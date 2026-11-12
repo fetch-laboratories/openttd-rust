@@ -3081,6 +3081,318 @@ class EnqueueTests(unittest.TestCase):
         self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
 
 
+def comment(number: int, body: str, at: str) -> dict[str, str]:
+    return {
+        "html_url": f"https://github.com/example/fork/pull/170#issuecomment-{number}",
+        "updated_at": at,
+        "body": body,
+    }
+
+
+def review(sha: str, agent: str, closing: str) -> str:
+    attribution = f"Agent: {agent} | Model: m-1 | Reasoning effort: high"
+    return f"Reviewed commit: {sha}\n{attribution}\n{closing}"
+
+
+class ReviewReportTests(unittest.TestCase):
+    def test_agent_and_disposition_come_from_the_report_or_are_unknown(self) -> None:
+        attribution = "Agent: /root/r | Model: m-1 | Reasoning effort: high"
+        fence = '```cleanup-acceptance\n{"accept": ["x"]}\n```'
+        for body, agent, disposition, scope in (
+            (
+                f"x\n{attribution}\nDisposition: accepted, whole PR",
+                "/root/r",
+                "accepted",
+                "whole PR",
+            ),
+            (
+                f"{attribution}\n**Disposition:** findings to remediate, group 2\n",
+                "/root/r",
+                "findings to remediate",
+                "group 2",
+            ),
+            (
+                f"Disposition: accepted\n{fence}\n{attribution}",
+                "/root/r",
+                "accepted",
+                None,
+            ),
+            (f"{attribution}\nAccepted.", "/root/r", "accepted", None),
+            (f"{attribution}\nLooks fine to me", "/root/r", "unknown", None),
+            (
+                "no attribution\nDisposition: accepted",
+                "unknown",
+                "accepted",
+                None,
+            ),
+            ("", "unknown", "unknown", None),
+        ):
+            with self.subTest(body=body):
+                (report,) = ci.review_report.review_reports(
+                    [comment(1, f"Reviewed commit: {HEAD}\n" + body, "t")], [], HEAD
+                )
+                self.assertEqual(
+                    (report.agent, report.disposition, report.scope),
+                    (agent, disposition, scope),
+                )
+
+    def test_github_reviews_and_older_heads_are_reported_as_such(self) -> None:
+        reviews = [
+            {
+                "commit_id": PREVIOUS,
+                "html_url": "r",
+                "submitted_at": "t",
+                "state": "COMMENTED",
+                "body": review(PREVIOUS, "/root/g", "Disposition: accepted"),
+            }
+        ]
+        (report,) = ci.review_report.review_reports([], reviews, HEAD)
+        self.assertEqual(
+            (report.source, report.matches_head, report.agent, report.disposition),
+            ("GitHub review: COMMENTED", False, "/root/g", "accepted"),
+        )
+
+
+class FakeGitHub:
+    """Recorded answers for one PR: heads (successive reads of the PR), quick,
+    runs (pages of dispatched runs), comments (pages of comments), queue (the
+    GraphQL pull request) and group (merge-group runs)."""
+
+    def __init__(self, world: dict[str, object]) -> None:
+        self.world = world
+        self.heads = iter(cast(list[str], world.get("heads", [HEAD, HEAD])))
+        self.runs = cast(list[list[dict]], world["runs"])
+        self.calls: list[tuple[str, ...]] = []
+
+    def api(self, _repository: str, path: str) -> object:
+        answers = {
+            "check-runs": {"check_runs": [self.world["quick"]]},
+            # enqueue's bounded window sees only the first page.
+            "event=workflow_dispatch": {"workflow_runs": self.runs[0]},
+            "event=pull_request": {"workflow_runs": []},
+            "event=merge_group": {"workflow_runs": self.world.get("group", [])},
+            f"commits/{MERGE}": {"parents": [{"sha": PARENT}, {"sha": HEAD}]},
+        }
+        if path == "pulls/170":
+            return dict(
+                PULL,
+                title="Port the thing",
+                created_at="2026-11-11T00:00:00Z",
+                mergeable_state="clean",
+                head={"sha": next(self.heads)},
+            )
+        (answer,) = [value for key, value in answers.items() if key in path]
+        return answer
+
+    def gh(self, *args: str) -> str:
+        self.calls.append(args)
+        if args[:2] == ("api", "graphql"):
+            pull = self.world["queue"]
+            return json.dumps({"data": {"repository": {"pullRequest": pull}}})
+        answers = {
+            "/comments": self.world.get("comments", [[]]),
+            "/reviews": [[]],
+            "event=workflow_dispatch": [{"workflow_runs": p} for p in self.runs],
+        }
+        (answer,) = [value for key, value in answers.items() if key in args[-1]]
+        return json.dumps(answer)
+
+
+class StateTests(unittest.TestCase):
+    """ci.py state PR against recorded, paginated gh answers (P1)."""
+
+    QUICK = {
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-12T01:00:00Z",
+        "html_url": "https://github.com/example/fork/runs/1",
+    }
+    RUST_RED = requested(
+        "rust",
+        "c" * 32,
+        "2026-11-12T02:00:00Z",
+        status="completed",
+        conclusion="failure",
+    )
+    NATIVE_GREEN = requested(
+        "native",
+        "e" * 32,
+        "2026-11-12T04:00:00Z",
+        status="completed",
+        conclusion="success",
+    )
+    NATIVE_OLD = requested(
+        "native",
+        "f" * 32,
+        "2026-11-12T01:00:00Z",
+        status="completed",
+        conclusion="failure",
+    )
+    QUEUED = {
+        "state": "OPEN",
+        "mergeCommit": None,
+        "mergeQueueEntry": {"state": "QUEUED", "position": 2},
+        "autoMergeRequest": None,
+    }
+    OUT = dict(QUEUED, mergeQueueEntry=None)
+
+    def state(
+        self, *argv: str, **world: object
+    ) -> tuple[int, str, list[tuple[str, ...]]]:
+        """Run `ci.py state 170` (or `argv`) against a FakeGitHub of `world`."""
+        defaults = {
+            "quick": self.QUICK,
+            "runs": [[self.RUST_RED], [self.NATIVE_GREEN, self.NATIVE_OLD]],
+            "queue": self.OUT,
+        }
+        github = FakeGitHub({**defaults, **world})
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(ci, "REQUESTS", Path(directory)),
+            patch.object(ci, "api", side_effect=github.api),
+            patch.object(ci, "gh", side_effect=github.gh),
+            patch(
+                "sys.argv",
+                ["ci.py", *(argv or ("state", "170")), "--repo", "example/fork"],
+            ),
+            patch("builtins.print") as printed,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        return code, output, github.calls
+
+    def test_one_screen_with_mixed_profiles_and_bounded_reports(self) -> None:
+        reports = [
+            comment(
+                1,
+                review(PREVIOUS, "/root/old", "Disposition: accepted, whole PR"),
+                "2026-11-12T01:00:00Z",
+            ),
+            comment(
+                2,
+                "Status: working\nAgent: /root/impl | Model: m | Reasoning effort: high",
+                "2026-11-12T01:30:00Z",
+            ),
+            comment(
+                3,
+                review(
+                    HEAD, "/root/new", "Disposition: findings to remediate, group 1"
+                ),
+                "2026-11-12T05:00:00Z",
+            ),
+            comment(
+                4,
+                f"Reviewed commit: {HEAD}\nno attribution, no disposition",
+                "2026-11-12T06:00:00Z",
+            ),
+        ] + [
+            comment(
+                10 + n,
+                review(HEAD, f"/root/r{n}", "Disposition: accepted"),
+                f"2026-11-12T0{n}:10:00Z",
+            )
+            for n in range(4)
+        ]
+        code, output, calls = self.state(comments=[reports[:3], reports[3:]])
+        self.assertEqual(code, 0)
+        lines = output.splitlines()
+        url = "https://github.com/example/fork/pull/170#issuecomment-"
+        self.assertEqual(
+            lines[:6],
+            [
+                "PR #170 open, ready: Port the thing",
+                f"head {HEAD}, mergeable: yes (clean)",
+                "Quick at head: success https://github.com/example/fork/runs/1",
+                "native at head: success https://github.com/example/fork/actions/runs/04",
+                "rust at head: failure https://github.com/example/fork/actions/runs/02",
+                "Queue: not queued",
+            ],
+        )
+        self.assertEqual(lines[6], "Review reports: 7, newest first")
+        self.assertEqual(lines[7], f"  unknown: unknown at head {url}4")
+        self.assertEqual(
+            lines[8], f"  /root/new: findings to remediate (group 1) at head {url}3"
+        )
+        self.assertEqual(lines[12], f"  2 older: {url}1, {url}10")
+        self.assertIn(f"/root/r3: accepted at head {url}13", output)
+        self.assertNotIn("/root/impl", output)
+        self.assertEqual(len(lines), 14)
+        # enqueue's bounded window sees rust's red run as the newest request.
+        self.assertTrue(
+            lines[13].startswith("enqueue checks: blocked: The latest requested run")
+        )
+        # Every listing is paginated.
+        self.assertTrue(
+            all("--paginate" in call for call in calls if call[1] != "graphql")
+        )
+
+    def test_old_acceptance_is_at_its_sha_not_invalid(self) -> None:
+        old = comment(
+            1,
+            review(PREVIOUS[:12], "/root/old", "Disposition: accepted, whole PR"),
+            "t",
+        )
+        _, output, _ = self.state(comments=[[old]])
+        self.assertIn(
+            f"  /root/old: accepted (whole PR) at {PREVIOUS[:10]}, not head", output
+        )
+
+    def test_queue_lines(self) -> None:
+        failed = {
+            "id": 7,
+            "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{BASE}",
+            "created_at": "2026-11-11T01:00:00Z",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "html_url": "https://github.com/example/fork/actions/runs/7",
+            "head_sha": MERGE,
+        }
+        merged = dict(self.OUT, state="MERGED", mergeCommit={"oid": MERGE})
+        for world, line in (
+            ({"queue": self.QUEUED}, "Queue: queued at position 2"),
+            ({}, "Queue: not queued"),
+            ({"group": [dict(failed, conclusion="success")]}, "Queue: not queued"),
+            (
+                {"group": [failed]},
+                "Queue: not queued; last merge-group run cancelled: "
+                + failed["html_url"],
+            ),
+            ({"queue": merged}, "Queue: merged"),
+        ):
+            with self.subTest(line):
+                _, output, _ = self.state(runs=[[self.NATIVE_GREEN]], **world)
+                self.assertIn(line + "\n", output)
+
+    def test_green_head_passes_enqueue_checks_only_as_checks(self) -> None:
+        code, output, calls = self.state(runs=[[self.NATIVE_GREEN]])
+        self.assertEqual(code, 0)
+        self.assertEqual(output.splitlines()[-1], "enqueue checks: pass")
+        self.assertFalse([call for call in calls if call[0] != "api"])
+        red = dict(self.QUICK, conclusion="failure")
+        _, output, _ = self.state(runs=[[self.NATIVE_GREEN]], quick=red)
+        self.assertIn("enqueue checks: blocked: Quick validation at", output)
+
+    def test_moved_head_prints_no_mixed_view(self) -> None:
+        code, output, _ = self.state(heads=[HEAD, PREVIOUS])
+        self.assertEqual(code, 1)
+        (line,) = output.splitlines()
+        self.assertIn(f"head moved from {HEAD} to {PREVIOUS}", line)
+        self.assertTrue(line.endswith("run python3 tools/ci.py state 170 again"))
+
+    def test_json_and_status_alias_show_the_same_facts(self) -> None:
+        _, text, _ = self.state()
+        _, alias, _ = self.state("status", "170")
+        self.assertEqual(alias, text)
+        _, raw, _ = self.state("state", "170", "--json")
+        facts = json.loads(raw)
+        self.assertEqual(facts["head"], HEAD)
+        self.assertEqual(sorted(facts["requests"]), ["native", "rust"])
+        self.assertEqual(facts["queue"], {"queued": False, "text": "not queued"})
+        self.assertEqual(
+            text.splitlines()[-1], "enqueue checks: " + facts["enqueue_checks"]
+        )
+
+
 class FailureCountTests(unittest.TestCase):
     def test_count_leaves_out_control_branches_unless_asked(self) -> None:
         runs = [

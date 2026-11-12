@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -15,18 +14,9 @@ from typing import Any
 from urllib.parse import urlencode
 
 import ci
+from review_report import ReviewReport, review_reports
 
 ROOT = Path(__file__).resolve().parents[1]
-REVIEWED = re.compile(r"\bReviewed\s+(?:commit|head):\s*`?([0-9a-f]{7,40})\b", re.I)
-
-
-@dataclass
-class ReviewReport:
-    sha: str
-    url: str
-    reported_at: str
-    source: str
-    matches_head: bool
 
 
 @dataclass
@@ -57,34 +47,6 @@ def pages(repository: str, path: str) -> list[dict[str, Any]]:
         )
         for item in page
     ]
-
-
-def review_reports(
-    comments: list[dict[str, Any]], reviews: list[dict[str, Any]], head: str
-) -> list[ReviewReport]:
-    reports = [
-        ReviewReport(
-            match[1],
-            item["html_url"],
-            item["updated_at"],
-            "report text",
-            head.startswith(match[1]),
-        )
-        for item in comments
-        for match in REVIEWED.finditer(item.get("body") or "")
-    ]
-    reports.extend(
-        ReviewReport(
-            item["commit_id"],
-            item["html_url"],
-            item["submitted_at"],
-            "GitHub review: " + item["state"],
-            item["commit_id"] == head,
-        )
-        for item in reviews
-        if item.get("commit_id") and item.get("submitted_at")
-    )
-    return reports
 
 
 def collect_pull(repository: str, number: int, *, latency: bool = False) -> PullFacts:
