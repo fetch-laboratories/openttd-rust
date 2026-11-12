@@ -25,7 +25,7 @@ Pursue a complete Rust rewrite through the stages and phases in [planning](../..
 
 ### 1. Fill slots
 
-Handle finished work first, then start ready work under [selection](../../planning.md#selection), [integration](../../root-workflow.md#integration) and the host's orchestration rules. At each [independent wake](../../team.md#missed-resumes), handle completed child results and messages addressed to you. A peripheral host-action failure does not end the assignment.
+Handle finished work first, then start ready, planned work under [selection](../../planning.md#selection), [integration](../../root-workflow.md#integration) and the host's orchestration rules. At each [independent wake](../../team.md#missed-resumes), handle completed child results and messages addressed to you. A peripheral host-action failure does not end the assignment.
 
 ### 2. Carry changes through
 
@@ -34,7 +34,8 @@ Follow the [change workflow](../../workflow.md) from issue through cleanup, and 
 ### 3. Plan more work
 
 - Trigger planning when the cleanup stage's stream issues run out of ready batches; before the cleanup stage's last items are dispatched (to plan phase 3); at a phase exit; when the current and next phases together hold fewer than three ready unstarted ownership items (not waiting on a draft or merge); when the next phase has no ready owner; or when `issues.py` shows unplaced issues.
-- Spawn a fresh planning agent with the model and effort in [team](../../team.md#roles-and-models), naming no preferred candidate. Have it size remaining code, rank owners of the current and next phase and open maintenance, testing and housekeeping issues under [selection](../../planning.md#selection), and apply [issue placement and deferral](../../planning.md#issue-placement-and-deferral). Point it at the roadmap's "Phases" and, for storage owners, the [world-state design](../../design/world-state.md).
+- This planning is yours: size remaining code, rank owners of the current and next phase and open maintenance, testing and housekeeping issues under [selection](../../planning.md#selection), and apply [issue placement and deferral](../../planning.md#issue-placement-and-deferral). Work from the roadmap's "Phases" and, for storage owners, the [world-state design](../../design/world-state.md). Hand counts and measurements to the [routine agent](../../team.md#routine-agent).
+- Write what you select into the [ready queue](../../team.md#ready-queue-and-pipelining). A planning agent then plans each work order, one per entry.
 
 ### 4. Refresh the course and take stock
 

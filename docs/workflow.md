@@ -11,7 +11,7 @@
 - A PR body follows the [PR template](../.github/PULL_REQUEST_TEMPLATE.md) and keeps the review groups, the residue with reasons, and the checks. Lint carries and growth or suppression proposals go in the branch's [cleanup records](rust-migration.md#quick-cleanup-checks) file, not the body.
 - Evidence is exact-head CI runs and commands recorded in the PR. Do not put receipt bundles, executable hashes or `.local/` paths in comments or docs.
 - Edit one status comment per task on its PR, or issue before the PR, at start, milestones and stop, with `python3 tools/ci.py comment PR --agent PATH --body-file FILE` (`--show` reads it, `--issue N` for an issue). A milestone is a pushed checkpoint whose checks pass, a blocking failure or a handoff, not each push or job start. A tracker issue body is its current list, edited as items open or close.
-- Root commits the roadmap only at a stocktake, a change of course or wind-down ([ADR 0026](adr/0026-roadmap-commit-timing.md)); the one exception is the planner's [ready-queue](team.md#ready-queue-and-pipelining) refresh.
+- Root commits the roadmap only at a stocktake, a change of course or wind-down ([ADR 0026](adr/0026-roadmap-commit-timing.md)); the one exception is root's [ready-queue](team.md#ready-queue-and-pipelining) refill.
 - Keep the roadmap forward-looking and update it in place: a completed item becomes one row with issue, PR, commit and metrics. CI run IDs, executable hashes, probe values and per-PR plans go in the PR or issue.
 - Put rules every agent needs in [AGENTS.md](../AGENTS.md) and other rules in the doc its routing table names, each in one place.
 

@@ -1,17 +1,21 @@
 # Implementer brief
 
-Read this brief; your work order, the ready-queue entry your spawn message names; its issue's `## Rules` section and the comments the entry links; and the original bodies the entry names. Then read:
+Read this brief; your work order's implementation plan, the issue comment your spawn message names; its issue's `## Rules` section and the comments the plan links; and the original bodies the plan names. Then read:
 
 - [porting](porting.md) for the code, fidelity and evidence standards your change meets;
 - [workflow](workflow.md) for commits, pushes, checks, review and the merge queue;
 - [background jobs](team.md#background-jobs) for how to start a long job.
+
+## Following the plan
+
+The plan holds the decisions; carry them out, and link it in the PR body. Where the tree contradicts the plan or a decision proves wrong, take the better course and record the departure and its reason in the PR body. Ask root first only when the departure changes what the work order delivers.
 
 ## Finishing a file pass
 
 A pass is ready for review when a reviewer would have nothing left on the [every-line list](review-brief.md#what-to-examine-in-your-group). Before the first checkpoint, look for the [design faults](porting.md#design-faults) in your files and count their repair in the pass's size. Before marking the PR ready, for each file:
 
 - Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports.
-- Run the fixtures that call the pass's functions: the comparison probes and the ABI probe fixtures under `tools/migration/windows-abi/`. Preflight only compiles them, so only a run shows a fixture that relied on a service read the pass replaced. Your work order names them.
+- Run the fixtures that call the pass's functions: the comparison probes and the ABI probe fixtures under `tools/migration/windows-abi/`. Preflight only compiles them, so only a run shows a fixture that relied on a service read the pass replaced. Your plan names them.
 - Add each file the pass finishes to `migration/finished-files.txt`.
 
 ## Messaging root

@@ -37,6 +37,7 @@ Every line of original C++ and fork-written C++ (glue, tools and tests) will ret
 | Selecting, ranking or planning work, or placing issues | [Roadmap](docs/roadmap.md), [planning](docs/planning.md) |
 | Building, testing or running the harness | [Migration tools](docs/rust-migration.md) |
 | Requesting or reading CI runs, or changing CI | [CI](docs/ci.md) |
+| Planning a work order | [Planner brief](docs/planner-brief.md) |
 | Implementing a work order | [Implementer brief](docs/implementer-brief.md) |
 | Reviewing a PR | [Review brief](docs/review-brief.md) |
 | Writing port standards, or when a check or work order cites them | [Porting](docs/porting.md) |
