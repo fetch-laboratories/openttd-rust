@@ -3,6 +3,7 @@
 //! interrupted map, close, tick or session entry. No borrowed game state crosses a save.
 #![allow(unsafe_code, missing_docs)]
 use crate::network_frame::Services as Network;
+use crate::network_type::NetworkRecvStatus;
 use crate::openttd::{GameMode, SwitchMode};
 use crate::session::{Frame, Services as Session};
 use std::ffi::c_void;
@@ -21,7 +22,7 @@ pub(crate) enum Resume {
     None,
     MapTransfer(*mut crate::network_socket::GameSocket),
     Waits(usize),
-    CloseTail(*mut crate::network_socket::GameSocket, u8),
+    CloseTail(*mut crate::network_socket::GameSocket, NetworkRecvStatus),
     CloseClients(usize, bool),
     DisconnectSend(usize, bool),
     RebootSend(usize),
@@ -56,6 +57,8 @@ struct Owner {
     frame: *mut Frame,
     save: *mut crate::network_socket::GameSocket,
     packet: *mut crate::network_tcp::Packet,
+    /// The driver's result byte: a `NetworkRecvStatus` after packet handling and map loads, and
+    /// `NetworkReceive`'s boolean after a receive.
     result: u8,
     queue: [Resume; 16],
     len: usize,
@@ -74,13 +77,50 @@ impl Actions {
     pub(crate) unsafe fn from_storage(storage: *mut Storage) -> Self {
         Self(storage.cast())
     }
-    pub(crate) fn set_result(self, result: u8) {
+    /// Initializes an empty owner, with no services bound, in unused native storage.
+    unsafe fn init(storage: *mut Storage) {
         unsafe {
-            (*self.0).result = result;
+            storage.cast::<Owner>().write(Owner {
+                network: std::ptr::null(),
+                session: std::ptr::null(),
+                frame: std::ptr::null_mut(),
+                save: std::ptr::null_mut(),
+                packet: std::ptr::null_mut(),
+                result: 0,
+                queue: [Resume::None; 16],
+                len: 0,
+                insert: 0,
+            });
         }
     }
-    pub(crate) fn result(self) -> u8 {
-        unsafe { (*self.0).result }
+    /// The native server shell whose map save is pending, or null when none is.
+    fn save_shell(self) -> *mut c_void {
+        let socket = unsafe { (*self.0).save };
+        if socket.is_null() {
+            std::ptr::null_mut()
+        } else {
+            crate::network_socket::server(socket)
+        }
+    }
+    /// Stores the `NetworkRecvStatus` the native caller returns.
+    pub(crate) fn set_status(self, status: NetworkRecvStatus) {
+        unsafe {
+            (*self.0).result = status.0;
+        }
+    }
+    /// The stored `NetworkRecvStatus`.
+    pub(crate) fn status(self) -> NetworkRecvStatus {
+        NetworkRecvStatus(unsafe { (*self.0).result })
+    }
+    /// Stores `NetworkReceive`'s result.
+    pub(crate) fn set_received(self, received: bool) {
+        unsafe {
+            (*self.0).result = u8::from(received);
+        }
+    }
+    /// The stored `NetworkReceive` result.
+    pub(crate) fn received(self) -> bool {
+        unsafe { (*self.0).result != 0 }
     }
     pub(crate) fn hold_packet(self, packet: *mut crate::network_tcp::Packet) {
         unsafe {
@@ -168,12 +208,12 @@ impl Actions {
                     crate::network_connection::map_transfer(network, socket, self);
                 }
                 Resume::Waits(count) => crate::network_connection::update_waiters(network, count),
-                Resume::CloseTail(socket, result) => {
+                Resume::CloseTail(socket, status) => {
                     crate::network_connection::close_tail(
                         network.connection,
                         network,
                         socket,
-                        crate::network_type::NetworkRecvStatus(result),
+                        status,
                     );
                 }
                 Resume::CloseClients(cursor, admins) => {
@@ -231,14 +271,14 @@ impl Actions {
                     crate::session::resume_switch_load(session.unwrap(), mode);
                 }
                 Resume::MapLoaded(game) => {
-                    let result = crate::network_client::map_loaded(
+                    let status = crate::network_client::map_loaded(
                         network.client,
                         network,
                         session.unwrap(),
                         game,
                         false,
                     );
-                    self.set_result(result);
+                    self.set_status(status);
                 }
                 Resume::LoopSwitch => {
                     let _ = crate::session::resume_loop_switch(session.unwrap(), frame, self);
@@ -252,7 +292,7 @@ impl Actions {
                         session.unwrap(),
                         network,
                         frame,
-                        self.result() != 0,
+                        self.received(),
                         self,
                     );
                 }
@@ -312,30 +352,13 @@ impl Actions {
 /// `storage` is aligned native stack capacity, unused until this initialization completes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_actions_init(storage: *mut Storage) {
-    unsafe {
-        storage.cast::<Owner>().write(Owner {
-            network: std::ptr::null(),
-            session: std::ptr::null(),
-            frame: std::ptr::null_mut(),
-            save: std::ptr::null_mut(),
-            packet: std::ptr::null_mut(),
-            result: 0,
-            queue: [Resume::None; 16],
-            len: 0,
-            insert: 0,
-        });
-    }
+    unsafe { Actions::init(storage) };
 }
 /// # Safety
 /// `storage` is a live initialized native frame's action owner.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_actions_save(storage: *mut Storage) -> *mut c_void {
-    let socket = unsafe { (*storage.cast::<Owner>()).save };
-    if socket.is_null() {
-        std::ptr::null_mut()
-    } else {
-        crate::network_socket::server(socket)
-    }
+    unsafe { Actions::from_storage(storage) }.save_shell()
 }
 /// # Safety
 /// The requested native save completed and all entry arguments and services remain live.
@@ -358,5 +381,8 @@ pub unsafe extern "C" fn openttd_rust_network_actions_drop(storage: *mut Storage
 /// `storage` is a live native frame's initialized action owner.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_actions_result(storage: *const Storage) -> u8 {
-    unsafe { (*storage.cast::<Owner>()).result }
+    // The result byte is the ABI form of both result kinds.
+    unsafe { Actions::from_storage(storage.cast_mut()) }
+        .status()
+        .0
 }

@@ -46,9 +46,13 @@ pub(crate) fn incoming(socket: *mut GameSocket) -> *mut CommandQueue {
 pub(crate) fn outgoing(socket: *mut GameSocket) -> *mut CommandQueue {
     read_field!(socket, outgoing)
 }
+/// The status byte, whose meaning depends on the role: `network_client::status` and
+/// `network_server::status` are its typed forms.
 pub(crate) fn status(socket: *mut GameSocket) -> u8 {
     read_field!(socket, status)
 }
+/// Stores the status byte; `network_client::set_status` and `network_server::set_status` are
+/// its typed forms.
 pub(crate) fn set_status(socket: *mut GameSocket, value: u8) {
     write_field!(socket, status, value);
 }
@@ -65,8 +69,18 @@ pub(crate) fn set_last_packet(socket: *mut GameSocket, time: i64) {
 use crate::game_state::GameState;
 use crate::network_action::Actions;
 use crate::network_frame::Services;
-use crate::network_type::{NETWORK_RECV_STATUS_CLIENT_QUIT, NETWORK_RECV_STATUS_CONNECTION_LOST};
+use crate::network_type::NetworkRecvStatus;
 
+/// The `role` byte: which `NetworkGameSocketHandler` subclass the native shell is, standing for
+/// the original's virtual `CloseConnection(NetworkRecvStatus)` and receive handlers.
+pub(crate) mod role {
+    /// `ClientNetworkGameSocketHandler`.
+    pub(crate) const CLIENT: u8 = 0;
+    /// `ServerNetworkGameSocketHandler`.
+    pub(crate) const SERVER: u8 = 1;
+}
+
+/// `_deferred_deletions`: the original's file-static vector of sockets awaiting deletion.
 static DEFERRED: GameState<Vec<*mut GameSocket>> = GameState::new(Vec::new());
 
 /// `DeferDeletion`: queue ownership before publishing the pending flag.
@@ -77,6 +91,7 @@ pub(crate) fn defer(socket: *mut GameSocket) {
 
 /// The native deleter may reenter Rust; no vector borrow crosses it. `clear` retains capacity.
 fn delete_deferred(delete: extern "C" fn(*mut c_void)) {
+    /* Calls deleter on all items */
     let count = unsafe { (*DEFERRED.get()).len() };
     for index in 0..count {
         let socket = unsafe { *(*DEFERRED.get()).as_ptr().add(index) };
@@ -85,46 +100,65 @@ fn delete_deferred(delete: extern "C" fn(*mut c_void)) {
     unsafe { (*DEFERRED.get()).clear() };
 }
 
+/// `NetworkGameSocketHandler::ProcessDeferredDeletions`.
 pub(crate) fn process_deferred(s: &Services) {
     delete_deferred(s.socket_delete);
 }
 
+/// The destruction of `_deferred_deletions` at exit: delete the remaining sockets, then release
+/// the vector's capacity.
+fn deferred_shutdown(delete: extern "C" fn(*mut c_void)) {
+    delete_deferred(delete);
+    unsafe { *DEFERRED.get() = Vec::new() };
+}
+
+/// The virtual `NetworkGameSocketHandler::CloseConnection(NetworkRecvStatus)`, dispatched on
+/// the socket's role; the query socket's override stays native.
 pub(crate) fn specialized_close(
     s: &Services,
     socket: *mut GameSocket,
-    result: u8,
+    status: NetworkRecvStatus,
     work: Actions,
-) -> u8 {
+) -> NetworkRecvStatus {
     match read_field!(socket, role) {
-        0 => crate::network_client::openttd_rust_network_client_close(s.client, s, socket, result),
-        1 => {
-            crate::network_connection::server_close(
-                s.connection,
-                s,
-                socket,
-                crate::network_type::NetworkRecvStatus(result),
-                work,
-            )
-            .0
+        role::CLIENT => crate::network_client::close_connection(s.client, s, socket, status),
+        role::SERVER => {
+            crate::network_connection::server_close(s.connection, s, socket, status, work)
         }
-        _ => (s.query_close)(shell(socket), result),
+        _ => NetworkRecvStatus((s.query_close)(shell(socket), status.0)),
     }
 }
 
-/// `NetworkGameSocketHandler::CloseConnection(bool)`.
-pub(crate) fn close(s: &Services, socket: *mut GameSocket, work: Actions) -> u8 {
+/// `NetworkGameSocketHandler::CloseConnection(bool)`: a socket can make errors. When that
+/// happens this handles what to do. For clients: close connection and drop back to main-menu.
+/// For servers: close connection and that is it.
+pub(crate) fn close_connection(
+    s: &Services,
+    socket: *mut GameSocket,
+    work: Actions,
+) -> NetworkRecvStatus {
     work.network(s);
-    let result =
-        if !(s.command.company.network_server)() && (s.command.company.finance.networking)() {
-            (s.client.emergency_save)();
-            crate::session::set_pending(crate::openttd::SwitchMode::MENU);
-            (s.lifecycle.set_networking)(false);
-            (s.show_lost_connection)();
-            NETWORK_RECV_STATUS_CLIENT_QUIT
-        } else {
-            NETWORK_RECV_STATUS_CONNECTION_LOST
-        };
-    specialized_close(s, socket, result, work)
+    /* Clients drop back to the main menu */
+    if !(s.command.company.network_server)() && (s.command.company.finance.networking)() {
+        (s.client.emergency_save)();
+        crate::session::set_pending(crate::openttd::SwitchMode::MENU);
+        (s.lifecycle.set_networking)(false);
+        (s.show_lost_connection)();
+
+        return specialized_close(
+            s,
+            socket,
+            NetworkRecvStatus::NETWORK_RECV_STATUS_CLIENT_QUIT,
+            work,
+        );
+    }
+
+    specialized_close(
+        s,
+        socket,
+        NetworkRecvStatus::NETWORK_RECV_STATUS_CONNECTION_LOST,
+        work,
+    )
 }
 
 /// Direct common TCP send; virtual game close stays in this owner.
@@ -144,7 +178,7 @@ pub(crate) fn send(
         )
     };
     if result == crate::network_tcp::Send::Close {
-        close(s, socket, work);
+        close_connection(s, socket, work);
         return crate::network_tcp::Send::Closed;
     }
     result
@@ -171,7 +205,7 @@ pub unsafe extern "C" fn openttd_rust_network_game_close(
     socket: *mut GameSocket,
     work: Actions,
 ) -> u8 {
-    close(s, socket, work)
+    close_connection(s, socket, work).0
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_process_deferred(s: &Services) {
@@ -179,8 +213,7 @@ pub extern "C" fn openttd_rust_network_process_deferred(s: &Services) {
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_deferred_shutdown(delete: extern "C" fn(*mut c_void)) {
-    delete_deferred(delete);
-    unsafe { *DEFERRED.get() = Vec::new() };
+    deferred_shutdown(delete);
 }
 
 /// `NetworkSend`: admin protocol first, then game sockets and deferred destruction.
@@ -223,6 +256,7 @@ pub(crate) fn send_clients(s: &Services, mut cursor: usize, work: Actions) {
             && crate::network_server::status(client.socket)
                 == crate::network_server::ClientStatus::STATUS_MAP
         {
+            /* This client is in the middle of a map-send, call the function for that */
             crate::network_connection::send_map(s.connection, s, client.socket, work);
             if work.pending() {
                 work.push(crate::network_action::Resume::SendClients(cursor));
@@ -311,20 +345,25 @@ pub(crate) fn receive_clients(
     Ok(receive_finish(s, frame, true, networking, work))
 }
 
+/// `ClientNetworkGameSocketHandler::Receive` after its `ReceivePackets`, then `NetworkReceive`'s
+/// deferred deletions.
 pub(crate) fn client_received(
     s: &Services,
     frame: *mut crate::session::Frame,
     work: Actions,
 ) -> bool {
-    let result = work.result();
-    if result != crate::network_type::NETWORK_RECV_STATUS_OKAY {
-        crate::network_client::client_error(s.client, s, (s.client_game)(), result);
+    let res = work.status();
+    if res != NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY {
+        /* The client made an error of which we can not recover.
+         * Close the connection and drop back to the main menu. */
+        crate::network_client::client_error(s.client, s, (s.client_game)(), res);
         return receive_finish(s, frame, false, false, work);
     }
     let networking = (s.command.company.finance.networking)();
     receive_finish(s, frame, false, networking, work)
 }
 
+/// `NetworkReceive`'s tail: the server's poll end, deferred deletions and the receive result.
 fn receive_finish(
     s: &Services,
     frame: *mut crate::session::Frame,
@@ -336,6 +375,6 @@ fn receive_finish(
         (s.server_poll_end)(frame);
     }
     process_deferred(s);
-    work.set_result(u8::from(result));
+    work.set_received(result);
     result
 }

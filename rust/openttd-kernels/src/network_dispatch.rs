@@ -8,7 +8,9 @@ use crate::network_action::{Actions, Resume};
 use crate::network_frame::Services as Network;
 use crate::network_socket::{self as socket, GameSocket};
 use crate::network_tcp::{self as tcp, Packet};
-use crate::network_type::{NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY};
+use crate::network_type::{
+    NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY, NetworkRecvStatus,
+};
 use crate::packet;
 use crate::raw_field::{read_field, write_field};
 use crate::session::{Frame, Services as Session};
@@ -65,7 +67,7 @@ fn handle(
             "[tcp/game] Received invalid packet from client {}",
             (s.dispatch.client_id)(game)
         );
-        socket::close(s, game, work);
+        socket::close_connection(s, game, work);
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     socket::set_last_packet(game, (s.tcp.now)());
@@ -155,7 +157,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_BANNED => match read_field!(game, role) {
-            0 => crate::network_client::receive_banned(s.client, s, game),
+            0 => crate::network_client::receive_server_banned(s.client).0,
             2 => (s.dispatch.server_banned)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
@@ -164,7 +166,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_CHECK_NEWGRFS => match read_field!(game, role) {
-            0 => crate::network_client::receive_grfs(s.client, s, game, p),
+            0 => crate::network_client::receive_server_check_newgrfs(s.client, s, game, p).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_CLIENT_INFO => match read_field!(game, role) {
@@ -184,18 +186,21 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_ERROR => match read_field!(game, role) {
-            0 => crate::network_client::receive_error(
-                s.client,
-                s,
-                game,
-                p,
-                (s.dispatch.text_begin)(frame),
-            ),
+            0 => {
+                crate::network_client::receive_server_error(
+                    s.client,
+                    s,
+                    game,
+                    p,
+                    (s.dispatch.text_begin)(frame),
+                )
+                .0
+            }
             2 => (s.dispatch.server_error)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_ERROR_QUIT => match read_field!(game, role) {
-            0 => crate::network_client::receive_error_quit(s.client, s, game, p),
+            0 => crate::network_client::receive_server_error_quit(s.client, s, game, p).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_EXTERNAL_CHAT => match read_field!(game, role) {
@@ -207,7 +212,7 @@ fn handle(
                 unsafe {
                     crate::network_frame::receive_frame(
                         s,
-                        crate::network_client::ServerStatus(socket::status(game)),
+                        crate::network_client::status(game),
                         socket::sync(game),
                         p,
                     )
@@ -217,7 +222,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_FULL => match read_field!(game, role) {
-            0 => crate::network_client::receive_full(s.client, s, game),
+            0 => crate::network_client::receive_server_full(s.client).0,
             2 => (s.dispatch.server_full)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
@@ -226,30 +231,33 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_JOIN => match read_field!(game, role) {
-            0 => crate::network_client::receive_join(s.client, s, game, p),
+            0 => crate::network_client::receive_server_join(s.client, s, game, p).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_MAP_BEGIN => match read_field!(game, role) {
-            0 => crate::network_client::receive_map_begin(s.client, s, game, p),
+            0 => crate::network_client::receive_server_map_begin(s.client, s, game, p).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_MAP_DATA => match read_field!(game, role) {
-            0 => crate::network_client::receive_map_data(s.client, s, game, p),
+            0 => crate::network_client::receive_server_map_data(s.client, game, p).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_MAP_DONE => match read_field!(game, role) {
-            0 => crate::network_client::receive_map_done(
-                s.client,
-                s,
-                session,
-                game,
-                frame,
-                (s.dispatch.map_load_args)(frame),
-            ),
+            0 => {
+                crate::network_client::receive_server_map_done(
+                    s.client,
+                    s,
+                    session,
+                    game,
+                    frame,
+                    (s.dispatch.map_load_args)(frame),
+                )
+                .0
+            }
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_MAP_SIZE => match read_field!(game, role) {
-            0 => crate::network_client::receive_map_size(s.client, s, game, p),
+            0 => crate::network_client::receive_server_map_size(s.client, s, game, p).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_MOVE => match read_field!(game, role) {
@@ -257,11 +265,11 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_NEWGAME => match read_field!(game, role) {
-            0 => crate::network_client::receive_newgame(s.client, s, game),
+            0 => crate::network_client::receive_server_newgame(s.client, game).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_QUIT => match read_field!(game, role) {
-            0 => crate::network_client::receive_quit(s.client, s, game, p),
+            0 => crate::network_client::receive_server_quit(s.client, s, game, p).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_RCON => match read_field!(game, role) {
@@ -269,26 +277,19 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_SHUTDOWN => match read_field!(game, role) {
-            0 => crate::network_client::receive_shutdown(s.client, s, game),
+            0 => crate::network_client::receive_server_shutdown(s.client, game).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_SYNC => match read_field!(game, role) {
-            0 => {
-                crate::network_frame::receive_sync(
-                    s,
-                    crate::network_client::ServerStatus(socket::status(game)),
-                    p,
-                )
-                .0
-            }
+            0 => crate::network_frame::receive_sync(s, crate::network_client::status(game), p).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_WAIT => match read_field!(game, role) {
-            0 => crate::network_client::receive_wait(s.client, s, game, p),
+            0 => crate::network_client::receive_server_wait(s.client, s, game, p).0,
             _ => illegal(s, game, kind),
         },
         PacketGameType::PACKET_SERVER_WELCOME => match read_field!(game, role) {
-            0 => crate::network_client::receive_welcome(s.client, s, game, p),
+            0 => crate::network_client::receive_server_welcome(s.client, s, game, p).0,
             _ => illegal(s, game, kind),
         },
         _ => {
@@ -299,7 +300,7 @@ fn handle(
                 kind,
                 (s.dispatch.client_id)(game)
             );
-            socket::close(s, game, work);
+            socket::close_connection(s, game, work);
             NETWORK_RECV_STATUS_MALFORMED_PACKET
         }
     }
@@ -322,7 +323,7 @@ fn receive_one(s: &Network, game: *mut GameSocket, work: Actions) -> *mut Packet
     } {
         tcp::Receive::None => return std::ptr::null_mut(),
         tcp::Receive::Close => {
-            socket::close(s, game, work);
+            socket::close_connection(s, game, work);
             return std::ptr::null_mut();
         }
         tcp::Receive::Ready => (),
@@ -333,7 +334,7 @@ fn receive_one(s: &Network, game: *mut GameSocket, work: Actions) -> *mut Packet
             net,
             0, "Invalid packet received (too small / decryption error)"
         );
-        socket::close(s, game, work);
+        socket::close_connection(s, game, work);
         return std::ptr::null_mut();
     }
     let shell = (s.tcp.receive_take)(socket::tcp(game));
@@ -358,18 +359,18 @@ pub(crate) fn receive_packets(
     loop {
         let packet = receive_one(s, game, work);
         if work.pending() {
-            work.set_result(NETWORK_RECV_STATUS_OKAY);
+            work.set_status(NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY);
             work.push(Resume::ReceiveEnd);
             return Err(());
         }
         work.drop_packet();
         if packet.is_null() {
-            work.set_result(NETWORK_RECV_STATUS_OKAY);
+            work.set_status(NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY);
             return Ok(NETWORK_RECV_STATUS_OKAY);
         }
         work.hold_packet(packet);
         let result = handle(session, s, game, packet, frame, work);
-        work.set_result(result);
+        work.set_status(NetworkRecvStatus(result));
         if work.pending() {
             work.push(Resume::ReceivedPacket(game));
             return Err(());
@@ -394,7 +395,7 @@ pub(crate) fn received_packet(
     work: Actions,
 ) -> Result<u8, ()> {
     (s.dispatch.packet_end)(frame);
-    let result = work.result();
+    let result = work.status().0;
     if result != NETWORK_RECV_STATUS_OKAY {
         work.drop_packet();
         return Ok(result);
