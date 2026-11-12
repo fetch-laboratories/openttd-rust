@@ -42,9 +42,9 @@
 ## Byte-string utilities
 
 - Rust owns: Case-insensitive comparison and search, lowercase conversion, hexadecimal encoding/decoding and trim scanning.
-- C++ keeps: String owners, views, erases, equal-prefix length policy, ICU and platform collation, validation, in-place replacement and `StringIterator` backends.
+- C++ keeps: String owners, views, erases, equal-prefix length policy, ICU and platform collation and `StringIterator` backends.
 - Checks: Rust `byte_strings::comparison_tests`; `python3 tools/core-boundary-comparison.py`.
-- Limits: Only the portable natural-contains fallback calls these helpers. Negative-char uppercase inputs other than EOF are outside portable C's domain; only observed native behavior is matched (#26).
+- Limits: Natural comparison and case-insensitive natural search call these helpers only in their portable fallbacks; the ICU and platform paths do not. Negative-char uppercase inputs other than EOF are outside portable C's domain; only observed native behavior is matched (#26).
 - PRs: #27.
 
 ## UTF-8 codec and byte positions
