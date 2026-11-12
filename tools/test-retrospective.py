@@ -406,6 +406,14 @@ class BaseUpdateTests(unittest.TestCase):
         code, out = self.cli("--since", second)
         self.assertEqual(code, 0, out)
         self.assertIn("No merges since", out)
+        code, out = self.cli("--since", second, "--json")
+        self.assertEqual(code, 0, out)
+        result = json.loads(out)
+        self.assertEqual(
+            (result["merges"], result["review_files"], result["exit_code"]),
+            ([], [], 0),
+        )
+        self.assertIn("No merges since", result["status_line"])
         code, out = self.cli("--since", reviewed, second)
         self.assertEqual(code, 2, out)
         self.assertIn("not both", out)

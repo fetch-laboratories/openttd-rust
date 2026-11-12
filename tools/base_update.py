@@ -333,6 +333,8 @@ def review_files(merges: list[Merge]) -> list[str]:
 
 
 def status_line(merges: list[Merge], reviewed: str | None) -> str:
+    if not merges:
+        return f"No merges since {reviewed}: there is no base update to classify."
     named = ", ".join(f"{m.sha[:10]} {m.label}" for m in merges)
     subject = f"Base updates since {reviewed[:10]}: {named}" if reviewed else ""
     if not reviewed:
@@ -411,9 +413,6 @@ def run(args: argparse.Namespace, cwd: Path) -> int:
         print(f"Fetch the base with `git fetch origin rust-migration` if {args.base}"
               " is missing, then run this again.")  # fmt: skip
         return 2
-    if not merges:
-        print(f"No merges since {args.since}: there is no base update to classify.")
-        return 0
     status = status_line(merges, args.since)
     code = exit_code(merges)
     if args.json:
