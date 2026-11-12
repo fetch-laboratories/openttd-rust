@@ -2794,8 +2794,12 @@ pub unsafe extern "C" fn openttd_rust_train_curve_limit(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u16 {
-    let g = entry_game!(leaves, services);
-    g.get_curve_speed_limit(id)
+    // SAFETY: The entry's contract keeps both immutable tables live until it returns.
+    get_curve_speed_limit(id, unsafe { &*leaves }, unsafe { &*services })
+}
+/// `Train::GetCurveSpeedLimit`: the train speed limit caused by curves.
+pub(crate) fn get_curve_speed_limit(id: Handle, leaves: &Leaves, services: &Services) -> u16 {
+    Game::new(leaves, services).get_curve_speed_limit(id)
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety
@@ -3229,3 +3233,6 @@ impl Game<'_> {
 
 pub const VRF_POWERED_WAGON: u64 = 1 << 3;
 pub const VRF_FLIPPED: u64 = 1 << 4;
+
+#[cfg(test)]
+mod evidence_tests;
