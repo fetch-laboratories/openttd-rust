@@ -1,0 +1,30 @@
+# Pinned original 14ec60f248547d4d062a1160f0fc26d742319888.
+# Original-only capture before deleting src/tests/alternating_iterator_state.cpp: tools/oracle-recipes/alternating.patch
+# runs its four cases on the unchanged misc/alternating_iterator.hpp over std::vector and std::list.
+# Sections are the cases; each output is one check in order: a flag, a value, a Base() as its distance from the
+# range's first element, or a traversal's values.
+# No candidate header, archive, body or output is compiled or read. -O0 and -O2 -DNDEBUG streams agree.
+# Reproduce: python3 tools/oracle-capture.py alternating (GNU/Linux x86_64, g++ 13.3.0).
+@@ singleton
+1
+0
+7
+%%
+0 1*2 2 0*2 1
+@@ copies
+1
+2
+3
+%%
+0 1*2 0*6 2 0
+@@ end
+1
+2
+4
+%%
+0*2 1 2
+@@ insertion
+2,1,25,0,3,4
+5
+%%
+0 1

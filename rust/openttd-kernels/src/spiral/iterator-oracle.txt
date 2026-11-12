@@ -1,0 +1,30 @@
+# Pinned original 14ec60f248547d4d062a1160f0fc26d742319888.
+# Original-only capture before deleting src/tests/spiral_iterator_state.cpp: tools/oracle-recipes/spiral.patch runs
+# its four cases on the unchanged tilearea.cpp and the extracted map.cpp statics, Map::Allocate and offset tables.
+# Sections are the cases; each output is one check in order: a flag, a count, a tile index, or a traversal's tiles.
+# No candidate header, archive, body or output is compiled or read. -O0 and -O2 -DNDEBUG streams agree.
+# Reproduce: python3 tools/oracle-capture.py spiral (GNU/Linux x86_64, g++ 13.3.0).
+@@ edges
+254,127,126,125,253,381,382,383,255,124,252,380,508,509,510,511
+8063,8062,8190,8191,7935,7934,7933,8061,8189
+8066,8065,8129,8130,8003,8002,8001,8000,8064,8128,8131,8067
+%%
+0 1 2
+@@ live
+64
+63
+%%
+0 1
+@@ copies
+1
+4484
+4421
+9
+0
+%%
+0*5 1 2 0*2 1 3 0*4 4
+@@ wrapping
+0
+1
+%%
+0*2 1

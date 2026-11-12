@@ -722,3 +722,5 @@ pub(crate) fn clear_test_labels() {
         registry.label_map.clear();
     }
 }
+#[cfg(test)]
+mod evidence_tests;
