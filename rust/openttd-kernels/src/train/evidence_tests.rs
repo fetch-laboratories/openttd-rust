@@ -115,7 +115,7 @@ struct World {
     curve_speed: u8,
     base: *mut BaseTileLayout,
     /// The original's entry tiles for this trial, and the next one the candidate uses.
-    entries: Vec<u32>,
+    entries: Vec<TileIndex>,
     next_entry: usize,
 }
 thread_local! {
@@ -138,10 +138,10 @@ fn index(v: *const OpenTTDVehicle) -> usize {
         .with_borrow(|w| w.records.iter().position(|&r| ptr::eq(r, v)))
         .expect("a fixture vehicle")
 }
-fn set_kind(tile: u32, kind: u8) {
+fn set_kind(tile: TileIndex, kind: u8) {
     WORLD.with_borrow(|w| {
         // SAFETY: The map allocation holds MAP_SIZE tiles; one field-sized store.
-        unsafe { (&raw mut (*w.base.add(tile as usize)).kind).write(kind) };
+        unsafe { (&raw mut (*w.base.add(tile.0 as usize)).kind).write(kind) };
     });
 }
 
@@ -384,12 +384,12 @@ impl Drop for Fixture {
 /// The original's entry tiles in order, decoded from the expected swap line: the tile of
 /// the vehicle at `l` (side 0) or `r` (side 1) after the swap, its XOR difference applied
 /// to the other index's tile before it.
-fn expected_entries(line: &str, t: &Trial) -> Vec<u32> {
+fn expected_entries(line: &str, t: &Trial) -> Vec<TileIndex> {
     let tokens: Vec<&str> = line.split(' ').collect();
     let tile = |side: usize| {
         let stored: u32 = tokens[2 + side * 8 + 5].parse().expect("oracle tile field");
         let other = if side == 0 { t.r } else { t.l };
-        stored ^ t.before[other][5]
+        TileIndex(stored ^ t.before[other][5])
     };
     tokens[0]
         .as_bytes()
