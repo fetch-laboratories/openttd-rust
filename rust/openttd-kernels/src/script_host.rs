@@ -48,6 +48,9 @@ const ERR_NONE: u32 = 0;
 /// `ScriptError::ERR_PRECONDITION_INVALID_COMPANY`.
 pub(crate) const ERR_PRECONDITION_INVALID_COMPANY: u32 = 4;
 
+/// The maximum recursive depth for items stored in the savegame (`script_instance.hpp`).
+pub(crate) const SQUIRREL_MAX_DEPTH: u32 = 25;
+
 crate::abi::shared_records! {
     fn abi_record;
     /// Per-instance host state (`ScriptInstance` lifecycle fields and `ScriptStorage`).
