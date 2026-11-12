@@ -2,11 +2,11 @@
 
 Root has selected a work order, the ready-queue entry your spawn message names. You write its implementation plan: the decisions an implementer at medium effort carries out without redoing your analysis. Root chose the work and its order; you settle how it is done.
 
-Read the entry and its issue, with the issue's `## Rules` section and the comments it links; [porting](porting.md); [sizing](planning.md#sizing); then the original bodies and the Rust files in scope, and the file lists of the open PRs.
+Read the entry and its issue, with the `## Rules` section of the tracker above it and the comments they link; [porting](porting.md); [sizing](planning.md#sizing); then the original bodies and the Rust files in scope, and the file lists of the open PRs.
 
 ## The plan
 
-Post one comment on the issue, headed `Implementation plan: <entry name>` and attributed. It records decisions and their reasons. The original is the specification ([ADR 0002](adr/0002-original-game-is-the-specification.md)): cite its bodies by file and function, and leave the code to the implementer.
+Write the plan into the issue's body under `## Implementation plan`, below root's opening line, which you keep, and attribute it. Correct the plan there in place. It records decisions and their reasons. The original is the specification ([ADR 0002](adr/0002-original-game-is-the-specification.md)): cite its bodies by file and function, and leave the code to the implementer.
 
 - **Base.** The commit you planned against.
 - **Done.** What a reviewer can observe when the work is finished, and the checks that show it.
@@ -21,4 +21,4 @@ Post one comment on the issue, headed `Implementation plan: <entry name>` and at
 - You write the plan and nothing else: every file stays as it is, and you start no agent, build, simulation or CI run. Measure with the inventory and metrics tools.
 - If the entry should not be done as selected (already delivered, blocked, or costing more than it removes), say so under open questions in place of a plan.
 
-Your last line to root is the plan's URL and its open questions.
+Your last line to root is the issue's URL and the plan's open questions.

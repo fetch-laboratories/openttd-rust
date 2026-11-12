@@ -1,6 +1,6 @@
 # Implementer brief
 
-Read this brief; your work order's implementation plan, the issue comment your spawn message names; its issue's `## Rules` section and the comments the plan links; and the original bodies the plan names. Then read:
+Read this brief; your work order's implementation plan, in the body of the issue your spawn message names; the `## Rules` section of the tracker above that issue and the comments the plan links; and the original bodies the plan names. Then read:
 
 - [porting](porting.md) for the code, fidelity and evidence standards your change meets;
 - [workflow](workflow.md) for commits, pushes, checks, review and the merge queue;
@@ -8,7 +8,7 @@ Read this brief; your work order's implementation plan, the issue comment your s
 
 ## Following the plan
 
-The plan holds the decisions; carry them out, and link it in the PR body. Where the tree contradicts the plan or a decision proves wrong, take the better course and record the departure and its reason in the PR body. Ask root first only when the departure changes what the work order delivers.
+The plan holds the decisions; carry them out, in a PR that closes the plan's issue. Where the tree contradicts the plan or a decision proves wrong, take the better course and record the departure and its reason in the PR body. Ask root first only when the departure changes what the work order delivers.
 
 ## Finishing a file pass
 
