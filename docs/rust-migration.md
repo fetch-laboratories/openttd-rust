@@ -38,7 +38,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 | `python3 tools/migration.py verify` | Cargo checks, both games and both CTest suites. Logs go to `.local/verification/<timestamp>/`. |
 | `python3 tools/migration.py tools` | Build the native Rust generators. |
 | `python3 tools/migration.py simulate`, `coverage`, `deep` | See [simulation comparison](#simulation-comparison), [coverage](#original-simulation-coverage) and [deep checks](deep-checks.md). |
-| `python3 tools/run-comparisons.py` | Run every `tools/*-comparison.py`. |
+| `python3 tools/run-comparisons.py` | Run every `tools/*-comparison.py`: the component comparisons, not the simulation scenarios. |
 | `eval "$(python3 tools/migration.py env)"` | Set the driver environment for Cargo and binaries run outside the driver. |
 | `python3 tools/git_hooks.py install` | Install the pre-push and pre-commit hooks. |
 

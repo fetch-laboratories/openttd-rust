@@ -40,7 +40,7 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 - Start one reviewer for the whole PR. Above about 1,000 changed lines, list review groups in the PR body and start one reviewer per group, in parallel.
 - Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
 - A PR has at most two review stages ([ADR 0025](adr/0025-two-review-stages.md)): the source review, and one re-check of the fixing commits only when a fix changed behaviour, test evidence or a body's operations. Fixes limited to names, comments, types or argument structs with unchanged operations need none; the implementer says so in the status comment.
-- A substantive rewrite, or a simulation behaviour fix that CI found (arithmetic and assertion fixes included), gets a fresh reviewer scoped to it.
+- A substantive rewrite, or a simulation behaviour fix that CI found (arithmetic and assertion fixes included), gets a fresh reviewer scoped to it. That is a review of new work, not a third stage.
 - The implementer or root may commit fixes for CI warnings or platform errors, or record speed medians, without a new review.
 - A review that stops before recording findings and disposition counts as no review.
 

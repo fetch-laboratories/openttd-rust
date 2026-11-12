@@ -28,6 +28,7 @@ At most two implementers work at once ([ADR 0010](adr/0010-two-implementers.md))
 
 ## Background jobs
 
+- Claude Code: start the job with Bash `run_in_background`; a T3 child also passes the task ID to `t3_background_wait`.
 - Codex, root or child: start the job with `exec_command` and check it once, as your last action before the final message; if it has already exited, read its output now.
 - Start each long job as `exec python3 tools/signal-witness.py -- <command>`. If the job exits 143 and the log shows no failure, read the sender record and the run's log or report, then rerun once incrementally. Add each new kill time and sender evidence to #724.
 
