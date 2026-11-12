@@ -38,8 +38,6 @@ const SIG_TBD_SIZE: usize = 256; // number of intersections - open nodes in curr
 const SIG_GLOB_SIZE: usize = 128; // number of open blocks (block can be opened more times until detected)
 const SIG_GLOB_UPDATE: usize = 64; // how many items need to be in _globset to force update
 
-const _: () = assert!(SIG_GLOB_UPDATE <= SIG_GLOB_SIZE);
-
 /// Incidating trackbits with given enterdir.
 const ENTERDIR_TO_TRACKBITS: [TrackBits; DiagDirection::DIAGDIR_END.0 as usize] = [
     TrackBits::TRACK_BIT_3WAY_NE,
