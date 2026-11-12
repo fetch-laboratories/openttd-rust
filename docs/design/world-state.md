@@ -1,6 +1,6 @@
 # Incremental world-state ownership
 
-Readers: storage owners, their briefers and reviewers. Design: [#90](https://github.com/fetch-laboratories/openttd-rust/issues/90). Implementation requires [roadmap](../roadmap.md) selection; the phase boundaries of each pool brief are in the [reader and pool placement](reader-pool-placement.md) design. Ownership transfers follow [storage ports](../porting.md#storage-ports), [boundary](../porting.md#boundary) and [map access](../porting.md#map-access); this file holds the decisions and contracts specific to world state.
+Design: [#90](https://github.com/fetch-laboratories/openttd-rust/issues/90). Ownership transfers follow [storage ports](../porting.md#storage-ports); this file holds the decisions and contracts specific to world state.
 
 ## Constraints in the current game
 
@@ -8,7 +8,7 @@ Readers: storage owners, their briefers and reviewers. Design: [#90](https://git
 - Pools select the first free slot, support indexed load allocation and ID reuse, optionally cache allocations and invoke destruction hooks. An ID is not a generation-checked lifetime guarantee: resolve IDs under source lifetime rules, since reacquiring an ID alone does not make reuse safe. Compacting pools, generation counters, reference counts or new stale-ID rejection would change original behavior.
 - `StateGameLoop` orders timers, tiles, vehicles and landscape. `RunTileLoop` uses LFSR order and special handling for tile zero; sorting or parallelizing changes observations and shared random draws.
 - Link graph jobs copy graph and settings; TGP's height map is temporary generator state. A general live-world snapshot would change observation semantics. Rust owns the temporary height map and the link graph job's computation snapshot, with job scheduling, save/load and join in C++; neither moves the global map or station pool.
-- C++ owns map arrays and live pools until their storage owner moves them. A C++ object pointer may be an opaque context, never a Rust view of an STL or pool object. Polymorphic shells remain opaque.
+- C++ owns map arrays and live pools until their storage owner moves them. A C++ object pointer may be an opaque context, not a Rust view of an STL or pool object. Polymorphic shells remain opaque.
 
 ## Raw access contracts
 
@@ -46,17 +46,9 @@ In `tile_loop.rs`, handlers may mutate tiles and pools, run landscape, road and 
 - Pin size, alignment and each field offset and width, including union arms, with named ABI probes on GCC, Clang, MSVC and Emscripten; do not assume LP64 padding or class-return ABI. Ordinary CI fails if a cross-language declaration or probe is missing. Generate scalar base types with typed inline conversions; do not overlay `StrongType` or `EnumBitSet` on an integer. Generated headers are build outputs, not a second checked-in schema.
 - Keep desync snapshots and plain runs ([evidence](../porting.md#evidence)): rebuilding caches can conceal faults. Vehicle ports need applicable #86/#104 evidence and branch witnesses per controller; saves cannot expose every transient state.
 
-## Process-wide owners
-
-These owners are delivered; their contracts bind later changes to them.
-
-- **Cargo registry views (#467).** One process-wide Rust owner holds the cargo registry views; native spans alias its buffers until rebuild. Language-loader sorting may precede climate setup. Publish clears and populated views before native collation, and each town-list insertion before the special-cargo break. Rebuild/reset is serialized loading outside callbacks. Each cargo callback has its own Rust invocation and native virtual/profiler frame. This grants no additional map access.
-- **World-generation lifecycle (#546).** Generation state has one process-wide, static-lifetime Rust allocation. C++ aliases only the stable `_generating_world` bool subobject; both languages use one-byte, one-aligned bools and write only false or true. Startup precedes the game thread; subsequent accesses use the game-state mutex on both GUI threads. Native CompanyID backup and landscape/town/industry/object frames remain opaque native objects, with the backup's destructor/restoration contract. Native wrappers catch progress abortion, script and completion callbacks and save/load errors; resource frames outlive Rust entries. Rust chooses cleanup, storage rollback and company restoration before native mode switching can reenter generation. Map descriptors expire before progress updates; this grants no additional map access.
-- **Simulation-session lifecycle (#551).** Game mode, switch request and pause-bit subobjects share one stable Rust allocation. Native inline aliases begin enum/bitset lifetimes once and retain their addresses across loading and reset; the native exit flag retains atomic storage and synchronization. Native frames retain chrono/resource lifetimes and exceptions from scheduled console commands, scripts, save/load, generation and network operations that can execute scripts. Rust returns before native rethrow and CompanyID backup destruction. Storage mode changes occur at the original calls: failure before `PSM_LEAVE_GAMELOOP` leaves partial state; later script failures follow that transition. This grants no additional map-descriptor access.
-
 ## Vehicle records (#570) and direct Tick dispatch (#656)
 
-#563's design delivered shared records and the data-boundary retirement through #570 and #636; its field tables and deletion inventories stay on [#563](https://github.com/fetch-laboratories/openttd-rust/issues/563) and [#570](https://github.com/fetch-laboratories/openttd-rust/issues/570). #656 owns the residual fields, pool completion and direct Tick dispatch.
+Field tables and deletion inventories are on [#563](https://github.com/fetch-laboratories/openttd-rust/issues/563) and [#570](https://github.com/fetch-laboratories/openttd-rust/issues/570). #656 owns the residual fields, pool completion and direct Tick dispatch.
 
 ### Records, links and lifetime
 
@@ -79,15 +71,13 @@ These owners are delivered; their contracts bind later changes to them.
 - On effect expiry, end the controller borrow and call the canonical native delete operation; remove the `RunEffect` trampoline. The dispatch also retires `OpenTTDVehiclePostTick`, `VehicleSchedulerTick` with its callback and binding, and the native controller Tick facades.
 - Bind immutable controller service tables once at scheduler entry, preserving initialization dependencies.
 - Keep timing for every road and ship Tick, train front engines only, and normal aircraft only after the early gate. A caller-owned native frame provides placement storage for `PerformanceAccumulator` and `OpenTTDRoadCommandSlot`; typed begin/end operations construct and destroy them without calling Rust, and Rust runs the controller between them.
-- Create road scratch lazily, reset and destroy it each road Tick, and never share it across nested entries. Finish timing and scratch destruction before the survival assertion, without an allocation or a timer wrapper that calls back into Rust.
+- Create road scratch lazily, reset and destroy it each road Tick, and do not share it across nested entries. Finish timing and scratch destruction before the survival assertion, without an allocation or a timer wrapper that calls back into Rust.
 - End field borrows before operations. After failure, access no dead record; after survival, reload type, first record and fields at source post-Tick branches. Preserve stable shell pointers and PreDestructor reentry from station loading lists.
 - Extend vehicle, fleet, rail, road, ship, aircraft, effect and disaster scenarios and native fixtures for ordinary and indexed allocation, holes/growth/reuse during Tick, deletion of current and unvisited chain members, SetNext and multihead order, fresh fields after callbacks, writes from both languages, reload/cache rebuilding, timing gates and the survival assertion. Move synthetic native virtual-Tick tests to the Rust traversal kernel with test-supplied work, and test production dispatch with real shells; keep no unused vtable trampoline. Keep semantic decoders and both RNG streams unchanged.
 
 ## Later pool record placement (#634, #635; decided 2026-11-05 after integration 82)
 
 Later pool records sit beside their shells, as #570's do. The decision and its measurements are on [#634](https://github.com/fetch-laboratories/openttd-rust/issues/634#issuecomment-6671702315).
-
-Basis: beside placement costs one extra instruction per C++ read, at most 0.033% of play-save loop Ir, and inside placement would save at most 0.024% for any family.
 
 **Conditions, which every brief states:**
 1. **No out-of-line record↔shell call.**
@@ -98,8 +88,8 @@ Basis: beside placement costs one extra instruction per C++ read, at most 0.033%
 
 **Per family:**
 - Station, waypoint, `GoodsEntry`, airport, road stop, town, industry and subsidy: beside.
-- Cargo packet and payment: beside now. Co-allocating the record in the same pool slot is decided at #634's pool-completion checkpoint. Their second allocation is the one measurable cost: 0.052% on P2016 and 0.011% on Opus.
-- Vehicles stay beside, with no conversion. Two out-of-line hops cost 0.44% to 0.51% gross and go to #656 or a #275 repair batch:
+- Cargo packet and payment: beside now. Co-allocating the record in the same pool slot is decided at #634's pool-completion checkpoint.
+- Vehicles stay beside, with no conversion. Two out-of-line hops go to #656 or a #275 repair batch:
   - `VehicleSvcTileLinks`: move `tile_links` into the record.
   - `VehicleRecordFromShell`: give the scheduler and the station loading queue record pointers.
 
@@ -129,7 +119,7 @@ The selected owner follows the [shared pool policy](#shared-pool-policy-716). De
 
 | Allocation | Canonical owner and consumers | Lifetime and remaining native owner |
 | --- | --- | --- |
-| Engine record | Consolidate existing Rust lifecycle/name storage with info, vehicle-specific info, original image/type/list position, GRF cargo bindings, ordered wagon overrides and badges. Rust loading, lifecycle, controllers and resolvers use the record; native save, script, strings and drawing callers read its shared layout. | Preserve default/monostate and typed constructor publication order, including original table copies, wagon life and aircraft cargo defaults. Temporary nonpooled prototypes and indexed pooled construction are distinct: never inspect an uninitialized prototype pool index to decide ownership. Borrowed GRF/SpriteGroup pointers expire with reload/reset. |
+| Engine record | Consolidate existing Rust lifecycle/name storage with info, vehicle-specific info, original image/type/list position, GRF cargo bindings, ordered wagon overrides and badges. Rust loading, lifecycle, controllers and resolvers use the record; native save, script, strings and drawing callers read its shared layout. | Preserve default/monostate and typed constructor publication order, including original table copies, wagon life and aircraft cargo defaults. Temporary nonpooled prototypes and indexed pooled construction are distinct: do not inspect an uninitialized prototype pool index to decide ownership. Borrowed GRF/SpriteGroup pointers expire with reload/reset. |
 | EngineRenew record and company head | Replace the existing fleet-owner aliases and native-node links with canonical record links. Fleet replacement/group operations and ERNW/company save adapters retain list order and reference identity. | Initialize a new node before publishing the head; single removal updates predecessor/head before deletion. Remove-all saves next, deletes each node, then clears the head. The head remains company-owned; each node's record retires at its actual owning-member destruction. |
 | Pool slots | EngineID and EngineRenewID retain u16 coordinates, maximum 64000 and invalid FFFF. Both pools are Normal and uncached; growth is 64 and 16 respectively. Reuse the shared Rust allocation, bitmap, cursor/count/credit, cleanup and live-iteration policy. | Retain native registration order/masks, publication before construction, live shell slots throughout destruction and free-before-post-hook order. Growth invalidates descriptor buffers, not separately allocated shells/records. ID reuse starts a new lifetime. |
 | Native shell | Keep identity/index and inline record access for remaining native callers. Only display_flags and display_last_variant remain field owners for phase 5's build-list GUI. | Name each remaining native consumer, including build/autoreplace/engine GUIs, vehicle drawing, script_engine and save/afterload/old-loader adapters. Networking retains command payloads and synchronized execution. Shell compatibility retires with its final callers. |
@@ -156,7 +146,7 @@ The phase-2 owner contains nine pools: Object, Depot, Sign, Goal, StoryPage, Sto
 
 All nine pools are Normal and uncached. Object uses u32 IDs, maximum 0xFF0000, invalid FFFFFFFF and growth 64; PersistentStorage uses u32, maximum 0xFF000, invalid FFFFF and growth 1. LeagueTable uses u8, maximum 255, invalid FF and growth 4. Other IDs are u16, maximum 64000 and invalid FFFF; growth is 64 except Sign's 16. Preserve registration/cleanup masks, publication before construction, assertion credit, occupancy/cursors/counts, indexed reuse and free-before-post-hook order. Descriptor buffers expire on growth; separately allocated live shells and records remain stable. Bind at the actual owning-member point and retire before record destruction while the native shell slot is still live.
 
-PersistentStorage needs a concrete nonpooled distinction: OldPersistentStorage has static legacy instances and tests use stack 16/256-value arrays. Its storage base initializes Rust payload before the PoolItem base; never read an uninitialized index or bind every base array. Preserve the actual native base-subobject address used by the registry. Reuse the one shell-identity binding extension from #719. Town/industry attachment vectors belong to #635; #638 owns the PSA payload and pool. Shared consumers use one create/destroy/reference table.
+PersistentStorage needs a concrete nonpooled distinction: OldPersistentStorage has static legacy instances and tests use stack 16/256-value arrays. Its storage base initializes Rust payload before the PoolItem base; do not read an uninitialized index or bind every base array. Preserve the actual native base-subobject address used by the registry. Reuse the one shell-identity binding extension from #719. Town/industry attachment vectors belong to #635; #638 owns the PSA payload and pool. Shared consumers use one create/destroy/reference table.
 
 ObjectSpec includes IgnoreObjectProperty, ObjectChangeInfo, ResetObjects, BindToClasses, SetEntitySpec and FinaliseObjectsArray. Reuse override_manager, newgrf_class::object, strings and badge owners. Preserve limit-check-before-resize, resize-before-interpretation otherwise, ignored widths/greatest result, property08 allocation before class dword, current-class deferred names, size/view repair, build-to-clear cost copy, dword dates, sticky 2CC, separate animation writes and atomic badge destination publication with partial seen state. Finalize in source file/spec order, consult saved mapping before transmitter allocation, preserve exhaustion logging/return, clear/shrink per-file payloads, then bind classes. ResetObjects does not reset mappings; persistent-NewGRF reset omits object manager; OBID resets separately. Register only the real global manager.
 
