@@ -143,8 +143,6 @@ pub struct Services {
     pub road_end: extern "C" fn(*mut Frame),
     pub landscape_begin: extern "C" fn(*mut Frame),
     pub landscape_end: extern "C" fn(*mut Frame),
-    pub schedule_measurement: extern "C" fn(*mut Frame) -> *mut std::ffi::c_void,
-    pub schedule_end: extern "C" fn(*mut Frame),
 }
 impl Services {
     /// One client or game setting from the shared catalog, loaded at its observation point.
@@ -730,14 +728,9 @@ impl<'a> Session<'a> {
         while unsafe { crate::company::on_tick(&*s.company, &mut company) } {
             complete((s.post_ai)(self.frame))?;
         }
-        crate::linkgraph_schedule::tick(
-            unsafe { &*s.schedule },
-            unsafe { &*s.shared },
-            (unsafe { &*s.company }.finance.networking)()
-                && !(unsafe { &*s.company }.network_server)(),
-            (s.schedule_measurement)(self.frame),
-        );
-        (s.schedule_end)(self.frame);
+        crate::linkgraph_schedule::tick(unsafe { &*s.schedule }, unsafe { &*s.shared }, unsafe {
+            &*s.company
+        });
         Ok(())
     }
     fn state_loop(&self) -> Outcome {
@@ -1110,8 +1103,6 @@ crate::abi::layouts! {
         road_end,
         landscape_begin,
         landscape_end,
-        schedule_measurement,
-        schedule_end,
     };
 }
 
