@@ -2671,7 +2671,7 @@ class RequestPathTests(unittest.TestCase):
         self.assertEqual((code, path), (0, newest))
         self.assertIn(f"newest native request for PR #170 at {HEAD}", output)
         self.assertIn(f"(from local record): {RUN}", output)
-        self.assertEqual(calls, [])
+        self.assertEqual(len(calls), 1)
 
     def test_wait_on_a_pr_finds_a_remote_request_through_every_page(self) -> None:
         older = requested("native", "c" * 32, "2026-11-12T01:00:00Z")
@@ -2690,6 +2690,28 @@ class RequestPathTests(unittest.TestCase):
         ((query),) = calls
         self.assertIn("--paginate", query)
         self.assertIn("created=%3E%3D2026-11-11T00%3A00%3A00Z", query[-1])
+
+    def test_wait_on_a_pr_chooses_among_local_and_remote_requests(self) -> None:
+        local = self.record("c" * 32, created_at="2026-11-12T01:00:00Z")
+        remote = requested("native", "e" * 32, "2026-11-12T02:00:00Z")
+        # The local request is on GitHub too: one request, not two.
+        listed = requested("native", "c" * 32, "2026-11-12T01:00:00Z")
+        code, path, output, calls = self.wait_pr(runs=[[listed, remote]])
+        self.assertEqual(code, 0)
+        self.assertEqual(path, ci.REQUESTS / f"{'e' * 32}-{HEAD}.json")
+        self.assertIn("(from GitHub)", output)
+        self.assertEqual(len(calls), 1)
+        # A newer local request GitHub does not list yet is still the newest.
+        newest = self.record("f" * 32, created_at="2026-11-12T03:00:00Z")
+        code, path, output, _ = self.wait_pr(runs=[[listed, remote]])
+        self.assertEqual((code, path), (0, newest))
+        self.assertIn("(from local record)", output)
+        # A remote request of another profile is a choice to name.
+        rust = requested("rust", "a" * 32, "2026-11-12T04:00:00Z")
+        code, path, output, _ = self.wait_pr(runs=[[listed, rust]])
+        self.assertEqual((code, path), (1, None))
+        self.assertIn("for native, rust; name one", output)
+        self.assertTrue(local.exists())
 
     def test_wait_on_a_pr_with_several_profiles_needs_one_named(self) -> None:
         self.record("native")

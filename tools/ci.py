@@ -566,21 +566,24 @@ def newest_request(
 
 
 def resolve_request(repository: str, pr: int, profile: str | None) -> Path:
-    """Fix, once, the newest request for the PR's current head: from this
-    checkout's records, else from GitHub. A later request is not followed."""
+    """Fix, once, the newest request for the PR's current head among this
+    checkout's records and the requested runs GitHub lists, one per request: a
+    request made elsewhere counts, and so does one GitHub does not list yet. A
+    later request is not followed."""
     pull = api(repository, f"pulls/{pr}")
     head = current_head(pull)
-
-    def wanted(candidates: list[Candidate]) -> list[Candidate]:
-        return [c for c in candidates if profile in (None, c[0]["profile"])]
-
-    source = "local record"
-    candidates = wanted(local_requests(repository, pr, head))
-    if not candidates:
-        source = "GitHub"
-        candidates = wanted(remote_requests(repository, dict(pull, number=pr), head))
-    record, path = newest_request(candidates, pr, head, profile)
-    if source == "GitHub":
+    local = local_requests(repository, pr, head)
+    known = {record["request"] for record, _ in local}
+    remote = [
+        candidate
+        for candidate in remote_requests(repository, dict(pull, number=pr), head)
+        if candidate[0]["request"] not in known
+    ]
+    candidates = [c for c in local + remote if profile in (None, c[0]["profile"])]
+    chosen = newest_request(candidates, pr, head, profile)
+    record, path = chosen
+    source = "GitHub" if chosen in remote else "local record"
+    if chosen in remote:
         write_request(path, record)
     print(
         f"Waiting on the newest {record['profile']} request for PR #{pr} at {head} "
