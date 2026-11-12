@@ -826,6 +826,9 @@ crate::abi::layouts! {
 }
 
 #[cfg(test)]
+mod evidence_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{
         Handler, NetworkAuthenticationAuthorizedKeyHandler, NetworkAuthenticationPasswordProvider,
