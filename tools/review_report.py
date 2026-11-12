@@ -3,7 +3,9 @@
 A report is a PR comment starting `Reviewed commit: <sha>`, attributed as
 `Agent: <path> | Model: <model> | Reasoning effort: <effort>` and ending with its
 disposition: accepted, or findings to remediate (docs/review-brief.md, Report).
-What a report's text does not give is `unknown`, never guessed.
+What a report's text does not give is `unknown`, never guessed. Fenced blocks
+and quoted lines, such as an earlier report quoted in a re-check, are not the
+report's own text and give nothing.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from cleanup_contract import ATTRIBUTION
 
 REVIEWED = re.compile(r"\bReviewed\s+(?:commit|head):\s*`?([0-9a-f]{7,40})\b", re.I)
 FENCE = re.compile(r"^\s*```.*?^\s*```\s*$", re.M | re.S)
+QUOTED = re.compile(r"^\s*>.*\n?", re.M)
 DISPOSITIONS = ("accepted", "findings to remediate")
 UNKNOWN = "unknown"
 
@@ -32,9 +35,21 @@ class ReviewReport:
     scope: str | None = None
 
 
+def own_text(body: str) -> str:
+    """The body without fenced blocks or quoted lines."""
+    return QUOTED.sub("", FENCE.sub("", body))
+
+
+def reviewed_sha(body: str) -> str | None:
+    """The commit the report's header names: its first `Reviewed commit:` in its
+    own text. A report rarely puts a line, such as its attribution, before it."""
+    header = REVIEWED.search(own_text(body))
+    return header[1] if header else None
+
+
 def agent(body: str) -> str:
     """The report's attributed agent path."""
-    attribution = ATTRIBUTION.search(body)
+    attribution = ATTRIBUTION.search(own_text(body))
     return attribution[1] if attribution else UNKNOWN
 
 
@@ -44,7 +59,7 @@ def disposition(body: str) -> tuple[str, str | None]:
     attribution line after the disposition does not hide it."""
     lines = [
         line
-        for line in FENCE.sub("", body).splitlines()
+        for line in own_text(body).splitlines()
         if line.strip() and not ATTRIBUTION.search(line)
     ]
     if not lines:
@@ -72,16 +87,16 @@ def review_reports(
     reports = [
         parsed(
             ReviewReport(
-                match[1],
+                sha,
                 item["html_url"],
                 item["updated_at"],
                 "report text",
-                head.startswith(match[1]),
+                head.startswith(sha),
             ),
             item.get("body") or "",
         )
         for item in comments
-        for match in REVIEWED.finditer(item.get("body") or "")
+        if (sha := reviewed_sha(item.get("body") or ""))
     ]
     reports.extend(
         parsed(

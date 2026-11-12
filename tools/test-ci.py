@@ -3166,6 +3166,27 @@ class ReviewReportTests(unittest.TestCase):
                     (agent, disposition, scope),
                 )
 
+    def test_quoted_earlier_report_does_not_take_the_disposition(self) -> None:
+        earlier = review(PREVIOUS, "/root/old", "Disposition: findings to remediate")
+        attribution = "Agent: /root/new | Model: m-1 | Reasoning effort: high"
+        quoted = "\n".join("> " + line for line in earlier.splitlines())
+        for body in (
+            f"Reviewed commit: {HEAD}\n{attribution}\n```\n{earlier}\n```\n"
+            "Disposition: accepted, group 1",
+            f"Reviewed commit: {HEAD}\n{attribution}\n{quoted}\n"
+            "Disposition: accepted, group 1",
+            f"{attribution}\n```\n{earlier}\n```\nReviewed commit: {HEAD}\n"
+            "Disposition: accepted, group 1",
+        ):
+            with self.subTest(body=body):
+                reports = ci.review_report.review_reports(
+                    [comment(1, body, "t")], [], HEAD
+                )
+                self.assertEqual(
+                    [(r.sha, r.agent, r.disposition) for r in reports],
+                    [(HEAD, "/root/new", "accepted")],
+                )
+
     def test_github_reviews_and_older_heads_are_reported_as_such(self) -> None:
         reviews = [
             {
