@@ -908,7 +908,8 @@ class CommitMsgTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     ran = record.read_text().split()
                     self.assertEqual(ran[1:], [hook, "argument"])
-                    self.assertEqual(Path(ran[0]), repo / "tools/git_hooks.py")
+                    # Git names the repository by its physical path.
+                    self.assertTrue(Path(ran[0]).samefile(repo / "tools/git_hooks.py"))
 
     def test_every_hook_name_reaches_its_handler(self) -> None:
         handlers = {
