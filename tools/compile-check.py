@@ -10,11 +10,11 @@ change since the base touches no shared header, generated ABI input, probe or
 runtime adapter. Generated ABI headers come fresh from `tools/generate-abi.py`,
 not from the build. Each comparison runs with PROBE_COMPILE_ONLY set, so
 `probe` compiles every variant for syntax only and each comparison skips its
-runs (`probe.RUN`). Where `clang++` is installed, every such compile, and
-the build's compiles of fork sources under tools/ and src/tests/, also runs
+runs (`probe.RUN`). Where `clang++` is installed, the build's compiles of
+fork sources under tools/ and src/tests/ that read a touched file also run
 through `clang++ -fsyntax-only -Wmissing-field-initializers` with the build's
-other flags (#933), and a Clang warning fails the check when its compile reads
-a file the change touches. Each child refuses to start any program but a compiler
+other flags (#933); any Clang diagnostic there fails the check, as CI's Clang
+annotation check would. Each child refuses to start any program but a compiler
 or a read of the repository and build, and a refusal fails the check.
 """
 
@@ -154,37 +154,47 @@ def run(name: str, command: list[str], env: dict[str, str]) -> tuple[str, int, P
 
 
 DIAGNOSTIC = re.compile(r"^\S+:\d+:\d+: (warning|error): ")
+# CompileFlags.cmake gives these to GCC only; clang++ rejects or inverts them.
+GCC_ONLY = {"-flifetime-dse=1", "-Wno-redundant-move"}
 
 
-def clang_pass(touched: set[Path], fresh: Path, env: dict[str, str]) -> list[str]:
-    """Clang's diagnostics from compiles that read a touched file (#933)."""
-    folder = env["PROBE_CLANG"]
-    commands = json.loads((BUILD / "compile_commands.json").read_text())
+def clang(entry: dict[str, str], fresh: Path, touched: set[Path]) -> list[str] | None:
+    """Clang's diagnostics for one build compile, or None when it reads no touched file."""
+    argv = probe.compile_only(shlex.split(entry["command"]), str(fresh)) or []
+    source = Path(entry["file"]).resolve().relative_to(ROOT)
+    stem = OUT / "clang" / str(source).replace("/", "-")
+    command = ["clang++", *(a for a in argv[1:] if a not in GCC_ONLY)]
+    directory = Path(entry["directory"])
+    # Preprocessing alone lists what the compile reads, at a fraction of its cost.
+    depends = [*command, "-M", "-MF", f"{stem}.d"]
+    if subprocess.run(depends, cwd=directory, capture_output=True).returncode:
+        return [f"{entry['file']}: clang++ could not preprocess it"]
+    read = Path(f"{stem}.d").read_text().replace("\\\n", " ").split()[1:]
+    if not touched & {(directory / path).resolve() for path in read}:
+        return None
+    extra = ["-Wmissing-field-initializers", "-Wno-unknown-warning-option"]
+    result = subprocess.run(
+        [*command, *extra], cwd=directory, capture_output=True, text=True
+    )
+    return [line for line in result.stderr.splitlines() if DIAGNOSTIC.match(line)]
+
+
+def clang_pass(touched: set[Path], fresh: Path) -> tuple[list[str], int, int]:
+    """Diagnostics, compiles checked and fork compiles listed (#933)."""
     fork = [
         entry
-        for entry in commands
+        for entry in json.loads((BUILD / "compile_commands.json").read_text())
         if Path(entry["file"]).resolve().is_relative_to(ROOT / "tools")
         or Path(entry["file"]).resolve().is_relative_to(ROOT / "src/tests")
     ]
-
-    def one(entry: dict[str, str]) -> None:
-        argv = probe.compile_only(shlex.split(entry["command"]), str(fresh))
-        if argv:
-            probe.clang(argv, entry["directory"], env, folder)
-
     with ThreadPoolExecutor(workers()) as pool:
-        list(pool.map(one, fork))
-    found = set()
-    for log in Path(folder).glob("*.log"):
-        cwd, *lines = log.read_text(errors="replace").splitlines()
-        depfile = log.with_suffix(".d")
-        if not depfile.exists():
-            continue
-        read = depfile.read_text().replace("\\\n", " ").split()
-        directory = Path(cwd.removeprefix("cwd "))
-        if touched & {(directory / path).resolve() for path in read[1:]}:
-            found |= {line for line in lines if DIAGNOSTIC.match(line)}
-    return sorted(found)
+        results = list(pool.map(lambda entry: clang(entry, fresh, touched), fork))
+    checked = [lines for lines in results if lines is not None]
+    return (
+        sorted({line for lines in checked for line in lines}),
+        len(checked),
+        len(fork),
+    )
 
 
 def workers() -> int:
@@ -219,10 +229,6 @@ def check(base: str) -> int:
     for folder in ("logs", "clang"):
         shutil.rmtree(OUT / folder, ignore_errors=True)
         (OUT / folder).mkdir()
-    if shutil.which("clang++", path=env.get("PATH")):
-        env["PROBE_CLANG"] = str(OUT / "clang")
-    else:
-        print("Clang pass skipped: no clang++ on this host")
     started = time.monotonic()
     listed = jobs()
     with ThreadPoolExecutor(workers()) as pool:
@@ -240,16 +246,19 @@ def check(base: str) -> int:
         print(f"FAIL {labels.get(code, 'error')}: {name}; see {log}")
     elapsed = time.monotonic() - started
     print(f"{len(listed) - len(failed)}/{len(listed)} compiled in {elapsed:.0f}s")
-    if "PROBE_CLANG" not in env:
+    if not shutil.which("clang++", path=env.get("PATH")):
+        print("Clang pass skipped: no clang++ on this host")
         return 1 if failed else 0
     started = time.monotonic()
     named = [ROOT / path for path in paths] + [fresh / name for name in abi]
     touched = {path.resolve() for path in named}
-    diagnostics = clang_pass(touched, fresh, env)
+    diagnostics, checked, listed_fork = clang_pass(touched, fresh)
     for line in diagnostics:
         print(f"FAIL clang: {line}")
-    count = len(list((OUT / "clang").glob("*.log")))
-    print(f"Clang pass: {count} compiles in {time.monotonic() - started:.0f}s")
+    elapsed = time.monotonic() - started
+    print(
+        f"Clang pass: {checked} of {listed_fork} fork compiles read a touched file; {elapsed:.0f}s"
+    )
     return 1 if failed or diagnostics else 0
 
 

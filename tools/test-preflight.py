@@ -564,25 +564,31 @@ class CompileCheckTests(unittest.TestCase):
         # #933: GCC does not report -Wmissing-field-initializers here (#885, #929).
         if not shutil.which("clang++"):
             self.skipTest("no clang++ on this host")
-        check, probe = tool("compile-check"), tool("probe")
+        check = tool("compile-check")
         with tempfile.TemporaryDirectory() as directory:
-            out = Path(directory)
+            out = Path(directory).resolve()
+            (out / "tools").mkdir()
             (out / "services.h").write_text("struct S { int a; int b; };\n")
-            (out / "probe.inc").write_text("S s{ .a = 1 };\n")
-            (out / "probe.cpp").write_text(
-                '#include "services.h"\n#include "probe.inc"\n'
-            )
-            (out / "compile_commands.json").write_text("[]")
-            argv = ["c++", "-std=c++20", "-O2", str(out / "probe.cpp"), "-fsyntax-only"]
-            probe.clang(argv, out, dict(os.environ), str(out))
-            probe.clang([*argv[:2], "-O0", *argv[3:]], out, dict(os.environ), str(out))
-            self.assertEqual(len(list(out.glob("*.log"))), 1)
-            env = {"PROBE_CLANG": str(out)}
-            with patch.object(check, "BUILD", out):
-                (warning,) = check.clang_pass({out / "services.h"}, out, env)
+            (out / "tools/probe.inc").write_text("S s{ .a = 1 };\n")
+            source = out / "tools/probe.cpp"
+            source.write_text('#include "../services.h"\n#include "probe.inc"\n')
+            command = f"/usr/bin/c++ -std=c++20 -O2 -flifetime-dse=1 -o x.o -c {source}"
+            entry = {"file": str(source), "directory": str(out), "command": command}
+            (out / "compile_commands.json").write_text(json.dumps([entry]))
+            (out / "clang").mkdir()
+            with (
+                patch.object(check, "BUILD", out),
+                patch.object(check, "OUT", out),
+                patch.object(check, "ROOT", out),
+            ):
+                (warning,), checked, listed = check.clang_pass(
+                    {out / "services.h"}, out
+                )
+                self.assertEqual((checked, listed), (1, 1))
                 self.assertIn("probe.inc:1", warning)
                 self.assertIn("-Wmissing-field-initializers", warning)
-                self.assertEqual(check.clang_pass({out / "other.h"}, out, env), [])
+                untouched = check.clang_pass({out / "other.h"}, out)
+                self.assertEqual(untouched, ([], 0, 1))
 
     def test_comparisons_guard_their_runs_and_abi_is_always_regenerated(self) -> None:
         check = tool("compile-check")
