@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict, cast
@@ -55,7 +55,7 @@ JOB_FAILED = (
 )
 RUN_URL = re.compile(
     r"https://github\.com/([^/\s]+/[^/\s]+)/actions/runs/(\d+)"
-    r"(?:/attempts/\d+)?(?:/job/(\d+))?/?(?:[?#]\S*)?"
+    r"(?:/attempts/(\d+))?(?:/job/(\d+))?/?(?:[?#]\S*)?"
 )
 
 
@@ -378,14 +378,15 @@ def status(path: Path) -> tuple[dict, dict | None]:
     return record, run
 
 
-def run_jobs(repository: str, run_id: int) -> list[dict]:
-    """Every job of the run's latest attempt, through every page."""
+def run_jobs(repository: str, run_id: int, attempt: int | None = None) -> list[dict]:
+    """Every job of the run's attempt, the latest by default, through every page."""
+    jobs = f"attempts/{attempt}/jobs?" if attempt else "jobs?filter=latest&"
     pages = json.loads(
         gh(
             "api",
             "--paginate",
             "--slurp",
-            f"repos/{repository}/actions/runs/{run_id}/jobs?filter=latest&per_page=100",
+            f"repos/{repository}/actions/runs/{run_id}/{jobs}per_page=100",
         )
     )
     return [job for page in pages for job in page["jobs"]]
@@ -1073,8 +1074,18 @@ def request_run(path: Path) -> tuple[str, int]:
     return record["repository"], run["id"]
 
 
-def log_target(args: argparse.Namespace) -> tuple[str, int, int | None]:
-    """The repository, run and job (or None) that `log`'s arguments name."""
+@dataclass(frozen=True)
+class LogTarget:
+    """The run `log` reads: its attempt (None for the latest) and one job."""
+
+    repository: str
+    run_id: int
+    attempt: int | None = None
+    job_id: int | None = None
+
+
+def log_target(args: argparse.Namespace) -> LogTarget:
+    """The run, attempt and job that `log`'s arguments name."""
     if (args.pr is None) == (args.target is None):
         raise ValueError(
             "name one run: python3 tools/ci.py log RUN_ID|RUN_URL|JOB_URL|"
@@ -1082,13 +1093,13 @@ def log_target(args: argparse.Namespace) -> tuple[str, int, int | None]:
         )
     if args.pr is not None:
         repository = repository_of(args.repo)
-        return repository, pr_run(repository, args.pr, args.profile), None
+        return LogTarget(repository, pr_run(repository, args.pr, args.profile))
     if match := RUN_URL.fullmatch(args.target):
-        job = int(match[3]) if match[3] else None
-        return match[1], int(match[2]), job
+        attempt, job = (int(n) if n else None for n in (match[3], match[4]))
+        return LogTarget(match[1], int(match[2]), attempt, job)
     if args.target.isdigit():
-        return repository_of(args.repo), int(args.target), None
-    return (*request_run(Path(args.target)), None)
+        return LogTarget(repository_of(args.repo), int(args.target))
+    return LogTarget(*request_run(Path(args.target)))
 
 
 def selected_jobs(
@@ -1110,16 +1121,16 @@ def no_jobs(run: dict, jobs: list[dict], name: str | None) -> str:
     return f"No failed job: the run concluded {run['conclusion']}"
 
 
-def log_lines(
-    repository: str, run_id: int, job_id: int | None, args: argparse.Namespace
-) -> list[str]:
+def log_lines(target: LogTarget, args: argparse.Namespace) -> list[str]:
     """The run's heading, then each selected job's log as `args` asks."""
     grep: str | None = args.grep
     pattern = re.compile(grep) if grep else None
-    run = api(repository, f"actions/runs/{run_id}")
-    jobs = run_jobs(repository, run_id)
+    repository = target.repository
+    attempt = f"/attempts/{target.attempt}" if target.attempt else ""
+    run = api(repository, f"actions/runs/{target.run_id}{attempt}")
+    jobs = run_jobs(repository, target.run_id, target.attempt)
     lines = ci_log.run_heading(run, jobs)
-    chosen = selected_jobs(repository, jobs, job_id, args.job)
+    chosen = selected_jobs(repository, jobs, target.job_id, args.job)
     if not chosen:
         lines.append(no_jobs(run, jobs, args.job))
     for job in chosen:
@@ -1128,8 +1139,7 @@ def log_lines(
 
 
 def show_log(args: argparse.Namespace) -> None:
-    repository, run_id, job_id = log_target(args)
-    print("\n".join(log_lines(repository, run_id, job_id, args)))
+    print("\n".join(log_lines(log_target(args), args)))
 
 
 def failure_logs(repository: str, run_id: int | None) -> None:
@@ -1139,7 +1149,8 @@ def failure_logs(repository: str, run_id: int | None) -> None:
         return
     summary = argparse.Namespace(job=None, grep=None, full=False)
     try:
-        print("\n".join(log_lines(repository, run_id, None, summary)), flush=True)
+        lines = log_lines(LogTarget(repository, run_id), summary)
+        print("\n".join(lines), flush=True)
     except Exception as error:  # Any failure here must keep the wait's status.
         print(
             f"Could not read the failed jobs' logs ({error}); read them with: "

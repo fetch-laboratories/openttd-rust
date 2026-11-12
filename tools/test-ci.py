@@ -3584,6 +3584,33 @@ class LogTests(unittest.TestCase):
         self.assertEqual(downloads, [19])
         self.assertTrue((self.cache / "example/fork/7/attempt-2/19.log").exists())
 
+    def test_attempt_url_reads_that_attempt_not_the_latest(self) -> None:
+        first = log_job()
+        steps = [dict(step, conclusion="success") for step in first["steps"]]
+        rerun = log_job(id=19, run_attempt=2, conclusion="success", steps=steps)
+        runs = {
+            "actions/runs/7": dict(self.RUN, run_attempt=2, conclusion="success"),
+            "actions/runs/7/attempts/1": dict(self.RUN),
+        }
+
+        def gh(*args: str) -> str:
+            jobs = [first] if "/attempts/1/jobs" in args[-1] else [rerun]
+            return json.dumps([{"jobs": jobs}])
+
+        url = "https://github.com/example/fork/actions/runs/7/attempts/1"
+        with (
+            patch.object(ci, "api", side_effect=lambda _, path: runs[path]),
+            patch.object(ci, "gh", side_effect=gh),
+            patch.object(ci_log, "download", return_value=RAW_LOG),
+            patch("sys.argv", ["ci.py", "log", url]),
+            patch("builtins.print") as printed,
+        ):
+            self.assertEqual(ci.main(), 0)
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        self.assertIn("Run 7 attempt 1 (failure)", output)
+        self.assertIn("Failing step: 2 Test (failure)", output)
+        self.assertTrue((self.cache / "example/fork/7/attempt-1/9.log").exists())
+
     def test_cancelled_job_without_a_failed_step_shows_its_tail(self) -> None:
         steps = [dict(step, conclusion="success") for step in log_job()["steps"]]
         lost = log_job(conclusion="cancelled", steps=steps)
@@ -3623,9 +3650,9 @@ class LogTests(unittest.TestCase):
     def test_targets_name_a_run_a_job_or_a_request(self) -> None:
         url = "https://github.com/example/fork/actions/runs/7/attempts/2"
         args = argparse.Namespace(pr=None, target=url, repo=None, profile=None)
-        self.assertEqual(ci.log_target(args), ("example/fork", 7, None))
+        self.assertEqual(ci.log_target(args), ci.LogTarget("example/fork", 7, 2))
         args.target = JOB_URL
-        self.assertEqual(ci.log_target(args), ("example/fork", 7, 9))
+        self.assertEqual(ci.log_target(args), ci.LogTarget("example/fork", 7, None, 9))
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "request.json"
             ci.write_request(
@@ -3633,7 +3660,7 @@ class LogTests(unittest.TestCase):
             )
             args.target = str(path)
             with patch.object(ci, "api", return_value=self.RUN):
-                self.assertEqual(ci.log_target(args), ("example/fork", 7, None))
+                self.assertEqual(ci.log_target(args), ci.LogTarget("example/fork", 7))
         args.target = None
         with self.assertRaisesRegex(ValueError, "python3 tools/ci.py log --pr N"):
             ci.log_target(args)
