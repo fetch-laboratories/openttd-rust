@@ -3202,7 +3202,7 @@ class ReviewReportTests(unittest.TestCase):
             "Disposition: accepted, group 1",
             f"Reviewed commit: {HEAD}\n{attribution}\n{quoted}\n"
             "Disposition: accepted, group 1",
-            f"{attribution}\n```\n{earlier}\n```\nReviewed commit: {HEAD}\n"
+            f"**Reviewed commit:** `{HEAD}`\n{attribution}\n~~~\n{earlier}\n~~~\n"
             "Disposition: accepted, group 1",
         ):
             with self.subTest(body=body):
@@ -3213,6 +3213,24 @@ class ReviewReportTests(unittest.TestCase):
                     [(r.sha, r.agent, r.disposition) for r in reports],
                     [(HEAD, "/root/new", "accepted")],
                 )
+
+    def test_only_a_comment_that_opens_with_the_header_is_a_report(self) -> None:
+        earlier = review(PREVIOUS, "/root/old", "Disposition: findings to remediate")
+        attribution = "Agent: /root/new | Model: m-1 | Reasoning effort: high"
+        for body in (
+            # Prose that quotes a header in inline code, then a disposition.
+            f"{attribution}\nThe earlier report said `Reviewed commit: {PREVIOUS}`.\n"
+            "Disposition: accepted, group 1",
+            # An earlier report in a tilde fence ahead of the real header.
+            f"~~~\n{earlier}\n~~~\nReviewed commit: {HEAD}\n{attribution}\n"
+            "Disposition: accepted, group 1",
+            f"{attribution}\nReviewed commit: {HEAD}\nDisposition: accepted",
+        ):
+            with self.subTest(body=body):
+                reports = ci.review_report.review_reports(
+                    [comment(1, body, "t")], [], HEAD
+                )
+                self.assertEqual(reports, [])
 
     def test_github_reviews_and_older_heads_are_reported_as_such(self) -> None:
         reviews: list[review_report.Review] = [

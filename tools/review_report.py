@@ -3,9 +3,9 @@
 A report is a PR comment starting `Reviewed commit: <sha>`, attributed as
 `Agent: <path> | Model: <model> | Reasoning effort: <effort>` and ending with its
 disposition: accepted, or findings to remediate (docs/review-brief.md, Report).
-What a report's text does not give is `unknown`, never guessed. Fenced blocks
-and quoted lines, such as an earlier report quoted in a re-check, are not the
-report's own text and give nothing.
+What a report's text does not give is `unknown`, never guessed. A comment that
+does not start with the header is not a report, and fenced blocks and quoted
+lines, such as an earlier report quoted in a re-check, give nothing.
 """
 
 from __future__ import annotations
@@ -16,8 +16,13 @@ from typing import NotRequired, TypedDict
 
 from cleanup_contract import ATTRIBUTION
 
+# The header anywhere in a text: what marks a comment as holding a report.
 REVIEWED = re.compile(r"\bReviewed\s+(?:commit|head):\s*`?([0-9a-f]{7,40})\b", re.I)
-FENCE = re.compile(r"^\s*```.*?^\s*```\s*$", re.M | re.S)
+# The header where a report has it: the comment's opening line.
+HEADER = re.compile(
+    r"\A\s*[*_]*Reviewed\s+(?:commit|head):[*_]*\s*`?([0-9a-f]{7,40})\b", re.I
+)
+FENCE = re.compile(r"^\s*(```|~~~).*?^\s*\1\s*$", re.M | re.S)
 QUOTED = re.compile(r"^\s*>.*\n?", re.M)
 DISPOSITIONS = ("accepted", "findings to remediate")
 UNKNOWN = "unknown"
@@ -66,9 +71,10 @@ def own_text(body: str) -> str:
 
 
 def reviewed_sha(body: str) -> str | None:
-    """The commit the report's header names: its first `Reviewed commit:` in its
-    own text. A report rarely puts a line, such as its attribution, before it."""
-    header = REVIEWED.search(own_text(body))
+    """The commit the report's header names. The header opens the comment
+    (docs/review-brief.md, Report); the same words later in it, in prose, inline
+    code or a quotation, are not a header."""
+    header = HEADER.match(body)
     return header[1] if header else None
 
 
