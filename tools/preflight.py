@@ -55,6 +55,12 @@ EXPRESSION = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 TAIL_LINES = 40
 # A stamp's base must be on this branch, so base-relative gates saw every PR change.
 PROTECTED = "origin/rust-migration"
+# Git exports these to a hook for the repository it runs in, and `git -C` does
+# not override them (#933), so commands on any other checkout drop them.
+REPOSITORY_VARIABLES = frozenset(
+    "GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY "
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_PREFIX".split()
+)
 
 
 @dataclass
@@ -68,25 +74,34 @@ def git(repo: Path, *arguments: str) -> str:
     return vcs.git(*arguments, cwd=repo).strip()
 
 
+def other_repository() -> dict[str, str]:
+    """This process's environment without git's repository-locating variables."""
+    return {k: v for k, v in os.environ.items() if k not in REPOSITORY_VARIABLES}
+
+
 def hooks_checkout(supplied: Path | None = None) -> Path:
     destination = supplied or (
         migration.COMMON_LOCAL / "tooling/OpenTTD-git-hooks" / HOOKS_REVISION
     )
+    env = other_repository()
+
+    def checker(*arguments: str) -> str:
+        return subprocess.check_output(
+            ["git", *arguments], cwd=destination, env=env, text=True
+        ).strip()
+
     with file_lock(
         migration.COMMON_LOCAL / "tooling/hooks.lock", label="commit-checker checkout"
     ):
         if not destination.exists() and supplied is None:
             destination.mkdir(parents=True)
-            subprocess.run(["git", "init", "--quiet", str(destination)], check=True)
+            checker("init", "--quiet")
         if supplied is None and not (destination / "hooks/check-commits.sh").exists():
-            for command in (
-                ["fetch", "--depth=1", HOOKS_URL, HOOKS_REVISION],
-                ["checkout", "--quiet", "--detach", HOOKS_REVISION],
-            ):
-                subprocess.run(["git", "-C", str(destination), *command], check=True)
-        if git(destination, "rev-parse", "HEAD") != HOOKS_REVISION:
+            checker("fetch", "--quiet", "--depth=1", HOOKS_URL, HOOKS_REVISION)
+            checker("checkout", "--quiet", "--detach", HOOKS_REVISION)
+        if checker("rev-parse", "HEAD") != HOOKS_REVISION:
             raise ValueError("commit checker is not at the pinned revision")
-        if git(destination, "status", "--porcelain", "--untracked-files=all"):
+        if checker("status", "--porcelain", "--untracked-files=all"):
             raise ValueError("commit checker checkout is dirty")
     return destination
 

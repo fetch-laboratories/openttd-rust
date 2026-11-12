@@ -365,6 +365,58 @@ class PushTests(unittest.TestCase):
                 with self.subTest(text=text), patch("sys.stderr"):
                     self.assertEqual(bool(git_hooks.pre_commit()), bool(code))
 
+    def test_pre_commit_hook_under_gits_variables_in_main_and_linked(self) -> None:
+        # #933: git exports GIT_DIR (linked worktree) or an absolute
+        # GIT_INDEX_FILE (`commit -a`) to the hook; neither may reach the checker.
+        try:
+            preflight.hooks_checkout()
+        except (OSError, ValueError, subprocess.CalledProcessError) as error:
+            self.skipTest(f"pinned commit checker unavailable: {error}")
+        with tempfile.TemporaryDirectory() as directory:
+            main, linked, runner = (Path(directory) / name for name in ("m", "l", "r"))
+            runner.write_text(
+                "import subprocess, sys\nfrom pathlib import Path\n"
+                f"sys.path.insert(0, {str(REPO / 'tools')!r})\n"
+                "import git_hooks, migration\n"
+                "top = subprocess.check_output(['git', 'rev-parse', "
+                "'--show-toplevel'], text=True)\n"
+                "migration.ROOT = Path(top.strip())\n"
+                f"migration.COMMON_LOCAL = Path({str(preflight.migration.COMMON_LOCAL)!r})\n"
+                "sys.exit(git_hooks.pre_commit())\n"
+            )
+            env = {
+                key: value
+                for key, value in os.environ.items()
+                if key not in preflight.REPOSITORY_VARIABLES
+            } | {"GIT_AUTHOR_NAME": "Seed", "GIT_AUTHOR_EMAIL": "s@example.invalid"}
+            env |= {"GIT_COMMITTER_NAME": "Seed", "GIT_COMMITTER_EMAIL": "s@x.invalid"}
+
+            def git(cwd: Path, *arguments: str) -> CompletedProcess[str]:
+                return subprocess.run(
+                    ["git", *arguments],
+                    cwd=cwd,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+            git(Path(directory), "init", "-q", "-b", "work", str(main))
+            (main / "a.cpp").write_text("int a;\n")
+            git(main, "add", "a.cpp")
+            git(main, "commit", "-qm", "Add: Base")
+            git(main, "worktree", "add", "-q", "-b", "side", str(linked))
+            hook = main / ".git/hooks/pre-commit"
+            hook.write_text(f"#!/bin/sh\nexec {sys.executable} {runner}\n")
+            hook.chmod(0o755)
+            for checkout in (main, linked):
+                for text, refused in (("int a; \n", True), ("int b;\n", False)):
+                    (checkout / "a.cpp").write_text(text)
+                    result = git(checkout, "commit", "-qam", "Change: A")
+                    with self.subTest(checkout=checkout.name, text=text):
+                        self.assertNotIn("unavailable", result.stdout + result.stderr)
+                        self.assertEqual(result.returncode != 0, refused, result)
+
     def test_installer_writes_shims_and_keeps_foreign_hooks(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch("builtins.print"):
             hooks = Path(directory)
