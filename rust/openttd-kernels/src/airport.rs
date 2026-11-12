@@ -11,7 +11,7 @@ use crate::tile_type::TileIndex;
 
 /* Some airport-related constants */
 
-/// `NUM_AIRPORTTILES_PER_GRF`: Number of airport tiles per NewGRF; limited to 255 to allow
+/// `NUM_AIRPORTTILES_PER_GRF`: Number of airport tiles per `NewGRF`; limited to 255 to allow
 /// extending Action3 with an extended byte later on.
 pub const NUM_AIRPORTTILES_PER_GRF: u32 = 255;
 /// `NUM_AIRPORTTILES`: Total number of airport tiles.
@@ -34,7 +34,7 @@ impl AirportTypes {
     pub const AT_OILRIG: Self = Self(9);
     /// Number of the first newgrf airport.
     pub const NEW_AIRPORT_OFFSET: Self = Self(10);
-    /// Maximal number of airports per NewGRF.
+    /// Maximal number of airports per `NewGRF`.
     pub const NUM_AIRPORTS_PER_GRF: Self = Self(128);
     /// Maximal number of airports in total.
     pub const NUM_AIRPORTS: Self = Self(128);

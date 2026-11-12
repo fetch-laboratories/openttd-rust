@@ -14,7 +14,7 @@
 /// When in a road stop (bit 5 or bit 6 set) these bits give the
 /// track direction of the entry to the road stop.
 /// As the entry direction will always be a diagonal
-/// direction (X_NE, Y_SE, X_SW or Y_NW) only bits 0 and 3
+/// direction (`X_NE`, `Y_SE`, `X_SW` or `Y_NW`) only bits 0 and 3
 /// are needed to hold this direction. Bit 1 is then used to show
 /// that the vehicle is using the second road stop bay.
 /// Bit 2 is then used for drive-through stops to show the vehicle

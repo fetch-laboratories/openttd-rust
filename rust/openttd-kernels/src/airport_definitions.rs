@@ -23,12 +23,12 @@ use crate::newgrf_internal::ChangeInfoResult;
 use crate::override_manager::{self, Manager};
 use crate::{animated_tile::AirportSpec as TileSpec, station_cmd::AirportSpec};
 use std::ffi::c_void;
-/// `AirportTileTable`: Tile-offset / AirportTileID pair.
+/// `AirportTileTable`: Tile-offset / `AirportTileID` pair.
 #[repr(C)]
 pub struct AirportTileTable {
     /// Tile offset from the top-most airport tile.
     pub ti: crate::map_type::TileIndexDiffC,
-    /// AirportTile to use for this tile.
+    /// `AirportTile` to use for this tile.
     pub gfx: u8,
 }
 /// `AirportTileLayout`: Airport tile layout.
@@ -476,7 +476,7 @@ pub unsafe fn reset_airports(s: *const Services) {
     }
 }
 /// `AirportTileSpec::ResetAirportTiles`: this function initializes the tile array of
-/// AirportTileSpec.
+/// `AirportTileSpec`.
 pub unsafe fn reset_airport_tiles(s: *const Services) {
     let s = unsafe { &*s };
     unsafe {

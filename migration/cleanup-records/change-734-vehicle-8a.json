@@ -1,0 +1,8 @@
+[
+  {
+    "from": "rust/openttd-kernels/src/airport_definitions.rs | fn airport_change | allow clippy::too_many_lines",
+    "kind": "carry",
+    "to": "rust/openttd-kernels/src/airport_definitions.rs | fn airport_change_info | allow clippy::too_many_lines",
+    "tool": "rust"
+  }
+]

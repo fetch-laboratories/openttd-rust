@@ -33,7 +33,7 @@ pub extern "C" fn openttd_rust_has_road_type(
 pub fn has_road_type_avail_raw(shared: &Shared, s: &Services, company: u8, rt: u8) -> bool {
     has_road_type_avail(shared, s, CompanyID(company), RoadType(rt))
 }
-/// `HasRoadTypeAvail`: finds out, whether given company has a given RoadType available for
+/// `HasRoadTypeAvail`: finds out, whether given company has a given `RoadType` available for
 /// construction.
 pub fn has_road_type_avail(
     shared: &Shared,
@@ -82,7 +82,7 @@ pub extern "C" fn openttd_rust_has_any_road_types_abi(
 ) -> u8 {
     u8::from(has_any_road_types_avail(s, CompanyID(company), rtt))
 }
-/// `HasAnyRoadTypesAvail`: test if any buildable RoadType is available for a company.
+/// `HasAnyRoadTypesAvail`: test if any buildable `RoadType` is available for a company.
 pub fn has_any_road_types_avail(s: &Services, company: CompanyID, rtt: RoadTramType) -> bool {
     let avail = (s.company_roadtypes)(company.0) & !crate::type_registry::road_hidden();
     avail & get_mask_for_road_tram_type(rtt).0 != 0
