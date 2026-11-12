@@ -760,6 +760,7 @@ pub(crate) fn get_speed_limit_with_road(
         }
     }
 
+    /* if min speed was requested, return it: no caller requests it */
     max_speed
 }
 /// Temporary raw adapter of [`get_speed_limit`] for `rail_yapf.rs` and
