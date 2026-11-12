@@ -206,17 +206,8 @@ pub(crate) fn tick(
         join_next(s);
     }
 }
-/// Observer installed by `evidence_tests`; none posts as before.
-#[cfg(test)]
-static PAUSE_OBSERVER: GameState<Option<fn(bool)>> = GameState::new(None);
 /// `Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused)`, the scheduler's only pause post.
 fn post_pause(s: &Services, paused: bool) {
-    // The game-free scheduler test records this post in place of the command chain it lacks.
-    #[cfg(test)]
-    if let Some(observer) = unsafe { *PAUSE_OBSERVER.get() } {
-        observer(paused);
-        return;
-    }
     crate::command_post::pause(s.shared, crate::openttd::PauseMode::LINK_GRAPH, paused);
 }
 pub(crate) fn pause(
