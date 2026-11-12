@@ -2,7 +2,7 @@
 
 The PR's implementer starts each reviewer with this fixed message and nothing more:
 
-> Review PR <URL> under `docs/review-brief.md`. You are <name>. Review <group N of the PR body's review groups | the whole PR>. The implementer's thread is <thread ID>.
+> Review PR <URL> under `docs/review-brief.md`. You are <name>. Review <group N of the PR body's review groups | the whole PR>.
 
 A re-check's message adds one sentence: `Re-check the fixing commits <SHAs> for the findings in <report URLs>.` Read the PR body, its review groups, its flagged points and its earlier reports yourself.
 
@@ -25,7 +25,7 @@ Do not commit, push, request Full or merge.
 
 ## Policy questions
 
-Rule on a policy question yourself, from the decisions recorded on the stream issues, in `docs/adr/` and in the docs, and state your ruling and its source in the report. A question no recorded decision answers goes in the report; tell the implementer, who asks root.
+Rule on a policy question yourself, from the decisions recorded on the stream issues, in `docs/adr/` and in the docs, and state your ruling and its source in the report. A question no recorded decision answers goes in the report; [tell the implementer](team.md#spawning), who asks root.
 
 ## Checks
 
@@ -45,6 +45,4 @@ Post one report on the PR as a separate comment, with the PR template's review s
 - When you accept a growth exception, lint exception or suppression proposed in the branch's cleanup records file, add the fenced `cleanup-acceptance` block it needs to the same report ([quick cleanup checks](rust-migration.md#quick-cleanup-checks)); without it the PR cannot queue.
 - Post the report when the source review is done; do not wait for CI.
 
-After posting, tell the implementer in one line with `t3_thread_send` to its thread ID, with `mode: "queue"`: your own thread ID, the report's URL and the disposition.
-
-Your last line is `PR <url>, head <SHA>, checks and reviews <state>`, with the job ID when you end a turn to wait on one.
+Your last line is `PR <url>, head <SHA>, checks and reviews <state>`, then the report's URL and disposition once posted, or the job ID when you end a turn to wait on one. It reaches the implementer when your turn ends.

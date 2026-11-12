@@ -20,4 +20,4 @@ Message root only when the queue merges or removes the PR (one line: PR, head, o
 
 ## Starting reviewers
 
-This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says, once the PR is ready and `native` is requested. Name each `/root/review-<PR>-<group>`. Each reviewer tells you in one line, with its thread ID, when its report is posted. A tool call cancelled with a notice to stop as such a message arrives is the host delivering it: read the message, rerun the call and carry on.
+This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says, once the PR is ready and `native` is requested. Name each `/root/review-<PR>-<group>`. Each reviewer's last message, with its report's URL and disposition, reaches you when its turn ends. A tool call cancelled with a notice to stop as such a message arrives is the host delivering it: read the message, rerun the call and carry on.
