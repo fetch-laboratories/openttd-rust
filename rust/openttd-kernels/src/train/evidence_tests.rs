@@ -23,6 +23,7 @@
 //! plain rail on the next expected entry tile only and clear elsewhere: an entry on any other
 //! tile skips the vehicle resolution and changes the recorded events.
 use super::{Handle, Leaves, curve_speed_limit, openttd_rust_train_reverse_swap};
+use crate::game_state::GameState;
 use crate::ground_vehicle::GroundState;
 use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
 use crate::movement::{MovementServices, MovementVehicle};
@@ -36,7 +37,6 @@ use crate::vehicle::occupancy::{Links, openttd_rust_occupancy_update};
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices};
 use crate::vehicle_base::{openttd_rust_vehicle_record_delete, openttd_rust_vehicle_record_new};
 use crate::vehicle_type::VehicleType;
-use std::cell::{Cell, RefCell};
 use std::fmt::Write as _;
 use std::ptr::{self, null_mut};
 
@@ -118,47 +118,48 @@ struct World {
     entries: Vec<TileIndex>,
     next_entry: usize,
 }
-thread_local! {
-    static WORLD: RefCell<World> = const {
-        RefCell::new(World {
-            records: [null_mut(); VEHICLES],
-            links: null_mut(),
-            events: Vec::new(),
-            curve_speed: 0,
-            base: null_mut(),
-            entries: Vec::new(),
-            next_entry: 0,
-        })
-    };
-    static MODEL: Cell<u8> = const { Cell::new(0) };
+/// Process-wide, as the probe's globals were; the test holds `GLOBAL_LOCK`.
+static WORLD: GameState<World> = GameState::new(World {
+    records: [null_mut(); VEHICLES],
+    links: null_mut(),
+    events: Vec::new(),
+    curve_speed: 0,
+    base: null_mut(),
+    entries: Vec::new(),
+    next_entry: 0,
+});
+/// `_settings_game.vehicle.train_acceleration_model`, read through the settings catalog.
+static MODEL: GameState<u8> = GameState::new(0);
+/// No production entry is called while the world is borrowed.
+fn with<R>(f: impl FnOnce(&mut World) -> R) -> R {
+    // SAFETY: Serialized by the test lock; the borrow ends with `f`.
+    f(unsafe { &mut *WORLD.get() })
 }
 
 fn index(v: *const OpenTTDVehicle) -> usize {
-    WORLD
-        .with_borrow(|w| w.records.iter().position(|&r| ptr::eq(r, v)))
-        .expect("a fixture vehicle")
+    with(|w| w.records.iter().position(|&r| ptr::eq(r, v))).expect("a fixture vehicle")
 }
 fn set_kind(tile: TileIndex, kind: u8) {
-    WORLD.with_borrow(|w| {
+    with(|w| {
         // SAFETY: The map allocation holds MAP_SIZE tiles; one field-sized store.
         unsafe { (&raw mut (*w.base.add(tile.0 as usize)).kind).write(kind) };
     });
 }
 
 extern "C" fn curve_advantage(_: Handle) -> u64 {
-    u64::from(WORLD.with_borrow(|w| w.curve_speed))
+    u64::from(with(|w| w.curve_speed))
 }
 extern "C" fn viewport(h: Handle, a: u8, b: u8) {
     assert!(a != 0 && b != 0, "UpdateViewport(true, true)");
     let i = index(h.record);
-    WORLD.with_borrow_mut(|w| w.events.push((2, i)));
+    with(|w| w.events.push((2, i)));
 }
 extern "C" fn tile_virt(x: i32, y: i32) -> u32 {
     ((y >> 4) * 256 + (x >> 4)) as u32
 }
 extern "C" fn tile_links(v: VehicleRef) -> *mut Links {
     let i = index(v.0.as_ptr());
-    WORLD.with_borrow_mut(|w| {
+    with(|w| {
         w.events.push((1, i));
         // SAFETY: The links array lives for the test; no reference to it is held.
         unsafe { (&raw mut (*w.links)[i]) }
@@ -169,7 +170,7 @@ extern "C" fn map_log_x() -> u32 {
 }
 extern "C" fn resolve(v: VehicleRef) -> MovementVehicle {
     let i = index(v.0.as_ptr());
-    let (entered, next) = WORLD.with_borrow_mut(|w| {
+    let (entered, next) = with(|w| {
         w.events.push((3, i));
         let entered = w.entries.get(w.next_entry).copied();
         w.next_entry += 1;
@@ -259,7 +260,7 @@ impl Fixture {
             ..TRAIN_LEAVES
         }));
         let settings = Box::into_raw(Box::new(SettingAddresses {
-            train_acceleration_model: MODEL.with(Cell::as_ptr).cast_const(),
+            train_acceleration_model: MODEL.get().cast_const(),
             ..SettingAddresses::NULL
         }));
         let movement = Box::into_raw(Box::new(MovementServices {
@@ -274,7 +275,7 @@ impl Fixture {
         }));
         // SAFETY: Both tables were just allocated and nothing else refers to them yet.
         unsafe { (*movement).shared = shared };
-        WORLD.with_borrow_mut(|w| {
+        with(|w| {
             w.records = records;
             w.links = links;
             w.base = base.cast::<BaseTileLayout>();
@@ -356,7 +357,7 @@ impl Fixture {
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
-        WORLD.with_borrow_mut(|w| {
+        with(|w| {
             w.records = [null_mut(); VEHICLES];
             w.links = null_mut();
             w.base = null_mut();
@@ -439,8 +440,9 @@ fn run() -> (Cases, Cases) {
     let (mut curves, mut lines) = (Vec::new(), Vec::new());
     for trial in 0..TRIALS {
         let mut t = draws.trial(trial);
-        MODEL.set(t.model);
-        WORLD.with_borrow_mut(|w| w.curve_speed = t.curve_speed);
+        // SAFETY: Serialized by the test lock; nothing reads the setting during the store.
+        unsafe { MODEL.get().write(t.model) };
+        with(|w| w.curve_speed = t.curve_speed);
         fixture.sync(&t);
         let inputs = format!("trial {trial} count {} model {}", t.count, t.model);
         // SAFETY: The fixture's tables and records are live for the call.
@@ -454,7 +456,7 @@ fn run() -> (Cases, Cases) {
         if let Some(&first) = entries.first() {
             set_kind(first, RAILWAY);
         }
-        WORLD.with_borrow_mut(|w| {
+        with(|w| {
             w.events.clear();
             w.entries.clone_from(&entries);
             w.next_entry = 0;
@@ -472,7 +474,7 @@ fn run() -> (Cases, Cases) {
         for &tile in &entries {
             set_kind(tile, 0);
         }
-        let events = WORLD.with_borrow_mut(|w| std::mem::take(&mut w.events));
+        let events = with(|w| std::mem::take(&mut w.events));
         let line = swap_line(&events, &fixture.fields(), &t);
         lines.push((format!("{inputs} l {} r {}", t.l, t.r), line));
         for &record in &fixture.records {
@@ -482,7 +484,7 @@ fn run() -> (Cases, Cases) {
             }
         }
     }
-    WORLD.with_borrow_mut(|w| w.events.clear());
+    with(|w| w.events.clear());
     (curves, lines)
 }
 
