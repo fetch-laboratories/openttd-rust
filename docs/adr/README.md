@@ -1,7 +1,5 @@
 # Decision records
 
-Readers: every agent, before changing a rule that links here or reversing a past choice; the user, when asked to approve one.
-
 An ADR (architecture decision record) is a short file that says what was decided, why, and who may change it. The rule docs hold the working detail: commands, thresholds and procedures. An ADR holds the reason, so that a later reader can judge a change without digging through history.
 
 ## When to write one
@@ -30,14 +28,14 @@ A decision is the user's if it sets the goal or scope, spends money, depends on 
 
 ## How to change one
 
-1. Write a new ADR with the next free number. Never reuse a number.
+1. Write a new ADR with the next free number. Do not reuse a number.
 2. Give it `status: accepted` and say what it replaces and why, with the measured reason.
 3. In the old ADR, change only the status line, to `status: superseded by ADR NNNN`. The old file stays.
 4. Update the rule docs that link to the old ADR.
 
 ## How to refer to one
 
-By number and header, with a link to the file, for example [ADR 0010](0010-two-implementers.md), "At most two implementers work at once". Never refer to a decision by its date, such as "the 11-10 decision".
+By number and header, with a link to the file, for example [ADR 0010](0010-two-implementers.md), "At most two implementers work at once". Do not refer to a decision by its date, such as "the 11-10 decision".
 
 ## The records
 
@@ -59,13 +57,11 @@ By number and header, with a link to the file, for example [ADR 0010](0010-two-i
 | [0012](0012-root-decides-implementers-review-and-merge.md) | Root chooses work and settles questions; implementers run their own reviews and merges |
 | [0013](0013-stocktake-every-12-merges.md) | Root takes stock after every 12 merges |
 | [0014](0014-speed-ceilings.md) | The Rust game may cost at most 1.6 times the original in play and 1.3 times in map generation |
-| [0015](0015-third-party-test-content.md) | Other people's test content is never committed or uploaded |
+| [0015](0015-third-party-test-content.md) | Other people's test content is not committed or uploaded |
 | [0016](0016-automatic-rollback.md) | Root rolls back a merge that breaks the main branch without asking |
 | [0017](0017-deep-checks-on-request.md) | Deep checks run only on the user's request, plus at the end of cleanup and of the reader phase |
 
 ### The agents'
-
-ADRs 0018 to 0020 also fall under [ADR 0008](0008-paid-ci-cost-needs-approval.md): a change that raises paid CI cost needs the user's approval.
 
 | ADR | Header |
 | --- | --- |
