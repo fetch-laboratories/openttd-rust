@@ -1,10 +1,8 @@
 add_test_files(
     alternating_iterator.cpp
-    alternating_iterator_state.cpp
     abi_layout.hpp
     bitmath_func.cpp
     company_economy.cpp
-    cargo_registry.cpp
     fleet.cpp
     follower_probe.hpp
     newgrf_loading.cpp
@@ -35,10 +33,8 @@ add_test_files(
     session.cpp
     service_tables.cpp
     station_service.cpp
-    spiral_iterator_state.cpp
     string_builder.cpp
     string_consumer.cpp
-    string_consumer_bytes.cpp
     string_inplace.cpp
     string_func.cpp
     test_main.cpp
