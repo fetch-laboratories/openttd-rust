@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
 
+import preflight_stamp
 import vcs
 
 PROFILES = ("rust", "native", "platform", "full")
@@ -148,10 +149,36 @@ def write_request(path: Path, record: dict) -> None:
     path.write_text(json.dumps(record, indent=2) + "\n")
 
 
+def require_stamp(pr: int, head: str, unstamped: str | None) -> None:
+    """A request or ready mark needs a preflight pass on the head's tree (#920)."""
+    if unstamped:
+        log = preflight_stamp.log_override("unstamped", f"PR #{pr}", head, unstamped)
+        print(f"PR #{pr} at {head} has no preflight stamp check; logged in {log}")
+        return
+    try:
+        entry = preflight_stamp.stamp_for(head)
+    except subprocess.CalledProcessError as error:
+        raise ValueError(f"PR head {head} is not in this clone; fetch it") from error
+    if entry is None:
+        raise ValueError(
+            f"PR #{pr} head {head} has no preflight stamp; run "
+            "`python3 tools/preflight.py --base origin/rust-migration` on it"
+        )
+
+
+def ready(args: argparse.Namespace) -> None:
+    repository = repository_of(args.repo)
+    head = current_head(api(repository, f"pulls/{args.pr}"))
+    require_stamp(args.pr, head, None)
+    gh("pr", "ready", str(args.pr), "--repo", repository)
+    print(f"PR #{args.pr} at {head} marked ready")
+
+
 def request(args: argparse.Namespace) -> Path | None:
     repository = repository_of(args.repo)
     pull = api(repository, f"pulls/{args.pr}")
     head = current_head(pull)
+    require_stamp(args.pr, head, args.unstamped)
     # A new request would reset a passing status, including one carried across a
     # docs-only base update, to pending and repeat the run.
     if args.profile == "full" and not args.bootstrap:
@@ -469,6 +496,24 @@ def positive(text: str) -> int:
     return value
 
 
+def dispatch(args: argparse.Namespace) -> None:
+    if args.command == "queue-wait":
+        merge = queue_wait(
+            repository_of(args.repo), args.pr, args.timeout, args.interval
+        )
+        print(f"PR #{args.pr} merged: {merge}")
+    elif args.command == "ready":
+        ready(args)
+    elif args.command == "request":
+        path = request(args)
+        if path and args.wait:
+            wait(path, WAIT_TIMEOUT, 15)
+    elif args.command == "wait":
+        wait(args.request_file, args.timeout, args.interval)
+    else:
+        report_status(args.request_file)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -488,6 +533,16 @@ def main() -> int:
         help="ci:full label request for reviewed workflow changes with CI_ON_DEMAND unset",
     )
     submit.add_argument("--wait", action="store_true")
+    submit.add_argument(
+        "--unstamped",
+        metavar="REASON",
+        help="request a head without a preflight stamp, such as a seeded control; logged",
+    )
+    marked = commands.add_parser(
+        "ready", help="mark a draft PR ready once its head has a preflight stamp"
+    )
+    marked.add_argument("pr", type=int)
+    marked.add_argument("--repo")
     for command in ("status", "wait"):
         check = commands.add_parser(command)
         check.add_argument("request_file", type=Path)
@@ -503,19 +558,7 @@ def main() -> int:
     queued.add_argument("--interval", type=positive, default=15)
     args = parser.parse_args()
     try:
-        if args.command == "queue-wait":
-            merge = queue_wait(
-                repository_of(args.repo), args.pr, args.timeout, args.interval
-            )
-            print(f"PR #{args.pr} merged: {merge}")
-        elif args.command == "request":
-            path = request(args)
-            if path and args.wait:
-                wait(path, WAIT_TIMEOUT, 15)
-        elif args.command == "wait":
-            wait(args.request_file, args.timeout, args.interval)
-        else:
-            report_status(args.request_file)
+        dispatch(args)
         return 0
     except WaitTimeout as timeout:
         print(timeout)

@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import preflight_stamp
 import vcs
 import yaml
 from validation_execution import file_lock
@@ -28,6 +29,8 @@ HOOKS_URL = "https://github.com/OpenTTD/OpenTTD-git-hooks.git"
 WORKFLOW = migration.ROOT / ".github/workflows/ci-quick.yml"
 JOB = "quick"
 COMMITS = "Check introduced commits with the pinned inherited checker"
+# Preflight's own step after Quick's (#923): CI compiles these in its native jobs.
+PROBES = "Compile comparison probes and runtime adapters without linking"
 # Quick's `run:` steps that preflight does not run. Steps that `uses:` an action
 # (checkouts, setup-uv) are skipped too: they only prepare the runner.
 SKIPPED = {
@@ -50,6 +53,8 @@ BASE_EXPRESSION = re.compile(r"\s*\$\{\{(.*?)\}\}\s*", re.DOTALL)
 TOKENS = {"GH_TOKEN", "GITHUB_TOKEN"}
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 TAIL_LINES = 40
+# A stamp's base must be on this branch, so base-relative gates saw every PR change.
+PROTECTED = "origin/rust-migration"
 
 
 @dataclass
@@ -227,11 +232,33 @@ def summary(chosen: list[Step], failed: list[str], seconds: float, warning: str)
     return 1 if failed else 0
 
 
+def stamp(options: argparse.Namespace, base: str, head: str, warning: str) -> str:
+    """Record a pass stamp for a complete clean run, or say why there is none."""
+    if options.step:
+        return "no stamp: --step ran a subset"
+    if warning:
+        return "no stamp: tracked files differ from HEAD"
+    if head != revision("HEAD"):
+        return "no stamp: --head is not the checked-out commit"
+    on_branch = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", base, PROTECTED],
+        cwd=migration.ROOT,
+        capture_output=True,
+        check=False,
+    )
+    if on_branch.returncode:
+        return f"no stamp: base {base[:10]} is not on {PROTECTED}"
+    path = preflight_stamp.record(base, head)
+    return f"stamp: recorded {path.name} for this tree against base {base[:10]}"
+
+
 def main() -> int:
     options = arguments()
     try:
         base, head = revision(options.base), revision(options.head)
         steps = workflow_steps(yaml.safe_load(WORKFLOW.read_text()), base)
+        probes = ["python3", "tools/compile-check.py", "--base", base]
+        steps.append(Step(PROBES, probes))
         names = selected([COMMITS] + [step.name for step in steps], options.step)
         if options.list:
             print("\n".join(names))
@@ -255,6 +282,8 @@ def main() -> int:
         ]
         # A step can change tracked files; the summary describes the end state too.
         warning = warning or uncommitted()
+        if not failed:
+            print(stamp(options, base, head, warning), flush=True)
     except (
         OSError,
         ValueError,

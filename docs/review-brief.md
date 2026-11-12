@@ -60,12 +60,15 @@ To confirm a suspected difference, run the narrowest check, after `eval "$(pytho
 
 Post one report on the PR, with the PR template's review skeleton, starting `Reviewed commit: <sha>` and attributed exactly as `Agent: <your name> | Model: <model> | Reasoning effort: <effort>`. The lint gates parse this exact form.
 
-- For each finding give:
+- For each finding give, in one to three sentences:
   - its location (file:line at the reviewed head);
   - what it departs from;
   - the check or reading that found it;
   - the suggested remedy.
-- End with the disposition: accepted, or findings to remediate.
+- Write only findings. Leave out what you compared, what you found unchanged and the checks that passed: every later reviewer and the implementer reads each report in full (on #918 a group's acceptance with no finding ran to 3,200 characters).
+- End with the disposition: accepted, or findings to remediate. An acceptance is three lines: the reviewed commit, the attribution and the disposition with your group.
+- A re-check gives one line per finding: resolved in `<sha>`, or what remains. Do not restate the finding or describe the fix.
+- When the PR body proposes a growth exception or a suppression contract and you accept it, add the fenced `cleanup-acceptance` block it needs to the same report, beside those lines ([quick cleanup checks](rust-migration.md#quick-cleanup-checks)). The gates read that block, and without it the PR cannot queue.
 - Findings and acceptances do not wait for CI: post the report when the source review is done. An acceptance covers the source at the reviewed head; the implementer records the passing `native` run ([review loop](team.md#review-loop)). On 2026-11-10, eight reviewers each held a finished report with findings until a `native` run ended, five of them for a run that timed out.
 
 After posting a report or a verification, tell the implementer in one line with `t3_thread_send` to its thread ID, with `mode: "queue"` ([spawning](team.md#spawning)): your own thread ID, the report's URL and the disposition. Root relays nothing ([review loop](team.md#review-loop)).
