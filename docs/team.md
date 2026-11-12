@@ -47,7 +47,7 @@ The review loop is in [review](workflow.md#review). Root reads dispositions, not
 
 ### Ready queue and pipelining
 
-- The roadmap's [ready queue](roadmap.md#ready-queue) holds two or three undispatched work orders, each ready once the next merge lands. Each gives its scope, its size, its file set checked against open PRs' actual edits, what it waits on, and the constraints its implementer needs. Fan-in and held-caller analysis go on the stream issue; PR state stays on the PR.
+- The roadmap's [ready queue](roadmap.md#ready-queue) holds two or three undispatched work orders, each ready once the next merge lands. Each gives its scope, its size, its file set checked against open PRs' actual edits, what it waits on, the constraints its implementer needs, and links to the issue comments that hold its decisions. Fan-in and held-caller analysis go on the stream issue; PR state stays on the PR.
 - A planner refreshes the queue when no entry is ready for the next slot to free, and writes up to three entries at once (provisional). It edits only that roadmap section, in docs-only commits.
 - Root dispatches the top ready entry as the planner wrote it, with the [fixed message](#spawning). It re-derives an entry only when a merge or open PR has changed the entry's files since, or the implementer disputes it.
 - **File sets.** Before starting, the implementer checks its file set against open PRs' actual edits with `python3 tools/retrospective.py readiness <PR> <open PRs>` and records the result in its status comment; root brokers no file reservation.

@@ -9,7 +9,7 @@ A re-check's message adds one sentence: `Re-check the fixing commits <SHAs> for 
 ## Before reviewing
 
 1. Read [porting](porting.md), which holds the standards you enforce, and [review](workflow.md#review).
-2. Read the stream issue's recorded decisions (for example #734, #735 or #736), the PR body, its branch's cleanup records file and its earlier review reports.
+2. Read the stream issue body's `## Rules` section and the issue comments the work order or PR body links, the PR body, its branch's cleanup records file and its earlier review reports.
 3. Check out the reviewed head. The original is `.local/reference/openttd` in the main checkout.
 
 ## Report only

@@ -1,6 +1,6 @@
 # Implementer brief
 
-Read this brief, your work order (the ready-queue entry and issue your spawn message names) and the original bodies it names, then:
+Read this brief; your work order, the ready-queue entry your spawn message names; its issue's `## Rules` section and the comments the entry links; and the original bodies the entry names. Then read:
 
 - [porting](porting.md) for the code, fidelity and evidence standards your change meets;
 - [workflow](workflow.md) for commits, pushes, checks, review and the merge queue;
@@ -11,7 +11,7 @@ Read this brief, your work order (the ready-queue entry and issue your spawn mes
 A pass is ready for review when a reviewer would have nothing left on the [every-line list](review-brief.md#what-to-examine-in-your-group). Before the first checkpoint, look for the [design faults](porting.md#design-faults) in your files and count their repair in the pass's size. Before marking the PR ready, for each file:
 
 - Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports.
-- Run the fixtures that call the pass's functions: the comparison probes and the ABI probe fixtures under `tools/migration/windows-abi/`. Preflight only compiles them, so only a run shows a fixture that relied on a service read the pass replaced. Your work order's entry on #734 names them.
+- Run the fixtures that call the pass's functions: the comparison probes and the ABI probe fixtures under `tools/migration/windows-abi/`. Preflight only compiles them, so only a run shows a fixture that relied on a service read the pass replaced. Your work order names them.
 - Add each file the pass finishes to `migration/finished-files.txt`.
 
 ## Messaging root
