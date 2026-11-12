@@ -14,7 +14,7 @@ Unless an entry says otherwise:
 - The C++ facade calls Rust in every fork build. Original bodies live only
   in the pinned reference; `src/` contains no `WITH_RUST` conditionals.
 - Rust panics and allocation failures abort (`panic = "abort"` in both
-  profiles). The C ABI never unwinds. No C++ exception crosses a Rust frame.
+  profiles). No C ABI call unwinds. No C++ exception crosses a Rust frame.
   Identical resource-exhaustion timing is not claimed.
 - Borrowed byte spans hold initialized, readable bytes in one live allocation.
   Their length is at most `PTRDIFF_MAX`; they stay immutable during the call.
