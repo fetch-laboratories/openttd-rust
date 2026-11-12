@@ -872,38 +872,74 @@ class CommitMsgTests(unittest.TestCase):
                 self.assertEqual(git_hooks.install(hooks, force=True), 0)
             self.assertIn(git_hooks.MARKER, (hooks / "commit-msg").read_text())
 
-    def test_every_shim_finds_its_handler_in_this_file(self) -> None:
-        # The shim greps this text to tell whether a branch's file handles the
-        # hook; if main() stops matching it, every hook would silently do nothing.
-        source = (REPO / "tools/git_hooks.py").read_text()
-        for hook in git_hooks.HOOKS:
-            with self.subTest(hook=hook):
-                self.assertIn(f'command == "{hook}"', source)
-                shim = git_hooks.SHIM.format(marker=git_hooks.MARKER, hook=hook)
-                self.assertIn(f"grep -qF 'command == \"{hook}\"'", shim)
+    def run_shim(self, repo: Path, hook: str, python: Path) -> CompletedProcess[str]:
+        """Run an installed shim in repo with a recording python3 first on PATH."""
+        env = os.environ | {"PATH": f"{python.parent}{os.pathsep}{os.environ['PATH']}"}
+        shim = repo / ".git/hooks" / hook
+        return subprocess.run(
+            [str(shim), "argument"], cwd=repo, env=env, text=True, capture_output=True
+        )
 
-    def test_the_shim_does_nothing_on_a_branch_that_predates_the_hook(self) -> None:
+    @contextmanager
+    def shimmed(self) -> Generator[tuple[Path, Path, Path]]:
+        """A repository with every shim installed, a python3 that records its
+        arguments instead of running anything, and the record it writes."""
         with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory)
-            self.git(repo, "init", "-q", "-b", "old")
+            repo = Path(directory) / "repo"
+            self.git(Path(directory), "init", "-q", "-b", "work", str(repo))
             with patch("builtins.print"):
-                git_hooks.install(repo / ".git/hooks", force=True)
-            older = self.git(REPO, "show", "1f69625a65:tools/git_hooks.py").stdout
-            self.assertIn('command == "pre-commit"', older)
+                self.assertEqual(git_hooks.install(repo / ".git/hooks", force=False), 0)
+            record = Path(directory) / "record"
+            python = Path(directory) / "bin/python3"
+            python.parent.mkdir()
+            python.write_text(f'#!/bin/sh\necho "$@" >> {record}\n')
+            python.chmod(0o755)
+            yield repo, python, record
+
+    def test_every_installed_shim_runs_this_file_for_its_hook(self) -> None:
+        # A shim that stopped recognising this file would do nothing, silently.
+        with self.shimmed() as (repo, python, record):
+            production = (REPO / "tools/git_hooks.py").read_text()
+            self.write(repo, "tools/git_hooks.py", production)
+            for hook in git_hooks.HOOKS:
+                with self.subTest(hook=hook):
+                    record.unlink(missing_ok=True)
+                    result = self.run_shim(repo, hook, python)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    ran = record.read_text().split()
+                    self.assertEqual(ran[1:], [hook, "argument"])
+                    self.assertEqual(Path(ran[0]), repo / "tools/git_hooks.py")
+
+    def test_every_hook_name_reaches_its_handler(self) -> None:
+        handlers = {
+            "pre-push": "pre_push",
+            "pre-commit": "pre_commit",
+            "commit-msg": "commit_msg",
+        }
+        self.assertEqual(set(handlers), set(git_hooks.HOOKS))
+        for hook, handler in handlers.items():
+            with (
+                self.subTest(hook=hook),
+                patch.object(git_hooks, handler, return_value=7) as called,
+                patch("sys.stdin", io.StringIO("")),
+            ):
+                self.assertEqual(git_hooks.main(["git_hooks.py", hook, "argument"]), 7)
+                called.assert_called_once()
+
+    def test_a_shim_does_nothing_where_the_file_does_not_list_its_hook(self) -> None:
+        with self.shimmed() as (repo, python, record):
+            older = 'HOOKS = ("pre-push", "pre-commit")\n'
             self.write(repo, "tools/git_hooks.py", older)
-            result = self.git(repo, "commit", "-qm", "Tools: Old branch", "--no-verify")
+            result = self.run_shim(repo, "commit-msg", python)
             self.assertEqual(result.returncode, 0, result.stderr)
-            # Only commit-msg runs below: pre-commit would run the old file.
-            (repo / ".git/hooks/pre-commit").unlink()
-            result = self.commit(repo, "Tools: Still unchecked")
-            self.assertEqual(result.returncode, 0, result.stderr)
-            stub = 'if command == "commit-msg":\n    raise SystemExit("ran")\n'
-            self.write(
-                repo, "tools/git_hooks.py", "import sys\ncommand = sys.argv[1]\n" + stub
-            )
-            result = self.commit(repo, "Tools: Now checked")
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("ran", result.stderr)
+            self.assertFalse(record.exists())
+            for hook in ("pre-push", "pre-commit"):
+                self.run_shim(repo, hook, python)
+            self.assertEqual(len(record.read_text().splitlines()), 2)
+            (repo / "tools/git_hooks.py").unlink()
+            record.unlink()
+            self.assertEqual(self.run_shim(repo, "pre-push", python).returncode, 0)
+            self.assertFalse(record.exists())
 
 
 if __name__ == "__main__":

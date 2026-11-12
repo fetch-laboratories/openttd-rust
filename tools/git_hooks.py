@@ -48,10 +48,12 @@ MARKER = "Installed by tools/git_hooks.py"
 SHIM = """#!/bin/sh
 # {marker} (#920): runs this worktree's tracked hook.
 top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
-# A branch whose git_hooks.py predates this hook has no handler for it.
-grep -qF 'command == "{hook}"' "$top/tools/git_hooks.py" 2>/dev/null || exit 0
+# A branch whose git_hooks.py predates this hook does not list it in HOOKS.
+grep -q '^HOOKS = .*"{hook}"' "$top/tools/git_hooks.py" 2>/dev/null || exit 0
 exec python3 "$top/tools/git_hooks.py" {hook} "$@"
 """
+# Each shim reads this line, on one line, to tell whether the worktree's copy of
+# this file handles its hook.
 HOOKS = ("pre-push", "pre-commit", "commit-msg")
 BASE_BRANCH = "rust-migration"
 # Titles git writes for `commit --fixup` and `--squash`; the checker refuses them.
@@ -326,8 +328,6 @@ def install(hooks: Path, force: bool) -> int:
 
 def main(argv: list[str]) -> int:
     command = argv[1] if len(argv) > 1 else ""
-    # Each shim greps for its `command == "<hook>"` line below to tell whether
-    # this branch's file handles the hook; keep that spelling.
     if command == "pre-push":
         return pre_push(sys.stdin.read().splitlines())
     if command == "pre-commit":
