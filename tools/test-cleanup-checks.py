@@ -1272,6 +1272,8 @@ class CarryTests(unittest.TestCase):
                 with (
                     patch.object(POLICY, "ROOT", root),
                     patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
                     patch.object(
                         POLICY,
                         "context",
