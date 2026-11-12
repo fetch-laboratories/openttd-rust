@@ -4,6 +4,10 @@
 The steps come from .github/workflows/ci-quick.yml itself, so the two cannot
 drift. Unlike CI, every step runs even after a failure, and the result lists
 each failed step.
+
+--fast runs, in seconds, the pre-push hook's fast tier (the pinned commit
+checker, cargo fmt --check and Quick's Ruff lines) and Quick's ty line, and
+records no stamp.
 """
 
 import argparse
@@ -18,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import preflight_stamp
+import quick_workflow
 import yaml
 from validation_execution import file_lock
 
@@ -25,8 +30,8 @@ import migration
 
 HOOKS_REVISION = "eeb3791aadf0aded5a7cd634c80823f17e87af9c"
 HOOKS_URL = "https://github.com/OpenTTD/OpenTTD-git-hooks.git"
-WORKFLOW = migration.ROOT / ".github/workflows/ci-quick.yml"
-JOB = "quick"
+WORKFLOW = quick_workflow.WORKFLOW
+JOB = quick_workflow.JOB
 COMMITS = "Check introduced commits with the pinned inherited checker"
 # Preflight's own step after Quick's (#923): CI compiles these in its native jobs.
 PROBES = "Compile comparison probes and runtime adapters without linking"
@@ -52,6 +57,15 @@ BASE_EXPRESSION = re.compile(r"\s*\$\{\{(.*?)\}\}\s*", re.DOTALL)
 TOKENS = {"GH_TOKEN", "GITHUB_TOKEN"}
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 TAIL_LINES = 40
+SHELL = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
+RUST_FORMAT = "Rust formatting (cargo fmt --check)"
+FORMAT = "python3 tools/migration.py fmt"
+# The command that fixes a failed fast step, by text in the step's name.
+FAST_FIXES = (
+    ("cargo fmt", FORMAT),
+    ("ruff format", FORMAT),
+    ("ruff check", f"{FORMAT} --fix applies Ruff's own fixes; fix the rest by hand"),
+)
 # A stamp's base must be on this branch, so base-relative gates saw every PR change.
 PROTECTED = "origin/rust-migration"
 # Git exports these to a hook for the repository it runs in, and `git -C` does
@@ -81,10 +95,13 @@ def other_repository() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k not in REPOSITORY_VARIABLES}
 
 
+def pinned_hooks() -> Path:
+    """Where the pinned commit checker is checked out, shared by every worktree."""
+    return migration.COMMON_LOCAL / "tooling/OpenTTD-git-hooks" / HOOKS_REVISION
+
+
 def hooks_checkout(supplied: Path | None = None) -> Path:
-    destination = supplied or (
-        migration.COMMON_LOCAL / "tooling/OpenTTD-git-hooks" / HOOKS_REVISION
-    )
+    destination = supplied or pinned_hooks()
     with file_lock(
         migration.COMMON_LOCAL / "tooling/hooks.lock", label="commit-checker checkout"
     ):
@@ -135,11 +152,10 @@ def workflow_steps(workflow: dict[str, Any], base: str) -> list[Step]:
             raise ValueError(f"step {name!r}: conditional steps need a decision")
         if EXPRESSION.search(entry["run"]):
             raise ValueError(f"step {name!r}: unsupported expression in run")
-        command = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
         steps.append(
             Step(
                 name,
-                [*command, entry["run"]],
+                [*SHELL, entry["run"]],
                 step_env(name, entry.get("env", {}), base),
             )
         )
@@ -155,6 +171,15 @@ def commit_step(base: str, head: str, hooks: Path) -> Step:
             "HOOKS_DIR": str(hooks / "hooks"),
         },
     )
+
+
+def fast_tier(base: str, head: str, inert: bool, hooks: Path) -> list[Step]:
+    """The pre-push hook's seconds-long checks; inert Markdown needs only the first."""
+    steps = [commit_step(base, head, hooks)]
+    if not inert:
+        steps.append(Step(RUST_FORMAT, ["cargo", "fmt", "--all", "--", "--check"]))
+        steps += [Step(line, [*SHELL, line]) for line in quick_workflow.ruff_lines()]
+    return steps
 
 
 def environment() -> dict[str, str]:
@@ -204,10 +229,19 @@ def arguments() -> argparse.Namespace:
     parser.add_argument(
         "--hooks", type=Path, help="existing clean pinned hooks checkout (offline)"
     )
-    parser.add_argument(
+    narrow = parser.add_mutually_exclusive_group()
+    narrow.add_argument(
         "--step",
         action="append",
         help="run only steps whose name contains this text (repeatable)",
+    )
+    narrow.add_argument(
+        "--fast",
+        action="store_true",
+        help=(
+            "run only the pre-push fast tier and Quick's ty line, in seconds, as "
+            "a check before a commit; records no stamp"
+        ),
     )
     parser.add_argument("--list", action="store_true", help="list the steps and exit")
     return parser.parse_args()
@@ -262,9 +296,38 @@ def stamp(options: argparse.Namespace, base: str, head: str, warning: str) -> st
     return f"stamp: recorded {path.name} for this tree against base {base[:10]}"
 
 
+def fast(options: argparse.Namespace) -> int:
+    """The fast tier on the working tree plus ty, each once, with no stamp."""
+    base, head = revision(options.base), revision(options.head)
+    supplied = options.hooks.resolve() if options.hooks else None
+    hooks = (supplied or pinned_hooks()) if options.list else hooks_checkout(supplied)
+    ty = quick_workflow.ty_line()
+    steps = [*fast_tier(base, head, False, hooks), Step(ty, [*SHELL, ty])]
+    if options.list:
+        print("\n".join(step.name for step in steps))
+        return 0
+    logs = migration.LOCAL / "preflight" / time.strftime("fast-%Y%m%d-%H%M%S")
+    logs.mkdir(parents=True, exist_ok=True)
+    env = environment()
+    started = time.monotonic()
+    failed = [
+        step.name
+        for number, step in enumerate(steps, 1)
+        if not run(step, env, logs / f"{number:02}.log")
+    ]
+    seconds = time.monotonic() - started
+    print(f"{len(steps) - len(failed)}/{len(steps)} passed in {seconds:.0f}s; no stamp")
+    for name in failed:
+        fix = next((fix for text, fix in FAST_FIXES if text in name), "")
+        print(f"failed: {name}" + (f"; fix: {fix}" if fix else ""))
+    return 1 if failed else 0
+
+
 def main() -> int:
     options = arguments()
     try:
+        if options.fast:
+            return fast(options)
         base, head = revision(options.base), revision(options.head)
         steps = workflow_steps(yaml.safe_load(WORKFLOW.read_text()), base)
         probes = ["python3", "tools/compile-check.py", "--base", base]

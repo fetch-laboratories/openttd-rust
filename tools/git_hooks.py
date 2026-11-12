@@ -32,7 +32,6 @@ from pathlib import Path
 import preflight
 import preflight_stamp
 import vcs
-import yaml
 
 import migration
 
@@ -49,32 +48,8 @@ HOOKS = ("pre-push", "pre-commit")
 PREFLIGHT = "python3 tools/preflight.py --base origin/rust-migration"
 
 
-def ruff_lines() -> list[str]:
-    """Quick's own Ruff commands, so the fast tier cannot drift from it."""
-    quick = yaml.safe_load(preflight.WORKFLOW.read_text())
-    lines = [
-        line.strip()
-        for step in quick["jobs"][preflight.JOB]["steps"]
-        for line in step.get("run", "").splitlines()
-        if line.strip().startswith("uvx --from ruff")
-    ]
-    if not lines:
-        raise ValueError("Quick runs no Ruff command")
-    return lines
-
-
 def fast_tier(base: str, head: str, inert: bool) -> list[preflight.Step]:
-    steps = [preflight.commit_step(base, head, preflight.hooks_checkout())]
-    if not inert:
-        steps.append(
-            preflight.Step(
-                "Rust formatting (cargo fmt --check)",
-                ["cargo", "fmt", "--all", "--", "--check"],
-            )
-        )
-        shell = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
-        steps += [preflight.Step(line, [*shell, line]) for line in ruff_lines()]
-    return steps
+    return preflight.fast_tier(base, head, inert, preflight.hooks_checkout())
 
 
 def ready_pr(branch: str) -> int | None:

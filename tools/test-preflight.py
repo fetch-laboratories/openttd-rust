@@ -2,6 +2,7 @@
 """Check preflight's reading of Quick and the pinned commit checker checkout."""
 
 import importlib.util
+import io
 import json
 import os
 import re
@@ -635,6 +636,100 @@ class CompileCheckTests(unittest.TestCase):
                 (Path(directory) / name).write_text("")
             self.assertEqual(check.check("base"), 1)
             jobs.assert_not_called()
+
+
+class FastTests(unittest.TestCase):
+    """--fast: the pre-push fast tier and Quick's ty line, with no stamp."""
+
+    @contextmanager
+    def fakes(self, failing: str = "") -> Generator[Path]:
+        """Fake cargo, uvx and commit checker that log each call and fail when
+        their arguments contain `failing`."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            calls = root / "calls"
+            script = (
+                f'#!/bin/sh\necho "$(basename "$0") $*" >> {calls}\n'
+                f'case "$*" in *"{failing or "-never-"}"*) exit 1;; esac\n'
+            )
+            for name in ("bin/cargo", "bin/uvx", "hooks/hooks/check-commits.sh"):
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text(script)
+                (root / name).chmod(0o755)
+            path = f"{root / 'bin'}{os.pathsep}{os.environ['PATH']}"
+            with (
+                patch.object(preflight, "revision", return_value="sha"),
+                patch.object(preflight, "hooks_checkout", return_value=root / "hooks"),
+                patch.object(preflight, "environment", return_value={"PATH": path}),
+                patch.object(preflight.migration, "LOCAL", root / "local"),
+                patch.object(preflight_stamp, "record") as record,
+            ):
+                yield calls
+            record.assert_not_called()
+
+    def fast(self, *argv: str) -> tuple[int, list[str]]:
+        with (
+            patch.object(sys, "argv", ["preflight.py", "--fast", *argv]),
+            patch("builtins.print") as printed,
+        ):
+            code = preflight.main()
+        return code, [" ".join(map(str, call.args)) for call in printed.call_args_list]
+
+    def test_runs_the_fast_tier_and_ty_once_each_without_a_stamp(self) -> None:
+        quick = [
+            *preflight.quick_workflow.ruff_lines(),
+            preflight.quick_workflow.ty_line(),
+        ]
+        with self.fakes() as calls:
+            code, lines = self.fast()
+            self.assertEqual(code, 0)
+            self.assertEqual(
+                calls.read_text().splitlines(),
+                [
+                    "check-commits.sh sha..sha",
+                    "cargo fmt --all -- --check",
+                    *quick,
+                ],
+            )
+        self.assertIn("5/5 passed", lines[-1])
+        self.assertIn("no stamp", lines[-1])
+
+    def test_a_failed_step_prints_the_command_that_fixes_it(self) -> None:
+        with self.fakes(failing="format") as calls:
+            code, lines = self.fast()
+            self.assertEqual(len(calls.read_text().splitlines()), 5)
+        self.assertEqual(code, 1)
+        failed = [line for line in lines if line.startswith("failed: ")]
+        self.assertEqual(len(failed), 1)
+        self.assertIn("ruff format --check", failed[0])
+        self.assertTrue(failed[0].endswith("; fix: python3 tools/migration.py fmt"))
+        with self.fakes(failing="ty@") as calls:
+            code, lines = self.fast()
+        self.assertEqual(code, 1)
+        (failed_ty,) = [line for line in lines if line.startswith("failed: ")]
+        self.assertNotIn("fix:", failed_ty)
+
+    def test_list_names_the_steps_and_runs_nothing(self) -> None:
+        with (
+            self.fakes() as calls,
+            patch.object(preflight, "hooks_checkout") as hooks,
+        ):
+            code, lines = self.fast("--list")
+            self.assertFalse(calls.exists())
+            hooks.assert_not_called()
+        self.assertEqual(code, 0)
+        self.assertEqual(lines[0].splitlines()[0], preflight.COMMITS)
+        self.assertEqual(len(lines[0].splitlines()), 5)
+
+    def test_fast_cannot_be_combined_with_step(self) -> None:
+        with (
+            patch.object(sys, "argv", ["preflight.py", "--fast", "--step", "ruff"]),
+            patch("sys.stderr", new_callable=io.StringIO) as stderr,
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            preflight.main()
+        self.assertEqual(stopped.exception.code, 2)
+        self.assertIn("not allowed with argument --fast", stderr.getvalue())
 
 
 if __name__ == "__main__":

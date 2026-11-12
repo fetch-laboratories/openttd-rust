@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import git_hooks
+import quick_workflow
 
 import migration
 
@@ -28,7 +28,7 @@ sys.exit(int(os.environ.get("FAIL_" + os.path.basename(sys.argv[0]).upper(), "0"
 
 def quick_ruff(subcommand: str) -> list[str]:
     """Quick's own pinned Ruff line, so these tests retype no version."""
-    return migration.ruff_command(git_hooks.ruff_lines(), subcommand)
+    return migration.ruff_command(quick_workflow.ruff_lines(), subcommand)
 
 
 class MigrationFmtTests(unittest.TestCase):

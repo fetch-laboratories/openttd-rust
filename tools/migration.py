@@ -830,11 +830,12 @@ def ruff_command(lines: list[str], subcommand: str) -> list[str]:
 def format_steps(check: bool, fix: bool) -> list[tuple[list[str], dict[str, str]]]:
     """cargo fmt, then Quick's pinned Ruff over Quick's scope: its lint line
     with --fix when asked, and its format line, without --check unless asked."""
-    # Imported here: git_hooks and preflight import this module.
-    import git_hooks
+    # Imported here: preflight imports this module, and quick_workflow needs
+    # PyYAML, which migration.py's other commands do not.
     import preflight
+    import quick_workflow
 
-    lines = git_hooks.ruff_lines()
+    lines = quick_workflow.ruff_lines()
     formatting = ruff_command(lines, "format")
     if not check:
         formatting = [word for word in formatting if word != "--check"]
