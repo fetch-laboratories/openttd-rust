@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
+from urllib.parse import quote
 
 import preflight_stamp
 import vcs
@@ -26,6 +27,12 @@ QUEUED = "Full runs in the merge queue"
 WAIT_TIMEOUT = 540
 # A queue-wait runs as a background job; the queue's Full takes about an hour.
 QUEUE_TIMEOUT = 5400
+# Quick's required check on a PR head, from its pull_request run.
+QUICK = "Quick validation"
+# The one branch prefix of deliberate negative controls; `failures` leaves them out.
+CONTROL = "control/"
+FAILED = ("failure", "timed_out", "startup_failure")
+REQUESTS = Path(".local/ci-requests")
 
 
 def gh(*args: str) -> str:
@@ -132,10 +139,12 @@ def find_run(record: dict, runs: list[dict]) -> dict | None:
         ]
     else:
         title = f"CI {record['profile']} PR {record['pr']} {record['request']}"
+        # ci-request.yml names the requested head after the request since #922.
+        titles = (title, f"{title} {record.get('head')}")
         matches = [
             run
             for run in runs
-            if run.get("display_title") == title
+            if run.get("display_title") in titles
             and run.get("event") == "workflow_dispatch"
             and run.get("head_branch") == PROTECTED_REF
         ]
@@ -211,7 +220,7 @@ def request(args: argparse.Namespace) -> Path | None:
         "bootstrap": args.bootstrap,
         "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    path = args.request_file or Path(".local/ci-requests") / f"{request_id}.json"
+    path = args.request_file or REQUESTS / f"{request_id}.json"
     write_request(path, record)
     if args.bootstrap:
         if variable(repository, "CI_ON_DEMAND") == "true":
@@ -398,6 +407,7 @@ class QueueRun(TypedDict):
 
     id: int
     head_branch: str
+    head_sha: str
     created_at: str
     status: str
     conclusion: str | None
@@ -427,14 +437,19 @@ def queue_state(repository: str, pr: int) -> QueueState:
     return answer["data"]["repository"]["pullRequest"]
 
 
-def queue_run(repository: str, pr: int) -> QueueRun | None:
-    """The PR's latest merge-group run of the CI request workflow."""
+def queue_runs(repository: str, pr: int) -> list[QueueRun]:
+    """The PR's merge-group runs of the CI request workflow, newest first."""
     runs: list[QueueRun] = api(
         repository, f"actions/workflows/{WORKFLOW}/runs?event=merge_group&per_page=100"
     )["workflow_runs"]
     prefix = f"gh-readonly-queue/{PROTECTED_REF}/pr-{pr}-"
     ours = [run for run in runs if (run["head_branch"] or "").startswith(prefix)]
-    return max(ours, key=lambda run: run["created_at"]) if ours else None
+    return sorted(ours, key=lambda run: run["created_at"], reverse=True)
+
+
+def queue_run(repository: str, pr: int) -> QueueRun | None:
+    """The PR's latest merge-group run of the CI request workflow."""
+    return next(iter(queue_runs(repository, pr)), None)
 
 
 def removal(repository: str, pr: int, state: str) -> str:
@@ -480,6 +495,165 @@ def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
 
 
+def latest_quick(repository: str, head: str) -> dict | None:
+    """The head's latest Quick validation check run, from its pull_request run."""
+    checks = api(
+        repository, f"commits/{head}/check-runs?check_name={quote(QUICK)}&filter=latest"
+    )
+    runs = sorted(checks["check_runs"], key=lambda run: run["started_at"] or "")
+    return runs[-1] if runs else None
+
+
+def latest_request(repository: str, pr: int, head: str) -> dict | None:
+    """The newest requested or bootstrap run of ci-request.yml for this PR head."""
+    path = f"actions/workflows/{WORKFLOW}/runs?per_page=100&event="
+    dispatched = api(repository, path + "workflow_dispatch")["workflow_runs"]
+    named = [
+        run
+        for run in dispatched
+        if (title := (run.get("display_title") or "").split())[2:4] == ["PR", str(pr)]
+        and title[-1] == head
+    ]
+    labeled = api(repository, path + f"pull_request&head_sha={head}")["workflow_runs"]
+    # Requests made before #922 carry no head in their title; their records do.
+    for record_path in REQUESTS.glob("*.json"):
+        record = json.loads(record_path.read_text())
+        if (
+            record.get("pr") == pr
+            and record.get("head") == head
+            and record.get("run_id")
+        ):
+            named.append(api(repository, f"actions/runs/{record['run_id']}"))
+    runs = named + labeled
+    return max(runs, key=lambda run: run["created_at"]) if runs else None
+
+
+def ejected_head(repository: str, run: QueueRun) -> str:
+    """The PR head a merge-group run tested: its group commit's second parent."""
+    return api(repository, f"commits/{run['head_sha']}")["parents"][1]["sha"]
+
+
+def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None:
+    """After the queue removes a PR for a failure, it queues again only with a new
+    head that contains base and has a preflight stamp, or once unchanged after a
+    runner or network failure the agent names with --retry."""
+    runs = queue_runs(repository, pr)
+    if not runs or runs[0]["conclusion"] not in FAILED:
+        return
+    url = runs[0]["html_url"]
+    if ejected_head(repository, runs[0]) != head:
+        behind = api(repository, f"compare/{PROTECTED_REF}...{head}")["behind_by"]
+        if behind:
+            raise ValueError(
+                f"The queue removed PR #{pr} ({url}); merge {PROTECTED_REF} into it "
+                f"first: its head is {behind} commits behind"
+            )
+        require_stamp(pr, head, None)
+        return
+    if not retry:
+        raise ValueError(
+            f"The queue removed PR #{pr} at this head ({url}). Fix the cause, merge "
+            f"{PROTECTED_REF} and pass preflight; for a runner or network failure, "
+            "queue it once more with --retry REASON"
+        )
+    failed = [
+        run
+        for run in runs
+        if run["conclusion"] in FAILED and ejected_head(repository, run) == head
+    ]
+    if len(failed) > 1:
+        raise ValueError(
+            f"PR #{pr} failed the queue {len(failed)} times at {head}; "
+            "a second failure goes to root"
+        )
+    log = preflight_stamp.log_override("requeue", f"PR #{pr}", head, retry)
+    print(f"Queueing PR #{pr} again unchanged after {url}; logged in {log}")
+
+
+def enqueue(args: argparse.Namespace) -> str:
+    """Queue a PR whose head has green Quick and requested runs; report the entry."""
+    repository = repository_of(args.repo)
+    pull = api(repository, f"pulls/{args.pr}")
+    head = current_head(pull)
+    if pull.get("draft"):
+        raise ValueError(f"PR #{args.pr} is a draft; mark it ready with ci.py ready")
+    quick = latest_quick(repository, head)
+    if not quick or quick["conclusion"] != "success":
+        state = (
+            quick and f"{quick['status']}/{quick['conclusion']}: {quick['html_url']}"
+        )
+        raise ValueError(f"{QUICK} at {head} is not green: {state or 'no run'}")
+    run = latest_request(repository, args.pr, head)
+    if not run or run["conclusion"] != "success":
+        state = run and f"{run['status']}/{run['conclusion']}: {run['html_url']}"
+        raise ValueError(
+            f"The latest requested run at {head} is not green: {state or 'none; '}"
+            + ("" if run else f"run ci.py request {args.pr} --profile native")
+        )
+    requeue_gate(repository, args.pr, head, args.retry)
+    gh(
+        "pr",
+        "merge",
+        str(args.pr),
+        "--repo",
+        repository,
+        "--merge",
+        "--match-head-commit",
+        head,
+    )
+    state = queue_state(repository, args.pr)
+    if entry := state["mergeQueueEntry"]:
+        return f"queued {entry['state'].lower()} at position {entry['position']}"
+    if state["autoMergeRequest"]:
+        return (
+            "auto-merge armed: GitHub queues the PR once its pending required "
+            "checks pass"
+        )
+    raise ValueError(f"PR #{args.pr} is neither queued nor armed for auto-merge")
+
+
+def control(repository: str, run: dict, branches: dict[int, str]) -> bool:
+    """Whether a run tested a negative control: a PR branch under CONTROL."""
+    branch = run.get("head_branch") or ""
+    queued = branch.removeprefix(f"gh-readonly-queue/{PROTECTED_REF}/pr-")
+    title = (run.get("display_title") or "").split()
+    if queued != branch:
+        number = int(queued.split("-")[0])
+    elif run.get("event") == "workflow_dispatch" and title[2:3] == ["PR"]:
+        number = int(title[3])
+    else:
+        return branch.startswith(CONTROL)
+    if number not in branches:
+        branches[number] = api(repository, f"pulls/{number}")["head"]["ref"]
+    return branches[number].startswith(CONTROL)
+
+
+def failures(args: argparse.Namespace) -> None:
+    """Count failed workflow runs since a date, leaving out negative controls."""
+    repository = repository_of(args.repo)
+    runs = [
+        run
+        for status in FAILED
+        for page in json.loads(
+            gh(
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{repository}/actions/runs?status={status}"
+                f"&created=%3E%3D{args.since}&per_page=100",
+            )
+        )
+        for run in page["workflow_runs"]
+    ]
+    branches: dict[int, str] = {}
+    controls = [run for run in runs if control(repository, run, branches)]
+    counted = runs if args.controls else [run for run in runs if run not in controls]
+    for run in counted:
+        print(f"{run['html_url']} {run['name']}: {run.get('display_title')}")
+    left = "" if args.controls else f", leaving out {len(controls)} on {CONTROL}"
+    print(f"{len(counted)} failed runs since {args.since}{left}")
+
+
 def report_status(path: Path) -> None:
     record, run = status(path)
     print(json.dumps({"request": record, "run": run}, indent=2))
@@ -504,6 +678,10 @@ def dispatch(args: argparse.Namespace) -> None:
         print(f"PR #{args.pr} merged: {merge}")
     elif args.command == "ready":
         ready(args)
+    elif args.command == "enqueue":
+        print(f"PR #{args.pr}: {enqueue(args)}")
+    elif args.command == "failures":
+        failures(args)
     elif args.command == "request":
         path = request(args)
         if path and args.wait:
@@ -548,6 +726,22 @@ def main() -> int:
         check.add_argument("request_file", type=Path)
         check.add_argument("--timeout", type=positive, default=WAIT_TIMEOUT)
         check.add_argument("--interval", type=positive, default=15)
+    entered = commands.add_parser(
+        "enqueue", help="queue a PR whose head has green Quick and requested runs"
+    )
+    entered.add_argument("pr", type=int)
+    entered.add_argument("--repo")
+    entered.add_argument(
+        "--retry",
+        metavar="REASON",
+        help="queue an unchanged head once more after a runner or network failure; logged",
+    )
+    counted = commands.add_parser(
+        "failures", help=f"count failed runs, leaving out {CONTROL} negative controls"
+    )
+    counted.add_argument("--since", required=True, help="date, such as 2026-11-10")
+    counted.add_argument("--controls", action="store_true", help="count them too")
+    counted.add_argument("--repo")
     queued = commands.add_parser(
         "queue-wait",
         help="wait until a queued PR merges (exit 0) or leaves the queue (exit 3)",
