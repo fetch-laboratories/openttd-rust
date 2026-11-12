@@ -2668,47 +2668,46 @@ class EnqueueTests(unittest.TestCase):
         "html_url": "https://github.com/example/fork/actions/runs/3",
     }
 
-    def enqueue(
-        self,
-        quick: object = QUICK,
-        requested: object = REQUESTED,
-        queue: Iterable[object] = (),
-        ejected: str = HEAD,
-        behind: int = 0,
-        retry: str | None = None,
-        entry: object = None,
-        armed: object = None,
-        recorded: object = None,
-    ) -> tuple[str, list[tuple[str, ...]]]:
+    def enqueue(self, **world: object) -> tuple[str, list[tuple[str, ...]]]:
+        """Run enqueue against `world`: quick, requested, queue (merge-group runs),
+        ejected (the head they tested), behind, retry, entry, armed and recorded
+        (the run a pre-#922 request record names)."""
+        world = {"quick": self.QUICK, "requested": self.REQUESTED, **world}
+        quick, requested = world["quick"], world["requested"]
+        answers = {
+            "pulls/170": PULL,
+            "check-runs?check_name=Quick%20validation": {
+                "check_runs": [quick] if quick else []
+            },
+            "event=workflow_dispatch": {
+                "workflow_runs": [requested] if requested else []
+            },
+            "event=pull_request": {"workflow_runs": []},
+            "event=merge_group": {
+                "workflow_runs": list(cast(Iterable[object], world.get("queue", ())))
+            },
+            f"commits/{MERGE}": {
+                "parents": [{"sha": PARENT}, {"sha": world.get("ejected", HEAD)}]
+            },
+            f"compare/rust-migration...{HEAD}": {"behind_by": world.get("behind", 0)},
+            "actions/runs/9": world.get("recorded"),
+        }
         calls: list[tuple[str, ...]] = []
         self.calls = calls
 
         def api(repository: str, path: str) -> dict:
-            if path == "pulls/170":
-                return PULL
-            if path.startswith(
-                f"commits/{HEAD}/check-runs?check_name=Quick%20validation"
-            ):
-                return {"check_runs": [quick] if quick else []}
-            if "event=workflow_dispatch" in path:
-                return {"workflow_runs": [requested] if requested else []}
-            if "event=pull_request" in path:
-                return {"workflow_runs": []}
-            if "event=merge_group" in path:
-                return {"workflow_runs": list(queue)}
-            if path == f"commits/{MERGE}":
-                return {"parents": [{"sha": PARENT}, {"sha": ejected}]}
-            if path == f"compare/rust-migration...{HEAD}":
-                return {"behind_by": behind}
-            if path == "actions/runs/9":
-                return cast(dict, recorded)
-            raise AssertionError(path)
+            (answer,) = [value for key, value in answers.items() if key in path]
+            return cast(dict, answer)
 
         def gh(*args: str) -> str:
             calls.append(args)
-            state = {"mergeQueueEntry": entry, "autoMergeRequest": armed}
+            state = {
+                "mergeQueueEntry": world.get("entry"),
+                "autoMergeRequest": world.get("armed"),
+            }
             return json.dumps({"data": {"repository": {"pullRequest": state}}})
 
+        retry = world.get("retry")
         args = argparse.Namespace(repo="example/fork", pr=170, retry=retry)
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -2721,7 +2720,7 @@ class EnqueueTests(unittest.TestCase):
             patch("builtins.print"),
             patch.object(ci, "REQUESTS", Path(directory)),
         ):
-            if recorded:
+            if world.get("recorded"):
                 record = {"pr": 170, "head": HEAD, "run_id": 9}
                 (Path(directory) / "old.json").write_text(json.dumps(record))
             self.stamp = stamp
@@ -2754,7 +2753,7 @@ class EnqueueTests(unittest.TestCase):
         ):
             with self.subTest(label):
                 with self.assertRaisesRegex(ValueError, message):
-                    self.enqueue(**cast(dict[str, Any], options))
+                    self.enqueue(**options)
                 self.assertEqual(self.calls, [])
 
     def test_green_head_queues_and_reports_entry_or_armed_auto_merge(self) -> None:
