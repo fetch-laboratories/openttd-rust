@@ -223,8 +223,13 @@ static void RoadBoundary()
 	for (uint32_t tile = 0; tile < map.size; ++tile) map.base[tile].type = 9 << 4;
 	map.base[100].type = 5 << 4; // The bus bay stop above.
 	map.extended[100].m6 = 3 << 3;
+	/* Movement sees every tile, the bay included, as the tunnel/bridge its tile
+	 * type service reports; VehicleEnterTile reads that type from this map. */
+	static OpenTTDFixtureMap movement_map{6, 4096};
+	for (uint32_t tile = 0; tile < movement_map.size; ++tile) movement_map.base[tile].type = 9 << 4;
+	movement_map.extended[100].m6 = 3 << 3;
 	static OpenTTDSharedServices movement_world{};
-	movement_world.map = &map.statics;
+	movement_world.map = &movement_map.statics;
 	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 9; };
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
