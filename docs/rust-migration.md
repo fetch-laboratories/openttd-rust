@@ -43,7 +43,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 | `python3 tools/migration.py exec -- CMD ...` | Run one command, such as `cargo test -p openttd-kernels`, in the driver environment. |
 | `python3 tools/migration.py fmt` | Format the Rust workspace and the Python Quick checks, at the pinned versions; `--check` only reports, `--fix` also applies Ruff's lint fixes. It stages nothing. |
 | `eval "$(python3 tools/migration.py env)"` | Set the driver environment in a shell that runs many commands. |
-| `python3 tools/git_hooks.py install` | Install the pre-push and pre-commit hooks. |
+| `python3 tools/git_hooks.py install` | Install the pre-push, pre-commit and commit-msg hooks. |
 
 - Run the candidate with `./build-rust/openttd-rust -X`, which avoids the global game folders.
 - Supported targets: native GNU/Linux x86-64 (aarch64 builds but no CI job tests it), macOS arm64, Emscripten and the scoped [Windows MSVC mode](#windows-msvc). Unsupported: 32-bit Windows ([ADR 0007](adr/0007-no-32-bit-windows.md)), other platforms, cross compilation, macOS universal or Intel.

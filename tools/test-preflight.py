@@ -732,5 +732,169 @@ class FastTests(unittest.TestCase):
         self.assertIn("not allowed with argument --fast", stderr.getvalue())
 
 
+class CommitMsgTests(unittest.TestCase):
+    """The commit-msg hook: the pinned message check, then this fork's remedy."""
+
+    @contextmanager
+    def repo(self, missing_checker: bool = False) -> Generator[Path]:
+        """A repository on branch work whose commit-msg hook runs this git_hooks,
+        with origin/rust-migration one commit ahead of the shared base."""
+        if not missing_checker:
+            try:
+                preflight.hooks_checkout()
+            except (OSError, ValueError, subprocess.CalledProcessError) as error:
+                self.skipTest(f"pinned commit checker unavailable: {error}")
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            runner = Path(directory) / "runner.py"
+            gone = (
+                "def gone() -> None:\n    raise ValueError('no checkout')\n"
+                "preflight.hooks_checkout = gone\n"
+            )
+            runner.write_text(
+                f"import sys\nsys.path.insert(0, {str(REPO / 'tools')!r})\n"
+                "import git_hooks, preflight\n"
+                + (gone if missing_checker else "")
+                + "sys.exit(git_hooks.main(['git_hooks.py', 'commit-msg', *sys.argv[1:]]))\n"
+            )
+            self.git(Path(directory), "init", "-q", "-b", "work", str(repo))
+            self.write(repo, "a.txt", "a\n")
+            self.git(repo, "commit", "-qm", "Add: Base", "--no-verify")
+            self.git(repo, "switch", "-qc", "base")
+            self.write(repo, "b.txt", "b\n")
+            self.git(repo, "commit", "-qm", "Add: Base change", "--no-verify")
+            self.git(repo, "update-ref", "refs/remotes/origin/rust-migration", "HEAD")
+            self.git(repo, "switch", "-q", "work")
+            hook = repo / ".git/hooks/commit-msg"
+            hook.write_text(f'#!/bin/sh\nexec {sys.executable} {runner} "$@"\n')
+            hook.chmod(0o755)
+            yield repo
+
+    def git(self, cwd: Path, *arguments: str) -> CompletedProcess[str]:
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if key not in preflight.REPOSITORY_VARIABLES
+        }
+        env |= {"GIT_AUTHOR_NAME": "Seed", "GIT_AUTHOR_EMAIL": "s@example.invalid"}
+        env |= {"GIT_COMMITTER_NAME": "Seed", "GIT_COMMITTER_EMAIL": "s@x.invalid"}
+        return subprocess.run(
+            ["git", *arguments],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def write(self, repo: Path, name: str, text: str) -> None:
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(text)
+        self.git(repo, "add", "-A")
+
+    def commit(self, repo: Path, message: str) -> CompletedProcess[str]:
+        self.write(repo, "c.txt", message)
+        return self.git(repo, "commit", "-qm", message)
+
+    def test_each_refusal_names_its_fix(self) -> None:
+        with self.repo() as repo:
+            for message, expected in (
+                ("Tools: Add a thing", "Accepted prefixes: Add, Feature, Change"),
+                ("Fix: A dash \u2014 here", "line 1 column 13: U+2014 EM DASH"),
+                ("Fix: Body\n\nhas\ta tab", "line 3 column 4: a tab"),
+                ("fixup! Fix: Body", "A `fixup!` title is refused here"),
+                ("squash! Fix: Body", "Give the commit a normal title"),
+                ("amend! Fix: Body", "the commit checker refuses it at push"),
+            ):
+                with self.subTest(message=message):
+                    result = self.commit(repo, message)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("***", result.stderr)
+                    self.assertIn(expected, result.stderr)
+            accepted = self.commit(repo, "Fix #12: A plain title")
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            self.assertEqual(accepted.stderr, "")
+            refused = self.commit(repo, "Fix: Body\n\nhas\ta tab")
+            self.assertNotIn("Accepted prefixes", refused.stderr)
+
+    def test_a_base_update_prints_its_parents_and_the_exact_command(self) -> None:
+        with self.repo() as repo:
+            self.write(repo, "w.txt", "w\n")
+            self.git(repo, "commit", "-qm", "Add: Work", "--no-verify")
+            merge = self.git(repo, "merge", "--no-edit", "origin/rust-migration")
+            self.assertNotEqual(merge.returncode, 0)
+            self.assertIn("This is a base update", merge.stderr)
+            self.assertIn("parent 1 (HEAD):       ", merge.stderr)
+            self.assertIn("Add: Work\n", merge.stderr)
+            self.assertIn("parent 2 (MERGE_HEAD): ", merge.stderr)
+            self.assertIn("Add: Base change", merge.stderr)
+            command = 'git commit -m "Update: Merge rust-migration into work"'
+            self.assertIn(f"commit-msg:   {command}\n", merge.stderr)
+            done = self.git(
+                repo, "commit", "-m", "Update: Merge rust-migration into work"
+            )
+            self.assertEqual(done.returncode, 0, done.stderr)
+            parents = self.git(repo, "rev-list", "--parents", "-n1", "HEAD").stdout
+            self.assertEqual(len(parents.split()), 3)
+
+    def test_a_merge_of_another_branch_gets_no_command(self) -> None:
+        with self.repo() as repo:
+            self.git(repo, "switch", "-qc", "other", "work")
+            self.write(repo, "o.txt", "o\n")
+            self.git(repo, "commit", "-qm", "Add: Other", "--no-verify")
+            self.git(repo, "switch", "-q", "work")
+            self.write(repo, "w.txt", "w\n")
+            self.git(repo, "commit", "-qm", "Add: Work", "--no-verify")
+            merge = self.git(repo, "merge", "--no-edit", "other")
+            self.assertNotEqual(merge.returncode, 0)
+            self.assertIn("This merge is not a base update", merge.stderr)
+            self.assertIn("Accepted prefixes", merge.stderr)
+            self.assertNotIn("git commit -m", merge.stderr)
+
+    def test_a_missing_checker_lets_the_commit_through_with_a_notice(self) -> None:
+        with self.repo(missing_checker=True) as repo:
+            result = self.commit(repo, "Tools: Add a thing")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("pinned checker unavailable, not checked", result.stderr)
+
+    def test_install_names_a_foreign_commit_msg_hook_and_keeps_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            hooks = Path(directory)
+            foreign = '#!/usr/bin/env python3\n"""Catch message failures."""\n'
+            (hooks / "commit-msg").write_text(foreign)
+            with patch("builtins.print") as printed:
+                self.assertEqual(git_hooks.install(hooks, force=False), 1)
+            message = printed.call_args.args[0]
+            self.assertIn("Catch message failures", message)
+            self.assertIn("install --force", message)
+            self.assertEqual((hooks / "commit-msg").read_text(), foreign)
+            with patch("builtins.print"):
+                self.assertEqual(git_hooks.install(hooks, force=True), 0)
+            self.assertIn(git_hooks.MARKER, (hooks / "commit-msg").read_text())
+
+    def test_the_shim_does_nothing_on_a_branch_that_predates_the_hook(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            self.git(repo, "init", "-q", "-b", "old")
+            with patch("builtins.print"):
+                git_hooks.install(repo / ".git/hooks", force=True)
+            older = self.git(REPO, "show", "1f69625a65:tools/git_hooks.py").stdout
+            self.assertIn('command == "pre-commit"', older)
+            self.write(repo, "tools/git_hooks.py", older)
+            result = self.git(repo, "commit", "-qm", "Tools: Old branch", "--no-verify")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # Only commit-msg runs below: pre-commit would run the old file.
+            (repo / ".git/hooks/pre-commit").unlink()
+            result = self.commit(repo, "Tools: Still unchecked")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            stub = 'if command == "commit-msg":\n    raise SystemExit("ran")\n'
+            self.write(
+                repo, "tools/git_hooks.py", "import sys\ncommand = sys.argv[1]\n" + stub
+            )
+            result = self.commit(repo, "Tools: Now checked")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("ran", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
