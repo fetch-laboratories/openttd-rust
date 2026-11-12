@@ -81,6 +81,7 @@ fn foundations_match_original() {
     assert_eq!(cases, 9728);
 }
 
+#[cfg(test)]
 thread_local! {
     static DIMENSIONS: Cell<(u32, u32)> = const { Cell::new((0, 0)) };
 }
@@ -102,6 +103,7 @@ extern "C" fn compatible(_: VehicleRef) -> u64 {
 extern "C" fn speed(_: RoadType) -> u16 {
     unreachable!()
 }
+#[cfg(test)]
 extern "C" fn kind(_: VehicleRef) -> RoadTramType {
     unreachable!()
 }

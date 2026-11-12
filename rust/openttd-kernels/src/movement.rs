@@ -513,8 +513,7 @@ impl MovementServices {
     }
     /// Temporary raw adapter of [`Self::get_tile_track_status`] for `road_yapf.rs`
     /// and `train.rs` until their passes.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
         self.get_tile_track_status(
             TileIndex(tile),
@@ -525,8 +524,7 @@ impl MovementServices {
     }
     /// Temporary raw adapter of [`Self::get_tile_track_status_in_world`] for
     /// `follow_track.rs` and `pathfinder_func.rs` until their passes.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn track_status_in_world(
         &self,
         world: &World<'_>,
@@ -860,8 +858,7 @@ impl Context<'_> {
         }
     }
     /// `GetTileTrackStatus_Track`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     fn get_tile_track_status_track(
         &self,
         tile: TileIndex,
@@ -954,8 +951,7 @@ impl Context<'_> {
         track_bits_status(trackbits, red_signals)
     }
     /// `GetTileTrackStatus_Road`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     fn get_tile_track_status_road(
         &self,
         tile: TileIndex,
@@ -1084,8 +1080,7 @@ impl Context<'_> {
         combine_trackdir_status(trackdirbits, red_signals)
     }
     /// `GetTileTrackStatus_Station`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     fn get_tile_track_status_station(
         &self,
         tile: TileIndex,
@@ -1160,8 +1155,7 @@ impl Context<'_> {
         track_bits_status(trackbits, TrackdirBits::TRACKDIR_BIT_NONE)
     }
     /// `GetTileTrackStatus_Water`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     fn get_tile_track_status_water(&self, tile: TileIndex, mode: TransportType) -> TrackStatus {
         const COAST_TRACKS: [TrackBits; 16] = [
             TrackBits::TRACK_BIT_NONE,
@@ -1231,8 +1225,7 @@ impl Context<'_> {
         track_bits_status(ts, TrackdirBits::TRACKDIR_BIT_NONE)
     }
     /// `GetTileTrackStatus_TunnelBridge`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     fn get_tile_track_status_tunnel_bridge(
         &self,
         tile: TileIndex,
@@ -1848,8 +1841,7 @@ pub(crate) fn get_tile_track_status(
 }
 /// Temporary raw adapter of [`get_tile_track_status`] for the files no pass has
 /// finished yet.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn track_status(shared: &Services, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
     get_tile_track_status(
         shared,
