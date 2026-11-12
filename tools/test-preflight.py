@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -546,7 +547,9 @@ class CompileCheckTests(unittest.TestCase):
             with (
                 patch.object(check, "BUILD", Path(directory)),
                 patch.object(check, "OUT", Path(directory) / "out"),
-                patch.object(check, "generated_abi_changed", return_value=True),
+                patch.object(check, "generated_abi_changed", return_value=["seeded.h"]),
+                patch.object(check, "changed", return_value=[]),
+                patch.object(check.shutil, "which", return_value=None),
                 patch.object(check, "jobs", return_value=[("seeded", [])]),
                 patch.object(check, "run", return_value=done[0]),
                 patch("builtins.print") as printed,
@@ -556,6 +559,30 @@ class CompileCheckTests(unittest.TestCase):
                 self.assertEqual(check.check("base"), 0)
             lines = [call.args[0] for call in printed.call_args_list]
             self.assertTrue(any(line.startswith("SKIP seeded") for line in lines))
+
+    def test_clang_fails_a_missing_initializer_only_behind_a_touched_file(self) -> None:
+        # #933: GCC does not report -Wmissing-field-initializers here (#885, #929).
+        if not shutil.which("clang++"):
+            self.skipTest("no clang++ on this host")
+        check, probe = tool("compile-check"), tool("probe")
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out / "services.h").write_text("struct S { int a; int b; };\n")
+            (out / "probe.inc").write_text("S s{ .a = 1 };\n")
+            (out / "probe.cpp").write_text(
+                '#include "services.h"\n#include "probe.inc"\n'
+            )
+            (out / "compile_commands.json").write_text("[]")
+            argv = ["c++", "-std=c++20", "-O2", str(out / "probe.cpp"), "-fsyntax-only"]
+            probe.clang(argv, out, dict(os.environ), str(out))
+            probe.clang([*argv[:2], "-O0", *argv[3:]], out, dict(os.environ), str(out))
+            self.assertEqual(len(list(out.glob("*.log"))), 1)
+            env = {"PROBE_CLANG": str(out)}
+            with patch.object(check, "BUILD", out):
+                (warning,) = check.clang_pass({out / "services.h"}, out, env)
+                self.assertIn("probe.inc:1", warning)
+                self.assertIn("-Wmissing-field-initializers", warning)
+                self.assertEqual(check.clang_pass({out / "other.h"}, out, env), [])
 
     def test_comparisons_guard_their_runs_and_abi_is_always_regenerated(self) -> None:
         check = tool("compile-check")
@@ -571,7 +598,8 @@ class CompileCheckTests(unittest.TestCase):
             patch.object(check, "BUILD", Path(directory)),
             patch.object(check, "OUT", Path(directory) / "out"),
             patch.object(check, "changed", return_value=["src/shared.h"]),
-            patch.object(check, "generated_abi_changed", return_value=False) as abi,
+            patch.object(check, "generated_abi_changed", return_value=[]) as abi,
+            patch.object(check.shutil, "which", return_value=None),
             patch.object(check, "jobs", return_value=[]),
             patch("builtins.print"),
         ):

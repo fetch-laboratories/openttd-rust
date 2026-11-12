@@ -10,21 +10,29 @@ change since the base touches no shared header, generated ABI input, probe or
 runtime adapter. Generated ABI headers come fresh from `tools/generate-abi.py`,
 not from the build. Each comparison runs with PROBE_COMPILE_ONLY set, so
 `probe` compiles every variant for syntax only and each comparison skips its
-runs (`probe.RUN`). Each child refuses to start any program but a compiler
+runs (`probe.RUN`). Where `clang++` is installed, every such compile, and
+the build's compiles of fork sources under tools/ and src/tests/, also runs
+through `clang++ -fsyntax-only -Wmissing-field-initializers` with the build's
+other flags (#933), and a Clang warning fails the check when its compile reads
+a file the change touches. Each child refuses to start any program but a compiler
 or a read of the repository and build, and a refusal fails the check.
 """
 
 import argparse
 import filecmp
+import json
 import os
 import re
 import runpy
+import shlex
 import shutil
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import probe
 
 import migration
 
@@ -45,21 +53,19 @@ def changed(base: str) -> list[str]:
     return migration.git("diff", "--name-only", merge_base, "--").splitlines()
 
 
-def generated_abi_changed(fresh: Path) -> bool:
-    """Whether the current Rust declarations generate other headers than the build's."""
+def generated_abi_changed(fresh: Path) -> list[str]:
+    """Headers the current Rust declarations generate unlike the build's."""
     shutil.rmtree(fresh, ignore_errors=True)
     subprocess.run(
         [sys.executable, str(ROOT / "tools/generate-abi.py"), str(fresh)], check=True
     )
     built = BUILD / "generated-abi"
     if not built.is_dir():
-        return True
+        return ["(no generated-abi in build-rust)"]
     comparison = filecmp.dircmp(fresh, built)
-    return bool(
-        comparison.left_only
-        or comparison.right_only
-        or filecmp.cmpfiles(fresh, built, comparison.common_files, shallow=False)[1]
-    )
+    common = comparison.common_files
+    differ = filecmp.cmpfiles(fresh, built, common, shallow=False)[1]
+    return comparison.left_only + comparison.right_only + differ
 
 
 # Comparisons that compile no fixture: they run built tools or Rust tests only.
@@ -147,6 +153,44 @@ def run(name: str, command: list[str], env: dict[str, str]) -> tuple[str, int, P
     return name, code, log
 
 
+DIAGNOSTIC = re.compile(r"^\S+:\d+:\d+: (warning|error): ")
+
+
+def clang_pass(touched: set[Path], fresh: Path, env: dict[str, str]) -> list[str]:
+    """Clang's diagnostics from compiles that read a touched file (#933)."""
+    folder = env["PROBE_CLANG"]
+    commands = json.loads((BUILD / "compile_commands.json").read_text())
+    fork = [
+        entry
+        for entry in commands
+        if Path(entry["file"]).resolve().is_relative_to(ROOT / "tools")
+        or Path(entry["file"]).resolve().is_relative_to(ROOT / "src/tests")
+    ]
+
+    def one(entry: dict[str, str]) -> None:
+        argv = probe.compile_only(shlex.split(entry["command"]), str(fresh))
+        if argv:
+            probe.clang(argv, entry["directory"], env, folder)
+
+    with ThreadPoolExecutor(workers()) as pool:
+        list(pool.map(one, fork))
+    found = set()
+    for log in Path(folder).glob("*.log"):
+        cwd, *lines = log.read_text(errors="replace").splitlines()
+        depfile = log.with_suffix(".d")
+        if not depfile.exists():
+            continue
+        read = depfile.read_text().replace("\\\n", " ").split()
+        directory = Path(cwd.removeprefix("cwd "))
+        if touched & {(directory / path).resolve() for path in read[1:]}:
+            found |= {line for line in lines if DIAGNOSTIC.match(line)}
+    return sorted(found)
+
+
+def workers() -> int:
+    return max(2, (os.cpu_count() or 2) - round(os.getloadavg()[0]))
+
+
 def check(base: str) -> int:
     if (
         not (BUILD / "CMakeCache.txt").is_file()
@@ -161,7 +205,8 @@ def check(base: str) -> int:
     fresh = OUT / "generated-abi"
     # Always regenerate: a selected run must compile against this tree's ABI.
     abi = generated_abi_changed(fresh)
-    if not abi and not any(INPUTS.match(path) for path in changed(base)):
+    paths = changed(base)
+    if not abi and not any(INPUTS.match(path) for path in paths):
         print(
             "skipped: the change touches no shared header, generated ABI, probe "
             "or runtime adapter"
@@ -171,12 +216,16 @@ def check(base: str) -> int:
     env = migration.environment()
     env["CPATH"] = env.get("CPATH", "").replace(stale, str(fresh))
     env["PROBE_COMPILE_ONLY"] = str(fresh)
-    shutil.rmtree(OUT / "logs", ignore_errors=True)
-    (OUT / "logs").mkdir()
+    for folder in ("logs", "clang"):
+        shutil.rmtree(OUT / folder, ignore_errors=True)
+        (OUT / folder).mkdir()
+    if shutil.which("clang++", path=env.get("PATH")):
+        env["PROBE_CLANG"] = str(OUT / "clang")
+    else:
+        print("Clang pass skipped: no clang++ on this host")
     started = time.monotonic()
     listed = jobs()
-    workers = max(2, (os.cpu_count() or 2) - round(os.getloadavg()[0]))
-    with ThreadPoolExecutor(workers) as pool:
+    with ThreadPoolExecutor(workers()) as pool:
         results = list(pool.map(lambda job: run(*job, env), listed))
     labels = {FAILED: "compile failed", RAN: "tried to run a program"}
     for name, _code, log in (result for result in results if result[1] == MISSING):
@@ -191,7 +240,17 @@ def check(base: str) -> int:
         print(f"FAIL {labels.get(code, 'error')}: {name}; see {log}")
     elapsed = time.monotonic() - started
     print(f"{len(listed) - len(failed)}/{len(listed)} compiled in {elapsed:.0f}s")
-    return 1 if failed else 0
+    if "PROBE_CLANG" not in env:
+        return 1 if failed else 0
+    started = time.monotonic()
+    named = [ROOT / path for path in paths] + [fresh / name for name in abi]
+    touched = {path.resolve() for path in named}
+    diagnostics = clang_pass(touched, fresh, env)
+    for line in diagnostics:
+        print(f"FAIL clang: {line}")
+    count = len(list((OUT / "clang").glob("*.log")))
+    print(f"Clang pass: {count} compiles in {time.monotonic() - started:.0f}s")
+    return 1 if failed or diagnostics else 0
 
 
 def main() -> int:

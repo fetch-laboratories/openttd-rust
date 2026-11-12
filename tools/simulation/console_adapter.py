@@ -48,6 +48,7 @@ def console_adapter(
         if command is None:
             raise RuntimeError(f"not a compile command: {compile_args[0]}")
         subprocess.run(command, cwd=entry["directory"], env=env, check=True)
+        probe.clang(command, entry["directory"], env)
         return folder / f"openttd-{kind}"
     subprocess.run(compile_args, cwd=entry["directory"], env=env, check=True)
     target = "openttd-rust" if (build / "openttd-rust").exists() else "openttd"

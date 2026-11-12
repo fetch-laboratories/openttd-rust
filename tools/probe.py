@@ -6,6 +6,7 @@ It then requires identical output.
 """
 
 import difflib
+import hashlib
 import os
 import re
 import subprocess
@@ -29,9 +30,15 @@ GENERATED = os.environ.get("PROBE_COMPILE_ONLY", "")
 # Every comparison guards each run, and each check of a run's output, with RUN.
 RUN = not GENERATED
 COMPILE_FAILED = 3
+# The compile check's Clang pass (#933) writes each compile's clang++ output here.
+CLANG = os.environ.get("PROBE_CLANG", "")
+# CompileFlags.cmake gives these to GCC only; clang++ rejects or inverts them.
+GCC_ONLY = {"-flifetime-dse=1", "-Wno-redundant-move"}
 
 
-def compile_only(command: Sequence[Argument]) -> list[str] | None:
+def compile_only(
+    command: Sequence[Argument], generated: str = GENERATED
+) -> list[str] | None:
     """The compile without its output, link inputs or the build's generated ABI.
 
     None for a command that compiles no C or C++ source: a link alone, or a
@@ -54,9 +61,29 @@ def compile_only(command: Sequence[Argument]) -> list[str] | None:
             (".a", ".so", ".o")
         ):
             for path in stale:
-                argument = argument.replace(path, GENERATED)
+                argument = argument.replace(path, generated)
             checked.append(argument)
     return [*checked, "-fsyntax-only"]
+
+
+def clang(
+    argv: Sequence[str],
+    cwd: Path | str | None,
+    env: Mapping[str, str],
+    folder: str = CLANG,
+) -> None:
+    """Record clang++'s warnings and dependencies for one syntax-only compile."""
+    kept = [a for a in argv[1:] if a not in GCC_ONLY and not a.startswith("-O")]
+    # O0 and O2 variants check the same text once.
+    stem = Path(folder) / hashlib.sha1("\0".join(kept).encode()).hexdigest()[:16]
+    if not folder or stem.with_suffix(".log").exists():
+        return
+    extra = ["-Wmissing-field-initializers", "-Wno-unknown-warning-option"]
+    command = ["clang++", *kept, *extra, "-MD", "-MF", f"{stem}.d"]
+    with stem.with_suffix(".log").open("wb") as handle:
+        handle.write(f"cwd {cwd or Path.cwd()}\n".encode())
+        handle.flush()
+        subprocess.run(command, cwd=cwd, env=env, stdout=handle, stderr=handle)
 
 
 def output(name: str, directory: Argument | None = None) -> Path:
@@ -139,6 +166,8 @@ def compile(
     if code and GENERATED:
         print(f"compile-only: failed; see {log}", file=sys.stderr)
         raise SystemExit(COMPILE_FAILED)
+    if GENERATED:
+        clang(argv, cwd, env or ENV)
     if code:
         raise subprocess.CalledProcessError(code, argv)
 
