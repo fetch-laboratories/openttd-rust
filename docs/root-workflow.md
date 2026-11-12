@@ -90,7 +90,11 @@ Full also builds Linux Clang and GCC Dedicated, so the cadence's builds of them 
 
 ## Automatic rollback and wind-down
 
-A confirmed code regression on `rust-migration` [stops merges](#merge-stops). When the breaking merge has only docs commits after it, or none, root removes it without asking ([ADR 0016](adr/0016-automatic-rollback.md)), by the procedure below: preserve its work remotely, restore its first parent plus corrected docs, and report afterwards. This holds even during wind-down, without a fix PR or new CI wait. A runner or API failure alone is not a code regression. If later code prevents this bounded rollback, preserve the state and handle recovery before further merges; during wind-down, hand it off instead of starting repairs.
+A confirmed code regression on `rust-migration` [stops merges](#merge-stops). When the breaking merge has only docs commits after it, or none, root removes it without asking ([ADR 0016](adr/0016-automatic-rollback.md)), by the procedure below: preserve its work remotely, restore its first parent plus corrected docs, and report afterwards.
+
+- This holds even during wind-down, without a fix PR or new CI wait.
+- A runner or API failure alone is not a code regression.
+- If later code prevents this bounded rollback, preserve the state and handle recovery before further merges; during wind-down, hand it off instead of starting repairs.
 
 Wind-down is when the user pauses the project. It is bounded by actions, not time estimates:
 
