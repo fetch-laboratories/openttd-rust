@@ -467,6 +467,51 @@ class OneSessionTests(unittest.TestCase):
         self.build(claude, [])
         self.assertIn("[0 hits]", self.query("humans", "run the tests"))
 
+    def test_a_result_after_the_window_still_marks_its_call(self) -> None:
+        late = "2026-11-04"
+        failed = tool_result("tu1", "Exit code 1\nboom", True)
+        claude = [
+            claude_assistant(DAY1, "23:59:00", tool_use("tu1", "slow claude build")),
+            claude_user(late, "00:00:30", [failed]),
+        ]
+        slow = command("x1", "slow codex build", 1, "error")
+        codex = [
+            codex_call(DAY1, "23:59:00", "c1", "exec", "text(slow)"),
+            codex_item(late, "00:00:20", slow, ms(DAY1, "23:59:30")),
+            codex_output(late, "00:00:30", "c1", "Script failed"),
+        ]
+        self.build(claude, codex, until=DAY1)
+        self.assertIn("total 2 failed 2", self.query("count", "slow .* build"))
+        out = self.query("count", "slow", "--kind", "call", "--failed")
+        self.assertIn("total 2 failed 2", out)
+
+    def test_an_opening_before_the_window_still_marks_a_delegated_session(
+        self,
+    ) -> None:
+        opening = "Delegated task node:x\nFix the parser."
+        claude = [
+            claude_user(DAY1, "10:00:00", opening),
+            claude_user(DAY2, "10:00:00", "Please merge it"),
+        ]
+        codex = [
+            codex_user(DAY1, "10:00:00", opening),
+            codex_user(DAY2, "10:00:00", "Please merge it"),
+        ]
+        self.build(claude, codex, since=DAY2)
+        self.assertIn("[2 hits]", self.query("users", "merge it"))
+        self.assertIn("[0 hits]", self.query("users", "Delegated task"))
+        self.assertIn("[0 hits]", self.query("humans", "merge it"))
+
+    def test_file_time_prefilter_keeps_a_session_written_in_the_window(
+        self,
+    ) -> None:
+        self.build([claude_user(DAY1, "10:00:00", "old")], [])
+        written = transcripts.epoch_ms(ts(DAY2, "10:00:00")) / 1000
+        os.utime(self.claude_path, (written, written))
+        since = transcripts.epoch_ms(f"{DAY2}T00:00:00Z") / 1000
+        files = transcripts.claude_files(self.claude_root, MATCH, since)
+        self.assertEqual(files, [self.claude_path])
+
 
 if __name__ == "__main__":
     unittest.main()

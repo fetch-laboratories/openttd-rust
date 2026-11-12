@@ -96,6 +96,11 @@ records (calls.jsonl, field "kind"):
   wait        a Codex wait or wait_agent call.
   Queries read "leaf" records by default: one per command, so Codex scripts
   are not counted twice. --kind call reads the outer calls.
+  The digest reads each session whole, so a result, a completion or the
+  session's opening outside the window still counts, then keeps the records
+  whose t falls in it: a call's t is when it started. A session's start, end
+  and first message span the whole session; its calls, cmds and failed count
+  the records kept.
   Every record keeps h (host), s (session), parent, path and ln (raw file and
   line), t, id (call ID), model, effort (Codex), e (failed), x (exit code),
   c (input or command, in full) and r (result: its first and last 500
@@ -269,13 +274,17 @@ class Reader:
         return record
 
     def finish(self, invalid: int) -> Parsed | None:
+        """Keep the records the window selects, once the whole session is read."""
         self.flush_final()
-        out, meta = self.out, self.out.session
+        out, meta, has = self.out, self.out.session, self.window.has
         stamps = sorted(r["t"] for t in (out.calls, out.users, out.finals) for r in t)
         stamps = [ts for ts in stamps if ts]
         out.invalid = meta["invalid"] = invalid
-        if not stamps:
+        if not any(has(ts) for ts in stamps):
             return None
+        out.calls = [r for r in out.calls if has(r["t"])]
+        out.users = [r for r in out.users if has(r["t"])]
+        out.finals = [r for r in out.finals if has(r["t"])]
         meta.update(start=stamps[0], end=stamps[-1], model=meta["model"] or self.model)
         meta["calls"] = sum(r["kind"] in ("call", "wait") for r in out.calls)
         meta["cmds"] = sum(r["kind"] in ("shell", "background") for r in out.calls)
@@ -311,8 +320,6 @@ class ClaudeReader(Reader):
         if kind not in ("user", "assistant"):
             return
         ts = record.get("timestamp", "")
-        if not self.window.has(ts):
-            return
         if self.meta["sub"] and not self.meta["parent"]:
             self.meta["parent"] = record.get("sessionId", "")
         self.meta["cwd"] = self.meta["cwd"] or record.get("cwd", "")
@@ -447,8 +454,6 @@ class CodexReader(Reader):
             self.context(payload)
             return
         ts = record.get("timestamp", "")
-        if not self.window.has(ts):
-            return
         if kind == "response_item":
             self.response(ts, ln, payload)
         elif kind == "event_msg" and payload.get("type") == "item_completed":
@@ -558,6 +563,11 @@ def parse(job: tuple[str, str, Window]) -> Parsed | None:
 
 
 def claude_files(root: Path, match: str, oldest: float) -> list[Path]:
+    """Matching session files written since OLDEST.
+
+    A file holding a record from the window was last written at or after that
+    record's time, so the modification-time test keeps every such session.
+    """
     projects = root / "projects"
     if not projects.is_dir():
         return []
