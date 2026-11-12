@@ -276,10 +276,10 @@ class BaseUpdateTests(unittest.TestCase):
         self.on("base", {path: "a\nBASE\nc\n"}, "base side")
         self.on("main", {path: "a\nMINE\nc\n"}, "branch side")
 
-    def cli(self, *arguments: str) -> tuple[int, str]:
+    def cli(self, *arguments: str, where: str = "") -> tuple[int, str]:
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "base-update", *arguments],
-            cwd=self.repo,
+            cwd=self.repo / where,
             capture_output=True,
             text=True,
             env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull},
@@ -318,6 +318,14 @@ class BaseUpdateTests(unittest.TestCase):
             "a fresh reviewer checks the conflict resolution in tools/x.py", out
         )
         self.assertIn(f"git show --remerge-diff {sha[:10]}", out)
+
+    def test_relative_diff_config_and_a_subdirectory_keep_root_paths(self) -> None:
+        self.conflict("tools/x.py")
+        self.merge(resolved={"tools/x.py": "a\nMERGED\nc\n"})
+        self.git("config", "diff.relative", "true")
+        code, out = self.cli(where="tools")
+        self.assertEqual(code, base_update.EXIT_NEEDS_REVIEW, out)
+        self.assertIn("in tools/x.py", out)
 
     def test_reordered_sides_and_merge_time_edits_need_review(self) -> None:
         self.conflict("tools/x.py")

@@ -272,6 +272,8 @@ def remerge(cwd: Path, sha: str) -> str:
         "diff.suppressBlankEmpty=false",
         "show",
         "--remerge-diff",
+        # Root paths, whatever the working directory or diff.relative.
+        "--no-relative",
         "--no-color",
         "--no-ext-diff",
         "--no-textconv",
