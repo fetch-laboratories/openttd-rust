@@ -17,9 +17,9 @@
 //! `Packet` facade, which the probe's candidate called and this test does not.
 use super::*;
 use crate::network_config::COMPAT_MTU;
-use std::cell::Cell;
 use std::fmt::Write as _;
 use std::ptr::{NonNull, null, null_mut};
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 /// The probe's `SECRET_CLIENT`: bytes 32 to 63.
 const SECRET_CLIENT: [u8; X25519_KEY_SIZE] = {
@@ -270,14 +270,13 @@ struct Endpoint {
     stream: *mut Stream,
 }
 
-thread_local! {
-    /// The endpoint whose command runs; `RandomBytesWithFallback` has no context argument.
-    static ACTIVE: Cell<*mut Endpoint> = const { Cell::new(null_mut()) };
-}
+/// The endpoint whose command runs; `RandomBytesWithFallback` has no context argument.
+/// Process-wide, as the probe's globals were; the test runs alone in its isolated process.
+static ACTIVE: AtomicPtr<Endpoint> = AtomicPtr::new(null_mut());
 
 /// The probe's `RandomBytesWithFallback`.
 extern "C" fn random_bytes(data: *mut u8, size: usize) {
-    let endpoint = ACTIVE.get();
+    let endpoint = ACTIVE.load(Ordering::Relaxed);
     unsafe {
         for i in 0..size {
             let value =
@@ -444,7 +443,7 @@ impl Endpoint {
     /// One command line of the probe's `main`, with its printed result.
     fn call(self: &mut Box<Self>, line: &str) -> String {
         let endpoint: *mut Self = &raw mut **self;
-        ACTIVE.set(endpoint);
+        ACTIVE.store(endpoint, Ordering::Relaxed);
         let result = unsafe { Self::run(endpoint, line) };
         // `DebugPrint`, through the Rust debug table bound to net level 9.
         for (category, level, message) in crate::debug::tests::take() {
@@ -454,7 +453,7 @@ impl Endpoint {
                 (*endpoint).last_log = line.to_vec();
             }
         }
-        ACTIVE.set(null_mut());
+        ACTIVE.store(null_mut(), Ordering::Relaxed);
         result.trim_end().to_owned()
     }
     /// The probe's `server` and `client` commands: reset, then create the handler.
