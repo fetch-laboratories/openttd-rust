@@ -3,6 +3,7 @@
 //! availability.
 #![allow(unsafe_code)]
 use crate::company_type::{CompanyID, Owner};
+use crate::road::RoadTypeFlag;
 use crate::road_type::{RoadTramType, RoadType, RoadTypes};
 use crate::services::Services as Shared;
 use crate::timer_game_calendar::CalendarDate;
@@ -10,6 +11,15 @@ use crate::timer_game_common::MAX_DATE;
 use crate::type_availability::{Services, company_available, services};
 use crate::vehicle::VehicleType;
 
+/// `IsInsideMM(rti->introduction_date, 0, CalendarTime::MAX_DATE.base())`, with the date
+/// converted to `size_t` as the original's call converts it.
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "IsInsideMM converts the signed introduction_date to size_t"
+)]
+fn is_introduction_date(date: CalendarDate) -> bool {
+    crate::math::is_inside_mm(date.0 as usize, 0, MAX_DATE as usize)
+}
 /// `GetMaskForRoadTramType`; classification masks belong to the registry owner.
 #[must_use]
 pub fn get_mask_for_road_tram_type(rtt: RoadTramType) -> RoadTypes {
@@ -46,14 +56,15 @@ pub fn has_road_type_avail(
         || (s.editor)()
         || (shared.clear_square_services.generating_world)()
     {
-        let rti = (s.road_construction)(roadtype.0);
-        if rti.label == 0 {
+        let rti = (s.road_info)(roadtype);
+        if (s.road_label)(rti).0 == 0 {
             return false;
         }
 
         /* Not yet introduced at this date. */
-        if (0..MAX_DATE).contains(&rti.date)
-            && rti.date > crate::timer_game_common::calendar_date().0
+        let introduction_date = (s.road_introduction_date)(rti);
+        if is_introduction_date(introduction_date)
+            && introduction_date.0 > crate::timer_game_common::calendar_date().0
         {
             return false;
         }
@@ -63,14 +74,15 @@ pub fn has_road_type_avail(
          * The GS under deity mode, as well as anybody in the editor builds roads that are
          * owned by towns. So if a town may build it, it should be buildable by them too.
          */
-        !rti.hidden || rti.town_build
+        let flags = (s.road_flags)(rti);
+        !flags.test(RoadTypeFlag::Hidden) || flags.test(RoadTypeFlag::TownBuild)
     } else {
         // Company::GetIfValid has exactly the shared IsValidID precondition.
         if !(shared.company_valid)(company.0) {
             return false;
         }
-        let avail =
-            RoadTypes((s.company_roadtypes)(company.0) & !crate::type_registry::road_hidden());
+        let avail = RoadTypes((s.company_roadtypes)(company.0))
+            .reset(RoadTypes(crate::type_registry::road_hidden()));
         avail.test(roadtype)
     }
 }
@@ -84,8 +96,9 @@ pub extern "C" fn openttd_rust_has_any_road_types_abi(
 }
 /// `HasAnyRoadTypesAvail`: test if any buildable `RoadType` is available for a company.
 pub fn has_any_road_types_avail(s: &Services, company: CompanyID, rtt: RoadTramType) -> bool {
-    let avail = (s.company_roadtypes)(company.0) & !crate::type_registry::road_hidden();
-    avail & get_mask_for_road_tram_type(rtt).0 != 0
+    let avail = RoadTypes((s.company_roadtypes)(company.0))
+        .reset(RoadTypes(crate::type_registry::road_hidden()));
+    avail.any(get_mask_for_road_tram_type(rtt))
 }
 /// Base-integer form of `val_param_road_type` for callers in files no pass has finished.
 pub fn val_param_road_type_raw(shared: &Shared, roadtype: u8) -> bool {
@@ -120,29 +133,30 @@ pub fn add_date_introduced_road_types(
     loop {
         let mut rts = current;
         for rt in RoadType::ROADTYPE_BEGIN.0..RoadType::ROADTYPE_END.0 {
-            let rti = (s.road_introduction)(rt);
+            let rti = (s.road_info)(RoadType(rt));
             /* Unused road type. */
-            if rti.label == 0 {
+            if (s.road_label)(rti).0 == 0 {
                 continue;
             }
 
             /* Not date introduced. */
-            if !(0..MAX_DATE).contains(&rti.date) {
+            let introduction_date = (s.road_introduction_date)(rti);
+            if !is_introduction_date(introduction_date) {
                 continue;
             }
 
             /* Not yet introduced at this date. */
-            if rti.date > date.0 {
+            if introduction_date.0 > date.0 {
                 continue;
             }
 
             /* Have we introduced all required roadtypes? */
-            let required = rti.required;
-            if rts.0 & required != required {
+            let required = (s.road_introduction_required)(rti);
+            if !rts.all(required) {
                 continue;
             }
 
-            rts = rts.with(RoadTypes(rti.introduces));
+            rts = rts.with((s.road_introduces)(rti));
         }
 
         /* When we added roadtypes we need to run this method again; the added
@@ -184,7 +198,7 @@ fn engine_road_types(s: &Services, company: Option<CompanyID>, introduces: bool)
         let roadtype = RoadType(engine.roadtype());
         crate::movement::native_assert(shared, roadtype < RoadType::ROADTYPE_END);
         rts = rts.with(if introduces {
-            RoadTypes((s.road_introduces)(roadtype.0))
+            (s.road_introduces)((s.road_info)(roadtype))
         } else {
             RoadTypes::from_element(roadtype)
         });

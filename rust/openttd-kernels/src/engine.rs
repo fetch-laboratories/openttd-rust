@@ -827,7 +827,8 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
         if types.assertions {
             assert!(rt < crate::road_type::ROADTYPE_END);
         }
-        let introduced = (types.road_introduces)(rt);
+        let introduced =
+            (types.road_introduces)((types.road_info)(crate::road_type::RoadType(rt))).0;
         let mut from = 0;
         loop {
             let c = unsafe { call!(s, company_next, from) };
