@@ -6,7 +6,10 @@ It then requires identical output.
 """
 
 import difflib
+import os
+import re
 import subprocess
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
@@ -20,6 +23,40 @@ ENV = migration.environment()
 # A command argument; compile and execute stringify each one.
 Argument = str | Path
 Labels = Sequence[tuple[str, Path]]
+# Preflight's compile check (#923) sets this: compile each fixture for syntax only,
+# against freshly generated ABI headers, and link or run nothing.
+GENERATED = os.environ.get("PROBE_COMPILE_ONLY", "")
+# Every comparison guards each run, and each check of a run's output, with RUN.
+RUN = not GENERATED
+COMPILE_FAILED = 3
+
+
+def compile_only(command: Sequence[Argument]) -> list[str] | None:
+    """The compile without its output, link inputs or the build's generated ABI.
+
+    None for a command that compiles no C or C++ source: a link alone, or a
+    generator a comparison runs, which compile-only mode does not run.
+    """
+    argv = list(map(str, command))
+    compilers = re.compile(r"(c\+\+|[gc]\+\+|clang\+\+|gcc|cc|clang)(-[0-9.]+)?$")
+    if not argv or not compilers.search(Path(argv[0]).name):
+        return None
+    if not any(a.endswith((".c", ".cc", ".cpp", ".cxx", ".mm")) for a in argv[1:]):
+        return None
+    built = BUILD / "generated-abi"
+    stale = {str(built), str(built.resolve())}
+    checked: list[str] = []
+    arguments = iter(argv)
+    for argument in arguments:
+        if argument == "-o":
+            next(arguments, None)
+        elif not argument.startswith(("-l", "-L", "-Wl,")) and not argument.endswith(
+            (".a", ".so", ".o")
+        ):
+            for path in stale:
+                argument = argument.replace(path, GENERATED)
+            checked.append(argument)
+    return [*checked, "-fsyntax-only"]
 
 
 def output(name: str, directory: Argument | None = None) -> Path:
@@ -76,6 +113,8 @@ def target_flags(build: Path = BUILD) -> list[str]:
 
 def rust(build: Path = BUILD, *, define: bool = True) -> list[str]:
     """WITH_RUST (unless define is false), the validated archive and its libraries."""
+    if GENERATED:
+        return ["-DWITH_RUST"] * define
     configuration = migration.rust_configuration(build)
     archive = str(migration.rust_archive(build))
     return ["-DWITH_RUST"] * define + [archive, *configuration["native_libraries"]]
@@ -89,15 +128,19 @@ def compile(
     cwd: Path | None = None,
 ) -> None:
     """Run a compile or link command, retaining its combined output in log."""
+    argv = compile_only(command) if GENERATED else list(map(str, command))
+    if argv is None:
+        Path(log).write_text("compile-only: not a compile; not run\n")
+        return
     with Path(log).open("wb") as handle:
-        subprocess.run(
-            list(map(str, command)),
-            cwd=cwd,
-            env=env or ENV,
-            stdout=handle,
-            stderr=subprocess.STDOUT,
-            check=True,
-        )
+        code = subprocess.run(
+            argv, cwd=cwd, env=env or ENV, stdout=handle, stderr=subprocess.STDOUT
+        ).returncode
+    if code and GENERATED:
+        print(f"compile-only: failed; see {log}", file=sys.stderr)
+        raise SystemExit(COMPILE_FAILED)
+    if code:
+        raise subprocess.CalledProcessError(code, argv)
 
 
 def execute(
@@ -110,6 +153,8 @@ def execute(
     cwd: Path | None = None,
 ) -> bytes:
     """Return stdout; stderr is "empty", "merged", "allowed" or "inherited"."""
+    if not RUN:
+        raise RuntimeError(f"compile-only mode runs nothing, not {argv[0]}")
     result = subprocess.run(
         list(map(str, argv)),
         input=input,
@@ -161,13 +206,17 @@ def compare(
         binary = out / f"{label}-{mode}"
         argv = [*command(label, source), "-o", binary]
         compile(argv + (rust() if label == "candidate" else []), f"{binary}.log")
-        outputs[label] = execute([binary], binary, input=input, stderr=stderr)
-        same(outputs[labels[0][0]], outputs[label], binary.name, out)
-    return outputs[labels[0][0]]
+        if RUN:
+            outputs[label] = execute([binary], binary, input=input, stderr=stderr)
+            same(outputs[labels[0][0]], outputs[label], binary.name, out)
+    return outputs.get(labels[0][0], b"")
 
 
 def passed(name: str, **counts: int) -> None:
     """Recheck the reference and print the inventory run-comparisons reports."""
+    if not RUN:
+        print(f"{name}: every fixture compiled; nothing ran")
+        return
     if not counts or 0 in counts.values():
         raise RuntimeError(f"{name} compared no cases: {counts}")
     migration.ensure_reference()

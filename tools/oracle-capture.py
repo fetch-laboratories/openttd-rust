@@ -393,6 +393,24 @@ RECIPE: dict[str, Recipe] = {
 }
 
 
+def tabbed(text: str) -> str:
+    """Text without trailing whitespace, each line's leading spaces as tabs (#920).
+
+    The commit checker rejects both in C++ diffs, so a program copied back into a
+    recipe passes it.
+    """
+    lines = []
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        body = line.lstrip(" \t")
+        tabs, spaces = divmod(len(line[: len(line) - len(body)].expandtabs(4)), 4)
+        if not tabs and spaces > 1:
+            # Alignment spaces may follow a tab; two leading ones fail the checker.
+            tabs, spaces = 1, 0
+        lines.append("\t" * tabs + " " * spaces + body)
+    return "\n".join(lines) + "\n"
+
+
 def program(name: str, recipe: Recipe, out: Path) -> Path:
     """Write the patched capture program and its extracted bodies into `out`."""
     # The patch names a non-source file, so the commit checker does not read the
@@ -405,7 +423,8 @@ def program(name: str, recipe: Recipe, out: Path) -> Path:
         (out / "capture.in").write_text(fixture)
     with (RECIPES / f"{name}.patch").open() as patch:
         subprocess.run(["patch", "-s", "-p1", "-d", str(out)], stdin=patch, check=True)
-    (out / "capture.in").replace(out / "capture.cpp")
+    (out / "capture.cpp").write_text(tabbed((out / "capture.in").read_text()))
+    (out / "capture.in").unlink()
     includes: dict[str, list[str]] = {}
     for include, path, start, end in recipe.extract:
         text = (probe.REFERENCE / path).read_text()
@@ -448,7 +467,8 @@ def capture(name: str) -> bool:
     committed = [
         line for line in oracle.read_text().splitlines() if not line.startswith("#")
     ]
-    captured = recipe.convert(printed[0].splitlines())
+    # A committed oracle carries no trailing whitespace (the commit checker's rule).
+    captured = [line.rstrip() for line in recipe.convert(printed[0].splitlines())]
     if captured != committed:
         (out / "captured.txt").write_text("\n".join(captured) + "\n")
         print(

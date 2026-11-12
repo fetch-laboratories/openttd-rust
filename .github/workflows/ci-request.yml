@@ -249,7 +249,12 @@ jobs:
               core.info(`Carry lookup failed, so this group runs: ${error.message}`);
             }
           }
-          for (const [key, value] of Object.entries({head, base: queue ? tested.parents[0]?.sha : pull.base.sha, merge,
+          // Base-relative gates compare the tested merge with the commit it merged onto, its first
+          // parent. The PR's recorded base SHA may predate merges into base since (#919).
+          if (!/^[0-9a-f]{40}$/.test(parent || '')) {
+            throw new Error('The tested merge commit has no first parent');
+          }
+          for (const [key, value] of Object.entries({head, base: parent, merge,
               tree: tested.commit.tree.sha, profile, pr, checker, carried: carry?.url ?? '', 'carried-tree': carry?.tree ?? ''})) {
             core.setOutput(key, String(value));
           }

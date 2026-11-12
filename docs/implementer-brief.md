@@ -40,6 +40,7 @@ List anything you leave in the PR body with its reason. Residue not listed there
 - Before pushing, apply the [preflight exception for inert Markdown](workflow.md#commits-and-pushes). For other changes, run your work order's focused checks and `python3 tools/preflight.py --base origin/rust-migration`, which runs every gate Quick runs. [Quick cleanup checks](rust-migration.md#quick-cleanup-checks) explains each gate and its reviewed exception contracts. Fix failures while preserving the original's operations.
 - Take scenario evidence from CI, not from this host: push, then run `python3 tools/ci.py request PR --profile native` and wait on it in the background ([checks](workflow.md#checks)). Run a scenario locally, by name, only to diagnose a failure.
 - Run long jobs in the background as `exec python3 tools/signal-witness.py -- <command>`, name the job ID and end your turn ([AGENTS.md](../AGENTS.md#every-agent)).
+- The pre-push hook refuses a non-Markdown push without a preflight stamp for its tree. Push a draft checkpoint with `PREFLIGHT_CHECKPOINT='what is incomplete' git push`; mark the PR ready with `python3 tools/ci.py ready PR` ([commits](workflow.md#commits-and-pushes)).
 - Commit coherent steps under titles the preflight commit checker accepts ([commits](workflow.md#commits-and-pushes)). Push at each passing milestone, keep the PR in draft until done and edit one status comment at milestones.
 - Finish with what you delivered, what stays in C++, exact commands, limits and the next action.
 

@@ -48,6 +48,8 @@ def main() -> None:
         ],
         out / "compile.log",
     )
+    if not probe.RUN:
+        return probe.passed("Train edge comparison")
     output = probe.execute([out / "train-edge"], out / "run", stderr="merged")
     curve, reversal = re.findall(rb"\d+", output)[:2]
     probe.passed(
