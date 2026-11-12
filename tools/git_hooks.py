@@ -130,7 +130,7 @@ def git_merge_base(base: str, sha: str) -> str:
 
 def pre_push(lines: list[str]) -> int:
     # Git exports these to hooks; every command here names its worktree by cwd.
-    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX"):
+    for name in preflight.REPOSITORY_VARIABLES:
         os.environ.pop(name, None)
     updates = [
         line.split()
@@ -160,11 +160,17 @@ def pre_push(lines: list[str]) -> int:
 
 
 def pre_commit() -> int:
+    # An unavailable checker (no network for its first fetch, or an edited
+    # checkout) lets the commit through: pre-push runs the same rules again.
     try:
         hooks = preflight.hooks_checkout() / "hooks"
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        print(f"pre-commit: pinned checker unavailable, not checked: {error}")
+        print(
+            f"pre-commit: pinned checker unavailable, not checked: {error}",
+            file=sys.stderr,
+        )
         return 0
+    # The checker's diff runs in the committing repository, with git's variables.
     env = os.environ | {"HOOKS_DIR": str(hooks)}
     command = ["sh", str(hooks / "pre-commit")]
     return subprocess.run(command, cwd=migration.ROOT, env=env, check=False).returncode

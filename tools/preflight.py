@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import preflight_stamp
-import vcs
 import yaml
 from validation_execution import file_lock
 
@@ -55,6 +54,12 @@ EXPRESSION = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 TAIL_LINES = 40
 # A stamp's base must be on this branch, so base-relative gates saw every PR change.
 PROTECTED = "origin/rust-migration"
+# Git exports these to a hook for the repository it runs in, and `git -C` does
+# not override them (#933), so commands on any other checkout drop them.
+REPOSITORY_VARIABLES = frozenset(
+    "GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY "
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_PREFIX".split()
+)
 
 
 @dataclass
@@ -65,7 +70,15 @@ class Step:
 
 
 def git(repo: Path, *arguments: str) -> str:
-    return vcs.git(*arguments, cwd=repo).strip()
+    """Git on the repository at repo, which cwd alone names."""
+    return subprocess.check_output(
+        ["git", *arguments], cwd=repo, env=other_repository(), text=True
+    ).strip()
+
+
+def other_repository() -> dict[str, str]:
+    """This process's environment without git's repository-locating variables."""
+    return {k: v for k, v in os.environ.items() if k not in REPOSITORY_VARIABLES}
 
 
 def hooks_checkout(supplied: Path | None = None) -> Path:
@@ -77,13 +90,10 @@ def hooks_checkout(supplied: Path | None = None) -> Path:
     ):
         if not destination.exists() and supplied is None:
             destination.mkdir(parents=True)
-            subprocess.run(["git", "init", "--quiet", str(destination)], check=True)
+            git(destination, "init", "--quiet")
         if supplied is None and not (destination / "hooks/check-commits.sh").exists():
-            for command in (
-                ["fetch", "--depth=1", HOOKS_URL, HOOKS_REVISION],
-                ["checkout", "--quiet", "--detach", HOOKS_REVISION],
-            ):
-                subprocess.run(["git", "-C", str(destination), *command], check=True)
+            git(destination, "fetch", "--quiet", "--depth=1", HOOKS_URL, HOOKS_REVISION)
+            git(destination, "checkout", "--quiet", "--detach", HOOKS_REVISION)
         if git(destination, "rev-parse", "HEAD") != HOOKS_REVISION:
             raise ValueError("commit checker is not at the pinned revision")
         if git(destination, "status", "--porcelain", "--untracked-files=all"):

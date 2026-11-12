@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -365,6 +366,58 @@ class PushTests(unittest.TestCase):
                 with self.subTest(text=text), patch("sys.stderr"):
                     self.assertEqual(bool(git_hooks.pre_commit()), bool(code))
 
+    def test_pre_commit_hook_under_gits_variables_in_main_and_linked(self) -> None:
+        # #933: git exports GIT_DIR (linked worktree) or an absolute
+        # GIT_INDEX_FILE (`commit -a`) to the hook; neither may reach the checker.
+        try:
+            preflight.hooks_checkout()
+        except (OSError, ValueError, subprocess.CalledProcessError) as error:
+            self.skipTest(f"pinned commit checker unavailable: {error}")
+        with tempfile.TemporaryDirectory() as directory:
+            main, linked, runner = (Path(directory) / name for name in ("m", "l", "r"))
+            runner.write_text(
+                "import subprocess, sys\nfrom pathlib import Path\n"
+                f"sys.path.insert(0, {str(REPO / 'tools')!r})\n"
+                "import git_hooks, migration\n"
+                "top = subprocess.check_output(['git', 'rev-parse', "
+                "'--show-toplevel'], text=True)\n"
+                "migration.ROOT = Path(top.strip())\n"
+                f"migration.COMMON_LOCAL = Path({str(preflight.migration.COMMON_LOCAL)!r})\n"
+                "sys.exit(git_hooks.pre_commit())\n"
+            )
+            env = {
+                key: value
+                for key, value in os.environ.items()
+                if key not in preflight.REPOSITORY_VARIABLES
+            } | {"GIT_AUTHOR_NAME": "Seed", "GIT_AUTHOR_EMAIL": "s@example.invalid"}
+            env |= {"GIT_COMMITTER_NAME": "Seed", "GIT_COMMITTER_EMAIL": "s@x.invalid"}
+
+            def git(cwd: Path, *arguments: str) -> CompletedProcess[str]:
+                return subprocess.run(
+                    ["git", *arguments],
+                    cwd=cwd,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+            git(Path(directory), "init", "-q", "-b", "work", str(main))
+            (main / "a.cpp").write_text("int a;\n")
+            git(main, "add", "a.cpp")
+            git(main, "commit", "-qm", "Add: Base")
+            git(main, "worktree", "add", "-q", "-b", "side", str(linked))
+            hook = main / ".git/hooks/pre-commit"
+            hook.write_text(f"#!/bin/sh\nexec {sys.executable} {runner}\n")
+            hook.chmod(0o755)
+            for checkout in (main, linked):
+                for text, refused in (("int a; \n", True), ("int b;\n", False)):
+                    (checkout / "a.cpp").write_text(text)
+                    result = git(checkout, "commit", "-qam", "Change: A")
+                    with self.subTest(checkout=checkout.name, text=text):
+                        self.assertNotIn("unavailable", result.stdout + result.stderr)
+                        self.assertEqual(result.returncode != 0, refused, result)
+
     def test_installer_writes_shims_and_keeps_foreign_hooks(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch("builtins.print"):
             hooks = Path(directory)
@@ -482,6 +535,61 @@ class CompileCheckTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, code, result.stderr)
 
+    def test_a_missing_generated_input_is_a_named_skip_not_a_failure(self) -> None:
+        # #933: script-list-comparison read bindings its skipped cmake -P writes.
+        check = tool("compile-check")
+        with tempfile.TemporaryDirectory() as directory:
+            seeded = Path(directory) / "seeded-comparison.py"
+            seeded.write_text(f"open({str(Path(directory) / 'gen.hpp')!r})\n")
+            with patch("sys.stderr"), patch.object(sys, "addaudithook"):
+                self.assertEqual(check.child(str(seeded), None), check.MISSING)
+            done = [("seeded", check.MISSING, Path(directory) / "log")]
+            with (
+                patch.object(check, "BUILD", Path(directory)),
+                patch.object(check, "OUT", Path(directory) / "out"),
+                patch.object(check, "generated_abi_changed", return_value=["seeded.h"]),
+                patch.object(check, "changed", return_value=[]),
+                patch.object(check.shutil, "which", return_value=None),
+                patch.object(check, "jobs", return_value=[("seeded", [])]),
+                patch.object(check, "run", return_value=done[0]),
+                patch("builtins.print") as printed,
+            ):
+                for name in ("CMakeCache.txt", "compile_commands.json"):
+                    (Path(directory) / name).write_text("")
+                self.assertEqual(check.check("base"), 0)
+            lines = [call.args[0] for call in printed.call_args_list]
+            self.assertTrue(any(line.startswith("SKIP seeded") for line in lines))
+
+    def test_clang_fails_a_missing_initializer_only_behind_a_touched_file(self) -> None:
+        # #933: GCC does not report -Wmissing-field-initializers here (#885, #929).
+        if not shutil.which("clang++"):
+            self.skipTest("no clang++ on this host")
+        check = tool("compile-check")
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory).resolve()
+            (out / "tools").mkdir()
+            (out / "services.h").write_text("struct S { int a; int b; };\n")
+            (out / "tools/probe.inc").write_text("S s{ .a = 1 };\n")
+            source = out / "tools/probe.cpp"
+            source.write_text('#include "../services.h"\n#include "probe.inc"\n')
+            command = f"/usr/bin/c++ -std=c++20 -O2 -flifetime-dse=1 -o x.o -c {source}"
+            entry = {"file": str(source), "directory": str(out), "command": command}
+            (out / "compile_commands.json").write_text(json.dumps([entry]))
+            (out / "clang").mkdir()
+            with (
+                patch.object(check, "BUILD", out),
+                patch.object(check, "OUT", out),
+                patch.object(check, "ROOT", out),
+            ):
+                (warning,), checked, listed = check.clang_pass(
+                    {out / "services.h"}, out
+                )
+                self.assertEqual((checked, listed), (1, 1))
+                self.assertIn("probe.inc:1", warning)
+                self.assertIn("-Wmissing-field-initializers", warning)
+                untouched = check.clang_pass({out / "other.h"}, out)
+                self.assertEqual(untouched, ([], 0, 1))
+
     def test_comparisons_guard_their_runs_and_abi_is_always_regenerated(self) -> None:
         check = tool("compile-check")
         for path in check.comparisons():
@@ -496,7 +604,8 @@ class CompileCheckTests(unittest.TestCase):
             patch.object(check, "BUILD", Path(directory)),
             patch.object(check, "OUT", Path(directory) / "out"),
             patch.object(check, "changed", return_value=["src/shared.h"]),
-            patch.object(check, "generated_abi_changed", return_value=False) as abi,
+            patch.object(check, "generated_abi_changed", return_value=[]) as abi,
+            patch.object(check.shutil, "which", return_value=None),
             patch.object(check, "jobs", return_value=[]),
             patch("builtins.print"),
         ):
@@ -505,6 +614,27 @@ class CompileCheckTests(unittest.TestCase):
             (Path(directory) / "out/generated-abi").mkdir(parents=True)
             self.assertEqual(check.check("base"), 0)
             abi.assert_called_once()
+
+    def test_a_fork_test_source_alone_runs_only_the_clang_pass(self) -> None:
+        # #933: c11ad644db's warning was in src/tests/station_service.cpp alone.
+        check = tool("compile-check")
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(check, "BUILD", Path(directory)),
+            patch.object(check, "OUT", Path(directory) / "out"),
+            patch.object(check, "changed", return_value=["src/tests/station.cpp"]),
+            patch.object(check, "generated_abi_changed", return_value=[]),
+            patch.object(check.shutil, "which", return_value="clang++"),
+            patch.object(check, "jobs") as jobs,
+            patch.object(
+                check, "clang_pass", return_value=(["x:1:1: warning: w"], 1, 1)
+            ),
+            patch("builtins.print"),
+        ):
+            for name in ("CMakeCache.txt", "compile_commands.json"):
+                (Path(directory) / name).write_text("")
+            self.assertEqual(check.check("base"), 1)
+            jobs.assert_not_called()
 
 
 if __name__ == "__main__":

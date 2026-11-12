@@ -142,7 +142,10 @@ def main() -> None:
     if (ROOT / exporter).read_bytes() != (REFERENCE / exporter).read_bytes():
         raise RuntimeError("Original binding generator changed")
 
-    for apilc, apiuc in (("ai", "AI"), ("game", "GS"), ("template", "Template")):
+    # Compile-only mode (#933) runs no generator, and no compile reads the bindings.
+    for apilc, apiuc in (
+        (("ai", "AI"), ("game", "GS"), ("template", "Template")) if probe.RUN else ()
+    ):
         generated: list[bytes] = []
         for label, source in (("reference", REFERENCE), ("candidate", ROOT)):
             target = out / f"bindings-{label}-{apilc}.sq.hpp"
