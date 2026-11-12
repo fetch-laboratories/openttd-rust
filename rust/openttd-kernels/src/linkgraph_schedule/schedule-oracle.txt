@@ -1,7 +1,7 @@
 # Capture scaffold: tools/simulation/linkgraph-schedule-reference.cpp at f0f67cf819c75eed8d74e158dc50126e77fe0ca6, candidate half removed.
 # Original 14ec60f248547d4d062a1160f0fc26d742319888; source-only capture; candidate never linked.
 # Linux-6.8.0-147-generic-x86_64-with-glibc2.39; g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -std=c++20 -O0 and -O2 -DNDEBUG; streams identical.
-# capture-source-sha256 b253fc4f1e1f4add42e013c87e191d4f8a8af7ff218e356c6f001ea0e0f1dd7d
+# capture-source-sha256 8b1f37af8a61061f60f7383a54d566503160dae2809e4a64afb03ae83f2064e8
 # Bodies: linkgraphschedule.cpp's SpawnNext, IsJoinWithUnfinishedJobDue, JoinNext, SpawnAll, Clear, ShiftDates,
 # StateGameLoop_LinkGraphPauseControl, AfterLoad_LinkGraphPauseControl and OnTick_LinkGraph; linkgraphschedule.h's Queue and Dequeue.
 # trace: one case per fixture trace entry, `kind a b`, in call order: 2 job created (job, graph tag), 3 job deleted (job, graph),

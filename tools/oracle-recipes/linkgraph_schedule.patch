@@ -4,7 +4,7 @@
  /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 -/** @file linkgraph-schedule-reference.cpp Controlled workers for otherwise unreachable scheduler branches. */
 -#define WITH_RUST
-+/** @file linkgraph-schedule-reference.cpp Original-only capture of linkgraph_schedule/schedule-oracle.txt (#736). Was: Controlled workers for otherwise unreachable scheduler branches. */
++/** @file linkgraph-schedule-reference.cpp Original-only capture of linkgraph_schedule/schedule-oracle.txt (#736): controlled workers for otherwise unreachable scheduler branches. */
  #include "stdafx.h"
  #include <algorithm>
  #include <array>
