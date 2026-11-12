@@ -80,11 +80,15 @@ def current_head(pull: dict, head: str | None = None) -> str:
         raise ValueError("PR must be open and target rust-migration")
     current = pull["head"]["sha"]
     if head is not None and current != head:
-        raise ValueError(
+        raise HeadMoved(
             f"PR head changed: requested {head}, current {current}; that request "
             "no longer covers the PR, so request CI for the new head"
         )
     return current
+
+
+class HeadMoved(ValueError):
+    """The PR's head is no longer the one a request or wait was made for."""
 
 
 class MergeabilityPending(ValueError):
@@ -288,8 +292,8 @@ def label_request(repository: str, pr: int, pull: dict, head: str) -> None:
     gh("pr", "edit", str(pr), "--repo", repository, "--add-label", "ci:full")
 
 
-def request(args: argparse.Namespace) -> Path | None:
-    repository = repository_of(args.repo)
+def requestable(repository: str, args: argparse.Namespace) -> tuple[dict, str] | None:
+    """The PR and the head to request for, or None when Full already passed it."""
     pull = api(repository, f"pulls/{args.pr}")
     head = expected_head(pull, args.head)
     require_stamp(args.pr, head, args.unstamped)
@@ -301,7 +305,28 @@ def request(args: argparse.Namespace) -> Path | None:
         return None
     if args.bootstrap and args.profile != "full":
         raise ValueError("Bootstrap label requests only support --profile full")
-    pull = await_mergeable(repository, args.pr, pull, head)
+    return await_mergeable(repository, args.pr, pull, head), head
+
+
+def request(args: argparse.Namespace) -> Path | None:
+    repository = repository_of(args.repo)
+    try:
+        found = requestable(repository, args)
+    except HeadMoved:
+        # Just after a push GitHub can still answer with the previous head, then
+        # move to the new one while its mergeability is computed. A caller who
+        # named no head asked for the current one, so read the PR once more.
+        if args.head:
+            raise
+        print(
+            f"PR #{args.pr}'s head moved while GitHub computed its mergeability "
+            "(a push just before this request); requesting for the new head",
+            flush=True,
+        )
+        found = requestable(repository, args)
+    if found is None:
+        return None
+    pull, head = found
     # The identifier ends with the head, so enqueue finds a head's requests (#922).
     request_id = f"{uuid.uuid4().hex}-{head}"
     record = {

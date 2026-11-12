@@ -2593,15 +2593,35 @@ class RequestPathTests(unittest.TestCase):
             )
         )
 
-    def test_pending_then_conflict_closed_or_moved_stops_at_once(self) -> None:
+    def test_pending_then_conflict_or_closed_stops_at_once(self) -> None:
         for label, after, message in (
             ("conflict", dict(PULL, mergeable=False), "conflicts with rust-migration"),
             ("closed", dict(self.PENDING, state="closed"), "must be open"),
-            ("moved", dict(PULL, head={"sha": PREVIOUS}), "head changed"),
         ):
             with self.subTest(label), self.assertRaisesRegex(ValueError, message):
                 self.request(self.PENDING, after)
             self.assertNotIn("Requested", self.output)
+
+    def test_a_head_that_moves_while_pending_is_followed_once(self) -> None:
+        # Just after a push GitHub still answers with the previous head.
+        stale = dict(self.PENDING, head={"sha": PREVIOUS})
+        path, calls, output, _ = self.request(stale, PULL, PULL)
+        self.assertIsNotNone(path)
+        self.assertIn("requesting for the new head", output)
+        ((dispatch),) = calls
+        self.assertIn(f"head={HEAD}", dispatch)
+        self.assertEqual(
+            [c.args[1] for c in self.stamp.call_args_list], [PREVIOUS, HEAD]
+        )
+        # A head that moves again is refused, and so is any move from a named head.
+        moved = dict(PULL, head={"sha": PARENT})
+        with self.assertRaisesRegex(ci.HeadMoved, "head changed"):
+            self.request(stale, PULL, self.PENDING, moved)
+        self.assertNotIn("Requested", self.output)
+        named = dict(self.PENDING, head={"sha": PREVIOUS})
+        with self.assertRaisesRegex(ci.HeadMoved, "head changed"):
+            self.request(named, PULL, head=PREVIOUS)
+        self.assertNotIn("requesting for the new head", self.output)
 
     def test_conflict_is_worded_apart_from_pending(self) -> None:
         with self.assertRaisesRegex(ValueError, "merge origin/rust-migration"):
