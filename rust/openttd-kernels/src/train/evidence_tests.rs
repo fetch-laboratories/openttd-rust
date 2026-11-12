@@ -9,7 +9,7 @@
 //! line format. This test regenerates the probe's 20,000 trials from its generator, builds
 //! the 16 vehicle records the probe linked, and calls:
 //!
-//! - `get_curve_speed_limit`, the crate function `settings_table.rs` calls, for the curve
+//! - `curve_speed_limit`, the crate function `settings_table.rs` calls, for the curve
 //!   limit. The probe called the export it replaced, which had no other caller.
 //! - The export `openttd_rust_train_reverse_swap`, as the probe did, for the reversal.
 //!
@@ -22,7 +22,7 @@
 //! the expected entry tiles are decoded from the expected line. As in the probe, the map is
 //! plain rail on the next expected entry tile only and clear elsewhere: an entry on any other
 //! tile skips the vehicle resolution and changes the recorded events.
-use super::{Handle, Leaves, get_curve_speed_limit, openttd_rust_train_reverse_swap};
+use super::{Handle, Leaves, curve_speed_limit, openttd_rust_train_reverse_swap};
 use crate::ground_vehicle::GroundState;
 use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
 use crate::movement::{MovementServices, MovementVehicle};
@@ -445,7 +445,7 @@ fn run() -> (Cases, Cases) {
         let inputs = format!("trial {trial} count {} model {}", t.count, t.model);
         // SAFETY: The fixture's tables and records are live for the call.
         let limit =
-            unsafe { get_curve_speed_limit(fixture.head(), &*fixture.leaves, &*fixture.shared) };
+            unsafe { curve_speed_limit(fixture.head(), &*fixture.leaves, &*fixture.shared) };
         curves.push((inputs.clone(), limit.to_string()));
 
         t.l = (draws.next() as usize) % t.count;

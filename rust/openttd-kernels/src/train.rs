@@ -2785,8 +2785,9 @@ pub unsafe extern "C" fn openttd_rust_train_consist_changed(
     let g = entry_game!(leaves, services);
     g.consist_changed(id, allowed);
 }
-/// `Train::GetCurveSpeedLimit`: the train speed limit caused by curves.
-pub(crate) fn get_curve_speed_limit(id: Handle, leaves: &Leaves, services: &Services) -> u16 {
+/// The train speed limit caused by curves, for callers outside a train entry; the
+/// original body is `Game::get_curve_speed_limit`.
+pub(crate) fn curve_speed_limit(id: Handle, leaves: &Leaves, services: &Services) -> u16 {
     Game::new(leaves, services).get_curve_speed_limit(id)
 }
 /// Invoke synchronous train policy with live serialized services.
