@@ -52,5 +52,5 @@ Each reviewer tells you in one line when its report is posted, and gives its thr
 
 - Read the reports on the PR. Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
 - If a fix changed behaviour, evidence or a body's operations, start one re-check the same way, naming the fixing commits ([review loop](team.md#review-loop)). For fixes limited to names, comments, types or argument structs with unchanged operations, say so in the status comment instead.
-- Record the passing `native` run at the reviewed head in the status comment, then queue the PR and wait on the queue yourself under [integration](root-workflow.md#integration), which also covers a conflict with base and a failure in the queue.
+- Record the passing `native` run at the reviewed head in the status comment, then queue the PR with `python3 tools/ci.py enqueue PR` and wait on the queue yourself under [integration](root-workflow.md#integration), which also covers a conflict with base and a failure in the queue.
 - After a substantive rewrite, or a base update that needs review, start a fresh reviewer the same way. Ask root only when you and a reviewer disagree, or a reviewer raises a policy question no recorded decision answers.
