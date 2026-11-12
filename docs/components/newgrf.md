@@ -5,7 +5,7 @@
 ## Vehicle NewGRF resolver runtime (#392)
 
 - Rust owns: Vehicle resolver cache, scope/root selection, wagon overrides, real-group selection, vehicle/purchase variables, callback/property/probability entries, subtype/aircraft helpers, randomisation and trigger recursion.
-- C++ keeps: Action2 evaluation, specifications, pools, saved vehicle random/waiting fields and rendering.
+- C++ keeps: Specifications, pools, saved vehicle random/waiting fields and rendering.
 - Checks: Default fleet resolver/reload, rail and aircraft fixtures, native ABI and aircraft comparison probes.
 - Limits: #156 (arbitrary external GRF programs, historical saves, GUI scheduling and remaining branch combinations); fixtures do not claim persistent synthetic sprite groups.
 - PRs: #397, integrated in #415.
@@ -60,7 +60,7 @@
 ## Airport and airport-tile NewGRF runtime (#418)
 
 - Rust owns: Airport and airport-tile resolver contexts, roots/scopes/town, variables, random packing, tile callbacks and airport selection/availability/bounds.
-- C++ keeps: Parsing, spec/layout/override storage, rendering, preview drawing, text, hangar and rotation algorithms; `GetAirportCallback` has no Rust export.
+- C++ keeps: Parsing, spec/layout/override storage, rendering, preview drawing, text, hangar and rotation algorithms. `GetAirportCallback`, which the original never calls, has no C++ or Rust body.
 - Checks: Default airport/reload fixtures.
 - Limits: These remain #156 gaps: external loading, historical saves, GUI scheduling and native removal setup. Temporary admission builds carry no storage-writing group because native removal leaves a deleted PSA pointer; retained airport PSA is saved and reloaded.
 - PRs: #428, integrated in #444.
@@ -83,7 +83,7 @@
 ## Staged NewGRF loading interpreter (#471)
 
 - Rust owns: Staged/file traversal, pseudo-sprite decoding, actions 6/7/9/8/D/E/10, patch flags/variables, GRM, labels, Action6 buffers, reset/status, finalization, `_cur_gps`, spriteset maps and spritegroup references.
-- C++ keeps: Config/GRF/spec objects, parameters, sprite/file I/O, feature parsers and engine-definition initialization/finalization.
+- C++ keeps: Config/GRF/spec objects, parameters, sprite/file I/O and feature parsers.
 - Limits: These remain #156 gaps: arbitrary feature grammars/data sections, historical saves, network clock and static influence, remaining GRM/variable/target combinations and GUI scheduling.
 - PRs: #473.
 
