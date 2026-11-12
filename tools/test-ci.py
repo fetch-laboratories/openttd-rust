@@ -3459,40 +3459,65 @@ RAW_LOG = (
 )
 
 
-def log_job(**fields: object) -> dict[str, Any]:
-    """A failed job of run 7 as the jobs API lists it, failing in step 2."""
+def log_step(
+    number: int, name: str, conclusion: str, start: int, end: int
+) -> ci_log.Step:
+    """A step of a job of run 7, from second `start` past 01:00 to `end`."""
     return {
-        "id": 9,
+        "number": number,
+        "name": name,
+        "conclusion": conclusion,
+        "started_at": f"2026-11-12T01:00:{start:02}Z",
+        "completed_at": f"2026-11-12T01:00:{end:02}Z",
+    }
+
+
+def log_job(
+    job_id: int = 9,
+    attempt: int = 1,
+    conclusion: str | None = "failure",
+    steps: list[ci_log.Step] | None = None,
+    name: str = "native / test",
+) -> ci_log.Job:
+    """A job of run 7 as the jobs API lists it, by default failing in step 2;
+    without a conclusion it is still running."""
+    if steps is None:
+        steps = [
+            log_step(1, "Checkout", "success", 0, 2),
+            log_step(2, "Test", "failure", 5, 7),
+            log_step(3, "Post", "success", 9, 10),
+        ]
+    url = JOB_URL if job_id == 9 else JOB_URL.replace("/9", f"/{job_id}")
+    return {
+        "id": job_id,
         "run_id": 7,
-        "run_attempt": 1,
-        "name": "native / test",
-        "status": "completed",
-        "conclusion": "failure",
-        "html_url": JOB_URL,
-        "steps": [
-            {
-                "number": 1,
-                "name": "Checkout",
-                "conclusion": "success",
-                "started_at": "2026-11-12T01:00:00Z",
-                "completed_at": "2026-11-12T01:00:02Z",
-            },
-            {
-                "number": 2,
-                "name": "Test",
-                "conclusion": "failure",
-                "started_at": "2026-11-12T01:00:05Z",
-                "completed_at": "2026-11-12T01:00:07Z",
-            },
-            {
-                "number": 3,
-                "name": "Post",
-                "conclusion": "success",
-                "started_at": "2026-11-12T01:00:09Z",
-                "completed_at": "2026-11-12T01:00:10Z",
-            },
-        ],
-        **fields,
+        "run_attempt": attempt,
+        "name": name,
+        "status": "in_progress" if conclusion is None else "completed",
+        "conclusion": conclusion,
+        "html_url": url,
+        "steps": steps,
+    }
+
+
+def passed(job: ci_log.Job) -> list[ci_log.Step]:
+    """The job's steps, each concluding success."""
+    steps = [step.copy() for step in job.get("steps") or []]
+    for step in steps:
+        step["conclusion"] = "success"
+    return steps
+
+
+def log_run(
+    attempt: int = 1, status: str = "completed", conclusion: str | None = "failure"
+) -> ci_log.Run:
+    """Run 7 as the runs API gives it."""
+    return {
+        "id": 7,
+        "run_attempt": attempt,
+        "status": status,
+        "conclusion": conclusion,
+        "html_url": "https://github.com/example/fork/actions/runs/7",
     }
 
 
@@ -3500,13 +3525,7 @@ class LogTests(unittest.TestCase):
     """ci.py log against recorded jobs and logs, with the cache in a temporary
     directory (P2)."""
 
-    RUN = {
-        "id": 7,
-        "run_attempt": 1,
-        "status": "completed",
-        "conclusion": "failure",
-        "html_url": "https://github.com/example/fork/actions/runs/7",
-    }
+    RUN = log_run()
 
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
@@ -3519,9 +3538,9 @@ class LogTests(unittest.TestCase):
     def log(
         self,
         *argv: str,
-        jobs: list[dict[str, Any]],
+        jobs: list[ci_log.Job],
         logs: Iterable[str | None] = (RAW_LOG,),
-        run: Mapping[str, object] | None = None,
+        run: ci_log.Run | None = None,
     ) -> tuple[int, str, list[int]]:
         """Run `ci.py log ARGV`; `logs` are the successive downloads."""
         answers = iter(logs)
@@ -3533,7 +3552,7 @@ class LogTests(unittest.TestCase):
 
         def api(_repository: str, path: str) -> object:
             if path == "actions/runs/7":
-                return dict(run or self.RUN)
+                return run or self.RUN
             (job,) = [j for j in jobs if path == f"actions/jobs/{j['id']}"]
             return job
 
@@ -3550,9 +3569,7 @@ class LogTests(unittest.TestCase):
         return code, output, downloads
 
     def test_failing_step_without_colour_or_stamps_and_one_download(self) -> None:
-        jobs = [
-            {"id": 8, "name": "quick", "status": "completed", "conclusion": "success"}
-        ]
+        jobs = [log_job(8, conclusion="success", steps=[], name="quick")]
         code, output, downloads = self.log("log", "7", jobs=[*jobs, log_job()])
         self.assertEqual(code, 0)
         self.assertNotIn("\x1b", output)
@@ -3619,8 +3636,8 @@ class LogTests(unittest.TestCase):
         first = self.cache / "example/fork/7/attempt-1/9.log"
         first.parent.mkdir(parents=True)
         first.write_text("2026-11-12T01:00:06.0000000Z error: first attempt\n")
-        retried = log_job(id=19, run_attempt=2, html_url=JOB_URL + "0")
-        run = dict(self.RUN, run_attempt=2)
+        retried = log_job(19, attempt=2)
+        run = log_run(attempt=2)
         _, output, downloads = self.log("log", "7", jobs=[retried], run=run)
         self.assertIn("Run 7 attempt 2 (failure)", output)
         self.assertIn("mismatched types", output)
@@ -3665,11 +3682,10 @@ class LogTests(unittest.TestCase):
 
     def test_attempt_url_reads_that_attempt_not_the_latest(self) -> None:
         first = log_job()
-        steps = [dict(step, conclusion="success") for step in first["steps"]]
-        rerun = log_job(id=19, run_attempt=2, conclusion="success", steps=steps)
+        rerun = log_job(19, attempt=2, conclusion="success", steps=passed(first))
         runs = {
-            "actions/runs/7": dict(self.RUN, run_attempt=2, conclusion="success"),
-            "actions/runs/7/attempts/1": dict(self.RUN),
+            "actions/runs/7": log_run(attempt=2, conclusion="success"),
+            "actions/runs/7/attempts/1": log_run(),
         }
 
         def gh(*args: str) -> str:
@@ -3691,23 +3707,20 @@ class LogTests(unittest.TestCase):
         self.assertTrue((self.cache / "example/fork/7/attempt-1/9.log").exists())
 
     def test_cancelled_job_without_a_failed_step_shows_its_tail(self) -> None:
-        steps = [dict(step, conclusion="success") for step in log_job()["steps"]]
-        lost = log_job(conclusion="cancelled", steps=steps)
+        lost = log_job(conclusion="cancelled", steps=passed(log_job()))
         _, output, _ = self.log("log", "7", jobs=[lost])
         self.assertIn("== native / test (cancelled)", output)
         self.assertIn("No failed step: the job ended cancelled", output)
         self.assertIn("Post job cleanup", output)
 
     def test_running_jobs_are_named_and_have_no_log_yet(self) -> None:
-        running = {
-            "id": 10,
-            "run_id": 7,
-            "name": "native / simulation (1)",
-            "status": "in_progress",
-            "conclusion": None,
-            "html_url": JOB_URL + "1",
-        }
-        run = dict(self.RUN, status="in_progress", conclusion=None)
+        running = log_job(
+            10,
+            conclusion=None,
+            steps=[],
+            name="native / simulation (1)",
+        )
+        run = log_run(status="in_progress", conclusion=None)
         _, output, _ = self.log("log", "7", jobs=[log_job(), running], run=run)
         self.assertIn("Run 7 attempt 1 (in_progress)", output)
         self.assertIn(
@@ -3721,7 +3734,7 @@ class LogTests(unittest.TestCase):
         self.assertIn(
             "No log: the job is still running; GitHub serves no log yet", output
         )
-        self.assertIn(JOB_URL + "1", output)
+        self.assertIn(running["html_url"], output)
         self.assertEqual(downloads, [])
         _, output, _ = self.log("log", "7", jobs=[running], run=run)
         self.assertIn("No failed job yet", output)
@@ -3831,23 +3844,27 @@ class FakeComments:
             for i, (body, author) in enumerate(bodies)
         ]
         self.post = post
-        self.writes: list[tuple[str, str, dict]] = []
-        self.reads_by_id: dict[int, dict] = {}
+        self.writes: list[tuple[str, str, dict[str, str]]] = []
+        self.reads_by_id: dict[int, status_comment.Comment] = {}
 
     @staticmethod
     def comment(
-        number: int, body: str, author: str = ACCOUNT, issue: int = 170
-    ) -> dict:
+        number: int,
+        body: str,
+        author: str = ACCOUNT,
+        issue: int = 170,
+        updated: str = "2026-11-12T01:00:00Z",
+    ) -> status_comment.Comment:
         return {
             "id": number,
             "body": body,
             "user": {"login": author},
             "issue_url": f"{ISSUES}{issue}",
             "html_url": f"https://github.com/example/fork/pull/{issue}#issuecomment-{number}",
-            "updated_at": "2026-11-12T01:00:00Z",
+            "updated_at": updated,
         }
 
-    def by_id(self, number: int) -> dict:
+    def by_id(self, number: int) -> status_comment.Comment:
         if number in self.reads_by_id:
             return self.reads_by_id[number]
         (found,) = [c for c in self.store if c["id"] == number]
@@ -3873,11 +3890,12 @@ class FakeComments:
             return json.dumps({"number": 171})
         raise AssertionError(args)
 
-    def write(self, method: str, path: str, data: dict) -> str:
+    def write(self, method: str, path: str, data: dict[str, str]) -> str:
         self.writes.append((method, path, data))
         if method == "PATCH":
             comment = self.by_id(int(path.rsplit("/", 1)[1]))
-            comment.update(data, updated_at="2026-11-12T02:00:00Z")
+            comment["body"] = data["body"]
+            comment["updated_at"] = "2026-11-12T02:00:00Z"
             return json.dumps(comment)
         if self.post == "fails":
             raise subprocess.CalledProcessError(1, ["gh"], "", "HTTP 502")
@@ -3966,8 +3984,8 @@ class CommentTests(unittest.TestCase):
     def test_change_since_the_first_read_refuses_the_patch(self) -> None:
         marked = "<!-- status comment: /root/a -->\nStatus\n\n" + attribution("/root/a")
         github = FakeComments([(marked, ACCOUNT)])
-        github.reads_by_id[1000] = dict(
-            github.store[0], updated_at="2026-11-12T03:00:00Z"
+        github.reads_by_id[1000] = FakeComments.comment(
+            1000, marked, updated="2026-11-12T03:00:00Z"
         )
         code, _, err = self.run_comment(
             github,

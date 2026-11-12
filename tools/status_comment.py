@@ -15,9 +15,10 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from typing import NotRequired, TypedDict
 
 from cleanup_contract import ATTRIBUTION
-from review_report import REVIEWED
+from review_report import REVIEWED, Comment
 
 MARKER = "<!-- status comment: {agent} -->"
 MARKED = re.compile(r"\A<!-- status comment: (\S+) -->[ \t]*(?:\r?\n|\Z)")
@@ -54,15 +55,28 @@ def gh(*args: str, payload: str | None = None, timeout: float | None = None) -> 
     ).stdout
 
 
-def get(target: Target, path: str) -> dict:
-    return json.loads(gh("api", f"repos/{target.repository}/{path}"))
+class Issue(TypedDict):
+    """An issue as the API gives it; a PR's carries `pull_request`."""
+
+    number: int
+    pull_request: NotRequired[dict[str, object]]
+
+
+def issue(target: Target) -> Issue:
+    return json.loads(gh("api", f"repos/{target.repository}/issues/{target.number}"))
+
+
+def by_id(target: Target, comment_id: int) -> Comment:
+    return json.loads(
+        gh("api", f"repos/{target.repository}/issues/comments/{comment_id}")
+    )
 
 
 def login() -> str:
     return gh("api", "user", "--jq", ".login").strip()
 
 
-def comments(target: Target) -> list[dict]:
+def comments(target: Target) -> list[Comment]:
     """Every comment on the PR or issue, through every page."""
     pages = json.loads(
         gh(
@@ -85,7 +99,7 @@ def unmarked(body: str) -> str:
     return MARKED.sub("", body, count=1)
 
 
-def ours(found: list[dict], agent: str, author: str) -> list[dict]:
+def ours(found: list[Comment], agent: str, author: str) -> list[Comment]:
     """The agent's status comments: its exact marker, written by this account."""
     return [
         comment
@@ -103,11 +117,11 @@ def command(target: Target, agent: str, rest: str) -> str:
     return f"python3 tools/ci.py comment {target.again} --agent {agent} {rest}"
 
 
-def listed(found: list[dict]) -> str:
+def listed(found: list[Comment]) -> str:
     return "; ".join(f"{comment['id']} {comment['html_url']}" for comment in found)
 
 
-def one(found: list[dict], target: Target, agent: str) -> dict | None:
+def one(found: list[Comment], target: Target, agent: str) -> Comment | None:
     if len(found) > 1:
         raise ValueError(
             f"{len(found)} status comments for {agent} on {target.kind} "
@@ -169,14 +183,14 @@ def prepared(body: str, agent: str, model: str | None, effort: str | None) -> st
 
 
 def check_kind(target: Target) -> None:
-    issue = get(target, f"issues/{target.number}")
-    if target.kind == "issue" and "pull_request" in issue:
+    found = issue(target)
+    if target.kind == "issue" and "pull_request" in found:
         raise ValueError(f"#{target.number} is a PR; name it without --issue")
-    if target.kind == "PR" and "pull_request" not in issue:
+    if target.kind == "PR" and "pull_request" not in found:
         raise ValueError(f"#{target.number} is an issue; name it with --issue")
 
 
-def adoptable(target: Target, comment: dict, agent: str, author: str) -> None:
+def adoptable(target: Target, comment: Comment, agent: str, author: str) -> None:
     """Refuse a legacy comment that is not this agent's own status on this PR."""
     where = f"{API}{target.repository}/issues/{target.number}".lower()
     body = comment.get("body") or ""
@@ -206,9 +220,9 @@ def adoptable(target: Target, comment: dict, agent: str, author: str) -> None:
         )
 
 
-def update(target: Target, comment: dict, body: str) -> dict:
+def update(target: Target, comment: Comment, body: str) -> Comment:
     """Replace the comment's body, refusing one that changed since it was read."""
-    fresh = get(target, f"issues/comments/{comment['id']}")
+    fresh = by_id(target, comment["id"])
     if (fresh.get("body"), fresh.get("updated_at")) != (
         comment.get("body"),
         comment.get("updated_at"),
@@ -231,7 +245,7 @@ def update(target: Target, comment: dict, body: str) -> dict:
     )
 
 
-def create(target: Target, agent: str, author: str, body: str) -> dict:
+def create(target: Target, agent: str, author: str, body: str) -> Comment:
     """Post the comment once. A post that fails or does not answer may still have
     landed, so the marker is looked up instead of posting again."""
     try:
@@ -260,7 +274,7 @@ def create(target: Target, agent: str, author: str, body: str) -> dict:
 
 def chosen(
     target: Target, agent: str, author: str, comment_id: int | None
-) -> dict | None:
+) -> Comment | None:
     """The comment to replace: the agent's marked one, or an adopted legacy one."""
     found = comments(target)
     mine = one(ours(found, agent, author), target, agent)
@@ -272,7 +286,7 @@ def chosen(
             f"#{target.number}: {mine['html_url']}; edit that one with: "
             + command(target, agent, "--body-file FILE")
         )
-    comment = get(target, f"issues/comments/{comment_id}")
+    comment = by_id(target, comment_id)
     adoptable(target, comment, agent, author)
     return comment
 

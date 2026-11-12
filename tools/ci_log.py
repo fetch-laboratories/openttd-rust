@@ -16,6 +16,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
 import vcs
 
@@ -37,6 +38,45 @@ MATCHES = 200
 # The run states other than completed, in which jobs may still start or run.
 UNFINISHED = ("queued", "in_progress", "waiting", "requested", "pending")
 UNAVAILABLE = ("HTTP 404", "HTTP 410")
+
+
+class Step(TypedDict, total=False):
+    """A job's step as the jobs API lists it."""
+
+    number: int
+    name: str
+    status: str
+    conclusion: str | None
+    started_at: str | None
+    completed_at: str | None
+
+
+class Job(TypedDict):
+    """A job as the jobs API lists it, with the fields these tools read."""
+
+    id: int
+    run_id: int
+    name: str
+    status: str
+    conclusion: str | None
+    html_url: str
+    run_attempt: NotRequired[int]
+    steps: NotRequired[list[Step]]
+
+
+class Run(TypedDict):
+    """A workflow run as the runs API lists it, with the fields these tools read."""
+
+    id: int
+    status: str
+    conclusion: str | None
+    html_url: str
+    run_attempt: NotRequired[int]
+    created_at: NotRequired[str]
+    display_title: NotRequired[str | None]
+    event: NotRequired[str]
+    head_branch: NotRequired[str | None]
+    head_sha: NotRequired[str]
 
 
 @dataclass
@@ -66,17 +106,16 @@ def numbered(text: str) -> list[tuple[int, str]]:
     return list(enumerate(text.splitlines(), 1))
 
 
-def step_lines(text: str, step: dict | None) -> list[tuple[int, str]]:
+def step_lines(text: str, step: Step | None) -> list[tuple[int, str]]:
     """The raw lines a step wrote, found by its start and end times against the
     lines' stamps; an unstamped line belongs with the line before it. Stamps
     count whole seconds, so a failed step ends at its last `##[error]` line, not
     in the next step's lines of the same second. The whole log when there is no
     step or no stamped line falls inside it."""
     lines = numbered(text)
-    start, end = (
-        second((step or {}).get("started_at")),
-        second((step or {}).get("completed_at")),
-    )
+    if step is None:
+        return lines
+    start, end = second(step.get("started_at")), second(step.get("completed_at"))
     if not start or not end:
         return lines
     inside, chosen = False, []
@@ -90,7 +129,7 @@ def step_lines(text: str, step: dict | None) -> list[tuple[int, str]]:
     return chosen[: errors[-1] + 1] if errors else chosen or lines
 
 
-def failing_step(job: dict) -> dict | None:
+def failing_step(job: Job) -> Step | None:
     return next(
         (
             step
@@ -101,7 +140,7 @@ def failing_step(job: dict) -> dict | None:
     )
 
 
-def cache_path(repository: str, job: dict) -> Path:
+def cache_path(repository: str, job: Job) -> Path:
     owner, name = repository.split("/", 1)
     attempt = f"attempt-{job.get('run_attempt') or 1}"
     return LOGS / owner / name / str(job["run_id"]) / attempt / f"{job['id']}.log"
@@ -146,7 +185,7 @@ def store(path: Path, text: str) -> None:
         raise
 
 
-def job_log(repository: str, job: dict) -> Log:
+def job_log(repository: str, job: Job) -> Log:
     """The job's log from the cache, else from GitHub, cached once complete."""
     path = cache_path(repository, job)
     if path.is_file():
@@ -166,7 +205,7 @@ def bounded(lines: Iterable[tuple[int, str]], limit: int) -> list[str]:
     return [f"  {number}: {clean(line)}" for number, line in list(lines)[-limit:]]
 
 
-def step_title(job: dict, step: dict | None) -> str:
+def step_title(job: Job, step: Step | None) -> str:
     if step:
         return f"Failing step: {step.get('number')} {step.get('name')} ({step.get('conclusion')})"
     return (
@@ -175,7 +214,7 @@ def step_title(job: dict, step: dict | None) -> str:
     )
 
 
-def summary(log: Log, job: dict) -> list[str]:
+def summary(log: Log, job: Job) -> list[str]:
     """The failing step, its error lines and its tail, bounded."""
     assert log.text is not None
     step = failing_step(job)
@@ -203,7 +242,7 @@ def grep(log: Log, pattern: re.Pattern[str], full: bool) -> list[str]:
 
 
 def job_report(
-    repository: str, job: dict, pattern: re.Pattern[str] | None, full: bool
+    repository: str, job: Job, pattern: re.Pattern[str] | None, full: bool
 ) -> list[str]:
     """One job's heading and its log as the options ask."""
     state = job.get("conclusion") or job.get("status")
@@ -220,11 +259,11 @@ def job_report(
     return lines + summary(log, job)
 
 
-def unfinished(jobs: list[dict]) -> list[dict]:
+def unfinished(jobs: list[Job]) -> list[Job]:
     return [job for job in jobs if job.get("status") in UNFINISHED]
 
 
-def run_heading(run: dict, jobs: list[dict]) -> list[str]:
+def run_heading(run: Run, jobs: list[Job]) -> list[str]:
     """The run, and a warning when jobs still run: a later failure may follow."""
     state = run.get("conclusion") or run["status"]
     lines = [

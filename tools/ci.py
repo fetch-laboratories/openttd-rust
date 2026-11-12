@@ -378,7 +378,9 @@ def status(path: Path) -> tuple[dict, dict | None]:
     return record, run
 
 
-def run_jobs(repository: str, run_id: int, attempt: int | None = None) -> list[dict]:
+def run_jobs(
+    repository: str, run_id: int, attempt: int | None = None
+) -> list[ci_log.Job]:
     """Every job of the run's attempt, the latest by default, through every page."""
     jobs = f"attempts/{attempt}/jobs?" if attempt else "jobs?filter=latest&"
     pages = json.loads(
@@ -392,7 +394,7 @@ def run_jobs(repository: str, run_id: int, attempt: int | None = None) -> list[d
     return [job for page in pages for job in page["jobs"]]
 
 
-def failed_jobs(repository: str, run_id: int) -> list[dict]:
+def failed_jobs(repository: str, run_id: int) -> list[ci_log.Job]:
     return [
         job for job in run_jobs(repository, run_id) if job["conclusion"] in JOB_FAILED
     ]
@@ -1106,16 +1108,16 @@ def log_target(args: argparse.Namespace) -> LogTarget:
 
 
 def selected_jobs(
-    repository: str, jobs: list[dict], job_id: int | None, name: str | None
-) -> list[dict]:
+    repository: str, jobs: list[ci_log.Job], job_id: int | None, name: str | None
+) -> list[ci_log.Job]:
     if job_id is not None:
-        return [api(repository, f"actions/jobs/{job_id}")]
+        return [cast(ci_log.Job, api(repository, f"actions/jobs/{job_id}"))]
     if name:
         return [job for job in jobs if name.lower() in job["name"].lower()]
     return [job for job in jobs if job["conclusion"] in JOB_FAILED]
 
 
-def no_jobs(run: dict, jobs: list[dict], name: str | None) -> str:
+def no_jobs(run: ci_log.Run, jobs: list[ci_log.Job], name: str | None) -> str:
     if name:
         names = ", ".join(job["name"] for job in jobs)
         return f"No job named like {name!r}; the run's jobs: {names}"
@@ -1130,7 +1132,7 @@ def log_lines(target: LogTarget, args: argparse.Namespace) -> list[str]:
     pattern = re.compile(grep) if grep else None
     repository = target.repository
     attempt = f"/attempts/{target.attempt}" if target.attempt else ""
-    run = api(repository, f"actions/runs/{target.run_id}{attempt}")
+    run = cast(ci_log.Run, api(repository, f"actions/runs/{target.run_id}{attempt}"))
     jobs = run_jobs(repository, target.run_id, target.attempt)
     lines = ci_log.run_heading(run, jobs)
     chosen = selected_jobs(repository, jobs, target.job_id, args.job)

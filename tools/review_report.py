@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from cleanup_contract import ATTRIBUTION
 
@@ -21,6 +21,21 @@ FENCE = re.compile(r"^\s*```.*?^\s*```\s*$", re.M | re.S)
 QUOTED = re.compile(r"^\s*>.*\n?", re.M)
 DISPOSITIONS = ("accepted", "findings to remediate")
 UNKNOWN = "unknown"
+
+
+class User(TypedDict):
+    login: str
+
+
+class Comment(TypedDict):
+    """An issue comment as the API lists it, with the fields these tools read."""
+
+    id: int
+    html_url: str
+    updated_at: str
+    body: str
+    user: NotRequired[User | None]
+    issue_url: NotRequired[str]
 
 
 @dataclass
