@@ -289,8 +289,8 @@ pub unsafe fn allocate_house(
     // HouseOverrideManager inherits OverrideManagerBase::CheckValidNewID.
     unsafe { add_entity_id_with_check(manager, local, grfid, substitute, |_| true) }
 }
-/// `AirportOverrideManager::AddEntityID`; the manager inherits
-/// `OverrideManagerBase::CheckValidNewID`.
+/// `OverrideManagerBase::AddEntityID` on `_airport_mngr`; `AirportOverrideManager` inherits
+/// it and `OverrideManagerBase::CheckValidNewID`.
 /// # Safety
 /// `manager` is a live override manager with no other borrow.
 pub(crate) unsafe fn airport_add_entity_id(

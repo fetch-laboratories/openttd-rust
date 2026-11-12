@@ -146,7 +146,7 @@ pub(crate) fn station_get_by_tile(
 ) -> *mut crate::station::BaseStation {
     (s.by_tile)(tile.0).cast()
 }
-/// Temporary raw adapter for `water.rs` and `airport.rs`.
+/// Temporary raw adapter for `water.rs`.
 #[inline]
 pub(crate) fn station_by_tile(
     tile: u32,
