@@ -2,6 +2,7 @@
 """Exercise request identity and the actual privileged full-result publisher."""
 
 import argparse
+import io
 import itertools
 import json
 import os
@@ -16,6 +17,7 @@ from unittest.mock import patch
 
 import ci
 import ci_log
+import status_comment
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -3703,6 +3705,317 @@ class LogTests(unittest.TestCase):
         ):
             self.assertEqual(ci.main(), 1)
         lines.assert_not_called()
+
+
+ACCOUNT = "fork-bot"
+ISSUES = "https://api.github.com/repos/example/fork/issues/"
+
+
+def attribution(agent: str) -> str:
+    return f"Agent: {agent} | Model: m-1 | Reasoning effort: high"
+
+
+class FakeComments:
+    """Comments on example/fork #170 (a PR) as gh answers for them: listed over
+    two pages, read by ID, patched and posted. `post` may land and then fail."""
+
+    def __init__(self, bodies: list[tuple[str, str]], post: str = "ok") -> None:
+        self.store = [
+            self.comment(1000 + i, body, author)
+            for i, (body, author) in enumerate(bodies)
+        ]
+        self.post = post
+        self.writes: list[tuple[str, str, dict]] = []
+        self.reads_by_id: dict[int, dict] = {}
+
+    @staticmethod
+    def comment(
+        number: int, body: str, author: str = ACCOUNT, issue: int = 170
+    ) -> dict:
+        return {
+            "id": number,
+            "body": body,
+            "user": {"login": author},
+            "issue_url": f"{ISSUES}{issue}",
+            "html_url": f"https://github.com/example/fork/pull/{issue}#issuecomment-{number}",
+            "updated_at": "2026-11-12T01:00:00Z",
+        }
+
+    def by_id(self, number: int) -> dict:
+        if number in self.reads_by_id:
+            return self.reads_by_id[number]
+        (found,) = [c for c in self.store if c["id"] == number]
+        return found
+
+    def gh(
+        self, *args: str, payload: str | None = None, timeout: float | None = None
+    ) -> str:
+        path = next(a for a in args if a.startswith("repos/") or a == "user")
+        if path == "user":
+            return ACCOUNT + "\n"
+        if "--method" in args:
+            return self.write(
+                args[args.index("--method") + 1], path, json.loads(payload or "{}")
+            )
+        if path.endswith("/comments?per_page=100"):
+            return json.dumps([self.store[:1], self.store[1:]])
+        if match := re.search(r"/issues/comments/(\d+)$", path):
+            return json.dumps(self.by_id(int(match[1])))
+        if path.endswith("/issues/170"):
+            return json.dumps({"number": 170, "pull_request": {}})
+        if path.endswith("/issues/171"):
+            return json.dumps({"number": 171})
+        raise AssertionError(args)
+
+    def write(self, method: str, path: str, data: dict) -> str:
+        self.writes.append((method, path, data))
+        if method == "PATCH":
+            comment = self.by_id(int(path.rsplit("/", 1)[1]))
+            comment.update(data, updated_at="2026-11-12T02:00:00Z")
+            return json.dumps(comment)
+        if self.post == "fails":
+            raise subprocess.CalledProcessError(1, ["gh"], "", "HTTP 502")
+        comment = self.comment(2000 + len(self.store), data["body"])
+        self.store.append(comment)
+        if self.post == "times out":
+            raise subprocess.TimeoutExpired(["gh"], 60)
+        return json.dumps(comment)
+
+
+class CommentTests(unittest.TestCase):
+    """ci.py comment against recorded comments (P4)."""
+
+    def run_comment(
+        self, github: FakeComments, *argv: str, body: str | None = None
+    ) -> tuple[int, str, str]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "status.md"
+            if body is not None:
+                path.write_text(body)
+                argv = (*argv, "--body-file", str(path))
+            with (
+                patch.object(status_comment, "gh", side_effect=github.gh),
+                patch(
+                    "sys.argv", ["ci.py", "comment", *argv, "--repo", "example/fork"]
+                ),
+                patch("sys.stdout", new_callable=io.StringIO) as out,
+                patch("sys.stderr", new_callable=io.StringIO) as err,
+            ):
+                code = ci.main()
+        return code, out.getvalue(), err.getvalue()
+
+    def test_lone_review_report_is_neither_chosen_nor_overwritten(self) -> None:
+        report = review(HEAD, "/root/rev", "Disposition: accepted, whole PR")
+        github = FakeComments([(report, ACCOUNT)])
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/rev", "--show")
+        self.assertEqual(code, 0)
+        self.assertIn("No status comment for /root/rev on PR #170.", out)
+        self.assertIn("1000 (review report, not adoptable)", out)
+        self.assertNotIn("--comment-id", out)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/rev", "--comment-id", "1000"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("is a review report or cleanup acceptance", err)
+        code, out, _ = self.run_comment(
+            github,
+            "170",
+            "--agent",
+            "/root/rev",
+            "--model",
+            "m-1",
+            "--effort",
+            "high",
+            body="Status: re-check started",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
+        self.assertEqual(github.store[0]["body"], report)
+        self.assertEqual(
+            github.store[1]["body"],
+            "<!-- status comment: /root/rev -->\nStatus: re-check started\n\n"
+            + attribution("/root/rev"),
+        )
+        self.assertIn("Show it again: python3 tools/ci.py comment 170 --repo", out)
+
+    def test_marked_comment_is_replaced_and_found_again(self) -> None:
+        marked = "<!-- status comment: /root/a -->\nStatus: old\n\n" + attribution(
+            "/root/a"
+        )
+        github = FakeComments([("unrelated", "someone"), (marked, ACCOUNT)])
+        new = "Status: new\n\n" + attribution("/root/a")
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", body=new)
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            github.writes[0][:2], ("PATCH", "repos/example/fork/issues/comments/1001")
+        )
+        self.assertEqual(
+            github.store[1]["body"], "<!-- status comment: /root/a -->\n" + new
+        )
+        self.assertIn("#issuecomment-1001", out)
+        code, out, err = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertEqual(out.strip(), new)
+        self.assertIn("Status comment: https://github.com/example/fork/pull/170", err)
+
+    def test_change_since_the_first_read_refuses_the_patch(self) -> None:
+        marked = "<!-- status comment: /root/a -->\nStatus\n\n" + attribution("/root/a")
+        github = FakeComments([(marked, ACCOUNT)])
+        github.reads_by_id[1000] = dict(
+            github.store[0], updated_at="2026-11-12T03:00:00Z"
+        )
+        code, _, err = self.run_comment(
+            github,
+            "170",
+            "--agent",
+            "/root/a",
+            body="Status: mine\n" + attribution("/root/a"),
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("changed since it was read", err)
+        self.assertEqual(github.writes, [])
+
+    def test_several_marked_comments_are_listed_not_chosen(self) -> None:
+        marked = "<!-- status comment: /root/a -->\nStatus\n\n" + attribution("/root/a")
+        github = FakeComments([(marked, ACCOUNT), (marked, ACCOUNT)])
+        for extra in (("--show",), ("--model", "m-1", "--effort", "high")):
+            code, _, err = self.run_comment(
+                github,
+                "170",
+                "--agent",
+                "/root/a",
+                *extra,
+                body=None if extra[0] == "--show" else "x",
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("2 status comments for /root/a on PR #170: 1000 ", err)
+            self.assertIn("#issuecomment-1001", err)
+        self.assertEqual(github.writes, [])
+
+    def test_agent_paths_match_exactly(self) -> None:
+        marked = "<!-- status comment: /root/ab -->\nStatus\n\n" + attribution(
+            "/root/ab"
+        )
+        github = FakeComments(
+            [(marked, ACCOUNT), ("Old status\n" + attribution("/root/ab"), ACCOUNT)]
+        )
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertIn("No status comment for /root/a", out)
+        self.assertNotIn("1001", out)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/a", "--comment-id", "1001"
+        )
+        self.assertIn("has attribution for ['/root/ab'], not /root/a", err)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/a", body="x\n" + attribution("/root/ab")
+        )
+        self.assertIn("attribution names /root/ab, not /root/a", err)
+        code, _, _ = self.run_comment(
+            github,
+            "170",
+            "--agent",
+            "/root/a",
+            "--model",
+            "m-1",
+            "--effort",
+            "high",
+            body="x",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
+        self.assertTrue(
+            github.store[0]["body"].startswith("<!-- status comment: /root/ab -->")
+        )
+
+    def test_forged_or_conflicting_attribution_is_refused(self) -> None:
+        forged = "<!-- status comment: /root/a -->\nForged\n\n" + attribution("/root/a")
+        github = FakeComments([(forged, "someone-else")])
+        refusals = {
+            "x\n"
+            + attribution("/root/a")
+            + "\n"
+            + attribution("/root/a"): "exactly one",
+            "x\nAgent: /root/a | Model: m-1": "exactly one",
+            "<!-- status comment: /root/b -->\nx\n" + attribution("/root/a"): "marker",
+            "x": "pass --model and --effort",
+        }
+        for body, reason in refusals.items():
+            code, _, err = self.run_comment(
+                github, "170", "--agent", "/root/a", body=body
+            )
+            self.assertEqual(code, 1, body)
+            self.assertIn(reason, err)
+        code, _, err = self.run_comment(
+            github,
+            "170",
+            "--agent",
+            "/root/a",
+            "--model",
+            "m-2",
+            body="x\n" + attribution("/root/a"),
+        )
+        self.assertIn("conflicts with the body's line", err)
+        self.assertEqual(github.writes, [])
+        # Another account's marker is not this agent's status comment.
+        code, _, _ = self.run_comment(
+            github, "170", "--agent", "/root/a", body="Mine\n" + attribution("/root/a")
+        )
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
+        self.assertEqual(github.store[0]["body"], forged)
+
+    def test_adoption_checks_place_author_and_content(self) -> None:
+        legacy = "Status: started\n\n" + attribution("/root/a")
+        github = FakeComments([(legacy, ACCOUNT), (legacy, "someone-else")])
+        github.reads_by_id[1002] = FakeComments.comment(1002, legacy, issue=171)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/a", "--comment-id", "1002"
+        )
+        self.assertIn(f"is on {ISSUES}171, not PR #170", err)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/a", "--comment-id", "1001"
+        )
+        self.assertIn(f"was written by someone-else, not {ACCOUNT}", err)
+        self.assertEqual(github.writes, [])
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertIn("1000 (comment)", out)
+        self.assertNotIn("1001", out)
+        self.assertIn("--comment-id 1000", out)
+        code, _, _ = self.run_comment(
+            github, "170", "--agent", "/root/a", "--comment-id", "1000"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            github.store[0]["body"], "<!-- status comment: /root/a -->\n" + legacy
+        )
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertEqual(out.strip(), legacy)
+
+    def test_create_that_times_out_after_landing_is_found_not_repeated(self) -> None:
+        github = FakeComments([], post="times out")
+        body = "Status\n" + attribution("/root/a")
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", body=body)
+        self.assertEqual(code, 0)
+        self.assertIn("did not answer", out)
+        self.assertIn("#issuecomment-2000", out)
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
+        failing = FakeComments([], post="fails")
+        code, _, err = self.run_comment(failing, "170", "--agent", "/root/a", body=body)
+        self.assertEqual(code, 1)
+        self.assertIn("none is on PR #170; run the same command again", err)
+        self.assertEqual([w[0] for w in failing.writes], ["POST"])
+
+    def test_show_with_nothing_to_show_creates_nothing(self) -> None:
+        github = FakeComments([])
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertEqual(code, 0)
+        self.assertIn("No status comment for /root/a on PR #170.", out)
+        self.assertIn("--body-file FILE --model MODEL --effort EFFORT", out)
+        self.assertEqual(github.writes, [])
+        code, _, err = self.run_comment(github, "171", "--agent", "/root/a", "--show")
+        self.assertIn("#171 is an issue; name it with --issue", err)
+        code, out, _ = self.run_comment(
+            github, "--issue", "171", "--agent", "/root/a", "--show"
+        )
+        self.assertIn("on issue #171", out)
 
 
 class FailureCountTests(unittest.TestCase):

@@ -19,6 +19,7 @@ from urllib.parse import quote
 import ci_log
 import preflight_stamp
 import review_report
+import status_comment
 import vcs
 
 PROFILES = ("rust", "native", "platform", "full")
@@ -1246,6 +1247,7 @@ def request_command(args: argparse.Namespace) -> None:
 HANDLERS = {
     "log": show_log,
     "logs": show_log,
+    "comment": lambda args: status_comment.run(args, repository_of(args.repo)),
     "queue-wait": queue_wait_command,
     "ready": ready,
     "enqueue": lambda args: print(f"PR #{args.pr}: {enqueue(args)}"),
@@ -1395,6 +1397,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     log_parser(commands)
+    status_comment.register(commands)
     request_parser(commands)
     pr_parsers(commands)
     args = parser.parse_args()
