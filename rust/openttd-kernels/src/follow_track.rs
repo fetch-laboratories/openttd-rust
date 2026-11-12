@@ -265,7 +265,8 @@ impl CFollowTrackT {
     ) -> bool {
         self.follow_with_road(s, TileIndex(tile), Trackdir(td), road)
     }
-    /// [`Self::follow`] with the road search's invariant vehicle facts.
+    /// `Follow`, with the road search's invariant vehicle facts where the caller
+    /// supplies them.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn follow_with_road(
@@ -721,7 +722,8 @@ pub(crate) fn get_speed_limit(
 ) -> i32 {
     get_speed_limit_with_road(s, mode, veh, old_tile, None)
 }
-/// [`get_speed_limit`] with the road search's invariant road kind.
+/// `GetSpeedLimit`, with the road search's invariant road kind where the caller
+/// supplies it.
 pub(crate) fn get_speed_limit_with_road(
     s: &Services,
     mode: TransportType,
