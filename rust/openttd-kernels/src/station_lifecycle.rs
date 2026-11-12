@@ -601,7 +601,7 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
             );
         }
         if unsafe { &*owner }.size() == 0 {
-            crate::linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
+            crate::linkgraph_schedule::dequeue(graph);
             (graphs.delete_graph)(graph);
         }
     }

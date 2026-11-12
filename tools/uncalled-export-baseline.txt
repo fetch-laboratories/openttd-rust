@@ -17,8 +17,7 @@ openttd_rust_override_substitute | #635 town and industry pools: tests/industry.
 openttd_rust_packet_get_type | #730 network: tests/network_connection.cpp calls Packet::GetPacketType, beside the core-adapter and upstream crypto test boundaries
 openttd_rust_packet_packet_type | #730 network: tests/network_connection.cpp calls Packet::GetPacketType, beside the core-adapter and upstream crypto test boundaries
 openttd_rust_roadstop_town | #634 station pools: station-resolver-console.hpp and animation-console.hpp call RoadStopResolverObject::GetTown
-openttd_rust_schedule_dequeue | #736 link graph schedule probe: linkgraph-schedule-reference.cpp calls LinkGraphSchedule::Dequeue
-openttd_rust_schedule_queue | #736 link graph schedule probe and #634 station pools: linkgraph-schedule-reference.cpp and station-lifecycle-console.hpp call LinkGraphSchedule::Queue
+openttd_rust_schedule_queue | #634 station pools: station-lifecycle-console.hpp calls LinkGraphSchedule::Queue
 openttd_rust_station_town_scope | #634 station pools: station-resolver-console.hpp calls StationResolverObject::GetTown
 openttd_rust_train_curve_limit | #736 train edge probe: train-edge-comparison.cpp calls Train::GetCurveSpeedLimit
 openttd_rust_train_update_speed | #656 vehicle pool: fleet-console.cpp calls Train::UpdateSpeed

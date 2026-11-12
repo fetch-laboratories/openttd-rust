@@ -132,8 +132,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.road_end = [](OpenTTDSessionFrame *f) noexcept { f->road.reset(); },
 		.landscape_begin = [](OpenTTDSessionFrame *f) noexcept { f->landscape.emplace(PFE_GL_LANDSCAPE); },
 		.landscape_end = [](OpenTTDSessionFrame *f) noexcept { f->landscape.reset(); },
-		.schedule_measurement = [](OpenTTDSessionFrame *f) noexcept -> void * { return &f->schedule; },
-		.schedule_end = [](OpenTTDSessionFrame *f) noexcept { f->schedule.reset(); },
 	};
 	return services;
 }
