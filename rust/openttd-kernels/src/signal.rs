@@ -253,7 +253,7 @@ fn access<T>(f: impl FnOnce(&mut State) -> T) -> T {
     unsafe { f(&mut *STATE.get()) }
 }
 /// `SmallSet::Add` on a process-wide set, with its full-set `Debug` after the borrow ends.
-fn add<Tdir: SetDir, const ITEMS: usize>(
+fn add_to_set<Tdir: SetDir, const ITEMS: usize>(
     set: impl FnOnce(&mut State) -> &mut SmallSet<Tdir, ITEMS>,
     tile: TileIndex,
     dir: Tdir,
@@ -429,7 +429,7 @@ impl<'a> Signals<'a> {
             return true;
         }
 
-        add(|s| &mut s.tbdset, t1, d1)
+        add_to_set(|s| &mut s.tbdset, t1, d1)
     }
 
     /// Search signal block of the `owner` whose signals we are updating.
@@ -536,7 +536,7 @@ impl<'a> Signals<'a> {
                                     }
                                     flags.set(SigFlag::ENTER);
 
-                                    if !add(|s| &mut s.tbuset, tile, reversedir) {
+                                    if !add_to_set(|s| &mut s.tbuset, tile, reversedir) {
                                         return flags | SigFlags::FULL;
                                     }
                                 }
@@ -735,7 +735,7 @@ impl<'a> Signals<'a> {
                 if map.is_presignal_exit(tile.0, trackdir_to_track(trackdir.0)) {
                     // for pre-signal exits, add block to the global set
                     let exitdir = DiagDirection(trackdir_to_exitdir(reverse_trackdir(trackdir.0)));
-                    add(|s| &mut s.globset, tile, exitdir); // do not check for full global set, first update all signals
+                    add_to_set(|s| &mut s.globset, tile, exitdir); // do not check for full global set, first update all signals
                     crate::witness::hit(crate::witness::SIGNAL_PROPAGATE);
                 }
                 read!(self, rail, set_signal_state, tile.0, trackdir.0, newstate.0);
@@ -790,25 +790,25 @@ impl<'a> Signals<'a> {
                         || dir
                             == reverse_diag_dir(DiagDirection(map.tunnel_bridge_dir(tile.0)), check)
                 });
-                add(|s| &mut s.tbdset, tile, DiagDirection::INVALID_DIAGDIR); // we can safely start from wormhole centre
+                add_to_set(|s| &mut s.tbdset, tile, DiagDirection::INVALID_DIAGDIR); // we can safely start from wormhole centre
                 let other = TileIndex(read!(self, rail, other_tunnel_bridge_end, tile.0));
-                add(|s| &mut s.tbdset, other, DiagDirection::INVALID_DIAGDIR);
+                add_to_set(|s| &mut s.tbdset, other, DiagDirection::INVALID_DIAGDIR);
             } else if kind == TileType::MP_RAILWAY && map.is_rail_depot(tile.0) {
                 // 'optimization assert' do not try to update signals in other cases
                 self.source_assert(|| {
                     dir == DiagDirection::INVALID_DIAGDIR
                         || dir == DiagDirection(map.rail_depot_dir(tile.0))
                 });
-                add(|s| &mut s.tbdset, tile, DiagDirection::INVALID_DIAGDIR); // start from depot inside
+                add_to_set(|s| &mut s.tbdset, tile, DiagDirection::INVALID_DIAGDIR); // start from depot inside
             } else if (kind == TileType::MP_RAILWAY
                 || kind == TileType::MP_STATION
                 || kind == TileType::MP_ROAD)
                 && self.has_incidating_track(tile, dir)
             {
                 // only add to set when there is some 'interesting' track
-                add(|s| &mut s.tbdset, tile, dir);
+                add_to_set(|s| &mut s.tbdset, tile, dir);
                 let next = tile + self.tile_offs_by_diag_dir(dir);
-                add(|s| &mut s.tbdset, next, reverse_diag_dir(dir, check));
+                add_to_set(|s| &mut s.tbdset, next, reverse_diag_dir(dir, check));
             } else {
                 // jump to next tile
                 tile += self.tile_offs_by_diag_dir(dir);
@@ -818,7 +818,7 @@ impl<'a> Signals<'a> {
                     crate::witness::hit(crate::witness::SIGNAL_NEIGHBOUR_CONTINUE);
                     continue; // continue the while() loop
                 }
-                add(|s| &mut s.tbdset, tile, dir);
+                add_to_set(|s| &mut s.tbdset, tile, dir);
             }
 
             self.source_assert(|| access(|s| !s.tbdset.overflowed())); // it really shouldn't overflow by these one or two items
@@ -884,8 +884,8 @@ impl<'a> Signals<'a> {
 
         access(|s| s.last_owner = owner);
 
-        add(|s| &mut s.globset, tile, SEARCH_DIR_1[usize::from(track.0)]);
-        add(|s| &mut s.globset, tile, SEARCH_DIR_2[usize::from(track.0)]);
+        add_to_set(|s| &mut s.globset, tile, SEARCH_DIR_1[usize::from(track.0)]);
+        add_to_set(|s| &mut s.globset, tile, SEARCH_DIR_2[usize::from(track.0)]);
 
         if access(|s| s.globset.items() >= SIG_GLOB_UPDATE) {
             // too many items, force update
@@ -902,7 +902,7 @@ impl<'a> Signals<'a> {
 
         access(|s| s.last_owner = owner);
 
-        add(|s| &mut s.globset, tile, side);
+        add_to_set(|s| &mut s.globset, tile, side);
 
         if access(|s| s.globset.items() >= SIG_GLOB_UPDATE) {
             // too many items, force update
@@ -922,7 +922,7 @@ impl<'a> Signals<'a> {
         owner: Owner,
     ) -> SigSegState {
         self.source_assert(|| access(|s| s.globset.is_empty()));
-        add(|s| &mut s.globset, tile, side);
+        add_to_set(|s| &mut s.globset, tile, side);
 
         self.update_signals_in_buffer_owner(owner)
     }
@@ -1396,11 +1396,8 @@ mod tests {
         COMPANY_READS.set(COMPANY_READS.get() + 1);
         false
     }
-    fn item<Tdir>(tile: u32, dir: Tdir) -> SSdata<Tdir> {
-        SSdata {
-            tile: TileIndex(tile),
-            dir,
-        }
+    fn item<Tdir>(tile: TileIndex, dir: Tdir) -> SSdata<Tdir> {
+        SSdata { tile, dir }
     }
 
     #[test]
@@ -1433,9 +1430,18 @@ mod tests {
         access(|s| {
             assert_eq!(s.globset.items(), 3);
             assert_eq!(s.last_owner, CompanyID(7));
-            assert_eq!(s.globset.get(), Some(item(4321, DiagDirection::DIAGDIR_NE)));
-            assert_eq!(s.globset.get(), Some(item(1234, DiagDirection::DIAGDIR_SW)));
-            assert_eq!(s.globset.get(), Some(item(1234, DiagDirection::DIAGDIR_NE)));
+            assert_eq!(
+                s.globset.get(),
+                Some(item(TileIndex(4321), DiagDirection::DIAGDIR_NE))
+            );
+            assert_eq!(
+                s.globset.get(),
+                Some(item(TileIndex(1234), DiagDirection::DIAGDIR_SW))
+            );
+            assert_eq!(
+                s.globset.get(),
+                Some(item(TileIndex(1234), DiagDirection::DIAGDIR_NE))
+            );
             assert!(s.globset.is_empty());
             s.last_owner = Owner::INVALID;
         });
@@ -1452,7 +1458,10 @@ mod tests {
         std::thread::spawn(|| {
             access(|s| {
                 assert_eq!(s.last_owner, CompanyID(7));
-                assert_eq!(s.globset.get(), Some(item(1234, DiagDirection::DIAGDIR_SW)));
+                assert_eq!(
+                    s.globset.get(),
+                    Some(item(TileIndex(1234), DiagDirection::DIAGDIR_SW))
+                );
             });
         })
         .join()
