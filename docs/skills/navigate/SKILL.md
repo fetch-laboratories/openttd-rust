@@ -10,7 +10,7 @@ Judge the whole course against this fixed destination, which stays as written:
 
 OpenTTD as a Rust program: every original C++ line retired, the game behaving as the original does, and root's agents getting there on their own.
 
-Everything else, including AGENTS.md's goal, is subject to review. Work at the scale of areas, phases, thousands of lines and rates over weeks. Use code, history and system documents. Steer handles root transcripts, PRs, CI, reviews, individual ports and smaller findings. Judge the whole picture yourself; a subagent may count lines. Answer and correct without waiting for the user, but respect decisions recorded as the user's.
+Everything else, including AGENTS.md's goal, is subject to review. Work at the scale of areas, phases, thousands of lines and rates over weeks. Use code, history and system documents. Steer handles root transcripts, PRs, CI, reviews, individual ports and smaller findings. Judge the whole picture yourself; a subagent may count lines. Answer and correct without waiting for the user, but change an ADR marked `may change: user` only after asking the user, as [ADRs](../../adr/README.md#who-may-change-one) describe.
 
 Attribution on every issue, comment and commit body you write:
 `Agent: /root (<host> navigation) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
@@ -31,7 +31,7 @@ Done when one table holds done and remaining code lines by area and the rate, ea
 
 Read the whole system as a newcomer who knows only the destination and position.
 
-- Read `AGENTS.md`, `docs/roadmap.md`, `docs/workflow.md`, `docs/team.md`, `docs/planning.md`, `docs/porting.md`, `docs/rust-migration.md`, `docs/speed.md`, `docs/deep-checks.md`, `docs/components/`, `docs/design/` and every skill under `docs/skills/`.
+- Read `AGENTS.md`, `docs/adr/`, `docs/roadmap.md`, `docs/workflow.md`, `docs/root-workflow.md`, `docs/team.md`, `docs/planning.md`, `docs/porting.md`, `docs/implementer-brief.md`, `docs/review-brief.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `docs/rust-migration.md`, `docs/ci.md`, `docs/speed.md`, `docs/deep-checks.md`, `docs/components/`, `docs/design/` and every skill under `docs/skills/`.
 
 Done when you have read the course in full.
 
@@ -52,10 +52,10 @@ Done when every part has a verdict, and each failure names the text that causes 
 
 Correct each failure at its source.
 
-- Correct the goal line in `AGENTS.md`, [goal and phases](../../planning.md#goal-and-phases), the roadmap's "Phases", owning guidance and skills as needed. Rewrite or remove a failing rule rather than adding a counter-rule. State the outcome root should reach.
+- Correct the goal line in `AGENTS.md`, [goal and phases](../../planning.md#goal-and-phases), the roadmap's "Phases", owning guidance and skills as needed. Rewrite or remove a failing rule rather than adding a counter-rule. State the outcome root should reach. Record a correction that is a real decision as an ADR under [ADRs](../../adr/README.md); write no `(user, date)` tag ([who decides](../../../AGENTS.md#who-decides)).
 - Put a tool change, such as a metric, in an issue at the top of the work order; code follows root's PR process.
 - Replace the roadmap's "Phases" chart with the position table, each phase's size, exit criterion and status, and root's first actions.
-- Commit all edits as one docs-only commit on `rust-migration`: `Doc: Navigate toward <correction> [skip ci]`, or `Doc: Navigate, course holds [skip ci]` if only position changed. Push once settled; the user reviews the report ([change types](../../workflow.md#change-types)).
+- Commit all edits, ADRs included, as one docs-only commit on `rust-migration`: `Doc: Navigate toward <correction> [skip ci]`, or `Doc: Navigate, course holds [skip ci]` if only position changed. Push once settled; the user reviews the report ([change types](../../workflow.md#change-types)).
 
 Done when each failure is corrected or assigned to its tool issue and the chart is updated.
 
