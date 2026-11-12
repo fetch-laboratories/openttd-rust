@@ -187,11 +187,11 @@ Provisional, for steering 36 to judge:
 
 Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, which holds the merge-40 entry text as planner input; a planner writes the plan there before dispatch. The open component PRs are #936 and #937, within the [branch limit](root-workflow.md#integration).
 
-1. #947: 9a, the file pass for the pathfinding callees. Waits on nothing.
-2. #948: 9s, the single-file pass for `signal.rs`. Waits on nothing; its planner checks its file set against #947's.
+1. #947: 9a, the file pass for the pathfinding callees, less `water_regions.rs`. Planned; waits on nothing.
+2. #948: 9s, the single-file pass for `signal.rs`. Planned; waits on nothing.
 3. #946: the train edge and aircraft range probes, #736's last transfer. Waits on nothing.
 
-**Later.** 9p (`pbs.rs`), the pass for `ship_yapf.rs` and `road_yapf.rs`, and the single-file pass for `rail_yapf.rs` wait on #947, the last on 9p too ([order](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6811109267)). Workset 08's ten remaining files follow workset 09, the four over 1,500 lines (`train.rs`, `road.rs`, `aircraft.rs` and `train_reservation.rs`) as single-file passes. A second slot with no workset-09 entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes. #945 follows #946.
+**Later.** #949 is 9w, the pass for `water_regions.rs`, which #947's plan split off at the file boundary; it follows #947. 9p (`pbs.rs`), the pass for `ship_yapf.rs` and `road_yapf.rs`, and the single-file pass for `rail_yapf.rs` wait on #947, the last on 9p too and the `ship_yapf.rs` pass on #949 too ([order](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6811109267)). Workset 08's ten remaining files follow workset 09, the four over 1,500 lines (`train.rs`, `road.rs`, `aircraft.rs` and `train_reservation.rs`) as single-file passes. A second slot with no workset-09 entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes. #945 follows #946.
 
 Full phase-3 planning remains untriggered: 193 of #734's 319 files, in 19 worksets, are in no entry.
 
