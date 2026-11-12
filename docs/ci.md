@@ -46,7 +46,7 @@ Full is the merge gate; its builds are set by [ADR 0018](adr/0018-builds-before-
 | `python3 tools/ci.py wait .local/ci-requests/REQUEST.json` | Wait for a request; prints its resume command on timeout. |
 | `python3 tools/ci.py status .local/ci-requests/REQUEST.json` | Print a request's state once. |
 | `python3 tools/ci.py ready PR` | Mark a draft PR ready once a preflight stamp covers its head. |
-| `python3 tools/ci.py enqueue PR` | Queue a PR ([integration](root-workflow.md#integration)). |
+| `python3 tools/ci.py enqueue PR` | Queue a PR ([integration](workflow.md#integration)). |
 | `python3 tools/ci.py queue-wait PR` | Wait, as a background job, until a queued PR merges or leaves the queue. |
 | `python3 tools/ci.py failures --since DATE` | Count failed runs. |
 

@@ -108,7 +108,7 @@ Phase numbers name content; the execution order sets the sequence. Phase 1 (simu
 Root's first actions on resume:
 1. Follow the [resume checkpoint](#resume-checkpoint).
 2. Drive each cleanup stream to its end state above. Check that #736's body lists its remaining batches; record delivered batches there.
-3. Once every remaining cleanup item is dispatched or in the ready queue, spawn the phase-3 planner ([start-development](skills/start-development/SKILL.md) step 3).
+3. Before the cleanup stage's last items are dispatched, spawn the phase-3 planner ([start-development](skills/start-development/SKILL.md) step 3).
 
 ## Cleanup work order
 

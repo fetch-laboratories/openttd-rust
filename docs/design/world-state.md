@@ -75,7 +75,7 @@ Field tables and deletion inventories are on [#563](https://github.com/fetch-lab
 - End field borrows before operations. After failure, access no dead record; after survival, reload type, first record and fields at source post-Tick branches. Preserve stable shell pointers and PreDestructor reentry from station loading lists.
 - Extend vehicle, fleet, rail, road, ship, aircraft, effect and disaster scenarios and native fixtures for ordinary and indexed allocation, holes/growth/reuse during Tick, deletion of current and unvisited chain members, SetNext and multihead order, fresh fields after callbacks, writes from both languages, reload/cache rebuilding, timing gates and the survival assertion. Move synthetic native virtual-Tick tests to the Rust traversal kernel with test-supplied work, and test production dispatch with real shells; keep no unused vtable trampoline. Keep semantic decoders and both RNG streams unchanged.
 
-## Later pool record placement (#634, #635; decided 2026-11-05 after integration 82)
+## Later pool record placement (#634, #635)
 
 Later pool records sit beside their shells, as #570's do. The decision and its measurements are on [#634](https://github.com/fetch-laboratories/openttd-rust/issues/634#issuecomment-6671702315).
 
@@ -115,7 +115,7 @@ Station #634 owns its record/container adaptation; #717 owns flow contents and c
 
 ## Engine and renewal storage (#637 with #497)
 
-The selected owner follows the [shared pool policy](#shared-pool-policy-716). Define Engine and EngineRenew records once through the existing shared-record generator, beside the shell under the [placement decision](#later-pool-record-placement-634-635-decided-2026-11-05-after-integration-82). Adopt #655's integrated loading behavior and the single native pool facade and operation schema reserved to #714; do not create a competing definition or make independent record work depend on another draft.
+The selected owner follows the [shared pool policy](#shared-pool-policy-716). Define Engine and EngineRenew records once through the existing shared-record generator, beside the shell under the [placement decision](#later-pool-record-placement-634-635). Adopt #655's integrated loading behavior and the single native pool facade and operation schema reserved to #714; do not create a competing definition or make independent record work depend on another draft.
 
 | Allocation | Canonical owner and consumers | Lifetime and remaining native owner |
 | --- | --- | --- |

@@ -25,7 +25,7 @@ Pursue a complete Rust rewrite through the stages and phases in [planning](../..
 
 ### 1. Fill slots
 
-Handle finished work first, then start ready work under [selection](../../planning.md#selection), [integration](../../root-workflow.md#integration) and [spawning](../../team.md#spawning). At each [independent wake](../../team.md#missed-resumes), handle completed child results and messages addressed to you. A peripheral host-action failure does not end the assignment.
+Handle finished work first, then start ready work under [selection](../../planning.md#selection), [integration](../../root-workflow.md#integration) and the host's orchestration rules. At each [independent wake](../../team.md#missed-resumes), handle completed child results and messages addressed to you. A peripheral host-action failure does not end the assignment.
 
 ### 2. Carry changes through
 

@@ -58,7 +58,7 @@ Done when every standing correction and every issue `issues.py` reports has a ve
 
 ## 3. Audit independently
 
-1. Launch fresh audits together under [spawning](../../team.md#spawning), on the parent's model family (Opus under Claude Code). They leave root's worktrees, branches and `.local/` output unchanged.
+1. Launch fresh audits together under the host's orchestration rules, on the parent's model family (Opus under Claude Code). They leave root's worktrees, branches and `.local/` output unchanged.
 2. Assign up to four fidelity audits, one per large port integrated since steering or about to integrate, largest first, and one or two targeted audits where the survey found most cost or risk: blockers, process time against port time, or speed.
 3. Give every agent `AGENTS.md` and the roadmap. Give fidelity agents the worktree, commit, merge base and `.local/reference/openttd`, and have them compare original bodies line by line, including fallback bodies under `#ifndef WITH_RUST`, against [fidelity](../../porting.md#fidelity), [boundary](../../porting.md#boundary) and [code standards](../../porting.md#code-standards).
 4. For speed, compare candidate and reference on play saves and `generate-tgp-256-1` with callgrind instruction counts (`.local/valgrind`), attribute the gap by port and remeasure each speed-parked PR at its head. A wall-clock median comes with the machine-wide compiler, linker and `openttd` processes from `ps -eo pid,pcpu,comm,args` and the 1-minute load average.
