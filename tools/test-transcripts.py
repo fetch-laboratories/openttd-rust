@@ -392,5 +392,81 @@ class TranscriptTests(unittest.TestCase):
         self.assertEqual(files, [])
 
 
+class OneSessionTests(unittest.TestCase):
+    """Build a digest from one Claude session and one Codex rollout."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        base = Path(self.temp.name)
+        self.claude_root, self.codex_root = base / "claude", base / "codex"
+        self.out = base / "digest"
+        self.claude_path = (
+            self.claude_root / "projects" / f"-work-{MATCH}" / f"{CLAUDE_MAIN}.jsonl"
+        )
+        self.codex_path = self.codex_root / "sessions" / f"rollout-a-{CODEX_MAIN}.jsonl"
+
+    def build(
+        self,
+        claude: list[Any],
+        codex: list[Any],
+        since: str = "2026-11-01",
+        until: str = "",
+    ) -> None:
+        write_lines(self.claude_path, claude)
+        write_lines(self.codex_path, [codex_meta(CODEX_MAIN, CWD), *codex])
+        window = ["--since", since] + (["--until", until] if until else [])
+        roots = ["--claude-root", str(self.claude_root)]
+        roots += ["--codex-root", str(self.codex_root)]
+        self.query("digest", *window, "--out", str(self.out), *roots)
+
+    def query(self, *argv: str) -> str:
+        if argv[0] != "digest":
+            argv = (*argv, "--digest", str(self.out), "--limit", "0")
+        else:
+            argv = (*argv, "--match", MATCH, "--jobs", "1")
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stdout):
+            self.assertEqual(transcripts.main(list(argv)), 0)
+        return stdout.getvalue()
+
+    def test_queries_match_text_beyond_the_display_clip(self) -> None:
+        pad = "x" * 7000
+        claude = [
+            claude_user(DAY1, "10:00:00", f"{pad} remember the rebase"),
+            claude_assistant(
+                DAY1, "10:00:01", tool_use("tu1", f"{pad}; gh pr merge 1")
+            ),
+            claude_user(DAY1, "10:00:02", [tool_result("tu1", "merged")]),
+            claude_assistant(
+                DAY1, "10:00:03", {"type": "text", "text": f"{pad} Done."}
+            ),
+        ]
+        long_command = command("x1", f"{pad}; gh pr merge 2", 1, "refused")
+        codex = [
+            codex_call(DAY1, "08:00:00", "c1", "exec", "text(1)"),
+            codex_item(DAY1, "08:00:01", long_command, ms(DAY1, "08:00:00.5")),
+            codex_output(DAY1, "08:00:02", "c1", "Script completed"),
+        ]
+        self.build(claude, codex)
+        out = self.query("count", "gh pr merge")
+        self.assertIn("total 2 failed 1", out)
+        self.assertIn("[1 hits]", self.query("users", "remember the rebase"))
+        self.assertIn("[1 hits]", self.query("humans", "remember the rebase"))
+        self.assertIn("[1 hits]", self.query("finals", "Done"))
+        shown = self.query("calls", "gh pr merge 1")
+        self.assertNotIn("gh pr merge 1", shown.split("---", 1)[1])
+        self.assertIn(f"{pad}; gh pr merge 1", self.query("calls", "merge 1", "--full"))
+
+    def test_attribution_deep_in_the_opening_marks_a_delegated_session(self) -> None:
+        brief = "Fix the parser.\n" + "Context line.\n" * 40 + "Agent: /root | Model: x"
+        claude = [
+            claude_user(DAY1, "10:00:00", brief),
+            claude_user(DAY1, "10:01:00", "Please also run the tests"),
+        ]
+        self.build(claude, [])
+        self.assertIn("[0 hits]", self.query("humans", "run the tests"))
+
+
 if __name__ == "__main__":
     unittest.main()

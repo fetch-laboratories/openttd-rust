@@ -30,14 +30,11 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA = 1
+SCHEMA = 2
 ROOT = Path(__file__).absolute().parents[1]
 DEFAULT_DIGEST = ROOT / ".local" / "transcripts"
 TABLES = ("sessions", "calls", "users", "finals")
-CLIP_INPUT = 1500
 CLIP_RESULT = 500
-CLIP_USER = 6000
-CLIP_FINAL = 2500
 CODEX_WAITS = ("wait", "wait_agent")
 CODEX_CALLS = ("custom_tool_call", "function_call", "local_shell_call")
 CODEX_OUTPUTS = ("custom_tool_call_output", "function_call_output")
@@ -101,7 +98,9 @@ records (calls.jsonl, field "kind"):
   are not counted twice. --kind call reads the outer calls.
   Every record keeps h (host), s (session), parent, path and ln (raw file and
   line), t, id (call ID), model, effort (Codex), e (failed), x (exit code),
-  c and r (input and result, clipped) with cl and rl (full lengths).
+  c (input or command, in full) and r (result: its first and last 500
+  characters, with rl its full length). Queries match c, and users and
+  finals match m (the message, in full); no query reads r.
 
 humans (heuristic):
   User-role messages that start with none of the machine-written prefixes in
@@ -247,14 +246,14 @@ class Reader:
     def user(self, ts: str, ln: int, text: str) -> None:
         self.flush_final()
         record = self.base(ts, ln)
-        record.update(sub=self.meta["sub"], m=clip(text, CLIP_USER), ml=len(text))
+        record.update(sub=self.meta["sub"], m=text)
         self.out.users.append(record)
         if not self.meta["first"]:
-            self.meta["first"] = clip(" ".join(text.split()), 300)
+            self.meta["first"] = text
 
     def final(self, ts: str, ln: int, text: str) -> None:
         record = self.base(ts, ln)
-        record.update(m=clip(text, CLIP_FINAL), ml=len(text))
+        record.update(m=text)
         self.out.finals.append(record)
 
     def flush_final(self) -> None:
@@ -265,8 +264,7 @@ class Reader:
     def call(self, ts: str, ln: int, **fields: object) -> dict[str, Any]:
         record = self.base(ts, ln)
         record.update(fields)
-        text = record.get("c", "")
-        record.update(c=clip(text, CLIP_INPUT), cl=len(text), e=False)
+        record["e"] = False
         self.out.calls.append(record)
         return record
 
@@ -911,7 +909,7 @@ def session_line(session: dict[str, Any]) -> str:
     return (
         f"{session['start'][:16]} {session['h']} {session['s']} {model} "
         f"calls={session['calls']} cmds={session['cmds']} "
-        f"failed={session['failed']}{sub} | {session['first'][:100]}"
+        f"failed={session['failed']}{sub} | {' '.join(session['first'].split())[:100]}"
     )
 
 
@@ -966,7 +964,9 @@ def query_options() -> argparse.ArgumentParser:
     common.add_argument(
         "--limit", type=int, default=40, help="rows to print; 0 prints all"
     )
-    common.add_argument("--full", action="store_true", help="print full clipped text")
+    common.add_argument(
+        "--full", action="store_true", help="print full text; results stay clipped"
+    )
     common.add_argument(
         "--digest", type=Path, default=DEFAULT_DIGEST, help="digest folder to read"
     )
