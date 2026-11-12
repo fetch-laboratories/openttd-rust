@@ -36,12 +36,12 @@ Implementers queue nothing until root lifts the stop. A confirmed regression als
 | --- | --- | --- |
 | Session start | [Routine agent](team.md#routine-agent) | [Housekeeping](#housekeeping) |
 | After every fifth merge | Routine agent runs and reports; root decides | Platform cadence: `gh workflow run ci-build.yml --ref rust-migration` ([ADR 0018](adr/0018-builds-before-every-merge.md)); a red result [stops merges](#merge-stops) until fixed. Housekeeping runs with it. |
-| After every twelfth merge | Root | Stocktake under [`/start-development` step 4](skills/start-development/SKILL.md) ([ADR 0013](adr/0013-stocktake-every-12-merges.md)), with `python3 tools/retrospective.py stocktake START END`. Profile the merged tip in the background ([speed](speed.md#instruction-projections), [ADR 0027](adr/0027-speed-measured-on-merged-branch.md)). Check issue placement and exclusion conditions, and report #892's remaining production macro counts beside the #734 inventory. |
+| After every twelfth merge | Root | Stocktake under [`/start-development` step 4](skills/start-development/SKILL.md) ([ADR 0013](adr/0013-stocktake-every-12-merges.md)), with `python3 tools/retrospective.py stocktake START END`. Profile the merged tip in the background ([speed](speed.md#instruction-projections), [ADR 0027](adr/0027-speed-measured-on-merged-branch.md)). Check issue placement and exclusion conditions, report #892's remaining production macro counts beside the #734 inventory, and pick the next interval's [tools batch](planning.md#selection). |
 | Cleanup exit and phase-3 exit | Root | All-member deep check ([ADR 0017](adr/0017-deep-checks-on-request.md), [deep checks](deep-checks.md#policy)) |
 
 ## CI administration
 
-- A PR that changes `.github/workflows/` needs a reviewed **bootstrap Full** on its head before it queues. Root reviews its workflow after the reviewer accepts the source. The [routine agent](team.md#routine-agent) then:
+- A PR that changes `.github/workflows/` needs a reviewed **bootstrap Full** on its head before it queues. Root reviews its workflow after the reviewer accepts the source, and checks that each tool call the workflow changes still runs against the tool as open branches have it: a requested run takes its workflow from base and its tools from the PR's head. The [routine agent](team.md#routine-agent) then:
   1. unsets `CI_ON_DEMAND`;
   2. runs `python3 tools/ci.py request PR --profile full --bootstrap`;
   3. sets the variable back to `true` as soon as that run's `plan` job has succeeded;
