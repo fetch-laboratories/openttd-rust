@@ -58,18 +58,21 @@ REFERENCE_BUILD = COMMON_LOCAL / f"build-reference{SANITIZED}"
 CANDIDATE_BUILD = ROOT / f"build-rust{SANITIZED}"
 # Cargo output shared by driver runs and `env` shells, whatever the sanitizer.
 CARGO_TARGET_DIR = ROOT / "build-rust/cargo"
-# The two lints whose debt tools/lint-ratchet.py counts. The gate's Clippy run
+# The lints whose debt tools/lint-ratchet.py counts. The gate's Clippy run
 # force-warns them and the ratchet repeats that exact command, so Cargo replays
 # the gate's result instead of checking the crate a second time. Function
 # length, nesting and cognitive complexity are not collected: a faithful port
-# keeps the original's function structure (steering 33).
-CLIPPY_DEBT_LINTS = ("too_many_arguments", "missing_safety_doc")
+# keeps the original's function structure (steering 33). disallowed_macros
+# counts production assertion macros (#891, #892) from the non-test build only.
+CLIPPY_DEBT_LINTS = ("too_many_arguments", "missing_safety_doc", "disallowed_macros")
 CLIPPY_CONFIGURATION = "migration/lints"
-# Stable rustc accepts -Zsanitizer only under RUSTC_BOOTSTRAP; the precompiled std
-# stays uninstrumented.
+# Stable rustc accepts -Z flags only under RUSTC_BOOTSTRAP; the precompiled std
+# stays uninstrumented. -Zub-checks turns on std's unsafe precondition checks in
+# the candidate (#891); -Cdebug-assertions would also enable debug_assert! and
+# stop the sanitized candidate being the production body.
 SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer"
 TSAN_FLAGS = "-fsanitize=thread -fno-omit-frame-pointer"
-RUST_SANITIZER_FLAGS = "-Zsanitizer=address -Cforce-frame-pointers=yes"
+RUST_SANITIZER_FLAGS = "-Zsanitizer=address -Zub-checks=yes -Cforce-frame-pointers=yes"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())
 SCENARIO_COVERAGE_PREFIX: ContextVar[str | None] = ContextVar(
     "scenario_coverage_prefix", default=None
@@ -90,15 +93,19 @@ def deps_libraries() -> Path:
     return bootstrapped("deps") / "usr/lib/x86_64-linux-gnu"
 
 
-def clippy_command(*options: str) -> list[str]:
+def clippy_command(*options: str, targets: str = "--all-targets") -> list[str]:
     """The one Clippy command of the gate and the debt ratchet. A force-warned
-    lint stays a warning under `-D warnings`, so its debt never fails the gate."""
+    lint stays a warning under `-D warnings`, so its debt never fails the gate.
+    With `targets="--lib"` Cargo replays only the gate's non-test library unit."""
     return [
         "cargo",
         "clippy",
         "--workspace",
-        "--all-targets",
+        targets,
         "--locked",
+        # Native-test callers compile only with this feature (#807, #891).
+        "--features",
+        "openttd-kernels/native-test-support",
         *options,
         "--",
         "-D",
@@ -502,6 +509,30 @@ class Execution:
     select_role: Callable[[str], dict[str, str]]
 
 
+def sanitized_rust_tests(execution: Execution, name: str, build: Path) -> None:
+    """Every Cargo test under the sanitized flags (#891). Its own output
+    directory keeps the ordinary build-rust/cargo cache intact; --target keeps
+    build scripts and proc macros uninstrumented. Test fixtures leak their
+    service tables on purpose, so leak detection is off, as in the games."""
+    if not execution.args.sanitize or name != "candidate":
+        return
+    execution.run(
+        "candidate-rust-tests",
+        [
+            "env",
+            "ASAN_OPTIONS=detect_leaks=0",
+            "cargo",
+            "test",
+            "--workspace",
+            "--locked",
+            "--target",
+            execution.report["rust_configuration"]["target"],
+            "--target-dir",
+            str(build / "cargo-tests"),
+        ],
+    )
+
+
 def build_games(execution: Execution) -> None:
     args, run = execution.args, execution.run
     builds, report = execution.builds, execution.report
@@ -601,6 +632,7 @@ def build_games(execution: Execution) -> None:
                     else []
                 ),
             )
+            sanitized_rust_tests(execution, name, build)
             if instruction_mode:
                 from simulation.instructions import record_build
 
