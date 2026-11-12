@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
 import unittest
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
@@ -3583,6 +3584,41 @@ class LogTests(unittest.TestCase):
         self.assertNotIn("first attempt", output)
         self.assertEqual(downloads, [19])
         self.assertTrue((self.cache / "example/fork/7/attempt-2/19.log").exists())
+
+    def test_two_writers_publish_the_same_log(self) -> None:
+        path = self.cache / "example/fork/7/attempt-1/9.log"
+        both = threading.Barrier(2, timeout=5)
+        replace = os.replace
+        errors: list[BaseException] = []
+
+        def meet_then_replace(source: str, target: Path) -> None:
+            both.wait()
+            replace(source, target)
+
+        def writer() -> None:
+            try:
+                ci_log.store(path, RAW_LOG)
+            except BaseException as error:
+                errors.append(error)
+
+        with patch.object(ci_log.os, "replace", side_effect=meet_then_replace):
+            threads = [threading.Thread(target=writer) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(path.read_text(), RAW_LOG)
+        self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_failed_write_leaves_no_temporary_file(self) -> None:
+        path = self.cache / "example/fork/7/attempt-1/9.log"
+        with (
+            patch.object(ci_log.os, "replace", side_effect=OSError("disk full")),
+            self.assertRaises(OSError),
+        ):
+            ci_log.store(path, RAW_LOG)
+        self.assertEqual(list(path.parent.iterdir()), [])
 
     def test_attempt_url_reads_that_attempt_not_the_latest(self) -> None:
         first = log_job()

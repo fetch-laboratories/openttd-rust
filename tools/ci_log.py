@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -129,12 +130,20 @@ def download(repository: str, job_id: int) -> str | None:
 
 
 def store(path: Path, text: str) -> None:
-    """Write the whole log, then rename it into place, so no partial file is
-    ever read as a complete one."""
+    """Write the whole log to this writer's own temporary file beside it, then
+    rename it into place, so no partial file is read as a complete one and two
+    writers of one log do not take each other's file. A failure removes it."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_name(path.name + ".partial")
-    partial.write_text(text)
-    os.replace(partial, path)
+    partial = tempfile.NamedTemporaryFile(
+        "w", dir=path.parent, prefix=path.name + ".", suffix=".partial", delete=False
+    )
+    try:
+        with partial:
+            partial.write(text)
+        os.replace(partial.name, path)
+    except BaseException:
+        Path(partial.name).unlink(missing_ok=True)
+        raise
 
 
 def job_log(repository: str, job: dict) -> Log:
