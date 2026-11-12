@@ -42,8 +42,8 @@ Full is the merge gate; its builds are set by [ADR 0018](adr/0018-builds-before-
 
 | Command | Purpose |
 | --- | --- |
-| `python3 tools/ci.py request PR --profile rust\|native\|platform\|full` | Request a run for the PR's current head. |
-| `python3 tools/ci.py wait .local/ci-requests/REQUEST.json` | Wait for a request; prints its resume command on timeout. |
+| `python3 tools/ci.py request PR --profile native --wait` | Request a run for the PR's current head and wait for it, started as one background job; also `rust`, `platform` or `full`, and `--head SHA` to refuse another head. |
+| `python3 tools/ci.py wait PR` | Resume waiting on the newest request at the PR's head (or a request file). Exit 2 means still running at the timeout (default 5,400 seconds), not failed; it prints the command to resume. |
 | `python3 tools/ci.py status .local/ci-requests/REQUEST.json` | Print a request's state once. |
 | `python3 tools/ci.py ready PR` | Mark a draft PR ready once a preflight stamp covers its head. |
 | `python3 tools/ci.py enqueue PR` | Queue a PR ([integration](workflow.md#integration)). |

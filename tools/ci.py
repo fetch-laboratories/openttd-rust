@@ -23,10 +23,13 @@ PROTECTED_REF = "rust-migration"
 CONTEXT = "Full validation"
 # ci-invalidate.yml's merge-queue status on a PR head: no Full ran on that head.
 QUEUED = "Full runs in the merge queue"
-# Under the agent shell's 10-minute command cap, so a foreground wait returns.
-WAIT_TIMEOUT = 540
+# A wait runs as a background job; a native run takes up to an hour.
+WAIT_TIMEOUT = 5400
 # A queue-wait runs as a background job; the queue's Full takes about an hour.
 QUEUE_TIMEOUT = 5400
+# GitHub computes mergeability for a few seconds after a push; a request waits.
+MERGEABLE_WAIT = 60
+MERGEABLE_INTERVAL = 3
 # Quick's required check on a PR head, from its pull_request run.
 QUICK = "Quick validation"
 # The one branch prefix of deliberate negative controls; `failures` leaves them out.
@@ -58,19 +61,67 @@ def current_head(pull: dict, head: str | None = None) -> str:
         raise ValueError("PR must be open and target rust-migration")
     current = pull["head"]["sha"]
     if head is not None and current != head:
-        raise ValueError(f"PR head changed: requested {head}, current {current}")
+        raise ValueError(
+            f"PR head changed: requested {head}, current {current}; that request "
+            "no longer covers the PR, so request CI for the new head"
+        )
     return current
+
+
+class MergeabilityPending(ValueError):
+    """GitHub has not yet computed the PR's mergeability."""
 
 
 def validate_pull(pull: dict, head: str | None = None) -> str:
     # Mergeability selects the tested merge, so only requests require it. A base
     # push can leave it pending; the requested run and its result remain valid.
     current = current_head(pull, head)
-    if pull.get("mergeable") is not True or not pull.get("merge_commit_sha"):
+    if pull.get("mergeable") is False:
         raise ValueError(
-            "PR is unmergeable or mergeability is pending; retry after resolving it"
+            f"The PR conflicts with {PROTECTED_REF}: merge origin/{PROTECTED_REF} "
+            "into its branch (docs/workflow.md, Integration, step 1), push, and "
+            "request again"
+        )
+    if pull.get("mergeable") is not True or not pull.get("merge_commit_sha"):
+        raise MergeabilityPending(
+            "GitHub is still computing the PR's mergeability; request again in a minute"
         )
     return current
+
+
+def await_mergeable(repository: str, pr: int, pull: dict, head: str) -> dict:
+    """Re-read a PR whose mergeability is pending, for up to MERGEABLE_WAIT
+    seconds, at the same head; a conflict, closed PR or new head stops at once."""
+    deadline = time.monotonic() + MERGEABLE_WAIT
+    waiting = False
+    while True:
+        try:
+            validate_pull(pull, head)
+            return pull
+        except MergeabilityPending:
+            if time.monotonic() >= deadline:
+                raise
+        if not waiting:
+            print(
+                f"Waiting up to {MERGEABLE_WAIT} seconds for GitHub to compute PR "
+                f"#{pr}'s mergeability",
+                flush=True,
+            )
+            waiting = True
+        time.sleep(MERGEABLE_INTERVAL)
+        pull = api(repository, f"pulls/{pr}")
+
+
+def expected_head(pull: dict, expected: str | None) -> str:
+    """The PR's head, refused when it is not the head the caller expects."""
+    head = current_head(pull)
+    if expected and not head.startswith(expected):
+        raise ValueError(
+            f"PR head on GitHub is {head}, not the expected {expected}; push that "
+            "commit (just pushed: rerun in a few seconds), or pass the head you "
+            "mean to test"
+        )
+    return head
 
 
 def passed_run(repository: str, head: str) -> str | None:
@@ -184,31 +235,54 @@ def ready(args: argparse.Namespace) -> None:
     print(f"PR #{args.pr} at {head} marked ready")
 
 
+def full_already_passed(repository: str, pr: int, head: str) -> bool:
+    """Whether an ordinary Full request is unneeded; refuse one queue mode bars."""
+    # A new request would reset a passing status, including one carried across a
+    # docs-only base update, to pending and repeat the run.
+    if run := passed_run(repository, head):
+        print(f"PR #{pr} at {head} already passed Full validation: {run}")
+        return True
+    try:
+        queue = variable(repository, "CI_MERGE_QUEUE") == "true"
+    except subprocess.CalledProcessError:
+        # Reading variables needs its own token permission, which an ordinary
+        # request never needed; the plan applies the same rule server-side.
+        queue = False
+    if queue and changes_definitions(repository, pr):
+        raise ValueError(
+            "In merge-queue mode a PR changing .github/workflows/ needs root's "
+            "reviewed bootstrap Full"
+        )
+    return False
+
+
+def label_request(repository: str, pr: int, pull: dict, head: str) -> None:
+    if variable(repository, "CI_ON_DEMAND") == "true":
+        raise ValueError(
+            "Label requests need CI_ON_DEMAND unset; root must review workflow changes first"
+        )
+    # Remove/add is intentional: only the explicit label event requests a run.
+    labels = {label["name"] for label in pull["labels"]}
+    if "ci:full" in labels:
+        gh("pr", "edit", str(pr), "--repo", repository, "--remove-label", "ci:full")
+    validate_pull(api(repository, f"pulls/{pr}"), head)
+    gh("pr", "edit", str(pr), "--repo", repository, "--add-label", "ci:full")
+
+
 def request(args: argparse.Namespace) -> Path | None:
     repository = repository_of(args.repo)
     pull = api(repository, f"pulls/{args.pr}")
-    head = current_head(pull)
+    head = expected_head(pull, args.head)
     require_stamp(args.pr, head, args.unstamped)
-    # A new request would reset a passing status, including one carried across a
-    # docs-only base update, to pending and repeat the run.
-    if args.profile == "full" and not args.bootstrap:
-        if run := passed_run(repository, head):
-            print(f"PR #{args.pr} at {head} already passed Full validation: {run}")
-            return None
-        try:
-            queue = variable(repository, "CI_MERGE_QUEUE") == "true"
-        except subprocess.CalledProcessError:
-            # Reading variables needs its own token permission, which an ordinary
-            # request never needed; the plan applies the same rule server-side.
-            queue = False
-        if queue and changes_definitions(repository, args.pr):
-            raise ValueError(
-                "In merge-queue mode a PR changing .github/workflows/ needs root's "
-                "reviewed bootstrap Full"
-            )
-    validate_pull(pull, head)
+    if (
+        args.profile == "full"
+        and not args.bootstrap
+        and full_already_passed(repository, args.pr, head)
+    ):
+        return None
     if args.bootstrap and args.profile != "full":
         raise ValueError("Bootstrap label requests only support --profile full")
+    pull = await_mergeable(repository, args.pr, pull, head)
     # The identifier ends with the head, so enqueue finds a head's requests (#922).
     request_id = f"{uuid.uuid4().hex}-{head}"
     record = {
@@ -224,25 +298,9 @@ def request(args: argparse.Namespace) -> Path | None:
     }
     path = args.request_file or REQUESTS / f"{request_id}.json"
     write_request(path, record)
+    # Nothing after this point retries: a second dispatch would repeat a paid run.
     if args.bootstrap:
-        if variable(repository, "CI_ON_DEMAND") == "true":
-            raise ValueError(
-                "Label requests need CI_ON_DEMAND unset; root must review workflow changes first"
-            )
-        # Remove/add is intentional: only the explicit label event requests a run.
-        labels = {label["name"] for label in pull["labels"]}
-        if "ci:full" in labels:
-            gh(
-                "pr",
-                "edit",
-                str(args.pr),
-                "--repo",
-                repository,
-                "--remove-label",
-                "ci:full",
-            )
-        validate_pull(api(repository, f"pulls/{args.pr}"), head)
-        gh("pr", "edit", str(args.pr), "--repo", repository, "--add-label", "ci:full")
+        label_request(repository, args.pr, pull, head)
     else:
         gh(
             "workflow",
@@ -264,6 +322,8 @@ def request(args: argparse.Namespace) -> Path | None:
     print(
         f"Requested {args.profile} CI for PR #{args.pr} at {head}\nRequest file: {path}"
     )
+    if not args.wait:
+        print(f"Wait for it as a background job: python3 tools/ci.py wait {path}")
     return path
 
 
@@ -370,6 +430,118 @@ def wait(path: Path, timeout: int, interval: int) -> None:
                 f"resume with: python3 tools/ci.py wait {path}"
             )
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
+
+
+Candidate = tuple[dict, Path]
+
+
+def local_requests(repository: str, pr: int, head: str) -> list[Candidate]:
+    """This checkout's request records for the PR head, bootstrap labels aside."""
+    found = []
+    for path in sorted(REQUESTS.glob("*.json")):
+        try:
+            record = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if (
+            record.get("schema_version") == 1
+            and record.get("repository") == repository
+            and record.get("pr") == pr
+            and record.get("head") == head
+            and not record.get("bootstrap")
+        ):
+            found.append((record, path))
+    return found
+
+
+def remote_requests(repository: str, pull: dict, head: str) -> list[Candidate]:
+    """Requests for the PR head found on GitHub by their identifier, which ends
+    with the head (#922): every dispatched run since the PR opened, paginated."""
+    pr = pull["number"]
+    since = quote(">=" + pull["created_at"])
+    pages = json.loads(
+        gh(
+            "api",
+            "--paginate",
+            "--slurp",
+            f"repos/{repository}/actions/workflows/{WORKFLOW}/runs"
+            f"?event=workflow_dispatch&created={since}&per_page=100",
+        )
+    )
+    found = []
+    for run in (run for page in pages for run in page["workflow_runs"]):
+        title = (run.get("display_title") or "").split()
+        if (
+            len(title) == 5
+            and title[0] == "CI"
+            and title[1] in PROFILES
+            and title[2:4] == ["PR", str(pr)]
+            and title[4].endswith(f"-{head}")
+            and run.get("head_branch") == PROTECTED_REF
+        ):
+            record = {
+                "schema_version": 1,
+                "repository": repository,
+                "pr": pr,
+                "head": head,
+                "base": None,
+                "profile": title[1],
+                "request": title[4],
+                "bootstrap": False,
+                "created_at": run["created_at"],
+                "run_id": run["id"],
+                "run_url": run["html_url"],
+            }
+            found.append((record, REQUESTS / f"{title[4]}.json"))
+    return found
+
+
+def newest_request(
+    candidates: list[Candidate], pr: int, head: str, profile: str | None
+) -> Candidate:
+    """The newest candidate, refusing a choice between profiles nobody named."""
+    newest: dict[str, Candidate] = {}
+    for candidate in sorted(
+        candidates, key=lambda c: (c[0]["created_at"], c[0]["request"])
+    ):
+        newest[candidate[0]["profile"]] = candidate
+    if not newest:
+        named = f"{profile} " if profile else ""
+        raise ValueError(
+            f"No {named}request for PR #{pr} at its head {head}; request one with: "
+            f"python3 tools/ci.py request {pr} --profile {profile or 'native'} --wait"
+        )
+    if len(newest) > 1:
+        raise ValueError(
+            f"PR #{pr} has requests at {head} for {', '.join(sorted(newest))}; "
+            f"name one: python3 tools/ci.py wait {pr} --profile PROFILE"
+        )
+    return next(iter(newest.values()))
+
+
+def resolve_request(repository: str, pr: int, profile: str | None) -> Path:
+    """Fix, once, the newest request for the PR's current head: from this
+    checkout's records, else from GitHub. A later request is not followed."""
+    pull = api(repository, f"pulls/{pr}")
+    head = current_head(pull)
+
+    def wanted(candidates: list[Candidate]) -> list[Candidate]:
+        return [c for c in candidates if profile in (None, c[0]["profile"])]
+
+    source = "local record"
+    candidates = wanted(local_requests(repository, pr, head))
+    if not candidates:
+        source = "GitHub"
+        candidates = wanted(remote_requests(repository, dict(pull, number=pr), head))
+    record, path = newest_request(candidates, pr, head, profile)
+    if source == "GitHub":
+        write_request(path, record)
+    print(
+        f"Waiting on the newest {record['profile']} request for PR #{pr} at {head} "
+        f"(from {source}): {record.get('run_url') or 'run not listed yet'}",
+        flush=True,
+    )
+    return path
 
 
 QUEUE_STATE = """
@@ -696,6 +868,33 @@ def positive(text: str) -> int:
     return value
 
 
+def sha(text: str) -> str:
+    if not 7 <= len(text) <= 40 or any(c not in "0123456789abcdef" for c in text):
+        raise argparse.ArgumentTypeError("must be 7 to 40 lowercase hex digits")
+    return text
+
+
+def timing(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--timeout",
+        type=positive,
+        default=WAIT_TIMEOUT,
+        help=f"seconds to wait before exit 2 (default {WAIT_TIMEOUT})",
+    )
+    parser.add_argument("--interval", type=positive, default=15)
+
+
+def wait_target(args: argparse.Namespace) -> Path:
+    """A wait's request file: the one named, or the one a PR number resolves to."""
+    if args.target.isdigit():
+        return resolve_request(repository_of(args.repo), int(args.target), args.profile)
+    if args.profile or args.repo:
+        raise ValueError(
+            "--profile and --repo apply to a PR number; a request file names both"
+        )
+    return Path(args.target)
+
+
 def dispatch(args: argparse.Namespace) -> None:
     if args.command == "queue-wait":
         merge = queue_wait(
@@ -711,9 +910,9 @@ def dispatch(args: argparse.Namespace) -> None:
     elif args.command == "request":
         path = request(args)
         if path and args.wait:
-            wait(path, WAIT_TIMEOUT, 15)
+            wait(path, args.timeout, args.interval)
     elif args.command == "wait":
-        wait(args.request_file, args.timeout, args.interval)
+        wait(wait_target(args), args.timeout, args.interval)
     else:
         report_status(args.request_file)
 
@@ -736,7 +935,16 @@ def main() -> int:
         action="store_true",
         help="ci:full label request for reviewed workflow changes with CI_ON_DEMAND unset",
     )
-    submit.add_argument("--wait", action="store_true")
+    submit.add_argument(
+        "--wait", action="store_true", help="then wait for the run, like wait"
+    )
+    submit.add_argument(
+        "--head",
+        metavar="SHA",
+        type=sha,
+        help="refuse unless the PR's head on GitHub is SHA (or starts with it)",
+    )
+    timing(submit)
     submit.add_argument(
         "--unstamped",
         metavar="REASON",
@@ -747,11 +955,21 @@ def main() -> int:
     )
     marked.add_argument("pr", type=int)
     marked.add_argument("--repo")
-    for command in ("status", "wait"):
-        check = commands.add_parser(command)
-        check.add_argument("request_file", type=Path)
-        check.add_argument("--timeout", type=positive, default=WAIT_TIMEOUT)
-        check.add_argument("--interval", type=positive, default=15)
+    check = commands.add_parser("status", help="print a request's state once")
+    check.add_argument("request_file", type=Path)
+    waited = commands.add_parser(
+        "wait",
+        help="wait for a request: exit 0 passed, 1 failed, 2 still running at the "
+        "timeout (resume with the command it prints)",
+    )
+    waited.add_argument(
+        "target",
+        metavar="PR|REQUEST_FILE",
+        help="a request file, or a PR number for the newest request at its head",
+    )
+    waited.add_argument("--profile", choices=PROFILES, help="with a PR number")
+    waited.add_argument("--repo", help="with a PR number")
+    timing(waited)
     entered = commands.add_parser(
         "enqueue", help="queue a PR whose head has green Quick and requested runs"
     )

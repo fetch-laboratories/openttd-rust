@@ -31,7 +31,7 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 
 ### Checks
 
-- Scenario comparisons run on CI, not on this host ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)); run one locally, by name, only to diagnose a failure. Once the local build and Cargo checks pass, request `python3 tools/ci.py request PR --profile native`, wait on it in the background, and record the passing run at the reviewed head in the status comment.
+- Scenario comparisons run on CI, not on this host ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)); run one locally, by name, only to diagnose a failure. Once the local build and Cargo checks pass, start `python3 tools/ci.py request PR --profile native --wait` with your host's [background-job](team.md#background-jobs) mechanics (exit 2 means still running, not failed: resume with `python3 tools/ci.py wait PR`), and record the passing run at the reviewed head in the status comment.
 - Request `--profile platform` only for a suspected macOS build failure, or once before queueing a change to `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `cmake/`: Full does not build macOS, and the [platform cadence](root-workflow.md#cadences) would find the break after it merges.
 
 ### Review

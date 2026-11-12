@@ -2123,6 +2123,8 @@ class RequestTests(unittest.TestCase):
             profile="native",
             bootstrap=False,
             unstamped=None,
+            head=None,
+            wait=False,
         )
         with (
             patch.object(ci, "api", side_effect=pull_and_statuses([])),
@@ -2160,6 +2162,8 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=False,
                     unstamped=None,
+                    head=None,
+                    wait=False,
                     request_file=Path(directory) / "request.json",
                 )
                 with (
@@ -2220,6 +2224,8 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    head=None,
+                    wait=False,
                     request_file=Path(directory) / "request.json",
                 )
                 with (
@@ -2278,6 +2284,8 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    head=None,
+                    wait=False,
                     request_file=Path(directory) / "request.json",
                 )
                 with (
@@ -2308,6 +2316,8 @@ class RequestTests(unittest.TestCase):
                 profile="full",
                 bootstrap=False,
                 unstamped=None,
+                head=None,
+                wait=False,
                 request_file=Path(directory) / "request.json",
             )
             with (
@@ -2357,7 +2367,7 @@ class RequestTests(unittest.TestCase):
                 mergeable=mergeable,
                 base={"sha": "e" * 40, "ref": "rust-migration"},
             )
-            with self.assertRaisesRegex(ValueError, "mergeability"):
+            with self.assertRaisesRegex(ValueError, "conflicts|mergeability"):
                 ci.validate_pull(pull)
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "request.json"
@@ -2438,7 +2448,7 @@ class RequestTests(unittest.TestCase):
                 self.assertEqual(ci.main(), 1)
             ci.verify_children({"failed_jobs": []})
 
-    def test_wait_returns_within_shell_cap_and_names_resume_command(self) -> None:
+    def test_wait_times_out_with_exit_2_and_names_resume_command(self) -> None:
         running = {"status": "in_progress", "html_url": RUN, "failed_jobs": []}
         record = {"profile": "full", "head": HEAD}
         clock = itertools.count(0, 100)
@@ -2455,9 +2465,12 @@ class RequestTests(unittest.TestCase):
                 ):
                     ci.wait(path, 540, 15)
             self.assertTrue(sleep.called)
-            for argv in (
-                ["ci.py", "wait", str(path)],
-                ["ci.py", "request", "170", "--wait"],
+            # Waits run as background jobs, so both default to queue-wait's limit.
+            for argv, timeout in (
+                (["ci.py", "wait", str(path)], 5400),
+                (["ci.py", "request", "170", "--wait"], 5400),
+                (["ci.py", "request", "170", "--wait", "--timeout", "60"], 60),
+                (["ci.py", "wait", str(path), "--timeout", "120"], 120),
             ):
                 with (
                     patch("sys.argv", argv),
@@ -2468,7 +2481,7 @@ class RequestTests(unittest.TestCase):
                     patch("builtins.print") as printed,
                 ):
                     self.assertEqual(ci.main(), 2)
-                self.assertLess(waited.call_args.args[1], 600)
+                self.assertEqual(waited.call_args.args[1:], (timeout, 15))
                 printed.assert_called_once()
 
     def test_successful_run_without_full_status_is_rejected(self) -> None:
@@ -2492,6 +2505,214 @@ class RequestTests(unittest.TestCase):
             with patch.object(ci, "api", side_effect=[PULL, {"statuses": statuses}]):
                 with self.assertRaises(ValueError):
                     ci.verify_completion(record, run)
+
+
+def requested(profile: str, request: str, created: str, **fields: object) -> dict:
+    """A dispatched ci-request.yml run as GitHub lists it."""
+    return {
+        "id": int(created[11:13]),
+        "display_title": f"CI {profile} PR 170 {request}-{HEAD}",
+        "event": "workflow_dispatch",
+        "head_branch": "rust-migration",
+        "created_at": created,
+        "html_url": f"https://github.com/example/fork/actions/runs/{created[11:13]}",
+        **fields,
+    }
+
+
+class RequestPathTests(unittest.TestCase):
+    """request waits out pending mergeability; wait takes a PR number (P3)."""
+
+    PENDING = dict(PULL, mergeable=None, merge_commit_sha=None)
+
+    def setUp(self) -> None:
+        stamp = patch.object(ci, "require_stamp")
+        self.stamp = stamp.start()
+        self.addCleanup(stamp.stop)
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.directory = Path(directory.name)
+        requests = patch.object(ci, "REQUESTS", self.directory / "requests")
+        requests.start()
+        self.addCleanup(requests.stop)
+
+    def request(
+        self, *pulls: dict, **options: object
+    ) -> tuple[Path | None, list[tuple[str, ...]], str, int]:
+        """Run request against successive reads of the PR, on a fake clock."""
+        reads = iter(pulls)
+        calls: list[tuple[str, ...]] = []
+        args = argparse.Namespace(
+            **{
+                "repo": "example/fork",
+                "pr": 170,
+                "profile": "native",
+                "bootstrap": False,
+                "unstamped": None,
+                "head": None,
+                "wait": False,
+                "request_file": None,
+                **options,
+            }
+        )
+        clock = itertools.count(0, 3)
+        with (
+            patch.object(ci, "api", side_effect=lambda _r, _p: next(reads)),
+            patch.object(ci, "gh", side_effect=lambda *a: calls.append(a) or ""),
+            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+            patch.object(ci.time, "sleep") as sleep,
+            patch("builtins.print") as printed,
+        ):
+            try:
+                path = ci.request(args)
+            finally:
+                self.output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        return path, calls, self.output, sleep.call_count
+
+    def test_pending_then_mergeable_dispatches_the_pinned_head(self) -> None:
+        path, calls, output, sleeps = self.request(self.PENDING, self.PENDING, PULL)
+        self.assertEqual(sleeps, 2)
+        self.assertEqual(output.count("Waiting up to 60 seconds"), 1)
+        ((dispatch),) = calls
+        self.assertEqual(dispatch[:2], ("workflow", "run"))
+        self.assertIn(f"head={HEAD}", dispatch)
+        self.assertTrue(
+            output.endswith(
+                f"Wait for it as a background job: python3 tools/ci.py wait {path}"
+            )
+        )
+
+    def test_pending_then_conflict_closed_or_moved_stops_at_once(self) -> None:
+        for label, after, message in (
+            ("conflict", dict(PULL, mergeable=False), "conflicts with rust-migration"),
+            ("closed", dict(self.PENDING, state="closed"), "must be open"),
+            ("moved", dict(PULL, head={"sha": PREVIOUS}), "head changed"),
+        ):
+            with self.subTest(label), self.assertRaisesRegex(ValueError, message):
+                self.request(self.PENDING, after)
+            self.assertNotIn("Requested", self.output)
+
+    def test_conflict_is_worded_apart_from_pending(self) -> None:
+        with self.assertRaisesRegex(ValueError, "merge origin/rust-migration"):
+            self.request(dict(PULL, mergeable=False))
+        self.assertNotIn("Waiting", self.output)
+        # Pending past the bound stops without dispatching, and says so.
+        with self.assertRaisesRegex(ci.MergeabilityPending, "still computing"):
+            self.request(*[self.PENDING] * 40)
+        self.assertNotIn("Requested", self.output)
+
+    def test_head_option_refuses_another_remote_head(self) -> None:
+        with self.assertRaisesRegex(ValueError, f"head on GitHub is {HEAD}, not"):
+            self.request(PULL, head=PREVIOUS)
+        self.stamp.assert_not_called()
+        path, calls, _, _ = self.request(PULL, head=HEAD[:12])
+        self.assertIsNotNone(path)
+        self.assertEqual(calls[0][:2], ("workflow", "run"))
+        with patch("sys.argv", ["ci.py", "request", "170", "--head", "main"]):
+            with patch("sys.stderr"), self.assertRaises(SystemExit):
+                ci.main()
+
+    def test_request_with_wait_prints_no_separate_wait_command(self) -> None:
+        _, _, output, _ = self.request(PULL, wait=True)
+        self.assertNotIn("Wait for it", output)
+
+    def record(self, name: str, **fields: object) -> Path:
+        record = {
+            "schema_version": 1,
+            "repository": "example/fork",
+            "pr": 170,
+            "head": HEAD,
+            "profile": "native",
+            "request": f"{name}-{HEAD}",
+            "bootstrap": False,
+            "created_at": "2026-11-12T01:00:00Z",
+            **fields,
+        }
+        path = ci.REQUESTS / f"{name}.json"
+        ci.write_request(path, record)
+        return path
+
+    def wait_pr(
+        self, *extra: str, runs: list[list[dict]] | None = None
+    ) -> tuple[int, Path | None, str, list[tuple[str, ...]]]:
+        """Run `ci.py wait 170 ...`, recording the request file wait was given."""
+        calls: list[tuple[str, ...]] = []
+
+        def gh(*args: str) -> str:
+            calls.append(args)
+            return json.dumps([{"workflow_runs": page} for page in runs or []])
+
+        pull = dict(PULL, number=170, created_at="2026-11-11T00:00:00Z")
+        argv = ["ci.py", "wait", "170", "--repo", "example/fork", *extra]
+        with (
+            patch.object(ci, "api", return_value=pull),
+            patch.object(ci, "gh", side_effect=gh),
+            patch.object(ci, "wait") as waited,
+            patch("sys.argv", argv),
+            patch("builtins.print") as printed,
+            patch("sys.stderr") as stderr,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
+        path = waited.call_args.args[0] if waited.called else None
+        return code, path, output, calls
+
+    def test_wait_on_a_pr_takes_the_newest_local_record_at_head(self) -> None:
+        self.record("old", created_at="2026-11-12T00:00:00Z")
+        newest = self.record("new", run_url=RUN)
+        self.record("moved", head=PREVIOUS, created_at="2026-11-12T09:00:00Z")
+        self.record("label", bootstrap=True, created_at="2026-11-12T09:00:00Z")
+        code, path, output, calls = self.wait_pr()
+        self.assertEqual((code, path), (0, newest))
+        self.assertIn(f"newest native request for PR #170 at {HEAD}", output)
+        self.assertIn(f"(from local record): {RUN}", output)
+        self.assertEqual(calls, [])
+
+    def test_wait_on_a_pr_finds_a_remote_request_through_every_page(self) -> None:
+        older = requested("native", "c" * 32, "2026-11-12T01:00:00Z")
+        newer = requested("native", "e" * 32, "2026-11-12T03:00:00Z")
+        foreign = [
+            dict(newer, display_title=f"CI native PR 171 x-{HEAD}"),
+            dict(newer, display_title=f"CI native PR 170 x-{PREVIOUS}"),
+            dict(newer, head_branch="untrusted"),
+        ]
+        code, path, output, calls = self.wait_pr(runs=[[older, *foreign], [newer]])
+        self.assertEqual(code, 0)
+        self.assertEqual(path, ci.REQUESTS / f"{'e' * 32}-{HEAD}.json")
+        record = json.loads(cast(Path, path).read_text())
+        self.assertEqual((record["run_id"], record["profile"]), (3, "native"))
+        self.assertIn("(from GitHub)", output)
+        ((query),) = calls
+        self.assertIn("--paginate", query)
+        self.assertIn("created=%3E%3D2026-11-11T00%3A00%3A00Z", query[-1])
+
+    def test_wait_on_a_pr_with_several_profiles_needs_one_named(self) -> None:
+        self.record("native")
+        rust = self.record("rust", profile="rust", created_at="2026-11-12T05:00:00Z")
+        code, path, output, _ = self.wait_pr()
+        self.assertEqual((code, path), (1, None))
+        self.assertIn("for native, rust; name one", output)
+        self.assertIn("wait 170 --profile PROFILE", output)
+        code, path, _, _ = self.wait_pr("--profile", "rust")
+        self.assertEqual((code, path), (0, rust))
+
+    def test_wait_on_a_pr_without_a_request_names_the_request_command(self) -> None:
+        self.record("native")
+        code, _, output, calls = self.wait_pr("--profile", "full")
+        self.assertEqual(code, 1)
+        self.assertIn("request 170 --profile full --wait", output)
+        self.assertEqual(len(calls), 1)
+
+    def test_wait_on_a_file_rejects_pr_options(self) -> None:
+        path = self.record("native")
+        with (
+            patch("sys.argv", ["ci.py", "wait", str(path), "--profile", "rust"]),
+            patch.object(ci, "wait") as waited,
+            patch("sys.stderr"),
+        ):
+            self.assertEqual(ci.main(), 1)
+        waited.assert_not_called()
 
 
 class QueueWaitTests(unittest.TestCase):
