@@ -30,15 +30,18 @@
 /* static */ LinkGraphSchedule LinkGraphSchedule::instance;
 
 static_assert(LinkGraphSchedule::SPAWN_JOIN_TICK == 21 && EconomyTime::SECONDS_PER_DAY == 2);
+/** OnTick_LinkGraph's PerformanceMeasurer around a network client's join. */
+static std::optional<PerformanceMeasurer> _join_measurement;
 constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 	.allocation_failure = +[]() noexcept { NOT_REACHED(); },
 	.assert_graph = +[]([[maybe_unused]] const OpenTTDLiveGraph *g) noexcept { assert(g->shell == LinkGraph::Get(g->shell->index)); },
-	.begin_measurement = +[](void *storage, bool client) noexcept {
-		if (client) static_cast<std::optional<PerformanceMeasurer> *>(storage)->emplace(PFE_GL_LINKGRAPH);
+	.begin_measurement = +[](bool client) noexcept {
+		if (client) _join_measurement.emplace(PFE_GL_LINKGRAPH);
 		else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH);
 	},
 	.can_allocate = +[]() noexcept { return LinkGraphJob::CanAllocateItem(); },
 	.destroy_job = +[](OpenTTDLinkGraphJobRecord *j) noexcept { delete j->shell; },
+	.end_measurement = +[]() noexcept { _join_measurement.reset(); },
 	.graph_pool = &_link_graph_pool.descriptor,
 	.job_pool = &_link_graph_job_pool.descriptor,
 	.new_job = +[](const OpenTTDLiveGraph *g) noexcept { return &(new LinkGraphJob(*g->shell))->Record(); },

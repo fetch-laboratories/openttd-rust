@@ -10,7 +10,7 @@ use crate::{
     timer_game_common::SECONDS_PER_DAY,
     witness,
 };
-use std::{collections::VecDeque, ffi::c_void, sync::atomic::Ordering};
+use std::{collections::VecDeque, sync::atomic::Ordering};
 
 #[repr(C)]
 struct Queues {
@@ -23,9 +23,10 @@ struct Queues {
 pub(crate) struct Services {
     allocation_failure: extern "C" fn(),
     assert_graph: extern "C" fn(*const Graph),
-    begin_measurement: extern "C" fn(*mut c_void, bool),
+    begin_measurement: extern "C" fn(bool),
     can_allocate: extern "C" fn() -> bool,
     destroy_job: extern "C" fn(*mut Job),
+    end_measurement: extern "C" fn(),
     graph_pool: *const *const crate::pool::PoolDescriptor,
     job_pool: *const *const crate::pool::PoolDescriptor,
     new_job: extern "C" fn(*const Graph) -> *mut Job,
@@ -35,7 +36,7 @@ pub(crate) struct Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, begin_measurement, can_allocate, destroy_job, graph_pool, job_pool, new_job, shared, start_thread, vehicle };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, begin_measurement, can_allocate, destroy_job, end_measurement, graph_pool, job_pool, new_job, shared, start_thread, vehicle };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
 }
@@ -188,11 +189,11 @@ pub(crate) extern "C" fn openttd_rust_schedule_shift(s: &Services, interval: i32
         }
     }
 }
+/// `OnTick_LinkGraph`: spawn or join a link graph job if one is due.
 pub(crate) fn tick(
     s: &Services,
     shared: &crate::services::Services,
-    client: bool,
-    measurement: *mut c_void,
+    company: &crate::company::Services,
 ) {
     if crate::timer_game_common::economy_fraction() != SPAWN_JOIN_TICK {
         return;
@@ -202,8 +203,16 @@ pub(crate) fn tick(
     if offset == 0 {
         spawn_next(s);
     } else if offset == interval / 2 {
-        (s.begin_measurement)(measurement, client);
-        join_next(s);
+        if !(company.finance.networking)() || (company.network_server)() {
+            // `PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH)`.
+            (s.begin_measurement)(false);
+            join_next(s);
+        } else {
+            // `PerformanceMeasurer framerate(PFE_GL_LINKGRAPH)`, ended with its scope.
+            (s.begin_measurement)(true);
+            join_next(s);
+            (s.end_measurement)();
+        }
     }
 }
 /// `Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused)`, the scheduler's only pause post.

@@ -26,6 +26,7 @@ use crate::pool::{PoolDescriptor, PoolSlot};
 use crate::services::{CommandCost, CommandCostStorage, CommandServices};
 use crate::timer_game_common::{write_economy_date, write_economy_fraction};
 use crate::timer_game_economy::EconomyDate;
+use std::ffi::c_void;
 use std::ptr::null_mut;
 
 /// The fixture's `LinkGraph` shell: its pool index and the tag its trace entries name.
@@ -59,6 +60,9 @@ struct Fixture {
     command: *const CommandServices,
     session: *const crate::session::Services,
     current_company: u8,
+    /// `_networking`, and the company services `tick` reads it through.
+    networking: bool,
+    company: *const crate::company::Services,
 }
 /// Process-wide, as the probe's globals were; the test holds `GLOBAL_LOCK`.
 static FIXTURE: GameState<Fixture> = GameState::new(Fixture {
@@ -72,6 +76,8 @@ static FIXTURE: GameState<Fixture> = GameState::new(Fixture {
     command: std::ptr::null(),
     session: std::ptr::null(),
     current_company: 0,
+    networking: false,
+    company: std::ptr::null(),
 });
 /// No production entry is called while the fixture is borrowed.
 fn with<R>(f: impl FnOnce(&mut Fixture) -> R) -> R {
@@ -262,14 +268,13 @@ extern "C" fn assert_graph(graph: *const Graph) {
     let index = unsafe { (*shell).index };
     assert_eq!(slot(graphs(), index).shell, shell.cast::<c_void>());
 }
-extern "C" fn begin_measurement(measurement: *mut c_void, client: bool) {
-    if client {
-        // SAFETY: `tick` passes its local measurement flag.
-        unsafe { *measurement.cast::<bool>() = true };
-        observe([9, 1, 0]);
-    } else {
-        observe([9, 0, 0]);
-    }
+/// `PerformanceMeasurer::SetInactive` (0) or its construction (1) around the join.
+extern "C" fn begin_measurement(client: bool) {
+    observe([9, client.into(), 0]);
+}
+/// The client's `PerformanceMeasurer` destruction.
+extern "C" fn end_measurement() {
+    observe([9, 2, 0]);
 }
 extern "C" fn can_allocate() -> bool {
     true
@@ -344,6 +349,9 @@ extern "C" fn current_company() -> u8 {
 }
 extern "C" fn set_current_company(company: u8) {
     with(|f| f.current_company = company);
+}
+extern "C" fn networking() -> bool {
+    with(|f| f.networking)
 }
 extern "C" fn no() -> bool {
     false
@@ -435,21 +443,15 @@ fn queue(graph: *mut GraphShell) {
     // SAFETY: A live fixture graph.
     openttd_rust_schedule_queue(services(), unsafe { (*graph).owner });
 }
-/// The session's link graph tick at `date` and `fract`; `client` is a networked non-server.
+/// `OnTick_LinkGraph` at `date` and `fract`; `client` sets `_networking` without a server.
 fn tick(date: i32, fract: u16, client: bool) {
     write_economy_date(EconomyDate(date));
     write_economy_fraction(fract);
-    let mut measured = false;
-    super::tick(
-        services(),
-        services().shared,
-        client,
-        (&raw mut measured).cast(),
-    );
-    // The client's `PerformanceMeasurer` ends with the tick.
-    if measured {
-        observe([9, 2, 0]);
-    }
+    with(|f| f.networking = client);
+    // SAFETY: Installed by the test for its whole run.
+    let company = unsafe { &*with(|f| f.company) };
+    super::tick(services(), services().shared, company);
+    with(|f| f.networking = false);
 }
 /// The session's pause control on day 1, fraction 19, under pause `bits` (1 link graph,
 /// 2 normal); `load` runs the after-load control on an unpaused game instead.
@@ -496,6 +498,7 @@ fn install() -> &'static Services {
         begin_measurement,
         can_allocate,
         destroy_job,
+        end_measurement,
         graph_pool: Box::leak(Box::new(graph_pool.cast_const())),
         job_pool: Box::leak(Box::new(job_pool.cast_const())),
         new_job: new_job_record,
@@ -518,7 +521,7 @@ fn install_command_chain(shared: &'static crate::services::Services) {
     let finance: &'static _ = Box::leak(Box::new(crate::company::FinanceServices {
         current_company,
         set_current_company,
-        networking: no,
+        networking,
         company_finances: no_finances,
         ..crate::test_tables::FINANCE
     }));
@@ -551,6 +554,11 @@ fn install_command_chain(shared: &'static crate::services::Services) {
         session,
         ..crate::test_tables::COMMAND_POST
     }));
+    let company: &'static _ = Box::leak(Box::new(crate::company::Services {
+        finance,
+        network_server: no,
+        ..crate::test_tables::COMPANY
+    }));
     let sessions: &'static _ = Box::leak(Box::new(crate::session::Services {
         pause_change,
         pause_dirty: nothing,
@@ -560,6 +568,7 @@ fn install_command_chain(shared: &'static crate::services::Services) {
         f.post = post;
         f.command = commands;
         f.session = sessions;
+        f.company = company;
     });
 }
 /// After the fixture's `ShiftDates` and `Clear`: each pooled graph's compression and first

@@ -147,8 +147,6 @@ struct SessionFixture {
 		services.links = &links;
 		services.visits = &visits;
 		services.industry_builder = builder;
-		services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept -> void * { return nullptr; };
-		services.schedule_end = FrameNothing;
 		services.window_tick = Nothing;
 		services.news = Nothing;
 		services.assert_local_company = Nothing;

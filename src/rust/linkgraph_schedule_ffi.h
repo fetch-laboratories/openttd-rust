@@ -22,9 +22,10 @@ struct OpenTTDVehicleServices;
 struct OpenTTDScheduleServices {
 	void (OPENTTD_RUST_CALL *allocation_failure)() noexcept;
 	void (OPENTTD_RUST_CALL *assert_graph)(const OpenTTDLiveGraph *) noexcept;
-	void (OPENTTD_RUST_CALL *begin_measurement)(void *, bool) noexcept;
+	void (OPENTTD_RUST_CALL *begin_measurement)(bool) noexcept;
 	bool (OPENTTD_RUST_CALL *can_allocate)() noexcept;
 	void (OPENTTD_RUST_CALL *destroy_job)(OpenTTDLinkGraphJobRecord *) noexcept;
+	void (OPENTTD_RUST_CALL *end_measurement)() noexcept;
 	/* Constant-initialized addresses; access only in live game/fixture entries. */
 	const RustPoolDescriptor *const *graph_pool;
 	const RustPoolDescriptor *const *job_pool;

@@ -1829,8 +1829,6 @@ pub(crate) const SESSION: crate::session::Services = crate::session::Services {
     road_end: unreachable1,
     landscape_begin: unreachable1,
     landscape_end: unreachable1,
-    schedule_measurement: unreachable1,
-    schedule_end: unreachable1,
 };
 
 /// `crate::station_cmd::Strings` with every string zero.
