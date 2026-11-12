@@ -1,12 +1,10 @@
 # Reader and pool placement
 
-Readers: planners and briefers of phase-3 reader owners and phase-2 pool owners, including the [`brief-storage-owner`](../skills/brief-storage-owner/SKILL.md) skill. It holds until phase 2 ends.
-
-These are the accepted ownership boundaries between the reader phase (phase 3), the storage phase (phase 2) and later phases. The roadmap's [Phases](../roadmap.md#phases) holds the current reader envelope and its [after-cleanup order](../roadmap.md#after-cleanup) the queued owners. The [world-state design](world-state.md) holds the storage layout each pool owner builds on.
+These are the accepted ownership boundaries between the reader phase (phase 3), the storage phase (phase 2) and later phases.
 
 ## Readers
 
-- #669 holds the remaining reader owners and their selection events (the recorded conditions that bring each up for selection). It is not an additive retirement promise.
+- #669 holds the remaining reader owners and their selection events. It is not an additive retirement promise.
 - #653's industry definitions are integrated. Specification files classified under simulation storage or logic add work outside the NewGRF bucket.
 - Retain the script VM, registration glue, stack conversions and exception and suspension shims until their phase-6 owner.
 - Executable API header methods belong to their API owners. Whole headers and new forwarding methods are not savings.
@@ -22,7 +20,7 @@ These are the accepted ownership boundaries between the reader phase (phase 3), 
 
 ## Shell dispositions
 
-These exact remaining dispositions constrain briefs. A shell is the C++ object that holds a Rust owner and keeps its pool identity ([porting terms](../porting.md#terms)).
+These exact remaining dispositions constrain briefs.
 
 | Boundary | Phase-2 ownership and exact later-owned remainder |
 | --- | --- |
@@ -34,8 +32,3 @@ These exact remaining dispositions constrain briefs. A shell is the C++ object t
 | Company/group | Phase 2 takes settings, finance/statistics aliases, identity, names/livery and free-unit/free-group state used by Rust. AI instance/info/config payload belongs to #669 script orchestration; authorization-list payload to #669 network remainder. Rust-used links move with the record. Only `Group::folded` awaits phase-5 GUI. |
 | LinkGraph/LinkGraphJob | Graph/settings snapshots, join/abort state, annotations, flows and publication move in phase 2, including #168/#199/#500 completed-job publication. A native thread handle may remain behind a named join/start operation until platform threading moves; no field-callback exception follows. |
 | Small pools | #638 includes objects, depots, signs, goals, story pages/elements, league tables/elements and persistent storage, plus #498 payloads and Rust-used strings. Only `Sign::sign` awaits phase-5 drawing/viewport. |
-
-## Estimates
-
-- Every issue estimate is net compiled C++ removed, including retained and generated declarations, facades and fixtures. Rewritten consumers earn no reduction credit ([cost decisions](../planning.md#cost-decisions)).
-- #658's +445 code-line `.inc` re-baseline is reported separately from its small cleanup savings and from #657's deletion savings.
