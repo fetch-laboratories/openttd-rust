@@ -16,7 +16,10 @@
     missing_docs,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
+    clippy::many_single_char_names,
+    clippy::if_not_else,
     clippy::too_many_lines,
+    clippy::collapsible_match,
     clippy::cast_sign_loss
 )]
 use crate::direction_func::{

@@ -41,6 +41,8 @@ rust/openttd-kernels/src/kdtree.rs
 rust/openttd-kernels/src/map_func.rs
 rust/openttd-kernels/src/math.rs
 rust/openttd-kernels/src/md5.rs
+rust/openttd-kernels/src/movement.rs
+rust/openttd-kernels/src/movement/tests.rs
 rust/openttd-kernels/src/network_config.rs
 rust/openttd-kernels/src/network_content.rs
 rust/openttd-kernels/src/network_crypto.rs
@@ -52,6 +54,7 @@ rust/openttd-kernels/src/random_func.rs
 rust/openttd-kernels/src/raw_field.rs
 rust/openttd-kernels/src/road_stop.rs
 rust/openttd-kernels/src/saveload.rs
+rust/openttd-kernels/src/signal_func.rs
 rust/openttd-kernels/src/slope_func.rs
 rust/openttd-kernels/src/spiral.rs
 rust/openttd-kernels/src/sprites.rs
