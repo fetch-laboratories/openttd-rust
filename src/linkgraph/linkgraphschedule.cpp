@@ -47,7 +47,6 @@ constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 	.vehicle = &_rust_vehicle_services,
 };
 void LinkGraphSchedule::Queue(LinkGraph *g) { openttd_rust_schedule_queue(&services, g->RustState()); }
-void LinkGraphSchedule::Dequeue(LinkGraph *g) { openttd_rust_schedule_dequeue(g->RustState()); }
 void LinkGraphSchedule::SpawnAll() { openttd_rust_schedule_spawn_all(&services); }
 void LinkGraphSchedule::Clear() { openttd_rust_schedule_clear(); }
 void LinkGraphSchedule::ShiftDates(TimerGameEconomy::Date interval) { openttd_rust_schedule_shift(&services, interval.base()); }

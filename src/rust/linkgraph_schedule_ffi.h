@@ -36,7 +36,6 @@ struct OpenTTDScheduleServices {
 extern "C" {
 void openttd_rust_schedule_run(const OpenTTDScheduleServices *, OpenTTDLinkGraphJobRecord *);
 void openttd_rust_schedule_queue(const OpenTTDScheduleServices *, OpenTTDLiveGraph *);
-void openttd_rust_schedule_dequeue(OpenTTDLiveGraph *);
 void openttd_rust_schedule_spawn_all(const OpenTTDScheduleServices *);
 void openttd_rust_schedule_clear();
 void openttd_rust_schedule_shift(const OpenTTDScheduleServices *, int32_t);

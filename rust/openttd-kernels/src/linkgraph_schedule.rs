@@ -61,8 +61,8 @@ pub(crate) extern "C" fn openttd_rust_schedule_queue(s: &Services, graph: *mut G
     access(|q| q.schedule.push_back(graph));
     witness::hit(witness::SCHEDULE_QUEUE);
 }
-#[unsafe(no_mangle)]
-pub(crate) extern "C" fn openttd_rust_schedule_dequeue(graph: *mut Graph) {
+/// `LinkGraphSchedule::Dequeue`: remove a link graph from the execution queue.
+pub(crate) fn dequeue(graph: *mut Graph) {
     access(|q| q.schedule.retain(|&g| g != graph));
 }
 fn spawn_job(s: &Services, job: *mut Job) {
@@ -131,7 +131,7 @@ fn join_next(s: &Services) {
     (s.destroy_job)(next); // joins and applies results; may reenter this owner.
     let graph = unsafe { live::Pool::from_descriptor(*s.graph_pool).record(id) };
     if !graph.is_null() {
-        openttd_rust_schedule_dequeue(graph);
+        dequeue(graph);
         openttd_rust_schedule_queue(s, graph);
         witness::hit(witness::SCHEDULE_REQUEUE);
     }
@@ -206,13 +206,13 @@ pub(crate) fn tick(
         join_next(s);
     }
 }
-/// Observer installed by `linkgraph-schedule-reference.cpp`; null posts as before.
-#[cfg(feature = "native-test-support")]
-pub(crate) static PAUSE_OBSERVER: GameState<Option<extern "C" fn(bool)>> = GameState::new(None);
+/// Observer installed by `evidence_tests`; none posts as before.
+#[cfg(test)]
+static PAUSE_OBSERVER: GameState<Option<fn(bool)>> = GameState::new(None);
 /// `Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused)`, the scheduler's only pause post.
 fn post_pause(s: &Services, paused: bool) {
-    // The game-free scheduler fixture records this post in place of the command chain it lacks.
-    #[cfg(feature = "native-test-support")]
+    // The game-free scheduler test records this post in place of the command chain it lacks.
+    #[cfg(test)]
     if let Some(observer) = unsafe { *PAUSE_OBSERVER.get() } {
         observer(paused);
         return;
@@ -281,3 +281,5 @@ unsafe extern "C" fn openttd_rust_schedule_import(input: &Queues) {
     });
     witness::hit(witness::SCHEDULE_IMPORT);
 }
+#[cfg(test)]
+mod evidence_tests;

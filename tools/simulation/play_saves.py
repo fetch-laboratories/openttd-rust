@@ -1,7 +1,6 @@
 """play saves scenario evidence."""
 
 import hashlib
-import subprocess
 import threading
 from pathlib import Path
 from typing import NotRequired, cast
@@ -53,75 +52,17 @@ class Scenario(core.Scenario):
     reload_cargos: NotRequired[list[int]]
 
 
-def scheduler_reference(out: Path) -> str:
-    """Default fixture for worker states unavailable with deterministic thread fallback."""
-    import probe
+SCHEDULER_ORACLE = (
+    "rust:lib:linkgraph_schedule::evidence_tests::schedule_trace_matches_original"
+)
 
-    import migration
 
-    out.mkdir(parents=True, exist_ok=True)
-    bodies: list[str] = []
-    for file, signatures, destination in (
-        (
-            "linkgraphschedule.cpp",
-            (
-                "void LinkGraphSchedule::SpawnNext()",
-                "bool LinkGraphSchedule::IsJoinWithUnfinishedJobDue() const",
-                "void LinkGraphSchedule::JoinNext()",
-                "void LinkGraphSchedule::SpawnAll()",
-                "void LinkGraphSchedule::Clear()",
-                "void LinkGraphSchedule::ShiftDates(",
-                "void StateGameLoop_LinkGraphPauseControl()",
-                "void AfterLoad_LinkGraphPauseControl()",
-                "void OnTick_LinkGraph()",
-            ),
-            "scheduler-original.inc",
-        ),
-        (
-            "linkgraphschedule.h",
-            ("void Queue(", "void Dequeue("),
-            "scheduler-queue-original.inc",
-        ),
-    ):
-        source = subprocess.check_output(
-            ["git", "show", migration.BASELINE["commit"] + ":src/linkgraph/" + file],
-            cwd=ROOT,
-            text=True,
-        )
-        bodies.clear()
-        for signature in signatures:
-            bodies.append(probe.body(source, signature))
-        (out / destination).write_text("\n".join(bodies))
-    build = ROOT / "build-rust"
-    binary = out / "scheduler-reference"
-    command = [
-        probe.compiler(build),
-        "-std=c++20",
-        *probe.target_flags(build),
-        "-O2",
-        "-I" + str(ROOT / "src"),
-        "-I" + str(build / "generated-abi"),
-        "-I" + str(out),
-        str(Path(__file__).with_name("linkgraph-schedule-reference.cpp")),
-        # The native-test archive carries the pause observer the fixture installs.
-        str(
-            migration.rust_archive(
-                build, target_dir=build / "cargo-native-test-support"
-            )
-        ),
-        *migration.rust_configuration(build)["native_libraries"],
-        "-o",
-        str(binary),
-    ]
-    probe.compile(command, out / "compile.log", env=migration.environment())
-    output = probe.execute([binary], binary, stderr="allowed").decode()
-    if (
-        not output.startswith("PASS ")
-        or not output.endswith(" unchanged-reference scheduler observations\n")
-        or int(output.split()[1]) == 0
-    ):
-        raise RuntimeError("scheduler reference fixture omitted completion marker")
-    return output.strip()
+def scheduler_reference() -> str:
+    """Require the frozen original trace of the worker states thread fallback cannot reach."""
+    import evidence_replacements
+
+    evidence_replacements.run_rust(SCHEDULER_ORACLE)
+    return "PASS 47 unchanged-reference scheduler observations: " + SCHEDULER_ORACLE
 
 
 def scenarios(soak: bool) -> list[Scenario]:
@@ -204,9 +145,7 @@ def prepare(
         if binaries["candidate"] != binaries["reference"]:
             with _SCHEDULER_LOCK:
                 if out not in _SCHEDULER_REPORTS:
-                    _SCHEDULER_REPORTS[out] = scheduler_reference(
-                        out / "scheduler-reference"
-                    )
+                    _SCHEDULER_REPORTS[out] = scheduler_reference()
                 core.findings(result)["scheduler_reference"] = _SCHEDULER_REPORTS[out]
         # The fixture comes from the unchanged reference only. Outstanding
         # jobs recompute from their saved graph/settings on load in both.

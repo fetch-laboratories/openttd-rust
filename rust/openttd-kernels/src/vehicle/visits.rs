@@ -204,14 +204,14 @@ pub(crate) fn increase_stats(
             if unsafe { (&*graph).size() < (&*second).size() } {
                 witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
                 unsafe {
-                    linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
+                    linkgraph_schedule::dequeue(graph);
                     live::openttd_rust_live_graph_merge(second, graph, l.graphs);
                 }
                 graph = second;
             } else {
                 witness::hit(witness::VISITS_GRAPH_MERGE_FIRST);
                 unsafe {
-                    linkgraph_schedule::openttd_rust_schedule_dequeue(second);
+                    linkgraph_schedule::dequeue(second);
                     live::openttd_rust_live_graph_merge(graph, second, l.graphs);
                 }
             }
