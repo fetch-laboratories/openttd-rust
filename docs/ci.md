@@ -36,7 +36,7 @@ A profile is the scope of a requested run. Full is the merge gate; the set of bu
 | Annotation checks | no | yes | yes | yes | yes |
 
 - The source is the job conditions in `ci-build.yml` and `ci-request.yml`; check there before relying on a cell.
-- No job builds or tests 32-bit Windows ([ADR 0007](adr/0007-no-32-bit-windows.md)). `Rust tests (32-bit)` runs Clippy and `cargo test --workspace` for `i686-unknown-linux-gnu` on a free runner, after requiring a 32-bit pointer width. It is a test proxy for the crate's pointer-width behaviour, not a game build, MSVC linkage or Emscripten runtime check.
+- No job builds or tests 32-bit Windows ([ADR 0007](adr/0007-no-32-bit-windows.md)). `Rust tests (32-bit)` runs Clippy and `cargo test --workspace` for `i686-unknown-linux-gnu` on a free runner, after requiring a 32-bit pointer width. It is a test proxy for the crate's pointer-width behaviour, not a game build, MSVC linkage or Emscripten runtime check. The three oracle tests of #818 stay ignored at 32 bits.
 - `native` builds Clang so its annotation check sees Clang-only C++ test warnings before the queue, and runs `Rust tests (32-bit)` so a 32-bit-only Clippy finding fails before the queue.
 - The cadence dispatch is `gh workflow run ci-build.yml --ref rust-migration`; when it runs is in [CI administration](root-workflow.md#ci-administration).
 - A Full publishes `Full validation` only for the captured PR head, and only after every selected job succeeds; a skipped or cancelled job does not qualify.
@@ -125,7 +125,7 @@ Who decides which jobs run on paid Blacksmith runners is in [ADR 0009](adr/0009-
 | `CI_MACOS_HEAVY` | macOS runner; the capacity fallback is in [CI administration](root-workflow.md#ci-administration) | unset | `macos-latest` |
 | `CI_MERGE_QUEUE` | [Merge-queue](#merge-queue) behaviour | `true` | queue behaviour off |
 | `CI_ON_DEMAND` | Requested CI: PR pushes skip automatic heavy jobs, the invalidation workflow runs, and `ci:full` label requests are refused | `true` | every PR push runs the heavy jobs; a `ci:full` label starts a bootstrap Full |
-| `MIGRATION_CCACHE` | Nothing: no workflow or tool reads it | `true` | — |
+| `MIGRATION_CCACHE` | Nothing: no workflow or tool reads it | `true` | no effect |
 
 - Values read from `gh variable list`. Check it before relying on a value; this table does not update itself.
 - The cached GCC flavours, Linux GCC SDL2 and GCC Dedicated, always use free `ubuntu-24.04` (`ci-linux.yml`).
