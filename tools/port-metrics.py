@@ -944,8 +944,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--target",
+        "--base",
+        dest="target",
         default="origin/rust-migration",
-        help="branch the PR targets (default: origin/rust-migration)",
+        help="branch the PR targets; the before side is its merge base with --head, "
+        "not the branch tip (default: origin/rust-migration)",
     )
     parser.add_argument(
         "--head", default="HEAD", help="revision to measure (default: HEAD)"

@@ -459,6 +459,33 @@ class PortMetricsTests(unittest.TestCase):
             self.assertFalse(METRICS.simulation_source(path), path)
 
 
+class Measured(Exception):
+    """Stops main() at its first Git call, after argument parsing."""
+
+
+class PortMetricsArgumentTests(unittest.TestCase):
+    def merge_base_arguments(self, *argv: str) -> tuple[str, ...]:
+        with (
+            mock.patch("sys.argv", ["port-metrics.py", *argv]),
+            mock.patch.object(METRICS, "keep_code_lines"),
+            mock.patch.object(METRICS, "git", side_effect=Measured) as git,
+            self.assertRaises(Measured),
+        ):
+            METRICS.main()
+        return git.call_args.args
+
+    def test_base_is_an_alias_of_target(self) -> None:
+        self.assertEqual(
+            self.merge_base_arguments(),
+            ("merge-base", "origin/rust-migration", "HEAD"),
+        )
+        for flag in ("--base", "--target"):
+            self.assertEqual(
+                self.merge_base_arguments(flag, "other", "--head", "tip"),
+                ("merge-base", "other", "tip"),
+            )
+
+
 class CodeLineStoreTests(unittest.TestCase):
     """A stored result is exactly the lexed one, and no other text reaches it."""
 

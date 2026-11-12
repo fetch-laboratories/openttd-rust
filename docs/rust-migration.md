@@ -28,7 +28,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 ```
 
 - This host runs Ubuntu 24.04 x86-64 with these packages plus `valgrind`, `ccache`, `unifdef` and `gdb`. Keep `.local/deps` absent here: the driver puts it ahead of the system on every compiler, library and pkg-config path.
-- `tools/bootstrap-local.py` is for an Ubuntu 26.04 host without administrator access. Do not run it here: it installs into `.local/deps` at once, even when given `--help`.
+- `tools/bootstrap-local.py --install` is for an Ubuntu 26.04 host without administrator access. Do not run it here.
 
 ## Build and verification
 
@@ -140,7 +140,7 @@ Quick runs all but `port-metrics.py`, against `--base-ref origin/rust-migration`
 | `python3 tools/rebound-callees.py` | Duplicate bindings and forwarded service fields; macros, lambdas, wrappers, some templates and namespace resolution need review. |
 | `python3 tools/rust-only.py` | `WITH_RUST` conditionals in `src/`. |
 | `python3 tools/ffi-bool-returns.py` | Rust-defined C `bool` returns. |
-| `python3 tools/orphan-exports.py` | Rust exports and C++ declarations without production use; tests and harnesses do not count. An export used only by uncalled C++ members needs a row in `tools/uncalled-export-baseline.txt` naming the owner issue that retires it. It has no `--help`: given one, it runs the whole check. |
+| `python3 tools/orphan-exports.py` | Rust exports and C++ declarations without production use; tests and harnesses do not count. An export used only by uncalled C++ members needs a row in `tools/uncalled-export-baseline.txt` naming the owner issue that retires it. |
 | `python3 tools/port-metrics.py` | Code-line counts and original retirement; `--whole-fork` adds source areas, C++ evidence and exports; `--functions [AREA ...]` adds remaining original lines per file and function. |
 
 - No checker detects Rust copies of original header helpers and constants ([porting](porting.md#callees-and-shared-accessors)).
