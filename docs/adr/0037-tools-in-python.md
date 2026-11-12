@@ -1,6 +1,6 @@
 ---
 status: accepted
-may change: agents
+may change: agents; keeping the tools after the rewrite is the user's decision
 ---
 # The fork's tools and harness are written in Python and checked with pinned lint and type checkers
 
@@ -10,4 +10,6 @@ The tools are written in Python. Ruff (a Python lint tool) and ty (a Python type
 
 Nothing in the record chose Python over another language; it was the first harness agent's default, and Ruff came with that harness on 2026-10-03 (commit `addc6741c9`). The type checks are the user's. On 2026-10-26 they asked "Are we using uv, ruff, and ty? I always put those on my python projects", and when the agent played it down: "26k lines is a huge surface for bugs. any new python code should have type hints."
 
-Moving the tools to another language would mean rewriting tens of thousands of lines. Whether the Python tools outlive the rewrite is open: [ADR 0001](0001-full-rust-rewrite.md) retires the fork's C++ tools, and no record says what happens to the Python ones.
+The Python tools are kept after the rewrite. [ADR 0001](0001-full-rust-rewrite.md) retires the fork's C++ tools, not the Python ones. The user decided this on 2026-11-12: "development will continue after rewrite into improvement, so anything supporting development should be kept."
+
+Moving the tools to another language would mean rewriting tens of thousands of lines.

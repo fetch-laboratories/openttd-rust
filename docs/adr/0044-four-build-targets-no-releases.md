@@ -10,4 +10,6 @@ The game is built for 64-bit Linux on x86, macOS on Apple silicon, 64-bit Window
 
 Agents made this decision. On 2026-10-02 the founding agent enabled only the targets it could check, and later housekeeping removed the release workflows as unused. No words of the user chose the set. The user's own platform choices are dropping 32-bit Windows ([ADR 0007](0007-no-32-bit-windows.md)) and, on 2026-11-11, "fix the linux arm claim", after the docs had listed Linux on ARM as supported without a CI job. It is the user's to change because it sets which platforms the game runs on.
 
+Whether the browser build is part of the finished game is undecided. On 2026-11-12 the user kept it for now, "because it's low effort until we reach graphics work"; the question returns when that work is planned.
+
 Adding a target back grows dearer as the C++ goes: it needs a Rust build path, layout checks and CI jobs, and any platform code retired without a Rust version for that target would have to be written again.
