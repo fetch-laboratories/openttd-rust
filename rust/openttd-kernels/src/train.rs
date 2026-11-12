@@ -3201,6 +3201,11 @@ pub(crate) fn calc_next_vehicle_offset(id: Handle) -> i32 {
 }
 /// `TrainOnCrossing`: check if a level crossing tile has a train on it.
 pub(crate) fn train_on_crossing(leaves: &Leaves, services: &Services, tile: TileIndex) -> bool {
+    crate::movement::native_assert(
+        services,
+        crate::map_func::World::new(services).level_crossing_tile(tile.0),
+    );
+
     Game::new(leaves, services).train_on_tile(tile.0)
 }
 
