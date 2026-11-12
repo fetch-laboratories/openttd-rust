@@ -32,6 +32,9 @@ QUICK = "Quick validation"
 # The one branch prefix of deliberate negative controls; `failures` leaves them out.
 CONTROL = "control/"
 FAILED = ("failure", "timed_out", "startup_failure")
+# A merge-group run is cancelled only by a job timeout or by hand: its concurrency
+# group is its own run, so no later run cancels it. Either removes the PR.
+REMOVED = (*FAILED, "cancelled")
 REQUESTS = Path(".local/ci-requests")
 
 
@@ -417,6 +420,22 @@ class QueueRemoved(Exception):
     """The PR left the merge queue without merging."""
 
 
+def entry_text(entry: QueueEntry) -> str:
+    """A queue entry as `queued at position 2` or `queued awaiting_checks at ...`."""
+    state = entry["state"].lower()
+    words = "queued" if state == "queued" else f"queued {state}"
+    return f"{words} at position {entry['position']}"
+
+
+def queue_position(pull: QueueState) -> str | None:
+    """The PR's place in the queue, or None once it reads as out of the queue."""
+    if pull["state"] != "OPEN":
+        return None
+    if entry := pull["mergeQueueEntry"]:
+        return entry_text(entry)
+    return "awaiting entry to the merge queue" if pull["autoMergeRequest"] else None
+
+
 def queue_state(repository: str, pr: int) -> QueueState:
     owner, name = repository.split("/", 1)
     answer = json.loads(
@@ -475,14 +494,12 @@ def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
         commit = pull["mergeCommit"]
         if pull["state"] == "MERGED" and commit:
             return commit["oid"]
-        entry = pull["mergeQueueEntry"]
-        if pull["state"] != "OPEN" or not entry and not pull["autoMergeRequest"]:
+        # A merging PR reads for a moment as open and out of the queue before it
+        # reads as merged, so a removal counts once a second read confirms it.
+        state = queue_position(pull)
+        if state is None and previous == "leaving the merge queue":
             raise QueueRemoved(removal(repository, pr, pull["state"].lower()))
-        state = (
-            f"queued {entry['state'].lower()} at position {entry['position']}"
-            if entry
-            else "awaiting entry to the merge queue"
-        )
+        state = state or "leaving the merge queue"
         if state != previous:
             print(state, flush=True)
             previous = state
@@ -547,7 +564,7 @@ def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None
     head that contains base and has a preflight stamp, or once unchanged after a
     runner or network failure the agent names with --retry."""
     runs = queue_runs(repository, pr)
-    if not runs or runs[0]["conclusion"] not in FAILED:
+    if not runs or runs[0]["conclusion"] not in REMOVED:
         return
     url = runs[0]["html_url"]
     if ejected_head(repository, runs[0]) != head:
@@ -568,7 +585,7 @@ def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None
     failed = [
         run
         for run in runs
-        if run["conclusion"] in FAILED and ejected_head(repository, run) == head
+        if run["conclusion"] in REMOVED and ejected_head(repository, run) == head
     ]
     if len(failed) > 1:
         raise ValueError(
@@ -612,7 +629,7 @@ def enqueue(args: argparse.Namespace) -> str:
     )
     state = queue_state(repository, args.pr)
     if entry := state["mergeQueueEntry"]:
-        return f"queued {entry['state'].lower()} at position {entry['position']}"
+        return entry_text(entry)
     if state["autoMergeRequest"]:
         return (
             "auto-merge armed: GitHub queues the PR once its pending required "

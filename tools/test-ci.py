@@ -2601,11 +2601,12 @@ class QueueWaitTests(unittest.TestCase):
         self.assertIn("name=fork", query)
 
     def test_removed_prints_failed_run_and_jobs(self) -> None:
-        code, output, _ = self.run_main([self.QUEUED, self.REMOVED])
+        code, output, _ = self.run_main([self.QUEUED, self.REMOVED, self.REMOVED])
         self.assertEqual(code, 3)
         self.assertEqual(
             output.splitlines()[1:],
             [
+                "leaving the merge queue",
                 "PR #170 left the merge queue (open); merge-group run "
                 "completed/failure: https://github.com/example/fork/actions/runs/7",
                 "failed job: native / simulation (1) "
@@ -2613,9 +2614,31 @@ class QueueWaitTests(unittest.TestCase):
             ],
         )
         closed = dict(self.REMOVED, state="CLOSED")
-        code, output, _ = self.run_main([closed])
+        code, output, _ = self.run_main([closed, closed])
         self.assertEqual(code, 3)
         self.assertIn("left the merge queue (closed)", output)
+
+    def test_open_read_between_leaving_the_queue_and_merged_keeps_waiting(
+        self,
+    ) -> None:
+        # #938: GitHub reads a merging PR as open with no entry for a moment.
+        code, output, _ = self.run_main([self.QUEUED, self.REMOVED, self.MERGED])
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            output.splitlines(),
+            [
+                "queued awaiting_checks at position 1",
+                "leaving the merge queue",
+                f"PR #170 merged: {MERGE}",
+            ],
+        )
+
+    def test_queued_entry_names_its_state_once(self) -> None:
+        # #938: an entry in state QUEUED printed "queued queued".
+        entry = {"state": "QUEUED", "position": 2}
+        queued = dict(self.QUEUED, mergeQueueEntry=entry)
+        _, output, _ = self.run_main([queued, self.MERGED])
+        self.assertEqual(output.splitlines()[0], "queued at position 2")
 
     def test_pending_auto_merge_keeps_waiting(self) -> None:
         pending = dict(self.REMOVED, autoMergeRequest={"enabledAt": "date"})
@@ -2768,6 +2791,8 @@ class EnqueueTests(unittest.TestCase):
         merge = calls[0]
         self.assertEqual(merge[:3], ("pr", "merge", "170"))
         self.assertEqual(merge[merge.index("--match-head-commit") + 1], HEAD)
+        reported, _ = self.enqueue(entry={"state": "QUEUED", "position": 1})
+        self.assertEqual(reported, "queued at position 1")
         reported, _ = self.enqueue(armed={"enabledAt": "date"})
         self.assertTrue(reported.startswith("auto-merge armed"))
         with self.assertRaisesRegex(ValueError, "neither queued"):
@@ -2814,6 +2839,18 @@ class EnqueueTests(unittest.TestCase):
         passed = dict(self.EJECTED, conclusion="success")
         reported, _ = self.enqueue(queue=[passed], entry=entry)
         self.assertTrue(reported.startswith("queued"))
+
+    def test_run_cancelled_by_a_job_timeout_counts_as_a_removal(self) -> None:
+        # #938: a job timeout ends the merge-group run cancelled, not failed.
+        entry = {"state": "QUEUED", "position": 1}
+        cancelled = dict(self.EJECTED, conclusion="cancelled")
+        with self.assertRaisesRegex(ValueError, "runs/3.*--retry REASON"):
+            self.enqueue(queue=[cancelled])
+        reported, _ = self.enqueue(queue=[cancelled], retry="job timeout", entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+        twice = [cancelled, dict(self.EJECTED, created_at="2026-11-12T00:00:00Z")]
+        with self.assertRaisesRegex(ValueError, "2 times.*root"):
+            self.enqueue(queue=twice, retry="job timeout", entry=entry)
 
     def test_new_head_after_ejection_needs_base_and_a_stamp(self) -> None:
         entry = {"state": "QUEUED", "position": 1}
