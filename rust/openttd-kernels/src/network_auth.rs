@@ -36,12 +36,12 @@ pub(crate) fn send_request(
         server::status(socket),
         ClientStatus::STATUS_INACTIVE | ClientStatus::STATUS_AUTH_GAME
     ) {
-        return NetworkRecvStatus(socket::specialized_close(
+        return socket::specialized_close(
             f,
             socket,
-            NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET.0,
+            NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET,
             work,
-        ));
+        );
     }
 
     debug!(
@@ -93,7 +93,7 @@ pub(crate) fn receive_request(
 ) -> NetworkRecvStatus {
     let s = f.client;
     if !matches!(
-        ServerStatus(socket::status(game)),
+        crate::network_client::status(game),
         ServerStatus::STATUS_JOIN | ServerStatus::STATUS_AUTH_GAME
     ) {
         return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
@@ -124,7 +124,7 @@ pub(crate) fn receive_enable(
     p: *mut State,
 ) -> NetworkRecvStatus {
     let s = f.client;
-    if ServerStatus(socket::status(game)) != ServerStatus::STATUS_AUTH_GAME {
+    if crate::network_client::status(game) != ServerStatus::STATUS_AUTH_GAME {
         return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let native = socket::shell(game);
@@ -145,9 +145,9 @@ pub(crate) fn receive_enable(
     (s.enable_encryption)(native, receive, send);
 
     debug!(net, 9, "Client::status = ENCRYPTED");
-    crate::raw_field::write_field!(game, status, ServerStatus::STATUS_ENCRYPTED.0);
+    crate::network_client::set_status(game, ServerStatus::STATUS_ENCRYPTED);
 
-    NetworkRecvStatus(crate::network_client::send_identify(s, f))
+    crate::network_client::send_identify(s, f)
 }
 
 /// `GetErrorForAuthenticationMethod` (`network_server.cpp`).
@@ -179,12 +179,12 @@ fn send_enable_encryption(
 
     /* Invalid packet when status is anything but STATUS_AUTH_GAME. */
     if server::status(socket) != ClientStatus::STATUS_AUTH_GAME {
-        return NetworkRecvStatus(socket::specialized_close(
+        return socket::specialized_close(
             f,
             socket,
-            NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET.0,
+            NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET,
             work,
-        ));
+        );
     }
 
     let mut p = packet_new(f, socket, PacketGameType::PACKET_SERVER_ENABLE_ENCRYPTION);

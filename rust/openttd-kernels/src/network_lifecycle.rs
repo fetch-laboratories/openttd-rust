@@ -9,9 +9,7 @@ use crate::network_action::{Actions, Resume};
 use crate::network_command::next_client;
 use crate::network_frame::Services as FrameServices;
 use crate::network_socket as socket;
-use crate::network_type::{
-    CLIENT_ID_SERVER, NETWORK_RECV_STATUS_CLIENT_QUIT, NetworkRecvStatus, SERVER_GAME_TYPE_LOCAL,
-};
+use crate::network_type::{CLIENT_ID_SERVER, NetworkRecvStatus, SERVER_GAME_TYPE_LOCAL};
 use crate::openttd::{GameMode, SwitchMode};
 use crate::services::ByteSpan;
 use crate::session::Services as SessionServices;
@@ -159,11 +157,11 @@ pub(crate) fn close_clients(
 fn close_client(s: &Services, f: &FrameServices) {
     if !(f.client_game)().is_null() {
         crate::network_client::send_quit(f);
-        crate::network_client::openttd_rust_network_client_close(
+        crate::network_client::close_connection(
             f.client,
             f,
             (f.client_game)(),
-            NETWORK_RECV_STATUS_CLIENT_QUIT,
+            NetworkRecvStatus::NETWORK_RECV_STATUS_CLIENT_QUIT,
         );
     }
     (s.coordinator_close_client)();
