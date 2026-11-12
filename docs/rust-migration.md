@@ -14,6 +14,7 @@ Building, local checks and the comparison harness. CI is in [CI](ci.md).
 | Candidate build | `build-rust` in each worktree; the game is `build-rust/openttd-rust` |
 | Rust crate | `rust/openttd-kernels` |
 
+- Read the original from any worktree with `python3 tools/migration.py original show FILE[:A-B]` or `original grep PATTERN [PATH ...]`, which run `git show <baseline commit>:src/FILE` and `git grep PATTERN <baseline commit> -- src/`; `original path` prints the reference worktree after checking it is clean and at the pin.
 - Direct CMake builds need the pinned commit object for the native-test oracle headers: `git fetch --no-tags --depth=1 origin 14ec60f248547d4d062a1160f0fc26d742319888`.
 
 ## Prerequisites and host

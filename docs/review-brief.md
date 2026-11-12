@@ -10,7 +10,7 @@ A re-check's message adds one sentence: `Re-check the fixing commits <SHAs> for 
 
 1. Read [porting](porting.md), which holds the standards you enforce, and [review](workflow.md#review).
 2. Read the stream issue body's `## Rules` section and the issue comments the work order or PR body links, the PR body, its branch's cleanup records file and its earlier review reports.
-3. Check out the reviewed head. The original is `.local/reference/openttd` in the main checkout.
+3. Check out the reviewed head. The original is `.local/reference/openttd` in the main checkout. From any worktree, read it with `python3 tools/migration.py original show FILE[:A-B]` and search it with `python3 tools/migration.py original grep PATTERN [PATH ...]`, which run `git show <baseline commit>:src/FILE` and `git grep PATTERN <baseline commit> -- src/`.
 
 ## Report only
 

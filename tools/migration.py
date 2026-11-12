@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 import evidence_replacements
@@ -889,10 +889,156 @@ def command_fmt(argv: list[str]) -> int:
     return 1 if failed else 0
 
 
+ORIGINAL_USAGE = "python3 tools/migration.py original {path | show FILE[:A-B] | grep PATTERN [PATH ...]}"
+
+
+def reference_problem() -> str | None:
+    """What keeps the shared reference worktree from being the pinned original."""
+    commit = BASELINE["commit"]
+    if not REFERENCE.is_dir():
+        return (
+            f"{REFERENCE} does not exist; `python3 tools/migration.py build` creates "
+            "it. `original show` and `original grep` read the pinned commit without it."
+        )
+    try:
+        head = git("rev-parse", "HEAD", cwd=REFERENCE)
+        changes = git(
+            "--no-optional-locks",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            cwd=REFERENCE,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return f"{REFERENCE} is not a Git worktree; move it aside and rerun the build."
+    if head != commit:
+        return (
+            f"{REFERENCE} is at {head}, not the pinned {commit} of "
+            "migration/baseline.json; check it out there before comparing."
+        )
+    if changes:
+        return (
+            f"{REFERENCE} has changes (`git -C {REFERENCE} status`); restore it to "
+            "the pinned commit. `original show` and `original grep` are unaffected."
+        )
+    return None
+
+
+def pinned_commit() -> str:
+    """The baseline commit, after checking this clone has its objects."""
+    commit = BASELINE["commit"]
+    present = subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+        cwd=ROOT,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if present.returncode:
+        raise RuntimeError(
+            f"the pinned original {commit} is not in this clone; fetch it with "
+            f"git fetch --no-tags --depth=1 origin {commit}"
+        )
+    return commit
+
+
+def original_path(text: str) -> str:
+    """A path inside the original's repository, or a refusal."""
+    path = PurePosixPath(text)
+    if path.is_absolute() or ".." in path.parts:
+        raise RuntimeError(
+            f"{text}: give a path relative to the original's root, such as src/map.cpp"
+        )
+    return str(path)
+
+
+def show_original(spec: str) -> int:
+    """Print a file, or lines A-B numbered, from the pinned commit's object."""
+    lines_match = re.search(r":(\d+)(?:-(\d+))?$", spec)
+    path = original_path(spec[: lines_match.start()] if lines_match else spec)
+    commit = pinned_commit()
+    shown = subprocess.run(
+        ["git", "show", f"{commit}:{path}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=False,
+    )
+    if shown.returncode:
+        raise RuntimeError(
+            f"{path} is not in the original at {commit}; find it with "
+            "python3 tools/migration.py original grep PATTERN"
+        )
+    if lines_match is None:
+        print(shown.stdout, end="")
+        return 0
+    lines = shown.stdout.splitlines()
+    start = int(lines_match[1])
+    end = int(lines_match[2] or start)
+    if not 1 <= start <= min(end, len(lines)):
+        raise RuntimeError(f"{path} has {len(lines)} lines; give 1 <= A <= B")
+    for number in range(start, min(end, len(lines)) + 1):
+        print(f"{number:>6}  {lines[number - 1]}")
+    return 0
+
+
+def grep_original(pattern: str, paths: list[str]) -> int:
+    """git grep -n over the pinned commit, printing path:line:text."""
+    commit = pinned_commit()
+    pathspecs = [original_path(path) for path in paths] or ["src/"]
+    command = ["git", "grep", "-n", "-E", "-e", pattern, commit, "--", *pathspecs]
+    with subprocess.Popen(
+        command, cwd=ROOT, stdout=subprocess.PIPE, text=True, errors="replace"
+    ) as process:
+        assert process.stdout is not None
+        for line in process.stdout:
+            sys.stdout.write(line.removeprefix(f"{commit}:"))
+    if process.returncode == 1:
+        print(f"no match in the original at {commit}", file=sys.stderr)
+    return process.returncode
+
+
+def command_original(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="migration.py original",
+        usage=ORIGINAL_USAGE,
+        description=(
+            "Read the pinned original (migration/baseline.json) from any worktree. "
+            "show and grep read the pinned commit's Git objects, running "
+            "`git show COMMIT:src/FILE` and `git grep -n -E PATTERN COMMIT -- src/`, "
+            "so the reference worktree's state cannot affect them."
+        ),
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser(
+        "path", help="print the reference worktree's path after checking it"
+    )
+    show = commands.add_parser("show", help="print a file, or lines A-B numbered")
+    show.add_argument(
+        "spec", metavar="FILE[:A-B]", help="for example src/map.cpp:80-120"
+    )
+    grep = commands.add_parser(
+        "grep", help="search with an extended regular expression; prints path:line:text"
+    )
+    grep.add_argument("pattern")
+    grep.add_argument("paths", nargs="*", metavar="PATH", help="default: src/")
+    args = parser.parse_args(argv)
+    if args.command == "show":
+        return show_original(args.spec)
+    if args.command == "grep":
+        return grep_original(args.pattern, args.paths)
+    if problem := reference_problem():
+        print(f"original path: {problem}", file=sys.stderr)
+        return 1
+    print(REFERENCE)
+    return 0
+
+
 # Commands that parse their own arguments and need no build lock or evidence.
 AGENT_COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "exec": command_exec,
     "fmt": command_fmt,
+    "original": command_original,
 }
 AGENT_EPILOG = f"""\
 These take their own arguments, come first and take none of the options above:
@@ -900,6 +1046,8 @@ These take their own arguments, come first and take none of the options above:
       run one command (cargo, rustc, a built binary) in the driver environment
   {FMT_USAGE}
       format the Rust workspace and Quick's Python scope at the pinned versions
+  {ORIGINAL_USAGE}
+      read the pinned original from any worktree
 """
 
 
