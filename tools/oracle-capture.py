@@ -182,6 +182,13 @@ def linkgraph_schedule(lines: Sequence[str]) -> list[str]:
     return section("trace", streams(lines)["trace"])
 
 
+def train_edge(lines: Sequence[str]) -> list[str]:
+    """Curve limits with even (original-model) trials first, then the swaps in trial order."""
+    s = streams(lines)
+    curve = s["curve"][0::2] + s["curve"][1::2]
+    return section("curve", curve) + section("swap", s["swap"])
+
+
 def policy(lines: Sequence[str]) -> list[str]:
     s = streams(lines)
     return [line for kind in "HRZAP" for line in section(kind, s[kind])]
@@ -361,6 +368,20 @@ RECIPE: dict[str, Recipe] = {
                 "",
             )
             for signature in ("void Queue(", "void Dequeue(")
+        ),
+    ),
+    "train_edge": Recipe(
+        oracle="train/edge-oracle.txt",
+        fixture="a00b377774:tools/migration/train-edge-comparison.cpp",
+        convert=train_edge,
+        extract=tuple(
+            ("train-reference.inc", "src/train_cmd.cpp", signature, "")
+            for signature in (
+                "uint16_t Train::GetCurveSpeedLimit() const",
+                "static void SwapTrainFlags(uint16_t *swap_flag1, uint16_t *swap_flag2)",
+                "static void UpdateStatusAfterSwap(Train *v)",
+                "void ReverseTrainSwapVeh(Train *v, int l, int r)",
+            )
         ),
     ),
     "tunnel": Recipe(
