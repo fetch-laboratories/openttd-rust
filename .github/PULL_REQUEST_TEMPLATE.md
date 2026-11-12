@@ -8,7 +8,7 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 
 ## Moved to Rust
 
-<!-- Describe the state and control flow Rust owns. -->
+<!-- Name the state and control flow Rust owns: types, functions and files as a list. The diff and commit titles show the rest, so do not narrate them or list mechanical callers one by one. -->
 
 ## Stays in C++
 
@@ -16,7 +16,7 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 
 ## Checks
 
-<!-- List exact commands and results. Name the harness scenarios that exercise the component. -->
+<!-- List exact commands and results, one line each. Name the harness scenarios that exercise the component. -->
 
 ## Metrics
 
@@ -30,9 +30,8 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 Review report (reviewer posts it as a separate comment):
 Reviewed commit: <sha>
 Agent: <path> | Model: <exact model> | Reasoning effort: <effort>
-Findings, checks and fixing commits: <finding, check and commit, or why it went to root; or "none">
-Compared against the original body: <functions or files>
-New callbacks duplicating a shared accessor: <each one is a finding; or "none">
-WITH_RUST bodies and openttd_rust_* exports touched and their production callers; orphan bodies, exports or declarations: <each orphan is a finding; or "none">
+Findings: <one to three sentences each: file:line, what it departs from, how it was found, the remedy. A duplicate callback or an orphan body, export or declaration is a finding. Leave this line out when there are none.>
+Disposition: <accepted | findings to remediate>, <whole PR | group N>
+An acceptance is these three lines. A re-check gives one line per finding: resolved in <sha>, or what remains.
 Shared credentials require an attributed report, not a GitHub platform approval.
 -->
