@@ -23,28 +23,28 @@ pub struct RoadTypeInfo {
 }
 #[repr(C)]
 pub struct Services {
-    pub shared: *const Shared,
+    pub assertions: bool,
+    pub company_railtypes: extern "C" fn(u8) -> u64,
+    pub company_roadtypes: extern "C" fn(u8) -> u64,
+    pub editor: extern "C" fn() -> bool,
     pub next: unsafe extern "C" fn(u32) -> EngineRef,
-    pub rail_introduction: extern "C" fn(u8) -> Introduction,
     pub rail_introduces: extern "C" fn(u8) -> u64,
-    /// `GetRoadTypeInfo`, retaining its assertion.
-    pub road_info: extern "C" fn(RoadType) -> *const RoadTypeInfo,
-    /// `RoadTypeInfo::label`.
-    pub road_label: extern "C" fn(*const RoadTypeInfo) -> RoadTypeLabel,
+    pub rail_introduction: extern "C" fn(u8) -> Introduction,
     /// `RoadTypeInfo::flags`.
     pub road_flags: extern "C" fn(*const RoadTypeInfo) -> RoadTypeFlags,
+    /// `GetRoadTypeInfo`, retaining its assertion.
+    pub road_info: extern "C" fn(RoadType) -> *const RoadTypeInfo,
+    /// `RoadTypeInfo::introduces_roadtypes`.
+    pub road_introduces: extern "C" fn(*const RoadTypeInfo) -> RoadTypes,
     /// `RoadTypeInfo::introduction_date`.
     pub road_introduction_date: extern "C" fn(*const RoadTypeInfo) -> CalendarDate,
     /// `RoadTypeInfo::introduction_required_roadtypes`.
     pub road_introduction_required: extern "C" fn(*const RoadTypeInfo) -> RoadTypes,
-    /// `RoadTypeInfo::introduces_roadtypes`.
-    pub road_introduces: extern "C" fn(*const RoadTypeInfo) -> RoadTypes,
-    pub company_railtypes: extern "C" fn(u8) -> u64,
-    pub company_roadtypes: extern "C" fn(u8) -> u64,
+    /// `RoadTypeInfo::label`.
+    pub road_label: extern "C" fn(*const RoadTypeInfo) -> RoadTypeLabel,
     pub set_company_railtypes: extern "C" fn(u8, u64),
     pub set_company_roadtypes: extern "C" fn(u8, u64),
-    pub editor: extern "C" fn() -> bool,
-    pub assertions: bool,
+    pub shared: *const Shared,
 }
 /// Handles returned here remain live only in this synchronous no-reset interval.
 pub fn services(shared: &Shared) -> &Services {
@@ -64,10 +64,21 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDTypeIntroduction" ["engine"] => Introduction { label, date, required, introduces };
     "OpenTTDTypeAvailabilityServices" ["engine"] => Services {
-        shared, next,
-        rail_introduction, rail_introduces, road_info, road_label, road_flags,
-        road_introduction_date, road_introduction_required, road_introduces,
-        company_railtypes, company_roadtypes, set_company_railtypes,
-        set_company_roadtypes, editor, assertions
+        assertions,
+        company_railtypes,
+        company_roadtypes,
+        editor,
+        next,
+        rail_introduces,
+        rail_introduction,
+        road_flags,
+        road_info,
+        road_introduces,
+        road_introduction_date,
+        road_introduction_required,
+        road_label,
+        set_company_railtypes,
+        set_company_roadtypes,
+        shared,
     };
 }
