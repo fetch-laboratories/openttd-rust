@@ -33,7 +33,7 @@ A pass is ready for review when a reviewer would have nothing left on the [every
 - Add each file the pass finishes to `migration/finished-files.txt`. Quick's residue gate then fails any later PR that adds one of those classes to it.
 - Compare each body with its original, comments and assertions included.
 
-List anything you leave in the PR body with its reason. Residue not listed there is a finding.
+List anything you leave in the PR body with its reason. Residue not listed there is a finding. Write the rest of the body as [records](workflow.md#records) says: names, not a narration of the diff.
 
 ## Checks and commits
 
