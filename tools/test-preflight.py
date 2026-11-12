@@ -451,7 +451,9 @@ class CompileCheckTests(unittest.TestCase):
                     probe.compile(command, out / "fail.log")
                 self.assertEqual(stopped.exception.code, probe.COMPILE_FAILED)
                 self.assertIn("town", (out / "fail.log").read_text())
-                self.assertEqual(probe.execute([out / "probe"], out / "run"), b"")
+                with patch.object(probe, "RUN", False):
+                    with self.assertRaisesRegex(RuntimeError, "runs nothing"):
+                        probe.execute([out / "probe"], out / "run")
         check = tool("compile-check")
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -461,6 +463,48 @@ class CompileCheckTests(unittest.TestCase):
             failing = [sys.executable, "-c", f"raise SystemExit({check.FAILED})"]
             name, code, log = check.run("auth-comparison", failing, dict(os.environ))
             self.assertEqual((name, code), ("auth-comparison", check.FAILED))
+
+    def test_a_child_refuses_every_program_but_compilers_and_reads(self) -> None:
+        # Review of #927: a comparison must not start a built binary (#923).
+        script = REPO / "tools/compile-check.py"
+        for program, code in (("git --version", 0), ("true", 4), ("./reference", 4)):
+            with self.subTest(program=program):
+                body = (
+                    "import runpy, subprocess, sys; sys.argv = ['x']; "
+                    f"check = runpy.run_path({str(script)!r}); check['guard'](); "
+                    f"subprocess.run({program.split()!r}, capture_output=True)"
+                )
+                result = subprocess.run(
+                    [sys.executable, "-c", body],
+                    cwd=REPO / "tools",
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, code, result.stderr)
+
+    def test_comparisons_guard_their_runs_and_abi_is_always_regenerated(self) -> None:
+        check = tool("compile-check")
+        for path in check.comparisons():
+            text = path.read_text()
+            runs = re.search(
+                r"probe\.execute\(|subprocess\.(run|Popen)\(|scenario\(", text
+            )
+            with self.subTest(comparison=path.stem):
+                self.assertTrue(not runs or "probe.RUN" in text)
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(check, "BUILD", Path(directory)),
+            patch.object(check, "OUT", Path(directory) / "out"),
+            patch.object(check, "changed", return_value=["src/shared.h"]),
+            patch.object(check, "generated_abi_changed", return_value=False) as abi,
+            patch.object(check, "jobs", return_value=[]),
+            patch("builtins.print"),
+        ):
+            for name in ("CMakeCache.txt", "compile_commands.json"):
+                (Path(directory) / name).write_text("")
+            (Path(directory) / "out/generated-abi").mkdir(parents=True)
+            self.assertEqual(check.check("base"), 0)
+            abi.assert_called_once()
 
 
 if __name__ == "__main__":

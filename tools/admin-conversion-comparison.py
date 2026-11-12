@@ -142,9 +142,10 @@ def main() -> None:
         # Each process compares original and candidate on the same live VM.
         # Instance-key hashes depend on allocation addresses: separate processes may
         # legitimately visit stringification collisions in a different order.
-        counts[f"{mode}_records"] = len(
-            probe.execute([executable], out / mode).splitlines()
-        )
+        if probe.RUN:
+            counts[f"{mode}_records"] = len(
+                probe.execute([executable], out / mode).splitlines()
+            )
     probe.passed("Admin conversion comparison", **counts)
 
 

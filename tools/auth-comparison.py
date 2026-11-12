@@ -298,28 +298,30 @@ def main() -> None:
         probe.compile([*commands[label], "-o", binary], f"{binary}-compile.log")
         binaries[label] = binary
     records = 0
-    for case in CASES:
-        expected = scenario(
-            binaries["reference"], binaries["reference"], probe.ENV, case
-        )
-        for server_label, client_label in (
-            ("reference", "candidate"),
-            ("candidate", "reference"),
-            ("candidate", "candidate"),
-        ):
-            name = f"{case.name}-{server_label}-{client_label}"
-            actual = scenario(
-                binaries[server_label], binaries[client_label], probe.ENV, case
+    # Compile-only preflight (#923) runs no endpoint.
+    if probe.RUN:
+        for case in CASES:
+            expected = scenario(
+                binaries["reference"], binaries["reference"], probe.ENV, case
             )
-            if actual != expected:
-                (out / f"{name}.json").write_text(
-                    json.dumps({"expected": expected, "actual": actual}, indent=2)
-                    + "\n"
+            for server_label, client_label in (
+                ("reference", "candidate"),
+                ("candidate", "reference"),
+                ("candidate", "candidate"),
+            ):
+                name = f"{case.name}-{server_label}-{client_label}"
+                actual = scenario(
+                    binaries[server_label], binaries[client_label], probe.ENV, case
                 )
-                raise RuntimeError(
-                    f"Authentication discrepancy: {name}; see retained transcript"
-                )
-            records += len(actual)
+                if actual != expected:
+                    (out / f"{name}.json").write_text(
+                        json.dumps({"expected": expected, "actual": actual}, indent=2)
+                        + "\n"
+                    )
+                    raise RuntimeError(
+                        f"Authentication discrepancy: {name}; see retained transcript"
+                    )
+                records += len(actual)
     probe.passed(
         "Authentication comparison",
         public_cases=len(CASES),

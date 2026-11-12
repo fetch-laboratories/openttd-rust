@@ -26,6 +26,8 @@ Labels = Sequence[tuple[str, Path]]
 # Preflight's compile check (#923) sets this: compile each fixture for syntax only,
 # against freshly generated ABI headers, and link or run nothing.
 GENERATED = os.environ.get("PROBE_COMPILE_ONLY", "")
+# Every comparison guards each run, and each check of a run's output, with RUN.
+RUN = not GENERATED
 COMPILE_FAILED = 3
 
 
@@ -151,8 +153,8 @@ def execute(
     cwd: Path | None = None,
 ) -> bytes:
     """Return stdout; stderr is "empty", "merged", "allowed" or "inherited"."""
-    if GENERATED:
-        return b""
+    if not RUN:
+        raise RuntimeError(f"compile-only mode runs nothing, not {argv[0]}")
     result = subprocess.run(
         list(map(str, argv)),
         input=input,
@@ -177,7 +179,7 @@ def execute(
 
 def same(expected: bytes, actual: bytes, name: str, out: Path) -> None:
     """Raise with a retained unified diff when two outputs differ."""
-    if expected == actual or GENERATED:
+    if expected == actual:
         return
     diff = difflib.unified_diff(
         expected.decode(errors="replace").splitlines(True),
@@ -204,14 +206,16 @@ def compare(
         binary = out / f"{label}-{mode}"
         argv = [*command(label, source), "-o", binary]
         compile(argv + (rust() if label == "candidate" else []), f"{binary}.log")
-        outputs[label] = execute([binary], binary, input=input, stderr=stderr)
-        same(outputs[labels[0][0]], outputs[label], binary.name, out)
-    return outputs[labels[0][0]]
+        if RUN:
+            outputs[label] = execute([binary], binary, input=input, stderr=stderr)
+            same(outputs[labels[0][0]], outputs[label], binary.name, out)
+    return outputs.get(labels[0][0], b"")
 
 
 def passed(name: str, **counts: int) -> None:
     """Recheck the reference and print the inventory run-comparisons reports."""
-    if GENERATED:
+    if not RUN:
+        print(f"{name}: every fixture compiled; nothing ran")
         return
     if not counts or 0 in counts.values():
         raise RuntimeError(f"{name} compared no cases: {counts}")

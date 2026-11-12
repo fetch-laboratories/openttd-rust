@@ -154,6 +154,8 @@ def main() -> None:
                 f"{mode}-{label}-compile",
             )
             objects.append(str(obj))
+        if not probe.RUN:
+            continue
         binary = out / mode
         command([compiler, *objects, *inputs, "-o", str(binary)], f"{mode}-link")
         probe.execute([binary], out / mode)
@@ -179,6 +181,8 @@ def main() -> None:
             or null_records[0]["exit"] != null_records[1]["exit"]
         ):
             failures.append({"mode": mode, "null_records": null_records})
+    if not probe.RUN:
+        return probe.passed("Widget parser comparison")
     if failures:
         raise RuntimeError(f"Null-generator disposition changed: {failures}")
     registered = int((out / "custom-assert.out").read_text().splitlines()[0].split()[1])
