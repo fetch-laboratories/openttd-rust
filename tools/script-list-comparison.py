@@ -143,8 +143,9 @@ def main() -> None:
         raise RuntimeError("Original binding generator changed")
 
     # Compile-only mode (#933) runs no generator, and no compile reads the bindings.
-    apis = (("ai", "AI"), ("game", "GS"), ("template", "Template"))
-    for apilc, apiuc in apis if probe.RUN else ():
+    for apilc, apiuc in (
+        (("ai", "AI"), ("game", "GS"), ("template", "Template")) if probe.RUN else ()
+    ):
         generated: list[bytes] = []
         for label, source in (("reference", REFERENCE), ("candidate", ROOT)):
             target = out / f"bindings-{label}-{apilc}.sq.hpp"
