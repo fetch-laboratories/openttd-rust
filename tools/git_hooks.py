@@ -326,6 +326,8 @@ def install(hooks: Path, force: bool) -> int:
 
 def main(argv: list[str]) -> int:
     command = argv[1] if len(argv) > 1 else ""
+    # Each shim greps for its `command == "<hook>"` line below to tell whether
+    # this branch's file handles the hook; keep that spelling.
     if command == "pre-push":
         return pre_push(sys.stdin.read().splitlines())
     if command == "pre-commit":

@@ -872,6 +872,16 @@ class CommitMsgTests(unittest.TestCase):
                 self.assertEqual(git_hooks.install(hooks, force=True), 0)
             self.assertIn(git_hooks.MARKER, (hooks / "commit-msg").read_text())
 
+    def test_every_shim_finds_its_handler_in_this_file(self) -> None:
+        # The shim greps this text to tell whether a branch's file handles the
+        # hook; if main() stops matching it, every hook would silently do nothing.
+        source = (REPO / "tools/git_hooks.py").read_text()
+        for hook in git_hooks.HOOKS:
+            with self.subTest(hook=hook):
+                self.assertIn(f'command == "{hook}"', source)
+                shim = git_hooks.SHIM.format(marker=git_hooks.MARKER, hook=hook)
+                self.assertIn(f"grep -qF 'command == \"{hook}\"'", shim)
+
     def test_the_shim_does_nothing_on_a_branch_that_predates_the_hook(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
