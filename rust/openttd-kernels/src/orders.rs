@@ -2180,17 +2180,22 @@ pub(crate) fn should_stop_at_station(
     last_station_visited: StationID,
     station: StationID,
 ) -> bool {
+    use crate::order_type::{
+        OrderDepotTypeFlag, OrderDepotTypeFlags, OrderNonStopFlag, OrderNonStopFlags,
+    };
     let order = load(p);
-    let (last_station, station) = (last_station_visited.0, station.0);
-    (order.kind() != OT_GOTO_DEPOT || order.depot_type() & 2 != 0)
-        && last_station != station
-        && order.non_stop()
-            & (if order.kind() == OT_GOTO_STATION && order.destination == station {
-                2
-            } else {
-                1
-            })
-            == 0
+    let is_dest_station = order.kind() == OT_GOTO_STATION && order.destination == station.0;
+
+    (order.kind() != OT_GOTO_DEPOT
+        || OrderDepotTypeFlags(order.depot_type()).test(OrderDepotTypeFlag::PartOfOrders))
+        // Do stop only when we've not just been there
+        && last_station_visited != station
+        /* Finally do stop when there is no non-stop flag set for this type of station. */
+        && !OrderNonStopFlags(order.non_stop()).test(if is_dest_station {
+            OrderNonStopFlag::NoDestination
+        } else {
+            OrderNonStopFlag::NoIntermediate
+        })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_should_stop(
