@@ -4,5 +4,34 @@
     "kind": "carry",
     "to": "rust/openttd-kernels/src/airport_definitions.rs | fn airport_change_info | allow clippy::too_many_lines",
     "tool": "rust"
+  },
+  {
+    "kind": "growth",
+    "counter": "callback_slots",
+    "added": {
+      "rust/expanded.rs | airport_definitions::Services.airport_size_x": 1,
+      "rust/expanded.rs | airport_definitions::Services.airport_size_y": 1,
+      "rust/expanded.rs | type_availability::Services.road_flags": 1,
+      "rust/expanded.rs | type_availability::Services.road_info": 1,
+      "rust/expanded.rs | type_availability::Services.road_introduction_date": 1,
+      "rust/expanded.rs | type_availability::Services.road_introduction_required": 1,
+      "rust/expanded.rs | type_availability::Services.road_label": 1
+    },
+    "reason": "Review of #937 group 1 (findings 1 and 2): the design-fault rule removes the single-call-site carriers dimensions, road_construction and road_introduction from the finished airport_definitions.rs and road/availability.rs. The original assigns AirportSpec::size_x and size_y separately (newgrf_act0_airports.cpp), and HasRoadTypeAvail and AddDateIntroducedRoadTypes (road.cpp) resolve GetRoadTypeInfo once and read label, flags, introduction_date, introduction_required_roadtypes and introduces_roadtypes from it. One typed slot per original field, plus the one resolution: 7 added against 3 removed, net 4.",
+    "existing_alternatives": "No Rust accessor for these RoadTypeInfo or AirportSpec fields exists. type_registry's road type_label and publication take a RoadType or return a label-and-hidden projection, so they resolve per field or remain a carrier. town.rs's road_flags is a town leaf keyed by RoadType. Rust cannot mirror RoadTypeInfo's layout: it holds strings, vectors and sprite groups.",
+    "retiring_owner": "#734",
+    "retirement_condition": "RoadTypeInfo and AirportSpec storage move to Rust, making these field reads and writes direct."
+  },
+  {
+    "kind": "growth",
+    "counter": "outside_cpp",
+    "added": {
+      "generated/abi-visit-OpenTTDAirportDefinitionServices.hpp": 1,
+      "generated/abi-visit-OpenTTDTypeAvailabilityServices.hpp": 3
+    },
+    "reason": "Generated ABI visit lines for the callback slots in the callback_slots record of this file; one line per net slot.",
+    "existing_alternatives": "The lines are generated from the layouts! declarations; no hand-written alternative exists.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires with the callback slots it lists."
   }
 ]
