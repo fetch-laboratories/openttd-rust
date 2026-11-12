@@ -77,11 +77,23 @@ class Merge:
     findings: list[Finding]
     detail: str = ""
     unclassified: bool = False
+    label: str = field(init=False)
 
-    @property
-    def label(self) -> str:
+    def __post_init__(self) -> None:
         unknown = ": could not classify" if self.unclassified else ""
-        return self.classification + unknown
+        self.label = self.classification + unknown
+
+
+@dataclass
+class Report:
+    """What --json prints."""
+
+    base: str
+    merges: list[Merge]
+    status_line: str
+    review_files: list[str]
+    exit_code: int
+    schema_version: int = 1
 
 
 def git_bytes(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[bytes]:
@@ -416,15 +428,8 @@ def run(args: argparse.Namespace, cwd: Path) -> int:
     status = status_line(merges, args.since)
     code = exit_code(merges)
     if args.json:
-        result = {
-            "schema_version": 1,
-            "base": args.base,
-            "merges": [{**asdict(m), "label": m.label} for m in merges],
-            "status_line": status,
-            "review_files": review_files(merges),
-            "exit_code": code,
-        }
-        print(json.dumps(result, indent=2))
+        report = Report(args.base, merges, status, review_files(merges), code)
+        print(json.dumps(asdict(report), indent=2))
         return code
     for merge in merges:
         print("\n".join(merge_lines(merge, args.base)))

@@ -305,6 +305,8 @@ class BaseUpdateTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         result = json.loads(out)
         self.assertEqual(result["merges"][0]["classification"], "both-sides")
+        self.assertEqual(result["merges"][0]["label"], "both-sides")
+        self.assertEqual(result["schema_version"], 1)
         self.assertIn("both-sides; needs only CI", result["status_line"])
 
     def test_conflict_resolved_with_an_edit_needs_review(self) -> None:
