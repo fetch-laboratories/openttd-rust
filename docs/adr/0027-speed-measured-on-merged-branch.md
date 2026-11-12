@@ -8,7 +8,7 @@ Speed is measured by running saved games in the original and the Rust game and c
 
 Speed is measured on the merged branch at each stocktake, not on each pull request. A rise of more than 3% is fixed in a follow-up change, and the 3% figure is provisional.
 
-An agent recorded this as the user's decision of 2026-10-22, in commit `d23471800d`, after the 17th steering review (an audit that corrects root's rules). The user's own words were not found. A stocktake is root's periodic measurement of progress ([ADR 0013](0013-stocktake-every-12-merges.md)). The ceilings the measurement is checked against are in [ADR 0014](0014-speed-ceilings.md), and [docs/speed.md](../speed.md) holds the procedure.
+An agent recorded this as the user's decision of 2026-10-22, in commit `d23471800d`, after the 17th steering review. The user's own words were not found. The ceilings the measurement is checked against are in [ADR 0014](0014-speed-ceilings.md), and [docs/speed.md](../speed.md) holds the procedure.
 
 A per-PR speed check would cost agent-hours and machine time waiting for quiet measurements.
 
