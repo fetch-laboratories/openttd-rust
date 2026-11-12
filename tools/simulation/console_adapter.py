@@ -1,6 +1,7 @@
 """Common fixture-only console compilation and frozen-object relinking."""
 
 import json
+import os
 import re
 import shlex
 import shutil
@@ -39,6 +40,15 @@ def console_adapter(
         "-I" + str(folder),
         "-I" + str(Path(__file__).resolve().parent),
     ]
+    if os.environ.get("PROBE_COMPILE_ONLY"):
+        # Preflight's compile check (#923): the adapter source alone, not linked.
+        import probe
+
+        command = probe.compile_only(compile_args)
+        if command is None:
+            raise RuntimeError(f"not a compile command: {compile_args[0]}")
+        subprocess.run(command, cwd=entry["directory"], env=env, check=True)
+        return folder / f"openttd-{kind}"
     subprocess.run(compile_args, cwd=entry["directory"], env=env, check=True)
     target = "openttd-rust" if (build / "openttd-rust").exists() else "openttd"
     command = subprocess.check_output(

@@ -29,6 +29,8 @@ HOOKS_URL = "https://github.com/OpenTTD/OpenTTD-git-hooks.git"
 WORKFLOW = migration.ROOT / ".github/workflows/ci-quick.yml"
 JOB = "quick"
 COMMITS = "Check introduced commits with the pinned inherited checker"
+# Preflight's own step after Quick's (#923): CI compiles these in its native jobs.
+PROBES = "Compile comparison probes and runtime adapters without linking"
 # Quick's `run:` steps that preflight does not run. Steps that `uses:` an action
 # (checkouts, setup-uv) are skipped too: they only prepare the runner.
 SKIPPED = {
@@ -255,6 +257,8 @@ def main() -> int:
     try:
         base, head = revision(options.base), revision(options.head)
         steps = workflow_steps(yaml.safe_load(WORKFLOW.read_text()), base)
+        probes = ["python3", "tools/compile-check.py", "--base", base]
+        steps.append(Step(PROBES, probes))
         names = selected([COMMITS] + [step.name for step in steps], options.step)
         if options.list:
             print("\n".join(names))

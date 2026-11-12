@@ -115,6 +115,7 @@ class RunTests(unittest.TestCase):
                 CompletedProcess([], 0),
                 CompletedProcess([], 1),
                 CompletedProcess([], 0),
+                CompletedProcess([], 0),
             ]
             self.assertEqual(preflight.main(), 1)
             commands = [call.args[0] for call in run.call_args_list]
@@ -122,8 +123,9 @@ class RunTests(unittest.TestCase):
                 commands[0], ["sh", "/hooks/hooks/check-commits.sh", "sha..sha"]
             )
             self.assertEqual(
-                [command[-1] for command in commands[1:]], ["false", "true"]
+                [command[-1] for command in commands[1:]], ["false", "true", "sha"]
             )
+            self.assertEqual(commands[-1][:2], ["python3", "tools/compile-check.py"])
 
     def test_selected_steps_skip_the_commit_checker(self) -> None:
         quick = workflow({"name": "Only", "run": "true"})
@@ -385,6 +387,80 @@ class OracleCaptureTests(unittest.TestCase):
         self.assertEqual(
             capture.tabbed(text), "int f()\n{\n\tif (x) {\n\t\tg();\n\t}\n}\n"
         )
+
+
+class CompileCheckTests(unittest.TestCase):
+    def test_inputs_select_headers_abi_probes_and_adapters_only(self) -> None:
+        check = tool("compile-check")
+        for path, selected in (
+            ("src/station_base.h", True),
+            ("src/rust/abi_ffi.h", True),
+            ("tools/generate-abi.py", True),
+            ("tools/auth-comparison.py", True),
+            ("tools/migration/auth-comparison.cpp", True),
+            ("tools/simulation/station-resolver-console.hpp", True),
+            ("tools/simulation/stations.py", True),
+            ("src/station_cmd.cpp", False),
+            ("rust/openttd-kernels/src/station.rs", False),
+            ("tools/preflight.py", False),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(bool(check.INPUTS.match(path)), selected)
+
+    def test_skips_with_a_notice_without_a_configured_build(self) -> None:
+        check = tool("compile-check")
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(check, "BUILD", Path(directory)),
+            patch.object(check, "changed") as changed,
+            patch("builtins.print") as printed,
+        ):
+            self.assertEqual(check.check("base"), 0)
+            changed.assert_not_called()
+        self.assertIn("no configured build-rust", printed.call_args.args[0])
+
+    def test_seeded_removed_member_fails_the_probe_by_name(self) -> None:
+        probe = tool("probe")
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out / "shared.h").write_text("struct Station { int town; };\n")
+            fixture = out / "probe.cpp"
+            fixture.write_text(
+                '#include "shared.h"\nint main() { return Station{}.town; }\n'
+            )
+            command = [
+                "c++",
+                "-std=c++20",
+                "-I",
+                out,
+                fixture,
+                "-o",
+                out / "probe",
+                "lib.a",
+            ]
+            with patch.object(probe, "GENERATED", str(out / "abi")):
+                self.assertNotIn("lib.a", probe.compile_only(command) or [])
+                # A generator run and a link alone are not compiles; neither runs.
+                self.assertIsNone(probe.compile_only([out / "strgen", "-L", out]))
+                link = probe.compile_only(["c++", out / "a.o", "-o", out / "a"])
+                self.assertIsNone(link)
+                probe.compile(command, out / "pass.log")
+                self.assertFalse((out / "probe").exists())
+                (out / "shared.h").write_text("struct Station { };\n")
+                with patch("sys.stderr"), self.assertRaises(SystemExit) as stopped:
+                    probe.compile(command, out / "fail.log")
+                self.assertEqual(stopped.exception.code, probe.COMPILE_FAILED)
+                self.assertIn("town", (out / "fail.log").read_text())
+                self.assertEqual(probe.execute([out / "probe"], out / "run"), b"")
+        check = tool("compile-check")
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(check, "OUT", Path(directory)),
+        ):
+            (Path(directory) / "logs").mkdir()
+            failing = [sys.executable, "-c", f"raise SystemExit({check.FAILED})"]
+            name, code, log = check.run("auth-comparison", failing, dict(os.environ))
+            self.assertEqual((name, code), ("auth-comparison", check.FAILED))
 
 
 if __name__ == "__main__":
