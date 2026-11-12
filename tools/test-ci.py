@@ -1335,9 +1335,10 @@ class MergeQueueTests(unittest.TestCase):
                 "CI rust PR 170 unique",
             ),
             (
+                # The head ends the request identifier, not the name (#922).
                 {"profile": "rust", "pr": "170", "request": "unique", "head": HEAD},
                 {"event_name": "workflow_dispatch", "run_id": 7, "event": {}},
-                f"CI rust PR 170 unique {HEAD}",
+                "CI rust PR 170 unique",
             ),
             (
                 {},
@@ -2181,7 +2182,8 @@ class RequestTests(unittest.TestCase):
                 record = json.loads(cast(Path, request_path).read_text())
                 self.assertEqual(record["head"], HEAD)
                 self.assertEqual(record["base"], BASE)
-                self.assertEqual(len(record["request"]), 32)
+                request_id, head = record["request"].split("-")
+                self.assertEqual((len(request_id), head), (32, HEAD))
 
     def test_full_request_stops_on_a_head_that_already_passed(self) -> None:
         passed = {
@@ -2331,9 +2333,6 @@ class RequestTests(unittest.TestCase):
         }
         other = dict(run, id=2, display_title="CI rust PR 170 other")
         self.assertEqual(ci.find_run(record, [other, run]), run)
-        # Since #922 the run name ends with the requested head.
-        named = dict(run, display_title=f"CI rust PR 170 unique {HEAD}")
-        self.assertEqual(ci.find_run(dict(record, head=HEAD), [other, named]), named)
         self.assertIsNone(ci.find_run(record, [dict(run, head_branch="untrusted")]))
         with self.assertRaises(ValueError):
             ci.find_run(record, [run, dict(run, id=3)])
@@ -2653,7 +2652,7 @@ class EnqueueTests(unittest.TestCase):
         "html_url": "https://github.com/example/fork/runs/1",
     }
     REQUESTED = {
-        "display_title": f"CI native PR 170 {'c' * 32} {HEAD}",
+        "display_title": f"CI native PR 170 {'c' * 32}-{HEAD}",
         "status": "completed",
         "conclusion": "success",
         "created_at": "2026-11-12T02:00:00Z",
@@ -2751,7 +2750,7 @@ class EnqueueTests(unittest.TestCase):
                 "other head",
                 {
                     "requested": dict(
-                        self.REQUESTED, display_title="CI native PR 170 x " + BASE
+                        self.REQUESTED, display_title=f"CI native PR 170 x-{BASE}"
                     )
                 },
                 "--profile native",

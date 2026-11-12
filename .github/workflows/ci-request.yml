@@ -1,5 +1,5 @@
 name: Requested validation
-run-name: CI ${{ inputs.profile || 'full' }} ${{ github.event_name == 'merge_group' && format('queue {0}', github.event.merge_group.head_ref) || format('PR {0} {1}{2}', inputs.pr || github.event.pull_request.number, inputs.request || format('bootstrap-{0}', github.run_id), inputs.head && format(' {0}', inputs.head) || '') }}
+run-name: CI ${{ inputs.profile || 'full' }} ${{ github.event_name == 'merge_group' && format('queue {0}', github.event.merge_group.head_ref) || format('PR {0} {1}', inputs.pr || github.event.pull_request.number, inputs.request || format('bootstrap-{0}', github.run_id)) }}
 
 on:
   workflow_dispatch:

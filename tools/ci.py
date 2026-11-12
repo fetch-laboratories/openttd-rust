@@ -139,12 +139,10 @@ def find_run(record: dict, runs: list[dict]) -> dict | None:
         ]
     else:
         title = f"CI {record['profile']} PR {record['pr']} {record['request']}"
-        # ci-request.yml names the requested head after the request since #922.
-        titles = (title, f"{title} {record.get('head')}")
         matches = [
             run
             for run in runs
-            if run.get("display_title") in titles
+            if run.get("display_title") == title
             and run.get("event") == "workflow_dispatch"
             and run.get("head_branch") == PROTECTED_REF
         ]
@@ -208,7 +206,8 @@ def request(args: argparse.Namespace) -> Path | None:
     validate_pull(pull, head)
     if args.bootstrap and args.profile != "full":
         raise ValueError("Bootstrap label requests only support --profile full")
-    request_id = uuid.uuid4().hex
+    # The identifier ends with the head, so enqueue finds a head's requests (#922).
+    request_id = f"{uuid.uuid4().hex}-{head}"
     record = {
         "schema_version": 1,
         "repository": repository,
@@ -512,7 +511,7 @@ def latest_request(repository: str, pr: int, head: str) -> dict | None:
         run
         for run in dispatched
         if (title := (run.get("display_title") or "").split())[2:4] == ["PR", str(pr)]
-        and title[-1] == head
+        and title[-1].endswith(f"-{head}")
     ]
     # Every label starts a run; only a ci:full bootstrap runs its plan.
     labeled = [
@@ -525,7 +524,7 @@ def latest_request(repository: str, pr: int, head: str) -> dict | None:
             for job in api(repository, f"actions/runs/{run['id']}/jobs")["jobs"]
         )
     ]
-    # Requests made before #922 carry no head in their title; their records do.
+    # Requests made before #922 carry no head in their identifier; their records do.
     for record_path in REQUESTS.glob("*.json"):
         record = json.loads(record_path.read_text())
         if (
