@@ -8,10 +8,12 @@
 //! `endpoints-oracle.txt` (`python3 tools/oracle-capture.py auth_endpoints`), one section per case.
 //!
 //! This test regenerates the driver's commands and replays each case in the same three pairings
-//! (original server with candidate client, the reverse, and candidate with candidate). A recorded
-//! result stands for the original endpoint; a candidate endpoint is the probe's command
-//! interpreter over the production `openttd_rust_auth_*` entries, with fixture-owned provider,
-//! password-request, entropy and debug tables in place of the program's globals.
+//! (candidate client, candidate server, both candidates). A candidate endpoint is the probe's
+//! command interpreter over the production `openttd_rust_auth_*` entries, with fixture-owned
+//! provider, password-request, entropy and debug tables in place of the program's globals. The
+//! driver always receives the original's recorded result, so every candidate is fed the original
+//! peer's recorded output, never another candidate's, and each candidate result is compared with
+//! the original's.
 //!
 //! Not observed here: the C++ adapter classes in `src/network/network_crypto.cpp` and the native
 //! `Packet` facade, which the probe's candidate called and this test does not.
@@ -869,6 +871,7 @@ fn endpoints_match_original_transcripts() {
             records += crate::oracle::check(&oracle, case.name, calls);
         }
     }
-    // The probe's `mixed_endpoint_records`.
+    // The probe's `mixed_endpoint_records`: 1,696 candidate results and the 848 recorded results
+    // the two single-candidate pairings compare with themselves.
     assert_eq!(records, 2_544);
 }
