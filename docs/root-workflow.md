@@ -61,7 +61,7 @@ Implementers queue nothing until root lifts the stop. A confirmed regression als
 
 `python3 tools/housekeeping.py` lists stale worktrees and `.local` output; `--apply` removes the listed `remove` entries. Read the dry run first.
 
-- Naming a path or run in the roadmap, or in an open issue or PR body, protects it. Removing the name releases it.
+- Naming a path or run in the roadmap, or in an open issue or PR body, protects it. Removing the name releases it. Name a worktree by its whole folder name: a shortened one, such as `t3-bc6721f0`, protects nothing.
 - A lock stays until every issue or PR its note names is closed or merged, so name the work in a lock note.
 
 ## Automatic rollback and wind-down
