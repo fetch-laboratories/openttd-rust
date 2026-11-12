@@ -42,9 +42,10 @@ def wide(out: Path, build: Path) -> int:
         argv = [*command(source), "-o", binary]
         argv += probe.rust(build) if label == "candidate" else []
         probe.compile(argv, f"{binary}.log")
-        streams[label] = probe.execute([binary], binary, stderr="merged")
-        probe.same(streams["reference"], streams[label], binary.name, out)
-    return len(streams["reference"].splitlines())
+        if probe.RUN:
+            streams[label] = probe.execute([binary], binary, stderr="merged")
+            probe.same(streams["reference"], streams[label], binary.name, out)
+    return len(streams.get("reference", b"").splitlines())
 
 
 def main() -> None:

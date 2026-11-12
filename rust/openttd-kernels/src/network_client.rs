@@ -2,6 +2,7 @@
 //! Client admission, map transfer and disconnect decisions. Save filters, presentation and
 //! socket transport stay native. Raw field accesses end before callbacks, including map loads.
 #![allow(unsafe_code, missing_docs)]
+use crate::company_type::CompanyID;
 use crate::debug::debug;
 use crate::network_frame::Services as FrameServices;
 use crate::network_frame::{
@@ -9,14 +10,7 @@ use crate::network_frame::{
 };
 use crate::network_internal::NetworkJoinStatus;
 use crate::network_socket as socket;
-use crate::network_type::{
-    NETWORK_ERROR_DESYNC, NETWORK_ERROR_GENERAL, NETWORK_ERROR_KICKED,
-    NETWORK_ERROR_NEWGRF_MISMATCH, NETWORK_ERROR_SAVEGAME_FAILED, NETWORK_RECV_STATUS_CLOSE_QUERY,
-    NETWORK_RECV_STATUS_DESYNC, NETWORK_RECV_STATUS_MALFORMED_PACKET,
-    NETWORK_RECV_STATUS_NEWGRF_MISMATCH, NETWORK_RECV_STATUS_OKAY, NETWORK_RECV_STATUS_SAVEGAME,
-    NETWORK_RECV_STATUS_SERVER_BANNED, NETWORK_RECV_STATUS_SERVER_ERROR,
-    NETWORK_RECV_STATUS_SERVER_FULL,
-};
+use crate::network_type::{ClientID, NetworkErrorCode, NetworkRecvStatus};
 use crate::openttd::{GameMode, SwitchMode};
 use crate::packet::{self, State as PacketState};
 use crate::tcp_game::PacketGameType;
@@ -104,7 +98,6 @@ crate::abi::layouts! {
     };
 }
 
-/// `ClientNetworkGameSocketHandler::ServerStatus`.
 /// `ClientNetworkGameSocketHandler::ServerStatus`: status of the connection with the server,
 /// retaining every underlying byte.
 #[repr(transparent)]
@@ -129,254 +122,342 @@ impl ServerStatus {
     pub const STATUS_ACTIVE: Self = Self(8);
 }
 
-pub(crate) mod status {
-    use super::ServerStatus;
-    pub const JOIN: u8 = ServerStatus::STATUS_JOIN.0;
-    pub const ENCRYPTED: u8 = ServerStatus::STATUS_ENCRYPTED.0;
-    pub const AUTHORIZED: u8 = ServerStatus::STATUS_AUTHORIZED.0;
-    pub const MAP_WAIT: u8 = ServerStatus::STATUS_MAP_WAIT.0;
-    pub const MAP: u8 = ServerStatus::STATUS_MAP.0;
-    pub const ACTIVE: u8 = ServerStatus::STATUS_ACTIVE.0;
+/// `ClientNetworkGameSocketHandler::status` of the live client-side socket.
+pub(crate) fn status(game: *mut socket::GameSocket) -> ServerStatus {
+    ServerStatus(socket::status(game))
 }
 
-fn status(_s: &Services, game: *mut socket::GameSocket) -> u8 {
-    socket::status(game)
+/// Stores `ClientNetworkGameSocketHandler::status` of the live client-side socket.
+pub(crate) fn set_status(game: *mut socket::GameSocket, status: ServerStatus) {
+    socket::set_status(game, status.0);
 }
-fn set_status(_s: &Services, game: *mut socket::GameSocket, value: u8) {
-    crate::raw_field::write_field!(game, status, value);
+
+/// `_network_join.company`.
+fn join_company(s: &Services) -> CompanyID {
+    CompanyID(unsafe { s.join_company.read() })
 }
-fn join_company(s: &Services) -> u8 {
-    unsafe { s.join_company.read() }
-}
+/// `_network_join_status`.
 fn set_join_status(s: &Services, value: NetworkJoinStatus) {
     unsafe { s.join_status.write(value.0) };
 }
-fn empty_packet(f: &FrameServices, game: *mut socket::GameSocket, kind: PacketGameType) -> u8 {
-    let mut p = packet_new(f, game, kind);
-    packet_send(f, game, &mut p);
-    NETWORK_RECV_STATUS_OKAY
+/// `_network_own_client_id`.
+fn own_client_id(s: &Services) -> ClientID {
+    ClientID(unsafe { s.own_client_id.read() })
+}
+/// Stores `_network_own_client_id`.
+fn set_own_client_id(s: &Services, client_id: ClientID) {
+    unsafe { s.own_client_id.write(client_id.0) };
+}
+/// Native `SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN)`.
+fn set_join_window_dirty(s: &Services) {
+    (s.dirty_join)();
+}
+/// A packet of `kind` with no payload, sent to the server.
+fn send_empty(f: &FrameServices, kind: PacketGameType) -> NetworkRecvStatus {
+    let my_client = (f.client_game)();
+    let mut p = packet_new(f, my_client, kind);
+    packet_send(f, my_client, &mut p);
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn send_join(s: &Services, f: &FrameServices) -> u8 {
+/// `ClientNetworkGameSocketHandler::SendJoin`: tell the server we would like to join.
+pub(crate) fn send_join(s: &Services, f: &FrameServices) -> NetworkRecvStatus {
     debug!(net, 9, "Client::SendJoin()");
+
     debug!(net, 9, "Client::status = JOIN");
-    let game = (f.client_game)();
-    set_status(s, game, status::JOIN);
+    let my_client = (f.client_game)();
+    set_status(my_client, ServerStatus::STATUS_JOIN);
     debug!(net, 9, "Client::join_status = AUTHORIZING");
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_AUTHORIZING);
-    (s.dirty_join)();
-    let mut p = packet_new(f, game, PacketGameType::PACKET_CLIENT_JOIN);
+    set_join_window_dirty(s);
+
+    let mut p = packet_new(f, my_client, PacketGameType::PACKET_CLIENT_JOIN);
     packet_send_string(f, &mut p, (s.revision)());
     p.send_uint32((f.connection.newgrf_version)(), packet_check(f));
-    packet_send(f, game, &mut p);
-    NETWORK_RECV_STATUS_OKAY
+    packet_send(f, my_client, &mut p);
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn send_identify(s: &Services, f: &FrameServices) -> u8 {
+/// `ClientNetworkGameSocketHandler::SendIdentify`.
+pub(crate) fn send_identify(s: &Services, f: &FrameServices) -> NetworkRecvStatus {
     debug!(net, 9, "Client::SendIdentify()");
-    let game = (f.client_game)();
-    let mut p = packet_new(f, game, PacketGameType::PACKET_CLIENT_IDENTIFY);
-    packet_send_string(f, &mut p, (s.client_name)());
-    p.send_uint8(join_company(s), packet_check(f));
-    packet_send(f, game, &mut p);
-    NETWORK_RECV_STATUS_OKAY
+
+    let my_client = (f.client_game)();
+    let mut p = packet_new(f, my_client, PacketGameType::PACKET_CLIENT_IDENTIFY);
+    packet_send_string(f, &mut p, (s.client_name)()); // Client name
+    p.send_uint8(join_company(s).0, packet_check(f)); // PlayAs
+    packet_send(f, my_client, &mut p);
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn send_grfs_ok(f: &FrameServices) -> u8 {
+/// `ClientNetworkGameSocketHandler::SendNewGRFsOk`: tell the server we got all the `NewGRFs`.
+pub(crate) fn send_newgrfs_ok(f: &FrameServices) -> NetworkRecvStatus {
     debug!(net, 9, "Client::SendNewGRFsOk()");
-    empty_packet(
-        f,
-        (f.client_game)(),
-        PacketGameType::PACKET_CLIENT_NEWGRFS_CHECKED,
-    )
+
+    send_empty(f, PacketGameType::PACKET_CLIENT_NEWGRFS_CHECKED)
 }
 
-pub(crate) fn send_getmap(s: &Services, f: &FrameServices) -> u8 {
+/// `ClientNetworkGameSocketHandler::SendGetMap`: request the map from the server.
+pub(crate) fn send_get_map(f: &FrameServices) -> NetworkRecvStatus {
     debug!(net, 9, "Client::SendGetMap()");
+
     debug!(net, 9, "Client::status = MAP_WAIT");
-    set_status(s, (f.client_game)(), status::MAP_WAIT);
-    empty_packet(f, (f.client_game)(), PacketGameType::PACKET_CLIENT_GETMAP)
+    set_status((f.client_game)(), ServerStatus::STATUS_MAP_WAIT);
+
+    send_empty(f, PacketGameType::PACKET_CLIENT_GETMAP)
 }
 
-pub(crate) fn send_map_ok(s: &Services, f: &FrameServices) -> u8 {
+/// `ClientNetworkGameSocketHandler::SendMapOk`: tell the server we received the complete map.
+pub(crate) fn send_map_ok(f: &FrameServices) -> NetworkRecvStatus {
     debug!(net, 9, "Client::SendMapOk()");
+
     debug!(net, 9, "Client::status = ACTIVE");
-    set_status(s, (f.client_game)(), status::ACTIVE);
-    empty_packet(f, (f.client_game)(), PacketGameType::PACKET_CLIENT_MAP_OK)
+    set_status((f.client_game)(), ServerStatus::STATUS_ACTIVE);
+
+    send_empty(f, PacketGameType::PACKET_CLIENT_MAP_OK)
 }
 
-pub(crate) fn send_error(f: &FrameServices, error: u8) -> u8 {
-    debug!(net, 9, "Client::SendError(): errorno={}", error);
-    let game = (f.client_game)();
-    let mut p = packet_new(f, game, PacketGameType::PACKET_CLIENT_ERROR);
-    p.send_uint8(error, packet_check(f));
-    packet_send(f, game, &mut p);
-    NETWORK_RECV_STATUS_OKAY
+/// `ClientNetworkGameSocketHandler::SendError`: send an error-packet over the network.
+pub(crate) fn send_error(f: &FrameServices, errorno: NetworkErrorCode) -> NetworkRecvStatus {
+    debug!(net, 9, "Client::SendError(): errorno={}", errorno.0);
+
+    let my_client = (f.client_game)();
+    let mut p = packet_new(f, my_client, PacketGameType::PACKET_CLIENT_ERROR);
+
+    p.send_uint8(errorno.0, packet_check(f));
+    packet_send(f, my_client, &mut p);
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn send_quit(f: &FrameServices) -> u8 {
+/// `ClientNetworkGameSocketHandler::SendQuit`: tell the server we would like to quit.
+pub(crate) fn send_quit(f: &FrameServices) -> NetworkRecvStatus {
     debug!(net, 9, "Client::SendQuit()");
-    empty_packet(f, (f.client_game)(), PacketGameType::PACKET_CLIENT_QUIT)
+
+    send_empty(f, PacketGameType::PACKET_CLIENT_QUIT)
 }
 
-pub(crate) fn receive_full(s: &Services, _f: &FrameServices, _game: *mut socket::GameSocket) -> u8 {
+/// `ClientNetworkGameSocketHandler::IsConnected`: whether the client is actually connected
+/// (and in the game).
+pub(crate) fn is_connected(f: &FrameServices) -> bool {
+    let my_client = (f.client_game)();
+    !my_client.is_null() && status(my_client) == ServerStatus::STATUS_ACTIVE
+}
+
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_FULL`.
+pub(crate) fn receive_server_full(s: &Services) -> NetworkRecvStatus {
     debug!(net, 9, "Client::Receive_SERVER_FULL()");
+
+    /* We try to join a server which is full */
     (s.show_full)();
-    NETWORK_RECV_STATUS_SERVER_FULL
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_FULL
 }
 
-pub(crate) fn receive_banned(
-    s: &Services,
-    _f: &FrameServices,
-    _game: *mut socket::GameSocket,
-) -> u8 {
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_BANNED`.
+pub(crate) fn receive_server_banned(s: &Services) -> NetworkRecvStatus {
     debug!(net, 9, "Client::Receive_SERVER_BANNED()");
+
+    /* We try to join a server where we are banned */
     (s.show_banned)();
-    NETWORK_RECV_STATUS_SERVER_BANNED
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_BANNED
 }
 
-pub(crate) fn receive_error(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_ERROR`. The native presentation maps the
+/// error to its string; `text` receives the kick message.
+pub(crate) fn receive_server_error(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
     text: *mut c_void,
-) -> u8 {
-    let error = unsafe { packet::recv_uint8(p, f.packet) };
-    debug!(net, 9, "Client::Receive_SERVER_ERROR(): error={}", error);
-    if error == NETWORK_ERROR_KICKED && unsafe { packet::can_read(p, f.packet, 1, false) } {
+) -> NetworkRecvStatus {
+    let error = NetworkErrorCode(unsafe { packet::recv_uint8(p, f.packet) });
+
+    debug!(net, 9, "Client::Receive_SERVER_ERROR(): error={}", error.0);
+
+    /* In case of kicking a client, we assume there is a kick message in the packet if we can read one byte */
+    if error == NetworkErrorCode::NETWORK_ERROR_KICKED
+        && unsafe { packet::can_read(p, f.packet, 1, false) }
+    {
         packet_recv_string(f, p, text, crate::network_config::NETWORK_CHAT_LENGTH);
-        (s.show_server_error)(error, text);
+        (s.show_server_error)(error.0, text);
     } else {
-        (s.show_server_error)(error, std::ptr::null_mut());
+        (s.show_server_error)(error.0, std::ptr::null_mut());
     }
-    if status(s, game) == status::ACTIVE {
+
+    /* Perform an emergency save if we had already entered the game */
+    if status(game) == ServerStatus::STATUS_ACTIVE {
         (s.emergency_save)();
     }
-    NETWORK_RECV_STATUS_SERVER_ERROR
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_ERROR
 }
 
-pub(crate) fn receive_grfs(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_CHECK_NEWGRFS`.
+pub(crate) fn receive_server_check_newgrfs(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
-) -> u8 {
-    if status(s, game) != status::ENCRYPTED {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status(game) != ServerStatus::STATUS_ENCRYPTED {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    let count = u32::from(unsafe { packet::recv_uint8(p, f.packet) });
+
+    let grf_count = u32::from(unsafe { packet::recv_uint8(p, f.packet) });
+
     debug!(
         net,
-        9, "Client::Receive_SERVER_CHECK_NEWGRFS(): grf_count={}", count
+        9, "Client::Receive_SERVER_CHECK_NEWGRFS(): grf_count={}", grf_count
     );
-    let result = check_grfs(f.packet, p, count, s.check_grf);
-    if result == NETWORK_RECV_STATUS_OKAY {
-        return send_grfs_ok(f);
+
+    let ret = check_newgrfs(f.packet, p, grf_count, s.check_grf);
+
+    if ret == NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY {
+        /* Start receiving the map */
+        return send_newgrfs_ok(f);
     }
+
+    /* NewGRF mismatch, bail out */
     (s.show_newgrf_mismatch)();
-    result
+    ret
 }
 
-pub(crate) fn receive_welcome(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_WELCOME`.
+pub(crate) fn receive_server_welcome(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
-) -> u8 {
-    if status(s, game) < status::ENCRYPTED || status(s, game) >= status::AUTHORIZED {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status(game) < ServerStatus::STATUS_ENCRYPTED
+        || status(game) >= ServerStatus::STATUS_AUTHORIZED
+    {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     debug!(net, 9, "Client::status = AUTHORIZED");
-    set_status(s, game, status::AUTHORIZED);
-    unsafe { s.own_client_id.write(packet::recv_uint32(p, f.packet)) };
+    set_status(game, ServerStatus::STATUS_AUTHORIZED);
+
+    set_own_client_id(s, ClientID(unsafe { packet::recv_uint32(p, f.packet) }));
+
     debug!(
         net,
         9,
         "Client::Receive_SERVER_WELCOME(): client_id={}",
-        unsafe { s.own_client_id.read() }
+        own_client_id(s).0
     );
-    send_getmap(s, f)
+
+    /* Start receiving the map */
+    send_get_map(f)
 }
 
-pub(crate) fn receive_wait(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_WAIT`.
+pub(crate) fn receive_server_wait(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
-) -> u8 {
-    if status(s, game) != status::MAP_WAIT {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    /* We set the internal wait state when requesting the map. */
+    if status(game) != ServerStatus::STATUS_MAP_WAIT {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
+
     debug!(net, 9, "Client::Receive_SERVER_WAIT()");
+
+    /* But... only now we set the join status to waiting, instead of requesting. */
     debug!(net, 9, "Client::join_status = WAITING");
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_WAITING);
     unsafe { s.join_waiting.write(packet::recv_uint8(p, f.packet)) };
-    (s.dirty_join)();
-    NETWORK_RECV_STATUS_OKAY
+    set_join_window_dirty(s);
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn receive_map_begin(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_MAP_BEGIN`. The native shell owns the
+/// `savegame` reader.
+pub(crate) fn receive_server_map_begin(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
-) -> u8 {
-    if status(s, game) < status::AUTHORIZED || status(s, game) >= status::MAP {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status(game) < ServerStatus::STATUS_AUTHORIZED || status(game) >= ServerStatus::STATUS_MAP {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     debug!(net, 9, "Client::status = MAP");
-    set_status(s, game, status::MAP);
+    set_status(game, ServerStatus::STATUS_MAP);
+
     if (s.map_exists)(socket::shell(game)) {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
+
     (s.map_create)(socket::shell(game));
+
     crate::network_frame::map_begin(unsafe { packet::recv_uint32(p, f.packet) });
+
     debug!(
         net,
         9,
         "Client::Receive_SERVER_MAP_BEGIN(): frame_counter={}",
         crate::network_frame::frame_counter()
     );
+
     unsafe {
         s.join_bytes.write(0);
         s.join_bytes_total.write(0);
     }
+
     debug!(net, 9, "Client::join_status = DOWNLOADING");
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_DOWNLOADING);
-    (s.dirty_join)();
-    NETWORK_RECV_STATUS_OKAY
+    set_join_window_dirty(s);
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn receive_map_size(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_MAP_SIZE`.
+pub(crate) fn receive_server_map_size(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
-) -> u8 {
-    if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status(game) != ServerStatus::STATUS_MAP {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
+    if !(s.map_exists)(socket::shell(game)) {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
+    }
+
     unsafe { s.join_bytes_total.write(packet::recv_uint32(p, f.packet)) };
-    (s.dirty_join)();
+    set_join_window_dirty(s);
+
     debug!(
         net,
         9,
         "Client::Receive_SERVER_MAP_SIZE(): bytes_total={}",
         unsafe { s.join_bytes_total.read() }
     );
-    NETWORK_RECV_STATUS_OKAY
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn receive_map_data(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DATA`.
+pub(crate) fn receive_server_map_data(
     s: &Services,
-    _f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
-) -> u8 {
-    if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status(game) != ServerStatus::STATUS_MAP {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
+    if !(s.map_exists)(socket::shell(game)) {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
+    }
+
+    /* We are still receiving data, put it to the file */
     let size = unsafe { (*p).remaining() };
     let data = unsafe { (*p).data.add(usize::from((*p).position)) };
     let total = (s.map_append_data)(
@@ -388,27 +469,39 @@ pub(crate) fn receive_map_data(
         (*p).transfer_commit(size as isize);
         s.join_bytes.write(total);
     }
-    (s.dirty_join)();
-    NETWORK_RECV_STATUS_OKAY
+    set_join_window_dirty(s);
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn receive_map_done(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DONE` up to its `SafeLoad`; a native map
+/// save requested during the load resumes in `map_loaded`.
+pub(crate) fn receive_server_map_done(
     s: &Services,
     f: &FrameServices,
     session: &crate::session::Services,
     game: *mut socket::GameSocket,
     frame: *mut crate::session::Frame,
     load: *mut crate::session::Load,
-) -> u8 {
-    if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status(game) != ServerStatus::STATUS_MAP {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
+    if !(s.map_exists)(socket::shell(game)) {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
+    }
+
     debug!(net, 9, "Client::Receive_SERVER_MAP_DONE()");
+
     debug!(net, 9, "Client::join_status = PROCESSING");
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_PROCESSING);
-    (s.dirty_join)();
+    set_join_window_dirty(s);
+
+    /* The map is done downloading, load it */
+    /* Set the abstract filetype. This is read during savegame load. */
     (s.map_load_prepare)(socket::shell(game), load);
-    let Ok(success) =
+
+    let Ok(load_success) =
         crate::session::safe_load(session, frame, load, crate::openttd::GameMode::NORMAL)
     else {
         let work = unsafe {
@@ -416,159 +509,223 @@ pub(crate) fn receive_map_done(
         };
         work.push(crate::network_action::Resume::MapLoaded(game));
         return if work.pending() {
-            NETWORK_RECV_STATUS_SAVEGAME
+            NetworkRecvStatus::NETWORK_RECV_STATUS_SAVEGAME
         } else {
-            NETWORK_RECV_STATUS_OKAY
+            NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
         };
     };
-    map_loaded(s, f, session, game, success)
+    map_loaded(s, f, session, game, load_success)
 }
 
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DONE` after its `SafeLoad`.
 pub(crate) fn map_loaded(
     s: &Services,
     f: &FrameServices,
     session: &crate::session::Services,
     game: *mut socket::GameSocket,
-    success: bool,
-) -> u8 {
+    load_success: bool,
+) -> NetworkRecvStatus {
     (s.map_release)(socket::shell(game));
+
+    /* Long savegame loads shouldn't affect the lag calculation! */
     socket::set_last_packet(game, (f.tcp.now)());
-    if !success {
+
+    if !load_success {
         (s.show_savegame_error)();
-        return NETWORK_RECV_STATUS_SAVEGAME;
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_SAVEGAME;
     }
-    send_map_ok(s, f);
+    /* If the savegame has successfully loaded, ALL windows have been removed,
+     * only toolbar/statusbar and gamefield are visible */
+
+    /* Say we received the map and loaded it correctly! */
+    send_map_ok(f);
+
+    /* As we skipped switch-mode, update the time we "switched". */
     (session.reset_session_stats)();
+
     (s.show_client_list)();
-    if join_company(s) == crate::company_type::COMPANY_NEW_COMPANY
-        || !(f.command.company.shared.company_valid)(join_company(s))
+
+    /* New company/spectator (invalid company) or company we want to join is not active
+     * Switch local company to spectator and await the server's judgement */
+    if join_company(s) == CompanyID::NEW_COMPANY
+        || !(f.command.company.shared.company_valid)(join_company(s).0)
     {
-        crate::company::set_local_company(
-            f.command.company,
-            crate::company_type::CompanyID::SPECTATOR,
-        );
-        if join_company(s) != crate::company_type::COMPANY_SPECTATOR {
+        crate::company::set_local_company(f.command.company, CompanyID::SPECTATOR);
+
+        if join_company(s) != CompanyID::SPECTATOR {
+            /* We have arrived and ready to start playing; send a command to make a new company;
+             * the server will give us a client-id and let us in */
             debug!(net, 9, "Client::join_status = REGISTERING");
             set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_REGISTERING);
             (s.show_join_window)();
-            crate::command_post::new_company(f.command.company.shared, unsafe {
-                s.own_client_id.read()
-            });
+            crate::command_post::new_company(f.command.company.shared, own_client_id(s).0);
         }
     } else {
-        crate::company::set_local_company(
-            f.command.company,
-            crate::company_type::CompanyID(join_company(s)),
-        );
+        /* take control over an existing company */
+        crate::company::set_local_company(f.command.company, join_company(s));
     }
+
     (s.enter_multiplayer)();
-    NETWORK_RECV_STATUS_OKAY
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn receive_error_quit(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_ERROR_QUIT`.
+pub(crate) fn receive_server_error_quit(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
-) -> u8 {
-    if status(s, game) < status::AUTHORIZED {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status(game) < ServerStatus::STATUS_AUTHORIZED {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    let id = unsafe { packet::recv_uint32(p, f.packet) };
+
+    let client_id = ClientID(unsafe { packet::recv_uint32(p, f.packet) });
+
     debug!(
         net,
-        9, "Client::Receive_SERVER_ERROR_QUIT(): client_id={}", id
+        9, "Client::Receive_SERVER_ERROR_QUIT(): client_id={}", client_id.0
     );
-    let info = (f.command.company.shared.network_client_info)(id);
-    if !info.is_null() {
-        (s.leave_error)(info, unsafe { packet::recv_uint8(p, f.packet) });
-        (s.delete_info)(info);
+
+    let ci = (f.command.company.shared.network_client_info)(client_id.0);
+    if !ci.is_null() {
+        (s.leave_error)(ci, unsafe { packet::recv_uint8(p, f.packet) });
+        (s.delete_info)(ci);
     }
+
     ((f.command.company.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
-    NETWORK_RECV_STATUS_OKAY
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn receive_quit(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_QUIT`.
+pub(crate) fn receive_server_quit(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
-) -> u8 {
-    if status(s, game) < status::AUTHORIZED {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status(game) < ServerStatus::STATUS_AUTHORIZED {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    let id = unsafe { packet::recv_uint32(p, f.packet) };
-    debug!(net, 9, "Client::Receive_SERVER_QUIT(): client_id={}", id);
-    let info = (f.command.company.shared.network_client_info)(id);
-    if info.is_null() {
-        debug!(net, 1, "Unknown client ({}) is leaving the game", id);
+
+    let client_id = ClientID(unsafe { packet::recv_uint32(p, f.packet) });
+
+    debug!(
+        net,
+        9, "Client::Receive_SERVER_QUIT(): client_id={}", client_id.0
+    );
+
+    let ci = (f.command.company.shared.network_client_info)(client_id.0);
+    if ci.is_null() {
+        debug!(
+            net,
+            1, "Unknown client ({}) is leaving the game", client_id.0
+        );
     } else {
-        (s.leave)(info);
-        (s.delete_info)(info);
+        (s.leave)(ci);
+        (s.delete_info)(ci);
     }
+
     ((f.command.company.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
-    NETWORK_RECV_STATUS_OKAY
+
+    /* If we come here it means we could not locate the client.. strange :s */
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn receive_join(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_JOIN`.
+pub(crate) fn receive_server_join(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
-) -> u8 {
-    if status(s, game) < status::AUTHORIZED {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status(game) < ServerStatus::STATUS_AUTHORIZED {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    let id = unsafe { packet::recv_uint32(p, f.packet) };
-    debug!(net, 9, "Client::Receive_SERVER_JOIN(): client_id={}", id);
-    let info = (f.command.company.shared.network_client_info)(id);
-    if !info.is_null() {
-        (s.join)(info);
+
+    let client_id = ClientID(unsafe { packet::recv_uint32(p, f.packet) });
+
+    debug!(
+        net,
+        9, "Client::Receive_SERVER_JOIN(): client_id={}", client_id.0
+    );
+
+    let ci = (f.command.company.shared.network_client_info)(client_id.0);
+    if !ci.is_null() {
+        (s.join)(ci);
     }
+
     ((f.command.company.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
-    NETWORK_RECV_STATUS_OKAY
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn receive_shutdown(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_SHUTDOWN`.
+pub(crate) fn receive_server_shutdown(
     s: &Services,
-    _f: &FrameServices,
     game: *mut socket::GameSocket,
-) -> u8 {
+) -> NetworkRecvStatus {
     debug!(net, 9, "Client::Receive_SERVER_SHUTDOWN()");
-    if status(s, game) >= status::JOIN {
+
+    /* Only when we're trying to join we really
+     * care about the server shutting down. */
+    if status(game) >= ServerStatus::STATUS_JOIN {
         (s.show_shutdown)();
     }
-    if status(s, game) == status::ACTIVE {
+
+    if status(game) == ServerStatus::STATUS_ACTIVE {
         (s.emergency_save)();
     }
-    NETWORK_RECV_STATUS_SERVER_ERROR
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_ERROR
 }
 
-pub(crate) fn receive_newgame(
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_NEWGAME`.
+pub(crate) fn receive_server_newgame(
     s: &Services,
-    _f: &FrameServices,
     game: *mut socket::GameSocket,
-) -> u8 {
+) -> NetworkRecvStatus {
     debug!(net, 9, "Client::Receive_SERVER_NEWGAME()");
-    if status(s, game) >= status::JOIN {
+
+    /* Only when we're trying to join we really
+     * care about the server shutting down. */
+    if status(game) >= ServerStatus::STATUS_JOIN {
+        /* To throttle the reconnects a bit, every clients waits its
+         * Client ID modulo 16 + 1 (value 0 means no reconnect).
+         * This way reconnects should be spread out a bit. */
         #[allow(clippy::cast_possible_truncation)]
         unsafe {
-            s.reconnect.write((s.own_client_id.read() % 16 + 1) as u8);
+            s.reconnect.write((own_client_id(s).0 % 16 + 1) as u8);
         };
         (s.show_reboot)();
     }
-    if status(s, game) == status::ACTIVE {
+
+    if status(game) == ServerStatus::STATUS_ACTIVE {
         (s.emergency_save)();
     }
-    NETWORK_RECV_STATUS_SERVER_ERROR
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_ERROR
 }
 
-fn close(s: &Services, f: &FrameServices, game: *mut socket::GameSocket, result: u8) -> u8 {
-    crate::movement::native_assert(f.command.company.shared, result != NETWORK_RECV_STATUS_OKAY);
+/// `ClientNetworkGameSocketHandler::CloseConnection(NetworkRecvStatus)`.
+pub(crate) fn close_connection(
+    s: &Services,
+    f: &FrameServices,
+    game: *mut socket::GameSocket,
+    status: NetworkRecvStatus,
+) -> NetworkRecvStatus {
+    crate::movement::native_assert(
+        f.command.company.shared,
+        status != NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY,
+    );
     if socket::pending(game) {
-        return result;
+        return status;
     }
+
     crate::movement::native_assert(f.command.company.shared, (f.tcp.valid)(socket::tcp(game)));
+
     if !crate::network_frame::socket_has_quit(f, game) {
         debug!(
             net,
@@ -576,11 +733,19 @@ fn close(s: &Services, f: &FrameServices, game: *mut socket::GameSocket, result:
             "Closed client connection {}",
             (f.dispatch.client_id)(game)
         );
+
         socket::send_closing(f, game);
+
+        /* Wait a number of ticks so our leave message can reach the server.
+         * This is especially needed for Windows servers as they seem to get
+         * the "socket is closed" message before receiving our leave message,
+         * which would trigger the server to close the connection as well. */
         (s.wait_for_quit_packets)();
     }
+
     socket::defer(game);
-    result
+
+    status
 }
 
 #[unsafe(no_mangle)]
@@ -588,112 +753,161 @@ pub extern "C" fn openttd_rust_network_client_close(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
-    result: u8,
+    status: u8,
 ) -> u8 {
-    close(s, f, game, result)
+    close_connection(s, f, game, NetworkRecvStatus(status)).0
 }
 
+/// `ClientNetworkGameSocketHandler::ClientError`: handle an error coming from the client side.
 pub(crate) fn client_error(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
-    result: u8,
+    res: NetworkRecvStatus,
 ) {
     if socket::pending(game) {
         return;
     }
-    if result == NETWORK_RECV_STATUS_CLOSE_QUERY {
+
+    /* First, send a CLIENT_ERROR to the server, so it knows we are
+     *  disconnected (and why!) */
+
+    /* We just want to close the connection.. */
+    if res == NetworkRecvStatus::NETWORK_RECV_STATUS_CLOSE_QUERY {
         unsafe { (f.packet.mark_closed)(socket::base(game)) };
-        close(s, f, game, result);
+        close_connection(s, f, game, res);
         (f.lifecycle.set_networking)(false);
+
         (f.command.company.close_network_status)();
         return;
     }
-    let error = match result {
-        NETWORK_RECV_STATUS_DESYNC => NETWORK_ERROR_DESYNC,
-        NETWORK_RECV_STATUS_SAVEGAME => NETWORK_ERROR_SAVEGAME_FAILED,
-        NETWORK_RECV_STATUS_NEWGRF_MISMATCH => NETWORK_ERROR_NEWGRF_MISMATCH,
-        _ => NETWORK_ERROR_GENERAL,
+
+    let errorno = match res {
+        NetworkRecvStatus::NETWORK_RECV_STATUS_DESYNC => NetworkErrorCode::NETWORK_ERROR_DESYNC,
+        NetworkRecvStatus::NETWORK_RECV_STATUS_SAVEGAME => {
+            NetworkErrorCode::NETWORK_ERROR_SAVEGAME_FAILED
+        }
+        NetworkRecvStatus::NETWORK_RECV_STATUS_NEWGRF_MISMATCH => {
+            NetworkErrorCode::NETWORK_ERROR_NEWGRF_MISMATCH
+        }
+        _ => NetworkErrorCode::NETWORK_ERROR_GENERAL,
     };
-    if matches!(
-        result,
-        NETWORK_RECV_STATUS_SERVER_ERROR
-            | NETWORK_RECV_STATUS_SERVER_FULL
-            | NETWORK_RECV_STATUS_SERVER_BANNED
-    ) {
-        close(s, f, game, result);
+
+    if res == NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_ERROR
+        || res == NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_FULL
+        || res == NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_BANNED
+    {
+        /* This means the server closed the connection. Emergency save is
+         * already created if this was appropriate during handling of the
+         * disconnect. */
+        close_connection(s, f, game, res);
     } else {
-        send_error(f, error);
-        close(s, f, game, result);
+        /* This means we as client made a boo-boo. */
+        send_error(f, errorno);
+
+        /* Close connection before we make an emergency save, as the save can
+         * take a bit of time; better that the server doesn't stall while we
+         * are doing the save, and already disconnects us. */
+        close_connection(s, f, game, res);
         (s.emergency_save)();
     }
+
     (f.command.company.close_network_status)();
+
     if crate::session::mode() != GameMode::MENU {
         crate::session::set_pending(SwitchMode::MENU);
     }
     (f.lifecycle.set_networking)(false);
 }
 
-const SECOND: i64 = 1_000_000_000;
-static LAST_LAG: crate::game_state::GameState<i64> = crate::game_state::GameState::new(0);
+/// `ClientNetworkGameSocketHandler::CheckConnection`: check the connection's state, i.e. is
+/// the connection still up? Durations are `steady_clock` nanoseconds.
 pub(crate) fn check_connection(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     work: crate::network_action::Actions,
 ) {
-    if status(s, game) < status::AUTHORIZED {
+    /// `std::chrono::seconds(1)` in `steady_clock` nanoseconds.
+    const SECONDS: i64 = 1_000_000_000;
+
+    /* Only once we're authorized we can expect a steady stream of packets. */
+    if status(game) < ServerStatus::STATUS_AUTHORIZED {
         return;
     }
+
+    /* 5 seconds are roughly twice the server's "you're slow" threshold (1 game day). */
     let lag = (f.tcp.now)().wrapping_sub(socket::last_packet(game));
-    if lag < 5 * SECOND {
+    if lag < 5 * SECONDS {
         return;
     }
-    if lag > 20 * SECOND {
-        socket::close(f, game, work);
+
+    /* 20 seconds are (way) more than 4 game days after which
+     * the server will forcefully disconnect you. */
+    if lag > 20 * SECONDS {
+        socket::close_connection(f, game, work);
         return;
     }
-    if unsafe { LAST_LAG.get().read() } / SECOND == lag / SECOND {
+
+    /* Prevent showing the lag message every tick; just update it when needed. */
+    if unsafe { LAST_LAG.get().read() } / SECONDS == lag / SECONDS {
         return;
     }
+
     unsafe { LAST_LAG.get().write(lag) };
-    (s.show_lag)(lag / SECOND);
+    (s.show_lag)(lag / SECONDS);
 }
+
+/// `CheckConnection`'s function-local `static last_lag`.
+static LAST_LAG: crate::game_state::GameState<i64> = crate::game_state::GameState::new(0);
 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_client_is_connected_abi(
-    s: &Services,
+    _s: &Services,
     f: &FrameServices,
 ) -> u8 {
-    let game = (f.client_game)();
-    u8::from(!game.is_null() && status(s, game) == status::ACTIVE)
+    u8::from(is_connected(f))
+}
+
+/// `NetworkClient_Connected`: is called after a client is connected to the server.
+pub(crate) fn network_client_connected(s: &Services, f: &FrameServices) {
+    /* Set the frame-counter to 0 so nothing happens till we are ready */
+    crate::network_frame::client_connected();
+
+    debug!(net, 9, "Client::NetworkClient_Connected()");
+
+    /* Request the game-info */
+    send_join(s, f);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_client_connected(s: &Services, f: &FrameServices) {
-    crate::network_frame::client_connected();
-    debug!(net, 9, "Client::NetworkClient_Connected()");
-    send_join(s, f);
+    network_client_connected(s, f);
 }
 
-fn check_grfs(
+/// The `Receive_SERVER_CHECK_NEWGRFS` loop over `grf_count` identifiers; `find` is the native
+/// `FindGRFConfig(FGCM_EXACT)` lookup with its not-found debug line.
+fn check_newgrfs(
     services: &packet::Services,
     p: *mut PacketState,
-    count: u32,
-    check: extern "C" fn(u32, *const u8) -> bool,
-) -> u8 {
-    let mut result = NETWORK_RECV_STATUS_OKAY;
-    for _ in 0..count {
-        let id = unsafe { packet::recv_uint32(p, services) };
-        let mut hash = [0; crate::md5::MD5_HASH_BYTES];
-        unsafe {
-            (*p).recv_bytes(&mut hash);
+    mut grf_count: u32,
+    find: extern "C" fn(u32, *const u8) -> bool,
+) -> NetworkRecvStatus {
+    let mut ret = NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
+
+    /* Check all GRFs */
+    while grf_count > 0 {
+        let c = unsafe { crate::network_game_info::deserialize_grf_identifier(p, services) };
+
+        /* Check whether we know this GRF */
+        if !find(c.grfid, c.md5sum.as_ptr()) {
+            /* We do not know this GRF, bail out of initialization */
+            ret = NetworkRecvStatus::NETWORK_RECV_STATUS_NEWGRF_MISMATCH;
         }
-        if !check(id, hash.as_ptr()) {
-            result = NETWORK_RECV_STATUS_NEWGRF_MISMATCH;
-        }
+        grf_count -= 1;
     }
-    result
+
+    ret
 }
 
 #[cfg(test)]
@@ -729,8 +943,8 @@ mod tests {
         p.send_bytes(&[42; 16]);
         p.send_bytes(&8_u32.to_le_bytes());
         assert_eq!(
-            check_grfs(packet::test_services(), &raw mut p, 2, check),
-            NETWORK_RECV_STATUS_NEWGRF_MISMATCH
+            check_newgrfs(packet::test_services(), &raw mut p, 2, check),
+            NetworkRecvStatus::NETWORK_RECV_STATUS_NEWGRF_MISMATCH
         );
         assert_eq!(p.position, 24);
     }

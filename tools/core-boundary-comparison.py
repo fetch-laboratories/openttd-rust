@@ -139,12 +139,14 @@ def encoded(out: Path) -> int:
                 ["-O0", *sources, *flags],
             )
             builds += 1
+            if not probe.RUN:
+                continue
             probe.execute([binary, "--logs"], f"{binary}-logs")
             outcomes[label] = [
                 outcome(binary, argument)
                 for argument in ("--assert-numeric", "--assert-string")
             ]
-        if outcomes["reference"] != outcomes["candidate"]:
+        if probe.RUN and outcomes["reference"] != outcomes["candidate"]:
             raise RuntimeError(f"Encoded assertion outcomes differ in {mode}")
     sources = [scoped(out, "candidate", probe.ROOT)]
     sources += [probe.ROOT / "src" / name for name in ENCODED_SOURCES]
@@ -159,7 +161,7 @@ def encoded(out: Path) -> int:
         "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
         "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
     }
-    for argument in ("--logs", "--copy-throw"):
+    for argument in ("--logs", "--copy-throw") if probe.RUN else ():
         probe.execute([sanitized, argument], f"{sanitized}{argument}", env=env)
     return builds + 1
 
@@ -177,7 +179,10 @@ def packet(out: Path) -> int:
                 "PACKET",
                 [*flags, "-DUNIX", "-Werror=mismatched-tags", *sources],
             )
-            outputs[label] = probe.execute([binary], binary)
+            if probe.RUN:
+                outputs[label] = probe.execute([binary], binary)
+        if not probe.RUN:
+            continue
         if not outputs["reference"].endswith(b"packet boundary passed\n"):
             raise RuntimeError(f"Packet boundary stream incomplete in {mode}")
         probe.same(outputs["reference"], outputs["candidate"], f"packet-{mode}", out)
@@ -195,7 +200,8 @@ def main() -> None:
                 *(source / "src" / name for name in sources),
             ]
             binary = build(out, section.lower(), label, section, flags)
-            probe.execute([binary], binary, stderr="merged")
+            if probe.RUN:
+                probe.execute([binary], binary, stderr="merged")
             builds += 1
     builds += encoded(out)
     builds += packet(out)

@@ -487,7 +487,7 @@ fn client_game_loop(
                     s.client,
                     s,
                     (s.client_game)(),
-                    crate::network_type::NETWORK_RECV_STATUS_DESYNC,
+                    NetworkRecvStatus::NETWORK_RECV_STATUS_DESYNC,
                 );
                 return Ok(false);
             }

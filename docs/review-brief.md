@@ -58,7 +58,7 @@ To confirm a suspected difference, run the narrowest check, after `eval "$(pytho
 
 ## Report
 
-Post one report on the PR in this skeleton: `Reviewed commit: <sha>`, then the attribution exactly as `Agent: <your name> | Model: <model> | Reasoning effort: <effort>`, then `Findings:` when there are any, then `Disposition: <accepted | findings to remediate>, <whole PR | group N>`. The lint gates parse the attribution in this exact form. The PR template still shows an older four-field skeleton; use this one (root, 2026-11-12).
+Post one report on the PR, with the PR template's review skeleton, starting `Reviewed commit: <sha>` and attributed exactly as `Agent: <your name> | Model: <model> | Reasoning effort: <effort>`. The lint gates parse this exact form.
 
 - For each finding give, in one to three sentences:
   - its location (file:line at the reviewed head);
