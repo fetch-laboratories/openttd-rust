@@ -1,0 +1,6 @@
+[
+  {"kind": "carry", "tool": "rust", "from": "rust/openttd-kernels/src/follow_track.rs | struct State | allow clippy::struct_excessive_bools", "to": "rust/openttd-kernels/src/follow_track.rs | struct CFollowTrackT | allow clippy::struct_excessive_bools"},
+  {"kind": "carry", "tool": "rust", "from": "rust/openttd-kernels/src/follow_track.rs | impl State > fn follow_with_road | allow clippy::inline_always", "to": "rust/openttd-kernels/src/follow_track.rs | impl CFollowTrackT > fn follow_with_road | allow clippy::inline_always"},
+  {"kind": "carry", "tool": "rust", "from": "rust/openttd-kernels/src/follow_track.rs | impl State > fn query | allow clippy::inline_always", "to": "rust/openttd-kernels/src/follow_track.rs | impl CFollowTrackT > fn query_new_tile_track_status | allow clippy::inline_always"},
+  {"kind": "carry", "tool": "rust", "from": "rust/openttd-kernels/src/pathfinder_func.rs | fn road_trackdirs_in_world | allow clippy::inline_always", "to": "rust/openttd-kernels/src/pathfinder_func.rs | fn get_trackdir_bits_for_road_in_world | allow clippy::inline_always"}
+]

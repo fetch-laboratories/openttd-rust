@@ -411,7 +411,6 @@ impl CFollowTrackT {
     }
 
     /// Follow the exitdir from `old_tile` and fill `new_tile` and `tiles_skipped`
-    #[allow(clippy::if_same_then_else)] // The original's separate rail and road station tests.
     fn follow_tile_exit(&mut self, w: &World<'_>) {
         self.is_station = false;
         self.is_bridge = false;
@@ -453,9 +452,9 @@ impl CFollowTrackT {
         );
 
         /* special handling for stations */
-        if self.mode == RAIL && w.has_station_tile_rail(self.new_tile) {
-            self.is_station = true;
-        } else if self.mode == ROAD && w.is_station_road_stop_tile(self.new_tile) {
+        if (self.mode == RAIL && w.has_station_tile_rail(self.new_tile))
+            || (self.mode == ROAD && w.is_station_road_stop_tile(self.new_tile))
+        {
             self.is_station = true;
         }
     }
