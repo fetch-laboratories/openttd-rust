@@ -95,9 +95,9 @@ Fix these before integration, whatever the timing; root grants no exceptions. A 
 
 ### Tests in Rust and C++
 
-- New tests are Rust tests or harness scenarios, never C++ ([ADR 0001](adr/0001-full-rust-rewrite.md)). C++ under `tools/` and `src/tests` is fork C++ that must retire; it shrinks or holds.
+- New tests are Rust tests or harness scenarios, not C++ ([ADR 0001](adr/0001-full-rust-rewrite.md)); the boundary observation below is the one exception. C++ under `tools/` and `src/tests` is fork C++ that must retire; it shrinks or holds.
 - A C++ test that checks code still written in C++ stays in C++ until that code is ported; it is not converted early ([ADR 0023](adr/0023-cpp-tests-stay-until-code-is-ported.md)). This covers any check of a live native binding, pool or production caller; a mock of that boundary carries no observation. The kept test retires inside the port that retires the code it checks, counted in that port's C++ removed.
-- An observation of the C++ calling boundary itself that Rust tests and the harness cannot make goes in such a kept native test. Name it in the PR, with the boundary whose retirement removes it, for reviewer acceptance.
+- The one exception: an observation of the C++ calling boundary itself that Rust tests and the harness cannot make may add C++ test code, in a kept native test where one fits. Name it in the PR, with the boundary whose retirement removes it, for reviewer acceptance.
 - Move a C++ test to Rust or the harness only where Rust or the harness reaches what it observed, and only where the counted C++ it deletes clearly exceeds the counted C++ its oracle recipe adds ([ADR 0004](adr/0004-cleanup-before-porting.md)); its first checkpoint reports both.
 - Before removing a fixture, carry its observation into Rust tests or the harness with expectations taken from the original ([final exit](planning.md#goal-and-phases)), and register the replacement in `migration/evidence-replacements/` (`tools/evidence_replacements.py`). Quick's lost-cases step rejects a removed native CTest case without its `ctest:` or `source:` record; review judges that the named replacements carry every original observation.
 - #736 items follow the oracle rule recorded on #736, which stores each distinct output once.

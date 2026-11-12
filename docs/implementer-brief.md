@@ -24,7 +24,7 @@ Readers: implementation agents, when starting a work order and again before mark
 
 ### Evidence
 
-- Use the harness and Rust tests; write no new C++ test, and leave a C++ test of code still in C++ where it is ([tests in Rust and C++](porting.md#tests-in-rust-and-c)).
+- Use the harness and Rust tests; a new C++ test needs the boundary exception, and a C++ test of code still in C++ stays where it is ([tests in Rust and C++](porting.md#tests-in-rust-and-c)).
 - Add a scenario or test only for behaviour existing checks cannot distinguish, and name that behaviour in the PR ([evidence](porting.md#evidence)).
 - `cfg(test)` never changes a production body ([tests](porting.md#tests)).
 

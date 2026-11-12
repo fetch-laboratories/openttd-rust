@@ -75,7 +75,7 @@ ADRs 0018 to 0020 also fall under [ADR 0008](0008-paid-ci-cost-needs-approval.md
 | [0021](0021-integer-wrappers-not-rust-enums.md) | Rust wraps the original's integer types instead of using Rust enums |
 | [0022](0022-progress-is-net-cpp-removed.md) | Progress is measured by net lines of C++ removed |
 | [0023](0023-cpp-tests-stay-until-code-is-ported.md) | C++ tests of C++ code stay in C++ until that code is ported |
-| [0024](0024-lint-ratchet-scope.md) | The lint check enforces only parameter count and safety documentation |
+| [0024](0024-lint-ratchet-scope.md) | The lint check enforces only parameter count, safety documentation and production assertions |
 | [0025](0025-two-review-stages.md) | A pull request gets at most two review stages |
 | [0026](0026-roadmap-commit-timing.md) | Root commits the roadmap only at a stocktake, a change of course or wind-down |
 | [0027](0027-speed-measured-on-merged-branch.md) | Speed is measured on the merged branch, not on each pull request |
