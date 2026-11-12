@@ -496,6 +496,24 @@ def positive(text: str) -> int:
     return value
 
 
+def dispatch(args: argparse.Namespace) -> None:
+    if args.command == "queue-wait":
+        merge = queue_wait(
+            repository_of(args.repo), args.pr, args.timeout, args.interval
+        )
+        print(f"PR #{args.pr} merged: {merge}")
+    elif args.command == "ready":
+        ready(args)
+    elif args.command == "request":
+        path = request(args)
+        if path and args.wait:
+            wait(path, WAIT_TIMEOUT, 15)
+    elif args.command == "wait":
+        wait(args.request_file, args.timeout, args.interval)
+    else:
+        report_status(args.request_file)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -540,21 +558,7 @@ def main() -> int:
     queued.add_argument("--interval", type=positive, default=15)
     args = parser.parse_args()
     try:
-        if args.command == "queue-wait":
-            merge = queue_wait(
-                repository_of(args.repo), args.pr, args.timeout, args.interval
-            )
-            print(f"PR #{args.pr} merged: {merge}")
-        elif args.command == "ready":
-            ready(args)
-        elif args.command == "request":
-            path = request(args)
-            if path and args.wait:
-                wait(path, WAIT_TIMEOUT, 15)
-        elif args.command == "wait":
-            wait(args.request_file, args.timeout, args.interval)
-        else:
-            report_status(args.request_file)
+        dispatch(args)
         return 0
     except WaitTimeout as timeout:
         print(timeout)
