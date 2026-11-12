@@ -443,7 +443,7 @@ class GateTests(unittest.TestCase):
                 env = {"PR": "170", "HEAD": HEAD, "PROFILE": profile}
                 result = execute_script("ci-request.yml", "plan", PULL, env=env)
                 self.assertEqual(result["outputs"]["base"], PARENT)
-                self.assertNotEqual(PULL["base"]["sha"], PARENT)
+                self.assertNotEqual(BASE, PARENT)
         orphan = {MERGE: {"parents": [], "commit": {"tree": {"sha": TREE}}}}
         env = {"PR": "170", "HEAD": HEAD, "PROFILE": "native"}
         world = {"commits": orphan}
@@ -1352,18 +1352,27 @@ class MergeQueueTests(unittest.TestCase):
         ):
             triggers = cast(dict[Any, Any], workflow(filename))[True]
             self.assertIn("merge_group", triggers, filename)
+            if quick := filename == "ci-quick.yml":
+                self.assertIn("ready_for_review", triggers["pull_request"]["types"])
             condition = job(filename, name)["if"]
-            for event, checkout, expected in (
-                ("pull_request", "", True),
-                ("push", "", True),
-                ("merge_group", "", False),
+            for event, checkout, draft, expected in (
+                ("pull_request", "", False, True),
+                # A draft's checkpoint runs no Quick; ready_for_review runs it (#920).
+                ("pull_request", "", True, not quick),
+                ("push", "", False, True),
+                ("merge_group", "", False, False),
                 # Full calls Quick inside the merge group.
-                ("merge_group", MERGE, filename == "ci-quick.yml"),
+                ("merge_group", MERGE, False, quick),
+                # A requested profile or bootstrap calls Quick, draft or not.
+                ("pull_request", MERGE, True, True),
             ):
-                with self.subTest(filename=filename, event=event, checkout=checkout):
+                with self.subTest(filename=filename, event=event, draft=draft):
                     observed = evaluate(
                         condition,
-                        github={"event_name": event},
+                        github={
+                            "event_name": event,
+                            "event": {"pull_request": {"draft": draft}},
+                        },
                         inputs={"checkout-ref": checkout},
                     )
                     self.assertEqual(observed, expected)
@@ -2076,7 +2085,52 @@ def pull_and_statuses(
     )
 
 
+REQUIRE_STAMP = ci.require_stamp
+
+
 class RequestTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Stamps are tools/test-preflight.py's; these tests read only the request.
+        stamp = patch.object(ci, "require_stamp")
+        self.stamp = stamp.start()
+        self.addCleanup(stamp.stop)
+
+    def test_request_and_ready_need_a_stamp_before_any_change(self) -> None:
+        self.stamp.side_effect = ValueError("no preflight stamp")
+        args = argparse.Namespace(
+            repo="example/fork",
+            pr=170,
+            profile="native",
+            bootstrap=False,
+            unstamped=None,
+        )
+        with (
+            patch.object(ci, "api", side_effect=pull_and_statuses([])),
+            patch.object(ci, "gh") as gh,
+        ):
+            for command in (ci.request, ci.ready):
+                with self.assertRaisesRegex(ValueError, "no preflight stamp"):
+                    command(args)
+            gh.assert_not_called()
+        self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
+
+    def test_unstamped_request_is_logged_not_checked(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(
+                ci.preflight_stamp, "common_local", return_value=Path(directory)
+            ),
+            patch.object(ci.preflight_stamp, "stamp_for") as stamp_for,
+            patch("builtins.print"),
+        ):
+            REQUIRE_STAMP(917, HEAD, "seeded debug-assert control")
+            stamp_for.assert_not_called()
+            (entry,) = (Path(directory) / "overrides.log").read_text().splitlines()
+        self.assertEqual(
+            {k: v for k, v in json.loads(entry).items() if k in ("kind", "reason")},
+            {"kind": "unstamped", "reason": "seeded debug-assert control"},
+        )
+
     def test_each_profile_dispatches_captured_head_on_protected_ref(self) -> None:
         for profile in ci.PROFILES:
             with tempfile.TemporaryDirectory() as directory:
@@ -2085,6 +2139,7 @@ class RequestTests(unittest.TestCase):
                     pr=170,
                     profile=profile,
                     bootstrap=False,
+                    unstamped=None,
                     request_file=Path(directory) / "request.json",
                 )
                 with (
@@ -2143,6 +2198,7 @@ class RequestTests(unittest.TestCase):
                     pr=170,
                     profile=profile,
                     bootstrap=bootstrap,
+                    unstamped=None,
                     request_file=Path(directory) / "request.json",
                 )
                 with (
@@ -2200,6 +2256,7 @@ class RequestTests(unittest.TestCase):
                     pr=170,
                     profile=profile,
                     bootstrap=bootstrap,
+                    unstamped=None,
                     request_file=Path(directory) / "request.json",
                 )
                 with (
@@ -2229,6 +2286,7 @@ class RequestTests(unittest.TestCase):
                 pr=170,
                 profile="full",
                 bootstrap=False,
+                unstamped=None,
                 request_file=Path(directory) / "request.json",
             )
             with (

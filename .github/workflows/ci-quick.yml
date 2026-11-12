@@ -1,8 +1,10 @@
 name: Quick validation
 
 on:
+  # A draft PR's checkpoints run no Quick; marking it ready runs Quick on its head (#920).
   pull_request:
     branches: [rust-migration]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [rust-migration]
   # A required check must report on each merge group too; Full calls this workflow there.
@@ -28,7 +30,9 @@ concurrency:
 jobs:
   quick:
     name: Quick validation
-    if: inputs.checkout-ref != '' || github.event_name != 'merge_group'
+    if: >-
+      inputs.checkout-ref != '' || github.event_name == 'push' ||
+      github.event_name == 'pull_request' && !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
