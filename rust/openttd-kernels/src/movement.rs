@@ -184,7 +184,6 @@ pub struct MovementServices {
     pub road_compatible: extern "C" fn(VehicleRef) -> u64,
     pub road_type_speed: extern "C" fn(crate::services::RoadType) -> u16,
     pub road_kind: extern "C" fn(VehicleRef) -> crate::services::RoadTramType,
-    pub road_vehicle: *const crate::road::Leaves,
     pub resolve: extern "C" fn(crate::vehicle::VehicleRef) -> MovementVehicle,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
@@ -218,7 +217,6 @@ impl MovementServices {
         pub(crate) fn train -> crate::train::Leaves;
         pub(crate) fn vehicle -> crate::vehicle::VehicleServices;
         pub(crate) fn tunnel_bridge -> crate::tunnelbridge_cmd::TunnelBridgeServices;
-        fn road_vehicle -> crate::road::Leaves;
         fn objects -> crate::objects::ObjectServices;
         fn town -> crate::town::Leaves;
         fn industry_tiles -> crate::industry::TileServices;
@@ -411,9 +409,13 @@ impl MovementServices {
     /// which may lie outside the map.
     pub(crate) fn get_slope_pixel_z_outside_map(&self, x: i32, y: i32) -> i32 {
         w::hit(w::MOVE_OUTSIDE_Z);
-        if (x as u32) < ((self.shared().map_max_x)() + 1) * TILE_SIZE
-            && (y as u32) < ((self.shared().map_max_y)() + 1) * TILE_SIZE
-        {
+        // `IsInsideBS(x, 0, Map::SizeX() * TILE_SIZE) && IsInsideBS(y, 0, Map::SizeY() * TILE_SIZE)`.
+        let inside = {
+            let world = World::new(self.shared());
+            (x as u32) < world.dimensions.size_x() * TILE_SIZE
+                && (y as u32) < world.size_y() * TILE_SIZE
+        };
+        if inside {
             self.get_slope_pixel_z(x, y, false)
         } else {
             self.with_context(|c| {
@@ -1441,7 +1443,8 @@ impl MovementServices {
             if state < RVSB_IN_ROAD_STOP
                 && !is_reversing_road_trackdir(state, self.check())
                 && unsafe { crate::road::get_frame(rv) } == 0
-                && (self.road_vehicle().is_station_road_stop)(tile.0)
+                && World::new(self.shared())
+                    .asserted(|m| crate::station_map::is_station_road_stop(m, tile))
                 && v.is_front_engine()
             {
                 /* Attempt to allocate a parking bay in a road stop */
@@ -1935,7 +1938,6 @@ crate::abi::layouts! {
         road_compatible,
         road_type_speed,
         road_kind,
-        road_vehicle,
         resolve,
         depot_invalidate,
         native_assert,

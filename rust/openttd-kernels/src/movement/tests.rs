@@ -127,7 +127,6 @@ fn services(shared: &Services) -> MovementServices {
         road_compatible: compatible,
         road_type_speed: speed,
         road_kind: kind,
-        road_vehicle: ptr::null(),
         resolve,
         depot_invalidate: invalidate,
         native_assert: check,

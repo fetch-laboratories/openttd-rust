@@ -76,6 +76,14 @@ pub(crate) fn is_any_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bo
     Some(is_truck_stop(m, tile)? || is_bus_stop(m, tile)? || is_road_waypoint(m, tile)?)
 }
 
+/// `IsStationRoadStop`: is the station at `t` a road station?
+#[allow(clippy::inline_always)]
+#[inline(always)]
+pub(crate) fn is_station_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    m.require_type(tile, TileType::MP_STATION)?;
+    Some(is_truck_stop(m, tile)? || is_bus_stop(m, tile)?)
+}
+
 /// `IsAirport`: is this station tile an airport? The station type leaf keeps
 /// its native assertion.
 #[allow(clippy::inline_always)]

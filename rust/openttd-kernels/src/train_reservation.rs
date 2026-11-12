@@ -1360,7 +1360,6 @@ pub(crate) mod tests {
             road_compatible: unused(),
             road_type_speed: unused(),
             road_kind: unused(),
-            road_vehicle: unused(),
             resolve: unused(),
             depot_invalidate: unused(),
             native_assert: unused(),
