@@ -14,6 +14,7 @@ Building, local checks and the comparison harness. CI is in [CI](ci.md).
 | Candidate build | `build-rust` in each worktree; the game is `build-rust/openttd-rust` |
 | Rust crate | `rust/openttd-kernels` |
 
+- Read the original from any worktree with `python3 tools/migration.py original show FILE[:A-B]` or `original grep PATTERN [PATH ...]`, which run `git show <baseline commit>:src/FILE` and `git grep PATTERN <baseline commit> -- src/`; `original path` prints the reference worktree after checking it is clean and at the pin.
 - Direct CMake builds need the pinned commit object for the native-test oracle headers: `git fetch --no-tags --depth=1 origin 14ec60f248547d4d062a1160f0fc26d742319888`.
 
 ## Prerequisites and host
@@ -27,7 +28,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 ```
 
 - This host runs Ubuntu 24.04 x86-64 with these packages plus `valgrind`, `ccache`, `unifdef` and `gdb`. Keep `.local/deps` absent here: the driver puts it ahead of the system on every compiler, library and pkg-config path.
-- `tools/bootstrap-local.py` is for an Ubuntu 26.04 host without administrator access. Do not run it here: it installs into `.local/deps` at once, even when given `--help`.
+- `tools/bootstrap-local.py --install` is for an Ubuntu 26.04 host without administrator access. Do not run it here.
 
 ## Build and verification
 
@@ -39,15 +40,17 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 | `python3 tools/migration.py tools` | Build the native Rust generators. |
 | `python3 tools/migration.py simulate`, `coverage`, `deep` | See [simulation comparison](#simulation-comparison), [coverage](#original-simulation-coverage) and [deep checks](deep-checks.md). |
 | `python3 tools/run-comparisons.py` | Run every `tools/*-comparison.py`: the component comparisons, not the simulation scenarios. |
-| `eval "$(python3 tools/migration.py env)"` | Set the driver environment for Cargo and binaries run outside the driver. |
-| `python3 tools/git_hooks.py install` | Install the pre-push and pre-commit hooks. |
+| `python3 tools/migration.py exec -- CMD ...` | Run one command, such as `cargo test -p openttd-kernels`, in the driver environment. |
+| `python3 tools/migration.py fmt` | Format the Rust workspace and the Python Quick checks, at the pinned versions; `--check` only reports, `--fix` also applies Ruff's lint fixes. It stages nothing. |
+| `eval "$(python3 tools/migration.py env)"` | Set the driver environment in a shell that runs many commands. |
+| `python3 tools/git_hooks.py install` | Install the pre-push, pre-commit and commit-msg hooks. |
 
 - Run the candidate with `./build-rust/openttd-rust -X`, which avoids the global game folders.
 - Supported targets: native GNU/Linux x86-64 (aarch64 builds but no CI job tests it), macOS arm64, Emscripten and the scoped [Windows MSVC mode](#windows-msvc). Unsupported: 32-bit Windows ([ADR 0007](adr/0007-no-32-bit-windows.md)), other platforms, cross compilation, macOS universal or Intel.
 
 ### Quick cleanup checks
 
-[Quick](ci.md#jobs-and-profiles) runs the Cargo checks and these gates; `python3 tools/preflight.py --base origin/rust-migration` runs them all locally. Preserve the original's casts and control flow: a faithful truncation must not become a checked conversion to reduce debt.
+[Quick](ci.md#jobs-and-profiles) runs the Cargo checks and these gates; `python3 tools/preflight.py --base origin/rust-migration` runs them all locally. Run one gate with `python3 tools/preflight.py --base origin/rust-migration --step NAME`, which runs the Quick steps whose name contains NAME (`--list` names them) with Quick's pinned versions and base. `python3 tools/preflight.py --fast` is the seconds-long check before a commit: the pre-push hook's fast tier and Quick's Ruff and ty lines, with no stamp. Preserve the original's casts and control flow: a faithful truncation must not become a checked conversion to reduce debt.
 
 | Command | Fails on |
 | --- | --- |
@@ -137,7 +140,7 @@ Quick runs all but `port-metrics.py`, against `--base-ref origin/rust-migration`
 | `python3 tools/rebound-callees.py` | Duplicate bindings and forwarded service fields; macros, lambdas, wrappers, some templates and namespace resolution need review. |
 | `python3 tools/rust-only.py` | `WITH_RUST` conditionals in `src/`. |
 | `python3 tools/ffi-bool-returns.py` | Rust-defined C `bool` returns. |
-| `python3 tools/orphan-exports.py` | Rust exports and C++ declarations without production use; tests and harnesses do not count. An export used only by uncalled C++ members needs a row in `tools/uncalled-export-baseline.txt` naming the owner issue that retires it. It has no `--help`: given one, it runs the whole check. |
+| `python3 tools/orphan-exports.py` | Rust exports and C++ declarations without production use; tests and harnesses do not count. An export used only by uncalled C++ members needs a row in `tools/uncalled-export-baseline.txt` naming the owner issue that retires it. |
 | `python3 tools/port-metrics.py` | Code-line counts and original retirement; `--whole-fork` adds source areas, C++ evidence and exports; `--functions [AREA ...]` adds remaining original lines per file and function. |
 
 - No checker detects Rust copies of original header helpers and constants ([porting](porting.md#callees-and-shared-accessors)).

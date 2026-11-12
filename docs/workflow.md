@@ -22,7 +22,7 @@ A substantive change gets a fork issue, then a branch and worktree from `rust-mi
 ## Commits and pushes
 
 - Before pushing a change that is not docs-only, run `python3 tools/preflight.py --base origin/rust-migration` as a background job. The pre-push hook refuses a push whose tree has no preflight stamp, except a checkpoint push to a draft PR.
-- Commit titles start with a supported prefix such as `Add:`, `Change:`, `Fix:`, `Doc:` or `Update:`; the commit checker rejects others, `Merge:` included.
+- A commit title starts with a prefix the pinned commit checker accepts; the `commit-msg` hook refuses any other title and says what to use.
 - A fidelity or crash fix ends with `Found-by:` naming the check: `review`, `scenario NAME`, `comparison TOOL`, `unit test`, `CI JOB`, `deep check` or `user`.
 
 ## PR lifecycle

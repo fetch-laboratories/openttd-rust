@@ -12,7 +12,7 @@ Every line of original C++ and fork-written C++ (glue, tools and tests) will ret
 
 ## Every agent
 
-- `migration/baseline.json` pins the original. Its worktree is `.local/reference/openttd`. The original is the specification, quirks included ([ADR 0002](docs/adr/0002-original-game-is-the-specification.md)). Keep that worktree unchanged. Do not change candidate behavior and expected results together to make checks pass.
+- `migration/baseline.json` pins the original. Its worktree is `.local/reference/openttd` in the main checkout; `python3 tools/migration.py original path|show|grep` reads the original from any worktree. The original is the specification, quirks included ([ADR 0002](docs/adr/0002-original-game-is-the-specification.md)). Keep that worktree unchanged. Do not change candidate behavior and expected results together to make checks pass.
 - Keep the full game running: preserve networking, saves, mods, interface and shared random-number behavior, including the exact sequence of draws.
 - Record possible improvements as fork issues with the label `deferred-improvement`. Consider them after near-full Rust reproduction.
 - Work only on what [the roadmap](docs/roadmap.md) holds. Root selects work and updates the roadmap.
