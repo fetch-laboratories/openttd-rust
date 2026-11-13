@@ -30,7 +30,7 @@ use crate::tile_type::{MP_INDUSTRY, MP_TUNNELBRIDGE};
 use crate::track_type::TrackBits;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 use crate::vehicle_base::VS_STOPPED;
-use crate::water_regions::Patch;
+use crate::water_regions::WaterRegionPatchDesc as Patch;
 use std::collections::{HashSet, VecDeque};
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_ship_control_reload_rotation() {
@@ -362,7 +362,7 @@ impl Game<'_> {
             (*scratch).visited.clear();
             (*scratch).queue.clear();
         }
-        let key = |p: Patch| (p.x, p.y, p.label);
+        let key = |p: Patch| (p.x, p.y, p.label.0);
         // SAFETY: Scratch borrows end before the neighbour callback below.
         unsafe {
             (*scratch).visited.insert(key(start));
@@ -374,7 +374,7 @@ impl Game<'_> {
             let mut neighbours = [Patch {
                 x: 0,
                 y: 0,
-                label: 0,
+                label: crate::water_regions::WaterRegionPatchLabel(0),
             }; 320];
             let count = (self.leaves.neighbours)(current, neighbours.as_mut_ptr());
             for patch in &neighbours[..count] {

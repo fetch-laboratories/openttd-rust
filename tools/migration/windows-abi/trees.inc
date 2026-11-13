@@ -63,7 +63,7 @@ static void Trees()
 		.set_tree_ground = TreeUnused<void, uint32_t, TreeGround, uint32_t>,
 		.make_sea = TreeUnused<void, uint32_t>,
 		.buoy_or_dock = TreeUnused<bool, uint32_t>,
-		.region_context = TreeUnused<OpenTTDWaterRegionContext>,
+		.water_regions = TreeUnused<OpenTTDWaterRegions *>,
 		.remove_rail = TreeUnused<void, OpenTTDCommandCost *, uint32_t, Track>,
 		.airport_tile = TreeUnused<bool, uint32_t>,
 		.airport = TreeUnused<OpenTTDAirportGround, uint32_t>,

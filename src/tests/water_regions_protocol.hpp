@@ -23,8 +23,6 @@ inline uint8_t WaterType(uint32_t tile) noexcept
 	if (tile >= water.size() || tile % 32 == 31) return MP_VOID;
 	return water[tile] ? MP_WATER : MP_CLEAR;
 }
-inline uint32_t OPENTTD_RUST_CALL Aqueduct(uint32_t) noexcept { return UINT32_MAX; }
-inline void OPENTTD_RUST_CALL WaterProbeDebug(uint8_t, int32_t, int32_t) noexcept {}
 
 /* These callbacks deliberately mutate a warmed cache between next calls, a gap
  * the ship AI corpus cannot reach: YAPF visitors do not execute world commands. */
@@ -35,48 +33,54 @@ template <typename Check> void Run(Check check)
 	for (uint32_t tile = static_cast<uint32_t>(water.size()); tile < map.tiles.size; ++tile) map.Tile(tile, MP_VOID);
 	auto &world = map.shared;
 	world.tile_type = WaterType;
-	const OpenTTDWaterLeaves leaves{.shared = &world, .aqueduct = Aqueduct, .debug = WaterProbeDebug};
 	const auto fill = [&](bool value) { water.fill(value); for (uint32_t t = 0; t < water.size(); ++t) map.Tile(t, t % 32 == 31 ? MP_VOID : value ? MP_WATER : MP_CLEAR); };
+	/* Each tile of the north-west region, in its local index order. */
+	const auto region_labels = [&](OpenTTDWaterRegions *owner) {
+		std::array<uint8_t, 256> labels{};
+		for (uint32_t local = 0; local < labels.size(); ++local) labels[local] = openttd_rust_water_label(owner, &world, local % 16 + local / 16 * 32);
+		return labels;
+	};
 	using Owner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
-	using Cursor = std::unique_ptr<OpenTTDWaterVisit, decltype(&openttd_rust_water_visit_destroy)>;
-	Owner owner{openttd_rust_water_new(32, 32), openttd_rust_water_destroy};
+	Owner owner{openttd_rust_water_new(&world, 32, 32), openttd_rust_water_destroy};
 	fill(false);
-	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 0);
+	check(openttd_rust_water_label(owner.get(), &world, 0) == 0);
 	fill(true);
-	openttd_rust_water_invalidate(owner.get(), &leaves, 0);
-	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 1);
+	openttd_rust_water_invalidate(owner.get(), &world, 0);
+	check(openttd_rust_water_label(owner.get(), &world, 0) == 1);
 	/* A warm region keeps its label without reading the map again until invalidated. */
 	fill(false);
-	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 1);
+	check(openttd_rust_water_label(owner.get(), &world, 0) == 1);
 	fill(true);
-	OpenTTDWaterSnapshot snapshot{};
-	openttd_rust_water_snapshot(owner.get(), &leaves, 0, &snapshot);
-	check(snapshot.patches == 1 && snapshot.edges[1] == UINT16_MAX && snapshot.edges[2] == UINT16_MAX);
-	check(std::all_of(std::begin(snapshot.labels), std::end(snapshot.labels), [](auto label) { return label == 1; }));
-	Cursor visit{openttd_rust_water_visit_new(owner.get(), &leaves, {0, 0, 1}), openttd_rust_water_visit_destroy};
+	/* One patch: every tile has the first label. */
+	const auto single = region_labels(owner.get());
+	check(std::all_of(single.begin(), single.end(), [](auto label) { return label == 1; }));
+	/* Both southern edges are traversable: a whole visit reaches the SE and then the SW neighbour. */
 	OpenTTDWaterPatch next{};
-	check(openttd_rust_water_visit_next(owner.get(), &leaves, visit.get(), {0, 0, 1}, &next) && next.x == 0 && next.y == 1);
+	OpenTTDWaterVisit whole{};
+	check(openttd_rust_water_visit_next(owner.get(), &world, &whole, {0, 0, 1}, &next) && next.x == 0 && next.y == 1 && next.label == 1);
+	check(openttd_rust_water_visit_next(owner.get(), &world, &whole, {0, 0, 1}, &next) && next.x == 1 && next.y == 0 && next.label == 1);
+	check(openttd_rust_water_visit_next(owner.get(), &world, &whole, {0, 0, 1}, &next) == 0);
+	OpenTTDWaterVisit visit{};
+	check(openttd_rust_water_visit_next(owner.get(), &world, &visit, {0, 0, 1}, &next) && next.x == 0 && next.y == 1);
 	/* Const-reference arguments may be mutated through a caller-owned alias. */
-	Cursor aliased{openttd_rust_water_visit_new(owner.get(), &leaves, {0, 0, 1}), openttd_rust_water_visit_destroy};
-	check(openttd_rust_water_visit_next(owner.get(), &leaves, aliased.get(), {0, 0, 1}, &next) && next.x == 0 && next.y == 1);
-	check(openttd_rust_water_visit_next(owner.get(), &leaves, aliased.get(), {0, 0, 0}, &next) == 0);
-	aliased.reset();
+	OpenTTDWaterVisit aliased{};
+	check(openttd_rust_water_visit_next(owner.get(), &world, &aliased, {0, 0, 1}, &next) && next.x == 0 && next.y == 1);
+	check(openttd_rust_water_visit_next(owner.get(), &world, &aliased, {0, 0, 0}, &next) == 0);
 	/* Reentrant visitor removes the east connection. The next side must refresh. */
 	for (uint32_t y = 0; y < 16; y++) {
 		water[16 + y * 32] = false; map.Tile(16 + y * 32, MP_CLEAR);
-		openttd_rust_water_invalidate(owner.get(), &leaves, 16 + y * 32);
+		openttd_rust_water_invalidate(owner.get(), &world, 16 + y * 32);
 	}
-	check(openttd_rust_water_visit_next(owner.get(), &leaves, visit.get(), {0, 0, 1}, &next) == 0);
-	visit.reset(); // Same cleanup used when a C++ visitor throws.
+	check(openttd_rust_water_visit_next(owner.get(), &world, &visit, {0, 0, 1}, &next) == 0);
 	fill(false);
 	water[0] = true; water[2] = true; map.Tile(0, MP_WATER); map.Tile(2, MP_WATER);
-	openttd_rust_water_invalidate(owner.get(), &leaves, 0);
-	openttd_rust_water_snapshot(owner.get(), &leaves, 0, &snapshot);
-	check(snapshot.patches == 2 && snapshot.labels[0] == 1 && snapshot.labels[2] == 2 && snapshot.labels[1] == 0);
+	openttd_rust_water_invalidate(owner.get(), &world, 0);
+	/* Two patches: the two water tiles take labels 1 and 2, every land tile none. */
+	const auto pair = region_labels(owner.get());
+	check(pair[0] == 1 && pair[2] == 2 && std::all_of(pair.begin() + 3, pair.end(), [](auto label) { return label == 0; }) && pair[1] == 0);
 	/* Replacement map gets fresh private validity and labels. */
-	owner.reset(openttd_rust_water_new(32, 32));
+	owner.reset(openttd_rust_water_new(&world, 32, 32));
 	fill(false);
-	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 0);
-}
+	check(openttd_rust_water_label(owner.get(), &world, 0) == 0);
 }
 #endif /* WATER_REGIONS_PROTOCOL_HPP */

@@ -1823,8 +1823,7 @@ pub(crate) unsafe fn enter(shared: &Services, v: VehicleRef, tile: u32, x: i32, 
     unsafe { vehicle_enter_tile(shared, v, TileIndex(tile), x, y) }.0
 }
 
-/// Temporary raw adapter for `ship_control.rs`, `disaster.rs` and
-/// `water_regions.rs` until their passes:
+/// Temporary raw adapter for `ship_control.rs` and `disaster.rs` until their passes:
 /// `TrackStatusToTrackBits(GetTileTrackStatus(tile, TRANSPORT_WATER, 0, side))`.
 pub(crate) fn water_tracks(shared: &Services, tile: u32, side: u8) -> u32 {
     table(shared).water_tracks(tile, side)

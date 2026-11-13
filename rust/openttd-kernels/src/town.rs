@@ -4731,7 +4731,7 @@ mod protocol_tests {
     use crate::test_tables::{
         ANIMATION, CATCHMENT, CLEAR_GROUND, COMMAND_COSTS, COMMANDS, HOUSE_ANIMATION, HOUSES,
         LANDSCAPE, LANDSCAPE_TILES, MOVEMENT, RAIL_COMMANDS, ROAD_COMMANDS, SHARED, TILE_OWNERS,
-        TOWN_LEAVES, WATER_REGION_LEAVES, unreachable0,
+        TOWN_LEAVES, unreachable0,
     };
     use std::cell::{Cell, RefCell};
     use std::ptr;
@@ -5077,22 +5077,16 @@ mod protocol_tests {
         static CATCHMENT_TABLE: Cell<*const crate::station::CatchmentServices> =
             const { Cell::new(ptr::null()) };
         static WATER_TABLE: Cell<*const crate::water::WaterServices> = const { Cell::new(ptr::null()) };
-        static REGIONS: Cell<crate::water_regions::Context> = const {
-            Cell::new(crate::water_regions::Context {
-                owner: ptr::null_mut(),
-                leaves: ptr::null(),
-            })
-        };
+        static REGIONS: Cell<*mut crate::water_regions::Regions> = const { Cell::new(ptr::null_mut()) };
     }
     /// The synthetic map has no docking tiles and no water neighbours.
     extern "C" fn make_clear(_: u32, _: crate::services::ClearGroundType, _: u32) {
         with(|w| w.square_clears += 1);
     }
-    unsafe extern "C" fn debug(_: u8, _: i32, _: i32) {}
     extern "C" fn water_services() -> *const crate::water::WaterServices {
         WATER_TABLE.get()
     }
-    extern "C" fn region_context() -> crate::water_regions::Context {
+    extern "C" fn water_regions() -> *mut crate::water_regions::Regions {
         REGIONS.get()
     }
     extern "C" fn station_catchment() -> *const crate::station::CatchmentServices {
@@ -5177,17 +5171,12 @@ mod protocol_tests {
 
     /// The fixture's water services: no docking or water neighbours; square clears counted.
     fn install_water(regions: *mut crate::water_regions::Regions) {
-        let mut region_leaves = WATER_REGION_LEAVES;
-        region_leaves.debug = debug;
-        REGIONS.set(crate::water_regions::Context {
-            owner: regions,
-            leaves: leak(region_leaves),
-        });
+        REGIONS.set(regions);
         let mut clear_ground = CLEAR_GROUND;
         clear_ground.make_clear = make_clear;
         let mut water = crate::water::fixture();
         water.clear = leak(clear_ground);
-        water.region_context = region_context;
+        water.water_regions = water_regions;
         WATER_TABLE.set(leak(water));
     }
 
@@ -5574,7 +5563,7 @@ mod protocol_tests {
         // The tile arrays stay allocated until the test ends.
         let _map = fixture_map();
         let owner = fixture_owner();
-        let regions = crate::water_regions::openttd_rust_water_new(64, 64);
+        let regions = Box::into_raw(Box::new(crate::water_regions::Regions::new(64, 64)));
         install_water(regions);
         let services = fixture_services();
         let leaves = fixture_leaves(services);
@@ -5603,7 +5592,7 @@ mod protocol_tests {
             resolver::openttd_rust_house_resolver_exchange(resolver);
             crate::animated_tile::openttd_rust_animation_exchange(animation);
             mask.write(saved_mask);
-            crate::water_regions::openttd_rust_water_destroy(regions);
+            drop(Box::from_raw(regions));
         }
         crate::timer_game_common::write_calendar_year(saved_year);
         crate::timer_game_common::write_calendar_date(saved_date);
