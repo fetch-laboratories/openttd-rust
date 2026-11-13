@@ -510,10 +510,6 @@ impl crate::map_func::World<'_> {
         self.get_bay_road_stop_dir(TileIndex(t)).0
     }
     #[inline]
-    pub(crate) fn station_index(&self, t: u32) -> StationID {
-        self.get_station_index(TileIndex(t))
-    }
-    #[inline]
     pub(crate) fn station_blocked(&self, t: u32) -> bool {
         self.is_station_tile_blocked(TileIndex(t))
     }

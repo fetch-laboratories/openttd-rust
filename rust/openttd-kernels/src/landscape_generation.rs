@@ -1372,7 +1372,7 @@ impl World<'_> {
         w::hit(w::GENERATION_YAPF_FOUND);
         let mut current = Some(destination);
         while let Some(id) = current {
-            let tile = pf.nodes[id].get_tile();
+            let tile = pf.nodes[id].get_tile().0;
             if !self.water(tile) {
                 self.river_tile(tile);
             }
@@ -1382,7 +1382,7 @@ impl World<'_> {
             let long = u32::from(g.min_river_length) * 4;
             let mut current = Some(destination);
             while let Some(id) = current {
-                let center = pf.nodes[id].get_tile();
+                let center = pf.nodes[id].get_tile().0;
                 let length = self
                     .map
                     .distance_manhattan(TileIndex(spring), TileIndex(center));
@@ -1396,7 +1396,7 @@ impl World<'_> {
     }
 }
 
-type RiverNode = crate::yapf_node::Node<u32>;
+type RiverNode = crate::yapf_node::Node<TileIndex>;
 /// Complete local CYapfBaseT/NodeList state. The no-cache component retains no
 /// segments; keys are tiles because every source trackdir is `INVALID_TRACKDIR`.
 struct RiverBuilder<'a, 'w> {
@@ -1425,7 +1425,7 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
             best_intermediate: None,
             rounds: 0,
         };
-        pf.add_startup_node(RiverNode::set(None, start));
+        pf.add_startup_node(RiverNode::set(None, TileIndex(start)));
         pf
     }
     fn node_cache_fetch(_node: &mut RiverNode) -> bool {
@@ -1436,21 +1436,21 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
             .include(id, |a, b| self.nodes[a].less(&self.nodes[b]));
     }
     fn pop_open_node(&mut self, id: usize) {
-        self.open.remove(&self.nodes[id].get_tile());
+        self.open.remove(&self.nodes[id].get_tile().0);
         self.heap
             .remove(id, |a, b| self.nodes[a].less(&self.nodes[b]));
     }
     fn add_startup_node(&mut self, mut node: RiverNode) {
         Self::node_cache_fetch(&mut node);
-        if !self.open.contains_key(&node.get_tile()) {
+        if !self.open.contains_key(&node.get_tile().0) {
             let id = self.nodes.len();
-            self.open.insert(node.get_tile(), id);
+            self.open.insert(node.get_tile().0, id);
             self.nodes.push(node);
             self.include(id);
         }
     }
     fn detect_destination(&self, node: RiverNode) -> bool {
-        node.get_tile() == self.end
+        node.get_tile().0 == self.end
     }
     fn calc_cost(&self, node: &mut RiverNode) {
         node.cost = self.nodes[node.parent.unwrap()]
@@ -1466,8 +1466,7 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
         node.estimate = node.cost.wrapping_add(
             self.world
                 .map
-                .distance_manhattan(TileIndex(self.end), TileIndex(node.get_tile()))
-                as i32,
+                .distance_manhattan(TileIndex(self.end), node.get_tile()) as i32,
         );
         crate::movement::native_assert(
             self.world.a.shared(),
@@ -1485,12 +1484,12 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
                 self.nodes[id].estimate.wrapping_sub(self.nodes[id].cost)
                     > node.estimate.wrapping_sub(node.cost)
             });
-        if let Some(&old) = self.open.get(&node.get_tile()) {
+        if let Some(&old) = self.open.get(&node.get_tile().0) {
             if node.estimate < self.nodes[old].estimate {
                 w::hit(w::GENERATION_YAPF_OPEN_UPDATE);
                 self.pop_open_node(old);
                 self.nodes[old] = node;
-                self.open.insert(node.get_tile(), old);
+                self.open.insert(node.get_tile().0, old);
                 self.include(old);
                 if set_intermediate {
                     self.best_intermediate = Some(old);
@@ -1498,7 +1497,7 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
             }
             return;
         }
-        if let Some(&old) = self.closed.get(&node.get_tile()) {
+        if let Some(&old) = self.closed.get(&node.get_tile().0) {
             if node.estimate < self.nodes[old].estimate {
                 (self.world.s.not_reached)();
             }
@@ -1506,7 +1505,7 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
         }
         let id = self.nodes.len();
         self.nodes.push(node);
-        self.open.insert(node.get_tile(), id);
+        self.open.insert(node.get_tile().0, id);
         self.include(id);
         if set_intermediate {
             self.best_intermediate = Some(id);
@@ -1514,14 +1513,14 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
     }
     fn follow_node(&mut self, old: usize) {
         for dir in 0..4 {
-            let tile = (TileIndex(self.nodes[old].get_tile())
+            let tile = (self.nodes[old].get_tile()
                 + self
                     .world
                     .map
                     .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
             .0;
-            if self.world.valid(tile) && self.world.flows_down(self.nodes[old].get_tile(), tile) {
-                self.add_new_node(RiverNode::set(Some(old), tile));
+            if self.world.valid(tile) && self.world.flows_down(self.nodes[old].get_tile().0, tile) {
+                self.add_new_node(RiverNode::set(Some(old), TileIndex(tile)));
             }
         }
     }
@@ -1547,7 +1546,7 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
                 break;
             }
             self.pop_open_node(best);
-            self.closed.insert(self.nodes[best].get_tile(), best);
+            self.closed.insert(self.nodes[best].get_tile().0, best);
         }
         let (cost, distance) = self.best_dest.map_or((-1, -1), |id| {
             (

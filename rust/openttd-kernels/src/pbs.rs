@@ -282,7 +282,7 @@ pub unsafe extern "C" fn openttd_rust_pbs_unreserve(s: *const PbsServices, tile:
     Pbs(unsafe { &*s }).unreserve(tile, track);
 }
 
-use crate::follow_track::State as Follower;
+use crate::follow_track::CFollowTrackT as Follower;
 use crate::track_func::{
     diag_dir_to_diag_trackdir, diagdir_reaches_trackdirs, find_first_trackdir, reverse_trackdir,
     track_bits_to_trackdir_bits, track_overlaps_tracks, track_to_track_bits, track_to_trackdir,
@@ -296,7 +296,7 @@ impl<'a> Pbs<'a> {
         self.reserved(tile) & tracks != 0
     }
     fn follower(self, v: Handle, owner: u8, types: u64) -> Follower {
-        Follower::rail(self.shared(), v, owner, types)
+        Follower::rail_raw(self.shared(), v, owner, types)
     }
     fn is_depot(self, tile: u32) -> bool {
         World::new(self.shared()).rail_depot(tile)
@@ -336,17 +336,14 @@ impl<'a> Pbs<'a> {
             };
         }
         let mut ft = self.follower(Handle::NONE, owner, types);
-        while ft.follow(self.shared(), tile, td) {
+        while ft.follow_raw(self.shared(), tile, td) {
             let reserved =
-                ft.new_td_bits & track_bits_to_trackdir_bits(self.reserved(ft.new_tile.0));
+                ft.new_td_bits.0 & track_bits_to_trackdir_bits(self.reserved(ft.new_tile.0));
             if reserved == 0 {
                 if ft.is_station {
                     let diff = self
                         .map()
-                        .tile_offs_by_diag_dir(
-                            DiagDirection(ft.exitdir),
-                            crate::map_func::native_check,
-                        )
+                        .tile_offs_by_diag_dir(ft.exitdir, crate::map_func::native_check)
                         .cast_unsigned();
                     while {
                         let skipped = ft.tiles_skipped;
@@ -356,7 +353,7 @@ impl<'a> Pbs<'a> {
                         ft.new_tile.0 = ft.new_tile.0.wrapping_sub(diff);
                         if World::new(self.shared()).station_reserved(ft.new_tile.0) {
                             tile = ft.new_tile.0;
-                            td = diag_dir_to_diag_trackdir(ft.exitdir, |ok| {
+                            td = diag_dir_to_diag_trackdir(ft.exitdir.0, |ok| {
                                 crate::movement::native_assert(self.shared(), ok);
                             });
                             crate::witness::hit(crate::witness::PBS_PLATFORM_INTERIOR);
@@ -583,14 +580,14 @@ impl<'a> Pbs<'a> {
         Handle::NONE
     }
     fn reachable(self, ft: &mut Follower, td: u8, no90: bool) {
-        ft.new_td_bits &= diagdir_reaches_trackdirs(ft.exitdir);
+        ft.new_td_bits.0 &= diagdir_reaches_trackdirs(ft.exitdir.0);
         let w = World::new(self.shared());
         if (self.0.rail90)(
             w.tile_rail_type(ft.old_tile.0),
             w.tile_rail_type(ft.new_tile.0),
             no90,
         ) {
-            ft.new_td_bits &= !trackdir_crosses_trackdirs(td);
+            ft.new_td_bits.0 &= !trackdir_crosses_trackdirs(td);
         }
     }
     pub(crate) fn safe(self, v: Handle, tile: u32, td: u8, include_end: bool, no90: bool) -> bool {
@@ -602,16 +599,16 @@ impl<'a> Pbs<'a> {
         }
         let types = (self.shared().all_compatible_railtypes)(v.get_railtypes());
         let mut ft = self.follower(v, 0, types);
-        if !ft.follow(self.shared(), tile, td) && include_end {
+        if !ft.follow_raw(self.shared(), tile, td) && include_end {
             crate::witness::hit(crate::witness::PBS_SAFE_LINE_END);
             return true;
         }
         self.reachable(&mut ft, td, no90);
-        if ft.new_td_bits == 0 {
+        if ft.new_td_bits.0 == 0 {
             return include_end;
         }
-        if ft.new_td_bits & ft.new_td_bits.wrapping_sub(1) == 0 {
-            let next_td = find_first_trackdir(ft.new_td_bits);
+        if ft.new_td_bits.0 & ft.new_td_bits.0.wrapping_sub(1) == 0 {
+            let next_td = find_first_trackdir(ft.new_td_bits.0);
             if (self.0.has_pbs)(ft.new_tile.0, next_td) {
                 crate::witness::hit(crate::witness::PBS_SAFE_PBS);
                 return true;
@@ -640,11 +637,11 @@ impl<'a> Pbs<'a> {
             return true;
         }
         let mut ft = self.follower(v, 0, 0);
-        if !ft.follow(self.shared(), tile, td) {
+        if !ft.follow_raw(self.shared(), tile, td) {
             return true;
         }
         self.reachable(&mut ft, td, no90);
-        !self.has_reserved_tracks(ft.new_tile.0, trackdir_bits_to_track_bits(ft.new_td_bits))
+        !self.has_reserved_tracks(ft.new_tile.0, trackdir_bits_to_track_bits(ft.new_td_bits.0))
     }
 }
 /// # Safety

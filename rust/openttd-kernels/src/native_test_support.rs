@@ -175,7 +175,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     )
 }
 
-use crate::follow_track::{State, mask_reserved_tracks, speed_limit};
+use crate::follow_track::{CFollowTrackT as State, get_speed_limit_raw};
 use crate::pbs::Pbs;
 use crate::services::Services;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef};
@@ -201,13 +201,13 @@ fn follower_output(state: &State, followed: bool) -> FollowerOutput {
         old_tile: state.old_tile.0,
         new_tile: state.new_tile.0,
         tiles_skipped: state.tiles_skipped,
-        new_td_bits: state.new_td_bits,
-        old_td: state.old_td,
-        exitdir: state.exitdir,
+        new_td_bits: state.new_td_bits.0,
+        old_td: state.old_td.0,
+        exitdir: state.exitdir.0,
         is_tunnel: state.is_tunnel,
         is_bridge: state.is_bridge,
         is_station: state.is_station,
-        err: state.err,
+        err: state.err.0,
     }
 }
 /// A boxed production follower; `openttd_test_follower_delete` frees it.
@@ -226,9 +226,9 @@ pub unsafe extern "C" fn openttd_test_follower_new(
     let s = unsafe { &*s };
     let v = std::ptr::NonNull::new(v).map(VehicleRef);
     Box::into_raw(Box::new(if from_vehicle {
-        State::vehicle(s, mode, v, types, allow90)
+        State::vehicle_raw(s, mode, v, types, allow90)
     } else {
-        State::new(s, mode, v, owner, types, allow90)
+        State::new_raw(s, mode, v, owner, types, allow90)
     }))
 }
 /// # Safety
@@ -247,7 +247,7 @@ pub unsafe extern "C" fn openttd_test_follower_follow(
     td: u8,
 ) -> FollowerOutput {
     let state = unsafe { &mut *state };
-    let followed = state.follow(unsafe { &*s }, tile, td);
+    let followed = state.follow_raw(unsafe { &*s }, tile, td);
     follower_output(state, followed)
 }
 /// The production `MaskReservedTracks` step after a successful follow.
@@ -259,7 +259,7 @@ pub unsafe extern "C" fn openttd_test_follower_mask(
     state: *mut State,
 ) -> FollowerOutput {
     let state = unsafe { &mut *state };
-    let masked = mask_reserved_tracks(Pbs::acquire(unsafe { &*s }), state);
+    let masked = state.mask_reserved_tracks(Pbs::acquire(unsafe { &*s }));
     follower_output(state, masked)
 }
 /// # Safety
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn openttd_test_follower_speed(
     v: *mut OpenTTDVehicle,
     tile: u32,
 ) -> i32 {
-    speed_limit(
+    get_speed_limit_raw(
         unsafe { &*s },
         mode,
         std::ptr::NonNull::new(v).map(VehicleRef),
@@ -291,9 +291,9 @@ pub unsafe extern "C" fn openttd_test_platform_length(
 ) -> u32 {
     let world = crate::map_func::World::new(unsafe { &*s });
     if directional {
-        crate::follow_track::platform_length_station(&world, tile, dir)
+        crate::station::get_platform_length_in_direction_raw(&world, tile, dir)
     } else {
-        crate::follow_track::platform_length_full(&world, station, tile)
+        crate::station::get_platform_length_raw(&world, station, tile)
     }
 }
 

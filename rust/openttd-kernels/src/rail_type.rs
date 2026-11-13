@@ -68,6 +68,11 @@ impl RailTypes {
 }
 
 impl RailTypes {
+    /// Native `BaseBitSet::Any`: true iff any of the values are set.
+    #[must_use]
+    pub const fn any(self) -> bool {
+        self.0 != 0
+    }
     /// Native `BaseBitSet::Test`, with an element rather than a set mask.
     #[must_use]
     pub const fn test(self, element: RailType) -> bool {
