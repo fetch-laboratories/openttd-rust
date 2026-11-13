@@ -42,7 +42,6 @@ OpenTTDAuthHandler *OPENTTD_RUST_CALL openttd_rust_auth_client_new(const OpenTTD
 OpenTTDAuthHandler *OPENTTD_RUST_CALL openttd_rust_auth_server_new(const OpenTTDAuthHandlerServices *, const NetworkAuthenticationPasswordProvider *, const NetworkAuthenticationAuthorizedKeyHandler *, uint16_t);
 void OPENTTD_RUST_CALL openttd_rust_auth_handler_destroy(OpenTTDAuthHandler *);
 const uint8_t *OPENTTD_RUST_CALL openttd_rust_auth_handler_name(const OpenTTDAuthHandler *, size_t *);
-uint8_t OPENTTD_RUST_CALL openttd_rust_auth_handler_method(const OpenTTDAuthHandler *);
 const uint8_t *OPENTTD_RUST_CALL openttd_rust_auth_handler_peer(const OpenTTDAuthHandler *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_auth_handler_can_be_used(const OpenTTDAuthHandler *);
 void OPENTTD_RUST_CALL openttd_rust_auth_handler_send_request(OpenTTDAuthHandler *, OpenTTDPacketState *, void (*)(bool) noexcept);
