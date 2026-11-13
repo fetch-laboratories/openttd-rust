@@ -996,3 +996,120 @@ crate::abi::layouts! {
         has_cross_region_aqueducts,
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Regions, WaterRegionPatchLabel, get_water_region_patch_info};
+    use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, World};
+    use crate::tile_type::{TileIndex, TileType};
+    use std::cell::RefCell;
+
+    const SIZE_X: u32 = 32;
+    /// The owner's 32 by 32 map, with 32 void rows below it: the follower reads the
+    /// tile past the southern edge, which a generated map holds as void.
+    const TILES: u32 = 32 * 64;
+
+    thread_local! {
+        static BASE: RefCell<Vec<BaseTileLayout>> = const { RefCell::new(Vec::new()) };
+        static EXTENDED: RefCell<Vec<ExtendedTileLayout>> = const { RefCell::new(Vec::new()) };
+    }
+
+    extern "C" fn native_assert(condition: bool) {
+        assert!(condition, "native assertion");
+    }
+    extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
+        unreachable!("no draw")
+    }
+    extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        unreachable!("no industry")
+    }
+    extern "C" fn tile_type(_: u32) -> u8 {
+        unreachable!("the raw map backend serves every tile")
+    }
+
+    /// Install a map where `water` tiles are clear sea, the rest of the owner's map
+    /// is clear land and its `Map::MaxX` column and the guard rows are void.
+    fn install(water: impl Fn(u32) -> bool) {
+        let tile = |t: u32| {
+            let kind = if t % SIZE_X == SIZE_X - 1 || t >= SIZE_X * SIZE_X {
+                TileType::MP_VOID
+            } else if water(t) {
+                TileType::MP_WATER
+            } else {
+                TileType::MP_CLEAR
+            };
+            BaseTileLayout {
+                kind: kind.0 << 4,
+                height: 0,
+                m2: 0,
+                m1: 0,
+                m3: 0,
+                m4: 0,
+                m5: 0,
+            }
+        };
+        BASE.with_borrow_mut(|b| *b = (0..TILES).map(tile).collect());
+        EXTENDED.with_borrow_mut(|e| {
+            *e = (0..TILES)
+                .map(|_| ExtendedTileLayout {
+                    m6: 0,
+                    m7: 0,
+                    m8: 0,
+                })
+                .collect();
+        });
+        let allocation = TileTypeAllocation {
+            base: BASE.with_borrow(Vec::as_ptr),
+            extended: EXTENDED.with_borrow(Vec::as_ptr),
+            count: TILES,
+            assertions: true,
+        };
+        crate::map_func::fixture::set(allocation, SIZE_X.trailing_zeros());
+    }
+
+    /// The shared table and the movement registry that points back at it, leaked for the test.
+    fn services() -> &'static crate::services::Services {
+        let s = Box::leak(Box::new(crate::services::fixture(
+            std::ptr::null_mut(),
+            random,
+            industry,
+        )));
+        s.map = crate::map_func::fixture::statics();
+        s.tile_type = tile_type;
+        let mut movement = crate::train_reservation::tests::movement_table();
+        movement.native_assert = native_assert;
+        movement.shared = std::ptr::from_ref(s);
+        s.movement = Box::leak(Box::new(movement));
+        s
+    }
+
+    /// The stored edge masks and patch counts, which no export reads, after the
+    /// production update of the north-west region.
+    #[test]
+    fn force_update_stores_the_fixture_masks_and_patch_counts() {
+        let s = services();
+        let mut regions = Regions::new(SIZE_X, SIZE_X);
+
+        // All water: one patch, traversable along both southern edges, and the
+        // north-eastern and north-western edges lie on the map border.
+        install(|_| true);
+        let world = World::new(s);
+        let patch = get_water_region_patch_info(&mut regions, &world, s, TileIndex(0));
+        assert!(patch.label == WaterRegionPatchLabel(1));
+        let data = &regions.water_region_data[0];
+        assert_eq!(data.number_of_patches, 1);
+        assert_eq!(data.edge_traversability_bits, [0, u16::MAX, u16::MAX, 0]);
+        assert!(data.tile_patch_labels.is_none() && !data.has_cross_region_aqueducts);
+
+        // Two separate water tiles: two patches, no edge reaches another region.
+        install(|t| t == 0 || t == 2);
+        regions.is_water_region_valid[0] = false;
+        let world = World::new(s);
+        let patch = get_water_region_patch_info(&mut regions, &world, s, TileIndex(2));
+        assert!(patch.label == WaterRegionPatchLabel(2));
+        let data = &regions.water_region_data[0];
+        assert_eq!(data.number_of_patches, 2);
+        assert_eq!(data.edge_traversability_bits, [0; 4]);
+        assert!(data.tile_patch_labels.is_some());
+    }
+}
