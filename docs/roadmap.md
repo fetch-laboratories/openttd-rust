@@ -193,7 +193,7 @@ Provisional, for steering 36 to judge:
 
 ## Ready queue
 
-Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. Merges 48 to 55 were #951, #937, #956, #936, #960, #961, #966 and #962. The open component PRs are #959 and #955 (in the merge queue), #969 and #972, with #968 dispatched and its PR to come.
+Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. Merges 48 to 55 were #951, #937, #956, #936, #960, #961, #966 and #962. The open component PRs are #959 (for #954) and #955 (for #946), both in the merge queue, #969 (for #965) and #972 (for #967), with #968 dispatched and its PR to come.
 
 1. #970: 9ys, the pass for `ship_yapf.rs`. Planned; waits on nothing.
 2. #963: 8g, the file pass for `ground.rs` and `ground_vehicle.rs`, workset 08's shared callees. Planned; waits on #959, which rewrites calls it replaces.
