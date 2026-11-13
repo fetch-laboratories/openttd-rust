@@ -51,8 +51,8 @@
 
 ## Water-region cache and graph service
 
-- Rust owns: Water-region cache, validity, tile labels, edge masks, patch counts, aqueduct flags, flood scratch, rebuild, invalidation and neighbour traversal.
-- C++ keeps: Map storage, formatting and `water_regions.h` facade.
+- Rust owns: Water-region cache, validity, tile labels, edge masks, patch counts, aqueduct flags, flood scratch, rebuild, invalidation, neighbour traversal and the region debug dump (`water_regions.rs`, a finished file).
+- C++ keeps: Map storage and the `water_regions.h` facade: the owner pointer, `AllocateWaterRegions`, `CalculateWaterRegionPatchHash`, `GetWaterRegionCenterTile` and `GetWaterRegionInfo`, which retire as their callers are ported. A visit is a caller-held `OpenTTDWaterVisit` record stepped by one export.
 - Checks: `python3 tools/migration.py simulate water --jobs 2` and native ABI probes. See `tools/water-scenario-ai/README.md` for preparation, negative probes and optional crossing/timing measurements.
 - Limits: Map replacement during a visitor violates original reference lifetimes. Arbitrary maps/NewGRFs and exhaustive region/path limits remain open.
 - PRs: #114.
