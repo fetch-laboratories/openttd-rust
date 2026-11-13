@@ -24,4 +24,3 @@ no production user | openttd_rust_signal_inspect
 no production user | openttd_rust_signal_workset_probe
 no production user | openttd_rust_subsidy_delete_with
 no production user | openttd_rust_tgp_estimate
-no production user | openttd_rust_trees_clear_tile

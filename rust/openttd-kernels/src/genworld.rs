@@ -27,6 +27,8 @@ pub const LG_ORIGINAL: u8 = 0;
 pub const LG_TERRAGENESIS: u8 = 1;
 /// `CUSTOM_SEA_LEVEL_NUMBER_DIFFICULTY`.
 pub const CUSTOM_SEA_LEVEL_NUMBER_DIFFICULTY: u8 = 4;
+/// Original map height limit (`MAP_HEIGHT_LIMIT_ORIGINAL`).
+pub(crate) const MAP_HEIGHT_LIMIT_ORIGINAL: u32 = 15;
 
 use crate::bitmath_func::gb;
 use crate::clear_map::{CLEAR_DESERT, CLEAR_ROCKS, CLEAR_ROUGH};

@@ -807,16 +807,16 @@ impl World<'_> {
                 (self.clear.set_ground)(tile, ClearGroundType(CLEAR_ROUGH), 3);
                 if trees && g.tree_placer != TP_NONE {
                     w::hit(w::GENERATION_WETLAND_TREES);
-                    unsafe {
-                        crate::trees::openttd_rust_trees_place(
-                            tile,
-                            self.s.random(),
-                            true,
-                            g.climate,
-                            self.a.trees,
-                            self.a.shared,
-                        );
-                    }
+                    let r = self.s.random();
+                    // SAFETY: The generation tables are live and immutable for the entry.
+                    let trees = unsafe { crate::trees::Trees::new(self.a.trees, self.a.shared) };
+                    crate::trees::place_tree(
+                        &trees,
+                        &crate::map_func::World::new(self.s),
+                        crate::tile_type::TileIndex(tile),
+                        r,
+                        true,
+                    );
                 }
             }
         });

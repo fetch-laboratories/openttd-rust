@@ -156,7 +156,13 @@ unsafe fn dispatch<const AMBIENT: bool>(
                 ambient_callback: AMBIENT,
                 ..settings
             };
-            trees::tile_loop(tile.0, settings, g.call, s.trees, s.shared, types);
+            trees::tile_loop_trees(
+                &trees::Trees::new(s.trees, s.shared),
+                types,
+                tile,
+                &settings,
+                g.call,
+            );
         },
         TileType::MP_STATION => unsafe {
             crate::station_lifecycle::tile_loop_station(
@@ -481,8 +487,8 @@ mod comparison_tests {
         let settings = trees::LoopSettings {
             tick_counter: tick,
             size_x: 1 << log_x,
-            climate: 0,
-            extra: 0,
+            climate: crate::landscape_type::LandscapeType::Temperate,
+            extra: trees::ExtraTreePlacement::ETP_NO_SPREAD,
             ambient: false,
             ambient_callback: false,
         };

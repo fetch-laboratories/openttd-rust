@@ -20,10 +20,11 @@ pub(crate) const fn is_inside_bs(x: usize, base: usize, size: usize) -> bool {
     x.wrapping_sub(base) < size
 }
 
-/// `Delta<uint>`: the absolute difference between two unsigned scalars.
+/// `Delta`: returns the absolute value of (scalar) variable, for each type the original
+/// instantiates (`uint` and `int`).
 #[inline]
-pub(crate) const fn delta(a: u32, b: u32) -> u32 {
-    a.abs_diff(b)
+pub(crate) fn delta<T: Copy + PartialOrd + std::ops::Sub<Output = T>>(a: T, b: T) -> T {
+    if a < b { b - a } else { a - b }
 }
 
 /// `RoundDivSU`: computes round(a / b) for signed a and unsigned b; the quotient, rounded to
