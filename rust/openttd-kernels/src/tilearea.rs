@@ -37,7 +37,10 @@ impl OrthogonalTileArea {
     }
     /// `OrthogonalTileArea(start, end)`: the area spanning both corners in either order.
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "OrthogonalTileArea(start, end) narrows the uint extents to uint16_t w and h"
+    )]
     pub fn from_corners(
         map: Map,
         size: u32,
@@ -64,7 +67,10 @@ impl OrthogonalTileArea {
         }
     }
     /// `Add`: add a single tile to a tile area; enlarge if needed.
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "OrthogonalTileArea::Add narrows the uint extents to uint16_t w and h"
+    )]
     pub fn add(&mut self, to_add: TileIndex, map: Map) {
         if self.tile == TileIndex::INVALID {
             self.tile = to_add;
@@ -121,7 +127,8 @@ impl OrthogonalTileArea {
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_possible_wrap,
-        clippy::cast_sign_loss
+        clippy::cast_sign_loss,
+        reason = "OrthogonalTileArea::Expand: int coordinates, int to TileXY, uint16_t extents"
     )]
     pub fn expand(&mut self, rad: i32, map: Map, size_y: u32) {
         let x = map.tile_x(self.tile) as i32;
@@ -145,7 +152,8 @@ impl OrthogonalTileArea {
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_possible_wrap,
-        clippy::cast_sign_loss
+        clippy::cast_sign_loss,
+        reason = "OrthogonalTileArea::ClampToMap: std::min<int> narrowed to uint16_t"
     )]
     pub fn clamp_to_map(&mut self, map: Map, size: u32, check: impl FnOnce(bool)) {
         check(self.tile.0 < size);
@@ -208,8 +216,7 @@ impl OrthogonalTileIterator {
         self.step(map);
     }
     /// The body of `operator++` after its assertion, which cannot fail inside a range-`for`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     fn step(&mut self, map: Map) {
         self.x -= 1;
         if self.x > 0 {
@@ -338,7 +345,10 @@ impl DiagonalTileIterator {
     }
     /// `operator++`: move ourselves to the next tile in the rectangle on the map.
     /// Its loop continues while `tile > Map::Size()`, so only `INVALID_TILE` is skipped.
-    #[allow(clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_sign_loss,
+        reason = "DiagonalTileIterator::operator++ adds the int half-offsets to the uint base"
+    )]
     pub fn advance(&mut self, map: Map, size: u32, check: impl FnOnce(bool)) {
         check(self.tile != TileIndex::INVALID);
         let size_y = size >> map.log_x;

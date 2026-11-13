@@ -19,8 +19,9 @@ use crate::{ground, industry, services, town, trees, water};
 use std::ffi::c_uint;
 
 /// `feedbacks`: maximal length LFSR feedback terms, from 12-bit (for 64x64 maps) to 24-bit
-/// (for 4096x4096 maps). Extracted from <http://www.ece.cmu.edu/~koopman/lfsr/>.
-const FEEDBACKS: &[u32] = &[
+/// (for 4096x4096 maps). Extracted from <http://www.ece.cmu.edu/~koopman/lfsr/>. The length
+/// is the original's `static_assert`: a table of any other size does not compile.
+const FEEDBACKS: [u32; (2 * MAX_MAP_SIZE_BITS - 2 * MIN_MAP_SIZE_BITS + 1) as usize] = [
     0xD8F,
     0x1296,
     0x2496,
@@ -35,9 +36,9 @@ const FEEDBACKS: &[u32] = &[
     0x0040_04B2,
     0x0080_0B87,
 ];
-const _: () =
-    assert!(FEEDBACKS.len() == (2 * MAX_MAP_SIZE_BITS - 2 * MIN_MAP_SIZE_BITS + 1) as usize);
-const _: () = assert!(2 * MIN_MAP_SIZE_BITS >= TILE_UPDATE_FREQUENCY_LOG);
+/// `static_assert(2 * MIN_MAP_SIZE_BITS >= TILE_UPDATE_FREQUENCY_LOG)`: the unsigned
+/// difference fails constant evaluation when it would be negative.
+const _: u32 = 2 * MIN_MAP_SIZE_BITS - TILE_UPDATE_FREQUENCY_LOG;
 
 /// `_cur_tileloop_tile`. Serialized by the game-state mutex on both GUI threads; raw
 /// save/load access occurs only at the original serial boundaries. Never form a Rust reference.
