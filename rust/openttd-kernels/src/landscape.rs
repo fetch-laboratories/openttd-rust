@@ -190,8 +190,12 @@ pub(super) fn partial_pixel_z(x: i32, y: i32, corners: u8) -> Option<u32> {
     })
 }
 
-/// Original `TILE_UPDATE_FREQUENCY` in landscape.cpp.
-pub(crate) const TILE_UPDATE_FREQUENCY: u32 = 256;
+/// `TILE_UPDATE_FREQUENCY_LOG`: the logarithm of how many ticks it takes between tile
+/// updates (log base 2).
+pub(crate) const TILE_UPDATE_FREQUENCY_LOG: u32 = 8;
+/// `TILE_UPDATE_FREQUENCY`: how many ticks it takes between tile updates (has to be a
+/// power of 2).
+pub(crate) const TILE_UPDATE_FREQUENCY: u32 = 1 << TILE_UPDATE_FREQUENCY_LOG;
 
 #[cfg(test)]
 mod water_edges_tests {

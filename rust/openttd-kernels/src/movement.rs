@@ -28,6 +28,7 @@ use crate::direction_func::{
 };
 use crate::direction_type::{Axis, DiagDirection, Direction};
 use crate::map_func::World;
+use crate::math::is_inside_bs;
 use crate::rail_map::{RailGroundType, RailTileType};
 use crate::road_map::RoadTileType;
 use crate::road_type::{DisallowedRoadDirections, RoadBits, RoadTramType};
@@ -409,11 +410,13 @@ impl MovementServices {
     /// which may lie outside the map.
     pub(crate) fn get_slope_pixel_z_outside_map(&self, x: i32, y: i32) -> i32 {
         w::hit(w::MOVE_OUTSIDE_Z);
-        // `IsInsideBS(x, 0, Map::SizeX() * TILE_SIZE) && IsInsideBS(y, 0, Map::SizeY() * TILE_SIZE)`.
         let inside = {
             let world = World::new(self.shared());
-            (x as u32) < world.dimensions.size_x() * TILE_SIZE
-                && (y as u32) < world.size_y() * TILE_SIZE
+            is_inside_bs(
+                x as usize,
+                0,
+                (world.dimensions.size_x() * TILE_SIZE) as usize,
+            ) && is_inside_bs(y as usize, 0, (world.size_y() * TILE_SIZE) as usize)
         };
         if inside {
             self.get_slope_pixel_z(x, y, false)

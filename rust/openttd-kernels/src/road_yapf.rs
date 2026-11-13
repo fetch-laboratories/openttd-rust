@@ -662,8 +662,8 @@ impl Search<'_> {
                 };
                 let commands = unsafe { &*(shared.station_commands)() };
                 let a = (commands.tile_area)(st, kind);
-                let x = (a.tile % self.input.map_x) as i32;
-                let y = (a.tile / self.input.map_x) as i32;
+                let x = (a.tile.0 % self.input.map_x) as i32;
+                let y = (a.tile.0 / self.input.map_x) as i32;
                 let sx = (x - 8).max(0);
                 let sy = (y - 8).max(0);
                 let ex = (x + i32::from(a.w) + 8).min(self.input.map_x as i32);

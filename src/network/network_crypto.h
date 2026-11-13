@@ -210,12 +210,6 @@ public:
 	virtual std::string_view GetName() const = 0;
 
 	/**
-	 * Get the method this handler is providing functionality for.
-	 * @return The \c NetworkAuthenticationMethod.
-	 */
-	virtual NetworkAuthenticationMethod GetAuthenticationMethod() const = 0;
-
-	/**
 	 * Create a \a NetworkEncryptionHandler to encrypt or decrypt messages from the client to the server.
 	 * @return The handler for the client to server encryption.
 	 */

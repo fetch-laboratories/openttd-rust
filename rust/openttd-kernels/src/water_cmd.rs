@@ -558,10 +558,16 @@ impl World<'_> {
         self.expense(out, 0);
         let check = |ok| crate::movement::native_assert(self.s, ok);
         let size = self.size_x * self.size_y;
-        let mut iter =
-            crate::tilearea::TileIterator::create(self.map, size, end, start, diagonal, check);
-        while iter.tile() != INVALID_TILE {
-            let tile = iter.tile();
+        let mut iter = crate::tilearea::TileIterator::create(
+            self.map,
+            size,
+            crate::tile_type::TileIndex(end),
+            crate::tile_type::TileIndex(start),
+            diagonal,
+            check,
+        );
+        while iter.tile().0 != INVALID_TILE {
+            let tile = iter.tile().0;
             let slope =
                 crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(tile));
             if slope != crate::slope_type::Slope::SLOPE_FLAT

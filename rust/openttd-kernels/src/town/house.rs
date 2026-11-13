@@ -233,7 +233,7 @@ struct StationFinder<'a> {
 impl StationFinder<'_> {
     /// `StationFinder stations(TileArea(tile, 1, 1))`.
     fn new(tile: TileIndex) -> Self {
-        let area = crate::tilearea::TileArea::new(tile.0, 1, 1);
+        let area = crate::tilearea::TileArea::new(tile, 1, 1);
         Self {
             finder: RefCell::new(crate::station::StationFinder::new(area)),
             catchment: OnceCell::new(),
@@ -1191,16 +1191,15 @@ impl<'a> House<'a> {
         let building_flags = self.building_flags(house);
         let map = self.map();
         // Check each tile of a multi-tile house.
-        let mut ta = crate::tilearea::TileArea::new(tile.0, 1, 1);
+        let mut ta = crate::tilearea::TileArea::new(tile, 1, 1);
         if building_flags.test(BuildingFlag::Size2x2) {
-            ta.add(self.tile_add_xy(tile, 1, 1).0, map);
+            ta.add(self.tile_add_xy(tile, 1, 1), map);
         }
         if building_flags.test(BuildingFlag::Size2x1) {
             ta.add(
                 map.tile_add_by_diag_dir(tile, DiagDirection::DIAGDIR_SW, |ok| {
                     crate::movement::native_assert(self.s, ok);
-                })
-                .0,
+                }),
                 map,
             );
         }
@@ -1208,14 +1207,13 @@ impl<'a> House<'a> {
             ta.add(
                 map.tile_add_by_diag_dir(tile, DiagDirection::DIAGDIR_SE, |ok| {
                     crate::movement::native_assert(self.s, ok);
-                })
-                .0,
+                }),
                 map,
             );
         }
         // SAFETY: Static command table referenced by the house table.
         let commands = unsafe { &*self.h.commands };
-        for subtile in ta.tiles(map).map(TileIndex) {
+        for subtile in ta.tiles(map) {
             // Houses cannot be built on steep slopes.
             let slope = crate::map_func::World::new(self.s).tile_slope(subtile);
             if is_steep_slope(slope) {
@@ -1259,7 +1257,7 @@ impl<'a> House<'a> {
             witness::hit(W_PLACE);
             // If replacing, clear any existing houses first.
             if replace {
-                for subtile in ta.tiles(map).map(TileIndex) {
+                for subtile in ta.tiles(map) {
                     if TileType((self.s.tile_type)(subtile.0)) == TileType::MP_HOUSE {
                         self.clear_town_house(
                             (self.h.town)(subtile.0),

@@ -19,7 +19,7 @@ A merge is one merged PR, counted from the first-parent history of `origin/rust-
 - A work order may batch small maintenance items in one PR with one reviewer: cleanups, coverage, speed, tooling and fidelity fixes.
 - Keep at most six unmerged component branches, drafts and WIP included. Queue reviewed work before starting a component. Start from current `rust-migration` unless the roadmap names a dependency.
 - A shared accessor or service is not such a dependency. The first PR to merge adds it to the shared layer in final typed form; other drafts adopt it when they update from base. Root builds a shared service or shared-path fix needed by several drafts once, in its own small PR from `rust-migration`.
-- A sweep across most of `src/` merges before any other `src/` change; other drafts continue but queue only after it merges. A reviewed PR gains no new scope before it merges.
+- A sweep across most of `src/` merges before any other `src/` change; other drafts continue but queue only after it merges. A reviewed PR gains no new scope before it merges, and no condition from a rule root changed after its review began, unless the PR cannot merge correctly without it.
 
 ### Merge stops
 

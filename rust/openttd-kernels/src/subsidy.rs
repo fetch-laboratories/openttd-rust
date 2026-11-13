@@ -290,7 +290,7 @@ impl Services {
             }
         }
         let shared = self.shared();
-        let xy = unsafe { town::position(owner) }.0;
+        let xy = unsafe { town::position(owner) };
         let map = shared.map();
         let mut area = crate::tilearea::TileArea {
             tile: xy,
@@ -303,18 +303,18 @@ impl Services {
             crate::map_func::World::new(shared).size_y(),
         );
         for tile in area.tiles(map) {
-            if TileType((shared.tile_type)(tile)) != TileType::MP_HOUSE {
+            if TileType((shared.tile_type)(tile.0)) != TileType::MP_HOUSE {
                 continue;
             }
             unsafe {
                 if accepted {
                     let house = &*(*self.town).houses;
-                    let entry = (house.entry)(tile);
+                    let entry = (house.entry)(tile.0);
                     let mut always = CargoTypes(0);
                     town::house::add_accepted_cargo_of_house(
                         self.town,
                         self.shared,
-                        TileIndex(tile),
+                        tile,
                         entry.house,
                         entry.town.shell,
                         &mut *scratch.data.cast::<CargoArray>(),
@@ -324,7 +324,7 @@ impl Services {
                     town::house::add_produced_cargo_town(
                         self.town,
                         self.shared,
-                        TileIndex(tile),
+                        tile,
                         &mut *scratch.data.cast::<CargoArray>(),
                     );
                 }

@@ -51,6 +51,7 @@ Fix these before integration; root grants no exceptions. A file pass fixes every
 - A Rust-to-C++-to-Rust bounce into code Rust owns.
 - A moved field behind a service, or a Rust-called service routed through `Record()`.
 - Allocation on a hot path or per call where the original has none, including a process-wide scratch pool (`GameState<Vec<...>>`) where the original builds a local container.
+  - Capacity kept between calls is not this fault where the original allocates its container on every call, as YAPF's node list and open-list heap do. The scratch is emptied on entry so that nothing carries from one call to the next, and its comment names the original's container and the measured cost of allocating per call.
 - Opcode dispatch, such as a `mode` parameter choosing among operations, or whole-record copies.
 - An owner resolved once per field instead of once per entry.
 

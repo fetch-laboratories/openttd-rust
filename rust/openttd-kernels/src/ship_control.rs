@@ -756,9 +756,13 @@ impl Game<'_> {
                                     let st = ((*table.station).get)(station as u16);
                                     *(table.docking_area)(st)
                                 };
-                                if docking.contains(new_tile, self.services.map(), |ok| {
-                                    crate::movement::native_assert(self.services, ok);
-                                }) && self.destination_station(new_tile, station)
+                                if docking.contains(
+                                    crate::tile_type::TileIndex(new_tile),
+                                    self.services.map(),
+                                    |ok| {
+                                        crate::movement::native_assert(self.services, ok);
+                                    },
+                                ) && self.destination_station(new_tile, station)
                                 {
                                     self.vehicle().write_last_station(station as u16);
                                     if (self.services.station_facilities)(station as u16)
