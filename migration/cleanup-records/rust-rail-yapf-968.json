@@ -1,0 +1,90 @@
+[
+  {
+    "kind": "lint",
+    "tool": "clippy",
+    "site": "rust/openttd-kernels/src/rail_yapf.rs | impl < ' a , T : Types < PfDestination = CYapfDestinationAnyDepotRailT > > CYapfRailT < ' a , T >::fn st_find_nearest_depot_two_way | too_many_arguments | 4a33eacd5fa65f2b2e28",
+    "before": [],
+    "after": [
+      8
+    ],
+    "operation": "rail_yapf::CYapfRailT::st_find_nearest_depot_two_way",
+    "source_contract": "`CYapfFollowAnyDepotRailT::stFindNearestDepotTwoWay` (src/pathfinder/yapf/yapf_rail.cpp) takes `v, t1, td1, t2, td2, max_penalty, reverse_penalty`; the Rust function adds the services handle `s` to those seven.",
+    "reason": "#968's plan, decision 1: the static/member pairs keep the original's parameter lists. Bundling them into a record would add a type the original does not have.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the services handle stops being an explicit parameter (Rust owns the game state), the list falls to the original's seven."
+  },
+  {
+    "kind": "lint",
+    "tool": "clippy",
+    "site": "rust/openttd-kernels/src/rail_yapf.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28",
+    "before": [],
+    "after": [
+      9
+    ],
+    "operation": "rail_yapf::yapf_train_choose_track",
+    "source_contract": "`YapfTrainChooseTrack(const Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool &path_found, bool reserve_track, struct PBSTileInfo *target, TileIndex *dest)` (src/pathfinder/yapf/yapf_rail.cpp) has eight parameters; the Rust entry adds the services handle `s`.",
+    "reason": "#968's plan, decision 1: the internal entry keeps the original's eight parameters, the one place the seven-parameter bound yields to the original's signature, as its comment says.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the services handle stops being an explicit parameter (Rust owns the game state)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/rail_yapf.rs | impl<'a, T: Types> CYapfRailT<'a, T> > fn pf_calc_cost | allow clippy::too_many_lines",
+    "before": 0,
+    "after": 1,
+    "operation": "rail_yapf::CYapfRailT::pf_calc_cost",
+    "source_contract": "`CYapfCostRailT::PfCalcCost` (src/pathfinder/yapf/yapf_costrail.hpp) is one loop over a segment's tiles with the `no_entry_cost` label; the original already splits out curve, switch, one-tile, slope, reservation, signal and platform-length costs, and the port splits out each of them.",
+    "reason": "Carried from base's module-wide `#![allow(clippy::too_many_lines)]` on rail_yapf.rs, narrowed to the one body that needs it. Splitting the loop further would invent helpers the original does not have and break the reviewer's side-by-side reading (#968's plan, decision 5).",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires with the ADR 0024 scope if function length stops being linted, or never: the body follows the original."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/rail_yapf.rs | impl<'a, T: Types> CYapfRailT<'a, T> > fn signal_cost | allow clippy::if_not_else",
+    "before": 0,
+    "after": 1,
+    "operation": "rail_yapf::CYapfRailT::signal_cost",
+    "source_contract": "`CYapfCostRailT::SignalCost` (src/pathfinder/yapf/yapf_costrail.hpp) tests `if (sig_state != SIGNAL_STATE_RED)` and handles the green signal first, the red one in the else branch.",
+    "reason": "Carried from base's module-wide `#![allow(clippy::if_not_else)]` on rail_yapf.rs, narrowed to the one body. Swapping the branches would reorder the original's long green and red bodies against the reviewer's side-by-side reading.",
+    "retiring_owner": "#734",
+    "retirement_condition": "None while the body follows the original."
+  },
+  {
+    "kind": "growth",
+    "counter": "exports",
+    "added": {
+      "rust/expanded.rs | openttd_rust_yapf_train_check_reverse": 1,
+      "rust/expanded.rs | openttd_rust_yapf_train_choose_track": 1,
+      "rust/expanded.rs | openttd_rust_yapf_train_find_nearest_depot": 1,
+      "rust/expanded.rs | openttd_rust_yapf_train_find_nearest_safe_tile": 1
+    },
+    "reason": "#968's plan, decision 1: the four original entries YapfTrainChooseTrack, YapfTrainCheckReverse, YapfTrainFindNearestDepot and YapfTrainFindNearestSafeTile become one shim each over the Rust-internal entries, replacing the new/step/destroy protocol (openttd_rust_rail_new, _step, _destroy retire, so the historical export count rises by one).",
+    "existing_alternatives": "The protocol exports carried opcode dispatch and a step loop that the design-fault list forbids; the train controller in C++ still calls the four original entries.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Decision 10: when train.rs and train_reservation.rs call the internal entries, their passes delete the four shims and the C++ entries."
+  },
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-settings.h": 23
+    },
+    "reason": "#968's plan, decision 4: the 23 rail_* fields of _settings_game.pf.yapf that rail_yapf.rs reads join the settings catalog, so the search reads them in place as PfGetSettings() does and the Settings copy in RailRun goes. One generated field per original setting.",
+    "existing_alternatives": "The catalog held max_search_nodes and the road settings from #965; no Rust accessor read the rail penalties, and a per-setting service would be a callback slot each.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The fields stay while the settings table is native; they retire when Rust owns _settings_game."
+  },
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/rail_yapf_protocol.hpp": 30
+    },
+    "reason": "#968's plan, Evidence: the native fixture states in the map and the settings catalog what the removed tile leaf and Input injected (settings catalog values, hill heights, PBS signal fields and HasPbsSignal from them) and calls the new probe openttd_test_rail_yapf, so every expectation of src/tests/rail_yapf.cpp stays native.",
+    "existing_alternatives": "The leaves the fixture used to fill are gone with the step protocol; FollowerFixture supplies the map but not the rail-specific facts.",
+    "retiring_owner": "#725",
+    "retirement_condition": "When #725 retires the YAPF template C++ that src/tests/rail_yapf.cpp compares against."
+  }
+]

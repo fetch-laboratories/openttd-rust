@@ -1209,7 +1209,10 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         0
     }
     /// `SignalCost`.
-    #[allow(clippy::if_not_else)]
+    #[allow(
+        clippy::if_not_else,
+        reason = "the original tests the green signal state first"
+    )]
     fn signal_cost(&mut self, n: &mut CYapfRailNode, tile: TileIndex, trackdir: Trackdir) -> i32 {
         let mut cost = 0_i32;
         /* if there is one-way signal in the opposite direction, then it is not our way */
@@ -1367,7 +1370,10 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
     /// `PfCalcCost`: called by YAPF to calculate the cost from the origin to
     /// the given node. Calculates only the cost of given node, adds it to the
     /// parent node cost and stores the result into `Node::cost` member.
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the original's PfCalcCost is one loop over the segment's tiles"
+    )]
     fn pf_calc_cost(&mut self, n: &mut CYapfRailNode, follower: &CFollowTrackT) -> bool {
         self.world
             .assert_with(|| !n.flags_u.get(CYapfRailNodeFlags::TARGET_SEEN));
@@ -3388,7 +3394,7 @@ mod tests {
     }
 
     #[test]
-    fn each_setting_reaches_the_cost_the_original_adds_it_to() {
+    fn cost_settings_reach_the_cost_the_original_adds_them_to() {
         let _statics = STATICS.lock().unwrap_or_else(PoisonError::into_inner);
         let f = fixture();
         let mut pf = CYapfRailT::<CYapfRail>::new(f.s, f.v);
@@ -3465,6 +3471,17 @@ mod tests {
             pf.reservation_cost(&n, TileIndex(400), x_ne, 1),
             2 * v.pbs_station.cast_signed()
         );
+
+        assert_eq!(FAILED_ASSERTIONS.get(), 0);
+    }
+
+    #[test]
+    fn signal_and_platform_settings_reach_the_cost_the_original_adds_them_to() {
+        let _statics = STATICS.lock().unwrap_or_else(PoisonError::into_inner);
+        let f = fixture();
+        let mut pf = CYapfRailT::<CYapfRail>::new(f.s, f.v);
+        let v = &VALUES;
+        let x_ne = Trackdir::TRACKDIR_X_NE;
 
         // `SignalCost`: a red block, then a red exit signal ahead, each the
         // first signal, with the first look-ahead cost; a path signal behind.
