@@ -124,7 +124,7 @@ pub struct Services {
     cargo_subtype: unsafe extern "C" fn(V) -> u8,
     age: unsafe extern "C" fn(V) -> i32,
     max_age: unsafe extern "C" fn(V) -> i32,
-    unit: unsafe extern "C" fn(V) -> u16,
+    pub(crate) unit: unsafe extern "C" fn(V) -> u16,
     pub(crate) sprite: unsafe extern "C" fn(V) -> u8,
     breakdowns: unsafe extern "C" fn(V) -> u8,
     breakdown_delay: unsafe extern "C" fn(V) -> u8,

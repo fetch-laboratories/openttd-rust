@@ -190,8 +190,8 @@ impl CFollowTrackT {
             allow90,
         )
     }
-    /// Temporary raw adapter of [`Self::vehicle`] for `rail_yapf.rs`,
-    /// `road_yapf.rs` and `native_test_support.rs` until their passes.
+    /// Temporary raw adapter of [`Self::vehicle`] for `rail_yapf.rs` and
+    /// `native_test_support.rs` until their passes.
     pub(crate) fn vehicle_raw(
         s: &Services,
         mode: u8,
@@ -252,17 +252,6 @@ impl CFollowTrackT {
     /// `rail_yapf.rs` and `native_test_support.rs` until their passes.
     pub(crate) fn follow_raw(&mut self, s: &Services, tile: u32, td: u8) -> bool {
         self.follow(s, TileIndex(tile), Trackdir(td))
-    }
-    /// Temporary raw adapter of [`Self::follow_with_road`] for `road_yapf.rs`
-    /// until its pass.
-    pub(crate) fn follow_with_road_raw(
-        &mut self,
-        s: &Services,
-        tile: u32,
-        td: u8,
-        road: Option<&RoadContext>,
-    ) -> bool {
-        self.follow_with_road(s, TileIndex(tile), Trackdir(td), road)
     }
     /// `Follow`, with the road search's invariant vehicle facts where the caller
     /// supplies them.
@@ -768,23 +757,6 @@ pub(crate) fn get_speed_limit_raw(
     tile: u32,
 ) -> i32 {
     get_speed_limit(s, TransportType(mode), veh, TileIndex(tile))
-}
-/// Temporary raw adapter of [`get_speed_limit_with_road`] for `road_yapf.rs`
-/// until its pass.
-pub(crate) fn get_speed_limit_with_road_raw(
-    s: &Services,
-    mode: u8,
-    veh: Option<VehicleRef>,
-    tile: u32,
-    tram: Option<bool>,
-) -> i32 {
-    get_speed_limit_with_road(
-        s,
-        TransportType(mode),
-        veh,
-        TileIndex(tile),
-        tram.map(RoadTramType),
-    )
 }
 
 /// `CFollowTrackWater(v)` with a null vehicle, followed once from `tile`: the

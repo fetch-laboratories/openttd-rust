@@ -480,12 +480,6 @@
     "rust/openttd-kernels/src/road_stop.rs | fn is_free_bay | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/road_yapf.rs | impl Search < ' _ >::fn add | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | impl Search < ' _ >::fn estimate | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
     "rust/openttd-kernels/src/script_list.rs | impl List::fn remove | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
