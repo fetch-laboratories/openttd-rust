@@ -1964,7 +1964,10 @@ mod tests {
     extern "C" fn trig(value: f32) -> f32 {
         value
     }
-    #[allow(clippy::cast_possible_truncation, reason = "MakeTree's uint count and density in bitfields")]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "MakeTree's uint count and density in bitfields"
+    )]
     extern "C" fn make_tree(
         tile: u32,
         r#type: u8,
@@ -1982,7 +1985,10 @@ mod tests {
             b.m5 = ((count as u8) << 6) | growth;
         });
     }
-    #[allow(clippy::cast_possible_truncation, reason = "SetTreeGroundDensity's uint density in m2")]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "SetTreeGroundDensity's uint density in m2"
+    )]
     extern "C" fn set_ground_density(tile: u32, ground: u8, density: u32) {
         log(Event::Write("ground", tile));
         edit(tile, |b| {
@@ -2013,7 +2019,10 @@ mod tests {
         log(Event::Write("set_growth", tile));
         edit(tile, |b| b.m5 = (b.m5 & !7) | g);
     }
-    #[allow(clippy::cast_possible_truncation, reason = "MakeClear's uint density in m5")]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "MakeClear's uint density in m5"
+    )]
     extern "C" fn make_clear(tile: u32, g: u8, density: u32) {
         log(Event::Write("clear", tile));
         clear(tile, ClearGround(g), density as u8);
