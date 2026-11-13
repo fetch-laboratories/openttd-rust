@@ -764,12 +764,10 @@ unsafe fn acceptance_history(
         .diff(i32::from(x_offs), i32::from(y_offs))
         .cast_unsigned();
     let shared = unsafe { &*s.shared };
-    let tile = map
-        .wrap_to_map(
-            TileIndex(scope.tile.wrapping_add(offset)),
-            crate::map_func::World::new(shared).size_y(),
-        )
-        .0;
+    let tile = map.wrap_to_map(
+        TileIndex(scope.tile.wrapping_add(offset)),
+        crate::map_func::World::new(shared).size_y(),
+    );
     let c = crate::station::Ctx::from_shared(shared);
     let mut stations =
         crate::station::StationFinder::new(crate::tilearea::TileArea { tile, w: 1, h: 1 });

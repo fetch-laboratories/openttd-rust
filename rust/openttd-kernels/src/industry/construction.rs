@@ -461,7 +461,7 @@ pub(crate) unsafe fn do_create_new_industry(
         );
         if IndustryGfx(it.gfx) != IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
             let mut location = super::location(owner);
-            location.add(cur_tile.0, map);
+            location.add(cur_tile, map);
             set_location(owner, location);
             let wc = unsafe { (cons.water_class)(cur_tile.0) };
             unsafe {
@@ -531,7 +531,7 @@ pub(crate) unsafe fn do_create_new_industry(
 fn set_location(owner: *mut Industry, location: TileArea) {
     // SAFETY: Live owner supplied by the caller's resolved shell; immediate writes.
     unsafe {
-        (*owner).metadata.tile = location.tile;
+        (*owner).metadata.tile = location.tile.0;
         (*owner).metadata.width = location.w;
         (*owner).metadata.height = location.h;
     }

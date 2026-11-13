@@ -130,10 +130,15 @@ impl<'a> World<'a> {
     ) -> Option<T> {
         let check = |ok| crate::movement::native_assert(self.s, ok);
         let mut iter = crate::tilearea::TileIterator::create(
-            self.map, self.size, tile, start, diagonal, check,
+            self.map,
+            self.size,
+            crate::tile_type::TileIndex(tile),
+            crate::tile_type::TileIndex(start),
+            diagonal,
+            check,
         );
         loop {
-            let t = iter.tile();
+            let t = iter.tile().0;
             if t == INVALID_TILE {
                 return None;
             }

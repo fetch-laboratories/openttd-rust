@@ -194,21 +194,21 @@ impl StationRect {
     /// `AfterRemoveRect`: the second corner is skipped once the first empties.
     #[allow(clippy::cast_possible_wrap)]
     pub fn after_remove_rect(&mut self, id: StationID, ta: TileArea, c: &Ctx<'_>) -> bool {
-        let x = c.map.tile_x(TileIndex(ta.tile));
-        let y = c.map.tile_y(TileIndex(ta.tile));
+        let x = c.map.tile_x(ta.tile);
+        let y = c.map.tile_y(ta.tile);
         c.check(self.pt_in_extended_rect(x as i32, y as i32, 0));
         c.check(self.pt_in_extended_rect(
             (x + u32::from(ta.w)).wrapping_sub(1) as i32,
             (y + u32::from(ta.h)).wrapping_sub(1) as i32,
             0,
         ));
-        let mut empty = self.after_remove_tile(id, TileIndex(ta.tile), c);
+        let mut empty = self.after_remove_tile(id, ta.tile, c);
         if ta.w != 1 || ta.h != 1 {
             empty = empty
                 || self.after_remove_tile(
                     id,
                     c.map
-                        .tile_add_xy(TileIndex(ta.tile), i32::from(ta.w) - 1, i32::from(ta.h) - 1),
+                        .tile_add_xy(ta.tile, i32::from(ta.w) - 1, i32::from(ta.h) - 1),
                     c,
                 );
         }
@@ -227,12 +227,14 @@ fn scan_for_station_tiles(
     bottom: i32,
     c: &Ctx<'_>,
 ) -> bool {
-    let ta = TileArea::between(
+    let ta = TileArea::from_corners(
         c.map,
-        c.map.tile_xy(left as u32, top as u32).0,
-        c.map.tile_xy(right as u32, bottom as u32).0,
+        c.map.size_x() * c.size_y,
+        c.map.tile_xy(left as u32, top as u32),
+        c.map.tile_xy(right as u32, bottom as u32),
+        |ok| c.check(ok),
     );
-    ta.tiles(c.map).map(TileIndex).any(|tile| {
+    ta.tiles(c.map).any(|tile| {
         TileType((c.s.tile_type)(tile.0)) == TileType::MP_STATION && c.station_index(tile) == id
     })
 }
@@ -667,7 +669,7 @@ pub(crate) fn remove_from_all_nearby_lists(st: *mut BaseStation, state: *mut Ser
     let mut industries = Vec::new();
     // SAFETY: Live owner; immediate geometry copy.
     let area = unsafe { (*catchment(state)).tiles.area };
-    for tile in area.tiles(c.map).map(TileIndex) {
+    for tile in area.tiles(c.map) {
         let kind = TileType((c.s.tile_type)(tile.0));
         if kind == TileType::MP_HOUSE {
             flat_insert(&mut towns, c.town_index(tile));
@@ -725,7 +727,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         // SAFETY: Live owner; immediate mutation.
         unsafe { (*catchment(state)).tiles.initialize(location) };
         let industry_id = (c.c.industry_id)(industry);
-        for tile in location.tiles(c.map).map(TileIndex) {
+        for tile in location.tiles(c.map) {
             if TileType((c.s.tile_type)(tile.0)) == TileType::MP_INDUSTRY
                 && c.industry_index(tile) == industry_id
             {
@@ -767,13 +769,15 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
     // SAFETY: Live owner; immediate copy.
     let bounds = unsafe { *rect(state) };
     #[allow(clippy::cast_sign_loss)]
-    let ta = TileArea::between(
+    let ta = TileArea::from_corners(
         c.map,
-        c.map.tile_xy(bounds.left as u32, bounds.top as u32).0,
-        c.map.tile_xy(bounds.right as u32, bounds.bottom as u32).0,
+        c.map.size_x() * c.size_y,
+        c.map.tile_xy(bounds.left as u32, bounds.top as u32),
+        c.map.tile_xy(bounds.right as u32, bounds.bottom as u32),
+        |ok| c.check(ok),
     );
     let id = (c.c.id)(st);
-    for tile in ta.tiles(c.map).map(TileIndex) {
+    for tile in ta.tiles(c.map) {
         if TileType((c.s.tile_type)(tile.0)) != TileType::MP_STATION || c.station_index(tile) != id
         {
             continue;
@@ -785,7 +789,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         // No tile tests are needed in this sub-loop: every tile is simply
         // added to the catchment set.
         let mut ta2 = TileArea {
-            tile: tile.0,
+            tile: tile,
             w: 1,
             h: 1,
         };
@@ -796,7 +800,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
             unsafe {
                 (*catchment(state))
                     .tiles
-                    .set_tile(tile2, c.map, |ok| c.check(ok));
+                    .set_tile(tile2.0, c.map, |ok| c.check(ok));
             };
         }
     }
@@ -870,7 +874,7 @@ pub(crate) fn for_all_stations_around_tiles(
     let mut ext = ta;
     #[allow(clippy::cast_possible_wrap)]
     ext.expand(max_c as i32, c.map, c.size_y);
-    for tile in ext.tiles(c.map).map(TileIndex) {
+    for tile in ext.tiles(c.map) {
         if TileType((c.s.tile_type)(tile.0)) != TileType::MP_STATION {
             continue;
         }
@@ -886,7 +890,7 @@ pub(crate) fn for_all_stations_around_tiles(
             continue;
         }
         let state = (c.c.owner)(st);
-        for tile in ta.tiles(c.map).map(TileIndex) {
+        for tile in ta.tiles(c.map) {
             /* Test if the tile is within the station's catchment */
             // SAFETY: Live owner; the membership borrow ends before `func`.
             if unsafe { tile_is_in_catchment(state, tile, c) }
@@ -914,8 +918,8 @@ impl StationFinder {
     }
     /// `GetStations`: computed on first use, then the area tile is invalidated.
     pub fn get_stations(&mut self, c: &Ctx<'_>) -> &StationList {
-        if self.area.tile != INVALID_TILE {
-            let tile = TileIndex(self.area.tile);
+        if self.area.tile != TileIndex::INVALID {
+            let tile = self.area.tile;
             if TileType((c.s.tile_type)(tile.0)) == TileType::MP_HOUSE {
                 // Only one tile is supported: town nearby stations are
                 // filtered per tile.
@@ -929,7 +933,7 @@ impl StationFinder {
                     true
                 });
             }
-            self.area.tile = INVALID_TILE;
+            self.area.tile = TileIndex::INVALID;
         }
         &self.stations
     }
@@ -965,14 +969,14 @@ pub(crate) fn production_around_tiles(
     let mut industries = Vec::new();
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let mut ta = TileArea {
-        tile: north_tile.0,
+        tile: north_tile,
         w: w as u16,
         h: h as u16,
     };
     ta.expand(rad, c.map, c.size_y);
     // Loop over all tiles to get the produced cargo of
     // everything except industries.
-    for tile in ta.tiles(c.map).map(TileIndex) {
+    for tile in ta.tiles(c.map) {
         if TileType((c.s.tile_type)(tile.0)) == TileType::MP_INDUSTRY {
             flat_insert(&mut industries, c.industry_index(tile));
         }
@@ -1012,12 +1016,12 @@ pub(crate) fn acceptance_around_tiles(
     }
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let mut ta = TileArea {
-        tile: center_tile.0,
+        tile: center_tile,
         w: w as u16,
         h: h as u16,
     };
     ta.expand(rad, c.map, c.size_y);
-    for tile in ta.tiles(c.map).map(TileIndex) {
+    for tile in ta.tiles(c.map) {
         // Ignore industry if it has a neutral station.
         if !(c.s.station_serve_neutral)()
             && TileType((c.s.tile_type)(tile.0)) == TileType::MP_INDUSTRY

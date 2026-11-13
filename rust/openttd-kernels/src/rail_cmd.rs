@@ -1886,13 +1886,13 @@ impl<'a> Ctx<'a> {
         let mut iter = crate::tilearea::TileIterator::create(
             self.map,
             self.map_size(),
-            area_start,
-            area_end,
+            TileIndex(area_start),
+            TileIndex(area_end),
             diagonal_area,
             check,
         );
         loop {
-            let tile = iter.tile();
+            let tile = iter.tile().0;
             if tile == INVALID_TILE {
                 break;
             }
@@ -2069,18 +2069,32 @@ impl<'a> Ctx<'a> {
             }
             MP_TUNNELBRIDGE => {
                 let endtile = (self.rail.other_tunnel_bridge_end)(tile);
-                if endtile < tile
-                    && crate::tilearea::corners_contain(
+                if endtile < tile {
+                    let check = |ok| crate::movement::native_assert(self.shared, ok);
+                    let (start, end) = (TileIndex(area_start), TileIndex(area_end));
+                    if diagonal_area {
+                        if crate::tilearea::DiagonalTileArea::from_corners(
+                            self.map,
+                            self.map_size(),
+                            start,
+                            end,
+                            check,
+                        )
+                        .contains(TileIndex(endtile), self.map)
+                        {
+                            return false;
+                        }
+                    } else if crate::tilearea::OrthogonalTileArea::from_corners(
                         self.map,
                         self.map_size(),
-                        area_start,
-                        area_end,
-                        diagonal_area,
-                        endtile,
-                        |ok| crate::movement::native_assert(self.shared, ok),
+                        start,
+                        end,
+                        check,
                     )
-                {
-                    return false;
+                    .contains(TileIndex(endtile), self.map, check)
+                    {
+                        return false;
+                    }
                 }
                 if !(self.s.compatible_rail)(
                     crate::services::RailType(

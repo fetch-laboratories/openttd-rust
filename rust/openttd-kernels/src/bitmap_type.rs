@@ -36,7 +36,7 @@ impl BitmapTileArea {
     pub const fn new() -> Self {
         Self {
             area: TileArea {
-                tile: INVALID_TILE,
+                tile: TileIndex(INVALID_TILE),
                 w: 0,
                 h: 0,
             },
@@ -51,15 +51,15 @@ impl BitmapTileArea {
     fn index(&self, tile: u32, map: Map) -> usize {
         self.index_xy(
             map.tile_x(TileIndex(tile))
-                .wrapping_sub(map.tile_x(TileIndex(self.area.tile))),
+                .wrapping_sub(map.tile_x(self.area.tile)),
             map.tile_y(TileIndex(tile))
-                .wrapping_sub(map.tile_y(TileIndex(self.area.tile))),
+                .wrapping_sub(map.tile_y(self.area.tile)),
         ) as usize
     }
     /// `Reset`.
     pub fn reset(&mut self) {
         self.area = TileArea {
-            tile: INVALID_TILE,
+            tile: TileIndex(INVALID_TILE),
             w: 0,
             h: 0,
         };
@@ -69,7 +69,7 @@ impl BitmapTileArea {
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     pub fn initialize_rect(&mut self, left: i32, top: i32, right: i32, bottom: i32, map: Map) {
         self.initialize(TileArea {
-            tile: map.tile_xy(left as u32, top as u32).0,
+            tile: map.tile_xy(left as u32, top as u32),
             w: rect_width(left, right) as u16,
             h: rect_height(top, bottom) as u16,
         });
@@ -83,13 +83,13 @@ impl BitmapTileArea {
     }
     /// `SetTile`, asserting containment.
     pub fn set_tile(&mut self, tile: u32, map: Map, check: impl Fn(bool)) {
-        check(self.area.contains(tile, map, &check));
+        check(self.area.contains(TileIndex(tile), map, &check));
         let index = self.index(tile, map);
         self.data[index] = true;
     }
     /// `HasTile`.
     pub fn has_tile(&self, tile: u32, map: Map, check: impl Fn(bool)) -> bool {
-        self.area.contains(tile, map, check) && self.data[self.index(tile, map)]
+        self.area.contains(TileIndex(tile), map, check) && self.data[self.index(tile, map)]
     }
 }
 
@@ -109,7 +109,7 @@ impl BitmapTileIterator {
             iter: OrthogonalTileIterator::new(unsafe { (*bitmap).area }),
         };
         // SAFETY: Caller contract.
-        if !unsafe { (*bitmap).has_tile(it.iter.tile, map, &check) } {
+        if !unsafe { (*bitmap).has_tile(it.iter.tile.0, map, &check) } {
             unsafe { it.advance(bitmap, map, check) };
         }
         it
@@ -117,7 +117,7 @@ impl BitmapTileIterator {
     /// The current tile, `INVALID_TILE` at the end.
     #[must_use]
     pub fn tile(&self) -> u32 {
-        self.iter.tile
+        self.iter.tile.0
     }
     /// `operator++`, including the orthogonal end-of-range assertion.
     /// # Safety
@@ -132,8 +132,8 @@ impl BitmapTileIterator {
     ) {
         self.iter.advance(map, &check);
         // SAFETY: Caller contract; each membership read is an immediate borrow.
-        while self.iter.tile != INVALID_TILE
-            && !unsafe { (*bitmap).has_tile(self.iter.tile, map, &check) }
+        while self.iter.tile.0 != INVALID_TILE
+            && !unsafe { (*bitmap).has_tile(self.iter.tile.0, map, &check) }
         {
             self.iter.advance(map, &check);
         }
@@ -208,14 +208,17 @@ mod tests {
         let m = map();
         let mut b = BitmapTileArea::new();
         b.initialize_rect(2, 3, 4, 5, m);
-        assert_eq!((b.area.tile, b.area.w, b.area.h), (m.tile_xy(2, 3).0, 3, 3));
+        assert_eq!(
+            (b.area.tile.0, b.area.w, b.area.h),
+            (m.tile_xy(2, 3).0, 3, 3)
+        );
         // `Index(w, h) == w * (h + 1)`.
         assert_eq!(b.data.len(), 12);
         b.set_tile(m.tile_xy(4, 5).0, m, |ok| assert!(ok));
         assert!(b.has_tile(m.tile_xy(4, 5).0, m, |ok| assert!(ok)));
         assert!(!b.has_tile(m.tile_xy(5, 5).0, m, |ok| assert!(ok)));
         b.reset();
-        assert_eq!((b.area.tile, b.area.w, b.area.h), (INVALID_TILE, 0, 0));
+        assert_eq!((b.area.tile.0, b.area.w, b.area.h), (INVALID_TILE, 0, 0));
         assert!(!b.has_tile(m.tile_xy(4, 5).0, m, |ok| assert!(ok)));
     }
 
@@ -224,7 +227,7 @@ mod tests {
         let m = map();
         let mut b = BitmapTileArea::new();
         b.initialize(TileArea {
-            tile: m.tile_xy(1, 1).0,
+            tile: m.tile_xy(1, 1),
             w: 3,
             h: 2,
         });

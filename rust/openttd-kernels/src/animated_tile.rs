@@ -369,7 +369,7 @@ pub extern "C" fn openttd_rust_trigger_station(
         areas[usize::from(trigger)],
     );
     let b = unsafe { &*a.station };
-    area.tiles(a.shared().map()).for_each(|t| {
+    area.tiles_raw(a.shared().map()).for_each(|t| {
         if !(a.rail_belongs)(st, t) {
             return;
         }
@@ -483,12 +483,12 @@ pub extern "C" fn openttd_rust_trigger_airport_tile_abi(
 pub extern "C" fn openttd_rust_trigger_airport_abi(st: *mut Station, trigger: u8, cargo: u8) -> u8 {
     let a = services();
     let area = (a.airport_area)(st);
-    if area.tile == INVALID_TILE {
+    if area.tile.0 == INVALID_TILE {
         return u8::from(false);
     }
     let mut ret = true;
     let mut random = a.shared().random();
-    area.tiles(a.shared().map()).for_each(|t| {
+    area.tiles_raw(a.shared().map()).for_each(|t| {
         if !(a.airport_belongs)(st, t) {
             return;
         }

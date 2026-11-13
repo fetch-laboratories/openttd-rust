@@ -97,13 +97,17 @@ pub(crate) fn clear_areas() {
 }
 fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
     let map = crate::services::Map::from_log_x(log_x);
-    let tile_area = TileArea { tile, w: 1, h: 1 };
+    let tile_area = TileArea {
+        tile: TileIndex(tile),
+        w: 1,
+        h: 1,
+    };
     // SAFETY: serialized entry, no callbacks while reading.
     unsafe { &(*STATE.get()).areas }
         .iter()
         .position(|a| {
             TileArea {
-                tile: a.tile,
+                tile: TileIndex(a.tile),
                 w: a.width,
                 h: a.height,
             }
@@ -631,7 +635,7 @@ impl<'a> World<'a> {
             // The tile-loop entry has no captured map. Acquire the actual stride
             // only when the original whole-object iterator is constructed.
             let map = self.shared.map();
-            for tile in area.tiles(map) {
+            for tile in area.tiles_raw(map) {
                 if self.do_trigger(obj, tile, trigger, spec, random) {
                     // SB also ORs high bits from the unmasked draw.
                     crate::bitmath_func::sb(&mut random, 0, 16, self.shared.random());
@@ -651,7 +655,7 @@ impl<'a> World<'a> {
         unsafe { &*self.s.company }
     }
     fn tiles(&self, a: TileArea) -> impl Iterator<Item = u32> {
-        a.tiles(self.map)
+        a.tiles_raw(self.map)
     }
     fn footprint(tile: u32, shape: Footprint, view: u8) -> TileArea {
         let (x, y) = if view & 1 == 0 {
@@ -660,7 +664,7 @@ impl<'a> World<'a> {
             (shape.size >> 4, shape.size & 15)
         };
         TileArea {
-            tile,
+            tile: TileIndex(tile),
             w: u16::from(x),
             h: u16::from(y),
         }
@@ -952,7 +956,7 @@ impl<'a> World<'a> {
             }
             openttd_rust_object_areas_append(ClearArea {
                 first_tile: tile,
-                tile: object.area.tile,
+                tile: object.area.tile.0,
                 width: object.area.w,
                 height: object.area.h,
             });
@@ -1558,8 +1562,11 @@ impl World<'_> {
             }
             let level = u32::from(self.get_company_hq_size(tile)) + 1;
             crate::movement::native_assert(self.shared, level < 6);
-            let mut stations =
-                crate::station::StationFinder::new(crate::tilearea::TileArea { tile, w: 2, h: 2 });
+            let mut stations = crate::station::StationFinder::new(crate::tilearea::TileArea {
+                tile: TileIndex(tile),
+                w: 2,
+                h: 2,
+            });
             let catchment = std::cell::OnceCell::new();
             let mut deliver = |cargo: u8, amount: u32| {
                 let c = catchment.get_or_init(|| crate::station::Ctx::from_shared(self.shared));

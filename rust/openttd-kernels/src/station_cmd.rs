@@ -613,7 +613,7 @@ impl<'a> Ctx<'a> {
         // does. Its callbacks (the spread setting, map reads and the native
         // assertion) never access a station rectangle.
         let ok = unsafe { &mut *self.rect(st) }.before_add_rect(
-            TileIndex(area.tile),
+            area.tile,
             i32::from(area.w),
             i32::from(area.h),
             mode,
@@ -677,7 +677,7 @@ impl<'a> Ctx<'a> {
     /// `TileArea::Add` on a station area resolved in place for this call.
     fn area_add(&self, area: *mut TileArea, tile: TileIndex) {
         // SAFETY: The accessor addresses a live station area; nothing else borrows it.
-        unsafe { (*area).add(tile.0, self.map()) };
+        unsafe { (*area).add(tile, self.map()) };
     }
     fn map(&self) -> Map {
         if let Some(map) = self.map.get() {
@@ -1052,10 +1052,10 @@ impl Ctx<'_> {
             let mut closest_station = existing_station;
             /* check around to see if there are any stations there owned by the company */
             for tile_cur in ta.tiles(self.map()) {
-                if TileType((self.shared.tile_type)(tile_cur)) != TileType::MP_STATION {
+                if TileType((self.shared.tile_type)(tile_cur.0)) != TileType::MP_STATION {
                     continue;
                 }
-                let t = StationID((self.shared.station_index)(tile_cur));
+                let t = StationID((self.shared.station_index)(tile_cur.0));
                 let candidate = get_if_valid(t);
                 if candidate.is_null()
                     || CompanyID((self.world().station_owner)(candidate)) != company
@@ -1125,7 +1125,7 @@ impl Ctx<'_> {
     ) -> *mut BaseStation {
         /* Find a deleted station close to us */
         if st.is_null() && reuse {
-            st = self.get_closest_deleted_station(TileIndex(area.tile));
+            st = self.get_closest_deleted_station(area.tile);
             if !st.is_null() {
                 crate::witness::hit(crate::witness::STATION_CMD_REUSE);
             }
@@ -1148,19 +1148,16 @@ impl Ctx<'_> {
                 return st;
             }
             if flags.test(DoCommandFlag::Execute) {
-                st = (self.s.new_station)(area.tile);
+                st = (self.s.new_station)(area.tile.0);
                 crate::station::spatial::insert(self.shared, st);
-                let town = crate::town::spatial::closest_town_from_tile(
-                    self.shared,
-                    TileIndex(area.tile),
-                    u32::MAX,
-                );
+                let town =
+                    crate::town::spatial::closest_town_from_tile(self.shared, area.tile, u32::MAX);
                 (self.s.set_town)(st, town);
                 (self.s.set_string_id)(
                     st,
                     crate::station_lifecycle::generate_station_name(
                         st,
-                        TileIndex(area.tile),
+                        area.tile,
                         name_class,
                         unsafe { &*self.s.lifecycle },
                     )
@@ -1353,7 +1350,7 @@ impl Ctx<'_> {
             /* too small? */
             if ta.w == 0 || ta.h == 0 {
                 return TileArea {
-                    tile: TileIndex::INVALID.0,
+                    tile: TileIndex::INVALID,
                     w: 0,
                     h: 0,
                 };
@@ -1372,13 +1369,11 @@ impl Ctx<'_> {
                 let mut found = false;
                 for i in 0..size {
                     let tile = if vertical {
-                        ta.tile
-                            .wrapping_add(self.map().diff(x, i32::from(i)).cast_unsigned())
+                        ta.tile + self.map().diff(x, i32::from(i))
                     } else {
-                        ta.tile
-                            .wrapping_add(self.map().diff(i32::from(i), x).cast_unsigned())
+                        ta.tile + self.map().diff(i32::from(i), x)
                     };
-                    if func(TileIndex(tile)) {
+                    if func(tile) {
                         found = true;
                         break;
                     }
@@ -1387,12 +1382,12 @@ impl Ctx<'_> {
                 if !found {
                     if vertical {
                         if x == 0 {
-                            ta.tile = ta.tile.wrapping_add(self.map().diff(1, 0).cast_unsigned());
+                            ta.tile += self.map().diff(1, 0);
                         }
                         ta.w -= 1;
                     } else {
                         if x == 0 {
-                            ta.tile = ta.tile.wrapping_add(self.map().diff(0, 1).cast_unsigned());
+                            ta.tile += self.map().diff(0, 1);
                         }
                         ta.h -= 1;
                     }
@@ -1806,7 +1801,7 @@ impl Ctx<'_> {
         let mut tracknum = 0_u8;
         let mut allowed_z = -1;
         for cur_tile in tile_area.tiles(self.map()) {
-            let cur_tile = TileIndex(cur_tile);
+            let cur_tile = cur_tile;
             /* Clear the land below the station. */
             // CheckFlatLandRailStation uses both native slots; its result is
             // left in `cost`, and the accumulated amount is restored after.
@@ -1815,7 +1810,7 @@ impl Ctx<'_> {
                 cost,
                 ret,
                 tile_cur: cur_tile,
-                north_tile: TileIndex(tile_area.tile),
+                north_tile: tile_area.tile,
                 allowed_z: &mut allowed_z,
                 flags,
                 axis,
@@ -1951,20 +1946,20 @@ impl Ctx<'_> {
     fn expand_platform_reservations(&self, tile_org: TileIndex, axis: Axis, numtracks: u8) {
         let update_reservation_area = if axis == Axis::AXIS_X {
             TileArea {
-                tile: tile_org.0,
+                tile: tile_org,
                 w: 1,
                 h: u16::from(numtracks),
             }
         } else {
             TileArea {
-                tile: tile_org.0,
+                tile: tile_org,
                 w: u16::from(numtracks),
                 h: 1,
             }
         };
         let world = crate::map_func::World::new(self.shared);
         for tile in update_reservation_area.tiles(self.map()) {
-            let tile = TileIndex(tile);
+            let tile = tile;
             /* Don't even try to make eye candy parts reserved. */
             if self.is_station_tile_blocked(tile) {
                 continue;
@@ -2065,7 +2060,7 @@ impl Ctx<'_> {
         }
         /* these values are those that will be stored in train_tile and station_platforms */
         let mut new_location = TileArea {
-            tile: tile_org.0,
+            tile: tile_org,
             w: u16::from(w_org),
             h: u16::from(h_org),
         };
@@ -2114,7 +2109,7 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        if !st.is_null() && self.s.rail_area(st).tile != TileIndex::INVALID.0 {
+        if !st.is_null() && self.s.rail_area(st).tile != TileIndex::INVALID {
             new_location = self.can_expand_rail_station(ret, st, new_location);
             if !ret.ok() {
                 return cost.take(ret);
@@ -2225,14 +2220,14 @@ impl Ctx<'_> {
         crate::station_lifecycle::add_facility(
             st,
             StationFacility::Train,
-            TileIndex(new_location.tile),
+            new_location.tile,
             unsafe { &*self.s.lifecycle },
         );
         self.before_add_rect(
             ret,
             st,
             TileArea {
-                tile: tile_org.0,
+                tile: tile_org,
                 w: u16::from(w_org),
                 h: u16::from(h_org),
             },
@@ -2569,7 +2564,7 @@ impl Ctx<'_> {
         error.zero();
         /* Do the action for every tile into the area */
         for tile in ta.tiles(self.map()) {
-            let tile = TileIndex(tile);
+            let tile = tile;
             /* Make sure the specified tile is a rail station */
             if !crate::map_func::World::new(self.shared).has_station_tile_rail(tile) {
                 continue;
@@ -2644,7 +2639,7 @@ impl Ctx<'_> {
             (self.s.set_train_area)(st, train_station);
             self.update_station_sign_coord(st);
             /* if we deleted the whole station, delete the train facility. */
-            if train_station.tile == TileIndex::INVALID.0 {
+            if train_station.tile == TileIndex::INVALID {
                 (self.s.reset_facilities)(
                     st,
                     StationFacilities::from_element(StationFacility::Train).0,
@@ -2687,7 +2682,9 @@ impl Ctx<'_> {
             total_cost: cost,
             ret,
             error,
-            ta: TileArea::between(self.map(), start.0, end.0),
+            ta: TileArea::from_corners(self.map(), map_size, start, end, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            }),
             flags,
             removal_cost: Self::rail_removal_cost(waypoint),
             keep_rail,
@@ -2698,7 +2695,7 @@ impl Ctx<'_> {
         }
         /* Do all station specific functions here. */
         for st in affected_stations {
-            if self.s.rail_area(st).tile == TileIndex::INVALID.0 {
+            if self.s.rail_area(st).tile == TileIndex::INVALID {
                 (self.s.facility_widget)(st, StationType::Rail.0);
             }
             (self.s.mark_tiles)(st, false);
@@ -2733,7 +2730,7 @@ impl Ctx<'_> {
         /* clear all areas of the station */
         for tile in ta.tiles(self.map()) {
             /* only remove tiles that are actually train station tiles */
-            if !self.tile_belongs_to_rail_station(st, TileIndex(tile)) {
+            if !self.tile_belongs_to_rail_station(st, tile) {
                 continue;
             }
             let total = cost.money();
@@ -3196,7 +3193,7 @@ impl Ctx<'_> {
         let mut allowed_z = -1;
         cost.set(0);
         for cur_tile in tile_area.tiles(self.map()) {
-            let cur_tile = TileIndex(cur_tile);
+            let cur_tile = cur_tile;
             // CheckFlatLandRoadStop uses both native slots; its result is left
             // in `cost`, and the accumulated amount is restored after.
             let total = cost.money();
@@ -3393,7 +3390,7 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let roadstop_area = TileArea {
-            tile: tile.0,
+            tile: tile,
             w: u16::from(width),
             h: u16::from(length),
         };
@@ -3532,7 +3529,7 @@ impl Ctx<'_> {
         }
         /* Check every tile in the area. */
         for cur_tile in roadstop_area.tiles(self.map()) {
-            let cur_tile = TileIndex(cur_tile);
+            let cur_tile = cur_tile;
             /* Get existing road types and owners before any tile clearing */
             let (mut road_rt, mut tram_rt, road_owner, tram_owner) =
                 self.existing_road_types_and_owners(cur_tile);
@@ -3903,7 +3900,7 @@ impl Ctx<'_> {
                 (self.s.set_road_waypoint_area)(wp, road_waypoint_area);
                 self.update_station_sign_coord(wp);
                 /* if we deleted the whole waypoint, delete the road facility. */
-                if road_waypoint_area.tile == TileIndex::INVALID.0 {
+                if road_waypoint_area.tile == TileIndex::INVALID {
                     (self.s.reset_facilities)(
                         wp,
                         (StationFacilities::from_element(StationFacility::BusStop)
@@ -3942,7 +3939,7 @@ impl Ctx<'_> {
         last_error.error(self.s.strings.no_station);
         let mut had_success = false;
         for cur_tile in roadstop_area.tiles(self.map()) {
-            let cur_tile = TileIndex(cur_tile);
+            let cur_tile = cur_tile;
             /* Make sure the specified tile is a road stop of the correct type */
             if TileType((self.shared.tile_type)(cur_tile.0)) != TileType::MP_STATION
                 || !world.any_road_stop_tile(cur_tile.0)
@@ -4055,7 +4052,7 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let roadstop_area = TileArea {
-            tile: tile.0,
+            tile: tile,
             w: u16::from(width),
             h: u16::from(height),
         };
@@ -4086,7 +4083,9 @@ impl Ctx<'_> {
         if start.0 >= map_size || end.0 >= map_size {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let roadstop_area = TileArea::between(self.map(), start.0, end.0);
+        let roadstop_area = TileArea::from_corners(self.map(), map_size, start, end, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         self.remove_generic_road_stop(RoadStopRemoval {
             cost,
             ret,
@@ -4303,8 +4302,8 @@ impl Ctx<'_> {
         self.airport_get_nearest_town(
             crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
             rotation,
-            TileIndex(airport.tile),
-            airport.tiles(self.map()).map(TileIndex).filter(|&t| {
+            airport.tile,
+            airport.tiles(self.map()).filter(|&t| {
                 crate::station_base::tile_belongs_to_airport(self.shared, StationID(id), t)
             }),
         )
@@ -4509,7 +4508,7 @@ impl Ctx<'_> {
             (size.w, size.h)
         };
         let airport_area = TileArea {
-            tile: tile.0,
+            tile: tile,
             w: u16::from(w),
             h: u16::from(h),
         };
@@ -4689,12 +4688,12 @@ impl Ctx<'_> {
             if !crate::station_base::tile_belongs_to_airport(
                 self.shared,
                 StationID(index),
-                TileIndex(tile_cur),
+                tile_cur,
             ) {
                 continue;
             }
             unsafe {
-                self.command.no_vehicle(ret.0, tile_cur);
+                self.command.no_vehicle(ret.0, tile_cur.0);
             }
             if !ret.ok() {
                 return cost.take(ret);
@@ -4703,8 +4702,8 @@ impl Ctx<'_> {
                 Price::PR_CLEAR_STATION_AIRPORT.0,
             )));
             if flags.test(DoCommandFlag::Execute) {
-                crate::ground::clear_square(tile_cur, self.shared);
-                (self.s.close_airport_tile_inspect)(tile_cur);
+                crate::ground::clear_square(tile_cur.0, self.shared);
+                (self.s.close_airport_tile_inspect)(tile_cur.0);
             }
         }
         if flags.test(DoCommandFlag::Execute) {
@@ -4884,21 +4883,26 @@ impl Ctx<'_> {
         } else {
             (self.s.industry_area)(industry)
         };
-        if area.tile == TileIndex::INVALID.0 {
+        if area.tile == TileIndex::INVALID {
             return;
         }
         let map = self.map();
-        let x = map.tile_x(TileIndex(area.tile));
-        let y = map.tile_y(TileIndex(area.tile));
+        let x = map.tile_x(area.tile);
+        let y = map.tile_y(area.tile);
         /* Expand the area by a tile on each side while
          * making sure that we remain inside the map. */
         let x2 = (x + u32::from(area.w) + 1).min(map.size_x());
         let x1 = x.saturating_sub(1);
         let y2 = (y + u32::from(area.h) + 1).min(crate::map_func::World::new(self.shared).size_y());
         let y1 = y.saturating_sub(1);
-        let ta = TileArea::between(map, map.tile_xy(x1, y1).0, map.tile_xy(x2 - 1, y2 - 1).0);
+        let ta = TileArea::from_corners(
+            map,
+            self.shared.map_size(),
+            map.tile_xy(x1, y1),
+            map.tile_xy(x2 - 1, y2 - 1),
+            |ok| crate::movement::native_assert(self.shared, ok),
+        );
         for tile in ta.tiles(map) {
-            let tile = TileIndex(tile);
             if (self.shared.tile_valid)(tile.0) && self.is_possible_docking_tile(tile) {
                 self.check_for_docking_tile(tile);
             }
@@ -5112,7 +5116,7 @@ impl Ctx<'_> {
         }
         let (dx, dy) = DOCK_TILEOFFS_CHKAROUND[usize::from(direction.0)];
         let dock_area = TileArea {
-            tile: tile.0.wrapping_add(self.map().diff(dx, dy).cast_unsigned()),
+            tile: tile + self.map().diff(dx, dy),
             w: DOCK_W_CHK[usize::from(direction.0)],
             h: DOCK_H_CHK[usize::from(direction.0)],
         };
@@ -5295,11 +5299,11 @@ impl Ctx<'_> {
                 });
             (self.s.set_ship_area)(st, ship_station);
             self.update_station_docking_tiles(st);
-            if ship_station.tile == TileIndex::INVALID.0 {
+            if ship_station.tile == TileIndex::INVALID {
                 (self.s.set_ship_area)(
                     st,
                     TileArea {
-                        tile: TileIndex::INVALID.0,
+                        tile: TileIndex::INVALID,
                         w: 0,
                         h: 0,
                     },
@@ -6060,29 +6064,19 @@ impl Ctx<'_> {
         let cur_ta = self.s.rail_area(st);
         let map = self.map();
         /* determine new size of train station region.. */
-        let x = map
-            .tile_x(TileIndex(cur_ta.tile))
-            .min(map.tile_x(TileIndex(new_ta.tile)));
-        let y = map
-            .tile_y(TileIndex(cur_ta.tile))
-            .min(map.tile_y(TileIndex(new_ta.tile)));
+        let x = map.tile_x(cur_ta.tile).min(map.tile_x(new_ta.tile));
+        let y = map.tile_y(cur_ta.tile).min(map.tile_y(new_ta.tile));
         let new_ta = TileArea {
-            tile: map.tile_xy(x, y).0,
+            tile: map.tile_xy(x, y),
             w: (map
-                .tile_x(TileIndex(cur_ta.tile))
+                .tile_x(cur_ta.tile)
                 .wrapping_add(u32::from(cur_ta.w))
-                .max(
-                    map.tile_x(TileIndex(new_ta.tile))
-                        .wrapping_add(u32::from(new_ta.w)),
-                )
+                .max(map.tile_x(new_ta.tile).wrapping_add(u32::from(new_ta.w)))
                 .wrapping_sub(x)) as u16,
             h: (map
-                .tile_y(TileIndex(cur_ta.tile))
+                .tile_y(cur_ta.tile)
                 .wrapping_add(u32::from(cur_ta.h))
-                .max(
-                    map.tile_y(TileIndex(new_ta.tile))
-                        .wrapping_add(u32::from(new_ta.h)),
-                )
+                .max(map.tile_y(new_ta.tile).wrapping_add(u32::from(new_ta.h)))
                 .wrapping_sub(y)) as u16,
         };
         /* make sure the final size is not too big. */

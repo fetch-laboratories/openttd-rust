@@ -1972,13 +1972,13 @@ impl<'a> Ctx<'a> {
         let mut iter = crate::tilearea::TileIterator::create(
             self.map,
             self.size(),
-            start,
-            end,
+            TileIndex(start),
+            TileIndex(end),
             diagonal,
             check,
         );
         loop {
-            let tile = iter.tile();
+            let tile = iter.tile().0;
             if tile == u32::MAX {
                 break;
             }
@@ -2104,18 +2104,32 @@ impl<'a> Ctx<'a> {
             }
         } else {
             let other = (self.rail.other_tunnel_bridge_end)(tile);
-            if other < tile
-                && crate::tilearea::corners_contain(
+            if other < tile {
+                let check = |ok| crate::movement::native_assert(self.shared, ok);
+                let (area_start, area_end) = (TileIndex(start), TileIndex(end));
+                if diagonal {
+                    if crate::tilearea::DiagonalTileArea::from_corners(
+                        self.map,
+                        self.size(),
+                        area_start,
+                        area_end,
+                        check,
+                    )
+                    .contains(TileIndex(other), self.map)
+                    {
+                        return;
+                    }
+                } else if crate::tilearea::OrthogonalTileArea::from_corners(
                     self.map,
                     self.size(),
-                    start,
-                    end,
-                    diagonal,
-                    other,
-                    |ok| crate::movement::native_assert(self.shared, ok),
+                    area_start,
+                    area_end,
+                    check,
                 )
-            {
-                return;
+                .contains(TileIndex(other), self.map, check)
+                {
+                    return;
+                }
             }
             if !(self.shared.road_powered)(from, to) {
                 ret.wormhole_free(self.commands, tile, other);
