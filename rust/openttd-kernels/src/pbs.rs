@@ -701,7 +701,8 @@ impl<'a> Pbs<'a> {
         }
 
         if ft.new_td_bits != TrackdirBits::TRACKDIR_BIT_NONE
-            && kill_first_bit_u32(u32::from(ft.new_td_bits.0)) == 0
+            && kill_first_bit_u32(u32::from(ft.new_td_bits.0))
+                == u32::from(TrackdirBits::TRACKDIR_BIT_NONE.0)
         {
             let td = Trackdir(find_first_trackdir(ft.new_td_bits.0));
             /* PBS signal on next trackdir? Safe position. */
