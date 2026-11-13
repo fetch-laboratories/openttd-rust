@@ -33,7 +33,7 @@ Follow the [change workflow](../../workflow.md) from issue through cleanup, and 
 
 ### 3. Plan more work
 
-- Trigger planning when the cleanup stage's stream issues run out of ready batches; before the cleanup stage's last items are dispatched (to plan phase 3); at a phase exit; when the current and next phases together hold fewer than three ready unstarted ownership items (not waiting on a draft or merge); when the next phase has no ready owner; or when `issues.py` shows unplaced issues.
+- Trigger planning when the cleanup stage's stream issues run out of ready batches; while the cleanup stage runs and phase 3 has no full plan; at a phase exit; when the current and next phases together hold fewer than three ready unstarted ownership items (not waiting on a draft or merge); when the next phase has no ready owner; or when `issues.py` shows unplaced issues.
 - This planning is yours: size remaining code, rank owners of the current and next phase and open maintenance, testing and housekeeping issues under [selection](../../planning.md#selection), and apply [issue placement and deferral](../../planning.md#issue-placement-and-deferral). Work from the roadmap's "Phases" and, for storage owners, the [world-state design](../../design/world-state.md). Hand counts and measurements to the [routine agent](../../team.md#routine-agent).
 - Write what you select into the [ready queue](../../team.md#ready-queue-and-pipelining). A planning agent then plans each work order, one per entry.
 
