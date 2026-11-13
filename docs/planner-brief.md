@@ -19,7 +19,16 @@ Write the plan into the issue's body under `## Implementation plan`, below root'
 
 ## Limits
 
-- You write the plan and nothing else: every file stays as it is, and you start no agent, build, simulation or CI run. Measure with the inventory and metrics tools.
+- You write the plan and nothing else: every file stays as it is, and you start no build, simulation or CI run, and no agent but the plan's reviewer. Measure with the inventory and metrics tools.
 - If the entry should not be done as selected (already delivered, blocked, or costing more than it removes), say so under open questions in place of a plan.
 
-Your last line to root is the issue's URL and the plan's open questions.
+## Plan review
+
+Have the plan reviewed before you report to root. Nobody downstream checks a decision again: the implementer carries it out and the PR's reviewers take it as given.
+
+- Start one reviewer with T3 `delegate_task` and `isolation: "worktree"`, using the [role table](team.md#roles-and-models)'s review model, and this fixed message and nothing more:
+  > Review the plan in <issue URL> under `docs/review-brief.md`. You are /root/plan-review-<issue number>.
+- Correct the plan in place for each finding. A finding that turns on a question no recorded rule answers, or one you dispute, goes under open questions with the reviewer's point and yours.
+- One review is enough; start a second only if you rewrote a decision.
+
+Your last line to root is the issue's URL, the plan review's report URL and the plan's open questions.

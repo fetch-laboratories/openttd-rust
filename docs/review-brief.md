@@ -8,6 +8,10 @@ The PR's implementer starts each reviewer with one of these fixed messages and n
 
 Read the PR body, its review groups, its flagged points and its earlier reports yourself.
 
+A planner starts its plan's reviewer with this message; [a plan review](#a-plan-review) has its own section and report:
+
+> Review the plan in <issue URL> under `docs/review-brief.md`. You are <name>.
+
 ## Before reviewing
 
 1. Read [porting](porting.md), which holds the standards you enforce, and [review](workflow.md#review). Read them and this brief as `origin/rust-migration` has them (`git show origin/rust-migration:docs/review-brief.md`): a PR head that predates a rule change still carries the old rule.
@@ -23,7 +27,8 @@ Do not commit, push, request Full or merge.
 - **Same operations, same order.** Compare each changed body with its original body, callee by callee, not only with the earlier Rust: guards, fatal paths, assertions, widths, return values, service and command calls, random draws, partial effects on early return and lifetimes.
 - **Every line in scope.** Each departure from [porting](porting.md) in the lines [code standards](porting.md#code-standards) puts in scope is a finding. `python3 tools/code-standards-inventory.py FILE...` lists candidate sites per file; judge each.
 - **Design faults.** A pass leaves none in the files it finishes ([design faults](porting.md#design-faults)). Count the call sites of each service those files call: a service with one, such as one per console or error message, is a carrier written for one call site.
-- **The plan.** A departure from the implementation plan that the PR body does not record with its reason is a finding.
+- **The plan.** A departure from the implementation plan that the PR body does not record with its reason is a finding. The plan's decisions were reviewed before dispatch; reopen one only where the code shows a fact it states is false.
+- **Recorded exceptions.** Writing a departure from [porting](porting.md) into the PR body does not settle it (provisional). Rule on each one the PR body records for your group: name the rule, ruling or owning issue that allows it, or report it as a finding.
 - **Evidence.** A changed path the PR newly leaves unreached or unobserved by the scenarios and tests it cites is a finding.
 - **Cleanup records.** The checks enforce the records' form, not their truth, so judge each: a growth or lint exception names the original behavior that requires it and what retires it; a carry pairs the same item before and after a rename or move; a suppression's reason names the original definition or cast it preserves.
 
@@ -34,6 +39,28 @@ A re-check is a PR's second and last review stage ([ADR 0025](adr/0025-two-revie
 - Say for each earlier finding whether its fixing commit resolves it.
 - Raise a new finding only in a line a fixing commit changed, or for a behaviour difference from the original wherever you see one.
 - Anything else you notice is one line under the disposition and does not change it. The implementer fixes it without a further review where the operations stay unchanged, or records it as residue in the PR body.
+
+## A plan review
+
+You review an implementation plan before any code is written. The planner chose how the work is done; you check that the plan can be carried out as written without breaking the project's rules. Fixing a plan costs nothing now and a review round later. You do not review the PR that follows.
+
+The plan is the `## Implementation plan` in the issue's body, and its Base names the commit it was written against. Check that commit out and work from it. Read [porting](porting.md), the [planner brief](planner-brief.md) and [sizing](planning.md#sizing).
+
+Go through the plan one decision at a time, then its Done, Files, Size and Evidence sections.
+
+- **Rules.** Would carrying the decision out leave something porting forbids in the files the plan finishes: a design fault, a C++ service called where a Rust port or typed accessor of the same original callee exists, a new accessor that duplicates an existing one, an orphan, a dropped assertion or comment, a function over the parameter limit? Whatever the plan leaves in C++, defers or excepts needs the rule, ruling or owning issue that allows it. Name it; a decision with none is a finding. A plan grants no exception itself.
+- **Facts.** Test every claim the plan makes about the code with a search or a read: that no Rust form of something exists, that something has no caller or one caller, a count, a line number, what a function does, what the original does, which files the work touches. A plan built on a false claim is a finding.
+- **Feasibility.** Where the plan prescribes a shape, a signature or an order of commits, say if it cannot build or cannot pass the lint gates (`migration/lints/clippy.toml`, [quick cleanup checks](rust-migration.md#quick-cleanup-checks)).
+
+Do not redo the planner's design or propose a different approach where the plan's own meets the rules.
+
+Post one report as a comment on the issue, starting `Reviewed plan: #<issue> at <commit>` and attributed as every report is.
+
+- **Findings.** One to three sentences each: the decision or section, what is wrong, the command and result that show it, and the remedy.
+- **Claims tested.** One line for every claim you tested, true or false: the claim in a few words, the command, the result. List the claims you could not test.
+- End with the disposition: `plan accepted` or `findings to remediate`.
+
+Your last line is the report's URL and disposition. It reaches the planner when your turn ends.
 
 ## Policy questions
 
@@ -54,6 +81,7 @@ Post one report on the PR as a separate comment, with the PR template's review s
 - For each finding give, in one to three sentences, its location (file:line at the reviewed head), what it departs from, the check or reading that found it and the suggested remedy.
 - End with the disposition: accepted, or findings to remediate. An acceptance is three lines: the reviewed commit, the attribution and the disposition with your group.
 - A re-check gives one line per finding: resolved in `<sha>`, or what remains.
+- Give one line for each recorded exception you allowed: the exception and what allows it.
 - When you accept a growth exception, lint exception or suppression proposed in the branch's cleanup records file, add the fenced `cleanup-acceptance` block it needs to the same report ([quick cleanup checks](rust-migration.md#quick-cleanup-checks)); without it the PR cannot queue.
 - Post the report when the source review is done; do not wait for CI.
 
