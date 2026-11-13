@@ -2013,7 +2013,7 @@ mod tests {
     extern "C" fn add_count(tile: u32, c: i32) {
         log(Event::Write("count", tile));
         edit(TileIndex(tile), |b| {
-            b.m5 = b.m5.wrapping_add(((c as u8) & 3) << 6)
+            b.m5 = b.m5.wrapping_add(((c as u8) & 3) << 6);
         });
     }
     #[allow(
