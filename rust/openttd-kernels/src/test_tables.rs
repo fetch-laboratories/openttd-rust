@@ -823,13 +823,6 @@ pub(crate) const CLEAR_GROUND: crate::ground::ClearServices = crate::ground::Cle
     set_field: unreachable2,
 };
 
-/// `crate::water_regions::Leaves` with every entry unreachable.
-pub(crate) const WATER_REGION_LEAVES: crate::water_regions::Leaves = crate::water_regions::Leaves {
-    shared: ptr::null(),
-    aqueduct: unreachable1,
-    debug: unreachable3,
-};
-
 /// `crate::station::CatchmentServices` with every entry unreachable.
 pub(crate) const CATCHMENT: crate::station::CatchmentServices = crate::station::CatchmentServices {
     shared: ptr::null(),

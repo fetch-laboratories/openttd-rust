@@ -21,7 +21,7 @@ use crate::game_state::GameState;
 use crate::node_hash::NodeMap;
 use crate::services::Services;
 use crate::track_type::INVALID_TRACKDIR;
-use crate::water_regions::Patch;
+use crate::water_regions::WaterRegionPatchDesc as Patch;
 use std::ffi::c_void;
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -77,9 +77,8 @@ pub struct Leaves {
     pub destination: unsafe extern "C" fn(*const c_void) -> Destination,
     pub tile: unsafe extern "C" fn(*const c_void, u32, u8) -> Tile,
     pub patch: unsafe extern "C" fn(u32) -> Patch,
-    pub visit_new: unsafe extern "C" fn(Patch) -> *mut c_void,
-    pub visit_next: unsafe extern "C" fn(*mut c_void, Patch, *mut Patch) -> u8,
-    pub visit_destroy: unsafe extern "C" fn(*mut c_void),
+    pub visit_next:
+        unsafe extern "C" fn(*mut crate::water_regions::WaterVisit, Patch, *mut Patch) -> u8,
     pub debug: unsafe extern "C" fn(u32, u8, u8, u32, u32, u32, i32, i32),
 }
 #[derive(Clone, Default)]
@@ -241,7 +240,7 @@ fn patch_hash(input: &Input, p: Patch) -> u32 {
         .wrapping_mul(p.y as u32)
         .wrapping_add(p.x as u32)
         << 8)
-        | u32::from(p.label)
+        | u32::from(p.label.0)
 }
 fn distance(a: Patch, b: Patch) -> i32 {
     (a.x.wrapping_sub(b.x).abs() + a.y.wrapping_sub(b.y).abs()).wrapping_mul(100)
@@ -276,7 +275,7 @@ fn region_path(
     let mut search = unsafe { Search::reused(limit) };
     for &tile in origins {
         let patch = unsafe { (leaves.patch)(tile) };
-        if patch.label != 0 {
+        if patch.label.0 != 0 {
             search.startup(blank(patch_hash(input, patch), 0, 0, patch, None));
         }
     }
@@ -298,14 +297,14 @@ fn region_path(
             break index;
         }
         stats[0] += 1;
-        let cursor = unsafe { (leaves.visit_new)(node.patch) };
+        let mut cursor = crate::water_regions::WaterVisit::new();
         loop {
             let mut patch = Patch {
                 x: 0,
                 y: 0,
-                label: 0,
+                label: crate::water_regions::WaterRegionPatchLabel(0),
             };
-            if unsafe { (leaves.visit_next)(cursor, node.patch, &raw mut patch) } == 0 {
+            if unsafe { (leaves.visit_next)(&raw mut cursor, node.patch, &raw mut patch) } == 0 {
                 break;
             }
             let mut n = blank(patch_hash(input, patch), 0, 0, patch, Some(index));
@@ -325,7 +324,6 @@ fn region_path(
             };
             search.add(n);
         }
-        unsafe { (leaves.visit_destroy)(cursor) };
         if !search.close(index) {
             stats[11] += 1;
             search.report(input, leaves, 0, rounds, None);
@@ -431,7 +429,7 @@ fn low_search(
             Patch {
                 x: 0,
                 y: 0,
-                label: 0,
+                label: crate::water_regions::WaterRegionPatchLabel(0),
             },
             None,
         ));
@@ -470,7 +468,7 @@ fn low_search(
                     Patch {
                         x: 0,
                         y: 0,
-                        label: 0,
+                        label: crate::water_regions::WaterRegionPatchLabel(0),
                     },
                     Some(index),
                 );
@@ -909,7 +907,7 @@ pub unsafe extern "C" fn openttd_rust_ship_heap_probe(
             Patch {
                 x: 0,
                 y: 0,
-                label: 0,
+                label: crate::water_regions::WaterRegionPatchLabel(0),
             },
             None,
         );
@@ -959,9 +957,7 @@ crate::abi::layouts! {
         destination,
         tile,
         patch,
-        visit_new,
         visit_next,
-        visit_destroy,
         debug,
     };
     "OpenTTDShipTile" ["probe"] => Tile {
@@ -991,7 +987,7 @@ mod tests {
         let patch = Patch {
             x: 1,
             y: 2,
-            label: 3,
+            label: crate::water_regions::WaterRegionPatchLabel(3),
         };
         for key in 0..64 {
             outer.add(blank(key, key, 0, patch, None));
