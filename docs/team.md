@@ -15,7 +15,7 @@ Under a Claude Code root, Opus handles all code-touching work; Sonnet handles on
 
 ## Slots
 
-At most two implementers work at once ([ADR 0010](adr/0010-two-implementers.md)). An implementer whose PRs all wait on CI, review or the merge queue does not count; a running profile counts as one. Reviews, planning and research do not count.
+At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). An implementer holds its slot from dispatch until its PR merges or root stops it, including while it waits on CI, review or the merge queue, and root gives it no new work meanwhile. A running profile counts as one. Reviews, planning and research do not count.
 
 ## Spawning
 

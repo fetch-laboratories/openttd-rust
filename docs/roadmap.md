@@ -238,7 +238,7 @@ Steering 36 is the latest; its findings are in the message of the steering commi
 For root, on resume:
 1. Take #976 to the queue; nothing blocks it. Its failed Quick step had a cause that is not in the PR: the head moved during the requested run. Run `python3 tools/ci.py ready 976`, request `native` at `2b2fa63782`, push nothing to the branch until the run's Quick job has finished, and queue on a pass ([audit comment](https://github.com/fetch-laboratories/openttd-rust/pull/976#issuecomment-6847188596)).
 2. Finish root's half of the merge-59 stocktake ([resume checkpoint](#resume-checkpoint)). In it, add #978 and items 12 and 13 of [steering 36's comment](https://github.com/fetch-laboratories/openttd-rust/issues/945#issuecomment-6847190436) to #945, and have its planner say whether the batch still fits one PR.
-3. Dispatch #945 before any new file pass, and #974 to the other slot. File passes take the slots after them: #963, then a fresh implementer for #977 from [its notes](https://github.com/fetch-laboratories/openttd-rust/pull/977#issuecomment-6847189014).
+3. Slots are strict now ([slots](team.md#slots)): the implementer that takes #976 through CI holds one until it merges. Dispatch #945 to the other, before any new file pass, then #974. File passes take the slots after them: #963, then a fresh implementer for #977 from [its notes](https://github.com/fetch-laboratories/openttd-rust/pull/977#issuecomment-6847189014).
 4. Start a planner for #979 once #974 has merged and #945's one-call-site listing exists.
 5. Bring #734's body to 133 files and link the three residue lists.
 
@@ -248,7 +248,7 @@ Provisional, for steering 37 to judge:
 - **Plans.** Plans cost about 9% of implementer minutes and their file sets were accurate (10 of 12 PRs had at most 4% unplanned lines), so plans in issues stand. Count the plan decisions an audit or reviewer finds contrary to porting (six in this window) and compare estimates with actual changed lines (median 1.54 times).
 - **Re-check scope** stands: no re-check raised a behaviour defect outside its fixing commits, and the four sessions beyond two stages were forced by the exact-head acceptance, item 13 on #945.
 - **Root's docs pushes.** Ten of 22 landed on a queued PR and rebuilt 13 merge-group runs before `b4e7ca3d73`, none after. Root made 13 ready-queue commits in 8.3 hours; count both again.
-- **Implementer slots.** Before the user's session-only limit of 2026-11-13 04:07, an average of 5.2 implementer sessions existed and 3.0 were building or editing, with three or more active in 16 of 24 quarter-hours; the compile step ran a median 234 seconds then, against 136 to 140 idle. A waiting implementer does not stay waiting: base updates, review fixes and preflight reruns bring it back. Steering 36 put the choice to the user, whose [ADR 0010](adr/0010-two-implementers.md) it is; until they answer, [slots](team.md#slots) stands as written.
+- **Implementer slots.** The user made the strict limit of two standing ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)): a waiting implementer keeps its slot. Under the earlier rule 3.0 implementers were building or editing on average and the compile step ran a median 234 seconds against 136 to 140 idle. Measure changed lines merged per hour (3,396 before the limit, 3,660 in the 2.4 hours after it), the compile step's time and how long a slot sits idle behind CI, so that the user can judge the limit on more than one session.
 
 ## Ready queue
 
