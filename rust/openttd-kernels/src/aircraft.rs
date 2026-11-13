@@ -1254,7 +1254,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// vehicle.
     #[allow(
         clippy::manual_midpoint,
-        reason = "GetAircraftFlightLevel's int (min + max) / 2 truncates toward zero"
+        reason = "GetAircraftFlightLevel's int (aircraft_min_altitude + aircraft_max_altitude) / 2"
     )]
     fn get_aircraft_flight_level(&self, v: VehicleRef, flags: *mut u8, takeoff: bool) -> i32 {
         /* Aircraft is in flight. We want to enforce it being somewhere

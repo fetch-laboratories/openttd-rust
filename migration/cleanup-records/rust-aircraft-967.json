@@ -55,7 +55,7 @@
     "after": 1,
     "operation": "World::get_aircraft_flight_level",
     "source_contract": "`GetAircraftFlightLevel` (src/aircraft_cmd.cpp:776) computes `(aircraft_min_altitude + aircraft_max_altitude) / 2` in int.",
-    "reason": "`i32::midpoint` rounds toward negative infinity; the original's division truncates toward zero, which differs for negative odd sums.",
+    "reason": "The port keeps the original's int expression `(aircraft_min_altitude + aircraft_max_altitude) / 2` and its operations rather than substituting `i32::midpoint`.",
     "retiring_owner": "#734",
     "retirement_condition": "When the body no longer has the original's shape this lint reports, or the lint leaves the force-warned set; the module-wide allow this pass removed covered it before."
   },
