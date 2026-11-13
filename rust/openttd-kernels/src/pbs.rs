@@ -8,7 +8,8 @@
 //! PBS support routines (`pbs.cpp`, `pbs.h`). Map arrays and native shells stay
 //! canonical; the native leaves in [`PbsServices`] reach the fields still stored
 //! in C++. No world reference survives a call.
-#![allow(unsafe_code)]
+// The `switch` cases keep the original's `if` inside each `case`.
+#![allow(unsafe_code, clippy::collapsible_match)]
 use crate::bitmath_func::{has_bit, kill_first_bit_u32};
 use crate::company_type::Owner;
 use crate::direction_func::diag_dir_to_axis;
