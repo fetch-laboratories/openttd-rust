@@ -282,10 +282,20 @@ impl<'a> CYapfRoad<'a> {
         self.nodes.closed_nodes.insert(key, item);
     }
     /// `NodeList::OpenCount`.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        reason = "HashTable::Count returns the original's int item count"
+    )]
     fn open_count(&self) -> i32 {
         self.nodes.open_nodes.len() as i32
     }
     /// `NodeList::ClosedCount`.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        reason = "HashTable::Count returns the original's int item count"
+    )]
     fn closed_count(&self) -> i32 {
         self.nodes.closed_nodes.len() as i32
     }
@@ -322,8 +332,7 @@ impl<'a> CYapfRoad<'a> {
     /// `AddMultipleNodes`: add multiple nodes - direct children of the given node.
     #[inline]
     fn add_multiple_nodes(&mut self, parent: usize, tf: &CFollowTrackT) {
-        let is_choice =
-            kill_first_bit_u16(tf.new_td_bits.0) != TrackdirBits::TRACKDIR_BIT_NONE.0;
+        let is_choice = kill_first_bit_u16(tf.new_td_bits.0) != TrackdirBits::TRACKDIR_BIT_NONE.0;
         let mut rtds = tf.new_td_bits;
         while rtds != TrackdirBits::TRACKDIR_BIT_NONE {
             let td = Trackdir(find_first_bit(u64::from(rtds.0)));
@@ -764,7 +773,8 @@ impl<'a> CYapfRoad<'a> {
                 && (self.non_artic || self.world.is_drive_through_stop_tile(tile));
         }
 
-        tile == self.dest_tile && has_trackdir(self.dest_trackdirs.0, trackdir.0, |ok| self.check(ok))
+        tile == self.dest_tile
+            && has_trackdir(self.dest_trackdirs.0, trackdir.0, |ok| self.check(ok))
     }
     /// `PfCalcEstimate`: called by YAPF to calculate cost estimate. Calculates
     /// distance to the destination adds it to the actual cost from origin and
@@ -831,11 +841,8 @@ impl<'a> CYapfRoad<'a> {
         /* our source tile will be the next vehicle tile (should be the given one) */
         let src_tile = tile;
         /* get available trackdirs on the start tile */
-        let mut src_trackdirs = get_trackdir_bits_for_road(
-            crate::movement::table(self.s),
-            tile,
-            self.road_tram_type(),
-        );
+        let mut src_trackdirs =
+            get_trackdir_bits_for_road(crate::movement::table(self.s), tile, self.road_tram_type());
         /* select reachable trackdirs only */
         src_trackdirs &= TrackdirBits(diagdir_reaches_trackdirs(enterdir.0));
 
@@ -883,11 +890,11 @@ impl<'a> CYapfRoad<'a> {
             if !st.is_null() {
                 let stop = crate::road_stop::primary_for_vehicle(self.s, st, self.vehicle);
                 // SAFETY: The shared table returns the static road stop table.
-                let stops = unsafe { &*(self.s.road_stops)() };
+                let road_stops = unsafe { &*(self.s.road_stops)() };
                 if !stop.is_null()
                     && (self
                         .world
-                        .is_drive_through_stop_tile(TileIndex((stops.tile)(stop)))
+                        .is_drive_through_stop_tile(TileIndex((road_stops.tile)(stop)))
                         || !crate::road_stop::next_for_vehicle(self.s, stop, self.vehicle)
                             .is_null())
                 {
@@ -926,7 +933,12 @@ impl<'a> CYapfRoad<'a> {
         next_trackdir
     }
     /// `FindNearestDepot`: find the best depot for a road vehicle.
-    fn find_nearest_depot(&mut self, tile: TileIndex, td: Trackdir, max_distance: i32) -> FindDepotData {
+    fn find_nearest_depot(
+        &mut self,
+        tile: TileIndex,
+        td: Trackdir,
+        max_distance: i32,
+    ) -> FindDepotData {
         /* Set origin. */
         self.set_origin(tile, TrackdirBits(trackdir_to_trackdir_bits(td.0)));
         self.max_cost = max_distance;
@@ -1034,10 +1046,10 @@ pub(crate) unsafe fn yapf_road_vehicle_choose_track(
     // SAFETY: As this function's contract.
     let td_ret = unsafe { pf.choose_road_track(tile, enterdir, path_found, state) };
 
-    if td_ret != Trackdir::INVALID_TRACKDIR {
-        td_ret
-    } else {
+    if td_ret == Trackdir::INVALID_TRACKDIR {
         Trackdir(find_first_bit(u64::from(trackdirs.0)))
+    } else {
+        td_ret
     }
 }
 
@@ -1110,12 +1122,18 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
     // SAFETY: As this function's contract.
     let mut pf = unsafe { CYapfRoad::reused(s, v, input, false) };
     // SAFETY: As this function's contract.
-    let td_ret =
-        unsafe { pf.choose_road_track(TileIndex(tile), DiagDirection(entry), &mut path_found, state) };
-    let direction = if td_ret != Trackdir::INVALID_TRACKDIR {
-        td_ret
-    } else {
+    let td_ret = unsafe {
+        pf.choose_road_track(
+            TileIndex(tile),
+            DiagDirection(entry),
+            &mut path_found,
+            state,
+        )
+    };
+    let direction = if td_ret == Trackdir::INVALID_TRACKDIR {
         Trackdir(find_first_bit(u64::from(dirs)))
+    } else {
+        td_ret
     };
     pf.result(direction, path_found)
 }
@@ -1212,10 +1230,15 @@ mod tests {
     extern "C" fn road_kind(_: VehicleRef) -> crate::road_type::RoadTramType {
         crate::road_type::RoadTramType::RTT_ROAD
     }
-    extern "C" fn no_station(_: crate::station_type::StationID) -> *mut crate::station::BaseStation {
+    extern "C" fn no_station(
+        _: crate::station_type::StationID,
+    ) -> *mut crate::station::BaseStation {
         ptr::null_mut()
     }
-    extern "C" fn absent_area(_: *const crate::station::BaseStation, _: u8) -> crate::tilearea::TileArea {
+    extern "C" fn absent_area(
+        _: *const crate::station::BaseStation,
+        _: u8,
+    ) -> crate::tilearea::TileArea {
         crate::tilearea::TileArea::new(TileIndex::INVALID, 0, 0)
     }
     extern "C" fn some_station(_: u16) -> *mut crate::station::BaseStation {
@@ -1533,8 +1556,7 @@ mod tests {
     fn closed_node_bettered_by_a_new_node_takes_the_native_unreachable_path() {
         // The native unreachable path ends the process, so the search runs in a
         // child whose `NOT_REACHED` service exits with a code the parent checks.
-        const NAME: &str =
-            "road_yapf::tests::closed_node_bettered_by_a_new_node_takes_the_native_unreachable_path";
+        const NAME: &str = "road_yapf::tests::closed_node_bettered_by_a_new_node_takes_the_native_unreachable_path";
         const CHILD: &str = "OPENTTD_ROAD_YAPF_NOT_REACHED_CHILD";
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().unwrap())

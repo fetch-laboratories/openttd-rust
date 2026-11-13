@@ -39,17 +39,23 @@ pub(crate) fn calc_closest_station_tile(
         return TileIndex((s.base_station_xy)(station.0));
     }
 
-    let minx = map.dimensions.tile_x(ta.tile); // topmost corner of station
-    let miny = map.dimensions.tile_y(ta.tile);
-    let maxx = minx.wrapping_add(u32::from(ta.w)).wrapping_sub(1); // lowermost corner of station
-    let maxy = miny.wrapping_add(u32::from(ta.h)).wrapping_sub(1);
+    // The topmost corner of the station is `ta.tile`, and the lowermost
+    // `ta.tile + (ta.w - 1, ta.h - 1)`, in the original's unsigned arithmetic.
+    let corner = |coordinate: u32, extent: u16| {
+        (
+            coordinate,
+            coordinate.wrapping_add(u32::from(extent)).wrapping_sub(1),
+        )
+    };
 
     /* we are going the aim for the x coordinate of the closest corner
      * but if we are between those coordinates, we will aim for our own x coordinate */
-    let x = clamp_u(map.dimensions.tile_x(tile), minx, maxx, |ok| map.check(ok));
+    let (min, max) = corner(map.dimensions.tile_x(ta.tile), ta.w);
+    let x = clamp_u(map.dimensions.tile_x(tile), min, max, |ok| map.check(ok));
 
     /* same for y coordinate, see above comment */
-    let y = clamp_u(map.dimensions.tile_y(tile), miny, maxy, |ok| map.check(ok));
+    let (min, max) = corner(map.dimensions.tile_y(ta.tile), ta.h);
+    let y = clamp_u(map.dimensions.tile_y(tile), min, max, |ok| map.check(ok));
 
     /* return the tile of our target coordinates */
     map.dimensions.tile_xy(x, y)
