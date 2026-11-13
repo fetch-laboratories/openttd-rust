@@ -201,8 +201,8 @@ impl CFollowTrackT {
     ) -> Self {
         Self::vehicle(s, TransportType(mode), v, RailTypes(types), allow90)
     }
-    /// Temporary raw adapter of [`Self::rail`] for `pbs.rs` and
-    /// `train_reservation.rs` until their passes.
+    /// Temporary raw adapter of [`Self::rail`] for `train_reservation.rs` until
+    /// its pass.
     pub(crate) fn rail_raw(s: &Services, v: crate::train::Handle, owner: u8, types: u64) -> Self {
         Self::rail(
             s,
@@ -248,9 +248,8 @@ impl CFollowTrackT {
     pub(crate) fn follow(&mut self, s: &Services, old_tile: TileIndex, old_td: Trackdir) -> bool {
         self.follow_with_road(s, old_tile, old_td, None)
     }
-    /// Temporary raw adapter of [`Self::follow`] for `pbs.rs`,
-    /// `train_reservation.rs`, `rail_yapf.rs` and `native_test_support.rs`
-    /// until their passes.
+    /// Temporary raw adapter of [`Self::follow`] for `train_reservation.rs`,
+    /// `rail_yapf.rs` and `native_test_support.rs` until their passes.
     pub(crate) fn follow_raw(&mut self, s: &Services, tile: u32, td: u8) -> bool {
         self.follow(s, TileIndex(tile), Trackdir(td))
     }
@@ -386,7 +385,7 @@ impl CFollowTrackT {
             }
         }
 
-        let reserved = TrackBits(pbs.reserved(self.new_tile.0));
+        let reserved = pbs.get_reserved_trackbits(self.new_tile);
         /* Mask already reserved trackdirs. */
         self.new_td_bits &= !TrackdirBits(track_bits_to_trackdir_bits(reserved.0));
         /* Mask out all trackdirs that conflict with the reservation. */

@@ -36,7 +36,6 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.try_track = [](uint32_t t, uint8_t track) noexcept { return TryReserveTrack(TileIndex{t}, static_cast<Track>(track)); },
 		.unreserve_track = [](uint32_t t, uint8_t track) noexcept { UnreserveTrack(TileIndex{t}, static_cast<Track>(track)); },
 		.show_reservation = RustShowTrackReservation,
-		.assert_platform = []([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t dir) noexcept { assert(IsRailStationTile(TileIndex{tile})); assert(GetRailStationAxis(TileIndex{tile}) == DiagDirToAxis(static_cast<DiagDirection>(dir))); },
 		.station = RustBaseStationByTile,
 
 		.is_crossing = MapSvcRoadIsLevelCrossing,
@@ -63,7 +62,6 @@ void UnreserveRailTrack(TileIndex tile, Track t) { openttd_rust_pbs_unreserve(&G
 
 PBSTileInfo FollowTrainReservation(const Train *v, Vehicle **other)
 {
-	assert(v->GetType() == VEH_TRAIN);
 	auto result = openttd_rust_pbs_follow_train(&GetPbsServices(), TrainHandle(v), reinterpret_cast<OpenTTDPbsTrainOutput *>(other));
 	return {TileIndex{result.tile}, static_cast<Trackdir>(result.td), result.okay != 0};
 }
