@@ -18,14 +18,4 @@ inline OpenTTDTypeIntroduction RustRailTypeIntroduction(RailType rt) noexcept
 	const RailTypeInfo *rti = GetRailTypeInfo(rt);
 	return {.label = RustRailTypeLabel(rti), .date = rti->introduction_date.base(), .required = rti->introduction_required_railtypes.base(), .introduces = RustRailTypeIntroduces(rti)};
 }
-inline OpenTTDTypeIntroduction RustRoadTypeIntroduction(RoadType rt) noexcept
-{
-	const RoadTypeInfo *rti = GetRoadTypeInfo(rt);
-	return {.label = RustRoadTypeLabel(rti), .date = RustRoadTypeIntroductionDate(rti), .required = rti->introduction_required_roadtypes.base(), .introduces = RustRoadTypeIntroduces(rti)};
-}
-inline OpenTTDRoadTypeConstruction RustRoadTypeConstruction(RoadType rt) noexcept
-{
-	const RoadTypeInfo *rti = GetRoadTypeInfo(rt);
-	return {.label = RustRoadTypeLabel(rti), .date = RustRoadTypeIntroductionDate(rti), .hidden = RustRoadTypeHidden(rti), .town_build = RustRoadTypeTownBuild(rti)};
-}
 #endif

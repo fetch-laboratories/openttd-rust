@@ -42,6 +42,8 @@ pub struct RoadTypeFlag(pub u8);
 impl RoadTypeFlag {
     /// Bit number for setting this roadtype as not house friendly
     pub const NoHouses: Self = Self(2);
+    /// Bit number for hidden from construction.
+    pub const Hidden: Self = Self(3);
     /// Bit number for allowing towns to build this roadtype.
     pub const TownBuild: Self = Self(4);
 }

@@ -219,7 +219,7 @@ unsafe fn variable(
         0x43 | 0x44 => {
             let tram = variable == 0x44;
             let rt = if c.tile == INVALID_TILE {
-                if crate::road::get_road_tram_type(c.roadtype).0 == tram {
+                if crate::road::get_road_tram_type_raw(c.roadtype).0 == tram {
                     c.roadtype
                 } else {
                     crate::road_type::INVALID_ROADTYPE

@@ -6,24 +6,27 @@
 #include "../rail_type.h"
 #include "../road_type.h"
 struct OpenTTDTypeIntroduction { uint32_t label; int32_t date; uint64_t required, introduces; };
-struct OpenTTDRoadTypeConstruction { uint32_t label; int32_t date; bool hidden, town_build; };
+class RoadTypeInfo;
 /* Native TypeInfo storage supplies immutable metadata. These leaves neither reset
  * pools nor yield. Engine lifecycle scalar reads end before every callback.
  * Panics and environmental exceptions abort; ordinary play has no throwing leaf. */
 struct OpenTTDTypeAvailabilityServices {
-	const OpenTTDSharedServices *shared;
-	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
-	OpenTTDTypeIntroduction (*rail_introduction)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduction);
-	OpenTTDTypeIntroduction (*road_introduction)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_introduction);
-	uint64_t (*rail_introduces)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduces);
-	uint64_t (*road_introduces)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_introduces);
-	OpenTTDRoadTypeConstruction (*road_construction)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_construction);
+	bool assertions;
 	uint64_t (*company_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_railtypes);
 	uint64_t (*company_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_roadtypes);
+	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
+	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
+	uint64_t (*rail_introduces)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduces);
+	OpenTTDTypeIntroduction (*rail_introduction)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduction);
+	uint8_t (*road_flags)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
+	const RoadTypeInfo *(*road_info)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_info);
+	uint64_t (*road_introduces)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_introduces);
+	int32_t (*road_introduction_date)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_introduction_date);
+	uint64_t (*road_introduction_required)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_introduction_required);
+	uint32_t (*road_label)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_label);
 	void (*set_company_railtypes)(uint8_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_company_railtypes);
 	void (*set_company_roadtypes)(uint8_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_company_roadtypes);
-	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
-	bool assertions;
+	const OpenTTDSharedServices *shared;
 };
 const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcept;
 extern "C" {

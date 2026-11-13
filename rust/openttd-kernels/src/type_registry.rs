@@ -383,7 +383,7 @@ pub extern "C" fn openttd_rust_road_saved_current() {
     let s = services();
     for rt in ROADTYPE_BEGIN..ROADTYPE_END {
         let label = (s.road().type_label)(rt);
-        openttd_rust_road_saved_append(label, u8::from(crate::road::get_road_tram_type(rt).0));
+        openttd_rust_road_saved_append(label, u8::from(crate::road::get_road_tram_type_raw(rt).0));
     }
 }
 
@@ -440,7 +440,7 @@ pub extern "C" fn openttd_rust_road_translate(rtt: RoadTramType, rt: u8, file: H
         .map_or(INVALID_ROADTYPE, |label| {
             openttd_rust_road_by_label(*label, true)
         });
-    if result != INVALID_ROADTYPE && crate::road::get_road_tram_type(result).0 != rtt.0 {
+    if result != INVALID_ROADTYPE && crate::road::get_road_tram_type_raw(result).0 != rtt.0 {
         INVALID_ROADTYPE
     } else {
         result
@@ -468,7 +468,7 @@ pub extern "C" fn openttd_rust_road_reverse(rt: u8, file: Handle) -> u8 {
         return rt;
     }
     let s = services();
-    let labels = if crate::road::road_type_is_road(rt) {
+    let labels = if crate::road::road_type_is_road_raw(rt) {
         (s.road_labels)(file)
     } else {
         (s.tram_labels)(file)
@@ -557,7 +557,8 @@ pub unsafe extern "C" fn openttd_rust_road_saved_convert(
     for index in 0..saved_count {
         let (label, subtype) = unsafe { (&(*REGISTRY.get()).road_saved)[index] };
         let mut rt = openttd_rust_road_by_label(label, true);
-        if rt == INVALID_ROADTYPE || u8::from(crate::road::get_road_tram_type(rt).0) != subtype {
+        if rt == INVALID_ROADTYPE || u8::from(crate::road::get_road_tram_type_raw(rt).0) != subtype
+        {
             rt = if subtype != 0 {
                 ROADTYPE_TRAM
             } else {
