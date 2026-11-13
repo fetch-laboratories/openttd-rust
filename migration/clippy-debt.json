@@ -418,9 +418,6 @@
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn test_autoslope | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
     ],
-    "rust/openttd-kernels/src/rail_yapf.rs | impl Search::fn add_node | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
     "rust/openttd-kernels/src/road/availability.rs | fn engine_types | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],

@@ -3202,8 +3202,8 @@ mod tests {
         pbs_station: u32,
         shorter: u32,
         shorter_tile: u32,
-        slope: u32,
-        station: u32,
+        uphill: u32,
+        passing: u32,
     }
     static VALUES: Values = Values {
         max_search_nodes: 777,
@@ -3228,8 +3228,8 @@ mod tests {
         pbs_station: 61,
         shorter: 67,
         shorter_tile: 71,
-        slope: 73,
-        station: 79,
+        uphill: 73,
+        passing: 79,
     };
     fn catalog() -> SettingAddresses {
         let v = &VALUES;
@@ -3256,8 +3256,8 @@ mod tests {
             rail_pbs_station_penalty: &raw const v.pbs_station,
             rail_shorter_platform_penalty: &raw const v.shorter,
             rail_shorter_platform_per_tile_penalty: &raw const v.shorter_tile,
-            rail_slope_penalty: &raw const v.slope,
-            rail_station_penalty: &raw const v.station,
+            rail_slope_penalty: &raw const v.uphill,
+            rail_station_penalty: &raw const v.passing,
             ..SettingAddresses::NULL
         }
     }
@@ -3443,7 +3443,7 @@ mod tests {
             (*f.base.add(650)).height = 1;
             (*f.base.add(714)).height = 1;
         }
-        assert_eq!(pf.slope_cost(TileIndex(650), x_ne), v.slope.cast_signed());
+        assert_eq!(pf.slope_cost(TileIndex(650), x_ne), v.uphill.cast_signed());
         assert_eq!(pf.slope_cost(TileIndex(650), Trackdir::TRACKDIR_X_SW), 0);
 
         // `ReservationCost`: a reserved X track, crossed diagonally and by a
