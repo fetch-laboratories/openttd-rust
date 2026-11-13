@@ -36,7 +36,7 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 
 ### Review
 
-- The implementer starts its reviewers with T3 `delegate_task`, using the [role table](team.md#roles-and-models)'s review model and the [review brief](review-brief.md)'s spawn message. Root starts no reviewers.
+- The implementer starts its reviewers with T3 `delegate_task` and `isolation: "worktree"`, using the [role table](team.md#roles-and-models)'s review model and the [review brief](review-brief.md)'s spawn message. A reviewer checks out the reviewed head, so one started in a shared checkout moves that checkout's head. Root starts no reviewers.
 - Start one reviewer for the whole PR. Above about 1,000 changed lines, list review groups in the PR body and start one reviewer per group, in parallel.
 - Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
 - A PR has at most two review stages ([ADR 0025](adr/0025-two-review-stages.md)): the source review, and one re-check of the fixing commits only when a fix changed behaviour, test evidence or a body's operations. Fixes limited to names, comments, types or argument structs with unchanged operations need none; the implementer says so in the status comment.

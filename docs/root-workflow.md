@@ -14,6 +14,7 @@ A merge is one merged PR, counted from the first-parent history of `origin/rust-
 
   A checkpoint that increases fork C++ does not merge; take the [cost decision](planning.md#cost-decisions) first.
 - Cleanup-stage PRs instead pass their stream's proof in the roadmap, grow neither fork C++ nor the boundary, and merge on review and the queue's Full. A #734/#735 PR finishes every file it touches ([work order](roadmap.md#cleanup-work-order)).
+  - Callback slots may grow where a pass replaces a carrier written for one call site with shared typed accessors, and fork C++ does not grow with them. The reviewer accepts the growth record at the PR's head, and the record names the pass or owner that retires the slots.
 - A completion claim, in a PR or the roadmap, names only the scope delivered.
 - A work order may batch small maintenance items in one PR with one reviewer: cleanups, coverage, speed, tooling and fidelity fixes.
 - Keep at most six unmerged component branches, drafts and WIP included. Queue reviewed work before starting a component. Start from current `rust-migration` unless the roadmap names a dependency.
@@ -61,7 +62,7 @@ Implementers queue nothing until root lifts the stop. A confirmed regression als
 
 `python3 tools/housekeeping.py` lists stale worktrees and `.local` output; `--apply` removes the listed `remove` entries. Read the dry run first.
 
-- Naming a path or run in the roadmap, or in an open issue or PR body, protects it. Removing the name releases it.
+- Naming a path or run in the roadmap, or in an open issue or PR body, protects it. Removing the name releases it. Name a worktree by its whole folder name: a shortened one, such as `t3-bc6721f0`, protects nothing.
 - A lock stays until every issue or PR its note names is closed or merged, so name the work in a lock note.
 
 ## Automatic rollback and wind-down
