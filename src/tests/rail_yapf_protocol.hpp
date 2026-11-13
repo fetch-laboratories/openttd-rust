@@ -14,6 +14,7 @@
 #include "abi-record-settings.h"
 #include "../track_type.h"
 #include "../track_func.h"
+#include "../rail_map.h"
 #include "../rail_type.h"
 #include "../signal_func.h"
 #include "follower_fixture.hpp"
@@ -84,7 +85,7 @@ inline uint8_t Write(uint32_t tile, uint8_t td, uint8_t op) noexcept
 inline bool HasPbsSignal(uint32_t tile, uint8_t td) noexcept
 {
 	const auto &t = FollowerFixture::active->tiles.base[tile];
-	if (t.type >> 4 != MP_RAILWAY || t.m5 >> 6 != RAIL_TILE_SIGNALS) return false;
+	if (t.type >> 4 != MP_RAILWAY || t.m5 >> 6 != to_underlying(RailTileType::Signals)) return false;
 	if (((t.m3 >> 4) & SignalAlongTrackdir(static_cast<Trackdir>(td))) == 0) return false;
 	const Track track = TrackdirToTrack(static_cast<Trackdir>(td));
 	return IsPbsSignal(static_cast<SignalType>(GB(t.m2, track == TRACK_LOWER || track == TRACK_RIGHT ? 4 : 0, 3)));
@@ -108,7 +109,7 @@ inline OpenTTDTestRailYapf Run(uint32_t limit, uint32_t curve = 29, bool cache =
 	if (rollback) {
 		for (uint32_t tile : {start - 1, start - 2, start - 3}) {
 			auto &t = map.tiles.base[tile];
-			t.m5 = (RAIL_TILE_SIGNALS << 6) | TRACK_BIT_ALL;
+			t.m5 = (to_underlying(RailTileType::Signals) << 6) | TRACK_BIT_ALL;
 			t.m3 = SignalAlongTrackdir(TRACKDIR_X_SW) << 4;
 			t.m4 = SignalAlongTrackdir(TRACKDIR_X_SW) << 4;
 			t.m2 = SIGTYPE_PBS;
