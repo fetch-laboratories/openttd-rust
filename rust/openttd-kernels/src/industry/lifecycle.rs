@@ -72,7 +72,7 @@ pub struct LifecycleServices {
 pub(super) unsafe fn location(owner: *mut Industry) -> TileArea {
     unsafe {
         TileArea {
-            tile: ptr::read(ptr::addr_of!((*owner).metadata.tile)),
+            tile: TileIndex(ptr::read(ptr::addr_of!((*owner).metadata.tile))),
             w: ptr::read(ptr::addr_of!((*owner).metadata.width)),
             h: ptr::read(ptr::addr_of!((*owner).metadata.height)),
         }
@@ -82,7 +82,7 @@ pub(super) unsafe fn location(owner: *mut Industry) -> TileArea {
 /// width is a power of two.
 pub(super) fn tiles(area: TileArea, size_x: u32, mut operation: impl FnMut(TileIndex)) {
     for tile in area.tiles(crate::map_func::Map::from_log_x(size_x.ilog2())) {
-        operation(TileIndex(tile));
+        operation(tile);
     }
 }
 
@@ -148,7 +148,7 @@ pub(crate) unsafe fn industry_destruct(d: IndustryDestruct, s: &Services, w: &Li
     let has_neutral_station = !unsafe { (w.neutral_station)(industry) }.is_null();
     let area = unsafe {
         TileArea {
-            tile: ptr::read(ptr::addr_of!((*owner).metadata.tile)),
+            tile: TileIndex(ptr::read(ptr::addr_of!((*owner).metadata.tile))),
             w: width,
             h: ptr::read(ptr::addr_of!((*owner).metadata.height)),
         }
@@ -183,7 +183,7 @@ pub(crate) unsafe fn industry_destruct(d: IndustryDestruct, s: &Services, w: &Li
         .test(IndustryBehaviour::PlantFields)
     {
         let mut ta = TileArea {
-            tile: unsafe { ptr::read(ptr::addr_of!((*owner).metadata.tile)) },
+            tile: TileIndex(unsafe { ptr::read(ptr::addr_of!((*owner).metadata.tile)) }),
             w: 0,
             h: 0,
         };
