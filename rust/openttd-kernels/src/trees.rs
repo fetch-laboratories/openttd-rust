@@ -97,10 +97,10 @@ pub struct LoopSettings {
 pub struct Strings {
     /// `STR_ERROR_TREE_ALREADY_HERE`.
     pub already_here: u32,
-    /// `STR_ERROR_TREE_PLANT_LIMIT_REACHED`.
-    pub plant_limit: u32,
     /// `STR_ERROR_CAN_T_BUILD_ON_WATER`.
     pub on_water: u32,
+    /// `STR_ERROR_TREE_PLANT_LIMIT_REACHED`.
+    pub plant_limit: u32,
     /// `STR_ERROR_SITE_UNSUITABLE`.
     pub site_unsuitable: u32,
     /// `STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE`.
@@ -113,21 +113,21 @@ pub struct Strings {
 /// aborted; C++ then holds the exception and rethrows it after the entry returns.
 #[repr(C)]
 pub struct TreeServices {
-    pub sin: extern "C" fn(f32) -> f32,
-    pub cos: extern "C" fn(f32) -> f32,
-    pub make_tree: extern "C" fn(u32, u8, u32, u8, u8, u32),
-    pub set_ground_density: extern "C" fn(u32, u8, u32),
     pub add_count: extern "C" fn(u32, i32),
     pub add_growth: extern "C" fn(u32, i32),
-    pub set_growth: extern "C" fn(u32, u8),
-    pub make_clear: extern "C" fn(u32, u8, u32),
-    pub progress: extern "C" fn() -> bool,
-    pub progress_total: extern "C" fn(u32) -> bool,
-    /// Town leaves of `ChangeTownRating`.
-    pub town: *const crate::town::Leaves,
     /// The magic bulldozer cheat and town indices of `ChangeTownRating`.
     pub authority: *const crate::town::AuthorityServices,
+    pub cos: extern "C" fn(f32) -> f32,
+    pub make_clear: extern "C" fn(u32, u8, u32),
+    pub make_tree: extern "C" fn(u32, u8, u32, u8, u8, u32),
+    pub progress: extern "C" fn() -> bool,
+    pub progress_total: extern "C" fn(u32) -> bool,
+    pub set_ground_density: extern "C" fn(u32, u8, u32),
+    pub set_growth: extern "C" fn(u32, u8),
+    pub sin: extern "C" fn(f32) -> f32,
     pub strings: Strings,
+    /// Town leaves of `ChangeTownRating`.
+    pub town: *const crate::town::Leaves,
 }
 
 crate::abi::shared_records! {
@@ -1662,24 +1662,24 @@ pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDTreeServices" ["probe"] => crate::trees::TreeServices {
-        sin,
-        cos,
-        make_tree,
-        set_ground_density,
         add_count,
         add_growth,
-        set_growth,
+        authority,
+        cos,
         make_clear,
+        make_tree,
         progress,
         progress_total,
-        town,
-        authority,
+        set_ground_density,
+        set_growth,
+        sin,
         strings,
+        town,
     };
     "OpenTTDTreeStrings" ["probe"] => Strings {
         already_here,
-        plant_limit,
         on_water,
+        plant_limit,
         site_unsuitable,
         wrong_terrain,
     };
@@ -2041,33 +2041,33 @@ mod tests {
     }
     const STRINGS: Strings = Strings {
         already_here: 101,
-        plant_limit: 102,
         on_water: 103,
+        plant_limit: 102,
         site_unsuitable: 104,
         wrong_terrain: 105,
     };
     fn services() -> &'static TreeServices {
         Box::leak(Box::new(TreeServices {
-            sin: trig,
-            cos: trig,
-            make_tree,
-            set_ground_density,
             add_count,
             add_growth,
-            set_growth,
-            make_clear,
-            progress,
-            progress_total,
-            town: Box::leak(Box::new(crate::town::Leaves {
-                dirty_authority,
-                ..crate::test_tables::TOWN_LEAVES
-            })),
             authority: Box::leak(Box::new(crate::town::AuthorityServices {
                 bulldozer,
                 town_index,
                 refusal: 0,
             })),
+            cos: trig,
+            make_clear,
+            make_tree,
+            progress,
+            progress_total,
+            set_ground_density,
+            set_growth,
+            sin: trig,
             strings: STRINGS,
+            town: Box::leak(Box::new(crate::town::Leaves {
+                dirty_authority,
+                ..crate::test_tables::TOWN_LEAVES
+            })),
         }))
     }
     fn trees() -> Trees<'static> {

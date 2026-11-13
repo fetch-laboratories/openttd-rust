@@ -21,9 +21,12 @@ struct OpenTTDTreeLoopSettings {
 };
 /* CmdPlantTree's error messages. */
 struct OpenTTDTreeStrings {
-	uint32_t already_here, plant_limit, on_water, site_unsuitable, wrong_terrain;
+	uint32_t already_here;
+	uint32_t on_water;
+	uint32_t plant_limit;
+	uint32_t site_unsuitable;
+	uint32_t wrong_terrain;
 };
-
 /* The same-named tree_map.h/clear_map.h writers, the native sinf/cosf, and the generation
  * progress updates. progress/progress_total return true when world generation was aborted: the
  * C++ wrapper keeps the exception, Rust returns without another draw or write, and the entry's
@@ -34,19 +37,19 @@ struct OpenTTDCommandServices;
 struct OpenTTDTownLeaves;
 struct OpenTTDTownAuthorityServices;
 struct OpenTTDTreeServices {
-	float (*sin)(float) noexcept OPENTTD_SERVICE_DEFAULT(sin);
-	float (*cos)(float) noexcept OPENTTD_SERVICE_DEFAULT(cos);
-	void (*make_tree)(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_tree);
-	void (*set_ground_density)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(set_ground_density);
 	void (*add_count)(uint32_t tile, int32_t count) noexcept OPENTTD_SERVICE_DEFAULT(add_count);
 	void (*add_growth)(uint32_t tile, int32_t growth) noexcept OPENTTD_SERVICE_DEFAULT(add_growth);
-	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept OPENTTD_SERVICE_DEFAULT(set_growth);
+	const OpenTTDTownAuthorityServices *authority;
+	float (*cos)(float) noexcept OPENTTD_SERVICE_DEFAULT(cos);
 	void (*make_clear)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_clear);
+	void (*make_tree)(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_tree);
 	bool (*progress)() noexcept OPENTTD_SERVICE_DEFAULT(progress);
 	bool (*progress_total)(uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_total);
-	const OpenTTDTownLeaves *town;
-	const OpenTTDTownAuthorityServices *authority;
+	void (*set_ground_density)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(set_ground_density);
+	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept OPENTTD_SERVICE_DEFAULT(set_growth);
+	float (*sin)(float) noexcept OPENTTD_SERVICE_DEFAULT(sin);
 	OpenTTDTreeStrings strings;
+	const OpenTTDTownLeaves *town;
 };
 
 struct OpenTTDWorldServices;

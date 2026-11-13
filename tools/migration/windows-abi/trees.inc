@@ -21,22 +21,22 @@ static Result TreeUnused(Args...) noexcept
 }
 static uint32_t TreeRandom(void *) noexcept { return UINT32_MAX; }
 static const OpenTTDTreeServices tree_probe_services{
-	.sin = [](float value) noexcept { return value; },
+	.add_count = TreeUnused<void, uint32_t, int32_t>,
+	.add_growth = TreeUnused<void, uint32_t, int32_t>,
+	.authority = nullptr,
 	.cos = [](float value) noexcept { return value; },
+	.make_clear = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
 	.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {
 		++tree_probe.writes;
 		CHECK(tile == 1 && type == 12 && count == 2 && growth == 6 && ground == 0 && density == 2);
 	},
-	.set_ground_density = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
-	.add_count = TreeUnused<void, uint32_t, int32_t>,
-	.add_growth = TreeUnused<void, uint32_t, int32_t>,
-	.set_growth = TreeUnused<void, uint32_t, uint8_t>,
-	.make_clear = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
 	.progress = []() noexcept { return tree_probe.abort; },
 	.progress_total = TreeUnused<bool, uint32_t>,
+	.set_ground_density = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
+	.set_growth = TreeUnused<void, uint32_t, uint8_t>,
+	.sin = [](float value) noexcept { return value; },
+	.strings = {.already_here = 11, .on_water = 13, .plant_limit = 12, .site_unsuitable = 14, .wrong_terrain = 15},
 	.town = nullptr,
-	.authority = nullptr,
-	.strings = {.already_here = 11, .plant_limit = 12, .on_water = 13, .site_unsuitable = 14, .wrong_terrain = 15},
 };
 static void Trees()
 {

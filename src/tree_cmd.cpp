@@ -78,27 +78,27 @@ static bool TreeProgress(Update update) noexcept
 static const OpenTTDTreeServices &TreeServices() noexcept
 {
 	static const OpenTTDTreeServices services{
-		.sin = [](float v) noexcept { return sinf(v); },
+		.add_count = [](uint32_t tile, int32_t count) noexcept { AddTreeCount(TileIndex{tile}, count); },
+		.add_growth = [](uint32_t tile, int32_t growth) noexcept { AddTreeGrowth(TileIndex{tile}, growth); },
+		.authority = &GetRustTownAuthorityServices(),
 		.cos = [](float v) noexcept { return cosf(v); },
+		.make_clear = RustMakeClearValue,
 		.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {
 			MakeTree(TileIndex{tile}, static_cast<TreeType>(type), count, static_cast<TreeGrowthStage>(growth), static_cast<TreeGround>(ground), density);
 		},
-		.set_ground_density = RustSetTreeGroundDensityValue,
-		.add_count = [](uint32_t tile, int32_t count) noexcept { AddTreeCount(TileIndex{tile}, count); },
-		.add_growth = [](uint32_t tile, int32_t growth) noexcept { AddTreeGrowth(TileIndex{tile}, growth); },
-		.set_growth = [](uint32_t tile, uint8_t growth) noexcept { SetTreeGrowth(TileIndex{tile}, static_cast<TreeGrowthStage>(growth)); },
-		.make_clear = RustMakeClearValue,
 		.progress = []() noexcept { return TreeProgress([] { RustIncreaseGeneratingWorldProgress(GWP_TREE); }); },
 		.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { RustSetGeneratingWorldProgress(GWP_TREE, total); }); },
-		.town = &GetRustTownServices(),
-		.authority = &GetRustTownAuthorityServices(),
+		.set_ground_density = RustSetTreeGroundDensityValue,
+		.set_growth = [](uint32_t tile, uint8_t growth) noexcept { SetTreeGrowth(TileIndex{tile}, static_cast<TreeGrowthStage>(growth)); },
+		.sin = [](float v) noexcept { return sinf(v); },
 		.strings = {
 			.already_here = STR_ERROR_TREE_ALREADY_HERE,
-			.plant_limit = STR_ERROR_TREE_PLANT_LIMIT_REACHED,
 			.on_water = STR_ERROR_CAN_T_BUILD_ON_WATER,
+			.plant_limit = STR_ERROR_TREE_PLANT_LIMIT_REACHED,
 			.site_unsuitable = STR_ERROR_SITE_UNSUITABLE,
 			.wrong_terrain = STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE,
 		},
+		.town = &GetRustTownServices(),
 	};
 	return services;
 }
