@@ -743,6 +743,8 @@ fn visit_adjacent_water_region_patch_neighbours(
     }
 
     // Multiple water patches can be reached from the current patch. Check each edge tile individually.
+    // The visit's label buffer is the original's unique_labels: static and vector-instead-of-map for
+    // performance reasons, emptied above for each side.
     for x_or_y in 0..WATER_REGION_EDGE_LENGTH {
         if !has_bit(traversability_bits, x_or_y as u8) {
             continue;
