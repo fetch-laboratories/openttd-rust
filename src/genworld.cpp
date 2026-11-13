@@ -159,11 +159,7 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.object_begin = [](OpenTTDWorldFrame *f) noexcept { auto &o = f->objects.emplace(); return OpenTTDWorldObject{&o.frame, RustCommandCost(&o.out), RustCommandCost(&o.tmp), RustCommandCost(&o.aux)}; },
 		.object_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->objects->frame.cancellation; f->objects.reset(); },
 		.tree_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = TakeTreeGenerationException(); },
-		.loop_begin = [](OpenTTDWorldFrame *f) noexcept -> const OpenTTDGenerationLoop * {
-			auto &loop = f->loop.emplace();
-			assert(*openttd_rust_tile_loop_cursor() != 0);
-			return &loop.view;
-		},
+		.loop_begin = [](OpenTTDWorldFrame *f) noexcept -> const OpenTTDGenerationLoop * { return &f->loop.emplace().view; },
 		.loop_end = [](OpenTTDWorldFrame *f) noexcept { f->loop.reset(); },
 		.advance_tick = []() noexcept { TimerGameTick::counter++; },
 		.script_start = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { Game::StartNew(); }); },

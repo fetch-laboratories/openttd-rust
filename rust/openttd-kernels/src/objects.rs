@@ -2380,7 +2380,19 @@ pub unsafe extern "C" fn openttd_rust_object_cargo(
     w.cargo(tile, cargo, accepted);
 }
 
-/// Synchronous object owner entry.
+/// `TileLoop_Object`, the body of the tile-loop entry.
+/// # Safety
+/// The module's export contract.
+pub(crate) unsafe fn tile_loop(
+    s: *const ObjectServices,
+    call: *mut crate::ground::Call,
+    tile: TileIndex,
+) {
+    let w = unsafe { World::new::<false>(&*s) };
+    w.tile_loop(tile.0, call);
+}
+
+/// Native `TileLoop_Object` entry.
 /// # Safety
 /// The module's export contract.
 #[unsafe(no_mangle)]
@@ -2389,8 +2401,7 @@ pub unsafe extern "C" fn openttd_rust_object_tile_loop(
     call: *mut crate::ground::Call,
     tile: u32,
 ) {
-    let w = unsafe { World::new::<false>(&*s) };
-    w.tile_loop(tile, call);
+    unsafe { tile_loop(s, call, TileIndex(tile)) };
 }
 
 /// Synchronous object owner entry.
