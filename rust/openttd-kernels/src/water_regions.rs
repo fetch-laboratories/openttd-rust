@@ -246,8 +246,7 @@ impl WaterRegion {
                 map.tile_xy(
                     (i32::from(region_x) * edge).cast_unsigned(),
                     (i32::from(region_y) * edge).cast_unsigned(),
-                )
-                .0,
+                ),
                 edge as u16,
                 edge as u16,
             ),
@@ -255,11 +254,11 @@ impl WaterRegion {
     }
 
     fn tile(self) -> TileIndex {
-        TileIndex(self.tile_area.tile)
+        self.tile_area.tile
     }
 
     fn contains(self, world: &World<'_>, map: Map, tile: TileIndex) -> bool {
-        self.tile_area.contains(tile.0, map, |ok| world.check(ok))
+        self.tile_area.contains(tile, map, |ok| world.check(ok))
     }
 
     /// Returns the local index of the tile within the region. The N corner represents 0,
@@ -348,7 +347,7 @@ impl WaterRegion {
 
         // Perform connected component labeling. This uses a flooding algorithm that expands until no
         // additional tiles can be added. Only tiles inside the water region are considered.
-        for start_tile in self.tile_area.tiles(map).map(TileIndex) {
+        for start_tile in self.tile_area.tiles(map) {
             tiles_to_check.clear();
             tiles_to_check.push(start_tile);
 
