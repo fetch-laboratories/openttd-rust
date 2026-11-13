@@ -1764,7 +1764,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     .any(&[AirportMovingDataFlag::LAND, AirportMovingDataFlag::BRAKE])
                     && !st.is_null()
                 {
-                    self.check(Self::airport_has_hangar(st));
+                    /* HasHangar() runs only where the native build asserts. */
+                    self.map.assert_with(|| Self::airport_has_hangar(st));
                     let runtime = crate::newgrf_airport::runtime();
                     let hangar_tile = TileIndex(Self::call(|| {
                         (runtime.hangar_tile)(st.cast(), 0, Self::airport_spec(st))
