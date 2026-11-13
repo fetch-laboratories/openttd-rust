@@ -285,3 +285,11 @@ pub fn set_track_bit_iterator(
 ) -> impl Iterator<Item = crate::track_type::Track> {
     crate::bitmath_func::SetBitIterator::new(u64::from(bits.0)).map(crate::track_type::Track)
 }
+
+/// `SetTrackdirBitIterator`: each set `Trackdir` of a `TrackdirBits`, in ascending order.
+/// The bits are copied on construction, as the original ensemble does.
+pub fn set_trackdir_bit_iterator(
+    bits: crate::track_type::TrackdirBits,
+) -> impl Iterator<Item = crate::track_type::Trackdir> {
+    crate::bitmath_func::SetBitIterator::new(u64::from(bits.0)).map(crate::track_type::Trackdir)
+}

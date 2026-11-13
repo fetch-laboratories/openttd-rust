@@ -618,7 +618,7 @@ impl Search {
     }
     fn safe(&self, tile: u32, td: u8, forbid: u8) -> bool {
         let pbs = self.pbs();
-        pbs.safe(
+        pbs.is_safe_waiting_position_raw(
             crate::train::Handle::from_record(self.vehicle.0.as_ptr()),
             tile,
             td,
@@ -628,7 +628,7 @@ impl Search {
     }
     fn free(&self, tile: u32, td: u8, forbid: u8) -> bool {
         let pbs = self.pbs();
-        pbs.free(
+        pbs.is_waiting_position_free_raw(
             crate::train::Handle::from_record(self.vehicle.0.as_ptr()),
             tile,
             td,
@@ -803,7 +803,7 @@ impl Search {
             }
         }
         if crate::track_func::track_overlaps_tracks(
-            self.pbs().reserved(tile),
+            self.pbs().get_reserved_trackbits_raw(tile),
             crate::track_func::trackdir_to_track(td),
             |ok| crate::movement::native_assert(self.pbs().shared(), ok),
         ) {
@@ -1259,7 +1259,7 @@ impl Search {
         match self.input.kind {
             0 | 2 => {
                 let pbs = self.pbs();
-                let origin = pbs.follow_train(
+                let origin = pbs.follow_train_reservation_raw(
                     crate::train::Handle::from_record(self.vehicle.0.as_ptr()),
                     false,
                     crate::train::Handle::NONE,
@@ -1442,7 +1442,7 @@ impl Reservation {
         } else if tile != fail || td != self.fail_td {
             search
                 .pbs()
-                .unreserve(tile, crate::track_func::trackdir_to_track(td));
+                .unreserve_rail_track_raw(tile, crate::track_func::trackdir_to_track(td));
         }
         (tile != self.target_tile || td != self.target_td) && (tile != fail || td != self.fail_td)
     }
@@ -1538,7 +1538,7 @@ impl Reservation {
                         }
                     }
                 } else {
-                    if !search.pbs().try_reserve(
+                    if !search.pbs().try_reserve_rail_track_raw(
                         tile,
                         crate::track_func::trackdir_to_track(td),
                         true,

@@ -27,15 +27,12 @@ inline OpenTTDWaterPatch Patch(uint32_t tile) noexcept
 	if (region_chain) return {static_cast<int32_t>(tile), 0, 1};
 	return snake ? OpenTTDWaterPatch{0, 0, 1} : OpenTTDWaterPatch{static_cast<int32_t>(tile % 32 / 16), static_cast<int32_t>(tile / 32 / 16), 1};
 }
-struct Cursor { bool used = false; };
-inline void *VisitNew(OpenTTDWaterPatch) noexcept { return new Cursor{}; }
-inline uint8_t VisitNext(void *cursor, OpenTTDWaterPatch from, OpenTTDWaterPatch *out) noexcept
+/* The synthetic region graph keeps its one-edge progress in the visit the search holds. */
+inline uint8_t VisitNext(OpenTTDWaterVisit *visit, OpenTTDWaterPatch from, OpenTTDWaterPatch *out) noexcept
 {
-	auto &state = *static_cast<Cursor *>(cursor);
-	if (!region_chain || state.used) return 0;
-	state.used = true; *out = {from.x + 1, 0, 1}; return 1;
+	if (!region_chain || visit->started != 0) return 0;
+	visit->started = 1; *out = {from.x + 1, 0, 1}; return 1;
 }
-inline void VisitDestroy(void *cursor) noexcept { delete static_cast<Cursor *>(cursor); }
 inline void Report(uint32_t, uint8_t, uint8_t, uint32_t, uint32_t, uint32_t, int32_t, int32_t) noexcept {}
 inline uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
 
@@ -75,7 +72,7 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	check(openttd_rust_ship_path_size(path.get()) == 2 && openttd_rust_ship_path_get(path.get(), 0) == 255 && openttd_rust_ship_path_get(path.get(), 1) == 13);
 	openttd_rust_ship_path_clear(path.get());
 	OpenTTDShipYapfInput input{32, 32, 10 + 32 * 20, 10 + 32 * 24, 100, 20, 100, 0, 1 << 9, 1, 0, 0, 0, 0};
-	const OpenTTDShipYapfLeaves leaves{Destination, Tile, Patch, VisitNew, VisitNext, VisitDestroy, Report};
+	const OpenTTDShipYapfLeaves leaves{Destination, Tile, Patch, VisitNext, Report};
 	FollowerFixture map{32, 32};
 	auto &services = map.shared;
 	services.random = Random;

@@ -68,6 +68,7 @@ rust/openttd-kernels/src/network_tcp.rs
 rust/openttd-kernels/src/node_hash.rs
 rust/openttd-kernels/src/packet.rs
 rust/openttd-kernels/src/pathfinder_func.rs
+rust/openttd-kernels/src/pbs.rs
 rust/openttd-kernels/src/pool.rs
 rust/openttd-kernels/src/pool/tests.rs
 rust/openttd-kernels/src/random_func.rs
@@ -132,6 +133,7 @@ rust/openttd-kernels/src/vehicle_transactions/refit.rs
 rust/openttd-kernels/src/vehicle_transactions.rs
 rust/openttd-kernels/src/viewport_func.rs
 rust/openttd-kernels/src/void_map.rs
+rust/openttd-kernels/src/water_regions.rs
 rust/openttd-kernels/src/widget_parser.rs
 rust/openttd-kernels/src/witness.rs
 rust/openttd-kernels/src/yapf_node.rs

@@ -395,7 +395,7 @@ impl<'a> Ctx<'a> {
         crate::map_func::World::new(self.shared).has_signal_on_track(tile, track)
     }
     fn reserved(&self, tile: u32) -> u8 {
-        crate::pbs::Pbs::acquire(self.shared).reserved(tile)
+        crate::pbs::Pbs::acquire(self.shared).get_reserved_trackbits_raw(tile)
     }
     fn signal_type(&self, tile: u32, track: u8) -> u8 {
         crate::services::SignalType(
@@ -877,7 +877,7 @@ impl<'a> Ctx<'a> {
                     );
                     if self.reserved(tile) & trackbit != 0 {
                         v = crate::pbs::Pbs::acquire(self.shared)
-                            .train_for(tile, track)
+                            .get_train_for_reservation_raw(tile, track)
                             .shell()
                             .cast::<crate::services::Train>();
                         if !v.is_null() {
@@ -953,7 +953,7 @@ impl<'a> Ctx<'a> {
                     w::hit(w::RAIL_CMD_REMOVE_RAIL);
                     if self.reserved(tile) & trackbit != 0 {
                         v = crate::pbs::Pbs::acquire(self.shared)
-                            .train_for(tile, track)
+                            .get_train_for_reservation_raw(tile, track)
                             .shell()
                             .cast::<crate::services::Train>();
                         if !v.is_null() {
@@ -1325,7 +1325,7 @@ impl<'a> Ctx<'a> {
         let mut v: *mut Train = std::ptr::null_mut();
         if self.reserved(tile) & (1 << track) != 0 {
             v = crate::pbs::Pbs::acquire(self.shared)
-                .train_for(tile, track)
+                .get_train_for_reservation_raw(tile, track)
                 .shell()
                 .cast::<crate::services::Train>();
             if !v.is_null() {
@@ -1451,7 +1451,7 @@ impl<'a> Ctx<'a> {
                     // SAFETY: The reservation train remains live through this synchronous check.
                     !{
                         let pbs = crate::pbs::Pbs::acquire(self.shared);
-                        pbs.safe(
+                        pbs.is_safe_waiting_position_raw(
                             pbs.handle(v),
                             at.tile,
                             at.trackdir,
@@ -1777,7 +1777,7 @@ impl<'a> Ctx<'a> {
             let mut v: *mut Train = std::ptr::null_mut();
             if self.reserved(tile) & (1 << track) != 0 {
                 v = crate::pbs::Pbs::acquire(self.shared)
-                    .train_for(tile, track)
+                    .get_train_for_reservation_raw(tile, track)
                     .shell()
                     .cast::<crate::services::Train>();
             } else if is_pbs(self.signal_type(tile, track)) {
@@ -1801,7 +1801,7 @@ impl<'a> Ctx<'a> {
                             let found =
                                 (self.reserved(next) & tracks & 0x3F).trailing_zeros() as u8;
                             v = crate::pbs::Pbs::acquire(self.shared)
-                                .train_for(next, found)
+                                .get_train_for_reservation_raw(next, found)
                                 .shell()
                                 .cast::<crate::services::Train>();
                         }
@@ -2193,7 +2193,7 @@ impl<'a> Ctx<'a> {
     /// Free an unpowered reserving train and remember it for re-reservation.
     fn reroute(&self, tile: u32, track: u8, totype: u8) -> Option<*mut Train> {
         let v = crate::pbs::Pbs::acquire(self.shared)
-            .train_for(tile, track)
+            .get_train_for_reservation_raw(tile, track)
             .shell()
             .cast::<crate::services::Train>();
         if !v.is_null() && !unsafe { (self.s.train_powered)(v, totype) } {
@@ -2227,7 +2227,7 @@ impl<'a> Ctx<'a> {
             let mut v: *mut Train = std::ptr::null_mut();
             if (self.rail.depot_reserved)(tile) {
                 v = crate::pbs::Pbs::acquire(self.shared)
-                    .train_for(tile, dir & 1)
+                    .get_train_for_reservation_raw(tile, dir & 1)
                     .shell()
                     .cast::<crate::services::Train>();
                 if !v.is_null() {
