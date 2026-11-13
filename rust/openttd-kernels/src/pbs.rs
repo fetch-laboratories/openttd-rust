@@ -218,7 +218,6 @@ impl<'a> Pbs<'a> {
     /// `TryReserveRailTrack` and `UnreserveRailTrack` make before changing a reservation.
     fn mark_reservation_dirty(self, tile: TileIndex) {
         if (self.0.show_reservation)() {
-            /* show the reserved rail if needed */
             if (self.shared().is_bridge)(tile.0) {
                 (self.shared().mark_bridge_dirty)(tile.0);
             } else {
@@ -237,6 +236,8 @@ impl<'a> Pbs<'a> {
         trigger_stations: bool,
     ) -> bool {
         self.assert_has_track(tile, t);
+
+        /* show the reserved rail if needed */
         self.mark_reservation_dirty(tile);
 
         let s = self.shared();
