@@ -47,7 +47,6 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(command_post) \
 	X(autoreplace_cmd) \
 	X(linkgraphjob) \
-	X(water_regions) \
 	X(yapf_rail) \
 	X(yapf_ship) \
 	X(network_client) \

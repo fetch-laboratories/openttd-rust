@@ -25,6 +25,11 @@ pub(crate) struct MapLeafOracle {
     pub tram_bits: u32,
     pub has_road: u32,
     pub has_tram: u32,
+    pub tree_ground: u32,
+    pub tree_density: u32,
+    pub tree_type: u32,
+    pub tree_count: u32,
+    pub tree_growth: u32,
 }
 
 /// Native map probe uses the production context against unchanged native helpers.

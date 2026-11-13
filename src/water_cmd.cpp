@@ -540,7 +540,7 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.set_tree_ground = RustSetTreeGroundDensity,
 		.make_sea = [](uint32_t t) noexcept { MakeSea(TileIndex{t}); },
 		.buoy_or_dock = [](uint32_t t) noexcept { return IsBuoy(TileIndex{t}) || IsDock(TileIndex{t}); },
-		.region_context = GetRustWaterRegionContext,
+		.water_regions = GetRustWaterRegions,
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.airport_tile = RustAirportTile,
 		.airport = [](uint32_t t) noexcept { const Station *st = RustStationByTile(t); return OpenTTDAirportGround{.station = st, .tile = RustStationAirportTile(st), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st)}; },

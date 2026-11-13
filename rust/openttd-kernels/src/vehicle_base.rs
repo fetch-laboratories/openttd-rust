@@ -62,6 +62,11 @@ impl VehStates {
     pub const fn without(self, other: Self) -> Self {
         Self(self.0 & !other.0)
     }
+    /// Native `EnumBitSet::Test`: is the named state set?
+    #[must_use]
+    pub const fn test(self, element: VehState) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
 }
 
 /// Bit numbers indicating which `NewGRFCache` values are valid.

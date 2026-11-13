@@ -12,87 +12,56 @@
 #include <cstdint>
 #include "services_ffi.h"
 
-/* Fields CanPlantTreesOnTile, GetRandomTreeType and PlantTreesOnTile observe. Clear
- * fields are set on clear tiles; coast is IsCoast && !IsSlopeWithOneCornerRaised and
- * is set on water tiles only, so the slope is read only on coast tiles. */
-struct OpenTTDTreePlantObservation {
-	uint8_t tile_type;
-	bool bridge;
-	uint8_t ground;
-	uint8_t density;
-	bool snow;
-	bool coast;
-	uint8_t zone;
-};
-/* Tree fields of one MP_TREES tile. */
-struct OpenTTDTreeObservation {
-	uint8_t ground, density, species, count, growth, zone;
-};
-/* Only the fields ClearTile_Trees uses, with GetTreeCount's uint return type. */
-struct OpenTTDTreeClearObservation {
-	uint32_t count;
-	uint8_t species;
-};
-/* Settings read once per entry. Prices are Money values. */
+/* Settings of one tile-loop batch. climate is a LandscapeType and extra an ExtraTreePlacement. */
 struct OpenTTDTreeLoopSettings {
 	uint64_t tick_counter;
 	uint32_t size_x;
 	uint8_t climate, extra;
 	bool ambient, ambient_callback;
 };
-struct OpenTTDTreeCommandSettings {
-	int64_t build_price;
-	uint32_t size;
-	uint8_t climate;
-	bool editor, execute, company_valid;
+/* CmdPlantTree's error messages. */
+struct OpenTTDTreeStrings {
+	uint32_t already_here;
+	uint32_t on_water;
+	uint32_t plant_limit;
+	uint32_t site_unsuitable;
+	uint32_t wrong_terrain;
 };
-/* Status 0: the cost, or message index when the cost is zero; 1: CMD_ERROR;
- * 2: the failed nested landscape clear kept by the command context. */
-struct OpenTTDTreeCommandResult {
-	int64_t cost;
-	uint8_t status, message;
-};
-/* Command flags, company and nested result; opaque to Rust. */
-struct OpenTTDTreeCommand;
-
-/* Reads are pure; writes are the same-named tree_map.h/clear_map.h functions. Direct water calls,
- * ambient and landscape_clear can reenter tree entries, so Rust reads the tile again afterwards;
- * Rust ambient observes its enable bit after return. progress/progress_total return true when world
- * generation was aborted: the C++ wrapper keeps the exception, Rust returns without another draw or
- * write, and the entry's caller rethrows it. */
+/* The same-named tree_map.h/clear_map.h writers, the native sinf/cosf, and the generation
+ * progress updates. progress/progress_total return true when world generation was aborted: the
+ * C++ wrapper keeps the exception, Rust returns without another draw or write, and the entry's
+ * caller rethrows it. */
 struct OpenTTDGroundCall;
 struct OpenTTDCommandCost;
 struct OpenTTDCommandServices;
+struct OpenTTDTownLeaves;
+struct OpenTTDTownAuthorityServices;
 struct OpenTTDTreeServices {
-	OpenTTDTreePlantObservation (*plant_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(plant_observation);
-	OpenTTDTreeObservation (*tree_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_observation);
-	uint32_t (*tree_count)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_count);
-	OpenTTDTreeClearObservation (*clear_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_observation);
-	float (*sin)(float) noexcept OPENTTD_SERVICE_DEFAULT(sin);
-	float (*cos)(float) noexcept OPENTTD_SERVICE_DEFAULT(cos);
-	void (*make_tree)(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_tree);
-	void (*set_ground_density)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(set_ground_density);
 	void (*add_count)(uint32_t tile, int32_t count) noexcept OPENTTD_SERVICE_DEFAULT(add_count);
 	void (*add_growth)(uint32_t tile, int32_t growth) noexcept OPENTTD_SERVICE_DEFAULT(add_growth);
-	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept OPENTTD_SERVICE_DEFAULT(set_growth);
+	const OpenTTDTownAuthorityServices *authority;
+	float (*cos)(float) noexcept OPENTTD_SERVICE_DEFAULT(cos);
 	void (*make_clear)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_clear);
+	void (*make_tree)(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_tree);
 	bool (*progress)() noexcept OPENTTD_SERVICE_DEFAULT(progress);
 	bool (*progress_total)(uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_total);
-	void (*town_rating)(uint16_t, uint32_t tile, bool up) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
-	int32_t (*command_begin)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_begin);
-	void (*command_debit)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_debit);
+	void (*set_ground_density)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(set_ground_density);
+	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept OPENTTD_SERVICE_DEFAULT(set_growth);
+	float (*sin)(float) noexcept OPENTTD_SERVICE_DEFAULT(sin);
+	OpenTTDTreeStrings strings;
+	const OpenTTDTownLeaves *town;
 };
 
 struct OpenTTDWorldServices;
 extern "C" {
 /* Plain synchronous entries; original game preconditions apply. Panics abort. */
-uint32_t openttd_rust_trees_place_group(uint32_t tile, uint8_t type, uint32_t radius, uint32_t count, bool set_zone, const OpenTTDTreeServices *, const OpenTTDSharedServices *, const OpenTTDEnvironmentServices *, const OpenTTDWorldServices *);
+uint32_t openttd_rust_trees_place_group(uint32_t tile, uint8_t type, uint32_t radius, uint32_t count, bool set_zone, const OpenTTDTreeServices *, const OpenTTDSharedServices *, const OpenTTDWorldServices *);
 uint8_t openttd_test_trees_generate(const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_trees_place_randomly_abi(const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 extern "C++" inline bool openttd_rust_trees_place_randomly(const OpenTTDTreeServices *a0, const OpenTTDSharedServices *a1) { return openttd_rust_trees_place_randomly_abi(a0, a1) != 0; }
-void openttd_rust_trees_place(uint32_t tile, uint32_t r, bool keep_density, uint8_t climate, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
-OpenTTDTreeCommandResult openttd_rust_trees_cmd_plant(OpenTTDTreeCommand *, uint32_t tile, uint32_t start, uint8_t tree, bool diagonal, OpenTTDTreeCommandSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *, OpenTTDCommandCost *, const OpenTTDCommandServices *, uint16_t);
-int64_t openttd_rust_trees_clear_tile(uint32_t tile, uint16_t flags, int64_t price, bool company_valid, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
+void openttd_rust_trees_place(uint32_t tile, uint32_t r, bool keep_density, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
+/* CmdPlantTree: writes the command's result to the native slot. */
+void openttd_rust_trees_cmd_plant(uint16_t flags, const OpenTTDPlantTreeArgs *, OpenTTDCommandCost *, const OpenTTDTreeServices *, const OpenTTDSharedServices *, const OpenTTDCommandServices *);
 /* Stable Rust-owned byte; game-thread initialization/ticks and serial save/load access only.
  * C++ never retains a C++ reference across a Rust call. DATE LoadCheck omits this field.
  * The unchanged modern and TTD/TTO descriptors access it only at serialization boundaries. */
