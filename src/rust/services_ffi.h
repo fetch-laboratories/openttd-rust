@@ -24,6 +24,7 @@
 enum class LandscapeType : uint8_t;
 enum GrfSpecFeature : uint8_t;
 enum class StationType : uint8_t;
+struct BaseStation;
 struct OpenTTDStationService;
 struct OpenTTDNewGRFSpecs;
 struct ResolverObject;
@@ -166,6 +167,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*station_had_vehicle_of_type)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_had_vehicle_of_type);
 	void (*station_add_vehicle_of_type)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_add_vehicle_of_type);
 	uint32_t (*station_xy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_xy);
+	BaseStation *(*base_station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(base_station);
 	uint32_t (*base_station_xy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(base_station_xy);
 	uint8_t (*station_facilities)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_facilities);
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);

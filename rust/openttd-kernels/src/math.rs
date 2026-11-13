@@ -66,6 +66,21 @@ pub(crate) fn clamp(a: i32, min: i32, max: i32, check: impl Fn(bool)) -> i32 {
     a
 }
 
+/// `ClampU`: clamp an unsigned integer between an interval. Returns `min` when the value
+/// is at or below it, `max` when at or above it, otherwise the value.
+pub(crate) fn clamp_u(a: u32, min: u32, max: u32, check: impl Fn(bool)) -> u32 {
+    if min > max {
+        check(false);
+    }
+    if a <= min {
+        return min;
+    }
+    if a >= max {
+        return max;
+    }
+    a
+}
+
 /// `ClampTo<uint8_t>`: clamp the given value down to lie within the `uint8_t` range.
 #[allow(
     clippy::cast_possible_truncation,
