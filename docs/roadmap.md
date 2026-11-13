@@ -16,7 +16,7 @@ Measured at merge 59 (`f24c05dbe9`); the other column is merge 47 (`6d8a24a401`)
 - The instruction counts that rose 3.4% and 3.8% by merge 47 are back at their merge-32 level on Opus and Grok ([speed](#speed)). Generation's count has risen 0.97% since merge 32, and its projection is 0.039x below its band.
 - Every file pass so far raised news and script events through one C++ leaf per message, a design fault no pass could fix alone. #974 builds the shared services and converts the 29 leaves in finished files.
 - The platform cadence passed at merges 52 and 57 (runs 43350842579 and 43362926059).
-- No rollback has happened since merge 32, and no confirmed base regression is open. Full phase-3 planning is due now ([phases](#phases)), and near-full reproduction is not met.
+- No rollback has happened since merge 32, and no confirmed base regression is open. Full phase-3 planning is not triggered, and near-full reproduction is not met.
 
 Reproduce the census with `python3 tools/port-metrics.py --whole-fork` (metric v2).
 
@@ -155,22 +155,21 @@ What set the rate:
 | Order | Stage | Size now | Exit (end state) | Status |
 | ---: | --- | --- | --- | --- |
 | 1 | Cleanup | #734: 133 of 319 workset files and 92,475 of 190,751 lines finished; the files now hold 198,098 lines. #735: 118 long functions, 44 debt keys and 9 allows. #736: 14,494 counted tools C++ lines and 4,770 fork test lines, plus separately inventoried embedded C++. #737 and #738 are closed at their end states | #734: all 319 files finished and [closure](#cleanup-work-order) done; #735 closes with it. #736: no file the [classification](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013) calls movable remains, as [steering 35 amended it](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6834080910); each remaining C++ file under `tools/` and `src/tests`, and any embedded C++, either checks the calling boundary itself or reaches a live native pool, reader or production caller, and names the owner or boundary whose retirement removes it ([evidence](porting.md#evidence)). The 65 pool and reader fixtures stay native until their owners retire them. Lint ratchets shrink per PR but set no exit, and the structural Clippy rows are outside it. Read each end state from the code and inventories, not from issue state | Current |
-| 2 | Phase 3: readers (script API, NewGRF, network, content, admin, save/load outside pool chunks) | About 37,800 compiled lines: script API 13,252, network 10,611, NewGRF 5,183, and save/load 13,023 less the pool and map chunks. The [queued owners](#after-cleanup) estimate 4,600 to 7,000 net C++ removed, so about 31,000 to 33,000 lines have no owner yet | Readers run in Rust with evidence for their observable outputs. Every remaining body in these buckets has a named later owner: VM and binding shims phase 6, script and network GUI phase 5, pool chunks phase 2 | Next. Root plans it in full now, while cleanup runs ([goal and phases](planning.md#goal-and-phases)) |
+| 2 | Phase 3: readers (script API, NewGRF, network, content, admin, save/load outside pool chunks) | About 37,800 compiled lines: script API 13,252, network 10,611, NewGRF 5,183, and save/load 13,023 less the pool and map chunks. The [queued owners](#after-cleanup) estimate 4,600 to 7,000 net C++ removed, so about 31,000 to 33,000 lines have no owner yet | Readers run in Rust with evidence for their observable outputs. Every remaining body in these buckets has a named later owner: VM and binding shims phase 6, script and network GUI phase 5, pool chunks phase 2 | Next. Plan it in full before cleanup's last items are dispatched ([goal and phases](planning.md#goal-and-phases)), and no sooner: the user declined planning it during cleanup as far too early |
 | 3 | Phase 2: storage, each pool with its save/load chunks, then the map | 11,866 compiled lines in storage, about 4,300 save/load chunk lines, the logic residue assigned to pool owners, and record field routes in the 16,289-line boundary layer | Rust owns every pool's records, slots, allocation, iteration, lifetime and save/load, then map allocation and remaining map bodies; no Rust-used field behind a native service | Queued; placement in the [reader and pool placement](design/reader-pool-placement.md) design |
 | 4 | Support | About 32,200: support 21,188 and graphics and viewport 10,982, plus their data tables and startup | As in [planning](planning.md#goal-and-phases) | #3; planned when it becomes the next phase ([ADR 0005](adr/0005-plan-only-the-next-phase.md)) |
 | 5 | GUI, drawing and platform | About 64,200: GUI 52,227 and platform 11,943, plus simulation and data-table drawing | As in [planning](planning.md#goal-and-phases) | As phase 4 |
 | 6 | Vendored and final retirement | Vendored 52,831, plus whatever boundary, test and evidence C++ remains | Every original and fork-written C++ line retired and candidate native targets removed ([goal and phases](planning.md#goal-and-phases)) | As phase 4 |
 
 Why the course changed at this navigation (cited at `80f50ba64c`):
-1. Phase 3 was to be planned in full "before the cleanup stage's last items are dispatched" (`planning.md:15`), which root read as every remaining #734 file sitting in a ready-queue entry (`roadmap.md:205`). The queue holds at most three entries, so that fires in the stage's last hours, with at least 31,000 of phase 3's 37,800 lines unowned and #893's host measurements due before the first reader dispatch. Nothing is gained by waiting: phase 3 has been the next phase since cleanup began ([ADR 0005](adr/0005-plan-only-the-next-phase.md)), planning takes no implementer slot, and cleanup changed 18 lines in the four reader buckets in four days, so the plan cannot go stale. Root plans it now.
-2. `/steer` step 2 said "progress counts original C++ retired, not glue removed" (`skills/steer/SKILL.md:38`), against the yardstick of [ADR 0022](adr/0022-progress-is-net-cpp-removed.md). It now reads the fork C++ census.
-3. The retired count moved by hundreds of lines with diff alignment and showed retirement running backwards (#978).
+1. `/steer` step 2 said "progress counts original C++ retired, not glue removed" (`skills/steer/SKILL.md:38`), against the yardstick of [ADR 0022](adr/0022-progress-is-net-cpp-removed.md). It now reads the fork C++ census.
+2. The retired count moved by hundreds of lines with diff alignment and showed retirement running backwards (#978).
 
 Root's first actions on resume:
 1. Follow the [latest steering actions](#latest-steering-actions) and the [resume checkpoint](#resume-checkpoint).
-2. Plan phase 3 in full, alongside the stocktake half root owes. Have the [routine agent](team.md#routine-agent) list the remaining lines per file and function of the four reader buckets (`python3 tools/port-metrics.py --functions "Save/load" "Script API" "Network" NewGRF`). Then give every file an owner or a named later phase, re-estimate the six [queued owners](#after-cleanup), name the evidence for what the harness cannot see from #890's inputs, and write the result into "After cleanup" and #669.
-3. Add #978 to the tools batch (#945).
-4. Drive each cleanup stream to its end state above.
+2. Add #978 to the tools batch (#945).
+3. Drive each cleanup stream to its end state above.
+4. Before the cleanup stage's last items are dispatched, plan phase 3 ([start-development](skills/start-development/SKILL.md) step 3).
 
 ## Cleanup work order
 
@@ -194,7 +193,7 @@ Slots: both [implementer slots](team.md#slots) run #734/#735 file passes, on wor
 
    #734 also owns the `unwrap`/`expect` and release-overflow fidelity gaps recorded in #156: remaining file passes handle their selected files, and closure handles recorded residue in already-finished files. Compare each with the original's preconditions and observable failure behaviour; an occurrence alone is not a defect. This ownership does not expand #892's macro scope or add a census, lint rule or gate.
 5. **#952 speed maintenance**, after #951 merges: restore the inlining of `movement.rs`'s track-status path, measured on Opus and Grok.
-6. **#893 cleanup-exit evidence**, after closure and before the first phase-3 reader dispatch: run the coverage measurement, seeded-fault pilot and all-member deep check. Pause implementers for the two host measurements. Read the report and handle findings under [deep checks](deep-checks.md#policy) before dispatch. Phase-3 planning does not wait for these results.
+6. **#893 cleanup-exit evidence**, after closure and before the first phase-3 reader dispatch: run the coverage measurement, seeded-fault pilot and all-member deep check. Pause implementers for the two host measurements. Read the report and handle findings under [deep checks](deep-checks.md#policy) before dispatch. Phase-3 planning follows its normal trigger and does not wait for these results.
 
 ## After cleanup
 
@@ -256,7 +255,7 @@ Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has 
 
 **Later.** #973, 23n, the pass for `native_test_support.rs` and `native_test_support/movement.rs`, is planned and waits on #963, so that it removes C++ and adds none. #964, 8r, the single-file pass for `road.rs`, is planned and waits on #963 and #974. #971 shares `CYapfBaseT`'s search loop across the three YAPF files and waits on #976 and #977. #975 deletes the C++ free functions the extended orphan check finds uncalled, about 35 by the planner's scan, and waits on #945. #950, the aircraft range probe, follows #945 and #972. In workset 08, after #963 and #964: the single-file passes for `train.rs` and `train_reservation.rs`, and one pass for `effect.rs`, `vehicle_effect.rs`, `ship_control.rs` and `disaster.rs`, which its planner splits if it must. A second slot with no entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes.
 
-Full phase-3 planning no longer waits on this queue ([phases](#phases)). 180 of #734's 319 files, in 19 worksets, are in no entry.
+Full phase-3 planning remains untriggered: 180 of #734's 319 files, in 19 worksets, are in no entry.
 
 ## Resume checkpoint
 
@@ -281,7 +280,7 @@ CI variables were not rechecked this session, and no workflow change or bootstra
 | Tools batch | #945 was not dispatched in its interval. It is the batch of the interval that starts at merge 60, and the candidates on #939 wait for the one after. |
 | Platform cadence | Passed at merges 52 and 57. Next after merge 62. |
 | Stocktake | Measured at merge 59. Root's half is owed on resume: rerun `issues.py` and recheck the exclusion conditions; bring #734's body to 133 files; and the three checks in root's notes on #3 (whether the two rule changes of 2026-11-13 were used beyond the PRs that prompted them, base updates made without a conflict since `fc5010d279`, and whether #945's added items still fail runs). |
-| Phase-3 planning | Due on resume: the navigation at merge 59 moved it ahead of cleanup's last dispatches ([phases](#phases)). |
+| Phase-3 planning | Not triggered. |
 
 Flakes and limits carried forward:
 
