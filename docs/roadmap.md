@@ -135,7 +135,7 @@ Inventory correction, apart from retirement: no original C++ came back. Version 
 
 Of the 19,797 evidence lines, 18,154 are candidate or shared, none is reference-only and 1,643 are unresolved, which the census counts as candidate. Outside the census are 836 raw lines of C++ in `COMMAND_SOURCE` (`tools/simulation/stations.py`) and 302 lines of oracle recipes, which compile only against the pinned original. The boundary has 1,501 exports (−38) and 3,178 callback slots (−154). Rust has 190,296 code lines (−1,603) and tooling 73,533 (+11,637).
 
-Rates use commit timestamps between code endpoints, in calendar days, not agent time:
+Rates use commit timestamps between code endpoints, in calendar days. The days include the user's pauses, so these rates do not compare periods; the next navigation recounts them per running hour ([who decides](../AGENTS.md#who-decides)):
 
 | Period | Days | Original retired | Per day | Fork C++ census change | Per day |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -152,7 +152,6 @@ What set the rate:
 - The cleanup stage retires no original C++ by design ([ADR 0004](adr/0004-cleanup-before-porting.md)); the movement in that column is the diff noise of #978. Ownership ports retired 1,250 to 2,160 original lines a day before it. At that pace the 221,908 lines left are about 150 days of porting, with no measured pace yet for the GUI, platform or vendored code.
 - #734 finished 92 files and 60,395 lines since the stocktake at integration 143, just before the last navigation: about 15,000 lines a day. 105,623 lines remain at the files' current sizes, about seven more days at that pace, before closure and #893.
 - The census fell at half the previous navigation's pace. Between steerings 34 and 35, 8 of the 17 merges in root's session were tools or CI changes and tooling grew by 8,314 lines; steering 35 moved that work to one batch per stocktake interval, and the 12 merges after it cut the census at 1,967 lines a day.
-- In five gaps of over four hours no PR merged, 45 of the 86 hours between the first and last merge of the period. The two longest, 12.6 and 14.1 hours, were the pauses around steerings 34 and 35.
 
 | Order | Stage | Size now | Exit (end state) | Status |
 | ---: | --- | --- | --- | --- |

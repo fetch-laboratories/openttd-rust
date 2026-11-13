@@ -19,7 +19,7 @@ Attribution on every issue, comment and commit body you write:
 
 - Count original C++ code lines retired and still compiled, excluding comments, blank and preprocessor lines, for the whole fork and each area: simulation logic, simulation storage (object classes, pools, map accessors), save/load, script API, network, NewGRF, support, GUI and drawing, platform and vendored. Use `python3 tools/port-metrics.py --whole-fork` where it reports these; count the rest.
 - State the metric's source and build-target scope. Count candidate tooling and generated C++ it omits, keeping reference-only oracle support separate. Recount past endpoints with the same metric version (`--head`) and report inventory corrections apart from retirement.
-- Measure retired lines per day across the fork's history and each of the last several steering periods (`git log --format='%h %ad %s' | grep -i 'Doc: .*Steer'`).
+- Measure retired lines per running hour ([who decides](../../../AGENTS.md#who-decides)) across the fork's history and each of the last several steering periods (`git log --format='%h %ad %s' | grep -i 'Doc: .*Steer'`).
 - The last navigation is `git log --format='%h %ad %s' | grep 'Doc: Navigate'`; its figures are in that commit's roadmap "Phases".
 
 Done when one table holds done and remaining lines by area and the rate, each with its change since the last navigation.

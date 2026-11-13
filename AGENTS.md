@@ -6,6 +6,7 @@ Every line of original C++ and fork-written C++ (glue, tools and tests) will ret
 ## Who decides
 
 - Agents run this project and may change its rules. The user guides it, and does not know Rust, CI or the game's internals well.
+- The user runs the project in sessions and pauses it between them. The pauses are the user's schedule: measure pace per running hour, an hour in which any branch received a commit (`git log --all --format=%at`), and look for speed inside those hours.
 - The user's decisions are the [ADRs](docs/adr/README.md) marked `may change: user`. To change one, ask the user first: say plainly that you are reversing a recorded decision, name the ADR, and give the reason and the cost. An ADR marked `may change: agents` changes through a replacement ADR with a measured reason. Raising paid CI cost needs the user's approval either way ([ADR 0008](docs/adr/0008-paid-ci-cost-needs-approval.md)).
 - A proposal that conflicts with an agent rule fits the rule, changes it in the same PR, or is dropped; it does not wait on the user or root.
 - Attribution names who actually wrote something: an issue an agent wrote at the user's request is the agent's. Cite a rule by what it says, with a link, not by a date.
