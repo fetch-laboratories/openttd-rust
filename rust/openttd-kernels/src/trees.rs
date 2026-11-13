@@ -13,7 +13,12 @@
 //! generation abort is the one C++ exception: its progress service reports it and the entry
 //! returns. Settings are read through the catalog's process-wide addresses, one field-sized
 //! load at the original's observation point.
-#![allow(unsafe_code)]
+#![allow(
+    unsafe_code,
+    clippy::many_single_char_names,
+    clippy::too_many_lines,
+    reason = "the original's coordinate and random names; CmdPlantTree and TileLoop_Trees are one function each"
+)]
 
 use crate::bitmath_func::gb;
 use crate::clear_map::{ClearGround, get_clear_density, get_clear_ground, is_clear_ground};
@@ -147,7 +152,7 @@ pub(crate) struct Trees<'a> {
     t: &'a TreeServices,
     s: &'a Services,
 }
-impl<'a> Trees<'a> {
+impl Trees<'_> {
     /// # Safety
     /// Both pointers address live immutable tables for the whole entry.
     pub(crate) unsafe fn new(services: *const TreeServices, shared: *const Services) -> Self {
@@ -489,7 +494,7 @@ fn create_random_star_shaped_polygon(c: &Trees, radius: i32, shape: &mut [Point]
 
 /// Returns true if the given coordinates (relative to the centre of the shape) lie within a
 /// triangle.
-fn is_point_in_triangle(x: i32, y: i32, v1: &Point, v2: &Point, v3: &Point) -> bool {
+fn is_point_in_triangle(x: i32, y: i32, v1: Point, v2: Point, v3: Point) -> bool {
     let s = ((v1.x.wrapping_sub(v3.x)).wrapping_mul(y.wrapping_sub(v3.y)))
         .wrapping_sub((v1.y.wrapping_sub(v3.y)).wrapping_mul(x.wrapping_sub(v3.x)));
     let t = ((v2.x.wrapping_sub(v1.x)).wrapping_mul(y.wrapping_sub(v1.y)))
@@ -513,15 +518,15 @@ fn is_point_in_star_shaped_polygon(x: i32, y: i32, shape: &[Point]) -> bool {
     let mut it = 0;
     while it != shape.len() {
         // The iterator advances inside the body.
-        let v1 = &shape[it];
+        let v1 = shape[it];
         it += 1;
         let v2 = if it == shape.len() {
-            &shape[0]
+            shape[0]
         } else {
-            &shape[it]
+            shape[it]
         };
 
-        if is_point_in_triangle(x, y, v1, v2, &Point { x: 0, y: 0 }) {
+        if is_point_in_triangle(x, y, v1, v2, Point { x: 0, y: 0 }) {
             return true;
         }
     }
@@ -530,11 +535,10 @@ fn is_point_in_star_shaped_polygon(x: i32, y: i32, shape: &[Point]) -> bool {
 }
 
 /// `TileAddWrap`, with `construction.freeform_edges` read at the call.
-fn tile_add_wrap(w: &World, tile: TileIndex, addx: i32, addy: i32) -> TileIndex {
+fn tile_add_wrap(w: &World, tile: TileIndex, x: i32, y: i32) -> TileIndex {
     // SAFETY: The module's settings contract.
     let freeform = unsafe { w.shared.settings().freeform_edges.read() };
-    w.dimensions
-        .tile_add_wrap(tile, addx, addy, w.size_y(), freeform)
+    w.dimensions.tile_add_wrap(tile, x, y, w.size_y(), freeform)
 }
 
 /// Creates a number of tree groups.
@@ -1259,6 +1263,9 @@ fn tile_loop_trees(
     settings: &LoopSettings,
     call: *mut crate::ground::Call,
 ) {
+    /// How many tile updates happen for one tree update
+    const TREE_UPDATE_FREQUENCY: u32 = 16;
+
     let w = World {
         types: types.without_native_assert(),
         shared: c.s,
@@ -1314,8 +1321,6 @@ fn tile_loop_trees(
         return;
     }
 
-    /// How many tile updates happen for one tree update
-    const TREE_UPDATE_FREQUENCY: u32 = 16;
     if cycle % TREE_UPDATE_FREQUENCY != TREE_UPDATE_FREQUENCY - 1 {
         return;
     }
@@ -1992,7 +1997,7 @@ mod tests {
     extern "C" fn set_ground_density(tile: u32, ground: u8, density: u32) {
         log(Event::Write("ground", tile));
         edit(tile, |b| {
-            b.m2 = (b.m2 & !0x1f0) | (u16::from(ground) << 6) | ((density as u16) << 4)
+            b.m2 = (b.m2 & !0x1f0) | (u16::from(ground) << 6) | ((density as u16) << 4);
         });
     }
     #[allow(
@@ -2012,7 +2017,7 @@ mod tests {
     extern "C" fn add_growth(tile: u32, a: i32) {
         log(Event::Write("add_growth", tile));
         edit(tile, |b| {
-            b.m5 = (b.m5 & !7) | (b.m5.wrapping_add(a as u8) & 7)
+            b.m5 = (b.m5 & !7) | (b.m5.wrapping_add(a as u8) & 7);
         });
     }
     extern "C" fn set_growth(tile: u32, g: u8) {
