@@ -379,7 +379,8 @@ trait Yapf<'v> {
 
             let key = base.nodes.items[best_open_node].key;
             base.nodes.pop_open_node(&base.vehicle.world, &key);
-            base.nodes.insert_closed_node(&base.vehicle.world, best_open_node);
+            base.nodes
+                .insert_closed_node(&base.vehicle.world, best_open_node);
         }
 
         let base = self.base();
@@ -604,7 +605,8 @@ impl<'v> CYapfShip<'v> {
         let v = self.v();
         if self.has_intermediate_dest {
             /* GetWaterRegionInfo is much faster than GetWaterRegionPatchInfo so we try that first. */
-            if get_water_region_info(v.world.dimensions, tile) != self.intermediate_dest_region_patch
+            if get_water_region_info(v.world.dimensions, tile)
+                != self.intermediate_dest_region_patch
             {
                 return false;
             }
@@ -923,8 +925,7 @@ pub(crate) fn choose_ship_track(
     path_cache: &mut ShipPathCache,
     best_origin_dir: &mut Trackdir,
 ) -> Trackdir {
-    let high_level_path =
-        find_water_region_path(v, tile, NUMBER_OR_WATER_REGIONS_LOOKAHEAD + 1);
+    let high_level_path = find_water_region_path(v, tile, NUMBER_OR_WATER_REGIONS_LOOKAHEAD + 1);
     if high_level_path.is_empty() {
         *path_found = false;
         crate::witness::hit(crate::witness::SHIP_YAPF_LOST);
@@ -1176,8 +1177,7 @@ impl Hash for WaterRegionPatchKey {
     }
 }
 
-static WATER_REGION_NODES: GameState<Option<NodeList<WaterRegionPatchKey>>> =
-    GameState::new(None);
+static WATER_REGION_NODES: GameState<Option<NodeList<WaterRegionPatchKey>>> = GameState::new(None);
 impl NodeKey for WaterRegionPatchKey {
     fn scratch() -> &'static GameState<Option<NodeList<Self>>> {
         &WATER_REGION_NODES
@@ -1244,7 +1244,8 @@ impl<'v> YapfShipRegions<'v> {
             return;
         }
         if !self.has_origin(water_region_patch) {
-            let key = WaterRegionPatchKey::set(self.base.vehicle.world.dimensions, water_region_patch);
+            let key =
+                WaterRegionPatchKey::set(self.base.vehicle.world.dimensions, water_region_patch);
             self.add_startup_node(WaterRegionNode::set(None, key));
         }
     }
@@ -1256,7 +1257,8 @@ impl<'v> YapfShipRegions<'v> {
     }
     /// `SetDestination`.
     fn set_destination(&mut self, water_region_patch: WaterRegionPatchDesc) {
-        self.dest = WaterRegionPatchKey::set(self.base.vehicle.world.dimensions, water_region_patch);
+        self.dest =
+            WaterRegionPatchKey::set(self.base.vehicle.world.dimensions, water_region_patch);
     }
 }
 impl<'v> Yapf<'v> for YapfShipRegions<'v> {
@@ -1422,7 +1424,9 @@ pub extern "C" fn openttd_rust_ship_path_new() -> *mut ShipPathCache {
     Box::into_raw(Box::default())
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_path_clone(p: *const ShipPathCache) -> *mut ShipPathCache {
+pub unsafe extern "C" fn openttd_rust_ship_path_clone(
+    p: *const ShipPathCache,
+) -> *mut ShipPathCache {
     Box::into_raw(Box::new(unsafe { &*p }.clone()))
 }
 #[unsafe(no_mangle)]
@@ -1590,7 +1594,11 @@ mod tests {
         );
         let extended = Box::leak(
             (0..64 * 64)
-                .map(|_| crate::map_func::ExtendedTileLayout { m6: 0, m7: 0, m8: 0 })
+                .map(|_| crate::map_func::ExtendedTileLayout {
+                    m6: 0,
+                    m7: 0,
+                    m8: 0,
+                })
                 .collect::<Box<[_]>>(),
         );
         crate::map_func::fixture::set(
@@ -1724,7 +1732,11 @@ mod tests {
             leaves: &crate::test_tables::SHIP_LEAVES,
         };
         let input = ship_input(&s, &ship);
-        assert_eq!((input.tile, input.dest_tile), (1111, 2222), "tile and destination");
+        assert_eq!(
+            (input.tile, input.dest_tile),
+            (1111, 2222),
+            "tile and destination"
+        );
         assert_eq!(
             (input.order_type, input.order_destination),
             (OrderType::OT_GOTO_STATION.0, 4321),
@@ -1732,7 +1744,11 @@ mod tests {
         );
         assert_eq!(input.direction, 5, "direction");
         assert_eq!(
-            (input.max_speed, input.ocean_speed_frac, input.canal_speed_frac),
+            (
+                input.max_speed,
+                input.ocean_speed_frac,
+                input.canal_speed_frac
+            ),
             (301, 17, 23),
             "the engine's speed and its ocean and canal fractions"
         );
@@ -1754,8 +1770,10 @@ mod tests {
         let v = vehicle(&s);
         let mut pf = CYapfShip::new(&v, 0);
         pf.dest_tile = TileIndex(40 + 40 * 64);
-        let mut parent =
-            CYapfShipNode::set(None, CYapfNodeKeyExitDir::set(TileIndex(0), Trackdir::TRACKDIR_X_NE));
+        let mut parent = CYapfShipNode::set(
+            None,
+            CYapfNodeKeyExitDir::set(TileIndex(0), Trackdir::TRACKDIR_X_NE),
+        );
         parent.estimate = 10_000;
         pf.base.nodes.items.push(parent);
         let mut child = CYapfShipNode::set(
@@ -1778,7 +1796,10 @@ mod tests {
         let s = shared(&crate::test_tables::VEHICLE);
         let v = vehicle(&s);
         let pf = CYapfShip::new(&v, 0);
-        assert_eq!(pf.curve_cost(Trackdir::TRACKDIR_X_NE, Trackdir::TRACKDIR_X_NE), 0);
+        assert_eq!(
+            pf.curve_cost(Trackdir::TRACKDIR_X_NE, Trackdir::TRACKDIR_X_NE),
+            0
+        );
         assert_eq!(FAILED_ASSERTIONS.get(), 0);
         // Trackdir 7 is not valid: `CurveCost` asserts the second trackdir, and
         // the `HasTrackdir` it then calls asserts it again.
@@ -1818,8 +1839,10 @@ mod tests {
         let destination = TileIndex(10 + 10 * 64);
         pf.dest_tile = destination;
         // A closed node keyed by the destination tile and the north-east exit.
-        let mut closed =
-            CYapfShipNode::set(None, CYapfNodeKeyExitDir::set(destination, Trackdir::TRACKDIR_X_NE));
+        let mut closed = CYapfShipNode::set(
+            None,
+            CYapfNodeKeyExitDir::set(destination, Trackdir::TRACKDIR_X_NE),
+        );
         closed.estimate = 100_000;
         pf.base.nodes.items.push(closed);
         pf.base.nodes.insert_closed_node(&v.world, 0);
@@ -1844,7 +1867,9 @@ mod tests {
     /// take it in turn, as serialized production entries do.
     fn scratch_lock() -> std::sync::MutexGuard<'static, ()> {
         static SCRATCH: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        SCRATCH.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        SCRATCH
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
     fn fill(nodes: &mut NodeList<CYapfNodeKeyExitDir>, world: &crate::map_func::World<'_>) {
         for tile in 0..64 {

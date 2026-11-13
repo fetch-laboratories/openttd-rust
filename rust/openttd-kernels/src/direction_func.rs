@@ -237,7 +237,11 @@ mod tests {
             }
         }
         assert_eq!(
-            diag_dir_difference(DiagDirection::DIAGDIR_NE, DiagDirection::DIAGDIR_SE, |ok| assert!(ok)),
+            diag_dir_difference(
+                DiagDirection::DIAGDIR_NE,
+                DiagDirection::DIAGDIR_SE,
+                |ok| assert!(ok)
+            ),
             DiagDirDiff::DIAGDIRDIFF_90LEFT
         );
     }

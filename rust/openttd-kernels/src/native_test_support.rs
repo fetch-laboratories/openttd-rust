@@ -877,7 +877,10 @@ pub unsafe extern "C" fn openttd_test_ship_heap_probe(
                 heap.include(index, |a, b| items[a].less(&items[b]));
             }
         }
-        unsafe { out.add(step).write(heap.first().map_or(u32::MAX, |i| i as u32)) };
+        unsafe {
+            out.add(step)
+                .write(heap.first().map_or(u32::MAX, |i| i as u32))
+        };
     }
 }
 

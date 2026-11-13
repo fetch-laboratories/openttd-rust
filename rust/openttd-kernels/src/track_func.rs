@@ -308,7 +308,8 @@ pub fn vehicle_exit_dir(
 
     /* Determine the diagonal direction in which we will exit this tile */
     if direction.0 & 1 == 0 && track != STATE_DIR_TABLE[usize::from(diagdir.0)] {
-        diagdir = crate::direction_func::change_diag_dir(diagdir, DiagDirDiff::DIAGDIRDIFF_90LEFT, check);
+        diagdir =
+            crate::direction_func::change_diag_dir(diagdir, DiagDirDiff::DIAGDIRDIFF_90LEFT, check);
     }
 
     diagdir

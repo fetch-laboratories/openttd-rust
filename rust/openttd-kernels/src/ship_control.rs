@@ -1334,10 +1334,30 @@ mod tests {
         // half-tile water rail tile and a barren rail tile.
         let tiles = [
             (TileType::MP_WATER, WaterClass::Canal.0 << 5, 0, 0),
-            (TileType::MP_TUNNELBRIDGE, 0, 0, crate::transport_type::TransportType::TRANSPORT_WATER.0 << 2),
-            (TileType::MP_TUNNELBRIDGE, 0, 0, crate::transport_type::TransportType::TRANSPORT_RAIL.0 << 2),
-            (TileType::MP_RAILWAY, 0, crate::rail_map::RailGroundType::HalfTileWater.0, 0),
-            (TileType::MP_RAILWAY, 0, crate::rail_map::RailGroundType::Barren.0, 0),
+            (
+                TileType::MP_TUNNELBRIDGE,
+                0,
+                0,
+                crate::transport_type::TransportType::TRANSPORT_WATER.0 << 2,
+            ),
+            (
+                TileType::MP_TUNNELBRIDGE,
+                0,
+                0,
+                crate::transport_type::TransportType::TRANSPORT_RAIL.0 << 2,
+            ),
+            (
+                TileType::MP_RAILWAY,
+                0,
+                crate::rail_map::RailGroundType::HalfTileWater.0,
+                0,
+            ),
+            (
+                TileType::MP_RAILWAY,
+                0,
+                crate::rail_map::RailGroundType::Barren.0,
+                0,
+            ),
             (TileType::MP_CLEAR, 0, 0, 0),
             (TileType::MP_CLEAR, 0, 0, 0),
             (TileType::MP_CLEAR, 0, 0, 0),
@@ -1355,7 +1375,11 @@ mod tests {
             })
             .collect();
         let extended: Vec<ExtendedTileLayout> = (0..8)
-            .map(|_| ExtendedTileLayout { m6: 0, m7: 0, m8: 0 })
+            .map(|_| ExtendedTileLayout {
+                m6: 0,
+                m7: 0,
+                m8: 0,
+            })
             .collect();
         crate::map_func::fixture::set(
             TileTypeAllocation {
@@ -1376,11 +1400,26 @@ mod tests {
         };
         let world = World::new(&s);
         let class = |tile| get_effective_water_class(&world, TileIndex(tile));
-        assert!(class(0) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 0, "the tile's own class");
-        assert!(class(1) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 0, "an aqueduct");
-        assert!(class(2) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 1, "a rail bridge breaks the transport assertion");
-        assert!(class(3) == WaterClass::Sea && FAILED_ASSERTIONS.get() == 1, "half-tile water rail");
-        assert!(class(4) == WaterClass::Sea && FAILED_ASSERTIONS.get() == 2, "barren rail breaks the ground assertion");
+        assert!(
+            class(0) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 0,
+            "the tile's own class"
+        );
+        assert!(
+            class(1) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 0,
+            "an aqueduct"
+        );
+        assert!(
+            class(2) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 1,
+            "a rail bridge breaks the transport assertion"
+        );
+        assert!(
+            class(3) == WaterClass::Sea && FAILED_ASSERTIONS.get() == 1,
+            "half-tile water rail"
+        );
+        assert!(
+            class(4) == WaterClass::Sea && FAILED_ASSERTIONS.get() == 2,
+            "barren rail breaks the ground assertion"
+        );
     }
 
     #[test]

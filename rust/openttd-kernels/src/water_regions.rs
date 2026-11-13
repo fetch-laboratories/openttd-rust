@@ -195,8 +195,10 @@ pub(crate) fn calculate_water_region_patch_hash(
 /// `GetWaterRegionCenterTile`: returns the center tile of a particular water region.
 pub(crate) fn get_water_region_center_tile(map: Map, water_region: WaterRegionDesc) -> TileIndex {
     map.tile_xy(
-        (water_region.x * WATER_REGION_EDGE_LENGTH + (WATER_REGION_EDGE_LENGTH / 2)).cast_unsigned(),
-        (water_region.y * WATER_REGION_EDGE_LENGTH + (WATER_REGION_EDGE_LENGTH / 2)).cast_unsigned(),
+        (water_region.x * WATER_REGION_EDGE_LENGTH + (WATER_REGION_EDGE_LENGTH / 2))
+            .cast_unsigned(),
+        (water_region.y * WATER_REGION_EDGE_LENGTH + (WATER_REGION_EDGE_LENGTH / 2))
+            .cast_unsigned(),
     )
 }
 
