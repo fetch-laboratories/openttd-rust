@@ -170,10 +170,6 @@ impl TreePlacer {
 }
 /// Raw adapter: `TP_NONE` as a base value, for files no pass has finished yet.
 pub const TP_NONE: u8 = TreePlacer::TP_NONE.0;
-/// Raw adapter: `TP_ORIGINAL` as a base value.
-pub const TP_ORIGINAL: u8 = TreePlacer::TP_ORIGINAL.0;
-/// Raw adapter: `TP_IMPROVED` as a base value.
-pub const TP_IMPROVED: u8 = TreePlacer::TP_IMPROVED.0;
 
 /// Native `settings_type.h::IndustryDensity`, retaining the full underlying integer domain.
 #[repr(transparent)]

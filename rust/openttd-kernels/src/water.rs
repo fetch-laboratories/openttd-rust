@@ -543,7 +543,7 @@ impl<'a> World<'a> {
                 crate::tile_type::MP_TREES if !is_slope_with_one_corner_raised_raw(slope.0) => {
                     (self.w.set_tree_ground)(
                         tile,
-                        TreeGround(crate::tree_map::TREE_GROUND_SHORE),
+                        TreeGround::TREE_GROUND_SHORE,
                         3,
                     );
                     (self.s.mark_dirty)(tile);
@@ -773,11 +773,11 @@ pub(crate) unsafe fn dirty_water_neighbours(
     let map = crate::map_func::World::new(s);
     unsafe { World::new(w, s, &map.types, size_x, size_y) }.dirty_neighbours(tile);
 }
+/// `ClearNeighbourNonFloodingStates`, over the map dimensions `size_x` by `size_y`.
 /// # Safety
 /// Live immutable service tables for the synchronous no-unwind invocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_clear_neighbour_flooding(
-    tile: u32,
+pub(crate) unsafe fn clear_neighbour_non_flooding_states(
+    tile: crate::tile_type::TileIndex,
     size_x: u32,
     size_y: u32,
     w: *const WaterServices,
@@ -788,11 +788,32 @@ pub unsafe extern "C" fn openttd_rust_clear_neighbour_flooding(
     let map = crate::map_func::World::new(shared);
     let world = unsafe { World::new(w, s, &map.types, size_x, size_y) };
     for direction in 0..8 {
-        let target = offset(tile, direction, size_x);
+        let target = offset(tile.0, direction, size_x);
         if world.valid(target) && world.tile_type(target) == 6 {
             (world.w.set_non_flooding)(target, false);
             crate::ground::hit(crate::ground::Witness::Wakeup);
         }
+    }
+}
+/// # Safety
+/// Live immutable service tables for the synchronous no-unwind invocation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_clear_neighbour_flooding(
+    tile: u32,
+    size_x: u32,
+    size_y: u32,
+    w: *const WaterServices,
+    s: *const Services,
+) {
+    // SAFETY: The caller's contract is the function's.
+    unsafe {
+        clear_neighbour_non_flooding_states(
+            crate::tile_type::TileIndex(tile),
+            size_x,
+            size_y,
+            w,
+            s,
+        );
     }
 }
 

@@ -34,6 +34,7 @@
 #include "../road_type.h"
 #include "../road_map.h"
 #include "../water_map.h"
+#include "../tree_map.h"
 #include "../station_type.h"
 #include "../rust/landscape_loop_ffi.h"
 #include "landscape_protocol.hpp"
@@ -140,6 +141,11 @@ struct MapLeafOracle {
 	uint32_t tram_bits;
 	uint32_t has_road;
 	uint32_t has_tram;
+	uint32_t tree_ground;
+	uint32_t tree_density;
+	uint32_t tree_type;
+	uint32_t tree_count;
+	uint32_t tree_growth;
 };
 static void ObserveMapLeaves(uint32_t index, MapLeafOracle *out) noexcept
 {
@@ -159,8 +165,12 @@ static void ObserveMapLeaves(uint32_t index, MapLeafOracle *out) noexcept
 	if (MayHaveRoad(tile)) {
 		out->has_road = HasTileRoadType(tile, RTT_ROAD); out->has_tram = HasTileRoadType(tile, RTT_TRAM);
 	}
+	if (IsTileType(tile, MP_TREES)) {
+		out->tree_ground = GetTreeGround(tile); out->tree_density = GetTreeDensity(tile); out->tree_type = GetTreeType(tile);
+		out->tree_count = GetTreeCount(tile); out->tree_growth = to_underlying(GetTreeGrowth(tile));
+	}
 }
-extern "C" uint8_t openttd_rust_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept, void (*)(uint32_t, MapLeafOracle *) noexcept);
+extern "C" uint8_t openttd_rust_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, const OpenTTDClearServices *, uint32_t, void (*)(uint32_t) noexcept, void (*)(uint32_t, MapLeafOracle *) noexcept);
 TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 {
 	for (const uint size : {64U, 128U}) {
@@ -176,10 +186,10 @@ TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 					t.m4() = value; t.m5() = kind == MP_ROAD ? value & 63 : value; t.m6() = value;
 					t.m8() = value * 257;
 					SetTileHeight(tile, value);
-					CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
+					CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
 					auto unchecked = statics;
 					unchecked.assertions = false;
-					CHECK(openttd_rust_map_read_probe(&unchecked, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
+					CHECK(openttd_rust_map_read_probe(&unchecked, &GetRustSharedServices(), &GetRustClearServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
 				}
 			}
 		}
@@ -211,7 +221,7 @@ TEST_CASE("Rust movement map context rereads native mutations within an entry")
 							Tile t{TileIndex{index}};
 							t.type() = MP_CLEAR << 4;
 						};
-						CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), change_type ? +mutate_type : +mutate_fields, ObserveMapLeaves));
+						CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), tile.base(), change_type ? +mutate_type : +mutate_fields, ObserveMapLeaves));
 					}
 				}
 			}

@@ -83,12 +83,11 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     statics: *const MapStatics,
     shared: *const crate::services::Services,
     clear: *const crate::ground::ClearServices,
-    trees: *const crate::trees::TreeServices,
     tile: u32,
     mutate: extern "C" fn(u32),
     observe: extern "C" fn(u32, *mut crate::movement::native_test_support::MapLeafOracle),
 ) -> u8 {
-    let (s, c, trees) = unsafe { (&*shared, &*clear, &*trees) };
+    let (s, c) = unsafe { (&*shared, &*clear) };
     let allocation = unsafe { (*statics).load().0 };
     let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
     let x = (s.map_max_x)() + 1;
@@ -143,15 +142,15 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
         }
         TileType::MP_TREES => {
             use crate::tree_map::{
-                get_tree_count_raw, get_tree_density_raw, get_tree_ground_raw, get_tree_growth_raw,
-                get_tree_type_raw,
+                get_tree_count, get_tree_density, get_tree_ground, get_tree_growth, get_tree_type,
             };
-            let tree = (trees.tree_observation)(tile);
-            if get_tree_ground_raw(&map, tile) != Some(tree.ground)
-                || get_tree_density_raw(&map, tile) != Some(tree.density)
-                || get_tree_type_raw(&map, tile) != Some(tree.species)
-                || get_tree_count_raw(&map, tile) != Some(tree.count)
-                || get_tree_growth_raw(&map, tile) != Some(tree.growth)
+            let mut tree = crate::movement::native_test_support::MapLeafOracle::default();
+            observe(tile, &raw mut tree);
+            if get_tree_ground(&map, index).map(|g| u32::from(g.0)) != Some(tree.tree_ground)
+                || get_tree_density(&map, index).map(u32::from) != Some(tree.tree_density)
+                || get_tree_type(&map, index).map(|t| u32::from(t.0)) != Some(tree.tree_type)
+                || get_tree_count(&map, index).map(u32::from) != Some(tree.tree_count)
+                || get_tree_growth(&map, index).map(|g| u32::from(g.0)) != Some(tree.tree_growth)
             {
                 return u8::from(false);
             }
@@ -165,7 +164,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
             || crate::clear_map::is_snow_tile_raw(&map, tile).is_none())
             && (!allocation.assertions
                 || kind == TileType::MP_TREES
-                || crate::tree_map::get_tree_type_raw(&map, tile).is_none())
+                || crate::tree_map::get_tree_type(&map, index).is_none())
             && (!allocation.assertions
                 || kind == TileType::MP_WATER
                 || crate::water_map::is_coast(&map, tile).is_none())

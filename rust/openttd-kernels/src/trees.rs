@@ -5,208 +5,109 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Tree policy, iteration, grove geometry, commands and the persisted tick byte; tiles stay in
-//! C++. Flooding, `NewGRF` ambient callbacks and nested clears may reenter, so records read
-//! before them are read again afterwards; the tile loop reads single fields where the source
-//! does. World-generation abort is the one C++ exception: its progress service reports it and
-//! the entry returns.
-#![allow(
-    unsafe_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::cast_precision_loss,
-    clippy::too_many_arguments,
-    clippy::struct_excessive_bools,
-    clippy::many_single_char_names,
-    clippy::too_many_lines
-)]
-use crate::clear_map::{CLEAR_DESERT, CLEAR_FIELDS, CLEAR_GRASS, CLEAR_ROCKS, CLEAR_ROUGH};
+//! Handling of tree tiles (`tree_cmd.cpp`). Tiles stay in the native map arrays, which these
+//! functions read in place through a `World` view; the `tree_map.h` writers stay native leaves.
+//! Flooding, the `NewGRF` ambient callback and the nested landscape clear may reenter tree
+//! entries but cannot reset or load the map, so a view lives for its entry. A world-generation
+//! progress update yields the game-state mutex: generation builds a new view after each one. A
+//! generation abort is the one C++ exception: its progress service reports it and the entry
+//! returns. Settings are read through the catalog's process-wide addresses, one field-sized
+//! load at the original's observation point.
+#![allow(unsafe_code)]
+
+use crate::bitmath_func::gb;
+use crate::clear_map::{ClearGround, get_clear_density, get_clear_ground, is_clear_ground};
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_type::CompanyID;
+use crate::economy_type::{ExpensesType, PR_BUILD_TREES, PR_CLEAR_TREES};
+use crate::geometry_type::Point;
+use crate::landscape_type::LandscapeType;
+use crate::map_func::{Map, TileTypeAccess, World};
+use crate::math::{delta, is_inside_bs, is_inside_mm};
 use crate::openttd::GameMode;
 use crate::random_func::chance16_i;
-use crate::services::Services;
-use crate::tile_type::TileIndex;
-use crate::tile_type::TileType;
-use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
-use crate::tree_map::TREE_GROUND_SHORE as GROUND_SHORE;
-
-use crate::landscape_type::{ARCTIC, TROPIC};
-const TOYLAND: u8 = 3;
+use crate::services::{CommandCost, CommandServices, Cost, Services, TownHandle};
+use crate::settings_type::TreePlacer;
+use crate::sound_type::SoundFx;
+use crate::strings_type::StringID;
+use crate::tile_type::{TileIndex, TileType, TropicZone};
+use crate::tree_land::{TREE_BASE_BY_LANDSCAPE, TREE_COUNT_BY_LANDSCAPE};
 use crate::tree_map::{
-    TREE_GROUND_GRASS as GROUND_GRASS, TREE_GROUND_ROUGH as GROUND_ROUGH,
-    TREE_GROUND_ROUGH_SNOW as GROUND_ROUGH_SNOW, TREE_GROUND_SNOW_DESERT as GROUND_SNOW_DESERT,
+    TREE_COUNT_RAINFOREST, TREE_COUNT_SUB_ARCTIC, TREE_COUNT_SUB_TROPICAL, TREE_COUNT_TEMPERATE,
+    TREE_COUNT_TOYLAND, TreeGround, TreeGrowthStage, TreeType, get_tree_count, get_tree_density,
+    get_tree_ground, get_tree_growth, get_tree_type,
 };
-const ZONE_NORMAL: u8 = 0;
-const ZONE_DESERT: u8 = 1;
-const ZONE_RAINFOREST: u8 = 2;
-const GROWING1: u8 = crate::tree_map::TreeGrowthStage::Growing1.0;
-const GROWN: u8 = crate::tree_map::TreeGrowthStage::Grown.0;
-const DEAD: u8 = crate::tree_map::TreeGrowthStage::Dead.0;
-const TREE_RAINFOREST: u8 = crate::tree_map::TreeType::TREE_RAINFOREST.0;
-const TREE_CACTUS: u8 = crate::tree_map::TreeType::TREE_CACTUS.0;
-const TREE_SUB_TROPICAL: u8 = crate::tree_map::TreeType::TREE_SUB_TROPICAL.0;
-const TREE_TOYLAND: u8 = crate::tree_map::TreeType::TREE_TOYLAND.0;
-const TREE_INVALID: u8 = crate::tree_map::TreeType::TREE_INVALID.0;
-const ETP_NO_SPREAD: u8 = 0;
-const ETP_SPREAD_RAINFOREST: u8 = 1;
-const ETP_SPREAD_ALL: u8 = 2;
-const ETP_NO_GROWTH_NO_SPREAD: u8 = 3;
-use crate::settings_type::{TP_IMPROVED, TP_NONE, TP_ORIGINAL};
-const DEFAULT_TREE_STEPS: u32 = 1000;
-const DEFAULT_RAINFOREST_TREE_STEPS: u32 = 15000;
-const EDITOR_TREE_DIV: i32 = 5;
-const MAP_HEIGHT_LIMIT_ORIGINAL: u8 = 15;
-const RAINFOREST_SOUNDS: [u16; 4] = [66, 67, 68, 72];
-const ARCTIC_SNOW_1: u16 = 52;
-const ARCTIC_SNOW_2: u16 = 57;
-/// `_tileoffs_by_dir` in direction order N, NE, E, SE, S, SW, W, NW.
-const DIRECTION_OFFSETS: [(i32, i32); 8] = [
-    (-1, -1),
-    (-1, 0),
-    (-1, 1),
-    (0, 1),
-    (1, 1),
-    (1, 0),
-    (1, -1),
-    (0, -1),
-];
 
-// Process-lifetime allocation, initialized without runtime construction. Access is
-// serialized by the game thread; save/load dereferences its raw address only when
-// no Rust call is active. In particular no Rust reference to it is ever formed.
-static mut TREE_COUNTER: u8 = 0;
+/// Where to place trees while in-game?
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExtraTreePlacement(pub u8);
+impl ExtraTreePlacement {
+    /// Grow trees on tiles that have them but don't spread to new ones
+    pub const ETP_NO_SPREAD: Self = Self(0);
+    /// Grow trees on tiles that have them, only spread to new ones in rainforests
+    pub const ETP_SPREAD_RAINFOREST: Self = Self(1);
+    /// Grow trees and spread them without restrictions
+    pub const ETP_SPREAD_ALL: Self = Self(2);
+    /// Don't grow trees and don't spread them at all
+    pub const ETP_NO_GROWTH_NO_SPREAD: Self = Self(3);
+}
 
-/// Stable address for unchanged DATE and legacy TTD/TTO serialization descriptors.
-/// The game thread exclusively serializes access; callers never keep references
-/// across a Rust invocation. `LoadCheck` deliberately does not access this byte.
+/// Determines when to consider building more trees.
+// Process-wide, initialized without runtime construction. The game-state mutex serializes
+// access; save/load dereferences its address only when no Rust call is active, and no Rust
+// reference to it is formed.
+#[allow(non_upper_case_globals, reason = "the original's name")]
+static mut _trees_tick_ctr: u8 = 0;
+
+/// Default number of attempts for placing trees.
+const DEFAULT_TREE_STEPS: u16 = 1000;
+/// Default number of attempts for placing extra trees at rainforest in tropic.
+const DEFAULT_RAINFOREST_TREE_STEPS: u16 = 15000;
+/// Game editor tree generation divisor factor.
+const EDITOR_TREE_DIV: u16 = 5;
+
+/// Stable address of `_trees_tick_ctr` for the unchanged DATE and legacy TTD/TTO save
+/// descriptors. `LoadCheck` does not access this byte.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_tree_counter() -> *mut u8 {
-    &raw mut TREE_COUNTER
+    &raw mut _trees_tick_ctr
 }
 
-/// Reset the private persisted byte when initializing a game.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_trees_initialize() {
-    // SAFETY: Game initialization is serialized with ticks and save/load.
-    unsafe {
-        TREE_COUNTER = 0;
-    }
-}
-
-fn decrement(counter: u8, scale: u32) -> (u8, bool) {
-    let next = u32::from(counter).wrapping_sub(scale) as u8;
-    (next, counter <= next)
-}
-
-/// Fields `CanPlantTreesOnTile`, `GetRandomTreeType` and `PlantTreesOnTile` observe.
-/// Clear fields are valid only on clear tiles and `coast` only on water tiles;
-/// `coast` is `IsCoast && !IsSlopeWithOneCornerRaised(GetTileSlope)`, so the slope is
-/// read only on coast tiles. `bridge` is read on clear and water tiles.
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug)]
-pub struct PlantObservation {
-    pub tile_type: u8,
-    pub bridge: bool,
-    pub ground: u8,
-    pub density: u8,
-    pub snow: bool,
-    pub coast: bool,
-    pub zone: u8,
-}
-impl PlantObservation {
-    fn suitable(self, allow_desert: bool) -> bool {
-        match self.tile_type {
-            MP_WATER => !self.bridge && self.coast,
-            MP_CLEAR => {
-                !self.bridge
-                    && self.ground != CLEAR_FIELDS
-                    && self.ground != CLEAR_ROCKS
-                    && (allow_desert || self.ground != CLEAR_DESERT)
-            }
-            _ => false,
-        }
-    }
-}
-
-/// Tree-tile fields of one `MP_TREES` tile.
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug)]
-pub struct TreeObservation {
-    pub ground: u8,
-    pub density: u8,
-    pub species: u8,
-    pub count: u8,
-    pub growth: u8,
-    pub zone: u8,
-}
-
-/// Only the tree count and species read by `ClearTile_Trees`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct ClearObservation {
-    pub count: u32,
-    pub species: u8,
-}
-
-/// `TileLoop_Trees` settings, read once per entry. `ambient` is the client sound
-/// setting; `ambient_callback` is the `NewGRF` feature gate of `AmbientSoundEffect`.
+/// `TileLoop_Trees` settings of one tile-loop batch. `ambient` is the client sound setting;
+/// `ambient_callback` is the `NewGRF` feature gate of `AmbientSoundEffect`.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct LoopSettings {
     pub tick_counter: u64,
     pub size_x: u32,
-    pub climate: u8,
-    pub extra: u8,
+    pub climate: LandscapeType,
+    pub extra: ExtraTreePlacement,
     pub ambient: bool,
     pub ambient_callback: bool,
 }
 
-/// `CmdPlantTree` settings, read once per entry.
+/// The error messages of `CmdPlantTree`, filled once by C++.
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct CommandSettings {
-    pub build_price: i64,
-    pub size: u32,
-    pub climate: u8,
-    pub editor: bool,
-    pub execute: bool,
-    pub company_valid: bool,
+pub struct Strings {
+    /// `STR_ERROR_TREE_ALREADY_HERE`.
+    pub already_here: u32,
+    /// `STR_ERROR_TREE_PLANT_LIMIT_REACHED`.
+    pub plant_limit: u32,
+    /// `STR_ERROR_CAN_T_BUILD_ON_WATER`.
+    pub on_water: u32,
+    /// `STR_ERROR_SITE_UNSUITABLE`.
+    pub site_unsuitable: u32,
+    /// `STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE`.
+    pub wrong_terrain: u32,
 }
 
-/// `CmdPlantTree` outcome. Status 0 returns the cost, or the indexed message when
-/// the cost is zero; 1 is `CMD_ERROR`; 2 returns the failed nested landscape clear.
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug)]
-pub struct CommandResult {
-    pub cost: i64,
-    pub status: u8,
-    pub message: u8,
-}
-
-/// Nested `CMD_LANDSCAPE_CLEAR` outcome; C++ keeps the failed `CommandCost`.
-#[derive(Clone, Copy, Default, Debug)]
-pub struct LandscapeClear {
-    pub cost: i64,
-    pub failed: bool,
-}
-
-/// Opaque C++ command context (flags, company, nested result).
-#[repr(C)]
-pub struct Command {
-    _private: [u8; 0],
-}
-
-/// Tree services. Reads are pure. Writes are the named `tree_map.h`/`clear_map.h`
-/// functions. Direct water calls, `ambient` and `landscape_clear` can reenter tree
-/// entries. The generic owner observes its enable bit after ambient returns. `progress` and
-/// `progress_total` return true when world generation was aborted; C++ then holds
-/// the exception and rethrows it after the entry returns.
+/// Tree services: the `tree_map.h` and `clear_map.h` writers of the same names, the native
+/// `sinf` and `cosf` that keep grove shapes identical across platforms, and the generation
+/// progress updates. `progress` and `progress_total` return true when world generation was
+/// aborted; C++ then holds the exception and rethrows it after the entry returns.
 #[repr(C)]
 pub struct TreeServices {
-    pub plant_observation: extern "C" fn(u32) -> PlantObservation,
-    pub tree_observation: extern "C" fn(u32) -> TreeObservation,
-    pub tree_count: extern "C" fn(u32) -> u32,
-    pub clear_observation: extern "C" fn(u32) -> ClearObservation,
     pub sin: extern "C" fn(f32) -> f32,
     pub cos: extern "C" fn(f32) -> f32,
     pub make_tree: extern "C" fn(u32, u8, u32, u8, u8, u32),
@@ -217,876 +118,1444 @@ pub struct TreeServices {
     pub make_clear: extern "C" fn(u32, u8, u32),
     pub progress: extern "C" fn() -> bool,
     pub progress_total: extern "C" fn(u32) -> bool,
-    pub town_rating: extern "C" fn(u16, u32, bool),
-    pub command_begin: extern "C" fn(*mut Command) -> i32,
-    pub command_debit: extern "C" fn(*mut Command),
+    /// Town leaves of `ChangeTownRating`.
+    pub town: *const crate::town::Leaves,
+    /// The magic bulldozer cheat and town indices of `ChangeTownRating`.
+    pub authority: *const crate::town::AuthorityServices,
+    pub strings: Strings,
 }
 
-/// `Map::ScaleBySize`: `CeilDiv(n << (LogX + LogY - 12), 16)` in uint arithmetic.
-fn scale_by_size(size: u32, n: u32) -> u32 {
-    n.wrapping_shl(size.trailing_zeros().wrapping_sub(12))
-        .wrapping_add(15)
-        / 16
-}
-
-/// `TileAddWrap` on the canonical map; `freeform_edges` is read at the call, as in `map.cpp`.
-fn tile_add_wrap(s: &Services, tile: u32, x: i32, y: i32) -> u32 {
-    s.map()
-        .tile_add_wrap(TileIndex(tile), x, y, 1 << s.map_log_y(), unsafe {
-            s.settings().freeform_edges.read()
-        })
-        .0
-}
-
-/// `GetRandomTreeType`; the zone is used only in the tropic climate.
-fn random_tree_type(climate: u8, zone: u8, seed: u32) -> u8 {
-    let (base, count) = match climate {
-        0 => (0, 12),
-        ARCTIC => (12, 8),
-        TROPIC => match zone {
-            ZONE_NORMAL => (u32::from(TREE_SUB_TROPICAL), 4),
-            ZONE_DESERT => return if seed > 12 { TREE_INVALID } else { TREE_CACTUS },
-            _ => (u32::from(TREE_RAINFOREST), 7),
-        },
-        _ => (u32::from(TREE_TOYLAND), 9),
-    };
-    (seed.wrapping_mul(count) / 256).wrapping_add(base) as u8
-}
-
-fn is_rainforest_tree(tree: u8) -> bool {
-    (TREE_RAINFOREST..TREE_CACTUS).contains(&tree)
-}
-
-#[derive(Clone, Copy, Default)]
-struct Point {
-    x: i32,
-    y: i32,
-}
-/// `IsPointInTriangle` with the third vertex at the origin.
-fn in_triangle(x: i32, y: i32, v1: Point, v2: Point) -> bool {
-    let s = v1.x.wrapping_mul(y).wrapping_sub(v1.y.wrapping_mul(x));
-    let t = (v2.x.wrapping_sub(v1.x))
-        .wrapping_mul(y.wrapping_sub(v1.y))
-        .wrapping_sub((v2.y.wrapping_sub(v1.y)).wrapping_mul(x.wrapping_sub(v1.x)));
-    if (s < 0) != (t < 0) && s != 0 && t != 0 {
-        return false;
+crate::abi::shared_records! {
+    fn abi_record;
+    /// The parameters of `CmdPlantTree`, in the original's order; tiles are base `TileIndex`
+    /// values.
+    "OpenTTDPlantTreeArgs" ["probe"] => pub struct PlantTreeArgs {
+        /// End tile of area-drag.
+        pub tile: u32,
+        /// Start tile of area-drag of tree plantation.
+        pub start_tile: u32,
+        /// Tree type, `TREE_INVALID` means random.
+        pub tree_to_plant: u8,
+        /// Whether to use the Orthogonal (false) or Diagonal (true) iterator.
+        pub diagonal: bool,
     }
-    let d = (0_i32.wrapping_sub(v2.x))
-        .wrapping_mul(y.wrapping_sub(v2.y))
-        .wrapping_sub((0_i32.wrapping_sub(v2.y)).wrapping_mul(x.wrapping_sub(v2.x)));
-    (d < 0) == (s.wrapping_add(t) <= 0)
-}
-/// `IsPointInStarShapedPolygon` over the sixteen grove segments.
-fn in_grove(x: i32, y: i32, shape: &[Point; 16]) -> bool {
-    (0..16).any(|i| in_triangle(x, y, shape[i], shape[(i + 1) % 16]))
 }
 
-/// Borrowed immutable service tables for one entry. They are C++ statics, never
-/// world storage, so holding them across reentrant services is sound.
-struct Trees<'a> {
+/// The immutable service tables of one entry. They are C++ statics, never world storage, so
+/// holding them across reentrant services is sound.
+pub(crate) struct Trees<'a> {
     t: &'a TreeServices,
     s: &'a Services,
-    map: Option<&'a crate::services::TileTypeAccess>,
 }
-impl Trees<'_> {
-    fn plant_observation(&self, tile: u32) -> PlantObservation {
-        self.map
-            .and_then(|m| {
-                let mut p = PlantObservation {
-                    tile_type: crate::tile_map::get_tile_type(m, TileIndex(tile))?.0,
-                    zone: (crate::tile_map::get_tropic_zone(m, TileIndex(tile))?).0,
-                    ..PlantObservation::default()
-                };
-                if p.tile_type == MP_CLEAR {
-                    p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
-                    p.ground = crate::clear_map::get_clear_ground_raw(m, tile)?;
-                    p.density = crate::clear_map::get_clear_density_raw(m, tile)?;
-                    p.snow = crate::clear_map::is_snow_tile_raw(m, tile)?;
-                } else if p.tile_type == MP_WATER {
-                    p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
-                    p.coast = crate::water_map::is_coast(m, tile)? && {
-                        let width = self.s.map().size_x();
-                        !crate::slope_func::is_slope_with_one_corner_raised_raw(
-                            (crate::tile_map::get_tile_slope(
-                                m,
-                                TileIndex(tile),
-                                width,
-                                m.count() / width,
-                            )?)
-                            .0,
-                        )
-                    };
-                }
-                Some(p)
-            })
-            .unwrap_or_else(|| (self.t.plant_observation)(tile))
-    }
-    /// One field read at its original observation point. Without the audited map, or when a
-    /// native assertion fails, the record accessor reads it; its first read asserts the same.
-    #[inline]
-    fn field(
-        &self,
-        tile: u32,
-        read: fn(&crate::services::TileTypeAccess, u32) -> Option<u8>,
-        pick: fn(TreeObservation) -> u8,
-    ) -> u8 {
-        self.map
-            .and_then(|map| read(map, tile))
-            .unwrap_or_else(|| pick((self.t.tree_observation)(tile)))
-    }
-    fn ground(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_ground_raw, |t| t.ground)
-    }
-    fn density(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_density_raw, |t| t.density)
-    }
-    fn species(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_type_raw, |t| t.species)
-    }
-    fn count(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_count_raw, |t| t.count)
-    }
-    fn growth(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_growth_raw, |t| t.growth)
-    }
-    fn zone(&self, tile: u32) -> u8 {
-        self.field(
-            tile,
-            |map, tile| {
-                crate::tile_map::get_tropic_zone(map, crate::tile_type::TileIndex(tile))
-                    .map(|z| z.0)
-            },
-            |t| t.zone,
-        )
-    }
-    /// `TreesOnTileCanSpread`; the zone is read only in the tropic climate.
-    fn can_spread(&self, tile: u32, s: &LoopSettings) -> bool {
-        if s.climate == TROPIC {
-            return match self.zone(tile) {
-                ZONE_DESERT => false,
-                ZONE_RAINFOREST => s.extra == ETP_SPREAD_ALL || s.extra == ETP_SPREAD_RAINFOREST,
-                _ => s.extra == ETP_SPREAD_ALL,
-            };
+impl<'a> Trees<'a> {
+    /// # Safety
+    /// Both pointers address live immutable tables for the whole entry.
+    pub(crate) unsafe fn new(services: *const TreeServices, shared: *const Services) -> Self {
+        // SAFETY: This function's contract.
+        unsafe {
+            Self {
+                t: &*services,
+                s: &*shared,
+            }
         }
-        s.extra == ETP_SPREAD_ALL
     }
-    fn random(&self) -> u32 {
-        self.s.random()
+    /// `MakeTree`.
+    fn make_tree(
+        &self,
+        t: TileIndex,
+        r#type: TreeType,
+        count: u32,
+        growth: TreeGrowthStage,
+        ground: TreeGround,
+        density: u32,
+    ) {
+        (self.t.make_tree)(t.0, r#type.0, count, growth.0, ground.0, density);
     }
-    fn dirty(&self, tile: u32) {
-        (self.s.mark_dirty)(tile);
+    /// `SetTreeGroundDensity`.
+    fn set_tree_ground_density(&self, t: TileIndex, g: TreeGround, d: u32) {
+        (self.t.set_ground_density)(t.0, g.0, d);
     }
-    fn set_ground(&self, tile: u32, ground: u8, density: u32) {
-        (self.t.set_ground_density)(tile, ground, density);
+    /// `AddTreeCount`.
+    fn add_tree_count(&self, t: TileIndex, c: i32) {
+        (self.t.add_count)(t.0, c);
     }
+    /// `AddTreeGrowth`.
+    fn add_tree_growth(&self, t: TileIndex, a: i32) {
+        (self.t.add_growth)(t.0, a);
+    }
+    /// `SetTreeGrowth`.
+    fn set_tree_growth(&self, t: TileIndex, g: TreeGrowthStage) {
+        (self.t.set_growth)(t.0, g.0);
+    }
+    /// `MakeClear`.
+    fn make_clear(&self, t: TileIndex, g: ClearGround, density: u32) {
+        (self.t.make_clear)(t.0, g.0, density);
+    }
+    /// `MarkTileDirtyByTile`.
+    fn mark_tile_dirty_by_tile(&self, tile: TileIndex) {
+        (self.s.mark_dirty)(tile.0);
+    }
+    /// `ChangeTownRating(t, add, max, flags)` for `_current_company`; `t` is not null.
+    fn change_town_rating(&self, t: *const TownHandle, add: i32, max: i32, flags: DoCommandFlags) {
+        // SAFETY: The tables are live for the entry and the town is live; the rating owner ends
+        // its access before its native window invalidation.
+        unsafe {
+            let authority = &*self.t.authority;
+            crate::town::change_town_rating(
+                &*self.t.town,
+                self.s,
+                crate::town::RatedTown {
+                    state: (self.s.town_owner)(t),
+                    id: crate::town_type::TownId((authority.town_index)(t)),
+                    shell: t,
+                },
+                crate::town::RatingChange {
+                    company: CompanyID((self.s.current_company)()),
+                    add,
+                    maximum: max,
+                    flags,
+                    bulldozer: (authority.bulldozer)(),
+                },
+            );
+        }
+    }
+}
 
-    /// `PlantTreesOnTile` from a record read since the last effect on this tile.
-    /// Returns the ground written by `MakeTree`.
-    fn plant(&self, tile: u32, p: PlantObservation, tree: u8, count: u32, growth: u8) -> u8 {
-        let mut density = 3;
-        let ground = if p.tile_type == MP_WATER {
-            // SAFETY: Immutable tables and source-valid map dimensions; no owner borrow.
+/// `_settings_game.game_creation.landscape`.
+fn landscape(s: &Services) -> LandscapeType {
+    // SAFETY: The module's settings contract.
+    LandscapeType(unsafe { s.settings().climate.read() })
+}
+
+/// `_game_mode == GM_EDITOR`.
+fn editor() -> bool {
+    crate::session::mode() == GameMode::GM_EDITOR
+}
+
+/// `NOT_REACHED()`, through the native fatal error.
+fn not_reached() -> ! {
+    crate::services_assert::not_reached()
+}
+
+/// Tests if a tile can be converted to `MP_TREES`.
+/// This is true for clear ground without farms or rocks.
+fn can_plant_trees_on_tile(w: &World, tile: TileIndex, allow_desert: bool) -> bool {
+    match w.kind(tile) {
+        TileType::MP_WATER => {
+            !w.bridge_above(tile.0)
+                && w.asserted(|m| crate::water_map::is_coast(m, tile.0))
+                && !crate::slope_func::is_slope_with_one_corner_raised(w.tile_slope(tile))
+        }
+        TileType::MP_CLEAR => {
+            !w.bridge_above(tile.0)
+                && !w.asserted(|m| is_clear_ground(m, tile, ClearGround::CLEAR_FIELDS))
+                && !w.asserted(|m| is_clear_ground(m, tile, ClearGround::CLEAR_ROCKS))
+                && (allow_desert
+                    || !w.asserted(|m| is_clear_ground(m, tile, ClearGround::CLEAR_DESERT)))
+        }
+        _ => false,
+    }
+}
+
+/// Creates a tree tile.
+/// Ground type and density is preserved.
+/// `count` is the number of trees (minus 1).
+fn plant_trees_on_tile(
+    c: &Trees,
+    w: &World,
+    tile: TileIndex,
+    treetype: TreeType,
+    count: u32,
+    growth: TreeGrowthStage,
+) {
+    w.assert_with(|| treetype != TreeType::TREE_INVALID);
+    w.assert_with(|| can_plant_trees_on_tile(w, tile, true));
+
+    let ground;
+    let mut density = 3;
+
+    match w.kind(tile) {
+        TileType::MP_WATER => {
+            ground = TreeGround::TREE_GROUND_SHORE;
+            // SAFETY: Live immutable tables; flooding state writes cannot reset the map.
             unsafe {
-                crate::water::openttd_rust_clear_neighbour_flooding(
+                crate::water::clear_neighbour_non_flooding_states(
                     tile,
-                    (self.s.map_max_x)().wrapping_add(1),
-                    (self.s.map_max_y)().wrapping_add(1),
-                    (self.s.water_services)(),
-                    self.s,
+                    w.dimensions.size_x(),
+                    w.size_y(),
+                    (c.s.water_services)(),
+                    c.s,
                 );
             }
-            GROUND_SHORE
-        } else {
-            let ground = if p.snow {
-                if p.ground == CLEAR_ROUGH {
-                    GROUND_ROUGH_SNOW
-                } else {
-                    GROUND_SNOW_DESERT
-                }
-            } else {
-                match p.ground {
-                    CLEAR_GRASS => GROUND_GRASS,
-                    CLEAR_ROUGH => GROUND_ROUGH,
-                    _ => GROUND_SNOW_DESERT,
-                }
-            };
-            if p.ground != CLEAR_ROUGH {
-                density = u32::from(p.density);
-            }
-            ground
-        };
-        (self.t.make_tree)(tile, tree, count, growth, ground, density);
-        ground
-    }
-
-    /// `_settings_game.game_creation.landscape`, read at the observation point.
-    fn climate(&self) -> u8 {
-        unsafe { self.s.settings().climate.read() }
-    }
-    /// `_settings_game.game_creation.tree_placer`, read at the observation point.
-    fn placer(&self) -> u8 {
-        unsafe { self.s.settings().tree_placer.read() }
-    }
-
-    /// `PlaceTree`; `GetTreeGround` after `MakeTree` is the ground just written.
-    fn place(&self, tile: u32, p: PlantObservation, r: u32, keep_density: bool, climate: u8) {
-        let tree = random_tree_type(climate, p.zone, r >> 24);
-        if tree == TREE_INVALID {
-            return;
         }
-        let ground = self.plant(tile, p, tree, (r >> 22) & 3, ((r >> 16) & 7).min(6) as u8);
-        self.dirty(tile);
+        TileType::MP_CLEAR => {
+            let clearground = w.asserted(|m| get_clear_ground(m, tile));
+            if w.asserted(|m| crate::clear_map::is_snow_tile(m, tile)) {
+                ground = if clearground == ClearGround::CLEAR_ROUGH {
+                    TreeGround::TREE_GROUND_ROUGH_SNOW
+                } else {
+                    TreeGround::TREE_GROUND_SNOW_DESERT
+                };
+            } else {
+                ground = match clearground {
+                    ClearGround::CLEAR_GRASS => TreeGround::TREE_GROUND_GRASS,
+                    ClearGround::CLEAR_ROUGH => TreeGround::TREE_GROUND_ROUGH,
+                    _ => TreeGround::TREE_GROUND_SNOW_DESERT,
+                };
+            }
+            if clearground != ClearGround::CLEAR_ROUGH {
+                density = u32::from(w.asserted(|m| get_clear_density(m, tile)));
+            }
+        }
+        _ => not_reached(),
+    }
+
+    c.make_tree(tile, treetype, count, growth, ground, density);
+}
+
+/// Get a random `TreeType` for the given tile based on a given seed.
+///
+/// This function returns a random `TreeType` which can be placed on the given tile.
+/// The seed for randomness must be less or equal 256, use `GB` on the value of `Random()`
+/// to get such a value.
+#[allow(clippy::cast_possible_truncation, reason = "static_cast<TreeType> of a uint")]
+fn get_random_tree_type(w: &World, tile: TileIndex, seed: u32) -> TreeType {
+    let tree = |count: u32, base: TreeType| {
+        TreeType(
+            seed.wrapping_mul(count)
+                .wrapping_div(256)
+                .wrapping_add(u32::from(base.0)) as u8,
+        )
+    };
+    match landscape(w.shared) {
+        LandscapeType::Temperate => tree(TREE_COUNT_TEMPERATE, TreeType::TREE_TEMPERATE),
+        LandscapeType::Arctic => tree(TREE_COUNT_SUB_ARCTIC, TreeType::TREE_SUB_ARCTIC),
+        LandscapeType::Tropic => match w.asserted(|m| crate::tile_map::get_tropic_zone(m, tile)) {
+            TropicZone::TROPICZONE_NORMAL => {
+                tree(TREE_COUNT_SUB_TROPICAL, TreeType::TREE_SUB_TROPICAL)
+            }
+            TropicZone::TROPICZONE_DESERT => {
+                if seed > 12 {
+                    TreeType::TREE_INVALID
+                } else {
+                    TreeType::TREE_CACTUS
+                }
+            }
+            _ => tree(TREE_COUNT_RAINFOREST, TreeType::TREE_RAINFOREST),
+        },
+        _ => tree(TREE_COUNT_TOYLAND, TreeType::TREE_TOYLAND),
+    }
+}
+
+/// Make a random tree tile of the given tile.
+///
+/// Create a new tree-tile for the given tile. `r`, a `Random()` value, is used for
+/// randomness like type and number of trees. `keep_density` keeps the existing ground density
+/// of the tile.
+#[allow(clippy::cast_possible_truncation, reason = "GB of a uint into a uint8_t field")]
+pub(crate) fn place_tree(c: &Trees, w: &World, tile: TileIndex, r: u32, keep_density: bool) {
+    let tree = get_random_tree_type(w, tile, gb(r, 24, 8));
+
+    if tree != TreeType::TREE_INVALID {
+        plant_trees_on_tile(
+            c,
+            w,
+            tile,
+            tree,
+            gb(r, 22, 2),
+            TreeGrowthStage((gb(r, 16, 3) as u8).min(6)),
+        );
+        c.mark_tile_dirty_by_tile(tile);
+
+        // Maybe keep the existing ground density.
         if keep_density {
             return;
         }
-        if ground != GROUND_SNOW_DESERT && ground != GROUND_ROUGH_SNOW && ground != GROUND_SHORE {
-            (self.t.set_ground_density)(tile, ((r >> 28) & 1) as u8, 3);
+
+        // Rerandomize ground, if neither snow nor shore
+        let ground = w.asserted(|m| get_tree_ground(m, tile));
+        if ground != TreeGround::TREE_GROUND_SNOW_DESERT
+            && ground != TreeGround::TREE_GROUND_ROUGH_SNOW
+            && ground != TreeGround::TREE_GROUND_SHORE
+        {
+            c.set_tree_ground_density(tile, TreeGround(gb(r, 28, 1) as u8), 3);
+        }
+    }
+}
+
+/// One harmonic of a star-shaped polygon.
+struct BlobHarmonic {
+    amplitude: i32,
+    phase: f32,
+    frequency: i32,
+}
+
+/// Creates a star-shaped polygon originating from (0, 0) as defined by the given harmonics.
+/// The shape is placed into a pre-allocated span so the caller controls allocation.
+/// `radius` is the maximum radius of the polygon. May be smaller, but will not be larger.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "the original's float conversions"
+)]
+fn create_star_shaped_polygon(
+    c: &Trees,
+    radius: i32,
+    harmonics: &[BlobHarmonic],
+    shape: &mut [Point],
+) {
+    let mut theta = 0.0_f32;
+    let step = (std::f64::consts::PI * 2.0 / shape.len() as f64) as f32;
+
+    // Divide a circle into a number of equally spaced divisions.
+    for vertex in shape {
+        // Add up the values of each harmonic at this segment.
+        let deviation = harmonics.iter().fold(0.0_f32, |d, harmonic| {
+            d + (c.t.sin)((theta + harmonic.phase) * harmonic.frequency as f32)
+                * harmonic.amplitude as f32
+        });
+
+        // Smooth out changes.
+        let adjusted_radius = (radius as f32 / 2.0) + (deviation / 2.0);
+
+        // Add to the final polygon.
+        vertex.x = ((c.t.cos)(theta) * adjusted_radius) as i32;
+        vertex.y = ((c.t.sin)(theta) * adjusted_radius) as i32;
+
+        // Proceed to the next segment.
+        theta += step;
+    }
+}
+
+/// Creates a random star-shaped polygon originating from (0, 0).
+/// The shape is placed into a pre-allocated span so the caller controls allocation.
+/// `radius` is the maximum radius of the blob. May be smaller, but will not be larger.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "the original's float conversions"
+)]
+fn create_random_star_shaped_polygon(c: &Trees, radius: i32, shape: &mut [Point]) {
+    // Valid values for the phase of blob harmonics are between 0 and Tau. we can get a value in
+    // the correct range from Random() by dividing the maximum possible value by the desired
+    // maximum, and then dividing the random value by the result.
+    const PHASE_DIVISOR: f32 = (i32::MAX as f64 / std::f64::consts::PI * 2.0) as f32;
+
+    // These values are ones found in testing that result in suitable-looking polygons that did
+    // not self-intersect and fit within a square of radius * radius dimensions.
+    let harmonics = [
+        BlobHarmonic {
+            amplitude: radius / 2,
+            phase: c.s.random() as f32 / PHASE_DIVISOR,
+            frequency: 1,
+        },
+        BlobHarmonic {
+            amplitude: radius / 4,
+            phase: c.s.random() as f32 / PHASE_DIVISOR,
+            frequency: 2,
+        },
+        BlobHarmonic {
+            amplitude: radius / 8,
+            phase: c.s.random() as f32 / PHASE_DIVISOR,
+            frequency: 3,
+        },
+        BlobHarmonic {
+            amplitude: radius / 16,
+            phase: c.s.random() as f32 / PHASE_DIVISOR,
+            frequency: 4,
+        },
+    ];
+
+    create_star_shaped_polygon(c, radius, &harmonics, shape);
+}
+
+/// Returns true if the given coordinates (relative to the centre of the shape) lie within a
+/// triangle.
+fn is_point_in_triangle(x: i32, y: i32, v1: &Point, v2: &Point, v3: &Point) -> bool {
+    let s = ((v1.x.wrapping_sub(v3.x)).wrapping_mul(y.wrapping_sub(v3.y)))
+        .wrapping_sub((v1.y.wrapping_sub(v3.y)).wrapping_mul(x.wrapping_sub(v3.x)));
+    let t = ((v2.x.wrapping_sub(v1.x)).wrapping_mul(y.wrapping_sub(v1.y)))
+        .wrapping_sub((v2.y.wrapping_sub(v1.y)).wrapping_mul(x.wrapping_sub(v1.x)));
+
+    if (s < 0) != (t < 0) && s != 0 && t != 0 {
+        return false;
+    }
+
+    let d = (v3.x.wrapping_sub(v2.x))
+        .wrapping_mul(y.wrapping_sub(v2.y))
+        .wrapping_sub((v3.y.wrapping_sub(v2.y)).wrapping_mul(x.wrapping_sub(v2.x)));
+    (d < 0) == (s.wrapping_add(t) <= 0)
+}
+
+/// Returns true if the given coordinates (relative to the centre of the shape) lie within a
+/// star shaped polygon.
+/// Breaks the polygon into a series of triangles around the centre point (0, 0) and then tests
+/// the coordinates against each triangle until a match is found (or not).
+fn is_point_in_star_shaped_polygon(x: i32, y: i32, shape: &[Point]) -> bool {
+    let mut it = 0;
+    while it != shape.len() {
+        let v1 = &shape[it];
+        it += 1;
+        let v2 = if it == shape.len() {
+            &shape[0]
+        } else {
+            &shape[it]
+        };
+
+        if is_point_in_triangle(x, y, v1, v2, &Point { x: 0, y: 0 }) {
+            return true;
         }
     }
 
-    /// `CreateRandomStarShapedPolygon(16, grove)` with native `sinf`/`cosf`.
-    fn grove_shape(&self) -> [Point; 16] {
-        let divisor = (f64::from(i32::MAX) / std::f64::consts::PI * 2.0) as f32;
-        let mut phases = [0.0_f32; 4];
-        for phase in &mut phases {
-            *phase = self.random() as f32 / divisor;
-        }
-        let mut shape = [Point::default(); 16];
-        let step = (std::f64::consts::PI * 2.0 / 16.0) as f32;
-        let mut theta = 0.0_f32;
-        for vertex in &mut shape {
-            let mut deviation = 0.0_f32;
-            for (i, phase) in phases.iter().enumerate() {
-                let frequency = (i + 1) as f32;
-                let amplitude = (8 >> i) as f32;
-                deviation += (self.t.sin)((theta + phase) * frequency) * amplitude;
-            }
-            let radius = 16.0_f32 / 2.0 + deviation / 2.0;
-            vertex.x = ((self.t.cos)(theta) * radius) as i32;
-            vertex.y = ((self.t.sin)(theta) * radius) as i32;
-            theta += step;
-        }
-        shape
-    }
+    false
+}
 
-    /// `PlaceTreeGroups`; returns true on world-generation abort.
-    fn place_groups(&self, groups: u32) -> bool {
-        let mut groups = groups;
-        loop {
-            let center = self.random() & self.s.map_size().wrapping_sub(1);
-            let shape = self.grove_shape();
-            for _ in 0..DEFAULT_TREE_STEPS {
-                if (self.t.progress)() {
-                    return true;
-                }
-                let r = self.random();
-                let x = (r & 31) as i32 - 16;
-                let y = ((r >> 8) & 31) as i32 - 16;
-                let tile = tile_add_wrap(self.s, center, x, y);
-                if tile == INVALID_TILE {
-                    continue;
-                }
-                let p = self.plant_observation(tile);
-                if !p.suitable(true) || !in_grove(x, y, &shape) {
-                    continue;
-                }
-                self.place(tile, p, r, false, self.climate());
-            }
-            groups = groups.wrapping_sub(1);
-            if groups == 0 {
-                return false;
-            }
-        }
-    }
+/// `TileAddWrap`, with `construction.freeform_edges` read at the call.
+fn tile_add_wrap(w: &World, tile: TileIndex, addx: i32, addy: i32) -> TileIndex {
+    // SAFETY: The module's settings contract.
+    let freeform = unsafe { w.shared.settings().freeform_edges.read() };
+    w.dimensions
+        .tile_add_wrap(tile, addx, addy, w.size_y(), freeform)
+}
 
-    /// `PlaceTreeAtSameHeight`.
-    fn place_at_same_height(&self, tile: u32, height: i32) {
+/// Creates a number of tree groups.
+/// The number of trees in each group depends on how many trees are actually placed around the
+/// given tile. Returns true on world-generation abort.
+fn place_tree_groups(c: &Trees, num_groups: u32) -> bool {
+    /// How many segments make up the tree group.
+    const GROVE_SEGMENTS: usize = 16;
+    /// Maximum radius of tree groups.
+    const GROVE_RADIUS: u32 = 16;
+
+    // Shape in which trees may be contained. Array is here to reduce allocations.
+    let mut grove = [Point::default(); GROVE_SEGMENTS];
+
+    let mut num_groups = num_groups;
+    loop {
+        let w = World::new(c.s);
+        let center_tile = w.dimensions.random_tile_seed(w.size_y(), c.s.random());
+
+        create_random_star_shaped_polygon(c, GROVE_RADIUS.cast_signed(), &mut grove);
+
         for _ in 0..DEFAULT_TREE_STEPS {
-            let r = self.random();
-            let x = (r & 31) as i32 - 16;
-            let y = ((r >> 8) & 31) as i32 - 16;
-            let current = tile_add_wrap(self.s, tile, x, y);
-            if current == INVALID_TILE || x.abs() + y.abs() > 16 {
+            if (c.t.progress)() {
+                return true;
+            }
+            let w = World::new(c.s);
+
+            let r = c.s.random();
+            let x = gb(r, 0, 5).wrapping_sub(GROVE_RADIUS).cast_signed();
+            let y = gb(r, 8, 5).wrapping_sub(GROVE_RADIUS).cast_signed();
+            let cur_tile = tile_add_wrap(&w, center_tile, x, y);
+
+            if cur_tile == TileIndex::INVALID {
                 continue;
             }
-            let p = self.plant_observation(current);
-            if !p.suitable(true) {
+            if !can_plant_trees_on_tile(&w, cur_tile, true) {
                 continue;
             }
-            let z = (self.s.tile_z)(current);
-            if (if z < height {
-                height.wrapping_sub(z)
-            } else {
-                z.wrapping_sub(height)
-            }) > 2
-            {
+            if !is_point_in_star_shaped_polygon(x, y, &grove) {
                 continue;
             }
-            self.place(current, p, r, false, self.climate());
+
+            place_tree(c, &w, cur_tile, r, false);
+        }
+
+        num_groups = num_groups.wrapping_sub(1);
+        if num_groups == 0 {
+            return false;
+        }
+    }
+}
+
+/// `GetTileZ`.
+fn get_tile_z(w: &World, tile: TileIndex) -> i32 {
+    let (x, y) = w.size();
+    w.asserted(|m| crate::tile_map::get_tile_z(m, tile, x, y))
+}
+
+/// Place a tree at the same height as an existing tree.
+///
+/// Add a new tree around the given tile which is at the same height or at some offset (2
+/// units) of `height`, the height like the one from the tile.
+fn place_tree_at_same_height(c: &Trees, w: &World, tile: TileIndex, height: i32) {
+    for _ in 0..DEFAULT_TREE_STEPS {
+        let r = c.s.random();
+        let x = gb(r, 0, 5).wrapping_sub(16).cast_signed();
+        let y = gb(r, 8, 5).wrapping_sub(16).cast_signed();
+        let cur_tile = tile_add_wrap(w, tile, x, y);
+        if cur_tile == TileIndex::INVALID {
+            continue;
+        }
+
+        // Keep in range of the existing tree
+        if x.abs() + y.abs() > 16 {
+            continue;
+        }
+
+        // Clear tile, no farm-tiles or rocks
+        if !can_plant_trees_on_tile(w, cur_tile, true) {
+            continue;
+        }
+
+        // Not too much height difference
+        if delta(get_tile_z(w, cur_tile), height) > 2 {
+            continue;
+        }
+
+        // Place one tree and quit
+        place_tree(c, w, cur_tile, r, false);
+        break;
+    }
+}
+
+/// Place some trees randomly.
+///
+/// This function just place some trees randomly on the map. Returns true on world-generation
+/// abort.
+pub(crate) fn place_trees_randomly(c: &Trees) -> bool {
+    let s = c.s;
+    // SAFETY: The module's settings contract.
+    let max_height: u8 = unsafe { s.settings().height_limit.read() };
+
+    let w = World::new(s);
+    let mut i = w
+        .dimensions
+        .scale_by_size(w.size_y(), u32::from(DEFAULT_TREE_STEPS))
+        .cast_signed();
+    if editor() {
+        i /= i32::from(EDITOR_TREE_DIV);
+    }
+    loop {
+        'attempt: {
+            let w = World::new(s);
+            let r = s.random();
+            let tile = w.dimensions.random_tile_seed(w.size_y(), r);
+
+            if (c.t.progress)() {
+                return true;
+            }
+            let w = World::new(s);
+
+            if can_plant_trees_on_tile(&w, tile, true) {
+                place_tree(c, &w, tile, r, false);
+                // SAFETY: The module's settings contract.
+                if TreePlacer(unsafe { s.settings().tree_placer.read() })
+                    != TreePlacer::TP_IMPROVED
+                {
+                    break 'attempt;
+                }
+
+                // Place a number of trees based on the tile height.
+                //  This gives a cool effect of multiple trees close together.
+                //  It is almost real life ;)
+                let ht = get_tile_z(&w, tile);
+                // The higher we get, the more trees we plant
+                let mut j = get_tile_z(&w, tile) * 2;
+                // Above snowline more trees!
+                if landscape(s) == LandscapeType::Arctic
+                    && ht > i32::from(crate::snow_line::get(s))
+                {
+                    j *= 3;
+                }
+                // Scale generation by maximum map height.
+                if u32::from(max_height) > crate::genworld::MAP_HEIGHT_LIMIT_ORIGINAL {
+                    j = (j
+                        .cast_unsigned()
+                        .wrapping_mul(crate::genworld::MAP_HEIGHT_LIMIT_ORIGINAL)
+                        / u32::from(max_height))
+                    .cast_signed();
+                }
+                while j != 0 {
+                    j -= 1;
+                    place_tree_at_same_height(c, &w, tile, ht);
+                }
+            }
+        }
+        i -= 1;
+        if i == 0 {
             break;
         }
     }
 
-    /// One `PlaceTreesRandomly` attempt; returns true on world-generation abort.
-    fn scatter_one(&self, height_limit: u8) -> bool {
-        let r = self.random();
-        let tile = r & self.s.map_size().wrapping_sub(1);
-        if (self.t.progress)() {
-            return true;
+    // place extra trees at rainforest area
+    if landscape(s) == LandscapeType::Tropic {
+        let w = World::new(s);
+        i = w
+            .dimensions
+            .scale_by_size(w.size_y(), u32::from(DEFAULT_RAINFOREST_TREE_STEPS))
+            .cast_signed();
+        if editor() {
+            i /= i32::from(EDITOR_TREE_DIV);
         }
-        let p = self.plant_observation(tile);
-        if !p.suitable(true) {
-            return false;
-        }
-        self.place(tile, p, r, false, self.climate());
-        if self.placer() != TP_IMPROVED {
-            return false;
-        }
-        let ht = (self.s.tile_z)(tile);
-        let mut j = (self.s.tile_z)(tile).wrapping_mul(2);
-        if self.climate() == ARCTIC && ht > i32::from(crate::snow_line::get(self.s)) {
-            j = j.wrapping_mul(3);
-        }
-        if height_limit > MAP_HEIGHT_LIMIT_ORIGINAL {
-            j = j.wrapping_mul(i32::from(MAP_HEIGHT_LIMIT_ORIGINAL)) / i32::from(height_limit);
-        }
-        while j != 0 {
-            j = j.wrapping_sub(1);
-            self.place_at_same_height(tile, ht);
-        }
-        false
-    }
 
-    /// One rainforest `PlaceTreesRandomly` attempt; returns true on abort.
-    fn scatter_rainforest_one(&self) -> bool {
-        let r = self.random();
-        let tile = r & self.s.map_size().wrapping_sub(1);
-        if (self.t.progress)() {
-            return true;
-        }
-        let p = self.plant_observation(tile);
-        if p.zone == ZONE_RAINFOREST && p.suitable(false) {
-            self.place(tile, p, r, false, self.climate());
-        }
-        false
-    }
-
-    /// `PlaceTreesRandomly`; returns true on world-generation abort.
-    fn place_randomly(&self) -> bool {
-        let height_limit = unsafe { self.s.settings().height_limit.read() };
-        let mut i = scale_by_size(self.s.map_size(), DEFAULT_TREE_STEPS) as i32;
-        if crate::session::mode() == GameMode::EDITOR {
-            i /= EDITOR_TREE_DIV;
-        }
         loop {
-            if self.scatter_one(height_limit) {
+            let w = World::new(s);
+            let r = s.random();
+            let tile = w.dimensions.random_tile_seed(w.size_y(), r);
+
+            if (c.t.progress)() {
                 return true;
             }
-            i = i.wrapping_sub(1);
+            let w = World::new(s);
+
+            if w.asserted(|m| crate::tile_map::get_tropic_zone(m, tile))
+                == TropicZone::TROPICZONE_RAINFOREST
+                && can_plant_trees_on_tile(&w, tile, false)
+            {
+                place_tree(c, &w, tile, r, false);
+            }
+            i -= 1;
             if i == 0 {
                 break;
             }
         }
-        if self.climate() == TROPIC {
-            let mut i = scale_by_size(self.s.map_size(), DEFAULT_RAINFOREST_TREE_STEPS) as i32;
-            if crate::session::mode() == GameMode::EDITOR {
-                i /= EDITOR_TREE_DIV;
-            }
-            loop {
-                if self.scatter_rainforest_one() {
-                    return true;
-                }
-                i = i.wrapping_sub(1);
-                if i == 0 {
-                    break;
-                }
-            }
-        }
-        false
     }
+    false
+}
 
-    /// `GenerateTrees`; returns true on world-generation abort.
-    fn generate(&self) -> bool {
-        if self.placer() == TP_NONE {
-            return false;
-        }
-        let mut i: u32 = if self.placer() == TP_ORIGINAL {
-            if self.climate() == ARCTIC { 15 } else { 6 }
-        } else if self.climate() == ARCTIC {
-            4
-        } else {
-            2
+/// Place some trees in a radius around a tile.
+/// The trees are placed in an quasi-normal distribution around the indicated tile, meaning that
+/// while the radius does define a square, the distribution inside the square will be roughly
+/// circular. This function uses the interactive RNG and must only be used in editor and map
+/// generation. `treetype` must be a valid tree type for the climate; `radius` is the maximum
+/// distance (on each axis) from tile to place trees, `count` the maximum number of trees to
+/// place, and `set_zone` whether to create a rainforest zone when placing rainforest trees.
+/// Returns the number of trees actually placed.
+pub(crate) fn place_tree_group_around_tile(
+    c: &Trees,
+    random: &crate::genworld::WorldServices,
+    tile: TileIndex,
+    treetype: TreeType,
+    radius: u32,
+    count: u32,
+    set_zone: bool,
+) -> u32 {
+    let w = World::new(c.s);
+    w.assert_with(editor); // Due to InteractiveRandom being used in this function
+    w.assert_with(|| {
+        u32::from(treetype.0) < u32::from(TreeType::TREE_TOYLAND.0) + TREE_COUNT_TOYLAND
+    });
+    let allow_desert = treetype == TreeType::TREE_CACTUS;
+    let mut planted = 0_u32;
+
+    for _ in 0..count {
+        // Simple quasi-normal distribution with range [-radius; radius)
+        let mkcoord = || {
+            let rand = (random.interactive_random)();
+            let dist = gb(rand, 0, 8) + gb(rand, 8, 8) + gb(rand, 16, 8) + gb(rand, 24, 8);
+            let scu = dist.wrapping_mul(radius) / 512;
+            scu.wrapping_sub(radius).cast_signed()
         };
-        let mut total = scale_by_size(self.s.map_size(), DEFAULT_TREE_STEPS);
-        if self.climate() == TROPIC {
-            total = total.wrapping_add(scale_by_size(
-                self.s.map_size(),
-                DEFAULT_RAINFOREST_TREE_STEPS,
-            ));
+        let xofs = mkcoord();
+        let yofs = mkcoord();
+        let tile_to_plant = tile_add_wrap(&w, tile, xofs, yofs);
+        if tile_to_plant != TileIndex::INVALID {
+            if w.kind(tile_to_plant) == TileType::MP_TREES
+                && w.asserted(|m| get_tree_count(m, tile_to_plant)) < 4
+            {
+                c.add_tree_count(tile_to_plant, 1);
+                c.set_tree_growth(tile_to_plant, TreeGrowthStage::Growing1);
+                c.mark_tile_dirty_by_tile(tile_to_plant);
+                planted += 1;
+            } else if can_plant_trees_on_tile(&w, tile_to_plant, allow_desert) {
+                plant_trees_on_tile(
+                    c,
+                    &w,
+                    tile_to_plant,
+                    treetype,
+                    0,
+                    TreeGrowthStage::Grown,
+                );
+                c.mark_tile_dirty_by_tile(tile_to_plant);
+                planted += 1;
+            }
         }
-        total = total.wrapping_mul(i);
-        let groups = if self.climate() == TOYLAND {
-            0
-        } else {
-            scale_by_size(self.s.map_size(), (self.random() & 31) + 25)
+    }
+
+    if set_zone
+        && is_inside_mm(
+            usize::from(treetype.0),
+            usize::from(TreeType::TREE_RAINFOREST.0),
+            usize::from(TreeType::TREE_CACTUS.0),
+        )
+    {
+        let map = w.dimensions;
+        // The native TileArea(tile) constructor starts with zero extents.
+        let mut area = crate::tilearea::TileArea {
+            tile: tile.0,
+            w: 0,
+            h: 0,
         };
-        total = total.wrapping_add(groups.wrapping_mul(DEFAULT_TREE_STEPS));
-        if (self.t.progress_total)(total) {
-            return true;
-        }
-        if groups != 0 && self.place_groups(groups) {
-            return true;
-        }
-        while i != 0 {
-            if self.place_randomly() {
-                return true;
+        area.expand(radius.cast_signed(), map, w.size_y());
+        for t in area.tiles(map) {
+            let t = TileIndex(t);
+            if w.kind(t) != TileType::MP_VOID
+                && map.distance_square(tile, t) < radius.wrapping_mul(radius)
+            {
+                (c.s.set_tropic_zone)(t.0, TropicZone::TROPICZONE_RAINFOREST.0);
             }
-            i -= 1;
-        }
-        false
-    }
-
-    /// `TileLoopTreesDesert`.
-    fn loop_desert(&self, tile: u32, s: &LoopSettings) {
-        match self.zone(tile) {
-            ZONE_DESERT => {
-                if self.ground(tile) != GROUND_SNOW_DESERT {
-                    self.set_ground(tile, GROUND_SNOW_DESERT, 3);
-                    self.dirty(tile);
-                }
-            }
-            ZONE_RAINFOREST => {
-                let r = self.random();
-                if chance16_i(1, 200, r) && s.ambient {
-                    (self.s.play_sound)(tile, RAINFOREST_SOUNDS[((r >> 16) & 3) as usize]);
-                }
-            }
-            _ => (),
         }
     }
 
-    /// `TileLoopTreesAlps`. Repeated source reads with no write between are read once.
-    fn loop_alps(&self, tile: u32, s: &LoopSettings) {
-        let k = self
-            .map
-            .and_then(|map| {
-                crate::tile_map::get_tile_z(map, TileIndex(tile), s.size_x, map.count() / s.size_x)
-            })
-            .unwrap_or_else(|| (self.s.tile_z)(tile))
-            .wrapping_sub(i32::from(crate::snow_line::get(self.s)))
-            .wrapping_add(1);
-        if k < 0 {
-            match self.ground(tile) {
-                GROUND_SNOW_DESERT => self.set_ground(tile, GROUND_GRASS, 3),
-                GROUND_ROUGH_SNOW => self.set_ground(tile, GROUND_ROUGH, 3),
-                _ => return,
-            }
-        } else {
-            let density = (k as u32).min(3);
-            let ground = self.ground(tile);
-            if ground != GROUND_SNOW_DESERT && ground != GROUND_ROUGH_SNOW {
-                let ground = if ground == GROUND_ROUGH {
-                    GROUND_ROUGH_SNOW
-                } else {
-                    GROUND_SNOW_DESERT
-                };
-                self.set_ground(tile, ground, density);
+    planted
+}
+
+/// Place new trees.
+///
+/// This function takes care of the selected tree placer algorithm and place randomly the trees
+/// for a new game. Returns true on world-generation abort.
+pub(crate) fn generate_trees(c: &Trees) -> bool {
+    let s = c.s;
+    // SAFETY: The module's settings contract.
+    let tree_placer = || TreePlacer(unsafe { s.settings().tree_placer.read() });
+
+    if tree_placer() == TreePlacer::TP_NONE {
+        return false;
+    }
+
+    let mut i: u32 = match tree_placer() {
+        TreePlacer::TP_ORIGINAL => {
+            if landscape(s) == LandscapeType::Arctic {
+                15
             } else {
-                let current = self.density(tile);
-                if u32::from(current) == density {
-                    if current == 3 {
-                        let r = self.random();
-                        if chance16_i(1, 200, r) && s.ambient {
-                            let sound = if r & 0x8000_0000 != 0 {
-                                ARCTIC_SNOW_2
-                            } else {
-                                ARCTIC_SNOW_1
-                            };
-                            (self.s.play_sound)(tile, sound);
-                        }
-                    }
-                    return;
-                }
-                self.set_ground(tile, ground, density);
+                6
             }
         }
-        self.dirty(tile);
+        TreePlacer::TP_IMPROVED => {
+            if landscape(s) == LandscapeType::Arctic {
+                4
+            } else {
+                2
+            }
+        }
+        _ => not_reached(),
+    };
+
+    let w = World::new(s);
+    let scale_by_size = |n: u32| w.dimensions.scale_by_size(w.size_y(), n);
+    let mut total = scale_by_size(u32::from(DEFAULT_TREE_STEPS));
+    if landscape(s) == LandscapeType::Tropic {
+        total = total.wrapping_add(scale_by_size(u32::from(DEFAULT_RAINFOREST_TREE_STEPS)));
+    }
+    total = total.wrapping_mul(i);
+    let num_groups = if landscape(s) == LandscapeType::Toyland {
+        0
+    } else {
+        scale_by_size(gb(s.random(), 0, 5) + 25)
+    };
+    total = total.wrapping_add(num_groups.wrapping_mul(u32::from(DEFAULT_TREE_STEPS)));
+    if (c.t.progress_total)(total) {
+        return true;
     }
 
-    /// `TileLoop_Trees`. Fields are read where the source reads them, so flooding and the
-    /// ambient callback are observed, and growth fields only behind the growth gate.
-    fn tile_loop(&self, tile: u32, s: &LoopSettings, call: *mut crate::ground::Call) {
-        if self.ground(tile) == GROUND_SHORE {
-            // SAFETY: The native caller owns an independent stack result context;
-            // flooding may reenter trees but no owner state is borrowed here.
+    if num_groups != 0 && place_tree_groups(c, num_groups) {
+        return true;
+    }
+
+    while i != 0 {
+        if place_trees_randomly(c) {
+            return true;
+        }
+        i -= 1;
+    }
+    false
+}
+
+/// Plant a tree. `args.tile` is the end tile of area-drag; `args.tree_to_plant`
+/// `TREE_INVALID` means random. Writes the cost of this operation or an error to `out`.
+fn cmd_plant_tree(
+    c: &Trees,
+    commands: &CommandServices,
+    flags: DoCommandFlags,
+    args: &PlantTreeArgs,
+    out: Cost<'_>,
+) {
+    let s = c.s;
+    let strings = &c.t.strings;
+    let mut msg = StringID::INVALID_STRING_ID;
+    // CommandCost cost(EXPENSES_OTHER): `AddCost` saturates.
+    let mut cost: i64 = 0;
+    let w = World::new(s);
+
+    if args.start_tile >= w.types.count() {
+        out.error(StringID::INVALID_STRING_ID.0);
+        return;
+    }
+    // Check the tree type within the current climate
+    let climate = usize::from(landscape(s).0);
+    if TreeType(args.tree_to_plant) != TreeType::TREE_INVALID
+        && !is_inside_bs(
+            usize::from(args.tree_to_plant),
+            usize::from(TREE_BASE_BY_LANDSCAPE[climate]),
+            usize::from(TREE_COUNT_BY_LANDSCAPE[climate]),
+        )
+    {
+        out.error(StringID::INVALID_STRING_ID.0);
+        return;
+    }
+
+    let company = if editor() {
+        std::ptr::null_mut()
+    } else {
+        (commands.finance.company_finances)((commands.finance.current_company)())
+    };
+    let mut limit = if company.is_null() {
+        i32::MAX
+    } else {
+        // SAFETY: A valid company's finances; one field-sized load.
+        gb(unsafe { std::ptr::addr_of!((*company).tree).read() }, 16, 16).cast_signed()
+    };
+    // `c->tree_limit -= 1 << 16`.
+    let debit = || {
+        if !company.is_null() {
+            // SAFETY: As above; one field-sized load and store with no call between.
             unsafe {
-                if let Some(map) = self.map {
-                    crate::water::water_tile_loop(
-                        tile,
-                        MP_TREES,
-                        false,
-                        s.size_x,
-                        map.count() / s.size_x,
-                        call,
-                        (self.s.water_services)(),
-                        self.s,
-                        map,
-                    );
-                } else {
-                    crate::water::tree_industry_water_loop(tile, call, self.s);
-                }
-            };
-        } else {
-            match s.climate {
-                TROPIC => self.loop_desert(tile, s),
-                ARCTIC => self.loop_alps(tile, s),
-                _ => (),
+                let field = std::ptr::addr_of_mut!((*company).tree);
+                field.write(field.read().wrapping_sub(1 << 16));
             }
         }
-        crate::newgrf_generic::ambient(s.ambient_callback, tile);
+    };
 
-        let x = tile & s.size_x.wrapping_sub(1);
-        let y = tile >> s.size_x.trailing_zeros();
-        let cycle = x
-            .wrapping_mul(11)
-            .wrapping_add(y.wrapping_mul(9))
-            .wrapping_add((s.tick_counter >> 8) as u32);
+    let check = |ok| w.check(ok);
+    let mut iter = crate::tilearea::TileIterator::create(
+        w.dimensions,
+        w.types.count(),
+        args.tile,
+        args.start_tile,
+        args.diagonal,
+        check,
+    );
+    'tiles: while iter.tile() != TileIndex::INVALID.0 {
+        let current_tile = TileIndex(iter.tile());
+        'next: {
+            match w.kind(current_tile) {
+                TileType::MP_TREES => {
+                    // no more space for trees?
+                    if w.asserted(|m| get_tree_count(m, current_tile)) == 4 {
+                        msg = StringID(strings.already_here);
+                        break 'next;
+                    }
 
-        if cycle & 7 == 7 && self.ground(tile) == GROUND_GRASS {
-            let density = self.density(tile);
-            if density < 3 {
-                self.set_ground(tile, GROUND_GRASS, u32::from(density) + 1);
-                self.dirty(tile);
-            }
-        }
-
-        if s.extra == ETP_NO_GROWTH_NO_SPREAD || cycle % 16 != 15 {
-            return;
-        }
-
-        let mut tile = tile;
-        match self.growth(tile) {
-            GROWN => {
-                if s.climate == TROPIC
-                    && self.species(tile) != TREE_CACTUS
-                    && self.zone(tile) == ZONE_DESERT
-                {
-                    (self.t.add_growth)(tile, 1);
-                } else {
-                    match self.random() & 7 {
-                        0 => (self.t.add_growth)(tile, 1),
-                        1 if self.count(tile) < 4 && self.can_spread(tile, s) => {
-                            (self.t.add_count)(tile, 1);
-                            (self.t.set_growth)(tile, GROWING1);
+                    // Test tree limit.
+                    limit -= 1;
+                    if limit < 1 {
+                        msg = StringID(strings.plant_limit);
+                    } else {
+                        if flags.test(DoCommandFlag::Execute) {
+                            c.add_tree_count(current_tile, 1);
+                            c.mark_tile_dirty_by_tile(current_tile);
+                            debit();
                         }
-                        1 | 2 => {
-                            if self.can_spread(tile, s) {
-                                let tree = self.species(tile);
-                                let (dx, dy) = DIRECTION_OFFSETS[(self.random() % 8) as usize];
-                                let diff = dy.wrapping_mul(s.size_x as i32).wrapping_add(dx);
-                                tile = tile.wrapping_add(diff as u32);
-                                let p = self.plant_observation(tile);
-                                if !p.suitable(false) {
-                                    return;
-                                }
-                                // Don't plant trees if the ground was freshly cleared.
-                                if p.tile_type == MP_CLEAR
-                                    && p.ground == CLEAR_GRASS
-                                    && !p.snow
-                                    && p.density != 3
-                                {
-                                    return;
-                                }
-                                self.plant(tile, p, tree, 0, GROWING1);
-                            }
-                        }
-                        _ => return,
+                        // 2x as expensive to add more trees to an existing tile
+                        cost = cost.saturating_add(crate::company::price(PR_BUILD_TREES).saturating_mul(2));
                     }
                 }
-            }
-            DEAD => {
-                if !self.can_spread(tile, s) {
-                    (self.t.set_growth)(tile, GROWING1);
-                } else if self.count(tile) > 1 {
-                    (self.t.add_count)(tile, -1);
-                    (self.t.set_growth)(tile, GROWN);
-                } else {
-                    match self.ground(tile) {
-                        GROUND_SHORE => (self.s.make_shore)(tile),
-                        GROUND_GRASS => {
-                            let density = u32::from(self.density(tile));
-                            (self.t.make_clear)(tile, CLEAR_GRASS, density);
-                        }
-                        GROUND_ROUGH => (self.t.make_clear)(tile, CLEAR_ROUGH, 3),
-                        GROUND_ROUGH_SNOW => {
-                            let density = u32::from(self.density(tile));
-                            (self.t.make_clear)(tile, CLEAR_ROUGH, 3);
-                            (self.s.make_snow)(tile, density);
-                        }
-                        _ if s.climate == TROPIC => {
-                            let density = u32::from(self.density(tile));
-                            (self.t.make_clear)(tile, CLEAR_DESERT, density);
-                        }
-                        _ => {
-                            let density = u32::from(self.density(tile));
-                            (self.t.make_clear)(tile, CLEAR_GRASS, 3);
-                            (self.s.make_snow)(tile, density);
-                        }
+
+                kind @ (TileType::MP_WATER | TileType::MP_CLEAR) => {
+                    if kind == TileType::MP_WATER
+                        && (!w.asserted(|m| crate::water_map::is_coast(m, current_tile.0))
+                            || crate::slope_func::is_slope_with_one_corner_raised(
+                                w.tile_slope(current_tile),
+                            ))
+                    {
+                        msg = StringID(strings.on_water);
+                        break 'next;
                     }
-                }
-            }
-            _ => (self.t.add_growth)(tile, 1),
-        }
-        self.dirty(tile);
-    }
 
-    /// `PlantRandomTree`.
-    fn plant_random_tree(&self, rainforest: bool) {
-        let r = self.random();
-        let tile = r & crate::map_func::World::new(self.s)
-            .types
-            .count()
-            .wrapping_sub(1);
-        let p = self.plant_observation(tile);
-        if rainforest && p.zone != ZONE_RAINFOREST {
-            return;
-        }
-        if !p.suitable(false) {
-            return;
-        }
-        let tree = random_tree_type(self.climate(), p.zone, r >> 24);
-        if tree == TREE_INVALID {
-            return;
-        }
-        self.plant(tile, p, tree, 0, GROWING1);
-    }
-
-    /// `OnTick_Trees`.
-    fn tick(&self) {
-        let settings = self.s.settings();
-        if unsafe { settings.extra_tree_placement.read() } == ETP_NO_SPREAD
-            || unsafe { settings.extra_tree_placement.read() } == ETP_NO_GROWTH_NO_SPREAD
-        {
-            return;
-        }
-        let size = crate::map_func::World::new(self.s).types.count();
-        let skip = scale_by_size(size, 16);
-        if skip < 16 && (self.s.tick_counter)() & u64::from(16 / skip - 1) != 0 {
-            return;
-        }
-        if unsafe { settings.climate.read() } == TROPIC {
-            let mut c = scale_by_size(size, 1);
-            while c > 0 {
-                self.plant_random_tree(true);
-                c -= 1;
-            }
-        }
-        // SAFETY: Game thread only; no reference to this byte is formed, and no
-        // service runs between the read and the write.
-        let wrapped = unsafe {
-            let (next, wrapped) = decrement(TREE_COUNTER, scale_by_size(size, 1));
-            TREE_COUNTER = next;
-            wrapped
-        };
-        if !wrapped || unsafe { settings.extra_tree_placement.read() } == ETP_SPREAD_RAINFOREST {
-            return;
-        }
-        self.plant_random_tree(false);
-    }
-
-    /// `CmdPlantTree`.
-    fn plant_command(
-        &self,
-        ctx: *mut Command,
-        tile: u32,
-        start: u32,
-        tree: u8,
-        diagonal: bool,
-        s: &CommandSettings,
-        flags: u16,
-        mut clear: impl FnMut(u32) -> LandscapeClear,
-    ) -> CommandResult {
-        const ERROR: CommandResult = CommandResult {
-            cost: 0,
-            status: 1,
-            message: 0,
-        };
-        let mut message = 0;
-        let mut cost: i64 = 0;
-        if start >= s.size {
-            return ERROR;
-        }
-        let (base, count) = match s.climate {
-            0 => (0, 12),
-            ARCTIC => (12, 8),
-            TROPIC => (TREE_RAINFOREST, 12),
-            _ => (TREE_TOYLAND, 9),
-        };
-        if tree != TREE_INVALID && tree.wrapping_sub(base) >= count {
-            return ERROR;
-        }
-
-        let mut limit = (self.t.command_begin)(ctx);
-        let map = self.s.map();
-        let check = |ok| crate::movement::native_assert(self.s, ok);
-        let mut iter =
-            crate::tilearea::TileIterator::create(map, s.size, tile, start, diagonal, check);
-        let mut current = iter.tile();
-        while current != INVALID_TILE {
-            let p = self.plant_observation(current);
-            'tile: {
-                match p.tile_type {
-                    MP_TREES => {
-                        if (self.t.tree_count)(current) == 4 {
-                            message = 1;
-                            break 'tile;
-                        }
-                        limit -= 1;
-                        if limit < 1 {
-                            message = 2;
-                        } else {
-                            if s.execute {
-                                (self.t.add_count)(current, 1);
-                                self.dirty(current);
-                                (self.t.command_debit)(ctx);
-                            }
-                            cost = cost.saturating_add(s.build_price.saturating_mul(2));
-                        }
+                    if w.bridge_above(current_tile.0) {
+                        msg = StringID(strings.site_unsuitable);
+                        break 'next;
                     }
-                    MP_WATER | MP_CLEAR => {
-                        if p.tile_type == MP_WATER && !p.coast {
-                            message = 3;
-                            break 'tile;
-                        }
-                        if p.bridge {
-                            message = 4;
-                            break 'tile;
-                        }
-                        if s.climate == TROPIC
-                            && tree != TREE_INVALID
-                            && ((tree == TREE_CACTUS && p.zone != ZONE_DESERT)
-                                || (is_rainforest_tree(tree)
-                                    && p.zone != ZONE_RAINFOREST
-                                    && !s.editor)
-                                || ((TREE_SUB_TROPICAL..TREE_TOYLAND).contains(&tree)
-                                    && p.zone != ZONE_NORMAL))
-                        {
-                            message = 5;
-                            break 'tile;
-                        }
-                        limit -= 1;
-                        if limit < 1 {
-                            message = 2;
-                        } else {
-                            if p.tile_type == MP_CLEAR
-                                && (p.ground == CLEAR_FIELDS || p.ground == CLEAR_ROCKS)
-                            {
-                                let nested = clear(current);
-                                if nested.failed {
-                                    return CommandResult {
-                                        cost: 0,
-                                        status: 2,
-                                        message: 0,
-                                    };
-                                }
-                                cost = cost.saturating_add(nested.cost);
-                            }
-                            if !s.editor && s.company_valid {
-                                (self.t.town_rating)(flags, current, true);
-                            }
-                            if s.execute {
-                                let mut tree = tree;
-                                let seed = if tree == TREE_INVALID {
-                                    Some(self.random() >> 24)
-                                } else {
-                                    None
-                                };
-                                // The nested clear changed the tile; read it again.
-                                let p = self.plant_observation(current);
-                                if let Some(seed) = seed {
-                                    tree = random_tree_type(s.climate, p.zone, seed);
-                                    if tree == TREE_INVALID {
-                                        tree = TREE_CACTUS;
+
+                    let mut treetype = TreeType(args.tree_to_plant);
+                    let zone = || w.asserted(|m| crate::tile_map::get_tropic_zone(m, current_tile));
+                    // Be a bit picky about which trees go where.
+                    if landscape(s) == LandscapeType::Tropic
+                        && treetype != TreeType::TREE_INVALID
+                        && (
+                            // No cacti outside the desert
+                            (treetype == TreeType::TREE_CACTUS
+                                && zone() != TropicZone::TROPICZONE_DESERT)
+                                // No rainforest trees outside the rainforest, except in the editor mode where it makes those tiles rainforest tile
+                                || (is_inside_mm(
+                                    usize::from(treetype.0),
+                                    usize::from(TreeType::TREE_RAINFOREST.0),
+                                    usize::from(TreeType::TREE_CACTUS.0),
+                                ) && zone() != TropicZone::TROPICZONE_RAINFOREST
+                                    && !editor())
+                                // And no subtropical trees in the desert/rainforest
+                                || (is_inside_mm(
+                                    usize::from(treetype.0),
+                                    usize::from(TreeType::TREE_SUB_TROPICAL.0),
+                                    usize::from(TreeType::TREE_TOYLAND.0),
+                                ) && zone() != TropicZone::TROPICZONE_NORMAL)
+                        )
+                    {
+                        msg = StringID(strings.wrong_terrain);
+                        break 'next;
+                    }
+
+                    // Test tree limit.
+                    limit -= 1;
+                    if limit < 1 {
+                        msg = StringID(strings.plant_limit);
+                    } else {
+                        if w.kind(current_tile) == TileType::MP_CLEAR {
+                            // Remove fields or rocks. Note that the ground will get barrened
+                            match w.asserted(|m| get_clear_ground(m, current_tile)) {
+                                ClearGround::CLEAR_FIELDS | ClearGround::CLEAR_ROCKS => {
+                                    crate::landscape_cmd::clear_command(
+                                        commands,
+                                        out.0,
+                                        current_tile.0,
+                                        flags.0,
+                                    );
+                                    // A failed clear is the command's result.
+                                    if !out.ok() {
+                                        return;
                                     }
+                                    cost = cost.saturating_add(out.money());
                                 }
-                                let growth = if s.editor { GROWN } else { GROWING1 };
-                                self.plant(current, p, tree, 0, growth);
-                                self.dirty(current);
-                                (self.t.command_debit)(ctx);
-                                if s.editor && is_rainforest_tree(tree) {
-                                    (self.s.set_tropic_zone)(current, ZONE_RAINFOREST);
+                                _ => {}
+                            }
+                        }
+
+                        if !editor() && (s.company_valid)((s.current_company)()) {
+                            let t = crate::town::spatial::closest_town_from_tile(
+                                s,
+                                current_tile,
+                                u32::from(crate::town::authority_distance(s)),
+                            );
+                            if !t.is_null() {
+                                c.change_town_rating(
+                                    t,
+                                    crate::town_type::RATING_TREE_UP_STEP,
+                                    crate::town_type::RATING_TREE_MAXIMUM,
+                                    flags,
+                                );
+                            }
+                        }
+
+                        if flags.test(DoCommandFlag::Execute) {
+                            if treetype == TreeType::TREE_INVALID {
+                                treetype =
+                                    get_random_tree_type(&w, current_tile, gb(s.random(), 24, 8));
+                                if treetype == TreeType::TREE_INVALID {
+                                    treetype = TreeType::TREE_CACTUS;
                                 }
                             }
-                            cost = cost.saturating_add(s.build_price);
+
+                            // Plant full grown trees in scenario editor
+                            plant_trees_on_tile(
+                                c,
+                                &w,
+                                current_tile,
+                                treetype,
+                                0,
+                                if editor() {
+                                    TreeGrowthStage::Grown
+                                } else {
+                                    TreeGrowthStage::Growing1
+                                },
+                            );
+                            c.mark_tile_dirty_by_tile(current_tile);
+                            debit();
+
+                            // When planting rainforest-trees, set tropiczone to rainforest in editor.
+                            if editor()
+                                && is_inside_mm(
+                                    usize::from(treetype.0),
+                                    usize::from(TreeType::TREE_RAINFOREST.0),
+                                    usize::from(TreeType::TREE_CACTUS.0),
+                                )
+                            {
+                                (s.set_tropic_zone)(
+                                    current_tile.0,
+                                    TropicZone::TROPICZONE_RAINFOREST.0,
+                                );
+                            }
                         }
+                        cost = cost.saturating_add(crate::company::price(PR_BUILD_TREES));
                     }
-                    _ => message = 4,
                 }
-                if limit < 0 {
-                    return CommandResult {
-                        cost,
-                        status: 0,
-                        message,
+
+                _ => msg = StringID(strings.site_unsuitable),
+            }
+
+            // Tree limit used up? No need to check more.
+            if limit < 0 {
+                break 'tiles;
+            }
+        }
+        iter.advance(w.dimensions, w.types.count(), check);
+    }
+
+    if cost == 0 {
+        out.error(msg.0);
+    } else {
+        (out.1.expense_money)(out.0, ExpensesType::EXPENSES_OTHER.0, cost);
+    }
+}
+
+/// `ClearTile_Trees`; returns the cost, of `EXPENSES_CONSTRUCTION`.
+pub(crate) fn clear_tile_trees(c: &Trees, tile: TileIndex, flags: DoCommandFlags) -> i64 {
+    let s = c.s;
+
+    if (s.company_valid)((s.current_company)()) {
+        let t = crate::town::spatial::closest_town_from_tile(
+            s,
+            tile,
+            u32::from(crate::town::authority_distance(s)),
+        );
+        if !t.is_null() {
+            c.change_town_rating(
+                t,
+                crate::town_type::RATING_TREE_DOWN_STEP,
+                crate::town_type::RATING_TREE_MINIMUM,
+                flags,
+            );
+        }
+    }
+
+    let w = World::new(s);
+    let mut num = u32::from(w.asserted(|m| get_tree_count(m, tile)));
+    if is_inside_mm(
+        usize::from(w.asserted(|m| get_tree_type(m, tile)).0),
+        usize::from(TreeType::TREE_RAINFOREST.0),
+        usize::from(TreeType::TREE_CACTUS.0),
+    ) {
+        num *= 4;
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        crate::ground::clear_square(tile.0, s);
+    }
+
+    i64::from(num).saturating_mul(crate::company::price(PR_CLEAR_TREES))
+}
+
+/// `TileLoopTreesDesert`.
+fn tile_loop_trees_desert(c: &Trees, w: &World, tile: TileIndex, settings: &LoopSettings) {
+    match w.asserted(|m| crate::tile_map::get_tropic_zone(m, tile)) {
+        TropicZone::TROPICZONE_DESERT => {
+            if w.asserted(|m| get_tree_ground(m, tile)) != TreeGround::TREE_GROUND_SNOW_DESERT {
+                c.set_tree_ground_density(tile, TreeGround::TREE_GROUND_SNOW_DESERT, 3);
+                c.mark_tile_dirty_by_tile(tile);
+            }
+        }
+
+        TropicZone::TROPICZONE_RAINFOREST => {
+            const FOREST_SOUNDS: [SoundFx; 4] = [
+                SoundFx::SND_42_RAINFOREST_1,
+                SoundFx::SND_43_RAINFOREST_2,
+                SoundFx::SND_44_RAINFOREST_3,
+                SoundFx::SND_48_RAINFOREST_4,
+            ];
+            let r = c.s.random();
+
+            if chance16_i(1, 200, r) && settings.ambient {
+                (c.s.play_sound)(tile.0, u16::from(FOREST_SOUNDS[gb(r, 16, 2) as usize].0));
+            }
+        }
+
+        _ => {}
+    }
+}
+
+/// `TileLoopTreesAlps`.
+#[allow(clippy::cast_sign_loss, reason = "std::min<uint> of a nonnegative int")]
+fn tile_loop_trees_alps(c: &Trees, w: &World, tile: TileIndex, settings: &LoopSettings) {
+    let k = get_tile_z(w, tile) - i32::from(crate::snow_line::get(c.s)) + 1;
+
+    if k < 0 {
+        match w.asserted(|m| get_tree_ground(m, tile)) {
+            TreeGround::TREE_GROUND_SNOW_DESERT => {
+                c.set_tree_ground_density(tile, TreeGround::TREE_GROUND_GRASS, 3);
+            }
+            TreeGround::TREE_GROUND_ROUGH_SNOW => {
+                c.set_tree_ground_density(tile, TreeGround::TREE_GROUND_ROUGH, 3);
+            }
+            _ => return,
+        }
+    } else {
+        let density = (k as u32).min(3);
+
+        if w.asserted(|m| get_tree_ground(m, tile)) != TreeGround::TREE_GROUND_SNOW_DESERT
+            && w.asserted(|m| get_tree_ground(m, tile)) != TreeGround::TREE_GROUND_ROUGH_SNOW
+        {
+            let tg = if w.asserted(|m| get_tree_ground(m, tile)) == TreeGround::TREE_GROUND_ROUGH {
+                TreeGround::TREE_GROUND_ROUGH_SNOW
+            } else {
+                TreeGround::TREE_GROUND_SNOW_DESERT
+            };
+            c.set_tree_ground_density(tile, tg, density);
+        } else if u32::from(w.asserted(|m| get_tree_density(m, tile))) != density {
+            c.set_tree_ground_density(tile, w.asserted(|m| get_tree_ground(m, tile)), density);
+        } else {
+            if w.asserted(|m| get_tree_density(m, tile)) == 3 {
+                let r = c.s.random();
+                if chance16_i(1, 200, r) && settings.ambient {
+                    let sound = if r & 0x8000_0000 != 0 {
+                        SoundFx::SND_39_ARCTIC_SNOW_2
+                    } else {
+                        SoundFx::SND_34_ARCTIC_SNOW_1
                     };
+                    (c.s.play_sound)(tile.0, u16::from(sound.0));
                 }
             }
-            iter.advance(map, s.size, check);
-            current = iter.tile();
-        }
-        CommandResult {
-            cost,
-            status: 0,
-            message,
+            return;
         }
     }
+    c.mark_tile_dirty_by_tile(tile);
 }
 
-/// Build the entry view of the C++ service tables.
-/// # Safety
-/// Both pointers address live immutable tables for the whole entry.
-unsafe fn trees<'a>(services: *const TreeServices, shared: *const Services) -> Trees<'a> {
-    // SAFETY: This function's contract keeps both tables live and immutable for the entry.
+/// Check if trees on this tile are allowed to spread.
+/// If they are allowed to spread, they are also allowed to die.
+fn trees_on_tile_can_spread(w: &World, tile: TileIndex, settings: &LoopSettings) -> bool {
+    // Desert and rainforest trees need special handling.
+    if settings.climate == LandscapeType::Tropic {
+        return match w.asserted(|m| crate::tile_map::get_tropic_zone(m, tile)) {
+            // Cacti never spread.
+            TropicZone::TROPICZONE_DESERT => false,
+            TropicZone::TROPICZONE_RAINFOREST => {
+                settings.extra == ExtraTreePlacement::ETP_SPREAD_ALL
+                    || settings.extra == ExtraTreePlacement::ETP_SPREAD_RAINFOREST
+            }
+            _ => settings.extra == ExtraTreePlacement::ETP_SPREAD_ALL,
+        };
+    }
+
+    settings.extra == ExtraTreePlacement::ETP_SPREAD_ALL
+}
+
+/// `TileLoop_Trees`. `types` is the tile-loop batch's map descriptor; `call` is the native
+/// lazy-result context of the flooding it may run.
+#[allow(clippy::cast_possible_truncation, reason = "the uint32_t cycle of a uint64_t sum")]
+fn tile_loop_trees(
+    c: &Trees,
+    types: &TileTypeAccess,
+    tile: TileIndex,
+    settings: &LoopSettings,
+    call: *mut crate::ground::Call,
+) {
+    let w = World {
+        types: types.without_native_assert(),
+        shared: c.s,
+        dimensions: Map::from_log_x(settings.size_x.trailing_zeros()),
+    };
+    let mut tile = tile;
+
+    if w.asserted(|m| get_tree_ground(m, tile)) == TreeGround::TREE_GROUND_SHORE {
+        // SAFETY: The native caller owns an independent stack result context; flooding may
+        // reenter trees but cannot reset the map, and no owner state is borrowed here.
+        unsafe {
+            crate::water::water_tile_loop(
+                tile.0,
+                TileType::MP_TREES.0,
+                false,
+                settings.size_x,
+                w.size_y(),
+                call,
+                (c.s.water_services)(),
+                c.s,
+                &w.types,
+            );
+        }
+    } else {
+        match settings.climate {
+            LandscapeType::Tropic => tile_loop_trees_desert(c, &w, tile, settings),
+            LandscapeType::Arctic => tile_loop_trees_alps(c, &w, tile, settings),
+            _ => {}
+        }
+    }
+
+    crate::newgrf_generic::ambient(settings.ambient_callback, tile.0);
+
+    // TimerGameTick::counter is incremented by 256 between each call, so ignore lower 8 bits.
+    // Also, we use a simple hash to spread the updates evenly over the map.
+    // 11 and 9 are just some co-prime numbers for better spread.
+    let cycle = (11 * w.dimensions.tile_x(tile))
+        .wrapping_add(9 * w.dimensions.tile_y(tile))
+        .wrapping_add((settings.tick_counter >> 8) as u32);
+
+    // Handle growth of grass (under trees/on MP_TREES tiles) at every 8th processings, like
+    // it's done for grass on MP_CLEAR tiles.
+    if (cycle & 7) == 7 && w.asserted(|m| get_tree_ground(m, tile)) == TreeGround::TREE_GROUND_GRASS
+    {
+        let density = u32::from(w.asserted(|m| get_tree_density(m, tile)));
+        if density < 3 {
+            c.set_tree_ground_density(tile, TreeGround::TREE_GROUND_GRASS, density + 1);
+            c.mark_tile_dirty_by_tile(tile);
+        }
+    }
+
+    if settings.extra == ExtraTreePlacement::ETP_NO_GROWTH_NO_SPREAD {
+        return;
+    }
+
+    /// How many tile updates happen for one tree update
+    const TREE_UPDATE_FREQUENCY: u32 = 16;
+    if cycle % TREE_UPDATE_FREQUENCY != TREE_UPDATE_FREQUENCY - 1 {
+        return;
+    }
+
+    match w.asserted(|m| get_tree_growth(m, tile)) {
+        // regular sized tree
+        TreeGrowthStage::Grown => {
+            if settings.climate == LandscapeType::Tropic
+                && w.asserted(|m| get_tree_type(m, tile)) != TreeType::TREE_CACTUS
+                && w.asserted(|m| crate::tile_map::get_tropic_zone(m, tile))
+                    == TropicZone::TROPICZONE_DESERT
+            {
+                c.add_tree_growth(tile, 1);
+            } else {
+                let spread = match gb(c.s.random(), 0, 3) {
+                    // start destructing
+                    0 => {
+                        c.add_tree_growth(tile, 1);
+                        false
+                    }
+                    // add a tree
+                    1 => {
+                        if w.asserted(|m| get_tree_count(m, tile)) < 4
+                            && trees_on_tile_can_spread(&w, tile, settings)
+                        {
+                            c.add_tree_count(tile, 1);
+                            c.set_tree_growth(tile, TreeGrowthStage::Growing1);
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    2 => true,
+                    _ => return,
+                };
+                // add a neighbouring tree
+                if spread && trees_on_tile_can_spread(&w, tile, settings) {
+                    let treetype = w.asserted(|m| get_tree_type(m, tile));
+
+                    let direction = crate::direction_type::Direction(
+                        (c.s.random() % u32::from(crate::direction_type::Direction::DIR_END.0))
+                            as u8,
+                    );
+                    tile = TileIndex(
+                        tile.0.wrapping_add_signed(
+                            w.dimensions.tile_offs_by_dir(direction, |ok| w.check(ok)),
+                        ),
+                    );
+
+                    if !can_plant_trees_on_tile(&w, tile, false) {
+                        return;
+                    }
+
+                    // Don't plant trees, if ground was freshly cleared
+                    if w.kind(tile) == TileType::MP_CLEAR
+                        && w.asserted(|m| get_clear_ground(m, tile)) == ClearGround::CLEAR_GRASS
+                        && !w.asserted(|m| crate::clear_map::is_snow_tile(m, tile))
+                        && w.asserted(|m| get_clear_density(m, tile)) != 3
+                    {
+                        return;
+                    }
+
+                    plant_trees_on_tile(c, &w, tile, treetype, 0, TreeGrowthStage::Growing1);
+                }
+            }
+        }
+
+        // final stage of tree destruction
+        TreeGrowthStage::Dead => {
+            if !trees_on_tile_can_spread(&w, tile, settings) {
+                // if trees can't spread just plant a new one to prevent deforestation
+                c.set_tree_growth(tile, TreeGrowthStage::Growing1);
+            } else if w.asserted(|m| get_tree_count(m, tile)) > 1 {
+                // more than one tree, delete it
+                c.add_tree_count(tile, -1);
+                c.set_tree_growth(tile, TreeGrowthStage::Grown);
+            } else {
+                // just one tree, change type into MP_CLEAR
+                match w.asserted(|m| get_tree_ground(m, tile)) {
+                    TreeGround::TREE_GROUND_SHORE => (c.s.make_shore)(tile.0),
+                    TreeGround::TREE_GROUND_GRASS => c.make_clear(
+                        tile,
+                        ClearGround::CLEAR_GRASS,
+                        u32::from(w.asserted(|m| get_tree_density(m, tile))),
+                    ),
+                    TreeGround::TREE_GROUND_ROUGH => {
+                        c.make_clear(tile, ClearGround::CLEAR_ROUGH, 3);
+                    }
+                    TreeGround::TREE_GROUND_ROUGH_SNOW => {
+                        let density = u32::from(w.asserted(|m| get_tree_density(m, tile)));
+                        c.make_clear(tile, ClearGround::CLEAR_ROUGH, 3);
+                        (c.s.make_snow)(tile.0, density);
+                    }
+                    // snow or desert
+                    _ => {
+                        if settings.climate == LandscapeType::Tropic {
+                            c.make_clear(
+                                tile,
+                                ClearGround::CLEAR_DESERT,
+                                u32::from(w.asserted(|m| get_tree_density(m, tile))),
+                            );
+                        } else {
+                            let density = u32::from(w.asserted(|m| get_tree_density(m, tile)));
+                            c.make_clear(tile, ClearGround::CLEAR_GRASS, 3);
+                            (c.s.make_snow)(tile.0, density);
+                        }
+                    }
+                }
+            }
+        }
+
+        _ => c.add_tree_growth(tile, 1),
+    }
+
+    c.mark_tile_dirty_by_tile(tile);
+}
+
+/// Decrement the tree tick counter.
+/// The interval is scaled by map size to allow for the same density regardless of size.
+/// Adjustment for map sizes below the standard 256 * 256 are handled earlier.
+/// Returns true if the counter was decremented past zero.
+#[allow(clippy::cast_possible_truncation, reason = "uint8_t -= uint")]
+fn decrement_tree_counter(w: &World) -> bool {
+    // Ensure _trees_tick_ctr can be decremented past zero only once for the largest map size.
+    const _: () = assert!(
+        2 * (crate::map_type::MAX_MAP_SIZE_BITS - crate::map_type::MIN_MAP_SIZE_BITS) - 4
+            <= u8::BITS
+    );
+
+    // byte underflow
+    let counter = &raw mut _trees_tick_ctr;
+    // SAFETY: The counter's contract; no call runs between the load and the store.
     unsafe {
-        Trees {
-            t: &*services,
-            s: &*shared,
-            map: None,
-        }
+        let old_trees_tick_ctr = counter.read();
+        counter.write(
+            u32::from(old_trees_tick_ctr)
+                .wrapping_sub(w.dimensions.scale_by_size(w.size_y(), 1)) as u8,
+        );
+        old_trees_tick_ctr <= counter.read()
     }
 }
 
-/// Scheduler-only entry: allocation metadata follows the scheduler's no-reset/no-yield proof.
-/// Each scalar load ends before ambient/flooding reentry; observations reload afterwards.
+/// Place a random tree on a random tile.
+/// If `rainforest` is set the random tile must be in a rainforest zone.
+fn plant_random_tree(c: &Trees, w: &World, rainforest: bool) {
+    let r = c.s.random();
+    let tile = w.dimensions.random_tile_seed(w.size_y(), r);
+
+    if rainforest
+        && w.asserted(|m| crate::tile_map::get_tropic_zone(m, tile))
+            != TropicZone::TROPICZONE_RAINFOREST
+    {
+        return;
+    }
+    if !can_plant_trees_on_tile(w, tile, false) {
+        return;
+    }
+
+    let tree = get_random_tree_type(w, tile, gb(r, 24, 8));
+    if tree == TreeType::TREE_INVALID {
+        return;
+    }
+
+    plant_trees_on_tile(c, w, tile, tree, 0, TreeGrowthStage::Growing1);
+}
+
+/// `OnTick_Trees`.
+pub(crate) fn on_tick_trees(c: &Trees) {
+    let s = c.s;
+    // SAFETY: The module's settings contract.
+    let extra_tree_placement =
+        || ExtraTreePlacement(unsafe { s.settings().extra_tree_placement.read() });
+
+    // Don't spread trees if that's not allowed
+    if extra_tree_placement() == ExtraTreePlacement::ETP_NO_SPREAD
+        || extra_tree_placement() == ExtraTreePlacement::ETP_NO_GROWTH_NO_SPREAD
+    {
+        return;
+    }
+
+    let w = World::new(s);
+    // Skip some tree ticks for map sizes below 256 * 256. 64 * 64 is 16 times smaller, so
+    // this is the maximum number of ticks that are skipped. Number of ticks to skip is
+    // inversely proportional to map size, so that is handled to create a mask.
+    let skip = w.dimensions.scale_by_size(w.size_y(), 16).cast_signed();
+    if skip < 16 && ((s.tick_counter)() & i64::from(16 / skip - 1).cast_unsigned()) != 0 {
+        return;
+    }
+
+    // place a tree at a random rainforest spot
+    if landscape(s) == LandscapeType::Tropic {
+        let mut c_ = w.dimensions.scale_by_size(w.size_y(), 1);
+        while c_ > 0 {
+            plant_random_tree(c, &w, true);
+            c_ -= 1;
+        }
+    }
+
+    if !decrement_tree_counter(&w)
+        || extra_tree_placement() == ExtraTreePlacement::ETP_SPREAD_RAINFOREST
+    {
+        return;
+    }
+
+    // place a tree at a random spot
+    plant_random_tree(c, &w, false);
+}
+
+/// `InitializeTrees`.
+pub(crate) fn initialize_trees() {
+    // SAFETY: The counter's contract.
+    unsafe { (&raw mut _trees_tick_ctr).write(0) };
+}
+
+/// Raw adapter for the tile-loop scheduler: `TileLoop_Trees` over base values.
+/// # Safety
+/// The tables are live and immutable; `map` follows the scheduler's no-reset, no-yield
+/// contract for the batch.
 pub(crate) unsafe fn tile_loop(
     tile: u32,
     settings: LoopSettings,
     call: *mut crate::ground::Call,
     services: *const TreeServices,
     shared: *const Services,
-    map: &crate::services::TileTypeAccess,
+    map: &TileTypeAccess,
 ) {
-    let mut owner = unsafe { trees(services, shared) };
-    owner.map = Some(map);
-    owner.tile_loop(tile, &settings, call);
+    // SAFETY: The caller's contract.
+    let c = unsafe { Trees::new(services, shared) };
+    tile_loop_trees(&c, map, TileIndex(tile), &settings, call);
 }
 
-/// `OnTick_Trees`.
+/// `OnTick_Trees` from the session tick.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
 pub(crate) unsafe fn tick(services: *const TreeServices, shared: *const Services) {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    unsafe { trees(services, shared) }.tick();
+    on_tick_trees(&unsafe { Trees::new(services, shared) });
 }
 
-/// `GenerateTrees`; true when a progress service reported world-generation abort.
+/// `GenerateTrees` from world generation; true when a progress service reported a
+/// world-generation abort.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
 pub(crate) unsafe fn generate(services: *const TreeServices, shared: *const Services) -> bool {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    unsafe { trees(services, shared) }.generate()
+    generate_trees(&unsafe { Trees::new(services, shared) })
 }
 
-/// `PlaceTreesRandomly`; true when a progress service reported world-generation abort.
+/// Raw adapter for the landscape clear dispatch: `ClearTile_Trees` over base values.
+pub(crate) fn clear_tile(t: &TreeServices, s: &Services, tile: u32, flags: u16) -> i64 {
+    clear_tile_trees(&Trees { t, s }, TileIndex(tile), DoCommandFlags(flags))
+}
+
+/// `InitializeTrees`.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_trees_initialize() {
+    initialize_trees();
+}
+
+/// `PlaceTreesRandomly`; 1 when a progress service reported a world-generation abort.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
@@ -1095,10 +1564,10 @@ pub unsafe extern "C" fn openttd_rust_trees_place_randomly_abi(
     shared: *const Services,
 ) -> u8 {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    u8::from(unsafe { trees(services, shared) }.place_randomly())
+    u8::from(place_trees_randomly(&unsafe { Trees::new(services, shared) }))
 }
 
-/// `PlaceTree` on a tile suitable for trees.
+/// `PlaceTree`.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
@@ -1106,187 +1575,71 @@ pub unsafe extern "C" fn openttd_rust_trees_place(
     tile: u32,
     r: u32,
     keep_density: bool,
-    climate: u8,
     services: *const TreeServices,
     shared: *const Services,
 ) {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    let trees = unsafe { trees(services, shared) };
-    let p = trees.plant_observation(tile);
-    trees.place(tile, p, r, keep_density, climate);
+    let c = unsafe { Trees::new(services, shared) };
+    place_tree(&c, &World::new(c.s), TileIndex(tile), r, keep_density);
 }
 
-/// `PlaceTreeGroupAroundTile`, called by the native scenario-editor brush.
+/// `PlaceTreeGroupAroundTile`, called by the native scenario-editor brush; a positional shim
+/// over the typed entry.
 /// # Safety
 /// Tables and canonical map remain live under the game-state mutex; no reset or yield.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_place_group(
     tile: u32,
-    tree: u8,
+    treetype: u8,
     radius: u32,
     count: u32,
     set_zone: bool,
-    services: &TreeServices,
-    shared: &Services,
-    environment: &crate::services::EnvironmentServices,
+    services: *const TreeServices,
+    shared: *const Services,
     random: &crate::genworld::WorldServices,
 ) -> u32 {
-    let world = crate::map_func::World::new(shared);
-    world.check((environment.editor)());
-    world.check(tree < TREE_TOYLAND + crate::tree_map::TREE_COUNT_TOYLAND);
-    let owner = Trees {
-        t: services,
-        s: shared,
-        map: Some(&world.types),
-    };
-    let map = world.dimensions;
-    let size_y = world.size_y();
-    let freeform = (environment.freeform_edges)();
-    let mut planted = 0_u32;
-    for _ in 0..count {
-        let coordinate = || {
-            let rand = (random.interactive_random)();
-            let dist = (rand & 255) + ((rand >> 8) & 255) + ((rand >> 16) & 255) + (rand >> 24);
-            // C++ promotes dist to uint for multiplication/division and offset subtraction.
-            (dist.wrapping_mul(radius) / 512)
-                .wrapping_sub(radius)
-                .cast_signed()
-        };
-        let x = coordinate();
-        let y = coordinate();
-        let target = map.tile_add_wrap(TileIndex(tile), x, y, size_y, freeform).0;
-        if target == INVALID_TILE {
-            continue;
-        }
-        if world.kind(TileIndex(target)) == TileType::MP_TREES
-            && world.asserted(|m| crate::tree_map::get_tree_count_raw(m, target)) < 4
-        {
-            (services.add_count)(target, 1);
-            (services.set_growth)(target, GROWING1);
-            owner.dirty(target);
-            planted = planted.wrapping_add(1);
-        } else if owner
-            .plant_observation(target)
-            .suitable(tree == TREE_CACTUS)
-        {
-            let observation = owner.plant_observation(target);
-            owner.plant(target, observation, tree, 0, GROWN);
-            owner.dirty(target);
-            planted = planted.wrapping_add(1);
-        }
-    }
-    if set_zone && is_rainforest_tree(tree) {
-        // The native TileArea(tile) constructor starts with zero extents.
-        let mut area = crate::tilearea::TileArea { tile, w: 0, h: 0 };
-        area.expand(radius.cast_signed(), map, size_y);
-        for target in area.tiles(map) {
-            if world.kind(TileIndex(target)) != TileType::MP_VOID
-                && map.distance_square(TileIndex(tile), TileIndex(target))
-                    < radius.wrapping_mul(radius)
-            {
-                (shared.set_tropic_zone)(target, ZONE_RAINFOREST);
-            }
-        }
-    }
-    planted
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
+    let c = unsafe { Trees::new(services, shared) };
+    place_tree_group_around_tile(
+        &c,
+        random,
+        TileIndex(tile),
+        TreeType(treetype),
+        radius,
+        count,
+        set_zone,
+    )
 }
 
-/// `CmdPlantTree`. The context is passed back to its command services only.
+/// `CmdPlantTree`, writing its result to the native slot `out`.
 /// # Safety
-/// Tables are live and immutable; game thread only. Services are `noexcept`.
-/// `ctx` and the independent nested command result live for the call.
+/// Tables are live and immutable; game thread only. Services are `noexcept`. `args` and the
+/// native result slot live for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
-    ctx: *mut Command,
-    tile: u32,
-    start: u32,
-    tree: u8,
-    diagonal: bool,
-    settings: CommandSettings,
+    flags: u16,
+    args: *const PlantTreeArgs,
+    out: *mut CommandCost,
     services: *const TreeServices,
     shared: *const Services,
-    nested: *mut crate::services::CommandCost,
-    commands: &crate::services::CommandServices,
-    flags: u16,
-) -> CommandResult {
-    // SAFETY: The contract above supplies the tables. The existing native nested result slot
-    // keeps the complete error returned by a failed clear for status 2.
-    unsafe { trees(services, shared) }.plant_command(
-        ctx,
-        tile,
-        start,
-        tree,
-        diagonal,
-        &settings,
-        flags,
-        |current| {
-            let table = unsafe { &*(commands.landscape_commands)() };
-            let costs = unsafe { &*table.costs };
-            crate::landscape_cmd::clear_command(commands, nested, current, flags);
-            LandscapeClear {
-                cost: (costs.money)(nested),
-                failed: !(costs.success)(nested),
-            }
-        },
-    )
-}
-
-/// `ClearTile_Trees`; returns the saturated cost.
-/// # Safety
-/// As for `openttd_rust_trees_cmd_plant`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_clear_tile(
-    tile: u32,
-    flags: u16,
-    price: i64,
-    company_valid: bool,
-    services: *const TreeServices,
-    shared: *const Services,
-) -> i64 {
-    // SAFETY: the native caller supplies immutable canonical tables.
-    unsafe { clear_tile_price(&*services, &*shared, tile, flags, company_valid, price) }
-}
-/// The existing tree clear callee, also used by direct landscape dispatch.
-pub(crate) fn clear_tile(t: &TreeServices, s: &Services, tile: u32, flags: u16) -> i64 {
-    clear_tile_price(
-        t,
-        s,
-        tile,
-        flags,
-        (s.company_valid)((s.current_company)()),
-        crate::company::price(crate::economy_type::PR_CLEAR_TREES),
-    )
-}
-fn clear_tile_price(
-    t: &TreeServices,
-    s: &Services,
-    tile: u32,
-    flags: u16,
-    company_valid: bool,
-    price: i64,
-) -> i64 {
-    if company_valid {
-        (t.town_rating)(flags, tile, false);
+    commands: *const CommandServices,
+) {
+    // SAFETY: The caller's contract.
+    unsafe {
+        let commands = &*commands;
+        cmd_plant_tree(
+            &Trees::new(services, shared),
+            commands,
+            DoCommandFlags(flags),
+            &*args,
+            Cost(out, commands.cost),
+        );
     }
-    let tree = (t.clear_observation)(tile);
-    let mut count = tree.count;
-    if is_rainforest_tree(tree.species) {
-        count = count.wrapping_mul(4);
-    }
-    if flags & crate::command_type::DoCommandFlag::EXECUTE != 0 {
-        crate::ground::clear_square(tile, s);
-    }
-    price.saturating_mul(i64::from(count))
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDTreeServices" ["probe"] => crate::trees::TreeServices {
-        plant_observation,
-        tree_observation,
-        tree_count,
-        clear_observation,
-
         sin,
         cos,
         make_tree,
@@ -1297,30 +1650,16 @@ crate::abi::layouts! {
         make_clear,
         progress,
         progress_total,
-        town_rating,
-        command_begin,
-        command_debit,
+        town,
+        authority,
+        strings,
     };
-    "OpenTTDTreePlantObservation" ["probe"] => PlantObservation {
-        tile_type,
-        bridge,
-        ground,
-        density,
-        snow,
-        coast,
-        zone,
-    };
-    "OpenTTDTreeObservation" ["probe"] => TreeObservation {
-        ground,
-        density,
-        species,
-        count,
-        growth,
-        zone,
-    };
-    "OpenTTDTreeClearObservation" ["probe"] => ClearObservation {
-        count,
-        species,
+    "OpenTTDTreeStrings" ["probe"] => Strings {
+        already_here,
+        plant_limit,
+        on_water,
+        site_unsuitable,
+        wrong_terrain,
     };
     "OpenTTDTreeLoopSettings" ["probe"] => LoopSettings {
         tick_counter,
@@ -1330,26 +1669,13 @@ crate::abi::layouts! {
         ambient,
         ambient_callback,
     };
-    "OpenTTDTreeCommandSettings" ["probe"] => CommandSettings {
-        build_price,
-        size,
-        climate,
-        editor,
-        execute,
-        company_valid,
-    };
-    "OpenTTDTreeCommandResult" ["probe"] => CommandResult {
-        cost,
-        status,
-        message,
-    };
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
+    use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
+    use std::cell::{Cell, RefCell};
     use std::ffi::c_void;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1357,721 +1683,924 @@ mod tests {
         Draw,
         Progress,
         Total(u32),
-        TileZ,
-        Plant,
-        Tree,
-        Count,
-        ClearTree,
-        Write(&'static str),
-        Dirty,
-        Zone(u8),
+        Write(&'static str, u32),
+        Dirty(u32),
+        Zone(u32, u8),
         Sound(u16),
-        Rating(bool),
-        Begin,
-        Debit,
-        Clear,
+        Assert,
+        Error(u32),
+        Expense(u8, i64),
+        Authority(u32),
     }
 
-    #[derive(Default)]
-    struct World {
-        plant: PlantObservation,
-        tree: TreeObservation,
-        log: Vec<Event>,
-        random: u32,
-        abort_at: Option<usize>,
-        progress: usize,
-        limit: i32,
-        clear_failed: bool,
-        visited: Vec<u32>,
-    }
     thread_local! {
-        static WORLD: RefCell<World> = RefCell::new(World::default());
+        static BASE: Cell<*mut BaseTileLayout> = const { Cell::new(std::ptr::null_mut()) };
+        static LOG: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
+        static RANDOM: Cell<u32> = const { Cell::new(0) };
+        static PROGRESS: Cell<usize> = const { Cell::new(0) };
+        static ABORT_AT: Cell<usize> = const { Cell::new(0) };
+        static PLANTED_GROUND: Cell<Option<u8>> = const { Cell::new(None) };
+        static COMPANY: Cell<*mut crate::company::Finances> =
+            const { Cell::new(std::ptr::null_mut()) };
+        static COMPANY_VALID: Cell<bool> = const { Cell::new(false) };
+        static CLIMATE: Cell<u8> = const { Cell::new(0) };
+        static PLACER: Cell<u8> = const { Cell::new(1) };
+        static EXTRA: Cell<u8> = const { Cell::new(2) };
+        static FREEFORM: Cell<bool> = const { Cell::new(true) };
+        static HEIGHT_LIMIT: Cell<u8> = const { Cell::new(15) };
+        static AUTHORITY: Cell<u8> = const { Cell::new(20) };
+        static SNOW_LINE: Cell<u8> = const { Cell::new(4) };
+        static TOWN: Cell<*mut crate::town::State> = const { Cell::new(std::ptr::null_mut()) };
+        static COMMANDS: Cell<*const CommandServices> = const { Cell::new(std::ptr::null()) };
     }
     fn log(event: Event) {
-        WORLD.with_borrow_mut(|w| w.log.push(event));
-    }
-    fn reset(world: World) {
-        WORLD.with_borrow_mut(|w| *w = world);
+        LOG.with_borrow_mut(|l| l.push(event));
     }
     fn events() -> Vec<Event> {
-        WORLD.with_borrow(|w| w.log.clone())
+        LOG.with_borrow_mut(std::mem::take)
     }
 
-    extern "C" fn random(_: *mut c_void) -> u32 {
-        log(Event::Draw);
-        WORLD.with_borrow(|w| w.random)
+    /// A 64x64 (or larger) map of real tile bytes. The tree and clear writer mocks store
+    /// the fields `tree_map.h` and `clear_map.h` store.
+    struct TestMap {
+        _base: Vec<BaseTileLayout>,
+        _extended: Vec<ExtendedTileLayout>,
     }
-    extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        0
-    }
-    extern "C" fn tile_z(_: u32) -> i32 {
-        log(Event::TileZ);
-        8
-    }
-    extern "C" fn dirty(_: u32) {
-        log(Event::Dirty);
-    }
-    extern "C" fn set_zone(_: u32, zone: u8) {
-        log(Event::Zone(zone));
-        WORLD.with_borrow_mut(|w| w.plant.zone = zone);
-    }
-    thread_local! {
-        static FREEFORM: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
-        static CATALOG: crate::settings_type::SettingAddresses =
-            crate::settings_type::SettingAddresses {
-                climate: &0,
-                freeform_edges: FREEFORM.with(std::cell::Cell::as_ptr).cast_const(),
-                height_limit: &MAP_HEIGHT_LIMIT_ORIGINAL,
-                tree_placer: &TP_ORIGINAL,
-                ..crate::settings_type::SettingAddresses::NULL
-            };
-    }
-    fn shared() -> Services {
-        crate::map_func::fixture::set(water_map(), 6);
-        Services {
-            settings: CATALOG.with(std::ptr::from_ref),
-            snow_line_support: crate::snow_line::Support {
-                height: &4,
-                ..crate::services::fixture(std::ptr::null_mut(), random, industry).snow_line_support
-            },
-            tile_z,
-            mark_dirty: dirty,
-            set_tropic_zone: set_zone,
-            make_shore,
-            make_snow,
-            water_services,
-            movement: movement(),
-            map_max_x: water_map_max,
-            map_max_y: water_map_max,
-            tile_type: water_type,
-            play_sound: sound,
-            clear_square_services: crate::services::ClearSquareServices {
-                docking: clear_flag,
-                generating_world: clear_generation,
-            },
-            ..crate::services::fixture(std::ptr::null_mut(), random, industry)
-        }
-    }
-
-    extern "C" fn plant_observation(tile: u32) -> PlantObservation {
-        log(Event::Plant);
-        WORLD.with_borrow_mut(|w| w.visited.push(tile));
-        WORLD.with_borrow(|w| w.plant)
-    }
-    extern "C" fn tree_observation(_: u32) -> TreeObservation {
-        log(Event::Tree);
-        WORLD.with_borrow(|w| w.tree)
-    }
-    extern "C" fn tree_count(_: u32) -> u32 {
-        log(Event::Count);
-        WORLD.with_borrow(|w| u32::from(w.tree.count))
-    }
-    extern "C" fn clear_observation(_: u32) -> ClearObservation {
-        log(Event::ClearTree);
-        WORLD.with_borrow(|w| ClearObservation {
-            count: u32::from(w.tree.count),
-            species: w.tree.species,
-        })
-    }
-    extern "C" fn trig(value: f32) -> f32 {
-        value
-    }
-    extern "C" fn make_tree(_: u32, tree: u8, count: u32, growth: u8, ground: u8, density: u32) {
-        log(Event::Write("make_tree"));
-        WORLD.with_borrow_mut(|w| {
-            w.tree = TreeObservation {
-                ground,
-                density: density as u8,
-                species: tree,
-                count: count as u8 + 1,
-                growth,
-                zone: w.plant.zone,
-            };
-        });
-    }
-    extern "C" fn set_ground_density(_: u32, ground: u8, density: u32) {
-        log(Event::Write("ground"));
-        WORLD.with_borrow_mut(|w| {
-            w.tree.ground = ground;
-            w.tree.density = density as u8;
-        });
-    }
-    extern "C" fn add_count(_: u32, _: i32) {
-        log(Event::Write("count"));
-    }
-    extern "C" fn add_growth(_: u32, value: i32) {
-        log(Event::Write("add_growth"));
-        WORLD.with_borrow_mut(|w| w.tree.growth = (i32::from(w.tree.growth) + value) as u8);
-    }
-    extern "C" fn set_growth(_: u32, growth: u8) {
-        log(Event::Write("set_growth"));
-        WORLD.with_borrow_mut(|w| w.tree.growth = growth);
-    }
-    extern "C" fn make_clear(_: u32, _: u8, _: u32) {
-        log(Event::Write("clear"));
-    }
-    extern "C" fn make_shore(_: u32) {
-        log(Event::Write("shore"));
-    }
-    extern "C" fn make_snow(_: u32, _: u32) {
-        log(Event::Write("snow"));
-    }
-    extern "C" fn water_type(_: u32) -> u8 {
-        MP_TREES
-    }
-    extern "C" fn water_services() -> *const crate::water::WaterServices {
-        thread_local! { static WATER: crate::water::WaterServices = {
-            let mut water = crate::water::fixture();
-            water.clear = &raw const CLEAR;
-            water
-        }; }
-        WATER.with(std::ptr::from_ref)
-    }
-    fn movement() -> *const crate::movement::MovementServices {
-        thread_local! { static MOVEMENT: crate::movement::MovementServices =
-            crate::train_reservation::tests::movement_table();
-        }
-        MOVEMENT.with(std::ptr::from_ref)
-    }
-    extern "C" fn water_map_max() -> u32 {
-        63
-    }
-    /// Every tile is a tree tile; the water entry's ground stays dry, as in the fixture.
-    fn water_map() -> crate::map_func::TileTypeAllocation {
-        use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
-        static BASE: [BaseTileLayout; 4096] = [const {
-            BaseTileLayout {
-                kind: MP_TREES << 4,
+    fn install(log_x: u32, kind: TileType, assertions: bool) -> TestMap {
+        let count = 1_usize << (2 * log_x);
+        let mut base: Vec<_> = (0..count)
+            .map(|_| BaseTileLayout {
+                kind: kind.0 << 4,
                 height: 0,
                 m2: 0,
                 m1: 0,
                 m3: 0,
                 m4: 0,
                 m5: 0,
-            }
-        }; 4096];
-        static EXTENDED: [ExtendedTileLayout; 4096] = [const {
-            ExtendedTileLayout {
+            })
+            .collect();
+        let extended: Vec<_> = (0..count)
+            .map(|_| ExtendedTileLayout {
                 m6: 0,
                 m7: 0,
                 m8: 0,
-            }
-        }; 4096];
-        TileTypeAllocation {
-            base: BASE.as_ptr(),
-            extended: EXTENDED.as_ptr(),
-            count: 4096,
-            assertions: true,
+            })
+            .collect();
+        BASE.set(base.as_mut_ptr());
+        crate::map_func::fixture::set(
+            TileTypeAllocation {
+                base: base.as_ptr(),
+                extended: extended.as_ptr(),
+                count: u32::try_from(count).unwrap(),
+                assertions,
+            },
+            log_x,
+        );
+        LOG.with_borrow_mut(Vec::clear);
+        PROGRESS.set(0);
+        ABORT_AT.set(0);
+        RANDOM.set(0);
+        PLANTED_GROUND.set(None);
+        TestMap {
+            _base: base,
+            _extended: extended,
         }
+    }
+    fn edit(tile: u32, f: impl FnOnce(&mut BaseTileLayout)) {
+        // SAFETY: The installed test map; no other reference to the tile is live.
+        f(unsafe { &mut *BASE.get().add(tile as usize) });
+    }
+    fn byte(tile: u32, f: impl FnOnce(&BaseTileLayout) -> u8) -> u8 {
+        // SAFETY: As `edit`.
+        f(unsafe { &*BASE.get().add(tile as usize) })
+    }
+    fn set_type(b: &mut BaseTileLayout, kind: TileType) {
+        b.kind = (kind.0 << 4) | (b.kind & 0x0f);
+    }
+    fn clear(tile: u32, ground: ClearGround, density: u8) {
+        edit(tile, |b| {
+            set_type(b, TileType::MP_CLEAR);
+            b.m5 = (ground.0 << 2) | density;
+            b.m3 = 0;
+        });
+    }
+    fn tree(tile: u32, r#type: TreeType, count: u8, growth: TreeGrowthStage, ground: TreeGround) {
+        edit(tile, |b| {
+            set_type(b, TileType::MP_TREES);
+            b.m3 = r#type.0;
+            b.m2 = (u16::from(ground.0) << 6) | (3 << 4);
+            b.m5 = ((count - 1) << 6) | growth.0;
+        });
+    }
+    fn tree_ground(tile: u32) -> u8 {
+        byte(tile, |b| u8::try_from((b.m2 >> 6) & 7).unwrap())
+    }
+    fn growth(tile: u32) -> u8 {
+        byte(tile, |b| b.m5 & 7)
+    }
+
+    extern "C" fn random(_: *mut c_void) -> u32 {
+        log(Event::Draw);
+        RANDOM.get()
+    }
+    extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        0
+    }
+    extern "C" fn tile_type(tile: u32) -> u8 {
+        byte(tile, |b| b.kind >> 4)
+    }
+    extern "C" fn dirty(tile: u32) {
+        log(Event::Dirty(tile));
+    }
+    extern "C" fn set_zone(tile: u32, zone: u8) {
+        log(Event::Zone(tile, zone));
+    }
+    extern "C" fn make_shore(tile: u32) {
+        log(Event::Write("shore", tile));
+    }
+    extern "C" fn make_snow(tile: u32, _: u32) {
+        log(Event::Write("snow", tile));
     }
     extern "C" fn sound(_: u32, id: u16) {
         log(Event::Sound(id));
     }
+    extern "C" fn record_assert(ok: bool) {
+        if !ok {
+            log(Event::Assert);
+        }
+    }
+    extern "C" fn tick_counter() -> u64 {
+        0
+    }
+    extern "C" fn max_xy() -> u32 {
+        63
+    }
+    extern "C" fn current_company() -> u8 {
+        0
+    }
+    extern "C" fn company_valid(_: u8) -> bool {
+        COMPANY_VALID.get()
+    }
+    extern "C" fn company_finances(_: u8) -> *mut crate::company::Finances {
+        COMPANY.get()
+    }
+    extern "C" fn no_flag(_: u32) -> bool {
+        false
+    }
+    extern "C" fn not_generating() -> bool {
+        false
+    }
+    extern "C" fn clear_square(tile: u32, _: crate::services::ClearGroundType, _: u32) {
+        log(Event::Write("clear_square", tile));
+    }
+    extern "C" fn water_services() -> *const crate::water::WaterServices {
+        thread_local! { static WATER: crate::water::WaterServices = {
+            let mut water = crate::water::fixture();
+            water.clear = Box::leak(Box::new(crate::ground::ClearServices {
+                make_clear: clear_square,
+                ..crate::test_tables::CLEAR_GROUND
+            }));
+            water
+        }; }
+        WATER.with(std::ptr::from_ref)
+    }
+    extern "C" fn town_count() -> usize {
+        usize::from(!TOWN.get().is_null())
+    }
+    extern "C" fn town_next_id(from: u32) -> u32 {
+        if from == 0 && !TOWN.get().is_null() {
+            0
+        } else {
+            u32::MAX
+        }
+    }
+    extern "C" fn town_owner_by_id(_: u32) -> *mut crate::town::State {
+        TOWN.get()
+    }
+    extern "C" fn town_by_id(_: u32) -> *mut TownHandle {
+        std::ptr::without_provenance_mut(0x40)
+    }
+    extern "C" fn town_owner(_: *const TownHandle) -> *mut crate::town::State {
+        TOWN.get()
+    }
+    extern "C" fn town_index(_: *const TownHandle) -> u16 {
+        0
+    }
+    extern "C" fn bulldozer() -> bool {
+        false
+    }
+    extern "C" fn dirty_authority(town: u32) {
+        log(Event::Authority(town));
+    }
+
+    fn settings() -> &'static crate::settings_type::SettingAddresses {
+        Box::leak(Box::new(crate::settings_type::SettingAddresses {
+            climate: CLIMATE.with(Cell::as_ptr).cast_const(),
+            tree_placer: PLACER.with(Cell::as_ptr).cast_const(),
+            extra_tree_placement: EXTRA.with(Cell::as_ptr).cast_const(),
+            freeform_edges: FREEFORM.with(Cell::as_ptr).cast_const(),
+            height_limit: HEIGHT_LIMIT.with(Cell::as_ptr).cast_const(),
+            dist_local_authority: AUTHORITY.with(Cell::as_ptr).cast_const(),
+            ..crate::settings_type::SettingAddresses::NULL
+        }))
+    }
+    fn shared() -> &'static Services {
+        let fixture = crate::services::fixture(std::ptr::null_mut(), random, industry);
+        Box::leak(Box::new(Services {
+            settings: settings(),
+            snow_line_support: crate::snow_line::Support {
+                height: SNOW_LINE.with(Cell::as_ptr).cast_const(),
+                ..fixture.snow_line_support
+            },
+            movement: Box::leak(Box::new(crate::movement::MovementServices {
+                native_assert: record_assert,
+                ..crate::test_tables::MOVEMENT
+            })),
+            tile_type,
+            mark_dirty: dirty,
+            set_tropic_zone: set_zone,
+            make_shore,
+            make_snow,
+            play_sound: sound,
+            water_services,
+            tick_counter,
+            map_max_x: max_xy,
+            map_max_y: max_xy,
+            current_company,
+            company_valid,
+            town_count,
+            town_next_id,
+            town_owner_by_id,
+            town_by_id,
+            town_owner,
+            clear_square_services: crate::services::ClearSquareServices {
+                docking: no_flag,
+                generating_world: not_generating,
+            },
+            ..fixture
+        }))
+    }
+
+    extern "C" fn trig(value: f32) -> f32 {
+        value
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    extern "C" fn make_tree(tile: u32, r#type: u8, count: u32, growth: u8, ground: u8, density: u32) {
+        log(Event::Write("make_tree", tile));
+        let ground = PLANTED_GROUND.get().unwrap_or(ground);
+        edit(tile, |b| {
+            set_type(b, TileType::MP_TREES);
+            b.m2 = (u16::from(ground) << 6) | ((density as u16) << 4);
+            b.m3 = r#type;
+            b.m5 = ((count as u8) << 6) | growth;
+        });
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    extern "C" fn set_ground_density(tile: u32, ground: u8, density: u32) {
+        log(Event::Write("ground", tile));
+        edit(tile, |b| b.m2 = (b.m2 & !0x1f0) | (u16::from(ground) << 6) | ((density as u16) << 4));
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    extern "C" fn add_count(tile: u32, c: i32) {
+        log(Event::Write("count", tile));
+        edit(tile, |b| b.m5 = b.m5.wrapping_add(((c as u8) & 3) << 6));
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    extern "C" fn add_growth(tile: u32, a: i32) {
+        log(Event::Write("add_growth", tile));
+        edit(tile, |b| b.m5 = (b.m5 & !7) | (b.m5.wrapping_add(a as u8) & 7));
+    }
+    extern "C" fn set_growth(tile: u32, g: u8) {
+        log(Event::Write("set_growth", tile));
+        edit(tile, |b| b.m5 = (b.m5 & !7) | g);
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    extern "C" fn make_clear(tile: u32, g: u8, density: u32) {
+        log(Event::Write("clear", tile));
+        clear(tile, ClearGround(g), density as u8);
+    }
     extern "C" fn progress() -> bool {
         log(Event::Progress);
-        WORLD.with_borrow_mut(|w| {
-            w.progress += 1;
-            w.abort_at == Some(w.progress)
-        })
+        PROGRESS.set(PROGRESS.get() + 1);
+        PROGRESS.get() == ABORT_AT.get()
     }
     extern "C" fn progress_total(total: u32) -> bool {
         log(Event::Total(total));
-        WORLD.with_borrow_mut(|w| {
-            w.progress += 1;
-            w.abort_at == Some(w.progress)
-        })
+        PROGRESS.set(PROGRESS.get() + 1);
+        PROGRESS.get() == ABORT_AT.get()
     }
-    extern "C" fn clear_flag(_: u32) -> bool {
-        false
-    }
-    extern "C" fn clear_generation() -> bool {
-        false
-    }
-    extern "C" fn unused_clear1<A, R>(_: A) -> R {
-        panic!("unused clear leaf");
-    }
-    extern "C" fn unused_clear2<A, B, R>(_: A, _: B) -> R {
-        panic!("unused clear leaf");
-    }
-    extern "C" fn unused_clear3<A, B, C, R>(_: A, _: B, _: C) -> R {
-        panic!("unused clear leaf");
-    }
-    static CLEAR: crate::ground::ClearServices = crate::ground::ClearServices {
-        field_tile: unused_clear1,
-        density: unused_clear1,
-        counter: unused_clear1,
-        snow: unused_clear1,
-        surface: unused_clear1,
-        set_ground: unused_clear3,
-        set_density: unused_clear2,
-        set_counter: unused_clear2,
-        clear_snow: unused_clear1,
-        make_clear: clear_square,
-        fences: unused_clear1,
-        field: unused_clear1,
-        set_field: unused_clear2,
+    const STRINGS: Strings = Strings {
+        already_here: 101,
+        plant_limit: 102,
+        on_water: 103,
+        site_unsuitable: 104,
+        wrong_terrain: 105,
     };
-    extern "C" fn clear_square(_: u32, _: crate::services::ClearGroundType, _: u32) {
-        log(Event::Write("clear_square"));
+    fn services() -> &'static TreeServices {
+        Box::leak(Box::new(TreeServices {
+            sin: trig,
+            cos: trig,
+            make_tree,
+            set_ground_density,
+            add_count,
+            add_growth,
+            set_growth,
+            make_clear,
+            progress,
+            progress_total,
+            town: Box::leak(Box::new(crate::town::Leaves {
+                dirty_authority,
+                ..crate::test_tables::TOWN_LEAVES
+            })),
+            authority: Box::leak(Box::new(crate::town::AuthorityServices {
+                bulldozer,
+                town_index,
+                refusal: 0,
+            })),
+            strings: STRINGS,
+        }))
     }
-    extern "C" fn rating(_: u16, _: u32, up: bool) {
-        log(Event::Rating(up));
+    fn trees() -> Trees<'static> {
+        Trees {
+            t: services(),
+            s: shared(),
+        }
     }
-    extern "C" fn begin(_: *mut Command) -> i32 {
-        log(Event::Begin);
-        WORLD.with_borrow(|w| w.limit)
-    }
-    extern "C" fn debit(_: *mut Command) {
-        log(Event::Debit);
-    }
-    fn landscape_clear(_: *mut Command, _: u32) -> LandscapeClear {
-        log(Event::Clear);
-        WORLD.with_borrow_mut(|w| {
-            w.plant.ground = CLEAR_GRASS;
-            LandscapeClear {
-                cost: 7,
-                failed: w.clear_failed,
-            }
-        })
-    }
-    const SERVICES: TreeServices = TreeServices {
-        plant_observation,
-        tree_observation,
-        tree_count,
-        clear_observation,
 
-        sin: trig,
-        cos: trig,
-        make_tree,
-        set_ground_density,
-        add_count,
-        add_growth,
-        set_growth,
-        make_clear,
-        progress,
-        progress_total,
-        town_rating: rating,
-        command_begin: begin,
-        command_debit: debit,
-    };
-    fn with<R>(f: impl FnOnce(&Trees) -> R) -> R {
-        let shared = shared();
-        f(&Trees {
-            t: &SERVICES,
-            s: &shared,
-            map: None,
-        })
+    extern "C" fn error(_: *mut CommandCost, message: u32) {
+        log(Event::Error(message));
     }
-    const CLEAR_TILE: PlantObservation = PlantObservation {
-        tile_type: MP_CLEAR,
-        bridge: false,
-        ground: CLEAR_GRASS,
-        density: 3,
-        snow: false,
-        coast: false,
-        zone: ZONE_NORMAL,
-    };
-    const COMMAND: CommandSettings = CommandSettings {
-        build_price: 15,
-        size: 4096,
-        climate: 0,
-        editor: false,
-        execute: true,
-        company_valid: true,
-    };
-
-    #[test]
-    fn counter_full_byte_and_scale_domain() {
-        for scale in 1..=256 {
-            for old in 0..=u8::MAX {
-                let (next, wrapped) = decrement(old, scale);
-                assert_eq!(next, (u32::from(old).wrapping_sub(scale) & 255) as u8);
-                assert_eq!(wrapped, u32::from(old) < scale);
-            }
+    extern "C" fn expense_money(_: *mut CommandCost, expense: u8, money: i64) {
+        log(Event::Expense(expense, money));
+    }
+    fn commands(s: &'static Services) -> &'static CommandServices {
+        Box::leak(Box::new(CommandServices {
+            finance: Box::leak(Box::new(crate::company::FinanceServices {
+                current_company,
+                company_finances,
+                ..crate::test_tables::FINANCE
+            })),
+            cost: Box::leak(Box::new(crate::services::CommandCostServices {
+                error,
+                expense_money,
+                ..crate::test_tables::COMMAND_COSTS
+            })),
+            shared: s,
+            ..crate::test_tables::COMMANDS
+        }))
+    }
+    /// Run `CmdPlantTree` from `start_tile` to `tile`.
+    fn plant(c: &Trees<'static>, flags: u16, tile: u32, start_tile: u32, tree_to_plant: u8, diagonal: bool) {
+        let commands = commands(c.s);
+        let args = PlantTreeArgs {
+            tile,
+            start_tile,
+            tree_to_plant,
+            diagonal,
+        };
+        cmd_plant_tree(
+            c,
+            commands,
+            DoCommandFlags(flags),
+            &args,
+            Cost(std::ptr::null_mut(), commands.cost),
+        );
+    }
+    /// Set `_price[PR_BUILD_TREES]` and `_price[PR_CLEAR_TREES]` for the guarded test.
+    fn set_prices(build: i64, clear: i64) {
+        let prices = crate::company::openttd_rust_economy_prices();
+        // SAFETY: The process-wide price table, serialized by the global test lock.
+        unsafe {
+            *prices.add(PR_BUILD_TREES) = build;
+            *prices.add(PR_CLEAR_TREES) = clear;
+        }
+    }
+    /// Set `_game_mode`, returning the previous mode.
+    fn set_mode(mode: GameMode) -> GameMode {
+        // SAFETY: The canonical session state, serialized by the global test lock.
+        unsafe {
+            let state = crate::session::openttd_rust_session_storage();
+            std::mem::replace(&mut (*state).mode, mode)
+        }
+    }
+    fn finances(tree_limit: u32, clear_limit: u32) -> Box<crate::company::Finances> {
+        // SAFETY: Every field of the finance record is an integer or an array of integers.
+        let mut finances: Box<crate::company::Finances> = Box::new(unsafe { std::mem::zeroed() });
+        finances.tree = tree_limit;
+        finances.clear = clear_limit;
+        finances
+    }
+    fn loop_settings(climate: LandscapeType, extra: ExtraTreePlacement) -> LoopSettings {
+        LoopSettings {
+            tick_counter: 0,
+            size_x: 64,
+            climate,
+            extra,
+            ambient: true,
+            ambient_callback: false,
         }
     }
 
     #[test]
-    fn scale_and_wrap_follow_map_geometry() {
-        assert_eq!(scale_by_size(4096, 1000), 63);
-        assert_eq!(scale_by_size(65536, 1), 1);
-        assert_eq!(scale_by_size(4096 * 4096, 1), 256);
-        let shared = shared();
-        assert_eq!(tile_add_wrap(&shared, 65, -1, 0), INVALID_TILE);
-        assert_eq!(tile_add_wrap(&shared, 65, 1, 1), 130);
-        assert_eq!(tile_add_wrap(&shared, 65, 62, 0), INVALID_TILE);
+    fn counter_full_byte_and_scale_domain() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let counter = openttd_rust_tree_counter();
+        // SAFETY: The process-wide counter, serialized by the global test lock.
+        let saved = unsafe { counter.read() };
+        // 64x64 scales by 1 and 512x512 by 4.
+        for (log_x, scale) in [(6, 1_u32), (9, 4)] {
+            let _map = install(log_x, TileType::MP_CLEAR, true);
+            let w = World::new(shared());
+            for old in 0..=u8::MAX {
+                // SAFETY: As above.
+                unsafe { counter.write(old) };
+                let wrapped = decrement_tree_counter(&w);
+                // SAFETY: As above.
+                let next = unsafe { counter.read() };
+                assert_eq!(u32::from(next), (u32::from(old).wrapping_sub(scale)) & 255);
+                assert_eq!(wrapped, u32::from(old) < scale);
+            }
+        }
+        initialize_trees();
+        // SAFETY: As above.
+        assert_eq!(unsafe { counter.read() }, 0);
+        // SAFETY: As above.
+        unsafe { counter.write(saved) };
+    }
+
+    #[test]
+    fn tile_add_wrap_reads_freeform_edges() {
+        let _map = install(6, TileType::MP_CLEAR, true);
+        let w = World::new(shared());
+        assert_eq!(tile_add_wrap(&w, TileIndex(65), -1, 0), TileIndex::INVALID);
+        assert_eq!(tile_add_wrap(&w, TileIndex(65), 1, 1), TileIndex(130));
+        assert_eq!(tile_add_wrap(&w, TileIndex(65), 62, 0), TileIndex::INVALID);
         FREEFORM.set(false);
-        assert_eq!(tile_add_wrap(&shared, 65, -1, 0), 64);
+        assert_eq!(tile_add_wrap(&w, TileIndex(65), -1, 0), TileIndex(64));
         FREEFORM.set(true);
+    }
+
+    #[test]
+    fn tree_tables_match_the_original() {
+        // table/tree_land.h
+        assert_eq!(TREE_BASE_BY_LANDSCAPE, [0, 12, 20, 32]);
+        assert_eq!(TREE_COUNT_BY_LANDSCAPE, [12, 8, 12, 9]);
+        // tree_map.h
+        assert_eq!(
+            [
+                TREE_COUNT_TEMPERATE,
+                TREE_COUNT_SUB_ARCTIC,
+                TREE_COUNT_RAINFOREST,
+                TREE_COUNT_SUB_TROPICAL,
+                TREE_COUNT_TOYLAND
+            ],
+            [12, 8, 7, 4, 9]
+        );
+        // town_type.h
+        assert_eq!(
+            [
+                crate::town_type::RATING_TREE_DOWN_STEP,
+                crate::town_type::RATING_TREE_MINIMUM,
+                crate::town_type::RATING_TREE_UP_STEP,
+                crate::town_type::RATING_TREE_MAXIMUM
+            ],
+            [-35, -1000, 7, 220]
+        );
+        // IsInsideBS over each landscape's window.
+        assert!(is_inside_bs(20, 20, 12) && is_inside_bs(31, 20, 12));
+        assert!(!is_inside_bs(19, 20, 12) && !is_inside_bs(32, 20, 12));
     }
 
     // Headless semantic scenarios cannot click Abort during map generation. The
     // aborting progress call is the last service: no draw, read or write follows it.
     #[test]
-    #[allow(clippy::redundant_closure_for_method_calls)] // `Trees::generate` is not lifetime-general.
     fn generation_abort_returns_at_the_progress_call() {
-        reset(World {
-            abort_at: Some(1),
-            ..World::default()
-        });
-        assert!(with(|t| t.place_randomly()));
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode(1));
+        let _map = install(6, TileType::MP_TREES, true);
+        ABORT_AT.set(1);
+        assert!(place_trees_randomly(&trees()));
         assert_eq!(events(), [Event::Draw, Event::Progress]);
 
-        reset(World {
-            abort_at: Some(1),
-            ..World::default()
-        });
-        assert!(with(|t| t.generate()));
+        PROGRESS.set(0);
+        assert!(generate_trees(&trees()));
         assert_eq!(events(), [Event::Draw, Event::Total(6 * 63 + 2 * 1000)]);
 
-        reset(World {
-            abort_at: Some(2),
-            ..World::default()
-        });
-        assert!(with(|t| t.generate()));
+        PROGRESS.set(0);
+        ABORT_AT.set(2);
+        assert!(generate_trees(&trees()));
         let mut expected = vec![Event::Draw, Event::Total(6 * 63 + 2 * 1000)];
         expected.extend([Event::Draw; 5]); // Centre and four phases.
         expected.push(Event::Progress);
         assert_eq!(events(), expected);
 
-        reset(World {
-            abort_at: Some(3),
-            plant: PlantObservation {
-                tile_type: MP_TREES,
-                ..CLEAR_TILE
-            },
-            ..World::default()
-        });
-        assert!(with(|t| t.place_randomly()));
-        let attempt = [Event::Draw, Event::Progress, Event::Plant];
-        let mut expected = [attempt, attempt].concat();
-        expected.extend([Event::Draw, Event::Progress]);
-        assert_eq!(events(), expected);
+        // Tree tiles are unsuitable: each attempt draws and reports progress only.
+        PROGRESS.set(0);
+        ABORT_AT.set(3);
+        assert!(place_trees_randomly(&trees()));
+        assert_eq!(events(), [Event::Draw, Event::Progress].repeat(3));
+        set_mode(saved);
     }
 
     #[test]
-    fn quiet_temperate_tile_reads_once_and_never_reads_height() {
-        reset(World {
-            tree: TreeObservation {
-                growth: GROWN,
-                count: 1,
-                density: 3,
-                ..TreeObservation::default()
-            },
-            ..World::default()
-        });
-        let s = LoopSettings {
-            tick_counter: 0,
-            size_x: 64,
-            climate: 0,
-            extra: ETP_SPREAD_ALL,
-            ambient: true,
-            ambient_callback: false,
-        };
-        with(|t| t.tile_loop(0, &s, std::ptr::null_mut()));
-        assert_eq!(events(), [Event::Tree]);
+    fn quiet_temperate_tile_calls_no_service() {
+        let _map = install(6, TileType::MP_CLEAR, true);
+        tree(0, TreeType(0), 1, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+        let c = trees();
+        let s = loop_settings(LandscapeType::Temperate, ExtraTreePlacement::ETP_SPREAD_ALL);
+        tile_loop_trees(&c, &World::new(c.s).types, TileIndex(0), &s, std::ptr::null_mut());
+        assert_eq!(events(), []);
     }
 
     #[test]
-    fn water_rereads_the_tile_without_normalizing_bitpattern_seven() {
+    fn growth_bitpattern_seven_takes_the_default_arm() {
+        let _map = install(6, TileType::MP_CLEAR, true);
+        tree(2, TreeType(0), 1, TreeGrowthStage(7), TreeGround::TREE_GROUND_GRASS);
+        let c = trees();
         let s = LoopSettings {
             tick_counter: 2304, // Tile 2: cycle 31.
-            size_x: 64,
-            climate: 0,
-            extra: ETP_NO_SPREAD,
-            ambient: false,
-            ambient_callback: false,
+            ..loop_settings(LandscapeType::Temperate, ExtraTreePlacement::ETP_NO_SPREAD)
         };
-        let tree = TreeObservation {
-            ground: GROUND_GRASS,
-            density: 3,
-            count: 1,
-            growth: 7,
-            ..TreeObservation::default()
-        };
-        reset(World {
-            tree,
-            ..World::default()
-        });
-        with(|t| t.tile_loop(2, &s, std::ptr::null_mut()));
-        assert_eq!(
-            events(),
-            [
-                Event::Tree,
-                Event::Tree,
-                Event::Tree,
-                Event::Tree,
-                Event::Write("add_growth"),
-                Event::Dirty
-            ]
-        );
-        reset(World {
-            tree: TreeObservation {
-                ground: GROUND_SHORE,
-                ..tree
-            },
-            ..World::default()
-        });
-        with(|t| t.tile_loop(2, &s, std::ptr::null_mut()));
-        assert_eq!(
-            events(),
-            [
-                Event::Tree,
-                Event::Tree,
-                Event::Tree,
-                Event::Write("add_growth"),
-                Event::Dirty
-            ]
-        );
+        tile_loop_trees(&c, &World::new(c.s).types, TileIndex(2), &s, std::ptr::null_mut());
+        assert_eq!(events(), [Event::Write("add_growth", 2), Event::Dirty(2)]);
+        assert_eq!(growth(2), 0);
     }
 
     #[test]
     fn arctic_loop_uses_configured_snow_line() {
-        reset(World {
-            tree: TreeObservation {
-                ground: GROUND_SNOW_DESERT,
-                density: 3,
-                growth: GROWING1,
-                count: 1,
-                ..TreeObservation::default()
-            },
-            random: 0x8000_0000,
-            ..World::default()
-        });
-        let s = LoopSettings {
-            tick_counter: 0,
-            size_x: 64,
-            climate: ARCTIC,
-            extra: ETP_SPREAD_ALL,
-            ambient: true,
-            ambient_callback: false,
-        };
-        with(|t| t.tile_loop(0, &s, std::ptr::null_mut()));
+        let _map = install(6, TileType::MP_CLEAR, true);
+        for tile in 0..4096 {
+            edit(tile, |b| b.height = 8);
+        }
+        tree(65, TreeType(12), 1, TreeGrowthStage::Growing1, TreeGround::TREE_GROUND_SNOW_DESERT);
+        RANDOM.set(0x8000_0000);
+        let c = trees();
+        let s = loop_settings(LandscapeType::Arctic, ExtraTreePlacement::ETP_SPREAD_ALL);
+        // Height 8 above snow line 4 is full density: the snow sound is the only effect.
+        tile_loop_trees(&c, &World::new(c.s).types, TileIndex(65), &s, std::ptr::null_mut());
         assert_eq!(
             events(),
-            [
-                Event::Tree,
-                Event::TileZ,
-                Event::Tree,
-                Event::Tree,
-                Event::Draw,
-                Event::Sound(ARCTIC_SNOW_2)
-            ]
+            [Event::Draw, Event::Sound(u16::from(SoundFx::SND_39_ARCTIC_SNOW_2.0))]
         );
+        // Below the snow line, snow turns back into grass.
+        SNOW_LINE.set(10);
+        tile_loop_trees(&c, &World::new(c.s).types, TileIndex(65), &s, std::ptr::null_mut());
+        assert_eq!(events(), [Event::Write("ground", 65), Event::Dirty(65)]);
+        assert_eq!(tree_ground(65), TreeGround::TREE_GROUND_GRASS.0);
+        SNOW_LINE.set(4);
     }
 
     // Script APIs cannot request explicit tree types, diagonal rectangles, or editor
-    // planting. These tests cover those source branches and full Money bounds;
-    // end-to-end command evidence remains the unchanged reference harness.
+    // planting. These tests cover those source branches; end-to-end command evidence is
+    // the simulation harness.
     #[test]
     fn explicit_editor_planting_and_diagonal_iterator_request() {
-        reset(World {
-            plant: PlantObservation {
-                zone: ZONE_NORMAL,
-                ..CLEAR_TILE
-            },
-            limit: i32::MAX,
-            ..World::default()
-        });
-        let s = CommandSettings {
-            climate: TROPIC,
-            editor: true,
-            ..COMMAND
-        };
-        let result = with(|t| {
-            t.plant_command(std::ptr::null_mut(), 2, 1, 20, true, &s, 0, |tile| {
-                landscape_clear(std::ptr::null_mut(), tile)
-            })
-        });
-        assert_eq!((result.status, result.message, result.cost), (0, 0, 30));
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode::GM_EDITOR);
+        set_prices(15, 0);
+        let _map = install(6, TileType::MP_VOID, true);
+        clear(1, ClearGround::CLEAR_GRASS, 3);
+        clear(2, ClearGround::CLEAR_GRASS, 3);
+        CLIMATE.set(LandscapeType::Tropic.0);
+        // The diagonal from corner 2 to corner 1 starts at 2; the orthogonal area would
+        // start at 1.
+        plant(&trees(), DoCommandFlag::EXECUTE, 2, 1, 20, true);
+        let rainforest = TropicZone::TROPICZONE_RAINFOREST.0;
         assert_eq!(
             events(),
             [
-                Event::Begin,
-                Event::Plant,
-                Event::Plant,
-                Event::Write("make_tree"),
-                Event::Dirty,
-                Event::Debit,
-                Event::Zone(ZONE_RAINFOREST),
-                Event::Plant,
-                Event::Plant,
-                Event::Write("make_tree"),
-                Event::Dirty,
-                Event::Debit,
-                Event::Zone(ZONE_RAINFOREST),
+                Event::Write("make_tree", 2),
+                Event::Dirty(2),
+                Event::Zone(2, rainforest),
+                Event::Write("make_tree", 1),
+                Event::Dirty(1),
+                Event::Zone(1, rainforest),
+                Event::Expense(ExpensesType::EXPENSES_OTHER.0, 30),
             ]
         );
-        // The diagonal from corner 2 to corner 1 starts at 2; the orthogonal area would start at 1.
-        assert_eq!(WORLD.with_borrow(|w| w.visited.clone()), [2, 2, 1, 1]);
-        assert_eq!(WORLD.with_borrow(|w| w.tree.growth), GROWN);
+        // Full grown trees in the scenario editor.
+        assert_eq!(growth(1), TreeGrowthStage::Grown.0);
+        CLIMATE.set(0);
+        set_mode(saved);
     }
 
     #[test]
     fn explicit_tree_type_checks_and_wrong_tropical_zone() {
-        reset(World {
-            plant: CLEAR_TILE,
-            limit: i32::MAX,
-            ..World::default()
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode(1));
+        let _map = install(6, TileType::MP_VOID, true);
+        clear(1, ClearGround::CLEAR_GRASS, 3);
+        // Rainforest is outside the temperate range.
+        plant(&trees(), 0, 1, 1, 20, false);
+        // Start tile outside the map.
+        plant(&trees(), 0, 2, 4096, 255, false);
+        CLIMATE.set(LandscapeType::Tropic.0);
+        plant(&trees(), 0, 1, 1, 20, false);
+        assert_eq!(
+            events(),
+            [
+                Event::Error(StringID::INVALID_STRING_ID.0),
+                Event::Error(StringID::INVALID_STRING_ID.0),
+                Event::Error(STRINGS.wrong_terrain),
+            ]
+        );
+        CLIMATE.set(0);
+        set_mode(saved);
+    }
+
+    #[test]
+    fn non_coast_water_reports_water_before_bridge_and_zone() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode(1));
+        let _map = install(6, TileType::MP_VOID, true);
+        // Plain water under a bridge, in the desert, for a rainforest tree.
+        edit(1, |b| {
+            b.kind = (TileType::MP_WATER.0 << 4) | 0x04 | TropicZone::TROPICZONE_DESERT.0;
         });
-        let result = with(|t| {
-            t.plant_command(std::ptr::null_mut(), 1, 1, 20, false, &COMMAND, 0, |tile| {
-                landscape_clear(std::ptr::null_mut(), tile)
-            })
-        });
-        assert_eq!(result.status, 1); // Rainforest is outside the temperate range.
-        let result = with(|t| {
-            t.plant_command(
-                std::ptr::null_mut(),
-                2,
-                4096,
-                255,
-                false,
-                &COMMAND,
-                0,
-                |tile| landscape_clear(std::ptr::null_mut(), tile),
-            )
-        });
-        assert_eq!(result.status, 1); // Start tile outside the map.
-        assert_eq!(events(), []);
-        let s = CommandSettings {
-            climate: TROPIC,
-            ..COMMAND
-        };
-        let result = with(|t| {
-            t.plant_command(std::ptr::null_mut(), 1, 1, 20, false, &s, 0, |tile| {
-                landscape_clear(std::ptr::null_mut(), tile)
-            })
-        });
-        assert_eq!((result.status, result.cost, result.message), (0, 0, 5));
+        CLIMATE.set(LandscapeType::Tropic.0);
+        plant(&trees(), 0, 1, 1, 20, false);
+        assert_eq!(events(), [Event::Error(STRINGS.on_water)]);
+        CLIMATE.set(0);
+        set_mode(saved);
     }
 
     #[test]
     fn exhausted_limit_checks_zero_and_negative_separately() {
-        reset(World {
-            plant: CLEAR_TILE,
-            limit: 1,
-            ..World::default()
-        });
-        let result = with(|t| {
-            t.plant_command(
-                std::ptr::null_mut(),
-                5,
-                1,
-                255,
-                false,
-                &COMMAND,
-                0,
-                |tile| landscape_clear(std::ptr::null_mut(), tile),
-            )
-        });
-        assert_eq!((result.status, result.cost, result.message), (0, 0, 2));
-        assert_eq!(events(), [Event::Begin, Event::Plant, Event::Plant]);
-        assert_eq!(WORLD.with_borrow(|w| w.visited.clone()), [1, 2]);
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode(1));
+        let _map = install(6, TileType::MP_VOID, true);
+        let mut company = finances(1 << 16, 0);
+        COMPANY.set(&raw mut *company);
+        clear(1, ClearGround::CLEAR_GRASS, 3);
+        tree(2, TreeType(0), 4, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+        clear(3, ClearGround::CLEAR_GRASS, 3);
+        tree(4, TreeType(0), 4, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+        // A limit of zero is reached but not exceeded: tile 2 is still visited.
+        plant(&trees(), 0, 2, 1, 255, false);
+        assert_eq!(events(), [Event::Error(STRINGS.already_here)]);
+        // A negative limit stops before tile 4.
+        plant(&trees(), 0, 4, 1, 255, false);
+        assert_eq!(events(), [Event::Error(STRINGS.plant_limit)]);
+        COMPANY.set(std::ptr::null_mut());
+        set_mode(saved);
     }
 
     #[test]
-    fn nested_clear_failure_and_fields_replant_from_a_fresh_record() {
-        reset(World {
-            plant: PlantObservation {
-                ground: CLEAR_FIELDS,
-                ..CLEAR_TILE
-            },
-            limit: i32::MAX,
-            clear_failed: true,
-            ..World::default()
-        });
-        let result = with(|t| {
-            t.plant_command(std::ptr::null_mut(), 1, 1, 3, false, &COMMAND, 0, |tile| {
-                landscape_clear(std::ptr::null_mut(), tile)
-            })
-        });
-        assert_eq!(result.status, 2);
-        reset(World {
-            plant: PlantObservation {
-                ground: CLEAR_FIELDS,
-                ..CLEAR_TILE
-            },
-            limit: i32::MAX,
-            ..World::default()
-        });
-        let result = with(|t| {
-            t.plant_command(
-                std::ptr::null_mut(),
-                1,
-                1,
-                255,
-                false,
-                &COMMAND,
-                0,
-                |tile| landscape_clear(std::ptr::null_mut(), tile),
-            )
-        });
-        assert_eq!((result.status, result.cost), (0, 22));
+    fn tree_limit_is_debited_per_planted_tile_under_execute() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode(1));
+        set_prices(15, 0);
+        let _map = install(6, TileType::MP_VOID, true);
+        for tile in 1..=3 {
+            clear(tile, ClearGround::CLEAR_GRASS, 3);
+        }
+        // `--limit < 1` leaves a limit of 3 room for two plantings.
+        let mut company = finances(3 << 16, 0);
+        COMPANY.set(&raw mut *company);
+        plant(&trees(), 0, 3, 1, 0, false);
+        assert_eq!(
+            events(),
+            [Event::Expense(ExpensesType::EXPENSES_OTHER.0, 30)]
+        );
+        assert_eq!(company.tree, 3 << 16);
+        plant(&trees(), DoCommandFlag::EXECUTE, 3, 1, 0, false);
         assert_eq!(
             events(),
             [
-                Event::Begin,
-                Event::Plant,
-                Event::Clear,
-                Event::Rating(true),
-                Event::Draw,
-                Event::Plant,
-                Event::Write("make_tree"),
-                Event::Dirty,
-                Event::Debit,
+                Event::Write("make_tree", 1),
+                Event::Dirty(1),
+                Event::Write("make_tree", 2),
+                Event::Dirty(2),
+                Event::Expense(ExpensesType::EXPENSES_OTHER.0, 30),
             ]
         );
-        // The fresh record saw the cleared grass ground.
-        assert_eq!(WORLD.with_borrow(|w| w.tree.ground), GROUND_GRASS);
+        assert_eq!(company.tree, 1 << 16);
+        plant(&trees(), DoCommandFlag::EXECUTE, 3, 3, 0, false);
+        assert_eq!(events(), [Event::Error(STRINGS.plant_limit)]);
+        COMPANY.set(std::ptr::null_mut());
+        set_mode(saved);
+    }
+
+    #[test]
+    fn failed_nested_clear_is_the_result_and_debits_nothing() {
+        extern "C" fn landscape() -> *const crate::landscape_cmd::LandscapeServices {
+            thread_local! { static LANDSCAPE: crate::landscape_cmd::LandscapeServices =
+                crate::landscape_cmd::LandscapeServices {
+                    shared: shared(),
+                    costs: Box::leak(Box::new(crate::services::CommandCostServices {
+                        error,
+                        expense_money,
+                        success,
+                        ..crate::test_tables::COMMAND_COSTS
+                    })),
+                    commands: COMMANDS.get(),
+                    strings: crate::landscape_cmd::Strings {
+                        clear_limit: 201,
+                        ..crate::test_tables::LANDSCAPE.strings
+                    },
+                    ..crate::test_tables::LANDSCAPE
+                };
+            }
+            LANDSCAPE.with(std::ptr::from_ref)
+        }
+        extern "C" fn success(_: *const CommandCost) -> bool {
+            !LOG.with_borrow(|l| l.iter().any(|e| matches!(e, Event::Error(_))))
+        }
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode(1));
+        let _map = install(6, TileType::MP_VOID, true);
+        clear(1, ClearGround::CLEAR_FIELDS, 3);
+        // The tree limit allows planting; the clear limit fails the nested clear.
+        let mut company = finances(5 << 16, 0);
+        COMPANY.set(&raw mut *company);
+        let c = trees();
+        let commands: &'static CommandServices = Box::leak(Box::new(CommandServices {
+            landscape_commands: landscape,
+            cost: Box::leak(Box::new(crate::services::CommandCostServices {
+                error,
+                expense_money,
+                success,
+                ..crate::test_tables::COMMAND_COSTS
+            })),
+            ..*commands(c.s)
+        }));
+        COMMANDS.set(commands);
+        let args = PlantTreeArgs {
+            tile: 1,
+            start_tile: 1,
+            tree_to_plant: 255,
+            diagonal: false,
+        };
+        cmd_plant_tree(
+            &c,
+            commands,
+            DoCommandFlags(DoCommandFlag::EXECUTE),
+            &args,
+            Cost(std::ptr::null_mut(), commands.cost),
+        );
+        // The clear's own cost reset, then its error: nothing follows it.
+        assert_eq!(
+            events(),
+            [
+                Event::Expense(crate::economy_type::EXPENSES_CONSTRUCTION, 0),
+                Event::Error(201)
+            ]
+        );
+        assert_eq!(company.tree, 5 << 16);
+        COMPANY.set(std::ptr::null_mut());
+        set_mode(saved);
+    }
+
+    #[test]
+    fn town_rating_steps_and_limits_of_planting_and_clearing() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode(1));
+        set_prices(15, 4);
+        let _map = install(6, TileType::MP_VOID, true);
+        let mut town = Box::new(crate::town::State::default());
+        town.simulation.xy = 65;
+        TOWN.set(&raw mut *town);
+        COMPANY_VALID.set(true);
+        let c = trees();
+        crate::town::spatial::rebuild_town_kdtree(c.s);
+        clear(66, ClearGround::CLEAR_GRASS, 3);
+        // RATING_TREE_UP_STEP, up to RATING_TREE_MAXIMUM.
+        town.simulation.ratings[0] = 210;
+        plant(&c, 0, 66, 66, 255, false);
+        assert_eq!(town.simulation.ratings[0], 217);
+        plant(&c, 0, 66, 66, 255, false);
+        assert_eq!(town.simulation.ratings[0], 220);
+        // RATING_TREE_DOWN_STEP, down to RATING_TREE_MINIMUM.
+        tree(67, TreeType(20), 2, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+        town.simulation.ratings[0] = -960;
+        // Two rainforest trees cost four times each.
+        assert_eq!(clear_tile_trees(&c, TileIndex(67), DoCommandFlags(0)), 2 * 4 * 4);
+        assert_eq!(town.simulation.ratings[0], -995);
+        clear_tile_trees(&c, TileIndex(67), DoCommandFlags(0));
+        assert_eq!(town.simulation.ratings[0], -1000);
+        let log = events();
+        assert_eq!(log.iter().filter(|e| **e == Event::Authority(0)).count(), 4);
+        TOWN.set(std::ptr::null_mut());
+        COMPANY_VALID.set(false);
+        crate::town::spatial::rebuild_town_kdtree(c.s);
+        set_mode(saved);
     }
 
     #[test]
     fn money_extremes_keep_original_saturation_order() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode(1));
+        let _map = install(6, TileType::MP_VOID, true);
         for price in [i64::MIN, i64::MAX] {
-            reset(World {
-                plant: PlantObservation {
-                    tile_type: MP_TREES,
-                    ..CLEAR_TILE
-                },
-                tree: TreeObservation {
-                    count: 1,
-                    species: 20,
-                    ..TreeObservation::default()
-                },
-                limit: i32::MAX,
-                ..World::default()
-            });
-            let s = CommandSettings {
-                build_price: price,
-                execute: false,
-                ..COMMAND
-            };
-            let result = with(|t| {
-                t.plant_command(std::ptr::null_mut(), 3, 1, 255, false, &s, 0, |tile| {
-                    landscape_clear(std::ptr::null_mut(), tile)
-                })
-            });
-            assert_eq!(result.cost, price);
-            assert_eq!(events().iter().filter(|e| **e == Event::Count).count(), 3);
-            assert!(!events().contains(&Event::Tree));
-            WORLD.with_borrow_mut(|w| w.tree.count = 4);
-            // SAFETY: The test table is a live constant.
-            let shared = shared();
-            let cost = unsafe {
-                openttd_rust_trees_clear_tile(1, 1, price, true, &SERVICES, &raw const shared)
-            };
+            set_prices(price, price);
+            for tile in 1..=3 {
+                tree(tile, TreeType(20), 1, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+            }
+            plant(&trees(), 0, 3, 1, 255, false);
+            assert_eq!(
+                events(),
+                [Event::Expense(ExpensesType::EXPENSES_OTHER.0, price)]
+            );
+            tree(1, TreeType(20), 4, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+            let cost = clear_tile_trees(&trees(), TileIndex(1), DoCommandFlags(DoCommandFlag::EXECUTE));
             assert_eq!(cost, price);
+            assert_eq!(
+                events(),
+                [Event::Write("clear_square", 1), Event::Dirty(1)]
+            );
         }
-        let log = events();
+        set_mode(saved);
+    }
+
+    #[test]
+    fn planting_an_unsuitable_tile_asserts_once_where_the_build_asserts() {
+        for assertions in [true, false] {
+            let _map = install(6, TileType::MP_VOID, assertions);
+            clear(1, ClearGround::CLEAR_FIELDS, 2);
+            let c = trees();
+            let w = World::new(c.s);
+            plant_trees_on_tile(&c, &w, TileIndex(1), TreeType(0), 0, TreeGrowthStage::Growing1);
+            let mut expected = vec![Event::Write("make_tree", 1)];
+            if assertions {
+                expected.insert(0, Event::Assert);
+            }
+            assert_eq!(events(), expected);
+            // Fields are neither grass nor rough: snow-or-desert ground keeps the density.
+            assert_eq!(tree_ground(1), TreeGround::TREE_GROUND_SNOW_DESERT.0);
+        }
+    }
+
+    /// Run `body` in a child test process whose `NOT_REACHED` exits with status 73, and
+    /// check that it does.
+    fn takes_native_unreachable(name: &str, body: fn()) {
+        const CHILD: &str = "OPENTTD_TREES_UNREACHABLE_CHILD";
+        extern "C" fn exit_not_reached() {
+            std::process::exit(73);
+        }
+        if std::env::var(CHILD).ok().as_deref() == Some(name) {
+            let shared: &'static Services = Box::leak(Box::new(Services {
+                not_reached: exit_not_reached,
+                ..*shared()
+            }));
+            // SAFETY: The leaked table lives for the child process.
+            unsafe { crate::services_assert::openttd_rust_assert_bind(record_assert, shared) };
+            body();
+            std::process::exit(0);
+        }
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", name])
+            .env(CHILD, name)
+            .status()
+            .unwrap();
+        assert_eq!(status.code(), Some(73), "{name}");
+    }
+
+    #[test]
+    fn planting_a_tile_of_another_type_is_not_reached() {
+        takes_native_unreachable(
+            "trees::tests::planting_a_tile_of_another_type_is_not_reached",
+            || {
+                let _map = install(6, TileType::MP_TREES, true);
+                let c = trees();
+                let w = World::new(c.s);
+                plant_trees_on_tile(&c, &w, TileIndex(1), TreeType(0), 0, TreeGrowthStage::Growing1);
+            },
+        );
+    }
+
+    #[test]
+    fn an_unknown_tree_placer_is_not_reached() {
+        takes_native_unreachable("trees::tests::an_unknown_tree_placer_is_not_reached", || {
+            let _map = install(6, TileType::MP_TREES, true);
+            PLACER.set(3);
+            generate_trees(&trees());
+        });
+    }
+
+    #[test]
+    fn place_tree_rerandomizes_from_the_ground_read_back() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let saved = set_mode(GameMode(1));
+        let _map = install(6, TileType::MP_VOID, true);
+        let c = trees();
+        // Seed 0 plants temperate type 0; bit 28 chooses rough ground.
+        let r = 1 << 28;
+        clear(1, ClearGround::CLEAR_GRASS, 3);
+        place_tree(&c, &World::new(c.s), TileIndex(1), r, false);
         assert_eq!(
-            &log[log.len() - 4..],
+            events(),
             [
-                Event::Rating(false),
-                Event::ClearTree,
-                Event::Write("clear_square"),
-                Event::Dirty
+                Event::Write("make_tree", 1),
+                Event::Dirty(1),
+                Event::Write("ground", 1)
             ]
         );
+        assert_eq!(tree_ground(1), TreeGround::TREE_GROUND_ROUGH.0);
+        // A grass tile whose planted ground reads back as shore keeps it.
+        clear(1, ClearGround::CLEAR_GRASS, 3);
+        PLANTED_GROUND.set(Some(TreeGround::TREE_GROUND_SHORE.0));
+        place_tree(&c, &World::new(c.s), TileIndex(1), r, false);
+        assert_eq!(events(), [Event::Write("make_tree", 1), Event::Dirty(1)]);
+        set_mode(saved);
     }
 }

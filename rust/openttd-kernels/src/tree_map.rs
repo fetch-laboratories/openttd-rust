@@ -64,18 +64,25 @@ impl TreeGrowthStage {
     pub const Dead: Self = Self(6);
 }
 
-/// `TREE_COUNT_TOYLAND`: number of tree types on a toyland map.
-pub(crate) const TREE_COUNT_TOYLAND: u8 = 9;
-/// `TREE_GROUND_GRASS`, as a base value.
-pub(crate) const TREE_GROUND_GRASS: u8 = TreeGround::TREE_GROUND_GRASS.0;
-/// `TREE_GROUND_ROUGH`, as a base value.
-pub(crate) const TREE_GROUND_ROUGH: u8 = TreeGround::TREE_GROUND_ROUGH.0;
-/// `TREE_GROUND_SNOW_DESERT`, as a base value.
-pub(crate) const TREE_GROUND_SNOW_DESERT: u8 = TreeGround::TREE_GROUND_SNOW_DESERT.0;
-/// `TREE_GROUND_ROUGH_SNOW`, as a base value.
-pub(crate) const TREE_GROUND_ROUGH_SNOW: u8 = TreeGround::TREE_GROUND_ROUGH_SNOW.0;
-/// `TREE_GROUND_SHORE`.
-pub(crate) const TREE_GROUND_SHORE: u8 = TreeGround::TREE_GROUND_SHORE.0;
+/// Number of tree types on a temperate map (`TREE_COUNT_TEMPERATE`).
+#[allow(clippy::cast_lossless, reason = "`u32::from` is not const")]
+pub(crate) const TREE_COUNT_TEMPERATE: u32 =
+    TreeType::TREE_SUB_ARCTIC.0 as u32 - TreeType::TREE_TEMPERATE.0 as u32;
+/// Number of tree types on a sub arctic map (`TREE_COUNT_SUB_ARCTIC`).
+#[allow(clippy::cast_lossless, reason = "`u32::from` is not const")]
+pub(crate) const TREE_COUNT_SUB_ARCTIC: u32 =
+    TreeType::TREE_RAINFOREST.0 as u32 - TreeType::TREE_SUB_ARCTIC.0 as u32;
+/// Number of tree types for the 'rainforest part' of a sub-tropic map (`TREE_COUNT_RAINFOREST`).
+#[allow(clippy::cast_lossless, reason = "`u32::from` is not const")]
+pub(crate) const TREE_COUNT_RAINFOREST: u32 =
+    TreeType::TREE_CACTUS.0 as u32 - TreeType::TREE_RAINFOREST.0 as u32;
+/// Number of tree types for the 'sub-tropic part' of a sub-tropic map
+/// (`TREE_COUNT_SUB_TROPICAL`).
+#[allow(clippy::cast_lossless, reason = "`u32::from` is not const")]
+pub(crate) const TREE_COUNT_SUB_TROPICAL: u32 =
+    TreeType::TREE_TOYLAND.0 as u32 - TreeType::TREE_SUB_TROPICAL.0 as u32;
+/// Number of tree types on a toyland map (`TREE_COUNT_TOYLAND`).
+pub(crate) const TREE_COUNT_TOYLAND: u32 = 9;
 
 /// `GetTreeType`: returns the treetype of a tile.
 ///
@@ -120,30 +127,10 @@ pub(crate) fn get_tree_growth(m: &TileTypeAccess, t: TileIndex) -> Option<TreeGr
     Some(TreeGrowthStage(fields.m5() & 7))
 }
 
-/// Raw adapter: `GetTreeType` over base values, for files no pass has finished yet.
-#[inline]
-pub(crate) fn get_tree_type_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    get_tree_type(m, TileIndex(t)).map(|v| v.0)
-}
-/// Raw adapter: `GetTreeGround` over base values.
+/// Raw adapter: `GetTreeGround` over base values, for files no pass has finished yet.
 #[inline]
 pub(crate) fn get_tree_ground_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
     get_tree_ground(m, TileIndex(t)).map(|v| v.0)
-}
-/// Raw adapter: `GetTreeDensity` over a base tile.
-#[inline]
-pub(crate) fn get_tree_density_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    get_tree_density(m, TileIndex(t))
-}
-/// Raw adapter: `GetTreeCount` over a base tile.
-#[inline]
-pub(crate) fn get_tree_count_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    get_tree_count(m, TileIndex(t))
-}
-/// Raw adapter: `GetTreeGrowth` over base values.
-#[inline]
-pub(crate) fn get_tree_growth_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    get_tree_growth(m, TileIndex(t)).map(|v| v.0)
 }
 
 /// Native `TreeGround` representation; every byte pattern is retained.

@@ -450,8 +450,8 @@ mod comparison_tests {
         let settings = trees::LoopSettings {
             tick_counter: tick,
             size_x: 1 << log_x,
-            climate: 0,
-            extra: 0,
+            climate: crate::landscape_type::LandscapeType::Temperate,
+            extra: trees::ExtraTreePlacement::ETP_NO_SPREAD,
             ambient: false,
             ambient_callback: false,
         };

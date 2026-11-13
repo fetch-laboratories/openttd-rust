@@ -549,9 +549,6 @@
     "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop_town | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/trees.rs | impl Trees < ' _ >::fn plant_command | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
-    ],
     "rust/openttd-kernels/src/tunnelbridge_cmd.rs | impl < ' a > World < ' a >::fn allow_remove | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],

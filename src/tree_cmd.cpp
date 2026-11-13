@@ -31,32 +31,23 @@
 #include "table/tree_land.h"
 #include "table/clear_land.h"
 
-#include "rust/services_landscape.h"
-
-#include "safeguards.h"
-
-/** Where to place trees while in-game? */
-enum ExtraTreePlacement : uint8_t {
-	ETP_NO_SPREAD,           ///< Grow trees on tiles that have them but don't spread to new ones
-	ETP_SPREAD_RAINFOREST,   ///< Grow trees on tiles that have them, only spread to new ones in rainforests
-	ETP_SPREAD_ALL,          ///< Grow trees and spread them without restrictions
-	ETP_NO_GROWTH_NO_SPREAD, ///< Don't grow trees and don't spread them at all
-};
-
-#include "rust/trees_ffi.h"
-#include "rust/world_generation_ffi.h"
+#include "rust/command_cost_services.h"
+#include "rust/command_services_ffi.h"
 #include "rust/generation_services.hpp"
-#include "rust/settings_services.h"
-#include "rust/ground_services.h"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/services_ffi.h"
-#include "rust/services_map.h"
-#include "rust/services_water.h"
+#include "rust/services_landscape.h"
+#include "rust/town_ffi.h"
+#include "rust/trees_ffi.h"
+#include "rust/world_generation_ffi.h"
 #include <exception>
 #include <utility>
 
+#include "safeguards.h"
+
 static_assert(MP_CLEAR == 0 && MP_TREES == 4 && MP_WATER == 6);
 static_assert(TREE_RAINFOREST == 20 && TREE_CACTUS == 27 && TREE_SUB_TROPICAL == 28 && TREE_TOYLAND == 32 && TREE_INVALID == 255 && TREE_COUNT_TEMPERATE == 12);
+static_assert(TREE_COUNT_SUB_ARCTIC == 8 && TREE_COUNT_RAINFOREST == 7 && TREE_COUNT_SUB_TROPICAL == 4 && TREE_COUNT_TOYLAND == 9);
 static_assert(to_underlying(LandscapeType::Temperate) == 0 && to_underlying(LandscapeType::Arctic) == 1 && to_underlying(LandscapeType::Tropic) == 2 && to_underlying(LandscapeType::Toyland) == 3);
 static_assert(CLEAR_GRASS == 0 && CLEAR_ROUGH == 1 && CLEAR_ROCKS == 2 && CLEAR_FIELDS == 3 && CLEAR_DESERT == 5);
 static_assert(TROPICZONE_NORMAL == 0 && TROPICZONE_DESERT == 1 && TROPICZONE_RAINFOREST == 2);
@@ -64,50 +55,11 @@ static_assert(TP_NONE == 0 && TP_ORIGINAL == 1 && TP_IMPROVED == 2);
 static_assert(TREE_GROUND_GRASS == 0 && TREE_GROUND_ROUGH == 1 && TREE_GROUND_SNOW_DESERT == 2 && TREE_GROUND_SHORE == 3 && TREE_GROUND_ROUGH_SNOW == 4);
 static_assert(to_underlying(TreeGrowthStage::Growing1) == 0 && to_underlying(TreeGrowthStage::Grown) == 3 && to_underlying(TreeGrowthStage::Dead) == 6);
 static_assert(SND_42_RAINFOREST_1 == 66 && SND_43_RAINFOREST_2 == 67 && SND_44_RAINFOREST_3 == 68 && SND_48_RAINFOREST_4 == 72 && SND_34_ARCTIC_SNOW_1 == 52 && SND_39_ARCTIC_SNOW_2 == 57);
-static_assert(MAP_HEIGHT_LIMIT_ORIGINAL == 15 && DIR_N == 0 && DIR_NW == 7);
-static_assert(2 * (MAX_MAP_SIZE_BITS - MIN_MAP_SIZE_BITS) - 4 <= std::numeric_limits<uint8_t>::digits);
-
-/** State of one CmdPlantTree or ClearTile_Trees call; Rust passes it back to the command services. */
-struct OpenTTDTreeCommand {
-	explicit OpenTTDTreeCommand(DoCommandFlags flags) : flags(flags) {}
-	DoCommandFlags flags;
-	Company *company = nullptr;
-	CommandCost nested;
-};
+static_assert(MAP_HEIGHT_LIMIT_ORIGINAL == 15 && DIR_N == 0 && DIR_NW == 7 && MIN_MAP_SIZE_BITS == 6 && MAX_MAP_SIZE_BITS == 12);
+static_assert(RATING_TREE_DOWN_STEP == -35 && RATING_TREE_MINIMUM == RATING_MINIMUM && RATING_TREE_UP_STEP == 7 && RATING_TREE_MAXIMUM == 220);
 
 /** The AbortGenerateWorldSignal thrown by a progress update, held until the Rust entry returns. */
 static std::exception_ptr _tree_generation_abort;
-
-static OpenTTDTreePlantObservation TreePlantObservation(uint32_t index) noexcept
-{
-	TileIndex tile{index};
-	OpenTTDTreePlantObservation o{};
-	o.tile_type = SharedTileType(index);
-	o.zone = GetTropicZone(tile);
-	if (o.tile_type == MP_CLEAR) {
-		o.bridge = IsBridgeAbove(tile);
-		o.ground = RustClearGround(Tile{tile});
-		o.density = static_cast<uint8_t>(RustClearDensity(index));
-		o.snow = RustSnowTile(index);
-	} else if (o.tile_type == MP_WATER) {
-		o.bridge = IsBridgeAbove(tile);
-		o.coast = RustIsCoast(index) && !IsSlopeWithOneCornerRaised(GetTileSlope(tile));
-	}
-	return o;
-}
-
-static OpenTTDTreeObservation TreeObservation(uint32_t index) noexcept
-{
-	TileIndex tile{index};
-	return {
-		.ground = RustTreeGround(Tile{tile}),
-		.density = static_cast<uint8_t>(GetTreeDensity(tile)),
-		.species = GetTreeType(tile),
-		.count = static_cast<uint8_t>(GetTreeCount(tile)),
-		.growth = to_underlying(GetTreeGrowth(tile)),
-		.zone = GetTropicZone(tile),
-	};
-}
 
 /** Run one progress update; on world-generation abort keep the exception and return true. */
 template <typename Update>
@@ -122,48 +74,33 @@ static bool TreeProgress(Update update) noexcept
 	return false;
 }
 
-static void TreeTownRating(uint16_t flags, uint32_t tile, bool up) noexcept
+static const OpenTTDTreeServices &TreeServices() noexcept
 {
-	Town *t = ClosestTownFromTile(TileIndex{tile}, _settings_game.economy.dist_local_authority);
-	if (t == nullptr) return;
-	if (up) {
-		ChangeTownRating(t, RATING_TREE_UP_STEP, RATING_TREE_MAXIMUM, DoCommandFlags{flags});
-	} else {
-		ChangeTownRating(t, RATING_TREE_DOWN_STEP, RATING_TREE_MINIMUM, DoCommandFlags{flags});
-	}
+	static const OpenTTDTreeServices services{
+		.sin = [](float v) noexcept { return sinf(v); },
+		.cos = [](float v) noexcept { return cosf(v); },
+		.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {
+			MakeTree(TileIndex{tile}, static_cast<TreeType>(type), count, static_cast<TreeGrowthStage>(growth), static_cast<TreeGround>(ground), density);
+		},
+		.set_ground_density = RustSetTreeGroundDensityValue,
+		.add_count = [](uint32_t tile, int32_t count) noexcept { AddTreeCount(TileIndex{tile}, count); },
+		.add_growth = [](uint32_t tile, int32_t growth) noexcept { AddTreeGrowth(TileIndex{tile}, growth); },
+		.set_growth = [](uint32_t tile, uint8_t growth) noexcept { SetTreeGrowth(TileIndex{tile}, static_cast<TreeGrowthStage>(growth)); },
+		.make_clear = RustMakeClearValue,
+		.progress = []() noexcept { return TreeProgress([] { RustIncreaseGeneratingWorldProgress(GWP_TREE); }); },
+		.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { RustSetGeneratingWorldProgress(GWP_TREE, total); }); },
+		.town = &GetRustTownServices(),
+		.authority = &GetRustTownAuthorityServices(),
+		.strings = {
+			.already_here = STR_ERROR_TREE_ALREADY_HERE,
+			.plant_limit = STR_ERROR_TREE_PLANT_LIMIT_REACHED,
+			.on_water = STR_ERROR_CAN_T_BUILD_ON_WATER,
+			.site_unsuitable = STR_ERROR_SITE_UNSUITABLE,
+			.wrong_terrain = STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE,
+		},
+	};
+	return services;
 }
-
-static int32_t TreeCommandBegin(OpenTTDTreeCommand *ctx) noexcept
-{
-	ctx->company = (_game_mode != GM_EDITOR) ? Company::GetIfValid(_current_company) : nullptr;
-	int limit = (ctx->company == nullptr ? INT32_MAX : GB(ctx->company->Finances().tree_limit, 16, 16));
-	return limit;
-}
-
-static const OpenTTDTreeServices _tree_services{
-	.plant_observation = TreePlantObservation,
-	.tree_observation = TreeObservation,
-	.tree_count = [](uint32_t tile) noexcept { return GetTreeCount(TileIndex{tile}); },
-	.clear_observation = [](uint32_t index) noexcept {
-		TileIndex tile{index};
-		return OpenTTDTreeClearObservation{.count = GetTreeCount(tile), .species = GetTreeType(tile)};
-	},
-	.sin = [](float v) noexcept { return sinf(v); },
-	.cos = [](float v) noexcept { return cosf(v); },
-	.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {
-		MakeTree(TileIndex{tile}, static_cast<TreeType>(type), count, static_cast<TreeGrowthStage>(growth), static_cast<TreeGround>(ground), density);
-	},
-	.set_ground_density = RustSetTreeGroundDensityValue,
-	.add_count = [](uint32_t tile, int32_t count) noexcept { AddTreeCount(TileIndex{tile}, count); },
-	.add_growth = [](uint32_t tile, int32_t growth) noexcept { AddTreeGrowth(TileIndex{tile}, growth); },
-	.set_growth = [](uint32_t tile, uint8_t growth) noexcept { SetTreeGrowth(TileIndex{tile}, static_cast<TreeGrowthStage>(growth)); },
-	.make_clear = RustMakeClearValue,
-	.progress = []() noexcept { return TreeProgress([] { RustIncreaseGeneratingWorldProgress(GWP_TREE); }); },
-	.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { RustSetGeneratingWorldProgress(GWP_TREE, total); }); },
-	.town_rating = TreeTownRating,
-	.command_begin = TreeCommandBegin,
-	.command_debit = [](OpenTTDTreeCommand *ctx) noexcept { if (ctx->company != nullptr) ctx->company->Finances().tree_limit -= 1 << 16; },
-};
 
 /** Rethrow a world-generation abort after the Rust entry returned. */
 static void RethrowTreeGenerationAbort(bool aborted)
@@ -173,12 +110,12 @@ static void RethrowTreeGenerationAbort(bool aborted)
 
 void PlaceTree(TileIndex tile, uint32_t r, bool keep_density)
 {
-	openttd_rust_trees_place(tile.base(), r, keep_density, to_underlying(_settings_game.game_creation.landscape), &_tree_services, &GetRustSharedServices());
+	openttd_rust_trees_place(tile.base(), r, keep_density, &TreeServices(), &GetRustSharedServices());
 }
 
 void PlaceTreesRandomly()
 {
-	RethrowTreeGenerationAbort(openttd_rust_trees_place_randomly(&_tree_services, &GetRustSharedServices()));
+	RethrowTreeGenerationAbort(openttd_rust_trees_place_randomly(&TreeServices(), &GetRustSharedServices()));
 }
 
 std::exception_ptr TakeTreeGenerationException() noexcept
@@ -188,24 +125,13 @@ std::exception_ptr TakeTreeGenerationException() noexcept
 
 CommandCost CmdPlantTree(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, uint8_t tree_to_plant, bool diagonal)
 {
-	OpenTTDTreeCommand ctx(flags);
-	const OpenTTDTreeCommandSettings settings{
-		.build_price = static_cast<int64_t>(_price[PR_BUILD_TREES]),
-		.size = Map::Size(),
-		.climate = to_underlying(_settings_game.game_creation.landscape),
-		.editor = _game_mode == GM_EDITOR,
-		.execute = flags.Test(DoCommandFlag::Execute),
-		.company_valid = Company::IsValidID(_current_company),
-	};
-	auto result = openttd_rust_trees_cmd_plant(&ctx, tile.base(), start_tile.base(), tree_to_plant, diagonal, settings, &_tree_services, &GetRustSharedServices(), RustCommandCost(&ctx.nested), &GetRustCommandServices(), flags.base());
-	if (result.status == 1) return CMD_ERROR;
-	if (result.status == 2) return ctx.nested;
-	static const StringID messages[] = {INVALID_STRING_ID, STR_ERROR_TREE_ALREADY_HERE, STR_ERROR_TREE_PLANT_LIMIT_REACHED,
-		STR_ERROR_CAN_T_BUILD_ON_WATER, STR_ERROR_SITE_UNSUITABLE, STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE};
-	return result.cost == 0 ? CommandCost(messages[result.message]) : CommandCost(EXPENSES_OTHER, Money(result.cost));
+	const OpenTTDPlantTreeArgs args{.tile = tile.base(), .start_tile = start_tile.base(), .tree_to_plant = tree_to_plant, .diagonal = diagonal};
+	CommandCost result;
+	openttd_rust_trees_cmd_plant(flags.base(), &args, RustCommandCost(&result), &TreeServices(), &GetRustSharedServices(), &GetRustCommandServices());
+	return result;
 }
 
-const OpenTTDTreeServices &GetRustTreeServices() noexcept { return _tree_services; }
+const OpenTTDTreeServices &GetRustTreeServices() noexcept { return TreeServices(); }
 
 OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
 {
@@ -219,29 +145,12 @@ OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
 	};
 }
 
-
-
-
 void InitializeTrees() { openttd_rust_trees_initialize(); }
 
-
-/**
- * Place some trees in a radius around a tile.
- * The trees are placed in an quasi-normal distribution around the indicated tile, meaning that while
- * the radius does define a square, the distribution inside the square will be roughly circular.
- * @note This function the interactive RNG and must only be used in editor and map generation.
- * @param tile      Tile to place trees around.
- * @param treetype  Type of trees to place. Must be a valid tree type for the climate.
- * @param radius    Maximum distance (on each axis) from tile to place trees.
- * @param count     Maximum number of trees to place.
- * @param set_zone  Whether to create a rainforest zone when placing rainforest trees.
- * @return Number of trees actually placed.
- */
 uint PlaceTreeGroupAroundTile(TileIndex tile, TreeType treetype, uint radius, uint count, bool set_zone)
 {
-	return openttd_rust_trees_place_group(tile.base(), treetype, radius, count, set_zone, &_tree_services, &GetRustSharedServices(), &GetRustEnvironmentServices(), &GetRustWorldServices());
+	return openttd_rust_trees_place_group(tile.base(), treetype, radius, count, set_zone, &TreeServices(), &GetRustSharedServices(), &GetRustWorldServices());
 }
-
 
 struct TreeListEnt : PalSpriteID {
 	int8_t x, y;
@@ -364,4 +273,4 @@ extern const TileTypeProcs _tile_type_trees_procs = {
 
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDTreeServices.hpp"
-bool CheckAbi_tree_cmd() { return AbiServicesComplete(_tree_services); }
+bool CheckAbi_tree_cmd() { return AbiServicesComplete(TreeServices()); }
