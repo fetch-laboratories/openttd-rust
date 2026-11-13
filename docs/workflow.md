@@ -37,11 +37,11 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 
 ### Review
 
-- The implementer starts its reviewers with T3 `delegate_task` and `isolation: "worktree"`, using the [role table](team.md#roles-and-models)'s review model and the [review brief](review-brief.md)'s spawn message. A reviewer checks out the reviewed head, so one started in a shared checkout moves that checkout's head. Root starts no reviewers.
-- Start one reviewer for the whole PR. Above about 1,000 changed lines, list review groups in the PR body and start one reviewer per group, in parallel.
+- The implementer starts its reviewers with T3 `delegate_task` and `isolation: "worktree"`, using the [role table](team.md#roles-and-models)'s review model and the fixed messages in [starting reviewers](implementer-brief.md#starting-reviewers). A reviewer checks out the reviewed head, so one started in a shared checkout moves that checkout's head. Root starts no reviewers.
+- Start two reviewers for the whole PR, in parallel: one for behaviour, which compares each changed body's operations with the original, and one for porting, which checks how each body reaches what it uses against [porting](porting.md) ([review brief](review-brief.md)). Above about 1,000 changed lines, list review groups in the PR body and start the two for each group, all in parallel.
 - Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
 - A PR has at most two review stages ([ADR 0025](adr/0025-two-review-stages.md)): the source review, and one re-check of the fixing commits only when a fix changed behaviour, test evidence or a body's operations. Fixes limited to names, comments, types or argument structs with unchanged operations need none; the implementer says so in the status comment.
-- A substantive rewrite, or a simulation behaviour fix that CI found (arithmetic and assertion fixes included), gets a fresh reviewer scoped to it. That is a review of new work, not a third stage.
+- A substantive rewrite gets fresh behaviour and porting reviewers scoped to it; a simulation behaviour fix that CI found (arithmetic and assertion fixes included) gets a fresh behaviour reviewer. That is a review of new work, not a third stage.
 - The implementer or root may commit fixes for CI warnings or platform errors, or record speed medians, without a new review.
 - A review that stops before recording findings and disposition counts as no review.
 
@@ -50,7 +50,7 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 Every merge goes through GitHub's merge queue ([ADR 0019](adr/0019-merge-queue.md)): queue with `python3 tools/ci.py enqueue PR`, not `gh pr merge`, `--admin` or a hand merge. What may queue is in [root's integration rules](root-workflow.md#integration). While root has [stopped merges](root-workflow.md#merge-stops), queue nothing.
 
 1. **Base update.** Update from base only for a conflict or a change the PR needs from base. Merge `origin/rust-migration` in a commit titled `Update: Merge rust-migration into BRANCH`; `gh pr update-branch` writes a title the commit checker rejects.
-2. **Review after a base update.** A reviewed PR's base update needs only CI if it has no conflicts in `src/`, `rust/`, `tools/` or `.github/`, or resolves every conflict there by keeping both sides' lines unchanged. Apply this test with `python3 tools/retrospective.py base-update [MERGE_SHA | --since REVIEWED_SHA]` and record its last line on the PR. Otherwise a fresh reviewer checks only the conflict resolution, in the files it lists.
+2. **Review after a base update.** A reviewed PR's base update needs only CI if it has no conflicts in `src/`, `rust/`, `tools/` or `.github/`, or resolves every conflict there by keeping both sides' lines unchanged. Apply this test with `python3 tools/retrospective.py base-update [MERGE_SHA | --since REVIEWED_SHA]` and record its last line on the PR. Otherwise a fresh behaviour reviewer checks only the conflict resolution, in the files it lists.
 3. **Workflow changes.** A PR that changes `.github/workflows/` queues only after root's reviewed bootstrap Full on its head ([CI administration](root-workflow.md#ci-administration)).
 4. **Queue.** When every reviewer accepts and any re-check due has accepted, run `enqueue` at that head. Queue each PR alone and request no Full for it.
 5. **Wait.** Start `python3 tools/ci.py queue-wait PR` as a background job and take your next work. When the queue merges or removes the PR, tell root in one line with the PR, its head and the outcome.
