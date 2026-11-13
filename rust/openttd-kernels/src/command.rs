@@ -221,16 +221,14 @@ fn storage_mode(s: &CommandServices, mode: u8) {
     }
 }
 
+/// `UpdateSignalsInBuffer()`.
 fn flush_signals(s: &CommandServices) {
-    // SAFETY: immutable process tables; the caller holds the game-state mutex.
-    unsafe {
-        crate::signal::openttd_rust_signal_flush(
-            s.shared,
-            s.rail_map,
-            s.signals,
-            s.shared.map().log_x,
-        );
+    crate::signal::Context {
+        shared: s.shared,
+        rail: s.rail_map,
+        native: s.signals,
     }
+    .update_signals_in_buffer();
 }
 
 /// `IsLocalCompany`.

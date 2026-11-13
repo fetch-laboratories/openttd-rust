@@ -575,29 +575,29 @@ impl Search {
     }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
         let shared = unsafe { &*self.input.shared };
-        let mut state = crate::follow_track::State::vehicle(
+        let mut state = crate::follow_track::CFollowTrackT::vehicle_raw(
             shared,
             crate::transport_type::TRANSPORT_RAIL,
             Some(self.vehicle),
             compatible,
             no90 == 0,
         );
-        let mut followed = state.follow(shared, tile, td);
+        let mut followed = state.follow_raw(shared, tile, td);
         if followed && mask {
-            followed = crate::follow_track::mask_reserved_tracks(self.pbs(), &mut state);
+            followed = state.mask_reserved_tracks(self.pbs());
         }
         let step = FollowStep {
             tile: state.new_tile.0,
             skipped: state.tiles_skipped,
-            dirs: state.new_td_bits,
+            dirs: state.new_td_bits.0,
             followed: u8::from(followed),
-            error: state.err,
+            error: state.err.0,
             station: u8::from(state.is_station),
-            exitdir: state.exitdir,
+            exitdir: state.exitdir.0,
         };
         let speed = Speed {
             min_speed: 0,
-            max_speed: crate::follow_track::speed_limit(
+            max_speed: crate::follow_track::get_speed_limit_raw(
                 shared,
                 crate::transport_type::TRANSPORT_RAIL,
                 Some(self.vehicle),
@@ -636,7 +636,7 @@ impl Search {
         )
     }
     fn platform_length(&self, tile: u32, dir: u8) -> u32 {
-        crate::follow_track::platform_length(&self.world(), tile, dir)
+        crate::station::get_platform_length_by_tile_raw(&self.world(), tile, dir)
     }
     fn set_destination(&mut self) {
         if self.input.kind == 3 {

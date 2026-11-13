@@ -606,9 +606,6 @@ pub(crate) const FINANCE: crate::company::FinanceServices = crate::company::Fina
 /// `crate::services::RailMapServices` with every entry unreachable.
 pub(crate) const RAIL_MAP: crate::services::RailMapServices = crate::services::RailMapServices {
     ground: ptr::null(),
-    traversal: unreachable1,
-    station_admission: unreachable3,
-    wormhole_admission: unreachable2,
     set_signal_state: unreachable3,
     other_tunnel_bridge_end: unreachable1,
     invalid_rail_type: unreachable0,
@@ -634,9 +631,7 @@ pub(crate) const RAIL_MAP: crate::services::RailMapServices = crate::services::R
 pub(crate) const SIGNALS: crate::signal::SignalServices = crate::signal::SignalServices {
     assertions: false,
     assert_condition: unreachable1,
-    assert_wormhole_start: unreachable2,
     vehicles: ptr::null(),
-    assert_company: unreachable1,
 };
 
 /// `crate::landscape_cmd::LandscapeServices` with every entry unreachable.

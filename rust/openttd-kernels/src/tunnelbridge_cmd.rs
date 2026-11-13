@@ -200,7 +200,6 @@ impl<'a> World<'a> {
             shared: self.r.shared,
             rail: self.r.rail,
             native: self.r.signal,
-            log_x: self.map.log_x,
         }
         .add_side(tile, direction, owner);
     }
@@ -417,7 +416,7 @@ impl<'a> World<'a> {
         match transport {
             ROAD => {
                 roadtype = kind;
-                if !crate::road::val_param_road_type(self.s, roadtype) {
+                if !crate::road::val_param_road_type_raw(self.s, roadtype) {
                     return Self::error(cost);
                 }
             }
@@ -498,7 +497,7 @@ impl<'a> World<'a> {
                 return cost.error(self.a.strings.demolish_bridge);
             }
             if transport == ROAD {
-                let existing = if crate::road::road_type_is_road(roadtype) {
+                let existing = if crate::road::road_type_is_road_raw(roadtype) {
                     road
                 } else {
                     tram
@@ -625,10 +624,10 @@ impl<'a> World<'a> {
         let mut hasroad = road != INVALID_ROADTYPE;
         let mut hastram = tram != INVALID_ROADTYPE;
         if transport == ROAD {
-            if crate::road::road_type_is_road(roadtype) {
+            if crate::road::road_type_is_road_raw(roadtype) {
                 road = roadtype;
             }
-            if crate::road::road_type_is_tram(RoadType(roadtype).0) {
+            if crate::road::road_type_is_tram(RoadType(roadtype)) {
                 tram = roadtype;
             }
         }
@@ -853,7 +852,7 @@ impl<'a> World<'a> {
             }
             ROAD => {
                 roadtype = kind;
-                if !crate::road::val_param_road_type(self.s, roadtype) {
+                if !crate::road::val_param_road_type_raw(self.s, roadtype) {
                     return Self::error(cost);
                 }
             }
@@ -1014,12 +1013,12 @@ impl<'a> World<'a> {
                         );
                     };
                 }
-                let road = if crate::road::road_type_is_road(roadtype) {
+                let road = if crate::road::road_type_is_road_raw(roadtype) {
                     roadtype
                 } else {
                     INVALID_ROADTYPE
                 };
-                let tram = if crate::road::road_type_is_tram(RoadType(roadtype).0) {
+                let tram = if crate::road::road_type_is_tram(RoadType(roadtype)) {
                     roadtype
                 } else {
                     INVALID_ROADTYPE

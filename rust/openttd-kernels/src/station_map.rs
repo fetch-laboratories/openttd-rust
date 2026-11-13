@@ -146,7 +146,7 @@ pub(crate) fn station_get_by_tile(
 ) -> *mut crate::station::BaseStation {
     (s.by_tile)(tile.0).cast()
 }
-/// Temporary raw adapter for `water.rs` and `airport.rs`.
+/// Temporary raw adapter for `water.rs`.
 #[inline]
 pub(crate) fn station_by_tile(
     tile: u32,
@@ -508,10 +508,6 @@ impl crate::map_func::World<'_> {
     #[inline]
     pub(crate) fn bay_dir(&self, t: u32) -> u8 {
         self.get_bay_road_stop_dir(TileIndex(t)).0
-    }
-    #[inline]
-    pub(crate) fn station_index(&self, t: u32) -> StationID {
-        self.get_station_index(TileIndex(t))
     }
     #[inline]
     pub(crate) fn station_blocked(&self, t: u32) -> bool {

@@ -54,7 +54,7 @@ impl RailType {
 
 /// Native `RailTypes`, retaining every underlying `u64` value.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailTypes(pub u64);
 
 impl RailTypes {
@@ -68,6 +68,11 @@ impl RailTypes {
 }
 
 impl RailTypes {
+    /// Native `BaseBitSet::Any`: true iff any of the values are set.
+    #[must_use]
+    pub const fn any(self) -> bool {
+        self.0 != 0
+    }
     /// Native `BaseBitSet::Test`, with an element rather than a set mask.
     #[must_use]
     pub const fn test(self, element: RailType) -> bool {

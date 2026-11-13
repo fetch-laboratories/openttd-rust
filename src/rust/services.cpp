@@ -625,43 +625,10 @@ const OpenTTDRandomServices &GetRustRandomServices() noexcept
 	return services;
 }
 
-static OpenTTDRailTraversal SharedRail_traversal(uint32_t tile) noexcept
-{
-	OpenTTDRailTraversal r{.depot = RustRailIsDepot(tile), .tracks = TRACK_BIT_NONE};
-	if (!r.depot) r.tracks = RustRailTracks(tile);
-	return r;
-}
-static OpenTTDRailStationAdmission SharedRail_station_admission(uint32_t tile, uint8_t owner, uint8_t dir) noexcept
-{
-	TileIndex t(tile);
-	OpenTTDRailStationAdmission r{.rail = RustHasStationRail(tile), .owner = INVALID_OWNER.base(), .axis = AXIS_X, .blocked = false};
-	if (r.rail) {
-		r.owner = RustTileOwnerValue(tile);
-		if (r.owner == owner) {
-			r.axis = RustRailStationAxis(tile);
-			if (DiagDirToAxis(static_cast<DiagDirection>(dir)) == r.axis) r.blocked = RustStationBlocked(tile);
-		}
-	}
-	return r;
-}
-static OpenTTDRailWormholeAdmission SharedRail_wormhole_admission(uint32_t tile, uint8_t owner) noexcept
-{
-	OpenTTDRailWormholeAdmission r{.owner = RustTileOwnerValue(tile), .transport = TRANSPORT_RAIL, .direction = DIAGDIR_NE};
-	if (r.owner == owner) {
-		r.transport = RustTunnelBridgeTransport(tile);
-		if (r.transport == TRANSPORT_RAIL) r.direction = static_cast<DiagDirection>(MapSvcTunnelBridgeDirection(tile));
-	}
-	return r;
-}
-
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 {
 	static const OpenTTDRailMapServices services{
 		.ground = &GetRustRailGroundServices(),
-		.traversal = SharedRail_traversal,
-		.station_admission = SharedRail_station_admission,
-		.wormhole_admission = SharedRail_wormhole_admission,
-
 		.set_signal_state = RustRailSetSignalState,
 		.other_tunnel_bridge_end = RustOtherTunnelBridgeEnd,
 

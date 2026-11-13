@@ -118,7 +118,7 @@ pub struct Track(pub u8);
 
 /// Native `TrackBits` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TrackBits(pub u8);
 
 impl Track {
