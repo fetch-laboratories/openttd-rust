@@ -84,8 +84,7 @@ Fix these before integration; root grants no exceptions. A file pass fixes every
 ### Tests in Rust and C++
 
 - New tests are Rust tests or harness scenarios, not C++ ([ADR 0001](adr/0001-full-rust-rewrite.md)). The one exception: an observation of the C++ calling boundary itself that Rust tests and the harness cannot make may extend a kept native test, named in the PR with the boundary whose retirement removes it.
-- A C++ test of code still written in C++, including a live native binding, pool or production caller, stays in C++ until that code is ported ([ADR 0023](adr/0023-cpp-tests-stay-until-code-is-ported.md)), and retires inside that port.
-- Move a C++ test to Rust or the harness only where they reach what it observed, and only where the counted C++ it deletes clearly exceeds the counted C++ its oracle recipe adds ([ADR 0004](adr/0004-cleanup-before-porting.md)); its first checkpoint reports both. Carry each observation with expectations taken from the original.
+- A C++ test stays in C++ and is deleted inside the port that removes the code, binding, pool or boundary it reaches. That port carries its observations, with expectations taken from the original. No C++ test is moved to Rust or the harness ahead of that port ([ADR 0050](adr/0050-no-cpp-test-moves-to-rust.md)).
 - A PR that changes an oracle, its capture recipe or the pin reruns `tools/oracle-capture.py` for the oracles it touches and reports the result; its reviewer repeats the run.
 
 ### Cleanup proof
