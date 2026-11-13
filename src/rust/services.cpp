@@ -80,6 +80,7 @@
 #include "../effectvehicle_func.h"
 #include "clock_ffi.h"
 #include "../error.h"
+#include "../error_func.h"
 #include "../gfx_func.h"
 #include "../gui.h"
 #include "../texteff.hpp"
@@ -459,6 +460,9 @@ static size_t RustKdtreePartition(OpenTTDKdtreeKey *keys, size_t count) noexcept
 	return std::partition(keys, end, [=](const OpenTTDKdtreeKey &k) { return k.coordinate < split; }) - keys;
 }
 
+/** `FatalError` of a message Rust formatted. */
+static void RustFatalError(const uint8_t *message, size_t size) noexcept { FatalErrorI(std::string(reinterpret_cast<const char *>(message), size)); }
+
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.all_compatible_railtypes = RustAllCompatibleRailTypes,
 	.command_post = GetRustCommandPostServices,
@@ -607,6 +611,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.resolver_grf_version = RustResolverGRFVersion,
 	.show_error = RustShowErrorMessage,
 	.not_reached = RustNotReached,
+	.fatal_error = RustFatalError,
 };
 
 /* Game entries also bind the canonical fatal slot; tool-only links keep assertion binding. */

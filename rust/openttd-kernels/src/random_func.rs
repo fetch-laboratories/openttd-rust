@@ -29,6 +29,14 @@ pub fn chance16(shared: &crate::services::Services, a: u32, b: u32) -> bool {
     chance16_i(a, b, shared.random())
 }
 
+/// `Chance16R`: flips a coin with a given probability and saves the randomize-number in a
+/// variable. The drawn value is stored in `r` before the comparison.
+#[must_use]
+pub fn chance16r(shared: &crate::services::Services, a: u32, b: u32, r: &mut u32) -> bool {
+    *r = shared.random();
+    chance16_i(a, b, *r)
+}
+
 /// `Randomizer`: a local pseudo random number generator, independent of the shared
 /// random streams.
 #[derive(Clone, Copy, Default)]

@@ -42,6 +42,9 @@ static void AircraftDirectBoundary()
 	auto &vehicle = p.vehicle_services;
 	auto &shared = p.shared_services;
 	auto &leaves = p.leaves;
+	/* Every entry loads the map descriptor, including the disaster flight helpers below. */
+	static OpenTTDFixtureMap disaster_map{6, 4096};
+	shared.map = &disaster_map.statics;
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return aircraft_probe.order_owner->vehicle->current.type; };
 	vehicle.maintenance = &_vehicle_maintenance_probe;
 	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
@@ -107,8 +110,7 @@ static void AircraftDirectBoundary()
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&aircraft_probe); };
 	leaves.airport_blocks = [](const OpenTTDStation *) noexcept { CHECK(aircraft_probe.live); return &aircraft_probe.blocks; };
 	leaves.node = [](const void *ap, uint8_t) noexcept -> const void * { return ap; };
-	leaves.fta = [](const void *) noexcept { return OpenTTDAircraftNode{nullptr, uint64_t{1} << 9, 0, 0, 0}; };
-	leaves.layout_blocks = [](const void *, uint8_t) noexcept { return uint64_t{1} << 9; };
+	leaves.fta_blocks = [](const void *) noexcept { return uint64_t{1} << 9; };
 	vehicle.destroy = [](OpenTTDVehicle * handle) noexcept {
 		CHECK(handle == aircraft_probe.vehicle.handle);
 		auto v = aircraft_probe.vehicle;
@@ -125,8 +127,6 @@ static void AircraftDirectBoundary()
 	CHECK(!openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(!p.live && p.deleted == 1);
 	/* A disaster has its own flags and no Aircraft state, even with subtype zero. */
-	static OpenTTDFixtureMap disaster_map{6, 4096};
-	shared.map = &disaster_map.statics;
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 
 	p.record.subtype = 0; p.record.type = 4; p.record.direction = 4; p.record.z_pos = 0; p.record.cached_max_speed = 1;
@@ -158,6 +158,8 @@ static void AircraftPhaseBoundary()
 	auto &v = p.vehicle_services;
 	auto &s = p.shared_services;
 	auto &leaves = p.leaves;
+	static OpenTTDFixtureMap map{6, 4096};
+	s.map = &map.statics;
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
 	p.vehicle = {&p.record, state.get(), 17};
 
@@ -190,11 +192,9 @@ static void AircraftPhaseBoundary()
 	v.order_type = [](OpenTTDVehicle *) noexcept { return uint8_t{1}; };
 	p.vehicle.state->state = 14; p.vehicle.state->targetairport = 7;
 	leaves.station = [](uint16_t station) noexcept { CHECK(station == 7); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
-	leaves.geometry = [](const OpenTTDStation *) noexcept { return OpenTTDAircraftGeometry{0, 0, 8, 8, true}; };
+	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{0}; }; leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; }; leaves.airport_width = leaves.airport_height = [](const OpenTTDStation *) noexcept { return uint8_t{8}; };
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&aircraft_probe); };
 	leaves.moving = [](const void *, uint8_t) noexcept { return OpenTTDAircraftMoving{16, 0, 16, 0}; };
-	static OpenTTDFixtureMap map{6, 4096};
-	s.map = &map.statics;
 	s.map_max_x = s.map_max_y = []() noexcept { return uint32_t{63}; };
 	s.plane_speed = []() noexcept { return uint8_t{1}; };
 	p.record.acceleration = 8; p.record.cached_max_speed = 100;

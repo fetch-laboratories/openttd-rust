@@ -239,6 +239,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*resolver_grf_version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_version);
 	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);
 	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
+	void (*fatal_error)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(fatal_error);
 };
 extern const OpenTTDSharedServices _rust_shared_services;
 struct OpenTTDSubsidyServices;

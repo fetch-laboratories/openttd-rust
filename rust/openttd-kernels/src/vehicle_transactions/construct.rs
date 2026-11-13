@@ -316,7 +316,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
             .0
             .as_ptr(),
     );
-    unsafe { crate::aircraft::openttd_rust_aircraft_cache(r.aircraft, hv, true) };
+    unsafe { crate::aircraft::update_aircraft_cache(r.aircraft, hv, true) };
     unsafe {
         a.position(v);
         a.position(u);

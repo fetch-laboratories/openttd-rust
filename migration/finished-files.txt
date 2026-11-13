@@ -3,6 +3,8 @@
 # (tools/code-standards-inventory.py --gate) fails a PR that adds residue to one.
 # Reconstructed at a30091d652 from the merged pass PRs; 92 at merge 20, as root counted.
 rust/openttd-kernels/src/admin_conversion.rs
+rust/openttd-kernels/src/aircraft.rs
+rust/openttd-kernels/src/aircraft/tests.rs
 rust/openttd-kernels/src/airport_definitions.rs
 rust/openttd-kernels/src/airport.rs
 rust/openttd-kernels/src/alternating.rs
@@ -26,6 +28,7 @@ rust/openttd-kernels/src/direction_func.rs
 rust/openttd-kernels/src/disaster_vehicle.rs
 rust/openttd-kernels/src/effectvehicle_func.rs
 rust/openttd-kernels/src/encoded.rs
+rust/openttd-kernels/src/error_func.rs
 rust/openttd-kernels/src/follow_track.rs
 rust/openttd-kernels/src/game_state.rs
 rust/openttd-kernels/src/house_definition.rs
