@@ -192,6 +192,7 @@ impl CFollowTrackT {
     }
     /// Temporary raw adapter of [`Self::vehicle`] for
     /// `native_test_support.rs` until its pass.
+    #[cfg(feature = "native-test-support")]
     pub(crate) fn vehicle_raw(
         s: &Services,
         mode: u8,
@@ -758,6 +759,7 @@ pub(crate) fn get_speed_limit_with_road(
 }
 /// Temporary raw adapter of [`get_speed_limit`] for `native_test_support.rs`
 /// until its pass.
+#[cfg(feature = "native-test-support")]
 pub(crate) fn get_speed_limit_raw(
     s: &Services,
     mode: u8,

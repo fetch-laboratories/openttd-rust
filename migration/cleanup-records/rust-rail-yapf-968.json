@@ -96,5 +96,17 @@
     "reason": "The finished yapf_type.rs keeps the original's complete enumerator vocabulary (group 1 review of #976, following #734's steering-35 ruling on missing constants); nothing in the original reads this value, so nothing in Rust can.",
     "retiring_owner": "#734",
     "retirement_condition": "None while the original keeps the enumerator unused; retires if a ported body reads it."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/rail_yapf.rs | fn yapf_train_choose_track | allow clippy::too_many_arguments",
+    "before": 0,
+    "after": 1,
+    "operation": "rail_yapf::yapf_train_choose_track",
+    "source_contract": "`YapfTrainChooseTrack(const Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool &path_found, bool reserve_track, struct PBSTileInfo *target, TileIndex *dest)` (src/pathfinder/yapf/yapf_rail.cpp) has eight parameters; the Rust entry adds the services handle `s`.",
+    "reason": "The accepted lint exception for this function (#968's plan, decision 1) covers the force-warned ratchet; CI's plain `cargo clippy -- -D warnings` at 32 bits still rejects nine parameters, so the item carries the allow that every other over-bound body gets from a module-wide attribute, which a finished file may not keep.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the services handle stops being an explicit parameter (Rust owns the game state), with the lint exception."
   }
 ]

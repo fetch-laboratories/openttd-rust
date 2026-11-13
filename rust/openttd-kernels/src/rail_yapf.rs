@@ -2700,6 +2700,10 @@ impl<'a, T: Types<PfDestination = CYapfDestinationAnySafeTileRailT>> CYapfRailT<
 /// Its eight parameters after the service table are the original's list, the
 /// one place the seven-parameter bound yields to the original's signature.
 /// The tile and entry direction pass unused, as in the original.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "YapfTrainChooseTrack's eight parameters, plus the service table"
+)]
 pub(crate) fn yapf_train_choose_track(
     s: &Services,
     v: crate::train::Handle,
