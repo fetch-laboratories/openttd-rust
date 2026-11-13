@@ -143,27 +143,29 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 	for (Mode mode : {Rejected, Junction, Destination, MaxCost, Accepted, Startup}) {
 		CAPTURE(mode);
 		FollowerFixture map;
-		/* One-way NE road: a missing next tile cannot be replaced by a reversal. */
-		for (uint32_t t : {130U, 129U, 128U, 127U}) map.Tile(t, MP_ROAD, ROAD_X | 0x20);
-		if (mode == Rejected) map.Tile(128, MP_CLEAR);
+		/* One-way NE road along row 2, clear of the map edge, so that no step from its tiles
+		 * leaves the map: a missing next tile cannot be replaced by a reversal. */
+		constexpr uint32_t row = 2 * 64 + 31;
+		for (uint32_t t : {row + 3, row + 2, row + 1, row}) map.Tile(t, MP_ROAD, ROAD_X | 0x20);
+		if (mode == Rejected) map.Tile(row + 1, MP_CLEAR);
 		/* The goal is a depot facing south-west. In Junction mode the junction takes the goal's
 		 * tile, there is no depot, and the junction's exits are unenterable, so that no
 		 * continuation is accepted. */
 		if (mode == Junction) {
-			map.tiles.base[128].m5 = ROAD_ALL;
-			map.Tile(127, MP_CLEAR);
+			map.tiles.base[row + 1].m5 = ROAD_ALL;
+			map.Tile(row, MP_CLEAR);
 		} else if (mode != Rejected) {
-			map.tiles.base[mode == Startup ? 130 : mode == Destination ? 129 : 128].m5 = 0x80 | DIAGDIR_SW;
+			map.tiles.base[mode == Startup ? row + 3 : mode == Destination ? row + 2 : row + 1].m5 = 0x80 | DIAGDIR_SW;
 		}
-		/* Raising tile 128's north corner gives it SLOPE_N under ROAD_X, so its
-		 * centre is above flat tile 129 and the accepted step pays the uphill penalty. */
-		map.tiles.base[128].height = 1;
+		/* Raising the north corner of tile row + 1 raises its centre above flat tile
+		 * row + 2, so the accepted step pays the uphill penalty. */
+		map.tiles.base[row + 1].height = 1;
 		map.shared.apply_foundation = GetRustSharedServices().apply_foundation;
 		RoadOrder::limits.clear();
 		map.physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { RoadOrder::limits.push_back('D'); return 100; };
 		map.orders.vehicle = [](void *) noexcept { RoadOrder::limits.push_back('O'); return &FollowerFixture::active->order_state; };
 		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { RoadOrder::limits.push_back('R'); return 40; };
-		OpenTTDRoadYapfInput input{}; input.tile = 130; input.slope = 17;
+		OpenTTDRoadYapfInput input{}; input.tile = row + 3; input.slope = 17;
 		auto result = openttd_rust_road_yapf_depot(&input, &map.shared, map.Vehicle(), mode == MaxCost ? 99 : 0);
 		if (mode == Accepted) {
 			CHECK((RoadOrder::limits == std::vector<char>{'D', 'O', 'R'}));
