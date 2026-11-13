@@ -2191,6 +2191,27 @@ mod tests {
         initialize_trees();
         // SAFETY: As above.
         assert_eq!(unsafe { counter.read() }, 0);
+
+        // The game thread and the GUI thread share one counter: spawn and join serialize each
+        // access as the native game-state mutex does. Thread-local storage would fail each step.
+        // SAFETY: As above.
+        unsafe { counter.write(37) };
+        let (address, seen) = std::thread::spawn(|| {
+            let counter = openttd_rust_tree_counter();
+            // SAFETY: As above; the parent does not access the counter until this join.
+            let seen = unsafe { counter.read() };
+            let _map = install(6, TileType::MP_CLEAR, true);
+            assert!(!decrement_tree_counter(&World::new(shared())));
+            (counter as usize, seen)
+        })
+        .join()
+        .unwrap();
+        assert_eq!((address, seen), (counter as usize, 37));
+        // SAFETY: As above.
+        assert_eq!(unsafe { counter.read() }, 36);
+        std::thread::spawn(initialize_trees).join().unwrap();
+        // SAFETY: As above.
+        assert_eq!(unsafe { counter.read() }, 0);
         // SAFETY: As above.
         unsafe { counter.write(saved) };
     }
