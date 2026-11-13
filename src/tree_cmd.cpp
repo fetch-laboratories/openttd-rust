@@ -55,7 +55,8 @@ static_assert(TP_NONE == 0 && TP_ORIGINAL == 1 && TP_IMPROVED == 2);
 static_assert(TREE_GROUND_GRASS == 0 && TREE_GROUND_ROUGH == 1 && TREE_GROUND_SNOW_DESERT == 2 && TREE_GROUND_SHORE == 3 && TREE_GROUND_ROUGH_SNOW == 4);
 static_assert(to_underlying(TreeGrowthStage::Growing1) == 0 && to_underlying(TreeGrowthStage::Grown) == 3 && to_underlying(TreeGrowthStage::Dead) == 6);
 static_assert(SND_42_RAINFOREST_1 == 66 && SND_43_RAINFOREST_2 == 67 && SND_44_RAINFOREST_3 == 68 && SND_48_RAINFOREST_4 == 72 && SND_34_ARCTIC_SNOW_1 == 52 && SND_39_ARCTIC_SNOW_2 == 57);
-static_assert(MAP_HEIGHT_LIMIT_ORIGINAL == 15 && DIR_N == 0 && DIR_NW == 7 && MIN_MAP_SIZE_BITS == 6 && MAX_MAP_SIZE_BITS == 12);
+static_assert(MAP_HEIGHT_LIMIT_ORIGINAL == 15 && DIR_N == 0 && DIR_NW == 7);
+static_assert(2 * (MAX_MAP_SIZE_BITS - MIN_MAP_SIZE_BITS) - 4 <= std::numeric_limits<uint8_t>::digits);
 static_assert(RATING_TREE_DOWN_STEP == -35 && RATING_TREE_MINIMUM == RATING_MINIMUM && RATING_TREE_UP_STEP == 7 && RATING_TREE_MAXIMUM == 220);
 
 /** The AbortGenerateWorldSignal thrown by a progress update, held until the Rust entry returns. */

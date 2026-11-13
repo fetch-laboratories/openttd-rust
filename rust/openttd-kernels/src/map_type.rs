@@ -1,10 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `map_type.h` map limits and landscape leveling modes; native compilation asserts the values.
 
-/// `MIN_MAP_SIZE_BITS`: minimal size of map is equal to 2 ^ `MIN_MAP_SIZE_BITS`.
-pub const MIN_MAP_SIZE_BITS: u32 = 6;
-/// `MAX_MAP_SIZE_BITS`: maximal size of map is equal to 2 ^ `MAX_MAP_SIZE_BITS`.
-pub const MAX_MAP_SIZE_BITS: u32 = 12;
 /// `MAX_MAP_SIZE`.
 pub const MAX_MAP_SIZE: u32 = 1 << 12;
 
