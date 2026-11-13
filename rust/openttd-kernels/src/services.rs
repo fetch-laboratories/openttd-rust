@@ -660,26 +660,8 @@ crate::abi::layouts! {
         restore,
         set_seed,
     };
-    "OpenTTDRailTraversal" ["probe"] => RailTraversal {
-        depot,
-        tracks,
-    };
-    "OpenTTDRailStationAdmission" ["probe"] => RailStationAdmission {
-        rail,
-        owner,
-        axis,
-        blocked,
-    };
-    "OpenTTDRailWormholeAdmission" ["probe"] => RailWormholeAdmission {
-        owner,
-        transport,
-        direction,
-    };
     "OpenTTDRailMapServices" ["probe"] => RailMapServices {
         ground,
-        traversal,
-        station_admission,
-        wormhole_admission,
         set_signal_state,
         other_tunnel_bridge_end,
         invalid_rail_type,
@@ -1271,53 +1253,12 @@ pub struct RandomServices {
 
 /// Native `Axis` with its unchanged uint8 representation.
 pub use crate::direction_type::Axis;
-/// Fields consumed together at one original rail/signal branch phase.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct RailTraversal {
-    /// Native `depot` observation; later-branch fields are read only after their guards.
-    pub depot: bool,
-    /// Native `tracks` observation; later-branch fields are read only after their guards.
-    pub tracks: TrackBits,
-}
-/// Fields consumed together at one original rail/signal branch phase.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct RailStationAdmission {
-    /// Native `rail` observation; later-branch fields are read only after their guards.
-    pub rail: bool,
-    /// Native `owner` observation; later-branch fields are read only after their guards.
-    pub owner: u8,
-    /// Native `axis` observation; later-branch fields are read only after their guards.
-    pub axis: Axis,
-    /// Native `blocked` observation; later-branch fields are read only after their guards.
-    pub blocked: bool,
-}
-/// Fields consumed together at one original rail/signal branch phase.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct RailWormholeAdmission {
-    /// Native `owner` observation; later-branch fields are read only after their guards.
-    pub owner: u8,
-    /// Native `transport` observation; later-branch fields are read only after their guards.
-    pub transport: TransportType,
-    /// Native `direction` observation; later-branch fields are read only after their guards.
-    pub direction: DiagDirection,
-}
-
 /// Canonical shared rail/signal map operations; pointers remain immutable for the call.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RailMapServices {
     /// Canonical track bits and terrain leaves, shared with water and tile loops.
     pub ground: *const crate::ground::RailServices,
-    /// Consumed source-phase observation; guarded fields are not hoisted.
-    pub traversal: extern "C" fn(u32) -> RailTraversal,
-    /// Consumed source-phase observation; guarded fields are not hoisted.
-    pub station_admission: extern "C" fn(u32, u8, u8) -> RailStationAdmission,
-    /// Consumed source-phase observation; guarded fields are not hoisted.
-    pub wormhole_admission: extern "C" fn(u32, u8) -> RailWormholeAdmission,
-
     /// Native `set_signal_state` map operation at the original observation point.
     pub set_signal_state: extern "C" fn(u32, u8, u8) -> (),
     /// Native `other_tunnel_bridge_end` map operation at the original observation point.
