@@ -166,11 +166,6 @@ static void OPENTTD_RUST_CALL Aircraft_dirty_lists(OpenTTDAircraftVehicle vehicl
 	RustVehicleDetailsDirty(vehicle.handle); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
 }
 
-static void OPENTTD_RUST_CALL Aircraft_invalid_scheme(OpenTTDAircraftVehicle) noexcept
-{
-	FatalError("OK, you shouldn't be here, check your Airport Scheme!");
-}
-
 static bool OPENTTD_RUST_CALL Aircraft_rotor_image_if_changed(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); Aircraft *rotor = v->Next()->Next(); VehicleSpriteSeq seq;
@@ -209,7 +204,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.had_vehicle = Aircraft_had_vehicle,
 	.hangar_exit = Aircraft_hangar_exit,
 	.helipads = Aircraft_helipads,
-	.invalid_scheme = Aircraft_invalid_scheme,
 	.landing_rating = Aircraft_landing_rating,
 	.mass = &GetVehicleMassServices(),
 	.moving = Aircraft_moving,

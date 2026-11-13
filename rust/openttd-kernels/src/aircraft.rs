@@ -350,8 +350,6 @@ pub struct Leaves {
         unsafe extern "C" fn(*const Station, u32, *const crate::station_cmd::AirportSpec) -> u8,
     /// `AirportFTAClass::num_helipads`.
     pub helipads: unsafe extern "C" fn(*const c_void) -> u8,
-    /// `AircraftEventHandler_General`'s `FatalError`.
-    pub invalid_scheme: unsafe extern "C" fn(Vehicle),
     /// `MaybeCrashAirplane`'s goods entry reset for one cargo.
     pub landing_rating: unsafe extern "C" fn(u16, u8),
     /// The depot command's services, for `CMD_SEND_VEHICLE_TO_DEPOT`.
@@ -2325,8 +2323,11 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
 
     /// Original `AircraftEventHandler_General`.
-    fn aircraft_event_handler_general(&self, v: Vehicle) {
-        Self::call(|| unsafe { (self.leaves.invalid_scheme)(v) });
+    fn aircraft_event_handler_general(&self) -> ! {
+        crate::error_func::fatal_error(
+            self.ss,
+            "OK, you shouldn't be here, check your Airport Scheme!",
+        )
     }
 
     /// Original `AircraftEventHandler_TakeOff`.
@@ -2502,7 +2503,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             HELILANDING => self.aircraft_event_handler_heli_landing(v),
             HELIENDLANDING => self.aircraft_event_handler_heli_end_landing(v, apc),
             /* TO_ALL, the table's first entry. */
-            _ => self.aircraft_event_handler_general(v),
+            _ => self.aircraft_event_handler_general(),
         }
     }
 
@@ -3383,7 +3384,6 @@ crate::abi::layouts! {
         had_vehicle,
         hangar_exit,
         helipads,
-        invalid_scheme,
         landing_rating,
         mass,
         moving,

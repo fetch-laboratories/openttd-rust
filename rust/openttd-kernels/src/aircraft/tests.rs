@@ -199,3 +199,43 @@ fn airport_move_past_the_last_position_reports_and_asserts() {
     );
     assert_eq!(take_checks(), [false], "assert(v->pos < apc->nofelements)");
 }
+
+/// `AircraftEventHandler_General`, the table's `TO_ALL` entry: `FatalError` with the
+/// original's message, which does not return. The test runs it in a child and reads the
+/// message the recording fatal-error service prints.
+#[test]
+fn aircraft_event_handler_general_is_a_fatal_error() {
+    const CHILD: &str = "OPENTTD_AIRCRAFT_SCHEME_CHILD";
+    extern "C" fn print_fatal(message: *const u8, size: usize) {
+        // SAFETY: The service receives the message's bytes for this call.
+        let message = unsafe { std::slice::from_raw_parts(message, size) };
+        eprintln!("fatal: {}", String::from_utf8_lossy(message));
+    }
+    if std::env::var_os(CHILD).is_some() {
+        let mut leaves = leaves(crate::test_tables::VEHICLE);
+        let mut shared = *shared();
+        shared.fatal_error = print_fatal;
+        leaves.shared = Box::leak(Box::new(shared));
+        let v = aircraft();
+        // SAFETY: The test owns the live state allocation; state 0 is TO_ALL.
+        unsafe { (*v.state).state = 0 };
+        // SAFETY: The leaked tables outlive the test.
+        let w = unsafe { World::<false>::new(&raw const leaves) };
+        w.aircraft_state_handler(v, std::ptr::null());
+        std::process::exit(0);
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "aircraft::tests::aircraft_event_handler_general_is_a_fatal_error",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "FatalError does not return");
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("fatal: OK, you shouldn't be here, check your Airport Scheme!\n")
+    );
+}

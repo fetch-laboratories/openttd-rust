@@ -28,6 +28,7 @@ rust/openttd-kernels/src/direction_func.rs
 rust/openttd-kernels/src/disaster_vehicle.rs
 rust/openttd-kernels/src/effectvehicle_func.rs
 rust/openttd-kernels/src/encoded.rs
+rust/openttd-kernels/src/error_func.rs
 rust/openttd-kernels/src/follow_track.rs
 rust/openttd-kernels/src/game_state.rs
 rust/openttd-kernels/src/house_definition.rs

@@ -538,6 +538,8 @@ pub struct Services {
     pub show_error: extern "C" fn(u32, u32),
     /// Native `NOT_REACHED`.
     pub not_reached: extern "C" fn(),
+    /// Native `FatalErrorI` of a formatted message; it does not return.
+    pub fatal_error: extern "C" fn(*const u8, usize),
 }
 /// Station visitor: context, station, its service owner and its index.
 pub type StationVisitor = unsafe extern "C" fn(
@@ -868,6 +870,7 @@ crate::abi::layouts! {
         resolver_grf_version,
         show_error,
         not_reached,
+        fatal_error,
     };
     "OpenTTDByteSpan" ["industry"] => ByteSpan {
         data,
@@ -978,6 +981,9 @@ pub fn fixture(
     extern "C" fn unexpected_path() {
         std::process::abort()
     }
+    extern "C" fn unexpected_fatal(_: *const u8, _: usize) {
+        std::process::abort()
+    }
     extern "C" fn unexpected_string_data(_: *const c_void, _: *mut usize) -> *const u8 {
         std::process::abort()
     }
@@ -1062,6 +1068,7 @@ pub fn fixture(
         terrain_type: unexpected_terrain,
         show_error: unexpected_error,
         not_reached: unexpected_path,
+        fatal_error: unexpected_fatal,
         movement: std::ptr::null(),
         set_tile_owner: zone,
         autoslope: flag0,

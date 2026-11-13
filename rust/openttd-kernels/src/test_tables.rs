@@ -394,6 +394,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     resolver_grf_version: unreachable1,
     show_error: unreachable2,
     not_reached: unreachable0,
+    fatal_error: unreachable2,
 };
 
 /// `crate::rail_cmd::RailCommandServices` with every entry unreachable.
@@ -904,7 +905,6 @@ pub(crate) const AIRCRAFT_LEAVES: crate::aircraft::Leaves = crate::aircraft::Lea
     had_vehicle: unreachable1,
     hangar_exit: unreachable3,
     helipads: unreachable1,
-    invalid_scheme: unreachable1,
     landing_rating: unreachable2,
     mass: ptr::null(),
     moving: unreachable2,

@@ -49,6 +49,7 @@ mod disaster_vehicle;
 mod economy_func;
 pub mod economy_type;
 mod engine_type;
+mod error_func;
 /// Native engine scalar domains; native record fields remain internal.
 pub use engine_type::{
     EngineClass, EngineFlag, EngineFlags, EngineID, EngineMiscFlag, EngineMiscFlags,

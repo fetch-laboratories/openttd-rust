@@ -60,7 +60,6 @@ struct OpenTTDAircraftLeaves {
 	uint8_t (OPENTTD_RUST_CALL *had_vehicle)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(had_vehicle);
 	uint8_t (OPENTTD_RUST_CALL *hangar_exit)(const OpenTTDStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
 	uint8_t (OPENTTD_RUST_CALL *helipads)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(helipads);
-	void (OPENTTD_RUST_CALL *invalid_scheme)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(invalid_scheme);
 	void (OPENTTD_RUST_CALL *landing_rating)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(landing_rating);
 	const OpenTTDVehicleMassServices *mass;
 	OpenTTDAircraftMoving (OPENTTD_RUST_CALL *moving)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(moving);
