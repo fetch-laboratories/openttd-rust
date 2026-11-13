@@ -74,6 +74,7 @@ rust/openttd-kernels/src/random_func.rs
 rust/openttd-kernels/src/raw_field.rs
 rust/openttd-kernels/src/road/availability.rs
 rust/openttd-kernels/src/road_stop.rs
+rust/openttd-kernels/src/road_yapf.rs
 rust/openttd-kernels/src/roadveh.rs
 rust/openttd-kernels/src/saveload.rs
 rust/openttd-kernels/src/signal.rs
@@ -132,4 +133,5 @@ rust/openttd-kernels/src/viewport_func.rs
 rust/openttd-kernels/src/void_map.rs
 rust/openttd-kernels/src/widget_parser.rs
 rust/openttd-kernels/src/witness.rs
+rust/openttd-kernels/src/yapf_common.rs
 rust/openttd-kernels/src/yapf_node.rs
