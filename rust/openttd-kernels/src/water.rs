@@ -541,11 +541,7 @@ impl<'a> World<'a> {
                     }
                 }
                 crate::tile_type::MP_TREES if !is_slope_with_one_corner_raised_raw(slope.0) => {
-                    (self.w.set_tree_ground)(
-                        tile,
-                        TreeGround::TREE_GROUND_SHORE,
-                        3,
-                    );
+                    (self.w.set_tree_ground)(tile, TreeGround::TREE_GROUND_SHORE, 3);
                     (self.s.mark_dirty)(tile);
                     true
                 }

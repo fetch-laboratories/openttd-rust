@@ -332,7 +332,10 @@ fn plant_trees_on_tile(
 /// This function returns a random `TreeType` which can be placed on the given tile.
 /// The seed for randomness must be less or equal 256, use `GB` on the value of `Random()`
 /// to get such a value.
-#[allow(clippy::cast_possible_truncation, reason = "static_cast<TreeType> of a uint")]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "static_cast<TreeType> of a uint"
+)]
 fn get_random_tree_type(w: &World, tile: TileIndex, seed: u32) -> TreeType {
     let tree = |count: u32, base: TreeType| {
         TreeType(
@@ -366,7 +369,10 @@ fn get_random_tree_type(w: &World, tile: TileIndex, seed: u32) -> TreeType {
 /// Create a new tree-tile for the given tile. `r`, a `Random()` value, is used for
 /// randomness like type and number of trees. `keep_density` keeps the existing ground density
 /// of the tile.
-#[allow(clippy::cast_possible_truncation, reason = "GB of a uint into a uint8_t field")]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GB of a uint into a uint8_t field"
+)]
 pub(crate) fn place_tree(c: &Trees, w: &World, tile: TileIndex, r: u32, keep_density: bool) {
     let tree = get_random_tree_type(w, tile, gb(r, 24, 8));
 
@@ -408,9 +414,8 @@ struct BlobHarmonic {
 /// The shape is placed into a pre-allocated span so the caller controls allocation.
 /// `radius` is the maximum radius of the polygon. May be smaller, but will not be larger.
 #[allow(
-    clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    reason = "the original's float conversions"
+    reason = "CreateStarShapedPolygon's size_t, int and float conversions"
 )]
 fn create_star_shaped_polygon(
     c: &Trees,
@@ -419,18 +424,18 @@ fn create_star_shaped_polygon(
     shape: &mut [Point],
 ) {
     let mut theta = 0.0_f32;
-    let step = (std::f64::consts::PI * 2.0 / shape.len() as f64) as f32;
+    let step = (std::f64::consts::PI * 2.0 / f64::from(shape.len() as u32)) as f32;
 
     // Divide a circle into a number of equally spaced divisions.
     for vertex in shape {
         // Add up the values of each harmonic at this segment.
         let deviation = harmonics.iter().fold(0.0_f32, |d, harmonic| {
-            d + (c.t.sin)((theta + harmonic.phase) * harmonic.frequency as f32)
-                * harmonic.amplitude as f32
+            d + (c.t.sin)((theta + harmonic.phase) * f64::from(harmonic.frequency) as f32)
+                * f64::from(harmonic.amplitude) as f32
         });
 
         // Smooth out changes.
-        let adjusted_radius = (radius as f32 / 2.0) + (deviation / 2.0);
+        let adjusted_radius = (f64::from(radius) as f32 / 2.0) + (deviation / 2.0);
 
         // Add to the final polygon.
         vertex.x = ((c.t.cos)(theta) * adjusted_radius) as i32;
@@ -445,9 +450,8 @@ fn create_star_shaped_polygon(
 /// The shape is placed into a pre-allocated span so the caller controls allocation.
 /// `radius` is the maximum radius of the blob. May be smaller, but will not be larger.
 #[allow(
-    clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    reason = "the original's float conversions"
+    reason = "PHASE_DIVISOR's double and Random()'s uint32_t converted to float"
 )]
 fn create_random_star_shaped_polygon(c: &Trees, radius: i32, shape: &mut [Point]) {
     // Valid values for the phase of blob harmonics are between 0 and Tau. we can get a value in
@@ -460,22 +464,22 @@ fn create_random_star_shaped_polygon(c: &Trees, radius: i32, shape: &mut [Point]
     let harmonics = [
         BlobHarmonic {
             amplitude: radius / 2,
-            phase: c.s.random() as f32 / PHASE_DIVISOR,
+            phase: f64::from(c.s.random()) as f32 / PHASE_DIVISOR,
             frequency: 1,
         },
         BlobHarmonic {
             amplitude: radius / 4,
-            phase: c.s.random() as f32 / PHASE_DIVISOR,
+            phase: f64::from(c.s.random()) as f32 / PHASE_DIVISOR,
             frequency: 2,
         },
         BlobHarmonic {
             amplitude: radius / 8,
-            phase: c.s.random() as f32 / PHASE_DIVISOR,
+            phase: f64::from(c.s.random()) as f32 / PHASE_DIVISOR,
             frequency: 3,
         },
         BlobHarmonic {
             amplitude: radius / 16,
-            phase: c.s.random() as f32 / PHASE_DIVISOR,
+            phase: f64::from(c.s.random()) as f32 / PHASE_DIVISOR,
             frequency: 4,
         },
     ];
@@ -655,8 +659,7 @@ pub(crate) fn place_trees_randomly(c: &Trees) -> bool {
             if can_plant_trees_on_tile(&w, tile, true) {
                 place_tree(c, &w, tile, r, false);
                 // SAFETY: The module's settings contract.
-                if TreePlacer(unsafe { s.settings().tree_placer.read() })
-                    != TreePlacer::TP_IMPROVED
+                if TreePlacer(unsafe { s.settings().tree_placer.read() }) != TreePlacer::TP_IMPROVED
                 {
                     break 'attempt;
                 }
@@ -668,8 +671,7 @@ pub(crate) fn place_trees_randomly(c: &Trees) -> bool {
                 // The higher we get, the more trees we plant
                 let mut j = get_tile_z(&w, tile) * 2;
                 // Above snowline more trees!
-                if landscape(s) == LandscapeType::Arctic
-                    && ht > i32::from(crate::snow_line::get(s))
+                if landscape(s) == LandscapeType::Arctic && ht > i32::from(crate::snow_line::get(s))
                 {
                     j *= 3;
                 }
@@ -774,14 +776,7 @@ pub(crate) fn place_tree_group_around_tile(
                 c.mark_tile_dirty_by_tile(tile_to_plant);
                 planted += 1;
             } else if can_plant_trees_on_tile(&w, tile_to_plant, allow_desert) {
-                plant_trees_on_tile(
-                    c,
-                    &w,
-                    tile_to_plant,
-                    treetype,
-                    0,
-                    TreeGrowthStage::Grown,
-                );
+                plant_trees_on_tile(c, &w, tile_to_plant, treetype, 0, TreeGrowthStage::Grown);
                 c.mark_tile_dirty_by_tile(tile_to_plant);
                 planted += 1;
             }
@@ -919,7 +914,12 @@ fn cmd_plant_tree(
         i32::MAX
     } else {
         // SAFETY: A valid company's finances; one field-sized load.
-        gb(unsafe { std::ptr::addr_of!((*company).tree).read() }, 16, 16).cast_signed()
+        gb(
+            unsafe { std::ptr::addr_of!((*company).tree).read() },
+            16,
+            16,
+        )
+        .cast_signed()
     };
     // `c->tree_limit -= 1 << 16`.
     let debit = || {
@@ -963,7 +963,9 @@ fn cmd_plant_tree(
                             debit();
                         }
                         // 2x as expensive to add more trees to an existing tile
-                        cost = cost.saturating_add(crate::company::price(PR_BUILD_TREES).saturating_mul(2));
+                        cost = cost.saturating_add(
+                            crate::company::price(PR_BUILD_TREES).saturating_mul(2),
+                        );
                     }
                 }
 
@@ -1246,7 +1248,10 @@ fn trees_on_tile_can_spread(w: &World, tile: TileIndex, settings: &LoopSettings)
 
 /// `TileLoop_Trees`. `types` is the tile-loop batch's map descriptor; `call` is the native
 /// lazy-result context of the flooding it may run.
-#[allow(clippy::cast_possible_truncation, reason = "the uint32_t cycle of a uint64_t sum")]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the uint32_t cycle of a uint64_t sum"
+)]
 fn tile_loop_trees(
     c: &Trees,
     types: &TileTypeAccess,
@@ -1354,11 +1359,9 @@ fn tile_loop_trees(
                         (c.s.random() % u32::from(crate::direction_type::Direction::DIR_END.0))
                             as u8,
                     );
-                    tile = TileIndex(
-                        tile.0.wrapping_add_signed(
-                            w.dimensions.tile_offs_by_dir(direction, |ok| w.check(ok)),
-                        ),
-                    );
+                    tile = TileIndex(tile.0.wrapping_add_signed(
+                        w.dimensions.tile_offs_by_dir(direction, |ok| w.check(ok)),
+                    ));
 
                     if !can_plant_trees_on_tile(&w, tile, false) {
                         return;
@@ -1446,8 +1449,8 @@ fn decrement_tree_counter(w: &World) -> bool {
     unsafe {
         let old_trees_tick_ctr = counter.read();
         counter.write(
-            u32::from(old_trees_tick_ctr)
-                .wrapping_sub(w.dimensions.scale_by_size(w.size_y(), 1)) as u8,
+            u32::from(old_trees_tick_ctr).wrapping_sub(w.dimensions.scale_by_size(w.size_y(), 1))
+                as u8,
         );
         old_trees_tick_ctr <= counter.read()
     }
@@ -1579,7 +1582,9 @@ pub unsafe extern "C" fn openttd_rust_trees_place_randomly_abi(
     shared: *const Services,
 ) -> u8 {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    u8::from(place_trees_randomly(&unsafe { Trees::new(services, shared) }))
+    u8::from(place_trees_randomly(&unsafe {
+        Trees::new(services, shared)
+    }))
 }
 
 /// `PlaceTree`.
@@ -1959,8 +1964,15 @@ mod tests {
     extern "C" fn trig(value: f32) -> f32 {
         value
     }
-    #[allow(clippy::cast_possible_truncation)]
-    extern "C" fn make_tree(tile: u32, r#type: u8, count: u32, growth: u8, ground: u8, density: u32) {
+    #[allow(clippy::cast_possible_truncation, reason = "MakeTree's uint count and density in bitfields")]
+    extern "C" fn make_tree(
+        tile: u32,
+        r#type: u8,
+        count: u32,
+        growth: u8,
+        ground: u8,
+        density: u32,
+    ) {
         log(Event::Write("make_tree", tile));
         let ground = PLANTED_GROUND.get().unwrap_or(ground);
         edit(tile, |b| {
@@ -1970,26 +1982,38 @@ mod tests {
             b.m5 = ((count as u8) << 6) | growth;
         });
     }
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_truncation, reason = "SetTreeGroundDensity's uint density in m2")]
     extern "C" fn set_ground_density(tile: u32, ground: u8, density: u32) {
         log(Event::Write("ground", tile));
-        edit(tile, |b| b.m2 = (b.m2 & !0x1f0) | (u16::from(ground) << 6) | ((density as u16) << 4));
+        edit(tile, |b| {
+            b.m2 = (b.m2 & !0x1f0) | (u16::from(ground) << 6) | ((density as u16) << 4)
+        });
     }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "AddTreeCount's m5() += c << 6 of an int"
+    )]
     extern "C" fn add_count(tile: u32, c: i32) {
         log(Event::Write("count", tile));
         edit(tile, |b| b.m5 = b.m5.wrapping_add(((c as u8) & 3) << 6));
     }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "AddTreeGrowth's m5() += a of an int"
+    )]
     extern "C" fn add_growth(tile: u32, a: i32) {
         log(Event::Write("add_growth", tile));
-        edit(tile, |b| b.m5 = (b.m5 & !7) | (b.m5.wrapping_add(a as u8) & 7));
+        edit(tile, |b| {
+            b.m5 = (b.m5 & !7) | (b.m5.wrapping_add(a as u8) & 7)
+        });
     }
     extern "C" fn set_growth(tile: u32, g: u8) {
         log(Event::Write("set_growth", tile));
         edit(tile, |b| b.m5 = (b.m5 & !7) | g);
     }
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_truncation, reason = "MakeClear's uint density in m5")]
     extern "C" fn make_clear(tile: u32, g: u8, density: u32) {
         log(Event::Write("clear", tile));
         clear(tile, ClearGround(g), density as u8);
@@ -2065,7 +2089,14 @@ mod tests {
         }))
     }
     /// Run `CmdPlantTree` from `start_tile` to `tile`.
-    fn plant(c: &Trees<'static>, flags: u16, tile: u32, start_tile: u32, tree_to_plant: u8, diagonal: bool) {
+    fn plant(
+        c: &Trees<'static>,
+        flags: u16,
+        tile: u32,
+        start_tile: u32,
+        tree_to_plant: u8,
+        diagonal: bool,
+    ) {
         let commands = commands(c.s);
         let args = PlantTreeArgs {
             tile,
@@ -2220,23 +2251,47 @@ mod tests {
     #[test]
     fn quiet_temperate_tile_calls_no_service() {
         let _map = install(6, TileType::MP_CLEAR, true);
-        tree(0, TreeType(0), 1, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+        tree(
+            0,
+            TreeType(0),
+            1,
+            TreeGrowthStage::Grown,
+            TreeGround::TREE_GROUND_GRASS,
+        );
         let c = trees();
         let s = loop_settings(LandscapeType::Temperate, ExtraTreePlacement::ETP_SPREAD_ALL);
-        tile_loop_trees(&c, &World::new(c.s).types, TileIndex(0), &s, std::ptr::null_mut());
+        tile_loop_trees(
+            &c,
+            &World::new(c.s).types,
+            TileIndex(0),
+            &s,
+            std::ptr::null_mut(),
+        );
         assert_eq!(events(), []);
     }
 
     #[test]
     fn growth_bitpattern_seven_takes_the_default_arm() {
         let _map = install(6, TileType::MP_CLEAR, true);
-        tree(2, TreeType(0), 1, TreeGrowthStage(7), TreeGround::TREE_GROUND_GRASS);
+        tree(
+            2,
+            TreeType(0),
+            1,
+            TreeGrowthStage(7),
+            TreeGround::TREE_GROUND_GRASS,
+        );
         let c = trees();
         let s = LoopSettings {
             tick_counter: 2304, // Tile 2: cycle 31.
             ..loop_settings(LandscapeType::Temperate, ExtraTreePlacement::ETP_NO_SPREAD)
         };
-        tile_loop_trees(&c, &World::new(c.s).types, TileIndex(2), &s, std::ptr::null_mut());
+        tile_loop_trees(
+            &c,
+            &World::new(c.s).types,
+            TileIndex(2),
+            &s,
+            std::ptr::null_mut(),
+        );
         assert_eq!(events(), [Event::Write("add_growth", 2), Event::Dirty(2)]);
         assert_eq!(growth(2), 0);
     }
@@ -2247,19 +2302,40 @@ mod tests {
         for tile in 0..4096 {
             edit(tile, |b| b.height = 8);
         }
-        tree(65, TreeType(12), 1, TreeGrowthStage::Growing1, TreeGround::TREE_GROUND_SNOW_DESERT);
+        tree(
+            65,
+            TreeType(12),
+            1,
+            TreeGrowthStage::Growing1,
+            TreeGround::TREE_GROUND_SNOW_DESERT,
+        );
         RANDOM.set(0x8000_0000);
         let c = trees();
         let s = loop_settings(LandscapeType::Arctic, ExtraTreePlacement::ETP_SPREAD_ALL);
         // Height 8 above snow line 4 is full density: the snow sound is the only effect.
-        tile_loop_trees(&c, &World::new(c.s).types, TileIndex(65), &s, std::ptr::null_mut());
+        tile_loop_trees(
+            &c,
+            &World::new(c.s).types,
+            TileIndex(65),
+            &s,
+            std::ptr::null_mut(),
+        );
         assert_eq!(
             events(),
-            [Event::Draw, Event::Sound(u16::from(SoundFx::SND_39_ARCTIC_SNOW_2.0))]
+            [
+                Event::Draw,
+                Event::Sound(u16::from(SoundFx::SND_39_ARCTIC_SNOW_2.0))
+            ]
         );
         // Below the snow line, snow turns back into grass.
         SNOW_LINE.set(10);
-        tile_loop_trees(&c, &World::new(c.s).types, TileIndex(65), &s, std::ptr::null_mut());
+        tile_loop_trees(
+            &c,
+            &World::new(c.s).types,
+            TileIndex(65),
+            &s,
+            std::ptr::null_mut(),
+        );
         assert_eq!(events(), [Event::Write("ground", 65), Event::Dirty(65)]);
         assert_eq!(tree_ground(65), TreeGround::TREE_GROUND_GRASS.0);
         SNOW_LINE.set(4);
@@ -2347,9 +2423,21 @@ mod tests {
         let mut company = finances(1 << 16, 0);
         COMPANY.set(&raw mut *company);
         clear(1, ClearGround::CLEAR_GRASS, 3);
-        tree(2, TreeType(0), 4, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+        tree(
+            2,
+            TreeType(0),
+            4,
+            TreeGrowthStage::Grown,
+            TreeGround::TREE_GROUND_GRASS,
+        );
         clear(3, ClearGround::CLEAR_GRASS, 3);
-        tree(4, TreeType(0), 4, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+        tree(
+            4,
+            TreeType(0),
+            4,
+            TreeGrowthStage::Grown,
+            TreeGround::TREE_GROUND_GRASS,
+        );
         // A limit of zero is reached but not exceeded: tile 2 is still visited.
         plant(&trees(), 0, 2, 1, 255, false);
         assert_eq!(events(), [Event::Error(STRINGS.already_here)]);
@@ -2486,10 +2574,19 @@ mod tests {
         plant(&c, 0, 66, 66, 255, false);
         assert_eq!(town.simulation.ratings[0], 220);
         // RATING_TREE_DOWN_STEP, down to RATING_TREE_MINIMUM.
-        tree(67, TreeType(20), 2, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+        tree(
+            67,
+            TreeType(20),
+            2,
+            TreeGrowthStage::Grown,
+            TreeGround::TREE_GROUND_GRASS,
+        );
         town.simulation.ratings[0] = -960;
         // Two rainforest trees cost four times each.
-        assert_eq!(clear_tile_trees(&c, TileIndex(67), DoCommandFlags(0)), 2 * 4 * 4);
+        assert_eq!(
+            clear_tile_trees(&c, TileIndex(67), DoCommandFlags(0)),
+            2 * 4 * 4
+        );
         assert_eq!(town.simulation.ratings[0], -995);
         clear_tile_trees(&c, TileIndex(67), DoCommandFlags(0));
         assert_eq!(town.simulation.ratings[0], -1000);
@@ -2509,20 +2606,33 @@ mod tests {
         for price in [i64::MIN, i64::MAX] {
             set_prices(price, price);
             for tile in 1..=3 {
-                tree(tile, TreeType(20), 1, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
+                tree(
+                    tile,
+                    TreeType(20),
+                    1,
+                    TreeGrowthStage::Grown,
+                    TreeGround::TREE_GROUND_GRASS,
+                );
             }
             plant(&trees(), 0, 3, 1, 255, false);
             assert_eq!(
                 events(),
                 [Event::Expense(ExpensesType::EXPENSES_OTHER.0, price)]
             );
-            tree(1, TreeType(20), 4, TreeGrowthStage::Grown, TreeGround::TREE_GROUND_GRASS);
-            let cost = clear_tile_trees(&trees(), TileIndex(1), DoCommandFlags(DoCommandFlag::EXECUTE));
-            assert_eq!(cost, price);
-            assert_eq!(
-                events(),
-                [Event::Write("clear_square", 1), Event::Dirty(1)]
+            tree(
+                1,
+                TreeType(20),
+                4,
+                TreeGrowthStage::Grown,
+                TreeGround::TREE_GROUND_GRASS,
             );
+            let cost = clear_tile_trees(
+                &trees(),
+                TileIndex(1),
+                DoCommandFlags(DoCommandFlag::EXECUTE),
+            );
+            assert_eq!(cost, price);
+            assert_eq!(events(), [Event::Write("clear_square", 1), Event::Dirty(1)]);
         }
         set_mode(saved);
     }
@@ -2534,7 +2644,14 @@ mod tests {
             clear(1, ClearGround::CLEAR_FIELDS, 2);
             let c = trees();
             let w = World::new(c.s);
-            plant_trees_on_tile(&c, &w, TileIndex(1), TreeType(0), 0, TreeGrowthStage::Growing1);
+            plant_trees_on_tile(
+                &c,
+                &w,
+                TileIndex(1),
+                TreeType(0),
+                0,
+                TreeGrowthStage::Growing1,
+            );
             let mut expected = vec![Event::Write("make_tree", 1)];
             if assertions {
                 expected.insert(0, Event::Assert);
@@ -2578,18 +2695,28 @@ mod tests {
                 let _map = install(6, TileType::MP_TREES, true);
                 let c = trees();
                 let w = World::new(c.s);
-                plant_trees_on_tile(&c, &w, TileIndex(1), TreeType(0), 0, TreeGrowthStage::Growing1);
+                plant_trees_on_tile(
+                    &c,
+                    &w,
+                    TileIndex(1),
+                    TreeType(0),
+                    0,
+                    TreeGrowthStage::Growing1,
+                );
             },
         );
     }
 
     #[test]
     fn an_unknown_tree_placer_is_not_reached() {
-        takes_native_unreachable("trees::tests::an_unknown_tree_placer_is_not_reached", || {
-            let _map = install(6, TileType::MP_TREES, true);
-            PLACER.set(3);
-            generate_trees(&trees());
-        });
+        takes_native_unreachable(
+            "trees::tests::an_unknown_tree_placer_is_not_reached",
+            || {
+                let _map = install(6, TileType::MP_TREES, true);
+                PLACER.set(3);
+                generate_trees(&trees());
+            },
+        );
     }
 
     #[test]

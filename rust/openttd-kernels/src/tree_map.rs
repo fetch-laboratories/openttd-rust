@@ -65,20 +65,16 @@ impl TreeGrowthStage {
 }
 
 /// Number of tree types on a temperate map (`TREE_COUNT_TEMPERATE`).
-#[allow(clippy::cast_lossless, reason = "`u32::from` is not const")]
 pub(crate) const TREE_COUNT_TEMPERATE: u32 =
     TreeType::TREE_SUB_ARCTIC.0 as u32 - TreeType::TREE_TEMPERATE.0 as u32;
 /// Number of tree types on a sub arctic map (`TREE_COUNT_SUB_ARCTIC`).
-#[allow(clippy::cast_lossless, reason = "`u32::from` is not const")]
 pub(crate) const TREE_COUNT_SUB_ARCTIC: u32 =
     TreeType::TREE_RAINFOREST.0 as u32 - TreeType::TREE_SUB_ARCTIC.0 as u32;
 /// Number of tree types for the 'rainforest part' of a sub-tropic map (`TREE_COUNT_RAINFOREST`).
-#[allow(clippy::cast_lossless, reason = "`u32::from` is not const")]
 pub(crate) const TREE_COUNT_RAINFOREST: u32 =
     TreeType::TREE_CACTUS.0 as u32 - TreeType::TREE_RAINFOREST.0 as u32;
 /// Number of tree types for the 'sub-tropic part' of a sub-tropic map
 /// (`TREE_COUNT_SUB_TROPICAL`).
-#[allow(clippy::cast_lossless, reason = "`u32::from` is not const")]
 pub(crate) const TREE_COUNT_SUB_TROPICAL: u32 =
     TreeType::TREE_TOYLAND.0 as u32 - TreeType::TREE_SUB_TROPICAL.0 as u32;
 /// Number of tree types on a toyland map (`TREE_COUNT_TOYLAND`).

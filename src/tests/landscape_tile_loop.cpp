@@ -141,11 +141,7 @@ struct MapLeafOracle {
 	uint32_t tram_bits;
 	uint32_t has_road;
 	uint32_t has_tram;
-	uint32_t tree_ground;
-	uint32_t tree_density;
-	uint32_t tree_type;
-	uint32_t tree_count;
-	uint32_t tree_growth;
+	uint32_t tree_ground, tree_density, tree_type, tree_count, tree_growth;
 };
 static void ObserveMapLeaves(uint32_t index, MapLeafOracle *out) noexcept
 {
@@ -166,8 +162,7 @@ static void ObserveMapLeaves(uint32_t index, MapLeafOracle *out) noexcept
 		out->has_road = HasTileRoadType(tile, RTT_ROAD); out->has_tram = HasTileRoadType(tile, RTT_TRAM);
 	}
 	if (IsTileType(tile, MP_TREES)) {
-		out->tree_ground = GetTreeGround(tile); out->tree_density = GetTreeDensity(tile); out->tree_type = GetTreeType(tile);
-		out->tree_count = GetTreeCount(tile); out->tree_growth = to_underlying(GetTreeGrowth(tile));
+		out->tree_ground = GetTreeGround(tile); out->tree_density = GetTreeDensity(tile); out->tree_type = GetTreeType(tile); out->tree_count = GetTreeCount(tile); out->tree_growth = to_underlying(GetTreeGrowth(tile));
 	}
 }
 extern "C" uint8_t openttd_rust_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, const OpenTTDClearServices *, uint32_t, void (*)(uint32_t) noexcept, void (*)(uint32_t, MapLeafOracle *) noexcept);

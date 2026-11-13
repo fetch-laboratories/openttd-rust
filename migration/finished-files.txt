@@ -106,7 +106,9 @@ rust/openttd-kernels/src/town/policy.rs
 rust/openttd-kernels/src/town/resolver.rs
 rust/openttd-kernels/src/town.rs
 rust/openttd-kernels/src/town/spatial.rs
+rust/openttd-kernels/src/tree_land.rs
 rust/openttd-kernels/src/tree_map.rs
+rust/openttd-kernels/src/trees.rs
 rust/openttd-kernels/src/utf8.rs
 rust/openttd-kernels/src/vehicle_transactions/articulated.rs
 rust/openttd-kernels/src/vehicle_transactions/build.rs

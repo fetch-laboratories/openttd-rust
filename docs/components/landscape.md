@@ -13,7 +13,7 @@
 ## Landscape scheduler, ground and flooding
 
 - Rust owns: `RunTileLoop` (LFSR walk and saved cursor), seven Rust tile owners; clear, rail, road and tunnel ground evolution; flooding, half-tile rail removal, dry-up, neighbour wakeups and flood-victim traversal.
-- C++ keeps: Map arrays, allocation and writes. Scheduler clear/water/tree reads use the shared map descriptor (#274); standalone water/tree, generation, planting, command and other owner reads use typed callbacks.
+- C++ keeps: Map arrays, allocation and writes. Scheduler clear/water/tree reads use the shared map descriptor (#274); tree owner reads use it too; standalone water and other owner reads use typed callbacks.
 - Checks: the `tile_loop::comparison_tests` and `movement::evidence_tests` Rust tests over frozen original observations, and `python3 tools/migration.py simulate landscape roads-flooding`.
 - Limits: These remain #156 gaps: matrix, editor, NewGRF, threaded.
 - PRs: #255; descriptor #351.
@@ -43,11 +43,11 @@
 
 ## Tree generation, simulation and planting
 
-- Rust owns: Tree generation, scattering, grove geometry, placement, growth, climate loops, tick seeding, persisted counter and planting commands.
-- C++ keeps: Map/pools, rendering, editor forest-brush loop and save/load adapters; the brush calls Rust placement.
-- Checks: `python3 tools/migration.py simulate trees`, Cargo tests and native ABI probe.
+- Rust owns: Tree generation, scattering, grove geometry, placement, growth, climate loops, tick seeding, persisted counter, `CmdPlantTree` with its tree limit and town ratings, and `ClearTile_Trees`. Every tree, clear and water map read is in place through the shared map descriptor.
+- C++ keeps: The `tree_map.h` and `clear_map.h` writers as leaves, rendering, tile descriptions, the editor forest-brush loop and save/load adapters; the brush calls Rust placement.
+- Checks: `python3 tools/migration.py simulate trees`, the `trees::tests` Rust tests over a fixture map of real tile bytes, and the native ABI probe.
 - Limits: Editor interaction, diagonal traversal, legacy saves, NewGRF ambient callbacks and abort rethrow are unreached.
-- PRs: #102 and #208.
+- PRs: #102, #208 and the finished-file pass of #954.
 
 ## Water-region cache and graph service
 
