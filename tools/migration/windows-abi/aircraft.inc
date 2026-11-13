@@ -103,12 +103,12 @@ static void AircraftDirectBoundary()
 	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, true));
 	CHECK(p.order_owner->consist.real_index == 1 && p.order_owner->consist.implicit_index == 1);
 	leaves.station = [](uint16_t) noexcept -> const OpenTTDStation * { CHECK(aircraft_probe.live); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
+	AircraftTestAirportServices().get_station = [](uint16_t) noexcept { CHECK(aircraft_probe.live); return reinterpret_cast<Station *>(&aircraft_probe); };
 	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{7}; };
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&aircraft_probe); };
 	leaves.airport_blocks = [](const OpenTTDStation *) noexcept { CHECK(aircraft_probe.live); return &aircraft_probe.blocks; };
 	leaves.node = [](const void *ap, uint8_t) noexcept -> const void * { return ap; };
-	leaves.fta = [](const void *) noexcept { return OpenTTDAircraftNode{nullptr, uint64_t{1} << 9, 0, 0, 0}; };
-	leaves.layout_blocks = [](const void *, uint8_t) noexcept { return uint64_t{1} << 9; };
+	leaves.fta_blocks = [](const void *) noexcept { return uint64_t{1} << 9; };
 	vehicle.destroy = [](OpenTTDVehicle * handle) noexcept {
 		CHECK(handle == aircraft_probe.vehicle.handle);
 		auto v = aircraft_probe.vehicle;
@@ -190,7 +190,10 @@ static void AircraftPhaseBoundary()
 	v.order_type = [](OpenTTDVehicle *) noexcept { return uint8_t{1}; };
 	p.vehicle.state->state = 14; p.vehicle.state->targetairport = 7;
 	leaves.station = [](uint16_t station) noexcept { CHECK(station == 7); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
-	leaves.geometry = [](const OpenTTDStation *) noexcept { return OpenTTDAircraftGeometry{0, 0, 8, 8, true}; };
+	AircraftTestAirportServices().get_station = [](uint16_t station) noexcept { CHECK(station == 7); return reinterpret_cast<Station *>(&aircraft_probe); };
+	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{0}; };
+	leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
+	leaves.airport_width = leaves.airport_height = [](const OpenTTDStation *) noexcept { return uint8_t{8}; };
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&aircraft_probe); };
 	leaves.moving = [](const void *, uint8_t) noexcept { return OpenTTDAircraftMoving{16, 0, 16, 0}; };
 	static OpenTTDFixtureMap map{6, 4096};

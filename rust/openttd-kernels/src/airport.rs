@@ -175,9 +175,6 @@ impl AirportMovementStates {
     pub const TERM8: Self = Self(20);
     /// Heading for helipad 3.
     pub const HELIPAD3: Self = Self(21);
-    /// Last valid target to head for.
-    #[allow(dead_code)] // Complete original enumerator vocabulary.
-    pub const MAX_HEADINGS: Self = Self(21);
     /// Aircraft is looking for a free terminal in a terminalgroup.
     pub const TERMGROUP: Self = Self(255);
 }

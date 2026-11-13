@@ -8,6 +8,7 @@
 #include "rust/spec_services_ffi.h"
 #include "rust/station_command_ffi.h"
 #include "rust/station_service_ffi.h"
+#include "tests/fixture_map.hpp"
 #include <cstdlib>
 #include <cstdio>
 #include <memory>
@@ -58,6 +59,9 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	commands.airport_type = [](const BaseStation *) noexcept { return uint8_t{0}; };
 	shared.station_commands = []() noexcept -> const OpenTTDStationCommandServices * { return &AircraftTestAirportCommands(); };
 
+	/* Every entry loads the map descriptor; a fixture may replace this one. */
+	static OpenTTDFixtureMap map{6, 4096};
+	shared.map = &map.statics;
 	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{7}; };
 	leaves.airport_type = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 	openttd_rust_airport_exchange(&runtime);

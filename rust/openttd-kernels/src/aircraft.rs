@@ -32,10 +32,7 @@ use crate::newgrf_properties::{
     PROP_AIRCRAFT_CARGO_AGE_PERIOD, PROP_AIRCRAFT_RANGE, PROP_AIRCRAFT_SPEED,
 };
 use crate::newgrf_sound::{VSE_START, VSE_TOUCHDOWN};
-use crate::order_type::{
-    ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION,
-    OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OrderType,
-};
+use crate::order_type::{ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OrderType};
 use crate::services::Services;
 use crate::sound_type::{ORIGINAL_SAMPLE_COUNT, SoundFx, SoundID};
 use crate::station::Station;
@@ -73,9 +70,6 @@ impl AircraftSubType {
     pub const AIR_AIRCRAFT: Self = Self(2);
     /// shadow of the aircraft
     pub const AIR_SHADOW: Self = Self(4);
-    /// rotor of an helicopter
-    #[allow(dead_code)] // Complete original enumerator vocabulary.
-    pub const AIR_ROTOR: Self = Self(6);
 }
 /// `AIR_HELICOPTER`.
 pub const AIR_HELICOPTER: u8 = AircraftSubType::AIR_HELICOPTER.0;
@@ -621,8 +615,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         OrderType(Self::call(|| (self.vs.order_type)(v.base())))
     }
     /// `v->current_order.IsType(order_type)`.
-    fn current_order_is_type(&self, v: Vehicle, order_type: u8) -> bool {
-        self.order_type(v).0 == order_type
+    fn current_order_is_type(&self, v: Vehicle, order_type: OrderType) -> bool {
+        self.order_type(v) == order_type
     }
     /// `v->current_order.GetDestination()`.
     fn order_destination(&self, v: Vehicle) -> StationID {
@@ -637,7 +631,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         unsafe { maintenance::needs_automatic_servicing(v.base(), self.vs) }
     }
     /// `VehicleServiceInDepot(v)`.
-    fn vehicle_service_in_depot(&self, v: Vehicle) {
+    fn service_in_depot(&self, v: Vehicle) {
         // SAFETY: A live vehicle and its immutable maintenance table.
         unsafe { maintenance::service_in_depot(v.base(), self.vs) };
     }
@@ -646,11 +640,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         Self::call(|| (self.vs.start_stop_dirty)(v.base()));
     }
     /// `PlayVehicleSound(v, event)`.
-    fn play_vehicle_sound(
-        &self,
-        v: Vehicle,
-        event: crate::newgrf_sound::VehicleSoundEvent,
-    ) -> bool {
+    fn vehicle_sound(&self, v: Vehicle, event: crate::newgrf_sound::VehicleSoundEvent) -> bool {
         Self::call(|| (self.vs.play_vehicle_sound)(v.base(), event))
     }
     /// `SndPlayVehicleFx(sound, v)`.
@@ -670,7 +660,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         Self::call(|| (self.vs.property)((self.vs.newgrf)(), v, property, fallback))
     }
     /// `GetNewVehiclePos(v)`.
-    fn get_new_vehicle_pos(&self, v: Vehicle) -> crate::vehicle::NewPosition {
+    fn new_vehicle_pos(&self, v: Vehicle) -> crate::vehicle::NewPosition {
         Self::call(|| (self.vs.new_position)(v.base()))
     }
     /// `GetDirectionTowards(v, x, y)`.
@@ -764,7 +754,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// Original `FindNearestHangar`: find the nearest hangar to v.
     /// `StationID::Invalid()` is returned, if the company does not have any suitable
     /// airports (like helipads only)
-    #[allow(clippy::similar_names)] // FindNearestHangar's last_dest, next_dest, last_dist and next_dist.
+    #[allow(
+        clippy::similar_names,
+        reason = "FindNearestHangar's last_dest, next_dest, last_dist and next_dist"
+    )]
     fn find_nearest_hangar(&self, v: Vehicle) -> StationID {
         let b = v.base();
         let mut best: u32 = 0;
@@ -777,8 +770,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let mut last_dest: *const Station = std::ptr::null();
         let mut next_dest: *const Station = std::ptr::null();
         if max_range != 0 {
-            if self.current_order_is_type(v, OT_GOTO_STATION)
-                || (self.current_order_is_type(v, OT_GOTO_DEPOT)
+            if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
+                || (self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
                     && b.current_order().depot_action_flags() & ODATF_NEAREST_DEPOT == 0)
             {
                 last_dest = self.station_get_if_valid(StationID(b.last_station()));
@@ -874,14 +867,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             return;
         }
         if self.is_in_depot(v) {
-            self.vehicle_service_in_depot(v);
+            self.service_in_depot(v);
             return;
         }
 
         /* When we're parsing conditional orders and the like
          * we don't want to consider going to a depot too. */
-        if !self.current_order_is_type(v, OT_GOTO_DEPOT)
-            && !self.current_order_is_type(v, OT_GOTO_STATION)
+        if !self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
+            && !self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
         {
             return;
         }
@@ -895,7 +888,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if Self::airport_has_hangar(st) && Self::can_vehicle_use_station(v, st) {
             Self::call(|| unsafe { (self.leaves.service_order)(v, destination.0) });
             self.start_stop_dirty(v);
-        } else if self.current_order_is_type(v, OT_GOTO_DEPOT) {
+        } else if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
             Self::call(|| (self.vs.make_dummy)(v.base()));
             self.start_stop_dirty(v);
         }
@@ -911,7 +904,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
 
     /// Original `Aircraft::OnNewEconomyDay`: economy day handler.
-    #[allow(clippy::verbose_bit_mask)] // OnNewEconomyDay's (++day_counter & 7) == 0.
+    #[allow(
+        clippy::verbose_bit_mask,
+        reason = "OnNewEconomyDay's (++day_counter & 7) == 0"
+    )]
     fn on_new_economy_day(&self, v: Vehicle) {
         let b = v.base();
         if !is_normal_aircraft(b.subtype()) {
@@ -961,7 +957,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
         /* if true, helicopter rotors do not rotate. This should only be the case if a helicopter is
          * loading/unloading at a terminal or stopped */
-        if self.current_order_is_type(v, OT_LOADING) || vehstatus_test(v.base(), VehState::Stopped)
+        if self.current_order_is_type(v, OrderType::OT_LOADING)
+            || vehstatus_test(v.base(), VehState::Stopped)
         {
             if u.speed() != 0 {
                 u.write_speed(u.speed().wrapping_add(1));
@@ -1004,7 +1001,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
 
     /// Original `SetAircraftPosition`: set aircraft position.
-    #[allow(clippy::many_single_char_names)] // SetAircraftPosition's v, u, x, y and z.
+    #[allow(
+        clippy::many_single_char_names,
+        reason = "SetAircraftPosition's v, u, x, y and z"
+    )]
     fn set_aircraft_position(&self, v: Vehicle, x: i32, y: i32, z: i32) {
         let b = v.base();
         b.write_coordinates(x, y, z);
@@ -1056,7 +1056,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
     /// Original `PlayAircraftSound`.
     fn play_aircraft_sound(&self, v: Vehicle) {
-        if !self.play_vehicle_sound(v, VSE_START) {
+        if !self.vehicle_sound(v, VSE_START) {
             self.snd_play_vehicle_fx(self.engine_sfx(v), v);
         }
     }
@@ -1252,7 +1252,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
     /// Original `GetAircraftFlightLevel<T>`, over the flags of an aircraft or a disaster
     /// vehicle.
-    #[allow(clippy::manual_midpoint)] // GetAircraftFlightLevel's int (min + max) / 2 truncates toward zero.
+    #[allow(
+        clippy::manual_midpoint,
+        reason = "GetAircraftFlightLevel's int (min + max) / 2 truncates toward zero"
+    )]
     fn get_aircraft_flight_level(&self, v: VehicleRef, flags: *mut u8, takeoff: bool) -> i32 {
         /* Aircraft is in flight. We want to enforce it being somewhere
          * between the minimum and the maximum allowed altitude. */
@@ -1319,7 +1322,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// through each other or are forced to do 180 degree turns during the approach. The
     /// arrivals are grouped into four sectors dependent on the `DiagDirection` from which
     /// the airport is approached.
-    #[allow(clippy::if_not_else)] // AircraftGetEntryPoint's conditional order.
     fn aircraft_get_entry_point(&self, v: Vehicle, apc: *const c_void, rotation: Direction) -> u8 {
         /* assert(v != nullptr) holds by the type of v. */
         self.check(!apc.is_null());
@@ -1333,10 +1335,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if !st.is_null() {
             /* Make sure we don't go to INVALID_TILE if the airport has been removed. */
             let airport_tile = self.airport_tile(st);
-            tile = if airport_tile != TileIndex::INVALID {
-                airport_tile
-            } else {
+            tile = if airport_tile == TileIndex::INVALID {
                 self.station_xy(st)
+            } else {
+                airport_tile
             };
         }
 
@@ -1387,10 +1389,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// playback. Returns whether the position requested by the State Machine has been
     /// reached.
     #[allow(
-        clippy::too_many_lines, // The one original AircraftController body.
-        clippy::many_single_char_names, // AircraftController's v, u, x, y, z and t.
-        clippy::if_not_else // AircraftController's branch order.
+        clippy::too_many_lines,
+        reason = "the one original AircraftController body"
     )]
+    #[allow(
+        clippy::many_single_char_names,
+        reason = "AircraftController's v, u, x, y, z and t"
+    )]
+    #[allow(clippy::if_not_else, reason = "AircraftController's branch order")]
     fn aircraft_controller(&self, v: Vehicle) -> bool {
         let b = v.base();
         /* nullptr if station is invalid */
@@ -1467,7 +1473,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             if u.speed() > 32 {
                 b.write_speed(0);
                 u.write_speed(u.speed() - 1);
-                if u.speed() == 32 && !self.play_vehicle_sound(v, VSE_START) {
+                if u.speed() == 32 && !self.vehicle_sound(v, VSE_START) {
                     let mut sfx = self.engine_sfx(v);
                     /* For compatibility with old NewGRF we ignore the sfx property, unless a NewGRF-defined sound is used.
                      * The baseset has only one helicopter sound, so this only limits using plane or cow sounds. */
@@ -1692,7 +1698,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                             }
 
                             /* Move vehicle. */
-                            let gp = self.get_new_vehicle_pos(v);
+                            let gp = self.new_vehicle_pos(v);
                             gp_x = gp.x;
                             gp_y = gp.y;
                             gp_new_tile = TileIndex(gp.tile);
@@ -1712,7 +1718,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     } else {
                         v.set_number_consecutive_turns(0);
                         /* Move vehicle. */
-                        let gp = self.get_new_vehicle_pos(v);
+                        let gp = self.new_vehicle_pos(v);
                         gp_x = gp.x;
                         gp_y = gp.y;
                         gp_new_tile = TileIndex(gp.tile);
@@ -1903,7 +1909,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
     /// Original `HandleAircraftSmoke`: handle smoke of broken aircraft. `mode` is whether
     /// this is the non-first call for this vehicle in this tick.
-    #[allow(clippy::verbose_bit_mask)] // HandleAircraftSmoke's (tick_counter & 0x0F) == 0.
+    #[allow(
+        clippy::verbose_bit_mask,
+        reason = "HandleAircraftSmoke's (tick_counter & 0x0F) == 0"
+    )]
     fn handle_aircraft_smoke(v: Vehicle, mode: bool) {
         const SMOKE_POS: [(i8, i8); 8] = [
             (5, 5),
@@ -1969,7 +1978,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             if failed {
                 self.crash_airplane(v);
             }
-        } else if !self.current_order_is_type(v, OT_GOTO_DEPOT) {
+        } else if !self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
             Self::call(|| (self.vs.order_free)(v.base()));
         }
     }
@@ -2061,7 +2070,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// Original `AircraftEntersTerminal`: aircraft arrives at a terminal. If it is the
     /// first aircraft, throw a party. Start loading cargo.
     fn aircraft_enters_terminal(&self, v: Vehicle) {
-        if self.current_order_is_type(v, OT_GOTO_DEPOT) {
+        if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
             return;
         }
 
@@ -2095,7 +2104,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             AirportAnimationTrigger::AirplaneTouchdown,
         );
 
-        if !self.play_vehicle_sound(v, VSE_TOUCHDOWN) {
+        if !self.vehicle_sound(v, VSE_TOUCHDOWN) {
             self.snd_play_vehicle_fx(SoundID::from(SoundFx::SND_17_SKID_PLANE), v);
         }
     }
@@ -2103,8 +2112,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// Original `AircraftNextAirportPos_and_Order`: set the right pos when heading to
     /// other airports after takeoff.
     fn aircraft_next_airport_pos_and_order(&self, v: Vehicle) {
-        if self.current_order_is_type(v, OT_GOTO_STATION)
-            || self.current_order_is_type(v, OT_GOTO_DEPOT)
+        if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
+            || self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
         {
             v.set_targetairport(self.order_destination(v));
         }
@@ -2146,7 +2155,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             }
         }
 
-        self.vehicle_service_in_depot(v);
+        self.service_in_depot(v);
         Self::call(|| (self.vs.leave_unbunching_depot)(b));
         self.set_aircraft_position(v, b.x(), b.y(), b.z());
         Self::call(|| unsafe { (self.leaves.dirty_depot)(v) });
@@ -2176,7 +2185,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         /* if we were sent to the depot, stay there */
-        if self.current_order_is_type(v, OT_GOTO_DEPOT)
+        if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
             && vehstatus_test(v.base(), VehState::Stopped)
         {
             Self::call(|| (self.vs.order_free)(v.base()));
@@ -2188,14 +2197,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             return;
         }
 
-        if !self.current_order_is_type(v, OT_GOTO_STATION)
-            && !self.current_order_is_type(v, OT_GOTO_DEPOT)
+        if !self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
+            && !self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
         {
             return;
         }
 
         /* We are leaving a hangar, but have to go to the exact same one; re-enter */
-        if self.current_order_is_type(v, OT_GOTO_DEPOT)
+        if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
             && self.order_destination(v) == v.targetairport()
         {
             Self::call(|| self.vs.enter_depot(v.base()));
@@ -2267,7 +2276,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             return;
         }
 
-        if self.current_order_is_type(v, OT_NOTHING) {
+        if self.current_order_is_type(v, OrderType::OT_NOTHING) {
             return;
         }
 
@@ -2280,13 +2289,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
          * ---> start moving */
 
         let mut go_to_hangar = false;
-        match self.order_type(v).0 {
-            OT_GOTO_STATION => {} // ready to fly to another airport
-            OT_GOTO_DEPOT => {
+        match self.order_type(v) {
+            OrderType::OT_GOTO_STATION => {} // ready to fly to another airport
+            OrderType::OT_GOTO_DEPOT => {
                 // visit hangar for servicing, sale, etc.
                 go_to_hangar = self.order_destination(v) == v.targetairport();
             }
-            OT_CONDITIONAL => {
+            OrderType::OT_CONDITIONAL => {
                 /* In case of a conditional order we just have to wait a tick
                  * longer, so the conditional order can actually be processed;
                  * we should not clear the order as that makes us go nowhere. */
@@ -2437,7 +2446,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
          * 1. in case all terminals are busy AirportFindFreeTerminal() returns false or
          * 2. not going for terminal (but depot, no order),
          * --> get out of the way to the hangar. */
-        if self.current_order_is_type(v, OT_GOTO_STATION) && self.airport_find_free_terminal(v, apc)
+        if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
+            && self.airport_find_free_terminal(v, apc)
         {
             return;
         }
@@ -2458,7 +2468,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
          * --> else TAKEOFF
          * the reason behind this is that if an airport has a terminal, it also has a hangar. Airplanes
          * must go to a hangar. */
-        if self.current_order_is_type(v, OT_GOTO_STATION) && self.airport_find_free_helipad(v, apc)
+        if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
+            && self.airport_find_free_helipad(v, apc)
         {
             return;
         }
@@ -2722,7 +2733,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
     /// Original `AirportFindFreeTerminal`: find a free terminal, and assign it if
     /// available. Returns whether a free terminal was found and assigned.
-    #[allow(clippy::cast_possible_truncation)] // FreeTerminal's uint8_t parameters.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "FreeTerminal's uint8_t parameters take the uint group bounds"
+    )]
     fn airport_find_free_terminal(&self, v: Vehicle, apc: *const c_void) -> bool {
         /* example of more terminalgroups
          * {0,HANGAR,AirportBlock::Nothing,1}, {0,TERMGROUP,AirportBlock::TermGroup1,0}, {0,TERMGROUP,TERM_GROUP2_ENTER_block,1}, {0,0,N,1},
@@ -2772,7 +2786,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
 
     /// Original `AirportFindFreeHelipad`: find a free helipad, and assign it if available.
-    #[allow(clippy::cast_possible_truncation)] // FreeTerminal's uint8_t parameters.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "FreeTerminal's uint8_t parameters take the uint group bounds"
+    )]
     fn airport_find_free_helipad(&self, v: Vehicle, apc: *const c_void) -> bool {
         /* if an airport doesn't have helipads, use terminals */
         let num_helipads = self.num_helipads(apc);
@@ -2832,8 +2849,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         crate::orders::process_orders(b, orders);
         Self::call(|| self.vs.handle_loading(b, r#loop != 0, orders));
 
-        if self.current_order_is_type(v, OT_LOADING)
-            || self.current_order_is_type(v, OT_LEAVESTATION)
+        if self.current_order_is_type(v, OrderType::OT_LOADING)
+            || self.current_order_is_type(v, OrderType::OT_LEAVESTATION)
         {
             return true;
         }
@@ -2845,8 +2862,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             /* Check the distance to the next destination. This code works because the target
              * airport is only updated after take off and not on the ground. */
             let cur_st = self.station_get_if_valid(v.targetairport());
-            let next_st = if self.current_order_is_type(v, OT_GOTO_STATION)
-                || self.current_order_is_type(v, OT_GOTO_DEPOT)
+            let next_st = if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
+                || self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
             {
                 self.station_get_if_valid(self.order_destination(v))
             } else {
@@ -2945,7 +2962,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
             /* The aircraft is heading to a hangar, but the new station doesn't have one,
              * or the aircraft can't land on the new station. Cancel current order. */
-            if self.current_order_is_type(v, OT_GOTO_DEPOT)
+            if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
                 && v.base().current_order().depot_type() & ODTF_PART_OF_ORDERS == 0
                 && self.order_destination(v) == index
                 && (!Self::airport_has_hangar(st) || !Self::can_vehicle_use_station(v, st))
