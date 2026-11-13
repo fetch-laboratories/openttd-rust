@@ -126,16 +126,13 @@ impl<'a> Pbs<'a> {
         }
     }
     fn crossing(self, tile: u32, sound: bool) {
-        // SAFETY: synchronous Rust owner, static service tables. No owner borrow crosses it.
-        unsafe {
-            crate::train::openttd_rust_train_update_crossing(
-                tile,
-                u8::from(sound),
-                0,
-                self.0.train,
-                self.0.shared,
-            );
-        }
+        crate::train::update_level_crossing(
+            self.train(),
+            self.shared(),
+            crate::tile_type::TileIndex(tile),
+            sound,
+            false,
+        );
     }
     fn assert_track(self, tile: u32, track: u8) {
         if self.0.assertions {
@@ -457,8 +454,7 @@ impl<'a> Pbs<'a> {
         other: &mut O,
     ) -> TileInfo {
         let tile = v.vehicle().tile();
-        let td =
-            unsafe { crate::train::openttd_rust_train_trackdir(v, self.0.train, self.0.shared) };
+        let td = crate::train::get_vehicle_trackdir(self.train(), self.shared(), v).0;
         if self.is_depot(tile) && (self.0.depot_bits)(tile).0 == 0 {
             return TileInfo {
                 tile,

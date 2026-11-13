@@ -3232,6 +3232,26 @@ pub(crate) fn train_on_crossing(leaves: &Leaves, services: &Services, tile: Tile
 
     Game::new(leaves, services).train_on_tile(tile.0)
 }
+/// Update a level crossing to barred or open (crossing may include multiple adjacent tiles).
+/// `tile` causes the update; `sound` says whether to play sound; `force_bar` forces the
+/// crossing to be barred.
+pub(crate) fn update_level_crossing(
+    leaves: &Leaves,
+    services: &Services,
+    tile: TileIndex,
+    sound: bool,
+    force_bar: bool,
+) {
+    Game::new(leaves, services).update_crossing(tile.0, sound, force_bar);
+}
+/// `Train::GetVehicleTrackdir`: get the tracks of the train vehicle.
+pub(crate) fn get_vehicle_trackdir(
+    leaves: &Leaves,
+    services: &Services,
+    id: Handle,
+) -> crate::track_type::Trackdir {
+    crate::track_type::Trackdir(Game::new(leaves, services).trackdir(id))
+}
 
 impl Game<'_> {
     fn movement_enter(&self, id: Handle, tile: u32, x: i32, y: i32) -> u64 {

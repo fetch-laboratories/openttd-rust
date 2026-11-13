@@ -1602,10 +1602,12 @@ impl Ctx<'_> {
         let vehicle = handle.vehicle();
         let tile = TileIndex(vehicle.tile());
         if self.is_rail_station_tile(tile) {
-            // SAFETY: The shell and canonical immutable tables remain live for this call.
-            let td = Trackdir(unsafe {
-                crate::train::openttd_rust_train_trackdir(handle, self.s.train, self.s.shared)
-            });
+            // SAFETY: The immutable train table outlives every synchronous entry.
+            let td = crate::train::get_vehicle_trackdir(
+                unsafe { &*self.s.train },
+                self.shared,
+                handle,
+            );
             let td = if reverse {
                 Trackdir(reverse_trackdir(td.0))
             } else {
