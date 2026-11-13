@@ -7,7 +7,7 @@
     "after": 1,
     "operation": "Context::get_tile_track_status_track",
     "source_contract": "`GetTileTrackStatus` (src/landscape.cpp) reaches `GetTileTrackStatus_Track` through `_tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc`; the forced Rust dispatcher `Context::get_tile_track_status` replaces that indirect call with a match, and this arm is forced with it.",
-    "reason": "Measured cost: at merge 47 the out-of-line arms cost Opus +3.4% and Grok +3.8% play-loop instructions against merge 32 (get_tile_track_status_road 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with literal mode and sub_mode tests unfolded); forcing the arm restores merge 32's single forced body so literal arguments fold through the arm each caller reaches.",
+    "reason": "Measured cost. Merge 32 to merge 47 raised play-loop instructions by 944.4M on Opus (+3.44%) and 997.9M on Grok (+3.80%). #952's plan attributes about 710M to 790M (Opus) and 770M to 835M (Grok) of that rise to the out-of-line track-status path, with the rest to slope reads and vehicle tile entry. In that path, get_tile_track_status_road cost 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with the literal mode and sub_mode tests left unfolded. Forcing the arms restores merge 32's single forced body. With #961's head, which also includes #951 (merge 48), Opus measures 27,361,729,935 and Grok 26,109,785,394 (merge 32 -0.45% and -0.51%), and no track-status arm remains a symbol. #951's share of that recovery was not measured separately.",
     "retiring_owner": "#275",
     "retirement_condition": "When a profile shows this arm called out of line costs under 0.5% of the play loop's instructions."
   },
@@ -19,7 +19,7 @@
     "after": 1,
     "operation": "Context::get_tile_track_status_road",
     "source_contract": "`GetTileTrackStatus` (src/landscape.cpp) reaches `GetTileTrackStatus_Road` through `_tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc`; the forced Rust dispatcher `Context::get_tile_track_status` replaces that indirect call with a match, and this arm is forced with it.",
-    "reason": "Measured cost: at merge 47 the out-of-line arms cost Opus +3.4% and Grok +3.8% play-loop instructions against merge 32 (get_tile_track_status_road 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with literal mode and sub_mode tests unfolded); forcing the arm restores merge 32's single forced body so literal arguments fold through the arm each caller reaches.",
+    "reason": "Measured cost. Merge 32 to merge 47 raised play-loop instructions by 944.4M on Opus (+3.44%) and 997.9M on Grok (+3.80%). #952's plan attributes about 710M to 790M (Opus) and 770M to 835M (Grok) of that rise to the out-of-line track-status path, with the rest to slope reads and vehicle tile entry. In that path, get_tile_track_status_road cost 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with the literal mode and sub_mode tests left unfolded. Forcing the arms restores merge 32's single forced body. With #961's head, which also includes #951 (merge 48), Opus measures 27,361,729,935 and Grok 26,109,785,394 (merge 32 -0.45% and -0.51%), and no track-status arm remains a symbol. #951's share of that recovery was not measured separately.",
     "retiring_owner": "#275",
     "retirement_condition": "When a profile shows this arm called out of line costs under 0.5% of the play loop's instructions."
   },
@@ -31,7 +31,7 @@
     "after": 1,
     "operation": "Context::get_tile_track_status_station",
     "source_contract": "`GetTileTrackStatus` (src/landscape.cpp) reaches `GetTileTrackStatus_Station` through `_tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc`; the forced Rust dispatcher `Context::get_tile_track_status` replaces that indirect call with a match, and this arm is forced with it.",
-    "reason": "Measured cost: at merge 47 the out-of-line arms cost Opus +3.4% and Grok +3.8% play-loop instructions against merge 32 (get_tile_track_status_road 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with literal mode and sub_mode tests unfolded); forcing the arm restores merge 32's single forced body so literal arguments fold through the arm each caller reaches.",
+    "reason": "Measured cost. Merge 32 to merge 47 raised play-loop instructions by 944.4M on Opus (+3.44%) and 997.9M on Grok (+3.80%). #952's plan attributes about 710M to 790M (Opus) and 770M to 835M (Grok) of that rise to the out-of-line track-status path, with the rest to slope reads and vehicle tile entry. In that path, get_tile_track_status_road cost 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with the literal mode and sub_mode tests left unfolded. Forcing the arms restores merge 32's single forced body. With #961's head, which also includes #951 (merge 48), Opus measures 27,361,729,935 and Grok 26,109,785,394 (merge 32 -0.45% and -0.51%), and no track-status arm remains a symbol. #951's share of that recovery was not measured separately.",
     "retiring_owner": "#275",
     "retirement_condition": "When a profile shows this arm called out of line costs under 0.5% of the play loop's instructions."
   },
@@ -43,7 +43,7 @@
     "after": 1,
     "operation": "Context::get_tile_track_status_water",
     "source_contract": "`GetTileTrackStatus` (src/landscape.cpp) reaches `GetTileTrackStatus_Water` through `_tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc`; the forced Rust dispatcher `Context::get_tile_track_status` replaces that indirect call with a match, and this arm is forced with it.",
-    "reason": "Measured cost: at merge 47 the out-of-line arms cost Opus +3.4% and Grok +3.8% play-loop instructions against merge 32 (get_tile_track_status_road 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with literal mode and sub_mode tests unfolded); forcing the arm restores merge 32's single forced body so literal arguments fold through the arm each caller reaches.",
+    "reason": "Measured cost. Merge 32 to merge 47 raised play-loop instructions by 944.4M on Opus (+3.44%) and 997.9M on Grok (+3.80%). #952's plan attributes about 710M to 790M (Opus) and 770M to 835M (Grok) of that rise to the out-of-line track-status path, with the rest to slope reads and vehicle tile entry. In that path, get_tile_track_status_road cost 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with the literal mode and sub_mode tests left unfolded. Forcing the arms restores merge 32's single forced body. With #961's head, which also includes #951 (merge 48), Opus measures 27,361,729,935 and Grok 26,109,785,394 (merge 32 -0.45% and -0.51%), and no track-status arm remains a symbol. #951's share of that recovery was not measured separately.",
     "retiring_owner": "#275",
     "retirement_condition": "When a profile shows this arm called out of line costs under 0.5% of the play loop's instructions."
   },
@@ -55,7 +55,7 @@
     "after": 1,
     "operation": "Context::get_tile_track_status_tunnel_bridge",
     "source_contract": "`GetTileTrackStatus` (src/landscape.cpp) reaches `GetTileTrackStatus_TunnelBridge` through `_tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc`; the forced Rust dispatcher `Context::get_tile_track_status` replaces that indirect call with a match, and this arm is forced with it.",
-    "reason": "Measured cost: at merge 47 the out-of-line arms cost Opus +3.4% and Grok +3.8% play-loop instructions against merge 32 (get_tile_track_status_road 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with literal mode and sub_mode tests unfolded); forcing the arm restores merge 32's single forced body so literal arguments fold through the arm each caller reaches.",
+    "reason": "Measured cost. Merge 32 to merge 47 raised play-loop instructions by 944.4M on Opus (+3.44%) and 997.9M on Grok (+3.80%). #952's plan attributes about 710M to 790M (Opus) and 770M to 835M (Grok) of that rise to the out-of-line track-status path, with the rest to slope reads and vehicle tile entry. In that path, get_tile_track_status_road cost 3,044.8M exclusive over 18.9M calls, 321.7M of it frame entry and exit, with the literal mode and sub_mode tests left unfolded. Forcing the arms restores merge 32's single forced body. With #961's head, which also includes #951 (merge 48), Opus measures 27,361,729,935 and Grok 26,109,785,394 (merge 32 -0.45% and -0.51%), and no track-status arm remains a symbol. #951's share of that recovery was not measured separately.",
     "retiring_owner": "#275",
     "retirement_condition": "When a profile shows this arm called out of line costs under 0.5% of the play loop's instructions."
   }
