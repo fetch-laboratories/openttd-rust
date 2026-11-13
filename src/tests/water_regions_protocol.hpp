@@ -83,4 +83,5 @@ template <typename Check> void Run(Check check)
 	fill(false);
 	check(openttd_rust_water_label(owner.get(), &world, 0) == 0);
 }
+}
 #endif /* WATER_REGIONS_PROTOCOL_HPP */
