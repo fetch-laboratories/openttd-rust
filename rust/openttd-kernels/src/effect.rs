@@ -646,6 +646,23 @@ pub extern "C" fn openttd_rust_effect_create_above(
         kind,
     )
 }
+/// `CreateEffectVehicleRel`: create an effect vehicle above a particular vehicle. `x`, `y`
+/// and `z` are offsets from the vehicle's position; returns the effect vehicle shell.
+pub(crate) fn create_effect_vehicle_rel(
+    v: VehicleRef,
+    x: i32,
+    y: i32,
+    z: i32,
+    kind: crate::effectvehicle_func::EffectVehicleType,
+) -> *mut c_void {
+    openttd_rust_effect_create(
+        v.x().wrapping_add(x),
+        v.y().wrapping_add(y),
+        v.z().wrapping_add(z),
+        kind.0,
+    )
+}
+
 /// `CreateEffectVehicleRel`; the source shell is live for this synchronous call.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)]
@@ -657,11 +674,12 @@ pub extern "C" fn openttd_rust_effect_create_rel(
     kind: u8,
 ) -> *mut c_void {
     let record = VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast_mut()) });
-    openttd_rust_effect_create(
-        record.x().wrapping_add(x),
-        record.y().wrapping_add(y),
-        record.z().wrapping_add(z),
-        kind,
+    create_effect_vehicle_rel(
+        record,
+        x,
+        y,
+        z,
+        crate::effectvehicle_func::EffectVehicleType(kind),
     )
 }
 

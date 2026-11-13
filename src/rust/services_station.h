@@ -101,7 +101,6 @@ inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return
 /** `&st->goods[cargo].GetOrCreateData().cargo`'s Rust owner. */
 inline OpenTTDCargoList *RustStationCargoOwner(OpenTTDStation *st, uint8_t cargo) noexcept { return static_cast<Station *>(st)->goods[cargo].GetOrCreateData().cargo.RustOwner(); }
 inline uint8_t RustAirportLayoutHeading(const AirportFTAClass *airport, uint32_t index) noexcept { return airport->layout[index].heading; }
-inline uint8_t OpenTTDAirportLayoutHeading(const void *airport, uint8_t index) noexcept { return RustAirportLayoutHeading(static_cast<const AirportFTAClass *>(airport), index); }
 inline uint8_t RustAirportFlags(const AirportFTAClass *airport) noexcept { return airport->flags.base(); }
 inline uint8_t OpenTTDAirportFlags(const void *airport) noexcept { return RustAirportFlags(static_cast<const AirportFTAClass *>(airport)); }
 inline bool RustSelectedAirportHasHangar(const BaseStation *st, const AirportSpec *spec) noexcept { return Station::From(st)->airport.HasHangar(spec); }
@@ -203,6 +202,9 @@ inline uint8_t Aircraft_rotation(const OpenTTDStation *s) noexcept
 	const Station *st = StationOf(s);
 	return RustStationAirportRotation(st);
 }
+
+inline uint8_t Aircraft_airport_width(const OpenTTDStation *s) noexcept { return StationOf(s)->airport.w; }
+inline uint8_t Aircraft_airport_height(const OpenTTDStation *s) noexcept { return StationOf(s)->airport.h; }
 
 inline uint8_t Aircraft_airport_type(const OpenTTDStation *s) noexcept
 {

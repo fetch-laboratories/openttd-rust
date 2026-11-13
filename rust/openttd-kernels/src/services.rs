@@ -546,6 +546,8 @@ pub struct Services {
     pub yapf_rail_dump_state: unsafe extern "C" fn(*const u32, u32),
     /// Native `NOT_REACHED`.
     pub not_reached: extern "C" fn(),
+    /// Native `FatalErrorI` of a formatted message; it does not return.
+    pub fatal_error: extern "C" fn(*const u8, usize),
 }
 /// Station visitor: context, station, its service owner and its index.
 pub type StationVisitor = unsafe extern "C" fn(
@@ -879,6 +881,7 @@ crate::abi::layouts! {
         show_error,
         yapf_rail_dump_state,
         not_reached,
+        fatal_error,
     };
     "OpenTTDByteSpan" ["industry"] => ByteSpan {
         data,
@@ -1000,6 +1003,9 @@ pub fn fixture(
     extern "C" fn unexpected_dump(_: *const u32, _: u32) {
         std::process::abort()
     }
+    extern "C" fn unexpected_fatal(_: *const u8, _: usize) {
+        std::process::abort()
+    }
     extern "C" fn unexpected_string_data(_: *const c_void, _: *mut usize) -> *const u8 {
         std::process::abort()
     }
@@ -1085,6 +1091,7 @@ pub fn fixture(
         show_error: unexpected_error,
         yapf_rail_dump_state: unexpected_dump,
         not_reached: unexpected_path,
+        fatal_error: unexpected_fatal,
         movement: std::ptr::null(),
         set_tile_owner: zone,
         autoslope: flag0,

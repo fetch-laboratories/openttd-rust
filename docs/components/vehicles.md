@@ -44,7 +44,7 @@
 ## Aircraft controllers and airport movement
 
 - Rust owns: both tick passes, movement/speed/flight, shadow/rotor, FTA traversal, terminal/helipad reservations, service/range, crash cleanup, airport lifecycle, private counters/cache and airport masks.
-- C++ keeps: save aliases, vehicle/map/settings/RNG, geometry, viewport, NewGRF, sound and crash services.
+- C++ keeps: save aliases; the station and `AirportFTAClass` records, read through one leaf per field; vehicle/settings/RNG, viewport, NewGRF, sound, news, script-event and crash services. Rust owns `RotateAirportMovingData` (`airport.rs`) and sends the vehicle to a depot through the Rust command.
 - Checks: default `aircraft` and `disasters` scenarios.
 - Limits: Gaps remain in real NewGRF/refit/airport rotations, threaded GUI, legacy-save fixtures, and presentation (#156).
 - PRs: #145, #238, #326.

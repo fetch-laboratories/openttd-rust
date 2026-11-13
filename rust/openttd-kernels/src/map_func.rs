@@ -818,6 +818,20 @@ impl<'a> World<'a> {
     pub(crate) fn size_y(&self) -> u32 {
         self.types.count() / self.dimensions.size_x()
     }
+    /// `TileVirtXYClampedToMap` (`map.cpp`): get a tile from the virtual XY-coordinate,
+    /// clamped to the map; each `Clamp<int>` keeps its native assertion.
+    #[allow(
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        reason = "TileVirtXYClampedToMap's static_cast<int>(TILE_SIZE), Map::MaxY() and Map::MaxX() as int and static_cast<uint> of each clamp"
+    )]
+    pub(crate) fn tile_virt_xy_clamped_to_map(&self, x: i32, y: i32) -> TileIndex {
+        let check = |condition| self.check(condition);
+        let tile_size = crate::tile_type::TILE_SIZE as i32;
+        let ty = crate::math::clamp(y / tile_size, 0, Map::max_y(self.size_y()) as i32, check);
+        let tx = crate::math::clamp(x / tile_size, 0, self.dimensions.max_x() as i32, check);
+        TileIndex(((ty as u32) << self.dimensions.log_x).wrapping_add(tx as u32))
+    }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn byte(value: Option<u8>) -> u8 {

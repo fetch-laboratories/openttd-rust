@@ -140,8 +140,6 @@ struct AirportMovingData {
 	Direction direction; ///< Direction to turn the aircraft after reaching the destination.
 };
 
-AirportMovingData RotateAirportMovingData(const AirportMovingData *orig, Direction rotation, uint num_tiles_x, uint num_tiles_y);
-
 struct AirportFTAbuildup;
 
 /** Internal structure used in openttd - Finite sTate mAchine --> FTA */

@@ -611,6 +611,7 @@ pub(crate) unsafe fn station_base_variable(
                     (crate::animated_tile::services().as_station)(st)
                 )
                 .read()
+                .0
             };
             return if variable == 0xf6 {
                 bits as u32

@@ -73,6 +73,7 @@ struct OpenTTDVehicleMassServices {
 	uint32_t invalid_client;
 };
 const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept;
+const OpenTTDVehicleMassServices &GetVehicleMassServices() noexcept;
 const OpenTTDVehicleSelectionServices &GetRustVehicleSelectionServices() noexcept;
 const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noexcept;
 extern "C" {

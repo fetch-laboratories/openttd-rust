@@ -12,28 +12,17 @@
 #include "services_map.h"
 #include "services_station.h"
 #include "company_services.h"
-static_assert(ORIGINAL_SAMPLE_COUNT == 73 && SND_18_TAKEOFF_HELICOPTER == 22 && SND_12_EXPLOSION == 16 && SND_17_SKID_PLANE == 21);
-static_assert(NUM_CARGO == 64 && AT_OILRIG == 9);
-static_assert(AIR_FAST == 2 && AIR_CTOL == 1 && ROTOR_Z_OFFSET == 5);
-static_assert(HRS_ROTOR_STOPPED == 0 && HRS_ROTOR_MOVING_3 == 3);
-static_assert(VehicleID::Invalid().base() == 1048575 && StationID::Invalid().base() == 65535);
-static_assert(EV_BREAKDOWN_SMOKE_AIRCRAFT == 10 && EV_EXPLOSION_LARGE == 5 && EV_EXPLOSION_SMALL == 7);
-static_assert(HVOT_AIRCRAFT == 16);
-static_assert(OWNER_NONE.base() == 16);
-static_assert(AirportBlocks{AirportBlock::Nothing}.base() == (uint64_t{1} << 30));
-static_assert(AirportBlocks{AirportBlock::Zeppeliner}.base() == (uint64_t{1} << 62));
-static_assert(AirportBlocks{AirportBlock::AirportClosed}.base() == (uint64_t{1} << 63));
+#include "vehicle_transaction_ffi.h"
+/* The Rust shared definitions these values name: airport.rs, sound_type.rs, aircraft.rs. */
+static_assert(ORIGINAL_SAMPLE_COUNT == 73 && MAX_TERMINALS == 8 && TERMGROUP == 255 && ROTOR_Z_OFFSET == 5);
+static_assert(HRS_ROTOR_STOPPED == 0 && HRS_ROTOR_MOVING_1 == 1 && HRS_ROTOR_MOVING_3 == 3);
+static_assert(to_underlying(AirportMovingDataFlag::NoSpeedClamp) == 0 && to_underlying(AirportMovingDataFlag::Takeoff) == 1 && to_underlying(AirportMovingDataFlag::Land) == 3);
+static_assert(to_underlying(AirportBlock::RunwayIn) == 8 && to_underlying(AirportBlock::RunwayInOut) == 8 && to_underlying(AirportBlock::RunwayIn2) == 29);
+static_assert(to_underlying(AirportBlock::Term7) == 22 && to_underlying(AirportBlock::Term8) == 23 && to_underlying(AirportBlock::Helipad3) == 24);
+static_assert(to_underlying(AirportBlock::Nothing) == 30 && to_underlying(AirportBlock::Zeppeliner) == 62 && to_underlying(AirportBlock::AirportClosed) == 63);
 
 /* Resolve each live shell/private owner once. Disaster helpers retain null State.
  * The record contains opaque pointers only; Rust never views C++ object layout. */
-
-
-
-
-
-
-
-
 
 static uint64_t * OPENTTD_RUST_CALL Aircraft_airport_blocks(const OpenTTDStation *s) noexcept
 {
@@ -46,7 +35,6 @@ static uint8_t OPENTTD_RUST_CALL Aircraft_had_vehicle(const OpenTTDStation *s) n
 	const Station *st = StationOf(s);
 	return st->had_vehicle_of_type;
 }
-
 
 static uint8_t OPENTTD_RUST_CALL Aircraft_airport_elements(const void * airport) noexcept
 {
@@ -65,11 +53,11 @@ static const void * OPENTTD_RUST_CALL Aircraft_node(const void * airport, uint8_
 	return &static_cast<const AirportFTAClass *>(airport)->layout[pos];
 }
 
-static OpenTTDAircraftNode OPENTTD_RUST_CALL Aircraft_fta(const void * node) noexcept
-{
-	const auto *n = static_cast<const AirportFTA *>(node);
-	return {.next = n->next.get(), .blocks = n->blocks.base(), .position = n->position, .next_position = n->next_position, .heading = n->heading};
-}
+static const void * OPENTTD_RUST_CALL Aircraft_fta_next(const void *node) noexcept { return static_cast<const AirportFTA *>(node)->next.get(); }
+static uint64_t OPENTTD_RUST_CALL Aircraft_fta_blocks(const void *node) noexcept { return static_cast<const AirportFTA *>(node)->blocks.base(); }
+static uint8_t OPENTTD_RUST_CALL Aircraft_fta_position(const void *node) noexcept { return static_cast<const AirportFTA *>(node)->position; }
+static uint8_t OPENTTD_RUST_CALL Aircraft_fta_next_position(const void *node) noexcept { return static_cast<const AirportFTA *>(node)->next_position; }
+static uint8_t OPENTTD_RUST_CALL Aircraft_fta_heading(const void *node) noexcept { return static_cast<const AirportFTA *>(node)->heading; }
 
 static OpenTTDAircraftMoving OPENTTD_RUST_CALL Aircraft_moving(const void * airport, uint8_t pos) noexcept
 {
@@ -77,17 +65,9 @@ static OpenTTDAircraftMoving OPENTTD_RUST_CALL Aircraft_moving(const void * airp
 	return {.x = m->x, .y = m->y, .flags = RustAirportMovingFlags(m), .direction = m->direction};
 }
 
-
-
-
 static uint8_t OPENTTD_RUST_CALL Aircraft_airport_entry(const void * ap, uint8_t direction) noexcept
 {
 	return static_cast<const AirportFTAClass *>(ap)->entry_points[direction];
-}
-
-static int32_t OPENTTD_RUST_CALL Aircraft_hangar_height(const OpenTTDStation *station, const AirportSpec *spec) noexcept
-{
-	return GetTileMaxPixelZ(RustStationHangarTile(StationOf(station), 0, spec));
 }
 
 static uint8_t OPENTTD_RUST_CALL Aircraft_terminal_count(const void * ap, uint32_t index) noexcept
@@ -104,12 +84,6 @@ static uint16_t OPENTTD_RUST_CALL Aircraft_service_interval(OpenTTDAircraftVehic
 {
 	const Vehicle *v = VehicleOf(vehicle.handle);
 	return RustCompanyAircraftServiceInterval(v->GetOwner());
-}
-
-static bool OPENTTD_RUST_CALL Aircraft_chain_in_depot(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return Aircraft::From(v)->IsChainInDepot();
 }
 
 static OpenTTDAircraftVehicle OPENTTD_RUST_CALL Aircraft_next_aircraft(uint32_t last) noexcept
@@ -133,11 +107,9 @@ static void OPENTTD_RUST_CALL Aircraft_copy_sprite(OpenTTDVehicle *vehicle, Open
 	VehicleOf(vehicle)->sprite_cache.sprite_seq.CopyWithoutPalette(VehicleOf(source)->sprite_cache.sprite_seq);
 }
 
-
-
-static void OPENTTD_RUST_CALL Aircraft_truncate_cargo(OpenTTDAircraftVehicle vehicle) noexcept
+static void OPENTTD_RUST_CALL Aircraft_truncate_cargo(OpenTTDVehicle *vehicle) noexcept
 {
-	VehicleOf(vehicle.handle)->cargo.Truncate();
+	VehicleOf(vehicle)->cargo.Truncate();
 }
 
 static void OPENTTD_RUST_CALL Aircraft_crash_news(OpenTTDAircraftVehicle vehicle, uint16_t station_id, uint32_t victims) noexcept
@@ -149,7 +121,6 @@ static void OPENTTD_RUST_CALL Aircraft_crash_news(OpenTTDAircraftVehicle vehicle
 	Game::NewEvent(new ScriptEventVehicleCrashed(v->index, vt, missing ? ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT : ScriptEventVehicleCrashed::CRASH_PLANE_LANDING, victims, v->GetOwner()));
 	AddTileNewsItem(std::move(headline), v->GetOwner() == _local_company ? NewsType::Accident : NewsType::AccidentOther, vt, station);
 }
-
 
 static void OPENTTD_RUST_CALL Aircraft_landing_rating(uint16_t station_id, uint8_t cargo) noexcept
 {
@@ -169,8 +140,6 @@ static void OPENTTD_RUST_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle vehi
 	AI::NewEvent(v->GetOwner(), new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
 }
 
-
-
 static void OPENTTD_RUST_CALL Aircraft_destination_too_far(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); AI::NewEvent(v->GetOwner(), new ScriptEventAircraftDestTooFar(v->index));
@@ -187,8 +156,6 @@ static void OPENTTD_RUST_CALL Aircraft_service_order(OpenTTDAircraftVehicle vehi
 	Aircraft::From(VehicleOf(vehicle.handle))->current_order.MakeGoToDepot(StationID{static_cast<uint16_t>(station)}, OrderDepotTypeFlag::Service);
 }
 
-
-
 static void OPENTTD_RUST_CALL Aircraft_subtract_cost(OpenTTDAircraftVehicle vehicle, int64_t cost) noexcept
 {
 	SubtractMoneyFromCompanyFract(VehicleOf(vehicle.handle)->GetOwner(), CommandCost(EXPENSES_AIRCRAFT_RUN, Money{cost}));
@@ -198,39 +165,6 @@ static void OPENTTD_RUST_CALL Aircraft_dirty_lists(OpenTTDAircraftVehicle vehicl
 {
 	RustVehicleDetailsDirty(vehicle.handle); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
 }
-
-static uint16_t OPENTTD_RUST_CALL Aircraft_next_stopping_station(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	std::vector<StationID> next_station; Aircraft::From(VehicleOf(vehicle.handle))->GetNextStoppingStation(next_station); return next_station.empty() ? StationID::Invalid().base() : next_station.back().base();
-}
-
-static void OPENTTD_RUST_CALL Aircraft_remove_depot_orders(uint16_t station_id) noexcept
-{
-	RemoveOrderFromAllVehicles(OT_GOTO_DEPOT, StationID{static_cast<uint16_t>(station_id)}, true);
-}
-
-static void OPENTTD_RUST_CALL Aircraft_assert_flying([[maybe_unused]] OpenTTDAircraftVehicle vehicle) noexcept
-{
-	assert(Aircraft::From(VehicleOf(vehicle.handle))->state == FLYING);
-}
-
-static void OPENTTD_RUST_CALL Aircraft_invalid_movement(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	Debug(misc, 0, "[Ap] cannot move further on Airport! (pos {} state {}) for vehicle {}", Aircraft::From(VehicleOf(vehicle.handle))->pos, Aircraft::From(VehicleOf(vehicle.handle))->state, vehicle.id); RustNotReached();
-}
-
-static void OPENTTD_RUST_CALL Aircraft_invalid_position(OpenTTDAircraftVehicle vehicle, const void * ap) noexcept
-{
-	Debug(misc, 0, "[Ap] position {} is not valid for current airport. Max position is {}", Aircraft::From(VehicleOf(vehicle.handle))->pos, static_cast<const AirportFTAClass *>(ap)->nofelements - 1); assert(Aircraft::From(VehicleOf(vehicle.handle))->pos < static_cast<const AirportFTAClass *>(ap)->nofelements);
-}
-
-static void OPENTTD_RUST_CALL Aircraft_invalid_scheme(OpenTTDAircraftVehicle) noexcept
-{
-	FatalError("OK, you shouldn't be here, check your Airport Scheme!");
-}
-
-
-
 
 static bool OPENTTD_RUST_CALL Aircraft_rotor_image_if_changed(OpenTTDAircraftVehicle vehicle) noexcept
 {
@@ -244,116 +178,53 @@ static void OPENTTD_RUST_CALL Aircraft_update_rotor_image(OpenTTDAircraftVehicle
 	GetRotorImage(v, EIT_ON_MAP, &seq); rotor->sprite_cache.sprite_seq = seq;
 }
 
-
-
-
-static bool OPENTTD_RUST_CALL Aircraft_send_to_depot(OpenTTDAircraftVehicle vehicle, bool service) noexcept
-{
-	const CompanyID old = OpenTTDCurrentCompany();
-	OpenTTDSetCurrentCompany(CompanyID{RustVehicleOwner(VehicleOf(vehicle.handle))});
-	bool failed = Command<CMD_SEND_VEHICLE_TO_DEPOT>::Do(DoCommandFlag::Execute, VehicleID{vehicle.id}, service ? DepotCommandFlag::Service : DepotCommandFlags{}, {}).Failed();
-	OpenTTDSetCurrentCompany(old);
-	return failed;
-}
-
-static uint8_t OPENTTD_RUST_CALL Aircraft_fta_next_position(const void *node) noexcept
-{
-	return static_cast<const AirportFTA *>(node)->next_position;
-}
-
-static OpenTTDAircraftBlockNode OPENTTD_RUST_CALL Aircraft_block_node(const void *node) noexcept
-{
-	const auto *n = static_cast<const AirportFTA *>(node);
-	return {.blocks = n->blocks.base(), .position = n->position, .next_position = n->next_position};
-}
-
-static OpenTTDAircraftRouteNode OPENTTD_RUST_CALL Aircraft_route_node(const void *node) noexcept
-{
-	const auto *n = static_cast<const AirportFTA *>(node);
-	return {.next = n->next.get(), .next_position = n->next_position, .heading = n->heading};
-}
-
-static OpenTTDAircraftBlockChoice OPENTTD_RUST_CALL Aircraft_block_choice(const void *node) noexcept
-{
-	const auto *n = static_cast<const AirportFTA *>(node);
-	return {.next = n->next.get(), .blocks = n->blocks.base(), .heading = n->heading};
-}
-
-static OpenTTDAircraftGeometry OPENTTD_RUST_CALL Aircraft_geometry(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	const uint32_t tile = RustStationAirportTile(st);
-	if (tile == INVALID_TILE.base()) return {.tile = RustStationLocation(st), .rotation = 0, .width = 1, .height = 1, .airport = false};
-	return {.tile = tile, .rotation = st->airport.rotation, .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st), .airport = true};
-}
-static uint64_t OPENTTD_RUST_CALL Aircraft_layout_blocks(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].blocks.base(); }
-static uint8_t OPENTTD_RUST_CALL Aircraft_layout_next_position(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next_position; }
-static const void *OPENTTD_RUST_CALL Aircraft_layout_next(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next.get(); }
-static OpenTTDAircraftLayoutRoute OPENTTD_RUST_CALL Aircraft_layout_route(const void *ap, uint8_t pos) noexcept
-{
-	const AirportFTA *n = &static_cast<const AirportFTAClass *>(ap)->layout[pos];
-	return {.node = n, .next = n->next.get(), .next_position = n->next_position, .heading = n->heading};
-}
 static const OpenTTDAircraftLeaves _aircraft_leaves{
-	.geometry = Aircraft_geometry,
-	.layout_blocks = Aircraft_layout_blocks,
-	.layout_heading = OpenTTDAirportLayoutHeading,
-	.layout_next_position = Aircraft_layout_next_position,
-	.layout_next = Aircraft_layout_next,
-	.layout_route = Aircraft_layout_route,
-	.vehicle = &GetRustVehicleServices(),
+	.airport_blocks = Aircraft_airport_blocks,
+	.airport_delta_z = OpenTTDAirportDeltaZ,
+	.airport_elements = Aircraft_airport_elements,
+	.airport_entry = Aircraft_airport_entry,
+	.airport_flags = OpenTTDAirportFlags,
+	.airport_height = Aircraft_airport_height,
+	.airport_tile = Aircraft_airport_tile,
+	.airport_type = Aircraft_airport_type,
+	.airport_width = Aircraft_airport_width,
+	.copy_sprite = Aircraft_copy_sprite,
+	.crash_news = Aircraft_crash_news,
+	.delete_range_news = Aircraft_delete_range_news,
+	.destination_too_far = Aircraft_destination_too_far,
+	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
+	.dirty_depot = Aircraft_dirty_depot,
+	.dirty_lists = Aircraft_dirty_lists,
+	.first_arrival = Aircraft_first_arrival,
+	.fta_blocks = Aircraft_fta_blocks,
+	.fta_heading = Aircraft_fta_heading,
+	.fta_next = Aircraft_fta_next,
+	.fta_next_position = Aircraft_fta_next_position,
+	.fta_position = Aircraft_fta_position,
+	.had_vehicle = Aircraft_had_vehicle,
+	.hangar_exit = Aircraft_hangar_exit,
+	.helipads = Aircraft_helipads,
+	.landing_rating = Aircraft_landing_rating,
+	.mass = &GetVehicleMassServices(),
+	.moving = Aircraft_moving,
+	.next_aircraft = Aircraft_next_aircraft,
+	.node = Aircraft_node,
+	.rotation = Aircraft_rotation,
+	.rotor_image = Aircraft_rotor_image,
+	.rotor_image_if_changed = Aircraft_rotor_image_if_changed,
+	.service_interval = Aircraft_service_interval,
+	.service_order = Aircraft_service_order,
 	.shared = &GetRustSharedServices(),
 	.station = Aircraft_station,
-	.airport_tile = Aircraft_airport_tile,
-	.station_tile = Aircraft_station_tile,
-	.rotation = Aircraft_rotation,
-	.airport_type = Aircraft_airport_type,
 	.station_owner = Aircraft_station_owner,
-	.airport_blocks = Aircraft_airport_blocks,
-	.had_vehicle = Aircraft_had_vehicle,
-	.airport_elements = Aircraft_airport_elements,
-	.helipads = Aircraft_helipads,
-	.airport_flags = OpenTTDAirportFlags,
-	.airport_delta_z = OpenTTDAirportDeltaZ,
-	.node = Aircraft_node,
-	.fta = Aircraft_fta,
-	.moving = Aircraft_moving,
-	.airport_entry = Aircraft_airport_entry,
-	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
-	.hangar_height = Aircraft_hangar_height,
-	.terminal_count = Aircraft_terminal_count,
-	.hangar_exit = Aircraft_hangar_exit,
-	.service_interval = Aircraft_service_interval,
-	.chain_in_depot = Aircraft_chain_in_depot,
-	.next_aircraft = Aircraft_next_aircraft,
-	.viewport = Aircraft_viewport,
-	.rotor_image = Aircraft_rotor_image,
-	.copy_sprite = Aircraft_copy_sprite,
-	.truncate_cargo = Aircraft_truncate_cargo,
-	.crash_news = Aircraft_crash_news,
-	.landing_rating = Aircraft_landing_rating,
-	.dirty_depot = Aircraft_dirty_depot,
-	.first_arrival = Aircraft_first_arrival,
-	.destination_too_far = Aircraft_destination_too_far,
-	.delete_range_news = Aircraft_delete_range_news,
-	.service_order = Aircraft_service_order,
+	.station_tile = Aircraft_station_tile,
 	.subtract_cost = Aircraft_subtract_cost,
-	.dirty_lists = Aircraft_dirty_lists,
-	.next_stopping_station = Aircraft_next_stopping_station,
-	.remove_depot_orders = Aircraft_remove_depot_orders,
-	.assert_flying = Aircraft_assert_flying,
-	.invalid_movement = Aircraft_invalid_movement,
-	.invalid_position = Aircraft_invalid_position,
-	.invalid_scheme = Aircraft_invalid_scheme,
-	.unreachable = RustNotReachedWithUnusedOwner<OpenTTDAircraftVehicle>,
-	.rotor_image_if_changed = Aircraft_rotor_image_if_changed,
+	.terminal_count = Aircraft_terminal_count,
+	.truncate_cargo = Aircraft_truncate_cargo,
 	.update_rotor_image = Aircraft_update_rotor_image,
+	.vehicle = &GetRustVehicleServices(),
 	.vehicle_crash = RustVehicleBaseCrashHandle<OpenTTDAircraftVehicle>,
-	.send_to_depot = Aircraft_send_to_depot,
-	.fta_next_position = Aircraft_fta_next_position,
-	.block_node = Aircraft_block_node,
-	.route_node = Aircraft_route_node,
-	.block_choice = Aircraft_block_choice,
+	.viewport = Aircraft_viewport,
 };
 const OpenTTDAircraftLeaves &GetRustAircraftLeaves() noexcept { return _aircraft_leaves; }
 

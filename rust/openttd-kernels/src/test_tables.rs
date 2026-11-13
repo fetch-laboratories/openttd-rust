@@ -508,6 +508,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     show_error: unreachable2,
     yapf_rail_dump_state: unreachable2,
     not_reached: unreachable0,
+    fatal_error: unreachable2,
 };
 
 /// `crate::rail_cmd::RailCommandServices` with every entry unreachable.
@@ -983,6 +984,56 @@ pub(crate) const INDUSTRY_TILES: crate::industry::tile::TileServices =
         pixel_max_z: unreachable1,
         callback: unreachable5,
     };
+
+/// `crate::aircraft::Leaves` with every entry unreachable.
+pub(crate) const AIRCRAFT_LEAVES: crate::aircraft::Leaves = crate::aircraft::Leaves {
+    airport_blocks: unreachable1,
+    airport_delta_z: unreachable1,
+    airport_elements: unreachable1,
+    airport_entry: unreachable2,
+    airport_flags: unreachable1,
+    airport_height: unreachable1,
+    airport_tile: unreachable1,
+    airport_type: unreachable1,
+    airport_width: unreachable1,
+    copy_sprite: unreachable2,
+    crash_news: unreachable3,
+    delete_range_news: unreachable1,
+    destination_too_far: unreachable1,
+    direction_towards: unreachable3,
+    dirty_depot: unreachable1,
+    dirty_lists: unreachable1,
+    first_arrival: unreachable2,
+    fta_blocks: unreachable1,
+    fta_heading: unreachable1,
+    fta_next: unreachable1,
+    fta_next_position: unreachable1,
+    fta_position: unreachable1,
+    had_vehicle: unreachable1,
+    hangar_exit: unreachable3,
+    helipads: unreachable1,
+    landing_rating: unreachable2,
+    mass: ptr::null(),
+    moving: unreachable2,
+    next_aircraft: unreachable1,
+    node: unreachable2,
+    rotation: unreachable1,
+    rotor_image: unreachable1,
+    rotor_image_if_changed: unreachable1,
+    service_interval: unreachable1,
+    service_order: unreachable2,
+    shared: ptr::null(),
+    station: unreachable1,
+    station_owner: unreachable1,
+    station_tile: unreachable1,
+    subtract_cost: unreachable2,
+    terminal_count: unreachable2,
+    truncate_cargo: unreachable1,
+    update_rotor_image: unreachable1,
+    vehicle: ptr::null(),
+    vehicle_crash: unreachable2,
+    viewport: unreachable1,
+};
 
 /// `crate::movement::MovementServices` with every entry unreachable.
 pub(crate) const MOVEMENT: crate::movement::MovementServices = crate::movement::MovementServices {
