@@ -768,6 +768,8 @@ impl Context<'_> {
     /// `_tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc(tile,
     /// mode, sub_mode, side)`.
     // Keep one policy body visible to constant propagation at literal Rust callers.
+    // The per-tile-type arms are forced with it, so a literal `mode`, `sub_mode` or
+    // `side` folds through the arm the call reaches.
     // The native facade below still supplies dynamic transport/subtype/side values.
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -792,7 +794,8 @@ impl Context<'_> {
         }
     }
     /// `GetTileTrackStatus_Track`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn get_tile_track_status_track(
         &self,
         tile: TileIndex,
@@ -885,7 +888,8 @@ impl Context<'_> {
         track_bits_status(trackbits, red_signals)
     }
     /// `GetTileTrackStatus_Road`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn get_tile_track_status_road(
         &self,
         tile: TileIndex,
@@ -1015,7 +1019,8 @@ impl Context<'_> {
         combine_trackdir_status(trackdirbits, red_signals)
     }
     /// `GetTileTrackStatus_Station`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn get_tile_track_status_station(
         &self,
         tile: TileIndex,
@@ -1090,7 +1095,8 @@ impl Context<'_> {
         track_bits_status(trackbits, TrackdirBits::TRACKDIR_BIT_NONE)
     }
     /// `GetTileTrackStatus_Water`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn get_tile_track_status_water(&self, tile: TileIndex, mode: TransportType) -> TrackStatus {
         const COAST_TRACKS: [TrackBits; 16] = [
             TrackBits::TRACK_BIT_NONE,
@@ -1160,7 +1166,8 @@ impl Context<'_> {
         track_bits_status(ts, TrackdirBits::TRACKDIR_BIT_NONE)
     }
     /// `GetTileTrackStatus_TunnelBridge`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn get_tile_track_status_tunnel_bridge(
         &self,
         tile: TileIndex,
