@@ -115,12 +115,6 @@ pub(crate) fn get_trackdir_bits_for_road_in_world(
 
     bits
 }
-/// Temporary raw adapter of [`get_trackdir_bits_for_road`] for `road_yapf.rs`
-/// until its pass.
-#[inline]
-pub(crate) fn road_trackdirs(movement: &MovementServices, tile: u32, tram: bool) -> u16 {
-    get_trackdir_bits_for_road(movement, TileIndex(tile), RoadTramType(tram)).0
-}
 /// # Safety
 /// The immutable shared table and map remain live and serialized for this call.
 #[allow(unsafe_code)]

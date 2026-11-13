@@ -1,0 +1,185 @@
+--- a/capture.in
++++ b/capture.in
+@@ -5,16 +5,11 @@
+  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
+  */
+
+-/** @file train-edge-comparison.cpp Bounded NewGRF-only copied-world curve/reversal gap. */
++/** @file train-edge-comparison.cpp Original-only capture of train/edge-oracle.txt (#736): the bounded NewGRF-only curve/reversal inputs. */
+ #include "stdafx.h"
+ #include "core/math_func.hpp"
+ #include "direction_func.h"
+-#include "rust/vehicle_record_ffi.h"
+-#include "rust/train_ffi.h"
+-#include "abi-record-ground.h"
+-#include "rust/movement_ffi.h"
+-#include "rust/vehicle_ffi.h"
+-#include "tests/fixture_map.hpp"
++#include <array>
+ #include <cstdio>
+ #include <vector>
+
+@@ -37,8 +32,6 @@
+ };
+ static std::vector<uint64_t> events;
+ struct Train {
+-	OpenTTDVehicle record{};
+-	OpenTTDGroundState ground{};
+ 	uint32_t id;
+ 	Train *next;
+ 	uint8_t track;
+@@ -49,8 +42,6 @@
+ 	Status vehstatus;
+ 	struct { uint16_t cached_veh_length; } gcache;
+ 	struct { bool cached_tilt; int16_t cached_curve_speed_mod; } tcache;
+-	OpenTTDTrainState *state;
+-	OpenTTDVehicleTileLinks links{};
+ 	const Train *First() const;
+ 	Train *Next() const { return this->next; }
+ 	uint16_t GetCurveSpeedLimit() const;
+@@ -59,8 +50,8 @@
+ 	void UpdateInclination(bool, bool) { std::abort(); }
+ };
+ static Train trains[16];
+-/* The reference's asserted entry tiles, in order, and the next one the candidate must use. */
+-static std::vector<uint32_t> entered; static size_t next_entry;
++/* The reference's asserted entry tiles, in order. */
++static std::vector<uint32_t> entered;
+ const Train *Train::First() const { return trains; }
+ static void VehicleEnterTile(Train *v, TileIndex tile, int x, int y)
+ {
+@@ -72,89 +63,36 @@
+ static bool IsBridgeTile(TileIndex) { return false; }
+ #include "train-reference.inc"
+
+-static OpenTTDTrainHandle Handle(Train *v) noexcept { return {v == nullptr ? nullptr : &v->record, v == nullptr ? nullptr : v->state}; }
+-static Train &Part(OpenTTDTrainHandle part) noexcept { return *reinterpret_cast<Train *>(part.record->shell); }
+-static uint32_t UnexpectedRandom(void *) noexcept { std::abort(); }
+-static uint32_t UnexpectedIndustry(int32_t, int32_t, uint32_t *) noexcept { std::abort(); }
+-static OpenTTDMovementServices movement;
+-static OpenTTDVehicleServices vehicle;
+-static const OpenTTDSettingAddresses _settings_catalog{.train_acceleration_model = &_settings_game.vehicle.train_acceleration_model};
+-static OpenTTDTrainServices Leaves()
+-{
+-	OpenTTDTrainServices leaves{};
+-	leaves.curve_advantage = [](OpenTTDTrainHandle) noexcept { return uint64_t(rail.curve_speed); };
+-	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { auto &part = *reinterpret_cast<Train *>(v->shell); part.UpdatePosition(); return &part.links; };
+-	vehicle.map_log_x = []() noexcept { return uint32_t{8}; };
+-	leaves.vehicle = &vehicle;
+-	leaves.viewport = [](OpenTTDTrainHandle h, uint8_t a, uint8_t b) noexcept { Part(h).UpdateViewport(a != 0, b != 0); };
+-	leaves.tile_virt = [](int32_t x, int32_t y) noexcept { return uint32_t(TileVirtXY(x, y)); };
+-	return leaves;
+-}
+-static uint16_t RustCurve()
+-{
+-	const auto leaves = Leaves();
+-	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, UnexpectedRandom, UnexpectedIndustry);
+-	shared.settings = &_settings_catalog;
+-	return openttd_rust_train_curve_limit(Handle(trains), &leaves, &shared);
+-}
+-static void RustReverse(int left, int right)
+-{
+-	const auto leaves = Leaves();
+-	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, UnexpectedRandom, UnexpectedIndustry);
+-	movement.shared = &shared;
+-	shared.movement = &movement;
+-	shared.settings = &_settings_catalog;
+-	// The 256 by 256 map is plain rail only on the tile of the reference's next
+-	// entry, which it asserted is that vehicle's own tile, and clear elsewhere.
+-	// Depot entry reads the map in place and VehicleEnterTile reads the tile type
+-	// there, so an entry on any other tile skips the vehicle callback and changes
+-	// the compared events. The copied world has no depot/tunnel tiles. Observe the
+-	// real owner's admission call through typed map/vehicle services, retaining
+-	// event order.
+-	static OpenTTDFixtureMap map{8, 256 * 256};
+-	next_entry = 0; if (!entered.empty()) map.base[entered[0]].type = 1 << 4; // MP_RAILWAY
+-	shared.map = &map.statics;
+-	movement.resolve = [](OpenTTDVehicle *shell) noexcept {
+-		auto *v = reinterpret_cast<Train *>(shell->shell);
+-		events.push_back(0x300 + v->id);
+-		map.base[entered[next_entry]].type = 0; if (++next_entry < entered.size()) map.base[entered[next_entry]].type = 1 << 4;
+-		return OpenTTDMovementVehicle{Handle(v), nullptr, nullptr, VehicleType{0}};
+-	};
+-	openttd_rust_train_reverse_swap(Handle(trains), left, right, &leaves, &shared);
+-	for (uint32_t tile : entered) map.base[tile].type = 0; // MP_CLEAR
+-}
+ static uint32_t random_state = 130;
+ static uint32_t Draw() { random_state = random_state * 1664525U + 1013904223U; return random_state; }
+-static void Sync()
++/* The compared fields of one vehicle, in the probe's order. */
++static std::array<uint32_t, 8> Fields(const Train &v)
+ {
+-	for (Train &v : trains) {
+-		v.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&v);
+-		v.record.train = v.state;
+-		v.record.ground = &v.ground;
+-		v.record.next = v.next == nullptr ? nullptr : &v.next->record;
+-		v.record.first = &trains[0].record;
+-		v.record.tile = v.tile;
+-		v.record.x_pos = v.x_pos; v.record.y_pos = v.y_pos; v.record.z_pos = v.z_pos;
+-		v.record.direction = v.direction; v.record.vehstatus = v.vehstatus.bits;
+-		v.record.subtype = (v.id % 2) << 2;
+-		v.ground.cache.cached_veh_length = v.gcache.cached_veh_length;
+-		v.ground.flags = v.gv_flags;
+-		(v.state)->track = v.track;
+-		(v.state)->cached_tilt = (v.tcache.cached_tilt) != 0;
+-		(v.state)->cached_curve_speed_mod = static_cast<int16_t>(uint16_t(v.tcache.cached_curve_speed_mod));
+-	}
++	return {uint32_t(v.track), uint32_t(v.direction), uint32_t(v.x_pos), uint32_t(v.y_pos), uint32_t(v.z_pos), v.tile, v.gv_flags, v.vehstatus.bits};
+ }
+-static std::vector<uint64_t> State()
++/* Print what the swap changed: event order by side, the other vehicles that changed, and the swapped fields as XOR differences. */
++static void Print(const Train (&before)[16], int l, int r)
+ {
+-	auto result = events;
+-	for (Train &v : trains) {
+-		result.insert(result.end(), {uint64_t(v.track), uint64_t(v.direction), uint64_t(uint32_t(v.x_pos)), uint64_t(uint32_t(v.y_pos)), uint64_t(uint32_t(v.z_pos)), v.tile, v.gv_flags, v.vehstatus.bits});
++	std::printf("swap ");
++	for (uint64_t e : events) {
++		/* Each callback goes to the vehicle at l or r; the side names which. */
++		unsigned vehicle = unsigned(e & 0xFF);
++		if (vehicle != unsigned(l) && vehicle != unsigned(r)) std::abort();
++		std::printf("%u%u", unsigned(e >> 8), vehicle == unsigned(l) ? 0U : 1U);
+ 	}
+-	return result;
++	unsigned others = 0;
++	for (int i = 0; i < 16; ++i) if (i != l && i != r && Fields(trains[i]) != Fields(before[i])) ++others;
++	std::printf(" %u", others);
++	for (int side : {l, r}) {
++		auto now = Fields(trains[side]), own = Fields(before[side]), other = Fields(before[side == l ? r : l]);
++		for (size_t f = 0; f < 8; ++f) std::printf(" %u", now[f] ^ (f < 6 ? other[f] : own[f]));
++		if (l == r) break;
++	}
++	std::printf("\n");
+ }
+ int main()
+ {
+-	for (uint32_t i = 0; i < 16; ++i) { trains[i].id = i; trains[i].state = openttd_rust_train_state_new(); }
++	for (uint32_t i = 0; i < 16; ++i) trains[i].id = i;
+ 	for (uint32_t trial = 0; trial < 20000; ++trial) {
+ 		uint32_t count = 1 + Draw() % 16;
+ 		_settings_game.vehicle.train_acceleration_model = trial % 2;
+@@ -167,20 +105,10 @@
+ 			v.track = uint8_t(1 << (Draw() % 8)); v.gv_flags = uint16_t(Draw()); v.vehstatus.bits = uint8_t(Draw());
+ 			v.x_pos = int(Draw() % 4000); v.y_pos = int(Draw() % 4000); v.z_pos = int(Draw() % 256); v.tile = Draw() % 65536;
+ 		}
+-		Sync();
+-		if (trains[0].GetCurveSpeedLimit() != RustCurve()) { std::fprintf(stderr, "curve mismatch %u\n", trial); return 1; }
++		std::printf("curve %u\n", unsigned(trains[0].GetCurveSpeedLimit()));
+ 		Train original[16]; std::copy(std::begin(trains), std::end(trains), std::begin(original));
+ 		int l = int(Draw() % count), r = int(Draw() % count);
+-		events.clear(); entered.clear(); ReverseTrainSwapVeh(trains, l, r); auto expected = State();
+-		std::copy(std::begin(original), std::end(original), std::begin(trains)); Sync(); events.clear(); RustReverse(l, r);
+-		for (Train &v : trains) {
+-			v.track = uint8_t(v.state->track);
+-			v.tile = v.record.tile; v.x_pos = v.record.x_pos; v.y_pos = v.record.y_pos; v.z_pos = v.record.z_pos;
+-			v.direction = Direction(v.record.direction); v.vehstatus.bits = v.record.vehstatus; v.gv_flags = v.ground.flags;
+-		}
+-		if (expected != State()) { std::fprintf(stderr, "reversal mismatch %u\n", trial); return 1; }
+-		for (Train &v : trains) openttd_rust_occupancy_update(&vehicle, &v.record, true);
++		events.clear(); entered.clear(); ReverseTrainSwapVeh(trains, l, r);
++		Print(original, l, r);
+ 	}
+-	for (Train &v : trains) openttd_rust_train_state_destroy(v.state);
+-	std::printf("20000 variable-length curve and 20000 reversal cases equal through production Rust entries\n");
+ }

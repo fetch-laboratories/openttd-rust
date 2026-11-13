@@ -18,6 +18,14 @@ pub const RATING_TUNNEL_BRIDGE_MINIMUM: i32 = 0;
 pub const RATING_MAXIMUM: i32 = 1000;
 /// Minimum town rating.
 pub const RATING_MINIMUM: i32 = -1000;
+/// Rating decrease for removing trees (`RATING_TREE_DOWN_STEP`).
+pub const RATING_TREE_DOWN_STEP: i32 = -35;
+/// Minimum rating after removing trees (`RATING_TREE_MINIMUM`).
+pub const RATING_TREE_MINIMUM: i32 = RATING_MINIMUM;
+/// Rating increase for planting trees (`RATING_TREE_UP_STEP`).
+pub const RATING_TREE_UP_STEP: i32 = 7;
+/// Maximum rating reached by planting trees (`RATING_TREE_MAXIMUM`).
+pub const RATING_TREE_MAXIMUM: i32 = 220;
 /// Minimum rating after removing a town house.
 pub const RATING_HOUSE_MINIMUM: i32 = RATING_MINIMUM;
 /// Rating increase for a successful bribe.

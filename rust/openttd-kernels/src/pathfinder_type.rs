@@ -20,6 +20,12 @@ pub const YAPF_TILE_CORNER_LENGTH: i32 = 71;
 /// total path cost might overflow.
 pub const YAPF_INFINITE_PENALTY: i32 = 1000 * YAPF_TILE_LENGTH;
 
+/// Maximum segments of road vehicle path cache.
+pub const YAPF_ROADVEH_PATH_CACHE_SEGMENTS: i32 = 8;
+
+/// Distance from destination road stops to not cache any further.
+pub const YAPF_ROADVEH_PATH_CACHE_DESTINATION_LIMIT: i32 = 8;
+
 /// Helper container to find a depot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FindDepotData {

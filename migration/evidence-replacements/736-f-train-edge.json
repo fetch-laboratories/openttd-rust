@@ -1,0 +1,17 @@
+[
+  {
+    "retires": [
+      "source:tools/migration/train-edge-comparison.cpp",
+      "comparison:train-edge-comparison.py"
+    ],
+    "oracle": "Frozen train/edge-oracle.txt: the probe at a00b377774 with its candidate half removed and no Rust archive or candidate header linked, built against the unchanged original 14ec60f248547d4d062a1160f0fc26d742319888 bodies the driver extracted (train_cmd.cpp's Train::GetCurveSpeedLimit, SwapTrainFlags, UpdateStatusAfterSwap and ReverseTrainSwapVeh). GCC 13.3.0 Linux x86_64, C++20 at -O0 and -O2 -DNDEBUG; both streams identical. Recipe: tools/oracle-recipes/train_edge.patch over the fixture, `python3 tools/oracle-capture.py train_edge`. The curve section stores each trial's limit, the even trials first; the swap section stores per trial the event order by side, the count of other changed vehicles and the swapped vehicles' fields as XOR differences from the inputs the test regenerates, so the test rebuilds all 16 vehicles' state. The probe ran on Linux only; the test runs in default CI on every platform. 61,812 raw bytes, 16,338 gzip -9.",
+    "observations": {
+      "20,000 GetCurveSpeedLimit results for the probe's random consists of 1 to 16 vehicles with random directions, lengths, tilt, curve speed modifiers and rail curve advantage, under the original (even trials) and realistic (odd trials) acceleration models. Observed at the crate function train::curve_speed_limit, which settings_table.rs calls on an acceleration model change; the probe observed the export openttd_rust_train_curve_limit, removed here with the dead Train::GetCurveSpeedLimit member because neither had another caller. The C++ compiler's side of that call is no longer observed, and no C++ caller remains. The generator's inputs reach the 45-degree spacing limit and the realistic formula but no 90-degree bend, 45-degree right bend or single left-and-right pair": [
+        "rust:lib:train::evidence_tests::curve_limits_match_original"
+      ],
+      "20,000 ReverseTrainSwapVeh results over the same consists, with depot, wormhole and plain tracks: hidden-bit, track, direction, position, tile and z swaps, the going-up/down flag swap, the direction reversal outside depots, the tile entry on each vehicle's own tile, the position and viewport updates in order, and no change to any other vehicle; no service outside the probe's is called (every other entry is an unreachable stub). Observed at the export openttd_rust_train_reverse_swap, as the probe called it, from Rust; the C++ compiler's side of that call, whose only caller is the old-savegame conversion in saveload/vehicle_sl.cpp, is no longer observed and no scenario witness is claimed for it. In play the body is reached through train::reverse, which the default scenarios play-padhattan-ridge-2006-* and play-padhattan-ridge-2016-* must witness as train.reversal. The generator never draws l equal to r": [
+        "rust:lib:train::evidence_tests::reversals_match_original"
+      ]
+    }
+  }
+]

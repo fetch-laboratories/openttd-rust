@@ -85,6 +85,12 @@ crate::abi::shared_records! {
         pub recalc_interval: *const u16,
         pub reload_cfg: *const bool,
         pub reverse_at_signals: *const bool,
+        pub road_crossing_penalty: *const u32,
+        pub road_curve_penalty: *const u32,
+        pub road_slope_penalty: *const u32,
+        pub road_stop_bay_occupied_penalty: *const u32,
+        pub road_stop_occupied_penalty: *const u32,
+        pub road_stop_penalty: *const u32,
         pub roadveh_acceleration_model: *const u8,
         pub se_flat_world_height: *const u8,
         pub secondary_colour: *const u8,
@@ -171,6 +177,12 @@ impl SettingAddresses {
         recalc_interval: std::ptr::null(),
         reload_cfg: std::ptr::null(),
         reverse_at_signals: std::ptr::null(),
+        road_crossing_penalty: std::ptr::null(),
+        road_curve_penalty: std::ptr::null(),
+        road_slope_penalty: std::ptr::null(),
+        road_stop_bay_occupied_penalty: std::ptr::null(),
+        road_stop_occupied_penalty: std::ptr::null(),
+        road_stop_penalty: std::ptr::null(),
         roadveh_acceleration_model: std::ptr::null(),
         se_flat_world_height: std::ptr::null(),
         secondary_colour: std::ptr::null(),
@@ -218,10 +230,6 @@ impl TreePlacer {
 }
 /// Raw adapter: `TP_NONE` as a base value, for files no pass has finished yet.
 pub const TP_NONE: u8 = TreePlacer::TP_NONE.0;
-/// Raw adapter: `TP_ORIGINAL` as a base value.
-pub const TP_ORIGINAL: u8 = TreePlacer::TP_ORIGINAL.0;
-/// Raw adapter: `TP_IMPROVED` as a base value.
-pub const TP_IMPROVED: u8 = TreePlacer::TP_IMPROVED.0;
 
 /// Native `settings_type.h::IndustryDensity`, retaining the full underlying integer domain.
 #[repr(transparent)]
