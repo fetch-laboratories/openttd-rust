@@ -732,3 +732,162 @@ pub unsafe extern "C" fn openttd_test_engine_override(
         crate::engine::bindings::append_override(shared, bindings, cargo, group, ids);
     }
 }
+
+/// A ship search's input and the ship facts the controller supplies, with the
+/// search's `path_found` and `best_origin_dir`, for the native ship tests.
+#[repr(C)]
+pub struct ShipYapfProbe {
+    pub input: crate::ship_yapf::Input,
+    pub state: u8,
+    pub trackdir: u8,
+    pub path_found: u8,
+    pub best_origin_dir: u8,
+}
+impl ShipYapfProbe {
+    fn vehicle<'a>(
+        &self,
+        s: &'a crate::services::Services,
+        leaves: &'a crate::ship_control::Leaves,
+    ) -> crate::ship_yapf::Vehicle<'a> {
+        crate::ship_yapf::Vehicle::new(
+            s,
+            self.input,
+            crate::track_type::TrackBits(self.state),
+            crate::track_type::Trackdir(self.trackdir),
+            leaves,
+        )
+    }
+}
+
+/// Run the production `ChooseShipTrack` over the probe's input.
+/// # Safety
+/// The shared table, leaves, probe and path cache are live and exclusive for the
+/// call, under the ship search's module contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_ship_choose_ship_track(
+    shared: *const crate::services::Services,
+    leaves: *const crate::ship_control::Leaves,
+    probe: *mut ShipYapfProbe,
+    tile: u32,
+    forward_dirs: u16,
+    reverse_dirs: u16,
+    path_cache: *mut crate::ship_yapf::ShipPathCache,
+) -> u8 {
+    let (s, leaves, probe, path_cache) =
+        unsafe { (&*shared, &*leaves, &mut *probe, &mut *path_cache) };
+    let v = probe.vehicle(s, leaves);
+    let mut path_found = false;
+    let mut best_origin_dir = crate::track_type::Trackdir::INVALID_TRACKDIR;
+    let td = crate::ship_yapf::choose_ship_track(
+        &v,
+        TileIndex(tile),
+        crate::track_type::TrackdirBits(forward_dirs),
+        crate::track_type::TrackdirBits(reverse_dirs),
+        &mut path_found,
+        path_cache,
+        &mut best_origin_dir,
+    );
+    probe.path_found = u8::from(path_found);
+    probe.best_origin_dir = best_origin_dir.0;
+    td.0
+}
+
+/// Run the production `CheckShipReverse` over the probe's input; `trackdir`
+/// may be null, as the original's.
+/// # Safety
+/// As [`openttd_test_ship_choose_ship_track`]; `trackdir` is null or writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_ship_check_ship_reverse(
+    shared: *const crate::services::Services,
+    leaves: *const crate::ship_control::Leaves,
+    probe: *const ShipYapfProbe,
+    trackdir: *mut u8,
+) -> u8 {
+    let (s, leaves, probe) = unsafe { (&*shared, &*leaves, &*probe) };
+    let v = probe.vehicle(s, leaves);
+    let mut out = crate::track_type::Trackdir::INVALID_TRACKDIR;
+    let reverse =
+        crate::ship_yapf::check_ship_reverse(&v, (!trackdir.is_null()).then_some(&mut out));
+    if !trackdir.is_null() {
+        unsafe { trackdir.write(out.0) };
+    }
+    u8::from(reverse)
+}
+
+/// Run the production `FindWaterRegionPath` over the probe's input, writing at
+/// most `capacity` patches of the path to `out`; returns the path's length.
+/// # Safety
+/// As [`openttd_test_ship_choose_ship_track`]; `out` holds `capacity` writable patches.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_ship_find_water_region_path(
+    shared: *const crate::services::Services,
+    leaves: *const crate::ship_control::Leaves,
+    probe: *const ShipYapfProbe,
+    start_tile: u32,
+    max_returned_path_length: i32,
+    out: *mut crate::water_regions::WaterRegionPatchDesc,
+    capacity: usize,
+) -> usize {
+    let (s, leaves, probe) = unsafe { (&*shared, &*leaves, &*probe) };
+    let v = probe.vehicle(s, leaves);
+    let path = crate::ship_yapf::find_water_region_path(
+        &v,
+        TileIndex(start_tile),
+        max_returned_path_length,
+    );
+    for (index, patch) in path.iter().take(capacity).enumerate() {
+        unsafe { out.add(index).write(*patch) };
+    }
+    path.len()
+}
+
+/// The ship node list's open-node heap (`CBinaryHeapT` over `CYapfShipNode`
+/// estimates) for tie and removal order, which no saved state records.
+/// Commands use bits 31..30: include, remove, update; low bits are node indices.
+/// The native test runs the same commands through the original `CBinaryHeapT`.
+/// # Safety
+/// `costs[nodes]`, `commands[count]` and `values[count]` are readable, `out[count]`
+/// writable; node indices and heap membership obey `Include`/`Remove` preconditions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_ship_heap_probe(
+    costs: *const i32,
+    nodes: usize,
+    commands: *const u32,
+    values: *const i32,
+    count: usize,
+    out: *mut u32,
+) {
+    let mut items: Vec<crate::yapf_node::Node<u32>> = (0..nodes)
+        .map(|index| {
+            let mut node = crate::yapf_node::Node::set(None, 0);
+            node.estimate = unsafe { costs.add(index).read() };
+            node
+        })
+        .collect();
+    let mut heap = crate::binaryheap::BinaryHeap::new(2048);
+    for step in 0..count {
+        let command = unsafe { commands.add(step).read() };
+        let index = (command & 0x3fff_ffff) as usize;
+        match command >> 30 {
+            0 => heap.include(index, |a, b| items[a].less(&items[b])),
+            1 => heap.remove(index, |a, b| items[a].less(&items[b])),
+            _ => {
+                heap.remove(index, |a, b| items[a].less(&items[b]));
+                items[index].estimate = unsafe { values.add(step).read() };
+                heap.include(index, |a, b| items[a].less(&items[b]));
+            }
+        }
+        unsafe { out.add(step).write(heap.first().map_or(u32::MAX, |i| i as u32)) };
+    }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDShipYapfProbe" ["probe"] => ShipYapfProbe {
+        input,
+        state,
+        trackdir,
+        path_found,
+        best_origin_dir,
+    };
+}

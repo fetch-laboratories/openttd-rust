@@ -5,42 +5,68 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file ship_yapf_protocol.hpp Heap comparison and owner/lifetime ABI evidence. */
+/** @file ship_yapf_protocol.hpp Heap comparison, path ownership and production ship searches over fixture maps. */
 #ifndef SHIP_YAPF_PROTOCOL_HPP
 #define SHIP_YAPF_PROTOCOL_HPP
 #include "../rust/ship_yapf_ffi.h"
+#include "../rust/ship_control_ffi.h"
+#include "../rust/ground_ffi.h"
+#include "../rust/engine_capabilities_ffi.h"
 #include "follower_fixture.hpp"
 #include <array>
+#include <string_view>
 #include <vector>
 #include <memory>
 #include <cassert>
 #include "../misc/binaryheap.hpp"
+extern "C" {
+void openttd_rust_witness_enable();
+const char *openttd_rust_witness_name(size_t, size_t *);
+uint64_t openttd_rust_witness_count(size_t);
+}
 namespace ShipYapfProbe {
 inline uint32_t draws;
 inline uint32_t Random(void *) noexcept { ++draws; return 0x9abcdef0; }
-inline uint32_t destination;
-inline bool snake, region_chain;
-inline OpenTTDShipYapfDestination Destination(const void *) noexcept { return {.tile = destination, .station = false}; }
-inline OpenTTDShipTile Tile(const void *, uint32_t, uint8_t) noexcept { return {0, 0, 1, 0, 0}; }
-inline OpenTTDWaterPatch Patch(uint32_t tile) noexcept
+inline OpenTTDWaterRegions *regions;
+inline OpenTTDWaterGroundServices water{.water_regions = []() noexcept { return regions; }};
+
+/** The current count of the branch witness `ship_yapf.<name>`. */
+inline uint64_t Witness(std::string_view name)
 {
-	if (region_chain) return {static_cast<int32_t>(tile), 0, 1};
-	return snake ? OpenTTDWaterPatch{0, 0, 1} : OpenTTDWaterPatch{static_cast<int32_t>(tile % 32 / 16), static_cast<int32_t>(tile / 32 / 16), 1};
+	size_t length;
+	for (size_t i = 0; const char *witness = openttd_rust_witness_name(i, &length); ++i) {
+		if (std::string_view(witness, length).substr(0, 10) == "ship_yapf." && std::string_view(witness, length).substr(10) == name) return openttd_rust_witness_count(i);
+	}
+	std::abort();
 }
-/* The synthetic region graph keeps its one-edge progress in the visit the search holds. */
-inline uint8_t VisitNext(OpenTTDWaterVisit *visit, OpenTTDWaterPatch from, OpenTTDWaterPatch *out) noexcept
+/** The ship_yapf witnesses one search hits, as the differences around it. */
+struct Stats {
+	static constexpr std::array<std::string_view, 7> names{"region_nodes", "track_nodes", "retries", "track_limits", "lost", "random_draws", "region_limits"};
+	std::array<uint64_t, names.size()> before;
+	Stats() { for (size_t i = 0; i < names.size(); ++i) this->before[i] = Witness(names[i]); }
+	uint64_t operator[](std::string_view name) const
+	{
+		for (size_t i = 0; i < names.size(); ++i) if (names[i] == name) return Witness(name) - this->before[i];
+		std::abort();
+	}
+};
+
+/** One-tile-wide river rows on every odd y below `rows`, from x = 1 to width - 2, each joined to the next at alternating ends. */
+inline void CarveRiver(FollowerFixture &map, uint32_t width, uint32_t rows)
 {
-	if (!region_chain || visit->started != 0) return 0;
-	visit->started = 1; *out = {from.x + 1, 0, 1}; return 1;
+	for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_CLEAR);
+	for (uint32_t y = 1; y < rows; y += 2) {
+		for (uint32_t x = 1; x <= width - 2; ++x) map.Tile(x + y * width, MP_WATER);
+		if (y < rows - 2) map.Tile(((y / 2 & 1) ? 1 : width - 2) + (y + 1) * width, MP_WATER);
+	}
 }
-inline void Report(uint32_t, uint8_t, uint8_t, uint32_t, uint32_t, uint32_t, int32_t, int32_t) noexcept {}
-inline uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
 
 /* Save snapshots cannot distinguish every equal-priority heap shape. Compare
-	* insertion, middle removal and strict improvement directly to unchanged C++.
-	* This is only heap evidence; world/game semantics remain the ships corpus. */
+ * insertion, middle removal and strict improvement directly to unchanged C++.
+ * This is only heap evidence; world/game semantics remain the ships corpus. */
 template <typename Check> void Run(Check check, uint32_t limit_follows)
 {
+	openttd_rust_witness_enable();
 	struct Node { int32_t estimate; bool operator<(const Node &other) const { return this->estimate < other.estimate; } };
 	std::array<Node, 64> nodes{};
 	std::array<int32_t, 64> costs{};
@@ -61,7 +87,7 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 		expected.push_back(heap.IsEmpty() ? UINT32_MAX : static_cast<uint32_t>(heap.Begin() - nodes.data()));
 	}
 	std::vector<uint32_t> actual(commands.size());
-	openttd_rust_ship_heap_probe(costs.data(), costs.size(), commands.data(), values.data(), commands.size(), actual.data());
+	openttd_test_ship_heap_probe(costs.data(), costs.size(), commands.data(), values.data(), commands.size(), actual.data());
 	check(actual == expected);
 	using PathOwner = std::unique_ptr<OpenTTDShipPath, decltype(&openttd_rust_ship_path_destroy)>;
 	PathOwner path{openttd_rust_ship_path_new(), openttd_rust_ship_path_destroy};
@@ -71,50 +97,98 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	check(openttd_rust_ship_path_size(copy.get()) == 1 && openttd_rust_ship_path_get(copy.get(), 0) == 2);
 	check(openttd_rust_ship_path_size(path.get()) == 2 && openttd_rust_ship_path_get(path.get(), 0) == 255 && openttd_rust_ship_path_get(path.get(), 1) == 13);
 	openttd_rust_ship_path_clear(path.get());
-	OpenTTDShipYapfInput input{32, 32, 10 + 32 * 20, 10 + 32 * 24, 100, 20, 100, 0, 1 << 9, 1, 0, 0, 0, 0};
-	const OpenTTDShipYapfLeaves leaves{Destination, Tile, Patch, VisitNext, Report};
-	FollowerFixture map{32, 32};
-	auto &services = map.shared;
-	services.random = Random;
-	for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_WATER);
-	destination = input.dest_tile;
-	auto result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 1, 0, &destination, 1);
-	check(result.found == 1 && result.direction == 1 && result.origin == 1 && openttd_rust_ship_path_size(path.get()) == 0 && draws == 0);
-	destination = input.tile - 4 * 32;
-	result = openttd_rust_ship_reverse(&input, &leaves, &services, nullptr, 0, &destination, 1);
-	check(result.found == 1 && result.origin == 9 && draws == 0);
-	result = openttd_rust_ship_reverse(&input, &leaves, &services, nullptr, 1, &destination, 1);
-	check(result.found == 1 && result.direction == 9 && draws == 0);
-	using RegionOwner = std::unique_ptr<OpenTTDShipRegionPath, decltype(&openttd_rust_ship_regions_destroy)>;
-	RegionOwner regions{openttd_rust_ship_regions(&input, &leaves, input.tile, 5, &destination, 1), openttd_rust_ship_regions_destroy};
-	check(openttd_rust_ship_regions_size(regions.get()) == 1 && openttd_rust_ship_regions_get(regions.get(), 0).label == 1);
-	/* A one-tile-wide winding river exceeds the low-level node limit. All
-	 * transitions now enter the production follower over canonical tile layouts.
-	 * Region reporting remains injected to isolate low-level retry control. */
-	snake = true; draws = 0;
-	map.tiles.Resize(7, 128 * 128);
-	for (uint32_t y = 1; y < 127; y += 2) {
-		for (uint32_t x = 1; x <= 126; ++x) map.Tile(x + y * 128, MP_WATER);
-		if (y < 125) map.Tile(((y / 2 & 1) ? 1 : 126) + (y + 1) * 128, MP_WATER);
+
+	/* The searches read the map, a real water region owner and the probe's input. The controller's
+	 * leaves serve only station orders, which no case gives. */
+	static const OpenTTDEngineCapabilitiesServices capabilities{};
+	OpenTTDShipLeaves leaves{};
+	leaves.capabilities = &capabilities;
+	using RegionOwner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
+	RegionOwner owner{nullptr, openttd_rust_water_destroy};
+	const auto install = [&](FollowerFixture &map, uint32_t width, uint32_t height) {
+		map.shared.random = Random;
+		/* No fixture tile is a lock. */
+		map.shared.water_middle_lock = [](uint32_t) noexcept { return false; };
+		map.shared.water_services = []() noexcept -> const OpenTTDWaterGroundServices * { return &water; };
+		owner.reset(openttd_rust_water_new(&map.shared, width, height));
+		regions = owner.get();
+	};
+
+	/* A 32 by 32 sea: a ship on (10, 20) heading south-east. */
+	{
+		FollowerFixture map{32, 32};
+		for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_WATER);
+		install(map, 32, 32);
+		draws = 0;
+		OpenTTDShipYapfProbe probe{};
+		probe.input = {.tile = 10 + 32 * 20, .dest_tile = 10 + 32 * 24, .direction = DIR_SE, .max_speed = 100, .ship_curve45_penalty = 20, .ship_curve90_penalty = 100};
+		probe.state = TRACK_BIT_Y;
+		probe.trackdir = TRACKDIR_Y_SE;
+		auto direction = openttd_test_ship_choose_ship_track(&map.shared, &leaves, &probe, probe.input.tile, 1 << TRACKDIR_Y_SE, 0, path.get());
+		check(probe.path_found == 1 && direction == TRACKDIR_Y_SE && probe.best_origin_dir == TRACKDIR_Y_SE && openttd_rust_ship_path_size(path.get()) == 0 && draws == 0);
+		/* The destination four tiles behind: the reverse origin is the better one. */
+		probe.input.dest_tile = probe.input.tile - 4 * 32;
+		check(openttd_test_ship_check_ship_reverse(&map.shared, &leaves, &probe, nullptr) == 1 && draws == 0);
+		/* A blocked ship may reverse into Y_NW, LOWER_W or RIGHT_N. The water beside it is land,
+		 * so that only Y_NW leads anywhere, as the reverse trackdir the case observes. */
+		for (uint32_t t : {probe.input.tile - 1, probe.input.tile + 1}) {
+			map.Tile(t, MP_CLEAR);
+			openttd_rust_water_invalidate(owner.get(), &map.shared, t);
+		}
+		uint8_t trackdir = INVALID_TRACKDIR;
+		check(openttd_test_ship_check_ship_reverse(&map.shared, &leaves, &probe, &trackdir) == 1 && trackdir == TRACKDIR_Y_NW && draws == 0);
+		std::array<OpenTTDWaterPatch, 5> patches{};
+		check(openttd_test_ship_find_water_region_path(&map.shared, &leaves, &probe, probe.input.tile, 5, patches.data(), patches.size()) == 1 && patches[0].label == 1);
 	}
-	input = {128, 128, 1 + 128, 1 + 128 * 101, 100, 20, 100, 0, 0, 8, 0, 0, 0, 0};
-	destination = input.dest_tile;
-	result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 8, 0, &destination, 1);
-	check(result.found == 0 && result.stats[3] == 1 && result.stats[2] == 1 && result.stats[7] == 1);
-	/* The long winding route reaches the same fixed limit as the unchanged
-	 * generic search. The restricted retry additionally searches its start patch. */
-	check(result.stats[1] >= limit_follows && result.stats[1] <= limit_follows + 256);
-	check(result.stats[8] > 0 && result.stats[8] <= 8 && draws == result.stats[8]);
-	snake = false;
-	/* Map-derived high-level node limit, with a synthetic one-edge region graph. */
-	region_chain = true; draws = 0;
-	for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_WATER);
-	input = {128, 128, 600, 0, 100, 20, 100, 0, 0, 1, 0, 0, 0, 0};
-	destination = 0; openttd_rust_ship_path_clear(path.get());
-	result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 1, 0, &destination, 1);
-	check(result.found == 0 && result.stats[0] == 257 && result.stats[11] == 1 && result.stats[1] == 0);
-	check(result.stats[7] == 1 && result.stats[8] == 8 && draws == 8);
-	region_chain = false;
+
+	/* A one-tile-wide winding river exceeds the low-level node limit, then a failed retry. The
+	 * region cache is stale on purpose: each region was queried while the map was open sea and
+	 * the river was carved without invalidating it, which production never does. The high-level
+	 * path is then five regions straight south from the ship, the unrestricted search follows the
+	 * river past the limit, and the restricted retry is shut inside a corridor that the river
+	 * leaves at once. The case observes that retry's failure, which a consistent cache cannot give. */
+	{
+		FollowerFixture map{256, 256};
+		for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_WATER);
+		install(map, 256, 256);
+		for (uint32_t y = 0; y < 256; y += 16) {
+			for (uint32_t x = 0; x < 256; x += 16) check(openttd_rust_water_label(owner.get(), &map.shared, x + y * 256) == 1);
+		}
+		CarveRiver(map, 256, 255);
+		draws = 0;
+		OpenTTDShipYapfProbe probe{};
+		probe.input = {.tile = 1 + 256, .dest_tile = 1 + 256 * 101, .direction = DIR_SW, .max_speed = 100, .ship_curve45_penalty = 20, .ship_curve90_penalty = 100};
+		probe.state = TRACK_BIT_X;
+		probe.trackdir = TRACKDIR_X_SW;
+		openttd_rust_ship_path_clear(path.get());
+		const Stats stats;
+		openttd_test_ship_choose_ship_track(&map.shared, &leaves, &probe, probe.input.tile, 1 << TRACKDIR_X_SW, 0, path.get());
+		check(probe.path_found == 0 && stats["track_limits"] == 1 && stats["retries"] == 1 && stats["lost"] == 1);
+		/* The long winding route reaches the same fixed limit as the unchanged
+		 * generic search. The restricted retry additionally searches its start patch. */
+		check(stats["track_nodes"] >= limit_follows && stats["track_nodes"] <= limit_follows + 256);
+		check(stats["random_draws"] > 0 && stats["random_draws"] <= 8 && draws == stats["random_draws"]);
+	}
+
+	/* Map-derived high-level node limit: on 128 by 128 tiles the river is one chain of more than
+	 * 256 region patches. The destination is at its head and the ship at its tail, with eight
+	 * tiles of river ahead. */
+	{
+		FollowerFixture map{128, 128};
+		CarveRiver(map, 128, 127);
+		install(map, 128, 128);
+		draws = 0;
+		OpenTTDShipYapfProbe probe{};
+		probe.input = {.tile = 118 + 128 * 125, .dest_tile = 1 + 128, .direction = DIR_SW, .max_speed = 100, .ship_curve45_penalty = 20, .ship_curve90_penalty = 100};
+		probe.state = TRACK_BIT_X;
+		probe.trackdir = TRACKDIR_X_SW;
+		openttd_rust_ship_path_clear(path.get());
+		const Stats stats;
+		openttd_test_ship_choose_ship_track(&map.shared, &leaves, &probe, probe.input.tile, 1 << TRACKDIR_X_SW, 0, path.get());
+		check(probe.path_found == 0 && stats["region_nodes"] == 257 && stats["region_limits"] == 1 && stats["track_nodes"] == 0);
+		check(stats["lost"] == 1 && stats["random_draws"] == 8 && draws == 8);
+	}
+	regions = nullptr;
 }
 }
 #endif

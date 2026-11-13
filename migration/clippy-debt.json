@@ -498,21 +498,6 @@
     "rust/openttd-kernels/src/settings_table.rs | fn default_service_interval | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/ship_yapf.rs | fn choose | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/ship_yapf.rs | fn choose | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
-    ],
-    "rust/openttd-kernels/src/ship_yapf.rs | fn openttd_rust_ship_heap_probe | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/ship_yapf.rs | impl Search::fn add | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/ship_yapf.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
-    ],
     "rust/openttd-kernels/src/spiral.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
       1,

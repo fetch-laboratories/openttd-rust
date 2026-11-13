@@ -5,38 +5,29 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file ship_yapf_ffi.h Complete ship searches and canonical path owner. */
+/** @file ship_yapf_ffi.h Rust ship pathfinding and the ship's path cache owner. */
 #ifndef OPENTTD_RUST_SHIP_YAPF_FFI_H
 #define OPENTTD_RUST_SHIP_YAPF_FFI_H
-#include "service_defaults.hpp"
-#include "water_regions_ffi.h"
 #include "services_ffi.h"
+#include "water_regions_ffi.h"
 #include <stddef.h>
+#include <stdint.h>
 extern "C" {
 struct OpenTTDShipPath;
-struct OpenTTDShipRegionPath;
+struct OpenTTDShipLeaves;
+struct OpenTTDVehicle;
+/** What a search reads from the ship, its engine and the settings; native tests fill it themselves. */
 struct OpenTTDShipYapfInput {
-	uint32_t map_x, map_y, tile, dest_tile;
-	int32_t curve90, curve45;
-	uint32_t max_speed;
-	uint16_t dest_dirs, reverse_dirs;
-	uint8_t trackdir, ocean_frac, canal_frac, station;
-	uint32_t unit_number;
+	uint32_t tile, dest_tile;
+	uint8_t order_type;
+	uint16_t order_destination;
+	uint8_t direction;
+	uint16_t max_speed;
+	uint8_t ocean_speed_frac, canal_speed_frac;
+	uint32_t ship_curve45_penalty, ship_curve90_penalty;
+	uint16_t unit_number;
 };
-struct OpenTTDShipTile { uint32_t ships; uint8_t docking, sea, lock_middle, destination; };
-struct OpenTTDShipYapfResult { uint8_t direction, found, origin; uint32_t stats[13]; };
-struct OpenTTDShipYapfDestination { uint32_t tile; bool station; };
-struct OpenTTDShipYapfLeaves {
-	OpenTTDShipYapfDestination (*destination)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(destination);
-	OpenTTDShipTile (*tile)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	OpenTTDWaterPatch (*patch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(patch);
-	uint8_t (*visit_next)(OpenTTDWaterVisit *, OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept OPENTTD_SERVICE_DEFAULT(visit_next);
-	void (*debug)(uint32_t, uint8_t, uint8_t, uint32_t, uint32_t, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug);
-};
-/* Search owns its arena, hashes, heap and copied world observations; the ship context is opaque
- * and live for the call. Region calls may enter the distinct water-cache owner. The path owner
- * belongs to its Ship facade, and save errors occur outside Rust frames.
- * Leaves cannot reenter the search or path owner; no reference to its Vec escapes. */
+/* The path owner belongs to its Ship facade; save errors occur outside Rust frames. */
 OpenTTDShipPath *openttd_rust_ship_path_new();
 OpenTTDShipPath *openttd_rust_ship_path_clone(const OpenTTDShipPath *);
 void openttd_rust_ship_path_destroy(OpenTTDShipPath *);
@@ -46,16 +37,19 @@ void openttd_rust_ship_path_set(OpenTTDShipPath *, size_t, uint8_t);
 void openttd_rust_ship_path_push(OpenTTDShipPath *, uint8_t);
 void openttd_rust_ship_path_pop(OpenTTDShipPath *);
 void openttd_rust_ship_path_clear(OpenTTDShipPath *);
-OpenTTDShipYapfResult openttd_rust_ship_choose(OpenTTDShipPath *, const OpenTTDShipYapfInput *, const OpenTTDShipYapfLeaves *, const OpenTTDSharedServices *, const void *, uint32_t, uint16_t, uint16_t, const uint32_t *, size_t);
-OpenTTDShipYapfResult openttd_rust_ship_reverse(const OpenTTDShipYapfInput *, const OpenTTDShipYapfLeaves *, const OpenTTDSharedServices *, const void *, uint8_t, const uint32_t *, size_t);
-OpenTTDShipRegionPath *openttd_rust_ship_regions(const OpenTTDShipYapfInput *, const OpenTTDShipYapfLeaves *, uint32_t, int32_t, const uint32_t *, size_t);
-size_t openttd_rust_ship_regions_size(const OpenTTDShipRegionPath *);
-OpenTTDWaterPatch openttd_rust_ship_regions_get(const OpenTTDShipRegionPath *, size_t);
-void openttd_rust_ship_regions_destroy(OpenTTDShipRegionPath *);
-/* Evidence-only heap operations: costs[nodes], commands[count], values[count]
- * readable initialized spans, out[count] exclusive writable; extents <=isize::MAX.
- * Inputs remain live/read-only and do not overlap output. Node indices and heap
- * membership obey Include/Remove preconditions; no pointer survives the call. */
-void openttd_rust_ship_heap_probe(const int32_t *, size_t, const uint32_t *, const int32_t *, size_t, uint32_t *);
+/* YapfShipChooseTrack and YapfShipCheckReverse, with the ship's GetState() and GetVehicleTrackdir().
+ * The search reads the map in place and calls only shared services and the controller's leaves,
+ * which cannot reenter it, the ship's path owner or the controller. */
+uint8_t openttd_rust_yapf_ship_choose_track(const OpenTTDSharedServices *, const OpenTTDShipLeaves *, const OpenTTDVehicle *, uint8_t, uint8_t, uint32_t, OpenTTDShipPath *, bool *);
+uint8_t openttd_rust_yapf_ship_check_reverse(const OpenTTDSharedServices *, const OpenTTDShipLeaves *, const OpenTTDVehicle *, uint8_t, uint8_t, uint8_t *);
+/* Native test probes: the production searches over a test's own input, and the ship node list's heap. */
+struct OpenTTDShipYapfProbe {
+	OpenTTDShipYapfInput input;
+	uint8_t state, trackdir, path_found, best_origin_dir;
+};
+uint8_t openttd_test_ship_choose_ship_track(const OpenTTDSharedServices *, const OpenTTDShipLeaves *, OpenTTDShipYapfProbe *, uint32_t, uint16_t, uint16_t, OpenTTDShipPath *);
+uint8_t openttd_test_ship_check_ship_reverse(const OpenTTDSharedServices *, const OpenTTDShipLeaves *, const OpenTTDShipYapfProbe *, uint8_t *);
+size_t openttd_test_ship_find_water_region_path(const OpenTTDSharedServices *, const OpenTTDShipLeaves *, const OpenTTDShipYapfProbe *, uint32_t, int32_t, OpenTTDWaterPatch *, size_t);
+void openttd_test_ship_heap_probe(const int32_t *, size_t, const uint32_t *, const int32_t *, size_t, uint32_t *);
 }
 #endif

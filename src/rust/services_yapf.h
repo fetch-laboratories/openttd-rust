@@ -13,8 +13,4 @@ inline void RustRiverYapfDebug(bool found, uint32_t rounds, uint32_t open, uint3
 {
 	RustYapfDebug('~', found, 0, rounds, open, closed, 0.0f, cost, distance);
 }
-inline void RustShipYapfDebug(uint32_t unit, uint8_t kind, uint8_t found, uint32_t rounds, uint32_t open, uint32_t closed, int32_t cost, int32_t distance) noexcept
-{
-	RustYapfDebug(kind == 0 ? '^' : 'w', found != 0, unit, rounds, open, closed, 0.0f, cost, distance);
-}
 #endif /* RUST_SERVICES_YAPF_H */
