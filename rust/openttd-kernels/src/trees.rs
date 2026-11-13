@@ -1788,25 +1788,31 @@ mod tests {
             _extended: extended,
         }
     }
-    fn edit(tile: u32, f: impl FnOnce(&mut BaseTileLayout)) {
+    fn edit(tile: TileIndex, f: impl FnOnce(&mut BaseTileLayout)) {
         // SAFETY: The installed test map; no other reference to the tile is live.
-        f(unsafe { &mut *BASE.get().add(tile as usize) });
+        f(unsafe { &mut *BASE.get().add(tile.0 as usize) });
     }
-    fn byte(tile: u32, f: impl FnOnce(&BaseTileLayout) -> u8) -> u8 {
+    fn byte(tile: TileIndex, f: impl FnOnce(&BaseTileLayout) -> u8) -> u8 {
         // SAFETY: As `edit`.
-        f(unsafe { &*BASE.get().add(tile as usize) })
+        f(unsafe { &*BASE.get().add(tile.0 as usize) })
     }
     fn set_type(b: &mut BaseTileLayout, kind: TileType) {
         b.kind = (kind.0 << 4) | (b.kind & 0x0f);
     }
-    fn clear(tile: u32, ground: ClearGround, density: u8) {
+    fn clear(tile: TileIndex, ground: ClearGround, density: u8) {
         edit(tile, |b| {
             set_type(b, TileType::MP_CLEAR);
             b.m5 = (ground.0 << 2) | density;
             b.m3 = 0;
         });
     }
-    fn tree(tile: u32, r#type: TreeType, count: u8, growth: TreeGrowthStage, ground: TreeGround) {
+    fn tree(
+        tile: TileIndex,
+        r#type: TreeType,
+        count: u8,
+        growth: TreeGrowthStage,
+        ground: TreeGround,
+    ) {
         edit(tile, |b| {
             set_type(b, TileType::MP_TREES);
             b.m3 = r#type.0;
@@ -1814,11 +1820,13 @@ mod tests {
             b.m5 = ((count - 1) << 6) | growth.0;
         });
     }
-    fn tree_ground(tile: u32) -> u8 {
-        byte(tile, |b| u8::try_from((b.m2 >> 6) & 7).unwrap())
+    fn tree_ground(TileIndex(tile): TileIndex) -> TreeGround {
+        TreeGround(byte(TileIndex(tile), |b| {
+            u8::try_from((b.m2 >> 6) & 7).unwrap()
+        }))
     }
-    fn growth(tile: u32) -> u8 {
-        byte(tile, |b| b.m5 & 7)
+    fn growth(TileIndex(tile): TileIndex) -> TreeGrowthStage {
+        TreeGrowthStage(byte(TileIndex(tile), |b| b.m5 & 7))
     }
 
     extern "C" fn random(_: *mut c_void) -> u32 {
@@ -1829,7 +1837,7 @@ mod tests {
         0
     }
     extern "C" fn tile_type(tile: u32) -> u8 {
-        byte(tile, |b| b.kind >> 4)
+        byte(TileIndex(tile), |b| b.kind >> 4)
     }
     extern "C" fn dirty(tile: u32) {
         log(Event::Dirty(tile));
@@ -1980,7 +1988,7 @@ mod tests {
     ) {
         log(Event::Write("make_tree", tile));
         let ground = PLANTED_GROUND.get().unwrap_or(ground);
-        edit(tile, |b| {
+        edit(TileIndex(tile), |b| {
             set_type(b, TileType::MP_TREES);
             b.m2 = (u16::from(ground) << 6) | ((density as u16) << 4);
             b.m3 = r#type;
@@ -1993,7 +2001,7 @@ mod tests {
     )]
     extern "C" fn set_ground_density(tile: u32, ground: u8, density: u32) {
         log(Event::Write("ground", tile));
-        edit(tile, |b| {
+        edit(TileIndex(tile), |b| {
             b.m2 = (b.m2 & !0x1f0) | (u16::from(ground) << 6) | ((density as u16) << 4);
         });
     }
@@ -2004,7 +2012,9 @@ mod tests {
     )]
     extern "C" fn add_count(tile: u32, c: i32) {
         log(Event::Write("count", tile));
-        edit(tile, |b| b.m5 = b.m5.wrapping_add(((c as u8) & 3) << 6));
+        edit(TileIndex(tile), |b| {
+            b.m5 = b.m5.wrapping_add(((c as u8) & 3) << 6)
+        });
     }
     #[allow(
         clippy::cast_possible_truncation,
@@ -2013,13 +2023,13 @@ mod tests {
     )]
     extern "C" fn add_growth(tile: u32, a: i32) {
         log(Event::Write("add_growth", tile));
-        edit(tile, |b| {
+        edit(TileIndex(tile), |b| {
             b.m5 = (b.m5 & !7) | (b.m5.wrapping_add(a as u8) & 7);
         });
     }
     extern "C" fn set_growth(tile: u32, g: u8) {
         log(Event::Write("set_growth", tile));
-        edit(tile, |b| b.m5 = (b.m5 & !7) | g);
+        edit(TileIndex(tile), |b| b.m5 = (b.m5 & !7) | g);
     }
     #[allow(
         clippy::cast_possible_truncation,
@@ -2027,7 +2037,7 @@ mod tests {
     )]
     extern "C" fn make_clear(tile: u32, g: u8, density: u32) {
         log(Event::Write("clear", tile));
-        clear(tile, ClearGround(g), density as u8);
+        clear(TileIndex(tile), ClearGround(g), density as u8);
     }
     extern "C" fn progress() -> bool {
         log(Event::Progress);
@@ -2102,23 +2112,23 @@ mod tests {
     /// Run `CmdPlantTree` from `start_tile` to `tile`.
     fn plant(
         c: &Trees<'static>,
-        flags: u16,
-        tile: u32,
-        start_tile: u32,
-        tree_to_plant: u8,
+        flags: DoCommandFlags,
+        tile: TileIndex,
+        start_tile: TileIndex,
+        tree_to_plant: TreeType,
         diagonal: bool,
     ) {
         let commands = commands(c.s);
         let args = PlantTreeArgs {
-            tile,
-            start_tile,
-            tree_to_plant,
+            tile: tile.0,
+            start_tile: start_tile.0,
+            tree_to_plant: tree_to_plant.0,
             diagonal,
         };
         cmd_plant_tree(
             c,
             commands,
-            DoCommandFlags(flags),
+            flags,
             &args,
             Cost(std::ptr::null_mut(), commands.cost),
         );
@@ -2263,7 +2273,7 @@ mod tests {
     fn quiet_temperate_tile_calls_no_service() {
         let _map = install(6, TileType::MP_CLEAR, true);
         tree(
-            0,
+            TileIndex(0),
             TreeType(0),
             1,
             TreeGrowthStage::Grown,
@@ -2285,7 +2295,7 @@ mod tests {
     fn growth_bitpattern_seven_takes_the_default_arm() {
         let _map = install(6, TileType::MP_CLEAR, true);
         tree(
-            2,
+            TileIndex(2),
             TreeType(0),
             1,
             TreeGrowthStage(7),
@@ -2304,17 +2314,17 @@ mod tests {
             std::ptr::null_mut(),
         );
         assert_eq!(events(), [Event::Write("add_growth", 2), Event::Dirty(2)]);
-        assert_eq!(growth(2), 0);
+        assert_eq!(growth(TileIndex(2)), TreeGrowthStage::Growing1);
     }
 
     #[test]
     fn arctic_loop_uses_configured_snow_line() {
         let _map = install(6, TileType::MP_CLEAR, true);
         for tile in 0..4096 {
-            edit(tile, |b| b.height = 8);
+            edit(TileIndex(tile), |b| b.height = 8);
         }
         tree(
-            65,
+            TileIndex(65),
             TreeType(12),
             1,
             TreeGrowthStage::Growing1,
@@ -2348,7 +2358,7 @@ mod tests {
             std::ptr::null_mut(),
         );
         assert_eq!(events(), [Event::Write("ground", 65), Event::Dirty(65)]);
-        assert_eq!(tree_ground(65), TreeGround::TREE_GROUND_GRASS.0);
+        assert_eq!(tree_ground(TileIndex(65)), TreeGround::TREE_GROUND_GRASS);
         SNOW_LINE.set(4);
     }
 
@@ -2361,12 +2371,19 @@ mod tests {
         let saved = set_mode(GameMode::GM_EDITOR);
         set_prices(15, 0);
         let _map = install(6, TileType::MP_VOID, true);
-        clear(1, ClearGround::CLEAR_GRASS, 3);
-        clear(2, ClearGround::CLEAR_GRASS, 3);
+        clear(TileIndex(1), ClearGround::CLEAR_GRASS, 3);
+        clear(TileIndex(2), ClearGround::CLEAR_GRASS, 3);
         CLIMATE.set(LandscapeType::Tropic.0);
         // The diagonal from corner 2 to corner 1 starts at 2; the orthogonal area would
         // start at 1.
-        plant(&trees(), DoCommandFlag::EXECUTE, 2, 1, 20, true);
+        plant(
+            &trees(),
+            DoCommandFlags(DoCommandFlag::EXECUTE),
+            TileIndex(2),
+            TileIndex(1),
+            TreeType(20),
+            true,
+        );
         let rainforest = TropicZone::TROPICZONE_RAINFOREST.0;
         assert_eq!(
             events(),
@@ -2381,7 +2398,7 @@ mod tests {
             ]
         );
         // Full grown trees in the scenario editor.
-        assert_eq!(growth(1), TreeGrowthStage::Grown.0);
+        assert_eq!(growth(TileIndex(1)), TreeGrowthStage::Grown);
         CLIMATE.set(0);
         set_mode(saved);
     }
@@ -2391,13 +2408,34 @@ mod tests {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let saved = set_mode(GameMode(1));
         let _map = install(6, TileType::MP_VOID, true);
-        clear(1, ClearGround::CLEAR_GRASS, 3);
+        clear(TileIndex(1), ClearGround::CLEAR_GRASS, 3);
         // Rainforest is outside the temperate range.
-        plant(&trees(), 0, 1, 1, 20, false);
+        plant(
+            &trees(),
+            DoCommandFlags(0),
+            TileIndex(1),
+            TileIndex(1),
+            TreeType(20),
+            false,
+        );
         // Start tile outside the map.
-        plant(&trees(), 0, 2, 4096, 255, false);
+        plant(
+            &trees(),
+            DoCommandFlags(0),
+            TileIndex(2),
+            TileIndex(4096),
+            TreeType(255),
+            false,
+        );
         CLIMATE.set(LandscapeType::Tropic.0);
-        plant(&trees(), 0, 1, 1, 20, false);
+        plant(
+            &trees(),
+            DoCommandFlags(0),
+            TileIndex(1),
+            TileIndex(1),
+            TreeType(20),
+            false,
+        );
         assert_eq!(
             events(),
             [
@@ -2416,11 +2454,18 @@ mod tests {
         let saved = set_mode(GameMode(1));
         let _map = install(6, TileType::MP_VOID, true);
         // Plain water under a bridge, in the desert, for a rainforest tree.
-        edit(1, |b| {
+        edit(TileIndex(1), |b| {
             b.kind = (TileType::MP_WATER.0 << 4) | 0x04 | TropicZone::TROPICZONE_DESERT.0;
         });
         CLIMATE.set(LandscapeType::Tropic.0);
-        plant(&trees(), 0, 1, 1, 20, false);
+        plant(
+            &trees(),
+            DoCommandFlags(0),
+            TileIndex(1),
+            TileIndex(1),
+            TreeType(20),
+            false,
+        );
         assert_eq!(events(), [Event::Error(STRINGS.on_water)]);
         CLIMATE.set(0);
         set_mode(saved);
@@ -2433,27 +2478,41 @@ mod tests {
         let _map = install(6, TileType::MP_VOID, true);
         let mut company = finances(1 << 16, 0);
         COMPANY.set(&raw mut *company);
-        clear(1, ClearGround::CLEAR_GRASS, 3);
+        clear(TileIndex(1), ClearGround::CLEAR_GRASS, 3);
         tree(
-            2,
+            TileIndex(2),
             TreeType(0),
             4,
             TreeGrowthStage::Grown,
             TreeGround::TREE_GROUND_GRASS,
         );
-        clear(3, ClearGround::CLEAR_GRASS, 3);
+        clear(TileIndex(3), ClearGround::CLEAR_GRASS, 3);
         tree(
-            4,
+            TileIndex(4),
             TreeType(0),
             4,
             TreeGrowthStage::Grown,
             TreeGround::TREE_GROUND_GRASS,
         );
         // A limit of zero is reached but not exceeded: tile 2 is still visited.
-        plant(&trees(), 0, 2, 1, 255, false);
+        plant(
+            &trees(),
+            DoCommandFlags(0),
+            TileIndex(2),
+            TileIndex(1),
+            TreeType(255),
+            false,
+        );
         assert_eq!(events(), [Event::Error(STRINGS.already_here)]);
         // A negative limit stops before tile 4.
-        plant(&trees(), 0, 4, 1, 255, false);
+        plant(
+            &trees(),
+            DoCommandFlags(0),
+            TileIndex(4),
+            TileIndex(1),
+            TreeType(255),
+            false,
+        );
         assert_eq!(events(), [Event::Error(STRINGS.plant_limit)]);
         COMPANY.set(std::ptr::null_mut());
         set_mode(saved);
@@ -2466,18 +2525,32 @@ mod tests {
         set_prices(15, 0);
         let _map = install(6, TileType::MP_VOID, true);
         for tile in 1..=3 {
-            clear(tile, ClearGround::CLEAR_GRASS, 3);
+            clear(TileIndex(tile), ClearGround::CLEAR_GRASS, 3);
         }
         // `--limit < 1` leaves a limit of 3 room for two plantings.
         let mut company = finances(3 << 16, 0);
         COMPANY.set(&raw mut *company);
-        plant(&trees(), 0, 3, 1, 0, false);
+        plant(
+            &trees(),
+            DoCommandFlags(0),
+            TileIndex(3),
+            TileIndex(1),
+            TreeType(0),
+            false,
+        );
         assert_eq!(
             events(),
             [Event::Expense(ExpensesType::EXPENSES_OTHER.0, 30)]
         );
         assert_eq!(company.tree, 3 << 16);
-        plant(&trees(), DoCommandFlag::EXECUTE, 3, 1, 0, false);
+        plant(
+            &trees(),
+            DoCommandFlags(DoCommandFlag::EXECUTE),
+            TileIndex(3),
+            TileIndex(1),
+            TreeType(0),
+            false,
+        );
         assert_eq!(
             events(),
             [
@@ -2489,7 +2562,14 @@ mod tests {
             ]
         );
         assert_eq!(company.tree, 1 << 16);
-        plant(&trees(), DoCommandFlag::EXECUTE, 3, 3, 0, false);
+        plant(
+            &trees(),
+            DoCommandFlags(DoCommandFlag::EXECUTE),
+            TileIndex(3),
+            TileIndex(3),
+            TreeType(0),
+            false,
+        );
         assert_eq!(events(), [Event::Error(STRINGS.plant_limit)]);
         COMPANY.set(std::ptr::null_mut());
         set_mode(saved);
@@ -2523,7 +2603,7 @@ mod tests {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let saved = set_mode(GameMode(1));
         let _map = install(6, TileType::MP_VOID, true);
-        clear(1, ClearGround::CLEAR_FIELDS, 3);
+        clear(TileIndex(1), ClearGround::CLEAR_FIELDS, 3);
         // The tree limit allows planting; the clear limit fails the nested clear.
         let mut company = finances(5 << 16, 0);
         COMPANY.set(&raw mut *company);
@@ -2577,16 +2657,30 @@ mod tests {
         COMPANY_VALID.set(true);
         let c = trees();
         crate::town::spatial::rebuild_town_kdtree(c.s);
-        clear(66, ClearGround::CLEAR_GRASS, 3);
+        clear(TileIndex(66), ClearGround::CLEAR_GRASS, 3);
         // RATING_TREE_UP_STEP, up to RATING_TREE_MAXIMUM.
         town.simulation.ratings[0] = 210;
-        plant(&c, 0, 66, 66, 255, false);
+        plant(
+            &c,
+            DoCommandFlags(0),
+            TileIndex(66),
+            TileIndex(66),
+            TreeType(255),
+            false,
+        );
         assert_eq!(town.simulation.ratings[0], 217);
-        plant(&c, 0, 66, 66, 255, false);
+        plant(
+            &c,
+            DoCommandFlags(0),
+            TileIndex(66),
+            TileIndex(66),
+            TreeType(255),
+            false,
+        );
         assert_eq!(town.simulation.ratings[0], 220);
         // RATING_TREE_DOWN_STEP, down to RATING_TREE_MINIMUM.
         tree(
-            67,
+            TileIndex(67),
             TreeType(20),
             2,
             TreeGrowthStage::Grown,
@@ -2618,20 +2712,27 @@ mod tests {
             set_prices(price, price);
             for tile in 1..=3 {
                 tree(
-                    tile,
+                    TileIndex(tile),
                     TreeType(20),
                     1,
                     TreeGrowthStage::Grown,
                     TreeGround::TREE_GROUND_GRASS,
                 );
             }
-            plant(&trees(), 0, 3, 1, 255, false);
+            plant(
+                &trees(),
+                DoCommandFlags(0),
+                TileIndex(3),
+                TileIndex(1),
+                TreeType(255),
+                false,
+            );
             assert_eq!(
                 events(),
                 [Event::Expense(ExpensesType::EXPENSES_OTHER.0, price)]
             );
             tree(
-                1,
+                TileIndex(1),
                 TreeType(20),
                 4,
                 TreeGrowthStage::Grown,
@@ -2652,7 +2753,7 @@ mod tests {
     fn planting_an_unsuitable_tile_asserts_once_where_the_build_asserts() {
         for assertions in [true, false] {
             let _map = install(6, TileType::MP_VOID, assertions);
-            clear(1, ClearGround::CLEAR_FIELDS, 2);
+            clear(TileIndex(1), ClearGround::CLEAR_FIELDS, 2);
             let c = trees();
             let w = World::new(c.s);
             plant_trees_on_tile(
@@ -2669,7 +2770,10 @@ mod tests {
             }
             assert_eq!(events(), expected);
             // Fields are neither grass nor rough: snow-or-desert ground keeps the density.
-            assert_eq!(tree_ground(1), TreeGround::TREE_GROUND_SNOW_DESERT.0);
+            assert_eq!(
+                tree_ground(TileIndex(1)),
+                TreeGround::TREE_GROUND_SNOW_DESERT
+            );
         }
     }
 
@@ -2738,7 +2842,7 @@ mod tests {
         let c = trees();
         // Seed 0 plants temperate type 0; bit 28 chooses rough ground.
         let r = 1 << 28;
-        clear(1, ClearGround::CLEAR_GRASS, 3);
+        clear(TileIndex(1), ClearGround::CLEAR_GRASS, 3);
         place_tree(&c, &World::new(c.s), TileIndex(1), r, false);
         assert_eq!(
             events(),
@@ -2748,9 +2852,9 @@ mod tests {
                 Event::Write("ground", 1)
             ]
         );
-        assert_eq!(tree_ground(1), TreeGround::TREE_GROUND_ROUGH.0);
+        assert_eq!(tree_ground(TileIndex(1)), TreeGround::TREE_GROUND_ROUGH);
         // A grass tile whose planted ground reads back as shore keeps it.
-        clear(1, ClearGround::CLEAR_GRASS, 3);
+        clear(TileIndex(1), ClearGround::CLEAR_GRASS, 3);
         PLANTED_GROUND.set(Some(TreeGround::TREE_GROUND_SHORE.0));
         place_tree(&c, &World::new(c.s), TileIndex(1), r, false);
         assert_eq!(events(), [Event::Write("make_tree", 1), Event::Dirty(1)]);
