@@ -1000,7 +1000,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
             let aircraft = (s.refit.aircraft_handle)(v.0.as_ptr());
             // SAFETY: the live aircraft handle and its static controller table.
             unsafe {
-                crate::aircraft::enter_hangar(s.refit.aircraft, aircraft);
+                crate::aircraft::handle_aircraft_enter_hangar(s.refit.aircraft, aircraft);
             };
         }
         _ => unreachable!(),

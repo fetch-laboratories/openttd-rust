@@ -820,13 +820,14 @@ impl Game {
         }
         next
     }
+    /// `OrderList::GetNextStoppingStation`, appending each station to `output`.
     fn stopping(
         self,
         list: *mut c_void,
         v: *mut c_void,
         first: u8,
         mut hops: u32,
-        output: *mut c_void,
+        output: &mut impl FnMut(u16),
     ) {
         let mut next = first;
         if first == u8::MAX {
@@ -871,7 +872,7 @@ impl Game {
             if order.kind() == OT_GOTO_DEPOT || order.destination == last {
                 continue;
             }
-            self.append_station(output, order.destination);
+            output(order.destination);
             return;
         }
     }
@@ -1088,7 +1089,9 @@ pub unsafe extern "C" fn openttd_rust_list_stopping(
     leaves: &'static Leaves,
 ) -> u32 {
     let g = Game(leaves);
-    g.stopping(list, v, first, hops, output);
+    g.stopping(list, v, first, hops, &mut |station| {
+        g.append_station(output, station);
+    });
     0
 }
 
@@ -2623,6 +2626,13 @@ pub unsafe extern "C" fn openttd_rust_order_destination(
     u64::from(control.destination(v, input, depth, look_ahead != 0))
 }
 
+/// `ProcessOrders`: handle the orders of a vehicle and determine the next place to go to
+/// if needed. Returns true if the order was a new (non-implicit) order.
+pub(crate) fn process_orders(v: VehicleRef, leaves: &'static Leaves) -> bool {
+    let control = Control { g: Game(leaves) };
+    control.process(v.shell())
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_process_orders(
     v: *mut c_void,
@@ -2630,6 +2640,23 @@ pub unsafe extern "C" fn openttd_rust_process_orders(
 ) -> u64 {
     let control = Control { g: Game(leaves) };
     u64::from(control.process(v))
+}
+
+/// `Vehicle::GetNextStoppingStation`: the stations the vehicle will stop at next, each
+/// passed to `next_station` in the order the original appends them.
+pub(crate) fn get_next_stopping_station(
+    v: VehicleRef,
+    leaves: &'static Leaves,
+    next_station: &mut impl FnMut(StationID),
+) {
+    let g = Game(leaves);
+    let list = g.orders(v.shell());
+    if list.is_null() {
+        return;
+    }
+    g.stopping(list, v.shell(), u8::MAX, 0, &mut |station| {
+        next_station(StationID(station));
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -2853,6 +2880,18 @@ pub unsafe extern "C" fn openttd_rust_command_clear_backup(
         }
         1
     }
+}
+
+/// `RemoveOrderFromAllVehicles`: removes an order from all vehicles. Triggers when, say, a
+/// station is removed.
+pub(crate) fn remove_order_from_all_vehicles(
+    leaves: &'static Leaves,
+    order_type: OrderType,
+    destination: StationID,
+    hangar: bool,
+) {
+    let control = Control { g: Game(leaves) };
+    control.remove_destination(order_type.0, destination.0, hangar);
 }
 
 #[unsafe(no_mangle)]

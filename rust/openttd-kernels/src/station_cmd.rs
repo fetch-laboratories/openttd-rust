@@ -4612,7 +4612,7 @@ impl Ctx<'_> {
         self.make_airport_tiles(st, spec, layout, tile, (owner, index));
         // `UpdateAirplanesOnNewStation`.
         unsafe {
-            crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, index.0);
+            crate::aircraft::update_airplanes_on_new_station(self.s.aircraft, index);
         }
         unsafe {
             CompanyInfrastructure::add_airport(CompanyInfrastructure::get(self.shared, owner), 1);

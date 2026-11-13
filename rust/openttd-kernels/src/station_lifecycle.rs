@@ -539,7 +539,7 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
     let id = (s.catchment.id)(st);
     // Normal aircraft targeting this airport lose their target.
     unsafe {
-        crate::aircraft::invalidate_target(c.aircraft, id.0);
+        crate::aircraft::invalidate_target(c.aircraft, id);
     }
     let graphs = w.graphs;
     let storage = links.storage();

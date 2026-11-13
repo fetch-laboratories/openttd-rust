@@ -755,7 +755,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
                         .as_ptr(),
                 );
                 unsafe {
-                    crate::aircraft::openttd_rust_aircraft_cache(
+                    crate::aircraft::update_aircraft_cache(
                         s.aircraft,
                         (s.aircraft_handle)(super::vehicle_ref(v, s.common.vehicles).0.as_ptr()),
                         true,

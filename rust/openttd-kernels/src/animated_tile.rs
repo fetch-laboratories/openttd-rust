@@ -463,20 +463,26 @@ fn airport_trigger(
     );
     true
 }
+/// `TriggerAirportTileAnimation`: trigger the animation of an airport tile, drawing its
+/// random bits first.
+pub(crate) fn trigger_airport_tile_animation(
+    st: *mut Station,
+    tile: crate::tile_type::TileIndex,
+    trigger: crate::station_type::AirportAnimationTrigger,
+) -> bool {
+    let a = services();
+    airport_trigger(a, st, tile.0, trigger.0, a.shared().random(), 0)
+}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_trigger_airport_tile_abi(
     st: *mut Station,
     tile: u32,
     trigger: u8,
 ) -> u8 {
-    let a = services();
-    u8::from(airport_trigger(
-        a,
+    u8::from(trigger_airport_tile_animation(
         st,
-        tile,
-        trigger,
-        a.shared().random(),
-        0,
+        crate::tile_type::TileIndex(tile),
+        crate::station_type::AirportAnimationTrigger(trigger),
     ))
 }
 #[unsafe(no_mangle)]

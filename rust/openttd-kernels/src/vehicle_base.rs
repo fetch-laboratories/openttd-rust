@@ -167,8 +167,6 @@ pub const VS_UNCLICKABLE: u8 = VehStates::from_element(VehState::Unclickable).0;
 pub const VS_TRAIN_SLOWING: u8 = VehStates::from_element(VehState::TrainSlowing).0;
 /// Raw compatibility mask for `VehState::Shadow`.
 pub const VS_SHADOW: u8 = VehStates::from_element(VehState::Shadow).0;
-/// Raw compatibility mask for `VehState::AircraftBroken`.
-pub const VS_AIRCRAFT_BROKEN: u8 = VehStates::from_element(VehState::AircraftBroken).0;
 /// Raw compatibility mask for `VehState::Crashed`.
 pub const VS_CRASHED: u8 = VehStates::from_element(VehState::Crashed).0;
 
