@@ -690,8 +690,8 @@ mod tests {
             [35, 36, 37, 51, 52, 53]
         );
         // A zero extent starts at INVALID_TILE.
-        assert!(walk(TileArea::new(TileIndex(5), 0, 3)).is_empty());
-        assert!(walk(TileArea::new(TileIndex(5), 3, 0)).is_empty());
+        assert_eq!(walk(TileArea::new(TileIndex(5), 0, 3)), [] as [u32; 0]);
+        assert_eq!(walk(TileArea::new(TileIndex(5), 3, 0)), [] as [u32; 0]);
         // The range-`for` ends where the walk reaches INVALID_TILE.
         assert_eq!(
             walk(TileArea::new(TileIndex(u32::MAX - 1), 3, 2)),

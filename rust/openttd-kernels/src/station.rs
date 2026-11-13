@@ -788,11 +788,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         }
         // No tile tests are needed in this sub-loop: every tile is simply
         // added to the catchment set.
-        let mut ta2 = TileArea {
-            tile: tile,
-            w: 1,
-            h: 1,
-        };
+        let mut ta2 = TileArea { tile, w: 1, h: 1 };
         #[allow(clippy::cast_possible_wrap)]
         ta2.expand(radius as i32, c.map, c.size_y);
         for tile2 in ta2.tiles(c.map) {

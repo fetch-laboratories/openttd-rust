@@ -1801,7 +1801,6 @@ impl Ctx<'_> {
         let mut tracknum = 0_u8;
         let mut allowed_z = -1;
         for cur_tile in tile_area.tiles(self.map()) {
-            let cur_tile = cur_tile;
             /* Clear the land below the station. */
             // CheckFlatLandRailStation uses both native slots; its result is
             // left in `cost`, and the accumulated amount is restored after.
@@ -1959,7 +1958,6 @@ impl Ctx<'_> {
         };
         let world = crate::map_func::World::new(self.shared);
         for tile in update_reservation_area.tiles(self.map()) {
-            let tile = tile;
             /* Don't even try to make eye candy parts reserved. */
             if self.is_station_tile_blocked(tile) {
                 continue;
@@ -2564,7 +2562,6 @@ impl Ctx<'_> {
         error.zero();
         /* Do the action for every tile into the area */
         for tile in ta.tiles(self.map()) {
-            let tile = tile;
             /* Make sure the specified tile is a rail station */
             if !crate::map_func::World::new(self.shared).has_station_tile_rail(tile) {
                 continue;
@@ -3193,7 +3190,6 @@ impl Ctx<'_> {
         let mut allowed_z = -1;
         cost.set(0);
         for cur_tile in tile_area.tiles(self.map()) {
-            let cur_tile = cur_tile;
             // CheckFlatLandRoadStop uses both native slots; its result is left
             // in `cost`, and the accumulated amount is restored after.
             let total = cost.money();
@@ -3390,7 +3386,7 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let roadstop_area = TileArea {
-            tile: tile,
+            tile,
             w: u16::from(width),
             h: u16::from(length),
         };
@@ -3529,7 +3525,6 @@ impl Ctx<'_> {
         }
         /* Check every tile in the area. */
         for cur_tile in roadstop_area.tiles(self.map()) {
-            let cur_tile = cur_tile;
             /* Get existing road types and owners before any tile clearing */
             let (mut road_rt, mut tram_rt, road_owner, tram_owner) =
                 self.existing_road_types_and_owners(cur_tile);
@@ -3939,7 +3934,6 @@ impl Ctx<'_> {
         last_error.error(self.s.strings.no_station);
         let mut had_success = false;
         for cur_tile in roadstop_area.tiles(self.map()) {
-            let cur_tile = cur_tile;
             /* Make sure the specified tile is a road stop of the correct type */
             if TileType((self.shared.tile_type)(cur_tile.0)) != TileType::MP_STATION
                 || !world.any_road_stop_tile(cur_tile.0)
@@ -4052,7 +4046,7 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let roadstop_area = TileArea {
-            tile: tile,
+            tile,
             w: u16::from(width),
             h: u16::from(height),
         };
@@ -4508,7 +4502,7 @@ impl Ctx<'_> {
             (size.w, size.h)
         };
         let airport_area = TileArea {
-            tile: tile,
+            tile,
             w: u16::from(w),
             h: u16::from(h),
         };
