@@ -57,8 +57,7 @@ pub const INVALID_WATER_REGION_PATCH: WaterRegionPatchLabel = WaterRegionPatchLa
 /// `FIRST_REGION_LABEL`.
 const FIRST_REGION_LABEL: WaterRegionPatchLabel = WaterRegionPatchLabel(1);
 
-/// `WaterRegionTraversabilityBits`: one bit per edge tile, so its width is the
-/// original's `static_assert` against `WATER_REGION_EDGE_LENGTH`.
+/// `WaterRegionTraversabilityBits`: one bit per edge tile.
 type WaterRegionTraversabilityBits = u16;
 /// `WATER_REGION_EDGE_LENGTH` as an array length.
 #[allow(
@@ -74,6 +73,12 @@ const EDGE_TILES: usize = WATER_REGION_EDGE_LENGTH as usize;
 const NUMBER_OF_TILES: usize = WATER_REGION_NUMBER_OF_TILES as usize;
 /// `WaterRegionPatchLabelArray`.
 type WaterRegionPatchLabelArray = [WaterRegionPatchLabel; NUMBER_OF_TILES];
+
+// The original's static_asserts, as array lengths that must agree at compile time:
+// `sizeof(WaterRegionTraversabilityBits) * 8 == WATER_REGION_EDGE_LENGTH`, and
+// `sizeof(WaterRegionPatchLabel) == sizeof(uint8_t)` (important for the hash calculation).
+const _: [(); EDGE_TILES] = [(); WaterRegionTraversabilityBits::BITS as usize];
+const _: [(); std::mem::size_of::<u8>()] = [(); std::mem::size_of::<WaterRegionPatchLabel>()];
 
 /// `WaterRegionPatchDesc`: describes a single interconnected patch of water
 /// within a particular water region. The C++ side declares it as
