@@ -5,15 +5,55 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared `pathfinder/pathfinder_func.h` road track helper.
+//! Shared `pathfinder/pathfinder_func.h` helpers.
 use crate::direction_type::DiagDirection;
 use crate::map_func::World;
+use crate::math::clamp_u;
 use crate::movement::MovementServices;
 use crate::road_type::{RoadBits, RoadTramType};
+use crate::services::Services;
+use crate::station_cmd::CommandServicesTable;
+use crate::station_type::{StationID, StationType};
 use crate::tile_type::TileIndex;
 use crate::track_func::track_status_to_trackdir_bits;
 use crate::track_type::TrackdirBits;
 use crate::transport_type::TransportType;
+
+/// `CalcClosestStationTile`: calculates the tile of given station that is
+/// closest to a given tile. For this we assume the station is a rectangle, as
+/// defined by its tile area (x, y, w, h). `commands` is the shared station
+/// command table, which serves the virtual `GetTileArea`.
+pub(crate) fn calc_closest_station_tile(
+    s: &Services,
+    commands: &CommandServicesTable,
+    map: &World<'_>,
+    station: StationID,
+    tile: TileIndex,
+    station_type: StationType,
+) -> TileIndex {
+    let st = (s.base_station)(station.0);
+    let ta = (commands.tile_area)(st, station_type.0);
+
+    /* If the rail station is (temporarily) not present, use the station sign to drive near the station */
+    if ta.tile == TileIndex::INVALID {
+        return TileIndex((s.base_station_xy)(station.0));
+    }
+
+    let minx = map.dimensions.tile_x(ta.tile); // topmost corner of station
+    let miny = map.dimensions.tile_y(ta.tile);
+    let maxx = minx.wrapping_add(u32::from(ta.w)).wrapping_sub(1); // lowermost corner of station
+    let maxy = miny.wrapping_add(u32::from(ta.h)).wrapping_sub(1);
+
+    /* we are going the aim for the x coordinate of the closest corner
+     * but if we are between those coordinates, we will aim for our own x coordinate */
+    let x = clamp_u(map.dimensions.tile_x(tile), minx, maxx, |ok| map.check(ok));
+
+    /* same for y coordinate, see above comment */
+    let y = clamp_u(map.dimensions.tile_y(tile), miny, maxy, |ok| map.check(ok));
+
+    /* return the tile of our target coordinates */
+    map.dimensions.tile_xy(x, y)
+}
 
 /// `GetTrackdirBitsForRoad`: wrapper around `GetTileTrackStatus()` and
 /// `TrackStatusToTrackdirBits()`, as for single tram bits `GetTileTrackStatus()`
@@ -68,12 +108,6 @@ pub(crate) fn get_trackdir_bits_for_road_in_world(
     }
 
     bits
-}
-/// Temporary raw adapter of [`get_trackdir_bits_for_road`] for `road_yapf.rs`
-/// until its pass.
-#[inline]
-pub(crate) fn road_trackdirs(movement: &MovementServices, tile: u32, tram: bool) -> u16 {
-    get_trackdir_bits_for_road(movement, TileIndex(tile), RoadTramType(tram)).0
 }
 /// # Safety
 /// The immutable shared table and map remain live and serialized for this call.

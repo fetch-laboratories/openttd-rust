@@ -619,6 +619,13 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn write_cargo_cap(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), cargo_cap, value);
     }
+    /// `Vehicle::unitnumber`, a field still stored in the C++ shell, read
+    /// through the vehicle resolver's field service.
+    pub(crate) fn unit_number(self, shared: &crate::services::Services) -> u16 {
+        let vehicles = crate::movement::table(shared).vehicle();
+        // SAFETY: The vehicle table returns the static resolver service table.
+        unsafe { ((*(vehicles.newgrf)()).unit)(self.0.as_ptr()) }
+    }
     pub(crate) fn engine_id(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), engine_type).0
     }

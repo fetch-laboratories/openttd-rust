@@ -467,8 +467,8 @@ impl MovementServices {
     ) -> TrackStatus {
         Context { s: self, world }.get_tile_track_status(tile, mode, sub_mode, side)
     }
-    /// Temporary raw adapter of [`Self::get_tile_track_status`] for `road_yapf.rs`
-    /// and `train.rs` until their passes.
+    /// Temporary raw adapter of [`Self::get_tile_track_status`] for `train.rs`
+    /// until its pass.
     #[inline]
     pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
         self.get_tile_track_status(

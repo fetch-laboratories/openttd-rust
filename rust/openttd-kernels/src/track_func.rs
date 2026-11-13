@@ -226,6 +226,15 @@ pub const fn find_first_trackdir(bits: u16) -> u8 {
     }
 }
 
+/// `HasTrackdir`: checks whether a `TrackdirBits` has a given `Trackdir`, under
+/// its native valid-trackdir precondition.
+pub fn has_trackdir(trackdirs: u16, trackdir: u8, check: impl Fn(bool)) -> bool {
+    if !is_valid_trackdir(trackdir) {
+        check(false);
+    }
+    trackdirs & 1_u16.wrapping_shl(u32::from(trackdir)) != 0
+}
+
 /// `TrackdirToTrackdirBits`.
 pub const fn trackdir_to_trackdir_bits(td: u8) -> u16 {
     1_u16 << td

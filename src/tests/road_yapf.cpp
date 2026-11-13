@@ -14,68 +14,38 @@
 #include "../roadveh.h"
 #include "../rust/road_yapf_ffi.h"
 #include "../rust/movement_ffi.h"
-#include "../rust/station_catchment_ffi.h"
 #include "../tile_type.h"
 #include "../landscape.h"
+#include "../order_type.h"
+#include "reference-yapf_node_road.hpp"
+#include "../pathfinder/yapf/yapf_base.hpp"
+#include "../pathfinder/follow_track.hpp"
+#include "follower_fixture.hpp"
+#include "follower_probe.hpp"
 #include "../safeguards.h"
-
-namespace {
-OpenTTDRoadYapfTile ProbeTile(const OpenTTDVehicle *, uint32_t, uint8_t, bool) noexcept { OpenTTDRoadYapfTile tile{}; tile.type = 5; tile.station_type = 2; return tile; }
-uint16_t fixture_dirs = 1;
-OpenTTDFixtureMap movement_map{6, 4096};
-/* Every tile carries the road bits and one-way state the callbacks report. */
-void SetFixtureDirs(uint16_t dirs)
-{
-	fixture_dirs = dirs;
-	constexpr uint8_t bits[]{10, 5, 9, 6, 3, 12};
-	for (uint32_t t = 0; t < movement_map.size; ++t) {
-		movement_map.base[t].type = MP_ROAD << 4;
-		movement_map.base[t].m5 = bits[std::countr_zero(static_cast<unsigned>(fixture_dirs)) & 7] | ((fixture_dirs > 255 ? 1 : 2) << 4);
-	}
-}
-const OpenTTDSharedServices *MovementWorld()
-{
-	static OpenTTDSharedServices world{};
-	static OpenTTDMovementServices movement{};
-	static OpenTTDVehicleServices vehicle{};
-
-	movement.vehicle = &vehicle;
-	static OpenTTDStationCatchmentServices stations{};
-	world.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &stations; };
-	stations.station_if_valid = [](uint16_t) noexcept -> BaseStation * { return nullptr; };
-	world.movement = &movement;
-	world.map = &movement_map.statics;
-	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 2; };
-	world.map_max_y = []() noexcept -> uint32_t { return 63; };
-	movement.shared = &world;
-	movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
-	SetFixtureDirs(fixture_dirs);
-	return &world;
-}
-uint32_t RoadProbeClosest(const OpenTTDVehicle *, uint16_t, uint8_t) noexcept { return 0; }
-const OpenTTDRoadYapfLeaves probe_leaves{
-	.shared = MovementWorld(),
-	.tile = ProbeTile,
-	.closest = RoadProbeClosest,
-};
-}
 
 TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 {
-	const auto &leaves = probe_leaves;
-	OpenTTDRoadYapfInput input{};
-	input.map_x = input.map_y = 64;
-	input.dest_tile = 1;
-	input.order_type = 1;
+	/* Each case's start tile carries one road trackdir, as its road bits and one-way state
+	 * leave it. Its exit neighbour is a full junction and the destination tile, so a
+	 * reachable origin finds the destination one step on. */
+	constexpr uint32_t start = 32 + 32 * 64;
+	constexpr uint8_t bits[]{10, 5, 9, 6, 3, 12};
+	constexpr int32_t exit_offset[]{-1, 64, 1, -64};
 	OpenTTDRoadState *state = openttd_rust_road_new();
-	OpenTTDVehicle record{};
 	for (uint8_t entry = 0; entry < 4; ++entry) {
 		for (uint8_t td = 0; td < 14; ++td) {
 			if (td == 6 || td == 7) continue;
-			uint16_t tracks = 1U << td;
-			SetFixtureDirs(tracks);
-			auto result = openttd_rust_road_yapf_choose(state, &input, &leaves, &record, 0, entry, TRACKDIR_BIT_Y_NW, true);
-			bool reachable = (tracks & DiagdirReachesTrackdirs(static_cast<DiagDirection>(entry))) != 0;
+			CAPTURE(entry, td);
+			FollowerFixture map;
+			map.Tile(start, MP_ROAD, bits[td & 7] | ((td > 7 ? 1 : 2) << 4));
+			const uint32_t exit = start + exit_offset[TrackdirToExitdir(static_cast<Trackdir>(td))];
+			map.Tile(exit, MP_ROAD, ROAD_ALL);
+			OpenTTDRoadYapfInput input{};
+			input.dest_tile = exit;
+			input.order_type = OT_NOTHING;
+			auto result = openttd_rust_road_yapf_choose(state, &input, &map.shared, map.Vehicle(), start, entry, TRACKDIR_BIT_Y_NW, true);
+			bool reachable = ((1U << td) & DiagdirReachesTrackdirs(static_cast<DiagDirection>(entry))) != 0;
 			REQUIRE(result.direction == (reachable ? td : static_cast<uint8_t>(TRACKDIR_Y_NW)));
 			REQUIRE(result.found == static_cast<uint8_t>(reachable));
 		}
@@ -86,17 +56,8 @@ TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 /* Loaded games clamp max_search_nodes. The generic native search still checks
  * low limits and open-key replacement, now using the production follower on a
  * concrete junction grid instead of an injected transition callback. */
-#include "reference-yapf_node_road.hpp"
-#include "../pathfinder/yapf/yapf_base.hpp"
-#include "../pathfinder/follow_track.hpp"
-#include "follower_fixture.hpp"
-#include "follower_probe.hpp"
 namespace RoadLimit {
 inline uint32_t goal, start = 32 + 32 * 64;
-OpenTTDRoadYapfTile ProbeTile(const OpenTTDVehicle *, uint32_t tile, uint8_t, bool) noexcept
-{
-	OpenTTDRoadYapfTile out{}; out.type = 2; out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
-}
 OpenTTDTestFollow Follow(uint32_t tile, uint8_t td)
 {
 	return OpenTTDTestFollowOnce(FollowerFixture::active->shared, TRANSPORT_ROAD, FollowerFixture::active->Vehicle(), 0, 0, true, tile, td);
@@ -151,7 +112,6 @@ TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference",
 {
 	FollowerFixture map;
 	for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_ROAD, 15);
-	auto leaves = probe_leaves; leaves.shared = &map.shared; leaves.tile = RoadLimit::ProbeTile;
 	for (int limit : {0, 1, 2, 7}) for (uint32_t distance : {2U, 10U}) for (int max_cost : {0, 70, 71, 100}) {
 		CAPTURE(limit, distance, max_cost);
 		RoadLimit::goal = RoadLimit::start - distance;
@@ -159,8 +119,8 @@ TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference",
 		RoadLimit::Search reference(limit, max_cost);
 		bool found = reference.FindPath(nullptr);
 		auto *best = reference.GetBestNode();
-		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.max_nodes = limit; input.tile = RoadLimit::start;
-		auto result = openttd_rust_road_yapf_depot(&input, &leaves, map.Vehicle(), max_cost);
+		OpenTTDRoadYapfInput input{}; input.max_nodes = limit; input.tile = RoadLimit::start;
+		auto result = openttd_rust_road_yapf_depot(&input, &map.shared, map.Vehicle(), max_cost);
 		REQUIRE(result.found == static_cast<uint8_t>(found));
 		REQUIRE(result.tile == (best != nullptr ? best->segment_last_tile.base() : UINT32_MAX));
 		REQUIRE(result.cost == (best != nullptr ? best->cost : 0));
@@ -175,11 +135,7 @@ TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference",
 /* Vehicle/type limits are observed once per accepted continuation, after
  * transient rejection, destination, junction and cost-limit checks. */
 namespace RoadOrder {
-inline uint32_t goal;
 inline std::vector<char> limits;
-OpenTTDRoadYapfTile Tile(const OpenTTDVehicle *, uint32_t tile, uint8_t, bool) noexcept {
-	OpenTTDRoadYapfTile out{}; out.type = FollowerFixture::active->shared.tile_type(tile); out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
-}
 }
 TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[road][rust]")
 {
@@ -190,8 +146,15 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		/* One-way NE road: a missing next tile cannot be replaced by a reversal. */
 		for (uint32_t t : {130U, 129U, 128U, 127U}) map.Tile(t, MP_ROAD, ROAD_X | 0x20);
 		if (mode == Rejected) map.Tile(128, MP_CLEAR);
-		if (mode == Junction) map.tiles.base[128].m5 = 15;
-		RoadOrder::goal = mode == Startup ? 130 : mode == Destination ? 129 : 128;
+		/* The goal is a depot facing south-west. In Junction mode the junction takes the goal's
+		 * tile, there is no depot, and the junction's exits are unenterable, so that no
+		 * continuation is accepted. */
+		if (mode == Junction) {
+			map.tiles.base[128].m5 = ROAD_ALL;
+			map.Tile(127, MP_CLEAR);
+		} else if (mode != Rejected) {
+			map.tiles.base[mode == Startup ? 130 : mode == Destination ? 129 : 128].m5 = 0x80 | DIAGDIR_SW;
+		}
 		/* Raising tile 128's north corner gives it SLOPE_N under ROAD_X, so its
 		 * centre is above flat tile 129 and the accepted step pays the uphill penalty. */
 		map.tiles.base[128].height = 1;
@@ -200,9 +163,8 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		map.physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { RoadOrder::limits.push_back('D'); return 100; };
 		map.orders.vehicle = [](void *) noexcept { RoadOrder::limits.push_back('O'); return &FollowerFixture::active->order_state; };
 		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { RoadOrder::limits.push_back('R'); return 40; };
-		auto leaves = probe_leaves; leaves.shared = &map.shared; leaves.tile = RoadOrder::Tile;
-		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.tile = 130; input.slope = 17;
-		auto result = openttd_rust_road_yapf_depot(&input, &leaves, map.Vehicle(), mode == MaxCost ? 99 : 0);
+		OpenTTDRoadYapfInput input{}; input.tile = 130; input.slope = 17;
+		auto result = openttd_rust_road_yapf_depot(&input, &map.shared, map.Vehicle(), mode == MaxCost ? 99 : 0);
 		if (mode == Accepted) {
 			CHECK((RoadOrder::limits == std::vector<char>{'D', 'O', 'R'}));
 			CHECK(result.found == 1); CHECK(result.cost == 417);

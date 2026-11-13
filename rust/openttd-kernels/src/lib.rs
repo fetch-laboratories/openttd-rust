@@ -220,6 +220,7 @@ mod water_type;
 mod widget_parser;
 mod widget_type;
 mod witness;
+mod yapf_common;
 mod yapf_node;
 
 pub use admin_conversion::Action as AdminAction;
