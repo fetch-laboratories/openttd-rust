@@ -562,8 +562,7 @@ mod comparison_tests {
     }
 
     /// The scheduler's shared tile-type reader keeps the original callback for any tile outside
-    /// the allocation, and for an empty allocation (the retired `landscape_tile_loop.cpp`
-    /// fixture's checks).
+    /// the allocation, and for an empty allocation.
     #[test]
     fn tile_type_reader_falls_back_to_callback_out_of_range() {
         let mut tiles = map_tiles(4096);
