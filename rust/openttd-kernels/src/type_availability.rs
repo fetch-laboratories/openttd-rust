@@ -4,7 +4,10 @@
 //! borrow survives a callback; registry observations copy only consumed fields.
 #![allow(unsafe_code)]
 use crate::engine::EngineRef;
+use crate::road::RoadTypeFlags;
+use crate::road_type::{RoadType, RoadTypeLabel, RoadTypes};
 use crate::services::Services as Shared;
+use crate::timer_game_calendar::CalendarDate;
 #[repr(C)]
 pub struct Introduction {
     pub label: u32,
@@ -12,28 +15,36 @@ pub struct Introduction {
     pub required: u64,
     pub introduces: u64,
 }
+/// Native `RoadTypeInfo`, opaque: Rust holds the `GetRoadTypeInfo` result only through the
+/// call that resolved it and reads its fields through the accessors below.
 #[repr(C)]
-pub struct RoadConstruction {
-    pub label: u32,
-    pub date: i32,
-    pub hidden: bool,
-    pub town_build: bool,
+pub struct RoadTypeInfo {
+    _private: [u8; 0],
 }
 #[repr(C)]
 pub struct Services {
-    pub shared: *const Shared,
-    pub next: unsafe extern "C" fn(u32) -> EngineRef,
-    pub rail_introduction: extern "C" fn(u8) -> Introduction,
-    pub road_introduction: extern "C" fn(u8) -> Introduction,
-    pub rail_introduces: extern "C" fn(u8) -> u64,
-    pub road_introduces: extern "C" fn(u8) -> u64,
-    pub road_construction: extern "C" fn(u8) -> RoadConstruction,
+    pub assertions: bool,
     pub company_railtypes: extern "C" fn(u8) -> u64,
     pub company_roadtypes: extern "C" fn(u8) -> u64,
+    pub editor: extern "C" fn() -> bool,
+    pub next: unsafe extern "C" fn(u32) -> EngineRef,
+    pub rail_introduces: extern "C" fn(u8) -> u64,
+    pub rail_introduction: extern "C" fn(u8) -> Introduction,
+    /// `RoadTypeInfo::flags`.
+    pub road_flags: extern "C" fn(*const RoadTypeInfo) -> RoadTypeFlags,
+    /// `GetRoadTypeInfo`, retaining its assertion.
+    pub road_info: extern "C" fn(RoadType) -> *const RoadTypeInfo,
+    /// `RoadTypeInfo::introduces_roadtypes`.
+    pub road_introduces: extern "C" fn(*const RoadTypeInfo) -> RoadTypes,
+    /// `RoadTypeInfo::introduction_date`.
+    pub road_introduction_date: extern "C" fn(*const RoadTypeInfo) -> CalendarDate,
+    /// `RoadTypeInfo::introduction_required_roadtypes`.
+    pub road_introduction_required: extern "C" fn(*const RoadTypeInfo) -> RoadTypes,
+    /// `RoadTypeInfo::label`.
+    pub road_label: extern "C" fn(*const RoadTypeInfo) -> RoadTypeLabel,
     pub set_company_railtypes: extern "C" fn(u8, u64),
     pub set_company_roadtypes: extern "C" fn(u8, u64),
-    pub editor: extern "C" fn() -> bool,
-    pub assertions: bool,
+    pub shared: *const Shared,
 }
 /// Handles returned here remain live only in this synchronous no-reset interval.
 pub fn services(shared: &Shared) -> &Services {
@@ -52,12 +63,22 @@ pub unsafe fn company_available(e: EngineRef, company: u8) -> bool {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDTypeIntroduction" ["engine"] => Introduction { label, date, required, introduces };
-    "OpenTTDRoadTypeConstruction" ["engine"] => RoadConstruction { label, date, hidden, town_build };
     "OpenTTDTypeAvailabilityServices" ["engine"] => Services {
-        shared, next,
-        rail_introduction, road_introduction, rail_introduces, road_introduces,
-        road_construction,
-        company_railtypes, company_roadtypes, set_company_railtypes,
-        set_company_roadtypes, editor, assertions
+        assertions,
+        company_railtypes,
+        company_roadtypes,
+        editor,
+        next,
+        rail_introduces,
+        rail_introduction,
+        road_flags,
+        road_info,
+        road_introduces,
+        road_introduction_date,
+        road_introduction_required,
+        road_label,
+        set_company_railtypes,
+        set_company_roadtypes,
+        shared,
     };
 }

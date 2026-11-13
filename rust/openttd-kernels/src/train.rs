@@ -156,10 +156,10 @@ impl Handle {
     }
 
     pub(crate) fn get_flags(self) -> u64 {
-        u64::from(read_field!(self.owner, flags))
+        u64::from(read_field!(self.owner, flags).0)
     }
     pub(crate) fn set_flags(self, value: u64) {
-        write_field!(self.owner, flags, value as u16);
+        write_field!(self.owner, flags, VehicleRailFlags(value as u16));
     }
     pub(crate) fn get_crash_anim_pos(self) -> u64 {
         u64::from(read_field!(self.owner, crash_anim_pos))
@@ -174,28 +174,32 @@ impl Handle {
         write_field!(self.owner, wait_counter, value as u16);
     }
     pub(crate) fn get_compatible_railtypes(self) -> u64 {
-        read_field!(self.owner, compatible_railtypes)
+        read_field!(self.owner, compatible_railtypes).0
     }
     pub(crate) fn set_compatible_railtypes(self, value: u64) {
-        write_field!(self.owner, compatible_railtypes, value);
+        write_field!(
+            self.owner,
+            compatible_railtypes,
+            crate::rail_type::RailTypes(value)
+        );
     }
     pub(crate) fn get_railtypes(self) -> u64 {
-        read_field!(self.owner, railtypes)
+        read_field!(self.owner, railtypes).0
     }
     pub(crate) fn set_railtypes(self, value: u64) {
-        write_field!(self.owner, railtypes, value);
+        write_field!(self.owner, railtypes, crate::rail_type::RailTypes(value));
     }
     pub(crate) fn get_track(self) -> u64 {
-        u64::from(read_field!(self.owner, track))
+        u64::from(read_field!(self.owner, track).0)
     }
     pub(crate) fn set_track(self, value: u64) {
-        write_field!(self.owner, track, value as u8);
+        write_field!(self.owner, track, crate::track_type::TrackBits(value as u8));
     }
     pub(crate) fn get_force_proceed(self) -> u64 {
-        u64::from(read_field!(self.owner, force_proceed))
+        u64::from(read_field!(self.owner, force_proceed).0)
     }
     pub(crate) fn set_force_proceed(self, value: u64) {
-        write_field!(self.owner, force_proceed, value as u8);
+        write_field!(self.owner, force_proceed, TrainForceProceeding(value as u8));
     }
     pub(crate) fn get_cached_tilt(self) -> u64 {
         u64::from(read_field!(self.owner, cached_tilt))
@@ -227,6 +231,26 @@ impl Handle {
         self.set_flags(if value { old | mask } else { old & !mask });
     }
 }
+/// Native `VehicleRailFlags`: the `VehicleRailFlag` bit set, stored as `uint16_t`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VehicleRailFlags(pub u16);
+
+/// Native `TrainForceProceeding`: Modes for ignoring signals.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TrainForceProceeding(pub u8);
+
+impl TrainForceProceeding {
+    /// `TFP_NONE`: Normal operation.
+    pub const TFP_NONE: Self = Self(0);
+    /// `TFP_STUCK`: Proceed till next signal, but ignore being stuck till then. This includes
+    /// force leaving depots.
+    pub const TFP_STUCK: Self = Self(1);
+    /// `TFP_SIGNAL`: Ignore next signal, after the signal ignore being stuck.
+    pub const TFP_SIGNAL: Self = Self(2);
+}
+
 /// Native `VehicleRailFlag::Flipped`.
 pub(crate) const FLIPPED: u8 = 4;
 /// `CCF_ARRANGE`: `ConsistChangeFlag::Length` and `ConsistChangeFlag::Capacity`.
@@ -791,10 +815,10 @@ impl Game<'_> {
         let dir = crate::direction_func::dir_to_diag_dir_raw((id).vehicle().direction(), |ok| {
             world.check(ok);
         });
-        let station_ahead = (crate::follow_track::platform_length_station(&world, tile.0, dir)
-            as i32)
-            .wrapping_mul(TILE_SIZE as i32);
-        let station_length = (crate::follow_track::platform_length_full(&world, st.base, tile.0)
+        let station_ahead =
+            (crate::station::get_platform_length_in_direction_raw(&world, tile.0, dir) as i32)
+                .wrapping_mul(TILE_SIZE as i32);
+        let station_length = (crate::station::get_platform_length_raw(&world, st.base, tile.0)
             as i32)
             .wrapping_mul(TILE_SIZE as i32);
         let v_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));

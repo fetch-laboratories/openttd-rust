@@ -265,20 +265,12 @@ enum class RailTileType : uint8_t;
 enum class RailGroundType : uint8_t;
 enum SignalVariant : uint8_t;
 
-struct OpenTTDRailTraversal { bool depot; TrackBits tracks; };
-struct OpenTTDRailStationAdmission { bool rail; uint8_t owner; Axis axis; bool blocked; };
-struct OpenTTDRailWormholeAdmission { uint8_t owner; TransportType transport; DiagDirection direction; };
-
 /* Canonical rail/signal map leaves. A consuming owner calls each phase only at
  * the source observation point; signal writes are immediate. No map pointer,
  * whole tile record, opcode or allocation crosses this boundary. */
 struct OpenTTDRailServices;
 struct OpenTTDRailMapServices {
 	const OpenTTDRailServices *ground;
-	OpenTTDRailTraversal (*traversal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(traversal);
-	OpenTTDRailStationAdmission (*station_admission)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_admission);
-	OpenTTDRailWormholeAdmission (*wormhole_admission)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_admission);
-
 	void (*set_signal_state)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_state);
 	uint32_t (*other_tunnel_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_bridge_end);
 	/* Rail command, depot and level-crossing leaves (rail_cmd.rs). */

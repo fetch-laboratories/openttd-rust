@@ -2000,7 +2000,8 @@ fn update_load_unload_ticks(
         let tile = front.tile();
         // SAFETY: The loading entry keeps the immutable shared services live.
         let world = crate::map_func::World::new(unsafe { &*w.shared });
-        let length = crate::follow_track::platform_length_full(&world, st.base, tile);
+        let length =
+            crate::station::get_platform_length(&world, st.base, crate::tile_type::TileIndex(tile));
         let overhang = cached_length.wrapping_sub(length.wrapping_mul(TILE_SIZE)) as i32;
         if overhang > 0 {
             ticks = ticks.wrapping_shl(1);

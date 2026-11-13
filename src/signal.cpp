@@ -31,12 +31,6 @@
 #include "rust/environment_services.h"
 #include "rust/vehicle_services.h"
 
-static void SignalAssertCompany([[maybe_unused]] uint8_t owner) noexcept { assert(OpenTTDCompanyIsValid(owner)); }
-static void SignalAssertWormholeStart([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t dir) noexcept
-{
-	assert(RustTunnelBridgeTransport(tile) == TRANSPORT_RAIL);
-	assert(dir == INVALID_DIAGDIR || dir == ReverseDiagDir(GetTunnelBridgeDirection(TileIndex(tile))));
-}
 static const OpenTTDSignalServices _signal_services{
 #ifdef WITH_ASSERT
 	.assertions = true,
@@ -44,9 +38,7 @@ static const OpenTTDSignalServices _signal_services{
 	.assertions = false,
 #endif
 	.assert_condition = RustAssertCondition,
-	.assert_wormhole_start = SignalAssertWormholeStart,
 	.vehicles = &_rust_vehicle_services,
-	.assert_company = SignalAssertCompany,
 };
 
 const OpenTTDSignalServices &GetRustSignalServices() noexcept
@@ -56,23 +48,23 @@ const OpenTTDSignalServices &GetRustSignalServices() noexcept
 
 void UpdateSignalsInBuffer()
 {
-	openttd_rust_signal_flush(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, Map::LogX());
+	openttd_rust_signal_flush(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services);
 }
 void AddTrackToSignalBuffer(TileIndex tile, Track track, Owner owner)
 {
-	openttd_rust_signal_add_track(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, Map::LogX(), tile.base(), track, owner.base());
+	openttd_rust_signal_add_track(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, tile.base(), track, owner.base());
 }
 void AddSideToSignalBuffer(TileIndex tile, DiagDirection side, Owner owner)
 {
-	openttd_rust_signal_add_side(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, Map::LogX(), tile.base(), side, owner.base());
+	openttd_rust_signal_add_side(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, tile.base(), side, owner.base());
 }
 SigSegState UpdateSignalsOnSegment(TileIndex tile, DiagDirection side, Owner owner)
 {
-	return static_cast<SigSegState>(openttd_rust_signal_segment(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, Map::LogX(), tile.base(), side, owner.base()));
+	return static_cast<SigSegState>(openttd_rust_signal_segment(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, tile.base(), side, owner.base()));
 }
 void SetSignalsOnBothDir(TileIndex tile, Track track, Owner owner)
 {
-	openttd_rust_signal_both(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, Map::LogX(), tile.base(), track, owner.base());
+	openttd_rust_signal_both(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, tile.base(), track, owner.base());
 }
 
 #include "rust/service_table_check.hpp"

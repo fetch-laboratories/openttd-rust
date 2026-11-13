@@ -277,3 +277,11 @@ mod track_bits_conversion_tests {
         }
     }
 }
+
+/// `SetTrackBitIterator`: each set `Track` of a `TrackBits`, in ascending order.
+/// The bits are copied on construction, as the original ensemble does.
+pub fn set_track_bit_iterator(
+    bits: crate::track_type::TrackBits,
+) -> impl Iterator<Item = crate::track_type::Track> {
+    crate::bitmath_func::SetBitIterator::new(u64::from(bits.0)).map(crate::track_type::Track)
+}

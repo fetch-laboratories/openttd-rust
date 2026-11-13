@@ -592,5 +592,5 @@ pub unsafe extern "C" fn openttd_rust_is_hangar_abi(tile: u32, s: *const Service
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_pos_on_build(tile: u32, s: *const Services) -> u8 {
-    crate::airport::get_vehicle_pos_on_build(tile, unsafe { &*s })
+    crate::airport::get_vehicle_pos_on_build(TileIndex(tile), unsafe { &*s })
 }
