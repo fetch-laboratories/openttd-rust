@@ -193,15 +193,13 @@ Provisional, for steering 36 to judge:
 
 ## Ready queue
 
-Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. Merges 48 to 56 were #951, #937, #956, #936, #960, #961, #966, #962 and #959. The open component PRs are #955 (for #946, in the merge queue), #969 (for #965) and #972 (for #967), with #968 dispatched and its PR to come.
+Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. Merges 48 to 57 were #951, #937, #956, #936, #960, #961, #966, #962, #959 and #955. The open component PRs are #969 (for #965) and #972 (for #967), with #968 dispatched and its PR to come. Root's status comment on #3 holds the queue's state between commits to this section.
 
 1. #970: 9ys, the pass for `ship_yapf.rs`. Planned; waits on nothing.
-2. #963: 8g, the file pass for `ground.rs` and `ground_vehicle.rs`, workset 08's shared callees. Planned; waits on nothing now that #959 has merged.
-3. #973: 23n, the pass for `native_test_support.rs` and `native_test_support/movement.rs`, the last of workset 23. Waits on nothing; its planner says which open pass it must follow.
+2. #963: 8g, the file pass for `ground.rs` and `ground_vehicle.rs`, workset 08's shared callees. Planned; waits on nothing.
+3. #945: the interval's tools batch of eleven items. Waits on nothing now that #955 has merged.
 
-**Later.** #964, 8r, the single-file pass for `road.rs`, is planned and waits on #963 and on #969, its callees. #945, the interval's tools batch of eleven items, waits on #955. #971 shares `CYapfBaseT`'s search loop across the three YAPF files and waits on #969, #968 and #970, which finish them. In workset 08, after #963 and #964: the single-file passes for `train.rs` (after #955, which edits it) and `train_reservation.rs`, and one pass for `effect.rs`, `vehicle_effect.rs`, `ship_control.rs` and `disaster.rs`, which its planner splits if it must. A second slot with no entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes. #950, the aircraft range probe, waits on #955 and follows #945 and #972.
-
-While a PR the queue removed is preparing to queue again, root commits no docs to `rust-migration`: the requeue gate refuses a head that is behind by any commit (#945 item 11).
+**Later.** #973, 23n, the pass for `native_test_support.rs` and `native_test_support/movement.rs`, waits on nothing; its planner says which open pass it must follow. #964, 8r, the single-file pass for `road.rs`, is planned and waits on #963 and on #969, its callees. #971 shares `CYapfBaseT`'s search loop across the three YAPF files and waits on #969, #968 and #970, which finish them. #950, the aircraft range probe, follows #945 and #972. In workset 08, after #963 and #964: the single-file passes for `train.rs` and `train_reservation.rs`, and one pass for `effect.rs`, `vehicle_effect.rs`, `ship_control.rs` and `disaster.rs`, which its planner splits if it must. A second slot with no entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes.
 
 Full phase-3 planning remains untriggered: 180 of #734's 319 files, in 19 worksets, are in no entry.
 
