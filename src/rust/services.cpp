@@ -523,6 +523,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.station_had_vehicle_of_type = [](uint16_t station) noexcept -> uint8_t { return Station::Get(StationID(station))->had_vehicle_of_type; },
 	.station_add_vehicle_of_type = [](uint16_t station, uint8_t type) noexcept { Station::Get(StationID(station))->had_vehicle_of_type |= static_cast<StationHadVehicleOfType>(type); },
 	.station_xy = [](uint16_t station) noexcept { return Station::Get(StationID(station))->xy.base(); },
+	.base_station = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station)); },
 	.base_station_xy = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station))->xy.base(); },
 	.station_facilities = [](uint16_t station) noexcept { return Station::Get(StationID(station))->facilities.base(); },
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },

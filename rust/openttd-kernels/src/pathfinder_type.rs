@@ -9,3 +9,6 @@
 
 /// Length (penalty) of one tile with YAPF.
 pub const YAPF_TILE_LENGTH: i32 = 100;
+
+/// Length (penalty) of a corner with YAPF.
+pub const YAPF_TILE_CORNER_LENGTH: i32 = 71;
