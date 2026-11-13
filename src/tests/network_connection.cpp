@@ -202,6 +202,31 @@ static Packet *tcp_receive_packet;
 static std::vector<uint8_t> tcp_input;
 static size_t tcp_read_position;
 
+TEST_CASE("Network authentication - server adapters report usability and the active method name")
+{
+	/* #736/#730: the server handler's CanBeUsed and GetName adapters, which network_admin.cpp's secure
+	 * join reaches. Expectations are the original's `usable` and `state` results in auth/endpoints-oracle.txt. */
+	struct Password : NetworkAuthenticationPasswordProvider {
+		std::string_view GetPassword() const override { return "password"; }
+	} password;
+	struct Keys : NetworkAuthenticationAuthorizedKeyHandler {
+		bool CanBeUsed() const override { return true; }
+		bool IsAllowed(std::string_view) const override { return false; }
+	} keys;
+	struct Case { bool password, keys; uint16_t mask; bool usable; std::string_view name; };
+	const Case cases[]{
+		{false, false, 7, true, "X25519-KeyExchangeOnly-server"}, // no-password
+		{true, true, 7, true, "X25519-AuthorizedKey-server"}, // key-before-password
+		{true, true, 0, false, "Unknown"}, // no-supported-methods
+		{true, true, 2, true, "X25519-PAKE-server"}, // only-password-supported
+	};
+	for (const auto &test : cases) {
+		auto server = NetworkAuthenticationServerHandler::Create(test.password ? &password : nullptr, test.keys ? &keys : nullptr, NetworkAuthenticationMethodMask(test.mask));
+		CHECK(server->CanBeUsed() == test.usable);
+		CHECK(server->GetName() == test.name);
+	}
+}
+
 static NetworkSocketHandler *dispatch_base;
 static uint dispatch_creates, dispatch_deletes, dispatch_closes, dispatch_position;
 static bool dispatch_ended, dispatch_cleanup_order, dispatch_previous_live;

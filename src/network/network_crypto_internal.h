@@ -34,7 +34,6 @@ public:
 	RequestResult ReceiveRequest(Packet &p) override;
 	bool SendResponse(Packet &p) override;
 	std::string_view GetName() const override;
-	NetworkAuthenticationMethod GetAuthenticationMethod() const override;
 	bool ReceiveEnableEncryption(Packet &p) override;
 	std::unique_ptr<NetworkEncryptionHandler> CreateClientToServerEncryptionHandler() const override;
 	std::unique_ptr<NetworkEncryptionHandler> CreateServerToClientEncryptionHandler() const override;
@@ -49,7 +48,6 @@ public:
 	void SendRequest(Packet &p) override;
 	ResponseResult ReceiveResponse(Packet &p) override;
 	std::string_view GetName() const override;
-	NetworkAuthenticationMethod GetAuthenticationMethod() const override;
 	bool CanBeUsed() const override;
 	std::string GetPeerPublicKey() const override;
 	void SendEnableEncryption(Packet &p) override;

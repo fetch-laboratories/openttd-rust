@@ -450,8 +450,8 @@ class CompileCheckTests(unittest.TestCase):
             ("src/station_base.h", True),
             ("src/rust/abi_ffi.h", True),
             ("tools/generate-abi.py", True),
-            ("tools/auth-comparison.py", True),
-            ("tools/migration/auth-comparison.cpp", True),
+            ("tools/admin-conversion-comparison.py", True),
+            ("tools/migration/admin-conversion-comparison.cpp", True),
             ("tools/simulation/station-resolver-console.hpp", True),
             ("tools/simulation/stations.py", True),
             ("src/station_cmd.cpp", False),
@@ -515,8 +515,12 @@ class CompileCheckTests(unittest.TestCase):
         ):
             (Path(directory) / "logs").mkdir()
             failing = [sys.executable, "-c", f"raise SystemExit({check.FAILED})"]
-            name, code, log = check.run("auth-comparison", failing, dict(os.environ))
-            self.assertEqual((name, code), ("auth-comparison", check.FAILED))
+            name, code, log = check.run(
+                "admin-conversion-comparison", failing, dict(os.environ)
+            )
+            self.assertEqual(
+                (name, code), ("admin-conversion-comparison", check.FAILED)
+            )
 
     def test_a_child_refuses_every_program_but_compilers_and_reads(self) -> None:
         # Review of #927: a comparison must not start a built binary (#923).
