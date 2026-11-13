@@ -20,14 +20,10 @@ Do not commit, push, request Full or merge.
 
 ## What to examine in your group
 
-- **Same operations, same order.** Read every changed body in your group in full, beside its original body, before you report; a sample of bodies is not a review (provisional). Compare callee by callee, not only with the earlier Rust: guards, fatal paths, assertions, widths, return values, service and command calls, random draws, partial effects on early return and lifetimes.
+- **Same operations, same order.** Compare each changed body with its original body, callee by callee, not only with the earlier Rust: guards, fatal paths, assertions, widths, return values, service and command calls, random draws, partial effects on early return and lifetimes.
 - **Every line in scope.** Each departure from [porting](porting.md) in the lines [code standards](porting.md#code-standards) puts in scope is a finding. `python3 tools/code-standards-inventory.py FILE...` lists candidate sites per file; judge each.
-- **Design faults.** A pass leaves none in the files it finishes ([design faults](porting.md#design-faults)). Three searches find the ones a reading misses:
-  - Count the call sites of each service those files call: a service with one, such as one per console or error message, is a carrier written for one call site.
-  - For each C++ service a changed body calls, search `rust/` for a port or typed accessor of the same original callee. Calling the service where one exists is a finding.
-  - Count how often a body resolves the same owner, such as `Station::Get` behind each service it calls: more than once per entry is a finding.
-- **Orphans.** List the callers of each export and C++ facade the PR edits. One with no caller outside tests and fixtures is a finding, unless [porting](porting.md#callees-and-shared-accessors) keeps it with its fixture.
-- **The plan.** A departure from the implementation plan that the PR body does not record with its reason is a finding. A plan decision is not a reason to accept a departure from porting: report the departure and name the decision.
+- **Design faults.** A pass leaves none in the files it finishes ([design faults](porting.md#design-faults)). Count the call sites of each service those files call: a service with one, such as one per console or error message, is a carrier written for one call site.
+- **The plan.** A departure from the implementation plan that the PR body does not record with its reason is a finding.
 - **Evidence.** A changed path the PR newly leaves unreached or unobserved by the scenarios and tests it cites is a finding.
 - **Cleanup records.** The checks enforce the records' form, not their truth, so judge each: a growth or lint exception names the original behavior that requires it and what retires it; a carry pairs the same item before and after a rename or move; a suppression's reason names the original definition or cast it preserves.
 

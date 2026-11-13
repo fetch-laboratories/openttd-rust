@@ -232,7 +232,6 @@ Steering 36 is the latest; its findings are in the message of the steering commi
 
 - The tools batch is dispatched within its interval, ranked by its items' measured cost ([selection](planning.md#selection)). The last one was not dispatched at all.
 - A plan grants no exception to porting and prescribes no commit split ([planner brief](planner-brief.md#the-plan)).
-- A reviewer reads every changed body beside its original, runs three searches for design faults, lists the callers of edited exports, and does not take a plan decision as a reason to accept a departure ([review brief](review-brief.md#what-to-examine-in-your-group)). Review groups are about 1,000 changed lines each ([review](workflow.md#review)).
 - Three porting rulings: a pass keeps a one-call-site carrier only for a shared-service work order ([design faults](porting.md#design-faults)); a map service with no Rust port stays for #565 ([map access](porting.md#map-access)); an export that serves only a kept native fixture leaves with it ([callees](porting.md#callees-and-shared-accessors)).
 
 For root, on resume:
@@ -243,7 +242,7 @@ For root, on resume:
 5. Bring #734's body to 133 files and link the three residue lists.
 
 Provisional, for steering 37 to judge:
-- **Review depth.** In merges 48 to 59 a source-review session ran a median 2.1 minutes and 12 tool calls, on groups of up to 2,100 changed lines. The 46 review sessions raised 27 findings, one a behaviour difference, and none of the 22 departures the audits found in the same lines. Measure session length, findings per review and the audit findings reviewers missed after the review brief's change.
+- **What review catches.** The 30 source reviews of merges 48 to 59 each received the brief and the porting rules, and between them were shown 85% of the added code; for each of the 22 departures the audits found, a reviewer had both the Rust line and the original's on screen. They raised none of the 22, in a median 2.1 minutes and about 800 reasoning tokens a review. The cause is not established. Steering 36 first changed the review brief on one transcript and withdrew the change when these measurements refuted its premise; the brief is as it was at `c80ace14b8`. No change to review is made until a replayed review shows which change makes a reviewer catch known departures.
 - **The tools batch.** Failed runs by cause, and the share of PR-minutes outside implementation, after #945 merges; and whether each later batch was dispatched in its interval.
 - **Plans.** Plans cost about 9% of implementer minutes and their file sets were accurate (10 of 12 PRs had at most 4% unplanned lines), so plans in issues stand. Count the plan decisions an audit or reviewer finds contrary to porting (six in this window) and compare estimates with actual changed lines (median 1.54 times).
 - **Re-check scope** stands: no re-check raised a behaviour defect outside its fixing commits, and the four sessions beyond two stages were forced by the exact-head acceptance, item 13 on #945.
