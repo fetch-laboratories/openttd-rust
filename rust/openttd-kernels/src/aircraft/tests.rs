@@ -9,6 +9,7 @@ use crate::services::Services;
 use std::cell::RefCell;
 use std::ffi::c_void;
 
+#[cfg(test)]
 thread_local! {
     static CHECKS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
 }
