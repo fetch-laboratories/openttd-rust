@@ -200,7 +200,6 @@ impl<'a> World<'a> {
             shared: self.r.shared,
             rail: self.r.rail,
             native: self.r.signal,
-            log_x: self.map.log_x,
         }
         .add_side(tile, direction, owner);
     }

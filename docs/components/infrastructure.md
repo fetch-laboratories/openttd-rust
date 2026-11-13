@@ -89,6 +89,7 @@
 ## Original signal header and segment vocabulary (#734)
 
 - Signal exploration and the fixed work sets use the original flags, segment-state names, track-bit masks and `SmallSet` helper vocabulary. Raw values, queue capacities, traversal order, callback observations and propagation decisions are preserved.
+- `signal.rs` is a finished file: it reads the map in place through one map view per entry, with the original's accessors and assertions, and Rust callers reach the five original entries through typed `signal::Context` functions. Raw adapters serve the unfinished callers.
 - Map/pool storage, commands, rendering and native facades remain in C++; no service or interface is added.
 - Limits: Existing raw-domain and overflow qualifications, arbitrary mod layouts and threaded play remain on #156. Other signal/rail vocabulary remains in the cleanup workset.
-- PRs: #772, integrated in #776.
+- PRs: #772, integrated in #776; #956.

@@ -76,6 +76,7 @@ rust/openttd-kernels/src/road/availability.rs
 rust/openttd-kernels/src/road_stop.rs
 rust/openttd-kernels/src/roadveh.rs
 rust/openttd-kernels/src/saveload.rs
+rust/openttd-kernels/src/signal.rs
 rust/openttd-kernels/src/signal_func.rs
 rust/openttd-kernels/src/slope_func.rs
 rust/openttd-kernels/src/spiral.rs

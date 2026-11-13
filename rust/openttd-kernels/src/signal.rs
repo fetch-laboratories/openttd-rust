@@ -5,74 +5,292 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Signal-block traversal and its process-wide fixed work sets. Occupancy and dirtying
-//! callbacks can reenter.
+//! Functions related to rail signals updating (`signal.cpp`): signal-block traversal and its
+//! process-wide fixed work sets. Occupancy and dirtying callbacks can reenter, so every work-set
+//! borrow ends before a callback.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::collapsible_if)]
+use crate::bitmath_func::{find_first_bit, has_at_most_one_bit};
+use crate::company_type::{CompanyID, Owner};
 use crate::debug::debug;
+use crate::direction_func::{diag_dir_to_axis, is_valid_diag_direction, reverse_diag_dir};
 use crate::direction_type::DiagDirection;
 use crate::game_state::GameState;
-use crate::rail_map::is_pbs_signal as pbs;
-use crate::tile_type::TileIndex;
-use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
-
-use crate::company_type::INVALID_OWNER;
-use crate::direction_func::reverse_diag_dir_raw;
-use crate::direction_type::INVALID_DIAGDIR;
-use crate::direction_type::{
-    Axis, DIAGDIR_BEGIN, DIAGDIR_END, DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW,
-};
-use crate::map_func::Map;
+use crate::map_type::TileIndexDiff;
 use crate::movement::native_assert;
+use crate::rail_map::is_pbs_signal;
 use crate::services::{RailMapServices, Services};
 use crate::signal_func::SigSegState;
 use crate::signal_type::{SignalState, SignalType};
-use crate::track_func::track_status_to_track_bits;
-use crate::track_type::TrackBits;
+use crate::tile_type::{TileIndex, TileType};
+use crate::track_func::{
+    reverse_trackdir, track_bits_to_track, track_status_to_track_bits, track_to_track_bits,
+    trackdir_to_exitdir, trackdir_to_track,
+};
+use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
+use crate::transport_type::TransportType;
+use crate::vehicle::{VehicleRef, VehicleServices};
+use crate::vehicle_type::VehicleType;
 use std::{cell::OnceCell, ffi::c_uint};
 
-// Maximums used for updating signal blocks.
-const SIG_TBU_SIZE: usize = 64; // Number of signals entering the block.
-const SIG_TBD_SIZE: usize = 256; // Number of intersections: open nodes in the current block.
-const SIG_GLOB_SIZE: usize = 128; // Number of open blocks; a block can be opened more than once until detected.
-const SIG_GLOB_UPDATE: usize = 64; // Items in the global set that force an update.
+/* These are the maximums used for updating signal blocks. */
+const SIG_TBU_SIZE: usize = 64; // number of signals entering to block
+const SIG_TBD_SIZE: usize = 256; // number of intersections - open nodes in current block
+const SIG_GLOB_SIZE: usize = 128; // number of open blocks (block can be opened more times until detected)
+const SIG_GLOB_UPDATE: usize = 64; // how many items need to be in _globset to force update
 
-// Incident track bits for the given entering direction.
-const ENTERDIR_TO_TRACKBITS: [TrackBits; 4] = [
+/// Incidating trackbits with given enterdir.
+const ENTERDIR_TO_TRACKBITS: [TrackBits; DiagDirection::DIAGDIR_END.0 as usize] = [
     TrackBits::TRACK_BIT_3WAY_NE,
     TrackBits::TRACK_BIT_3WAY_SE,
     TrackBits::TRACK_BIT_3WAY_SW,
     TrackBits::TRACK_BIT_3WAY_NW,
 ];
-const SEARCH_DIR_1: [u8; 6] = [
-    DIAGDIR_NE, DIAGDIR_SE, DIAGDIR_NE, DIAGDIR_SE, DIAGDIR_SW, DIAGDIR_SE,
+
+/// Incidating trackdirbits with given enterdir.
+const ENTERDIR_TO_TRACKDIRBITS: [TrackdirBits; DiagDirection::DIAGDIR_END.0 as usize] = [
+    TrackdirBits(
+        TrackdirBits::TRACKDIR_BIT_X_SW.0
+            | TrackdirBits::TRACKDIR_BIT_UPPER_W.0
+            | TrackdirBits::TRACKDIR_BIT_RIGHT_S.0,
+    ),
+    TrackdirBits(
+        TrackdirBits::TRACKDIR_BIT_Y_NW.0
+            | TrackdirBits::TRACKDIR_BIT_LOWER_W.0
+            | TrackdirBits::TRACKDIR_BIT_RIGHT_N.0,
+    ),
+    TrackdirBits(
+        TrackdirBits::TRACKDIR_BIT_X_NE.0
+            | TrackdirBits::TRACKDIR_BIT_LOWER_E.0
+            | TrackdirBits::TRACKDIR_BIT_LEFT_N.0,
+    ),
+    TrackdirBits(
+        TrackdirBits::TRACKDIR_BIT_Y_SE.0
+            | TrackdirBits::TRACKDIR_BIT_UPPER_E.0
+            | TrackdirBits::TRACKDIR_BIT_LEFT_S.0,
+    ),
 ];
-const SEARCH_DIR_2: [u8; 6] = [
-    DIAGDIR_SW, DIAGDIR_NW, DIAGDIR_NW, DIAGDIR_SW, DIAGDIR_NW, DIAGDIR_NE,
-];
-/// Current signal block state flags from `signal.cpp`; all raw byte values remain representable.
+
+/// The `Tdir` of a `SmallSet`: `Trackdir` or `DiagDirection`. Its base integer crosses only
+/// the diagnostic boundary.
+trait SetDir: Copy + PartialEq {
+    /// The base integer of the direction.
+    fn base(self) -> u8;
+    /// The direction with this base integer.
+    fn from_base(value: u8) -> Self;
+}
+impl SetDir for Trackdir {
+    fn base(self) -> u8 {
+        self.0
+    }
+    fn from_base(value: u8) -> Self {
+        Self(value)
+    }
+}
+impl SetDir for DiagDirection {
+    fn base(self) -> u8 {
+        self.0
+    }
+    fn from_base(value: u8) -> Self {
+        Self(value)
+    }
+}
+
+/// Element of set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SSdata<Tdir> {
+    tile: TileIndex,
+    dir: Tdir,
+}
+
+/// Set containing 'items' items of 'tile and Tdir'.
+/// No tree structure is used because it would cause slowdowns in most usual cases.
+struct SmallSet<Tdir, const ITEMS: usize> {
+    n: usize,           // actual number of units
+    overflowed: bool,   // did we try to overflow the set?
+    name: &'static str, // name, used for debugging purposes...
+    /// Branch witness hit when an add to the process-wide set fails.
+    full_witness: usize,
+    data: [SSdata<Tdir>; ITEMS],
+}
+
+impl<Tdir: SetDir, const ITEMS: usize> SmallSet<Tdir, ITEMS> {
+    /// Constructor - just set default values and 'name'. `dir` fills the unused elements.
+    const fn new(name: &'static str, full_witness: usize, dir: Tdir) -> Self {
+        Self {
+            n: 0,
+            overflowed: false,
+            name,
+            full_witness,
+            data: [SSdata {
+                tile: TileIndex(0),
+                dir,
+            }; ITEMS],
+        }
+    }
+
+    /// Reset variables to default values.
+    fn reset(&mut self) {
+        self.n = 0;
+        self.overflowed = false;
+    }
+
+    /// Returns value of 'overflowed': did we try to overflow the set?
+    fn overflowed(&self) -> bool {
+        self.overflowed
+    }
+
+    /// Checks for empty set: is the set empty?
+    fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+
+    /// Checks for full set: is the set full?
+    fn is_full(&self) -> bool {
+        self.n == ITEMS
+    }
+
+    /// Reads the number of items: current number of items.
+    fn items(&self) -> usize {
+        self.n
+    }
+
+    /// Tries to remove first instance of given tile and dir.
+    /// Returns whether the element was found and removed.
+    fn remove(&mut self, tile: TileIndex, dir: Tdir) -> bool {
+        for i in 0..self.n {
+            if self.data[i].tile == tile && self.data[i].dir == dir {
+                self.n -= 1;
+                self.data[i] = self.data[self.n];
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Tries to find given tile and dir in the set.
+    /// Returns true iff the tile & dir element was found.
+    fn is_in(&self, tile: TileIndex, dir: Tdir) -> bool {
+        for i in 0..self.n {
+            if self.data[i].tile == tile && self.data[i].dir == dir {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Adds tile & dir into the set, checks for full set.
+    /// Sets the 'overflowed' flag if the set was full.
+    /// Returns true iff the item could be added (set wasn't full). On a full set the caller
+    /// issues [`Self::debug_full`] once its work-set borrow has ended.
+    fn add(&mut self, tile: TileIndex, dir: Tdir) -> bool {
+        if self.is_full() {
+            self.overflowed = true;
+            return false; // set is full
+        }
+
+        self.data[self.n].tile = tile;
+        self.data[self.n].dir = dir;
+        self.n += 1;
+
+        true
+    }
+
+    /// The `Debug` message of `Add` on a full set named `name`.
+    fn debug_full(name: &str) {
+        debug!(
+            misc,
+            0, "SignalSegment too complex. Set {} is full (maximum {})", name, ITEMS
+        );
+    }
+
+    /// Reads the last added element into the set.
+    /// Returns `None` iff the set was empty.
+    fn get(&mut self) -> Option<SSdata<Tdir>> {
+        if self.n == 0 {
+            return None;
+        }
+
+        self.n -= 1;
+        Some(self.data[self.n])
+    }
+}
+
+/// The work sets and owner of `signal.cpp`'s file statics.
+struct State {
+    /// `_tbuset`: set of signals that will be updated.
+    tbuset: SmallSet<Trackdir, SIG_TBU_SIZE>,
+    /// `_tbdset`: set of open nodes in current signal block.
+    tbdset: SmallSet<DiagDirection, SIG_TBD_SIZE>,
+    /// `_globset`: set of places to be updated in following runs.
+    globset: SmallSet<DiagDirection, SIG_GLOB_SIZE>,
+    /// `_last_owner`: last owner whose track was put into _globset.
+    last_owner: Owner,
+}
+static STATE: GameState<State> = GameState::new(State {
+    tbuset: SmallSet::new(
+        "_tbuset",
+        crate::witness::SIGNAL_TBU_OVERFLOW,
+        Trackdir::INVALID_TRACKDIR,
+    ),
+    tbdset: SmallSet::new(
+        "_tbdset",
+        crate::witness::SIGNAL_TBD_OVERFLOW,
+        DiagDirection::INVALID_DIAGDIR,
+    ),
+    globset: SmallSet::new(
+        "_globset",
+        crate::witness::SIGNAL_GLOBAL_OVERFLOW,
+        DiagDirection::INVALID_DIAGDIR,
+    ),
+    last_owner: Owner::INVALID,
+});
+fn access<T>(f: impl FnOnce(&mut State) -> T) -> T {
+    // SAFETY: caller holds the native game-state mutex; closure never reenters.
+    unsafe { f(&mut *STATE.get()) }
+}
+/// `SmallSet::Add` on a process-wide set, with its full-set `Debug` after the borrow ends.
+fn add_to_set<Tdir: SetDir, const ITEMS: usize>(
+    set: impl FnOnce(&mut State) -> &mut SmallSet<Tdir, ITEMS>,
+    tile: TileIndex,
+    dir: Tdir,
+) -> bool {
+    let (added, name, full_witness) = access(|s| {
+        let set = set(s);
+        (set.add(tile, dir), set.name, set.full_witness)
+    });
+    if !added {
+        SmallSet::<Tdir, ITEMS>::debug_full(name);
+        crate::witness::hit(full_witness);
+    }
+    added
+}
+
+/// Current signal block state flags.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 struct SigFlag(u8);
 impl SigFlag {
-    /// `SigFlag::Train`: train found in segment.
+    /// Train found in segment.
     const TRAIN: Self = Self(0);
-    /// `SigFlag::Exit`: exit signal found.
+    /// Exitsignal found.
     const EXIT: Self = Self(1);
-    /// `SigFlag::MultiExit`: two or more exits found.
+    /// Two or more exits found.
     const MULTI_EXIT: Self = Self(2);
-    /// `SigFlag::Green`: green exit signal found.
+    /// Green exitsignal found.
     const GREEN: Self = Self(3);
-    /// `SigFlag::MultiGreen`: two or more green exits found.
+    /// Two or more green exits found.
     const MULTI_GREEN: Self = Self(4);
-    /// `SigFlag::Full`: some buffer was full; do not continue.
+    /// Some of buffers was full, do not continue.
     const FULL: Self = Self(5);
-    /// `SigFlag::Pbs`: PBS signal found.
+    /// PBS signal found.
     const PBS: Self = Self(6);
-    /// `SigFlag::Split`: track merge or split found.
+    /// Track merge/split found.
     const SPLIT: Self = Self(7);
-    /// `SigFlag::Enter`: signal entering the block found.
+    /// Signal entering the block found.
     const ENTER: Self = Self(8);
-    /// `SigFlag::MultiEnter`: two or more signals entering the block found.
+    /// Two or more signals entering the block found.
     const MULTI_ENTER: Self = Self(9);
 }
 /// Original `EnumBitSet<SigFlag, uint16_t>`, including unnamed bits.
@@ -80,769 +298,665 @@ impl SigFlag {
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct SigFlags(u16);
 impl SigFlags {
-    const TRAIN: Self = Self(1 << SigFlag::TRAIN.0);
-    const EXIT: Self = Self(1 << SigFlag::EXIT.0);
-    const MULTI_EXIT: Self = Self(1 << SigFlag::MULTI_EXIT.0);
-    const GREEN: Self = Self(1 << SigFlag::GREEN.0);
-    const MULTI_GREEN: Self = Self(1 << SigFlag::MULTI_GREEN.0);
-    const FULL: Self = Self(1 << SigFlag::FULL.0);
-    const PBS: Self = Self(1 << SigFlag::PBS.0);
-    const SPLIT: Self = Self(1 << SigFlag::SPLIT.0);
-    const ENTER: Self = Self(1 << SigFlag::ENTER.0);
-    const MULTI_ENTER: Self = Self(1 << SigFlag::MULTI_ENTER.0);
+    const NONE: Self = Self(0);
+    const FULL: Self = Self::from_flag(SigFlag::FULL);
+    const SPLIT: Self = Self::from_flag(SigFlag::SPLIT);
+    const MULTI_ENTER: Self = Self::from_flag(SigFlag::MULTI_ENTER);
+
+    /// The set holding one element.
+    const fn from_flag(flag: SigFlag) -> Self {
+        Self(1 << flag.0)
+    }
+    /// `EnumBitSet::Test`.
+    const fn test(self, flag: SigFlag) -> bool {
+        self.0 & Self::from_flag(flag).0 != 0
+    }
+    /// `EnumBitSet::Set`.
+    fn set(&mut self, flag: SigFlag) {
+        self.0 |= Self::from_flag(flag).0;
+    }
+    /// `EnumBitSet::Any`.
+    const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
 }
 crate::base_bitset_type::impl_bitset_ops!(SigFlags);
 
-/// Spatial occupancy, diagnostics and original Company assertion services.
+/// Spatial occupancy and the original assertion policy.
 #[repr(C)]
 pub struct SignalServices {
     /// Native assertion build policy, independent of Cargo optimization.
     pub assertions: bool,
-    /// Original work-set/direction/owner assertion predicate.
+    /// Native `assert`, for the assertions of `signal.cpp`.
     pub assert_condition: extern "C" fn(bool),
-    /// Original tunnel transport and entering-direction assertion sites.
-    pub assert_wormhole_start: extern "C" fn(u32, u8),
     /// Direct Rust occupancy traversal, shared with the train controller.
-    pub vehicles: *const crate::vehicle::VehicleServices,
-    /// Original `Company::IsValidID` assertion, retaining native build policy.
-    pub assert_company: extern "C" fn(u8),
+    pub vehicles: *const VehicleServices,
 }
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
-struct Item {
-    tile: u32,
-    dir: u8,
-}
-/// Set of tile/direction items. No tree structure is used because it would
-/// cause slowdowns in the most usual cases (`signal.cpp::SmallSet`).
-struct SmallSet<const N: usize> {
-    count: usize,     // Actual number of units.
-    overflowed: bool, // Did we try to overflow the set?
-    data: [Item; N],
-}
-impl<const N: usize> SmallSet<N> {
-    const fn new() -> Self {
-        Self {
-            count: 0,
-            overflowed: false,
-            data: [Item { tile: 0, dir: 0 }; N],
-        }
-    }
-    /// Reset variables to default values.
-    fn reset(&mut self) {
-        self.count = 0;
-        self.overflowed = false;
-    }
-    /// Try to remove the first instance of the given tile and direction.
-    fn remove(&mut self, item: Item) -> bool {
-        for i in 0..self.count {
-            if self.data[i] == item {
-                self.count -= 1;
-                self.data[i] = self.data[self.count];
-                return true;
-            }
-        }
-        false
-    }
-    /// Find whether the tile/direction element is in the set (`IsIn`).
-    fn is_in(&self, item: Item) -> bool {
-        self.data[..self.count].contains(&item)
-    }
-    /// Add a tile/direction; set the overflow flag if the set was full.
-    fn add(&mut self, item: Item) -> bool {
-        if self.count == N {
-            self.overflowed = true;
-            return false;
-        }
-        self.data[self.count] = item;
-        self.count += 1;
-        true
-    }
-    /// Read the last added element; return no element if the set was empty.
-    fn get(&mut self) -> Option<Item> {
-        if self.count == 0 {
-            return None;
-        }
-        self.count -= 1;
-        Some(self.data[self.count])
-    }
-}
-struct State {
-    tbu: SmallSet<SIG_TBU_SIZE>,
-    tbd: SmallSet<SIG_TBD_SIZE>,
-    global: SmallSet<SIG_GLOB_SIZE>,
-    last_owner: u8,
-}
-static STATE: GameState<State> = GameState::new(State {
-    tbu: SmallSet::new(),
-    tbd: SmallSet::new(),
-    global: SmallSet::new(),
-    last_owner: INVALID_OWNER,
-});
-fn access<T>(f: impl FnOnce(&mut State) -> T) -> T {
-    // SAFETY: caller holds the native game-state mutex; closure never reenters.
-    unsafe { f(&mut *STATE.get()) }
-}
-struct World<'a> {
+
+/// One entry's service tables and its map view.
+struct Signals<'a> {
     shared: &'a Services,
     rail: &'a RailMapServices,
     native: &'a SignalServices,
-    map: OnceCell<Map>,
-    log_x: u32,
+    /// The entry's map view, created at its first map read.
+    map: OnceCell<crate::map_func::World<'a>>,
 }
 macro_rules! read {
     ($w:expr, $group:ident, $field:ident $(, $arg:expr)*) => {
         crate::witness::counted!(before SIGNAL_SERVICES, SIGNAL_BYTES, ($w.$group.$field)($($arg),*))
     };
 }
-/// Signal facts consumed together; later fields are read only after their guards.
-#[allow(clippy::struct_excessive_bools)] // The original reads four independent signal facts.
-#[derive(Clone, Copy)]
-struct RailSignalPresence {
-    signals: bool,
-    /// `TrackBitsToTrack` of the masked tracks, read only with signals.
-    track: u8,
-    /// `HasSignalOnTrack` for that track.
-    on_track: bool,
-    kind: SignalType,
-    forward: bool,
-    reverse: bool,
-}
+impl<'a> Signals<'a> {
+    /// The entry's map view. Queue-only entries read no map and never create it.
+    fn map(&self) -> &crate::map_func::World<'a> {
+        self.map
+            .get_or_init(|| crate::map_func::World::new(self.shared))
+    }
+    /// The native assertion of a header helper's precondition.
+    fn check(&self) -> impl Fn(bool) + Copy + '_ {
+        move |ok| native_assert(self.shared, ok)
+    }
+    /// `assert(condition)` of `signal.cpp`: evaluated only where the native build asserts.
+    fn source_assert(&self, condition: impl FnOnce() -> bool) {
+        if self.native.assertions {
+            read!(self, native, assert_condition, condition());
+        }
+    }
+    /// `TileOffsByDiagDir`.
+    fn tile_offs_by_diag_dir(&self, dir: DiagDirection) -> TileIndexDiff {
+        self.map()
+            .dimensions
+            .tile_offs_by_diag_dir(dir, self.check())
+    }
+    fn vehicles(&self) -> &VehicleServices {
+        // SAFETY: Static services; signal scans delete no vehicle.
+        unsafe { &*self.native.vehicles }
+    }
+    /// `if (!flags.Test(SigFlag::Train) && HasVehicleOnTile(tile, IsTrainAndNotInDepot)) flags.Set(SigFlag::Train);`
+    fn train_on_tile(&self, tile: TileIndex, flags: &mut SigFlags) {
+        let vehicles = self.vehicles();
+        if !flags.test(SigFlag::TRAIN)
+            && vehicles.any_on_tile(tile.0, |v| is_train_and_not_in_depot(vehicles, v))
+        {
+            flags.set(SigFlag::TRAIN);
+            crate::witness::hit(crate::witness::SIGNAL_TRAIN);
+        }
+    }
 
-#[derive(Clone, Copy)]
-struct RailSignalUpdate {
-    kind: SignalType,
-    reservations: TrackBits,
-}
+    /// Perform some operations before adding data into Todo set.
+    /// The new and reverse direction is removed from _globset, because we are sure
+    /// it doesn't need to be checked again.
+    /// Also, remove reverse direction from _tbdset.
+    /// This is the 'core' part so the graph searching won't enter any tile twice.
+    ///
+    /// `t1` and `d1` are the tile and side we are entering, `t2` and `d2` the tile and side
+    /// we are leaving. Returns false iff reverse direction was in Todo set.
+    fn check_add_to_todo_set(
+        &self,
+        t1: TileIndex,
+        d1: DiagDirection,
+        t2: TileIndex,
+        d2: DiagDirection,
+    ) -> bool {
+        access(|s| {
+            s.globset.remove(t1, d1); // it can be in Global but not in Todo
+            s.globset.remove(t2, d2); // remove in all cases
+        });
 
-#[derive(Clone, Copy)]
-struct RailCrossingAdmission {
-    crossing: bool,
-    owner: u8,
-    axis: Axis,
-}
-impl World<'_> {
-    fn map(&self) -> Map {
-        *self.map.get_or_init(|| {
-            let mut map = self.shared.map();
-            map.log_x = self.log_x;
-            map
-        })
+        self.source_assert(|| access(|s| !s.tbdset.is_in(t1, d1))); // it really shouldn't be there already
+
+        access(|s| !s.tbdset.remove(t2, d2))
     }
-    /// The canonical map view, loaded at each observation.
-    fn view(&self) -> crate::map_func::World<'_> {
-        crate::map_func::World::new(self.shared)
-    }
-}
-/// `UpdateSignalsAroundSegment` signal facts: `HasSignals`, then `GetPresentSignals`
-/// with `SignalOnTrack`, then `GetSignalType` and both `SignalAlongTrackdir` tests.
-fn signal_presence(w: &World<'_>, tile: u32, masked_tracks: u8, td: u8) -> RailSignalPresence {
-    let view = w.view();
-    let mut r = RailSignalPresence {
-        signals: view.has_signals(tile),
-        track: crate::track_type::INVALID_TRACK,
-        on_track: false,
-        kind: SignalType::SIGTYPE_BLOCK,
-        forward: false,
-        reverse: false,
-    };
-    if r.signals {
-        r.track = crate::track_func::track_bits_to_track(masked_tracks, |ok| view.check(ok));
-        let present = view.present_signals(tile);
-        r.on_track = present & crate::signal_func::signal_on_track_raw(r.track) != 0;
-        if r.on_track {
-            r.kind = SignalType(view.signal_type(tile, r.track));
-            r.forward = present & crate::signal_func::signal_along_trackdir_raw(td) != 0;
-            r.reverse = present
-                & crate::signal_func::signal_along_trackdir_raw(
-                    crate::track_func::reverse_trackdir(td),
-                )
-                != 0;
+
+    /// Perform some operations before adding data into Todo set.
+    /// The new and reverse direction is removed from Global set, because we are sure
+    /// it doesn't need to be checked again.
+    /// Also, remove reverse direction from Todo set.
+    /// This is the 'core' part so the graph searching won't enter any tile twice.
+    ///
+    /// `t1` and `d1` are the tile and side we are entering, `t2` and `d2` the tile and side
+    /// we are leaving. Returns false iff the Todo buffer would be overrun.
+    fn maybe_add_to_todo_set(
+        &self,
+        t1: TileIndex,
+        d1: DiagDirection,
+        t2: TileIndex,
+        d2: DiagDirection,
+    ) -> bool {
+        if !self.check_add_to_todo_set(t1, d1, t2, d2) {
+            return true;
         }
+
+        add_to_set(|s| &mut s.tbdset, t1, d1)
     }
-    r
-}
-/// Signal update facts: the signal type, then reservations only for path signals.
-fn signal_update(w: &World<'_>, tile: u32, td: u8) -> RailSignalUpdate {
-    let view = w.view();
-    view.check(view.has_signal_on_trackdir(tile, td));
-    let kind = view.signal_type(tile, crate::track_func::trackdir_to_track(td));
-    let mut r = RailSignalUpdate {
-        kind: SignalType(kind),
-        reservations: TrackBits::TRACK_BIT_NONE,
-    };
-    if pbs(kind) {
-        r.reservations = read!(w, rail, rail_reservation, tile);
-    }
-    r
-}
-/// Level-crossing admission: `IsLevelCrossing`, then the owner, then the road axis.
-fn crossing_admission(w: &World<'_>, tile: u32, owner: u8) -> RailCrossingAdmission {
-    let view = w.view();
-    let mut r = RailCrossingAdmission {
-        crossing: view.level_crossing(tile),
-        owner: INVALID_OWNER,
-        axis: Axis(crate::direction_type::AXIS_X),
-    };
-    if r.crossing {
-        r.owner = view.owner(TileIndex(tile)).0;
-        if r.owner == owner {
-            r.axis = Axis(view.crossing_road_axis(tile));
-        }
-    }
-    r
-}
-fn overflow_tbu() {
-    debug!(
-        misc,
-        0, "SignalSegment too complex. Set _tbuset is full (maximum 64)"
-    );
-}
-fn overflow_tbd() {
-    debug!(
-        misc,
-        0, "SignalSegment too complex. Set _tbdset is full (maximum 256)"
-    );
-}
-fn overflow_global() {
-    debug!(
-        misc,
-        0, "SignalSegment too complex. Set _globset is full (maximum 128)"
-    );
-}
-fn add_tbu(item: Item) -> bool {
-    let added = access(|s| s.tbu.add(item));
-    if !added {
-        overflow_tbu();
-        crate::witness::hit(crate::witness::SIGNAL_TBU_OVERFLOW);
-    }
-    added
-}
-fn add_tbd(item: Item) -> bool {
-    let added = access(|s| s.tbd.add(item));
-    if !added {
-        overflow_tbd();
-        crate::witness::hit(crate::witness::SIGNAL_TBD_OVERFLOW);
-    }
-    added
-}
-fn add_global(item: Item) -> bool {
-    let added = access(|s| s.global.add(item));
-    if !added {
-        overflow_global();
-        crate::witness::hit(crate::witness::SIGNAL_GLOBAL_OVERFLOW);
-    }
-    added
-}
-fn source_assert(w: &World<'_>, condition: bool) {
-    if w.native.assertions {
-        read!(w, native, assert_condition, condition);
-    }
-}
-/// Remove the new and reverse directions from the global set: they need not
-/// be checked again. Remove the reverse direction from the todo set too. This
-/// is the core of avoiding a second visit to a tile. Return false only if adding
-/// the new direction would overrun the todo buffer (`MaybeAddToTodoSet` and
-/// its in-place `CheckAddToTodoSet` operations).
-fn maybe_add_to_todo_set(w: &World<'_>, next: Item, previous: Item) -> bool {
-    access(|s| {
-        s.global.remove(next); // It can be in Global but not in Todo.
-        s.global.remove(previous); // Remove in all cases.
-    });
-    source_assert(w, access(|s| !s.tbd.is_in(next)));
-    let add = access(|s| !s.tbd.remove(previous));
-    !add || add_tbd(next)
-}
-// The unfiltered branch is IsTrainAndNotInDepot: a train on rail, outside a
-// depot. The filtered branch retains EnsureNoTrainOnTrackBits occupancy policy.
-fn occupied(w: &World<'_>, tile: u32, bits: Option<u8>) -> bool {
-    // SAFETY: Static services and live shells; signal scans do not delete vehicles.
-    let vs = unsafe { &*w.native.vehicles };
-    vs.any_on_tile(tile, |v| {
-        if v.vehicle_type() != crate::vehicle_type::VehicleType::TRAIN.0 {
-            return false;
-        }
-        crate::witness::hit(crate::witness::SIGNAL_OCCUPANCY_ACCESSORS);
-        let track = (vs.train_handle)(v.0.as_ptr()).track();
-        bits.map_or(track != crate::track_type::TRACK_BIT_DEPOT, |bits| {
-            track == bits || crate::track_func::tracks_overlap(track | bits)
-        })
-    })
-}
-fn train_on_tile(w: &World<'_>, tile: u32, flags: &mut SigFlags) {
-    if *flags & SigFlags::TRAIN == SigFlags(0) && occupied(w, tile, None) {
-        *flags |= SigFlags::TRAIN;
-        crate::witness::hit(crate::witness::SIGNAL_TRAIN);
-    }
-}
-/// Search the signal block belonging to the owner (`ExploreSegment`).
-#[allow(clippy::too_many_lines)]
-fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
-    let mut flags = SigFlags(0);
-    while let Some(Item { mut tile, mut dir }) = access(|s| s.tbd.get()) {
-        crate::witness::hit(crate::witness::SIGNAL_TILES);
-        let old_tile = tile; // Tile we are leaving.
-        // Expected new exit direction for a straight line.
-        let mut exitdir = if dir == INVALID_DIAGDIR {
-            INVALID_DIAGDIR
-        } else {
-            reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok))
-        };
-        match read!(w, shared, tile_type, tile) {
-            MP_RAILWAY => {
-                // Do not propagate signals on others' tiles (remove for track sharing).
-                if read!(w, shared, tile_owner, tile) != owner {
-                    crate::witness::hit(crate::witness::SIGNAL_OWNER_BARRIER);
-                    continue;
-                }
-                let geometry = read!(w, rail, traversal, tile);
-                if geometry.depot {
-                    if dir == INVALID_DIAGDIR {
-                        // From inside: a train just entered or left the depot.
-                        crate::witness::hit(crate::witness::SIGNAL_DEPOT);
-                        train_on_tile(w, tile, &mut flags);
-                        exitdir = w.view().rail_depot_dir(tile);
-                        tile = (TileIndex(tile)
-                            + w.map().tile_offs_by_diag_dir(
-                                DiagDirection(exitdir),
-                                crate::map_func::native_check,
-                            ))
-                        .0;
-                        dir = reverse_diag_dir_raw(exitdir, |ok| native_assert(w.shared, ok));
-                    } else if dir == w.view().rail_depot_dir(tile) {
-                        // Entered a depot.
-                        train_on_tile(w, tile, &mut flags);
-                        continue;
-                    } else {
-                        continue;
+
+    /// Search signal block of the `owner` whose signals we are updating.
+    #[allow(clippy::too_many_lines)]
+    fn explore_segment(&self, owner: Owner) -> SigFlags {
+        let check = self.check();
+        let mut flags = SigFlags::NONE;
+
+        while let Some(SSdata {
+            mut tile,
+            dir: mut enterdir,
+        }) = access(|s| s.tbdset.get())
+        {
+            crate::witness::hit(crate::witness::SIGNAL_TILES);
+            let oldtile = tile; // tile we are leaving
+            let mut exitdir = if enterdir == DiagDirection::INVALID_DIAGDIR {
+                DiagDirection::INVALID_DIAGDIR
+            } else {
+                reverse_diag_dir(enterdir, check)
+            }; // expected new exit direction (for straight line)
+
+            let map = self.map();
+            match map.kind(tile) {
+                TileType::MP_RAILWAY => {
+                    if map.owner(tile) != owner {
+                        crate::witness::hit(crate::witness::SIGNAL_OWNER_BARRIER);
+                        continue; // do not propagate signals on others' tiles (remove for tracksharing)
                     }
-                } else {
-                    source_assert(w, dir < DIAGDIR_END);
-                    let mut tracks = geometry.tracks; // Track bits of the tile.
-                    let masked = tracks & ENTERDIR_TO_TRACKBITS[usize::from(dir)]; // Only incident track bits.
-                    // There is exactly one incident track, no need to check.
-                    if tracks == TrackBits::TRACK_BIT_HORZ || tracks == TrackBits::TRACK_BIT_VERT {
-                        tracks = masked;
-                        // If no train was detected yet and the track is not clear, set the train flag.
-                        if flags & SigFlags::TRAIN == SigFlags(0)
-                            && occupied(w, tile, Some(tracks.0))
-                        {
-                            flags |= SigFlags::TRAIN;
-                            crate::witness::hit(crate::witness::SIGNAL_TRAIN);
-                        }
-                    } else {
-                        if masked == TrackBits::TRACK_BIT_NONE {
-                            // No incident track.
+
+                    if map.is_rail_depot(tile.0) {
+                        if enterdir == DiagDirection::INVALID_DIAGDIR {
+                            // from 'inside' - train just entered or left the depot
+                            crate::witness::hit(crate::witness::SIGNAL_DEPOT);
+                            self.train_on_tile(tile, &mut flags);
+                            exitdir = DiagDirection(map.rail_depot_dir(tile.0));
+                            tile += self.tile_offs_by_diag_dir(exitdir);
+                            enterdir = reverse_diag_dir(exitdir, check);
+                        } else if enterdir == DiagDirection(map.rail_depot_dir(tile.0)) {
+                            // entered a depot
+                            self.train_on_tile(tile, &mut flags);
+                            continue;
+                        } else {
                             continue;
                         }
-                        train_on_tile(w, tile, &mut flags);
-                    }
-                    // Is this a track merge or split?
-                    if tracks.0.count_ones() > 1 {
-                        flags |= SigFlags::SPLIT;
-                        crate::witness::hit(crate::witness::SIGNAL_SPLIT);
-                    }
-                    let td = ((u32::from(tracks.0) * 0x101)
-                        & u32::from(crate::track_func::diagdir_reaches_trackdirs(
-                            reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok)),
-                        )))
-                    .trailing_zeros() as u8;
-                    let signal = signal_presence(w, tile, masked.0, td);
-                    if signal.signals {
-                        // Exactly one track, not zero: there is an exit from this tile.
-                        if signal.on_track {
-                            // Check the whole track, rather than only the trackdir.
-                            let kind = signal.kind;
-                            let back = crate::track_func::reverse_trackdir(td);
-                            // Add the reverse direction to the to-be-updated set for any
-                            // conventional signal. A changed pre-signal exit will later add
-                            // its block to the to-be-done set.
-                            if signal.reverse {
-                                if pbs(kind.0) {
-                                    flags |= SigFlags::PBS;
-                                    crate::witness::hit(crate::witness::SIGNAL_PBS);
+                    } else {
+                        self.source_assert(|| is_valid_diag_direction(enterdir));
+                        let mut tracks = TrackBits(map.tracks(tile.0)); // trackbits of tile
+                        let tracks_masked = tracks & ENTERDIR_TO_TRACKBITS[usize::from(enterdir.0)]; // only incidating trackbits
+
+                        if tracks == TrackBits::TRACK_BIT_HORZ
+                            || tracks == TrackBits::TRACK_BIT_VERT
+                        {
+                            // there is exactly one incidating track, no need to check
+                            tracks = tracks_masked;
+                            // If no train detected yet, and there is not no train -> there is a train -> set the flag
+                            if !flags.test(SigFlag::TRAIN)
+                                && crate::vehicle::occupancy::ensure_no_train_on_track_bits(
+                                    self.vehicles(),
+                                    tile,
+                                    tracks,
+                                )
+                                .is_some()
+                            {
+                                flags.set(SigFlag::TRAIN);
+                                crate::witness::hit(crate::witness::SIGNAL_TRAIN);
+                            }
+                        } else {
+                            if tracks_masked == TrackBits::TRACK_BIT_NONE {
+                                continue; // no incidating track
+                            }
+                            self.train_on_tile(tile, &mut flags);
+                        }
+
+                        // Is this a track merge or split?
+                        if !has_at_most_one_bit(u64::from(tracks.0)) {
+                            flags.set(SigFlag::SPLIT);
+                            crate::witness::hit(crate::witness::SIGNAL_SPLIT);
+                        }
+
+                        if map.has_signals(tile.0) {
+                            // there is exactly one track - not zero, because there is exit from this tile
+                            let track = Track(track_bits_to_track(tracks_masked.0, check)); // mask TRACK_BIT_X and Y too
+                            if map.has_signal_on_track(tile.0, track.0) {
+                                // now check whole track, not trackdir
+                                let sig = SignalType(map.signal_type(tile.0, track.0));
+                                let trackdir = Trackdir(find_first_bit(u64::from(
+                                    (u32::from(tracks.0) * 0x101)
+                                        & u32::from(
+                                            ENTERDIR_TO_TRACKDIRBITS[usize::from(enterdir.0)].0,
+                                        ),
+                                )));
+                                let reversedir = Trackdir(reverse_trackdir(trackdir.0));
+                                // add (tile, reversetrackdir) to 'to-be-updated' set when there is
+                                // ANY conventional signal in REVERSE direction
+                                // (if it is a presignal EXIT and it changes, it will be added to 'to-be-done' set later)
+                                if map.has_signal_on_trackdir(tile.0, reversedir.0) {
+                                    if is_pbs_signal(sig.0) {
+                                        flags.set(SigFlag::PBS);
+                                        crate::witness::hit(crate::witness::SIGNAL_PBS);
+                                    }
+                                    if flags.test(SigFlag::ENTER) {
+                                        flags.set(SigFlag::MULTI_ENTER);
+                                        crate::witness::hit(crate::witness::SIGNAL_MULTI_ENTER);
+                                    }
+                                    flags.set(SigFlag::ENTER);
+
+                                    if !add_to_set(|s| &mut s.tbuset, tile, reversedir) {
+                                        return flags | SigFlags::FULL;
+                                    }
                                 }
-                                if flags & SigFlags::ENTER != SigFlags(0) {
-                                    flags |= SigFlags::MULTI_ENTER;
-                                    crate::witness::hit(crate::witness::SIGNAL_MULTI_ENTER);
+                                if map.has_signal_on_trackdir(tile.0, trackdir.0)
+                                    && !map.oneway_signal(tile.0, track.0)
+                                {
+                                    flags.set(SigFlag::PBS);
                                 }
-                                flags |= SigFlags::ENTER;
-                                if !add_tbu(Item { tile, dir: back }) {
+
+                                // if it is a presignal EXIT in OUR direction and we haven't found 2 green exits yes, do special check
+                                if !flags.test(SigFlag::MULTI_GREEN)
+                                    && map.is_presignal_exit(tile.0, track.0)
+                                    && map.has_signal_on_trackdir(tile.0, trackdir.0)
+                                {
+                                    // found presignal exit
+                                    if flags.test(SigFlag::EXIT) {
+                                        flags.set(SigFlag::MULTI_EXIT); // found two (or more) exits
+                                        crate::witness::hit(crate::witness::SIGNAL_MULTI_EXIT);
+                                    }
+                                    flags.set(SigFlag::EXIT); // found at least one exit - allow for compiler optimizations
+                                    crate::witness::hit(crate::witness::SIGNAL_EXIT);
+                                    if SignalState(map.signal_state_by_trackdir(tile.0, trackdir.0))
+                                        == SignalState::SIGNAL_STATE_GREEN
+                                    {
+                                        // found green presignal exit
+                                        if flags.test(SigFlag::GREEN) {
+                                            flags.set(SigFlag::MULTI_GREEN);
+                                            crate::witness::hit(crate::witness::SIGNAL_MULTI_GREEN);
+                                        }
+                                        flags.set(SigFlag::GREEN);
+                                        crate::witness::hit(crate::witness::SIGNAL_GREEN_EXIT);
+                                    }
+                                }
+
+                                continue;
+                            }
+                        }
+
+                        for dir in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
+                            // test all possible exit directions
+                            let dir = DiagDirection(dir);
+                            if dir != enterdir
+                                && (tracks & ENTERDIR_TO_TRACKBITS[usize::from(dir.0)])
+                                    != TrackBits::TRACK_BIT_NONE
+                            {
+                                // any track incidating?
+                                let newtile = tile + self.tile_offs_by_diag_dir(dir); // new tile to check
+                                let newdir = reverse_diag_dir(dir, check); // direction we are entering from
+                                if !self.maybe_add_to_todo_set(newtile, newdir, tile, dir) {
                                     return flags | SigFlags::FULL;
                                 }
                             }
-                            if signal.forward && kind == SignalType::SIGTYPE_PBS {
-                                flags |= SigFlags::PBS;
-                            }
-                            // Check a pre-signal exit in our direction until two green exits are found.
-                            if flags & SigFlags::MULTI_GREEN == SigFlags(0)
-                                && w.view().is_presignal_exit(tile, signal.track)
-                                && signal.forward
-                            {
-                                if flags & SigFlags::EXIT != SigFlags(0) {
-                                    flags |= SigFlags::MULTI_EXIT;
-                                    crate::witness::hit(crate::witness::SIGNAL_MULTI_EXIT);
-                                }
-                                flags |= SigFlags::EXIT;
-                                crate::witness::hit(crate::witness::SIGNAL_EXIT);
-                                if w.view().signal_state_by_trackdir(tile, td)
-                                    == SignalState::SIGNAL_STATE_GREEN.0
-                                {
-                                    if flags & SigFlags::GREEN != SigFlags(0) {
-                                        flags |= SigFlags::MULTI_GREEN;
-                                        crate::witness::hit(crate::witness::SIGNAL_MULTI_GREEN);
-                                    }
-                                    flags |= SigFlags::GREEN;
-                                    crate::witness::hit(crate::witness::SIGNAL_GREEN_EXIT);
-                                }
-                            }
-                            continue;
                         }
+
+                        continue; // continue the while() loop
                     }
-                    for exit in DIAGDIR_BEGIN..DIAGDIR_END {
-                        // Test all possible exit directions.
-                        if exit != dir
-                            && (tracks & ENTERDIR_TO_TRACKBITS[usize::from(exit)])
-                                != TrackBits::TRACK_BIT_NONE
-                        {
-                            let next = Item {
-                                tile: (TileIndex(tile)
-                                    + w.map().tile_offs_by_diag_dir(
-                                        DiagDirection(exit),
-                                        crate::map_func::native_check,
-                                    ))
-                                .0,
-                                dir: reverse_diag_dir_raw(exit, |ok| native_assert(w.shared, ok)),
-                            };
-                            if !maybe_add_to_todo_set(w, next, Item { tile, dir: exit }) {
-                                return flags | SigFlags::FULL;
-                            }
-                        }
-                    }
-                    continue;
                 }
-            }
-            MP_STATION => {
-                // Reject a different axis or a blocked (eye-candy) station tile.
-                let station = read!(w, rail, station_admission, tile, owner, dir);
-                if !station.rail
-                    || station.owner != owner
-                    || (dir & 1) != station.axis.0
-                    || station.blocked
-                {
-                    continue;
-                }
-                crate::witness::hit(crate::witness::SIGNAL_STATION);
-                train_on_tile(w, tile, &mut flags);
-                tile = (TileIndex(tile)
-                    + w.map().tile_offs_by_diag_dir(
-                        DiagDirection(exitdir),
-                        crate::map_func::native_check,
-                    ))
-                .0;
-            }
-            MP_ROAD => {
-                // The crossing road axis must differ from our entering axis.
-                let crossing = crossing_admission(w, tile, owner);
-                if !crossing.crossing || crossing.owner != owner || (dir & 1) == crossing.axis.0 {
-                    continue;
-                }
-                crate::witness::hit(crate::witness::SIGNAL_CROSSING);
-                train_on_tile(w, tile, &mut flags);
-                tile = (TileIndex(tile)
-                    + w.map().tile_offs_by_diag_dir(
-                        DiagDirection(exitdir),
-                        crate::map_func::native_check,
-                    ))
-                .0;
-            }
-            MP_TUNNELBRIDGE => {
-                let wormhole = read!(w, rail, wormhole_admission, tile, owner);
-                if wormhole.owner != owner
-                    || wormhole.transport != crate::transport_type::TransportType::TRANSPORT_RAIL
-                {
-                    continue;
-                }
-                crate::witness::hit(crate::witness::SIGNAL_WORMHOLE);
-                let direction = wormhole.direction.0;
-                if dir == INVALID_DIAGDIR {
-                    // Incoming from the wormhole.
-                    train_on_tile(w, tile, &mut flags);
-                    dir = direction;
-                    exitdir = reverse_diag_dir_raw(direction, |ok| native_assert(w.shared, ok));
-                    tile = (TileIndex(tile)
-                        + w.map().tile_offs_by_diag_dir(
-                            DiagDirection(exitdir),
-                            crate::map_func::native_check,
-                        ))
-                    .0;
-                } else {
-                    if reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok)) != direction {
+
+                TileType::MP_STATION => {
+                    if !map.has_station_rail(tile) {
                         continue;
                     }
-                    train_on_tile(w, tile, &mut flags);
-                    tile = read!(w, rail, other_tunnel_bridge_end, tile); // Skip to the exit tile.
-                    dir = INVALID_DIAGDIR;
-                    exitdir = INVALID_DIAGDIR;
+                    if map.owner(tile) != owner {
+                        continue;
+                    }
+                    if diag_dir_to_axis(enterdir, check) != map.get_rail_station_axis(tile) {
+                        continue; // different axis
+                    }
+                    if map.is_station_tile_blocked(tile) {
+                        continue; // 'eye-candy' station tile
+                    }
+
+                    crate::witness::hit(crate::witness::SIGNAL_STATION);
+                    self.train_on_tile(tile, &mut flags);
+                    tile += self.tile_offs_by_diag_dir(exitdir);
+                }
+
+                TileType::MP_ROAD => {
+                    if !map.level_crossing(tile.0) {
+                        continue;
+                    }
+                    if map.owner(tile) != owner {
+                        continue;
+                    }
+                    if diag_dir_to_axis(enterdir, check).0 == map.crossing_road_axis(tile.0) {
+                        continue; // different axis
+                    }
+
+                    crate::witness::hit(crate::witness::SIGNAL_CROSSING);
+                    self.train_on_tile(tile, &mut flags);
+                    tile += self.tile_offs_by_diag_dir(exitdir);
+                }
+
+                TileType::MP_TUNNELBRIDGE => {
+                    if map.owner(tile) != owner {
+                        continue;
+                    }
+                    if TransportType(map.tunnel_bridge_transport(tile.0))
+                        != TransportType::TRANSPORT_RAIL
+                    {
+                        continue;
+                    }
+                    let dir = DiagDirection(map.tunnel_bridge_dir(tile.0));
+                    crate::witness::hit(crate::witness::SIGNAL_WORMHOLE);
+
+                    if enterdir == DiagDirection::INVALID_DIAGDIR {
+                        // incoming from the wormhole
+                        self.train_on_tile(tile, &mut flags);
+                        enterdir = dir;
+                        exitdir = reverse_diag_dir(dir, check);
+                        tile += self.tile_offs_by_diag_dir(exitdir); // just skip to next tile
+                    } else {
+                        // NOT incoming from the wormhole!
+                        if reverse_diag_dir(enterdir, check) != dir {
+                            continue;
+                        }
+                        self.train_on_tile(tile, &mut flags);
+                        tile = TileIndex(read!(self, rail, other_tunnel_bridge_end, tile.0)); // just skip to exit tile
+                        enterdir = DiagDirection::INVALID_DIAGDIR;
+                        exitdir = DiagDirection::INVALID_DIAGDIR;
+                    }
+                }
+
+                _ => continue, // continue the while() loop
+            }
+
+            if !self.maybe_add_to_todo_set(tile, enterdir, oldtile, exitdir) {
+                return flags | SigFlags::FULL;
+            }
+        }
+
+        flags
+    }
+
+    /// Update signals around segment in _tbuset, with the `flags` info about the segment.
+    fn update_signals_around_segment(&self, flags: SigFlags) {
+        let check = self.check();
+        while let Some(SSdata {
+            tile,
+            dir: trackdir,
+        }) = access(|s| s.tbuset.get())
+        {
+            let map = self.map();
+            self.source_assert(|| map.has_signal_on_trackdir(tile.0, trackdir.0));
+
+            let track = Track(trackdir_to_track(trackdir.0));
+            let sig = SignalType(map.signal_type(tile.0, track.0));
+            let mut newstate = SignalState::SIGNAL_STATE_GREEN;
+
+            // Signal state of reserved path signals is handled by the reserve/unreserve process.
+            if is_pbs_signal(sig.0)
+                && (read!(self, rail, rail_reservation, tile.0)
+                    & TrackBits(track_to_track_bits(track.0, check)))
+                    != TrackBits::TRACK_BIT_NONE
+            {
+                crate::witness::hit(crate::witness::SIGNAL_RESERVED_SKIP);
+                continue;
+            }
+
+            // determine whether the new state is red
+            if flags.test(SigFlag::TRAIN) {
+                // train in the segment
+                newstate = SignalState::SIGNAL_STATE_RED;
+            } else if is_pbs_signal(sig.0) && flags.any(SigFlags::SPLIT | SigFlags::MULTI_ENTER) {
+                // Turn path signals red if the segment has a junction or more than one way in.
+                newstate = SignalState::SIGNAL_STATE_RED;
+            } else if sig == SignalType::SIGTYPE_COMBO
+                && map.has_signal_on_trackdir(tile.0, reverse_trackdir(trackdir.0))
+            {
+                // is it a bidir combo? - then do not count its other signal direction as exit
+                crate::witness::hit(crate::witness::SIGNAL_COMBO);
+                // at least one more exit
+                if flags.test(SigFlag::MULTI_EXIT)
+                    // no green exit
+                    && (!flags.test(SigFlag::GREEN)
+                        // only one green exit, and it is this one - so all other exits are red
+                        || (!flags.test(SigFlag::MULTI_GREEN)
+                            && SignalState(map.signal_state_by_trackdir(
+                                tile.0,
+                                reverse_trackdir(trackdir.0),
+                            )) == SignalState::SIGNAL_STATE_GREEN))
+                {
+                    newstate = SignalState::SIGNAL_STATE_RED;
+                    crate::witness::hit(crate::witness::SIGNAL_COMBO_RED);
+                }
+            } else if map.is_presignal_entry(tile.0, trackdir_to_track(trackdir.0))
+                && flags.test(SigFlag::EXIT)
+                && !flags.test(SigFlag::GREEN)
+            {
+                // entry, at least one exit, no green exit
+                newstate = SignalState::SIGNAL_STATE_RED;
+            }
+
+            // only when the state changes
+            if newstate != SignalState(map.signal_state_by_trackdir(tile.0, trackdir.0)) {
+                if map.is_presignal_exit(tile.0, trackdir_to_track(trackdir.0)) {
+                    // for pre-signal exits, add block to the global set
+                    let exitdir = DiagDirection(trackdir_to_exitdir(reverse_trackdir(trackdir.0)));
+                    add_to_set(|s| &mut s.globset, tile, exitdir); // do not check for full global set, first update all signals
+                    crate::witness::hit(crate::witness::SIGNAL_PROPAGATE);
+                }
+                read!(self, rail, set_signal_state, tile.0, trackdir.0, newstate.0);
+                read!(self, shared, mark_dirty, tile.0);
+                crate::witness::hit(crate::witness::SIGNAL_CHANGED);
+            }
+        }
+    }
+
+    /// `GetTileTrackStatus(tile, TRANSPORT_RAIL, 0)` has track bits incidating with `dir`.
+    fn has_incidating_track(&self, tile: TileIndex, dir: DiagDirection) -> bool {
+        let status = crate::movement::table(self.shared).get_tile_track_status_in_world(
+            self.map(),
+            tile,
+            TransportType::TRANSPORT_RAIL,
+            0,
+            DiagDirection::INVALID_DIAGDIR,
+        );
+        (TrackBits(track_status_to_track_bits(status)) & ENTERDIR_TO_TRACKBITS[usize::from(dir.0)])
+            != TrackBits::TRACK_BIT_NONE
+    }
+
+    /// Updates blocks in _globset buffer for the company `owner` whose signals we are updating
+    /// (`UpdateSignalsInBuffer(Owner)`). Returns the state of the first block from _globset.
+    /// Precondition: `Company::IsValidID(owner)`.
+    fn update_signals_in_buffer_owner(&self, owner: Owner) -> SigSegState {
+        let check = self.check();
+        self.source_assert(|| (self.shared.company_valid)(owner.0));
+        crate::witness::hit(crate::witness::SIGNAL_UPDATES);
+
+        let mut first = true; // first block?
+        let mut state = SigSegState::SIGSEG_FREE; // value to return
+
+        while let Some(SSdata { mut tile, mut dir }) = access(|s| s.globset.get()) {
+            self.source_assert(|| access(|s| s.tbuset.is_empty()));
+            self.source_assert(|| access(|s| s.tbdset.is_empty()));
+
+            // After updating signal, data stored are always MP_RAILWAY with signals.
+            // Other situations happen when data are from outside functions -
+            // modification of railbits (including both rail building and removal),
+            // train entering/leaving block, train leaving depot...
+            let map = self.map();
+            let kind = map.kind(tile);
+            if kind == TileType::MP_TUNNELBRIDGE {
+                // 'optimization assert' - do not try to update signals when it is not needed
+                self.source_assert(|| {
+                    TransportType(map.tunnel_bridge_transport(tile.0))
+                        == TransportType::TRANSPORT_RAIL
+                });
+                self.source_assert(|| {
+                    dir == DiagDirection::INVALID_DIAGDIR
+                        || dir
+                            == reverse_diag_dir(DiagDirection(map.tunnel_bridge_dir(tile.0)), check)
+                });
+                add_to_set(|s| &mut s.tbdset, tile, DiagDirection::INVALID_DIAGDIR); // we can safely start from wormhole centre
+                let other = TileIndex(read!(self, rail, other_tunnel_bridge_end, tile.0));
+                add_to_set(|s| &mut s.tbdset, other, DiagDirection::INVALID_DIAGDIR);
+            } else if kind == TileType::MP_RAILWAY && map.is_rail_depot(tile.0) {
+                // 'optimization assert' do not try to update signals in other cases
+                self.source_assert(|| {
+                    dir == DiagDirection::INVALID_DIAGDIR
+                        || dir == DiagDirection(map.rail_depot_dir(tile.0))
+                });
+                add_to_set(|s| &mut s.tbdset, tile, DiagDirection::INVALID_DIAGDIR); // start from depot inside
+            } else if (kind == TileType::MP_RAILWAY
+                || kind == TileType::MP_STATION
+                || kind == TileType::MP_ROAD)
+                && self.has_incidating_track(tile, dir)
+            {
+                // only add to set when there is some 'interesting' track
+                add_to_set(|s| &mut s.tbdset, tile, dir);
+                let next = tile + self.tile_offs_by_diag_dir(dir);
+                add_to_set(|s| &mut s.tbdset, next, reverse_diag_dir(dir, check));
+            } else {
+                // jump to next tile
+                tile += self.tile_offs_by_diag_dir(dir);
+                dir = reverse_diag_dir(dir, check);
+                if !self.has_incidating_track(tile, dir) {
+                    // happens when removing a rail that wasn't connected at one or both sides
+                    crate::witness::hit(crate::witness::SIGNAL_NEIGHBOUR_CONTINUE);
+                    continue; // continue the while() loop
+                }
+                add_to_set(|s| &mut s.tbdset, tile, dir);
+            }
+
+            self.source_assert(|| access(|s| !s.tbdset.overflowed())); // it really shouldn't overflow by these one or two items
+            self.source_assert(|| access(|s| !s.tbdset.is_empty())); // it wouldn't hurt anyone, but shouldn't happen too
+
+            let flags = self.explore_segment(owner);
+
+            if first {
+                first = false;
+                // SIGSEG_FREE is set by default
+                if flags.test(SigFlag::PBS) {
+                    state = SigSegState::SIGSEG_PBS;
+                } else if flags.test(SigFlag::TRAIN)
+                    || (flags.test(SigFlag::EXIT) && !flags.test(SigFlag::GREEN))
+                    || flags.test(SigFlag::FULL)
+                {
+                    state = SigSegState::SIGSEG_FULL;
                 }
             }
-            _ => continue,
+
+            // do not do anything when some buffer was full
+            if flags.test(SigFlag::FULL) {
+                reset_sets(); // free all sets
+                crate::witness::hit(crate::witness::SIGNAL_RESET);
+                break;
+            }
+
+            self.update_signals_around_segment(flags);
         }
-        if !maybe_add_to_todo_set(
-            w,
-            Item { tile, dir },
-            Item {
-                tile: old_tile,
-                dir: exitdir,
-            },
-        ) {
-            return flags | SigFlags::FULL;
+
+        state
+    }
+
+    /// Update signals in buffer. Called from 'outside' (`UpdateSignalsInBuffer()`).
+    fn update_signals_in_buffer(&self) {
+        if access(|s| !s.globset.is_empty()) {
+            self.update_signals_in_buffer_owner(access(|s| s.last_owner));
+            access(|s| s.last_owner = Owner::INVALID); // invalidate
         }
     }
-    flags
-}
-/// Update signals around the segment in the to-be-updated set.
-fn update_signals_around_segment(w: &World<'_>, flags: SigFlags) {
-    while let Some(Item { tile, dir: td }) = access(|s| s.tbu.get()) {
-        let track = crate::track_func::trackdir_to_track(td);
-        let observation = signal_update(w, tile, td);
-        let kind = observation.kind;
-        let mut new_state = SignalState::SIGNAL_STATE_GREEN;
-        // The reserve/unreserve process handles the state of reserved path signals.
-        if pbs(kind.0) && observation.reservations.0 & (1 << track) != 0 {
-            crate::witness::hit(crate::witness::SIGNAL_RESERVED_SKIP);
-            continue;
-        }
-        // Turn red for a train, or a path signal with a junction or multiple ways in.
-        if flags & SigFlags::TRAIN != SigFlags(0)
-            || (pbs(kind.0) && flags & (SigFlags::SPLIT | SigFlags::MULTI_ENTER) != SigFlags(0))
-        {
-            new_state = SignalState::SIGNAL_STATE_RED;
-            // For a bidirectional combo, do not count the other direction as an exit.
-        } else if kind == SignalType::SIGTYPE_COMBO
-            && w.view()
-                .has_signal_on_trackdir(tile, crate::track_func::reverse_trackdir(td))
-        {
-            crate::witness::hit(crate::witness::SIGNAL_COMBO);
-            // At least one more exit, with no green exit, or this is the only green exit.
-            if flags & SigFlags::MULTI_EXIT != SigFlags(0)
-                && (flags & SigFlags::GREEN == SigFlags(0)
-                    || (flags & SigFlags::MULTI_GREEN == SigFlags(0)
-                        && w.view().signal_state_by_trackdir(
-                            tile,
-                            crate::track_func::reverse_trackdir(td),
-                        ) == SignalState::SIGNAL_STATE_GREEN.0))
-            {
-                new_state = SignalState::SIGNAL_STATE_RED;
-                crate::witness::hit(crate::witness::SIGNAL_COMBO_RED);
-            }
-            // Entry signal, at least one exit, no green exit.
-        } else if w.view().is_presignal_entry(tile, track)
-            && flags & SigFlags::EXIT != SigFlags(0)
-            && flags & SigFlags::GREEN == SigFlags(0)
-        {
-            new_state = SignalState::SIGNAL_STATE_RED;
-        }
-        // Only when the state changes.
-        if new_state != SignalState(w.view().signal_state_by_trackdir(tile, td)) {
-            // For pre-signal exits, add the block globally without checking for a
-            // full global set: update all signals first.
-            if w.view().is_presignal_exit(tile, track) {
-                add_global(Item {
-                    tile,
-                    dir: crate::track_func::trackdir_to_exitdir(
-                        crate::track_func::reverse_trackdir(td),
-                    ),
-                });
-                crate::witness::hit(crate::witness::SIGNAL_PROPAGATE);
-            }
-            read!(w, rail, set_signal_state, tile, td, new_state.0);
-            read!(w, shared, mark_dirty, tile);
-            crate::witness::hit(crate::witness::SIGNAL_CHANGED);
+
+    /// Add `track` of `tile` to signal update buffer, to update signals at its ends for `owner`.
+    fn add_track_to_signal_buffer(&self, tile: TileIndex, track: Track, owner: Owner) {
+        const SEARCH_DIR_1: [DiagDirection; 6] = [
+            DiagDirection::DIAGDIR_NE,
+            DiagDirection::DIAGDIR_SE,
+            DiagDirection::DIAGDIR_NE,
+            DiagDirection::DIAGDIR_SE,
+            DiagDirection::DIAGDIR_SW,
+            DiagDirection::DIAGDIR_SE,
+        ];
+        const SEARCH_DIR_2: [DiagDirection; 6] = [
+            DiagDirection::DIAGDIR_SW,
+            DiagDirection::DIAGDIR_NW,
+            DiagDirection::DIAGDIR_NW,
+            DiagDirection::DIAGDIR_SW,
+            DiagDirection::DIAGDIR_NW,
+            DiagDirection::DIAGDIR_NE,
+        ];
+
+        // do not allow signal updates for two companies in one run
+        self.source_assert(|| access(|s| s.globset.is_empty() || owner == s.last_owner));
+
+        access(|s| s.last_owner = owner);
+
+        add_to_set(|s| &mut s.globset, tile, SEARCH_DIR_1[usize::from(track.0)]);
+        add_to_set(|s| &mut s.globset, tile, SEARCH_DIR_2[usize::from(track.0)]);
+
+        if access(|s| s.globset.items() >= SIG_GLOB_UPDATE) {
+            // too many items, force update
+            crate::witness::hit(crate::witness::SIGNAL_FORCED_FLUSH);
+            self.update_signals_in_buffer_owner(access(|s| s.last_owner));
+            access(|s| s.last_owner = Owner::INVALID);
         }
     }
+
+    /// Add `side` of `tile` to signal update buffer, to update signals of `owner`.
+    fn add_side_to_signal_buffer(&self, tile: TileIndex, side: DiagDirection, owner: Owner) {
+        // do not allow signal updates for two companies in one run
+        self.source_assert(|| access(|s| s.globset.is_empty() || owner == s.last_owner));
+
+        access(|s| s.last_owner = owner);
+
+        add_to_set(|s| &mut s.globset, tile, side);
+
+        if access(|s| s.globset.items() >= SIG_GLOB_UPDATE) {
+            // too many items, force update
+            crate::witness::hit(crate::witness::SIGNAL_FORCED_FLUSH);
+            self.update_signals_in_buffer_owner(access(|s| s.last_owner));
+            access(|s| s.last_owner = Owner::INVALID);
+        }
+    }
+
+    /// Update signals of `owner`, starting at `side` of `tile`.
+    /// Will check tile next to this at opposite side too.
+    /// Returns the state of the signal segment.
+    fn update_signals_on_segment(
+        &self,
+        tile: TileIndex,
+        side: DiagDirection,
+        owner: Owner,
+    ) -> SigSegState {
+        self.source_assert(|| access(|s| s.globset.is_empty()));
+        add_to_set(|s| &mut s.globset, tile, side);
+
+        self.update_signals_in_buffer_owner(owner)
+    }
+
+    /// Update signals of `owner` at segments that are at both ends of
+    /// given (existent or non-existent) `track` of `tile`.
+    fn set_signals_on_both_dir(&self, tile: TileIndex, track: Track, owner: Owner) {
+        self.source_assert(|| access(|s| s.globset.is_empty()));
+
+        self.add_track_to_signal_buffer(tile, track, owner);
+        self.update_signals_in_buffer_owner(owner);
+    }
 }
+
+/// Check whether there is a train on rail, not in a depot.
+fn is_train_and_not_in_depot(vehicles: &VehicleServices, v: VehicleRef) -> bool {
+    VehicleType(v.vehicle_type()) == VehicleType::TRAIN && {
+        crate::witness::hit(crate::witness::SIGNAL_OCCUPANCY_ACCESSORS);
+        TrackBits((vehicles.train_handle)(v.0.as_ptr()).track()) != TrackBits::TRACK_BIT_DEPOT
+    }
+}
+
 /// Reset all sets after one set overflowed.
 fn reset_sets() {
     access(|s| {
-        s.tbu.reset();
-        s.tbd.reset();
-        s.global.reset();
+        s.tbuset.reset();
+        s.tbdset.reset();
+        s.globset.reset();
     });
 }
-/// Update global buffered blocks and return the state of the first block.
-fn update_signals_in_buffer(w: &World<'_>, owner: u8) -> SigSegState {
-    read!(w, native, assert_company, owner);
-    crate::witness::hit(crate::witness::SIGNAL_UPDATES);
-    let mut first = true;
-    let mut state = SigSegState::SIGSEG_FREE; // Value to return.
-    while let Some(Item { mut tile, mut dir }) = access(|s| s.global.get()) {
-        source_assert(w, access(|s| s.tbu.count == 0));
-        source_assert(w, access(|s| s.tbd.count == 0));
-        // Signal updates leave railway tiles with signals here. Other entries
-        // come from rail construction/removal, trains entering/leaving a block,
-        // or a train leaving a depot.
-        let kind = read!(w, shared, tile_type, tile);
-        if kind == MP_TUNNELBRIDGE {
-            // Optimization assertions: do not update signals when unnecessary.
-            if w.native.assertions {
-                read!(w, native, assert_wormhole_start, tile, dir);
-            }
-            add_tbd(Item {
-                tile,
-                dir: INVALID_DIAGDIR,
-            });
-            // Safely start from the wormhole centre at both ends.
-            let other = read!(w, rail, other_tunnel_bridge_end, tile);
-            add_tbd(Item {
-                tile: other,
-                dir: INVALID_DIAGDIR,
-            });
-        } else if kind == MP_RAILWAY && w.view().is_rail_depot(tile) {
-            if w.native.assertions {
-                source_assert(
-                    w,
-                    dir == INVALID_DIAGDIR || dir == w.view().rail_depot_dir(tile),
-                );
-            }
-            add_tbd(Item {
-                tile,
-                dir: INVALID_DIAGDIR,
-            });
-        } else if (kind == MP_RAILWAY || kind == MP_STATION || kind == MP_ROAD)
-            && (track_status_to_track_bits(crate::movement::track_status(
-                w.shared,
-                tile,
-                crate::transport_type::TRANSPORT_RAIL,
-                0,
-                INVALID_DIAGDIR,
-            )) & ENTERDIR_TO_TRACKBITS[usize::from(dir)].0)
-                != 0
-        {
-            add_tbd(Item { tile, dir });
-            add_tbd(Item {
-                tile: (TileIndex(tile)
-                    + w.map()
-                        .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
-                .0,
-                dir: reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok)),
-            });
-        } else {
-            tile = (TileIndex(tile)
-                + w.map()
-                    .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
-            .0;
-            dir = reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok));
-            if (track_status_to_track_bits(crate::movement::track_status(
-                w.shared,
-                tile,
-                crate::transport_type::TRANSPORT_RAIL,
-                0,
-                INVALID_DIAGDIR,
-            )) & ENTERDIR_TO_TRACKBITS[usize::from(dir)].0)
-                == 0
-            {
-                // Removing a rail unconnected at one or both ends reaches here.
-                crate::witness::hit(crate::witness::SIGNAL_NEIGHBOUR_CONTINUE);
-                continue;
-            }
-            add_tbd(Item { tile, dir });
-        }
-        // These one or two items should neither overflow nor leave the set empty.
-        source_assert(w, access(|s| !s.tbd.overflowed));
-        source_assert(w, access(|s| s.tbd.count != 0));
-        let flags = explore_segment(w, owner);
-        if first {
-            first = false;
-            if flags & SigFlags::PBS != SigFlags(0) {
-                state = SigSegState::SIGSEG_PBS;
-            } else if flags & SigFlags::TRAIN != SigFlags(0)
-                || (flags & SigFlags::EXIT != SigFlags(0) && flags & SigFlags::GREEN == SigFlags(0))
-                || flags & SigFlags::FULL != SigFlags(0)
-            {
-                state = SigSegState::SIGSEG_FULL;
-            }
-        }
-        // Do nothing more when any buffer was full.
-        if flags & SigFlags::FULL != SigFlags(0) {
-            reset_sets();
-            crate::witness::hit(crate::witness::SIGNAL_RESET);
-            break;
-        }
-        update_signals_around_segment(w, flags);
-    }
-    state
-}
-/// Add a track to the signal update buffer at both ends.
-fn add_track_to_signal_buffer(w: &World<'_>, tile: u32, track: u8, owner: u8) {
-    // Do not allow signal updates for two companies in one run.
-    source_assert(w, access(|s| s.global.count == 0 || owner == s.last_owner));
-    access(|s| s.last_owner = owner);
-    add_global(Item {
-        tile,
-        dir: SEARCH_DIR_1[usize::from(track)],
-    });
-    add_global(Item {
-        tile,
-        dir: SEARCH_DIR_2[usize::from(track)],
-    });
-    force_flush(w);
-}
-fn force_flush(w: &World<'_>) {
-    if access(|s| s.global.count >= SIG_GLOB_UPDATE) {
-        // Too many items: force an update.
-        crate::witness::hit(crate::witness::SIGNAL_FORCED_FLUSH);
-        update_signals_in_buffer(w, access(|s| s.last_owner));
-        access(|s| s.last_owner = INVALID_OWNER);
-    }
-}
-/// Update signals in the buffer, called from outside (`UpdateSignalsInBuffer()`).
-fn flush_signal_buffer(w: &World<'_>) {
-    if access(|s| s.global.count != 0) {
-        update_signals_in_buffer(w, access(|s| s.last_owner));
-        access(|s| s.last_owner = INVALID_OWNER);
-    }
-}
-/// Add one side of a tile to the signal update buffer.
-fn add_side_to_signal_buffer(w: &World<'_>, tile: u32, side: u8, owner: u8) {
-    // Do not allow signal updates for two companies in one run.
-    source_assert(w, access(|s| s.global.count == 0 || owner == s.last_owner));
-    access(|s| s.last_owner = owner);
-    add_global(Item { tile, dir: side });
-    force_flush(w);
-}
-/// Update from one side of a tile, checking the neighbouring opposite side too.
-fn update_signals_on_segment(w: &World<'_>, tile: u32, side: u8, owner: u8) -> SigSegState {
-    source_assert(w, access(|s| s.global.count == 0));
-    add_global(Item { tile, dir: side });
-    update_signals_in_buffer(w, owner)
-}
-/// Update segments at both ends of an existent or non-existent track.
-fn set_signals_on_both_dir(w: &World<'_>, tile: u32, track: u8, owner: u8) {
-    source_assert(w, access(|s| s.global.count == 0));
-    add_track_to_signal_buffer(w, tile, track, owner);
-    update_signals_in_buffer(w, owner);
-}
+
 // SAFETY for every exported entry: immutable tables outlive the synchronous
 // invocation. Game-state mutex is held; callbacks do not retain any Rust owner
 // borrow and cannot throw ordinary-play exceptions. No entry draws Random.
-unsafe fn world<'a>(
-    shared: *const Services,
-    rail: *const RailMapServices,
-    native: *const SignalServices,
-    log_x: c_uint,
-) -> World<'a> {
-    // SAFETY: caller supplies valid immutable tables for the invocation.
-    unsafe {
-        World {
-            shared: &*shared,
-            rail: &*rail,
-            native: &*native,
-            map: OnceCell::new(),
-            log_x,
-        }
-    }
-}
-/// Flush queued blocks and invalidate last owner only when nonempty.
+/// `UpdateSignalsInBuffer()`: flush queued blocks and invalidate the last owner only when
+/// nonempty.
 /// # Safety
 /// Immutable tables are valid for the call; caller holds the game-state mutex.
 #[unsafe(no_mangle)]
@@ -850,13 +964,16 @@ pub unsafe extern "C" fn openttd_rust_signal_flush(
     shared: *const Services,
     rail: *const RailMapServices,
     native: *const SignalServices,
-    log_x: c_uint,
 ) {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
-    let w = unsafe { world(shared, rail, native, log_x) };
-    flush_signal_buffer(&w);
+    Context {
+        shared,
+        rail,
+        native,
+    }
+    .update_signals_in_buffer();
 }
-/// Queue both ends of a track and preserve the 64-entry forced flush.
+/// `AddTrackToSignalBuffer`: queue both ends of a track and preserve the 64-entry forced flush.
 /// # Safety
 /// Immutable tables are valid for the call; caller holds the game-state mutex.
 #[unsafe(no_mangle)]
@@ -864,16 +981,19 @@ pub unsafe extern "C" fn openttd_rust_signal_add_track(
     shared: *const Services,
     rail: *const RailMapServices,
     native: *const SignalServices,
-    log_x: c_uint,
     tile: u32,
     track: u8,
     owner: u8,
 ) {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
-    let w = unsafe { world(shared, rail, native, log_x) };
-    add_track_to_signal_buffer(&w, tile, track, owner);
+    Context {
+        shared,
+        rail,
+        native,
+    }
+    .add_track_to_signal_buffer(TileIndex(tile), Track(track), CompanyID(owner));
 }
-/// Queue one side with the original owner lifetime and forced flush.
+/// `AddSideToSignalBuffer`: queue one side with the original owner lifetime and forced flush.
 /// # Safety
 /// Immutable tables are valid for the call; caller holds the game-state mutex.
 #[unsafe(no_mangle)]
@@ -881,16 +1001,20 @@ pub unsafe extern "C" fn openttd_rust_signal_add_side(
     shared: *const Services,
     rail: *const RailMapServices,
     native: *const SignalServices,
-    log_x: c_uint,
     tile: u32,
     side: u8,
     owner: u8,
 ) {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
-    let w = unsafe { world(shared, rail, native, log_x) };
-    add_side_to_signal_buffer(&w, tile, side, owner);
+    Context {
+        shared,
+        rail,
+        native,
+    }
+    .add_side_to_signal_buffer(TileIndex(tile), DiagDirection(side), CompanyID(owner));
 }
-/// Update a segment, returning the classification of the first explored block.
+/// `UpdateSignalsOnSegment`: update a segment, returning the classification of the first
+/// explored block.
 /// # Safety
 /// Immutable tables are valid for the call; caller holds the game-state mutex.
 #[unsafe(no_mangle)]
@@ -898,18 +1022,22 @@ pub unsafe extern "C" fn openttd_rust_signal_segment(
     shared: *const Services,
     rail: *const RailMapServices,
     native: *const SignalServices,
-    log_x: c_uint,
     tile: u32,
     side: u8,
     owner: u8,
 ) -> u8 {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
-    let w = unsafe { world(shared, rail, native, log_x) };
-    let state = update_signals_on_segment(&w, tile, side, owner);
+    let state = Context {
+        shared,
+        rail,
+        native,
+    }
+    .update_signals_on_segment(TileIndex(tile), DiagDirection(side), CompanyID(owner));
     crate::witness::hit(crate::witness::SIGNAL_CLASSIFICATION_BYTES);
     state.0
 }
-/// Update both track ends with the original private flush owner lifetime.
+/// `SetSignalsOnBothDir`: update both track ends with the original private flush owner
+/// lifetime.
 /// # Safety
 /// Immutable tables are valid for the call; caller holds the game-state mutex.
 #[unsafe(no_mangle)]
@@ -917,14 +1045,17 @@ pub unsafe extern "C" fn openttd_rust_signal_both(
     shared: *const Services,
     rail: *const RailMapServices,
     native: *const SignalServices,
-    log_x: c_uint,
     tile: u32,
     track: u8,
     owner: u8,
 ) {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
-    let w = unsafe { world(shared, rail, native, log_x) };
-    set_signals_on_both_dir(&w, tile, track, owner);
+    Context {
+        shared,
+        rail,
+        native,
+    }
+    .set_signals_on_both_dir(TileIndex(tile), Track(track), CompanyID(owner));
 }
 
 /// Call-scoped diagnostic image of the private signal work sets. No live map or
@@ -957,6 +1088,24 @@ pub struct SignalItem {
     /// Original `Trackdir` or `DiagDirection`, including sentinel 255.
     pub dir: u8,
 }
+impl<Tdir: SetDir> From<SSdata<Tdir>> for SignalItem {
+    fn from(item: SSdata<Tdir>) -> Self {
+        Self {
+            tile: item.tile.0,
+            dir: item.dir.base(),
+        }
+    }
+}
+/// The ordered active prefix of `set`, then zero-filled diagnostic output.
+fn inspect_set<Tdir: SetDir, const ITEMS: usize>(
+    dest: &mut [SignalItem],
+    set: &SmallSet<Tdir, ITEMS>,
+) {
+    dest.fill(SignalItem::default());
+    for (dest, source) in dest.iter_mut().zip(&set.data[..set.n]) {
+        *dest = SignalItem::from(*source);
+    }
+}
 /// Inspect pending sets without altering their ordering, counts or lifetime.
 /// # Safety
 /// `output` is writable for one Snapshot; caller holds the game-state mutex.
@@ -965,24 +1114,18 @@ pub unsafe extern "C" fn openttd_rust_signal_inspect(output: *mut Snapshot) {
     // SAFETY: caller owns this output, which does not alias STATE.
     let out = unsafe { &mut *output };
     access(|s| {
-        out.tbu_count = s.tbu.count as c_uint;
-        out.tbd_count = s.tbd.count as c_uint;
-        out.global_count = s.global.count as c_uint;
-        out.overflow = [s.tbu.overflowed, s.tbd.overflowed, s.global.overflowed];
-        out.last_owner = s.last_owner;
-        for (dest, source) in [
-            (&mut out.tbu[..], &s.tbu.data[..s.tbu.count]),
-            (&mut out.tbd[..], &s.tbd.data[..s.tbd.count]),
-            (&mut out.global[..], &s.global.data[..s.global.count]),
-        ] {
-            dest.fill(SignalItem::default());
-            for (dest, source) in dest.iter_mut().zip(source) {
-                *dest = SignalItem {
-                    tile: source.tile,
-                    dir: source.dir,
-                };
-            }
-        }
+        out.tbu_count = s.tbuset.items() as c_uint;
+        out.tbd_count = s.tbdset.items() as c_uint;
+        out.global_count = s.globset.items() as c_uint;
+        out.overflow = [
+            s.tbuset.overflowed(),
+            s.tbdset.overflowed(),
+            s.globset.overflowed(),
+        ];
+        out.last_owner = s.last_owner.0;
+        inspect_set(&mut out.tbu, &s.tbuset);
+        inspect_set(&mut out.tbd, &s.tbdset);
+        inspect_set(&mut out.global, &s.globset);
     });
 }
 
@@ -1017,21 +1160,17 @@ crate::abi::layouts! {
     "OpenTTDSignalServices" ["probe"] => SignalServices {
         assertions,
         assert_condition,
-        assert_wormhole_start,
         vehicles,
-        assert_company,
     };
     "OpenTTDSignalContext" ["probe"] => Context {
         shared,
         rail,
         native,
-        log_x,
-    } width log_x: std::ffi::c_uint;
+    };
 }
 
-/// Call-scoped bridge to a direct Rust signal entry from other Rust owners.
-/// All pointers address immutable process-lifetime native service tables; map
-/// width is captured for this invocation.
+/// Call-scoped bridge to the signal entries from other Rust owners. All pointers address
+/// immutable process-lifetime native service tables.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Context {
@@ -1039,31 +1178,76 @@ pub struct Context {
     pub shared: *const Services,
     /// Canonical rail-map observations.
     pub rail: *const RailMapServices,
-    /// Occupancy, diagnostics and source assertions.
+    /// Occupancy and source assertions.
     pub native: *const SignalServices,
-    /// Current `Map::LogX`.
-    pub log_x: c_uint,
 }
 impl Context {
-    fn world(&self) -> World<'_> {
+    fn signals(&self) -> Signals<'_> {
         // SAFETY: native acquisition supplied immutable process-lifetime tables;
         // the caller holds the game-state mutex throughout this synchronous call.
-        unsafe { world(self.shared, self.rail, self.native, self.log_x) }
+        unsafe {
+            Signals {
+                shared: &*self.shared,
+                rail: &*self.rail,
+                native: &*self.native,
+                map: OnceCell::new(),
+            }
+        }
     }
+    /// `UpdateSignalsInBuffer()`.
+    pub(crate) fn update_signals_in_buffer(self) {
+        self.signals().update_signals_in_buffer();
+    }
+    /// `AddTrackToSignalBuffer`.
+    pub(crate) fn add_track_to_signal_buffer(self, tile: TileIndex, track: Track, owner: Owner) {
+        self.signals()
+            .add_track_to_signal_buffer(tile, track, owner);
+    }
+    /// `AddSideToSignalBuffer`.
+    pub(crate) fn add_side_to_signal_buffer(
+        self,
+        tile: TileIndex,
+        side: DiagDirection,
+        owner: Owner,
+    ) {
+        self.signals().add_side_to_signal_buffer(tile, side, owner);
+    }
+    /// `UpdateSignalsOnSegment`.
+    pub(crate) fn update_signals_on_segment(
+        self,
+        tile: TileIndex,
+        side: DiagDirection,
+        owner: Owner,
+    ) -> SigSegState {
+        self.signals().update_signals_on_segment(tile, side, owner)
+    }
+    /// `SetSignalsOnBothDir`.
+    pub(crate) fn set_signals_on_both_dir(self, tile: TileIndex, track: Track, owner: Owner) {
+        self.signals().set_signals_on_both_dir(tile, track, owner);
+    }
+    /// Temporary raw adapter of [`Self::update_signals_on_segment`] for `train.rs` until its pass.
     pub(crate) fn segment(self, tile: u32, side: u8, owner: u8) -> u8 {
-        update_signals_on_segment(&self.world(), tile, side, owner).0
+        self.update_signals_on_segment(TileIndex(tile), DiagDirection(side), CompanyID(owner))
+            .0
     }
+    /// Temporary raw adapter of [`Self::set_signals_on_both_dir`] for `train.rs` until its pass.
     pub(crate) fn both(self, tile: u32, track: u8, owner: u8) {
-        set_signals_on_both_dir(&self.world(), tile, track, owner);
+        self.set_signals_on_both_dir(TileIndex(tile), Track(track), CompanyID(owner));
     }
+    /// Temporary raw adapter of [`Self::add_track_to_signal_buffer`] for `rail_cmd.rs` until
+    /// its pass.
     pub(crate) fn add_track(self, tile: u32, track: u8, owner: u8) {
-        add_track_to_signal_buffer(&self.world(), tile, track, owner);
+        self.add_track_to_signal_buffer(TileIndex(tile), Track(track), CompanyID(owner));
     }
+    /// Temporary raw adapter of [`Self::add_side_to_signal_buffer`] for `rail_cmd.rs`,
+    /// `train_reservation.rs` and `tunnelbridge_cmd.rs` until their passes.
     pub(crate) fn add_side(self, tile: u32, side: u8, owner: u8) {
-        add_side_to_signal_buffer(&self.world(), tile, side, owner);
+        self.add_side_to_signal_buffer(TileIndex(tile), DiagDirection(side), CompanyID(owner));
     }
+    /// Temporary raw adapter of [`Self::update_signals_in_buffer`] for `train_reservation.rs`
+    /// and `water.rs` until their passes.
     pub(crate) fn flush(self) {
-        flush_signal_buffer(&self.world());
+        self.update_signals_in_buffer();
     }
 }
 /// Acquire call-scoped context while counting its real Rust-to-native crossing.
@@ -1105,62 +1289,54 @@ pub struct SetTrace {
     /// Reset clears the overflow flag.
     pub overflow_reset: bool,
 }
-impl From<Item> for SignalItem {
-    fn from(item: Item) -> Self {
-        Self {
-            tile: item.tile,
-            dir: item.dir,
-        }
-    }
+/// The probe's next popped item; an empty set yields the zero item, which the native
+/// comparison rejects.
+fn pop_item<Tdir: SetDir, const N: usize>(set: &mut SmallSet<Tdir, N>) -> SignalItem {
+    set.get().map_or_else(SignalItem::default, SignalItem::from)
 }
-fn probe_set<const N: usize>(overflow: fn()) -> SetTrace {
-    let mut set = SmallSet::<N>::new();
-    let a = Item { tile: 1, dir: 0 };
-    for item in [
+fn probe_set<Tdir: SetDir, const N: usize>(name: &'static str, full_witness: usize) -> SetTrace {
+    let mut set = SmallSet::<Tdir, N>::new(name, full_witness, Tdir::from_base(0));
+    let tile = |t: u32| TileIndex(t);
+    let a = (tile(1), Tdir::from_base(0));
+    for (t, d) in [
         a,
-        Item {
-            tile: 2,
-            dir: INVALID_DIAGDIR,
-        },
+        (tile(2), Tdir::from_base(DiagDirection::INVALID_DIAGDIR.0)),
         a,
-        Item { tile: 1, dir: 2 },
+        (tile(1), Tdir::from_base(2)),
     ] {
-        set.add(item);
+        set.add(t, d);
     }
-    set.remove(a);
-    let duplicate_count = set.count as c_uint;
-    let duplicate_pop = std::array::from_fn(|_| SignalItem::from(set.get().unwrap()));
+    set.remove(a.0, a.1);
+    let duplicate_count = set.items() as c_uint;
+    let duplicate_pop = std::array::from_fn(|_| pop_item(&mut set));
     set.reset();
-    for tile in 0..N {
-        set.add(Item {
-            tile: tile as u32,
-            dir: (tile & 3) as u8,
-        });
+    for t in 0..N {
+        set.add(tile(t as u32), Tdir::from_base((t & 3) as u8));
     }
-    let full_failed = !set.add(Item {
-        tile: u32::MAX,
-        dir: INVALID_DIAGDIR,
-    });
+    let full_failed = !set.add(
+        tile(u32::MAX),
+        Tdir::from_base(DiagDirection::INVALID_DIAGDIR.0),
+    );
     if full_failed {
-        overflow();
+        SmallSet::<Tdir, N>::debug_full(set.name);
     }
-    let overflow_full = set.overflowed;
-    set.remove(Item { tile: 0, dir: 0 });
+    let overflow_full = set.overflowed();
+    set.remove(tile(0), Tdir::from_base(0));
     let first_after_remove = set.data[0].into();
-    let mut refill_succeeded = set.add(Item {
-        tile: u32::MAX,
-        dir: INVALID_DIAGDIR,
-    });
-    let refill_pop = set.get().unwrap().into();
+    let mut refill_succeeded = set.add(
+        tile(u32::MAX),
+        Tdir::from_base(DiagDirection::INVALID_DIAGDIR.0),
+    );
+    let refill_pop = pop_item(&mut set);
     while set.get().is_some() {}
-    let drained_count = set.count as c_uint;
-    let overflow_drained = set.overflowed;
-    refill_succeeded &= set.add(Item {
-        tile: u32::MAX,
-        dir: INVALID_DIAGDIR,
-    });
+    let drained_count = set.items() as c_uint;
+    let overflow_drained = set.overflowed();
+    refill_succeeded &= set.add(
+        tile(u32::MAX),
+        Tdir::from_base(DiagDirection::INVALID_DIAGDIR.0),
+    );
     set.reset();
-    refill_succeeded &= set.count == 0;
+    refill_succeeded &= set.is_empty();
     SetTrace {
         duplicate_count,
         duplicate_pop,
@@ -1171,7 +1347,7 @@ fn probe_set<const N: usize>(overflow: fn()) -> SetTrace {
         refill_pop,
         drained_count,
         overflow_drained,
-        overflow_reset: set.overflowed,
+        overflow_reset: set.overflowed(),
     }
 }
 /// Compare all three fixed capacities against the unchanged source `SmallSet`
@@ -1182,16 +1358,45 @@ fn probe_set<const N: usize>(overflow: fn()) -> SetTrace {
 pub unsafe extern "C" fn openttd_rust_signal_workset_probe(output: *mut SetTrace) {
     // SAFETY: caller supplies live immutable callbacks and three output records.
     unsafe {
-        output.write(probe_set::<64>(overflow_tbu));
-        output.add(1).write(probe_set::<256>(overflow_tbd));
-        output.add(2).write(probe_set::<128>(overflow_global));
+        output.write(probe_set::<Trackdir, SIG_TBU_SIZE>(
+            "_tbuset",
+            crate::witness::SIGNAL_TBU_OVERFLOW,
+        ));
+        output
+            .add(1)
+            .write(probe_set::<DiagDirection, SIG_TBD_SIZE>(
+                "_tbdset",
+                crate::witness::SIGNAL_TBD_OVERFLOW,
+            ));
+        output
+            .add(2)
+            .write(probe_set::<DiagDirection, SIG_GLOB_SIZE>(
+                "_globset",
+                crate::witness::SIGNAL_GLOBAL_OVERFLOW,
+            ));
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::{Cell, RefCell};
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    thread_local! {
+        static ASSERTIONS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+        static COMPANY_READS: Cell<u32> = const { Cell::new(0) };
+    }
+    extern "C" fn record_assertion(condition: bool) {
+        ASSERTIONS.with(|a| a.borrow_mut().push(condition));
+    }
+    extern "C" fn invalid_company(_: u8) -> bool {
+        COMPANY_READS.set(COMPANY_READS.get() + 1);
+        false
+    }
+    fn item<Tdir>(tile: TileIndex, dir: Tdir) -> SSdata<Tdir> {
+        SSdata { tile, dir }
+    }
 
     #[test]
     fn empty_flush_and_queue_only_entries_leave_map_metadata_unused() {
@@ -1208,45 +1413,35 @@ mod tests {
             shared: &raw const shared,
             rail: &crate::test_tables::RAIL_MAP,
             native: &raw const native,
-            log_x: 6,
         };
         access(|s| {
-            s.global.reset();
-            s.last_owner = INVALID_OWNER;
+            s.globset.reset();
+            s.last_owner = Owner::INVALID;
         });
-        context.flush();
+        context.update_signals_in_buffer();
         access(|s| {
-            assert_eq!(s.global.count, 0);
-            assert_eq!(s.last_owner, INVALID_OWNER);
+            assert!(s.globset.is_empty());
+            assert_eq!(s.last_owner, Owner::INVALID);
         });
-        context.add_track(1234, crate::track_type::TRACK_X, 7);
-        context.add_side(4321, DIAGDIR_NE, 7);
+        context.add_track_to_signal_buffer(TileIndex(1234), Track::TRACK_X, CompanyID(7));
+        context.add_side_to_signal_buffer(TileIndex(4321), DiagDirection::DIAGDIR_NE, CompanyID(7));
         access(|s| {
-            assert_eq!(s.global.count, 3);
-            assert_eq!(s.last_owner, 7);
+            assert_eq!(s.globset.items(), 3);
+            assert_eq!(s.last_owner, CompanyID(7));
             assert_eq!(
-                s.global.get(),
-                Some(Item {
-                    tile: 4321,
-                    dir: DIAGDIR_NE
-                })
+                s.globset.get(),
+                Some(item(TileIndex(4321), DiagDirection::DIAGDIR_NE))
             );
             assert_eq!(
-                s.global.get(),
-                Some(Item {
-                    tile: 1234,
-                    dir: DIAGDIR_SW
-                })
+                s.globset.get(),
+                Some(item(TileIndex(1234), DiagDirection::DIAGDIR_SW))
             );
             assert_eq!(
-                s.global.get(),
-                Some(Item {
-                    tile: 1234,
-                    dir: DIAGDIR_NE
-                })
+                s.globset.get(),
+                Some(item(TileIndex(1234), DiagDirection::DIAGDIR_NE))
             );
-            assert_eq!(s.global.count, 0);
-            s.last_owner = INVALID_OWNER;
+            assert!(s.globset.is_empty());
+            s.last_owner = Owner::INVALID;
         });
     }
 
@@ -1254,18 +1449,114 @@ mod tests {
     fn process_owner_is_shared_across_serialized_game_threads() {
         let _lock = LOCK.lock().unwrap();
         access(|s| {
-            s.global.reset();
-            s.last_owner = 7;
-            s.global.add(Item { tile: 1234, dir: 2 });
+            s.globset.reset();
+            s.last_owner = CompanyID(7);
+            s.globset.add(TileIndex(1234), DiagDirection::DIAGDIR_SW);
         });
         std::thread::spawn(|| {
             access(|s| {
-                assert_eq!(s.last_owner, 7);
-                assert_eq!(s.global.get(), Some(Item { tile: 1234, dir: 2 }));
+                assert_eq!(s.last_owner, CompanyID(7));
+                assert_eq!(
+                    s.globset.get(),
+                    Some(item(TileIndex(1234), DiagDirection::DIAGDIR_SW))
+                );
             });
         })
         .join()
         .unwrap();
-        access(|s| s.last_owner = INVALID_OWNER);
+        access(|s| s.last_owner = Owner::INVALID);
+    }
+
+    /// `_enterdir_to_trackdirbits` as `signal.cpp` writes it, with the `TrackdirBits` values of
+    /// `track_type.h`: `TRACKDIR_BIT_X_NE` 0x1, `Y_SE` 0x2, `UPPER_E` 0x4, `LOWER_E` 0x8,
+    /// `LEFT_S` 0x10, `RIGHT_S` 0x20, `X_SW` 0x100, `Y_NW` 0x200, `UPPER_W` 0x400,
+    /// `LOWER_W` 0x800, `LEFT_N` 0x1000 and `RIGHT_N` 0x2000.
+    #[test]
+    fn enterdir_to_trackdirbits_matches_original_table() {
+        let expected = [
+            0x100 | 0x400 | 0x20,   // X_SW | UPPER_W | RIGHT_S
+            0x200 | 0x800 | 0x2000, // Y_NW | LOWER_W | RIGHT_N
+            0x1 | 0x8 | 0x1000,     // X_NE | LOWER_E | LEFT_N
+            0x2 | 0x4 | 0x10,       // Y_SE | UPPER_E | LEFT_S
+        ];
+        assert_eq!(ENTERDIR_TO_TRACKDIRBITS.map(|bits| bits.0), expected);
+    }
+
+    /// `SmallSet::Add` on a full set prints `Debug(misc, 0, "SignalSegment too complex. Set {}
+    /// is full (maximum {})", name, items)` once, with that set's name and capacity.
+    #[test]
+    fn full_set_add_prints_name_and_capacity() {
+        let _lock = LOCK.lock().unwrap();
+        crate::debug::tests::take();
+        reset_sets();
+        access(|s| {
+            for t in 0..SIG_TBU_SIZE {
+                s.tbuset.add(TileIndex(t as u32), Trackdir::TRACKDIR_X_NE);
+            }
+            for t in 0..SIG_TBD_SIZE {
+                s.tbdset.add(TileIndex(t as u32), DiagDirection::DIAGDIR_NE);
+            }
+            for t in 0..SIG_GLOB_SIZE {
+                s.globset
+                    .add(TileIndex(t as u32), DiagDirection::DIAGDIR_NE);
+            }
+        });
+        assert!(!add_to_set(
+            |s| &mut s.tbuset,
+            TileIndex(0),
+            Trackdir::TRACKDIR_X_NE
+        ));
+        assert!(!add_to_set(
+            |s| &mut s.tbdset,
+            TileIndex(0),
+            DiagDirection::DIAGDIR_NE
+        ));
+        assert!(!add_to_set(
+            |s| &mut s.globset,
+            TileIndex(0),
+            DiagDirection::DIAGDIR_NE
+        ));
+        access(|s| {
+            assert!(s.tbuset.overflowed() && s.tbdset.overflowed() && s.globset.overflowed());
+        });
+        reset_sets();
+        let line = |text: &str| ("misc".to_owned(), 0, text.as_bytes().to_vec());
+        assert_eq!(
+            crate::debug::tests::take(),
+            [
+                line("SignalSegment too complex. Set _tbuset is full (maximum 64)"),
+                line("SignalSegment too complex. Set _tbdset is full (maximum 256)"),
+                line("SignalSegment too complex. Set _globset is full (maximum 128)"),
+            ]
+        );
+    }
+
+    /// `assert(Company::IsValidID(owner))` reaches the native assertion once, and reads the
+    /// company only where the native build asserts.
+    #[test]
+    fn company_assertion_is_evaluated_only_with_assertions() {
+        let _lock = LOCK.lock().unwrap();
+        let mut shared = crate::test_tables::SHARED;
+        shared.map = std::ptr::null();
+        shared.company_valid = invalid_company;
+        let mut native = crate::test_tables::SIGNALS;
+        native.assert_condition = record_assertion;
+        reset_sets();
+        for assertions in [true, false] {
+            native.assertions = assertions;
+            ASSERTIONS.with(|a| a.borrow_mut().clear());
+            COMPANY_READS.set(0);
+            let signals = Context {
+                shared: &raw const shared,
+                rail: &crate::test_tables::RAIL_MAP,
+                native: &raw const native,
+            }
+            .signals()
+            .update_signals_in_buffer_owner(CompanyID(3));
+            assert_eq!(signals, SigSegState::SIGSEG_FREE);
+            let expected: &[bool] = if assertions { &[false] } else { &[] };
+            assert_eq!(ASSERTIONS.with(|a| a.borrow().clone()), expected);
+            assert_eq!(COMPANY_READS.get(), u32::from(assertions));
+        }
     }
 }
