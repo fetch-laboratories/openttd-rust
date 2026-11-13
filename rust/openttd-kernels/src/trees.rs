@@ -159,7 +159,10 @@ impl<'a> Trees<'a> {
             }
         }
     }
-    /// `MakeTree`.
+    /// `MakeTree`: make a tree-tile.
+    ///
+    /// This functions change the tile to a tile with trees and all information which belongs
+    /// to it. `count` is the number of trees, `density` the density (not the number of trees).
     fn make_tree(
         &self,
         t: TileIndex,
@@ -171,19 +174,30 @@ impl<'a> Trees<'a> {
     ) {
         (self.t.make_tree)(t.0, r#type.0, count, growth.0, ground.0, density);
     }
-    /// `SetTreeGroundDensity`.
+    /// `SetTreeGroundDensity`: set the density and ground type of a tile with trees.
+    ///
+    /// This functions saves the ground type and the density which belongs to it for a given
+    /// tile.
     fn set_tree_ground_density(&self, t: TileIndex, g: TreeGround, d: u32) {
         (self.t.set_ground_density)(t.0, g.0, d);
     }
-    /// `AddTreeCount`.
+    /// `AddTreeCount`: add a amount to the tree-count value of a tile with trees.
+    ///
+    /// This function add a value to the tree-count value of a tile. This value may be negative
+    /// to reduce the tree-counter. If the resulting value reach 0 it doesn't get converted to a
+    /// "normal" tile.
     fn add_tree_count(&self, t: TileIndex, c: i32) {
         (self.t.add_count)(t.0, c);
     }
-    /// `AddTreeGrowth`.
+    /// `AddTreeGrowth`: add a value to the tree growth stage.
+    ///
+    /// This function adds a value to the tree grow stage of a tile.
     fn add_tree_growth(&self, t: TileIndex, a: i32) {
         (self.t.add_growth)(t.0, a);
     }
-    /// `SetTreeGrowth`.
+    /// `SetTreeGrowth`: sets the tree growth stage of a tile.
+    ///
+    /// This function sets the tree growth stage of a tile directly with the given value.
     fn set_tree_growth(&self, t: TileIndex, g: TreeGrowthStage) {
         (self.t.set_growth)(t.0, g.0);
     }
@@ -494,6 +508,7 @@ fn is_point_in_triangle(x: i32, y: i32, v1: &Point, v2: &Point, v3: &Point) -> b
 fn is_point_in_star_shaped_polygon(x: i32, y: i32, shape: &[Point]) -> bool {
     let mut it = 0;
     while it != shape.len() {
+        // The iterator advances inside the body.
         let v1 = &shape[it];
         it += 1;
         let v2 = if it == shape.len() {
