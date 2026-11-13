@@ -32,6 +32,7 @@ use crate::services::Services;
 use crate::settings_type::SettingAddresses;
 use crate::test_tables::{MOVEMENT, SHARED, TRAIN_LEAVES, VEHICLE};
 use crate::tile_type::TileIndex;
+use crate::track_type::TrackBits;
 use crate::train_state::{State, openttd_rust_train_state_destroy, openttd_rust_train_state_new};
 use crate::vehicle::occupancy::{Links, openttd_rust_occupancy_update};
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices};
@@ -321,7 +322,7 @@ impl Fixture {
                 g.cache.cached_veh_length = t.lengths[i] as u8;
                 g.flags = flags as u16;
                 let s = &mut *self.states[i];
-                s.track = track as u8;
+                s.track = TrackBits(track as u8);
                 s.cached_tilt = t.tilts[i];
                 s.cached_curve_speed_mod = t.curve_mods[i];
             }
@@ -335,7 +336,7 @@ impl Fixture {
             unsafe {
                 let v = &*self.records[i];
                 [
-                    u32::from((*self.states[i]).track),
+                    u32::from((*self.states[i]).track.0),
                     u32::from(v.direction),
                     v.x_pos as u32,
                     v.y_pos as u32,
