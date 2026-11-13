@@ -138,15 +138,6 @@ void Train::ConsistChanged(ConsistChangeFlags allowed_changes)
 
 
 /**
- * Computes train speed limit caused by curves
- * @return imposed speed limit
- */
-uint16_t Train::GetCurveSpeedLimit() const
-{
-	return static_cast<uint16_t>(openttd_rust_train_curve_limit(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices()));
-}
-
-/**
  * Calculates the maximum speed of the vehicle under its current conditions.
  * @return Maximum speed of the vehicle.
  */

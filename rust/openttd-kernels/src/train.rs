@@ -2817,17 +2817,10 @@ pub unsafe extern "C" fn openttd_rust_train_consist_changed(
     let g = entry_game!(leaves, services);
     g.consist_changed(id, allowed);
 }
-/// Invoke synchronous train policy with live serialized services.
-/// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_curve_limit(
-    id: Handle,
-    leaves: *const Leaves,
-    services: *const Services,
-) -> u16 {
-    let g = entry_game!(leaves, services);
-    g.get_curve_speed_limit(id)
+/// The train speed limit caused by curves, for callers outside a train entry; the
+/// original body is `Game::get_curve_speed_limit`.
+pub(crate) fn curve_speed_limit(id: Handle, leaves: &Leaves, services: &Services) -> u16 {
+    Game::new(leaves, services).get_curve_speed_limit(id)
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety
@@ -3281,3 +3274,6 @@ impl Game<'_> {
 
 pub const VRF_POWERED_WAGON: u64 = 1 << 3;
 pub const VRF_FLIPPED: u64 = 1 << 4;
+
+#[cfg(test)]
+mod evidence_tests;

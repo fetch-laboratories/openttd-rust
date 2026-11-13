@@ -294,10 +294,8 @@ fn train_acceleration_model_changed(s: &Services) {
         if crate::vehicle_base::is_front_engine(true, subtype) {
             hit(witness::SETTINGS_TRAIN_ACCELERATION);
             let id = (vs.train_handle)(v.0.as_ptr());
-            // SAFETY: Process-lifetime tables; the live train shell is resolved per call.
-            let limit = unsafe {
-                crate::train::openttd_rust_train_curve_limit(id, train_leaves(s), s.shared)
-            };
+            // SAFETY: The movement registry holds the process-lifetime train leaves.
+            let limit = crate::train::curve_speed_limit(id, unsafe { &*train_leaves(s) }, s.shared);
             id.set_cached_max_curve_speed(u64::from(limit));
             crate::train::update_acceleration(id);
         }

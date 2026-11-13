@@ -37,8 +37,9 @@ The inputs do not witness articulated/unequal-length trains, bridge/tunnel
 reversal, or opposing PBS green-to-red restoration. The supplied save has no
 custom train NewGRFs, and the built opposing PBS signal remains red.
 
-`python3 tools/train-edge-comparison.py` addresses the concrete stock-engine gap
-with 20,000 variable-length curve cases and 20,000 reversal pose/flag cases. It
-extracts unchanged pinned C++ bodies and calls production Rust owner entries.
-World callbacks only record ordering. It does not establish realistic NewGRF
-construction, articulated follower movement, spacing advances, or bridge entry.
+The Rust test `train::evidence_tests` covers the concrete stock-engine gap with
+20,000 variable-length curve cases and 20,000 reversal pose/flag cases, against
+the pinned original's results frozen in `train/edge-oracle.txt`
+(`python3 tools/oracle-capture.py train_edge`). Its world services only record
+ordering. It does not establish realistic NewGRF construction, articulated
+follower movement, spacing advances, or bridge entry.
