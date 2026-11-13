@@ -177,9 +177,9 @@ Root's first actions on resume:
 
 Each stream issue holds its batches, rules, proof and inventory. [Selection](planning.md#selection) ranks cleanup work by stream inventory. File ownership and file-set checks follow [team](team.md#ready-queue-and-pipelining); what a cleanup PR needs to merge is in [integration](root-workflow.md#integration).
 
-Slots: the [implementer slots](team.md#slots) run #734/#735 file passes, on worksets whose file sets do not overlap. #945, #974, #979 and #950 each take one slot while they run. The stage exits when the file passes do, so they come before anything that can wait; the tools batch and the shared services do not wait, because every pass pays for their absence. #738 is closed at its end state.
+Slots: the [implementer slots](team.md#slots) run #734/#735 file passes, on worksets whose file sets do not overlap. #945, #974, #979 and #950 each take one slot while they run. The stage exits when the file passes do, so they come before anything that can wait; #945 and the shared services do not wait, because every pass pays for their absence. #738 is closed at its end state.
 
-1. **Tools batch.** One per stocktake interval, and the interval's first dispatch ([selection](planning.md#selection)). This interval's is #945, with #978 (the census's diff algorithm) and the two defects [steering 36 measured](https://github.com/fetch-laboratories/openttd-rust/issues/945#issuecomment-6847190436). New inventory visibility is not C++ deletion.
+1. **Tools batch.** One per stocktake interval, dispatched within it and ranked by its items' measured cost ([selection](planning.md#selection)). This interval's is #945, which goes first because three of its items cost about 300 PR-minutes and 9 failed runs in the last interval; with it go #978 (the census's diff algorithm) and the two defects [steering 36 measured](https://github.com/fetch-laboratories/openttd-rust/issues/945#issuecomment-6847190436). New inventory visibility is not C++ deletion.
 2. **Shared services for one-call-site leaves.** #974 (news and script events, planned), then #979 (error, console, window and sound leaves), which waits on #974 for its pattern and on #945 for its list. Until each merges, a pass keeps the leaves it would replace and names the work order ([design faults](porting.md#design-faults)).
 3. **#734/#735 file passes.** One PR per workset in the #734 manifest finishes every file it touches, applying the [code standards](porting.md#code-standards) to every line. Sizing, splits and single-file passes follow [sizing](planning.md#sizing); proof follows [cleanup proof](porting.md#cleanup-proof). Each pass reports its files' residue from `tools/code-standards-inventory.py`.
 
@@ -230,7 +230,7 @@ Excluded, with issue placement and return conditions rechecked by steering 35 at
 
 Steering 36 is the latest; its findings are in the message of the steering commit that follows `c80ace14b8`. Its standing changes are rules now:
 
-- The tools batch is each interval's first dispatch ([selection](planning.md#selection)).
+- The tools batch is dispatched within its interval, ranked by its items' measured cost ([selection](planning.md#selection)). The last one was not dispatched at all.
 - A plan grants no exception to porting and prescribes no commit split ([planner brief](planner-brief.md#the-plan)).
 - A reviewer reads every changed body beside its original, runs three searches for design faults, lists the callers of edited exports, and does not take a plan decision as a reason to accept a departure ([review brief](review-brief.md#what-to-examine-in-your-group)). Review groups are about 1,000 changed lines each ([review](workflow.md#review)).
 - Three porting rulings: a pass keeps a one-call-site carrier only for a shared-service work order ([design faults](porting.md#design-faults)); a map service with no Rust port stays for #565 ([map access](porting.md#map-access)); an export that serves only a kept native fixture leaves with it ([callees](porting.md#callees-and-shared-accessors)).
@@ -244,7 +244,7 @@ For root, on resume:
 
 Provisional, for steering 37 to judge:
 - **Review depth.** In merges 48 to 59 a source-review session ran a median 2.1 minutes and 12 tool calls, on groups of up to 2,100 changed lines. The 46 review sessions raised 27 findings, one a behaviour difference, and none of the 22 departures the audits found in the same lines. Measure session length, findings per review and the audit findings reviewers missed after the review brief's change.
-- **The tools batch first.** Failed runs by cause, and the share of PR-minutes outside implementation, after #945 merges.
+- **The tools batch.** Failed runs by cause, and the share of PR-minutes outside implementation, after #945 merges; and whether each later batch was dispatched in its interval.
 - **Plans.** Plans cost about 9% of implementer minutes and their file sets were accurate (10 of 12 PRs had at most 4% unplanned lines), so plans in issues stand. Count the plan decisions an audit or reviewer finds contrary to porting (six in this window) and compare estimates with actual changed lines (median 1.54 times).
 - **Re-check scope** stands: no re-check raised a behaviour defect outside its fixing commits, and the four sessions beyond two stages were forced by the exact-head acceptance, item 13 on #945.
 - **Root's docs pushes.** Ten of 22 landed on a queued PR and rebuilt 13 merge-group runs before `b4e7ca3d73`, none after. Root made 13 ready-queue commits in 8.3 hours; count both again.
@@ -282,7 +282,7 @@ CI variables were not rechecked this session, and no workflow change or bootstra
 | Other work | State |
 | --- | --- |
 | Ready queue | As the [ready queue](#ready-queue) above has it. Root's status comment on #3 has the session's notes. |
-| Tools batch | #945 was not dispatched in its interval. It is the batch of the interval that starts at merge 60 and its first dispatch; the other candidates on #939 wait for the one after. |
+| Tools batch | #945 was not dispatched in its interval. It is the batch of the interval that starts at merge 60 and goes first on its measured cost; the other candidates on #939 wait for the one after. |
 | Platform cadence | Passed at merges 52 and 57. Next after merge 62. |
 | Stocktake | Measured at merge 59. Root's half is owed on resume: rerun `issues.py` and recheck the exclusion conditions; bring #734's body to 133 files; and the three checks in root's notes on #3 (whether the two rule changes of 2026-11-13 were used beyond the PRs that prompted them, base updates made without a conflict since `fc5010d279`, and whether #945's added items still fail runs). |
 | Phase-3 planning | Not triggered. |
