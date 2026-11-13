@@ -124,7 +124,7 @@ Position at merge 59 (`f24c05dbe9`), 2026-11-13. Counts are code lines from `pyt
 | GUI | 52,179 | 415 (0) | 51,764 (0) | 463 (0) | 52,227 (0) | Phase 5 |
 | Platform | 11,941 | 0 (0) | 11,941 (0) | 2 (0) | 11,943 (0) | Phase 5 |
 | Vendored | 55,148 | 2,317 (0) | 52,831 (0) | 0 (0) | 52,831 (0) | Phase 6 |
-| Upstream tests and fork test glue | 2,248 | 14 (0) | 2,234 (0) | 4,770 (−509) | 7,004 (−509) | Fork tests with the pools and readers they reach ([ADR 0050](adr/0050-no-cpp-test-moves-to-rust.md)). Upstream tests go with the code they test; Catch2 goes when the last C++ test leaves |
+| Upstream tests and fork test glue | 2,248 | 14 (0) | 2,234 (0) | 4,770 (−509) | 7,004 (−509) | Fork tests with the pools and readers they reach ([ADR 0023](adr/0023-cpp-tests-stay-until-code-is-ported.md)). Upstream tests go with the code they test; Catch2 goes when the last C++ test leaves |
 | Boundary layer | 0 | 0 (0) | 0 (0) | 16,289 (−470) | 16,289 (−470) | Each side's owner; the final exit |
 | **Source total** | **284,355** | **62,447 (21.96%, −254)** | **221,908 (+254)** | **32,586 (−1,687)** | **254,494 (−1,433)** | |
 | C++ under `tools/` | | | | 14,494 (−1,148) | 14,494 (−1,148) | With the pools, readers and boundaries each file reaches (#736's classification) |

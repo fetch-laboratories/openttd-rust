@@ -71,7 +71,6 @@ By number and header, with a link to the file, for example [ADR 0049](0049-two-i
 | [0047](0047-output-on-the-hard-disk.md) | This machine's build and test output lives on the hard disk behind symlinks |
 | [0048](0048-agents-md-and-routing-table.md) | `AGENTS.md` holds only what every agent needs; everything else is reached through a routing table |
 | [0049](0049-two-implementers-waiting-keeps-slot.md) | At most two implementers exist at once, and a waiting one keeps its slot |
-| [0050](0050-no-cpp-test-moves-to-rust.md) | No C++ test is moved to Rust; each retires with the code it reaches |
 
 ### The agents'
 
@@ -82,7 +81,7 @@ By number and header, with a link to the file, for example [ADR 0049](0049-two-i
 | [0020](0020-scenario-comparisons-on-ci.md) | Scenario comparisons run on CI, not on this machine |
 | [0021](0021-integer-wrappers-not-rust-enums.md) | Rust wraps the original's integer types instead of using Rust enums |
 | [0022](0022-progress-is-net-cpp-removed.md) | Progress is measured by net lines of C++ removed |
-| [0023](0023-cpp-tests-stay-until-code-is-ported.md) | C++ tests of C++ code stay in C++ until that code is ported (superseded by 0050) |
+| [0023](0023-cpp-tests-stay-until-code-is-ported.md) | C++ tests of C++ code stay in C++ until that code is ported |
 | [0024](0024-lint-ratchet-scope.md) | The lint check enforces only parameter count, safety documentation and production assertions |
 | [0025](0025-two-review-stages.md) | A pull request gets at most two review stages |
 | [0026](0026-roadmap-commit-timing.md) | Root commits the roadmap only at a stocktake, a change of course or wind-down |

@@ -1,5 +1,5 @@
 ---
-status: superseded by ADR 0050
+status: accepted
 may change: agents
 ---
 # C++ tests of C++ code stay in C++ until that code is ported
