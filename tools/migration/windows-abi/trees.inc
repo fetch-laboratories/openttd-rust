@@ -63,7 +63,8 @@ static void Trees()
 		.set_tree_ground = TreeUnused<void, uint32_t, TreeGround, uint32_t>,
 		.make_sea = TreeUnused<void, uint32_t>,
 		.buoy_or_dock = TreeUnused<bool, uint32_t>,
-		.region_context = TreeUnused<OpenTTDWaterRegionContext>,
+		/* Clearing a valid tile invalidates its water region: one owner for the probe map. */
+		.water_regions = []() noexcept { static OpenTTDWaterRegions *regions = openttd_rust_water_new(tree_probe.shared, 64, 64); return regions; },
 		.remove_rail = TreeUnused<void, OpenTTDCommandCost *, uint32_t, Track>,
 		.airport_tile = TreeUnused<bool, uint32_t>,
 		.airport = TreeUnused<OpenTTDAirportGround, uint32_t>,

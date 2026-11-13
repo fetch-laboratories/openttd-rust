@@ -54,7 +54,7 @@ pub struct WaterServices {
     pub set_tree_ground: extern "C" fn(u32, TreeGround, u32),
     pub make_sea: extern "C" fn(u32),
     pub buoy_or_dock: extern "C" fn(u32) -> bool,
-    pub region_context: extern "C" fn() -> crate::water_regions::Context,
+    pub water_regions: extern "C" fn() -> *mut crate::water_regions::Regions,
     pub remove_rail: unsafe extern "C" fn(*mut services::CommandCost, u32, Track),
     pub airport_tile: extern "C" fn(u32) -> bool,
     pub airport: extern "C" fn(u32) -> AirportGround,
@@ -66,20 +66,16 @@ pub struct WaterServices {
     pub news: extern "C" fn(VehicleRef, u32),
 }
 impl WaterServices {
+    /// `InvalidateWaterRegion`.
     /// # Safety
-    /// The context resolves the current live map-lifetime region owner and leaves.
+    /// The service returns the current map's region owner, exclusively for this call.
     pub(crate) unsafe fn invalidate_region(&self, tile: u32, s: &Services) {
-        if !(s.tile_valid)(tile) {
-            return;
-        }
-        let context = (self.region_context)();
-        unsafe {
-            crate::water_regions::openttd_rust_water_invalidate(
-                context.owner,
-                context.leaves,
-                tile,
-            );
-        }
+        let regions = (self.water_regions)();
+        crate::water_regions::invalidate_water_region(
+            unsafe { &mut *regions },
+            s,
+            crate::tile_type::TileIndex(tile),
+        );
     }
 }
 /// Native packed-map/storage leaves for water class restoration.
@@ -829,7 +825,7 @@ crate::abi::layouts! {
         set_tree_ground,
         make_sea,
         buoy_or_dock,
-        region_context,
+        water_regions,
         remove_rail,
         airport_tile,
         airport,
@@ -871,7 +867,7 @@ pub(crate) fn fixture() -> WaterServices {
         set_tree_ground: unused3,
         make_sea: unused1,
         buoy_or_dock: unused1,
-        region_context: unused_region_context,
+        water_regions: fixture_water_regions,
         remove_rail: unused3,
         airport_tile: unused1,
         airport: unused1,
@@ -884,9 +880,27 @@ pub(crate) fn fixture() -> WaterServices {
     }
 }
 
+/// The invalidation's `IsValidTile` reads the fixture map, so a fixture that
+/// invalidates a valid tile reaches an owner for that map: one per thread,
+/// replaced when the installed map's dimensions change.
 #[cfg(test)]
-extern "C" fn unused_region_context() -> crate::water_regions::Context {
-    panic!("unused water region context")
+extern "C" fn fixture_water_regions() -> *mut crate::water_regions::Regions {
+    use std::cell::Cell;
+    thread_local! {
+        static REGIONS: Cell<(u32, u32, *mut crate::water_regions::Regions)> =
+            const { Cell::new((0, 0, std::ptr::null_mut())) };
+    }
+    // SAFETY: This thread's fixture statics address its installed map.
+    let (allocation, map) = unsafe { (*crate::map_func::fixture::statics()).load() };
+    let (size_x, size_y) = (map.size_x(), allocation.count / map.size_x());
+    let (x, y, regions) = REGIONS.get();
+    if !regions.is_null() && (x, y) == (size_x, size_y) {
+        return regions;
+    }
+    // A replaced owner is leaked: a caller may still hold it for this thread's test.
+    let regions = Box::into_raw(Box::new(crate::water_regions::Regions::new(size_x, size_y)));
+    REGIONS.set((size_x, size_y, regions));
+    regions
 }
 
 /// Native `FloodingBehaviour` representation; every byte pattern is retained.

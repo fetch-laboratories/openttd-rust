@@ -8,41 +8,36 @@
 /** @file water_regions_ffi.h Rust water-region cache owner and visitor boundary. */
 #ifndef OPENTTD_RUST_WATER_REGIONS_FFI_H
 #define OPENTTD_RUST_WATER_REGIONS_FFI_H
-#include "service_defaults.hpp"
 #include <stdint.h>
 #include "call_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 typedef struct OpenTTDWaterRegions OpenTTDWaterRegions;
-typedef struct OpenTTDWaterVisit OpenTTDWaterVisit;
 typedef struct { int32_t x, y; uint8_t label; } OpenTTDWaterPatch;
-typedef struct { uint16_t edges[4]; uint8_t labels[256], patches, aqueducts; } OpenTTDWaterSnapshot;
-typedef struct OpenTTDWaterLeaves {
-	const struct OpenTTDSharedServices *shared;
-	uint32_t (OPENTTD_RUST_CALL *aqueduct)(uint32_t) OPENTTD_SERVICE_DEFAULT(aqueduct);
-	void (OPENTTD_RUST_CALL *debug)(uint8_t, int32_t, int32_t) OPENTTD_SERVICE_DEFAULT(debug);
-} OpenTTDWaterLeaves;
-typedef struct OpenTTDWaterRegionContext { OpenTTDWaterRegions *owner; const OpenTTDWaterLeaves *leaves; } OpenTTDWaterRegionContext;
-/* One map-lifetime owner, replaced at Map::Allocate. follow returns INVALID_TILE on failure;
- * aqueduct returns its other end or INVALID_TILE. The visitor cursor owns only traversal progress
- * and copied per-side labels; next returns before C++ visitor work and observes live cache changes
- * at the original points. Map replacement during a visitor violates the original region-reference
- * lifetime. Destroy each owner and cursor once, also on visitor exception paths.
- * Leaves are synchronous, nonthrowing and nonreentrant; initialized outputs are exclusive per call.
- * Each next call receives the live descriptor and retains the original region origin. */
-OpenTTDWaterRegions *OPENTTD_RUST_CALL openttd_rust_water_new(uint32_t, uint32_t);
+/* One VisitWaterRegionPatchNeighbours in progress; a zeroed record starts a visit. */
+typedef struct OpenTTDWaterVisit {
+	OpenTTDWaterPatch origin;
+	int32_t neighbour_x, neighbour_y;
+	uint32_t aqueduct_tile;
+	uint8_t labels[16];
+	uint8_t started, side, count, read, aqueducts_read, has_cross_region_aqueducts;
+} OpenTTDWaterVisit;
+/* One map-lifetime owner, replaced at Map::Allocate and destroyed once. Each call
+ * holds the owner only until it returns: a visitor between two next steps may enter
+ * it again, and each step observes the caller's live descriptor and the live cache
+ * at the original points. Replacing the owner during a visit violates the original
+ * region-reference lifetime. */
+OpenTTDWaterRegions *OPENTTD_RUST_CALL openttd_rust_water_new(const struct OpenTTDSharedServices *, uint32_t, uint32_t);
 void OPENTTD_RUST_CALL openttd_rust_water_destroy(OpenTTDWaterRegions *);
-uint8_t OPENTTD_RUST_CALL openttd_rust_water_label(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t);
-void OPENTTD_RUST_CALL openttd_rust_water_invalidate(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t);
-void OPENTTD_RUST_CALL openttd_rust_water_snapshot(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t, OpenTTDWaterSnapshot *);
-OpenTTDWaterVisit *OPENTTD_RUST_CALL openttd_rust_water_visit_new(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, OpenTTDWaterPatch);
-void OPENTTD_RUST_CALL openttd_rust_water_visit_destroy(OpenTTDWaterVisit *);
-uint8_t OPENTTD_RUST_CALL openttd_rust_water_visit_next(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, OpenTTDWaterVisit *, OpenTTDWaterPatch, OpenTTDWaterPatch *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_water_label(OpenTTDWaterRegions *, const struct OpenTTDSharedServices *, uint32_t);
+void OPENTTD_RUST_CALL openttd_rust_water_invalidate(OpenTTDWaterRegions *, const struct OpenTTDSharedServices *, uint32_t);
+uint8_t OPENTTD_RUST_CALL openttd_rust_water_visit_next(OpenTTDWaterRegions *, const struct OpenTTDSharedServices *, OpenTTDWaterVisit *, OpenTTDWaterPatch, OpenTTDWaterPatch *);
+void OPENTTD_RUST_CALL openttd_rust_water_print_debug_info(OpenTTDWaterRegions *, const struct OpenTTDSharedServices *, uint32_t);
 #ifdef __cplusplus
 }
 #endif
 #ifdef __cplusplus
-OpenTTDWaterRegionContext GetRustWaterRegionContext() noexcept;
+OpenTTDWaterRegions *GetRustWaterRegions() noexcept;
 #endif
 #endif /* OPENTTD_RUST_WATER_REGIONS_FFI_H */

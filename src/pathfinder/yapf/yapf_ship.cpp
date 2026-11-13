@@ -49,17 +49,13 @@ static OpenTTDWaterPatch ShipPatch(uint32_t tile) noexcept
 	return {p.x, p.y, p.label.base()};
 }
 
-void *ShipWaterVisitNew(OpenTTDWaterPatch) noexcept;
-uint8_t ShipWaterVisitNext(void *, OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept;
-void ShipWaterVisitDestroy(void *) noexcept;
+uint8_t ShipWaterVisitNext(OpenTTDWaterVisit *, OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept;
 
 static const OpenTTDShipYapfLeaves _ship_yapf_leaves{
 	.destination = ShipDestination,
 	.tile = ShipTile,
 	.patch = ShipPatch,
-	.visit_new = ShipWaterVisitNew,
 	.visit_next = ShipWaterVisitNext,
-	.visit_destroy = ShipWaterVisitDestroy,
 	.debug = RustShipYapfDebug,
 };
 
