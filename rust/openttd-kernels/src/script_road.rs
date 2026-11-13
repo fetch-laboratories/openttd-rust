@@ -49,7 +49,7 @@ pub(crate) fn road_type_available(s: &Services, road_type: u32) -> bool {
     let road_type = road_type as u8;
     let shared = s.command.shared;
     road_type < crate::road_type::ROADTYPE_END
-        && crate::road::availability::has_road_type(
+        && crate::road::availability::has_road_type_avail_raw(
             shared,
             crate::type_availability::services(shared),
             script_host::active_company(),
@@ -202,7 +202,7 @@ fn tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
     if m.distance_manhattan(TileIndex(t1), TileIndex(t2)) != 1 {
         return false;
     }
-    let tram = crate::road::availability::get_road_tram_type(script_host::active_road_type()).0;
+    let tram = crate::road::availability::get_road_tram_type_raw(script_host::active_road_type()).0;
     let r1 = any_road_bits(s, t1, tram);
     let r2 = any_road_bits(s, t2, tram);
     #[allow(clippy::comparison_chain)]
@@ -650,7 +650,7 @@ pub extern "C" fn openttd_rust_script_road_build(
     if !straight_pair(s, start, end)
         || !enforce(
             one_way == 0
-                || crate::road::availability::road_type_is_road(script_host::active_road_type()),
+                || crate::road::availability::road_type_is_road_raw(script_host::active_road_type()),
             ERR_PRECONDITION_FAILED,
         )
         || !enforce(
@@ -823,12 +823,12 @@ pub unsafe extern "C" fn openttd_rust_script_road_type_list(
     let owner_company = script_host::active_company();
     let shared = s.command.shared;
     for rt in 0..crate::road_type::ROADTYPE_END {
-        let kind = crate::road::availability::get_road_tram_type(rt).0;
+        let kind = crate::road::availability::get_road_tram_type_raw(rt).0;
         if rtts & (1 << u32::from(kind)) == 0 {
             continue;
         }
         let types = crate::type_availability::services(shared);
-        if crate::road::availability::has_road_type(shared, types, owner_company, rt) {
+        if crate::road::availability::has_road_type_avail_raw(shared, types, owner_company, rt) {
             // SAFETY: caller contract.
             unsafe { (*owner).add(i64::from(rt), 0) };
         }

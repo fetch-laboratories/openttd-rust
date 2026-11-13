@@ -12,7 +12,6 @@ use crate::industry_type::{
 use crate::newgrf::CargoLabel;
 use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
 use crate::override_manager::{self, Mapping};
-use std::ffi::c_void;
 /// Native inputs: the original tables and the string ids Rust cannot name.
 #[repr(C)]
 pub struct Services {
@@ -80,17 +79,14 @@ pub unsafe fn allocate_tile_for(
     grfid: u32,
     substitute: u16,
 ) -> u16 {
-    let existing = unsafe { override_manager::get(manager, local, grfid) };
     // IndustryTileOverrideManager::CheckValidNewID excludes the water-check marker.
     unsafe {
-        crate::override_manager::openttd_rust_override_allocate(
+        override_manager::add_entity_id_with_check(
             manager,
             local,
             grfid,
             substitute,
-            std::ptr::null_mut(),
-            existing,
-            tile_valid,
+            crate::newgrf_commons::industry_tile_check_valid_new_id,
         )
     }
 }
@@ -99,10 +95,6 @@ pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
     unsafe { allocate_tile_for(override_manager::tile(), local, grfid, substitute) }
 }
 
-/// `IndustryTileOverrideManager::CheckValidNewID`, as the shared allocator's callback.
-unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> u8 {
-    u8::from(crate::newgrf_commons::industry_tile_check_valid_new_id(id))
-}
 /// `IndustryOverrideManager::SetEntitySpec`: method to install the new industry data in its
 /// proper slot, moving the per-file spec into it.
 #[allow(

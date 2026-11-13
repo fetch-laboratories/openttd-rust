@@ -182,6 +182,21 @@ impl RoadTypes {
     pub const fn with(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
+    /// Native `BaseBitSet::Reset` of every element in `other`.
+    #[must_use]
+    pub const fn reset(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
+    }
+    /// Native `BaseBitSet::Any`: test if any of the given values are set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+    /// Native `BaseBitSet::All`: test if all of the given values are set.
+    #[must_use]
+    pub const fn all(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
     /// Native `BaseBitSet` iteration, visiting set elements in ascending bit order.
     pub fn iter(self) -> impl Iterator<Item = RoadType> {
         let mut bits = self.0;

@@ -2994,7 +2994,7 @@ impl Ctx<'_> {
                 .0
                 .count_ones();
             if rt != RoadType::INVALID_ROADTYPE
-                && road_type_is_road(rt.0)
+                && road_type_is_road(rt)
                 && !(self.shared.road_powered)(rt.0, road_rt.0)
             {
                 return cost.error(self.s.strings.unsuitable_road);
@@ -3015,7 +3015,7 @@ impl Ctx<'_> {
                 crate::road_cost::build_cost(self.shared, road_rt.0)
                     .saturating_mul(i64::from(2_u32.wrapping_sub(num_pieces))),
             );
-        } else if rt != RoadType::INVALID_ROADTYPE && road_type_is_road(rt.0) {
+        } else if rt != RoadType::INVALID_ROADTYPE && road_type_is_road(rt) {
             cost.add_money(crate::road_cost::build_cost(self.shared, rt.0).saturating_mul(2));
         }
         /* There is a tram, check if we can build road+tram stop over it. */
@@ -3043,7 +3043,7 @@ impl Ctx<'_> {
                 .0
                 .count_ones();
             if rt != RoadType::INVALID_ROADTYPE
-                && road_type_is_tram(rt.0)
+                && road_type_is_tram(rt)
                 && !(self.shared.road_powered)(rt.0, tram_rt.0)
             {
                 return cost.error(self.s.strings.unsuitable_road);
@@ -3052,7 +3052,7 @@ impl Ctx<'_> {
                 crate::road_cost::build_cost(self.shared, tram_rt.0)
                     .saturating_mul(i64::from(2_u32.wrapping_sub(num_pieces))),
             );
-        } else if rt != RoadType::INVALID_ROADTYPE && road_type_is_tram(rt.0) {
+        } else if rt != RoadType::INVALID_ROADTYPE && road_type_is_tram(rt) {
             cost.add_money(crate::road_cost::build_cost(self.shared, rt.0).saturating_mul(2));
         }
     }
@@ -3353,7 +3353,7 @@ impl Ctx<'_> {
             adjacent,
         } = args;
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_ROAD);
-        if !crate::road::val_param_road_type(self.shared, rt.0)
+        if !crate::road::val_param_road_type(self.shared, rt)
             || !is_valid_diag_direction(ddir)
             || stop_type.0 >= RoadStopType::End.0
         {
@@ -3403,7 +3403,7 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Trams only have drive through stops */
-        if !is_drive_through && road_type_is_tram(rt.0) {
+        if !is_drive_through && road_type_is_tram(rt) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let axis = diag_dir_to_axis(ddir, |ok| {
@@ -3575,10 +3575,10 @@ impl Ctx<'_> {
                         cur_tile, road_rt, road_owner, tram_rt, tram_owner,
                     );
                 }
-                if road_rt == RoadType::INVALID_ROADTYPE && road_type_is_road(rt.0) {
+                if road_rt == RoadType::INVALID_ROADTYPE && road_type_is_road(rt) {
                     road_rt = rt;
                 }
-                if tram_rt == RoadType::INVALID_ROADTYPE && road_type_is_tram(rt.0) {
+                if tram_rt == RoadType::INVALID_ROADTYPE && road_type_is_tram(rt) {
                     tram_rt = rt;
                 }
                 (self.s.make_drive_stop)(
@@ -3594,10 +3594,10 @@ impl Ctx<'_> {
                 );
                 make_drive_through(self.shared, cur_tile, (self.stops().state)(road_stop));
             } else {
-                if road_rt == RoadType::INVALID_ROADTYPE && road_type_is_road(rt.0) {
+                if road_rt == RoadType::INVALID_ROADTYPE && road_type_is_road(rt) {
                     road_rt = rt;
                 }
-                if tram_rt == RoadType::INVALID_ROADTYPE && road_type_is_tram(rt.0) {
+                if tram_rt == RoadType::INVALID_ROADTYPE && road_type_is_tram(rt) {
                     tram_rt = rt;
                 }
                 (self.s.make_bay_stop)(

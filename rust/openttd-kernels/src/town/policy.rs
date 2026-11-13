@@ -3,7 +3,7 @@
 use super::{Leaves, State};
 use crate::cargo_type::{CargoType, INVALID_CARGO};
 use crate::cargotype::TownProductionEffect;
-use crate::road_type::{RoadTramType, RoadTypes};
+use crate::road_type::RoadTramType;
 use crate::tile_type::TileIndex;
 use crate::timer_game_calendar::CalendarDate;
 use crate::{cargo_registry, services::Services};
@@ -37,11 +37,7 @@ pub(crate) fn update_town_max_pass(leaves: &Leaves, owner: *mut State) {
 /// Return the introduction date of the earliest road type, or `INT32_MAX` if none is available.
 fn get_town_road_type_first_introduction_date(leaves: &Leaves) -> CalendarDate {
     let mut best = CalendarDate(i32::MAX);
-    for rt in RoadTypes(crate::road::get_mask_for_road_tram_type(
-        RoadTramType::RTT_ROAD,
-    ))
-    .iter()
-    {
+    for rt in crate::road::get_mask_for_road_tram_type(RoadTramType::RTT_ROAD).iter() {
         let rti = (leaves.road_info)(rt.0);
         // Town can't build this road type.
         if !rti.town_build {
