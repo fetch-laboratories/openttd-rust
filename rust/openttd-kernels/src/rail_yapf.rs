@@ -23,7 +23,7 @@
 use crate::binaryheap::BinaryHeap;
 use crate::bitmath_func::{find_first_bit, kill_first_bit, kill_first_bit_u16};
 use crate::debug::debug;
-use crate::direction_func::{diag_dir_to_axis, reverse_diag_dir};
+use crate::direction_func::reverse_diag_dir;
 use crate::direction_type::DiagDirection;
 use crate::follow_track::{CFollowTrackT, ErrorCode, get_speed_limit};
 use crate::game_state::GameState;
@@ -45,7 +45,7 @@ use crate::station_type::{SAT_PATH_RESERVATION, SRT_PATH_RESERVATION, StationID,
 use crate::tile_type::{TILE_SIZE, TileIndex, TileType};
 use crate::track_func::{
     diagdir_reaches_tracks, find_first_trackdir, has_trackdir, is_diagonal_trackdir,
-    is_uphill_trackdir, is_valid_trackdir, next_trackdir, reverse_trackdir, track_overlaps_tracks,
+    is_valid_trackdir, next_trackdir, reverse_trackdir, track_overlaps_tracks,
     track_status_to_trackdir_bits, trackdir_crosses_trackdirs, trackdir_to_exitdir,
     trackdir_to_track,
 };
@@ -54,6 +54,7 @@ use crate::transport_type::TransportType;
 use crate::vehicle::OpenTTDVehicle;
 use crate::witness;
 use crate::yapf_common::octile_distance_cost;
+use crate::yapf_costbase::st_slope_cost;
 use crate::yapf_node::CYapfNodeKeyTrackDir;
 use crate::yapf_type::{
     ESRF_ABORT_PF_MASK, ESRF_CACHED_MASK, ESRF_POSSIBLE_TARGET, EndSegmentReason, EndSegmentReasons,
@@ -1332,6 +1333,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
     #[inline]
     fn platform_length_penalty(&self, platform_length: i32) -> i32 {
         let mut cost = 0_i32;
+        self.world.assert_with(|| !self.v.record.is_null());
         let v = self.v.vehicle();
         self.world
             .assert_with(|| v.vehicle_type() == crate::vehicle_type::VEH_TRAIN);
@@ -1569,7 +1571,61 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                     /* This waypoint is our destination; maybe this isn't an unreserved
                      * one, so check that and if so see that as the last signal being
                      * red. This way waypoints near stations should work better. */
-                    extra_cost = extra_cost.wrapping_add(self.waypoint_look_ahead_cost(cur));
+                    let mut ft = CFollowTrackT::vehicle(
+                        self.s,
+                        TransportType::TRANSPORT_RAIL,
+                        Some(self.v.vehicle()),
+                        RailTypes::INVALID_RAILTYPES,
+                        true,
+                    );
+                    let mut t = cur.tile;
+                    let mut td = cur.td;
+                    let forbid_90_deg = (self.s.forbid_90_deg)();
+                    /* Arbitrary maximum tiles to follow to avoid infinite loops. */
+                    let mut max_tiles = 20_u32;
+                    while ft.follow(self.s, t, td) {
+                        self.world.assert_with(|| t != ft.new_tile);
+                        t = ft.new_tile;
+                        max_tiles = max_tiles.wrapping_sub(1);
+                        if t == cur.tile || max_tiles == 0 {
+                            /* We looped back on ourself or found another loop, bail out. */
+                            td = Trackdir::INVALID_TRACKDIR;
+                            break;
+                        }
+                        if kill_first_bit_u16(ft.new_td_bits.0) != TrackdirBits::TRACKDIR_BIT_NONE.0
+                        {
+                            /* We encountered a junction; it's going to be too complex to
+                             * handle this perfectly, so just bail out. There is no simple
+                             * free path, so try the other possibilities. */
+                            td = Trackdir::INVALID_TRACKDIR;
+                            break;
+                        }
+                        // `RemoveFirstTrackdir(&ft.new_td_bits)`.
+                        td = Trackdir(find_first_bit(u64::from(ft.new_td_bits.0)));
+                        ft.new_td_bits = TrackdirBits(kill_first_bit_u16(ft.new_td_bits.0));
+                        /* If this is a safe waiting position we're done searching for it */
+                        if self
+                            .pbs
+                            .is_safe_waiting_position(self.v, t, td, true, forbid_90_deg)
+                        {
+                            break;
+                        }
+                    }
+
+                    /* In the case this platform is (possibly) occupied we add penalty so the
+                     * other platforms of this waypoint are evaluated as well, i.e. we assume
+                     * that there is a red signal in the waypoint when it's occupied. */
+                    if td == Trackdir::INVALID_TRACKDIR
+                        || !self
+                            .pbs
+                            .is_safe_waiting_position(self.v, t, td, true, forbid_90_deg)
+                        || !self
+                            .pbs
+                            .is_waiting_position_free(self.v, t, td, forbid_90_deg)
+                    {
+                        extra_cost =
+                            extra_cost.wrapping_add(self.penalty(|s| s.rail_lastred_penalty));
+                    }
                 }
                 /* Waypoint is also a good reason to finish. */
                 end_segment_reason.set(EndSegmentReason::WAYPOINT);
@@ -1819,64 +1875,6 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
             .wrapping_add(extra_cost);
 
         true
-    }
-    /// The waypoint branch of `PfCalcCost`: `rail_lastred_penalty` when the
-    /// destination waypoint's platform from `cur` is (possibly) occupied.
-    fn waypoint_look_ahead_cost(&self, cur: TileInfo) -> i32 {
-        let mut ft = CFollowTrackT::vehicle(
-            self.s,
-            TransportType::TRANSPORT_RAIL,
-            Some(self.v.vehicle()),
-            RailTypes::INVALID_RAILTYPES,
-            true,
-        );
-        let mut t = cur.tile;
-        let mut td = cur.td;
-        let forbid_90_deg = (self.s.forbid_90_deg)();
-        /* Arbitrary maximum tiles to follow to avoid infinite loops. */
-        let mut max_tiles = 20_u32;
-        while ft.follow(self.s, t, td) {
-            self.world.assert_with(|| t != ft.new_tile);
-            t = ft.new_tile;
-            max_tiles = max_tiles.wrapping_sub(1);
-            if t == cur.tile || max_tiles == 0 {
-                /* We looped back on ourself or found another loop, bail out. */
-                td = Trackdir::INVALID_TRACKDIR;
-                break;
-            }
-            if kill_first_bit_u16(ft.new_td_bits.0) != TrackdirBits::TRACKDIR_BIT_NONE.0 {
-                /* We encountered a junction; it's going to be too complex to
-                 * handle this perfectly, so just bail out. There is no simple
-                 * free path, so try the other possibilities. */
-                td = Trackdir::INVALID_TRACKDIR;
-                break;
-            }
-            // `RemoveFirstTrackdir(&ft.new_td_bits)`.
-            td = Trackdir(find_first_bit(u64::from(ft.new_td_bits.0)));
-            ft.new_td_bits = TrackdirBits(kill_first_bit_u16(ft.new_td_bits.0));
-            /* If this is a safe waiting position we're done searching for it */
-            if self
-                .pbs
-                .is_safe_waiting_position(self.v, t, td, true, forbid_90_deg)
-            {
-                break;
-            }
-        }
-
-        /* In the case this platform is (possibly) occupied we add penalty so the
-         * other platforms of this waypoint are evaluated as well, i.e. we assume
-         * that there is a red signal in the waypoint when it's occupied. */
-        if td == Trackdir::INVALID_TRACKDIR
-            || !self
-                .pbs
-                .is_safe_waiting_position(self.v, t, td, true, forbid_90_deg)
-            || !self
-                .pbs
-                .is_waiting_position_free(self.v, t, td, forbid_90_deg)
-        {
-            return self.penalty(|s| s.rail_lastred_penalty);
-        }
-        0
     }
     /// `CanUseGlobalCache`.
     #[inline]
@@ -2319,33 +2317,6 @@ fn st_get_global_cache<T: Types>() {
             witness::hit(witness::RAIL_CACHE_FLUSHES);
         }
     }
-}
-
-/// `CYapfCostBase::stSlopeCost`: does the given track direction on the given
-/// tile yield an uphill penalty?
-#[inline]
-fn st_slope_cost(world: &World<'_>, tile: TileIndex, td: Trackdir) -> bool {
-    if is_diagonal_trackdir(td.0) {
-        if world.kind(tile) == TileType::MP_TUNNELBRIDGE && world.bridge(tile.0) {
-            /* it is bridge ramp, check if we are entering the bridge */
-            if world.tunnel_bridge_dir(tile.0) != trackdir_to_exitdir(td.0) {
-                return false; // no, we are leaving it, no penalty
-            }
-            /* we are entering the bridge */
-            let tile_slope = world.tile_slope(tile);
-            let axis = diag_dir_to_axis(DiagDirection(world.tunnel_bridge_dir(tile.0)), |ok| {
-                world.check(ok);
-            });
-            return !crate::bridge::has_bridge_flat_ramp(world.shared, tile_slope.0, axis.0);
-        }
-        /* not bridge ramp */
-        if world.kind(tile) == TileType::MP_TUNNELBRIDGE && world.tunnel(tile.0) {
-            return false; // tunnel entry/exit doesn't slope
-        }
-        let tile_slope = world.tile_slope(tile);
-        return is_uphill_trackdir(tile_slope, td.0, |ok| world.check(ok)); // slopes uphill => apply penalty
-    }
-    false
 }
 
 /// `DumpState`: the two searches' states, through the native `DumpTarget`

@@ -142,5 +142,6 @@ rust/openttd-kernels/src/water_regions.rs
 rust/openttd-kernels/src/widget_parser.rs
 rust/openttd-kernels/src/witness.rs
 rust/openttd-kernels/src/yapf_common.rs
+rust/openttd-kernels/src/yapf_costbase.rs
 rust/openttd-kernels/src/yapf_node.rs
 rust/openttd-kernels/src/yapf_type.rs
