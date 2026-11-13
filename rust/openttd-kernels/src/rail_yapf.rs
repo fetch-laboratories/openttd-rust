@@ -2519,16 +2519,27 @@ impl<'a, T: Types<PfDestination = CYapfDestinationTileOrStationRailT>> CYapfRail
     }
 }
 
+/// The two origins `FindNearestDepotTwoWay` hands to `SetOrigin`: the front of
+/// the train and its reversed back. An argument struct, not an original type.
+#[derive(Clone, Copy)]
+struct TwoWayOrigin {
+    /// `t1`: the tile of the forward origin.
+    t1: TileIndex,
+    /// `td1`: the trackdir of the forward origin.
+    td1: Trackdir,
+    /// `t2`: the tile of the reversed origin.
+    t2: TileIndex,
+    /// `td2`: the trackdir of the reversed origin.
+    td2: Trackdir,
+}
+
 // `CYapfFollowAnyDepotRailT`.
 impl<'a, T: Types<PfDestination = CYapfDestinationAnyDepotRailT>> CYapfRailT<'a, T> {
     /// `stFindNearestDepotTwoWay`.
     fn st_find_nearest_depot_two_way(
         s: &'a Services,
         v: crate::train::Handle,
-        t1: TileIndex,
-        td1: Trackdir,
-        t2: TileIndex,
-        td2: Trackdir,
+        origin: TwoWayOrigin,
         max_penalty: i32,
         reverse_penalty: i32,
     ) -> FindDepotData {
@@ -2545,14 +2556,12 @@ impl<'a, T: Types<PfDestination = CYapfDestinationAnyDepotRailT>> CYapfRailT<'a,
         if max_penalty != 0 {
             pf1.disable_cache(true);
         }
-        let result1 =
-            pf1.find_nearest_depot_two_way(t1, td1, t2, td2, max_penalty, reverse_penalty);
+        let result1 = pf1.find_nearest_depot_two_way(origin, max_penalty, reverse_penalty);
 
         if desync_level() >= 2 {
             let mut pf2 = Self::new(s, v);
             pf2.disable_cache(true);
-            let result2 =
-                pf2.find_nearest_depot_two_way(t1, td1, t2, td2, max_penalty, reverse_penalty);
+            let result2 = pf2.find_nearest_depot_two_way(origin, max_penalty, reverse_penalty);
             if result1.tile != result2.tile || (result1.reverse != result2.reverse) {
                 debug!(
                     desync,
@@ -2570,13 +2579,11 @@ impl<'a, T: Types<PfDestination = CYapfDestinationAnyDepotRailT>> CYapfRailT<'a,
     /// `FindNearestDepotTwoWay`.
     fn find_nearest_depot_two_way(
         &mut self,
-        t1: TileIndex,
-        td1: Trackdir,
-        t2: TileIndex,
-        td2: Trackdir,
+        origin: TwoWayOrigin,
         max_penalty: i32,
         reverse_penalty: i32,
     ) -> FindDepotData {
+        let TwoWayOrigin { t1, td1, t2, td2 } = origin;
         /* set origin and destination nodes */
         self.set_origin(t1, td1, t2, td2, reverse_penalty);
         self.set_treat_first_red_two_way_signal_as_eol(true);
@@ -2850,14 +2857,17 @@ pub(crate) fn yapf_train_find_nearest_depot(
         crate::train::get_vehicle_trackdir(leaves, s, last_veh).0,
     ));
 
+    let two_way = TwoWayOrigin {
+        t1: origin.tile,
+        td1: origin.trackdir,
+        t2: last_tile,
+        td2: td_rev,
+    };
     let result = if (s.forbid_90_deg)() {
         CYapfRailT::<CYapfAnyDepotRailNo90>::st_find_nearest_depot_two_way(
             s,
             v,
-            origin.tile,
-            origin.trackdir,
-            last_tile,
-            td_rev,
+            two_way,
             max_penalty,
             YAPF_INFINITE_PENALTY,
         )
@@ -2865,10 +2875,7 @@ pub(crate) fn yapf_train_find_nearest_depot(
         CYapfRailT::<CYapfAnyDepotRail>::st_find_nearest_depot_two_way(
             s,
             v,
-            origin.tile,
-            origin.trackdir,
-            last_tile,
-            td_rev,
+            two_way,
             max_penalty,
             YAPF_INFINITE_PENALTY,
         )
@@ -3555,36 +3562,72 @@ mod tests {
 
     #[test]
     fn counter_advance_flushes_only_the_next_constructed_cache() {
+        // The caches and the counter are process-wide statics that the game
+        // thread serializes: each step runs on its own thread, one after the
+        // other, with the fixture installed on that thread, so per-thread
+        // storage would fail the assertions below.
         let _statics = STATICS.lock().unwrap_or_else(PoisonError::into_inner);
-        let f = fixture();
         let key = CYapfRailSegmentKey::new(CYapfNodeKeyTrackDir::set(
             TileIndex(5),
             Trackdir::TRACKDIR_X_NE,
         ));
-        let mut found = false;
-        drop(CYapfRailT::<CYapfRail>::new(f.s, f.v));
-        drop(CYapfRailT::<CYapfAnyDepotRail>::new(f.s, f.v));
+        std::thread::spawn(move || {
+            let f = fixture();
+            let mut found = false;
+            drop(CYapfRailT::<CYapfRail>::new(f.s, f.v));
+            drop(CYapfRailT::<CYapfAnyDepotRail>::new(f.s, f.v));
+            // SAFETY: STATICS serializes the process-wide caches for this test,
+            // and the main thread waits for this one.
+            unsafe {
+                let caches = &mut *GLOBAL_CACHES.get();
+                caches[<CYapfRail as Types>::GLOBAL_CACHE]
+                    .c
+                    .get(key, &mut found);
+                caches[<CYapfAnyDepotRail as Types>::GLOBAL_CACHE]
+                    .c
+                    .get(key, &mut found);
+            }
+        })
+        .join()
+        .unwrap();
+
+        // The segments another thread cached are this thread's, and a search
+        // constructed here before any change keeps them.
+        let f = fixture();
+        let mut earlier = CYapfRailT::<CYapfRail>::new(f.s, f.v);
         // SAFETY: STATICS serializes the process-wide caches for this test.
         unsafe {
-            let caches = &mut *GLOBAL_CACHES.get();
-            caches[<CYapfRail as Types>::GLOBAL_CACHE]
-                .c
-                .get(key, &mut found);
-            caches[<CYapfAnyDepotRail as Types>::GLOBAL_CACHE]
-                .c
-                .get(key, &mut found);
+            let caches = &*GLOBAL_CACHES.get();
+            assert_eq!(caches[<CYapfRail as Types>::GLOBAL_CACHE].c.heap.len(), 1);
+            assert_eq!(
+                caches[<CYapfAnyDepotRail as Types>::GLOBAL_CACHE]
+                    .c
+                    .heap
+                    .len(),
+                1
+            );
         }
 
         // A search keeps its local segment through the change and the next
         // search's construction.
-        let mut earlier = CYapfRailT::<CYapfRail>::new(f.s, f.v);
         let mut n = node(&mut earlier, TileIndex(6), Trackdir::TRACKDIR_X_NE);
         n.cost = 1;
         let mut segment = earlier.segment(n.segment);
         segment.cost = 123;
         earlier.set_segment(n.segment, segment);
 
-        yapf_notify_track_layout_change(TileIndex::INVALID, Track::INVALID_TRACK);
+        // The change is notified on another thread.
+        // SAFETY: STATICS serializes the counter for this test.
+        let before = unsafe { *S_RAIL_CHANGE_COUNTER.get() };
+        std::thread::spawn(|| {
+            let _f = fixture();
+            yapf_notify_track_layout_change(TileIndex::INVALID, Track::INVALID_TRACK);
+        })
+        .join()
+        .unwrap();
+        // SAFETY: STATICS serializes the counter for this test.
+        assert_ne!(unsafe { *S_RAIL_CHANGE_COUNTER.get() }, before);
+
         let _later = CYapfRailT::<CYapfRail>::new(f.s, f.v);
         // SAFETY: STATICS serializes the process-wide caches for this test.
         unsafe {

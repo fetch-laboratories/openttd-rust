@@ -39,8 +39,18 @@ impl EndSegmentReason {
     pub(crate) const PATH_TOO_LONG: Self = Self(9);
     /// First signal was 2-way and it was red.
     pub(crate) const FIRST_TWO_WAY_RED: Self = Self(10);
-    // `LookAheadEnd` (11) and `TargetReached` (12) follow; the original sets
-    // neither and no mask names them.
+    /// We have just passed the last look-ahead signal.
+    #[allow(
+        dead_code,
+        reason = "the original's vocabulary; PfCalcCost never sets it"
+    )]
+    pub(crate) const LOOK_AHEAD_END: Self = Self(11);
+    /// We have just reached the destination.
+    #[allow(
+        dead_code,
+        reason = "the original's vocabulary; PfCalcCost never sets it"
+    )]
+    pub(crate) const TARGET_REACHED: Self = Self(12);
 }
 
 /// `EndSegmentReasons`: `EnumBitSet<EndSegmentReason, uint16_t>`.
