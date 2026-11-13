@@ -243,7 +243,8 @@ unsafe fn run_batch<const AMBIENT: bool>(
     let s = &snapshot;
     // The batch loads the descriptor once. Its serialized no-reset/no-yield call
     // graph keeps it live; only descriptor metadata, never a map access, spans dispatch.
-    let world = crate::map_func::World::new(unsafe { &*s.shared });
+    let shared = unsafe { &*s.shared };
+    let world = crate::map_func::World::new(shared);
     let types = world.types.without_native_assert();
     let map = world.dimensions;
     let size_y: c_uint = 1 << log_y;
@@ -259,7 +260,7 @@ unsafe fn run_batch<const AMBIENT: bool>(
 
     let mut tile = unsafe { CUR_TILELOOP_TILE };
     // The LFSR cannot have a zeroed state.
-    crate::services_assert::check(tile != TileIndex(0));
+    crate::movement::native_assert(shared, tile != TileIndex(0));
 
     // Manually update tile 0 every TILE_UPDATE_FREQUENCY ticks - the LFSR never iterates
     // over it itself.
@@ -425,6 +426,11 @@ mod comparison_tests {
         shared.tile_type = shared_tile_type;
         shared.station_type = station_type;
         shared.map = crate::map_func::fixture::statics();
+        let movement = crate::movement::MovementServices {
+            native_assert: record_failed_check,
+            ..crate::test_tables::MOVEMENT
+        };
+        shared.movement = Box::leak(Box::new(movement));
         // The station table holds `&'static` shared services, as the native facade does.
         let shared: &'static crate::services::Services = Box::leak(Box::new(shared));
         let mut roadstops = ROAD_STOPS;
@@ -586,21 +592,8 @@ mod comparison_tests {
         }
     }
 
-    /// The native assertion service, failing fast as the native build does.
-    extern "C" fn abort_failed_check(condition: bool) {
-        if !condition {
-            std::process::abort();
-        }
-    }
-
     #[test]
     fn tile_loop_matches_original_scheduler() {
-        if crate::services_assert::isolate_test_check(
-            "tile_loop::comparison_tests::tile_loop_matches_original_scheduler",
-            abort_failed_check,
-        ) {
-            return;
-        }
         let oracle = oracle::parse(ORACLE);
         // SAFETY: Serialized test access to the scheduler's cursor.
         let saved = unsafe { *openttd_rust_tile_loop_cursor() };
@@ -657,6 +650,8 @@ mod comparison_tests {
     /// tile-zero phase or the first LFSR visit; a nonzero cursor passes it.
     #[test]
     fn zero_cursor_fails_the_native_assertion_before_the_first_visit() {
+        // A child process keeps this batch off the process-wide cursor the comparison
+        // test drives; the shared table's recording assertion observes the failure.
         if crate::services_assert::isolate_test_check(
             "tile_loop::comparison_tests::zero_cursor_fails_the_native_assertion_before_the_first_visit",
             record_failed_check,
