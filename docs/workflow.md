@@ -21,7 +21,7 @@ A substantive change gets a fork issue, then a branch and worktree from `rust-mi
 
 ## Commits and pushes
 
-- Before pushing a change that is not docs-only, run `python3 tools/preflight.py --base origin/rust-migration` as a background job. The pre-push hook refuses a push whose tree has no preflight stamp, except a checkpoint push to a draft PR.
+- Before pushing a change that is not docs-only, run `python3 tools/preflight.py --base "$(git merge-base origin/rust-migration HEAD)"` as a background job. Give it the merge base, not the branch's tip: preflight compares the two trees, so against a tip that has moved it reads each newer merge as lines your branch removed, and that is no reason for a [base update](#integration). The pre-push hook refuses a push whose tree has no preflight stamp, except a checkpoint push to a draft PR.
 - A commit title starts with a prefix the pinned commit checker accepts; the `commit-msg` hook refuses any other title and says what to use.
 - A fidelity or crash fix ends with `Found-by:` naming the check: `review`, `scenario NAME`, `comparison TOOL`, `unit test`, `CI JOB`, `deep check` or `user`.
 

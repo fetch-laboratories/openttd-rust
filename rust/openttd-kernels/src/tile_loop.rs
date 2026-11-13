@@ -11,11 +11,17 @@
 //! map view") gives the interval that permits both.
 #![allow(unsafe_code)]
 
+use crate::landscape::{TILE_UPDATE_FREQUENCY, TILE_UPDATE_FREQUENCY_LOG};
+use crate::map_func::Map;
+use crate::map_type::{MAX_MAP_SIZE_BITS, MIN_MAP_SIZE_BITS};
 use crate::tile_type::{TileIndex, TileType};
 use crate::{ground, industry, services, town, trees, water};
 use std::ffi::c_uint;
 
-const FEEDBACKS: [u32; 13] = [
+/// `feedbacks`: maximal length LFSR feedback terms, from 12-bit (for 64x64 maps) to 24-bit
+/// (for 4096x4096 maps). Extracted from <http://www.ece.cmu.edu/~koopman/lfsr/>. The length
+/// is the original's `static_assert`: a table of any other size does not compile.
+const FEEDBACKS: [u32; (2 * MAX_MAP_SIZE_BITS - 2 * MIN_MAP_SIZE_BITS + 1) as usize] = [
     0xD8F,
     0x1296,
     0x2496,
@@ -30,14 +36,19 @@ const FEEDBACKS: [u32; 13] = [
     0x0040_04B2,
     0x0080_0B87,
 ];
-// Serialized by the game-state mutex on both GUI threads; raw save/load access
-// occurs only at the original serial boundaries. Never form a Rust reference.
-static mut CURSOR: u32 = 0;
+/// `static_assert(2 * MIN_MAP_SIZE_BITS >= TILE_UPDATE_FREQUENCY_LOG)`: the unsigned
+/// difference fails constant evaluation when it would be negative.
+const _: u32 = 2 * MIN_MAP_SIZE_BITS - TILE_UPDATE_FREQUENCY_LOG;
 
-/// Stable canonical storage for DATE, old-loader, reset and afterload repair.
+/// `_cur_tileloop_tile`. Serialized by the game-state mutex on both GUI threads; raw
+/// save/load access occurs only at the original serial boundaries. Never form a Rust reference.
+static mut CUR_TILELOOP_TILE: TileIndex = TileIndex(0);
+
+/// Stable canonical storage for DATE, old-loader, reset and afterload repair, as the
+/// base integer of the `#[repr(transparent)]` tile.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_tile_loop_cursor() -> *mut u32 {
-    &raw mut CURSOR
+    (&raw mut CUR_TILELOOP_TILE).cast::<u32>()
 }
 
 /// Existing industry tables consumed by this entry, borrowed for the batch.
@@ -85,11 +96,11 @@ pub struct Services {
 // uninlined closure cost 47 instructions per visit versus the native 18.
 // `AMBIENT` is the batch's `AmbientSoundEffect` feature gate, so a disabled gate costs
 // nothing per clear, tree or water tile.
-#[allow(clippy::inline_always, clippy::cast_possible_truncation)]
+#[allow(clippy::inline_always)]
 #[inline(always)]
 unsafe fn dispatch<const AMBIENT: bool>(
     tile: TileIndex,
-    log_x: c_uint,
+    map: Map,
     size_y: c_uint,
     settings: trees::LoopSettings,
     s: &Services,
@@ -145,11 +156,17 @@ unsafe fn dispatch<const AMBIENT: bool>(
                 ambient_callback: AMBIENT,
                 ..settings
             };
-            trees::tile_loop(tile.0, settings, g.call, s.trees, s.shared, types);
+            trees::tile_loop_trees(
+                &trees::Trees::new(s.trees, s.shared),
+                types,
+                tile,
+                &settings,
+                g.call,
+            );
         },
         TileType::MP_STATION => unsafe {
-            crate::station_lifecycle::tile_loop(
-                tile.0,
+            crate::station_lifecycle::tile_loop_station(
+                tile,
                 g.call,
                 &*s.station,
                 types,
@@ -175,28 +192,25 @@ unsafe fn dispatch<const AMBIENT: bool>(
             // A branch-local copy keeps the batch snapshot's address from escaping,
             // so its hot fields stay in registers for the other arms.
             let industry_services = s.industry;
-            industry::tile_loop(
-                tile,
-                // Existing industry ABI stores legal map logarithms in a byte.
-                crate::map_func::Map::from_log_x(log_x),
-                g.call,
-                &industry_services,
-            );
+            industry::tile_loop(tile, map, g.call, &industry_services);
         },
         TileType::MP_TUNNELBRIDGE => unsafe {
             ground::tunnel_tile_loop(tile.0, g.climate, g.tunnel, s.shared);
         },
         TileType::MP_OBJECT => unsafe {
-            crate::objects::openttd_rust_object_tile_loop(s.objects, g.call, tile.0);
+            crate::objects::tile_loop(s.objects, g.call, tile);
         },
-        // The source dispatch table has handlers only for original live tile types.
+        // `_tile_type_procs[GetTileType(tile)]` indexes its 16 entries without a check, and
+        // only the original tile types above are ever stored, so this arm is unreachable
+        // rather than a `NOT_REACHED`.
         _ => unsafe { std::hint::unreachable_unchecked() },
     }
 }
 
-/// Own the source's complete batch, including tile-zero phase and final commit.
+/// `RunTileLoop`: gradually iterate over all tiles on the map, calling their tile loop
+/// once every `TILE_UPDATE_FREQUENCY` ticks.
 /// # Safety
-/// Dimensions are legal original map dimensions; cursor is nonzero. All service
+/// Dimensions are legal original map dimensions. All service
 /// reached pointers/tables are immutable and live; each native entry owns its lazy
 /// result context independently. Calls are serialized with reset and
 /// save/load. Callbacks are noexcept; reentry sees the cursor before this batch.
@@ -235,24 +249,46 @@ unsafe fn run_batch<const AMBIENT: bool>(
     let s = &snapshot;
     // The batch loads the descriptor once. Its serialized no-reset/no-yield call
     // graph keeps it live; only descriptor metadata, never a map access, spans dispatch.
-    let types = crate::map_func::World::new(unsafe { &*s.shared })
-        .types
-        .without_native_assert();
-    let mut tile = unsafe { CURSOR };
-    let log_sum = log_x + log_y;
-    let feedback = FEEDBACKS[(log_sum - 12) as usize];
-    let mut count: c_uint = 1 << (log_sum - 8);
+    let shared = unsafe { &*s.shared };
+    let world = crate::map_func::World::new(shared);
+    let types = world.types.without_native_assert();
+    let map = world.dimensions;
     let size_y: c_uint = 1 << log_y;
-    if settings.tick_counter.is_multiple_of(256) {
-        unsafe { dispatch::<AMBIENT>(TileIndex(0), log_x, size_y, settings, s, &types) };
+
+    // The pseudorandom sequence of tiles is generated using a Galois linear feedback
+    // shift register (LFSR). This allows a deterministic pseudorandom ordering, but
+    // still with minimal state and fast iteration.
+    let feedback = FEEDBACKS[(log_x + log_y - 2 * MIN_MAP_SIZE_BITS) as usize];
+
+    // We update every tile every TILE_UPDATE_FREQUENCY ticks, so divide the map size by
+    // 2^TILE_UPDATE_FREQUENCY_LOG = TILE_UPDATE_FREQUENCY.
+    let mut count: c_uint = 1 << (log_x + log_y - TILE_UPDATE_FREQUENCY_LOG);
+
+    let mut tile = unsafe { CUR_TILELOOP_TILE };
+    // The LFSR cannot have a zeroed state.
+    crate::movement::native_assert(shared, tile != TileIndex(0));
+
+    // Manually update tile 0 every TILE_UPDATE_FREQUENCY ticks - the LFSR never iterates
+    // over it itself.
+    if settings
+        .tick_counter
+        .is_multiple_of(u64::from(TILE_UPDATE_FREQUENCY))
+    {
+        unsafe { dispatch::<AMBIENT>(TileIndex(0), map, size_y, settings, s, &types) };
         count -= 1;
     }
+
     while count != 0 {
-        unsafe { dispatch::<AMBIENT>(TileIndex(tile), log_x, size_y, settings, s, &types) };
-        tile = (tile >> 1) ^ (0_u32.wrapping_sub(tile & 1) & feedback);
         count -= 1;
+        unsafe { dispatch::<AMBIENT>(tile, map, size_y, settings, s, &types) };
+
+        // Get the next tile in sequence using a Galois LFSR.
+        tile = TileIndex(
+            (tile.0 >> 1) ^ ((tile.0 & 1).cast_signed().wrapping_neg().cast_unsigned() & feedback),
+        );
     }
-    unsafe { CURSOR = tile };
+
+    unsafe { CUR_TILELOOP_TILE = tile };
 }
 
 crate::abi::layouts! {
@@ -288,10 +324,9 @@ crate::abi::layouts! {
     };
 }
 
-/// `RunTileLoop` over the retired `tools/simulation/landscape-loop-reference.cpp` fixture's
-/// maps (#736 W): every original map size, five tick phases, three start cursors, reentry and
-/// both tile-type backends, plus the live LFSR-neighbour mutation, frozen from the unchanged
-/// original only (`tile_loop/comparison-oracle.txt`).
+/// `RunTileLoop` on every original map size, five tick phases, three start cursors, reentry
+/// and both tile-type backends, plus the live LFSR-neighbour mutation, against the original's
+/// visits and cursors in `tile_loop/comparison-oracle.txt`.
 #[cfg(test)]
 mod comparison_tests {
     use super::*;
@@ -324,12 +359,9 @@ mod comparison_tests {
             const { Cell::new(None) };
     }
 
-    fn tile_type(tile: u32) -> u8 {
+    extern "C" fn shared_tile_type(tile: u32) -> u8 {
         // SAFETY: The test's live allocation covers every visited tile.
         unsafe { (*TILES.get().add(tile as usize)).kind >> 4 }
-    }
-    extern "C" fn shared_tile_type(tile: u32) -> u8 {
-        tile_type(tile)
     }
     extern "C" fn station_type(_: u32) -> crate::station_type::StationType {
         crate::station_type::StationType::End
@@ -400,6 +432,11 @@ mod comparison_tests {
         shared.tile_type = shared_tile_type;
         shared.station_type = station_type;
         shared.map = crate::map_func::fixture::statics();
+        let movement = crate::movement::MovementServices {
+            native_assert: record_failed_check,
+            ..crate::test_tables::MOVEMENT
+        };
+        shared.movement = Box::leak(Box::new(movement));
         // The station table holds `&'static` shared services, as the native facade does.
         let shared: &'static crate::services::Services = Box::leak(Box::new(shared));
         let mut roadstops = ROAD_STOPS;
@@ -531,8 +568,7 @@ mod comparison_tests {
     }
 
     /// The scheduler's shared tile-type reader keeps the original callback for any tile outside
-    /// the allocation, and for an empty allocation (the retired `landscape_tile_loop.cpp`
-    /// fixture's checks).
+    /// the allocation, and for an empty allocation.
     #[test]
     fn tile_type_reader_falls_back_to_callback_out_of_range() {
         let mut tiles = map_tiles(4096);
@@ -602,5 +638,49 @@ mod comparison_tests {
         }
         // SAFETY: Same serialized scalar.
         unsafe { *openttd_rust_tile_loop_cursor() = saved };
+    }
+
+    thread_local! {
+        static FAILED_AT: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+    }
+    /// The native assertion service, recording the visit count at each failure.
+    extern "C" fn record_failed_check(condition: bool) {
+        if !condition {
+            let visits = RUN.with(|run| run.borrow().count);
+            FAILED_AT.with(|failed| failed.borrow_mut().push(visits));
+        }
+    }
+
+    /// `assert(tile != 0)` fails once per batch, after the cursor is loaded and before the
+    /// tile-zero phase or the first LFSR visit; a nonzero cursor passes it.
+    #[test]
+    fn zero_cursor_fails_the_native_assertion_before_the_first_visit() {
+        // A child process keeps this batch off the process-wide cursor the comparison
+        // test drives; the shared table's recording assertion observes the failure.
+        if crate::services_assert::isolate_test_check(
+            "tile_loop::comparison_tests::zero_cursor_fails_the_native_assertion_before_the_first_visit",
+            record_failed_check,
+        ) {
+            return;
+        }
+        let size = 1 << 12;
+        let mut tiles = map_tiles(size);
+        TILES.set(tiles.as_mut_ptr());
+        let extended = station_end_tiles(size);
+        EXTENDED.set(extended.as_ptr());
+        for (tick, start, failures) in [(1, 0, &[0][..]), (256, 0, &[0]), (256, 1, &[])] {
+            FAILED_AT.with(|failed| failed.borrow_mut().clear());
+            let output = batch(6, 6, tick, start, true);
+            // A zeroed LFSR stays at tile 0 for all 16 visits of a 64x64 batch.
+            if start == 0 {
+                assert!(output.ends_with(" 16 0"), "{output}");
+            }
+            assert_eq!(
+                FAILED_AT.with(|failed| failed.borrow().clone()),
+                failures,
+                "tick={tick} start={start}"
+            );
+        }
+        TILES.set(ptr::null_mut());
     }
 }

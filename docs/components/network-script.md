@@ -6,7 +6,7 @@
 
 - Rust owns: Single and combined authentication handlers, method selection and fallback, X25519 sessions, key derivation, packet encryption streams, UID/file hashing and plugin signature verification. Pinned maintained crates supply X25519, BLAKE2b, ChaCha20, Poly1305 and SHA-512; Rust composes Monocypher 4 incremental rekeying and cofactored Ed25519 verification.
 - C++ keeps: Native virtual facades, password/authorized-key providers and UI callbacks, file reads, UID clock/formatting and secret-key string validation. Packet operations use the integrated Rust packet owner directly.
-- Checks: Rust known-answer tests from the pinned original, `python3 tools/auth-comparison.py`, the `packet::comparison_tests` Rust tests and the packet section of `python3 tools/core-boundary-comparison.py`.
+- Checks: Rust known-answer tests from the pinned original, the `auth::evidence_tests` Rust test over the original-only `auth/endpoints-oracle.txt`, the `packet::comparison_tests` Rust tests and the packet section of `python3 tools/core-boundary-comparison.py`.
 - Limits: Mixed multiplayer modes are opt-in diagnostics; default public-endpoint comparisons cover the selected authentication paths. Live admin/RCON delivery and plugin-manifest file integration remain coverage gaps in #156. Original packet short-source preconditions remain in #41. Cryptographic security and complete secret erasure are not established by these checks.
 - PRs: #43, #52, #57, #61, #642.
 
@@ -38,7 +38,7 @@
 
 - Rust owns: Packet byte allocations, growth, copy and destruction, limit and cursor, typed binary and string send/receive, validation, length prefixes, framing and transfer planning/commit. The shared record is generated from Rust; native code reads its fields in place. Rust network callers use the typed packet API directly.
 - C++ keeps: The Packet facade, socket and queue shells, result string/vector allocations and callable transfer frames. Native virtual encryption implementations retain their exception frames; Rust streams are resolved through a native metadata accessor and called directly.
-- Checks: `python3 tools/auth-comparison.py`, scripted regressions, the `packet::comparison_tests` Rust tests over the original-only `packet/comparison-oracle.txt`, and the `CORE_BOUNDARY_PACKET` section of `python3 tools/core-boundary-comparison.py` for the native transfer, encryption-handler and move glue.
+- Checks: the `auth::evidence_tests` Rust test over the original-only `auth/endpoints-oracle.txt`, scripted regressions, the `packet::comparison_tests` Rust tests over the original-only `packet/comparison-oracle.txt`, and the `CORE_BOUNDARY_PACKET` section of `python3 tools/core-boundary-comparison.py` for the native transfer, encryption-handler and move glue.
 - Limits: The original nonempty-short-source `Recv_bytes` precondition remains deferred in #41. Allocation failure is environmental.
 - PRs: #60, #645.
 

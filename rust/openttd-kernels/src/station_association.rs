@@ -162,8 +162,8 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
     let map = shared.map();
     // Check all tiles over the station to check if the specindex is still in use
     for tile in area.tiles(map) {
-        if (animation.rail_belongs)(st, tile)
-            && (command.custom_rail_index)(tile) == u32::from(index)
+        if (animation.rail_belongs)(st, tile.0)
+            && (command.custom_rail_index)(tile.0) == u32::from(index)
         {
             return;
         }

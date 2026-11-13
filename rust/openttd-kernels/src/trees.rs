@@ -796,14 +796,9 @@ pub(crate) fn place_tree_group_around_tile(
     {
         let map = w.dimensions;
         // The native TileArea(tile) constructor starts with zero extents.
-        let mut area = crate::tilearea::TileArea {
-            tile: tile.0,
-            w: 0,
-            h: 0,
-        };
+        let mut area = crate::tilearea::TileArea { tile, w: 0, h: 0 };
         area.expand(radius.cast_signed(), map, w.size_y());
         for t in area.tiles(map) {
-            let t = TileIndex(t);
             if w.kind(t) != TileType::MP_VOID
                 && map.distance_square(tile, t) < radius.wrapping_mul(radius)
             {
@@ -940,13 +935,13 @@ fn cmd_plant_tree(
     let mut iter = crate::tilearea::TileIterator::create(
         w.dimensions,
         w.types.count(),
-        args.tile,
-        args.start_tile,
+        TileIndex(args.tile),
+        TileIndex(args.start_tile),
         args.diagonal,
         check,
     );
-    'tiles: while iter.tile() != TileIndex::INVALID.0 {
-        let current_tile = TileIndex(iter.tile());
+    'tiles: while iter.tile() != TileIndex::INVALID {
+        let current_tile = iter.tile();
         'next: {
             match w.kind(current_tile) {
                 TileType::MP_TREES => {
@@ -1256,7 +1251,7 @@ fn trees_on_tile_can_spread(w: &World, tile: TileIndex, settings: &LoopSettings)
     clippy::cast_possible_truncation,
     reason = "the uint32_t cycle of a uint64_t sum"
 )]
-fn tile_loop_trees(
+pub(crate) fn tile_loop_trees(
     c: &Trees,
     types: &TileTypeAccess,
     tile: TileIndex,
@@ -1528,23 +1523,6 @@ pub(crate) fn on_tick_trees(c: &Trees) {
 pub(crate) fn initialize_trees() {
     // SAFETY: The counter's contract.
     unsafe { (&raw mut _trees_tick_ctr).write(0) };
-}
-
-/// Raw adapter for the tile-loop scheduler: `TileLoop_Trees` over base values.
-/// # Safety
-/// The tables are live and immutable; `map` follows the scheduler's no-reset, no-yield
-/// contract for the batch.
-pub(crate) unsafe fn tile_loop(
-    tile: u32,
-    settings: LoopSettings,
-    call: *mut crate::ground::Call,
-    services: *const TreeServices,
-    shared: *const Services,
-    map: &TileTypeAccess,
-) {
-    // SAFETY: The caller's contract.
-    let c = unsafe { Trees::new(services, shared) };
-    tile_loop_trees(&c, map, TileIndex(tile), &settings, call);
 }
 
 /// `OnTick_Trees` from the session tick.

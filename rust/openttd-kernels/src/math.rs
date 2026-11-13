@@ -14,9 +14,8 @@ pub(crate) const fn is_inside_mm(x: usize, min: usize, max: usize) -> bool {
     x.wrapping_sub(min) < max.wrapping_sub(min)
 }
 
-/// `IsInsideBS`: checks if a value is between a window started at some base point. Returns
-/// true if `x` is between `base` and `base + size`; the subtraction wraps as the original's
-/// `size_t` arithmetic does.
+/// `IsInsideBS`: checks if a value is between a window started at some base point.
+/// Returns true if `x` is in the interval of `[base, base + size)`.
 pub(crate) const fn is_inside_bs(x: usize, base: usize, size: usize) -> bool {
     x.wrapping_sub(base) < size
 }

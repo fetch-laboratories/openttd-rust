@@ -100,8 +100,10 @@ rust/openttd-kernels/src/subsidy_base.rs
 rust/openttd-kernels/src/subsidy.rs
 rust/openttd-kernels/src/tcp_game.rs
 rust/openttd-kernels/src/tile_cmd.rs
+rust/openttd-kernels/src/tile_loop.rs
 rust/openttd-kernels/src/tile_map.rs
 rust/openttd-kernels/src/tile_owner.rs
+rust/openttd-kernels/src/tilearea.rs
 rust/openttd-kernels/src/town/commands.rs
 rust/openttd-kernels/src/town/founding.rs
 rust/openttd-kernels/src/town/house.rs

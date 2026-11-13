@@ -657,10 +657,6 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_name(
     name.as_ptr()
 }
 #[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_method(owner: *const Handler) -> u8 {
-    unsafe { (*owner).method().0 }
-}
-#[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_peer(owner: *const Handler) -> *const u8 {
     unsafe { (*owner).peer() }
 }
@@ -824,6 +820,9 @@ crate::abi::layouts! {
         server_password,
     };
 }
+
+#[cfg(test)]
+mod evidence_tests;
 
 #[cfg(test)]
 mod tests {

@@ -486,14 +486,14 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         };
         let mut new_location = TileArea {
-            tile: start_tile.0,
+            tile: start_tile,
             w: u16::from(width),
             h: u16::from(height),
         };
         /* only AddCost for non-existing waypoints */
         cost.set(0);
         for cur_tile in new_location.tiles(self.map()) {
-            if !crate::station_map::is_rail_waypoint_tile(TileIndex(cur_tile), self.shared) {
+            if !crate::station_map::is_rail_waypoint_tile(cur_tile, self.shared) {
                 cost.add_money(crate::company::price(PR_BUILD_WAYPOINT_RAIL));
             }
         }
@@ -555,7 +555,7 @@ impl Ctx<'_> {
                 return cost.error(self.s.strings.waypoint_close);
             }
             /* Check if we want to expand an already existing waypoint. */
-            if TileIndex(self.s.rail_area(wp).tile) != TileIndex::INVALID {
+            if self.s.rail_area(wp).tile != TileIndex::INVALID {
                 new_location = self.can_expand_rail_station(ret, wp, new_location);
                 if !ret.ok() {
                     return cost.take(ret);
@@ -565,7 +565,7 @@ impl Ctx<'_> {
                 ret,
                 wp,
                 TileArea {
-                    tile: start_tile.0,
+                    tile: start_tile,
                     w: u16::from(width),
                     h: u16::from(height),
                 },
@@ -598,7 +598,7 @@ impl Ctx<'_> {
             ret,
             wp,
             TileArea {
-                tile: start_tile.0,
+                tile: start_tile,
                 w: u16::from(width),
                 h: u16::from(height),
             },
@@ -693,7 +693,7 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         };
         let roadstop_area = TileArea {
-            tile: start_tile.0,
+            tile: start_tile,
             w: u16::from(width),
             h: u16::from(height),
         };
@@ -830,7 +830,7 @@ impl Ctx<'_> {
         let replacement_spec_index = i32::from(specindex.value);
         /* Check every tile in the area. */
         for cur_tile in roadstop_area.tiles(self.map()) {
-            let tile = TileIndex(cur_tile);
+            let tile = cur_tile;
             /* Get existing road types and owners before any tile clearing */
             let road_rt = if self.may_have_road(tile) {
                 self.get_road_type(tile, RoadTramType::RTT_ROAD)
@@ -855,20 +855,20 @@ impl Ctx<'_> {
             if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
                 self.remove_road_waypoint_stop(ret, tile, flags, replacement_spec_index);
             }
-            self.area_add((self.s.road_waypoint_tile_area)(wp), TileIndex(cur_tile));
-            self.before_add_tile(ret, wp, TileIndex(cur_tile), StationRectMode::ADD_TRY);
+            self.area_add((self.s.road_waypoint_tile_area)(wp), cur_tile);
+            self.before_add_tile(ret, wp, cur_tile, StationRectMode::ADD_TRY);
             /* Update company infrastructure counts. If the current tile is a normal road tile, remove the old
              * bits first. */
-            if world().is_normal_road_tile(cur_tile) {
+            if world().is_normal_road_tile(cur_tile.0) {
                 self.update_company_road_infrastructure(
                     road_rt,
                     road_owner,
-                    -(world().road_bits(cur_tile, false).count_ones() as i32),
+                    -(world().road_bits(cur_tile.0, false).count_ones() as i32),
                 );
                 self.update_company_road_infrastructure(
                     tram_rt,
                     tram_owner,
-                    -(world().road_bits(cur_tile, true).count_ones() as i32),
+                    -(world().road_bits(cur_tile.0, true).count_ones() as i32),
                 );
             }
             self.update_company_road_infrastructure(
@@ -882,7 +882,7 @@ impl Ctx<'_> {
                 ROAD_STOP_TRACKBIT_FACTOR as i32,
             );
             (self.s.make_drive_stop)(
-                cur_tile,
+                cur_tile.0,
                 owner.0,
                 road_owner.0,
                 tram_owner.0,
@@ -892,10 +892,10 @@ impl Ctx<'_> {
                 tram_rt.0,
                 axis.0,
             );
-            (self.s.set_custom_road_index)(cur_tile, specindex.value);
+            (self.s.set_custom_road_index)(cur_tile.0, specindex.value);
             if !roadstopspec.is_null() {
                 unsafe {
-                    ((*self.s.roadstop_resolver).set_tile_random)(wp, cur_tile, 0);
+                    ((*self.s.roadstop_resolver).set_tile_random)(wp, cur_tile.0, 0);
                 }
             }
             unsafe {
@@ -909,7 +909,7 @@ impl Ctx<'_> {
                     1,
                 );
             };
-            (self.shared.mark_dirty)(cur_tile);
+            (self.shared.mark_dirty)(cur_tile.0);
         }
         (self.command.infrastructure_dirty)(owner.0);
     }

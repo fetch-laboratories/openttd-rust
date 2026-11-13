@@ -379,18 +379,6 @@ pub(crate) fn add_facility(
     (c.orders_dirty)();
 }
 
-/// Raw adapter for `tile_loop.rs`, outside this pass; delegates to `tile_loop_station`.
-/// SAFETY: As `tile_loop_station`.
-pub(crate) unsafe fn tile_loop(
-    tile: u32,
-    call: *mut crate::ground::Call,
-    s: &Services,
-    m: &TileTypeAccess,
-    size_x: u32,
-    size_y: u32,
-) {
-    unsafe { tile_loop_station(TileIndex(tile), call, s, m, size_x, size_y) }
-}
 /// `TileLoop_Station`. The scheduler's map descriptor remains valid through the
 /// original tile callbacks under the game-loop interval in world-state.md.
 pub(crate) unsafe fn tile_loop_station(
