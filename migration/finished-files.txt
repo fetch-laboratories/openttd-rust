@@ -68,6 +68,7 @@ rust/openttd-kernels/src/network_tcp.rs
 rust/openttd-kernels/src/node_hash.rs
 rust/openttd-kernels/src/packet.rs
 rust/openttd-kernels/src/pathfinder_func.rs
+rust/openttd-kernels/src/pbs.rs
 rust/openttd-kernels/src/pool.rs
 rust/openttd-kernels/src/pool/tests.rs
 rust/openttd-kernels/src/random_func.rs
