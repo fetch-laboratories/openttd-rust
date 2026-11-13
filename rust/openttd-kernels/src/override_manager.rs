@@ -119,16 +119,20 @@ pub unsafe extern "C" fn openttd_rust_override_add(
     grfid: u32,
     entity: u32,
 ) {
-    unsafe { add(&mut *manager, local, grfid, entity as usize) };
+    unsafe { add(manager, local, grfid, entity) };
 }
-/// `OverrideManagerBase::Add`: the entity of `local` in `grfid` overrides `entity`.
-fn add(m: &mut Manager, local: u16, grfid: u32, entity: usize) {
+/// `OverrideManagerBase::Add`: the entity of `local_id` in `grfid` overrides `entity_type`.
+/// # Safety
+/// `manager` is a live override manager with no other borrow.
+pub(crate) unsafe fn add(manager: *mut Manager, local_id: u16, grfid: u32, entity_type: u32) {
+    let m = unsafe { &mut *manager };
+    let entity_type = entity_type as usize;
     /* An override can be set only once */
-    if m.entities[entity] != m.invalid {
+    if m.entities[entity_type] != m.invalid {
         return;
     }
-    m.entities[entity] = local;
-    m.grfids[entity] = grfid;
+    m.entities[entity_type] = local_id;
+    m.grfids[entity_type] = grfid;
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_override_reset_mapping(manager: *mut Manager) {
@@ -255,22 +259,66 @@ fn add_entity_id(
     }
     invalid
 }
+/// `OverrideManagerBase::AddEntityID` of a manager that inherits `GetID`, with that manager's
+/// `CheckValidNewID` as `check_valid_new_id`.
+/// # Safety
+/// `manager` is a live override manager with no other borrow.
+pub(crate) unsafe fn add_entity_id_with_check(
+    manager: *mut Manager,
+    grf_local_id: u16,
+    grfid: u32,
+    substitute_id: u16,
+    check_valid_new_id: impl FnMut(u16) -> bool,
+) -> u16 {
+    let existing = unsafe { get(manager, grf_local_id, grfid) };
+    add_entity_id(
+        unsafe { &mut *manager },
+        grf_local_id,
+        grfid,
+        substitute_id,
+        existing,
+        check_valid_new_id,
+    )
+}
 pub unsafe fn allocate_house(
     manager: *mut Manager,
     local: u16,
     grfid: u32,
     substitute: u16,
 ) -> u16 {
-    let existing = unsafe { get(manager, local, grfid) };
     // HouseOverrideManager inherits OverrideManagerBase::CheckValidNewID.
-    add_entity_id(
-        unsafe { &mut *manager },
-        local,
-        grfid,
-        substitute,
-        existing,
-        |_| true,
-    )
+    unsafe { add_entity_id_with_check(manager, local, grfid, substitute, |_| true) }
+}
+/// `OverrideManagerBase::AddEntityID` on `_airport_mngr`; `AirportOverrideManager` inherits
+/// it and `OverrideManagerBase::CheckValidNewID`.
+/// # Safety
+/// `manager` is a live override manager with no other borrow.
+pub(crate) unsafe fn airport_add_entity_id(
+    manager: *mut Manager,
+    grf_local_id: u16,
+    grfid: u32,
+    substitute_id: u16,
+) -> u16 {
+    unsafe { add_entity_id_with_check(manager, grf_local_id, grfid, substitute_id, |_| true) }
+}
+/// `AirportTileOverrideManager::AddEntityID`, with `AirportTileOverrideManager::CheckValidNewID`.
+/// # Safety
+/// `manager` is a live override manager with no other borrow.
+pub(crate) unsafe fn airport_tile_add_entity_id(
+    manager: *mut Manager,
+    grf_local_id: u16,
+    grfid: u32,
+    substitute_id: u16,
+) -> u16 {
+    unsafe {
+        add_entity_id_with_check(
+            manager,
+            grf_local_id,
+            grfid,
+            substitute_id,
+            crate::newgrf_commons::airport_tile_check_valid_new_id,
+        )
+    }
 }
 pub unsafe fn pending_override(manager: *const Manager, id: u16) -> (u16, u32) {
     let m = unsafe { &*manager };

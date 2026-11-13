@@ -1,0 +1,8 @@
+[
+  {
+    "from": "rust/openttd-kernels/src/signal.rs | fn explore_segment | allow clippy::too_many_lines",
+    "kind": "carry",
+    "to": "rust/openttd-kernels/src/signal.rs | impl<'a> Signals<'a> > fn explore_segment | allow clippy::too_many_lines",
+    "tool": "rust"
+  }
+]

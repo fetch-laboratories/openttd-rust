@@ -19,23 +19,26 @@ static_assert(MAX_COMPANIES == 15 && OWNER_DEITY.base() == 18 && MAX_LENGTH_ENGI
 const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcept
 {
 	static const OpenTTDTypeAvailabilityServices services{
-		.shared = &GetRustSharedServices(),
-		.next = Engine_next,
-		.rail_introduction = RustRailTypeIntroduction,
-		.road_introduction = RustRoadTypeIntroduction,
-		.rail_introduces = [](RailType rt) noexcept { return RustRailTypeIntroduces(GetRailTypeInfo(rt)); },
-		.road_introduces = [](RoadType rt) noexcept { return RustRoadTypeIntroduces(GetRoadTypeInfo(rt)); },
-		.road_construction = RustRoadTypeConstruction,
-		.company_railtypes = RustCompanyRailTypes,
-		.company_roadtypes = RustCompanyRoadTypes,
-		.set_company_railtypes = RustSetCompanyRailTypes,
-		.set_company_roadtypes = RustSetCompanyRoadTypes,
-		.editor = OpenTTDEditor,
 #ifdef WITH_ASSERT
 		.assertions = true,
 #else
 		.assertions = false,
 #endif
+		.company_railtypes = RustCompanyRailTypes,
+		.company_roadtypes = RustCompanyRoadTypes,
+		.editor = OpenTTDEditor,
+		.next = Engine_next,
+		.rail_introduces = [](RailType rt) noexcept { return RustRailTypeIntroduces(GetRailTypeInfo(rt)); },
+		.rail_introduction = RustRailTypeIntroduction,
+		.road_flags = [](const RoadTypeInfo *rti) noexcept { return rti->flags.base(); },
+		.road_info = [](RoadType rt) noexcept { return GetRoadTypeInfo(rt); },
+		.road_introduces = RustRoadTypeIntroduces,
+		.road_introduction_date = RustRoadTypeIntroductionDate,
+		.road_introduction_required = [](const RoadTypeInfo *rti) noexcept { return rti->introduction_required_roadtypes.base(); },
+		.road_label = [](const RoadTypeInfo *rti) noexcept { return RustRoadTypeLabel(rti); },
+		.set_company_railtypes = RustSetCompanyRailTypes,
+		.set_company_roadtypes = RustSetCompanyRoadTypes,
+		.shared = &GetRustSharedServices(),
 	};
 	return services;
 }

@@ -1487,10 +1487,7 @@ impl Engine<'_> {
         const ASSUME_MAX_SPEED: u16 = 50;
         let mut best_rt = RoadType::ROADTYPE_ROAD;
         let mut best_speed = None;
-        let mut mask = crate::road::get_mask_for_road_tram_type(crate::road_type::RTT_ROAD);
-        while mask != 0 {
-            let rt = RoadType(mask.trailing_zeros() as u8);
-            mask &= mask - 1;
+        for rt in crate::road::get_mask_for_road_tram_type(crate::road_type::RTT_ROAD).iter() {
             let rti = (self.leaves.road_info)(rt.0);
             /* Can town build this road. */
             if !rti.town_build {

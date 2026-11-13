@@ -7,7 +7,7 @@
 
 //! Shared company-command helpers from `company_cmd.cpp`.
 use crate::company_base::CompanyInfrastructure;
-use crate::road_type::{RoadTramType, RoadTypes};
+use crate::road_type::RoadTramType;
 
 /// Get total sum of all owned road bits.
 /// `rtt` is the `RoadTramType` to get the combined total for.
@@ -23,7 +23,7 @@ pub(crate) unsafe fn get_road_tram_total(
     rtt: RoadTramType,
 ) -> u32 {
     let mut total = 0_u32;
-    for rt in RoadTypes(crate::road::get_mask_for_road_tram_type(rtt)).iter() {
+    for rt in crate::road::get_mask_for_road_tram_type(rtt).iter() {
         // SAFETY: The canonical road/tram mask contains source-valid road types;
         // raw pointer indexing preserves the native array subscript contract.
         total = total.wrapping_add(unsafe {

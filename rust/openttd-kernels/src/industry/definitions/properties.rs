@@ -372,7 +372,7 @@ unsafe fn industrytiles_change_info(
                     continue;
                 }
                 unsafe {
-                    override_manager::openttd_rust_override_add(
+                    override_manager::add(
                         override_manager::tile(),
                         id as u16,
                         c.grfid,
@@ -547,7 +547,7 @@ unsafe fn industries_change_info(
                 }
                 unsafe {
                     (*indsp).grf_prop.override_id = u16::from(ovrid);
-                    override_manager::openttd_rust_override_add(
+                    override_manager::add(
                         override_manager::industry(),
                         id as u16,
                         c.grfid,
