@@ -461,6 +461,27 @@ impl crate::vehicle::VehicleRef {
             _ => false,
         }
     }
+    /// `Vehicle::GetOldAdvanceSpeed`: determines the effective direction-specific vehicle
+    /// movement speed.
+    ///
+    /// This method belongs to the old vehicle movement method:
+    /// A vehicle moves a step every 256 progress units.
+    /// The vehicle speed is scaled by 3/4 when moving in X or Y direction due to the longer
+    /// distance.
+    ///
+    /// However, this method is slightly wrong in corners, as the leftover progress is not
+    /// scaled correctly when changing movement direction. `GetAdvanceSpeed()` and
+    /// `GetAdvanceDistance()` are better wrt. this.
+    ///
+    /// `speed` is the direction-independent unscaled speed; returns the speed scaled by
+    /// movement direction. 256 units are required for each movement step.
+    pub(crate) fn get_old_advance_speed(self, speed: u32) -> u32 {
+        if self.direction() & 1 != 0 {
+            speed
+        } else {
+            speed.wrapping_mul(3) / 4
+        }
+    }
     /// `Vehicle::IsFrontEngine`.
     pub(crate) fn is_front_engine(self) -> bool {
         is_front_engine(is_ground_vehicle(self.vehicle_type()), self.subtype())

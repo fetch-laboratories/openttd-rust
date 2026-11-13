@@ -1181,7 +1181,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         /* Convert direction-independent speed into direction-dependent speed. (old movement method) */
-        spd = get_old_advance_speed(b, spd);
+        spd = b.get_old_advance_speed(spd);
 
         spd = spd.wrapping_add(u32::from(b.progress()));
         b.write_progress(spd as u8);
@@ -3017,18 +3017,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 b.reset(blocks);
             });
         }
-    }
-}
-
-/// `Vehicle::GetOldAdvanceSpeed`: determines the effective direction-specific vehicle
-/// movement speed. This method belongs to the old vehicle movement method: a vehicle
-/// moves a step every 256 progress units. The vehicle speed is scaled by 3/4 when moving
-/// in X or Y direction due to the longer distance.
-fn get_old_advance_speed(v: VehicleRef, speed: u32) -> u32 {
-    if v.direction() & 1 != 0 {
-        speed
-    } else {
-        speed.wrapping_mul(3) / 4
     }
 }
 
