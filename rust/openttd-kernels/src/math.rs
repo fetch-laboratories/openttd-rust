@@ -14,10 +14,18 @@ pub(crate) const fn is_inside_mm(x: usize, min: usize, max: usize) -> bool {
     x.wrapping_sub(min) < max.wrapping_sub(min)
 }
 
-/// `Delta<uint>`: the absolute difference between two unsigned scalars.
+/// `IsInsideBS`: checks if a value is between a window started at some base point. Returns
+/// true if `x` is between `base` and `base + size`; the subtraction wraps as the original's
+/// `size_t` arithmetic does.
+pub(crate) const fn is_inside_bs(x: usize, base: usize, size: usize) -> bool {
+    x.wrapping_sub(base) < size
+}
+
+/// `Delta`: returns the absolute value of (scalar) variable, for each type the original
+/// instantiates (`uint` and `int`).
 #[inline]
-pub(crate) const fn delta(a: u32, b: u32) -> u32 {
-    a.abs_diff(b)
+pub(crate) fn delta<T: Copy + PartialOrd + std::ops::Sub<Output = T>>(a: T, b: T) -> T {
+    if a < b { b - a } else { a - b }
 }
 
 /// `RoundDivSU`: computes round(a / b) for signed a and unsigned b; the quotient, rounded to
