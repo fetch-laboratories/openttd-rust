@@ -1881,6 +1881,9 @@ pub(crate) mod tests {
         let h = m.handle();
         let mut world = World::new();
         world.pbs.try_track = nested;
+        // Tile 7, which the reservation names, is plain rail like the stubbed tile type.
+        world.base[7].kind = crate::tile_type::MP_RAILWAY << 4;
+        world.base[7].m5 = crate::track_type::TRACK_BIT_UPPER;
         world.install(h);
         let ls = Leaves {
             shared: &raw const world.shared,
