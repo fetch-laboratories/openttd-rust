@@ -190,8 +190,8 @@ impl CFollowTrackT {
             allow90,
         )
     }
-    /// Temporary raw adapter of [`Self::vehicle`] for `rail_yapf.rs`,
-    /// `road_yapf.rs` and `native_test_support.rs` until their passes.
+    /// Temporary raw adapter of [`Self::vehicle`] for `rail_yapf.rs` and
+    /// `native_test_support.rs` until their passes.
     pub(crate) fn vehicle_raw(
         s: &Services,
         mode: u8,
@@ -201,8 +201,8 @@ impl CFollowTrackT {
     ) -> Self {
         Self::vehicle(s, TransportType(mode), v, RailTypes(types), allow90)
     }
-    /// Temporary raw adapter of [`Self::rail`] for `pbs.rs` and
-    /// `train_reservation.rs` until their passes.
+    /// Temporary raw adapter of [`Self::rail`] for `train_reservation.rs` until
+    /// its pass.
     pub(crate) fn rail_raw(s: &Services, v: crate::train::Handle, owner: u8, types: u64) -> Self {
         Self::rail(
             s,
@@ -248,22 +248,10 @@ impl CFollowTrackT {
     pub(crate) fn follow(&mut self, s: &Services, old_tile: TileIndex, old_td: Trackdir) -> bool {
         self.follow_with_road(s, old_tile, old_td, None)
     }
-    /// Temporary raw adapter of [`Self::follow`] for `pbs.rs`,
-    /// `train_reservation.rs`, `rail_yapf.rs` and `native_test_support.rs`
-    /// until their passes.
+    /// Temporary raw adapter of [`Self::follow`] for `train_reservation.rs`,
+    /// `rail_yapf.rs` and `native_test_support.rs` until their passes.
     pub(crate) fn follow_raw(&mut self, s: &Services, tile: u32, td: u8) -> bool {
         self.follow(s, TileIndex(tile), Trackdir(td))
-    }
-    /// Temporary raw adapter of [`Self::follow_with_road`] for `road_yapf.rs`
-    /// until its pass.
-    pub(crate) fn follow_with_road_raw(
-        &mut self,
-        s: &Services,
-        tile: u32,
-        td: u8,
-        road: Option<&RoadContext>,
-    ) -> bool {
-        self.follow_with_road(s, TileIndex(tile), Trackdir(td), road)
     }
     /// `Follow`, with the road search's invariant vehicle facts where the caller
     /// supplies them.
@@ -386,7 +374,7 @@ impl CFollowTrackT {
             }
         }
 
-        let reserved = TrackBits(pbs.reserved(self.new_tile.0));
+        let reserved = pbs.get_reserved_trackbits(self.new_tile);
         /* Mask already reserved trackdirs. */
         self.new_td_bits &= !TrackdirBits(track_bits_to_trackdir_bits(reserved.0));
         /* Mask out all trackdirs that conflict with the reservation. */
@@ -770,26 +758,9 @@ pub(crate) fn get_speed_limit_raw(
 ) -> i32 {
     get_speed_limit(s, TransportType(mode), veh, TileIndex(tile))
 }
-/// Temporary raw adapter of [`get_speed_limit_with_road`] for `road_yapf.rs`
-/// until its pass.
-pub(crate) fn get_speed_limit_with_road_raw(
-    s: &Services,
-    mode: u8,
-    veh: Option<VehicleRef>,
-    tile: u32,
-    tram: Option<bool>,
-) -> i32 {
-    get_speed_limit_with_road(
-        s,
-        TransportType(mode),
-        veh,
-        TileIndex(tile),
-        tram.map(RoadTramType),
-    )
-}
 
 /// `CFollowTrackWater(v)` with a null vehicle, followed once from `tile`: the
-/// raw adapter for `ship_yapf.rs` and `water_regions.rs` until their passes.
+/// raw adapter for `ship_yapf.rs` until its pass.
 pub(crate) fn water(s: &Services, tile: u32, td: u8) -> (CFollowTrackT, bool) {
     let mut ft = CFollowTrackT::vehicle(s, WATER, None, RailTypes::INVALID_RAILTYPES, true);
     let ok = ft.follow(s, TileIndex(tile), Trackdir(td));

@@ -123,6 +123,15 @@ pub const fn kill_first_bit(value: u8) -> u8 {
     kill_first_bit_u32(value as u32) as u8
 }
 
+/// `KillFirstBit` for the word-sized trackdir bitsets.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "KillFirstBit returns its own T; clearing a bit cannot widen the input word"
+)]
+pub const fn kill_first_bit_u16(value: u16) -> u16 {
+    kill_first_bit_u32(value as u32) as u16
+}
+
 /// `KillFirstBit` for script-visible unsigned track masks.
 pub const fn kill_first_bit_u32(value: u32) -> u32 {
     value & value.wrapping_sub(1)

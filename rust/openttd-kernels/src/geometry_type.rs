@@ -23,3 +23,12 @@ pub fn rect_width(left: i32, right: i32) -> i32 {
 pub fn rect_height(top: i32, bottom: i32) -> i32 {
     bottom.wrapping_sub(top).wrapping_add(1)
 }
+
+/// `Point`: coordinates of a point in 2D.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Point {
+    /// X coordinate.
+    pub x: i32,
+    /// Y coordinate.
+    pub y: i32,
+}

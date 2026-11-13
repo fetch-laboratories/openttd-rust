@@ -1,0 +1,24 @@
+[
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-probe.h": 7
+    },
+    "reason": "CmdPlantTree's argument struct OpenTTDPlantTreeArgs (tile, start_tile, tree_to_plant, diagonal): docs/porting.md#argument-structs requires a ported command to take one argument struct defined once in Rust with a generated declaration, which the C++ facade passes as const Args *. It replaces the hand-written OpenTTDTreeCommandSettings, OpenTTDTreeCommandResult, OpenTTDTreeCommand and the three observation records deleted from trees_ffi.h and tree_cmd.cpp in the same change.",
+    "existing_alternatives": "No command argument struct for CmdPlantTree exists; the positional export it replaces is what the argument-struct rule retires.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when the command dispatcher calls cmd_plant_tree from Rust and no C++ facade passes the struct."
+  },
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/landscape_tile_loop.cpp": 4
+    },
+    "reason": "The native map read test compared the tree_map.rs readers with the tree_observation service, which this pass deletes. Plan decision 8 of #954 moves that oracle into MapLeafOracle, which ObserveMapLeaves fills from the native GetTreeGround, GetTreeDensity, GetTreeType, GetTreeCount and GetTreeGrowth: one field line, the tree_map.h include and a three-line block. The test observes live native accessors, so it stays C++ (ADR 0023).",
+    "existing_alternatives": "Rust tests cannot call the native accessors, and the deleted service was the only other oracle.",
+    "retiring_owner": "#565",
+    "retirement_condition": "Retires with the native map read test when the tree_map.h accessors are ported and the native ones are deleted."
+  }
+]

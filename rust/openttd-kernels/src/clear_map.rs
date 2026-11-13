@@ -44,6 +44,11 @@ pub(crate) fn get_clear_ground(m: &TileTypeAccess, t: TileIndex) -> Option<Clear
         &m.require_type(t, TileType::MP_CLEAR)?,
     ))
 }
+/// `IsClearGround`: whether the clear tile has the given ground type.
+#[inline]
+pub(crate) fn is_clear_ground(m: &TileTypeAccess, t: TileIndex, ct: ClearGround) -> Option<bool> {
+    Some(get_clear_ground(m, t)? == ct)
+}
 /// `GetClearGround` over fields already checked as `MP_CLEAR`.
 #[allow(clippy::inline_always)]
 #[inline(always)]

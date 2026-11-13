@@ -27,7 +27,6 @@ struct OpenTTDPbsServices {
 	bool (*try_track)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(try_track);
 	void (*unreserve_track)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unreserve_track);
 	bool (*show_reservation)() noexcept OPENTTD_SERVICE_DEFAULT(show_reservation);
-	void (*assert_platform)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_platform);
 	BaseStation * (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 
 	bool (*is_crossing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_crossing);

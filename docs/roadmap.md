@@ -193,15 +193,15 @@ Provisional, for steering 36 to judge:
 
 ## Ready queue
 
-Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. Merges 48 to 52 were #951, #937, #956, #936 and #960. The open component PRs are #955, #959, #961, #962 and #966, all in review or near the merge queue, with #965 dispatched and its PR to come: six, the [branch limit](root-workflow.md#integration).
+Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. Merges 48 to 58 were #951, #937, #956, #936, #960, #961, #966, #962, #959, #955 and #969. The open component PRs are #972 (for #967, reviews settled, waiting on `native`) and two paused drafts whose code is written, each resumed by a fresh implementer from its checkout and status comment: #976 (for #968, `rail_yapf.rs`, checkout `t3-9332b642-2e3cbe422377f934`) and #977 (for #970, `ship_yapf.rs`, checkout `t3-0442faa5-4501bd863733960a`, with its two measurement worktrees `speed-970-base` and `speed-970-fresh`). Root's status comment on #3 holds the queue's state between commits to this section.
 
-1. #967: 8f, the single-file pass for `aircraft.rs`. Waits on nothing.
-2. #963: 8g, the file pass for `ground.rs` and `ground_vehicle.rs`, workset 08's shared callees. Planned; waits on #959, which rewrites calls it replaces.
-3. #964: 8r, the single-file pass for `road.rs`. Planned; waits on #963 and on #965's PR, its callees.
+1. #963: 8g, the file pass for `ground.rs` and `ground_vehicle.rs`, workset 08's shared callees. Planned; waits on nothing.
+2. #945: the interval's tools batch of eleven items. Planned; waits on nothing.
+3. #974: shared typed news and script-event services in place of one C++ leaf per message, with the 29 leaves in finished files converted. Planned; waits on #972, whose three aircraft leaves are its first conversion.
 
-**Later.** #945, the interval's tools batch of ten items, waits on #955, which is #946's PR. In workset 09, the pass for `ship_yapf.rs` waits on #962, and the single-file pass for `rail_yapf.rs` on #966 ([order](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6811109267)). In workset 08, after #963 and #964: the single-file passes for `train.rs` (after #966 and #955, which edit it) and `train_reservation.rs`, and one pass for `effect.rs`, `vehicle_effect.rs`, `ship_control.rs` and `disaster.rs`, which its planner splits if it must. A second slot with no entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes. Workset 23's `native_test_support.rs` and `native_test_support/movement.rs` get their own entry after #959 merges, since #959 edits the first. #950, the aircraft range probe, waits on #955 and follows #945 and #967.
+**Later.** #973, 23n, the pass for `native_test_support.rs` and `native_test_support/movement.rs`, is planned and waits on #963, so that it removes C++ and adds none. #964, 8r, the single-file pass for `road.rs`, is planned and waits on #963 and #974. #971 shares `CYapfBaseT`'s search loop across the three YAPF files and waits on #976 and #977. #975 deletes the C++ free functions the extended orphan check finds uncalled, about 35 by the planner's scan, and waits on #945. #950, the aircraft range probe, follows #945 and #972. In workset 08, after #963 and #964: the single-file passes for `train.rs` and `train_reservation.rs`, and one pass for `effect.rs`, `vehicle_effect.rs`, `ship_control.rs` and `disaster.rs`, which its planner splits if it must. A second slot with no entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes.
 
-Full phase-3 planning remains untriggered: 184 of #734's 319 files, in 19 worksets, are in no entry.
+Full phase-3 planning remains untriggered: 180 of #734's 319 files, in 19 worksets, are in no entry.
 
 ## Resume checkpoint
 

@@ -388,6 +388,8 @@ pub struct Services {
     pub station_add_vehicle_of_type: extern "C" fn(u16, u8),
     /// `Station::Get(station)->xy`.
     pub station_xy: extern "C" fn(u16) -> u32,
+    /// `BaseStation::Get(station)`.
+    pub base_station: extern "C" fn(u16) -> *mut crate::station::BaseStation,
     /// `BaseStation::Get(station)->xy`.
     pub base_station_xy: extern "C" fn(u16) -> u32,
     /// `Station::Get(station)->facilities`, as its base byte.
@@ -800,6 +802,7 @@ crate::abi::layouts! {
         station_had_vehicle_of_type,
         station_add_vehicle_of_type,
         station_xy,
+        base_station,
         base_station_xy,
         station_facilities,
         road_commands,
@@ -896,6 +899,10 @@ extern "C" fn unexpected_station_visit(_: u16, _: u8) {
 }
 #[cfg(test)]
 extern "C" fn unexpected_station_field(_: u16) -> u32 {
+    unreachable!()
+}
+#[cfg(test)]
+extern "C" fn unexpected_base_station(_: u16) -> *mut crate::station::BaseStation {
     unreachable!()
 }
 /// Standalone test table: map predicates return zero and writes do nothing.
@@ -1138,6 +1145,7 @@ pub fn fixture(
         station_had_vehicle_of_type: unexpected_station_visits,
         station_add_vehicle_of_type: unexpected_station_visit,
         station_xy: unexpected_station_field,
+        base_station: unexpected_base_station,
         base_station_xy: unexpected_station_field,
         station_facilities: unexpected_station_visits,
         road_commands: fixture_road_commands,

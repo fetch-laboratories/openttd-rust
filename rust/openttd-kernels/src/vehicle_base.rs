@@ -62,6 +62,11 @@ impl VehStates {
     pub const fn without(self, other: Self) -> Self {
         Self(self.0 & !other.0)
     }
+    /// Native `EnumBitSet::Test`: is the named state set?
+    #[must_use]
+    pub const fn test(self, element: VehState) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
 }
 
 /// Bit numbers indicating which `NewGRFCache` values are valid.
@@ -637,6 +642,13 @@ impl crate::vehicle::VehicleRef {
     }
     pub(crate) fn write_cargo_cap(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), cargo_cap, value);
+    }
+    /// `Vehicle::unitnumber`, a field still stored in the C++ shell, read
+    /// through the vehicle resolver's field service.
+    pub(crate) fn unit_number(self, shared: &crate::services::Services) -> u16 {
+        let vehicles = crate::movement::table(shared).vehicle();
+        // SAFETY: The vehicle table returns the static resolver service table.
+        unsafe { ((*(vehicles.newgrf)()).unit)(self.0.as_ptr()) }
     }
     pub(crate) fn engine_id(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), engine_type).0

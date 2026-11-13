@@ -259,8 +259,8 @@ fn is_coast(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
         (is_type(w, tile, MP_WATER) && w.asserted(|m| crate::water_map::is_coast(m, tile)))
             || (is_type(w, tile, MP_TREES)
-                && w.asserted(|m| crate::tree_map::get_tree_ground_raw(m, tile))
-                    == crate::tree_map::TREE_GROUND_SHORE)
+                && w.asserted(|m| crate::tree_map::get_tree_ground(m, TileIndex(tile)))
+                    == crate::tree_map::TreeGround::TREE_GROUND_SHORE)
     })
 }
 

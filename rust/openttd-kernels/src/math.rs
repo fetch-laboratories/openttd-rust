@@ -20,10 +20,11 @@ pub(crate) const fn is_inside_bs(x: usize, base: usize, size: usize) -> bool {
     x.wrapping_sub(base) < size
 }
 
-/// `Delta<uint>`: the absolute difference between two unsigned scalars.
+/// `Delta`: returns the absolute value of (scalar) variable, for each type the original
+/// instantiates (`uint` and `int`).
 #[inline]
-pub(crate) const fn delta(a: u32, b: u32) -> u32 {
-    a.abs_diff(b)
+pub(crate) fn delta<T: Copy + PartialOrd + std::ops::Sub<Output = T>>(a: T, b: T) -> T {
+    if a < b { b - a } else { a - b }
 }
 
 /// `RoundDivSU`: computes round(a / b) for signed a and unsigned b; the quotient, rounded to
@@ -54,6 +55,21 @@ pub(crate) const fn ceil_div(a: u32, b: u32) -> u32 {
 /// `Clamp` (`int` overload): clamp a value between an interval. Returns `min` when the
 /// value is at or below it, `max` when at or above it, otherwise the value.
 pub(crate) fn clamp(a: i32, min: i32, max: i32, check: impl Fn(bool)) -> i32 {
+    if min > max {
+        check(false);
+    }
+    if a <= min {
+        return min;
+    }
+    if a >= max {
+        return max;
+    }
+    a
+}
+
+/// `ClampU`: clamp an unsigned integer between an interval. Returns `min` when the value
+/// is at or below it, `max` when at or above it, otherwise the value.
+pub(crate) fn clamp_u(a: u32, min: u32, max: u32, check: impl Fn(bool)) -> u32 {
     if min > max {
         check(false);
     }

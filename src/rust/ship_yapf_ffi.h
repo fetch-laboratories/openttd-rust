@@ -30,9 +30,7 @@ struct OpenTTDShipYapfLeaves {
 	OpenTTDShipYapfDestination (*destination)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(destination);
 	OpenTTDShipTile (*tile)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	OpenTTDWaterPatch (*patch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(patch);
-	void *(*visit_new)(OpenTTDWaterPatch) noexcept OPENTTD_SERVICE_DEFAULT(visit_new);
-	uint8_t (*visit_next)(void *, OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept OPENTTD_SERVICE_DEFAULT(visit_next);
-	void (*visit_destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_destroy);
+	uint8_t (*visit_next)(OpenTTDWaterVisit *, OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept OPENTTD_SERVICE_DEFAULT(visit_next);
 	void (*debug)(uint32_t, uint8_t, uint8_t, uint32_t, uint32_t, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug);
 };
 /* Search owns its arena, hashes, heap and copied world observations; the ship context is opaque
