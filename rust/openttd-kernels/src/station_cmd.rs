@@ -1603,19 +1603,16 @@ impl Ctx<'_> {
         let tile = TileIndex(vehicle.tile());
         if self.is_rail_station_tile(tile) {
             // SAFETY: The immutable train table outlives every synchronous entry.
-            let td = crate::train::get_vehicle_trackdir(
-                unsafe { &*self.s.train },
-                self.shared,
-                handle,
-            );
+            let td =
+                crate::train::get_vehicle_trackdir(unsafe { &*self.s.train }, self.shared, handle);
             let td = if reverse {
                 Trackdir(reverse_trackdir(td.0))
             } else {
                 td
             };
-            crate::pbs::Pbs::acquire(self.shared).platform(
-                tile.0,
-                crate::track_func::trackdir_to_exitdir(td.0),
+            crate::pbs::Pbs::acquire(self.shared).set_rail_station_platform_reservation(
+                tile,
+                DiagDirection(crate::track_func::trackdir_to_exitdir(td.0)),
                 b,
             );
         }
@@ -1678,11 +1675,13 @@ impl Ctx<'_> {
     ) {
         /* Check for trains having a reservation for this tile. */
         if has_bit(
-            crate::pbs::Pbs::acquire(self.shared).reserved(tile_cur.0),
+            crate::pbs::Pbs::acquire(self.shared)
+                .get_reserved_trackbits(tile_cur)
+                .0,
             track.0,
         ) {
             let v = crate::pbs::Pbs::acquire(self.shared)
-                .train_for(tile_cur.0, track.0)
+                .get_train_for_reservation(tile_cur, track)
                 .shell()
                 .cast::<crate::services::Train>();
             if !v.is_null() {
@@ -1999,7 +1998,11 @@ impl Ctx<'_> {
                 t = TileIndex(t.0.wrapping_add(tile_offset));
             }
             if reservation {
-                crate::pbs::Pbs::acquire(self.shared).platform(platform_begin.0, dir.0, true);
+                crate::pbs::Pbs::acquire(self.shared).set_rail_station_platform_reservation(
+                    platform_begin,
+                    dir,
+                    true,
+                );
             }
         }
     }
@@ -2260,13 +2263,12 @@ impl Ctx<'_> {
                 if self.is_rail_station_tile(tile) && self.has_station_reservation(tile) {
                     /* Check for trains having a reservation for this tile. */
                     let v = crate::pbs::Pbs::acquire(self.shared)
-                        .train_for(
-                            tile.0,
+                        .get_train_for_reservation(
+                            tile,
                             crate::track_func::axis_to_track(
                                 crate::services::Axis(self.get_rail_station_axis(tile).0),
                                 |ok| crate::movement::native_assert(self.shared, ok),
-                            )
-                            .0,
+                            ),
                         )
                         .shell()
                         .cast::<crate::services::Train>();
@@ -2494,7 +2496,7 @@ impl Ctx<'_> {
         let mut v = std::ptr::null_mut();
         if self.has_station_reservation(tile) {
             v = crate::pbs::Pbs::acquire(self.shared)
-                .train_for(tile.0, track.0)
+                .get_train_for_reservation(tile, track)
                 .shell()
                 .cast::<crate::services::Train>();
             if !v.is_null() {

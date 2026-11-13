@@ -156,10 +156,10 @@ impl Game<'_> {
     }
     fn free(&self, id: Handle, tile: u32, td: u8) -> bool {
         self.pbs()
-            .free(id, tile, td, (self.shared().forbid_90_deg)())
+            .is_waiting_position_free_raw(id, tile, td, (self.shared().forbid_90_deg)())
     }
     fn has_reserved(&self, tile: u32, tracks: u8) -> bool {
-        self.pbs().has_reserved_tracks(tile, tracks)
+        self.pbs().has_reserved_tracks_raw(tile, tracks)
     }
     fn needs_service(&self, id: Handle) -> bool {
         // SAFETY: Live serialized train and immutable table; no owner borrow
@@ -170,18 +170,19 @@ impl Game<'_> {
         crate::movement::should_stop(self.shared(), id.vehicle(), station)
     }
     fn reserved(&self, tile: u32) -> u8 {
-        self.pbs().reserved(tile)
+        self.pbs().get_reserved_trackbits_raw(tile)
     }
     fn safe(&self, id: Handle, tile: u32, td: u8) -> bool {
         self.pbs()
-            .safe(id, tile, td, true, (self.shared().forbid_90_deg)())
+            .is_safe_waiting_position_raw(id, tile, td, true, (self.shared().forbid_90_deg)())
     }
     fn shared(&self) -> &crate::services::Services {
         // SAFETY: The entry's shared table lives for the process (or the test fixture's scope).
         unsafe { &*self.leaves.shared }
     }
     fn set_platform(&self, tile: u32, dir: u8, reserved: bool) {
-        self.pbs().platform(tile, dir, reserved);
+        self.pbs()
+            .set_rail_station_platform_reservation_raw(tile, dir, reserved);
     }
     fn signal_buffer(&self, tile: u32, td: u8) {
         // SAFETY: C++ supplies the adjusted Vehicle base of the entry train.
@@ -245,7 +246,8 @@ impl Game<'_> {
         Follower::rail_raw(self.shared(), id, 0, types)
     }
     fn origin(&self, id: Handle, other: bool) -> Pbs {
-        self.pbs().follow_train(id, other, Handle::NONE)
+        self.pbs()
+            .follow_train_reservation_raw(id, other, Handle::NONE)
     }
     fn dir(&self, id: Handle, td: u8) -> u8 {
         (self.leaves.exit_dir)(self.context, id, td) as u8
@@ -254,7 +256,7 @@ impl Game<'_> {
         (self.leaves.set_signal)(self.context, id, tile, td, u8::from(green));
     }
     fn reserve_track(&self, tile: u32, track: u8) -> bool {
-        self.pbs().try_reserve(tile, track, true)
+        self.pbs().try_reserve_rail_track_raw(tile, track, true)
     }
     /// `TryReserveRailTrack(tile, TrackdirToTrack(td))`.
     fn reserve(&self, tile: u32, td: u8) -> bool {
@@ -262,7 +264,7 @@ impl Game<'_> {
     }
     /// `UnreserveRailTrack(tile, TrackdirToTrack(td))`.
     fn unreserve(&self, tile: u32, td: u8) {
-        self.pbs().unreserve(tile, td & 7);
+        self.pbs().unreserve_rail_track_raw(tile, td & 7);
     }
 
     fn td(&self, id: Handle) -> u8 {
@@ -1671,7 +1673,6 @@ pub(crate) mod tests {
             try_track,
             unreserve_track,
             show_reservation: no_show,
-            assert_platform: unused(),
             station: unused(),
             is_crossing: unused(),
             read_train_on_res: unused(),

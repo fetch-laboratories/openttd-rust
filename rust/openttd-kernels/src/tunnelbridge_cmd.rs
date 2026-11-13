@@ -1356,7 +1356,7 @@ impl<'a> World<'a> {
         }
         w::hit(w::TB_RESERVATION);
         let train = crate::pbs::Pbs::acquire(self.s)
-            .train_for(tile, track)
+            .get_train_for_reservation_raw(tile, track)
             .shell()
             .cast::<Train>();
         if !train.is_null() {

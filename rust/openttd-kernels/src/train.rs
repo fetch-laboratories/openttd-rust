@@ -1521,7 +1521,7 @@ impl Game<'_> {
                 okay = false;
             }
             if (self.leaves.is_station)(Handle::NONE, tile) != 0 {
-                crate::pbs::Pbs::acquire(self.services).platform(
+                crate::pbs::Pbs::acquire(self.services).set_rail_station_platform_reservation_raw(
                     tile,
                     (self.leaves.trackdir_exit)(id, td) as u8,
                     true,
@@ -1842,7 +1842,7 @@ impl Game<'_> {
                         }
                         return (3, false);
                     }
-                    crate::pbs::Pbs::acquire(self.services).try_reserve(
+                    crate::pbs::Pbs::acquire(self.services).try_reserve_rail_track_raw(
                         new,
                         chosen.trailing_zeros() as u8,
                         false,
@@ -1975,7 +1975,8 @@ impl Game<'_> {
         }
         if signals {
             if (id).front() != 0 && self.moved_signals(id, new, entered) {
-                if (!crate::pbs::Pbs::acquire(self.services).has_reserved_tracks(new, id.track())
+                if (!crate::pbs::Pbs::acquire(self.services)
+                    .has_reserved_tracks_raw(new, id.track())
                     && self.reserve_track(id, new, id.track().trailing_zeros() as u8) == 0)
                     || !self.try_path_reserve(id, false, false)
                 {
@@ -2031,7 +2032,9 @@ impl Game<'_> {
 impl Game<'_> {
     /// `TryReserveRailTrack(tile, track)` with its default station triggers.
     fn reserve_track(&self, _id: Handle, tile: u32, track: u8) -> u64 {
-        u64::from(crate::pbs::Pbs::acquire(self.services).try_reserve(tile, track, true))
+        u64::from(
+            crate::pbs::Pbs::acquire(self.services).try_reserve_rail_track_raw(tile, track, true),
+        )
     }
     fn crash(&self, id: Handle, flooded: bool) -> u32 {
         let mut victims = 0_u32;
@@ -2207,8 +2210,8 @@ impl Game<'_> {
             tracks = 1 << (u64::from(self.world().tunnel_bridge_dir(tile)) & 1);
         }
         let track = tracks.trailing_zeros() as u8;
-        if crate::pbs::Pbs::acquire(self.services).has_reserved_tracks(tile, tracks) {
-            crate::pbs::Pbs::acquire(self.services).unreserve(tile, track);
+        if crate::pbs::Pbs::acquire(self.services).has_reserved_tracks_raw(tile, tracks) {
+            crate::pbs::Pbs::acquire(self.services).unreserve_rail_track_raw(tile, track);
             let mut remaining = 0_u8;
             self.visit_tile(tile, |u| {
                 if (u).vehicle().status() & 128 == 0 {
@@ -2239,8 +2242,13 @@ impl Game<'_> {
                 Handle::NONE,
                 (self.leaves.station_axis)(Handle::NONE, tile) as u8,
             ) as u8;
-            crate::pbs::Pbs::acquire(self.services).platform(tile, dir, occupied);
-            crate::pbs::Pbs::acquire(self.services).platform(tile, dir ^ 2, occupied);
+            crate::pbs::Pbs::acquire(self.services)
+                .set_rail_station_platform_reservation_raw(tile, dir, occupied);
+            crate::pbs::Pbs::acquire(self.services).set_rail_station_platform_reservation_raw(
+                tile,
+                dir ^ 2,
+                occupied,
+            );
         }
         if is_tile_type(
             self.services,

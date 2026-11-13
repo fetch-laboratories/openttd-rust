@@ -1044,7 +1044,8 @@ impl<'a> Ctx<'a> {
                                 };
                                 (self.commands.infrastructure_dirty)(owner);
                             }
-                            let reserved = crate::pbs::Pbs::acquire(self.shared).reserved(tile)
+                            let reserved = crate::pbs::Pbs::acquire(self.shared)
+                                .get_reserved_trackbits_raw(tile)
                                 & (1 << track)
                                 != 0;
                             (self.r.make_crossing)(
