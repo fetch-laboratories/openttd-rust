@@ -351,12 +351,9 @@ mod comparison_tests {
             const { Cell::new(None) };
     }
 
-    fn tile_type(tile: u32) -> u8 {
+    extern "C" fn shared_tile_type(tile: u32) -> u8 {
         // SAFETY: The test's live allocation covers every visited tile.
         unsafe { (*TILES.get().add(tile as usize)).kind >> 4 }
-    }
-    extern "C" fn shared_tile_type(tile: u32) -> u8 {
-        tile_type(tile)
     }
     extern "C" fn station_type(_: u32) -> crate::station_type::StationType {
         crate::station_type::StationType::End
