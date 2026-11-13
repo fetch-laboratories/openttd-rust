@@ -1366,20 +1366,6 @@ pub(crate) fn get_platform_length(
     len.wrapping_sub(1)
 }
 
-/// Temporary raw adapter of [`get_platform_length_by_tile`] for `rail_yapf.rs`
-/// until its pass.
-pub(crate) fn get_platform_length_by_tile_raw(
-    w: &crate::map_func::World<'_>,
-    tile: u32,
-    dir: u8,
-) -> u32 {
-    get_platform_length_by_tile(
-        w,
-        TileIndex(tile),
-        crate::direction_type::DiagDirection(dir),
-    )
-}
-
 /// Temporary raw adapter of [`get_platform_length_in_direction`] for `train.rs`
 /// and `native_test_support.rs` until their passes.
 pub(crate) fn get_platform_length_in_direction_raw(

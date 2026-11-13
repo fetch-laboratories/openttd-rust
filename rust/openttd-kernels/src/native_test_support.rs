@@ -733,3 +733,79 @@ pub unsafe extern "C" fn openttd_test_engine_override(
         crate::engine::bindings::append_override(shared, bindings, cargo, group, ids);
     }
 }
+
+/// One rail search's result, statistics and the witness counts it added.
+#[repr(C)]
+pub struct RailYapfSearch {
+    pub num_steps: i32,
+    pub open: i32,
+    pub closed: i32,
+    pub cache_hits: i32,
+    pub cost_calcs: i32,
+    pub cost: i32,
+    pub distance: i32,
+    pub flushes: u32,
+    pub limits: u32,
+    pub red: u32,
+    pub restored: u32,
+    pub found: u8,
+    pub td: u8,
+}
+/// The production rail search over the native fixture: `ChooseRailTrack`, or
+/// `FindNearestSafeTile` from `tile` and `td` with `safe_tile`. Witnesses turn
+/// on, and the counts are the differences around the search.
+/// # Safety
+/// Shared services and the front train record stay live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_rail_yapf(
+    s: *const Services,
+    v: *mut OpenTTDVehicle,
+    safe_tile: bool,
+    tile: u32,
+    td: u8,
+    reserve_track: bool,
+) -> RailYapfSearch {
+    use crate::witness::{
+        RAIL_CACHE_FLUSHES, RAIL_LIMIT_STOPS, RAIL_SIGNALS_RED, RAIL_SIGNALS_RESTORED,
+        openttd_rust_witness_count as count,
+    };
+    crate::witness::openttd_rust_witness_enable();
+    let before = [
+        RAIL_CACHE_FLUSHES,
+        RAIL_LIMIT_STOPS,
+        RAIL_SIGNALS_RED,
+        RAIL_SIGNALS_RESTORED,
+    ]
+    .map(|i| count(i));
+    let result = crate::rail_yapf::native_test_search(
+        unsafe { &*s },
+        crate::train::Handle::from_record(v),
+        safe_tile,
+        crate::tile_type::TileIndex(tile),
+        crate::track_type::Trackdir(td),
+        reserve_track,
+    );
+    let after = [
+        RAIL_CACHE_FLUSHES,
+        RAIL_LIMIT_STOPS,
+        RAIL_SIGNALS_RED,
+        RAIL_SIGNALS_RESTORED,
+    ]
+    .map(|i| count(i));
+    let delta = |i: usize| u32::try_from(after[i] - before[i]).unwrap_or(u32::MAX);
+    RailYapfSearch {
+        num_steps: result.num_steps,
+        open: result.open,
+        closed: result.closed,
+        cache_hits: result.cache_hits,
+        cost_calcs: result.cost_calcs,
+        cost: result.cost,
+        distance: result.distance,
+        flushes: delta(0),
+        limits: delta(1),
+        red: delta(2),
+        restored: delta(3),
+        found: u8::from(result.found),
+        td: result.td.0,
+    }
+}

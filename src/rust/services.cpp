@@ -44,6 +44,7 @@
 #include "../industry.h"
 #include "../bridge_map.h"
 #include "services_rail.h"
+#include "rail_yapf_ffi.h"
 #include "services_newgrf.h"
 #include "spec_services.hpp"
 #include "services_road.h"
@@ -262,6 +263,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.max_bridge_length = &_settings_game.construction.max_bridge_length,
 	.max_companies = &_settings_client.network.max_companies,
 	.max_competitors = &_settings_game.difficulty.max_no_competitors,
+	.max_search_nodes = &_settings_game.pf.yapf.max_search_nodes,
 	.max_train_length = &_settings_game.vehicle.max_train_length,
 	.max_trains = &_settings_game.vehicle.max_trains,
 	.maximum_go_to_depot_penalty = &_settings_game.pf.yapf.maximum_go_to_depot_penalty,
@@ -272,6 +274,29 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.order_review_system = &_settings_client.gui.order_review_system,
 	.participate_survey = reinterpret_cast<const uint8_t *>(&_settings_client.network.participate_survey),
 	.pause_on_newgame = &_settings_client.gui.pause_on_newgame,
+	.rail_crossing_penalty = &_settings_game.pf.yapf.rail_crossing_penalty,
+	.rail_curve45_penalty = &_settings_game.pf.yapf.rail_curve45_penalty,
+	.rail_curve90_penalty = &_settings_game.pf.yapf.rail_curve90_penalty,
+	.rail_depot_reverse_penalty = &_settings_game.pf.yapf.rail_depot_reverse_penalty,
+	.rail_doubleslip_penalty = &_settings_game.pf.yapf.rail_doubleslip_penalty,
+	.rail_firstred_exit_penalty = &_settings_game.pf.yapf.rail_firstred_exit_penalty,
+	.rail_firstred_penalty = &_settings_game.pf.yapf.rail_firstred_penalty,
+	.rail_firstred_twoway_eol = &_settings_game.pf.yapf.rail_firstred_twoway_eol,
+	.rail_lastred_exit_penalty = &_settings_game.pf.yapf.rail_lastred_exit_penalty,
+	.rail_lastred_penalty = &_settings_game.pf.yapf.rail_lastred_penalty,
+	.rail_longer_platform_penalty = &_settings_game.pf.yapf.rail_longer_platform_penalty,
+	.rail_longer_platform_per_tile_penalty = &_settings_game.pf.yapf.rail_longer_platform_per_tile_penalty,
+	.rail_look_ahead_max_signals = &_settings_game.pf.yapf.rail_look_ahead_max_signals,
+	.rail_look_ahead_signal_p0 = &_settings_game.pf.yapf.rail_look_ahead_signal_p0,
+	.rail_look_ahead_signal_p1 = &_settings_game.pf.yapf.rail_look_ahead_signal_p1,
+	.rail_look_ahead_signal_p2 = &_settings_game.pf.yapf.rail_look_ahead_signal_p2,
+	.rail_pbs_cross_penalty = &_settings_game.pf.yapf.rail_pbs_cross_penalty,
+	.rail_pbs_signal_back_penalty = &_settings_game.pf.yapf.rail_pbs_signal_back_penalty,
+	.rail_pbs_station_penalty = &_settings_game.pf.yapf.rail_pbs_station_penalty,
+	.rail_shorter_platform_penalty = &_settings_game.pf.yapf.rail_shorter_platform_penalty,
+	.rail_shorter_platform_per_tile_penalty = &_settings_game.pf.yapf.rail_shorter_platform_per_tile_penalty,
+	.rail_slope_penalty = &_settings_game.pf.yapf.rail_slope_penalty,
+	.rail_station_penalty = &_settings_game.pf.yapf.rail_station_penalty,
 	.raw_industry_construction = &_settings_game.construction.raw_industry_construction,
 	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
 	.reload_cfg = &_settings_client.network.reload_cfg,
@@ -523,8 +548,10 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.station_had_vehicle_of_type = [](uint16_t station) noexcept -> uint8_t { return Station::Get(StationID(station))->had_vehicle_of_type; },
 	.station_add_vehicle_of_type = [](uint16_t station, uint8_t type) noexcept { Station::Get(StationID(station))->had_vehicle_of_type |= static_cast<StationHadVehicleOfType>(type); },
 	.station_xy = [](uint16_t station) noexcept { return Station::Get(StationID(station))->xy.base(); },
+	.base_station = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station)); },
 	.base_station_xy = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station))->xy.base(); },
 	.station_facilities = [](uint16_t station) noexcept { return Station::Get(StationID(station))->facilities.base(); },
+	.waypoint_is_single_tile = RustWaypointSingleTile,
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
 	.kdtree_partition = RustKdtreePartition,
 	.station_commands = []() noexcept { return &GetRustStationCommandServices(); },
@@ -598,6 +625,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.resolver_grf_file_id = RustResolverGRFFileID,
 	.resolver_grf_version = RustResolverGRFVersion,
 	.show_error = RustShowErrorMessage,
+	.yapf_rail_dump_state = YapfRailDumpState,
 	.not_reached = RustNotReached,
 };
 

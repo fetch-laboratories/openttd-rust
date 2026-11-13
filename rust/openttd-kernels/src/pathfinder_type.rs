@@ -14,11 +14,11 @@ pub const YAPF_TILE_LENGTH: i32 = 100;
 /// Length (penalty) of a corner with YAPF.
 pub const YAPF_TILE_CORNER_LENGTH: i32 = 71;
 
-/// Maximum segments of road vehicle path cache.
-pub const YAPF_ROADVEH_PATH_CACHE_SEGMENTS: i32 = 8;
-
-/// Distance from destination road stops to not cache any further.
-pub const YAPF_ROADVEH_PATH_CACHE_DESTINATION_LIMIT: i32 = 8;
+/// This penalty is the equivalent of "infinite", which means that paths that
+/// get this penalty will be chosen, but only if there is no other route
+/// without it. Be careful with not applying this penalty too often, or the
+/// total path cost might overflow.
+pub const YAPF_INFINITE_PENALTY: i32 = 1000 * YAPF_TILE_LENGTH;
 
 /// Helper container to find a depot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,4 +46,35 @@ impl Default for FindDepotData {
     fn default() -> Self {
         Self::new(TileIndex::INVALID, u32::MAX, false)
     }
+}
+
+/// [`FindDepotData`] as it crosses to the native train controller: the tile as
+/// its base integer and `reverse` as a 0-or-1 byte.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FindDepotDataRecord {
+    /// [`FindDepotData::tile`].
+    pub tile: u32,
+    /// [`FindDepotData::best_length`].
+    pub best_length: u32,
+    /// [`FindDepotData::reverse`].
+    pub reverse: u8,
+}
+impl From<FindDepotData> for FindDepotDataRecord {
+    fn from(data: FindDepotData) -> Self {
+        Self {
+            tile: data.tile.0,
+            best_length: data.best_length,
+            reverse: u8::from(data.reverse),
+        }
+    }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDFindDepotData" ["probe"] => FindDepotDataRecord {
+        tile,
+        best_length,
+        reverse,
+    };
 }

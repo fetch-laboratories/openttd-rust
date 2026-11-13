@@ -170,6 +170,7 @@ struct OpenTTDSharedServices {
 	BaseStation *(*base_station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(base_station);
 	uint32_t (*base_station_xy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(base_station_xy);
 	uint8_t (*station_facilities)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_facilities);
+	bool (*waypoint_is_single_tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_is_single_tile);
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
 	size_t (*kdtree_partition)(OpenTTDKdtreeKey *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(kdtree_partition);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
@@ -238,6 +239,7 @@ struct OpenTTDSharedServices {
 	uint32_t (*resolver_grf_file_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file_id);
 	uint8_t (*resolver_grf_version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_version);
 	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);
+	void (*yapf_rail_dump_state)(const uint32_t *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(yapf_rail_dump_state);
 	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
 };
 extern const OpenTTDSharedServices _rust_shared_services;

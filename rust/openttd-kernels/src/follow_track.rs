@@ -190,8 +190,8 @@ impl CFollowTrackT {
             allow90,
         )
     }
-    /// Temporary raw adapter of [`Self::vehicle`] for `rail_yapf.rs`,
-    /// `road_yapf.rs` and `native_test_support.rs` until their passes.
+    /// Temporary raw adapter of [`Self::vehicle`] for `road_yapf.rs` and
+    /// `native_test_support.rs` until their passes.
     pub(crate) fn vehicle_raw(
         s: &Services,
         mode: u8,
@@ -248,8 +248,8 @@ impl CFollowTrackT {
     pub(crate) fn follow(&mut self, s: &Services, old_tile: TileIndex, old_td: Trackdir) -> bool {
         self.follow_with_road(s, old_tile, old_td, None)
     }
-    /// Temporary raw adapter of [`Self::follow`] for `train_reservation.rs`,
-    /// `rail_yapf.rs` and `native_test_support.rs` until their passes.
+    /// Temporary raw adapter of [`Self::follow`] for `train_reservation.rs` and
+    /// `native_test_support.rs` until their passes.
     pub(crate) fn follow_raw(&mut self, s: &Services, tile: u32, td: u8) -> bool {
         self.follow(s, TileIndex(tile), Trackdir(td))
     }
@@ -708,15 +708,23 @@ impl CFollowTrackT {
     }
 }
 
-/// Helper for pathfinders - get max speed on `old_tile`. `GetSpeedLimit`'s
-/// `pmin_speed` output is always 0 and no caller requests it.
+/// Helper for pathfinders - get max speed on `old_tile`, and its minimum
+/// speed, always 0, into `pmin_speed` where the caller requests it.
 pub(crate) fn get_speed_limit(
     s: &Services,
     mode: TransportType,
     veh: Option<VehicleRef>,
     old_tile: TileIndex,
+    pmin_speed: Option<&mut i32>,
 ) -> i32 {
-    get_speed_limit_with_road(s, mode, veh, old_tile, None)
+    let min_speed = 0;
+    let max_speed = get_speed_limit_with_road(s, mode, veh, old_tile, None);
+
+    /* if min speed was requested, return it */
+    if let Some(pmin_speed) = pmin_speed {
+        *pmin_speed = min_speed;
+    }
+    max_speed
 }
 /// `GetSpeedLimit`, with the road search's invariant road kind where the caller
 /// supplies it.
@@ -759,15 +767,15 @@ pub(crate) fn get_speed_limit_with_road(
     /* if min speed was requested, return it: no caller requests it */
     max_speed
 }
-/// Temporary raw adapter of [`get_speed_limit`] for `rail_yapf.rs` and
-/// `native_test_support.rs` until their passes.
+/// Temporary raw adapter of [`get_speed_limit`] for `native_test_support.rs`
+/// until its pass.
 pub(crate) fn get_speed_limit_raw(
     s: &Services,
     mode: u8,
     veh: Option<VehicleRef>,
     tile: u32,
 ) -> i32 {
-    get_speed_limit(s, TransportType(mode), veh, TileIndex(tile))
+    get_speed_limit(s, TransportType(mode), veh, TileIndex(tile), None)
 }
 /// Temporary raw adapter of [`get_speed_limit_with_road`] for `road_yapf.rs`
 /// until its pass.

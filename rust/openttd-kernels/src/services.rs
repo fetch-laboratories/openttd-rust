@@ -394,6 +394,8 @@ pub struct Services {
     pub base_station_xy: extern "C" fn(u16) -> u32,
     /// `Station::Get(station)->facilities`, as its base byte.
     pub station_facilities: extern "C" fn(u16) -> u8,
+    /// `Waypoint::Get(waypoint)->IsSingleTile()`.
+    pub waypoint_is_single_tile: extern "C" fn(u16) -> bool,
     /// Canonical shared `docking_tile` service.
     pub road_commands: extern "C" fn() -> *const crate::road_cmd::RoadCommandServices,
     /// Stateless native STL median selection and strict partition over split keys.
@@ -538,6 +540,10 @@ pub struct Services {
     pub resolver_grf_version: extern "C" fn(*const c_void) -> u8,
     /// `ShowErrorMessage` with two string IDs at `WL_ERROR`.
     pub show_error: extern "C" fn(u32, u32),
+    /// The rail search's `DumpState`, from the words `rail_yapf.rs` encodes:
+    /// the native `DumpTarget` and node and segment `Dump` templates, which
+    /// #725 retires.
+    pub yapf_rail_dump_state: unsafe extern "C" fn(*const u32, u32),
     /// Native `NOT_REACHED`.
     pub not_reached: extern "C" fn(),
 }
@@ -803,6 +809,7 @@ crate::abi::layouts! {
         base_station,
         base_station_xy,
         station_facilities,
+        waypoint_is_single_tile,
         road_commands,
         kdtree_partition,
         station_commands,
@@ -870,6 +877,7 @@ crate::abi::layouts! {
         resolver_grf_file_id,
         resolver_grf_version,
         show_error,
+        yapf_rail_dump_state,
         not_reached,
     };
     "OpenTTDByteSpan" ["industry"] => ByteSpan {
@@ -888,6 +896,10 @@ crate::abi::layouts! {
 
 #[cfg(test)]
 extern "C" fn unexpected_station_visits(_: u16) -> u8 {
+    unreachable!()
+}
+#[cfg(test)]
+extern "C" fn unexpected_waypoint(_: u16) -> bool {
     unreachable!()
 }
 #[cfg(test)]
@@ -985,6 +997,9 @@ pub fn fixture(
     extern "C" fn unexpected_path() {
         std::process::abort()
     }
+    extern "C" fn unexpected_dump(_: *const u32, _: u32) {
+        std::process::abort()
+    }
     extern "C" fn unexpected_string_data(_: *const c_void, _: *mut usize) -> *const u8 {
         std::process::abort()
     }
@@ -1068,6 +1083,7 @@ pub fn fixture(
         string_data: unexpected_string_data,
         terrain_type: unexpected_terrain,
         show_error: unexpected_error,
+        yapf_rail_dump_state: unexpected_dump,
         not_reached: unexpected_path,
         movement: std::ptr::null(),
         set_tile_owner: zone,
@@ -1141,6 +1157,7 @@ pub fn fixture(
         base_station: unexpected_base_station,
         base_station_xy: unexpected_station_field,
         station_facilities: unexpected_station_visits,
+        waypoint_is_single_tile: unexpected_waypoint,
         road_commands: fixture_road_commands,
         kdtree_partition: fixture_kdtree_partition,
         station_commands: fixture_station_commands,

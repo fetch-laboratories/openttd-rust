@@ -222,6 +222,7 @@ mod widget_type;
 mod witness;
 mod yapf_common;
 mod yapf_node;
+mod yapf_type;
 
 pub use admin_conversion::Action as AdminAction;
 pub use alternating::{AlternatingState, AlternatingStep};
