@@ -1,0 +1,13 @@
+[
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/network_connection.cpp": 22
+    },
+    "existing_alternatives": "No retained check calls the server handler's CanBeUsed or GetName adapters: test_network_crypto.cpp calls neither, network_connection.cpp's encrypted dispatch case calls neither, and no scenario runs network_admin.cpp's secure admin join. A Rust test cannot call the C++ adapter classes.",
+    "reason": "Review of #936 (finding 1): the retired auth-comparison probe was those adapters' only observation, and root's adapter-observation ruling on #736 keeps such an observation native. 22 lines against 160 counted probe lines deleted.",
+    "retiring_owner": "#730",
+    "retirement_condition": "The network_crypto.cpp adapter classes retire with #730's network boundary, and this case with them."
+  }
+]

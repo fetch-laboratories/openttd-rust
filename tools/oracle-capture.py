@@ -14,6 +14,7 @@ that changes an oracle, a recipe or the pin reruns it for the oracles it touches
 """
 
 import argparse
+import importlib.util
 import itertools
 import subprocess
 import sys
@@ -189,6 +190,12 @@ def train_edge(lines: Sequence[str]) -> list[str]:
     return section("curve", curve) + section("swap", s["swap"])
 
 
+def auth_endpoints(lines: Sequence[str]) -> list[str]:
+    """One section per case: each endpoint result in call order, both roles interleaved."""
+    s = streams(lines)
+    return [line for case, results in s.items() for line in section(case, results)]
+
+
 def policy(lines: Sequence[str]) -> list[str]:
     s = streams(lines)
     return [line for kind in "HRZAP" for line in section(kind, s[kind])]
@@ -205,6 +212,9 @@ class Recipe:
     extract: tuple[tuple[str, str, str, str], ...] = ()
     sources: tuple[str, ...] = ()
     flags: tuple[str, ...] = field(default=("-DUNIX",))
+    # The retired Python driver as `commit:path`: its CASES and scenario() drive the
+    # program as two endpoint processes and print `<case> <result>` for each call.
+    driver: str | None = None
 
 
 RECIPE: dict[str, Recipe] = {
@@ -384,6 +394,28 @@ RECIPE: dict[str, Recipe] = {
             )
         ),
     ),
+    "auth_endpoints": Recipe(
+        oracle="auth/endpoints-oracle.txt",
+        fixture="24c0fc242b:tools/migration/auth-comparison.cpp",
+        convert=auth_endpoints,
+        sources=(
+            "src/network/core/packet.cpp",
+            "src/string.cpp",
+            "src/core/string_builder.cpp",
+            "src/core/string_consumer.cpp",
+            "src/core/string_inplace.cpp",
+            "src/core/utf8.cpp",
+            "src/3rdparty/monocypher/monocypher.cpp",
+        ),
+        flags=(
+            "-DUNIX",
+            "-DFMT_HEADER_ONLY",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-Wl,--gc-sections",
+        ),
+        driver="24c0fc242b:tools/auth-comparison.py",
+    ),
     "tunnel": Recipe(
         oracle="town/tunnel-oracle.txt",
         fixture="d9cae2c923:tools/simulation/town-reference-gaps.cpp",
@@ -497,6 +529,23 @@ def program(name: str, recipe: Recipe, out: Path) -> Path:
     return out / "capture.cpp"
 
 
+def driven(recipe: Recipe, binary: Path, out: Path) -> str:
+    """The retired driver's reference-with-reference transcripts, one result per line."""
+    assert recipe.driver is not None
+    (out / "driver.py").write_text(
+        subprocess.check_output(["git", "show", recipe.driver], cwd=ROOT, text=True)
+    )
+    spec = importlib.util.spec_from_file_location("driver", out / "driver.py")
+    assert spec is not None and spec.loader is not None
+    driver = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(driver)
+    return "".join(
+        f"{case.name} {result}\n"
+        for case in driver.CASES
+        for _, _, result in driver.scenario(binary, binary, probe.ENV, case)
+    )
+
+
 def capture(name: str) -> bool:
     recipe = RECIPE[name]
     out = probe.output(f"oracle-capture/{name}")
@@ -517,7 +566,10 @@ def capture(name: str) -> bool:
         ]
         command += [str(probe.REFERENCE / s) for s in recipe.sources]
         subprocess.run([*command, "-o", str(binary)], check=True)
-        printed.append(subprocess.check_output([str(binary)], text=True))
+        if recipe.driver is None:
+            printed.append(subprocess.check_output([str(binary)], text=True))
+        else:
+            printed.append(driven(recipe, binary, out))
     if printed[0] != printed[1]:
         print(f"{name}: -O0 and -O2 streams differ", file=sys.stderr)
         return False
