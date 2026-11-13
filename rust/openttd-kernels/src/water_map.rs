@@ -135,6 +135,16 @@ impl crate::map_func::World<'_> {
     pub(crate) fn is_sea(&self, t: u32) -> bool {
         self.asserted(|m| is_sea(m, t))
     }
+    /// `IsDockingTile`: checks whether the tile is marked as a destination tile
+    /// for ships.
+    #[inline]
+    pub(crate) fn is_docking_tile(&self, t: TileIndex) -> bool {
+        (self.kind(t) == TileType::MP_WATER
+            || self.kind(t) == TileType::MP_RAILWAY
+            || self.kind(t) == TileType::MP_STATION
+            || self.kind(t) == TileType::MP_TUNNELBRIDGE)
+            && crate::bitmath_func::has_bit(Self::byte(self.types.m1(t)), 7)
+    }
     /// `GetLockDirection`, with its `IsLock` assertion.
     pub(crate) fn lock_direction(&self, t: u32) -> u8 {
         self.check(self.water_tile_type(t) == WATER_TILE_LOCK);

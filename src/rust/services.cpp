@@ -280,6 +280,8 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.se_flat_world_height = &_settings_game.game_creation.se_flat_world_height,
 	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
 	.select_goods = &_settings_game.order.selectgoods,
+	.ship_curve45_penalty = &_settings_game.pf.yapf.ship_curve45_penalty,
+	.ship_curve90_penalty = &_settings_game.pf.yapf.ship_curve90_penalty,
 	.starting_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour),
 	.station_noise = &_settings_game.economy.station_noise_level,
 	.town_council_tolerance = &_settings_game.difficulty.town_council_tolerance,
