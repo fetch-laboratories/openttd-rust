@@ -317,11 +317,12 @@ pub struct Leaves {
     pub airport_width: unsafe extern "C" fn(*const Station) -> u8,
     /// `u->sprite_cache.sprite_seq.CopyWithoutPalette(v->sprite_cache.sprite_seq)`.
     pub copy_sprite: unsafe extern "C" fn(VehicleRef, VehicleRef),
-    /// `CrashAirplane`'s news and script events.
+    /// `CrashAirplane`'s news and script events; #974's shared services replace it.
     pub crash_news: unsafe extern "C" fn(Vehicle, u16, u32),
     /// `DeleteVehicleNews(v->index, AdviceType::AircraftDestinationTooFar)`.
     pub delete_range_news: unsafe extern "C" fn(Vehicle),
-    /// `AircraftHandleDestTooFar`'s script event and advice news.
+    /// `AircraftHandleDestTooFar`'s script event and advice news; #974's shared services
+    /// replace it.
     pub destination_too_far: unsafe extern "C" fn(Vehicle),
     /// `GetDirectionTowards`.
     pub direction_towards: unsafe extern "C" fn(Vehicle, i32, i32) -> u8,
@@ -329,7 +330,8 @@ pub struct Leaves {
     pub dirty_depot: unsafe extern "C" fn(Vehicle),
     /// `OnNewEconomyDay`'s details and aircraft list windows.
     pub dirty_lists: unsafe extern "C" fn(Vehicle),
-    /// `AircraftEntersTerminal`'s first-arrival news and script events.
+    /// `AircraftEntersTerminal`'s first-arrival news and script events; #974's shared
+    /// services replace it.
     pub first_arrival: unsafe extern "C" fn(Vehicle, u16),
     /// `AirportFTA::blocks`.
     pub fta_blocks: unsafe extern "C" fn(*const c_void) -> AirportBlocks,
