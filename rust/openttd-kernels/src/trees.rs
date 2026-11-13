@@ -929,9 +929,15 @@ impl Trees<'_> {
         let mut limit = (self.t.command_begin)(ctx);
         let map = self.s.map();
         let check = |ok| crate::movement::native_assert(self.s, ok);
-        let mut iter =
-            crate::tilearea::TileIterator::create(map, s.size, tile, start, diagonal, check);
-        let mut current = iter.tile();
+        let mut iter = crate::tilearea::TileIterator::create(
+            map,
+            s.size,
+            TileIndex(tile),
+            TileIndex(start),
+            diagonal,
+            check,
+        );
+        let mut current = iter.tile().0;
         while current != INVALID_TILE {
             let p = self.plant_observation(current);
             'tile: {
@@ -1031,7 +1037,7 @@ impl Trees<'_> {
                 }
             }
             iter.advance(map, s.size, check);
-            current = iter.tile();
+            current = iter.tile().0;
         }
         CommandResult {
             cost,
@@ -1177,9 +1183,13 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
     }
     if set_zone && is_rainforest_tree(tree) {
         // The native TileArea(tile) constructor starts with zero extents.
-        let mut area = crate::tilearea::TileArea { tile, w: 0, h: 0 };
+        let mut area = crate::tilearea::TileArea {
+            tile: TileIndex(tile),
+            w: 0,
+            h: 0,
+        };
         area.expand(radius.cast_signed(), map, size_y);
-        for target in area.tiles(map) {
+        for target in area.tiles_raw(map) {
             if world.kind(TileIndex(target)) != TileType::MP_VOID
                 && map.distance_square(TileIndex(tile), TileIndex(target))
                     < radius.wrapping_mul(radius)

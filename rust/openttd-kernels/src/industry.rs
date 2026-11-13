@@ -1892,12 +1892,10 @@ fn plant_farm_field(
     let tiles = map.coordinates();
     let (tile_x, tile_y) = (tiles.tile_x(tile), tiles.tile_y(tile));
     let mut ta = TileArea::new(
-        tiles
-            .tile_xy(
-                tile_x - tile_x.min(size_x / 2),
-                tile_y - tile_y.min(size_y / 2),
-            )
-            .0,
+        tiles.tile_xy(
+            tile_x - tile_x.min(size_x / 2),
+            tile_y - tile_y.min(size_y / 2),
+        ),
         size_x as u16,
         size_y as u16,
     );
@@ -1911,12 +1909,7 @@ fn plant_farm_field(
     // check the amount of bad tiles
     let mut count = 0;
     for cur_tile in ta.tiles(tiles) {
-        count += u32::from(is_suitable_for_farm_field(
-            TileIndex(cur_tile),
-            false,
-            false,
-            svc,
-        ));
+        count += u32::from(is_suitable_for_farm_field(cur_tile, false, false, svc));
     }
     if count * 2 < u32::from(ta.w) * u32::from(ta.h) {
         return;
@@ -1927,8 +1920,8 @@ fn plant_farm_field(
     let field_type = ((gb(r, 8, 8) * 9) >> 8) as u8;
     // make field
     for cur_tile in ta.tiles(tiles) {
-        if is_suitable_for_farm_field(TileIndex(cur_tile), true, true, svc) {
-            unsafe { (svc.make_field)(cur_tile, field_type, counter, industry.0) };
+        if is_suitable_for_farm_field(cur_tile, true, true, svc) {
+            unsafe { (svc.make_field)(cur_tile.0, field_type, counter, industry.0) };
         }
     }
     let mut kind = 3;
@@ -1936,11 +1929,10 @@ fn plant_farm_field(
         kind = PLANTFARMFIELD_TYPE[(random(svc) & 0xF) as usize];
     }
     let (width, height) = (u32::from(ta.w), u32::from(ta.h));
-    let north = TileIndex(ta.tile);
-    setup_farm_field_fence(north, height, kind, DiagDirection::DIAGDIR_NE, map, svc);
-    setup_farm_field_fence(north, width, kind, DiagDirection::DIAGDIR_NW, map, svc);
+    setup_farm_field_fence(ta.tile, height, kind, DiagDirection::DIAGDIR_NE, map, svc);
+    setup_farm_field_fence(ta.tile, width, kind, DiagDirection::DIAGDIR_NW, map, svc);
     setup_farm_field_fence(
-        TileIndex(ta.tile.wrapping_add(width - 1)),
+        ta.tile + tiles.diff(i32::from(ta.w) - 1, 0),
         height,
         kind,
         DiagDirection::DIAGDIR_SW,
@@ -1948,7 +1940,7 @@ fn plant_farm_field(
         svc,
     );
     setup_farm_field_fence(
-        TileIndex(ta.tile.wrapping_add((height - 1).wrapping_mul(map.size_x))),
+        ta.tile + tiles.diff(0, i32::from(ta.h) - 1),
         width,
         kind,
         DiagDirection::DIAGDIR_SE,
@@ -1976,7 +1968,7 @@ fn plant_random_farm_field(
         .wrapping_add(random(s) % 31)
         .wrapping_sub(16) as i32;
     let tile = map.coordinates().tile_add_wrap(
-        TileIndex(location.tile),
+        location.tile,
         x,
         y,
         map.size_y,
@@ -2035,15 +2027,15 @@ fn chop_lumber_mill_trees(
     // We only want to cut trees if all tiles are completed.
     for tile_cur in location.tiles(tiles) {
         // TileBelongsToIndustry(tile_cur) && !IsIndustryCompleted(tile_cur)
-        if unsafe { !(s.tile_completed)(i, tile_cur) } {
+        if unsafe { !(s.tile_completed)(i, tile_cur.0) } {
             return;
         }
     }
     let width = map.size_x;
     // 40x40 tiles to search.
     let mut spiral = crate::spiral::square(
-        tiles.tile_x(TileIndex(location.tile)),
-        tiles.tile_y(TileIndex(location.tile)),
+        tiles.tile_x(location.tile),
+        tiles.tile_y(location.tile),
         40,
         width,
         map.size_y,

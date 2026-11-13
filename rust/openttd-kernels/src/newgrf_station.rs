@@ -42,7 +42,11 @@ pub(crate) fn rail_tile_area(
 ) -> crate::tilearea::TileArea {
     use crate::tilearea::TileArea;
     match area {
-        0 => TileArea { tile, w: 1, h: 1 },
+        0 => TileArea {
+            tile: TileIndex(tile),
+            w: 1,
+            h: 1,
+        },
         TA_PLATFORM => {
             let world = crate::map_func::World::new(shared);
             let delta = world
@@ -64,7 +68,7 @@ pub(crate) fn rail_tile_area(
                 start = start.wrapping_sub(delta);
             }
             TileArea {
-                tile: start,
+                tile: TileIndex(start),
                 w: world
                     .dimensions
                     .tile_x(TileIndex(end))
@@ -934,6 +938,7 @@ pub extern "C" fn openttd_rust_station_randomisation(
         for x in 0..area.w {
             let t = area
                 .tile
+                .0
                 .wrapping_add(map.diff(i32::from(x), i32::from(y)).cast_unsigned());
             if !(a.rail_belongs)(st, t) {
                 continue;

@@ -683,9 +683,14 @@ unsafe fn edit_tiles(
         return;
     }
     let check = |ok| w.check(ok);
-    let area =
-        crate::tilearea::TileArea::from_corners(w.dimensions, w.types.count(), t1, t2, check);
-    for tile in area.tiles(w.dimensions) {
+    let area = crate::tilearea::TileArea::from_corners(
+        w.dimensions,
+        w.types.count(),
+        TileIndex(t1),
+        TileIndex(t2),
+        check,
+    );
+    for tile in area.tiles_raw(w.dimensions) {
         // SAFETY: caller contract.
         unsafe {
             if add {

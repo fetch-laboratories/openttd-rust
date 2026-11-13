@@ -2725,7 +2725,7 @@ impl Engine<'_> {
             self.clear_make_house_tile(tile + self.map().diff(1, 1), t, house, c);
         }
         let area = crate::tilearea::TileArea {
-            tile: tile.0,
+            tile,
             w: if size.any(BuildingFlags::BUILDING_2_TILES_X) {
                 2
             } else {

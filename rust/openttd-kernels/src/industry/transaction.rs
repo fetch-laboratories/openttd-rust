@@ -530,11 +530,11 @@ impl Engine<'_> {
             return false;
         }
         let ta = TileArea {
-            tile: tile.0.wrapping_sub(coordinates.diff(1, 1).cast_unsigned()),
+            tile: tile - coordinates.diff(1, 1),
             w: 2,
             h: 2,
         };
-        for tile_walk in ta.tiles(coordinates).map(TileIndex) {
+        for tile_walk in ta.tiles(coordinates) {
             let curh = self.tile_height(tile_walk);
             // Is the tile clear?
             if self.tile_type(tile_walk) != TileType::MP_CLEAR
@@ -602,9 +602,7 @@ impl Engine<'_> {
         // are no obstructing items. TileArea::Expand is not used here as we need to abort
         // instead of clamping if the bounds cannot expanded.
         let ta = TileArea {
-            tile: (tile
-                + coordinates.diff(-(industry_platform as i32), -(industry_platform as i32)))
-            .0,
+            tile: tile + coordinates.diff(-(industry_platform as i32), -(industry_platform as i32)),
             w: (max_x
                 .wrapping_add(2)
                 .wrapping_add((2 * industry_platform) as i32)) as u16,
@@ -612,13 +610,8 @@ impl Engine<'_> {
                 .wrapping_add(2)
                 .wrapping_add((2 * industry_platform) as i32)) as u16,
         };
-        if coordinates
-            .tile_x(TileIndex(ta.tile))
-            .wrapping_add(u32::from(ta.w))
-            >= coordinates.max_x()
-            || coordinates
-                .tile_y(TileIndex(ta.tile))
-                .wrapping_add(u32::from(ta.h))
+        if coordinates.tile_x(ta.tile).wrapping_add(u32::from(ta.w)) >= coordinates.max_x()
+            || coordinates.tile_y(ta.tile).wrapping_add(u32::from(ta.h))
                 >= crate::map_func::Map::max_y(self.map().size_y)
         {
             return false;
@@ -627,7 +620,7 @@ impl Engine<'_> {
         // the company who funded or prospected the industry. Perform terraforming as
         // OWNER_TOWN to disable autoslope and town ratings.
         let cur_company = self.swap_company(Owner::TOWN);
-        for tile_walk in ta.tiles(coordinates).map(TileIndex) {
+        for tile_walk in ta.tiles(coordinates) {
             let curh = self.tile_height(tile_walk);
             if curh != h {
                 // This tile needs terraforming. Check if we can do that without damaging the
@@ -656,7 +649,7 @@ impl Engine<'_> {
         }
         if flags.test(DoCommandFlag::Execute) {
             // Terraform the land under the industry.
-            for tile_walk in ta.tiles(coordinates).map(TileIndex) {
+            for tile_walk in ta.tiles(coordinates) {
                 let mut curh = self.tile_height(tile_walk);
                 while curh != h {
                     // We give the terraforming for free here, because we can't calculate
