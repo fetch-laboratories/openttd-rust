@@ -35,7 +35,13 @@ static const OpenTTDTreeServices tree_probe_services{
 	.set_ground_density = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
 	.set_growth = TreeUnused<void, uint32_t, uint8_t>,
 	.sin = [](float value) noexcept { return value; },
-	.strings = {.already_here = 11, .on_water = 13, .plant_limit = 12, .site_unsuitable = 14, .wrong_terrain = 15},
+	.strings = {
+		.already_here = 11,
+		.on_water = 13,
+		.plant_limit = 12,
+		.site_unsuitable = 14,
+		.wrong_terrain = 15,
+	},
 	.town = nullptr,
 };
 static void Trees()
