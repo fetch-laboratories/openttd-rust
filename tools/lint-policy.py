@@ -27,7 +27,7 @@ from cleanup_contract import (
 )
 from code_lines import without_comments
 from rust_syntax import Node, item_source, nodes, syntax_trees
-from vcs import git
+from vcs import git, merge_base
 
 ROOT = Path(__file__).resolve().parents[1]
 RANK = {"allow": 0, "warn": 1, "deny": 2, "forbid": 3}
@@ -406,6 +406,7 @@ def main() -> int:
         help="record each ready carry in this branch's cleanup records file",
     )
     args = parser.parse_args()
+    args.base_ref = merge_base(args.base_ref, run=git, announce=True)
     # Quick runs lint policy on every change, so every record file is validated
     # here even when no gate needs its records.
     tracked(args.base_ref)

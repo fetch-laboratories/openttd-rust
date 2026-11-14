@@ -50,7 +50,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 
 ### Quick cleanup checks
 
-[Quick](ci.md#jobs-and-profiles) runs the Cargo checks and these gates; `python3 tools/preflight.py --base "$(git merge-base origin/rust-migration HEAD)"` runs them all locally ([why the merge base](workflow.md#commits-and-pushes)). Run one gate with the same `--base` and `--step NAME`, which runs the Quick steps whose name contains NAME (`--list` names them) with Quick's pinned versions and base. `python3 tools/preflight.py --fast` is the seconds-long check before a commit: the pre-push hook's fast tier and Quick's Ruff and ty lines, with no stamp. Preserve the original's casts and control flow: a faithful truncation must not become a checked conversion to reduce debt.
+[Quick](ci.md#jobs-and-profiles) runs the Cargo checks and these gates; `python3 tools/preflight.py` runs them all locally, against the merge base of `--base` (default `origin/rust-migration`) and the head. Run one gate with `--step NAME`, which runs the Quick steps whose name contains NAME (`--list` names them) with Quick's pinned versions and base. `python3 tools/preflight.py --fast` is the seconds-long check before a commit: the pre-push hook's fast tier and Quick's Ruff and ty lines, with no stamp. Preserve the original's casts and control flow: a faithful truncation must not become a checked conversion to reduce debt.
 
 | Command | Fails on |
 | --- | --- |

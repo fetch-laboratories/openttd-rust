@@ -285,6 +285,8 @@ class PolicyTests(unittest.TestCase):
                 with (
                     patch.object(POLICY, "ROOT", root),
                     patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
                     patch.object(
                         POLICY,
                         "context",
@@ -414,6 +416,8 @@ class PolicyTests(unittest.TestCase):
                 with (
                     patch.object(POLICY, "ROOT", root),
                     patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
                     patch("sys.argv", ["lint-policy.py", "--base-ref", "HEAD"]),
                 ):
                     self.assertEqual(POLICY.main(), 1)
@@ -1231,6 +1235,35 @@ class CarryTests(unittest.TestCase):
             with self.subTest(rejected=rejected):
                 self.assertEqual(POLICY.fidelity_sites({"rust/x.rs": rejected}), set())
 
+    def test_a_suppression_only_the_base_removed_is_not_added(self) -> None:
+        # #969: base removed an allow after the branch forked; the branch's
+        # unchanged copy is not a suppression it adds.
+        allowed = "#[allow(clippy::too_many_arguments)]\npub fn wide() {}\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"rust/x.rs": allowed, "rust/y.rs": "pub fn y() {}\n"})
+            fork = git("rev-parse", "HEAD", cwd=root).strip()
+            (root / "rust/x.rs").write_text("pub fn wide() {}\n")
+            tip = commit(root)
+            git("checkout", "-q", "-b", "work", fork, cwd=root)
+            (root / "rust/y.rs").write_text("pub fn y() {}\npub fn z() {}\n")
+            head = commit(root)
+            for given in (fork, tip):
+                with (
+                    self.subTest(given=given),
+                    patch.object(POLICY, "ROOT", root),
+                    patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
+                    patch.object(
+                        POLICY, "context", return_value=("/impl", [], [], head)
+                    ),
+                    patch("sys.argv", ["lint-policy.py", "--base-ref", given]),
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
+                ):
+                    self.assertEqual(POLICY.main(), 0)
+
     def test_accepted_contract_binds_to_unchanged_item_text(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1654,6 +1687,8 @@ class TrackedRecordTests(unittest.TestCase):
             with (
                 patch.object(POLICY, "ROOT", root),
                 patch.object(POLICY, "git", partial(git, cwd=root)),
+                patch.object(cleanup_contract, "ROOT", root),
+                patch.object(cleanup_contract, "git", partial(git, cwd=root)),
                 patch("sys.argv", ["lint-policy.py", "--base-ref", base]),
                 contextlib.redirect_stdout(output),
                 self.assertRaises(SystemExit) as stop,
@@ -1733,6 +1768,8 @@ class TrackedRecordTests(unittest.TestCase):
                 with (
                     patch.object(POLICY, "ROOT", root),
                     patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
                     patch("sys.argv", ["lint-policy.py", "--base-ref", base, *flags]),
                     contextlib.redirect_stdout(output),
                 ):

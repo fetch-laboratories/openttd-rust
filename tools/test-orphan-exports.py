@@ -245,11 +245,13 @@ class OrphanTests(unittest.TestCase):
         check.assert_not_called()
         with (
             patch.object(sys, "argv", ["orphan-exports.py", "--base-ref", "base"]),
+            patch.object(ORPHANS.vcs, "merge_base", return_value="fork") as fork,
             patch.object(ORPHANS, "check_uncalled", return_value=0) as check,
             patch.object(ORPHANS.baseline_ratchet, "main", return_value=1) as ratchet,
         ):
             self.assertEqual(ORPHANS.main(), 1)
-        check.assert_called_once_with("base")
+        fork.assert_called_once()
+        check.assert_called_once_with("fork")
         ratchet.assert_called_once()
 
 

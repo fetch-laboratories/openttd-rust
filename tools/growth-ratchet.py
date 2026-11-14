@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from cleanup_contract import context, reviewed, run
+from vcs import merge_base
 
 importlib.import_module("rust_syntax")
 
@@ -151,6 +152,7 @@ def main() -> int:
         help="the CI event; growth pending review fails only in merge_group",
     )
     args = parser.parse_args()
+    args.base_ref = merge_base(args.base_ref, args.head, run=METRICS.git, announce=True)
     METRICS.keep_code_lines()
     before = METRICS.growth_inventory(args.base_ref)
     after = METRICS.growth_inventory(args.head)

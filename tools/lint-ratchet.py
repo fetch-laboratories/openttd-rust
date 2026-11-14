@@ -17,6 +17,7 @@ from collections.abc import Callable
 from functools import lru_cache, partial
 from pathlib import Path
 
+import vcs
 from baseline_ratchet import debt_errors, exceeds
 from cleanup_contract import (
     Ledger,
@@ -434,19 +435,8 @@ def debt_lints(revision: str) -> frozenset[str] | None:
 
 
 def merge_base(base_ref: str) -> str:
-    """The base the change started from, not a base tip that moved since.
-
-    CI passes the base branch's current tip; comparing against it would count
-    base's own later changes as this change's growth. Without a common
-    ancestor there is no inventory to compare against, so the check stops.
-    """
-    try:
-        return git("merge-base", "HEAD", base_ref).strip()
-    except subprocess.CalledProcessError as error:
-        raise SystemExit(
-            f"no common ancestor of HEAD and {base_ref}; fetch full history"
-            " (git fetch --unshallow) or pass the branch's real base"
-        ) from error
+    """The base the change started from, not a base tip that moved since."""
+    return vcs.merge_base(base_ref, run=git)
 
 
 def check(

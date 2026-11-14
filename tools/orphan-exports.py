@@ -13,9 +13,11 @@ row names the owner issue that retires the fixture calling those members (#737).
 import argparse
 import re
 import subprocess
+from functools import partial
 from pathlib import Path
 
 import baseline_ratchet
+import vcs
 from code_lines import RUST_EXPORT, without_comments
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -269,7 +271,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.report_uncalled:
         return report_uncalled()
-    return check_uncalled(args.base_ref) | baseline_ratchet.main(
+    base = vcs.merge_base(args.base_ref, run=partial(vcs.git, cwd=ROOT))
+    return check_uncalled(base) | baseline_ratchet.main(
         __doc__,
         ROOT,
         BASELINE,

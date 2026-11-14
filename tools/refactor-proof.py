@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from cleanup_contract import ContractError, context, reviewed, run
-from vcs import git
+from vcs import git, merge_base
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -223,6 +223,7 @@ def main() -> int:
         if not (args.base_archive and args.head_archive):
             parser.error("both archives are required")
         return int(not compare(args.base_archive, args.head_archive, renames))
+    args.base_ref = merge_base(args.base_ref, run=git, announce=True)
     if args.renames:
         parser.error("CI renames must come from an exact-head reviewed PR contract")
     if (

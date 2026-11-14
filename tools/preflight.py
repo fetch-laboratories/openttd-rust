@@ -257,6 +257,21 @@ def revision(name: str) -> str:
     )
 
 
+def bases(options: argparse.Namespace) -> tuple[str, str]:
+    """The merge base of --base and --head, and --head, as commits.
+
+    Preflight compares two trees, so against a base tip that has moved since
+    the branch forked it would read each newer base commit as lines the branch
+    removed. The merge base of an ancestor is that ancestor, so a fork point
+    passed as --base is used unchanged.
+    """
+    tip, head = revision(options.base), revision(options.head)
+    base = tip if tip == head else git(migration.ROOT, "merge-base", tip, head)
+    if base != tip:
+        print(f"base: {base[:10]}, the merge base of {options.base} and {options.head}")
+    return base, head
+
+
 def uncommitted() -> str:
     """A warning when tracked files differ from HEAD, or nothing."""
     if git(migration.ROOT, "status", "--porcelain", "--untracked-files=no"):
@@ -298,7 +313,7 @@ def stamp(options: argparse.Namespace, base: str, head: str, warning: str) -> st
 
 def fast(options: argparse.Namespace) -> int:
     """The fast tier on the working tree plus ty, each once, with no stamp."""
-    base, head = revision(options.base), revision(options.head)
+    base, head = bases(options)
     supplied = options.hooks.resolve() if options.hooks else None
     hooks = (supplied or pinned_hooks()) if options.list else hooks_checkout(supplied)
     ty = quick_workflow.ty_line()
@@ -328,7 +343,7 @@ def main() -> int:
     try:
         if options.fast:
             return fast(options)
-        base, head = revision(options.base), revision(options.head)
+        base, head = bases(options)
         steps = workflow_steps(yaml.safe_load(WORKFLOW.read_text()), base)
         probes = ["python3", "tools/compile-check.py", "--base", base]
         steps.append(Step(PROBES, probes))

@@ -246,7 +246,7 @@ def require_stamp(pr: int, head: str, unstamped: str | None) -> None:
     if entry is None:
         raise ValueError(
             f"PR #{pr} head {head} has no preflight stamp; run "
-            "`python3 tools/preflight.py --base origin/rust-migration` on it"
+            "`python3 tools/preflight.py` on it"
         )
 
 

@@ -16,6 +16,7 @@ import subprocess
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, NamedTuple
 
+import vcs
 from vcs import ROOT, gh, git
 
 ATTRIBUTION = re.compile(r"Agent: (\S+) \| Model: (\S+) \| Reasoning effort: (\S+)")
@@ -93,10 +94,7 @@ def file_records(text: str, where: str) -> list[dict[str, Any]]:
 
 
 def merge_base(base_ref: str) -> str:
-    try:
-        return git("merge-base", "HEAD", base_ref).strip()
-    except subprocess.CalledProcessError:
-        return base_ref
+    return vcs.merge_base(base_ref, run=git)
 
 
 def at_base(base: str, path: str) -> str | None:

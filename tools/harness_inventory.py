@@ -412,6 +412,7 @@ def main() -> int:
         help="record additions, retaining archived evidence and case lines",
     )
     args = parser.parse_args()
+    args.base_ref = vcs.merge_base(args.base_ref, run=git, announce=True)
     tree, unread = tree_inventory()
     recorded = load((ROOT / INVENTORY).read_text())
     if args.write:

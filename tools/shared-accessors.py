@@ -378,6 +378,8 @@ def main() -> bool:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", help="ratchet against this Git revision")
     args = parser.parse_args()
+    if args.base_ref:
+        args.base_ref = vcs.merge_base(args.base_ref, run=git, announce=True)
     pinned = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
     tracked = set(git("ls-tree", "-r", "--name-only", pinned, "src").splitlines())
     all_files = sources()
