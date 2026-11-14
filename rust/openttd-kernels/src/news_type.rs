@@ -160,7 +160,8 @@ crate::abi::shared_records! {
     "OpenTTDNewsReference" ["news"] => pub struct NewsReferenceRecord {
         /// The alternative's base integer; zero for `std::monostate`.
         pub value: u32,
-        /// `std::variant::index()`, in the original's alternative order.
+        /// The alternative: 0 `std::monostate`, then tile, vehicle, station, industry, town
+        /// and engine, as in the original's list.
         pub index: u8,
     }
 }

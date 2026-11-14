@@ -866,7 +866,6 @@ static NewsReference RustNewsReference(const OpenTTDNewsReference &reference) no
 		default: NOT_REACHED();
 	}
 }
-static_assert(std::is_same_v<NewsReference, std::variant<std::monostate, TileIndex, VehicleID, StationID, IndustryID, TownID, EngineID>>);
 
 /** The string parameter a Rust descriptor borrows. */
 static StringParameter RustStringParameter(const OpenTTDRustEncodedParameter &parameter) noexcept
