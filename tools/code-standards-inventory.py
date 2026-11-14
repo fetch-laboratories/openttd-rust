@@ -16,7 +16,15 @@ At a revision (default HEAD) it counts, over rust/openttd-kernels/src:
 With file paths it prints those files' residue instead of the totals, including
 the finished-file residue classes (#901): calls to `*_raw` adapters and
 `openttd_rust_*` exports outside export shims, Rust-internal `execute: bool`
-parameters and `GameState<Vec<...>>` scratch pools. `--gate BASE_REF` fails when
+parameters and `GameState<Vec<...>>` scratch pools. It also lists candidates
+for the implementer and reviewer to judge, which enter no total and no gate:
+service fields (`extern "C" fn` struct fields) whose only non-test call site in
+the crate is in the given files (`one-call service`), functions that only
+forward their parameters to another without the `_raw` suffix (`unsuffixed
+adapter`), `1 << X.0` shifts outside a set type's `Self(...)` constructor
+(`hand-built flag bit`), and functions and fields named `*flags*` of a
+primitive integer type (`integer flag set`). Rows print as they are found,
+before the slower comment pairing. `--gate BASE_REF` fails when
 a file that migration/finished-files.txt lists gains one of those, or a command
 over seven parameters, against the merge base; existing occurrences pass. The Rust
 and the candidate C++ come from the revision's archive, the original from the
@@ -740,12 +748,197 @@ def gate(base_ref: str, head: str) -> int:
     return int(bool(failures or missing))
 
 
+# Candidate rows (#945 items 3 and 15): listed for the implementer and reviewer
+# to judge, outside RESIDUE, the totals and --gate.
+SERVICE = re.compile(r'\bextern\s*"C"\s*fn\b')
+PRIMITIVE = re.compile(r"[iu](?:8|16|32|64|128|size)")
+QUERIES = {
+    "service call": (
+        "(call_expression function: (parenthesized_expression"
+        " (field_expression field: (field_identifier) @field)))"
+    ),
+    "service field": "(field_declaration name: (field_identifier) @name) @field",
+}
+
+
+def captures(query: str, node: Node) -> dict[str, list[Node]]:
+    compiled = tree_sitter.Query(PARSERS["rust"].language, query)
+    return tree_sitter.QueryCursor(compiled).captures(node)
+
+
+@dataclass
+class Services:
+    """The crate's `extern "C" fn` fields and the non-test sites that call them."""
+
+    signatures: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
+    tables: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    calls: dict[str, list[tuple[str, int]]] = field(
+        default_factory=lambda: defaultdict(list)
+    )
+
+
+def services(rust: dict[str, str], tests: set[str]) -> Services:
+    found = Services()
+    for path, source in sorted(rust.items()):
+        data = source.encode()
+        root = PARSERS["rust"].parse(data).root_node
+        for node in captures(QUERIES["service field"], root).get("field", []):
+            kind = text(node.child_by_field_name("type"), data)
+            if SERVICE.search(kind):
+                name = text(node.child_by_field_name("name"), data)
+                found.signatures[name].add(" ".join(kind.split()))
+                found.tables[name] += 1
+        if path in tests:
+            continue
+        for node in captures(QUERIES["service call"], root).get("field", []):
+            if not in_test(node, data, path):
+                found.calls[text(node, data)].append((path, node.start_point[0] + 1))
+    return found
+
+
+def one_call_services(found: Services, paths: set[str]) -> list[Site]:
+    """Service fields that the given files call from the crate's only call site."""
+    rows = []
+    for name, sites in found.calls.items():
+        if name not in found.signatures or len(sites) != 1 or sites[0][0] not in paths:
+            continue
+        path, line = sites[0]
+        signature = " | ".join(sorted(found.signatures[name]))
+        tables = found.tables[name]
+        also = f"; declared in {tables} tables" if tables > 1 else ""
+        rows.append(Site(path, line, "one-call service", f"{name} ({signature}{also})"))
+    return sorted(rows, key=lambda s: (s.detail.split(" ", 1)[1], s.path, s.line))
+
+
+def parameter_names(node: Node, data: bytes) -> set[str]:
+    parameters = node.child_by_field_name("parameters")
+    names = {"self"}
+    for parameter in parameters.named_children if parameters else []:
+        pattern = parameter.child_by_field_name("pattern")
+        if pattern is not None:
+            names.add(text(pattern, data).removeprefix("mut "))
+    return names
+
+
+def forwarded_argument(node: Node, data: bytes, names: set[str]) -> bool:
+    """A parameter, or a wrapper constructor of one such as `TileIndex(tile)`."""
+    if node.type in ("identifier", "self"):
+        return text(node, data) in names
+    if node.type != "call_expression":
+        return False
+    function = node.child_by_field_name("function")
+    arguments = node.child_by_field_name("arguments")
+    inner = arguments.named_children if arguments else []
+    return (
+        function is not None
+        and re.fullmatch(r"(?:\w+::)*[A-Z]\w*", text(function, data)) is not None
+        and len(inner) == 1
+        and forwarded_argument(inner[0], data, names)
+    )
+
+
+def adapter_callee(only: Node, data: bytes, names: set[str]) -> str | None:
+    """The callee a one-expression body forwards its parameters to, or None."""
+    node: Node | None = only
+    if (
+        only.type == "field_expression"
+        and text(only.child_by_field_name("field"), data) == "0"
+    ):
+        node = only.child_by_field_name("value")
+    if node is None or node.type != "call_expression":
+        return None
+    function = node.child_by_field_name("function")
+    arguments = node.child_by_field_name("arguments")
+    if function is None or arguments is None:
+        return None
+    if function.type == "field_expression":
+        receiver = function.child_by_field_name("value")
+        if receiver is None or text(receiver, data) not in names:
+            return None
+        name = text(function.child_by_field_name("field"), data)
+    elif function.type in ("identifier", "scoped_identifier"):
+        name = text(function, data).split("::")[-1]
+    else:
+        return None
+    if all(forwarded_argument(a, data, names) for a in arguments.named_children):
+        return name
+    return None
+
+
+def unsuffixed_adapter(node: Node, data: bytes) -> str | None:
+    """A function that only forwards to another, under a name without `_raw`."""
+    name = text(node.child_by_field_name("name"), data)
+    body = node.child_by_field_name("body")
+    head = text(node, data).split("fn ", 1)[0]
+    if name.endswith("_raw") or body is None or 'extern "C"' in head:
+        return None
+    statements = [c for c in body.named_children if c.type not in COMMENTS]
+    if len(statements) != 1:
+        return None
+    (only,) = statements
+    if only.type == "expression_statement" and only.named_children:
+        only = only.named_children[0]
+    callee = adapter_callee(only, data, parameter_names(node, data))
+    return name if callee is not None and callee != name else None
+
+
+def flag_rows(path: str, source: str) -> list[Site]:
+    """Unsuffixed adapters, hand-built flag bits and integer flag sets of one file."""
+    data = source.encode()
+    rows = []
+    for node in walk(PARSERS["rust"].parse(data).root_node):
+        line = node.start_point[0] + 1
+        if node.type == "function_item":
+            if in_test(node, data, path):
+                continue
+            if name := unsuffixed_adapter(node, data):
+                rows.append(Site(path, line, "unsuffixed adapter", name))
+            head = text(node, data).split("fn ", 1)[0]
+            name = text(node.child_by_field_name("name"), data)
+            returned = text(node.child_by_field_name("return_type"), data)
+            if (
+                "flags" in name
+                and PRIMITIVE.fullmatch(returned)
+                and 'extern "C"' not in head
+            ):
+                rows.append(Site(path, line, "integer flag set", name))
+        elif node.type == "field_declaration":
+            name = text(node.child_by_field_name("name"), data)
+            kind = text(node.child_by_field_name("type"), data)
+            if "flags" in name and PRIMITIVE.fullmatch(kind):
+                if not in_test(node, data, path):
+                    rows.append(Site(path, line, "integer flag set", name))
+        elif node.type == "binary_expression" and re.fullmatch(
+            r"1\w*\s*<<\s*\(?[\w.:]+\.0\)?(?:\s+as\s+\w+)?", text(node, data)
+        ):
+            call = node.parent.parent if node.parent else None
+            own = (
+                call is not None
+                and call.type == "call_expression"
+                and text(call.child_by_field_name("function"), data) == "Self"
+            )
+            if not own and not in_test(node, data, path):
+                rows.append(Site(path, line, "hand-built flag bit", text(node, data)))
+    return rows
+
+
+def candidate_rows(
+    rust: dict[str, str], paths: set[str], tests: set[str]
+) -> Iterator[Site]:
+    """Each candidate row of the given files, as it is found."""
+    for path in sorted(paths):
+        yield from flag_rows(path, rust[path])
+    yield from one_call_services(services(rust, tests), paths)
+
+
 def print_residue(rust: dict[str, str], paths: set[str]) -> None:
     """The residue classes of paths, except long commands, which print above."""
     for path in sorted(paths):
         for site in residue(path, rust[path]):
             if site.kind != "long command":
-                print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
+                print(
+                    f"{site.path}:{site.line}: {site.kind}: {site.detail}", flush=True
+                )
 
 
 def main() -> int:
@@ -775,23 +968,39 @@ def main() -> int:
     unknown = selected - set(rust)
     if unknown:
         sys.exit(f"not a Rust source at {args.head}: {', '.join(sorted(unknown))}")
+    # With files, each row prints as soon as it is found, cheapest first: a run
+    # that a harness yields to the background has already shown its rows.
+    sites = []
+    for path, source in sorted(rust.items()):
+        if selected and path not in selected:
+            continue
+        found = sorted(type_sites(path, source), key=lambda s: s.line)
+        sites += found
+        for site in found if selected else []:
+            if site.kind in ("bare integer", "literal"):
+                print(
+                    f"{site.path}:{site.line}: {site.kind}: {site.detail}", flush=True
+                )
+    tests = test_modules(rust)
+    long = []
+    for path, source in sorted(rust.items()):
+        if (selected and path not in selected) or path in tests:
+            continue
+        for site in long_functions(path, source):
+            long.append(site)
+            if selected:
+                print(
+                    f"{site.path}:{site.line}: long {site.kind}: {site.detail}",
+                    flush=True,
+                )
+    if selected:
+        print_residue(rust, selected - tests)
+        for site in candidate_rows(rust, selected - tests, tests):
+            print(f"{site.path}:{site.line}: {site.kind}: {site.detail}", flush=True)
     pairs = [
         (r, o)
         for r, o in comment_pairs(args.head)
         if not selected or r.path in selected
-    ]
-    sites = [
-        site
-        for path, source in sorted(rust.items())
-        if not selected or path in selected
-        for site in type_sites(path, source)
-    ]
-    tests = test_modules(rust)
-    long = [
-        site
-        for path, source in sorted(rust.items())
-        if (not selected or path in selected) and path not in tests
-        for site in long_functions(path, source)
     ]
     missing = [
         (r, o, o.comments - r.comments) for r, o in pairs if o.comments > r.comments
@@ -801,12 +1010,6 @@ def main() -> int:
             print(
                 f"{r.path}:{r.line}: missing comment lines: {deficit} ({r.name}; original {o.path}:{o.line} {o.name})"
             )
-        for site in sorted(sites, key=lambda s: (s.path, s.line)):
-            if site.kind in ("bare integer", "literal"):
-                print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
-        for site in long:
-            print(f"{site.path}:{site.line}: long {site.kind}: {site.detail}")
-        print_residue(rust, selected - tests)
     counts = {
         kind: sum(s.kind == kind for s in sites)
         for kind in ("bare integer", "wrapper", "constant", "literal")

@@ -287,5 +287,149 @@ static SCRATCH: GameState<Vec<u8>> = GameState::new(Vec::new());
         self.assertEqual(self.gate(True, pool, pool + renamed), 1)
 
 
+SIGNAL = """
+impl Signals {
+    /// Temporary raw adapter of [`Self::update_signals_on_segment`].
+    pub(crate) fn segment(self, tile: u32, side: u8, owner: u8) -> u8 {
+        self.update_signals_on_segment(TileIndex(tile), DiagDirection(side), CompanyID(owner))
+            .0
+    }
+    pub(crate) fn both(self, tile: u32, track: u8, owner: u8) {
+        self.set_signals_on_both_dir(TileIndex(tile), Track(track), CompanyID(owner));
+    }
+    pub(crate) fn add_track(self, tile: u32, track: u8, owner: u8) {
+        self.add_track_to_signal_buffer(TileIndex(tile), Track(track), CompanyID(owner));
+    }
+    pub(crate) fn add_side(self, tile: u32, side: u8, owner: u8) {
+        self.add_side_to_signal_buffer(TileIndex(tile), DiagDirection(side), CompanyID(owner));
+    }
+    pub(crate) fn flush(self) {
+        self.update_signals_in_buffer();
+    }
+    pub(crate) fn segment_raw(self, tile: u32) -> u8 {
+        self.update(TileIndex(tile)).0
+    }
+    pub(crate) fn typed(self, tile: TileIndex) -> u8 {
+        self.signals().segment(tile)
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_both(tile: u32) {
+    both(TileIndex(tile))
+}
+"""
+FLAGS = """
+pub struct AirportFTAClassFlags(u8);
+impl AirportFTAClassFlags {
+    pub const fn from_flag(bit: AirportFTAClassFlag) -> Self {
+        Self(1 << bit.0)
+    }
+}
+pub struct Shell {
+    pub flags: u8,
+    pub fta: AirportFTAClassFlags,
+}
+fn fta_flags(fta: *const c_void) -> u8 {
+    0
+}
+fn fta_flags_test(fta: *const c_void, flag: AirportFTAClassFlag) -> bool {
+    fta_flags(fta) & (1 << flag.0) != 0
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_fta_flags(fta: *const c_void) -> u8 {
+    0
+}
+"""
+SERVICES = """
+pub struct Services {
+    pub once: extern "C" fn(u32) -> u8,
+    pub twice: unsafe extern "C" fn(),
+    pub tested: extern "C" fn(),
+    pub shared: extern "C" fn(),
+    pub size: u32,
+}
+pub struct Other {
+    pub shared: extern "C" fn(),
+}
+fn work(s: &Services) {
+    (s.once)(1);
+    unsafe { (s.twice)() };
+    unsafe { (s.twice)() };
+    (s.shared)();
+}
+#[cfg(test)]
+mod tests {
+    fn probe(s: &Services) {
+        (s.tested)();
+        (s.once)(2);
+    }
+}
+"""
+
+
+class CandidateTests(unittest.TestCase):
+    """#945 items 3 and 15 (#980): candidate rows, outside residue and the gate."""
+
+    def rows(self, source: str) -> set[tuple[str, str]]:
+        rust = {RUST: source.lstrip()}
+        return {
+            (site.kind, site.detail)
+            for site in INVENTORY.candidate_rows(rust, {RUST}, set())
+        }
+
+    def test_unsuffixed_adapters_are_listed_and_raw_ones_are_not(self) -> None:
+        self.assertEqual(
+            self.rows(SIGNAL),
+            {
+                ("unsuffixed adapter", name)
+                for name in ("segment", "both", "add_track", "add_side", "flush")
+            },
+        )
+
+    def test_flag_bits_and_integer_flag_sets(self) -> None:
+        self.assertEqual(
+            self.rows(FLAGS),
+            {
+                ("integer flag set", "flags"),
+                ("integer flag set", "fta_flags"),
+                ("hand-built flag bit", "1 << flag.0"),
+            },
+        )
+
+    def test_a_service_with_one_non_test_call_site_is_listed(self) -> None:
+        rows = self.rows(SERVICES)
+        self.assertEqual(
+            rows,
+            {
+                ("one-call service", 'once (extern "C" fn(u32) -> u8)'),
+                ("one-call service", 'shared (extern "C" fn(); declared in 2 tables)'),
+            },
+        )
+
+    def test_candidates_enter_no_residue_total_or_gate(self) -> None:
+        kinds = {"one-call service", "unsuffixed adapter", "hand-built flag bit"}
+        kinds.add("integer flag set")
+        self.assertFalse(kinds & set(INVENTORY.RESIDUE))
+        for source in (SIGNAL, FLAGS, SERVICES):
+            residue = {site.kind for site in INVENTORY.residue(RUST, source.lstrip())}
+            self.assertFalse(kinds & residue)
+
+    def test_rows_print_before_the_comment_pairing(self) -> None:
+        printed: list[str] = []
+
+        def pairs(_head: str) -> list[object]:
+            raise TimeoutError("yielded")
+
+        with (
+            patch.object(INVENTORY, "archive", return_value={RUST: SIGNAL.encode()}),
+            patch.object(INVENTORY, "comment_pairs", side_effect=pairs),
+            patch("sys.argv", ["code-standards-inventory.py", RUST]),
+            patch("builtins.print", side_effect=lambda *a, **_: printed.append(*a)),
+            self.assertRaises(TimeoutError),
+        ):
+            INVENTORY.main()
+        self.assertIn(f"{RUST}:8: unsuffixed adapter: both", printed)
+
+
 if __name__ == "__main__":
     unittest.main()
