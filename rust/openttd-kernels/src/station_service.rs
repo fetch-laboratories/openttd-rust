@@ -622,7 +622,7 @@ unsafe fn truncate_cargo(st: *mut BaseStation, cargo: CargoType, amount: u32, w:
 /// Original `ShowRejectOrAcceptNews`: add news item for when a station changes which cargoes
 /// it accepts. `cargoes` is the bit mask of cargo types to list; `reject` is true iff the
 /// station rejects the cargo types.
-fn show_reject_or_accept_news(st: *mut BaseStation, cargoes: u64, reject: bool, w: &World) {
+fn show_reject_or_accept_news(st: *mut BaseStation, cargoes: CargoTypes, reject: bool, w: &World) {
     let msg = if reject {
         w.strings.station_no_longer_accepts_cargo_list
     } else {
@@ -631,7 +631,7 @@ fn show_reject_or_accept_news(st: *mut BaseStation, cargoes: u64, reject: bool, 
     let index = StationID((w.graphs.station_id)(st));
     let headline = get_encoded_string(
         StringID(msg),
-        &[Integer(u64::from(index.0)), Integer(cargoes)],
+        &[Integer(u64::from(index.0)), Integer(cargoes.0)],
     );
     add_news_item(&AddNewsItemArgs {
         ref1: NewsReference::Station(index).record(),
@@ -695,13 +695,13 @@ pub(crate) unsafe fn update_station_acceptance(st: *mut BaseStation, show_msg: b
     /* show a message to report that the acceptance was changed? */
     if show_msg && w.local_owner(st) && w.in_use(st) {
         /* Combine old and new masks to get changes */
-        let accepts = new_acc.0 & !old_acc.0;
-        let rejects = !new_acc.0 & old_acc.0;
+        let accepts = CargoTypes(new_acc.0 & !old_acc.0);
+        let rejects = CargoTypes(!new_acc.0 & old_acc.0);
         /* Show news message if there are any changes */
-        if accepts != 0 {
+        if accepts.0 != 0 {
             show_reject_or_accept_news(st, accepts, false, w);
         }
-        if rejects != 0 {
+        if rejects.0 != 0 {
             show_reject_or_accept_news(st, rejects, true, w);
         }
     }
