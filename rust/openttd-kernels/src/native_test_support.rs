@@ -851,6 +851,10 @@ pub unsafe extern "C" fn openttd_test_ship_find_water_region_path(
 /// # Safety
 /// `costs[nodes]`, `commands[count]` and `values[count]` are readable, `out[count]`
 /// writable; node indices and heap membership obey `Include`/`Remove` preconditions.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the native test's static_cast<uint32_t>(heap.Begin() - nodes.data())"
+)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_ship_heap_probe(
     costs: *const i32,
@@ -880,10 +884,6 @@ pub unsafe extern "C" fn openttd_test_ship_heap_probe(
                 heap.include(index, |a, b| items[a].less(&items[b]));
             }
         }
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "the native test's static_cast<uint32_t>(heap.Begin() - nodes.data())"
-        )]
         unsafe {
             out.add(step)
                 .write(heap.first().map_or(u32::MAX, |i| i as u32));

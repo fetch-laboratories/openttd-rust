@@ -136,8 +136,11 @@ impl crate::map_func::World<'_> {
         self.asserted(|m| is_sea(m, t))
     }
     /// `IsDockingTile`: checks whether the tile is marked as a destination tile
-    /// for ships.
-    #[inline]
+    /// for ships. Always inlined: the ship search's cost callback reads it per
+    /// node, and an outlined call costs 13.2M instructions under the 1996 Padhattan
+    /// Ridge scenario, where the original's header inline has none (#977).
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn is_docking_tile(&self, t: TileIndex) -> bool {
         (self.kind(t) == TileType::MP_WATER
             || self.kind(t) == TileType::MP_RAILWAY

@@ -20,5 +20,17 @@
     "existing_alternatives": "The injected leaves are the design fault the pass removes; the Rust unit tests cannot hold these cases, which compare against the native follower fixture and the unchanged CBinaryHeapT.",
     "retiring_owner": "#734",
     "retirement_condition": "When the fork-added native tests retire with the C++ build (ADR 0001)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/water_map.rs | impl crate::map_func::World<'_> > fn is_docking_tile | allow clippy::inline_always",
+    "before": 0,
+    "after": 1,
+    "operation": "water_map::World::is_docking_tile",
+    "source_contract": "`IsDockingTile` (src/water_map.h) is a header inline that the ship search's `PfCalcCost` and `FindWaterRegionPath` evaluate per node and per dock tile.",
+    "reason": "#970's decision 9: with only #[inline] the call stayed outlined, 13.2M instructions under play-padhattan-ridge-1996-manual, and the scenario measured +0.55% against base, over the plan's 0.5% bar. With #[inline(always)] here and #[inline] on get_effective_water_class it measures +0.26% (2016: +0.40%), as #952's finding prescribes.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When a speed pass shows the call inlined without the attribute, or the ship search no longer calls it per node."
   }
 ]

@@ -262,6 +262,7 @@ unsafe fn depot_scratch() -> *mut DepotScratch {
 }
 /// `GetEffectiveWaterClass`: determine the effective `WaterClass` for a ship
 /// travelling on a tile.
+#[inline]
 pub(crate) fn get_effective_water_class(
     world: &crate::map_func::World<'_>,
     tile: crate::tile_type::TileIndex,
