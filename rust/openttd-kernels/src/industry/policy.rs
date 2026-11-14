@@ -67,7 +67,7 @@ pub(super) fn servicing(shell: *mut c_void, ind: *mut Industry, s: &Services) ->
     let orders = crate::orders::VisitOrders::new(unsafe { &*(vehicles.orders)() });
     let resolver = unsafe { &*s.resolver };
     let subsidies = unsafe { &*(resolver.lifecycle().subsidies)() };
-    let local_company = || CompanyID((subsidies.local_company)());
+    let local_company = || CompanyID((shared.local_company)());
     let mut result = Servicing::Nobody;
     let mut from = 0;
     while let Some(v) = (shared.vehicle_next)(from) {

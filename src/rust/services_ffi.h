@@ -111,6 +111,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*bridge_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_axis);
 	uint16_t (*bridge_speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
 	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
+	uint32_t (*cargo_name)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_name);
 	OpenTTDClearSquareServices clear_square_services;
 	bool (*company_human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_human);
 	CompanyInfrastructure *(*company_infrastructure)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_infrastructure);

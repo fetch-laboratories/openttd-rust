@@ -89,6 +89,7 @@
 #include "signal_ffi.h"
 #include "debug_ffi.h"
 #include "encoded_adapter.hpp"
+#include "services_cargo.h"
 #include "news_ffi.h"
 #include "../ai/ai.hpp"
 #include "../game/game.hpp"
@@ -503,6 +504,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.bridge_axis = Shared_bridge_axis,
 	.bridge_speed = MapSvcBridgeSpeed,
 	.build_on_slopes = RustBuildOnSlopes,
+	.cargo_name = RustCargoName,
 	.clear_square_services = {
 
 		.docking = OpenTTDIsDockingTile,

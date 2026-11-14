@@ -478,7 +478,7 @@ impl World {
         // for the process lifetime.
         let local = unsafe {
             let commands = &*(*((*self.shared).station_commands)()).command;
-            ((*(commands.company)()).local_company)()
+            ((*(commands.company)()).shared.local_company)()
         };
         (self.station_owner)(st) == local
     }

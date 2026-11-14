@@ -112,37 +112,6 @@ bool CheckSubsidised(CargoType cargo_type, CompanyID company, Source src, const 
 	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company.base(), src, RustBaseStationID(st));
 }
 
-static void SubsidyOfferedNews(uint16_t id) noexcept
-{
-	const Subsidy *s = Subsidy::Get(id);
-	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
-	EncodedString headline = GetEncodedString(STR_NEWS_SERVICE_SUBSIDY_OFFERED, cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id, _settings_game.difficulty.subsidy_duration);
-	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
-}
-static void SubsidyAwardedNews(uint16_t id) noexcept
-{
-	const Subsidy *s = Subsidy::Get(id);
-	std::string company_name = GetString(STR_COMPANY_NAME, s->awarded);
-
-	/* Add a news item */
-	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
-	EncodedString headline = GetEncodedString(STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF + _settings_game.difficulty.subsidy_multiplier, std::move(company_name), cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id, _settings_game.difficulty.subsidy_duration);
-	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
-}
-static void SubsidyOfferExpiredNews(uint16_t id) noexcept
-{
-	const Subsidy *s = Subsidy::Get(id);
-	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
-	EncodedString headline = GetEncodedString(STR_NEWS_OFFER_OF_SUBSIDY_EXPIRED, cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id);
-	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
-}
-static void SubsidyWithdrawnNews(uint16_t id) noexcept
-{
-	const Subsidy *s = Subsidy::Get(id);
-	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
-	EncodedString headline = GetEncodedString(STR_NEWS_SUBSIDY_WITHDRAWN_SERVICE, cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id);
-	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
-}
 const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 {
 	static const OpenTTDSubsidyServices services = {
@@ -156,17 +125,13 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.allocate = [](CargoType cargo, Source src, Source dst, uint16_t remaining) noexcept { return (new Subsidy(cargo, src, dst, remaining))->index.base(); },
 		.destroy = [](uint16_t id) noexcept { delete Subsidy::Get(id); },
 		.duration = OpenTTDSubsidyDuration,
-		.local_company = RustLocalCompanyID,
+		.multiplier = RustSubsidyMultiplier,
 		.cargo_valid = OpenTTDCargoSpecValid,
 		.manual = OpenTTDManualCargoDistribution,
 		.manual_pax = OpenTTDManualPassengerDistribution,
 		.any_manual = []() noexcept { return _settings_game.linkgraph.distribution_pax == DT_MANUAL || _settings_game.linkgraph.distribution_mail == DT_MANUAL || _settings_game.linkgraph.distribution_armoured == DT_MANUAL || _settings_game.linkgraph.distribution_default == DT_MANUAL; },
-		.offered_news = SubsidyOfferedNews, .awarded_news = SubsidyAwardedNews,
-		.offer_expired_news = SubsidyOfferExpiredNews, .withdrawn_news = SubsidyWithdrawnNews,
-		.offer_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyOffer(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyOffer(SubsidyID(id))); },
-		.award_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyAwarded(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyAwarded(SubsidyID(id))); },
-		.offer_expired_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyOfferExpired(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyOfferExpired(SubsidyID(id))); },
-		.expired_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); },
+		.strings = {.company_name = STR_COMPANY_NAME, .offer_of_subsidy_expired = STR_NEWS_OFFER_OF_SUBSIDY_EXPIRED, .service_subsidy_awarded_half = STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF,
+			.service_subsidy_offered = STR_NEWS_SERVICE_SUBSIDY_OFFERED, .source = {.industry_name = STR_INDUSTRY_NAME, .town_name = STR_TOWN_NAME}, .subsidy_withdrawn_service = STR_NEWS_SUBSIDY_WITHDRAWN_SERVICE},
 		.dirty = []() noexcept { InvalidateWindowData(WC_SUBSIDIES_LIST, 0); },
 		.station = RustStationGet<const Station *>,
 		.assert_destination = [](Source source) noexcept { if (source.type == SourceType::Town) { assert(Town::Get(source.ToTownID())->cache.part_of_subsidy.Test(PartOfSubsidy::Destination)); } else { assert(Industry::Get(source.ToIndustryID())->part_of_subsidy.Test(PartOfSubsidy::Destination)); } },

@@ -2720,7 +2720,6 @@ crate::abi::layouts! {
         disassociate_field,
         release_disasters,
         delete_storage,
-        delete_news,
         close_view,
         close_production,
         delete_inspect,

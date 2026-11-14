@@ -22,9 +22,16 @@ use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, Owner};
 use crate::game_state::GameState;
 use crate::industry_type::IndustryID;
+use crate::news_func::{AddNewsItemArgs, add_news_item};
+use crate::news_type::{NewsFlags, NewsStyle, NewsType};
+use crate::script_event_types::ScriptEvent;
+use crate::source_type::FormatStrings;
 pub use crate::source_type::Source;
 use crate::station::Station;
 use crate::station_type::StationID;
+use crate::strings_func::{get_encoded_string, get_string};
+use crate::strings_type::StringParameterData::{self, Integer};
+use crate::strings_type::{EncodedString, StringID};
 use crate::subsidy_type::{PartOfSubsidy, SubsidyID};
 use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
@@ -63,6 +70,22 @@ impl State {
 pub struct Cargo {
     pub data: *mut u32,
 }
+/// The generated string IDs of the subsidy news.
+#[repr(C)]
+pub struct Strings {
+    /// `STR_COMPANY_NAME`.
+    pub company_name: u32,
+    /// `STR_NEWS_OFFER_OF_SUBSIDY_EXPIRED`.
+    pub offer_of_subsidy_expired: u32,
+    /// `STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF`.
+    pub service_subsidy_awarded_half: u32,
+    /// `STR_NEWS_SERVICE_SUBSIDY_OFFERED`.
+    pub service_subsidy_offered: u32,
+    /// The formats of `Source::GetFormat`.
+    pub source: FormatStrings,
+    /// `STR_NEWS_SUBSIDY_WITHDRAWN_SERVICE`.
+    pub subsidy_withdrawn_service: u32,
+}
 #[repr(C)]
 pub struct Services {
     pub shared: *const crate::services::Services,
@@ -79,19 +102,13 @@ pub struct Services {
     pub allocate: extern "C" fn(u8, Source, Source, u16) -> u16,
     pub destroy: extern "C" fn(u16),
     pub duration: extern "C" fn() -> u16,
-    pub local_company: extern "C" fn() -> u8,
+    /// `_settings_game.difficulty.subsidy_multiplier`.
+    pub multiplier: extern "C" fn() -> u8,
     pub cargo_valid: extern "C" fn(u8) -> bool,
     pub manual: extern "C" fn(u8) -> bool,
     pub manual_pax: extern "C" fn() -> bool,
     pub any_manual: extern "C" fn() -> bool,
-    pub offered_news: extern "C" fn(u16),
-    pub awarded_news: extern "C" fn(u16),
-    pub offer_expired_news: extern "C" fn(u16),
-    pub withdrawn_news: extern "C" fn(u16),
-    pub offer_events: extern "C" fn(u16),
-    pub award_events: extern "C" fn(u16),
-    pub offer_expired_events: extern "C" fn(u16),
-    pub expired_events: extern "C" fn(u16),
+    pub strings: Strings,
     pub dirty: extern "C" fn(),
     pub station: extern "C" fn(u16) -> *const Station,
     pub assert_destination: extern "C" fn(Source),
@@ -148,6 +165,37 @@ pub unsafe extern "C" fn openttd_rust_subsidy_destroy(id: u16, state: *mut State
     }
 }
 impl Services {
+    /// `cs->name, src.GetFormat(), src.id, dst.GetFormat(), dst.id`, the route parameters of
+    /// every subsidy headline.
+    fn route_parameters(
+        &self,
+        cargo_type: CargoType,
+        src: Source,
+        dst: Source,
+    ) -> [StringParameterData<'static>; 5] {
+        let format = &self.strings.source;
+        [
+            Integer(u64::from((self.shared().cargo_name)(cargo_type.0))),
+            Integer(u64::from(src.get_format(format).0)),
+            Integer(u64::from(src.id)),
+            Integer(u64::from(dst.get_format(format).0)),
+            Integer(u64::from(dst.id)),
+        ]
+    }
+    /// `AddNewsItem(headline, NewsType::Subsidies, NewsStyle::Normal, {},
+    /// src.GetNewsReference(), dst.GetNewsReference())`.
+    fn add_news_item(&self, headline: &EncodedString, src: Source, dst: Source) {
+        add_news_item(&AddNewsItemArgs {
+            ref1: src.get_news_reference().record(),
+            ref2: dst.get_news_reference().record(),
+            ..AddNewsItemArgs::new(
+                headline,
+                NewsType::Subsidies,
+                NewsStyle::Normal,
+                NewsFlags::default(),
+            )
+        });
+    }
     pub(crate) fn shared(&self) -> &Shared {
         unsafe { &*self.shared }
     }
@@ -214,10 +262,17 @@ impl Services {
             dst,
             SUBSIDY_OFFER_MONTHS,
         ));
-        (self.offered_news)(id.0);
+        let headline = get_encoded_string(StringID(self.strings.service_subsidy_offered), &{
+            let [name, src_format, src_id, dst_format, dst_id] =
+                self.route_parameters(cargo_type, src, dst);
+            let duration = Integer(u64::from((self.duration)()));
+            [name, src_format, src_id, dst_format, dst_id, duration]
+        });
+        self.add_news_item(&headline, src, dst);
         self.set_part_of_subsidy_flag(src, PartOfSubsidy::Source);
         self.set_part_of_subsidy_flag(dst, PartOfSubsidy::Destination);
-        (self.offer_events)(id.0);
+        crate::ai::broadcast_new_event(&ScriptEvent::subsidy_offer(id), CompanyID::INVALID);
+        crate::game::new_event(&ScriptEvent::subsidy_offer(id));
         (self.dirty)();
         crate::witness::hit(crate::witness::SUBSIDY_CREATE);
     }
@@ -232,8 +287,36 @@ impl Services {
         unsafe {
             (*state).remaining = remaining as u16;
         }
-        (self.awarded_news)(id.0);
-        (self.award_events)(id.0);
+        let company_name = get_string(
+            StringID(self.strings.company_name),
+            [Integer(u64::from(company.0))],
+        );
+
+        /* Add a news item */
+        let (cargo_type, src, dst) = unsafe { ((*state).cargo_type, (*state).src, (*state).dst) };
+        let [name, src_format, src_id, dst_format, dst_id] =
+            self.route_parameters(cargo_type, src, dst);
+        let duration = Integer(u64::from((self.duration)()));
+        let parameters = [
+            StringParameterData::String(&company_name),
+            name,
+            src_format,
+            src_id,
+            dst_format,
+            dst_id,
+            duration,
+        ];
+        let headline = get_encoded_string(
+            StringID(
+                self.strings
+                    .service_subsidy_awarded_half
+                    .wrapping_add(u32::from((self.multiplier)())),
+            ),
+            &parameters,
+        );
+        self.add_news_item(&headline, src, dst);
+        crate::ai::broadcast_new_event(&ScriptEvent::subsidy_awarded(id), CompanyID::INVALID);
+        crate::game::new_event(&ScriptEvent::subsidy_awarded(id));
         (self.dirty)();
         crate::witness::hit(crate::witness::SUBSIDY_AWARD);
     }
@@ -484,14 +567,32 @@ impl Services {
             if remaining != 0 {
                 return;
             }
+            let (cargo_type, src, dst) =
+                unsafe { ((*state).cargo_type, (*state).src, (*state).dst) };
             if !unsafe { (*state).is_awarded() } {
-                (self.offer_expired_news)(id.0);
-                (self.offer_expired_events)(id.0);
+                let headline = get_encoded_string(
+                    StringID(self.strings.offer_of_subsidy_expired),
+                    &self.route_parameters(cargo_type, src, dst),
+                );
+                self.add_news_item(&headline, src, dst);
+                crate::ai::broadcast_new_event(
+                    &ScriptEvent::subsidy_offer_expired(id),
+                    CompanyID::INVALID,
+                );
+                crate::game::new_event(&ScriptEvent::subsidy_offer_expired(id));
             } else {
-                if unsafe { (*state).awarded } == CompanyID((self.local_company)()) {
-                    (self.withdrawn_news)(id.0);
+                if unsafe { (*state).awarded } == CompanyID((self.shared().local_company)()) {
+                    let headline = get_encoded_string(
+                        StringID(self.strings.subsidy_withdrawn_service),
+                        &self.route_parameters(cargo_type, src, dst),
+                    );
+                    self.add_news_item(&headline, src, dst);
                 }
-                (self.expired_events)(id.0);
+                crate::ai::broadcast_new_event(
+                    &ScriptEvent::subsidy_expired(id),
+                    CompanyID::INVALID,
+                );
+                crate::game::new_event(&ScriptEvent::subsidy_expired(id));
             }
             (self.destroy)(id.0);
             modified = true;
@@ -746,6 +847,15 @@ crate::abi::layouts! {
     "Source" ["probe"] => crate::subsidy::Source { id, kind => type, };
     "OpenTTDSubsidyState" ["probe"] => State { cargo_type, remaining, awarded, src, dst, };
     "OpenTTDSubsidyCargo" ["probe"] => Cargo { data, };
+    "OpenTTDSubsidyStrings" ["probe"] => Strings {
+        company_name,
+        offer_of_subsidy_expired,
+        service_subsidy_awarded_half,
+        service_subsidy_offered,
+        source,
+        subsidy_withdrawn_service,
+    };
+    "OpenTTDSourceFormatStrings" ["probe"] => FormatStrings { industry_name, town_name, };
     "OpenTTDSubsidyServices" ["probe"] => Services {
         shared,
         town,
@@ -761,19 +871,12 @@ crate::abi::layouts! {
         allocate,
         destroy,
         duration,
-        local_company,
+        multiplier,
         cargo_valid,
         manual,
         manual_pax,
         any_manual,
-        offered_news,
-        awarded_news,
-        offer_expired_news,
-        withdrawn_news,
-        offer_events,
-        award_events,
-        offer_expired_events,
-        expired_events,
+        strings,
         dirty,
         station,
         assert_destination,

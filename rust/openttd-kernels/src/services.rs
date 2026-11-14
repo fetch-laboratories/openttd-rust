@@ -275,6 +275,8 @@ pub struct Services {
     pub bridge_speed: extern "C" fn(u32) -> u16,
     /// `construction.build_on_slopes`.
     pub build_on_slopes: extern "C" fn() -> bool,
+    /// `CargoSpec::Get(cargo)->name`.
+    pub cargo_name: extern "C" fn(u8) -> u32,
     /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
     /// Whether this company pool ID is a live human company.
@@ -754,6 +756,7 @@ crate::abi::layouts! {
         bridge_axis,
         bridge_speed,
         build_on_slopes,
+        cargo_name,
         clear_square_services,
         company_human,
         company_infrastructure,
@@ -1102,6 +1105,7 @@ pub fn fixture(
         bridge_axis: byte,
         bridge_speed: short,
         build_on_slopes: flag0,
+        cargo_name: unused_cargo_name,
         clear_square_services: ClearSquareServices {
             docking: flag,
             generating_world: flag0,
@@ -1244,6 +1248,11 @@ pub(crate) extern "C" fn unused_next_company(_: u8) -> u8 {
 #[cfg(test)]
 pub(crate) extern "C" fn unused_town_owner(_: *const TownHandle) -> *mut crate::town::State {
     std::ptr::null_mut()
+}
+
+#[cfg(test)]
+pub(crate) extern "C" fn unused_cargo_name(_: u8) -> u32 {
+    u32::MAX
 }
 
 #[cfg(test)]

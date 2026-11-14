@@ -24,6 +24,8 @@ struct OpenTTDIndustryServices;
 struct OpenTTDSubsidyState { CargoType cargo_type; uint16_t remaining; CompanyID awarded; Source src, dst; };
 /** The contiguous scalar data of a native stack CargoArray. */
 struct OpenTTDSubsidyCargo { uint32_t *data; };
+struct OpenTTDSourceFormatStrings { uint32_t industry_name, town_name; };
+struct OpenTTDSubsidyStrings { uint32_t company_name, offer_of_subsidy_expired, service_subsidy_awarded_half, service_subsidy_offered; OpenTTDSourceFormatStrings source; uint32_t subsidy_withdrawn_service; };
 struct OpenTTDSubsidyServices {
 	const OpenTTDSharedServices * shared;
 	const OpenTTDTownLeaves * town;
@@ -39,19 +41,12 @@ struct OpenTTDSubsidyServices {
 	uint16_t (*allocate)(CargoType, Source, Source, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	void (*destroy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	uint16_t (*duration)() noexcept OPENTTD_SERVICE_DEFAULT(duration);
-	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
+	uint8_t (*multiplier)() noexcept OPENTTD_SERVICE_DEFAULT(multiplier);
 	bool (*cargo_valid)(CargoType) noexcept OPENTTD_SERVICE_DEFAULT(cargo_valid);
 	bool (*manual)(CargoType) noexcept OPENTTD_SERVICE_DEFAULT(manual);
 	bool (*manual_pax)() noexcept OPENTTD_SERVICE_DEFAULT(manual_pax);
 	bool (*any_manual)() noexcept OPENTTD_SERVICE_DEFAULT(any_manual);
-	void (*offered_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(offered_news);
-	void (*awarded_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(awarded_news);
-	void (*offer_expired_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(offer_expired_news);
-	void (*withdrawn_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(withdrawn_news);
-	void (*offer_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(offer_events);
-	void (*award_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(award_events);
-	void (*offer_expired_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(offer_expired_events);
-	void (*expired_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(expired_events);
+	OpenTTDSubsidyStrings strings;
 	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
 	const Station *(*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	void (*assert_destination)(Source) noexcept OPENTTD_SERVICE_DEFAULT(assert_destination);

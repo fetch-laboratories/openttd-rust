@@ -856,7 +856,6 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.disassociate_field = [](uint32_t tile) noexcept { SetIndustryIndexOfField(TileIndex(tile), IndustryID::Invalid()); },
 	.release_disasters = [](uint16_t industry) noexcept { ReleaseDisastersTargetingIndustry(IndustryID(industry)); },
 	.delete_storage = [](void *shell) noexcept { delete static_cast<Industry *>(shell)->psa; },
-	.delete_news = [](uint16_t industry) noexcept { DeleteIndustryNews(IndustryID(industry)); },
 	.close_view = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_VIEW, industry); },
 	.close_production = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_PRODUCTION, industry); },
 	.delete_inspect = OpenTTDDeleteIndustryInspect,
