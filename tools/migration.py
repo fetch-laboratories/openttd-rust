@@ -773,6 +773,62 @@ def other_checkout(cwd: Path) -> Path | None:
     return None if Path(top).resolve() == ROOT else Path(top)
 
 
+# Git variables a hook or a Git-run tool may inherit; a link run names its
+# worktree by its working directory instead.
+GIT_REPOSITORY_VARIABLES = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_PREFIX",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+)
+
+
+def link_local(root: Path | None = None) -> None:
+    """Make a linked worktree's missing `.local` link, as its checkout hook would.
+
+    A worktree made without the post-checkout hook has no `.local`, and the
+    first run would create a real one on the SSD. Where the machine-local
+    `hooks/offload-local` script exists, run its `hook` command for this
+    worktree. A `.local` that exists, or a link that dangles, is left alone, as
+    is the main checkout; any failure prints one line and the caller continues
+    (docs/rust-migration.md#output-disk).
+    """
+    root = ROOT if root is None else root
+    local = root / ".local"
+    if not (root / ".git").is_file() or local.exists() or local.is_symlink():
+        return
+    env = {k: v for k, v in os.environ.items() if k not in GIT_REPOSITORY_VARIABLES}
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        script = Path(common) / "hooks/offload-local"
+        if not script.is_file():
+            return
+        subprocess.run(
+            [sys.executable, str(script), "hook"],
+            cwd=root,
+            env=env,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        print(f"note: could not link {local}: {error}", file=sys.stderr)
+        return
+    if local.is_symlink():
+        print(f"linked {local} -> {os.readlink(local)}", file=sys.stderr)
+    else:
+        print(f"note: {script} made no link at {local}", file=sys.stderr)
+
+
 def command_exec(argv: list[str]) -> int:
     """Replace this process with one command in the driver environment."""
     parser = argparse.ArgumentParser(
@@ -798,6 +854,7 @@ def command_exec(argv: list[str]) -> int:
             f"whose Cargo target directory this would use. Run "
             f"python3 {top}/tools/migration.py exec -- ..., or cd into {ROOT}."
         )
+    link_local()
     try:
         os.execvpe(command[0], command, driver_environment())
     except OSError as error:
@@ -952,11 +1009,31 @@ def original_path(text: str) -> str:
     return str(path)
 
 
+def in_original(commit: str, text: str) -> str:
+    """The path as the original names it, with or without its `src/` prefix.
+
+    `original grep` prints `src/...` paths while reviewers often quote a path
+    from inside `src/`; both forms name one file or folder. A
+    path in neither form is returned as given, for the caller's own refusal.
+    """
+    path = original_path(text)
+    for candidate in (path, f"src/{path}"):
+        exists = subprocess.run(
+            ["git", "cat-file", "-e", f"{commit}:{candidate}"],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if not exists.returncode:
+            return candidate
+    return path
+
+
 def show_original(spec: str) -> int:
     """Print a file, or lines A-B numbered, from the pinned commit's object."""
     lines_match = re.search(r":(\d+)(?:-(\d+))?$", spec)
-    path = original_path(spec[: lines_match.start()] if lines_match else spec)
     commit = pinned_commit()
+    path = in_original(commit, spec[: lines_match.start()] if lines_match else spec)
     shown = subprocess.run(
         ["git", "show", f"{commit}:{path}"],
         cwd=ROOT,
@@ -986,7 +1063,7 @@ def show_original(spec: str) -> int:
 def grep_original(pattern: str, paths: list[str]) -> int:
     """git grep -n over the pinned commit, printing path:line:text."""
     commit = pinned_commit()
-    pathspecs = [original_path(path) for path in paths] or ["src/"]
+    pathspecs = [in_original(commit, path) for path in paths] or ["src/"]
     command = ["git", "grep", "-n", "-E", "-e", pattern, commit, "--", *pathspecs]
     with subprocess.Popen(
         command, cwd=ROOT, stdout=subprocess.PIPE, text=True, errors="replace"

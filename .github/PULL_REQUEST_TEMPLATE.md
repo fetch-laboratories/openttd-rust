@@ -14,6 +14,14 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 
 <!-- Name the remaining facade and callbacks. Explain why each is needed. -->
 
+## Review groups
+
+<!-- Above about 1,000 changed lines, a numbered list: each group's files or items, reviewed by its own behaviour and porting reviewers. Otherwise "Whole PR". -->
+
+## Residue
+
+<!-- Each item this PR leaves for later, with its reason and owner issue, or "None". -->
+
 ## Checks
 
 <!-- List exact commands and results, one line each. Name the harness scenarios that exercise the component. -->

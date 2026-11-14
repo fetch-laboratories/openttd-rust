@@ -2,9 +2,10 @@
 
 import argparse
 from collections.abc import Callable, Iterable
+from functools import partial
 from pathlib import Path
 
-from vcs import git
+from vcs import git, merge_base
 
 
 def main(
@@ -21,6 +22,7 @@ def main(
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--base-ref", default="origin/rust-migration")
     args = parser.parse_args()
+    args.base_ref = merge_base(args.base_ref, run=partial(git, cwd=root), announce=True)
     files = {
         str(p.relative_to(root)): p.read_text()
         for folder in folders

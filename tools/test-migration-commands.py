@@ -212,6 +212,20 @@ class MigrationOriginalTests(unittest.TestCase):
         self.assertIn("no match", errors)
         self.assertEqual(self.original("grep", "x", "../src")[0], 1)
 
+    def test_a_path_with_or_without_src_names_the_same_file(self) -> None:
+        # grep prints src/... paths, which reviewers quote with or without src/.
+        _, printed, _ = self.original("grep", "TileAdd", "map.cpp")
+        self.assertEqual(printed, "src/map.cpp:2:two TileAdd\n")
+        path = printed.split(":")[0]
+        for spec in (f"{path}:2", "map.cpp:2", "./map.cpp:2"):
+            self.assertEqual(
+                self.original("show", spec), (0, "     2  two TileAdd\n", "")
+            )
+        self.assertEqual(self.original("grep", "TileAdd", "src/map.cpp")[1], printed)
+        # A root file keeps its own path; a path in neither form is refused.
+        self.assertEqual(self.original("show", "README")[1], "TileAdd outside src\n")
+        self.assertEqual(self.original("show", "missing.cpp")[0], 1)
+
     def test_missing_pinned_commit_names_the_fetch(self) -> None:
         missing = "0" * 40
         with mock.patch.object(migration, "BASELINE", {"commit": missing}):

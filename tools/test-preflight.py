@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from collections.abc import Generator
 from contextlib import contextmanager
+from functools import partial
 from pathlib import Path
 from subprocess import CompletedProcess
 from types import ModuleType
@@ -22,6 +23,7 @@ from unittest.mock import patch
 import git_hooks
 import preflight
 import preflight_stamp
+import vcs
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
@@ -300,6 +302,28 @@ class StampTests(unittest.TestCase):
                     message = preflight.stamp(options, against, checked, warning)
                     self.assertIn(expected, message)
             self.assertEqual((preflight_stamp.stamp_for(head) or {}).get("base"), base)
+
+
+class BaseTests(unittest.TestCase):
+    def test_a_moved_base_is_read_at_the_merge_base(self) -> None:
+        with scratch_repo() as repo:
+            fork = preflight_stamp.git("rev-parse", "HEAD")
+            head = commit(repo, "Add: Work", {"tools/y.py": "y = 1\n"})
+            preflight_stamp.git("checkout", "-q", "-b", "base", fork)
+            tip = commit(repo, "Add: Later base", {"tools/z.py": "z = 1\n"})
+            preflight_stamp.git("checkout", "-q", "work")
+            preflight_stamp.git("update-ref", "refs/remotes/origin/rust-migration", tip)
+            for given in ("origin/rust-migration", fork):
+                with self.subTest(given=given), patch("builtins.print"):
+                    options = preflight.argparse.Namespace(base=given, head="HEAD")
+                    self.assertEqual(preflight.bases(options), (fork, head))
+            run = partial(vcs.git, cwd=repo)
+            self.assertEqual(vcs.merge_base(tip, run=run), fork)
+            self.assertEqual(vcs.merge_base(fork, run=run), fork)
+            preflight_stamp.git("checkout", "-q", "--orphan", "unrelated")
+            commit(repo, "Add: Unrelated", {"a.txt": "a\n"})
+            with self.assertRaises(SystemExit), patch("sys.stderr"):
+                vcs.merge_base(tip, run=run)
 
 
 class PushTests(unittest.TestCase):

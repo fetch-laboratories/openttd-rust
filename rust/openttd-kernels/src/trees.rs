@@ -1437,8 +1437,11 @@ pub(crate) fn tile_loop_trees(
 /// Returns true if the counter was decremented past zero.
 #[allow(clippy::cast_possible_truncation, reason = "uint8_t -= uint")]
 fn decrement_tree_counter(w: &World) -> bool {
-    // Ensure _trees_tick_ctr can be decremented past zero only once for the largest map size:
-    // tree_cmd.cpp keeps the original's static_assert.
+    // Ensure _trees_tick_ctr can be decremented past zero only once for the largest map size.
+    const _: () = assert!(
+        2 * (crate::map_type::MAX_MAP_SIZE_BITS - crate::map_type::MIN_MAP_SIZE_BITS) - 4
+            <= u8::BITS
+    );
 
     // byte underflow
     let counter = &raw mut _trees_tick_ctr;

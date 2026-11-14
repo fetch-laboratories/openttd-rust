@@ -17,6 +17,7 @@ from collections.abc import Callable
 from functools import lru_cache, partial
 from pathlib import Path
 
+import vcs
 from baseline_ratchet import debt_errors, exceeds
 from cleanup_contract import (
     Ledger,
@@ -27,7 +28,7 @@ from cleanup_contract import (
     run,
 )
 from code_lines import without_comments
-from rust_syntax import item_source, nodes, syntax_trees
+from rust_syntax import Node, item_source, nodes, syntax_trees
 from vcs import git
 
 import migration
@@ -82,6 +83,33 @@ def rust_site(path: str, text: str, start: int, lint: str) -> str:
     return f"{path} | {item} | {lint} | {ITEM}"
 
 
+# The nearest of these around a macro decides whether it runs at compile time:
+# a `const` item or inline `const` block evaluates it, while a function or a
+# closure body between it and any `const` runs it when called.
+EVALUATED = {"const_item", "const_block"}
+ENCLOSING = EVALUATED | {"function_item", "closure_expression"}
+
+
+@lru_cache(maxsize=512)
+def rust_tree(path: str, text: str) -> Node:
+    return syntax_trees({path: text})[path]
+
+
+def constant_context(path: str, text: str, start: int) -> bool:
+    """Whether the byte offset start lies in code evaluated at compile time.
+
+    An `assert!` there is the Rust form of the original's `static_assert`, not
+    a runtime fatal path that ADR 0024 counts.
+    """
+    try:
+        node = rust_tree(path, text).descendant_for_byte_range(start, start)
+    except ValueError:  # A file the grammar cannot parse keeps its rows.
+        return False
+    while node is not None and node.type not in ENCLOSING:
+        node = node.parent
+    return node is not None and node.type in EVALUATED
+
+
 def clippy_rows(raw: str, root: Path) -> dict[str, list[int]]:
     sites: dict[str, dict[tuple[str, int, int], int]] = defaultdict(dict)
     for line in raw.splitlines():
@@ -103,6 +131,10 @@ def clippy_rows(raw: str, root: Path) -> dict[str, list[int]]:
                 raise ValueError(f"unclassified Clippy source: {path}")
             data = (root / path).read_bytes()
             start, end = span["byte_start"], span["byte_end"]
+            if lint == "disallowed_macros" and constant_context(
+                path, data.decode(), start
+            ):
+                continue
             # rustc byte offsets are UTF-8; lexer offsets are Unicode characters.
             a = len(data[:start].decode())
             key = rust_site(path, data.decode(), a, lint)
@@ -434,19 +466,8 @@ def debt_lints(revision: str) -> frozenset[str] | None:
 
 
 def merge_base(base_ref: str) -> str:
-    """The base the change started from, not a base tip that moved since.
-
-    CI passes the base branch's current tip; comparing against it would count
-    base's own later changes as this change's growth. Without a common
-    ancestor there is no inventory to compare against, so the check stops.
-    """
-    try:
-        return git("merge-base", "HEAD", base_ref).strip()
-    except subprocess.CalledProcessError as error:
-        raise SystemExit(
-            f"no common ancestor of HEAD and {base_ref}; fetch full history"
-            " (git fetch --unshallow) or pass the branch's real base"
-        ) from error
+    """The base the change started from, not a base tip that moved since."""
+    return vcs.merge_base(base_ref, run=git)
 
 
 def check(

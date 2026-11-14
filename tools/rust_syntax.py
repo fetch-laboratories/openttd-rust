@@ -25,6 +25,8 @@ class Node(Protocol):
 
     def children_by_field_name(self, name: str) -> list["Node"]: ...
 
+    def descendant_for_byte_range(self, start: int, end: int) -> "Node | None": ...
+
     @property
     def start_point(self) -> tuple[int, int]: ...
 
@@ -170,8 +172,17 @@ def export_name(node: Node) -> str | None:
 
 
 def boundary_ids(
-    files: dict[str, str], *, expanded: bool = False
+    files: dict[str, str],
+    *,
+    expanded: bool = False,
+    texts: dict[str, str] | None = None,
 ) -> dict[str, set[str]]:
+    """Exports and callback slots, each keyed `path | identity`.
+
+    With texts, also record each key's declaration: the whole function item
+    for an export, the field declaration (name and type) for a named callback
+    slot, and the field's type for a tuple slot.
+    """
     trees = syntax_trees(files)
     aliases: dict[str, list[Node]] = {}
     for tree in trees.values():
@@ -185,47 +196,55 @@ def boundary_ids(
     result: dict[str, set[str]] = {"exports": set(), "callback_slots": set()}
     for path, tree in trees.items():
         for node in nodes(tree):
-            collect_node(path, node, aliases, result, expanded=expanded)
+            for counter, key, text in collect_node(
+                path, node, aliases, expanded=expanded
+            ):
+                result[counter].add(key)
+                if texts is not None:
+                    texts[key] = text
     return result
 
 
-def tuple_callbacks(node: Node, aliases: dict[str, list[Node]]) -> set[str]:
+def tuple_callbacks(node: Node, aliases: dict[str, list[Node]]) -> dict[str, str]:
+    """Each tuple callback slot, `Owner.index`, with its field's type text."""
     slots = {
-        index
+        index: field.text.decode()
         for index, field in enumerate(node.children_by_field_name("type"))
         if callback(field, aliases)
     }
     owner = qualified(node)
     if slots and not owner:
         raise ValueError("unclassified tuple callback owner")
-    return {f"{owner}.{index}" for index in slots}
+    return {f"{owner}.{index}": text for index, text in slots.items()}
 
 
 def collect_node(
-    path: str,
-    node: Node,
-    aliases: dict[str, list[Node]],
-    result: dict[str, set[str]],
-    *,
-    expanded: bool,
-) -> None:
+    path: str, node: Node, aliases: dict[str, list[Node]], *, expanded: bool
+) -> list[tuple[str, str, str]]:
+    """The node's boundary identities: (counter, `path | identity`, declaration)."""
+    refuse_unclassified(path, node, expanded=expanded)
     if node.type == "function_item":
         name = export_name(node)
-        if name:
-            result["exports"].add(f"{path} | {name}")
-    elif node.type == "field_declaration" and callback(
+        return [("exports", f"{path} | {name}", node.text.decode())] if name else []
+    if node.type == "field_declaration" and callback(
         node.child_by_field_name("type"), aliases
     ):
         owner = qualified(node)
         if not owner:
             raise ValueError(f"unclassified callback field in {path}")
         field = node.child_by_field_name("name").text.decode()
-        result["callback_slots"].add(f"{path} | {owner}.{field}")
-    elif node.type == "ordered_field_declaration_list":
-        result["callback_slots"].update(
-            f"{path} | {slot}" for slot in tuple_callbacks(node, aliases)
-        )
-    elif node.type in ("macro_definition", "macro_invocation"):
+        return [("callback_slots", f"{path} | {owner}.{field}", node.text.decode())]
+    if node.type == "ordered_field_declaration_list":
+        return [
+            ("callback_slots", f"{path} | {slot}", text)
+            for slot, text in tuple_callbacks(node, aliases).items()
+        ]
+    return []
+
+
+def refuse_unclassified(path: str, node: Node, *, expanded: bool) -> None:
+    """Stop on a boundary this syntactic inventory cannot classify."""
+    if node.type in ("macro_definition", "macro_invocation"):
         if expanded and node.type == "macro_definition":
             return  # The compiler emitted each expansion separately.
         if re.search(rb'\b(?:no_mangle|export_name)\b|\bextern\s*"C"', node.text):

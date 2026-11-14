@@ -4,7 +4,7 @@
 
 - **Docs-only** means what CI and the pre-push hook treat as inert: `AGENTS.md` and Markdown (`.md`) under `docs/`, except the docs CMake packages for the in-game viewer (the `builtDocs` list in `.github/workflows/ci-policy.yml`). Check the whole diff, both paths of a rename included. Everything else goes through a PR that passes CI.
 - Commit a docs-only change directly to `rust-migration`, one commit per change, and push it when done. These pushes use administrative bypass of branch protection, which covers docs-only pushes and nothing else.
-- Push to `rust-migration` only while the merge queue is empty; hold the commit locally until then. Any push to the base rebuilds every queued PR's merge group and starts its Full run again, and after a queue removal the requeue check refuses a head that is behind by any commit. `gh pr list --search "is:queued"` lists the queue.
+- Push to `rust-migration` only while the merge queue is empty; hold the commit locally until then. Any push to the base rebuilds every queued PR's merge group and starts its Full run again, and after a queue removal the requeue check refuses a head that is behind by any commit that changes more than inert Markdown. `gh pr list --search "is:queued"` lists the queue.
 
 ## Records
 
@@ -22,7 +22,7 @@ A substantive change gets a fork issue, then a branch and worktree from `rust-mi
 
 ## Commits and pushes
 
-- Before pushing a change that is not docs-only, run `python3 tools/preflight.py --base "$(git merge-base origin/rust-migration HEAD)"` as a background job. Give it the merge base, not the branch's tip: preflight compares the two trees, so against a tip that has moved it reads each newer merge as lines your branch removed, and that is no reason for a [base update](#integration). The pre-push hook refuses a push whose tree has no preflight stamp, except a checkpoint push to a draft PR.
+- Before pushing a change that is not docs-only, run `python3 tools/preflight.py` as a background job. Preflight compares the branch with its merge base, so a base that has moved since the branch forked is no reason for a [base update](#integration); Quick's gates compare the same way. The pre-push hook refuses a push whose tree has no preflight stamp, except a checkpoint push to a draft PR.
 - A commit title starts with a prefix the pinned commit checker accepts; the `commit-msg` hook refuses any other title and says what to use.
 - A fidelity or crash fix ends with `Found-by:` naming the check: `review`, `scenario NAME`, `comparison TOOL`, `unit test`, `CI JOB`, `deep check` or `user`.
 
@@ -54,4 +54,4 @@ Every merge goes through GitHub's merge queue ([ADR 0019](adr/0019-merge-queue.m
 3. **Workflow changes.** A PR that changes `.github/workflows/` queues only after root's reviewed bootstrap Full on its head ([CI administration](root-workflow.md#ci-administration)).
 4. **Queue.** When every reviewer accepts and any re-check due has accepted, run `enqueue` at that head. Queue each PR alone and request no Full for it.
 5. **Wait.** Start `python3 tools/ci.py queue-wait PR` as a background job and take your next work. When the queue merges or removes the PR, tell root in one line with the PR, its head and the outcome.
-6. **Removal.** Read the failed run to its last job before recording a cause, then fix the cause under [review](#review) and merge base before queueing again. After a runner or network failure, a step before any build or test or a lost runner with no test output, queue it again once with `enqueue --retry REASON`; a network-protocol scenario hang counts too, and its evidence goes on #693.
+6. **Removal.** Read the failed run to its last job before recording a cause, then fix the cause under [review](#review) and merge base before queueing again. After a runner or network failure, a step before any build or test or a lost runner with no test output, queue it again once with `enqueue --retry REASON`; a network-protocol scenario hang counts too, and its evidence goes on #693. A removal whose cause is fixed without a commit, such as a growth or lint acceptance missing at the queued head, also queues again once with `--retry`, naming the run and the acceptance: a base merge there would move the head and void the acceptance again. Before queueing a head that review fixes or a CI fix moved, check that every acceptance the cleanup records need is posted at that head; a PR's own runs print growth as pending review and only the queue's run fails it.
