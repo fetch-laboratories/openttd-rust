@@ -900,11 +900,11 @@ static const OpenTTDNewsServices _rust_news_services{
 	.delete_station_news = [](uint16_t station) noexcept { DeleteStationNews(StationID{station}); },
 	.delete_vehicle_news = [](uint32_t vehicle, uint8_t advice_type) noexcept { DeleteVehicleNews(VehicleID{vehicle}, static_cast<AdviceType>(advice_type)); },
 	.get_string = [](uint32_t string, const OpenTTDRustEncodedParameter *args, OpenTTDStringParameterSlot *slots, size_t count, OpenTTDRustStringSink sink, void *target) noexcept {
-		/* The parameters live in the caller's stack slots, as MakeParameters builds its array. */
-		for (size_t i = 0; i < count; ++i) new (reinterpret_cast<StringParameter *>(slots) + i) StringParameter(RustStringParameter(args[i]));
-		StringParameter *params = std::launder(reinterpret_cast<StringParameter *>(slots));
-		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, {params, count}));
-		std::destroy_n(params, count);
+		/* The parameter array lives in the caller's stack slots, as MakeParameters builds its array. */
+		std::span<StringParameter> params = count == 0 ? std::span<StringParameter>{} : std::span{new (slots) StringParameter[count], count};
+		for (size_t i = 0; i < count; ++i) params[i] = RustStringParameter(args[i]);
+		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, params));
+		std::destroy_n(params.data(), count);
 	},
 	.string_assertions = RUST_ENCODED_STRING_ASSERTIONS,
 };
