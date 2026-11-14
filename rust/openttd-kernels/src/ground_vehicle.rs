@@ -348,6 +348,11 @@ impl GroundVehicleType for Train {
     /// Allows to know the power value that this vehicle will use. Returns the power value from
     /// the engine in HP, or zero if the vehicle is not powered.
     #[inline]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "`uint16_t power = GetVehicleProperty(...)`"
+    )]
     fn get_power(s: &Services, v: VehicleRef, o: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part()
@@ -387,6 +392,11 @@ impl GroundVehicleType for Train {
     }
     /// Allows to know the weight value that this vehicle will use, in tonnes.
     #[inline]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the uint16_t weight: `WeightOfNUnitsInTrain(...)` and `weight += GetVehicleProperty(...)`"
+    )]
     fn get_weight(s: &Services, v: VehicleRef, o: Owner) -> u16 {
         let mut weight = (s.train_cargo_weight)(s.cargo_type(v).0, s.stored_count(v)) as u16;
         /* Vehicle weight is not added for articulated parts. */
@@ -406,6 +416,11 @@ impl GroundVehicleType for Train {
     }
     /// `Train::GetMaxWeight`: calculates the weight value that this vehicle will have when
     /// fully loaded with its current cargo, in tonnes.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the uint16_t weight: `WeightOfNUnitsInTrain(...)` and `weight += GetVehicleProperty(...)`"
+    )]
     fn get_max_weight(s: &Services, v: VehicleRef, o: Owner) -> u16 {
         hit(witness::GROUND_FULL_WEIGHT);
         let mut weight = (s.train_cargo_weight)(s.cargo_type(v).0, s.determine_capacity(v)) as u16;
@@ -426,6 +441,11 @@ impl GroundVehicleType for Train {
     }
     /// Allows to know the tractive effort value that this vehicle will use.
     #[inline]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "GetTractiveEffort's uint8_t return of GetVehicleProperty"
+    )]
     fn get_tractive_effort(s: &Services, v: VehicleRef) -> u8 {
         let engine = (s.vehicle.engine)(v);
         s.property(
@@ -530,6 +550,11 @@ impl GroundVehicleType for RoadVehicle {
     /// Allows to know the power value that this vehicle will use. Returns the power value from
     /// the engine in HP, or zero if the vehicle is not powered.
     #[inline]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "GetPower's uint16_t return of `10 * GetVehicleProperty(...)`"
+    )]
     fn get_power(s: &Services, v: VehicleRef, _: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part() {
@@ -552,6 +577,11 @@ impl GroundVehicleType for RoadVehicle {
     }
     /// Allows to know the weight value that this vehicle will use, in tonnes.
     #[inline]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the uint16_t weight: `WeightOfNUnits(...)` and `weight += GetVehicleProperty(...) / 4`"
+    )]
     fn get_weight(s: &Services, v: VehicleRef, _: Owner) -> u16 {
         let mut weight = (s.cargo_weight)(s.cargo_type(v).0, s.stored_count(v)) as u16;
         /* Vehicle weight is not added for articulated parts. */
@@ -570,6 +600,11 @@ impl GroundVehicleType for RoadVehicle {
     }
     /// `RoadVehicle::GetMaxWeight`: calculates the weight value that this vehicle will have
     /// when fully loaded with its current cargo, in tonnes.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the uint16_t weight: `WeightOfNUnits(...)` and `weight += GetVehicleProperty(...) / 4`"
+    )]
     fn get_max_weight(s: &Services, v: VehicleRef, _: Owner) -> u16 {
         hit(witness::GROUND_FULL_WEIGHT);
         let mut weight = (s.cargo_weight)(s.cargo_type(v).0, s.determine_capacity(v)) as u16;
@@ -589,6 +624,11 @@ impl GroundVehicleType for RoadVehicle {
     }
     /// Allows to know the tractive effort value that this vehicle will use.
     #[inline]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "GetTractiveEffort's uint8_t return of GetVehicleProperty"
+    )]
     fn get_tractive_effort(s: &Services, v: VehicleRef) -> u8 {
         let engine = (s.vehicle.engine)(v);
         /* The tractive effort coefficient is in units of 1/256.  */
@@ -692,6 +732,11 @@ pub(crate) struct GroundVehicle<T>(PhantomData<T>);
 impl<T: GroundVehicleType> GroundVehicle<T> {
     /// Recalculates the cached total power of a vehicle. Should be called when the consist is
     /// changed.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "`uint16_t max_speed = v->GetDisplayMaxSpeed()` and the uint8_t air_drag"
+    )]
     fn power_changed(s: &Services, v: VehicleRef, o: Owner) {
         s.assert(|| v.first() == v);
         hit(if T::TRANSPORT == TRANSPORT_RAIL {
@@ -789,6 +834,10 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
 
     /// Recalculates the cached weight of a vehicle and its parts. Should be called each time
     /// the cargo on the consist changes.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the uint16_t `cached_axle_resistance = 10 * weight`"
+    )]
     fn cargo_changed(s: &Services, v: VehicleRef, o: Owner) {
         s.assert(|| v.first() == v);
         hit(if T::TRANSPORT == TRANSPORT_RAIL {
@@ -996,8 +1045,8 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
              * the tile (middle_z) and the edge of the tile (old_z),
              * which we then can compare. */
             let middle_z = movement.get().get_slope_pixel_z(
-                (v.x() & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
-                (v.y() & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
+                (v.x() & !TILE_UNIT_MASK.cast_signed()) | (TILE_SIZE / 2).cast_signed(),
+                (v.y() & !TILE_UNIT_MASK.cast_signed()) | (TILE_SIZE / 2).cast_signed(),
                 true,
             );
 
@@ -1020,6 +1069,10 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
     /// faster code is used for trains and road vehicles unless they are reversing on a sloped
     /// tile.
     #[inline]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "`int8_t x_pos = this->x_pos` and `int8_t y_pos = this->y_pos`"
+    )]
     fn update_z_position(
         s: &Services,
         movement: &crate::movement::CachedTable<'_>,
@@ -1312,8 +1365,8 @@ mod tests {
     extern "C" fn viewport(_: VehicleRef, _: bool, _: bool) {}
 
     /// Ground services whose native assertion records failures, over `shared`.
-    fn services(shared: crate::services::Services, assertions: bool) -> &'static Services {
-        let shared: &'static mut crate::services::Services = Box::leak(Box::new(shared));
+    fn services(shared: Box<crate::services::Services>, assertions: bool) -> &'static Services {
+        let shared: &'static mut crate::services::Services = Box::leak(shared);
         let movement = Box::leak(Box::new(crate::movement::MovementServices {
             shared: std::ptr::from_ref(shared),
             native_assert: record_assertion,
@@ -1442,7 +1495,11 @@ mod tests {
     fn power_changed_on_a_later_part_reports_the_failed_assertion_and_continues() {
         FAILED.set(0);
         let s = services(
-            crate::services::fixture(std::ptr::null_mut(), random, industry),
+            Box::new(crate::services::fixture(
+                std::ptr::null_mut(),
+                random,
+                industry,
+            )),
             true,
         );
         let part = LaterPart::new();
@@ -1459,7 +1516,11 @@ mod tests {
     fn cargo_changed_on_a_later_part_reports_both_failed_assertions_and_continues() {
         FAILED.set(0);
         let s = services(
-            crate::services::fixture(std::ptr::null_mut(), random, industry),
+            Box::new(crate::services::fixture(
+                std::ptr::null_mut(),
+                random,
+                industry,
+            )),
             true,
         );
         let part = LaterPart::new();
@@ -1505,14 +1566,14 @@ mod tests {
         );
         let mut shared = crate::services::fixture(std::ptr::null_mut(), random, industry);
         shared.map = crate::map_func::fixture::statics();
-        let s = services(shared, true);
+        let s = services(Box::new(shared), true);
         let part = LaterPart::new();
         let v = part.v();
         v.write_xy(5 * 16 + 8, 5 * 16 + 8);
         let movement = crate::movement::CachedTable::new(s.shared());
         GroundVehicle::<Fixed>::update_z_position(s, &movement, v, Owner::of(v));
         assert_eq!(FAILED.get(), 1);
-        v.write_z(3 * crate::tile_type::TILE_HEIGHT as i32);
+        v.write_z(3 * crate::tile_type::TILE_HEIGHT.cast_signed());
         GroundVehicle::<Fixed>::update_z_position(s, &movement, v, Owner::of(v));
         assert_eq!(FAILED.get(), 1);
     }
@@ -1524,7 +1585,7 @@ mod tests {
         FAILED.set(0);
         let mut shared = crate::services::fixture(std::ptr::null_mut(), random, industry);
         shared.tile_type = get_slope_pixel_z_evaluated;
-        let s = services(shared, false);
+        let s = services(Box::new(shared), false);
         let part = LaterPart::new();
         let v = part.v();
         let movement = crate::movement::CachedTable::new(s.shared());

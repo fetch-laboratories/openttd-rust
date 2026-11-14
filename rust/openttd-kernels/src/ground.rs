@@ -248,20 +248,28 @@ pub(crate) struct TileLoop<'a> {
     pub world: World<'a>,
     /// `Map::SizeY()`.
     pub size_y: u32,
-    /// The batch's ground tables and result context.
+    /// The batch's ground tables, result context and game settings.
     pub ground: &'a crate::tile_loop::GroundServices,
-    /// `_settings_game.game_creation.landscape`.
-    pub landscape: LandscapeType,
-    /// `_game_mode == GM_EDITOR`.
-    pub game_mode_editor: bool,
-    /// `_settings_client.sound.ambient`.
-    pub sound_ambient: bool,
-    /// The batch's `AmbientSoundEffect` callback gate.
-    pub ambient_callback: bool,
-    /// `_settings_game.economy.mod_road_rebuild`.
-    pub mod_road_rebuild: bool,
+    /// The batch's client settings, with its `AmbientSoundEffect` callback gate.
+    pub settings: crate::trees::LoopSettings,
 }
 impl TileLoop<'_> {
+    /// `_settings_game.game_creation.landscape`.
+    fn landscape(&self) -> LandscapeType {
+        self.ground.climate
+    }
+    /// `_game_mode == GM_EDITOR`.
+    fn game_mode_editor(&self) -> bool {
+        self.ground.editor
+    }
+    /// `_settings_client.sound.ambient`.
+    fn sound_ambient(&self) -> bool {
+        self.settings.ambient
+    }
+    /// `_settings_game.economy.mod_road_rebuild`.
+    fn mod_road_rebuild(&self) -> bool {
+        self.ground.rebuild
+    }
     fn s(&self) -> &Services {
         self.world.shared
     }
@@ -430,9 +438,9 @@ fn tile_loop_clear_desert(c: &TileLoop<'_>, tile: TileIndex) {
 #[inline(always)]
 pub(crate) fn tile_loop_clear(c: &TileLoop<'_>, tile: TileIndex) {
     let w = &c.world;
-    crate::newgrf_generic::ambient(c.ambient_callback, tile.0);
+    crate::newgrf_generic::ambient(c.settings.ambient_callback, tile.0);
 
-    match c.landscape {
+    match c.landscape() {
         LandscapeType::Tropic => tile_loop_clear_desert(c, tile),
         LandscapeType::Arctic => tile_loop_clear_alps(c, tile),
         _ => {}
@@ -448,7 +456,7 @@ pub(crate) fn tile_loop_clear(c: &TileLoop<'_>, tile: TileIndex) {
                 return;
             }
 
-            if c.game_mode_editor {
+            if c.game_mode_editor() {
                 let random = c.s().random();
                 w.asserted(|m| {
                     set_clear_ground_density(
@@ -475,7 +483,7 @@ pub(crate) fn tile_loop_clear(c: &TileLoop<'_>, tile: TileIndex) {
         ClearGround::CLEAR_FIELDS => {
             update_fences(c, tile);
 
-            if c.game_mode_editor {
+            if c.game_mode_editor() {
                 return;
             }
 
@@ -506,11 +514,79 @@ pub(crate) fn tile_loop_clear(c: &TileLoop<'_>, tile: TileIndex) {
     c.mark_tile_dirty_by_tile(tile);
 }
 
+/// `dir_to_trackbits` of `TileLoop_Track`: the track bits on each tile edge.
+const DIR_TO_TRACKBITS: [TrackBits; 4] = [
+    TrackBits::TRACK_BIT_3WAY_NE,
+    TrackBits::TRACK_BIT_3WAY_SE,
+    TrackBits::TRACK_BIT_3WAY_SW,
+    TrackBits::TRACK_BIT_3WAY_NW,
+];
+/// The fence sets of `TileLoop_Track`'s switch.
+const FENCES_NE: DiagDirections = DiagDirections::from_element(DiagDirection::DIAGDIR_NE);
+const FENCES_SE: DiagDirections = DiagDirections::from_element(DiagDirection::DIAGDIR_SE);
+const FENCES_SW: DiagDirections = DiagDirections::from_element(DiagDirection::DIAGDIR_SW);
+const FENCES_NW: DiagDirections = DiagDirections::from_element(DiagDirection::DIAGDIR_NW);
+const FENCES_NE_SW: DiagDirections = FENCES_NE.with(FENCES_SW);
+const FENCES_SE_NW: DiagDirections = FENCES_SE.with(FENCES_NW);
+const FENCES_NE_SE: DiagDirections = FENCES_NE.with(FENCES_SE);
+const FENCES_NE_NW: DiagDirections = FENCES_NE.with(FENCES_NW);
+const FENCES_SE_SW: DiagDirections = FENCES_SE.with(FENCES_SW);
+const FENCES_SW_NW: DiagDirections = FENCES_SW.with(FENCES_NW);
+
+/// `TileLoop_Track`'s fence step: determine direction of fence.
+fn fence_ground(c: &TileLoop<'_>, tile: TileIndex) -> RailGroundType {
+    let w = &c.world;
+    // SAFETY: the batch's table is immutable and lives for the process.
+    let leaves = unsafe { &*c.ground.rail };
+    let rail = TrackBits(w.tracks(tile.0));
+
+    let owner = w.owner(tile);
+    let mut fences = DiagDirections::EMPTY;
+
+    for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
+        let d = DiagDirection(d);
+
+        /* Track bit on this edge => no fence. */
+        if rail & DIR_TO_TRACKBITS[usize::from(d.0)] != TrackBits::TRACK_BIT_NONE {
+            continue;
+        }
+
+        let tile2 = c.neighbour(tile, d);
+
+        /* Show fences if it's a house, industry, object, road, tunnelbridge or not owned by us. */
+        if !w.is_valid_tile(tile2)
+            || w.kind(tile2) == TileType::MP_HOUSE
+            || w.kind(tile2) == TileType::MP_INDUSTRY
+            || w.kind(tile2) == TileType::MP_ROAD
+            || (w.kind(tile2) == TileType::MP_OBJECT && !(leaves.owned_land)(tile2.0))
+            || w.kind(tile2) == TileType::MP_TUNNELBRIDGE
+            || w.owner(tile2) != owner
+        {
+            fences = fences.with(DiagDirections::from_element(d));
+        }
+    }
+
+    match fences {
+        DiagDirections::EMPTY => RailGroundType::Grass,
+        FENCES_NE => RailGroundType::FenceNE,
+        FENCES_SE => RailGroundType::FenceSE,
+        FENCES_SW => RailGroundType::FenceSW,
+        FENCES_NW => RailGroundType::FenceNW,
+        FENCES_NE_SW => RailGroundType::FenceNESW,
+        FENCES_SE_NW => RailGroundType::FenceSENW,
+        FENCES_NE_SE => RailGroundType::FenceVert1,
+        FENCES_NE_NW => RailGroundType::FenceHoriz2,
+        FENCES_SE_SW => RailGroundType::FenceHoriz1,
+        FENCES_SW_NW => RailGroundType::FenceVert2,
+        _ => crate::services_assert::not_reached(),
+    }
+}
+
 /// `TileLoop_Track`.
 pub(crate) fn tile_loop_track(c: &TileLoop<'_>, tile: TileIndex) {
     let w = &c.world;
     // SAFETY: the batch's table is immutable and lives for the process.
-    let r = unsafe { &*c.ground.rail };
+    let leaves = unsafe { &*c.ground.rail };
     let old_ground = RailGroundType(w.rail_ground(tile.0));
 
     if old_ground == RailGroundType::HalfTileWater {
@@ -533,7 +609,7 @@ pub(crate) fn tile_loop_track(c: &TileLoop<'_>, tile: TileIndex) {
     }
 
     let new_ground = 'set_ground: {
-        match c.landscape {
+        match c.landscape() {
             LandscapeType::Arctic => {
                 let (slope, mut z) = w.tile_slope_z(tile);
                 let mut half = false;
@@ -598,10 +674,8 @@ pub(crate) fn tile_loop_track(c: &TileLoop<'_>, tile: TileIndex) {
                 }
             }
 
-            LandscapeType::Tropic => {
-                if c.get_tropic_zone(tile) == TropicZone::TROPICZONE_DESERT {
-                    break 'set_ground RailGroundType::SnowOrDesert;
-                }
+            LandscapeType::Tropic if c.get_tropic_zone(tile) == TropicZone::TROPICZONE_DESERT => {
+                break 'set_ground RailGroundType::SnowOrDesert;
             }
 
             _ => {}
@@ -612,70 +686,13 @@ pub(crate) fn tile_loop_track(c: &TileLoop<'_>, tile: TileIndex) {
         if w.is_plain_rail(tile.0) && old_ground != RailGroundType::Barren {
             // wait until bottom is green
             /* determine direction of fence */
-            let rail = TrackBits(w.tracks(tile.0));
-
-            let owner = w.owner(tile);
-            let mut fences = DiagDirections::EMPTY;
-
-            for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-                const DIR_TO_TRACKBITS: [TrackBits; 4] = [
-                    TrackBits::TRACK_BIT_3WAY_NE,
-                    TrackBits::TRACK_BIT_3WAY_SE,
-                    TrackBits::TRACK_BIT_3WAY_SW,
-                    TrackBits::TRACK_BIT_3WAY_NW,
-                ];
-                let d = DiagDirection(d);
-
-                /* Track bit on this edge => no fence. */
-                if rail & DIR_TO_TRACKBITS[usize::from(d.0)] != TrackBits::TRACK_BIT_NONE {
-                    continue;
-                }
-
-                let tile2 = c.neighbour(tile, d);
-
-                /* Show fences if it's a house, industry, object, road, tunnelbridge or not owned by us. */
-                if !w.is_valid_tile(tile2)
-                    || w.kind(tile2) == TileType::MP_HOUSE
-                    || w.kind(tile2) == TileType::MP_INDUSTRY
-                    || w.kind(tile2) == TileType::MP_ROAD
-                    || (w.kind(tile2) == TileType::MP_OBJECT && !(r.owned_land)(tile2.0))
-                    || w.kind(tile2) == TileType::MP_TUNNELBRIDGE
-                    || w.owner(tile2) != owner
-                {
-                    fences = fences.with(DiagDirections::from_element(d));
-                }
-            }
-
-            const NE: DiagDirections = DiagDirections::from_element(DiagDirection::DIAGDIR_NE);
-            const SE: DiagDirections = DiagDirections::from_element(DiagDirection::DIAGDIR_SE);
-            const SW: DiagDirections = DiagDirections::from_element(DiagDirection::DIAGDIR_SW);
-            const NW: DiagDirections = DiagDirections::from_element(DiagDirection::DIAGDIR_NW);
-            const NE_SW: DiagDirections = NE.with(SW);
-            const SE_NW: DiagDirections = SE.with(NW);
-            const NE_SE: DiagDirections = NE.with(SE);
-            const NE_NW: DiagDirections = NE.with(NW);
-            const SE_SW: DiagDirections = SE.with(SW);
-            const SW_NW: DiagDirections = SW.with(NW);
-            match fences {
-                DiagDirections::EMPTY => {}
-                NE => new_ground = RailGroundType::FenceNE,
-                SE => new_ground = RailGroundType::FenceSE,
-                SW => new_ground = RailGroundType::FenceSW,
-                NW => new_ground = RailGroundType::FenceNW,
-                NE_SW => new_ground = RailGroundType::FenceNESW,
-                SE_NW => new_ground = RailGroundType::FenceSENW,
-                NE_SE => new_ground = RailGroundType::FenceVert1,
-                NE_NW => new_ground = RailGroundType::FenceHoriz2,
-                SE_SW => new_ground = RailGroundType::FenceHoriz1,
-                SW_NW => new_ground = RailGroundType::FenceVert2,
-                _ => crate::services_assert::not_reached(),
-            }
+            new_ground = fence_ground(c, tile);
         }
         new_ground
     };
 
     if old_ground != new_ground {
-        (r.set_ground)(tile.0, new_ground);
+        (leaves.set_ground)(tile.0, new_ground);
         hit(Witness::RailGround);
         c.mark_tile_dirty_by_tile(tile);
     }
@@ -687,7 +704,7 @@ pub(crate) fn tile_loop_tunnel_bridge(c: &TileLoop<'_>, tile: TileIndex) {
     // SAFETY: the batch's table is immutable and lives for the process.
     let t = unsafe { &*c.ground.tunnel };
     let snow_or_desert = (t.snow_or_desert)(tile.0);
-    match c.landscape {
+    match c.landscape() {
         LandscapeType::Arctic => {
             /* As long as we do not have a snow density, we want to use the density
              * from the entry edge. For tunnels this is the lowest point for bridges the highest point.
@@ -704,12 +721,12 @@ pub(crate) fn tile_loop_tunnel_bridge(c: &TileLoop<'_>, tile: TileIndex) {
             }
         }
 
-        LandscapeType::Tropic => {
-            if c.get_tropic_zone(tile) == TropicZone::TROPICZONE_DESERT && !snow_or_desert {
-                (t.set_snow_or_desert)(tile.0, true);
-                hit(Witness::TunnelGround);
-                c.mark_tile_dirty_by_tile(tile);
-            }
+        LandscapeType::Tropic
+            if c.get_tropic_zone(tile) == TropicZone::TROPICZONE_DESERT && !snow_or_desert =>
+        {
+            (t.set_snow_or_desert)(tile.0, true);
+            hit(Witness::TunnelGround);
+            c.mark_tile_dirty_by_tile(tile);
         }
 
         _ => {}
@@ -755,7 +772,7 @@ fn ensure_no_vehicle_on_ground_succeeded(c: &TileLoop<'_>, tile: TileIndex) -> b
 #[inline]
 fn adjust_road_ground_type(c: &TileLoop<'_>, tile: TileIndex, grp: HouseZone) {
     let w = &c.world;
-    let new_rs = if c.landscape == LandscapeType::Toyland {
+    let new_rs = if c.landscape() == LandscapeType::Toyland {
         TOWN_ROAD_TYPES_2[usize::from(grp.0)]
     } else {
         TOWN_ROAD_TYPES[usize::from(grp.0)]
@@ -782,6 +799,64 @@ fn adjust_road_ground_type(c: &TileLoop<'_>, tile: TileIndex, grp: HouseZone) {
     hit(Witness::Roadside);
 }
 
+/// `TileLoop_Road` once the road works are in their last stage.
+fn terminate_town_road_works(c: &TileLoop<'_>, tile: TileIndex) {
+    let w = &c.world;
+    let s = c.s();
+    // SAFETY: the batch's table is immutable and lives for the process.
+    let leaves = unsafe { &*c.ground.road };
+    w.asserted(|m| crate::road_map::terminate_road_works(m, tile));
+    hit(Witness::RoadWorkEnd);
+
+    if c.mod_road_rebuild() {
+        /* Generate a nicer town surface */
+        let old_rb = RoadBits((s.road_bits)(
+            tile.0,
+            u8::from(crate::road_type::RTT_ROAD.0),
+            false,
+        ));
+        let new_rb = crate::road_cleanup::clean_up_road_bits(s, tile.0, old_rb);
+
+        if old_rb != new_rb {
+            let flags = DoCommandFlags::from_element(DoCommandFlag::Execute)
+                .with(DoCommandFlags::from_element(DoCommandFlag::Auto))
+                .with(DoCommandFlags::from_element(DoCommandFlag::NoWater));
+            // SAFETY: the batch owns both native result slots of the command context.
+            unsafe {
+                let command = &*c.ground.road_command;
+                crate::road_cmd::openttd_rust_road_remove(
+                    command.services,
+                    command.cost,
+                    command.ret,
+                    flags.0,
+                    tile.0,
+                    (old_rb ^ new_rb).0,
+                    u8::from(crate::road_type::RTT_ROAD.0),
+                    true,
+                );
+            }
+            hit(Witness::RoadRemove);
+
+            /* If new_rb is 0, there are now no road pieces left and the tile is no longer a road tile */
+            if new_rb == RoadBits::ROAD_NONE {
+                c.mark_tile_dirty_by_tile(tile);
+                return;
+            }
+        }
+    }
+
+    /* Possibly change road type */
+    if w.road_owner(tile.0, false) == crate::company_type::OWNER_TOWN {
+        // SAFETY: the immutable town table is live; road selection borrows no owner.
+        let rt = unsafe { crate::town::get_town_road_type(leaves.town, s) };
+        if rt != w.asserted(|m| crate::road_map::get_road_type_road(m, tile.0)) {
+            crate::road_map::set_road_type_road(s, tile.0, rt.0);
+        }
+    }
+
+    c.mark_tile_dirty_by_tile(tile);
+}
+
 /// `TileLoop_Road`.
 #[allow(
     clippy::cast_possible_wrap,
@@ -791,8 +866,8 @@ pub(crate) fn tile_loop_road(c: &TileLoop<'_>, tile: TileIndex) {
     let w = &c.world;
     let s = c.s();
     // SAFETY: the batch's table is immutable and lives for the process.
-    let r = unsafe { &*c.ground.road };
-    match c.landscape {
+    let leaves = unsafe { &*c.ground.road };
+    match c.landscape() {
         LandscapeType::Arctic => {
             /* Roads on flat foundations use the snow level of the height they are elevated to. All others use the snow level of their minimum height. */
             let tile_z = if crate::movement::get_foundation_slope(s, tile).0 == Slope::SLOPE_FLAT {
@@ -800,19 +875,18 @@ pub(crate) fn tile_loop_road(c: &TileLoop<'_>, tile: TileIndex) {
             } else {
                 w.tile_z(tile)
             };
-            if (r.snow_or_desert)(tile.0) != (tile_z > c.get_snow_line()) {
-                (r.toggle_snow_or_desert)(tile.0);
+            if (leaves.snow_or_desert)(tile.0) != (tile_z > c.get_snow_line()) {
+                (leaves.toggle_snow_or_desert)(tile.0);
                 c.mark_tile_dirty_by_tile(tile);
             }
         }
 
-        LandscapeType::Tropic => {
+        LandscapeType::Tropic
             if c.get_tropic_zone(tile) == TropicZone::TROPICZONE_DESERT
-                && !(r.snow_or_desert)(tile.0)
-            {
-                (r.toggle_snow_or_desert)(tile.0);
-                c.mark_tile_dirty_by_tile(tile);
-            }
+                && !(leaves.snow_or_desert)(tile.0) =>
+        {
+            (leaves.toggle_snow_or_desert)(tile.0);
+            c.mark_tile_dirty_by_tile(tile);
         }
 
         _ => {}
@@ -848,7 +922,7 @@ pub(crate) fn tile_loop_road(c: &TileLoop<'_>, tile: TileIndex) {
                     w.asserted(|m| crate::road_map::start_road_works(m, tile));
                     hit(Witness::RoadWorkStart);
 
-                    if c.sound_ambient {
+                    if c.sound_ambient() {
                         (s.play_sound)(
                             tile.0,
                             u16::from(crate::sound_type::SoundFx::SND_21_ROAD_WORKS.0),
@@ -868,56 +942,7 @@ pub(crate) fn tile_loop_road(c: &TileLoop<'_>, tile: TileIndex) {
 
         adjust_road_ground_type(c, tile, grp);
     } else if w.asserted(|m| crate::road_map::increase_road_works_counter(m, tile)) {
-        w.asserted(|m| crate::road_map::terminate_road_works(m, tile));
-        hit(Witness::RoadWorkEnd);
-
-        if c.mod_road_rebuild {
-            /* Generate a nicer town surface */
-            let old_rb = RoadBits((s.road_bits)(
-                tile.0,
-                u8::from(crate::road_type::RTT_ROAD.0),
-                false,
-            ));
-            let new_rb = crate::road_cleanup::clean_up_road_bits(s, tile.0, old_rb);
-
-            if old_rb != new_rb {
-                let flags = DoCommandFlags::from_element(DoCommandFlag::Execute)
-                    .with(DoCommandFlags::from_element(DoCommandFlag::Auto))
-                    .with(DoCommandFlags::from_element(DoCommandFlag::NoWater));
-                // SAFETY: the batch owns both native result slots of the command context.
-                unsafe {
-                    let command = &*c.ground.road_command;
-                    crate::road_cmd::openttd_rust_road_remove(
-                        command.services,
-                        command.cost,
-                        command.ret,
-                        flags.0,
-                        tile.0,
-                        (old_rb ^ new_rb).0,
-                        u8::from(crate::road_type::RTT_ROAD.0),
-                        true,
-                    );
-                }
-                hit(Witness::RoadRemove);
-
-                /* If new_rb is 0, there are now no road pieces left and the tile is no longer a road tile */
-                if new_rb == RoadBits::ROAD_NONE {
-                    c.mark_tile_dirty_by_tile(tile);
-                    return;
-                }
-            }
-        }
-
-        /* Possibly change road type */
-        if w.road_owner(tile.0, false) == crate::company_type::OWNER_TOWN {
-            // SAFETY: the immutable town table is live; road selection borrows no owner.
-            let rt = unsafe { crate::town::get_town_road_type(r.town, s) };
-            if rt != w.asserted(|m| crate::road_map::get_road_type_road(m, tile.0)) {
-                crate::road_map::set_road_type_road(s, tile.0, rt.0);
-            }
-        }
-
-        c.mark_tile_dirty_by_tile(tile);
+        terminate_town_road_works(c, tile);
     }
 }
 
@@ -1114,12 +1139,18 @@ mod tests {
         TileLoop {
             world: World::new(s),
             size_y: 64,
-            ground: &NO_TABLES,
-            landscape,
-            game_mode_editor: false,
-            sound_ambient: false,
-            ambient_callback: false,
-            mod_road_rebuild: false,
+            ground: Box::leak(Box::new(crate::tile_loop::GroundServices {
+                climate: landscape,
+                ..NO_TABLES
+            })),
+            settings: crate::trees::LoopSettings {
+                tick_counter: 0,
+                size_x: 64,
+                climate: landscape,
+                extra: crate::trees::ExtraTreePlacement(0),
+                ambient: false,
+                ambient_callback: false,
+            },
         }
     }
 
@@ -1204,7 +1235,7 @@ mod tests {
             for (grp, row) in expected.iter().enumerate() {
                 for (current, after) in CURRENT.iter().zip(row) {
                     map.extended[t].m6 = current.0 << 3;
-                    adjust_road_ground_type(&c, tile, HouseZone(grp as u8));
+                    adjust_road_ground_type(&c, tile, HouseZone(u8::try_from(grp).unwrap()));
                     assert_eq!(
                         Roadside((map.extended[t].m6 >> 3) & 7),
                         *after,

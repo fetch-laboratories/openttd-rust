@@ -118,11 +118,10 @@ unsafe fn dispatch<const AMBIENT: bool>(
         },
         size_y,
         ground: g,
-        landscape: g.climate,
-        game_mode_editor: g.editor,
-        sound_ambient: settings.ambient,
-        ambient_callback: AMBIENT,
-        mod_road_rebuild: g.rebuild,
+        settings: trees::LoopSettings {
+            ambient_callback: AMBIENT,
+            ..settings
+        },
     };
     match tile_type {
         TileType::MP_CLEAR => ground::tile_loop_clear(&ground(), tile),
