@@ -16,6 +16,30 @@
 #include "transparency.h"
 
 /**
+ * Whether the given roadtype is valid.
+ * @param r the roadtype to check for validness
+ * @return true if and only if valid
+ */
+inline bool IsValidRoadBits(RoadBits r)
+{
+	return r < ROAD_END;
+}
+
+/**
+ * Calculate the mirrored RoadBits
+ *
+ * Simply move the bits to their new position.
+ *
+ * @param r The given RoadBits value
+ * @return the mirrored
+ */
+inline RoadBits MirrorRoadBits(RoadBits r)
+{
+	assert(IsValidRoadBits(r));
+	return (RoadBits)(GB(r, 0, 2) << 2 | GB(r, 2, 2));
+}
+
+/**
  * Create the road-part which belongs to the given DiagDirection
  *
  * This function returns a RoadBits value which belongs to

@@ -303,7 +303,7 @@ pub extern "C" fn openttd_rust_cargo_climate_labels() -> Labels {
     }
 }
 /// `GetClimateIndependentCargoTranslationTable`: get default climate-independent cargo
-/// translation table for a NewGRF, used if the NewGRF does not provide its own.
+/// translation table for a `NewGRF`, used if the `NewGRF` does not provide its own.
 pub(crate) fn get_climate_independent_cargo_translation_table() -> Labels {
     Labels {
         data: unsafe { (&raw const (*REGISTRY.get()).climate_independent_cargo_labels).cast() },

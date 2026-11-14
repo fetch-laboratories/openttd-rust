@@ -171,6 +171,24 @@ inline Track TrackBitsToTrack(TrackBits tracks)
 	return static_cast<Track>(FindFirstBit(tracks & TRACK_BIT_MASK));
 }
 
+/**
+ * Returns first Trackdir from TrackdirBits or INVALID_TRACKDIR
+ *
+ * This function returns the first Trackdir in the given TrackdirBits value or
+ * INVALID_TRACKDIR if the value is TRACKDIR_BIT_NONE. The TrackdirBits must
+ * not be INVALID_TRACKDIR_BIT.
+ *
+ * @param trackdirs The TrackdirBits value
+ * @return The first Trackdir from the TrackdirBits or INVALID_TRACKDIR on TRACKDIR_BIT_NONE.
+ * @pre trackdirs must not be INVALID_TRACKDIR_BIT
+ * @see RemoveFirstTrackdir
+ */
+inline Trackdir FindFirstTrackdir(TrackdirBits trackdirs)
+{
+	assert((trackdirs & ~TRACKDIR_BIT_MASK) == TRACKDIR_BIT_NONE);
+	return (trackdirs != TRACKDIR_BIT_NONE) ? (Trackdir)FindFirstBit(trackdirs) : INVALID_TRACKDIR;
+}
+
 /*
  * Functions describing logical relations between Tracks, TrackBits, Trackdirs
  * TrackdirBits, Direction and DiagDirections.
@@ -240,6 +258,21 @@ inline Trackdir TrackToTrackdir(Track track)
 }
 
 /**
+ * Returns a TrackdirBit mask from a given Track
+ *
+ * The TrackdirBit mask contains the two TrackdirBits that
+ * correspond with the given Track (one for each direction).
+ *
+ * @param track The track to get the TrackdirBits from
+ * @return The TrackdirBits which the selected tracks
+ */
+inline TrackdirBits TrackToTrackdirBits(Track track)
+{
+	Trackdir td = TrackToTrackdir(track);
+	return (TrackdirBits)(TrackdirToTrackdirBits(td) | TrackdirToTrackdirBits(ReverseTrackdir(td)));
+}
+
+/**
  * Discards all directional information from a TrackdirBits value
  *
  * Any Track which is present in either direction will be present in the result.
@@ -250,6 +283,17 @@ inline Trackdir TrackToTrackdir(Track track)
 inline TrackBits TrackdirBitsToTrackBits(TrackdirBits bits)
 {
 	return (TrackBits)((bits | (bits >> 8)) & TRACK_BIT_MASK);
+}
+
+/**
+ * Converts TrackBits to TrackdirBits while allowing both directions.
+ *
+ * @param bits The TrackBits
+ * @return The TrackdirBits containing of bits in both directions.
+ */
+inline TrackdirBits TrackBitsToTrackdirBits(TrackBits bits)
+{
+	return (TrackdirBits)(bits * 0x101);
 }
 
 /**
@@ -522,6 +566,19 @@ inline bool TracksOverlap(TrackBits bits)
 	 * than 2 tracks, they will surely overlap. When there are two, they will
 	 * always overlap unless they are lower & upper or right & left. */
 	return bits != TRACK_BIT_HORZ && bits != TRACK_BIT_VERT;
+}
+
+/**
+ * Check if a given track is contained within or overlaps some other tracks.
+ *
+ * @param tracks Tracks to be tested against
+ * @param track The track to test
+ * @return true if the track is already in the tracks or overlaps the tracks.
+ */
+inline bool TrackOverlapsTracks(TrackBits tracks, Track track)
+{
+	if (HasBit(tracks, track)) return true;
+	return TracksOverlap(tracks | TrackToTrackBits(track));
 }
 
 /**
