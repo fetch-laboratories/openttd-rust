@@ -6,7 +6,7 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 ## Where the fork stands
 
-Measured at merge 59 (`f24c05dbe9`); the other column is merge 47 (`6d8a24a401`), the stocktake before it. A routine agent took the census, the inventories and the instruction profile. Root finished its half on 2026-11-14; its counts are in root's status comment on #3. The next stocktake follows merge 71 and the next platform cadence merge 62.
+Base is at merge 63 (`0266fe96e1`). The census, the inventories and the instruction profile below are still the merge-59 measurements (`f24c05dbe9`), taken by a routine agent; the other column is merge 47 (`6d8a24a401`), the stocktake before it. Root finished its half of that stocktake on 2026-11-14; its counts are in root's status comment on #3. The next stocktake follows merge 71 and the next platform cadence merge 67.
 
 - Fork C++ fell by 787 lines: 376 compiled, 361 under `tools/` and 50 generated. The cleanup stage retires almost no original C++, so that share moved only from 21.88% to 21.90%. Rust grew by 6,172 lines and tooling fell by 444.
 - #734 has 133 of 319 files finished, holding 92,475 lines. That is 48.5% of the 190,751-line denominator; the workset's files have grown to 198,098 lines, of which it is 46.7%. Seven more finished files, 612 lines, are in no workset.
@@ -17,7 +17,7 @@ Measured at merge 59 (`f24c05dbe9`); the other column is merge 47 (`6d8a24a401`)
 - Every file pass so far raised news and script events through one C++ leaf per message, a design fault no pass could fix alone. #974 builds the shared services and converts the 29 leaves in finished files. About 58 error, console, window and sound leaves in finished files have the same shape; #979 owns them.
 - Steering 36's audits compared the bodies of seven passes merged in this interval, and of draft #976, with the original and found no behaviour difference on reachable input. The departures from the code standards they found are [residue on #734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6847188216).
 - Of the 1,782 minutes the interval's 12 PRs spent between dispatch and merge, implementation took 31% and CI, base updates and the merge queue 56%. Three defects the undispatched tools batch holds caused about 300 of those minutes and 9 failed runs ([#945](https://github.com/fetch-laboratories/openttd-rust/issues/945#issuecomment-6847190436)).
-- The platform cadence passed at merges 52 and 57 (runs 43350842579 and 43362926059).
+- The platform cadence passed at merges 52, 57 and 62 (runs 43350842579, 43362926059 and 43566394953).
 - No rollback has happened since merge 32, and no confirmed base regression is open. Full phase-3 planning is not triggered, and near-full reproduction is not met.
 
 Reproduce the census with `python3 tools/port-metrics.py --whole-fork`. Both columns are recounted with metric version 3 (#978, merged in #981), which diffs against the pin with git's minimal algorithm; only the retired, remaining and glue rows moved.
@@ -268,16 +268,16 @@ Full phase-3 planning remains untriggered: about 170 of #734's 319 files are in 
 
 ## Resume checkpoint
 
-**Running since 2026-11-14.** The table below is the state at the last wind-down; GitHub and root's status comment on #3 are newer.
+**Paused at the user's request (lenient wind-down, 2026-11-14).**
 
-Root resumed at merge 47 on 2026-11-12 and stopped at merge 59 (`f24c05dbe9`) on 2026-11-13, with no rollback and no confirmed base regression. It resumed on 2026-11-14 at the same merge. Where GitHub is newer than this section, GitHub is right. Steering 36 rewrote the [ready queue](#ready-queue) and #976's row below at merge 59.
+Root resumed at merge 59 on 2026-11-14 and stopped at merge 63 (`0266fe96e1`), with no rollback and no confirmed base regression. The merge queue is empty and no agent is running. No implementation, repair, review, build, simulation, CI request or retry is authorized until resume. Where GitHub is newer than this section, GitHub is right. A fresh implementer resumes each draft below from its checkout and status comment; the slots the [ready queue](#ready-queue) names as held are free.
 
 Agent: /root | Model: claude-fable-5-2 | Reasoning effort: high
 
-| Remaining PR | Pushed head | State when root stopped | Next action |
+| Remaining PR | Pushed head | Next action | Running jobs and CI |
 | --- | --- | --- | --- |
-| #976, 9c `rail_yapf.rs` pass (draft) | `2b2fa63782` | All three review groups accepted, and a re-check accepted `2b2fa63782`. Preflight passed 16 of 16 at this head. `native` has not run at this head. Checkout `t3-9332b642-2e3cbe422377f934`, clean and pushed. | [Steering action 1](#latest-steering-actions): mark it ready, request `native` at `2b2fa63782`, push nothing while its Quick job runs, then queue. |
-| #977, 9ys `ship_yapf.rs` pass (draft) | `96d942d6de` | Code written; nothing built or run natively, no CI, no review. It conflicts with base and carries copies of the shared ports #969 merged. Checkout `t3-0442faa5-4501bd863733960a`; measurement worktrees `speed-970-base` and `speed-970-fresh`, the second with one uncommitted file. | A fresh implementer starts from the PR's status comment: base update, native build and tests, the speed runs that also decide the retained scratch, preflight, review. |
+| #994, for #975, uncalled C++ free functions (draft) | `5b1c5d54d9` | Request `native` at this head. Re-measure fork C++ with `python3 tools/port-metrics.py --whole-fork` and correct the PR body: its figures (functions deleted, −597 compiled C++ lines, −135 glue) predate the restore of six track and road helpers, about 81 lines. Then both reviewer kinds for its two groups, then the queue. Checkout `t3-d6e9b980-c8ed7ba808c1e22e`, clean and pushed. | No job running. Preflight passed 16 of 16 at this head. CI at this head: the Full validation status only; no `native` run, no review. |
+| #977, for #970, `ship_yapf.rs` pass (draft) | `d428668fca` | Build and test the inline edit, which is committed unbuilt. Then rust-checks, preflight and `native` at the head; the PR body, including the `PRNUM` placeholder in `docs/components/vehicles.md`; and both reviewer kinds for its two groups, whose porting reviewers rule on three pending proposals (two growth items and the `inline_always` allow on `is_docking_tile`, on which lint policy fails until then). Remove `speed-970-base` and `speed-970-fresh` once the PR body records the speed figures. Checkout `t3-0442faa5-4501bd863733960a`, clean and pushed. | No job running. Instruction counts against base `0266fe96e1`: +0.26% on the 1996 play scenario and +0.40% on 2016, both under the plan's 0.5% bar; fresh node lists per search cost +0.47% on 2016, so they keep their capacity. CI at this head: the Full validation status only; no `native` run, no preflight, no review. |
 
 Implementation runs on `claude-opus-5-5`, medium, planning on `claude-fable-5-2`, medium, routine work on `claude-sonnet-5-5`, medium, and review on `gpt-6.1-sol`, high.
 
@@ -286,24 +286,25 @@ CI variables were not rechecked this session, and no workflow change or bootstra
 | Other work | State |
 | --- | --- |
 | Ready queue | As the [ready queue](#ready-queue) above has it. Root's status comment on #3 has the session's notes. |
-| Tools batch | #945 was not dispatched in its interval. It is the batch of the interval that starts at merge 60 and goes first on its measured cost; the other candidates on #939 wait for the one after. |
-| Platform cadence | Passed at merges 52 and 57. Next after merge 62. |
-| Stocktake | Measured at merge 59. Root's half is owed on resume: rerun `issues.py` and recheck the exclusion conditions; bring #734's body to 133 files; and the three checks in root's notes on #3 (whether the two rule changes of 2026-11-13 were used beyond the PRs that prompted them, base updates made without a conflict since `fc5010d279`, and whether #945's added items still fail runs). |
+| Tools batch | #945 merged as #981 (merge 61), the batch of the interval that starts at merge 60. The candidates root recorded on #939 this session, each with its count, wait for the batch picked at the merge-71 stocktake. |
+| Platform cadence | Passed at merge 62 (run 43566394953). Next after merge 67. |
+| Stocktake | Measured at merge 59, and root's half is done. Next after merge 71; it counts the news and event leaves converted since #982 against its figure of about 5.9 C++ lines a leaf. |
 | Phase-3 planning | Not triggered. |
 
 Flakes and limits carried forward:
 
 - #693: this session saw three network-timing failures with no code cause, each cleared by one unchanged retry: a `network-protocol-loopback` hang on #916, the `network-protocol` hang that removed #932 (run 43147704245) and the reference-side `content-protocol` miss that removed #935 (run 43150720812). Earlier windows recorded 2 such failures in 42 simulation-tier runs, then none among 63 native and queue requests at the merge-20 stocktake; the windows are not combined into a rate. No source or oracle change and no new local network diagnosis is authorized by this checkpoint. Keep `.local/retained-network-693` and the linked artifacts; no candidate or base regression is inferred from a timeout.
-- #693, this session: one `network-protocol-loopback` hang, on #961's `native` run 43347645519, cleared by one rerun of the failed shard.
+- #693, session of 2026-11-13: one `network-protocol-loopback` hang, on #961's `native` run 43347645519, cleared by one rerun of the failed shard.
+- #693, session of 2026-11-14: one `network-protocol-loopback` hang, on #988's `native` run at `ee3d2c335a`, cleared by one re-request; about eleven `native` requests ran in the session.
 - Two background jobs were killed by a signal with no sender identified on 2026-11-13 (#724), and the merge-59 profile's first run ended on its own agent's 30-minute limit and was rerun once.
 - Metric scope completeness stays with #736's end-state inventory. No later phase is selected. #898 is a partial evidence transfer; native ownership, loader and error observations, pool and ABI identity and retained fixture consumers remain as its accepted report states.
 
 Retained state for housekeeping:
 
-- `python3 tools/housekeeping.py --apply` last ran after merge 57, and root removed 18 review and merged checkouts by hand at this wind-down, each clean and pushed. The SSD has 49 GB free.
+- `python3 tools/housekeeping.py --apply` last ran at this wind-down, after merge 63, and removed 21 merged checkouts. The SSD has 46 GB free.
 - A name below protects a worktree only when it is the whole folder name ([housekeeping](root-workflow.md#housekeeping)). The `t3-` names of eight hex digits in this list are whole folder names from an earlier host version.
-- Keep each open PR's one checkout and #977's two measurement worktrees, named in the table above.
-- Keep the locked merge-59 profile checkout `t3-7739ec11-3073cbaa77b28444`. The merge-47 and merge-32 profile checkouts are released: this file no longer names them, and root unlocks them on resume so that housekeeping removes them. Preserve all current speed, deep and evidence anchors; the speed anchors live in the main checkout's `.local/speed-pass`.
+- Keep each open PR's one checkout, named in the table above, and #977's two measurement worktrees, `speed-970-base` and `speed-970-fresh`; the second holds a staged `ship_yapf.rs`, the fresh-node-list variant.
+- Keep the locked merge-59 profile checkout `t3-7739ec11-3073cbaa77b28444`. Preserve all current speed, deep and evidence anchors; the speed anchors live in the main checkout's `.local/speed-pass`.
 - Six older profile checkouts were released on 2026-11-12 (#924); this file no longer names them, so the next housekeeping run removes them.
 - The list below is carried forward unchanged as preservation guidance from earlier checkpoints; it does not assert that every old checkout still exists. `/steer` may reconcile stale references, preserving uncommitted or unpushed work and evidence.
 
