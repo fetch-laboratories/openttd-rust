@@ -862,16 +862,6 @@ CommandCost CmdDeleteOrder(DoCommandFlags flags, VehicleID veh_id, VehicleOrderI
 
 
 /**
- * Delete an order but skip the parameter validation.
- * @param v       The vehicle to delete the order from.
- * @param sel_ord The id of the order to be deleted.
- */
-void DeleteOrder(Vehicle *v, VehicleOrderID sel_ord)
-{
-	openttd_rust_delete_order(v, sel_ord, &GetRustOrdersLeaves());
-}
-
-/**
  * Goto order of order-list.
  * @param flags operation to perform
  * @param veh_id The ID of the vehicle which order is skipped

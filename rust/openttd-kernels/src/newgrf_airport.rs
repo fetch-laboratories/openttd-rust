@@ -126,10 +126,6 @@ pub unsafe extern "C" fn openttd_rust_airport_get_spec(
 ) -> *const AirportSpec {
     crate::station_base::airport_get_spec_raw(tile, kind, unsafe { &*s })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_airport_fta(kind: u8, s: *const Services) -> *const c_void {
-    crate::airport::get_airport(kind, unsafe { &*s })
-}
 /// Observe only the station airport association at its original query point.
 pub(crate) fn station_by_id(id: u16, s: &Services) -> *mut BaseStation {
     (s.get_station)(id)
@@ -589,8 +585,4 @@ pub unsafe extern "C" fn openttd_rust_can_vehicle_use_station_abi(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_is_hangar_abi(tile: u32, s: *const Services) -> u8 {
     u8::from(crate::station_map::is_hangar_raw(tile, unsafe { &*s }))
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_pos_on_build(tile: u32, s: *const Services) -> u8 {
-    crate::airport::get_vehicle_pos_on_build(TileIndex(tile), unsafe { &*s })
 }

@@ -25,7 +25,6 @@ void CompanyAdminBankrupt(CompanyID company_id);
 void UpdateCompanyLiveries(Company *c);
 
 Money GetAvailableMoney(CompanyID company);
-bool CheckCompanyHasMoney(CommandCost &cost);
 void SubtractMoneyFromCompany(const CommandCost &cost);
 void SubtractMoneyFromCompanyFract(CompanyID company, const CommandCost &cost);
 CommandCost CheckOwnership(Owner owner, TileIndex tile = {});

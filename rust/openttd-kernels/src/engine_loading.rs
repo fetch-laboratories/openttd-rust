@@ -482,7 +482,8 @@ pub struct CargoClass {
 }
 use crate::cargo_type::{
     CT_CANDY, CT_COAL, CT_COLA, CT_COPPER_ORE, CT_FOOD, CT_GOODS, CT_INVALID, CT_MAIL, CT_OIL,
-    CT_PASSENGERS, CT_SUGAR, CT_VALUABLES, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type,
+    CT_PASSENGERS, CT_SUGAR, CT_VALUABLES, CargoTypes, INVALID_CARGO, NUM_CARGO,
+    is_valid_cargo_type,
 };
 use crate::cargotype::{
     CC_ARMOURED, CC_BULK, CC_EXPRESS, CC_LIQUID, CC_MAIL, CC_PIECEGOODS, CC_REFRIGERATED,
@@ -491,11 +492,12 @@ use crate::cargotype::{
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_CUSTOM_REFIT};
 use crate::vehicle::RailVehicleTypes;
 use crate::vehicle_type::{VEH_AIRCRAFT, VEH_SHIP};
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_engine_translate_refit(mask: u32, file: File) -> u64 {
+/// `TranslateRefitMask`: translate the refit mask. `refit_mask` is `u32` as it has not been
+/// mapped to `CargoTypes`.
+pub(crate) fn translate_refit_mask(refit_mask: u32, file: File) -> CargoTypes {
     let mut result = 0;
     for bit in 0_u8..32 {
-        if mask & (1 << bit) == 0 {
+        if refit_mask & (1 << bit) == 0 {
             continue;
         }
         let cargo = openttd_rust_cargo_translate(bit, file, true);
@@ -503,7 +505,7 @@ pub extern "C" fn openttd_rust_engine_translate_refit(mask: u32, file: File) -> 
             result |= 1_u64 << cargo;
         }
     }
-    result
+    CargoTypes(result)
 }
 fn engine_label(shell: E) -> u32 {
     get_active_cargo_label(read_field!(shell, info.cargo_label), |label| {

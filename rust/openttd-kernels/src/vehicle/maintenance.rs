@@ -751,8 +751,8 @@ unsafe fn decrease_vehicle_value_impl<const C: bool>(v: VehicleRef, base: &Vehic
     branch!(C, VEHICLE_MAINT_VALUE);
 }
 macro_rules! entry {
-    ($name:ident, $direct:ident, $body:ident) => {
-        /// Direct Rust call for the vehicle ports; the native facade calls the same.
+    ($direct:ident, $body:ident) => {
+        /// Direct Rust call for the vehicle ports.
         /// # Safety
         /// A live serialized shell and immutable tables; no borrow into canonical
         /// storage survives any synchronous callback/reentry.
@@ -764,6 +764,9 @@ macro_rules! entry {
                 unsafe { $body::<false>(v, base) }
             }
         }
+    };
+    ($name:ident, $direct:ident, $body:ident) => {
+        entry!($direct, $body);
         /// # Safety
         /// As the direct call; `base` is the live immutable native table.
         #[unsafe(no_mangle)]
@@ -772,7 +775,7 @@ macro_rules! entry {
         }
     };
 }
-entry!(openttd_rust_vehicle_service_depot, service_in_depot, reset);
+entry!(service_in_depot, reset);
 entry!(openttd_rust_vehicle_age, age_vehicle, age_vehicle_impl);
 entry!(
     openttd_rust_vehicle_economy_age,
@@ -784,11 +787,7 @@ entry!(
     decrease_vehicle_value,
     decrease_vehicle_value_impl
 );
-entry!(
-    openttd_rust_vehicle_check_breakdown,
-    check_vehicle_breakdown,
-    check_vehicle_breakdown_impl
-);
+entry!(check_vehicle_breakdown, check_vehicle_breakdown_impl);
 /// # Safety
 /// As the maintenance entries; company is the live native owner at source scope.
 #[unsafe(no_mangle)]

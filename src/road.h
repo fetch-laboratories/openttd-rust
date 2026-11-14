@@ -240,27 +240,6 @@ inline Money RoadBuildCost(RoadType roadtype)
 }
 
 /**
- * Returns the cost of clearing the specified roadtype.
- * @param roadtype The roadtype being removed.
- * @return The cost.
- */
-inline Money RoadClearCost(RoadType roadtype)
-{
-	return openttd_rust_road_clear_cost(&GetRustSharedServices(), roadtype);
-}
-
-/**
- * Calculates the cost of road conversion
- * @param from The roadtype we are converting from
- * @param to   The roadtype we are converting to
- * @return Cost per RoadBit
- */
-inline Money RoadConvertCost(RoadType from, RoadType to)
-{
-	return openttd_rust_road_convert_cost(&GetRustSharedServices(), from, to);
-}
-
-/**
  * Test if road disallows level crossings
  * @param roadtype The roadtype we are testing
  * @return True iff the roadtype disallows level crossings

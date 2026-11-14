@@ -80,17 +80,6 @@ inline Slope ComplementSlope(Slope s)
 }
 
 /**
- * Tests if a specific slope has exactly one corner raised.
- *
- * @param s The #Slope
- * @return true iff exactly one corner is raised
- */
-inline bool IsSlopeWithOneCornerRaised(Slope s)
-{
-	return (s == SLOPE_W) || (s == SLOPE_S) || (s == SLOPE_E) || (s == SLOPE_N);
-}
-
-/**
  * Returns the slope with a specific corner raised.
  *
  * @param corner The #Corner.

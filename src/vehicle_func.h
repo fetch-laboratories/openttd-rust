@@ -151,7 +151,6 @@ private:
 	Iterator start;
 };
 
-void VehicleServiceInDepot(Vehicle *v);
 uint CountVehiclesInChain(const Vehicle *v);
 uint8_t CalcPercentVehicleFilled(const Vehicle *v, StringID *colour);
 
@@ -168,7 +167,6 @@ void ShowNewGrfVehicleError(EngineID engine, StringID part1, StringID part2, GRF
 CommandCost TunnelBridgeIsFree(TileIndex tile, TileIndex endtile, const Vehicle *ignore = nullptr);
 
 void DecreaseVehicleValue(Vehicle *v);
-void CheckVehicleBreakdown(Vehicle *v);
 void EconomyAgeVehicle(Vehicle *v);
 void AgeVehicle(Vehicle *v);
 
@@ -273,7 +271,6 @@ inline StringID GetCmdSendToDepotMsg(const BaseVehicle *v)
 }
 
 CommandCost EnsureNoVehicleOnGround(TileIndex tile);
-CommandCost EnsureNoTrainOnTrackBits(TileIndex tile, TrackBits track_bits);
 
 bool CanVehicleUseStation(EngineID engine_type, const struct Station *st);
 bool CanVehicleUseStation(const Vehicle *v, const struct Station *st);

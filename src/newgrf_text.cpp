@@ -238,15 +238,6 @@ bool CheckGrfLangID(uint8_t lang_id, uint8_t grf_version)
 	return openttd_rust_grf_text_check_language(lang_id, grf_version);
 }
 
-/**
- * House cleaning.
- * Remove all strings.
- */
-void CleanUpStrings()
-{
-	openttd_rust_grf_text_cleanup();
-}
-
 struct TextRefStack {
 private:
 	std::vector<uint8_t> stack;

@@ -263,17 +263,6 @@ bool Vehicle::NeedsAutorenewing(const Company *c, bool use_renew_setting) const
 }
 
 /**
- * Service a vehicle and all subsequent vehicles in the consist
- *
- * @param *v The vehicle or vehicle chain being serviced
- */
-void VehicleServiceInDepot(Vehicle *v)
-{
-	assert(v != nullptr);
-	openttd_rust_vehicle_service_depot(RustVehicle(v), &GetRustVehicleServices());
-}
-
-/**
  * Check if the vehicle needs to go to a depot in near future (if a opportunity presents itself) for service or replacement.
  *
  * @see NeedsAutomaticServicing()
@@ -428,21 +417,6 @@ CommandCost TunnelBridgeIsFree(TileIndex tile, TileIndex endtile, const Vehicle 
 {
 	CommandCost out;
 	openttd_rust_occupancy_wormhole(GetRustOccupancyCommands(), RustCommandCost(&out), tile.base(), endtile.base(), RustVehicle(ignore));
-	return out;
-}
-
-/**
- * Tests if a vehicle interacts with the specified track bits.
- * All track bits interact except parallel #TRACK_BIT_HORZ or #TRACK_BIT_VERT.
- *
- * @param tile The tile.
- * @param track_bits The track bits.
- * @return \c true if no train that interacts, is found. \c false if a train is found.
- */
-CommandCost EnsureNoTrainOnTrackBits(TileIndex tile, TrackBits track_bits)
-{
-	CommandCost out;
-	openttd_rust_occupancy_train(GetRustOccupancyCommands(), RustCommandCost(&out), tile.base(), track_bits);
 	return out;
 }
 
@@ -906,11 +880,6 @@ void DecreaseVehicleValue(Vehicle *v)
 	openttd_rust_vehicle_decrease_value(RustVehicle(v), &GetRustVehicleServices());
 }
 
-
-void CheckVehicleBreakdown(Vehicle *v)
-{
-	openttd_rust_vehicle_check_breakdown(RustVehicle(v), &GetRustVehicleServices());
-}
 
 /**
  * Handle all of the aspects of a vehicle breakdown

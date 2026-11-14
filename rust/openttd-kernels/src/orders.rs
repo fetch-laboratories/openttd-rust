@@ -2540,17 +2540,6 @@ pub unsafe extern "C" fn openttd_rust_insert_order(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_delete_order(
-    v: *mut c_void,
-    index: u8,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.delete(v, index);
-    0
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_delete_vehicle_orders(
     v: *mut c_void,
     keep: u8,

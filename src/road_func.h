@@ -16,16 +16,6 @@
 #include "transparency.h"
 
 /**
- * Whether the given roadtype is valid.
- * @param r the roadtype to check for validness
- * @return true if and only if valid
- */
-inline bool IsValidRoadBits(RoadBits r)
-{
-	return r < ROAD_END;
-}
-
-/**
  * Create the road-part which belongs to the given DiagDirection
  *
  * This function returns a RoadBits value which belongs to

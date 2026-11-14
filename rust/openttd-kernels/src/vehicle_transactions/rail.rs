@@ -186,7 +186,7 @@ impl Ctx {
         }
     }
     fn update_group(self, v: R) {
-        unsafe { crate::fleet::openttd_rust_fleet_update_train_group(self.g, Self::sh(v)) };
+        unsafe { crate::fleet::update_train_group_id(self.g, Self::sh(v)) };
     }
     fn count_vehicle(self, v: R, delta: i32) {
         unsafe { crate::fleet::openttd_rust_fleet_count_vehicle(self.g, Self::sh(v), delta) };
@@ -1080,7 +1080,11 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
     if original_src_head != src && dst_head == src {
         crate::witness::hit(crate::witness::VT_RAIL_NEW_FRONT);
         unsafe {
-            crate::fleet::openttd_rust_fleet_set_train_group(x.g, Ctx::sh(src), DEFAULT_GROUP);
+            crate::fleet::set_train_group_id(
+                x.g,
+                Ctx::sh(src),
+                crate::group_type::GroupID::DEFAULT_GROUP,
+            );
         }
         (s.company_dirty)();
     }

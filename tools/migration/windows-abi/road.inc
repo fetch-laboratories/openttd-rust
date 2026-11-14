@@ -450,6 +450,7 @@ static void RoadServiceBoundary()
 	service_engine = openttd_rust_engine_new();
 	const OpenTTDEngineDefaults engine_defaults{};
 	openttd_rust_engine_construct(service_engine, &engine_defaults, VEH_ROAD, UINT16_MAX);
+	service_engine->reliability = 0x9876;
 	t.vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return service_engine; };
 	static const uint32_t depot_penalty = 300;
 	static OpenTTDSettingAddresses catalog{};
@@ -487,11 +488,16 @@ static void RoadServiceBoundary()
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept {};
 	/* The tail record is linked; its part has no engine type, so only the head is serviced. */
 	maintenance.has_engine = [](OpenTTDVehicle *) noexcept { return false; };
-	maintenance.reset = [](OpenTTDVehicle *) noexcept { ++road_service_probe->services; return OpenTTDVehicleMaintenanceReset{}; };
-	t.vehicle.write_economy_service = t.vehicle.write_calendar_service = [](OpenTTDVehicle *, int32_t) noexcept {};
-	t.vehicle.write_breakdowns = [](OpenTTDVehicle *, uint8_t) noexcept {};
-	t.vehicle.write_reliability = [](OpenTTDVehicle *, uint16_t) noexcept {};
-	maintenance.chance_write = [](OpenTTDVehicle *, uint8_t) noexcept {};
+	/* The servicing reset's aggregate return and the stores it feeds cross the maintenance table. */
+	maintenance.reset = [](OpenTTDVehicle *) noexcept {
+		++road_service_probe->services;
+		return OpenTTDVehicleMaintenanceReset{.economy_date = OpenTTDEconomyDate{0x1020304}, .calendar_date = OpenTTDCalendarDate{-0x12345}, .chance = 12, .breakdowns = 2};
+	};
+	t.vehicle.write_economy_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == 0x1020304); };
+	t.vehicle.write_calendar_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == -0x12345); };
+	t.vehicle.write_breakdowns = [](OpenTTDVehicle *, uint8_t since) noexcept { CHECK(since == 0); };
+	t.vehicle.write_reliability = [](OpenTTDVehicle *, uint16_t reliability) noexcept { CHECK(reliability == 0x9876); };
+	maintenance.chance_write = [](OpenTTDVehicle *, uint8_t chance) noexcept { CHECK(chance == 3); };
 
 
 	t.leaves.is_road_depot_tile = [](uint32_t tile) noexcept { CHECK(tile == road_service_probe->tile); return road_service_probe->depot_tile; };

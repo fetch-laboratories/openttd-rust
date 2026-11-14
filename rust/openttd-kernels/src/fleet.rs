@@ -1198,20 +1198,6 @@ unsafe fn flag_command(
     }
     OK
 }
-unsafe fn remove_company_groups(w: &GroupServices, company: u8) {
-    let mut from = 0;
-    loop {
-        let id = unsafe { (w.next_group)(from) };
-        if id == NONE {
-            break;
-        }
-        from = id + 1;
-        let g = unsafe { group(w, id as u16) };
-        if read_field!(g, owner) == company {
-            unsafe { (w.delete_group)(id as u16) };
-        }
-    }
-}
 /// Retrieves the `EngineRenew` that specifies the replacement of the given
 /// engine type from the given renewlist
 unsafe fn get_engine_replacement(
@@ -1554,33 +1540,26 @@ pub unsafe extern "C" fn openttd_rust_fleet_flag_command(
     let w = unsafe { &*services };
     unsafe { flag_command(w, flags, id, flag, value, recursive) }
 }
-/// Synchronous original fleet `set_train_group` control.
+/// `SetTrainGroupID`: affect the groupID of a train to `new_g`.
+/// `v` is the first vehicle of the chain, `new_g` the index of array group.
 /// # Safety
 /// Static typed noexcept services; live native arguments and game-thread owners.
 /// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_set_train_group(
-    services: *const GroupServices,
-    v: *mut (),
-    id: u16,
-) {
-    let w = unsafe { &*services };
+pub(crate) unsafe fn set_train_group_id(w: &GroupServices, v: *mut (), new_g: GroupID) {
+    let id = new_g.0;
     unsafe {
         if !group(w, id).is_null() || id == DEFAULT_GROUP {
             train_group(w, v, id, true);
         }
     }
 }
-/// Synchronous original fleet `update_train_group` control.
+/// `UpdateTrainGroupID`: recalculates the groupID of a train. Should be called each time a
+/// vehicle is added to/removed from the chain. This needs to be called too for 'wagon chains'
+/// (in the depot, without an engine). `v` is the first vehicle of the chain.
 /// # Safety
 /// Static typed noexcept services; live native arguments and game-thread owners.
 /// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_update_train_group(
-    services: *const GroupServices,
-    v: *mut (),
-) {
-    let w = unsafe { &*services };
+pub(crate) unsafe fn update_train_group_id(w: &GroupServices, v: *mut ()) {
     unsafe {
         {
             let id = if record(w, v).is_front_engine() {
@@ -1648,18 +1627,6 @@ pub unsafe extern "C" fn openttd_rust_fleet_sum_profit(
     let w = unsafe { &*services };
     unsafe { sum_profit(w, company, id, kind) }
 }
-/// Synchronous original fleet `remove_company_groups` control.
-/// # Safety
-/// Static typed noexcept services; live native arguments and game-thread owners.
-/// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_remove_company_groups(
-    services: *const GroupServices,
-    company: u8,
-) {
-    let w = unsafe { &*services };
-    unsafe { remove_company_groups(w, company) }
-}
 /// Synchronous original fleet contains control.
 /// # Safety
 /// Static typed noexcept services; live native arguments and game-thread owners.
@@ -1687,23 +1654,6 @@ pub unsafe extern "C" fn openttd_rust_fleet_replacement(
 ) -> u16 {
     let w = unsafe { &*services };
     unsafe { engine_replacement(w, head, engine, id, old) }
-}
-/// Synchronous original fleet `add_replacement` control.
-/// # Safety
-/// Static typed noexcept services; live native arguments and game-thread owners.
-/// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_add_replacement(
-    services: *const GroupServices,
-    head: *mut *mut (),
-    from: u16,
-    to: u16,
-    id: u16,
-    old: bool,
-    flags: u32,
-) -> u32 {
-    let w = unsafe { &*services };
-    unsafe { add_engine_replacement(w, head, from, to, id, old, flags) }
 }
 /// Synchronous original fleet `remove_replacement` control.
 /// # Safety

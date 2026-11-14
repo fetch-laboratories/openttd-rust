@@ -262,32 +262,6 @@ CommandCost CmdSetGroupFlag(DoCommandFlags flags, GroupID group_id, GroupFlag fl
 	return FleetGroupResult(openttd_rust_fleet_flag_command(&FleetGroupServices(), flags.base(), group_id.base(), to_underlying(flag), value, recursive));
 }
 
-/**
- * Affect the groupID of a train to new_g.
- * @note called in CmdAddVehicleGroup and CmdMoveRailVehicle
- * @param v     First vehicle of the chain.
- * @param new_g index of array group
- */
-void SetTrainGroupID(Train *v, GroupID new_g)
-{
-	/* The original asserts after its validity return; Rust repeats that return. */
-	assert(!(Group::IsValidID(new_g) || IsDefaultGroupID(new_g)) || v->IsFrontEngine() || IsDefaultGroupID(new_g));
-	openttd_rust_fleet_set_train_group(&FleetGroupServices(), v, new_g.base());
-}
-
-
-/**
- * Recalculates the groupID of a train. Should be called each time a vehicle is added
- * to/removed from the chain,.
- * @note this needs to be called too for 'wagon chains' (in the depot, without an engine)
- * @note Called in CmdBuildRailVehicle, CmdBuildRailWagon, CmdMoveRailVehicle, CmdSellRailWagon
- * @param v First vehicle of the chain.
- */
-void UpdateTrainGroupID(Train *v)
-{
-	assert(v->IsFrontEngine() || v->IsFreeWagon());
-	openttd_rust_fleet_update_train_group(&FleetGroupServices(), v);
-}
 
 /**
  * Get the number of engines with EngineID id_e in the group with GroupID
@@ -339,11 +313,6 @@ uint GetGroupNumVehicleMinAge(CompanyID company, GroupID id_g, VehicleType type)
 Money GetGroupProfitLastYearMinAge(CompanyID company, GroupID id_g, VehicleType type)
 {
 	return openttd_rust_fleet_sum_profit(&FleetGroupServices(), company.base(), id_g.base(), type);
-}
-
-void RemoveAllGroupsForCompany(const CompanyID company)
-{
-	openttd_rust_fleet_remove_company_groups(&FleetGroupServices(), company.base());
 }
 
 

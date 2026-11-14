@@ -147,23 +147,6 @@ uint8_t GoodsEntry::ConvertState() const
 }
 
 
-/**
- * Evaluate a tile's position within a station, and return the result in a bit-stuffed format.
- * if not centered: .TNLcCpP, if centered: .TNL..CP
- * - T = Tile layout number (#GetStationGfx)
- * - N = Number of platforms
- * - L = Length of platforms
- * - C = Current platform number from start, c = from end
- * - P = Position along platform from start, p = from end
- * .
- * if centered, C/P start from the centre and c/p are not available.
- * @return Platform information in bit-stuffed format.
- */
-uint32_t GetPlatformInfo(Axis axis, uint8_t tile, int platforms, int length, int x, int y, bool centred)
-{
-	return openttd_rust_platform_info(axis, tile, platforms, length, x, y, centred);
-}
-
 
 /* Station Resolver Functions */
 /* virtual */ uint32_t StationScopeResolver::GetRandomBits() const

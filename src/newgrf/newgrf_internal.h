@@ -91,9 +91,6 @@ extern GrfMiscBits _misc_grf_features;
 void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid);
 GRFFile *GetCurrentGRFOverride();
 
-std::span<const CargoLabel> GetCargoTranslationTable(const GRFFile &grffile);
-CargoTypes TranslateRefitMask(uint32_t refit_mask);
-
 void SkipBadgeList(ByteReader &buf);
 
 std::vector<BadgeID> ReadBadgeList(ByteReader &buf, GrfSpecFeature feature);

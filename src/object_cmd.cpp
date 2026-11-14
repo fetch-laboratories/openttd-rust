@@ -138,8 +138,6 @@ void UpdateObjectColours(const Company *c)
 	openttd_rust_object_colours(&GetRustObjectServices(), c->index.base());
 }
 
-extern CommandCost CheckBuildableTile(TileIndex tile, DiagDirections invalid_dirs, int &allowed_z, bool allow_steep, bool check_bridge);
-
 /**
  * Build an object object
  * @param flags type of operation

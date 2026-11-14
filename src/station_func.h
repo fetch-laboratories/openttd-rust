@@ -30,7 +30,6 @@ CargoArray GetAcceptanceAroundTiles(TileIndex tile, int w, int h, int rad, Cargo
 
 void UpdateStationAcceptance(Station *st, bool show_msg);
 CargoTypes GetAcceptanceMask(const Station *st);
-CargoTypes GetEmptyMask(const Station *st);
 
 void SetRailStationTileFlags(TileIndex tile, const StationSpec *statspec);
 const DrawTileSprites *GetStationTileLayout(StationType st, uint8_t gfx);
@@ -40,7 +39,6 @@ bool HasStationInUse(StationID station, bool include_company, CompanyID company)
 
 void DeleteOilRig(TileIndex t);
 void UpdateStationDockingTiles(Station *st);
-void RemoveDockingTile(TileIndex t);
 void ClearDockingTilesCheckingNeighbours(TileIndex tile);
 
 void UpdateAirportsNoise();

@@ -705,7 +705,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
         (s.set_waiting)(st, waiting);
     }
     let empty_mask = if trigger == SRT_CARGO_TAKEN {
-        crate::newgrf_station::openttd_rust_station_empty_mask(st)
+        crate::newgrf_station::get_empty_mask(st)
     } else {
         0
     };

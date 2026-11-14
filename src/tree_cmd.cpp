@@ -108,11 +108,6 @@ static void RethrowTreeGenerationAbort(bool aborted)
 	if (aborted) std::rethrow_exception(std::exchange(_tree_generation_abort, nullptr));
 }
 
-void PlaceTree(TileIndex tile, uint32_t r, bool keep_density)
-{
-	openttd_rust_trees_place(tile.base(), r, keep_density, &TreeServices(), &GetRustSharedServices());
-}
-
 void PlaceTreesRandomly()
 {
 	RethrowTreeGenerationAbort(openttd_rust_trees_place_randomly(&TreeServices(), &GetRustSharedServices()));

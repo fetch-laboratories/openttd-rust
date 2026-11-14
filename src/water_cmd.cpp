@@ -61,17 +61,6 @@
 
 
 /**
- * Marks tile dirty if it is a canal or river tile.
- * Called to avoid glitches when flooding tiles next to canal tile.
- *
- * @param tile tile to check
- */
-void ClearNeighbourNonFloodingStates(TileIndex tile)
-{
-	openttd_rust_clear_neighbour_flooding(tile.base(), Map::SizeX(), Map::SizeY(), &GetRustWaterGroundServices(), &GetRustSharedServices());
-}
-
-/**
  * Build a ship depot.
  * @param flags type of operation
  * @param tile tile where ship depot is built
@@ -552,10 +541,6 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.news = [](OpenTTDVehicle *v, uint32_t victims) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_FLOOD_VEHICLE, victims), NewsType::Accident, TileIndex{RustVehicleTile(VehicleOf(v))}); },
 	};
 	return services;
-}
-FloodingBehaviour GetFloodingBehaviour(TileIndex tile)
-{
-	return openttd_rust_flooding_behaviour(tile.base(), &GetRustWaterGroundServices(), &GetRustSharedServices());
 }
 void TileLoop_Water(uint32_t tile) noexcept
 {

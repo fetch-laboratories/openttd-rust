@@ -192,7 +192,7 @@ impl Fixture {
     fn load_all(&mut self) {
         unsafe {
             clean_up();
-            crate::newgrf_text::openttd_rust_grf_text_cleanup();
+            crate::newgrf_text::clean_up_strings();
         }
         assert!(self.load(b"TNA5", &actions_a()));
         assert!(self.load(b"TNX5", &actions_bad()));
@@ -218,7 +218,7 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         unsafe {
             clean_up();
-            crate::newgrf_text::openttd_rust_grf_text_cleanup();
+            crate::newgrf_text::clean_up_strings();
             let state = newgrf_loading::openttd_rust_grf_execution();
             (*state).grffile = null_mut();
             (*state).skip_sprites = 0;

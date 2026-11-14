@@ -163,7 +163,7 @@ pub(crate) fn run() {
             });
             continue;
         }
-        openttd_rust_animate_tile(tile);
+        animate_tile(crate::tile_type::TileIndex(tile));
         i += 1;
     }
 }
@@ -177,30 +177,31 @@ pub(crate) fn may_animate(tile: u32, shared: &Shared) -> bool {
 pub extern "C" fn openttd_rust_may_animate_abi(tile: u32) -> u8 {
     u8::from(may_animate(tile, services().shared()))
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
+/// `AnimateTile`: call the animation proc of the tile's type.
+pub(crate) fn animate_tile(tile: crate::tile_type::TileIndex) {
     let a = services();
     let s = a.shared();
-    match (s.tile_type)(tile) {
+    let index = tile.0;
+    match (s.tile_type)(index) {
         MP_HOUSE => unsafe {
-            crate::town::house::animate(a.town, a.shared, crate::tile_type::TileIndex(tile));
+            crate::town::house::animate(a.town, a.shared, tile);
         },
         MP_INDUSTRY => unsafe {
             crate::industry::tile::animate_tile_industry(
-                crate::tile_type::TileIndex(tile),
+                tile,
                 &*a.industries,
                 &*a.construction,
                 &*a.industry_tiles,
             );
         },
-        MP_OBJECT => openttd_rust_animate_object(tile),
+        MP_OBJECT => openttd_rust_animate_object(index),
         MP_STATION => {
-            if crate::map_func::World::new(s).station_has_rail(tile) {
-                openttd_rust_animate_station(tile);
-            } else if crate::station_map::is_airport_raw(tile, s) {
-                openttd_rust_animate_airport(tile);
-            } else if crate::map_func::World::new(s).any_road_stop_tile(tile) {
-                openttd_rust_animate_roadstop(tile);
+            if crate::map_func::World::new(s).station_has_rail(index) {
+                openttd_rust_animate_station(index);
+            } else if crate::station_map::is_airport_raw(index, s) {
+                openttd_rust_animate_airport(index);
+            } else if crate::map_func::World::new(s).any_road_stop_tile(index) {
+                openttd_rust_animate_roadstop(index);
             }
         }
         _ => crate::movement::native_assert(s, false),

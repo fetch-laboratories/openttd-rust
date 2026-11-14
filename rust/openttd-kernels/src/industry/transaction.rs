@@ -1235,13 +1235,6 @@ unsafe fn create_new_industry(
 }
 
 /// # Safety
-/// Actual native slope bytes; pure original slope-refusal policy, no callbacks.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_slope_refused_abi(current: u8, refused: u8) -> u8 {
-    u8::from(is_slope_refused(Slope(current), Slope(refused)))
-}
-
-/// # Safety
 /// Native stack cost and immutable tables. Temporary shell construction/destruction
 /// is synchronous and no temporary owner or resolver pointer may escape the visit.
 #[unsafe(no_mangle)]

@@ -979,8 +979,8 @@ impl Ctx<'_> {
         self.check_for_docking_tile(tile);
         (self.shared.mark_dirty)(tile.0);
         unsafe {
-            crate::water::openttd_rust_clear_neighbour_flooding(
-                tile.0,
+            crate::water::clear_neighbour_non_flooding_states(
+                tile,
                 self.map().size_x(),
                 (self.shared.map_max_y)() + 1,
                 (self.shared.water_services)(),

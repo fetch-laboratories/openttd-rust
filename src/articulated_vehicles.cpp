@@ -140,24 +140,3 @@ CargoTypes GetCargoTypesOfArticulatedVehicle(const Vehicle *v, CargoType *cargo_
 
 #include "rust/vehicle_articulated_services.hpp"
 
-/**
- * Checks whether the specs of freshly build articulated vehicles are consistent with the information specified in the purchase list.
- * Only essential information is checked to leave room for magic tricks/workarounds to grfcoders.
- * It checks:
- *   For autoreplace/-renew:
- *    - Default cargo type (without capacity)
- *    - intersection and union of refit masks.
- */
-void CheckConsistencyOfArticulatedVehicle(const Vehicle *v)
-{
-	openttd_rust_vehicle_articulated_consistency(&GetRustVehicleArticulatedServices(), const_cast<Vehicle *>(v));
-}
-
-/**
- * Add the remaining articulated parts to the given vehicle.
- * @param first The head of the articulated bit.
- */
-void AddArticulatedParts(Vehicle *first)
-{
-	openttd_rust_vehicle_add_articulated(&GetRustVehicleArticulatedServices(), first);
-}
