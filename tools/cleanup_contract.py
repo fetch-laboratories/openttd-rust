@@ -13,6 +13,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, NamedTuple
 
@@ -336,7 +337,11 @@ def pull_discussion(head: str) -> tuple[str, list[str], str]:
         repository = json.loads(gh("repo", "view", "--json", "nameWithOwner"))[
             "nameWithOwner"
         ]
-    number = pull.get("number")
+    # A requested run is a workflow_dispatch whose `pr` input names the PR, and
+    # the Quick it calls reads the caller's event. The commit lookup below finds
+    # a PR only while its head is still the checkout's, so a push during the run
+    # would leave the run with no PR and every acceptance unread (#976).
+    number = pull.get("number") or (event.get("inputs") or {}).get("pr")
     if not number:
         for sha, accepts in candidates:
             pulls = [found for found in commit_pulls(repository, sha) if accepts(found)]
@@ -345,7 +350,10 @@ def pull_discussion(head: str) -> tuple[str, list[str], str]:
                 number = candidate["number"]
                 head = candidate["head"]["sha"]
                 break
-    if number is None:
+    if not number:
+        print(
+            f"no pull request found for {head}; acceptances unchecked", file=sys.stderr
+        )
         return "", [], head
     prefix = f"repos/{repository}"
     current = json.loads(gh("api", f"{prefix}/pulls/{number}"))

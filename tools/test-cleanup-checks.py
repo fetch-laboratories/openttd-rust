@@ -672,6 +672,25 @@ class GrowthTests(unittest.TestCase):
         }
         self.assertEqual(self.pr_context({"second": [merged]}), "PR 4 at second")
 
+    def test_a_requested_run_reads_its_pr_by_number(self) -> None:
+        # ci-request.yml's workflow_dispatch names the PR; the commit lookup
+        # finds none once the branch has moved (#976's run 43378240156).
+        event = {"inputs": {"pr": "13", "head": "second", "profile": "native"}}
+        captured: dict[str, object] = {"number": 13, "head": {"sha": "second"}}
+        moved: dict[str, object] = {"number": 13, "head": {"sha": "later"}}
+        self.assertEqual(
+            self.pr_context({"elsewhere": [captured]}, event=event), "PR 13 at second"
+        )
+        with self.assertRaisesRegex(cleanup_contract.ContractError, "PR head changed"):
+            self.pr_context({"elsewhere": [moved]}, event=event)
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(self.pr_context({}), "None at second")
+        self.assertEqual(
+            stderr.getvalue(),
+            "no pull request found for second; acceptances unchecked\n",
+        )
+
     def test_merge_group_reads_the_queued_pr(self) -> None:
         # Full in the merge queue checks out the group commit: its first parent is
         # the base or the group of the PR queued ahead, its second this PR's head.
