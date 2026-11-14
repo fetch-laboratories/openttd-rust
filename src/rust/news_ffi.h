@@ -10,10 +10,10 @@
 #define RUST_NEWS_FFI_H
 #include <cstddef>
 #include <cstdint>
-#include "service_defaults.hpp"
-#include "encoded_ffi.h"
 #include "abi-record-news.h"
 #include "abi-record-script_event.h"
+#include "encoded_ffi.h"
+#include "service_defaults.hpp"
 
 /** The parameters one string can consume: strgen's ParsedCommandStruct::consuming_commands. */
 static constexpr size_t OPENTTD_RUST_STRING_PARAMETERS = 32;
