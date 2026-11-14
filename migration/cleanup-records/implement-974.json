@@ -94,8 +94,8 @@
     "added": {
       "src/tests/water_regions.cpp": 2
     },
-    "reason": "No change to src/tests/water_regions.cpp; the metric's whole-tree rename pairing against the pinned original pairs this unchanged file differently after this branch's additions and deletions elsewhere.",
-    "existing_alternatives": "None; the file is unchanged against the merge base.",
+    "reason": "src/tests/water_regions.cpp is unchanged against the merge base. The census's rename detection against the pin (`git diff -M`) pairs the pin's src/script/api/script_railtypelist.cpp with src/tests/water_regions.cpp (R052) at the merge base 02850cfee5, and with this PR's new rust/openttd-kernels/src/game.rs (R052) at its head, so water_regions.cpp counts as an added file. The fork C++ total is unchanged by it.",
+    "existing_alternatives": "None in this PR; root records the pairing defect for the next tools batch.",
     "retiring_owner": "#734",
     "retirement_condition": "When the water-region tests retire with their native code."
   },
