@@ -2143,7 +2143,7 @@ class RequestTests(unittest.TestCase):
             gh.assert_not_called()
         self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
 
-    def ready(self, quick: list[dict[str, object]], **pull: object) -> list[tuple]:
+    def ready(self, quick: list[dict[str, str]], **pull: object) -> list[tuple]:
         """Run ready on PULL with pull's changes and `quick` as the head's checks."""
 
         def answers(_repository: str, path: str) -> object:
