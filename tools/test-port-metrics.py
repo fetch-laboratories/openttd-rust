@@ -55,6 +55,26 @@ class PortMetricsTests(unittest.TestCase):
         METRICS.git("commit", "-qm", "Change: Metric fixture")
         return METRICS.git("rev-parse", "HEAD").strip()
 
+    def test_an_old_commits_snapshot_is_newer_than_earlier_output(self) -> None:
+        # The fixture's commit is dated 2001; a snapshot extracted from it must
+        # still be newer than build output written before the extraction.
+        self.write("src/rust.rs", "fn f() {}\n")
+        METRICS.git("add", "-A")
+        with mock.patch.dict(
+            "os.environ", {"GIT_COMMITTER_DATE": "2001-01-01T00:00:00"}
+        ):
+            METRICS.git("commit", "-qm", "Change: Old")
+        archive = METRICS.subprocess.check_output(
+            ["git", "archive", "HEAD"], cwd=self.root
+        )
+        started = METRICS.time.time()
+        destination = self.root / "snapshot"
+        destination.mkdir()
+        METRICS.extract(archive, destination)
+        stamps = [p.stat().st_mtime for p in destination.rglob("*")]
+        self.assertTrue(stamps)
+        self.assertGreaterEqual(min(stamps), started - 1)
+
     def test_generated_declarations_count_as_glue_and_retire(self) -> None:
         rust = self.root / "rust/openttd-kernels/src"
         rust.mkdir(parents=True)

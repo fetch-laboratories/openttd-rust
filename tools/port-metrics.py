@@ -21,11 +21,13 @@ import ast
 import hashlib
 import io
 import json
+import os
 import re
 import runpy
 import subprocess
 import tarfile
 import tempfile
+import time
 from collections.abc import Iterator, Sequence
 from difflib import SequenceMatcher
 from functools import lru_cache
@@ -383,6 +385,22 @@ def boundary(head: str) -> BoundaryMetrics:
 _EXPANDED: dict[str, str] = {}
 
 
+def extract(archive: bytes, destination: Path) -> None:
+    """Unpack a `git archive` with every file stamped now, not at its commit.
+
+    Snapshots share one Cargo target directory, and the build script reruns
+    only for sources newer than its last output. An archive keeps the commit's
+    time, so an older snapshot built after a newer one would reuse the newer
+    one's generated layout list (#945 item 7, seen on #959).
+    """
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        tar.extractall(destination, filter="data")
+    now = time.time()
+    for path in destination.rglob("*"):
+        if not path.is_symlink():
+            os.utime(path, (now, now))
+
+
 def expanded_rust(revision: str) -> str:
     """Use the pinned compiler to expand macros, including test-only syntax.
 
@@ -410,8 +428,7 @@ def expanded_rust(revision: str) -> str:
     archive = subprocess.check_output(["git", "archive", revision], cwd=ROOT)
     with tempfile.TemporaryDirectory(dir=output) as directory:
         source = Path(directory)
-        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-            tar.extractall(source, filter="data")
+        extract(archive, source)
         env = migration.environment()
         env["CARGO_TARGET_DIR"] = str(ROOT / "build-rust/cargo-growth")
         env["RUSTC_BOOTSTRAP"] = "1"
