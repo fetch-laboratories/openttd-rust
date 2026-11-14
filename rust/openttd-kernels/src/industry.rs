@@ -3586,6 +3586,89 @@ mod production_policy_tests {
         drop(unsafe { Box::from_raw(owner) });
     }
 
+    /// `ClearTile_Industry` executed in the editor: the AI close event, then the game close
+    /// event, then the industry's destruction, as the original's order.
+    #[test]
+    fn clear_tile_industry_closes_before_destroying() {
+        use crate::news_func::testing::{Effect, take};
+        use crate::script_event_types::ScriptEvent;
+        use crate::test_tables::{unreachable0, unreachable1, unreachable2};
+        use std::cell::RefCell;
+        thread_local! {
+            static OWNER: std::cell::Cell<*mut Industry> = const { std::cell::Cell::new(ptr::null_mut()) };
+            static BEFORE_DESTROY: RefCell<Option<Vec<Effect>>> = const { RefCell::new(None) };
+        }
+        extern "C" fn tile_industry(_: u32) -> tile::TileIndustry {
+            tile::TileIndustry {
+                shell: ptr::null_mut(),
+                owner: OWNER.get(),
+            }
+        }
+        extern "C" fn destroy(_: *mut tile::ShellHandle) {
+            BEFORE_DESTROY.with(|b| *b.borrow_mut() = Some(take()));
+        }
+        extern "C" fn expense(_: *mut IndustryCost, _: u8, _: i64) {}
+        extern "C" fn yes() -> bool {
+            true
+        }
+        let (owner, saved) = news_industry(IndustryType(202), 0x0800);
+        OWNER.set(owner);
+        let s = news_services(owner);
+        let tiles = tile::TileServices {
+            industry: tile_industry,
+            shared: s.shared,
+            ..crate::test_tables::INDUSTRY_TILES
+        };
+        let policy = tile::TilePolicyServices {
+            object_in_way: unreachable2,
+            destroy,
+            tile_max_z: unreachable1,
+            command_checks: ptr::null(),
+        };
+        let costs = IndustryCostServices {
+            zero: unreachable1,
+            error: unreachable2,
+            expense_money: expense,
+            success: unreachable1,
+        };
+        let generation = GenerationServices {
+            environment: crate::services::EnvironmentServices {
+                editor: yes,
+                freeform_edges: unreachable0,
+            },
+            scale_by_size_1d: unreachable1,
+            scale_by_land_proportion: unreachable1,
+            set_progress: crate::test_tables::unreachable3,
+            increase_progress: unreachable2,
+            missing_warning: unreachable1,
+        };
+        take();
+        unsafe {
+            tile::clear_tile_industry(
+                ptr::null_mut(),
+                TileIndex(0x500),
+                crate::command_type::DoCommandFlags::from_element(
+                    crate::command_type::DoCommandFlag::Execute,
+                ),
+                &raw const tiles,
+                &raw const policy,
+                &raw const costs,
+                &raw const generation,
+            );
+        }
+        let close = ScriptEvent::industry_close(IndustryID(12));
+        assert_eq!(
+            BEFORE_DESTROY.with(|b| b.borrow_mut().take()),
+            Some(vec![
+                Effect::AiBroadcastNewEvent(close, CompanyID::INVALID.0),
+                Effect::GameNewEvent(close),
+            ])
+        );
+        assert_eq!(take(), []);
+        restore_spec(IndustryType(202), saved);
+        drop(unsafe { Box::from_raw(owner) });
+    }
+
     /// `WhoCanServiceIndustry`'s 0, 1 and 2 select `IndustryNobody`, `IndustryOther` and
     /// `IndustryCompany`, as both original switches do.
     #[test]
