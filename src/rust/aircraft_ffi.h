@@ -27,7 +27,12 @@ struct OpenTTDAircraftState {
 };
 struct OpenTTDAircraftVehicle { OpenTTDVehicle *handle; OpenTTDAircraftState *state; uint32_t id; };
 struct OpenTTDAircraftMoving { int16_t x, y; uint16_t flags; uint8_t direction; };
-struct OpenTTDAircraftStrings { uint32_t aircraft_crash, aircraft_dest_too_far, first_aircraft_arrival, plane_crash_out_of_fuel; };
+struct OpenTTDAircraftStrings {
+	uint32_t aircraft_crash;
+	uint32_t aircraft_dest_too_far;
+	uint32_t first_aircraft_arrival;
+	uint32_t plane_crash_out_of_fuel;
+};
 struct OpenTTDVehicleMassServices;
 /* Immutable callback table, borrowed for synchronous entries. Handles retain the
  * original pool identity; only raw field-sized State access occurs in Rust.

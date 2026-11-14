@@ -86,7 +86,10 @@ struct OpenTTDLoadingStation {
 	OpenTTDBaseStation *base;
 	OpenTTDStationService *state;
 };
-struct OpenTTDStationAcceptanceStrings { uint32_t station_no_longer_accepts_cargo_list, station_now_accepts_cargo_list; };
+struct OpenTTDStationAcceptanceStrings {
+	uint32_t station_no_longer_accepts_cargo_list;
+	uint32_t station_now_accepts_cargo_list;
+};
 struct OpenTTDStationServices {
 	const OpenTTDLiveGraphServices *graphs;
 	OpenTTDLoadingStation (*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);

@@ -30,7 +30,11 @@ struct OpenTTDTownFoundingFrame {
 /** Strong native IDs cross only as their documented wire representations:
  * TileIndex uint32_t, TownID uint16_t, CompanyID uint8_t. Native wrappers
  * explicitly construct IDs and expose .base(); enums retain their native type. */
-struct OpenTTDTownFoundingStrings { uint32_t company_name, new_town, new_town_unsponsored; };
+struct OpenTTDTownFoundingStrings {
+	uint32_t company_name;
+	uint32_t new_town;
+	uint32_t new_town_unsponsored;
+};
 struct OpenTTDTownFoundingServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDTownLeaves *growth;

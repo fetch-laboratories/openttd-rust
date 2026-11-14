@@ -185,7 +185,12 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.station = Aircraft_station,
 	.station_owner = Aircraft_station_owner,
 	.station_tile = Aircraft_station_tile,
-	.strings = {.aircraft_crash = STR_NEWS_AIRCRAFT_CRASH, .aircraft_dest_too_far = STR_NEWS_AIRCRAFT_DEST_TOO_FAR, .first_aircraft_arrival = STR_NEWS_FIRST_AIRCRAFT_ARRIVAL, .plane_crash_out_of_fuel = STR_NEWS_PLANE_CRASH_OUT_OF_FUEL},
+	.strings = {
+		.aircraft_crash = STR_NEWS_AIRCRAFT_CRASH,
+		.aircraft_dest_too_far = STR_NEWS_AIRCRAFT_DEST_TOO_FAR,
+		.first_aircraft_arrival = STR_NEWS_FIRST_AIRCRAFT_ARRIVAL,
+		.plane_crash_out_of_fuel = STR_NEWS_PLANE_CRASH_OUT_OF_FUEL,
+	},
 	.subtract_cost = Aircraft_subtract_cost,
 	.terminal_count = Aircraft_terminal_count,
 	.truncate_cargo = Aircraft_truncate_cargo,

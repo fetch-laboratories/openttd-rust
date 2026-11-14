@@ -301,7 +301,10 @@ static const OpenTTDStationServices _rust_station_services = {
 		if (waiting_changed) SetWindowDirty(WC_STATION_VIEW, st->index);
 		else SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_ACCEPT_RATING_LIST);
 	},
-	.strings = {.station_no_longer_accepts_cargo_list = STR_NEWS_STATION_NO_LONGER_ACCEPTS_CARGO_LIST, .station_now_accepts_cargo_list = STR_NEWS_STATION_NOW_ACCEPTS_CARGO_LIST},
+	.strings = {
+		.station_no_longer_accepts_cargo_list = STR_NEWS_STATION_NO_LONGER_ACCEPTS_CARGO_LIST,
+		.station_now_accepts_cargo_list = STR_NEWS_STATION_NOW_ACCEPTS_CARGO_LIST,
+	},
 	.delete_station = [](OpenTTDBaseStation *handle) noexcept -> void {
 		delete static_cast<BaseStation *>(handle);
 	},

@@ -24,8 +24,18 @@ struct OpenTTDIndustryServices;
 struct OpenTTDSubsidyState { CargoType cargo_type; uint16_t remaining; CompanyID awarded; Source src, dst; };
 /** The contiguous scalar data of a native stack CargoArray. */
 struct OpenTTDSubsidyCargo { uint32_t *data; };
-struct OpenTTDSourceFormatStrings { uint32_t industry_name, town_name; };
-struct OpenTTDSubsidyStrings { uint32_t company_name, offer_of_subsidy_expired, service_subsidy_awarded_half, service_subsidy_offered; OpenTTDSourceFormatStrings source; uint32_t subsidy_withdrawn_service; };
+struct OpenTTDSourceFormatStrings {
+	uint32_t industry_name;
+	uint32_t town_name;
+};
+struct OpenTTDSubsidyStrings {
+	uint32_t company_name;
+	uint32_t offer_of_subsidy_expired;
+	uint32_t service_subsidy_awarded_half;
+	uint32_t service_subsidy_offered;
+	OpenTTDSourceFormatStrings source;
+	uint32_t subsidy_withdrawn_service;
+};
 struct OpenTTDSubsidyServices {
 	const OpenTTDSharedServices * shared;
 	const OpenTTDTownLeaves * town;

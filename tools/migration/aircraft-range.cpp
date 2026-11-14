@@ -94,7 +94,15 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &range_orders->services; };
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept { fixture->messages[0]++; };
-	static const OpenTTDNewsServices news{.add_news_item = [](const OpenTTDAddNewsItemArgs *) noexcept { fixture->messages[2]++; }, .delete_vehicle_news = [](uint32_t, uint8_t) noexcept { fixture->messages[3]++; }}; static const OpenTTDScriptEventServices events{.ai_new = [](uint8_t, const OpenTTDScriptEvent *) noexcept { fixture->messages[1]++; }}; openttd_rust_news_bind(&news); openttd_rust_script_event_bind(&events);
+	static const OpenTTDNewsServices news{
+		.add_news_item = [](const OpenTTDAddNewsItemArgs *) noexcept { fixture->messages[2]++; },
+		.delete_vehicle_news = [](uint32_t, uint8_t) noexcept { fixture->messages[3]++; },
+	};
+	static const OpenTTDScriptEventServices events{
+		.ai_new = [](uint8_t, const OpenTTDScriptEvent *) noexcept { fixture->messages[1]++; },
+	};
+	openttd_rust_news_bind(&news);
+	openttd_rust_script_event_bind(&events);
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&fixture->blocks); };
 	leaves.station_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
 	leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
@@ -123,7 +131,8 @@ static OpenTTDAircraftLeaves RangeLeaves()
 		}(), openttd_rust_engine_destroy};
 	vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine.get(); };
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
-	shared.plane_speed = []() noexcept { return uint8_t{1}; }; shared.local_company = []() noexcept { return _local_company; };
+	shared.plane_speed = []() noexcept { return uint8_t{1}; };
+	shared.local_company = []() noexcept { return _local_company; };
 
 	movement.shared = &shared;
 	shared.movement = &movement;

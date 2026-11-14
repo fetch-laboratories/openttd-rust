@@ -758,8 +758,13 @@ static const OpenTTDIndustryServices _industry_services = {
 		return {result, reg[0]};
 	},
 	.text = &GetRustGrfTextServices(),
-	.strings = {.format_industry_name = STR_FORMAT_INDUSTRY_NAME, .industry_production_decrease_smooth = STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH,
-		.industry_production_increase_smooth = STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH, .last_stringid = STR_LAST_STRINGID, .town_name = STR_TOWN_NAME},
+	.strings = {
+		.format_industry_name = STR_FORMAT_INDUSTRY_NAME,
+		.industry_production_decrease_smooth = STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH,
+		.industry_production_increase_smooth = STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH,
+		.last_stringid = STR_LAST_STRINGID,
+		.town_name = STR_TOWN_NAME,
+	},
 	.callback_error = [](void *handle, bool invalid_cargo) noexcept {
 		Industry *i = RustIndustry(handle);
 		const IndustrySpec *spec = GetIndustrySpec(i->type);

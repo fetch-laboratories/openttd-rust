@@ -17,7 +17,14 @@ struct OpenTTDTownStationCursor { BaseStation *shell; uint32_t next; };
  * post_destruct runs after pool removal and never reacquires the old town ID.
  * Save/load decoding stays native and commits partially decoded encoded text. */
 struct OpenTTDClockServices;
-struct OpenTTDTownCommandStrings { uint32_t company_name, exclusive_rights_description_minutes, exclusive_rights_description_months, exclusive_rights_title, road_rebuilding_minutes, road_rebuilding_months; };
+struct OpenTTDTownCommandStrings {
+	uint32_t company_name;
+	uint32_t exclusive_rights_description_minutes;
+	uint32_t exclusive_rights_description_months;
+	uint32_t exclusive_rights_title;
+	uint32_t road_rebuilding_minutes;
+	uint32_t road_rebuilding_months;
+};
 struct OpenTTDTownCommandServices {
 	const OpenTTDTownFoundingServices *founding;
 	const OpenTTDRailMapServices *rail;

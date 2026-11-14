@@ -110,7 +110,13 @@ typedef struct OpenTTDIndustryChange {
 #endif
 /** Direct typed services, one per original operation. No Rust borrow survives
  * any call; construction, clearing, distribution and destruction may reenter. */
-struct OpenTTDIndustryStrings { uint32_t format_industry_name, industry_production_decrease_smooth, industry_production_increase_smooth, last_stringid, town_name; };
+struct OpenTTDIndustryStrings {
+	uint32_t format_industry_name;
+	uint32_t industry_production_decrease_smooth;
+	uint32_t industry_production_increase_smooth;
+	uint32_t last_stringid;
+	uint32_t town_name;
+};
 typedef struct OpenTTDIndustryServices {
 	const OpenTTDSharedServices *shared;
 	/* Periodic tick. */
