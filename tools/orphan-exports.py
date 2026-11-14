@@ -9,7 +9,7 @@ count as called, through their generated Squirrel bindings. The check enforces
 that list against tools/uncalled-export-baseline.txt, which only shrinks: each
 row names the owner issue that retires the fixture calling those members (#737).
 
-Free functions get the same treatment (#945): a file-scope definition with no
+Free functions get the same treatment: a file-scope definition with no
 `Class::` qualifier is uncalled when its name appears nowhere outside its own
 definition heads and declarations, in any tracked C++ file under src/ or tools/
 (tests and consoles included), in a src/ `.ini` table, or anywhere in a tools/

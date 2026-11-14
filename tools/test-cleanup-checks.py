@@ -10,10 +10,11 @@ import subprocess
 import tempfile
 import unittest
 from collections import Counter
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Mapping, Sequence
 from functools import partial
 from pathlib import Path
 from types import ModuleType
+from typing import TypedDict
 from unittest.mock import patch
 
 import cleanup_contract
@@ -22,6 +23,59 @@ from cleanup_contract import associated_pull, reviewed
 from rust_syntax import boundary_ids
 from source_fixture import initialize
 from vcs import git
+
+
+class DispatchInputs(TypedDict):
+    """The inputs ci-request.yml's workflow_dispatch carries."""
+
+    pr: str
+    head: str
+    profile: str
+
+
+class DispatchEvent(TypedDict):
+    inputs: DispatchInputs
+
+
+class PullHead(TypedDict):
+    sha: str
+
+
+class Pull(TypedDict):
+    """The fields of a pull request that `pull_discussion` reads."""
+
+    number: int
+    head: PullHead
+
+
+class Suppression(TypedDict):
+    """A suppression proposal of the cleanup records."""
+
+    kind: str
+    tool: str
+    site: str
+    operation: str
+    before: int
+    after: int
+    source_contract: str
+    reason: str
+    retiring_owner: str
+    retirement_condition: str
+
+
+class GrowthDelta(TypedDict):
+    counter: str
+    old: int
+    new: int
+    added: dict[str, int]
+
+
+class GrowthProposal(GrowthDelta):
+    kind: str
+    reason: str
+    existing_alternatives: str
+    retiring_owner: str
+    retirement_condition: str
 
 
 def load(name: str) -> ModuleType:
@@ -594,7 +648,7 @@ class GrowthTests(unittest.TestCase):
 
     def pr_context(
         self,
-        pulls: Mapping[str, list[dict[str, object]]],
+        pulls: Mapping[str, Sequence[Mapping[str, object]]],
         unknown: frozenset[str] = frozenset(),
         event: Mapping[str, object] | None = None,
     ) -> str:
@@ -674,10 +728,12 @@ class GrowthTests(unittest.TestCase):
 
     def test_a_requested_run_reads_its_pr_by_number(self) -> None:
         # ci-request.yml's workflow_dispatch names the PR; the commit lookup
-        # finds none once the branch has moved (#976's run 43378240156).
-        event = {"inputs": {"pr": "13", "head": "second", "profile": "native"}}
-        captured: dict[str, object] = {"number": 13, "head": {"sha": "second"}}
-        moved: dict[str, object] = {"number": 13, "head": {"sha": "later"}}
+        # finds none once the branch has moved.
+        event = DispatchEvent(
+            inputs=DispatchInputs(pr="13", head="second", profile="native")
+        )
+        captured = Pull(number=13, head=PullHead(sha="second"))
+        moved = Pull(number=13, head=PullHead(sha="later"))
         self.assertEqual(
             self.pr_context({"elsewhere": [captured]}, event=event), "PR 13 at second"
         )
@@ -814,18 +870,18 @@ class GrowthTests(unittest.TestCase):
                     changed, [report("/review", "head")], "/implementation", "head"
                 )
             )
-        lint = {
-            "kind": "suppression",
-            "tool": "rust",
-            "site": "rust/x.rs | impl A | allow x",
-            "operation": "A::B",
-            "before": 0,
-            "after": 1,
-            "source_contract": "original spelling",
-            "reason": "keep the original's name",
-            "retiring_owner": "owner",
-            "retirement_condition": "when the API goes",
-        }
+        lint = Suppression(
+            kind="suppression",
+            tool="rust",
+            site="rust/x.rs | impl A | allow x",
+            operation="A::B",
+            before=0,
+            after=1,
+            source_contract="original spelling",
+            reason="keep the original's name",
+            retiring_owner="owner",
+            retirement_condition="when the API goes",
+        )
         comment = acceptance_comment("head", lint)
         self.assertTrue(
             reviewed(
@@ -961,9 +1017,9 @@ class GrowthTests(unittest.TestCase):
         }
 
         def check(counter: str, key: str, now: str) -> bool:
-            delta = {"counter": counter, "old": 1, "new": 2, "added": {key: 1}}
-            proposal = dict(
-                delta,
+            delta = GrowthDelta(counter=counter, old=1, new=2, added={key: 1})
+            proposal = GrowthProposal(
+                **delta,
                 kind="growth",
                 reason="source contract",
                 existing_alternatives="none available",
@@ -1404,7 +1460,7 @@ class CarryTests(unittest.TestCase):
                 self.assertEqual(POLICY.fidelity_sites({"rust/x.rs": rejected}), set())
 
     def test_a_suppression_only_the_base_removed_is_not_added(self) -> None:
-        # #969: base removed an allow after the branch forked; the branch's
+        # Base removed an allow after the branch forked; the branch's
         # unchanged copy is not a suppression it adds.
         allowed = "#[allow(clippy::too_many_arguments)]\npub fn wide() {}\n"
         with tempfile.TemporaryDirectory() as directory:

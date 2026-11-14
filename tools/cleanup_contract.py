@@ -353,7 +353,7 @@ def pull_discussion(head: str) -> tuple[str, list[str], str]:
     # A requested run is a workflow_dispatch whose `pr` input names the PR, and
     # the Quick it calls reads the caller's event. The commit lookup below finds
     # a PR only while its head is still the checkout's, so a push during the run
-    # would leave the run with no PR and every acceptance unread (#976).
+    # would leave the run with no PR and every acceptance unread.
     number = pull.get("number") or (event.get("inputs") or {}).get("pr")
     if not number:
         for sha, accepts in candidates:

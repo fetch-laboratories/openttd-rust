@@ -98,9 +98,8 @@ def rust_tree(path: str, text: str) -> Node:
 def constant_context(path: str, text: str, start: int) -> bool:
     """Whether the byte offset start lies in code evaluated at compile time.
 
-    An `assert!` there is the Rust form of the original's `static_assert`
-    (#945 item 6; #892 leaves such lines out of its count), not a runtime
-    fatal path that ADR 0024 counts.
+    An `assert!` there is the Rust form of the original's `static_assert`, not
+    a runtime fatal path that ADR 0024 counts.
     """
     try:
         node = rust_tree(path, text).descendant_for_byte_range(start, start)

@@ -270,7 +270,7 @@ def ready(args: argparse.Namespace) -> None:
     quick = latest_quick(repository, head)
     if not pull.get("draft") and quick and quick["conclusion"] == "skipped":
         # Quick skipped a draft; a push landing with the ready mark left only
-        # that skip at this head. Marking ready again starts it (#936, #956).
+        # that skip at this head. Marking ready again starts it.
         gh("pr", "ready", str(args.pr), "--repo", repository, "--undo")
         gh("pr", "ready", str(args.pr), "--repo", repository)
         print(

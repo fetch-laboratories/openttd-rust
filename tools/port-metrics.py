@@ -218,10 +218,9 @@ def show(rev: str, path: str) -> str:
 def hunks(base: str, head: str, old: str, new: str) -> Iterator[Hunk]:
     """Yield (old start, old count, new start, new count) of a zero-context diff.
 
-    The minimal diff, since metric version 3 (#978): the default algorithm's
-    alignment of a heavily edited file is not minimal and moves when the file is
-    edited, so retired and glue shifted by hundreds of lines while no original
-    line changed.
+    The minimal diff: the default algorithm's alignment of a heavily edited
+    file is not minimal and moves when the file is edited, which would move
+    retired and glue while no original line changes.
     """
     for line in git(
         "diff",
@@ -404,7 +403,7 @@ def extract(archive: bytes, destination: Path) -> None:
     Snapshots share one Cargo target directory, and the build script reruns
     only for sources newer than its last output. An archive keeps the commit's
     time, so an older snapshot built after a newer one would reuse the newer
-    one's generated layout list (#945 item 7, seen on #959).
+    one's generated layout list.
     """
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(destination, filter="data")

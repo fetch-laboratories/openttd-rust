@@ -7,7 +7,7 @@ void it (#904). It names the reviewed head, and also holds at a later head while
 the source of every added key is byte-identical, so a base update or an
 unrelated push keeps it. For the identity counters that source is the key's
 declaration in the expanded crate: the whole function item for an export, the
-field declaration for a callback slot (#945 item 13).
+field declaration for a callback slot.
 
 A proposal lives in the change's tracked cleanup records; the acceptance is a
 reviewer's attributed PR comment. Growth whose proposal awaits that acceptance

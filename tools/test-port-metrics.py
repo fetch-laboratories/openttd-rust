@@ -57,7 +57,7 @@ class PortMetricsTests(unittest.TestCase):
         return METRICS.git("rev-parse", "HEAD").strip()
 
     def test_hunks_use_the_minimal_diff(self) -> None:
-        # A seeded edit whose default diff is longer than its minimal one (#978).
+        # A seeded edit whose default diff is longer than its minimal one.
         r = random.Random(2)
         old = [f"l{r.randrange(40)}" for _ in range(3000)]
         new = [line for line in old if r.random() > 0.5]

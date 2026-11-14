@@ -1,4 +1,4 @@
-# Exports held only by uncalled C++ free functions (#945 item 2). This list only shrinks.
+# Exports held only by uncalled C++ free functions. This list only shrinks.
 # Each row names the owner issue that deletes those functions; that owner removes the row.
 openttd_rust_aircraft_height | #975 uncalled free functions: GetTileHeightBelowAircraft
 openttd_rust_aircraft_hold_altitude | #975 uncalled free functions: GetAircraftHoldMaxAltitude

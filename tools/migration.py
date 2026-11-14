@@ -1013,7 +1013,7 @@ def in_original(commit: str, text: str) -> str:
     """The path as the original names it, with or without its `src/` prefix.
 
     `original grep` prints `src/...` paths while reviewers often quote a path
-    from inside `src/`; both forms name one file or folder (#945 item 16). A
+    from inside `src/`; both forms name one file or folder. A
     path in neither form is returned as given, for the caller's own refusal.
     """
     path = original_path(text)
