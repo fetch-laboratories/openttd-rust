@@ -192,6 +192,49 @@ class DebtTests(unittest.TestCase):
                     key = next(iter(rows))
                     self.assertTrue(debt_errors({key: [magnitude + 1]}, rows, rows))
 
+    def test_only_an_assert_evaluated_at_compile_time_is_left_out(self) -> None:
+        cases = {
+            "const item": ("const _: () = assert!(A <= B);\n", False),
+            "inline const block": (
+                "pub fn f() { const { assert!(A <= B) }; }\n",
+                False,
+            ),
+            "const item in a function": (
+                "pub fn f() { const _: () = assert!(A <= B); }\n",
+                False,
+            ),
+            "const fn": ("pub const fn f(ok: bool) { assert!(ok); }\n", True),
+            "closure as a const's value": (
+                "pub const CHECK: fn(bool) = |ok| assert!(ok);\n",
+                True,
+            ),
+            "function": ("pub fn f(ok: bool) { assert!(ok); }\n", True),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "rust").mkdir()
+            for name, (text, counted) in cases.items():
+                with self.subTest(name):
+                    (root / "rust/x.rs").write_text(text)
+                    start = len(text[: text.index("assert!")].encode())
+                    diagnostic = {
+                        "reason": "compiler-message",
+                        "message": {
+                            "code": {"code": "clippy::disallowed_macros"},
+                            "message": "use of a disallowed macro `std::assert`",
+                            "spans": [
+                                {
+                                    "is_primary": True,
+                                    "file_name": "rust/x.rs",
+                                    "byte_start": start,
+                                    "byte_end": start + 7,
+                                }
+                            ],
+                        },
+                    }
+                    rows = LINT.clippy_rows(json.dumps(diagnostic), root)
+                    self.assertEqual(bool(rows), counted, rows)
+
     def test_ruff_item_identity_and_growth(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

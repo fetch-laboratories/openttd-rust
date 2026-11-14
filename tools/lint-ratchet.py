@@ -16,6 +16,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from functools import lru_cache, partial
 from pathlib import Path
+from typing import Any
 
 import vcs
 from baseline_ratchet import debt_errors, exceeds
@@ -83,6 +84,34 @@ def rust_site(path: str, text: str, start: int, lint: str) -> str:
     return f"{path} | {item} | {lint} | {ITEM}"
 
 
+# The nearest of these around a macro decides whether it runs at compile time:
+# a `const` item or inline `const` block evaluates it, while a function or a
+# closure body between it and any `const` runs it when called.
+EVALUATED = {"const_item", "const_block"}
+ENCLOSING = EVALUATED | {"function_item", "closure_expression"}
+
+
+@lru_cache(maxsize=512)
+def rust_tree(path: str, text: str) -> Any:
+    return syntax_trees({path: text})[path]
+
+
+def constant_context(path: str, text: str, start: int) -> bool:
+    """Whether the byte offset start lies in code evaluated at compile time.
+
+    An `assert!` there is the Rust form of the original's `static_assert`
+    (#945 item 6; #892 leaves such lines out of its count), not a runtime
+    fatal path that ADR 0024 counts.
+    """
+    try:
+        node = rust_tree(path, text).descendant_for_byte_range(start, start)
+    except ValueError:  # A file the grammar cannot parse keeps its rows.
+        return False
+    while node is not None and node.type not in ENCLOSING:
+        node = node.parent
+    return node is not None and node.type in EVALUATED
+
+
 def clippy_rows(raw: str, root: Path) -> dict[str, list[int]]:
     sites: dict[str, dict[tuple[str, int, int], int]] = defaultdict(dict)
     for line in raw.splitlines():
@@ -104,6 +133,10 @@ def clippy_rows(raw: str, root: Path) -> dict[str, list[int]]:
                 raise ValueError(f"unclassified Clippy source: {path}")
             data = (root / path).read_bytes()
             start, end = span["byte_start"], span["byte_end"]
+            if lint == "disallowed_macros" and constant_context(
+                path, data.decode(), start
+            ):
+                continue
             # rustc byte offsets are UTF-8; lexer offsets are Unicode characters.
             a = len(data[:start].decode())
             key = rust_site(path, data.decode(), a, lint)

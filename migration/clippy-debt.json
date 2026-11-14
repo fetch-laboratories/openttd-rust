@@ -193,16 +193,10 @@
     "rust/openttd-kernels/src/ground_vehicle.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
-    "rust/openttd-kernels/src/heightmap.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
     "rust/openttd-kernels/src/house.rs | fn get_climate_mask_for_landscape | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/industry.rs | fn change_industry_production | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/kdtree.rs | fn native_split | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/kdtree.rs | impl < T : Copy + Ord > Kdtree < T >::impl Fn ( T , usize ) - > u16 , mut visit : impl FnMut ( T ) , ) | disallowed_macros | 4a33eacd5fa65f2b2e28": [
@@ -216,9 +210,6 @@
     ],
     "rust/openttd-kernels/src/landscape_cmd.rs | impl < ' a > World < ' a >::fn level | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
-    ],
-    "rust/openttd-kernels/src/landscape_generation.rs | impl World < ' _ >::fn greyscale | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
     ],
     "rust/openttd-kernels/src/lib.rs | fn encoded_parameter | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
@@ -235,9 +226,6 @@
     "rust/openttd-kernels/src/linkgraph/live.rs | impl Node::fn update_edge | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
       1,
-      1
-    ],
-    "rust/openttd-kernels/src/map_func.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/math.rs | fn mask | disallowed_macros | 4a33eacd5fa65f2b2e28": [
@@ -263,10 +251,6 @@
     ],
     "rust/openttd-kernels/src/movement.rs | impl MovementServices::fn enter_wormhole | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/network_action.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
       1
     ],
@@ -506,11 +490,6 @@
     ],
     "rust/openttd-kernels/src/ship_yapf.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
-    ],
-    "rust/openttd-kernels/src/spiral.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1,
-      1
     ],
     "rust/openttd-kernels/src/station.rs | fn tile_catchment_radius::mod ified_catchment ) | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
