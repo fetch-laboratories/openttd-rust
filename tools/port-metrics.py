@@ -21,11 +21,13 @@ import ast
 import hashlib
 import io
 import json
+import os
 import re
 import runpy
 import subprocess
 import tarfile
 import tempfile
+import time
 from collections.abc import Iterator, Sequence
 from difflib import SequenceMatcher
 from functools import lru_cache
@@ -412,6 +414,12 @@ def expanded_rust(revision: str) -> str:
         source = Path(directory)
         with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
             tar.extractall(source, filter="data")
+        # Archive members carry their commit's time, which can predate the
+        # build script's last run in the shared target directory; Cargo would
+        # then reuse the other revision's `abi_layouts.rs` module list.
+        now = time.time()
+        for path in source.rglob("*"):
+            os.utime(path, (now, now), follow_symlinks=False)
         env = migration.environment()
         env["CARGO_TARGET_DIR"] = str(ROOT / "build-rust/cargo-growth")
         env["RUSTC_BOOTSTRAP"] = "1"
