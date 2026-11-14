@@ -17,7 +17,6 @@
 //! forms `&mut Regions` only for the length of each `water_regions` call. No
 //! service a search calls loads, resets or yields the map, replaces the region
 //! owner, or reenters the search, the path cache or the ship controller.
-#![allow(unsafe_code)]
 use crate::binaryheap::BinaryHeap;
 use crate::bitmath_func::{find_first_bit, has_bit, kill_first_bit_u16};
 use crate::debug::debug;
