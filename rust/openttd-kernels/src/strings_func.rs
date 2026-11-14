@@ -34,6 +34,10 @@ pub(crate) fn get_encoded_string(
     EncodedString::from_encoded(result.into_bytes())
 }
 
+/// The parameters one string can consume (strgen's `ParsedCommandStruct::consuming_commands`),
+/// the capacity of `GetString`'s native parameter storage (`OPENTTD_RUST_STRING_PARAMETERS`).
+const STRING_PARAMETERS: usize = 32;
+
 #[allow(
     unsafe_code,
     reason = "the sink reads the native string's bytes during its call"
@@ -54,6 +58,8 @@ pub(crate) fn get_string<const N: usize>(
     string: StringID,
     args: [StringParameterData<'_>; N],
 ) -> Vec<u8> {
+    // The native service holds the parameters in local storage of this capacity.
+    const { assert!(N <= STRING_PARAMETERS) };
     let descriptors = args.map(descriptor);
     let mut result = Vec::new();
     (services().get_string)(

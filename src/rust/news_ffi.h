@@ -15,6 +15,8 @@
 #include "abi-record-news.h"
 #include "abi-record-script_event.h"
 
+/** The parameters one string can consume: strgen's ParsedCommandStruct::consuming_commands. */
+static constexpr size_t OPENTTD_RUST_STRING_PARAMETERS = 32;
 /** Receives the bytes of a native string during the call that produced it. */
 using OpenTTDRustStringSink = void (*)(void *target, const uint8_t *bytes, size_t length) noexcept;
 

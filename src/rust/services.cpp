@@ -897,10 +897,10 @@ static const OpenTTDNewsServices _rust_news_services{
 	.delete_station_news = [](uint16_t station) noexcept { DeleteStationNews(StationID{station}); },
 	.delete_vehicle_news = [](uint32_t vehicle, uint8_t advice_type) noexcept { DeleteVehicleNews(VehicleID{vehicle}, static_cast<AdviceType>(advice_type)); },
 	.get_string = [](uint32_t string, const OpenTTDRustEncodedParameter *args, size_t count, OpenTTDRustStringSink sink, void *target) noexcept {
-		std::vector<StringParameter> params;
-		params.reserve(count);
-		for (size_t i = 0; i < count; ++i) params.push_back(RustStringParameter(args[i]));
-		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, params));
+		/* Local storage as MakeParameters' array; Rust bounds count by OPENTTD_RUST_STRING_PARAMETERS. */
+		std::array<StringParameter, OPENTTD_RUST_STRING_PARAMETERS> params{};
+		for (size_t i = 0; i < count; ++i) params[i] = RustStringParameter(args[i]);
+		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, std::span(params).first(count)));
 	},
 	.string_assertions = RUST_ENCODED_STRING_ASSERTIONS,
 };
