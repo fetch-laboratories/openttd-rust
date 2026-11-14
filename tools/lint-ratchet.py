@@ -16,7 +16,6 @@ from collections import defaultdict
 from collections.abc import Callable
 from functools import lru_cache, partial
 from pathlib import Path
-from typing import Any
 
 import vcs
 from baseline_ratchet import debt_errors, exceeds
@@ -29,7 +28,7 @@ from cleanup_contract import (
     run,
 )
 from code_lines import without_comments
-from rust_syntax import item_source, nodes, syntax_trees
+from rust_syntax import Node, item_source, nodes, syntax_trees
 from vcs import git
 
 import migration
@@ -92,7 +91,7 @@ ENCLOSING = EVALUATED | {"function_item", "closure_expression"}
 
 
 @lru_cache(maxsize=512)
-def rust_tree(path: str, text: str) -> Any:
+def rust_tree(path: str, text: str) -> Node:
     return syntax_trees({path: text})[path]
 
 
