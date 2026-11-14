@@ -5,57 +5,26 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file rail_yapf_ffi.h Complete rail search/cache/reservation owner. */
+/** @file rail_yapf_ffi.h The rail pathfinder's train controller entries. */
 #ifndef OPENTTD_RUST_RAIL_YAPF_FFI_H
 #define OPENTTD_RUST_RAIL_YAPF_FFI_H
-#include "service_defaults.hpp"
 #include <stdint.h>
 #include "services_ffi.h"
+#include "train_reservation_ffi.h"
 extern "C" {
-struct OpenTTDRailYapf;
-struct OpenTTDRailSettings {
-	uint32_t max_nodes, firstred, firstred_exit, lastred, lastred_exit;
-	uint32_t station, slope, curve45, curve90, depot_reverse, crossing, lookahead;
-	int32_t p0, p1, p2;
-	uint32_t pbs_cross, pbs_station, pbs_back, doubleslip;
-	uint32_t longer, longer_tile, shorter, shorter_tile;
-	uint8_t firstred_eol;
+/** FindDepotData with the tile as its base integer. */
+struct OpenTTDFindDepotData {
+	uint32_t tile, best_length;
+	uint8_t reverse;
 };
-struct OpenTTDRailTile {
-	uint32_t flags, other_end;
-	uint16_t station;
-	uint8_t railtype, tracks, station_track, tunnel_dir;
-	uint8_t uphill, signal_along, signal_against, signal_green, signal_type, oneway;
-};
-struct OpenTTDRailInput {
-	void *context;
-	const OpenTTDVehicle *vehicle;
-	const OpenTTDSharedServices *shared;
-	OpenTTDRailSettings settings;
-	uint32_t map_x, tile;
-	int32_t max_cost, desync;
-	uint8_t kind, td, override_railtype, forbid90, reserve;
-};
-struct OpenTTDRailStep {
-	uint32_t tile, destination, target_tile, best_length;
-	uint8_t action, td, found, reverse, value, target_td, target_okay;
-};
-struct OpenTTDRailLeaves {
-	bool (*waypoint_single)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_single);
-	OpenTTDRailTile (*tile)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	uint32_t (*closest_station)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_station);
-	void (*output)(void *, uint8_t, const OpenTTDRailStep *) noexcept OPENTTD_SERVICE_DEFAULT(output);
-	void (*debug)(void *, uint8_t, const uint32_t *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug);
-};
-/* One owner holds the change counter and six cache banks; invalidation advances the counter and
- * banks flush lazily. Searches keep private arenas and queues and call the PBS owner directly.
- * step returns action=1 before the platform and waypoint triggers, in their original order (a
- * waypoint keeps its second trigger), and the next step resumes. Destroy once, also when an
- * ordinary station callback unwinds. Calls are serialized; map replacement is excluded during
- * traversal, and owner borrows end before platform and waypoint triggers. */
-OpenTTDRailYapf *openttd_rust_rail_new(const OpenTTDRailInput *, const OpenTTDRailLeaves *);
-OpenTTDRailStep openttd_rust_rail_step(OpenTTDRailYapf *);
-void openttd_rust_rail_destroy(OpenTTDRailYapf *);
-void openttd_rust_rail_invalidate();
+/* Each entry runs synchronously under the game-state mutex. A non-null target or dest is read
+ * before and written after the search. Bool results are 0 or 1. */
+uint8_t openttd_rust_yapf_train_choose_track(const OpenTTDSharedServices *, const OpenTTDVehicle *, uint32_t tile, uint8_t enterdir, uint8_t tracks, bool *path_found, uint8_t reserve_track, OpenTTDTrainReservationPbs *target, uint32_t *dest);
+uint8_t openttd_rust_yapf_train_check_reverse(const OpenTTDSharedServices *, const OpenTTDVehicle *);
+OpenTTDFindDepotData openttd_rust_yapf_train_find_nearest_depot(const OpenTTDSharedServices *, const OpenTTDVehicle *, int32_t max_penalty);
+uint8_t openttd_rust_yapf_train_find_nearest_safe_tile(const OpenTTDSharedServices *, const OpenTTDVehicle *, uint32_t tile, uint8_t td, uint8_t override_railtype);
+void openttd_rust_rail_invalidate(uint32_t tile, uint8_t track);
 }
+/** The rail search's DumpState through the native DumpTarget, which #725 retires. */
+void YapfRailDumpState(const uint32_t *words, uint32_t length) noexcept;
 #endif

@@ -778,8 +778,8 @@ impl<'a> Pbs<'a> {
 /// Temporary raw adapters for callers in files no pass has finished; each
 /// delegates to the typed routine named after the original.
 impl Pbs<'_> {
-    /// [`Self::get_reserved_trackbits`] for `train_reservation.rs`, `rail_cmd.rs`,
-    /// `rail_yapf.rs` and `road_cmd.rs`.
+    /// [`Self::get_reserved_trackbits`] for `train_reservation.rs`, `rail_cmd.rs`
+    /// and `road_cmd.rs`.
     pub(crate) fn get_reserved_trackbits_raw(self, tile: u32) -> u8 {
         self.get_reserved_trackbits(TileIndex(tile)).0
     }
@@ -792,8 +792,7 @@ impl Pbs<'_> {
     pub(crate) fn set_rail_station_platform_reservation_raw(self, start: u32, dir: u8, b: bool) {
         self.set_rail_station_platform_reservation(TileIndex(start), DiagDirection(dir), b);
     }
-    /// [`Self::try_reserve_rail_track`] for `train_reservation.rs`, `train.rs` and
-    /// `rail_yapf.rs`.
+    /// [`Self::try_reserve_rail_track`] for `train_reservation.rs` and `train.rs`.
     pub(crate) fn try_reserve_rail_track_raw(
         self,
         tile: u32,
@@ -802,13 +801,12 @@ impl Pbs<'_> {
     ) -> bool {
         self.try_reserve_rail_track(TileIndex(tile), Track(t), trigger_stations)
     }
-    /// [`Self::unreserve_rail_track`] for `train_reservation.rs`, `train.rs` and
-    /// `rail_yapf.rs`.
+    /// [`Self::unreserve_rail_track`] for `train_reservation.rs` and `train.rs`.
     pub(crate) fn unreserve_rail_track_raw(self, tile: u32, t: u8) {
         self.unreserve_rail_track(TileIndex(tile), Track(t));
     }
-    /// [`Self::follow_train_reservation`] for `train_reservation.rs` and
-    /// `rail_yapf.rs`: with `check_other`, the `train_on_res` slot starts at
+    /// [`Self::follow_train_reservation`] for `train_reservation.rs`: with
+    /// `check_other`, the `train_on_res` slot starts at
     /// `initial`; the record carries the slot's final value.
     pub(crate) fn follow_train_reservation_raw(
         self,
@@ -825,8 +823,8 @@ impl Pbs<'_> {
     pub(crate) fn get_train_for_reservation_raw(self, tile: u32, track: u8) -> Handle {
         self.get_train_for_reservation(TileIndex(tile), Track(track))
     }
-    /// [`Self::is_safe_waiting_position`] for `train_reservation.rs`, `rail_cmd.rs`
-    /// and `rail_yapf.rs`.
+    /// [`Self::is_safe_waiting_position`] for `train_reservation.rs` and
+    /// `rail_cmd.rs`.
     pub(crate) fn is_safe_waiting_position_raw(
         self,
         v: Handle,
@@ -843,8 +841,7 @@ impl Pbs<'_> {
             forbid_90deg,
         )
     }
-    /// [`Self::is_waiting_position_free`] for `train_reservation.rs` and
-    /// `rail_yapf.rs`.
+    /// [`Self::is_waiting_position_free`] for `train_reservation.rs`.
     pub(crate) fn is_waiting_position_free_raw(
         self,
         v: Handle,

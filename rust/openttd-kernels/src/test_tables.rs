@@ -439,6 +439,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     base_station: unreachable1,
     base_station_xy: unreachable1,
     station_facilities: unreachable1,
+    waypoint_is_single_tile: unreachable1,
     road_commands: unreachable0,
     kdtree_partition: unreachable2,
     station_commands: unreachable0,
@@ -505,6 +506,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     resolver_grf_file_id: unreachable1,
     resolver_grf_version: unreachable1,
     show_error: unreachable2,
+    yapf_rail_dump_state: unreachable2,
     not_reached: unreachable0,
     fatal_error: unreachable2,
 };

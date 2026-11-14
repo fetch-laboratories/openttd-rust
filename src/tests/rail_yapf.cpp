@@ -93,58 +93,60 @@ TEST_CASE("Rail YAPF finite limit and heap ordering against unchanged reference"
 		CHECK(result.found == static_cast<uint8_t>(found));
 		CHECK(result.td == reference.Direction());
 
-		CHECK(RailYapfProbe::stats[0] == static_cast<uint32_t>(reference.num_steps));
-		CHECK(RailYapfProbe::stats[1] == static_cast<uint32_t>(reference.nodes.OpenCount()));
-		CHECK(RailYapfProbe::stats[2] == static_cast<uint32_t>(reference.nodes.ClosedCount()));
-		CHECK(RailYapfProbe::stats[4] == reference.Calcs());
-		CHECK(RailYapfProbe::limits == static_cast<uint32_t>(!found && limit != 0));
-		if (found) CHECK(RailYapfProbe::stats[6] == static_cast<uint32_t>(reference.GetBestNode()->cost));
+		CHECK(result.num_steps == reference.num_steps);
+		CHECK(result.open == reference.nodes.OpenCount());
+		CHECK(result.closed == reference.nodes.ClosedCount());
+		CHECK(static_cast<uint32_t>(result.cost_calcs) == reference.Calcs());
+		CHECK(result.limits == static_cast<uint32_t>(!found && limit != 0));
+		if (found) CHECK(result.cost == reference.GetBestNode()->cost);
 	}
 }
 TEST_CASE("Rail YAPF live global cache invalidation after tile mutation")
 {
 	RailYapfProbe::goal = 3;
-	openttd_rust_rail_invalidate();
+	openttd_rust_rail_invalidate(INVALID_TILE.base(), INVALID_TRACK);
 	CHECK(RailYapfProbe::Run(0, 100, true).found == 1);
 	CHECK(RailYapfProbe::Run(0, 100, true).found == 1);
-	CHECK(RailYapfProbe::stats[3] > 0);
-	CHECK(RailYapfProbe::stats[4] == 0);
-	/* Same bank/settings, but the bundled tile service now reports an uphill
-	 * tile. Notify invalidation must discard costs from before the mutation. */
+	CHECK(RailYapfProbe::stats.cache_hits > 0);
+	CHECK(RailYapfProbe::stats.cost_calcs == 0);
+	/* Same bank/settings, but the map now holds an uphill tile. Notify
+	 * invalidation must discard costs from before the mutation. */
 	RailYapfProbe::hill = true;
-	openttd_rust_rail_invalidate();
+	openttd_rust_rail_invalidate(INVALID_TILE.base(), INVALID_TRACK);
 	CHECK(RailYapfProbe::Run(0, 100, true).found == 1);
-	CHECK(RailYapfProbe::flushes == 1);
-	CHECK(RailYapfProbe::stats[4] > 0);
+	CHECK(RailYapfProbe::stats.flushes == 1);
+	CHECK(RailYapfProbe::stats.cost_calcs > 0);
 	RailYapfReference::Search reference{0, 3, 100};
 	CHECK(reference.FindPath(nullptr));
-	CHECK(RailYapfProbe::stats[6] == static_cast<uint32_t>(reference.GetBestNode()->cost));
-	CHECK(RailYapfProbe::stats[6] == 350);
+	CHECK(RailYapfProbe::stats.cost == reference.GetBestNode()->cost);
+	CHECK(RailYapfProbe::stats.cost == 350);
 	RailYapfProbe::hill = false;
-	openttd_rust_rail_invalidate();
+	openttd_rust_rail_invalidate(INVALID_TILE.base(), INVALID_TRACK);
 }
 TEST_CASE("Rail YAPF opposing PBS signals restored in insertion order on rollback")
 {
 	/* The real rail corpus reaches rollback but no opposing green PBS signal.
 	 * Reuse the scalar graph to expose ordered red/unreserve/green writes. */
 	RailYapfProbe::goal = 3; RailYapfProbe::rollback = true;
-	openttd_rust_rail_invalidate();
+	openttd_rust_rail_invalidate(INVALID_TILE.base(), INVALID_TRACK);
 	CHECK(RailYapfProbe::Run(0, 100, true, true).found == 1);
 	const std::vector<uint32_t> expected{0x3001, 0x3085, 0x2001, 0x2085, 0x1001, 0x3002, 0x2002, 0x3086, 0x2086};
 	CHECK(RailYapfProbe::writes == expected);
-	CHECK(RailYapfProbe::red == 2);
-	CHECK(RailYapfProbe::restored == 2);
+	CHECK(RailYapfProbe::stats.red == 2);
+	CHECK(RailYapfProbe::stats.restored == 2);
 	RailYapfProbe::rollback = false;
-	openttd_rust_rail_invalidate();
+	openttd_rust_rail_invalidate(INVALID_TILE.base(), INVALID_TRACK);
 }
 TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 {
 	for (bool fail : {false, true}) for (uint8_t kind : {0, 3}) {
 		RailYapfProbe::follow_fail = fail;
-		openttd_rust_rail_invalidate();
+		openttd_rust_rail_invalidate(INVALID_TILE.base(), INVALID_TRACK);
 		const auto result = RailYapfProbe::Run(1, 29, false, false, kind);
-		// FindPath's statistics precede SetReservationTarget's PBS probes.
-		const std::string reads(RailYapfProbe::follow_reads.begin(), RailYapfProbe::follow_reads.begin() + RailYapfProbe::search_read_count);
+		/* After FindPath, SetReservationTarget's safe-position probes read
+		 * neither a reservation nor a speed limit in these cases, and no
+		 * reservation is made: every read is the search's. */
+		const std::string reads(RailYapfProbe::follow_reads.begin(), RailYapfProbe::follow_reads.end());
 		CAPTURE(kind, fail, reads);
 		if (kind == 3 && fail) {
 			// With the concrete missing track, the original safe-tile search
@@ -155,19 +157,21 @@ TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 		}
 		// ChooseRailTrack obtains its origin through FollowTrainReservation.
 		std::string expected = kind == 0 ? "r" : "";
-		if (fail) {
-			expected += "s"; // One failed search-node follow; no child segments.
-		} else {
+		/* With fail, one failed search-node follow adds no child segment, so
+		 * no PfCalcCost reads a speed limit. */
+		if (!fail) {
 			// max_nodes=1 expands two search nodes, each with three reachable
-			// child trackdirs. PfFollowNode masks only the search-node follow;
-			// PfCalcCost follows each child segment without reservation masking.
+			// child trackdirs. Only the safe tile search's PfFollowNode masks
+			// reserved tracks; each child's PfCalcCost reads the speed limit of
+			// the tile it was followed from once, inside the look-ahead radius,
+			// and its segment ends at the next choice without another read.
 			for (unsigned round = 0; round < 2; ++round) {
-				expected += kind == 3 ? "rs" : "s";
+				expected += kind == 3 ? "r" : "";
 				for (unsigned child = 0; child < 3; ++child) expected += "s";
 			}
 		}
 		CHECK(std::string(reads.begin(), reads.end()) == expected);
 	}
 	RailYapfProbe::follow_fail = false;
-	openttd_rust_rail_invalidate();
+	openttd_rust_rail_invalidate(INVALID_TILE.base(), INVALID_TRACK);
 }

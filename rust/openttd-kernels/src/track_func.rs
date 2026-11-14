@@ -235,6 +235,83 @@ pub fn has_trackdir(trackdirs: u16, trackdir: u8, check: impl Fn(bool)) -> bool 
     trackdirs & 1_u16.wrapping_shl(u32::from(trackdir)) != 0
 }
 
+/// `NextTrackdir`: maps a trackdir to the trackdir that you will end up on if
+/// you go straight ahead. This will be the same trackdir for diagonal
+/// trackdirs, but a different (alternating) one for straight trackdirs.
+pub fn next_trackdir(trackdir: u8, check: impl Fn(bool)) -> u8 {
+    use crate::track_type::Trackdir as T;
+    /// `_next_trackdir`, from `table/track_data.h`.
+    const NEXT_TRACKDIR: [T; 14] = [
+        T::TRACKDIR_X_NE,
+        T::TRACKDIR_Y_SE,
+        T::TRACKDIR_LOWER_E,
+        T::TRACKDIR_UPPER_E,
+        T::TRACKDIR_RIGHT_S,
+        T::TRACKDIR_LEFT_S,
+        T::INVALID_TRACKDIR,
+        T::INVALID_TRACKDIR,
+        T::TRACKDIR_X_SW,
+        T::TRACKDIR_Y_NW,
+        T::TRACKDIR_LOWER_W,
+        T::TRACKDIR_UPPER_W,
+        T::TRACKDIR_RIGHT_N,
+        T::TRACKDIR_LEFT_N,
+    ];
+    if !is_valid_trackdir(trackdir) {
+        check(false);
+    }
+    NEXT_TRACKDIR[usize::from(trackdir)].0
+}
+
+/// `IsUphillTrackdir`: checks whether a trackdir on a specific slope is going
+/// uphill. Valid for rail and road tracks, and for tile-slopes (under
+/// foundation) and foundation-slopes (on foundation).
+pub fn is_uphill_trackdir(slope: crate::slope_type::Slope, dir: u8, check: impl Fn(bool)) -> bool {
+    use crate::track_type::TrackdirBits as B;
+    /// `_uphill_trackdirs`, from `table/track_data.h`.
+    const UPHILL_TRACKDIRS: [u16; 31] = [
+        B::TRACKDIR_BIT_NONE.0,                          //  0 SLOPE_FLAT
+        B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_NW.0, //  1 SLOPE_W   -> inclined for diagonal track
+        B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_SE.0, //  2 SLOPE_S   -> inclined for diagonal track
+        B::TRACKDIR_BIT_X_SW.0,                          //  3 SLOPE_SW
+        B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_SE.0, //  4 SLOPE_E   -> inclined for diagonal track
+        B::TRACKDIR_BIT_NONE.0,                          //  5 SLOPE_EW
+        B::TRACKDIR_BIT_Y_SE.0,                          //  6 SLOPE_SE
+        B::TRACKDIR_BIT_NONE.0,                          //  7 SLOPE_WSE -> leveled
+        B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_NW.0, //  8 SLOPE_N   -> inclined for diagonal track
+        B::TRACKDIR_BIT_Y_NW.0,                          //  9 SLOPE_NW
+        B::TRACKDIR_BIT_NONE.0,                          // 10 SLOPE_NS
+        B::TRACKDIR_BIT_NONE.0,                          // 11 SLOPE_NWS -> leveled
+        B::TRACKDIR_BIT_X_NE.0,                          // 12 SLOPE_NE
+        B::TRACKDIR_BIT_NONE.0,                          // 13 SLOPE_ENW -> leveled
+        B::TRACKDIR_BIT_NONE.0,                          // 14 SLOPE_SEN -> leveled
+        B::TRACKDIR_BIT_NONE.0,                          // 15 invalid
+        B::TRACKDIR_BIT_NONE.0,                          // 16 invalid
+        B::TRACKDIR_BIT_NONE.0,                          // 17 invalid
+        B::TRACKDIR_BIT_NONE.0,                          // 18 invalid
+        B::TRACKDIR_BIT_NONE.0,                          // 19 invalid
+        B::TRACKDIR_BIT_NONE.0,                          // 20 invalid
+        B::TRACKDIR_BIT_NONE.0,                          // 21 invalid
+        B::TRACKDIR_BIT_NONE.0,                          // 22 invalid
+        B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_SE.0, // 23 SLOPE_STEEP_S -> inclined for diagonal track
+        B::TRACKDIR_BIT_NONE.0,                          // 24 invalid
+        B::TRACKDIR_BIT_NONE.0,                          // 25 invalid
+        B::TRACKDIR_BIT_NONE.0,                          // 26 invalid
+        B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_NW.0, // 27 SLOPE_STEEP_W -> inclined for diagonal track
+        B::TRACKDIR_BIT_NONE.0,                          // 28 invalid
+        B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_NW.0, // 29 SLOPE_STEEP_N -> inclined for diagonal track
+        B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_SE.0, // 30 SLOPE_STEEP_E -> inclined for diagonal track
+    ];
+    // `IsValidTrackdirForRoadVehicle`.
+    if dir >= crate::track_type::Trackdir::TRACKDIR_END.0 {
+        check(false);
+    }
+    crate::bitmath_func::has_bit(
+        UPHILL_TRACKDIRS[usize::from(crate::slope_func::remove_halftile_slope(slope).0)],
+        dir,
+    )
+}
+
 /// `TrackdirToTrackdirBits`.
 pub const fn trackdir_to_trackdir_bits(td: u8) -> u16 {
     1_u16 << td
