@@ -889,7 +889,9 @@ static const OpenTTDNewsServices _rust_news_services{
 		AddNewsItem(RustEncodedString({reinterpret_cast<const char *>(args->headline), args->headline_length}), static_cast<NewsType>(args->type), static_cast<NewsStyle>(args->style),
 			NewsFlags(args->flags), RustNewsReference(args->ref1), RustNewsReference(args->ref2), std::unique_ptr<NewsAllocatedData>(args->data), static_cast<AdviceType>(args->advice_type));
 	},
-	.assert_encoded = [](uint32_t codepoint, size_t length) noexcept { AssertRustEncoded({.assertion_length = length, .assertion_codepoint = codepoint, .assertion_kind = 2}, {}); },
+	.assert_encoded = [](uint32_t codepoint, size_t length) noexcept {
+		AssertRustEncoded({.bytes = nullptr, .length = 0, .diagnostic_count = 0, .assertion_offset = 0, .assertion_length = length, .assertion_codepoint = codepoint, .apply = 0, .assertion_kind = 2}, {});
+	},
 	.company_news_company_name = [](const NewsAllocatedData *data, OpenTTDRustStringSink sink, void *target) noexcept { RustSinkString(sink, target, static_cast<const CompanyNewsInformation *>(data)->company_name); },
 	.company_news_information = [](uint32_t title, uint8_t company, uint8_t other) noexcept -> NewsAllocatedData * {
 		return new CompanyNewsInformation(StringID{title}, Company::Get(CompanyID{company}), CompanyID{other} == CompanyID::Invalid() ? nullptr : Company::Get(CompanyID{other}));
