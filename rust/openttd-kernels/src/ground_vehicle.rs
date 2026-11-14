@@ -21,6 +21,7 @@ use crate::cargo_type::CargoType;
 use crate::direction_func::{diag_dir_to_axis, dir_to_diag_dir};
 use crate::direction_type::{Axis, DiagDirection, Direction};
 use crate::engine_type::{EngineID, VehicleAccelerationModel};
+use crate::map_func::World;
 use crate::newgrf_properties::{
     PROP_ROADVEH_POWER, PROP_ROADVEH_TRACTIVE_EFFORT, PROP_ROADVEH_WEIGHT, PROP_TRAIN_POWER,
     PROP_TRAIN_TRACTIVE_EFFORT, PROP_TRAIN_WEIGHT,
@@ -29,8 +30,9 @@ use crate::raw_field::{read_field, write_field};
 use crate::services::{RailType, RoadType};
 use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK, TileIndex};
 use crate::track_func::track_status_to_track_bits;
-use crate::track_type::{TRACK_BIT_DEPOT, TRACK_BIT_WORMHOLE, TRACK_BIT_X, TRACK_BIT_Y};
-use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD};
+use crate::track_type::TrackBits;
+use crate::train::{VehicleRailFlag, VehicleRailFlags};
+use crate::transport_type::TransportType;
 use crate::vehicle::{VehicleRef, VehicleServices, VehicleType};
 use crate::vehicle_base::{GroundVehicleSubtypeFlags, VehState, VehStates};
 use crate::vehicle_type::GROUND_ACCELERATION;
@@ -273,10 +275,6 @@ impl Services {
     fn property(&self, v: VehicleRef, property: u8, orig_value: u16) -> i32 {
         (self.vehicle.property)((self.vehicle.newgrf)(), v, property, i32::from(orig_value))
     }
-    /// `GetRailType(tile)`.
-    fn get_rail_type(&self, tile: TileIndex) -> RailType {
-        RailType(crate::map_func::World::new(self.shared()).rail_type(tile.0))
-    }
     /// `v->cargo_type`.
     fn cargo_type(&self, v: VehicleRef) -> CargoType {
         // SAFETY: a live record and the immutable binding; one field read.
@@ -316,9 +314,15 @@ impl Services {
 /// template calls them statically to improve performance.
 pub(crate) trait GroundVehicleType {
     /// `Type`, which equals the `TransportType` of its depots.
-    const TRANSPORT: u8;
-    fn get_power(s: &Services, v: VehicleRef, o: Owner) -> u16;
-    fn get_powered_part_power(s: &Services, v: VehicleRef, o: Owner, head: Owner) -> u16;
+    const TRANSPORT: TransportType;
+    fn get_power(s: &Services, w: &World<'_>, v: VehicleRef, o: Owner) -> u16;
+    fn get_powered_part_power(
+        s: &Services,
+        w: &World<'_>,
+        v: VehicleRef,
+        o: Owner,
+        head: Owner,
+    ) -> u16;
     fn get_weight(s: &Services, v: VehicleRef, o: Owner) -> u16;
     fn get_max_weight(s: &Services, v: VehicleRef, o: Owner) -> u16;
     fn get_tractive_effort(s: &Services, v: VehicleRef) -> u8;
@@ -327,10 +331,14 @@ pub(crate) trait GroundVehicleType {
     fn get_acceleration_status(v: VehicleRef, o: Owner) -> AccelStatus;
     fn get_current_speed(v: VehicleRef) -> u16;
     fn get_rolling_friction(s: &Services, v: VehicleRef) -> u32;
-    fn get_acceleration_type(s: &Services, v: VehicleRef) -> VehicleAccelerationModel;
+    fn get_acceleration_type(
+        s: &Services,
+        w: &World<'_>,
+        v: VehicleRef,
+    ) -> VehicleAccelerationModel;
     fn get_slope_steepness(s: &Services) -> u32;
     fn get_display_max_speed(v: VehicleRef) -> i32;
-    fn get_max_track_speed(s: &Services, v: VehicleRef) -> u16;
+    fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16;
     fn tile_may_have_sloped_track(
         movement: &crate::movement::CachedTable<'_>,
         v: VehicleRef,
@@ -343,7 +351,7 @@ pub(crate) trait GroundVehicleType {
 /// `Train`'s acceleration methods (`train.h`, `train_cmd.cpp`).
 pub(crate) struct Train;
 impl GroundVehicleType for Train {
-    const TRANSPORT: u8 = TRANSPORT_RAIL;
+    const TRANSPORT: TransportType = TransportType::TRANSPORT_RAIL;
     /// Allows to know the power value that this vehicle will use. Returns the power value from
     /// the engine in HP, or zero if the vehicle is not powered.
     #[inline]
@@ -352,13 +360,10 @@ impl GroundVehicleType for Train {
         clippy::cast_sign_loss,
         reason = "`uint16_t power = GetVehicleProperty(...)`"
     )]
-    fn get_power(s: &Services, v: VehicleRef, o: Owner) -> u16 {
+    fn get_power(s: &Services, w: &World<'_>, v: VehicleRef, o: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part()
-            && (s.powered)(
-                o.train.get_railtypes(),
-                s.get_rail_type(TileIndex(v.tile())),
-            )
+            && (s.powered)(o.train.get_railtypes(), RailType(w.rail_type(v.tile())))
         {
             let engine = (s.vehicle.engine)(v);
             let mut power = s.property(
@@ -377,13 +382,16 @@ impl GroundVehicleType for Train {
     /// Returns a value if this articulated part is powered: the power value from the
     /// articulated part in HP, or zero if it is not powered.
     #[inline]
-    fn get_powered_part_power(s: &Services, v: VehicleRef, o: Owner, head: Owner) -> u16 {
+    fn get_powered_part_power(
+        s: &Services,
+        w: &World<'_>,
+        v: VehicleRef,
+        o: Owner,
+        head: Owner,
+    ) -> u16 {
         /* For powered wagons the engine defines the type of engine (i.e. railtype) */
-        if o.train.get_flags() & crate::train::FLAG_POWERED_WAGON != 0
-            && (s.powered)(
-                head.train.get_railtypes(),
-                s.get_rail_type(TileIndex(v.tile())),
-            )
+        if o.train.flags().test(VehicleRailFlag::PoweredWagon)
+            && (s.powered)(head.train.get_railtypes(), RailType(w.rail_type(v.tile())))
         {
             return s.first_engine(o).wagon_power();
         }
@@ -408,7 +416,7 @@ impl GroundVehicleType for Train {
             ) as u16);
         }
         /* Powered wagons have extra weight added. */
-        if o.train.get_flags() & crate::train::FLAG_POWERED_WAGON != 0 {
+        if o.train.flags().test(VehicleRailFlag::PoweredWagon) {
             weight = weight.wrapping_add(u16::from(s.first_engine(o).wagon_weight()));
         }
         weight
@@ -433,7 +441,7 @@ impl GroundVehicleType for Train {
             ) as u16);
         }
         /* Powered wagons have extra weight added. */
-        if o.train.get_flags() & crate::train::FLAG_POWERED_WAGON != 0 {
+        if o.train.flags().test(VehicleRailFlag::PoweredWagon) {
             weight = weight.wrapping_add(u16::from(s.first_engine(o).wagon_weight()));
         }
         weight
@@ -462,7 +470,9 @@ impl GroundVehicleType for Train {
     #[inline]
     fn get_air_drag_area(v: VehicleRef, o: Owner) -> u8 {
         /* Air drag is higher in tunnels due to the limited cross-section. */
-        if o.train.track() == TRACK_BIT_WORMHOLE && VehStates(v.status()).test(VehState::Hidden) {
+        if TrackBits(o.train.track()) == TrackBits::TRACK_BIT_WORMHOLE
+            && VehStates(v.status()).test(VehState::Hidden)
+        {
             28
         } else {
             14
@@ -472,7 +482,10 @@ impl GroundVehicleType for Train {
     #[inline]
     fn get_acceleration_status(v: VehicleRef, o: Owner) -> AccelStatus {
         if VehStates(v.status()).test(VehState::Stopped)
-            || o.train.get_flags() & (crate::train::FLAG_REVERSING | crate::train::FLAG_STUCK) != 0
+            || o.train.flags().any(
+                VehicleRailFlags::from_element(VehicleRailFlag::Reversing)
+                    .with(VehicleRailFlags::from_element(VehicleRailFlag::Stuck)),
+            )
         {
             AccelStatus::AS_BRAKE
         } else {
@@ -494,8 +507,12 @@ impl GroundVehicleType for Train {
     }
     /// Allows to know the acceleration type of a vehicle.
     #[inline]
-    fn get_acceleration_type(s: &Services, v: VehicleRef) -> VehicleAccelerationModel {
-        VehicleAccelerationModel((s.rail_acceleration)(s.get_rail_type(TileIndex(v.tile()))))
+    fn get_acceleration_type(
+        s: &Services,
+        w: &World<'_>,
+        v: VehicleRef,
+    ) -> VehicleAccelerationModel {
+        VehicleAccelerationModel((s.rail_acceleration)(RailType(w.rail_type(v.tile()))))
     }
     /// Returns the slope steepness used by this vehicle.
     #[inline]
@@ -509,8 +526,8 @@ impl GroundVehicleType for Train {
     }
     /// Gets the maximum speed allowed by the track for this vehicle.
     #[inline]
-    fn get_max_track_speed(s: &Services, v: VehicleRef) -> u16 {
-        (s.rail_speed)(s.get_rail_type(TileIndex(v.tile())))
+    fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
+        (s.rail_speed)(RailType(w.rail_type(v.tile())))
     }
     /// Checks if the vehicle is at a tile that can be sloped.
     #[inline]
@@ -520,8 +537,8 @@ impl GroundVehicleType for Train {
         o: Owner,
     ) -> bool {
         /* Any track that isn't TRACK_BIT_X or TRACK_BIT_Y cannot be sloped. */
-        let track = o.train.track();
-        track == TRACK_BIT_X || track == TRACK_BIT_Y
+        let track = TrackBits(o.train.track());
+        track == TrackBits::TRACK_BIT_X || track == TrackBits::TRACK_BIT_Y
     }
     /// Trains can always use the faster algorithm because they have always the same direction
     /// as the track under them.
@@ -531,7 +548,7 @@ impl GroundVehicleType for Train {
     }
     #[inline]
     fn is_in_depot(o: Owner) -> bool {
-        o.train.track() == TRACK_BIT_DEPOT
+        TrackBits(o.train.track()) == TrackBits::TRACK_BIT_DEPOT
     }
 }
 
@@ -545,7 +562,7 @@ impl RoadVehicle {
     }
 }
 impl GroundVehicleType for RoadVehicle {
-    const TRANSPORT: u8 = TRANSPORT_ROAD;
+    const TRANSPORT: TransportType = TransportType::TRANSPORT_ROAD;
     /// Allows to know the power value that this vehicle will use. Returns the power value from
     /// the engine in HP, or zero if the vehicle is not powered.
     #[inline]
@@ -554,7 +571,7 @@ impl GroundVehicleType for RoadVehicle {
         clippy::cast_sign_loss,
         reason = "GetPower's uint16_t return of `10 * GetVehicleProperty(...)`"
     )]
-    fn get_power(s: &Services, v: VehicleRef, _: Owner) -> u16 {
+    fn get_power(s: &Services, _: &World<'_>, v: VehicleRef, _: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part() {
             let engine = (s.vehicle.engine)(v);
@@ -571,7 +588,13 @@ impl GroundVehicleType for RoadVehicle {
     }
     /// Returns zero, because road vehicles don't have powered parts.
     #[inline]
-    fn get_powered_part_power(_: &Services, _: VehicleRef, _: Owner, _: Owner) -> u16 {
+    fn get_powered_part_power(
+        _: &Services,
+        _: &World<'_>,
+        _: VehicleRef,
+        _: Owner,
+        _: Owner,
+    ) -> u16 {
         0
     }
     /// Allows to know the weight value that this vehicle will use, in tonnes.
@@ -677,7 +700,11 @@ impl GroundVehicleType for RoadVehicle {
     }
     /// Road vehicles always use a normal acceleration method.
     #[inline]
-    fn get_acceleration_type(_: &Services, _: VehicleRef) -> VehicleAccelerationModel {
+    fn get_acceleration_type(
+        _: &Services,
+        _: &World<'_>,
+        _: VehicleRef,
+    ) -> VehicleAccelerationModel {
         VehicleAccelerationModel::Normal
     }
     /// Returns the slope steepness used by this vehicle.
@@ -692,11 +719,10 @@ impl GroundVehicleType for RoadVehicle {
     }
     /// Gets the maximum speed allowed by the road type of the tile for this vehicle.
     #[inline]
-    fn get_max_track_speed(s: &Services, v: VehicleRef) -> u16 {
+    fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
         let rtt = crate::road::availability::get_road_tram_type(Self::roadtype(s, v));
         let tile = v.tile();
-        let world = crate::map_func::World::new(s.shared());
-        let roadtype = world.asserted(|m| crate::road_map::get_road_type(m, tile, rtt));
+        let roadtype = w.asserted(|m| crate::road_map::get_road_type(m, tile, rtt));
         (crate::movement::table(s.shared()).road_type_speed)(roadtype)
     }
     /// Checks if the vehicle is at a tile that can be sloped.
@@ -707,8 +733,8 @@ impl GroundVehicleType for RoadVehicle {
         _: Owner,
     ) -> bool {
         let ts = movement.get_road_vehicle_track_status(v, TileIndex(v.tile()));
-        let trackbits = track_status_to_track_bits(ts);
-        trackbits == TRACK_BIT_X || trackbits == TRACK_BIT_Y
+        let trackbits = TrackBits(track_status_to_track_bits(ts));
+        trackbits == TrackBits::TRACK_BIT_X || trackbits == TrackBits::TRACK_BIT_Y
     }
     /// Road vehicles have to use `GetSlopePixelZ()` to compute their height if they are
     /// reversing because in that case, their direction is not parallel with the road. It is
@@ -738,7 +764,8 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
     )]
     fn power_changed(s: &Services, v: VehicleRef, o: Owner) {
         s.assert(|| v.first() == v);
-        hit(if T::TRANSPORT == TRANSPORT_RAIL {
+        let w = World::new(s.shared());
+        hit(if T::TRANSPORT == TransportType::TRANSPORT_RAIL {
             witness::GROUND_RAIL_POWER
         } else {
             witness::GROUND_ROAD_POWER
@@ -752,8 +779,8 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         let mut part = Some(v);
         while let Some(u) = part {
             let uo = if u == v { o } else { Owner::of(u) };
-            let current_power = u32::from(T::get_power(s, u, uo))
-                + u32::from(T::get_powered_part_power(s, u, uo, uo));
+            let current_power = u32::from(T::get_power(s, &w, u, uo))
+                + u32::from(T::get_powered_part_power(s, &w, u, uo, uo));
             total_power = total_power.wrapping_add(current_power);
 
             /* Only powered parts add tractive effort. */
@@ -766,7 +793,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
             number_of_parts = number_of_parts.wrapping_add(1);
 
             /* Get minimum max speed for this track. */
-            let track_speed = T::get_max_track_speed(s, u);
+            let track_speed = T::get_max_track_speed(s, &w, u);
             if track_speed > 0 {
                 max_track_speed = max_track_speed.min(track_speed);
             }
@@ -839,7 +866,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
     )]
     fn cargo_changed(s: &Services, v: VehicleRef, o: Owner) {
         s.assert(|| v.first() == v);
-        hit(if T::TRANSPORT == TRANSPORT_RAIL {
+        hit(if T::TRANSPORT == TransportType::TRANSPORT_RAIL {
             witness::GROUND_RAIL_WEIGHT
         } else {
             witness::GROUND_ROAD_WEIGHT
@@ -885,6 +912,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         reason = "`const int max_te = this->gcache.cached_max_te`"
     )]
     fn get_acceleration(s: &Services, v: VehicleRef, o: Owner) -> i32 {
+        let w = World::new(s.shared());
         /* Speed is used squared later on, so U16 * U16, and then multiplied by other values. */
         let speed = i64::from(T::get_current_speed(v)); // [km/h-ish]
 
@@ -910,7 +938,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
          */
         let mut resistance = 0_i64;
 
-        let maglev = T::get_acceleration_type(s, v) == VehicleAccelerationModel::Maglev;
+        let maglev = T::get_acceleration_type(s, &w, v) == VehicleAccelerationModel::Maglev;
 
         let area = i64::from(T::get_air_drag_area(v, o));
         if !maglev {
@@ -984,8 +1012,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
     fn is_chain_in_depot(s: &Services, this: VehicleRef, o: Owner) -> bool {
         let v = this.first();
         /* Is the front engine stationary in the depot? */
-        if !crate::map_func::World::new(s.shared()).depot(v.tile(), T::TRANSPORT) || v.speed() != 0
-        {
+        if !World::new(s.shared()).depot(v.tile(), T::TRANSPORT.0) || v.speed() != 0 {
             return false;
         }
 
@@ -1356,7 +1383,8 @@ pub unsafe extern "C" fn openttd_rust_ground_acceleration_type(
     v: VehicleRef,
 ) -> u8 {
     // SAFETY: immutable native table lives for the synchronous entry.
-    Train::get_acceleration_type(unsafe { &*s }, v).0
+    let s = unsafe { &*s };
+    Train::get_acceleration_type(s, &World::new(s.shared()), v).0
 }
 
 crate::abi::layouts! {
@@ -1411,11 +1439,17 @@ mod tests {
     /// A part type with fixed per-type values, so the tests observe only the template.
     struct Fixed;
     impl GroundVehicleType for Fixed {
-        const TRANSPORT: u8 = TRANSPORT_ROAD;
-        fn get_power(_: &Services, _: VehicleRef, _: Owner) -> u16 {
+        const TRANSPORT: TransportType = TransportType::TRANSPORT_ROAD;
+        fn get_power(_: &Services, _: &World<'_>, _: VehicleRef, _: Owner) -> u16 {
             0
         }
-        fn get_powered_part_power(_: &Services, _: VehicleRef, _: Owner, _: Owner) -> u16 {
+        fn get_powered_part_power(
+            _: &Services,
+            _: &World<'_>,
+            _: VehicleRef,
+            _: Owner,
+            _: Owner,
+        ) -> u16 {
             0
         }
         fn get_weight(_: &Services, _: VehicleRef, _: Owner) -> u16 {
@@ -1443,7 +1477,11 @@ mod tests {
         fn get_rolling_friction(_: &Services, _: VehicleRef) -> u32 {
             unreachable!()
         }
-        fn get_acceleration_type(_: &Services, _: VehicleRef) -> VehicleAccelerationModel {
+        fn get_acceleration_type(
+            _: &Services,
+            _: &World<'_>,
+            _: VehicleRef,
+        ) -> VehicleAccelerationModel {
             unreachable!()
         }
         fn get_slope_steepness(_: &Services) -> u32 {
@@ -1452,7 +1490,7 @@ mod tests {
         fn get_display_max_speed(_: VehicleRef) -> i32 {
             unreachable!()
         }
-        fn get_max_track_speed(_: &Services, _: VehicleRef) -> u16 {
+        fn get_max_track_speed(_: &Services, _: &World<'_>, _: VehicleRef) -> u16 {
             0
         }
         fn tile_may_have_sloped_track(

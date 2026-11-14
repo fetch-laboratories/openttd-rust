@@ -156,7 +156,11 @@ impl Handle {
     }
 
     pub(crate) fn get_flags(self) -> u64 {
-        u64::from(read_field!(self.owner, flags).0)
+        u64::from(self.flags().0)
+    }
+    /// `Train::flags`.
+    pub(crate) fn flags(self) -> VehicleRailFlags {
+        read_field!(self.owner, flags)
     }
     pub(crate) fn set_flags(self, value: u64) {
         write_field!(self.owner, flags, VehicleRailFlags(value as u16));
@@ -231,10 +235,61 @@ impl Handle {
         self.set_flags(if value { old | mask } else { old & !mask });
     }
 }
+/// Native `VehicleRailFlag`: rail vehicle flags, as bit positions of `VehicleRailFlags`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VehicleRailFlag(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl VehicleRailFlag {
+    /// Train is slowing down to reverse.
+    pub const Reversing: Self = Self(0);
+    /// Wagon is powered.
+    pub const PoweredWagon: Self = Self(3);
+    /// Reverse the visible direction of the vehicle.
+    pub const Flipped: Self = Self(4);
+    /// Electric train engine is allowed to run on normal rail.
+    pub const AllowedOnNormalRail: Self = Self(6);
+    /// Used for vehicle var 0xFE bit 8 (toggled each time the train is reversed, accurate for
+    /// first vehicle only).
+    pub const Reversed: Self = Self(7);
+    /// Train can't get a path reservation.
+    pub const Stuck: Self = Self(8);
+    /// Train is just leaving a station.
+    pub const LeavingStation: Self = Self(9);
+}
+
 /// Native `VehicleRailFlags`: the `VehicleRailFlag` bit set, stored as `uint16_t`.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct VehicleRailFlags(pub u16);
+
+impl VehicleRailFlags {
+    /// Set containing the named element.
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "EnumBitSet<VehicleRailFlag, uint16_t> stores the element's bit in uint16_t"
+    )]
+    pub const fn from_element(element: VehicleRailFlag) -> Self {
+        Self((1_u64 << element.0) as u16)
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: VehicleRailFlag) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
+    /// Native `BaseBitSet::Any`: whether any element of `other` is set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+}
 
 /// Native `TrainForceProceeding`: Modes for ignoring signals.
 #[repr(transparent)]
@@ -1900,6 +1955,7 @@ impl Game<'_> {
                         let diff = (id).vehicle().direction().wrapping_sub(dir) & 7;
                         let small = if <crate::ground_vehicle::Train as crate::ground_vehicle::GroundVehicleType>::get_acceleration_type(
                             self.leaves.physics,
+                            &crate::map_func::World::new(self.services),
                             id.vehicle(),
                         ) == crate::engine_type::VehicleAccelerationModel::Maglev
                         {
@@ -3183,12 +3239,8 @@ crate::abi::layouts! {
         length,
     };
 }
-/// `VehicleRailFlag::PoweredWagon`, from `train.h`.
-pub(crate) const FLAG_POWERED_WAGON: u64 = 1 << 3;
-/// `VehicleRailFlag::Reversing`, from `train.h`.
-pub(crate) const FLAG_REVERSING: u64 = 1 << 0;
-/// `VehicleRailFlag::Stuck`, from `train.h`.
-pub(crate) const FLAG_STUCK: u64 = 1 << 8;
+/// Base mask of `VehicleRailFlag::Reversing`, for callers in files no pass has finished.
+pub(crate) const FLAG_REVERSING: u64 = 1 << VehicleRailFlag::Reversing.0;
 
 /// `GetTrainStopLocation`: the same owned stop-location callee for tile admission
 /// and train speed control. Returns the stop location, the station ahead and the
