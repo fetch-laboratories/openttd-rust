@@ -196,7 +196,12 @@ def boundary_ids(
     result: dict[str, set[str]] = {"exports": set(), "callback_slots": set()}
     for path, tree in trees.items():
         for node in nodes(tree):
-            collect_node(path, node, aliases, result, expanded=expanded, texts=texts)
+            for counter, key, text in collect_node(
+                path, node, aliases, expanded=expanded
+            ):
+                result[counter].add(key)
+                if texts is not None:
+                    texts[key] = text
     return result
 
 
@@ -214,34 +219,32 @@ def tuple_callbacks(node: Node, aliases: dict[str, list[Node]]) -> dict[str, str
 
 
 def collect_node(
-    path: str,
-    node: Node,
-    aliases: dict[str, list[Node]],
-    result: dict[str, set[str]],
-    *,
-    expanded: bool,
-    texts: dict[str, str] | None = None,
-) -> None:
-    found = {} if texts is None else texts
+    path: str, node: Node, aliases: dict[str, list[Node]], *, expanded: bool
+) -> list[tuple[str, str, str]]:
+    """The node's boundary identities: (counter, `path | identity`, declaration)."""
+    refuse_unclassified(path, node, expanded=expanded)
     if node.type == "function_item":
         name = export_name(node)
-        if name:
-            result["exports"].add(f"{path} | {name}")
-            found[f"{path} | {name}"] = node.text.decode()
-    elif node.type == "field_declaration" and callback(
+        return [("exports", f"{path} | {name}", node.text.decode())] if name else []
+    if node.type == "field_declaration" and callback(
         node.child_by_field_name("type"), aliases
     ):
         owner = qualified(node)
         if not owner:
             raise ValueError(f"unclassified callback field in {path}")
         field = node.child_by_field_name("name").text.decode()
-        result["callback_slots"].add(f"{path} | {owner}.{field}")
-        found[f"{path} | {owner}.{field}"] = node.text.decode()
-    elif node.type == "ordered_field_declaration_list":
-        for slot, text in tuple_callbacks(node, aliases).items():
-            result["callback_slots"].add(f"{path} | {slot}")
-            found[f"{path} | {slot}"] = text
-    elif node.type in ("macro_definition", "macro_invocation"):
+        return [("callback_slots", f"{path} | {owner}.{field}", node.text.decode())]
+    if node.type == "ordered_field_declaration_list":
+        return [
+            ("callback_slots", f"{path} | {slot}", text)
+            for slot, text in tuple_callbacks(node, aliases).items()
+        ]
+    return []
+
+
+def refuse_unclassified(path: str, node: Node, *, expanded: bool) -> None:
+    """Stop on a boundary this syntactic inventory cannot classify."""
+    if node.type in ("macro_definition", "macro_invocation"):
         if expanded and node.type == "macro_definition":
             return  # The compiler emitted each expansion separately.
         if re.search(rb'\b(?:no_mangle|export_name)\b|\bextern\s*"C"', node.text):

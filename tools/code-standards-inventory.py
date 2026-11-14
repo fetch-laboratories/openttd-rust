@@ -882,6 +882,34 @@ def unsuffixed_adapter(node: Node, data: bytes) -> str | None:
     return name if callee is not None and callee != name else None
 
 
+def function_rows(path: str, node: Node, data: bytes) -> list[Site]:
+    """An unsuffixed adapter or an integer flag set that a function item is."""
+    line = node.start_point[0] + 1
+    rows = []
+    if name := unsuffixed_adapter(node, data):
+        rows.append(Site(path, line, "unsuffixed adapter", name))
+    head = text(node, data).split("fn ", 1)[0]
+    name = text(node.child_by_field_name("name"), data)
+    returned = text(node.child_by_field_name("return_type"), data)
+    if "flags" in name and PRIMITIVE.fullmatch(returned) and 'extern "C"' not in head:
+        rows.append(Site(path, line, "integer flag set", name))
+    return rows
+
+
+def hand_built_bit(node: Node, data: bytes) -> bool:
+    """`1 << X.0` outside a set type's own `Self(1 << ...)` constructor."""
+    if not re.fullmatch(
+        r"1\w*\s*<<\s*\(?[\w.:]+\.0\)?(?:\s+as\s+\w+)?", text(node, data)
+    ):
+        return False
+    call = node.parent.parent if node.parent else None
+    return not (
+        call is not None
+        and call.type == "call_expression"
+        and text(call.child_by_field_name("function"), data) == "Self"
+    )
+
+
 def flag_rows(path: str, source: str) -> list[Site]:
     """Unsuffixed adapters, hand-built flag bits and integer flag sets of one file."""
     data = source.encode()
@@ -889,35 +917,16 @@ def flag_rows(path: str, source: str) -> list[Site]:
     for node in walk(PARSERS["rust"].parse(data).root_node):
         line = node.start_point[0] + 1
         if node.type == "function_item":
-            if in_test(node, data, path):
-                continue
-            if name := unsuffixed_adapter(node, data):
-                rows.append(Site(path, line, "unsuffixed adapter", name))
-            head = text(node, data).split("fn ", 1)[0]
-            name = text(node.child_by_field_name("name"), data)
-            returned = text(node.child_by_field_name("return_type"), data)
-            if (
-                "flags" in name
-                and PRIMITIVE.fullmatch(returned)
-                and 'extern "C"' not in head
-            ):
-                rows.append(Site(path, line, "integer flag set", name))
+            if not in_test(node, data, path):
+                rows += function_rows(path, node, data)
         elif node.type == "field_declaration":
             name = text(node.child_by_field_name("name"), data)
             kind = text(node.child_by_field_name("type"), data)
             if "flags" in name and PRIMITIVE.fullmatch(kind):
                 if not in_test(node, data, path):
                     rows.append(Site(path, line, "integer flag set", name))
-        elif node.type == "binary_expression" and re.fullmatch(
-            r"1\w*\s*<<\s*\(?[\w.:]+\.0\)?(?:\s+as\s+\w+)?", text(node, data)
-        ):
-            call = node.parent.parent if node.parent else None
-            own = (
-                call is not None
-                and call.type == "call_expression"
-                and text(call.child_by_field_name("function"), data) == "Self"
-            )
-            if not own and not in_test(node, data, path):
+        elif node.type == "binary_expression" and hand_built_bit(node, data):
+            if not in_test(node, data, path):
                 rows.append(Site(path, line, "hand-built flag bit", text(node, data)))
     return rows
 
@@ -939,6 +948,39 @@ def print_residue(rust: dict[str, str], paths: set[str]) -> None:
                 print(
                     f"{site.path}:{site.line}: {site.kind}: {site.detail}", flush=True
                 )
+
+
+def show_row(site: Site, prefix: str = "") -> None:
+    print(f"{site.path}:{site.line}: {prefix}{site.kind}: {site.detail}", flush=True)
+
+
+def file_rows(
+    rust: dict[str, str], paths: list[str], tests: set[str], shown: bool
+) -> tuple[list[Site], list[Site]]:
+    """The type sites and long functions of paths, printing every row when shown.
+
+    Each row prints as soon as it is found, cheapest first and before the slow
+    comment pairing: a run a harness yields to the background has shown its rows.
+    """
+    sites, long = [], []
+    for path in paths:
+        found = sorted(type_sites(path, rust[path]), key=lambda s: s.line)
+        sites += found
+        for site in found if shown else []:
+            if site.kind in ("bare integer", "literal"):
+                show_row(site)
+    for path in paths:
+        if path in tests:
+            continue
+        found = long_functions(path, rust[path])
+        long += found
+        for site in found if shown else []:
+            show_row(site, "long ")
+    if shown:
+        print_residue(rust, set(paths) - tests)
+        for site in candidate_rows(rust, set(paths) - tests, tests):
+            show_row(site)
+    return sites, long
 
 
 def main() -> int:
@@ -968,35 +1010,9 @@ def main() -> int:
     unknown = selected - set(rust)
     if unknown:
         sys.exit(f"not a Rust source at {args.head}: {', '.join(sorted(unknown))}")
-    # With files, each row prints as soon as it is found, cheapest first: a run
-    # that a harness yields to the background has already shown its rows.
-    sites = []
-    for path, source in sorted(rust.items()):
-        if selected and path not in selected:
-            continue
-        found = sorted(type_sites(path, source), key=lambda s: s.line)
-        sites += found
-        for site in found if selected else []:
-            if site.kind in ("bare integer", "literal"):
-                print(
-                    f"{site.path}:{site.line}: {site.kind}: {site.detail}", flush=True
-                )
+    measured = [path for path in sorted(rust) if not selected or path in selected]
     tests = test_modules(rust)
-    long = []
-    for path, source in sorted(rust.items()):
-        if (selected and path not in selected) or path in tests:
-            continue
-        for site in long_functions(path, source):
-            long.append(site)
-            if selected:
-                print(
-                    f"{site.path}:{site.line}: long {site.kind}: {site.detail}",
-                    flush=True,
-                )
-    if selected:
-        print_residue(rust, selected - tests)
-        for site in candidate_rows(rust, selected - tests, tests):
-            print(f"{site.path}:{site.line}: {site.kind}: {site.detail}", flush=True)
+    sites, long = file_rows(rust, measured, tests, bool(selected))
     pairs = [
         (r, o)
         for r, o in comment_pairs(args.head)

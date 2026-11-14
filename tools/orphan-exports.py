@@ -176,6 +176,45 @@ def free_uses(sources: dict[str, str], names: set[str]) -> dict[str, set[str]]:
     return used
 
 
+def production_cpp(path: str) -> bool:
+    """A C++ source under src/ that is not a test."""
+    return (
+        path.startswith("src/")
+        and not path.startswith("src/tests/")
+        and not path.endswith((".ini", ".py"))
+    )
+
+
+def free_function_sites(sources: dict[str, str]) -> dict[str, str]:
+    """Each free function src/ defines, with its first definition's `path:line`."""
+    defined: dict[str, str] = {}
+    for path, source in sources.items():
+        if not production_cpp(path) or path.startswith(NO_FREE_DEFINITIONS):
+            continue
+        for name, start, _, _ in free_definitions(source):
+            line = source.count("\n", 0, start) + 1
+            defined.setdefault(name, f"{path}:{line}")
+    return defined
+
+
+def exports_held_by(sources: dict[str, str], uncalled: set[str]) -> dict[str, set[str]]:
+    """Exports whose production references all sit inside the uncalled functions."""
+    held: dict[str, set[str]] = {}
+    before, after = set(), set()
+    for path, source in sources.items():
+        if not production_cpp(path):
+            continue
+        source = DECLARATION.sub("", source)
+        before.update(re.findall(NAME, source))
+        for name, start, _, end in reversed(free_definitions(source)):
+            if name in uncalled:
+                for export in re.findall(NAME, source[start:end]):
+                    held.setdefault(export, set()).add(name)
+                source = source[:start] + " " * (end - start) + source[end:]
+        after.update(re.findall(NAME, source))
+    return {name: held[name] for name in before - after if name in held}
+
+
 def uncalled_free_functions(
     files: dict[str, str],
 ) -> tuple[dict[str, str], dict[str, str], dict[str, set[str]]]:
@@ -198,14 +237,7 @@ def uncalled_free_functions(
         and Path(path).suffix in {".cpp", ".h", ".hpp", ".inc", ".ini", ".py"}
         and not path.startswith("src/3rdparty/")
     }
-    defined: dict[str, str] = {}
-    for path, source in sources.items():
-        if path.startswith("src/") and not path.startswith(NO_FREE_DEFINITIONS):
-            if path.endswith((".ini", ".py")):
-                continue
-            for name, start, _, _ in free_definitions(source):
-                line = source.count("\n", 0, start) + 1
-                defined.setdefault(name, f"{path}:{line}")
+    defined = free_function_sites(sources)
     used = free_uses(sources, set(defined))
     production = {
         name
@@ -218,22 +250,7 @@ def uncalled_free_functions(
         for name, where in defined.items()
         if name in used and name not in production
     }
-    held: dict[str, set[str]] = {}
-    before, after = set(), set()
-    for path, source in sources.items():
-        if not path.startswith("src/") or path.startswith("src/tests/"):
-            continue
-        if path.endswith((".ini", ".py")):
-            continue
-        source = DECLARATION.sub("", source)
-        before.update(re.findall(NAME, source))
-        for name, start, _, end in reversed(free_definitions(source)):
-            if name in uncalled:
-                for export in re.findall(NAME, source[start:end]):
-                    held.setdefault(export, set()).add(name)
-                source = source[:start] + " " * (end - start) + source[end:]
-        after.update(re.findall(NAME, source))
-    exports = {name: held[name] for name in before - after if name in held}
+    exports = exports_held_by(sources, set(uncalled))
     return uncalled, test_only, exports
 
 
