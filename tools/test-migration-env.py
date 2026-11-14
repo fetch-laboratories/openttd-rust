@@ -174,6 +174,94 @@ class MigrationEnvTests(unittest.TestCase):
         self.assertIn("--disable-new-dtags", options["CMAKE_EXE_LINKER_FLAGS"])
 
 
+class LinkLocalTests(unittest.TestCase):
+    """A worktree without its `.local` link gets one from the machine's hook."""
+
+    def setUp(self) -> None:
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.main = Path(scratch.name).resolve() / "main"
+        self.calls = Path(scratch.name).resolve() / "calls"
+        env = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+
+        def git(*args: str, cwd: Path = self.main) -> None:
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@example.invalid",
+                    *args,
+                ],
+                cwd=cwd,
+                env=os.environ | env,
+                check=True,
+                capture_output=True,
+            )
+
+        self.main.mkdir()
+        git("init", "-q")
+        git("commit", "-q", "--allow-empty", "-m", "Add: Seed")
+        self.worktree = self.main.parent / "worktree"
+        git("worktree", "add", "-q", "--detach", str(self.worktree))
+        self.script = self.main / ".git/hooks/offload-local"
+        self.script.parent.mkdir(exist_ok=True)
+        self.stand_in("os.symlink(os.environ['TARGET'], '.local')\n")
+        self.target = self.main.parent / "hdd"
+        self.target.mkdir()
+
+    def stand_in(self, body: str) -> None:
+        """An offload-local that records each call, its cwd and argv, then runs body."""
+        self.script.write_text(
+            "import os, sys\n"
+            f"open({str(self.calls)!r}, 'a').write(os.getcwd() + ' ' + ' '.join(sys.argv[1:]) + '\\n')\n"
+            + body
+        )
+
+    def link(self, root: Path) -> str:
+        stderr = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"TARGET": str(self.target)}),
+            contextlib.redirect_stderr(stderr),
+        ):
+            migration.link_local(root)
+        return stderr.getvalue()
+
+    def called(self) -> list[str]:
+        return self.calls.read_text().splitlines() if self.calls.exists() else []
+
+    def test_a_missing_link_is_made_once(self) -> None:
+        output = self.link(self.worktree)
+        self.assertEqual(self.called(), [f"{self.worktree} hook"])
+        self.assertEqual(Path(os.readlink(self.worktree / ".local")), self.target)
+        self.assertIn("linked", output)
+        self.link(self.worktree)
+        self.assertEqual(len(self.called()), 1)
+
+    def test_an_existing_local_and_the_main_checkout_are_left_alone(self) -> None:
+        (self.worktree / ".local").mkdir()
+        self.link(self.worktree)
+        self.link(self.main)
+        (self.worktree / ".local").rmdir()
+        (self.worktree / ".local").symlink_to(self.main.parent / "unmounted")
+        self.link(self.worktree)
+        self.assertEqual(self.called(), [])
+        self.assertFalse((self.main / ".local").exists())
+
+    def test_a_failing_hook_prints_one_line_and_continues(self) -> None:
+        self.stand_in("sys.exit(3)\n")
+        output = self.link(self.worktree)
+        self.assertEqual(len(output.splitlines()), 1)
+        self.assertIn("could not link", output)
+        self.assertFalse((self.worktree / ".local").is_symlink())
+
+    def test_no_hook_script_does_nothing(self) -> None:
+        self.script.unlink()
+        self.assertEqual(self.link(self.worktree), "")
+        self.assertFalse(os.path.lexists(self.worktree / ".local"))
+
+
 class Replaced(Exception):
     """Raised by a stubbed os.execvpe in place of replacing the test process."""
 

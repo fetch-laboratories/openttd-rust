@@ -321,6 +321,7 @@ def fast(options: argparse.Namespace) -> int:
     if options.list:
         print("\n".join(step.name for step in steps))
         return 0
+    migration.link_local()
     logs = migration.LOCAL / "preflight" / time.strftime("fast-%Y%m%d-%H%M%S")
     logs.mkdir(parents=True, exist_ok=True)
     env = environment()
@@ -358,6 +359,7 @@ def main() -> int:
             steps.insert(0, commit_step(base, head, hooks))
         if warning := uncommitted():
             print(warning, flush=True)
+        migration.link_local()
         logs = migration.LOCAL / "preflight" / time.strftime("%Y%m%d-%H%M%S")
         logs.mkdir(parents=True, exist_ok=True)
         env = environment()
