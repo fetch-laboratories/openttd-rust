@@ -38,12 +38,24 @@
   {
     "kind": "suppression",
     "tool": "rust",
-    "site": "rust/openttd-kernels/src/news_func.rs | mod testing | allow unsafe_code",
+    "site": "rust/openttd-kernels/src/news_func.rs | mod testing > fn copied | allow unsafe_code",
     "before": 0,
     "after": 1,
-    "operation": "news_func::testing",
+    "operation": "news_func::testing::copied",
     "source_contract": "The recording news and event tables of the Rust tests receive the records production code passes to the native services.",
-    "reason": "The recording services read the borrowed headline bytes and records through their raw pointers, as the native services do.",
+    "reason": "The recording services copy the headline bytes, records and descriptors production code passes them through raw pointers, as the native services read them; this one helper is the only place they dereference.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native news, strings and script event bodies these tables call are ported (phases 3 to 5) and the tables are removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/news_func.rs | mod testing > fn take | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "news_func::testing::take",
+    "source_contract": "The recording news and event tables of the Rust tests receive the records production code passes to the native services.",
+    "reason": "Binding the recording tables calls the two unsafe binding exports with process-lifetime statics, once for the test process.",
     "retiring_owner": "#734",
     "retirement_condition": "When the native news, strings and script event bodies these tables call are ported (phases 3 to 5) and the tables are removed."
   },

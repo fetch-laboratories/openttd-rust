@@ -21,6 +21,7 @@ const ASSERTION_ENCODED_PREFIX: u8 = 2;
 
 /// Tagged scalar/borrowed-byte descriptor; never a C++ variant layout.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Descriptor {
     /// Numeric bits, used only for tag 1.
     pub value: u64,

@@ -62,6 +62,7 @@ crate::abi::layouts! {
 crate::abi::shared_records! {
     fn abi_record;
     /// The parameters of `AddNewsItem`, in the original's order.
+    #[derive(Clone, Copy)]
     "OpenTTDAddNewsItemArgs" ["news"] => pub struct AddNewsItemArgs {
         /// The encoded headline's bytes, borrowed for the call.
         pub headline: *const u8,
@@ -269,10 +270,6 @@ pub(crate) fn delete_industry_news(iid: IndustryID) {
 
 /// Recording news, string and script event tables shared by the tests of every caller.
 #[cfg(test)]
-#[allow(
-    unsafe_code,
-    reason = "the recording services read the records Rust passes them"
-)]
 pub(crate) mod testing {
     use super::{AddNewsItemArgs, Services, Sink};
     use crate::encoded::Descriptor;
@@ -314,6 +311,14 @@ pub(crate) mod testing {
     thread_local! {
         static EFFECTS: RefCell<Vec<Effect>> = const { RefCell::new(Vec::new()) };
     }
+    /// The `len` values at `p`, which the code under test passes for this call.
+    #[allow(
+        unsafe_code,
+        reason = "the recording services copy the records Rust passes them"
+    )]
+    fn copied<T: Clone>(p: *const T, len: usize) -> Vec<T> {
+        unsafe { std::slice::from_raw_parts(p, len) }.to_vec()
+    }
     fn push(effect: Effect) {
         EFFECTS.with(|e| e.borrow_mut().push(effect));
     }
@@ -347,10 +352,11 @@ pub(crate) mod testing {
         }
     }
     extern "C" fn add_news_item(args: *const AddNewsItemArgs) {
-        let a = unsafe { &*args };
-        let data = (!a.data.is_null()).then(|| unsafe { (*a.data.cast::<Vec<u8>>()).clone() });
+        let a = copied(args, 1).remove(0);
+        let data =
+            (!a.data.is_null()).then(|| copied(a.data.cast::<Vec<u8>>().cast_const(), 1).remove(0));
         push(Effect::News {
-            headline: unsafe { std::slice::from_raw_parts(a.headline, a.headline_length) }.to_vec(),
+            headline: copied(a.headline, a.headline_length),
             r#type: a.r#type,
             style: a.style,
             flags: a.flags,
@@ -368,7 +374,7 @@ pub(crate) mod testing {
         sink: Sink,
         target: *mut c_void,
     ) {
-        let name = unsafe { &*data.cast::<Vec<u8>>() };
+        let name = copied(data.cast::<Vec<u8>>(), 1).remove(0);
         sink(target, name.as_ptr(), name.len());
     }
     extern "C" fn company_news_information(
@@ -395,7 +401,7 @@ pub(crate) mod testing {
         sink: Sink,
         target: *mut c_void,
     ) {
-        let params: Vec<u64> = unsafe { std::slice::from_raw_parts(args, count) }
+        let params: Vec<u64> = copied(args, count)
             .iter()
             .map(|d| {
                 assert_eq!(
@@ -421,13 +427,16 @@ pub(crate) mod testing {
         string_assertions: 1,
     };
     extern "C" fn ai_broadcast(event: *const ScriptEvent, skip_company: u8) {
-        push(Effect::AiBroadcastNewEvent(unsafe { *event }, skip_company));
+        push(Effect::AiBroadcastNewEvent(
+            copied(event, 1)[0],
+            skip_company,
+        ));
     }
     extern "C" fn ai_new(company: u8, event: *const ScriptEvent) {
-        push(Effect::AiNewEvent(company, unsafe { *event }));
+        push(Effect::AiNewEvent(company, copied(event, 1)[0]));
     }
     extern "C" fn game_new(event: *const ScriptEvent) {
-        push(Effect::GameNewEvent(unsafe { *event }));
+        push(Effect::GameNewEvent(copied(event, 1)[0]));
     }
     static EVENTS: crate::script_event::Services = crate::script_event::Services {
         ai_broadcast,
@@ -437,6 +446,7 @@ pub(crate) mod testing {
 
     /// Bind the recording tables once for the process; return and clear this thread's
     /// recorded effects.
+    #[allow(unsafe_code, reason = "binding the recording tables for the process")]
     pub(crate) fn take() -> Vec<Effect> {
         static BIND: Once = Once::new();
         BIND.call_once(|| unsafe {
