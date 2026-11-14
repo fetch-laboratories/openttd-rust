@@ -16,6 +16,8 @@ struct OpenTTDTownStationCursor { BaseStation *shell; uint32_t next; };
  * no owner borrow crosses commands, storage destruction, news or event enqueue.
  * post_destruct runs after pool removal and never reacquires the old town ID.
  * Save/load decoding stays native and commits partially decoded encoded text. */
+struct OpenTTDClockServices;
+struct OpenTTDTownCommandStrings { uint32_t company_name, exclusive_rights_description_minutes, exclusive_rights_description_months, exclusive_rights_title, road_rebuilding_minutes, road_rebuilding_months; };
 struct OpenTTDTownCommandServices {
 	const OpenTTDTownFoundingServices *founding;
 	const OpenTTDRailMapServices *rail;
@@ -28,10 +30,8 @@ struct OpenTTDTownCommandServices {
 	bool (*bribe)() noexcept OPENTTD_SERVICE_DEFAULT(bribe);
 	void (*invalidate_view)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_view);
 	void (*invalidate_authority)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_authority);
-	void (*road_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_news);
-	void (*road_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_events);
-	void (*rights_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rights_news);
-	void (*rights_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rights_events);
+	const OpenTTDClockServices *clock;
+	OpenTTDTownCommandStrings strings;
 	void (*station_views_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(station_views_dirty);
 	OpenTTDTownStationCursor (*next_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
 	const OpenTTDTownHandle *(*station_town)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);

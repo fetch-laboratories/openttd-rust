@@ -7,12 +7,17 @@ use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, OWNER_NONE};
 use crate::economy_type::PR_TOWN_ACTION;
 use crate::movement::native_assert;
+use crate::news_func::{AddNewsItemArgs, add_news_item};
+use crate::news_type::{CompanyNewsInformation, NewsFlags, NewsReference, NewsStyle, NewsType};
 use crate::objects::{Object, ObjectServices, QueryServices};
+use crate::script_event_types::ScriptEvent;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Map, Services, TownHandle};
 use crate::slope_func::is_steep_slope;
 use crate::station::BaseStation;
 use crate::station::Station;
-use crate::strings_type::INVALID_STRING_ID;
+use crate::strings_func::{get_encoded_string, get_string};
+use crate::strings_type::StringParameterData::{self, Integer};
+use crate::strings_type::{INVALID_STRING_ID, StringID};
 use crate::tile_type::{TileIndex, TileType};
 use crate::town_type::{
     RATING_BRIBE_DOWN_TO, RATING_BRIBE_MAXIMUM, RATING_BRIBE_UP_STEP, RATING_MAXIMUM,
@@ -30,6 +35,22 @@ pub struct StationCursor {
     pub shell: *mut BaseStation,
     pub next: u32,
 }
+/// The generated string IDs of the town action news.
+#[repr(C)]
+pub struct Strings {
+    /// `STR_COMPANY_NAME`.
+    pub company_name: u32,
+    /// `STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES`.
+    pub exclusive_rights_description_minutes: u32,
+    /// `STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS`.
+    pub exclusive_rights_description_months: u32,
+    /// `STR_NEWS_EXCLUSIVE_RIGHTS_TITLE`.
+    pub exclusive_rights_title: u32,
+    /// `STR_NEWS_ROAD_REBUILDING_MINUTES`.
+    pub road_rebuilding_minutes: u32,
+    /// `STR_NEWS_ROAD_REBUILDING_MONTHS`.
+    pub road_rebuilding_months: u32,
+}
 #[repr(C)]
 pub struct CommandServices {
     pub founding: *const FoundingServices,
@@ -43,10 +64,8 @@ pub struct CommandServices {
     pub bribe: extern "C" fn() -> bool,
     pub invalidate_view: extern "C" fn(u16),
     pub invalidate_authority: extern "C" fn(u16),
-    pub road_news: extern "C" fn(u16),
-    pub road_events: extern "C" fn(u16),
-    pub rights_news: extern "C" fn(u16),
-    pub rights_events: extern "C" fn(u16),
+    pub clock: *const crate::timer_game_common::ClockServices,
+    pub strings: Strings,
     pub station_views_dirty: extern "C" fn(),
     pub next_station: extern "C" fn(u32) -> StationCursor,
     pub station_town: extern "C" fn(*mut BaseStation) -> *const TownHandle,
@@ -85,6 +104,11 @@ struct Commands<'a> {
     world: OnceCell<crate::map_func::World<'a>>,
 }
 impl<'a> Commands<'a> {
+    /// `TimerGameEconomy::UsingWallclockUnits()`.
+    fn using_wallclock_units(&self) -> bool {
+        // SAFETY: The clock table is immutable for the process lifetime.
+        (unsafe { &*self.s.clock }.using_wallclock_units)(false)
+    }
     unsafe fn new(s: &'a CommandServices) -> Self {
         // SAFETY: Immutable tables live for the complete synchronous call.
         let f = unsafe { &*s.founding };
@@ -1035,8 +1059,38 @@ impl Commands<'_> {
                     unsafe {
                         (*t.state).growth.road = 6;
                     }
-                    (self.s.road_news)(t.id.0);
-                    (self.s.road_events)(t.id.0);
+
+                    let current = CompanyID((self.shared.current_company)());
+                    let company_name = get_string(
+                        StringID(self.s.strings.company_name),
+                        [Integer(u64::from(current.0))],
+                    );
+
+                    let headline = get_encoded_string(
+                        StringID(if self.using_wallclock_units() {
+                            self.s.strings.road_rebuilding_minutes
+                        } else {
+                            self.s.strings.road_rebuilding_months
+                        }),
+                        &[
+                            Integer(u64::from(t.id.0)),
+                            StringParameterData::String(&company_name),
+                        ],
+                    );
+                    add_news_item(&AddNewsItemArgs {
+                        ref1: NewsReference::Town(t.id).record(),
+                        ..AddNewsItemArgs::new(
+                            &headline,
+                            NewsType::General,
+                            NewsStyle::Normal,
+                            NewsFlags::default(),
+                        )
+                    });
+                    crate::ai::broadcast_new_event(
+                        &ScriptEvent::road_reconstruction(current, t.id),
+                        CompanyID::INVALID,
+                    );
+                    crate::game::new_event(&ScriptEvent::road_reconstruction(current, t.id));
                 }
             }
             TownAction::BuildStatue => {
@@ -1078,9 +1132,40 @@ impl Commands<'_> {
                         17,
                     );
                     (self.s.station_views_dirty)();
-                    // Spawn news message.
-                    (self.s.rights_news)(t.id.0);
-                    (self.s.rights_events)(t.id.0);
+                    /* Spawn news message */
+                    let current = CompanyID((self.shared.current_company)());
+                    let cni = CompanyNewsInformation::new(
+                        StringID(self.s.strings.exclusive_rights_title),
+                        current,
+                        None,
+                    );
+                    let company_name = cni.company_name();
+                    let message = get_encoded_string(
+                        StringID(if self.using_wallclock_units() {
+                            self.s.strings.exclusive_rights_description_minutes
+                        } else {
+                            self.s.strings.exclusive_rights_description_months
+                        }),
+                        &[
+                            Integer(u64::from(t.id.0)),
+                            StringParameterData::String(&company_name),
+                        ],
+                    );
+                    add_news_item(&AddNewsItemArgs {
+                        ref1: NewsReference::Town(t.id).record(),
+                        data: cni.into_data(),
+                        ..AddNewsItemArgs::new(
+                            &message,
+                            NewsType::General,
+                            NewsStyle::Company,
+                            NewsFlags::default(),
+                        )
+                    });
+                    crate::ai::broadcast_new_event(
+                        &ScriptEvent::exclusive_transport_rights(current, t.id),
+                        CompanyID::INVALID,
+                    );
+                    crate::game::new_event(&ScriptEvent::exclusive_transport_rights(current, t.id));
                 }
             }
             TownAction::Bribe => {
@@ -1215,6 +1300,7 @@ crate::abi::layouts! {
         next,
         town,
     };
+    "OpenTTDTownCommandStrings" ["probe"] => Strings { company_name, exclusive_rights_description_minutes, exclusive_rights_description_months, exclusive_rights_title, road_rebuilding_minutes, road_rebuilding_months, };
     "OpenTTDTownCommandServices" ["probe"] => crate::town::commands::CommandServices {
         founding,
         rail,
@@ -1227,10 +1313,8 @@ crate::abi::layouts! {
         bribe,
         invalidate_view,
         invalidate_authority,
-        road_news,
-        road_events,
-        rights_news,
-        rights_events,
+        clock,
+        strings,
         station_views_dirty,
         next_station,
         station_town,

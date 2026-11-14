@@ -30,6 +30,7 @@ struct OpenTTDTownFoundingFrame {
 /** Strong native IDs cross only as their documented wire representations:
  * TileIndex uint32_t, TownID uint16_t, CompanyID uint8_t. Native wrappers
  * explicitly construct IDs and expose .base(); enums retain their native type. */
+struct OpenTTDTownFoundingStrings { uint32_t company_name, new_town, new_town_unsponsored; };
 struct OpenTTDTownFoundingServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDTownLeaves *growth;
@@ -63,8 +64,7 @@ struct OpenTTDTownFoundingServices {
 	void (*money_deficit)(OpenTTDTownFoundingFrame *, const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(money_deficit);
 	void (*set_result)(OpenTTDTownFoundingFrame *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_result);
 	bool (*exchange_generating)(bool) noexcept OPENTTD_SERVICE_DEFAULT(exchange_generating);
-	void (*founded_news)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(founded_news);
-	void (*founded_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(founded_events);
+	OpenTTDTownFoundingStrings strings;
 	void (*clear_station_names)() noexcept OPENTTD_SERVICE_DEFAULT(clear_station_names);
 	void (*clear_industry_names)() noexcept OPENTTD_SERVICE_DEFAULT(clear_industry_names);
 	void (*update_station_coords)() noexcept OPENTTD_SERVICE_DEFAULT(update_station_coords);

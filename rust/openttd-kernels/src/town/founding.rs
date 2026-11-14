@@ -33,11 +33,28 @@ macro_rules! observed {
 }
 pub(super) use observed;
 
+use crate::news_func::add_tile_news_item;
+use crate::news_type::NewsType;
+use crate::script_event_types::ScriptEvent;
+use crate::station_type::StationID;
+use crate::strings_func::{get_encoded_string, get_string};
+use crate::strings_type::StringID;
+use crate::strings_type::StringParameterData::{self, Integer};
 pub use crate::tile_type::TileIndex as Tile;
 pub use crate::town_type::{TownFounding, TownLayout, TownSize};
 #[repr(C)]
 pub struct Frame {
     _private: [u8; 0],
+}
+/// The generated string IDs of the town founding news.
+#[repr(C)]
+pub struct FoundingStrings {
+    /// `STR_COMPANY_NAME`.
+    pub company_name: u32,
+    /// `STR_NEWS_NEW_TOWN`.
+    pub new_town: u32,
+    /// `STR_NEWS_NEW_TOWN_UNSPONSORED`.
+    pub new_town_unsponsored: u32,
 }
 #[repr(C)]
 pub struct FoundingServices {
@@ -73,8 +90,7 @@ pub struct FoundingServices {
     pub money_deficit: extern "C" fn(*mut Frame, *const CommandCost),
     pub set_result: extern "C" fn(*mut Frame, TownId),
     pub exchange_generating: extern "C" fn(bool) -> bool,
-    pub founded_news: extern "C" fn(TownId, Tile),
-    pub founded_events: extern "C" fn(TownId),
+    pub strings: FoundingStrings,
     pub clear_station_names: extern "C" fn(),
     pub clear_industry_names: extern "C" fn(),
     pub update_station_coords: extern "C" fn(),
@@ -746,8 +762,41 @@ pub(crate) unsafe fn cmd_found_town(
             let world = crate::map_func::World::new(f.shared);
             world.assert_with(|| !random_location);
 
-            observed!((f.s.founded_news)(town.id, tile));
-            observed!((f.s.founded_events)(town.id));
+            let current = CompanyID(observed!((f.shared.current_company)()));
+            let strings = &f.s.strings;
+            if current == CompanyID::DEITY {
+                observed!(add_tile_news_item(
+                    &get_encoded_string(
+                        StringID(strings.new_town_unsponsored),
+                        &[Integer(u64::from(town.id.0))],
+                    ),
+                    NewsType::IndustryOpen,
+                    tile,
+                    StationID::INVALID,
+                ));
+            } else {
+                let company_name = observed!(get_string(
+                    StringID(strings.company_name),
+                    [Integer(u64::from(current.0))],
+                ));
+                observed!(add_tile_news_item(
+                    &get_encoded_string(
+                        StringID(strings.new_town),
+                        &[
+                            StringParameterData::String(&company_name),
+                            Integer(u64::from(town.id.0)),
+                        ],
+                    ),
+                    NewsType::IndustryOpen,
+                    tile,
+                    StationID::INVALID,
+                ));
+            }
+            observed!(crate::ai::broadcast_new_event(
+                &ScriptEvent::town_founded(town.id),
+                CompanyID::INVALID,
+            ));
+            observed!(crate::game::new_event(&ScriptEvent::town_founded(town.id)));
         }
     }
 }
@@ -960,6 +1009,7 @@ pub(crate) unsafe fn cmd_rename_town(
 
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDTownFoundingStrings" ["probe"] => FoundingStrings { company_name, new_town, new_town_unsponsored, };
     "OpenTTDTownFoundingServices" ["probe"] => FoundingServices {
         shared,
         growth,
@@ -993,8 +1043,7 @@ crate::abi::layouts! {
         money_deficit,
         set_result,
         exchange_generating,
-        founded_news,
-        founded_events,
+        strings,
         clear_station_names,
         clear_industry_names,
         update_station_coords,

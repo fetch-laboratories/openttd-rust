@@ -617,16 +617,7 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.money_deficit = [](OpenTTDTownFoundingFrame *frame, const OpenTTDCommandCost *cost) noexcept { frame->extra_money = reinterpret_cast<const CommandCost *>(cost)->GetCost(); },
 		.set_result = [](OpenTTDTownFoundingFrame *frame, uint16_t id) noexcept { frame->town_id = TownID(id); },
 		.exchange_generating = OpenTTDExchangeGeneratingWorld,
-		.founded_news = [](uint16_t value, uint32_t position) noexcept {
-			TownID id(value); TileIndex tile(position);
-			if (_current_company == OWNER_DEITY) {
-				AddTileNewsItem(GetEncodedString(STR_NEWS_NEW_TOWN_UNSPONSORED, id), NewsType::IndustryOpen, tile);
-			} else {
-				std::string company_name = GetString(STR_COMPANY_NAME, _current_company);
-				AddTileNewsItem(GetEncodedString(STR_NEWS_NEW_TOWN, company_name, id), NewsType::IndustryOpen, tile);
-			}
-		},
-		.founded_events = [](uint16_t value) noexcept { TownID id(value); AI::BroadcastNewEvent(new ScriptEventTownFounded(id)); Game::NewEvent(new ScriptEventTownFounded(id)); },
+		.strings = {.company_name = STR_COMPANY_NAME, .new_town = STR_NEWS_NEW_TOWN, .new_town_unsponsored = STR_NEWS_NEW_TOWN_UNSPONSORED},
 		.clear_station_names = []() noexcept { ClearAllStationCachedNames(); },
 		.clear_industry_names = []() noexcept { ClearAllIndustryCachedNames(); },
 		.update_station_coords = []() noexcept { UpdateAllStationVirtCoords(); },
@@ -748,17 +739,9 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.bribe = OpenTTDBribe,
 		.invalidate_view = OpenTTDInvalidateTownView,
 		.invalidate_authority = [](uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_AUTHORITY, TownID(town)); },
-		.road_news = [](uint16_t id) noexcept {
-			std::string company_name = GetString(STR_COMPANY_NAME, _current_company);
-			AddNewsItem(GetEncodedString(TimerGameEconomy::UsingWallclockUnits() ? STR_NEWS_ROAD_REBUILDING_MINUTES : STR_NEWS_ROAD_REBUILDING_MONTHS, TownID(id), company_name), NewsType::General, NewsStyle::Normal, {}, TownID(id));
-		},
-		.road_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventRoadReconstruction(_current_company, TownID(id))); Game::NewEvent(new ScriptEventRoadReconstruction(_current_company, TownID(id))); },
-		.rights_news = [](uint16_t id) noexcept {
-			auto cni = std::make_unique<CompanyNewsInformation>(STR_NEWS_EXCLUSIVE_RIGHTS_TITLE, Company::Get(_current_company));
-			EncodedString message = GetEncodedString(TimerGameEconomy::UsingWallclockUnits() ? STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES : STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS, TownID(id), cni->company_name);
-			AddNewsItem(std::move(message), NewsType::General, NewsStyle::Company, {}, TownID(id), {}, std::move(cni));
-		},
-		.rights_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); Game::NewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); },
+		.clock = &GetRustClockServices(),
+		.strings = {.company_name = STR_COMPANY_NAME, .exclusive_rights_description_minutes = STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES, .exclusive_rights_description_months = STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS,
+			.exclusive_rights_title = STR_NEWS_EXCLUSIVE_RIGHTS_TITLE, .road_rebuilding_minutes = STR_NEWS_ROAD_REBUILDING_MINUTES, .road_rebuilding_months = STR_NEWS_ROAD_REBUILDING_MONTHS},
 		.station_views_dirty = []() noexcept { SetWindowClassesDirty(WC_STATION_VIEW); },
 		.next_station = [](uint32_t from) noexcept -> OpenTTDTownStationCursor { if (Station *st = OpenTTDNextStation(from)) return {.shell = st, .next = RustBaseStationID(st) + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
 		.station_town = RustStationStationTown,
