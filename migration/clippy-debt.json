@@ -456,11 +456,6 @@
     "rust/openttd-kernels/src/settings_table.rs | fn default_service_interval | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/spiral.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1,
-      1
-    ],
     "rust/openttd-kernels/src/station.rs | fn tile_catchment_radius::mod ified_catchment ) | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],

@@ -949,8 +949,9 @@ pub(crate) fn choose_ship_track(
             clippy::cast_possible_wrap,
             reason = "the original's static_cast<int> of the path's size"
         )]
+        // The original's `>= NUMBER_OR_WATER_REGIONS_LOOKAHEAD + 1`.
         let is_intermediate_destination =
-            high_level_path.len() as i32 >= NUMBER_OR_WATER_REGIONS_LOOKAHEAD + 1;
+            high_level_path.len() as i32 > NUMBER_OR_WATER_REGIONS_LOOKAHEAD;
         if is_intermediate_destination {
             pf.set_intermediate_destination(high_level_path[high_level_path.len() - 1]);
         }
@@ -1130,10 +1131,11 @@ pub(crate) fn yapf_ship_choose_track(
         path_cache,
         &mut best_origin_dir,
     );
-    if td_ret != Trackdir::INVALID_TRACKDIR {
-        Track(trackdir_to_track(td_ret.0))
-    } else {
+    // The original's `(td_ret != INVALID_TRACKDIR) ? TrackdirToTrack(td_ret) : INVALID_TRACK`.
+    if td_ret == Trackdir::INVALID_TRACKDIR {
         Track::INVALID_TRACK
+    } else {
+        Track(trackdir_to_track(td_ret.0))
     }
 }
 
