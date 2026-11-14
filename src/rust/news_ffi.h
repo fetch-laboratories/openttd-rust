@@ -15,8 +15,10 @@
 #include "encoded_ffi.h"
 #include "service_defaults.hpp"
 
-/** The parameters one string can consume: strgen's ParsedCommandStruct::consuming_commands. */
-static constexpr size_t OPENTTD_RUST_STRING_PARAMETERS = 32;
+/** Storage for one StringParameter, constructed in place on the Rust caller's stack. */
+struct OpenTTDStringParameterSlot {
+	alignas(8) uint8_t bytes[64];
+};
 /** Receives the bytes of a native string during the call that produced it. */
 using OpenTTDRustStringSink = void (*)(void *target, const uint8_t *bytes, size_t length) noexcept;
 
@@ -28,7 +30,7 @@ struct OpenTTDNewsServices {
 	void (*delete_industry_news)(uint16_t industry) noexcept OPENTTD_SERVICE_DEFAULT(delete_industry_news);
 	void (*delete_station_news)(uint16_t station) noexcept OPENTTD_SERVICE_DEFAULT(delete_station_news);
 	void (*delete_vehicle_news)(uint32_t vehicle, uint8_t advice_type) noexcept OPENTTD_SERVICE_DEFAULT(delete_vehicle_news);
-	void (*get_string)(uint32_t string, const OpenTTDRustEncodedParameter *args, size_t count, OpenTTDRustStringSink sink, void *target) noexcept OPENTTD_SERVICE_DEFAULT(get_string);
+	void (*get_string)(uint32_t string, const OpenTTDRustEncodedParameter *args, OpenTTDStringParameterSlot *slots, size_t count, OpenTTDRustStringSink sink, void *target) noexcept OPENTTD_SERVICE_DEFAULT(get_string);
 	uint8_t string_assertions;
 };
 extern "C" void openttd_rust_news_bind(const OpenTTDNewsServices *services);

@@ -34,10 +34,6 @@ pub(crate) fn get_encoded_string(
     EncodedString::from_encoded(result.into_bytes())
 }
 
-/// The parameters one string can consume (strgen's `ParsedCommandStruct::consuming_commands`),
-/// the capacity of `GetString`'s native parameter storage (`OPENTTD_RUST_STRING_PARAMETERS`).
-const STRING_PARAMETERS: usize = 32;
-
 #[allow(
     unsafe_code,
     reason = "the sink reads the native string's bytes during its call"
@@ -52,20 +48,40 @@ extern "C" fn append(target: *mut c_void, bytes: *const u8, length: usize) {
     }
 }
 
+/// Storage for one native `StringParameter`, which `GetString`'s native service constructs in
+/// place and destroys before it returns; `services.cpp` checks that one fits.
+#[repr(C, align(8))]
+pub struct StringParameterSlot {
+    bytes: [std::mem::MaybeUninit<u8>; 64],
+}
+impl StringParameterSlot {
+    const UNINIT: Self = Self {
+        bytes: [std::mem::MaybeUninit::uninit(); 64],
+    };
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDStringParameterSlot" ["news"] => StringParameterSlot {
+        bytes,
+    };
+}
+
 /// `GetString(string, args...)`: get a parsed string with most special stringcodes replaced
 /// by the string parameters.
 pub(crate) fn get_string<const N: usize>(
     string: StringID,
     args: [StringParameterData<'_>; N],
 ) -> Vec<u8> {
-    // The native service holds the parameters in local storage of this capacity.
-    const { assert!(N <= STRING_PARAMETERS) };
     let descriptors = args.map(descriptor);
+    // The native parameters live on this stack, as `MakeParameters` builds its array.
+    let mut slots = [const { StringParameterSlot::UNINIT }; N];
     let mut result = Vec::new();
     (services().get_string)(
         string.0,
         descriptors.as_ptr(),
-        descriptors.len(),
+        slots.as_mut_ptr(),
+        N,
         append,
         (&raw mut result).cast(),
     );

@@ -49,7 +49,14 @@ pub struct Services {
     /// `DeleteVehicleNews`.
     pub delete_vehicle_news: extern "C" fn(u32, u8),
     /// `GetStringWithArgs`, sinking the result.
-    pub get_string: extern "C" fn(u32, *const Descriptor, usize, Sink, *mut c_void),
+    pub get_string: extern "C" fn(
+        u32,
+        *const Descriptor,
+        *mut crate::strings_func::StringParameterSlot,
+        usize,
+        Sink,
+        *mut c_void,
+    ),
     /// One when the native build defines `WITH_ASSERT`.
     pub string_assertions: u8,
 }
@@ -142,7 +149,14 @@ extern "C" fn unbound_delete_id(_: u16) {
 extern "C" fn unbound_delete_vehicle_news(_: u32, _: u8) {
     std::process::abort()
 }
-extern "C" fn unbound_get_string(_: u32, _: *const Descriptor, _: usize, _: Sink, _: *mut c_void) {
+extern "C" fn unbound_get_string(
+    _: u32,
+    _: *const Descriptor,
+    _: *mut crate::strings_func::StringParameterSlot,
+    _: usize,
+    _: Sink,
+    _: *mut c_void,
+) {
     std::process::abort()
 }
 /// Services before the native table binds; each call aborts.
@@ -407,6 +421,7 @@ pub(crate) mod testing {
     extern "C" fn get_string(
         string: u32,
         args: *const Descriptor,
+        _: *mut crate::strings_func::StringParameterSlot,
         count: usize,
         sink: Sink,
         target: *mut c_void,

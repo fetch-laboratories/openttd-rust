@@ -867,6 +867,7 @@ static NewsReference RustNewsReference(const OpenTTDNewsReference &reference) no
 	}
 }
 
+static_assert(sizeof(StringParameter) <= sizeof(OpenTTDStringParameterSlot) && alignof(StringParameter) <= alignof(OpenTTDStringParameterSlot));
 /** The string parameter a Rust descriptor borrows. */
 static StringParameter RustStringParameter(const OpenTTDRustEncodedParameter &parameter) noexcept
 {
@@ -896,11 +897,12 @@ static const OpenTTDNewsServices _rust_news_services{
 	.delete_industry_news = [](uint16_t industry) noexcept { DeleteIndustryNews(IndustryID{industry}); },
 	.delete_station_news = [](uint16_t station) noexcept { DeleteStationNews(StationID{station}); },
 	.delete_vehicle_news = [](uint32_t vehicle, uint8_t advice_type) noexcept { DeleteVehicleNews(VehicleID{vehicle}, static_cast<AdviceType>(advice_type)); },
-	.get_string = [](uint32_t string, const OpenTTDRustEncodedParameter *args, size_t count, OpenTTDRustStringSink sink, void *target) noexcept {
-		/* Local storage as MakeParameters' array; Rust bounds count by OPENTTD_RUST_STRING_PARAMETERS. */
-		std::array<StringParameter, OPENTTD_RUST_STRING_PARAMETERS> params{};
-		for (size_t i = 0; i < count; ++i) params[i] = RustStringParameter(args[i]);
-		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, std::span(params).first(count)));
+	.get_string = [](uint32_t string, const OpenTTDRustEncodedParameter *args, OpenTTDStringParameterSlot *slots, size_t count, OpenTTDRustStringSink sink, void *target) noexcept {
+		/* The parameters live in the caller's stack slots, as MakeParameters builds its array. */
+		for (size_t i = 0; i < count; ++i) new (reinterpret_cast<StringParameter *>(slots) + i) StringParameter(RustStringParameter(args[i]));
+		StringParameter *params = std::launder(reinterpret_cast<StringParameter *>(slots));
+		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, {params, count}));
+		std::destroy_n(params, count);
 	},
 	.string_assertions = RUST_ENCODED_STRING_ASSERTIONS,
 };
