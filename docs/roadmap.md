@@ -8,7 +8,7 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 Measured at merge 59 (`f24c05dbe9`); the other column is merge 47 (`6d8a24a401`), the stocktake before it. A routine agent took the census, the inventories and the instruction profile. Root finished its half on 2026-11-14; its counts are in root's status comment on #3. The next stocktake follows merge 71 and the next platform cadence merge 62.
 
-- Fork C++ fell by 787 lines: 376 compiled, 361 under `tools/` and 50 generated. The cleanup stage retires almost no original C++, so that share moved only from 21.94% to 21.96%. Rust grew by 6,172 lines and tooling fell by 444.
+- Fork C++ fell by 787 lines: 376 compiled, 361 under `tools/` and 50 generated. The cleanup stage retires almost no original C++, so that share moved only from 21.88% to 21.90%. Rust grew by 6,172 lines and tooling fell by 444.
 - #734 has 133 of 319 files finished, holding 92,475 lines. That is 48.5% of the 190,751-line denominator; the workset's files have grown to 198,098 lines, of which it is 46.7%. Seven more finished files, 612 lines, are in no workset.
 - The boundary shrank: 1,501 exports and 3,178 callback slots, 5 and 27 fewer.
 - #735 is at 118 functions over seven parameters; 69 are FFI exports, which keep positional lists while their C++ callers remain.
@@ -20,18 +20,18 @@ Measured at merge 59 (`f24c05dbe9`); the other column is merge 47 (`6d8a24a401`)
 - The platform cadence passed at merges 52 and 57 (runs 43350842579 and 43362926059).
 - No rollback has happened since merge 32, and no confirmed base regression is open. Full phase-3 planning is not triggered, and near-full reproduction is not met.
 
-Reproduce the census with `python3 tools/port-metrics.py --whole-fork` (metric v2).
+Reproduce the census with `python3 tools/port-metrics.py --whole-fork`. Both columns are recounted with metric version 3 (#978, merged in #981), which diffs against the pin with git's minimal algorithm; only the retired, remaining and glue rows moved.
 
 | Measured quantity | Merge 47 | Merge 59 |
 | --- | ---: | ---: |
-| Original C++ remaining | 221,955 | 221,908 |
-| Fork source glue, including generated records | 32,915 | 32,586 |
+| Original C++ remaining | 222,134 | 222,084 |
+| Fork source glue, including generated records | 32,736 | 32,410 |
 | Compiled source and generated records C++ | 254,870 | 254,494 |
 | Tracked tools C++ evidence | 14,855 | 14,494 |
 | ABI-generated non-record C++ evidence | 5,353 | 5,303 |
 | Measured fork C++ series | 275,078 | 274,291 |
-| Original C++ retired, of 284,355 | 62,400 (21.94%) | 62,447 (21.96%) |
-| Simulation C++ retired, of 61,148 | 41,233 (67.43%) | 41,279 (67.51%) |
+| Original C++ retired, of 284,355 | 62,221 (21.88%) | 62,271 (21.90%) |
+| Simulation C++ retired, of 61,148 | 41,054 (67.14%) | 41,103 (67.22%) |
 | Historical regex exports / callback slots | 1,506 / 3,205 | 1,501 / 3,178 |
 | Shared-accessor / rebound-callee / orphan-export baseline rows | 47 / 244 / 27 | 47 / 244 / 26 |
 | Exports held only by uncalled members (baseline only shrinks) | 22 | 20 |
@@ -40,7 +40,7 @@ Reproduce the census with `python3 tools/port-metrics.py --whole-fork` (metric v
 
 | Source area / phase relationship (merge 59) | Original | Retired | Remaining | Fork glue |
 | --- | ---: | ---: | ---: | ---: |
-| Simulation logic (phase 1) | 47,424 | 38,037 | 9,387 | 5,766 |
+| Simulation logic (phase 1) | 47,424 | 37,861 | 9,563 | 5,590 |
 | Simulation storage (phase 2) | 13,724 | 3,242 | 10,482 | 1,384 |
 | NewGRF, save/load, script API and network (phase 3) | 51,794 | 13,075 | 38,719 | 3,350 |
 | Support, graphics and viewport (phase 4) | 32,602 | 980 | 31,622 | 548 |
@@ -108,11 +108,11 @@ Agent: /root (Claude Code navigation) | Model: claude-fable-5-2 | Reasoning effo
 
 Phase numbers name content; the execution order sets the sequence. Phase 1 (simulation logic) exited at integration 63.
 
-Position at merge 59 (`f24c05dbe9`), 2026-11-13. Counts are code lines from `python3 tools/port-metrics.py --whole-fork` (metric version 2): comments, blanks and preprocessor lines are excluded, and the scope is `src/` plus generated records for all platforms, not one executable. Parentheses compare the last navigation, `78553df0a1` (integration 146), recounted with the same metric; the recount matches its published figures. Areas are accounting buckets; the last column names what removes each.
+Position at merge 59 (`f24c05dbe9`), 2026-11-13. Counts are code lines from `python3 tools/port-metrics.py --whole-fork` (metric version 3, recounted at both endpoints after #978 merged): comments, blanks and preprocessor lines are excluded, and the scope is `src/` plus generated records for all platforms, not one executable. Parentheses compare the last navigation, `78553df0a1` (integration 146), recounted with the same metric; the recount matches its published figures. Areas are accounting buckets; the last column names what removes each.
 
 | Area | Original | Retired (change) | Remaining (change) | Fork glue (change) | Compiled C++ (change) | Removed by |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Simulation logic | 47,424 | 38,037 (−292) | 9,387 (+292) | 5,766 (−692) | 15,153 (−400) | Phase 1 has exited; its residue goes with its consumers: drawing functions in phase 5, startup (`openttd.cpp`) in phase 4, facades and other bodies with their phase-2 owners |
+| Simulation logic | 47,424 | 37,861 (+123) | 9,563 (−123) | 5,590 (−277) | 15,153 (−400) | Phase 1 has exited; its residue goes with its consumers: drawing functions in phase 5, startup (`openttd.cpp`) in phase 4, facades and other bodies with their phase-2 owners |
 | Simulation storage | 13,724 | 3,242 (+30) | 10,482 (−30) | 1,384 (−3) | 11,866 (−33) | Phase 2 |
 | Save/load | 13,388 | 1,435 (0) | 11,953 (0) | 1,070 (0) | 13,023 (0) | Phase 3, except about 4,300 lines of pool and map chunks and their compat tables, which go with phase 2 |
 | Script API | 14,908 | 2,406 (0) | 12,502 (0) | 750 (0) | 13,252 (0) | Phase 3; VM and binding shims in phase 6 |
@@ -126,12 +126,12 @@ Position at merge 59 (`f24c05dbe9`), 2026-11-13. Counts are code lines from `pyt
 | Vendored | 55,148 | 2,317 (0) | 52,831 (0) | 0 (0) | 52,831 (0) | Phase 6 |
 | Upstream tests and fork test glue | 2,248 | 14 (0) | 2,234 (0) | 4,770 (−509) | 7,004 (−509) | Fork tests with the pools and readers they reach ([ADR 0023](adr/0023-cpp-tests-stay-until-code-is-ported.md)). Upstream tests go with the code they test; Catch2 goes when the last C++ test leaves |
 | Boundary layer | 0 | 0 (0) | 0 (0) | 16,289 (−470) | 16,289 (−470) | Each side's owner; the final exit |
-| **Source total** | **284,355** | **62,447 (21.96%, −254)** | **221,908 (+254)** | **32,586 (−1,687)** | **254,494 (−1,433)** | |
+| **Source total** | **284,355** | **62,271 (21.90%, +161)** | **222,084 (−161)** | **32,410 (−1,272)** | **254,494 (−1,433)** | |
 | C++ under `tools/` | | | | 14,494 (−1,148) | 14,494 (−1,148) | With the pools, readers and boundaries each file reaches (#736's classification) |
 | ABI-generated non-record C++ | | | | 5,303 (−172) | 5,303 (−172) | With the records and layouts it checks |
 | **Fork C++ census** | | | | | **274,291 (−2,753)** | |
 
-Inventory correction, apart from retirement: no original C++ came back. Version 2 diffs each file against the pin with git's default algorithm, whose alignment shifts when a heavily edited file changes, so it overstates retired and glue by the same amount: 591 lines at the last navigation and 176 now (#978). Under a minimal diff, retired is 62,271 now against 62,110 then, a change of +161 where version 2 shows −254. Compiled C++ and the census are the same under both; read those for distance until #978 lands.
+Inventory correction, apart from retirement: no original C++ came back. Version 2 diffed each file against the pin with git's default algorithm, whose alignment shifts when a heavily edited file changes, so it overstated retired and glue by the same amount: 591 lines at the last navigation and 176 at merge 59, and it showed retirement of −254 over a period in which it was +161. Version 3 uses the minimal diff, and the table above is recounted with it; compiled C++ and the census are the same under both. The rates table below still holds version 2's retired figures at endpoints not recounted, and the next navigation recounts it.
 
 Of the 19,797 evidence lines, 18,154 are candidate or shared, none is reference-only and 1,643 are unresolved, which the census counts as candidate. Outside the census are 836 raw lines of C++ in `COMMAND_SOURCE` (`tools/simulation/stations.py`) and 302 lines of oracle recipes, which compile only against the pinned original. The boundary has 1,501 exports (−38) and 3,178 callback slots (−154). Rust has 190,296 code lines (−1,603) and tooling 73,533 (+11,637).
 
@@ -149,7 +149,7 @@ Rates use commit timestamps between code endpoints, in calendar days. The days i
 | **Whole history** | **41.29** | **+62,447** | **1,512** | **−10,064** | **−244** |
 
 What set the rate:
-- The cleanup stage retires no original C++ by design ([ADR 0004](adr/0004-cleanup-before-porting.md)); the movement in that column is the diff noise of #978. Ownership ports retired 1,250 to 2,160 original lines a day before it. At that pace the 221,908 lines left are about 150 days of porting, with no measured pace yet for the GUI, platform or vendored code.
+- The cleanup stage retires no original C++ by design ([ADR 0004](adr/0004-cleanup-before-porting.md)); the movement in that column is the diff noise of #978. Ownership ports retired 1,250 to 2,160 original lines a day before it. At that pace the 222,084 lines left are about 150 days of porting, with no measured pace yet for the GUI, platform or vendored code.
 - #734 finished 92 files and 60,395 lines since the stocktake at integration 143, just before the last navigation: about 15,000 lines a day. 105,623 lines remain at the files' current sizes, about seven more days at that pace, before closure and #893.
 - The census fell at half the previous navigation's pace. Between steerings 34 and 35, 8 of the 17 merges in root's session were tools or CI changes and tooling grew by 8,314 lines; steering 35 moved that work to one batch per stocktake interval, and the 12 merges after it cut the census at 1,967 lines a day.
 
