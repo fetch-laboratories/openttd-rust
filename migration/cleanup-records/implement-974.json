@@ -54,7 +54,7 @@
       "rust/expanded.rs | openttd_rust_news_bind": 1,
       "rust/expanded.rs | openttd_rust_script_event_bind": 1
     },
-    "reason": "The two process-wide binding entries of the shared news and script event tables, called once from services.cpp. They replace 28 per-message service fields.",
+    "reason": "The two process-wide binding entries of the shared news and script event tables, called once from services.cpp. They replace 28 per-message service fields. The 28 leaves removed pay for shared bodies that the 46 remaining news and event leaves reuse with no further C++, so each later conversion is a net deletion: one converted leaf removes about 5.9 code lines (body, *_ffi.h line, initializer, test stub) and adds one string-ID mirror field and one initializer line per message it formats.",
     "existing_alternatives": "A pointer to each table in every component table: two C++ lines per table per component in 25 files (plan decision 9).",
     "retiring_owner": "#734",
     "retirement_condition": "When the native news, strings and script event bodies are ported and the tables are removed."
@@ -98,5 +98,16 @@
     "existing_alternatives": "None in this PR; root records the pairing defect for the next tools batch.",
     "retiring_owner": "#734",
     "retirement_condition": "When the water-region tests retire with their native code."
+  },
+  {
+    "kind": "growth",
+    "counter": "tools_cpp",
+    "added": {
+      "tools/migration/aircraft-range.cpp": 8
+    },
+    "reason": "aircraft-range.cpp binds the two process-wide news and script event tables in place of the two deleted aircraft leaves, as the plan's Files section requires, one field per line as Code standards require.",
+    "existing_alternatives": "None; the fixture's message counters must observe the shared services.",
+    "retiring_owner": "#656",
+    "retirement_condition": "When the aircraft range fixture retires."
   }
 ]
