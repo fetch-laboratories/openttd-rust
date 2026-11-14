@@ -35,6 +35,7 @@ crate::abi::shared_records! {
     fn abi_record;
     /// One `ScriptEvent` to construct natively: its type and the constructor arguments of
     /// its class, as base integers. Fields the class does not take are zero.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     "OpenTTDScriptEvent" ["script_event"] => pub struct ScriptEvent {
         /// `ScriptEvent::GetEventType`.
         pub r#type: ScriptEventType,

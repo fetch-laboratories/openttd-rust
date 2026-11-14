@@ -882,3 +882,155 @@ crate::abi::layouts! {
         assert_destination,
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Services, Source, Strings, SubsidyID};
+    use crate::cargo_type::CargoType;
+    use crate::company_type::CompanyID;
+    use crate::news_func::testing::{Effect, Param, encoded, formatted, take};
+    use crate::news_type::{AdviceType, NewsFlags, NewsReference, NewsStyle, NewsType};
+    use crate::script_event_types::ScriptEvent;
+    use crate::source_type::FormatStrings;
+    use crate::test_tables::{unreachable0, unreachable1, unreachable2};
+    use std::ptr;
+
+    extern "C" fn cargo_name(cargo: u8) -> u32 {
+        0x300 + u32::from(cargo)
+    }
+    extern "C" fn allocate(_: u8, _: Source, _: Source, _: u16) -> u16 {
+        41
+    }
+    extern "C" fn ignore_flag(_: Source, _: crate::subsidy_type::PartOfSubsidy) {}
+    extern "C" fn nothing() {}
+    extern "C" fn duration() -> u16 {
+        2
+    }
+    extern "C" fn multiplier() -> u8 {
+        3
+    }
+    fn services() -> Services {
+        let shared = Box::leak(Box::new(crate::services::Services {
+            cargo_name,
+            ..crate::test_tables::SHARED
+        }));
+        Services {
+            shared,
+            town: ptr::null(),
+            industry: ptr::null(),
+            industry_owner: unreachable1,
+            industry_id: unreachable1,
+            next_industry: unreachable1,
+            has_source_flag: unreachable2,
+            set_source_flag: ignore_flag,
+            clear_source_flags: unreachable1,
+            valid_source: unreachable1,
+            can_allocate: unreachable0,
+            allocate,
+            destroy: unreachable1,
+            duration,
+            multiplier,
+            cargo_valid: unreachable1,
+            manual: unreachable1,
+            manual_pax: unreachable0,
+            any_manual: unreachable0,
+            strings: Strings {
+                company_name: 0x10,
+                offer_of_subsidy_expired: 0x20,
+                service_subsidy_awarded_half: 0x30,
+                service_subsidy_offered: 0x40,
+                source: FormatStrings {
+                    industry_name: 0x50,
+                    town_name: 0x60,
+                },
+                subsidy_withdrawn_service: 0x70,
+            },
+            dirty: nothing,
+            station: unreachable1,
+            assert_destination: unreachable1,
+        }
+    }
+    fn subsidy_news(headline: Vec<u8>) -> Effect {
+        Effect::News {
+            headline,
+            r#type: NewsType::Subsidies,
+            style: NewsStyle::Normal,
+            flags: NewsFlags::default(),
+            ref1: NewsReference::Industry(crate::industry_type::IndustryID(8)),
+            ref2: NewsReference::Town(crate::town_type::TownId(9)),
+            data: None,
+            advice_type: AdviceType::Invalid,
+        }
+    }
+    /// `CreateSubsidy`: `STR_NEWS_SERVICE_SUBSIDY_OFFERED` with the cargo name, both sources'
+    /// formats and IDs and the subsidy duration, then the offer events.
+    #[test]
+    fn create_subsidy_offers_the_original_news_and_events() {
+        let s = services();
+        take();
+        s.create_subsidy(CargoType(4), Source::industry(8), Source::town(9));
+        let offer = ScriptEvent::subsidy_offer(SubsidyID(41));
+        assert_eq!(
+            take(),
+            [
+                subsidy_news(encoded(
+                    0x40,
+                    &[
+                        Param::N(0x304),
+                        Param::N(0x50),
+                        Param::N(8),
+                        Param::N(0x60),
+                        Param::N(9),
+                        Param::N(2)
+                    ]
+                )),
+                Effect::AiBroadcastNewEvent(offer, CompanyID::INVALID.0),
+                Effect::GameNewEvent(offer),
+            ]
+        );
+    }
+
+    /// `Subsidy::AwardTo`: the company name, then
+    /// `STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF + subsidy_multiplier` with it before the route
+    /// parameters and the duration, then the award events.
+    #[test]
+    fn award_to_announces_the_original_news_and_events() {
+        let s = services();
+        let id = SubsidyID(42);
+        let state = super::openttd_rust_subsidy_new(id.0);
+        unsafe {
+            (*state).cargo_type = CargoType(5);
+            (*state).src = Source::industry(8);
+            (*state).dst = Source::town(9);
+        }
+        take();
+        s.award_to(id, CompanyID(2));
+        let name = formatted(0x10, &[2]);
+        let awarded = ScriptEvent::subsidy_awarded(id);
+        assert_eq!(
+            take(),
+            [
+                Effect::GetString(0x10, vec![2]),
+                subsidy_news(encoded(
+                    0x33,
+                    &[
+                        Param::S(&name),
+                        Param::N(0x305),
+                        Param::N(0x50),
+                        Param::N(8),
+                        Param::N(0x60),
+                        Param::N(9),
+                        Param::N(2),
+                    ]
+                )),
+                Effect::AiBroadcastNewEvent(awarded, CompanyID::INVALID.0),
+                Effect::GameNewEvent(awarded),
+            ]
+        );
+        assert_eq!(
+            unsafe { ((*state).awarded, (*state).remaining) },
+            (CompanyID(2), 24)
+        );
+        unsafe { super::openttd_rust_subsidy_destroy(id.0, state) };
+    }
+}

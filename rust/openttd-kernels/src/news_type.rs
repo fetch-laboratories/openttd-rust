@@ -156,6 +156,7 @@ pub enum NewsReference {
 crate::abi::shared_records! {
     fn abi_record;
     /// A `NewsReference`: the variant's index and its value as the base integer.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     "OpenTTDNewsReference" ["news"] => pub struct NewsReferenceRecord {
         /// The alternative's base integer; zero for `std::monostate`.
         pub value: u32,
