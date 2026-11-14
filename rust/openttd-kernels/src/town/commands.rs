@@ -95,6 +95,77 @@ pub struct CommandServices {
     pub too_many_objects: u32,
     pub no_statue_place: u32,
 }
+/// `TownActionRoadRebuild`'s news and script events for `current`'s road works in `town`;
+/// `minutes` is `TimerGameEconomy::UsingWallclockUnits()`.
+fn town_action_road_rebuild_news(
+    strings: &Strings,
+    minutes: bool,
+    current: CompanyID,
+    town: TownId,
+) {
+    let company_name = get_string(
+        StringID(strings.company_name),
+        [Integer(u64::from(current.0))],
+    );
+
+    let headline = get_encoded_string(
+        StringID(if minutes {
+            strings.road_rebuilding_minutes
+        } else {
+            strings.road_rebuilding_months
+        }),
+        &[
+            Integer(u64::from(town.0)),
+            StringParameterData::String(&company_name),
+        ],
+    );
+    add_news_item(&AddNewsItemArgs {
+        ref1: NewsReference::Town(town).record(),
+        ..AddNewsItemArgs::new(
+            &headline,
+            NewsType::General,
+            NewsStyle::Normal,
+            NewsFlags::default(),
+        )
+    });
+    crate::ai::broadcast_new_event(
+        &ScriptEvent::road_reconstruction(current, town),
+        CompanyID::INVALID,
+    );
+    crate::game::new_event(&ScriptEvent::road_reconstruction(current, town));
+}
+/// `TownActionBuyRights`' news message and script events for `current`'s rights in `town`;
+/// `minutes` is `TimerGameEconomy::UsingWallclockUnits()`.
+fn town_action_buy_rights_news(strings: &Strings, minutes: bool, current: CompanyID, town: TownId) {
+    let cni = CompanyNewsInformation::new(StringID(strings.exclusive_rights_title), current, None);
+    let company_name = cni.company_name();
+    let message = get_encoded_string(
+        StringID(if minutes {
+            strings.exclusive_rights_description_minutes
+        } else {
+            strings.exclusive_rights_description_months
+        }),
+        &[
+            Integer(u64::from(town.0)),
+            StringParameterData::String(&company_name),
+        ],
+    );
+    add_news_item(&AddNewsItemArgs {
+        ref1: NewsReference::Town(town).record(),
+        data: cni.into_data(),
+        ..AddNewsItemArgs::new(
+            &message,
+            NewsType::General,
+            NewsStyle::Company,
+            NewsFlags::default(),
+        )
+    });
+    crate::ai::broadcast_new_event(
+        &ScriptEvent::exclusive_transport_rights(current, town),
+        CompanyID::INVALID,
+    );
+    crate::game::new_event(&ScriptEvent::exclusive_transport_rights(current, town));
+}
 struct Commands<'a> {
     s: &'a CommandServices,
     f: &'a FoundingServices,
@@ -1060,37 +1131,12 @@ impl Commands<'_> {
                         (*t.state).growth.road = 6;
                     }
 
-                    let current = CompanyID((self.shared.current_company)());
-                    let company_name = get_string(
-                        StringID(self.s.strings.company_name),
-                        [Integer(u64::from(current.0))],
+                    town_action_road_rebuild_news(
+                        &self.s.strings,
+                        self.using_wallclock_units(),
+                        CompanyID((self.shared.current_company)()),
+                        t.id,
                     );
-
-                    let headline = get_encoded_string(
-                        StringID(if self.using_wallclock_units() {
-                            self.s.strings.road_rebuilding_minutes
-                        } else {
-                            self.s.strings.road_rebuilding_months
-                        }),
-                        &[
-                            Integer(u64::from(t.id.0)),
-                            StringParameterData::String(&company_name),
-                        ],
-                    );
-                    add_news_item(&AddNewsItemArgs {
-                        ref1: NewsReference::Town(t.id).record(),
-                        ..AddNewsItemArgs::new(
-                            &headline,
-                            NewsType::General,
-                            NewsStyle::Normal,
-                            NewsFlags::default(),
-                        )
-                    });
-                    crate::ai::broadcast_new_event(
-                        &ScriptEvent::road_reconstruction(current, t.id),
-                        CompanyID::INVALID,
-                    );
-                    crate::game::new_event(&ScriptEvent::road_reconstruction(current, t.id));
                 }
             }
             TownAction::BuildStatue => {
@@ -1133,39 +1179,12 @@ impl Commands<'_> {
                     );
                     (self.s.station_views_dirty)();
                     /* Spawn news message */
-                    let current = CompanyID((self.shared.current_company)());
-                    let cni = CompanyNewsInformation::new(
-                        StringID(self.s.strings.exclusive_rights_title),
-                        current,
-                        None,
+                    town_action_buy_rights_news(
+                        &self.s.strings,
+                        self.using_wallclock_units(),
+                        CompanyID((self.shared.current_company)()),
+                        t.id,
                     );
-                    let company_name = cni.company_name();
-                    let message = get_encoded_string(
-                        StringID(if self.using_wallclock_units() {
-                            self.s.strings.exclusive_rights_description_minutes
-                        } else {
-                            self.s.strings.exclusive_rights_description_months
-                        }),
-                        &[
-                            Integer(u64::from(t.id.0)),
-                            StringParameterData::String(&company_name),
-                        ],
-                    );
-                    add_news_item(&AddNewsItemArgs {
-                        ref1: NewsReference::Town(t.id).record(),
-                        data: cni.into_data(),
-                        ..AddNewsItemArgs::new(
-                            &message,
-                            NewsType::General,
-                            NewsStyle::Company,
-                            NewsFlags::default(),
-                        )
-                    });
-                    crate::ai::broadcast_new_event(
-                        &ScriptEvent::exclusive_transport_rights(current, t.id),
-                        CompanyID::INVALID,
-                    );
-                    crate::game::new_event(&ScriptEvent::exclusive_transport_rights(current, t.id));
                 }
             }
             TownAction::Bribe => {
@@ -1350,4 +1369,86 @@ crate::abi::layouts! {
         too_many_objects,
         no_statue_place,
     };
+}
+
+#[cfg(test)]
+mod news_tests {
+    use super::{
+        CompanyID, Strings, TownId, town_action_buy_rights_news, town_action_road_rebuild_news,
+    };
+    use crate::news_func::testing::{Effect, Param, company_news_name, encoded, formatted, take};
+    use crate::news_type::{AdviceType, NewsFlags, NewsReference, NewsStyle, NewsType};
+    use crate::script_event_types::ScriptEvent;
+
+    const STRINGS: Strings = Strings {
+        company_name: 0x10,
+        exclusive_rights_description_minutes: 0x21,
+        exclusive_rights_description_months: 0x22,
+        exclusive_rights_title: 0x23,
+        road_rebuilding_minutes: 0x31,
+        road_rebuilding_months: 0x32,
+    };
+    fn news(headline: Vec<u8>, style: NewsStyle, data: Option<Vec<u8>>) -> Effect {
+        Effect::News {
+            headline,
+            r#type: NewsType::General,
+            style,
+            flags: NewsFlags::default(),
+            ref1: NewsReference::Town(TownId(7)),
+            ref2: NewsReference::None,
+            data,
+            advice_type: AdviceType::Invalid,
+        }
+    }
+
+    /// `TownActionRoadRebuild`: the company name, then the minutes or months headline with
+    /// the town and the name, a general news item for the town, and the AI and game events.
+    #[test]
+    fn road_rebuild_follows_the_original() {
+        take();
+        for (minutes, id) in [(true, 0x31), (false, 0x32)] {
+            town_action_road_rebuild_news(&STRINGS, minutes, CompanyID(2), TownId(7));
+            let name = formatted(0x10, &[2]);
+            let event = ScriptEvent::road_reconstruction(CompanyID(2), TownId(7));
+            assert_eq!(
+                take(),
+                [
+                    Effect::GetString(0x10, vec![2]),
+                    news(
+                        encoded(id, &[Param::N(7), Param::S(&name)]),
+                        NewsStyle::Normal,
+                        None
+                    ),
+                    Effect::AiBroadcastNewEvent(event, CompanyID::INVALID.0),
+                    Effect::GameNewEvent(event),
+                ]
+            );
+        }
+    }
+
+    /// `TownActionBuyRights`: the `CompanyNewsInformation` of the current company with the
+    /// rights title, the minutes or months headline with the town and its stored company
+    /// name, a company-style news item that owns the data, and the AI and game events.
+    #[test]
+    fn buy_rights_follows_the_original() {
+        take();
+        for (minutes, id) in [(true, 0x21), (false, 0x22)] {
+            town_action_buy_rights_news(&STRINGS, minutes, CompanyID(3), TownId(7));
+            let name = company_news_name(3);
+            let event = ScriptEvent::exclusive_transport_rights(CompanyID(3), TownId(7));
+            assert_eq!(
+                take(),
+                [
+                    Effect::CompanyNewsInformation(0x23, 3, CompanyID::INVALID.0),
+                    news(
+                        encoded(id, &[Param::N(7), Param::S(&name)]),
+                        NewsStyle::Company,
+                        Some(name.clone())
+                    ),
+                    Effect::AiBroadcastNewEvent(event, CompanyID::INVALID.0),
+                    Effect::GameNewEvent(event),
+                ]
+            );
+        }
+    }
 }

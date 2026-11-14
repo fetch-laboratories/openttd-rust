@@ -763,42 +763,45 @@ pub(crate) unsafe fn cmd_found_town(
             world.assert_with(|| !random_location);
 
             let current = CompanyID(observed!((f.shared.current_company)()));
-            let strings = &f.s.strings;
-            if current == CompanyID::DEITY {
-                observed!(add_tile_news_item(
-                    &get_encoded_string(
-                        StringID(strings.new_town_unsponsored),
-                        &[Integer(u64::from(town.id.0))],
-                    ),
-                    NewsType::IndustryOpen,
-                    tile,
-                    StationID::INVALID,
-                ));
-            } else {
-                let company_name = observed!(get_string(
-                    StringID(strings.company_name),
-                    [Integer(u64::from(current.0))],
-                ));
-                observed!(add_tile_news_item(
-                    &get_encoded_string(
-                        StringID(strings.new_town),
-                        &[
-                            StringParameterData::String(&company_name),
-                            Integer(u64::from(town.id.0)),
-                        ],
-                    ),
-                    NewsType::IndustryOpen,
-                    tile,
-                    StationID::INVALID,
-                ));
-            }
-            observed!(crate::ai::broadcast_new_event(
-                &ScriptEvent::town_founded(town.id),
-                CompanyID::INVALID,
-            ));
-            observed!(crate::game::new_event(&ScriptEvent::town_founded(town.id)));
+            found_town_news(&f.s.strings, current, town.id, tile);
         }
     }
+}
+/// `CmdFoundTown`'s news item and script events for `town`, founded at `tile` by `current`.
+fn found_town_news(strings: &FoundingStrings, current: CompanyID, town: TownId, tile: Tile) {
+    if current == CompanyID::DEITY {
+        observed!(add_tile_news_item(
+            &get_encoded_string(
+                StringID(strings.new_town_unsponsored),
+                &[Integer(u64::from(town.0))],
+            ),
+            NewsType::IndustryOpen,
+            tile,
+            StationID::INVALID,
+        ));
+    } else {
+        let company_name = observed!(get_string(
+            StringID(strings.company_name),
+            [Integer(u64::from(current.0))],
+        ));
+        observed!(add_tile_news_item(
+            &get_encoded_string(
+                StringID(strings.new_town),
+                &[
+                    StringParameterData::String(&company_name),
+                    Integer(u64::from(town.0)),
+                ],
+            ),
+            NewsType::IndustryOpen,
+            tile,
+            StationID::INVALID,
+        ));
+    }
+    observed!(crate::ai::broadcast_new_event(
+        &ScriptEvent::town_founded(town),
+        CompanyID::INVALID,
+    ));
+    observed!(crate::game::new_event(&ScriptEvent::town_founded(town)));
 }
 /// # Safety
 /// As `generate_towns`; `result` is writable.
@@ -1063,4 +1066,56 @@ crate::abi::layouts! {
         too_many_error,
         no_space_error,
     };
+}
+
+#[cfg(test)]
+mod news_tests {
+    use super::{CompanyID, FoundingStrings, Tile, TownId, found_town_news};
+    use crate::news_func::testing::{Effect, Param, encoded, formatted, take};
+    use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle, NewsType};
+    use crate::script_event_types::ScriptEvent;
+
+    /// `CmdFoundTown`: for `OWNER_DEITY` the unsponsored headline with the town, otherwise
+    /// the company name and the sponsored headline with it and the town; an industry-open tile
+    /// news item at the town's tile, then the AI and game events.
+    #[test]
+    fn found_town_follows_the_original() {
+        const STRINGS: FoundingStrings = FoundingStrings {
+            company_name: 0x10,
+            new_town: 0x40,
+            new_town_unsponsored: 0x41,
+        };
+        let news = |headline| Effect::News {
+            headline,
+            r#type: NewsType::IndustryOpen,
+            style: NewsStyle::Thin,
+            flags: NewsFlags::new(&[NewsFlag::NoTransparency, NewsFlag::Shaded]),
+            ref1: NewsReference::Tile(Tile(0x1234)),
+            ref2: NewsReference::None,
+            data: None,
+            advice_type: AdviceType::Invalid,
+        };
+        let event = ScriptEvent::town_founded(TownId(9));
+        take();
+        found_town_news(&STRINGS, CompanyID::DEITY, TownId(9), Tile(0x1234));
+        assert_eq!(
+            take(),
+            [
+                news(encoded(0x41, &[Param::N(9)])),
+                Effect::AiBroadcastNewEvent(event, CompanyID::INVALID.0),
+                Effect::GameNewEvent(event),
+            ]
+        );
+        found_town_news(&STRINGS, CompanyID(1), TownId(9), Tile(0x1234));
+        let name = formatted(0x10, &[1]);
+        assert_eq!(
+            take(),
+            [
+                Effect::GetString(0x10, vec![1]),
+                news(encoded(0x40, &[Param::S(&name), Param::N(9)])),
+                Effect::AiBroadcastNewEvent(event, CompanyID::INVALID.0),
+                Effect::GameNewEvent(event),
+            ]
+        );
+    }
 }
