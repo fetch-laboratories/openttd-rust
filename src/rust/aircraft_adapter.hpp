@@ -112,16 +112,6 @@ static void OPENTTD_RUST_CALL Aircraft_truncate_cargo(OpenTTDVehicle *vehicle) n
 	VehicleOf(vehicle)->cargo.Truncate();
 }
 
-static void OPENTTD_RUST_CALL Aircraft_crash_news(OpenTTDAircraftVehicle vehicle, uint16_t station_id, uint32_t victims) noexcept
-{
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); StationID station{station_id};
-	TileIndex vt = TileVirtXYClampedToMap(RustVehicleX(v), RustVehicleY(v)); bool missing = station == StationID::Invalid();
-	EncodedString headline = missing ? GetEncodedString(STR_NEWS_PLANE_CRASH_OUT_OF_FUEL, victims) : GetEncodedString(STR_NEWS_AIRCRAFT_CRASH, victims, station);
-	AI::NewEvent(v->GetOwner(), new ScriptEventVehicleCrashed(v->index, vt, missing ? ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT : ScriptEventVehicleCrashed::CRASH_PLANE_LANDING, victims, v->GetOwner()));
-	Game::NewEvent(new ScriptEventVehicleCrashed(v->index, vt, missing ? ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT : ScriptEventVehicleCrashed::CRASH_PLANE_LANDING, victims, v->GetOwner()));
-	AddTileNewsItem(std::move(headline), v->GetOwner() == _local_company ? NewsType::Accident : NewsType::AccidentOther, vt, station);
-}
-
 static void OPENTTD_RUST_CALL Aircraft_landing_rating(uint16_t station_id, uint8_t cargo) noexcept
 {
 	GoodsEntry &ge = Station::Get(station_id)->goods[cargo]; ge.rating = 1; if (ge.HasData()) ge.GetData().cargo.Truncate();
@@ -130,25 +120,6 @@ static void OPENTTD_RUST_CALL Aircraft_landing_rating(uint16_t station_id, uint8
 static void OPENTTD_RUST_CALL Aircraft_dirty_depot(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	RustVehicleInvalidateDepot(VehicleOf(vehicle.handle)); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
-}
-
-static void OPENTTD_RUST_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
-{
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); Station *st = Station::Get(station);
-	/* show newsitem of celebrating citizens */
-	AddVehicleNewsItem(GetEncodedString(STR_NEWS_FIRST_AIRCRAFT_ARRIVAL, st->index), v->GetOwner() == _local_company ? NewsType::ArrivalCompany : NewsType::ArrivalOther, v->index, st->index);
-	AI::NewEvent(v->GetOwner(), new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
-}
-
-static void OPENTTD_RUST_CALL Aircraft_destination_too_far(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); AI::NewEvent(v->GetOwner(), new ScriptEventAircraftDestTooFar(v->index));
-	if (v->GetOwner() == _local_company) AddVehicleAdviceNewsItem(AdviceType::AircraftDestinationTooFar, GetEncodedString(STR_NEWS_AIRCRAFT_DEST_TOO_FAR, v->index), v->index);
-}
-
-static void OPENTTD_RUST_CALL Aircraft_delete_range_news(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	DeleteVehicleNews(VehicleID{vehicle.id}, AdviceType::AircraftDestinationTooFar);
 }
 
 static void OPENTTD_RUST_CALL Aircraft_service_order(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
@@ -189,13 +160,9 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.airport_type = Aircraft_airport_type,
 	.airport_width = Aircraft_airport_width,
 	.copy_sprite = Aircraft_copy_sprite,
-	.crash_news = Aircraft_crash_news,
-	.delete_range_news = Aircraft_delete_range_news,
-	.destination_too_far = Aircraft_destination_too_far,
 	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
 	.dirty_depot = Aircraft_dirty_depot,
 	.dirty_lists = Aircraft_dirty_lists,
-	.first_arrival = Aircraft_first_arrival,
 	.fta_blocks = Aircraft_fta_blocks,
 	.fta_heading = Aircraft_fta_heading,
 	.fta_next = Aircraft_fta_next,
@@ -218,6 +185,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.station = Aircraft_station,
 	.station_owner = Aircraft_station_owner,
 	.station_tile = Aircraft_station_tile,
+	.strings = {.aircraft_crash = STR_NEWS_AIRCRAFT_CRASH, .aircraft_dest_too_far = STR_NEWS_AIRCRAFT_DEST_TOO_FAR, .first_aircraft_arrival = STR_NEWS_FIRST_AIRCRAFT_ARRIVAL, .plane_crash_out_of_fuel = STR_NEWS_PLANE_CRASH_OUT_OF_FUEL},
 	.subtract_cost = Aircraft_subtract_cost,
 	.terminal_count = Aircraft_terminal_count,
 	.truncate_cargo = Aircraft_truncate_cargo,

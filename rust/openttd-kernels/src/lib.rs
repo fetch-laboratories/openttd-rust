@@ -11,6 +11,7 @@
 //! snapshots. No borrow of owner or world state survives a service that can reenter Rust.
 
 mod admin_conversion;
+mod ai;
 mod aircraft;
 mod airport;
 mod alternating;
@@ -56,6 +57,7 @@ pub use engine_type::{
     ExtraEngineFlag, ExtraEngineFlags, RailVehicleTypes, VehicleAccelerationModel,
 };
 mod follow_track;
+mod game;
 mod game_state;
 mod genland;
 mod genworld;
@@ -88,6 +90,8 @@ mod movement;
 mod native_test_support;
 mod network_config;
 mod newgrf;
+mod news_func;
+pub mod news_type;
 #[cfg(test)]
 mod oracle;
 #[cfg(test)]
@@ -152,6 +156,8 @@ pub mod road_type;
 mod road_yapf;
 pub mod roadstop_base;
 mod roadveh;
+mod script_event;
+mod script_event_types;
 mod script_host;
 mod script_list;
 mod script_marine;
@@ -185,6 +191,7 @@ mod string_func;
 mod string_services;
 pub mod string_type;
 mod string_validation;
+mod strings_func;
 pub mod strings_type;
 mod tgp;
 mod tile_cmd;

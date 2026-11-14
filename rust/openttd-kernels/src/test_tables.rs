@@ -399,6 +399,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     is_plain_rail: unreachable1,
     is_road_depot: unreachable1,
     is_water_tile: unreachable1,
+    local_company: unreachable0,
     map: ptr::null(),
     settings: ptr::null(),
     map_max_x: unreachable0,

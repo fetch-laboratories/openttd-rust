@@ -320,6 +320,8 @@ pub struct Services {
     pub is_road_depot: extern "C" fn(u32) -> bool,
     /// `IsWaterTile`: water category and clear subtype (sea, canal or river).
     pub is_water_tile: extern "C" fn(u32) -> bool,
+    /// `_local_company`, read at the original's observation point.
+    pub local_company: extern "C" fn() -> u8,
     /// Canonical `Tile` and `Map` statics, loaded at each observation.
     pub map: *const crate::map_func::MapStatics,
     /// Shared addresses of canonical settings; field values are loaded at their source branches.
@@ -774,6 +776,7 @@ crate::abi::layouts! {
         is_plain_rail,
         is_road_depot,
         is_water_tile,
+        local_company,
         map,
         settings,
         map_max_x,
@@ -1124,6 +1127,7 @@ pub fn fixture(
         is_plain_rail: flag,
         is_road_depot: flag,
         is_water_tile: flag,
+        local_company: unused_current_company,
         map: crate::map_func::fixture::statics(),
         settings: std::ptr::null(),
         map_max_x: word0,

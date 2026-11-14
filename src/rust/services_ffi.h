@@ -133,6 +133,7 @@ struct OpenTTDSharedServices {
 	bool (*is_plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_plain_rail);
 	bool (*is_road_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot);
 	bool (*is_water_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_water_tile);
+	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	const OpenTTDMapStatics *map = nullptr;
 	const OpenTTDSettingAddresses *settings = nullptr;
 	uint32_t (*map_max_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_x);

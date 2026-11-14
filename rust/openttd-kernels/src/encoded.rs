@@ -96,6 +96,11 @@ impl Output {
         }
     }
 
+    /// The output bytes.
+    pub(super) fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+
     pub(super) fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
