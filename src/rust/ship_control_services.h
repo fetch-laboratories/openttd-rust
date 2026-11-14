@@ -20,6 +20,7 @@
 #include "tile_animation_services.h"
 #include "vehicle_services.h"
 #include "engine_services.h"
+#include "../pathfinder/water_regions.h"
 static_assert(MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && TILE_HEIGHT == 8 && TILE_SIZE == 16);
 static_assert(TRACK_BIT_DEPOT == 128 && TRACK_BIT_WORMHOLE == 64 && HVOT_SHIP == 32);
 static_assert(to_underlying(WaterClass::Sea) == 0 && DIRDIFF_REVERSE == 4);

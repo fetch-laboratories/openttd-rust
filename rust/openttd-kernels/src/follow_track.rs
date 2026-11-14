@@ -768,11 +768,3 @@ pub(crate) fn get_speed_limit_raw(
 ) -> i32 {
     get_speed_limit(s, TransportType(mode), veh, TileIndex(tile), None)
 }
-
-/// `CFollowTrackWater(v)` with a null vehicle, followed once from `tile`: the
-/// raw adapter for `ship_yapf.rs` until its pass.
-pub(crate) fn water(s: &Services, tile: u32, td: u8) -> (CFollowTrackT, bool) {
-    let mut ft = CFollowTrackT::vehicle(s, WATER, None, RailTypes::INVALID_RAILTYPES, true);
-    let ok = ft.follow(s, TileIndex(tile), Trackdir(td));
-    (ft, ok)
-}

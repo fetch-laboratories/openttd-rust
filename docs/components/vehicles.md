@@ -121,11 +121,11 @@
 
 ## Ship YAPF searches and canonical path cache
 
-- Rust owns: region/track searches, search arenas, heap, estimates, corridor, attempts, lost paths, cache extraction and per-ship path.
-- C++ keeps: ship/world pools, station/dock queries, engine/settings observations, map and save staging.
+- Rust owns: region/track searches, search arenas, heap, estimates, corridor, attempts, lost paths, cache extraction and per-ship path; the ship, engine and settings reads, map reads, dock origins and water region calls.
+- C++ keeps: ship/station pools, the controller's `GetState`, `GetVehicleTrackdir` and `IsShipDestinationTile` map reads (until `ship_control.rs`'s pass), and save staging.
 - Checks: `python3 tools/migration.py simulate water --jobs 2`.
 - Limits: Gaps remain in arbitrary maps, NewGRFs or complete legacy saves.
-- PRs: #126, #308; scratch capacity #306.
+- PRs: #126, #308; scratch capacity #306; file pass PRNUM.
 
 ## Rail YAPF search, caches and reservation
 

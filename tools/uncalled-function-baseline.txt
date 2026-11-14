@@ -21,10 +21,6 @@ openttd_rust_occupancy_train | #975 uncalled free functions: EnsureNoTrainOnTrac
 openttd_rust_platform_info | #975 uncalled free functions: GetPlatformInfo
 openttd_rust_road_clear_cost | #975 uncalled free functions: RoadClearCost
 openttd_rust_road_convert_cost | #975 uncalled free functions: RoadConvertCost
-openttd_rust_ship_regions | #975 uncalled free functions: YapfShipFindWaterRegionPath
-openttd_rust_ship_regions_destroy | #975 uncalled free functions: YapfShipFindWaterRegionPath
-openttd_rust_ship_regions_get | #975 uncalled free functions: YapfShipFindWaterRegionPath
-openttd_rust_ship_regions_size | #975 uncalled free functions: YapfShipFindWaterRegionPath
 openttd_rust_station_check_buildable | #975 uncalled free functions: CheckBuildableTile
 openttd_rust_station_empty_mask | #975 uncalled free functions: GetEmptyMask
 openttd_rust_station_load | #975 uncalled free functions: LoadUnloadStation

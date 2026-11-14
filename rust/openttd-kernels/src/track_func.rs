@@ -317,6 +317,52 @@ pub const fn trackdir_to_trackdir_bits(td: u8) -> u16 {
     1_u16 << td
 }
 
+/// `RemoveFirstTrackdir`: removes the first `Trackdir` from `TrackdirBits` and
+/// returns it, or `INVALID_TRACKDIR` when the bits hold none.
+pub fn remove_first_trackdir(
+    trackdirs: &mut crate::track_type::TrackdirBits,
+    check: impl Fn(bool),
+) -> crate::track_type::Trackdir {
+    use crate::track_type::{Trackdir, TrackdirBits};
+    if *trackdirs != TrackdirBits::TRACKDIR_BIT_NONE
+        && *trackdirs != TrackdirBits::INVALID_TRACKDIR_BIT
+    {
+        if trackdirs.0 & !TrackdirBits::TRACKDIR_BIT_MASK.0 != TrackdirBits::TRACKDIR_BIT_NONE.0 {
+            check(false);
+        }
+        let first = Trackdir(crate::bitmath_func::find_first_bit(u64::from(trackdirs.0)));
+        crate::bitmath_func::clr_bit16(&mut trackdirs.0, first.0);
+        return first;
+    }
+    Trackdir::INVALID_TRACKDIR
+}
+
+/// `VehicleExitDir`: determine the side in which the vehicle will leave the tile.
+pub fn vehicle_exit_dir(
+    direction: crate::direction_type::Direction,
+    track: crate::track_type::TrackBits,
+    check: impl Fn(bool) + Copy,
+) -> crate::direction_type::DiagDirection {
+    use crate::direction_type::DiagDirDiff;
+    use crate::track_type::TrackBits;
+    const STATE_DIR_TABLE: [TrackBits; 4] = [
+        TrackBits::TRACK_BIT_RIGHT,
+        TrackBits::TRACK_BIT_LOWER,
+        TrackBits::TRACK_BIT_LEFT,
+        TrackBits::TRACK_BIT_UPPER,
+    ];
+
+    let mut diagdir = crate::direction_func::dir_to_diag_dir(direction, check);
+
+    /* Determine the diagonal direction in which we will exit this tile */
+    if direction.0 & 1 == 0 && track != STATE_DIR_TABLE[usize::from(diagdir.0)] {
+        diagdir =
+            crate::direction_func::change_diag_dir(diagdir, DiagDirDiff::DIAGDIRDIFF_90LEFT, check);
+    }
+
+    diagdir
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

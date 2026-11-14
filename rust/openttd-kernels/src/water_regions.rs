@@ -94,6 +94,31 @@ pub struct WaterRegionPatchDesc {
     pub label: WaterRegionPatchLabel,
 }
 
+/// `WaterRegionDesc`: describes a single square water region.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WaterRegionDesc {
+    /// The X coordinate of the water region, i.e. X=2 is the 3rd water region along the X-axis.
+    pub(crate) x: i32,
+    /// The Y coordinate of the water region, i.e. Y=2 is the 3rd water region along the Y-axis.
+    pub(crate) y: i32,
+}
+impl From<WaterRegionPatchDesc> for WaterRegionDesc {
+    /// `WaterRegionDesc(const WaterRegionPatchDesc &water_region_patch)`.
+    fn from(water_region_patch: WaterRegionPatchDesc) -> Self {
+        Self {
+            x: water_region_patch.x,
+            y: water_region_patch.y,
+        }
+    }
+}
+/// The original compares a `WaterRegionDesc` with a patch through the patch's
+/// implicit conversion to `WaterRegionDesc`.
+impl PartialEq<WaterRegionPatchDesc> for WaterRegionDesc {
+    fn eq(&self, other: &WaterRegionPatchDesc) -> bool {
+        *self == Self::from(*other)
+    }
+}
+
 /// `GetWaterTracks`.
 fn get_water_tracks(movement: &CachedTable<'_>, tile: TileIndex) -> TrackBits {
     TrackBits(track_status_to_track_bits(
@@ -148,6 +173,41 @@ fn get_water_region_index_for_tile(map: Map, tile: TileIndex) -> WaterRegionInde
         get_water_region_x(map, tile),
         get_water_region_y(map, tile),
     )
+}
+
+/// `GetWaterRegionIndex(const WaterRegionDesc &water_region)`: returns the index
+/// of the water region.
+fn get_water_region_index_for_region(map: Map, water_region: WaterRegionDesc) -> WaterRegionIndex {
+    get_water_region_index(map, water_region.x, water_region.y)
+}
+
+/// `CalculateWaterRegionPatchHash`: calculates a number that uniquely identifies
+/// the provided water region patch.
+pub(crate) fn calculate_water_region_patch_hash(
+    map: Map,
+    water_region_patch: WaterRegionPatchDesc,
+) -> i32 {
+    (u32::from(water_region_patch.label.0)
+        | get_water_region_index_for_region(map, water_region_patch.into()).0 << 8)
+        .cast_signed()
+}
+
+/// `GetWaterRegionCenterTile`: returns the center tile of a particular water region.
+pub(crate) fn get_water_region_center_tile(map: Map, water_region: WaterRegionDesc) -> TileIndex {
+    map.tile_xy(
+        (water_region.x * WATER_REGION_EDGE_LENGTH + (WATER_REGION_EDGE_LENGTH / 2))
+            .cast_unsigned(),
+        (water_region.y * WATER_REGION_EDGE_LENGTH + (WATER_REGION_EDGE_LENGTH / 2))
+            .cast_unsigned(),
+    )
+}
+
+/// `GetWaterRegionInfo`: returns basic water region information for the provided tile.
+pub(crate) fn get_water_region_info(map: Map, tile: TileIndex) -> WaterRegionDesc {
+    WaterRegionDesc {
+        x: get_water_region_x(map, tile),
+        y: get_water_region_y(map, tile),
+    }
 }
 
 /// The original's implicit `int` to `uint16_t` conversion of a region
@@ -569,7 +629,7 @@ fn get_updated_water_region_for_tile(
 
 /// `GetWaterRegionPatchInfo`: returns basic water region patch information for
 /// the provided tile.
-fn get_water_region_patch_info(
+pub(crate) fn get_water_region_patch_info(
     regions: &mut Regions,
     world: &World<'_>,
     s: &Services,
@@ -785,7 +845,7 @@ fn visit_adjacent_water_region_patch_neighbours(
 ///
 /// `water_region_patch` is the caller's descriptor as it is now: the original takes
 /// it by const reference, and a callback may change it between steps.
-fn visit_water_region_patch_neighbours(
+pub(crate) fn visit_water_region_patch_neighbours(
     regions: &mut Regions,
     s: &Services,
     visit: &mut WaterVisit,
@@ -1080,6 +1140,23 @@ mod tests {
         movement.shared = std::ptr::from_ref(s);
         s.movement = Box::leak(Box::new(movement));
         s
+    }
+
+    /// `CalculateWaterRegionPatchHash` on a map 64 tiles wide and 256 tall: the
+    /// region index takes the row width from `Map::SizeX()`.
+    #[test]
+    fn water_region_patch_hash_takes_the_row_width_from_the_x_axis() {
+        let map = crate::map_func::Map::from_log_x(6);
+        let patch = super::WaterRegionPatchDesc {
+            x: 3,
+            y: 10,
+            label: WaterRegionPatchLabel(5),
+        };
+        // label | (Map::SizeX() / 16 * y + x) << 8, and 64 / 16 = 4.
+        assert_eq!(
+            super::calculate_water_region_patch_hash(map, patch),
+            5 | (4 * 10 + 3) << 8
+        );
     }
 
     /// The stored edge masks and patch counts, which no export reads, after the

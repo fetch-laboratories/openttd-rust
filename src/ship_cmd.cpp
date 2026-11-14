@@ -17,7 +17,6 @@
 #include "station_base.h"
 #include "newgrf_engine.h"
 #include "pathfinder/yapf/yapf.h"
-#include "pathfinder/yapf/yapf_ship_regions.h"
 #include "newgrf_sound.h"
 #include "strings_func.h"
 #include "window_func.h"
