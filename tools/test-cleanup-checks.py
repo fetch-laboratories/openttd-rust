@@ -789,10 +789,58 @@ class GrowthTests(unittest.TestCase):
                 ("/implementation", [proposal], [report("/review", "head")], "head"),
             )
         )
-        changed = dict(proposal, reason="different operation")
-        self.assertFalse(
-            reviewed(changed, [report("/review", "head")], "/implementation", "head")
+        # Rewording why or until when keeps the acceptance; what is excepted
+        # does not change without a new one.
+        for field in (
+            "reason",
+            "existing_alternatives",
+            "retiring_owner",
+            "retirement_condition",
+        ):
+            reworded = dict(proposal, **{field: "reworded"})
+            self.assertTrue(
+                reviewed(
+                    reworded, [report("/review", "head")], "/implementation", "head"
+                )
+            )
+        for changed in (
+            dict(proposal, added={"x": 2}),
+            dict(proposal, added={"y": 1}),
+            dict(proposal, counter="callback_slots"),
+            dict(proposal, retiring_owner="owner", extra="field"),
+        ):
+            self.assertFalse(
+                reviewed(
+                    changed, [report("/review", "head")], "/implementation", "head"
+                )
+            )
+        lint = {
+            "kind": "suppression",
+            "tool": "rust",
+            "site": "rust/x.rs | impl A | allow x",
+            "operation": "A::B",
+            "before": 0,
+            "after": 1,
+            "source_contract": "original spelling",
+            "reason": "keep the original's name",
+            "retiring_owner": "owner",
+            "retirement_condition": "when the API goes",
+        }
+        comment = acceptance_comment("head", lint)
+        self.assertTrue(
+            reviewed(
+                dict(lint, source_contract="the original header's spelling"),
+                [comment],
+                "/implementation",
+                "head",
+            )
         )
+        for key, value in (("site", "rust/x.rs | impl C | allow x"), ("after", 2)):
+            self.assertFalse(
+                reviewed(
+                    dict(lint, **{key: value}), [comment], "/implementation", "head"
+                )
+            )
 
     def test_growth_acceptance_binds_added_keys_not_counter_totals(self) -> None:
         reviewed_delta = {
@@ -885,7 +933,65 @@ class GrowthTests(unittest.TestCase):
         self.assertFalse(check("generated_records", "abi-record-x.h", {"at": "short"}))
         self.assertTrue(check("tools_cpp", "tools/x.cpp", {}))
         self.assertFalse(check("tools_cpp", "tools/x.cpp", {"tools/x.cpp": "int y;"}))
-        self.assertFalse(check("exports", "tools/x.cpp", {}))
+
+    def test_boundary_ids_record_each_declaration_text(self) -> None:
+        texts: dict[str, str] = {}
+        source = (
+            'pub struct S { pub cb: extern "C" fn(u32), pub n: u8 }\n'
+            'pub struct T(u8, extern "C" fn());\n'
+            '#[unsafe(no_mangle)]\npub extern "C" fn openttd_rust_x() {}\n'
+        )
+        ids = boundary_ids({"rust/x.rs": source}, texts=texts)
+        self.assertEqual(set(texts), ids["exports"] | ids["callback_slots"])
+        self.assertEqual(texts["rust/x.rs | S.cb"], 'pub cb: extern "C" fn(u32)')
+        self.assertEqual(texts["rust/x.rs | T.1"], 'extern "C" fn()')
+        self.assertEqual(
+            texts["rust/x.rs | openttd_rust_x"], 'pub extern "C" fn openttd_rust_x() {}'
+        )
+
+    def test_identity_acceptance_holds_while_its_declaration_is_unchanged(self) -> None:
+        earlier = "a" * 40
+        slot = "rust/expanded.rs | Services.callback"
+        export = "rust/expanded.rs | openttd_rust_x"
+        texts = {
+            earlier: {
+                slot: 'callback: extern "C" fn(u32)',
+                export: 'pub extern "C" fn openttd_rust_x() { a() }',
+            }
+        }
+
+        def check(counter: str, key: str, now: str) -> bool:
+            delta = {"counter": counter, "old": 1, "new": 2, "added": {key: 1}}
+            proposal = dict(
+                delta,
+                kind="growth",
+                reason="source contract",
+                existing_alternatives="none available",
+                retiring_owner="owner",
+                retirement_condition="native shell removed",
+            )
+            current = dict(texts, HEAD={**texts[earlier], key: now})
+            with (
+                patch.object(GROWTH, "known", lambda rev: True),
+                patch.object(GROWTH.METRICS, "boundary_texts", current.__getitem__),
+            ):
+                return GROWTH.accepted(
+                    delta,
+                    (
+                        "/implementation",
+                        [proposal],
+                        [acceptance_comment(earlier, proposal)],
+                        "new-head",
+                    ),
+                )
+
+        self.assertTrue(check("callback_slots", slot, texts[earlier][slot]))
+        self.assertFalse(check("callback_slots", slot, 'callback: extern "C" fn(u8)'))
+        self.assertTrue(check("exports", export, texts[earlier][export]))
+        self.assertFalse(
+            check("exports", export, 'pub extern "C" fn openttd_rust_x() { b() }')
+        )
+        self.assertFalse(check("exports", "rust/expanded.rs | openttd_rust_new", "fn"))
 
 
 def acceptance_comment(head: str, proposal: Mapping[str, object]) -> str:

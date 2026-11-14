@@ -475,25 +475,41 @@ def keep_code_lines() -> None:
     persist(migration.COMMON_LOCAL / "growth-inputs")
 
 
+def boundary_identities(
+    head: str, texts: dict[str, str] | None = None
+) -> dict[str, set[str]]:
+    """Exports and callback slots at head, from the expanded crate when it has one.
+
+    With texts, each key's declaration text is recorded there too.
+    """
+    from rust_syntax import boundary_ids
+
+    if show(head, "rust/openttd-kernels/Cargo.toml"):
+        return boundary_ids(
+            {"rust/expanded.rs": expanded_rust(head)}, expanded=True, texts=texts
+        )
+    files = {
+        path: show(head, path)
+        for path in git("ls-tree", "-r", "--name-only", head, "rust/").splitlines()
+        if path.endswith(".rs")
+    }
+    return boundary_ids(files, texts=texts)
+
+
+def boundary_texts(head: str) -> dict[str, str]:
+    """Each export's and callback slot's declaration text at head."""
+    texts: dict[str, str] = {}
+    boundary_identities(head, texts)
+    return texts
+
+
 def growth_inventory(head: str) -> dict[str, dict[str, int]]:
     """Independent cleanup counters, sharing this metric's code-line semantics.
 
     The AST inventory closes aliases/unprefixed exports; boundary() remains the
     historical syntactic series and is reported separately by the caller.
     """
-    from rust_syntax import boundary_ids
-
-    files = {
-        path: show(head, path)
-        for path in git("ls-tree", "-r", "--name-only", head, "rust/").splitlines()
-        if path.endswith(".rs")
-    }
-    has_crate = bool(show(head, "rust/openttd-kernels/Cargo.toml"))
-    identities = (
-        boundary_ids({"rust/expanded.rs": expanded_rust(head)}, expanded=True)
-        if has_crate
-        else boundary_ids(files)
-    )
+    identities = boundary_identities(head)
     evidence = evidence_cpp(head)
     glue: dict[str, set[int]] = {}
     source_metrics(BASELINE, head, glue_lines=glue)

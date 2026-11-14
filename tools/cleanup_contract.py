@@ -24,6 +24,9 @@ ATTRIBUTION = re.compile(r"Agent: (\S+) \| Model: (\S+) \| Reasoning effort: (\S
 BLOCK = re.compile(r"```cleanup-acceptance\s*\n(.*?)\n```", re.S)
 RECORDS = "migration/cleanup-records"
 REASONS = ("reason", "retiring_owner", "retirement_condition")
+# Why and until when: a change to these words keeps an acceptance, since the
+# fields left say what is excepted and the re-check reads the changed words.
+WORDING = (*REASONS, "existing_alternatives", "source_contract")
 CONTRACT = dict.fromkeys(
     ("tool", "site", "operation", "source_contract", *REASONS), "text"
 )
@@ -164,6 +167,11 @@ def acceptances(body: str, where: str) -> list[dict[str, Any]]:
     return found
 
 
+def bound(record: dict[str, Any]) -> dict[str, Any]:
+    """The fields that say what a record excepts, without its WORDING."""
+    return {key: value for key, value in record.items() if key not in WORDING}
+
+
 def reviewed(
     proposal: dict[str, Any],
     comments: list[str],
@@ -171,10 +179,12 @@ def reviewed(
     head: str,
     unchanged: Callable[[str], bool] | None = None,
 ) -> bool:
-    """Require another attributed agent to accept the exact payload and head.
+    """Require another attributed agent to accept the payload at the head.
 
-    With `unchanged`, an acceptance at an earlier full SHA also holds while the
-    site's item text there equals the item text at the checked head.
+    An accepted entry matches the proposal on every field but the WORDING ones,
+    so rewording a reason keeps the acceptance. With `unchanged`, an acceptance
+    at an earlier full SHA also holds while the site's item text there equals
+    the item text at the checked head.
     """
     if not author:
         return False
@@ -184,7 +194,10 @@ def reviewed(
             continue
         for record in acceptances(body, f"comment {n} by {attribution[1]}"):
             accepted = record["head"]
-            if proposal in record["accept"] and (
+            if any(
+                isinstance(entry, dict) and bound(entry) == bound(proposal)
+                for entry in record["accept"]
+            ) and (
                 accepted == head
                 or unchanged is not None
                 and re.fullmatch(r"[0-9a-f]{40}", accepted) is not None
