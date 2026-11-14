@@ -2339,6 +2339,7 @@ pub(crate) const INDUSTRIES: crate::industry::Services = crate::industry::Servic
     num_items: unreachable0,
     get: unreachable1,
     resolver: ptr::null(),
+    transaction: ptr::null(),
     company_none: unreachable0,
     restore_company: unreachable1,
     directory_dirty: unreachable1,

@@ -808,7 +808,9 @@ pub(crate) unsafe fn clear_tile_industry(
     }
     if flags.test(DoCommandFlag::Execute) {
         unsafe {
-            let index = crate::industry_type::IndustryID((tiles.industry_index)(tile.0));
+            let index = (crate::station::Ctx::from_shared(&*tiles.shared)
+                .c
+                .industry_id)(i.shell);
             crate::ai::broadcast_new_event(
                 &crate::script_event_types::ScriptEvent::industry_close(index),
                 CompanyID::INVALID,

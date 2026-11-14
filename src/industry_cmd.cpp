@@ -778,6 +778,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.num_items = []() noexcept -> uint32_t { return static_cast<uint32_t>(Industry::GetNumItems()); },
 	.get = [](uint16_t id) noexcept -> void * { return IndustryIfValid(id); },
 	.resolver = &GetIndustryResolverServices(),
+	.transaction = &GetIndustryTransactionServices(),
 	.company_none = []() noexcept -> uint8_t {
 		CompanyID old = OpenTTDCurrentCompany();
 		OpenTTDSetCurrentCompany(OWNER_NONE);

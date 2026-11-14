@@ -523,6 +523,8 @@ pub struct Services {
     pub num_items: unsafe extern "C" fn() -> u32,
     pub get: unsafe extern "C" fn(u16) -> *mut c_void,
     pub resolver: *const resolver::ResolverServices,
+    /// `Industry::town`, through the transaction table's shell accessor.
+    pub transaction: *const TransactionServices,
     pub company_none: unsafe extern "C" fn() -> u8,
     pub restore_company: unsafe extern "C" fn(u8),
     pub directory_dirty: unsafe extern "C" fn(u8),
@@ -1380,7 +1382,7 @@ fn change_industry_production(
         /* Set parameters of news string */
         let strings = &svc.strings;
         let name = || Integer(u64::from(unsafe { (*spec_of(obs.owner)).name }));
-        let town = || Integer(u64::from(town_index(index, svc).0));
+        let town = || Integer(u64::from(town_index(i, svc).0));
         let headline = if str.0 > strings.last_stringid {
             get_encoded_string(
                 str,
@@ -1426,9 +1428,9 @@ fn industry_index(shell: *mut c_void, svc: &Services) -> IndustryID {
     (crate::station::Ctx::from_shared(svc.shared()).c.industry_id)(shell.cast())
 }
 /// `i->town->index` of a live industry.
-fn town_index(index: IndustryID, svc: &Services) -> crate::town_type::TownId {
-    let resolver = unsafe { &*svc.resolver };
-    crate::town_type::TownId(unsafe { (resolver.town_id)((resolver.get)(index.0).town) })
+fn town_index(shell: *mut c_void, svc: &Services) -> crate::town_type::TownId {
+    let (resolver, transaction) = unsafe { (&*svc.resolver, &*svc.transaction) };
+    crate::town_type::TownId(unsafe { (resolver.town_id)((transaction.town)(shell.cast())) })
 }
 /// Original `ReportNewsProductionChangeIndustry`: report news that industry production has
 /// changed significantly. `percent` is the percentage of change (>0 means increase, <0 means
@@ -2895,6 +2897,7 @@ crate::abi::layouts! {
         num_items,
         get,
         resolver,
+        transaction,
         company_none,
         restore_company,
         directory_dirty,
@@ -3203,6 +3206,7 @@ mod production_policy_tests {
             num_items: unexpected_num_items,
             get: unexpected_get,
             resolver: ptr::null(),
+            transaction: ptr::null(),
             company_none: unexpected_company_none,
             restore_company: unexpected_restore_company,
             directory_dirty: unexpected_directory_dirty,

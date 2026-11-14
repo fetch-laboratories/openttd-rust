@@ -240,7 +240,7 @@ pub(super) fn advertise(ind: *mut c_void, s: &Services) {
         }));
     let index = super::industry_index(ind, s);
     let (text, name) = unsafe { ((*ind_spc).new_industry_text, (*ind_spc).name) };
-    let town = Integer(u64::from(super::town_index(index, s).0));
+    let town = Integer(u64::from(super::town_index(ind, s).0));
     let headline = if text > s.strings.last_stringid {
         get_encoded_string(
             StringID(text),
