@@ -215,18 +215,6 @@ CargoTypes GetEmptyMask(const Station *st)
 }
 
 /**
- * Add news item for when a station changes which cargoes it accepts.
- * @param st Station of cargo change.
- * @param cargoes Bit mask of cargo types to list.
- * @param reject True iff the station rejects the cargo types.
- */
-static void ShowRejectOrAcceptNews(const Station *st, CargoTypes cargoes, bool reject)
-{
-	StringID msg = reject ? STR_NEWS_STATION_NO_LONGER_ACCEPTS_CARGO_LIST : STR_NEWS_STATION_NOW_ACCEPTS_CARGO_LIST;
-	AddNewsItem(GetEncodedString(msg, st->index, cargoes), NewsType::Acceptance, NewsStyle::Small, NewsFlag::InColour, st->index);
-}
-
-/**
  * Get the cargo types being produced around the tile (in a rectangle).
  * @param north_tile Northern most tile of area
  * @param w X extent of the area
@@ -313,9 +301,7 @@ static const OpenTTDStationServices _rust_station_services = {
 		if (waiting_changed) SetWindowDirty(WC_STATION_VIEW, st->index);
 		else SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_ACCEPT_RATING_LIST);
 	},
-	.acceptance_news = [](OpenTTDBaseStation *handle, uint64_t cargoes, bool reject) noexcept -> void {
-		ShowRejectOrAcceptNews(Station::From(static_cast<BaseStation *>(handle)), cargoes, reject);
-	},
+	.strings = {.station_no_longer_accepts_cargo_list = STR_NEWS_STATION_NO_LONGER_ACCEPTS_CARGO_LIST, .station_now_accepts_cargo_list = STR_NEWS_STATION_NOW_ACCEPTS_CARGO_LIST},
 	.delete_station = [](OpenTTDBaseStation *handle) noexcept -> void {
 		delete static_cast<BaseStation *>(handle);
 	},

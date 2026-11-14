@@ -753,8 +753,6 @@ pub(crate) unsafe fn add_accepted_cargo_industry(
 #[repr(C)]
 pub struct TilePolicyServices {
     pub object_in_way: unsafe extern "C" fn(*mut IndustryCost, *const SpecHandle),
-    pub close_ai: unsafe extern "C" fn(*mut ShellHandle),
-    pub close_game: unsafe extern "C" fn(*mut ShellHandle),
     pub destroy: unsafe extern "C" fn(*mut ShellHandle),
     pub tile_max_z: unsafe extern "C" fn(u32) -> i32,
     pub command_checks: *const crate::services::CommandServices,
@@ -810,8 +808,14 @@ pub(crate) unsafe fn clear_tile_industry(
     }
     if flags.test(DoCommandFlag::Execute) {
         unsafe {
-            (policy.close_ai)(i.shell);
-            (policy.close_game)(i.shell);
+            let index = crate::industry_type::IndustryID((tiles.industry_index)(tile.0));
+            crate::ai::broadcast_new_event(
+                &crate::script_event_types::ScriptEvent::industry_close(index),
+                CompanyID::INVALID,
+            );
+            crate::game::new_event(&crate::script_event_types::ScriptEvent::industry_close(
+                index,
+            ));
             (policy.destroy)(i.shell);
         }
     }
