@@ -10,8 +10,10 @@
 //! (`landscape.cpp`), `TileLoop_Track` (`rail_cmd.cpp`), `TileLoop_Road` (`road_cmd.cpp`) and
 //! `TileLoop_TunnelBridge` (`tunnelbridge_cmd.cpp`).
 //!
-//! Map storage stays native. Bodies read it in place through the map descriptor and write it
-//! through the native leaves of the tables below. Every table is immutable and lives for the
+//! Map storage stays native. Bodies read it in place through the map descriptor. They write
+//! clear density and counter, roadside and road-works fields in place through the descriptor
+//! (`clear_map.rs`, `road_map.rs`), and every other field through the native leaves of the
+//! tables below. Every table is immutable and lives for the
 //! process; no Rust borrow of map or owner state spans a leaf call, and leaves do not unwind.
 #![allow(unsafe_code)]
 use crate::clear_map::{
@@ -560,7 +562,7 @@ fn fence_ground(c: &TileLoop<'_>, tile: TileIndex) -> RailGroundType {
             || w.kind(tile2) == TileType::MP_ROAD
             || (w.kind(tile2) == TileType::MP_OBJECT && !(leaves.owned_land)(tile2.0))
             || w.kind(tile2) == TileType::MP_TUNNELBRIDGE
-            || w.owner(tile2) != owner
+            || !w.is_tile_owner(tile2, owner)
         {
             fences = fences.with(DiagDirections::from_element(d));
         }
@@ -734,7 +736,7 @@ pub(crate) fn tile_loop_tunnel_bridge(c: &TileLoop<'_>, tile: TileIndex) {
 }
 
 /// `_town_road_types`: the desired roadside and its pre-type by town radius group.
-const TOWN_ROAD_TYPES: [[Roadside; 2]; HouseZone::TownEnd.0 as usize] = [
+const TOWN_ROAD_TYPES: [[Roadside; 2]; crate::house::NUM_HOUSE_ZONES as usize] = [
     [Roadside::Grass, Roadside::Grass],
     [Roadside::Paved, Roadside::Paved],
     [Roadside::Paved, Roadside::Paved],
@@ -743,7 +745,7 @@ const TOWN_ROAD_TYPES: [[Roadside; 2]; HouseZone::TownEnd.0 as usize] = [
 ];
 
 /// `_town_road_types_2`: [`TOWN_ROAD_TYPES`] in Toyland.
-const TOWN_ROAD_TYPES_2: [[Roadside; 2]; HouseZone::TownEnd.0 as usize] = [
+const TOWN_ROAD_TYPES_2: [[Roadside; 2]; crate::house::NUM_HOUSE_ZONES as usize] = [
     [Roadside::Grass, Roadside::Grass],
     [Roadside::Paved, Roadside::Paved],
     [Roadside::StreetLights, Roadside::Paved],
@@ -892,7 +894,7 @@ pub(crate) fn tile_loop_road(c: &TileLoop<'_>, tile: TileIndex) {
         _ => {}
     }
 
-    if w.road_tile_type(tile.0).0 == crate::road_map::RoadTileType::Depot.0 {
+    if w.is_road_depot(tile) {
         return;
     }
 
@@ -1195,6 +1197,28 @@ mod tests {
         assert_eq!(FAILED.get(), 2);
         assert_eq!(roadside(&map), Roadside::Paved);
         assert_eq!(map.extended[t].m7, 0xf0);
+    }
+
+    /// `IncreaseRoadWorksCounter` adds one within the counter's four bits of `m7` (`AB`), so a
+    /// full counter wraps to zero without touching bit 4, and reports the last stage.
+    #[test]
+    fn road_works_counter_wraps_within_its_four_bits() {
+        let mut map = Map::new(TileType::MP_ROAD);
+        let tile = TileIndex(11 * 64 + 11);
+        let t = tile.0 as usize;
+        let c = tile_loop(shared(), LandscapeType::Temperate);
+        for (before, after, last) in [(0x8f, 0x80, false), (0x9e, 0x9f, true), (0x00, 0x01, false)]
+        {
+            map.extended[t].m7 = before;
+            let reported = c
+                .world
+                .asserted(|m| crate::road_map::increase_road_works_counter(m, tile));
+            assert_eq!(
+                (map.extended[t].m7, reported),
+                (after, last),
+                "from {before:#x}"
+            );
+        }
     }
 
     /// `TileLoop_Road`'s roadside step over `_town_road_types` and `_town_road_types_2`, for

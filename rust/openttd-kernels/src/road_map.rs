@@ -215,6 +215,10 @@ impl crate::map_func::World<'_> {
         self.check(self.road_tile_type(t).0 == ROAD_TILE_CROSSING);
         Self::byte(self.types.m5(TileIndex(t))) & 1
     }
+    /// `IsRoadDepot`: return whether a tile is a road depot.
+    pub(crate) fn is_road_depot(&self, t: TileIndex) -> bool {
+        self.road_tile_type(t.0).0 == ROAD_TILE_DEPOT
+    }
     /// `IsNormalRoad`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -357,8 +361,7 @@ pub(crate) fn increase_road_works_counter(
     t: TileIndex,
 ) -> Option<bool> {
     let mut bits = u32::from(m.m7(t)?);
-    let counter = crate::bitmath_func::gb(bits, 0, 4).wrapping_add(1);
-    crate::bitmath_func::sb(&mut bits, 0, 4, counter);
+    crate::bitmath_func::ab(&mut bits, 0, 4, 1);
     m.set_m7(t, bits as u8)?;
 
     Some(crate::bitmath_func::gb(u32::from(m.m7(t)?), 0, 4) == 15)

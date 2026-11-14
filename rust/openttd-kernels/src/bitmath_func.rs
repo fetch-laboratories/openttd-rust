@@ -52,6 +52,15 @@ pub fn sb(value: &mut u32, start: u8, length: u8, data: u32) {
     *value |= data.wrapping_shl(u32::from(start));
 }
 
+/// `AB`: add `i` to the `n`-bit window of `x` starting at bit `s`. An overflow does not
+/// affect the following bits of the window and is simply ignored. For uint32 fields.
+/// Preconditions: `n < 32` and `s + n <= 32`.
+pub fn ab(x: &mut u32, s: u8, n: u8, i: u32) -> u32 {
+    let mask = (1_u32.wrapping_shl(u32::from(n)) - 1).wrapping_shl(u32::from(s));
+    *x = (*x & !mask) | (x.wrapping_add(i.wrapping_shl(u32::from(s))) & mask);
+    *x
+}
+
 /// `AssignBit`: assigns a single bit in a variable. The variable is changed and the value is
 /// also returned. For promoted integer fields.
 pub fn assign_bit(value: &mut u32, bit: u8, enabled: bool) -> u32 {
