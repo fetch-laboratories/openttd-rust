@@ -52,7 +52,7 @@ Watch for:
 - **Artificial hurdles**: gates or circular deferrals park work without catching defects.
 - **Shell workarounds**: `cd <worktree> &&`, hand-made agent worktrees, `sleep`, polling or hand-written environment prefixes point to a missing permanent fix.
 - **Running dry**: planning selects ever smaller items while some area lacks queued work.
-- **Debt recurrence**: new code lacks the original's types, named constants, comments or argument structs, or a stream inventory rises above its end state. Fix it where it got through: the implementer brief, the review brief, or a CI check.
+- **Debt recurrence**: new code lacks the original's types, named constants, comments or argument structs, or a stream inventory rises above its end state. Find why review and CI passed it (step 4).
 
 Done when every standing correction and every issue `issues.py` reports has a verdict.
 
@@ -68,8 +68,13 @@ Done when every audit has reported.
 
 ## 4. Correct course
 
-Choose a few corrections, favoring systemic patterns.
+Fix each problem at its cause. Root's agents do what they are told, so the cause is usually in what the agent was given.
 
+- Before changing a rule, read what the agent that got it wrong was told: the message that started it and the brief it followed, read as that agent would read them. Check your reading against all of that agent's sessions in the window, not one.
+- Fix the type of problem, not the example that showed it. Where a brief states a rule and gives the agent no way to check it, give it the way to check it.
+- If an earlier steering already corrected the same problem, that correction did not work. Find out why before writing another.
+- Before reversing a rule, find why it was made (`git log -S`, the ADRs).
+- Ask the user before a test that starts more than a few agents.
 - Prune before adding: remove each rule an agent would follow correctly without, or whose wrong action a tool already catches, and relax a harmful rule before adding a counter-rule.
 - Put a standing rule once in the doc that owns it ([routing](../../../AGENTS.md#routing)), and a correction that is a real decision in an ADR ([ADRs](../../adr/README.md)).
 - Give new work an issue with problem, measurements, scope and acceptance; label it `roadmap` when ordered there. Put PR findings in a PR comment that separates what blocks integration from what can follow. Put new coverage gaps on #156.
