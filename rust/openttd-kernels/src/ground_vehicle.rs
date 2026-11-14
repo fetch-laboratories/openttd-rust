@@ -226,14 +226,13 @@ impl Owner {
             kind: VehicleType::VEH_ROAD,
         }
     }
-    fn flags(self) -> u16 {
+    /// `gv_flags`.
+    fn gv_flags(self) -> u16 {
         read_field!(self.state, flags)
     }
-    fn set_flags(self, flags: u16) {
-        write_field!(self.state, flags, flags);
-    }
-    fn has_flag(self, flag: GroundVehicleFlags) -> bool {
-        has_bit(self.flags(), flag.0)
+    /// Store `gv_flags`.
+    fn set_gv_flags(self, gv_flags: u16) {
+        write_field!(self.state, flags, gv_flags);
     }
 }
 
@@ -1012,10 +1011,10 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         let mut part = Some(v);
         while let Some(u) = part {
             let o = if u == v { first } else { Owner::of(u) };
-            if o.has_flag(GroundVehicleFlags::GVF_GOINGUP_BIT) {
+            if has_bit(o.gv_flags(), GroundVehicleFlags::GVF_GOINGUP_BIT.0) {
                 hit(witness::GROUND_UPHILL);
                 incl += i64::from(read_field!(o.state, cache.cached_slope_resistance));
-            } else if o.has_flag(GroundVehicleFlags::GVF_GOINGDOWN_BIT) {
+            } else if has_bit(o.gv_flags(), GroundVehicleFlags::GVF_GOINGDOWN_BIT.0) {
                 hit(witness::GROUND_DOWNHILL);
                 incl -= i64::from(read_field!(o.state, cache.cached_slope_resistance));
             }
@@ -1034,10 +1033,10 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         o: Owner,
     ) {
         v.write_z(movement.get().get_slope_pixel_z(v.x(), v.y(), true));
-        let mut flags = o.flags();
+        let mut flags = o.gv_flags();
         clr_bit16(&mut flags, GroundVehicleFlags::GVF_GOINGUP_BIT.0);
         clr_bit16(&mut flags, GroundVehicleFlags::GVF_GOINGDOWN_BIT.0);
-        o.set_flags(flags);
+        o.set_gv_flags(flags);
 
         if T::tile_may_have_sloped_track(movement, v, o) {
             /* To check whether the current tile is sloped, and in which
@@ -1051,7 +1050,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
             );
 
             if middle_z != v.z() {
-                let mut flags = o.flags();
+                let mut flags = o.gv_flags();
                 set_bit16(
                     &mut flags,
                     if middle_z > v.z() {
@@ -1060,7 +1059,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
                         GroundVehicleFlags::GVF_GOINGDOWN_BIT.0
                     },
                 );
-                o.set_flags(flags);
+                o.set_gv_flags(flags);
             }
         }
     }
@@ -1084,8 +1083,8 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
          * we know the Z position changes by +/-1 at certain moments - when x_pos, y_pos is odd/even,
          * depending on orientation of the slope and vehicle's direction */
 
-        if o.has_flag(GroundVehicleFlags::GVF_GOINGUP_BIT)
-            || o.has_flag(GroundVehicleFlags::GVF_GOINGDOWN_BIT)
+        if has_bit(o.gv_flags(), GroundVehicleFlags::GVF_GOINGUP_BIT.0)
+            || has_bit(o.gv_flags(), GroundVehicleFlags::GVF_GOINGDOWN_BIT.0)
         {
             if T::has_to_use_get_slope_pixel_z(v) {
                 /* In some cases, we have to use GetSlopePixelZ() */
@@ -1110,7 +1109,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
             /* Subtraction instead of addition because we are testing for GVF_GOINGUP_BIT.
              * GVF_GOINGUP_BIT is used because it's bit 0, so simple AND can be used,
              * without any shift */
-            let delta = if o.has_flag(GroundVehicleFlags::GVF_GOINGUP_BIT) {
+            let delta = if has_bit(o.gv_flags(), GroundVehicleFlags::GVF_GOINGUP_BIT.0) {
                 d
             } else {
                 -d
@@ -1197,10 +1196,10 @@ pub(crate) fn crash(s: &Services, v: VehicleRef, flooded: bool) -> u32 {
     let mut part = Some(v);
     while let Some(u) = part {
         let o = Owner::of(u);
-        let mut flags = o.flags();
+        let mut flags = o.gv_flags();
         clr_bit16(&mut flags, GroundVehicleFlags::GVF_GOINGUP_BIT.0);
         clr_bit16(&mut flags, GroundVehicleFlags::GVF_GOINGDOWN_BIT.0);
-        o.set_flags(flags);
+        o.set_gv_flags(flags);
         part = u.next();
     }
     hit(if flooded {

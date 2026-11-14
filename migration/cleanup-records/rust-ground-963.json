@@ -4,5 +4,23 @@
     "tool": "clippy",
     "from": "rust/openttd-kernels/src/ground_vehicle.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28",
     "to": "rust/openttd-kernels/src/road.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/ground.rs | fn clear_tile_loop | allow clippy::inline_always",
+    "to": "rust/openttd-kernels/src/ground.rs | fn tile_loop_clear | allow clippy::inline_always"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/ground.rs | fn field_fence | allow clippy::inline_always",
+    "to": "rust/openttd-kernels/src/ground.rs | fn update_fences | allow clippy::inline_always"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/ground_vehicle.rs | fn move_incline | allow clippy::too_many_arguments",
+    "to": "rust/openttd-kernels/src/road.rs | fn move_incline | allow clippy::too_many_arguments"
   }
 ]
