@@ -28,7 +28,12 @@ namespace ShipYapfProbe {
 inline uint32_t draws;
 inline uint32_t Random(void *) noexcept { ++draws; return 0x9abcdef0; }
 inline OpenTTDWaterRegions *regions;
-inline OpenTTDWaterGroundServices water{.water_regions = []() noexcept { return regions; }};
+/** The water services the fixture serves: only the region owner. */
+inline const OpenTTDWaterGroundServices water = [] {
+	OpenTTDWaterGroundServices services{};
+	services.water_regions = []() noexcept { return regions; };
+	return services;
+}();
 
 /** The current count of the branch witness `ship_yapf.<name>`. */
 inline uint64_t Witness(std::string_view name)
@@ -51,10 +56,27 @@ struct Stats {
 	}
 };
 
+/** The cases' search input: a ship with no order at `tile` facing `direction`, bound for `dest_tile`, at speed 100 with the cases' curve penalties. */
+inline OpenTTDShipYapfInput Input(uint32_t tile, uint32_t dest_tile, uint8_t direction)
+{
+	return {.tile = tile, .dest_tile = dest_tile, .order_type = OT_NOTHING, .order_destination = 0, .direction = direction, .max_speed = 100,
+		.ocean_speed_frac = 0, .canal_speed_frac = 0, .ship_curve45_penalty = 20, .ship_curve90_penalty = 100, .unit_number = 0};
+}
+
+/** Every tile `kind`, inside the void border a map with freeform edges has on all four sides. */
+inline void Fill(FollowerFixture &map, uint32_t width, uint8_t kind)
+{
+	const uint32_t height = map.tiles.size / width;
+	for (uint32_t t = 0; t < map.tiles.size; ++t) {
+		const uint32_t x = t % width, y = t / width;
+		map.Tile(t, x == 0 || y == 0 || x == width - 1 || y == height - 1 ? static_cast<uint8_t>(MP_VOID) : kind);
+	}
+}
+
 /** One-tile-wide river rows on every odd y below `rows`, from x = 1 to width - 2, each joined to the next at alternating ends. */
 inline void CarveRiver(FollowerFixture &map, uint32_t width, uint32_t rows)
 {
-	for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_CLEAR);
+	Fill(map, width, MP_CLEAR);
 	for (uint32_t y = 1; y < rows; y += 2) {
 		for (uint32_t x = 1; x <= width - 2; ++x) map.Tile(x + y * width, MP_WATER);
 		if (y < rows - 2) map.Tile(((y / 2 & 1) ? 1 : width - 2) + (y + 1) * width, MP_WATER);
@@ -117,11 +139,11 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	/* A 32 by 32 sea: a ship on (10, 20) heading south-east. */
 	{
 		FollowerFixture map{32, 32};
-		for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_WATER);
+		Fill(map, 32, MP_WATER);
 		install(map, 32, 32);
 		draws = 0;
 		OpenTTDShipYapfProbe probe{};
-		probe.input = {.tile = 10 + 32 * 20, .dest_tile = 10 + 32 * 24, .direction = DIR_SE, .max_speed = 100, .ship_curve45_penalty = 20, .ship_curve90_penalty = 100};
+		probe.input = Input(10 + 32 * 20, 10 + 32 * 24, DIR_SE);
 		probe.state = TRACK_BIT_Y;
 		probe.trackdir = TRACKDIR_Y_SE;
 		auto direction = openttd_test_ship_choose_ship_track(&map.shared, &leaves, &probe, probe.input.tile, 1 << TRACKDIR_Y_SE, 0, path.get());
@@ -149,15 +171,15 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	 * leaves at once. The case observes that retry's failure, which a consistent cache cannot give. */
 	{
 		FollowerFixture map{256, 256};
-		for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_WATER);
+		Fill(map, 256, MP_WATER);
 		install(map, 256, 256);
 		for (uint32_t y = 0; y < 256; y += 16) {
-			for (uint32_t x = 0; x < 256; x += 16) check(openttd_rust_water_label(owner.get(), &map.shared, x + y * 256) == 1);
+			for (uint32_t x = 0; x < 256; x += 16) check(openttd_rust_water_label(owner.get(), &map.shared, x + 8 + (y + 8) * 256) == 1);
 		}
 		CarveRiver(map, 256, 255);
 		draws = 0;
 		OpenTTDShipYapfProbe probe{};
-		probe.input = {.tile = 1 + 256, .dest_tile = 1 + 256 * 101, .direction = DIR_SW, .max_speed = 100, .ship_curve45_penalty = 20, .ship_curve90_penalty = 100};
+		probe.input = Input(1 + 256, 1 + 256 * 101, DIR_SW);
 		probe.state = TRACK_BIT_X;
 		probe.trackdir = TRACKDIR_X_SW;
 		openttd_rust_ship_path_clear(path.get());
@@ -179,7 +201,7 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 		install(map, 128, 128);
 		draws = 0;
 		OpenTTDShipYapfProbe probe{};
-		probe.input = {.tile = 118 + 128 * 125, .dest_tile = 1 + 128, .direction = DIR_SW, .max_speed = 100, .ship_curve45_penalty = 20, .ship_curve90_penalty = 100};
+		probe.input = Input(118 + 128 * 125, 1 + 128, DIR_SW);
 		probe.state = TRACK_BIT_X;
 		probe.trackdir = TRACKDIR_X_SW;
 		openttd_rust_ship_path_clear(path.get());
