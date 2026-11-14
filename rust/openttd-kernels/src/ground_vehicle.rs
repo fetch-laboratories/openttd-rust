@@ -1296,21 +1296,30 @@ pub(crate) fn do_update_speed(v: VehicleRef, accel: u32, min_speed: i32, max_spe
     scaled_spd as u32
 }
 
-/// Export bodies take the immutable service table and a live record.
-macro_rules! entry {
-    ($export:ident, $function:ident $(, $arg:ident : $ty:ty)* => $ret:ty) => {
-        /// # Safety
-        /// Services and shell must remain live under the game-state mutex.
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $export(s: *const Services, v: VehicleRef, $($arg: $ty),*) -> $ret {
-            // SAFETY: immutable native table lives for the synchronous entry.
-            $function(unsafe {&*s}, v, $($arg),*)
-        }
-    };
+/// # Safety
+/// Services and shell must remain live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_ground_power_changed(s: *const Services, v: VehicleRef) {
+    // SAFETY: immutable native table lives for the synchronous entry.
+    power_changed(unsafe { &*s }, v)
 }
-entry!(openttd_rust_ground_power_changed, power_changed => ());
-entry!(openttd_rust_ground_cargo_changed, cargo_changed => ());
-entry!(openttd_rust_ground_acceleration, get_acceleration => i32);
+/// # Safety
+/// Services and shell must remain live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_ground_cargo_changed(s: *const Services, v: VehicleRef) {
+    // SAFETY: immutable native table lives for the synchronous entry.
+    cargo_changed(unsafe { &*s }, v)
+}
+/// # Safety
+/// Services and shell must remain live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_ground_acceleration(
+    s: *const Services,
+    v: VehicleRef,
+) -> i32 {
+    // SAFETY: immutable native table lives for the synchronous entry.
+    get_acceleration(unsafe { &*s }, v)
+}
 /// # Safety
 /// Services and shell must remain live under the game-state mutex.
 #[unsafe(no_mangle)]
@@ -1321,8 +1330,24 @@ pub unsafe extern "C" fn openttd_rust_ground_chain_in_depot_abi(
     // SAFETY: immutable native table lives for the synchronous entry.
     u8::from(is_chain_in_depot(unsafe { &*s }, v))
 }
-entry!(openttd_rust_ground_crash, crash, flooded: bool => u32);
-entry!(openttd_rust_ground_max_weight, get_max_weight => u16);
+/// # Safety
+/// Services and shell must remain live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_ground_crash(
+    s: *const Services,
+    v: VehicleRef,
+    flooded: bool,
+) -> u32 {
+    // SAFETY: immutable native table lives for the synchronous entry.
+    crash(unsafe { &*s }, v, flooded)
+}
+/// # Safety
+/// Services and shell must remain live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_ground_max_weight(s: *const Services, v: VehicleRef) -> u16 {
+    // SAFETY: immutable native table lives for the synchronous entry.
+    get_max_weight(unsafe { &*s }, v)
+}
 /// # Safety
 /// Services and shell must remain live under the game-state mutex.
 #[unsafe(no_mangle)]
