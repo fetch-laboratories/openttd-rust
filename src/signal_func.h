@@ -26,16 +26,6 @@ inline uint8_t SignalAlongTrackdir(Trackdir trackdir)
 }
 
 /**
- * Maps a trackdir to the bit that stores its status in the map arrays, in the
- * direction against the trackdir.
- */
-inline uint8_t SignalAgainstTrackdir(Trackdir trackdir)
-{
-	extern const uint8_t _signal_against_trackdir[TRACKDIR_END];
-	return _signal_against_trackdir[trackdir];
-}
-
-/**
  * Maps a Track to the bits that store the status of the two signals that can
  * be present on the given track.
  */

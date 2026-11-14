@@ -299,8 +299,10 @@ pub unsafe extern "C" fn openttd_rust_grf_text_check_language_abi(language: u8, 
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_text_cleanup() {
+/// `CleanUpStrings`: house cleaning. Remove all strings.
+/// # Safety
+/// Serialized game state; no borrow of the text table is live.
+pub(crate) unsafe fn clean_up_strings() {
     unsafe { &mut *TEXTS.get() }.clear();
 }
 
@@ -390,7 +392,7 @@ mod tests {
         assert_eq!(select(9, [1, 0].into_iter()), Some(0));
         assert_eq!(select(9, [2, 3].into_iter()), None);
         unsafe {
-            openttd_rust_grf_text_cleanup();
+            clean_up_strings();
             let index = prepare(123, 0xd000, 42);
             assert_eq!(index, 0);
             assert_eq!(prepare(123, 0xd000, 99), 0);
@@ -449,7 +451,7 @@ mod tests {
             let mut default = 0;
             let text = openttd_rust_grf_text_get(&shared(), 0, &raw mut default);
             assert_eq!(crate::utf8::borrow(text.data, text.size), b"Deutsch");
-            openttd_rust_grf_text_cleanup();
+            clean_up_strings();
             assert_eq!(openttd_rust_grf_text_id(123, 0xd000, 2), 2);
             let mut movement = crate::train_reservation::tests::movement_table();
             movement.native_assert = returning_assert;
@@ -458,7 +460,7 @@ mod tests {
             let text = openttd_rust_grf_text_get(&shared, 0, &raw mut default);
             assert_eq!(crate::utf8::borrow(text.data, text.size), b"assertion");
             assert_eq!(ASSERTIONS.load(Ordering::SeqCst), 2);
-            openttd_rust_grf_text_cleanup();
+            clean_up_strings();
             openttd_rust_grf_text_set_language(1);
         }
     }

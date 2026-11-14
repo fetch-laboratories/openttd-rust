@@ -28,9 +28,6 @@
 	return {decoded.length, static_cast<char32_t>(decoded.codepoint)};
 }
 
-/* Check if the given character is part of a UTF8 sequence */
-bool IsUtf8Part(char c);
-
 /**
  * Constant span of UTF-8 encoded data.
  */

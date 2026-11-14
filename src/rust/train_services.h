@@ -34,12 +34,6 @@ static void TrainVehicleInvoke(OpenTTDTrainHandle id) noexcept
 	Operation(static_cast<Train *>(VehicleFromRecord(id.record)));
 }
 
-template <auto Operation>
-static void TrainVehiclePair(OpenTTDTrainHandle id, OpenTTDTrainHandle other) noexcept
-{
-	Operation(static_cast<Train *>(VehicleFromRecord(id.record)), static_cast<Train *>(VehicleFromRecord(other.record)));
-}
-
 static void TrainWriteColourmap(OpenTTDTrainHandle id, uint64_t value) noexcept
 {Train *v=static_cast<Train *>(VehicleFromRecord(id.record)); v->colourmap = static_cast<PaletteID>(value);}
 static uint64_t TrainAdvanceDistance(OpenTTDTrainHandle id) noexcept

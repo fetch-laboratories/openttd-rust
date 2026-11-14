@@ -75,18 +75,6 @@ inline uint GetClearDensity(Tile t)
 }
 
 /**
- * Increment the density of a non-field clear tile.
- * @param t the tile to increment the density of
- * @param d the amount to increment the density with
- * @pre IsTileType(t, MP_CLEAR)
- */
-inline void AddClearDensity(Tile t, int d)
-{
-	assert(IsTileType(t, MP_CLEAR)); // XXX incomplete
-	t.m5() += d;
-}
-
-/**
  * Set the density of a non-field clear tile.
  * @param t the tile to set the density of
  * @param d the new density
@@ -109,18 +97,6 @@ inline uint GetClearCounter(Tile t)
 {
 	assert(IsTileType(t, MP_CLEAR));
 	return GB(t.m5(), 5, 3);
-}
-
-/**
- * Increments the counter used to advance to the next clear density/field type.
- * @param t the tile to increment the counter of
- * @param c the amount to increment the counter with
- * @pre IsTileType(t, MP_CLEAR)
- */
-inline void AddClearCounter(Tile t, int c)
-{
-	assert(IsTileType(t, MP_CLEAR)); // XXX incomplete
-	t.m5() += c << 5;
 }
 
 /**

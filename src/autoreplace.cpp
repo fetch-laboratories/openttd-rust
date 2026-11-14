@@ -45,22 +45,6 @@ EngineID EngineReplacement(EngineRenewList erl, EngineID engine, GroupID group, 
 }
 
 /**
- * Add an engine replacement to the given renewlist.
- * @param erl The renewlist to add to.
- * @param old_engine The original engine type.
- * @param new_engine The replacement engine type.
- * @param group The group related to this replacement.
- * @param replace_when_old Replace when old or always?
- * @param flags The calling command flags.
- * @return 0 on success, CMD_ERROR on failure.
- */
-CommandCost AddEngineReplacement(EngineRenewList *erl, EngineID old_engine, EngineID new_engine, GroupID group, bool replace_when_old, DoCommandFlags flags)
-{
-	uint32_t error = openttd_rust_fleet_add_replacement(&FleetGroupServices(), reinterpret_cast<void **>(erl), old_engine.base(), new_engine.base(), group.base(), replace_when_old, flags.base());
-	return error == UINT32_MAX ? CommandCost() : CommandCost(error);
-}
-
-/**
  * Remove an engine replacement from a given renewlist.
  * @param erl The renewlist from which to remove the replacement
  * @param engine The original engine type.

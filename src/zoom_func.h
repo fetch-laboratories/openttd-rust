@@ -48,17 +48,6 @@ inline int AdjustByZoom(int value, int zoom)
 }
 
 /**
- * Scale by zoom level, usually shift left (when zoom > ZoomLevel::Min)
- * @param value value to shift
- * @param zoom  zoom level to shift to
- * @return shifted value
- */
-inline int ScaleByZoomLower(int value, ZoomLevel zoom)
-{
-	return value << to_underlying(zoom);
-}
-
-/**
  * Scale by zoom level, usually shift right (when zoom > ZoomLevel::Min)
  * @param value value to shift
  * @param zoom  zoom level to shift to
@@ -87,16 +76,6 @@ inline int UnScaleGUI(int value)
 inline ZoomLevel ScaleZoomGUI(ZoomLevel value)
 {
 	return std::clamp(value + (_gui_zoom - ZoomLevel::Normal), ZoomLevel::Min, ZoomLevel::Max);
-}
-
-/**
- * UnScale zoom level relative to GUI zoom.
- * @param value zoom level to scale
- * @return un-scaled zoom level
- */
-inline ZoomLevel UnScaleZoomGUI(ZoomLevel value)
-{
-	return std::clamp(value - (_gui_zoom - ZoomLevel::Normal), ZoomLevel::Min, ZoomLevel::Max);
 }
 
 /**

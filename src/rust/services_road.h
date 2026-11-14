@@ -22,7 +22,6 @@ inline uint64_t RustRoadCompatibleTypes(const Vehicle *v) noexcept { return Road
 inline uint16_t RustRoadTypeMaxSpeed(RoadType type) noexcept { return GetRoadTypeInfo(type)->max_speed; }
 inline RoadType RustRoadVehicleType(const RoadVehicle *v) noexcept { return v->roadtype; }
 inline RoadTramType RustRoadTramType(RoadType type) noexcept { return GetRoadTramType(type); }
-inline bool RustRoadTypeIsRoad(uint8_t rt) noexcept { return RoadTypeIsRoad(static_cast<RoadType>(rt)); }
 inline uint16_t RustRoadCostMultiplier(uint8_t type) noexcept { return GetRoadTypeInfo(static_cast<RoadType>(type))->cost_multiplier; }
 inline void RustSetRoadType(TileIndex tile, RoadTramType kind, RoadType type) noexcept { SetRoadType(tile, kind, type); }
 inline bool RustCrossingReserved(uint32_t tile) noexcept { return HasCrossingReservation(TileIndex{tile}); }

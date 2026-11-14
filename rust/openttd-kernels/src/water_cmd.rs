@@ -206,8 +206,8 @@ impl World<'_> {
     fn wake_neighbours(&self, tile: u32) {
         // SAFETY: Direct call; no borrow of native map data spans this entry.
         unsafe {
-            crate::water::openttd_rust_clear_neighbour_flooding(
-                tile,
+            crate::water::clear_neighbour_non_flooding_states(
+                crate::tile_type::TileIndex(tile),
                 self.size_x,
                 self.size_y,
                 self.water,

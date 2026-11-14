@@ -3326,28 +3326,6 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
         w.get_aircraft_flight_level(id.base(), flags, takeoff)
     })
 }
-/// `GetTileHeightBelowAircraft`.
-/// # Safety
-/// See the shared export contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_height(leaves: *const Leaves, id: Vehicle) -> i32 {
-    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    with_world!(leaves, |w| { w.get_tile_height_below_aircraft(id.base()) })
-}
-/// `GetAircraftHoldMaxAltitude`.
-/// # Safety
-/// See the shared export contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_hold_altitude(
-    leaves: *const Leaves,
-    id: Vehicle,
-) -> i32 {
-    if id.state.is_null() {
-        crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
-    }
-    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    with_world!(leaves, |w| { w.get_aircraft_hold_max_altitude(id.base()) })
-}
 /// `HandleMissingAircraftOrders`.
 /// # Safety
 /// See the shared export contract.
@@ -3403,13 +3381,6 @@ pub unsafe extern "C" fn openttd_rust_aircraft_order_location(leaves: *const Lea
     with_world!(leaves, |w| {
         w.get_order_station_location(id);
     });
-}
-/// `UpdateAirplanesOnNewStation`.
-/// # Safety
-/// See the shared export contract; `station` is a live station.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_replacement(leaves: *const Leaves, station: u16) {
-    unsafe { update_airplanes_on_new_station(leaves, StationID(station)) };
 }
 /// `Aircraft::FindClosestDepot`'s station.
 /// # Safety

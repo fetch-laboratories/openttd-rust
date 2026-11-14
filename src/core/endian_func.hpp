@@ -12,19 +12,7 @@
 
 #include "bitmath_func.hpp"
 
-static constexpr uint16_t FROM_BE16(uint16_t x)
-{
-	if constexpr (std::endian::native == std::endian::big) return x;
-	return std::byteswap(x);
-}
-
 static constexpr uint32_t FROM_BE32(uint32_t x)
-{
-	if constexpr (std::endian::native == std::endian::big) return x;
-	return std::byteswap(x);
-}
-
-static constexpr uint16_t TO_BE16(uint16_t x)
 {
 	if constexpr (std::endian::native == std::endian::big) return x;
 	return std::byteswap(x);
@@ -37,12 +25,6 @@ static constexpr uint32_t TO_BE32(uint32_t x)
 }
 
 static constexpr uint16_t FROM_LE16(uint16_t x)
-{
-	if constexpr (std::endian::native == std::endian::little) return x;
-	return std::byteswap(x);
-}
-
-static constexpr uint32_t FROM_LE32(uint32_t x)
 {
 	if constexpr (std::endian::native == std::endian::little) return x;
 	return std::byteswap(x);

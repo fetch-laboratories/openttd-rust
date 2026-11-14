@@ -335,11 +335,11 @@ unsafe fn station_change_info(
                 0x12 => {
                     let value = reader.dword()?;
                     let cargo = if ((*s.shared).grf_file_version)(file) >= 7 {
-                        crate::engine_loading::openttd_rust_engine_translate_refit(value, file)
+                        crate::engine_loading::translate_refit_mask(value, file)
                     } else {
-                        u64::from(value)
+                        CargoTypes(u64::from(value))
                     };
-                    (s.station_cargo_triggers)(spec, CargoTypes(cargo).0);
+                    (s.station_cargo_triggers)(spec, cargo.0);
                 }
                 // General flags
                 0x13 => (s.station_flags)(spec, StationSpecFlags(reader.byte()?).0),
@@ -514,11 +514,8 @@ unsafe fn road_stop_change_info(
                 0x0c => (s.road_draw_mode)(spec, RoadStopDrawModes(reader.byte()?).0),
                 // Cargo types for random triggers
                 0x0d => {
-                    let cargo = crate::engine_loading::openttd_rust_engine_translate_refit(
-                        reader.dword()?,
-                        file,
-                    );
-                    (s.road_cargo_triggers)(spec, CargoTypes(cargo).0);
+                    let cargo = crate::engine_loading::translate_refit_mask(reader.dword()?, file);
+                    (s.road_cargo_triggers)(spec, cargo.0);
                 }
                 // Animation info
                 0x0e => {

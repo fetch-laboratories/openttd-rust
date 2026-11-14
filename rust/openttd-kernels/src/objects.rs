@@ -751,8 +751,8 @@ impl<'a> World<'a> {
             }
             for t in self.tiles(area) {
                 if (self.shared.is_water_tile)(t) {
-                    crate::water::openttd_rust_clear_neighbour_flooding(
-                        t,
+                    crate::water::clear_neighbour_non_flooding_states(
+                        TileIndex(t),
                         self.map.size_x(),
                         (self.shared.map_max_y)() + 1,
                         (self.shared.water_services)(),
@@ -795,9 +795,9 @@ impl<'a> World<'a> {
                 let remove = (self.shared.clear_square_services.docking)(t);
                 (self.s.make)(t, owner, object.id, wc, self.shared.random());
                 if remove {
-                    crate::station_cmd::openttd_rust_station_remove_docking_tile(
+                    crate::station_cmd::remove_docking_tile(
                         (self.shared.station_commands)(),
-                        t,
+                        TileIndex(t),
                     );
                 }
                 (self.shared.mark_dirty)(t);
@@ -1135,12 +1135,12 @@ impl<'a> World<'a> {
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
                     if result.callback == CALLBACK_FAILED {
-                        crate::station_cmd::openttd_rust_station_check_buildable(
+                        crate::station_cmd::check_buildable_tile(
                             (self.shared.station_commands)(),
                             tmp.0,
-                            t,
-                            0,
-                            &raw mut z,
+                            TileIndex(t),
+                            crate::direction_type::DiagDirections::EMPTY,
+                            &mut z,
                             false,
                             false,
                         );

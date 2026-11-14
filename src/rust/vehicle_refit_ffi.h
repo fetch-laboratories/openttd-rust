@@ -129,8 +129,6 @@ const OpenTTDVehicleCloneServices &GetRustVehicleCloneServices() noexcept;
 const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept;
 const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept;
 extern "C" {
-void openttd_rust_vehicle_add_articulated(const OpenTTDVehicleArticulatedServices *, void *);
-void openttd_rust_vehicle_articulated_consistency(const OpenTTDVehicleArticulatedServices *, void *);
 uint32_t openttd_rust_vehicle_clone(const OpenTTDVehicleCloneServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, bool);
 OpenTTDVehicleBuildResult openttd_rust_vehicle_build(const OpenTTDVehicleBuildServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint16_t, bool, uint8_t, uint32_t);
 void openttd_rust_train_move(const OpenTTDVehicleBuildServices *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, bool);

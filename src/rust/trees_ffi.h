@@ -31,7 +31,6 @@ struct OpenTTDTreeStrings {
  * progress updates. progress/progress_total return true when world generation was aborted: the
  * C++ wrapper keeps the exception, Rust returns without another draw or write, and the entry's
  * caller rethrows it. */
-struct OpenTTDGroundCall;
 struct OpenTTDCommandCost;
 struct OpenTTDCommandServices;
 struct OpenTTDTownLeaves;
@@ -59,7 +58,6 @@ uint32_t openttd_rust_trees_place_group(uint32_t tile, uint8_t type, uint32_t ra
 uint8_t openttd_test_trees_generate(const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_trees_place_randomly_abi(const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 extern "C++" inline bool openttd_rust_trees_place_randomly(const OpenTTDTreeServices *a0, const OpenTTDSharedServices *a1) { return openttd_rust_trees_place_randomly_abi(a0, a1) != 0; }
-void openttd_rust_trees_place(uint32_t tile, uint32_t r, bool keep_density, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 /* CmdPlantTree: writes the command's result to the native slot. */
 void openttd_rust_trees_cmd_plant(uint16_t flags, const OpenTTDPlantTreeArgs *, OpenTTDCommandCost *, const OpenTTDTreeServices *, const OpenTTDSharedServices *, const OpenTTDCommandServices *);
 /* Stable Rust-owned byte; game-thread initialization/ticks and serial save/load access only.

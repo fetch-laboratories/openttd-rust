@@ -43,17 +43,6 @@ enum class WaterClass : uint8_t {
 	Invalid = 3, ///< Used for industry tiles on land (also for oilrig if newgrf says so).
 };
 
-/**
- * Checks if a water class is valid.
- *
- * @param wc The value to check
- * @return true if the given value is a valid water class.
- */
-inline bool IsValidWaterClass(WaterClass wc)
-{
-	return wc < WaterClass::Invalid;
-}
-
 /** Sections of the water depot. */
 enum class DepotPart : uint8_t {
 	North = 0, ///< Northern part of a depot.

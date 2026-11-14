@@ -58,19 +58,6 @@ void RotateHistory(HistoryData<T> &history, ValidHistoryMask valid_history, cons
 }
 
 /**
- * Get an average value for the previous month, as reset for the next month.
- * @param total Accrued total to average. Will be reset to zero.
- * @return Average value for the month.
- */
-template <typename T, typename Taccrued>
-T GetAndResetAccumulatedAverage(Taccrued &total)
-{
-	T result = ClampTo<T>(total / std::max(1U, TimerGameEconomy::days_since_last_month));
-	total = 0;
-	return result;
-}
-
-/**
  * Get historical data.
  * @tparam T type of history data element.
  * @param history History data to extract from.

@@ -386,8 +386,6 @@ void openttd_rust_industry_build(OpenTTDIndustryCost *, uint32_t tile, uint8_t t
 void openttd_rust_industry_create(OpenTTDIndustryCost *, OpenTTDIndustryShell **industry, uint32_t tile, uint8_t type, uint8_t creation_type, const OpenTTDIndustryTransactionContext *);
 void openttd_rust_industry_location_check(OpenTTDIndustryCost *, uint32_t tile, uint8_t type, size_t layout, uint32_t random, uint16_t bits, uint8_t founder, uint8_t creation, const OpenTTDIndustryTransactionContext *);
 void openttd_rust_industry_shape_check(OpenTTDIndustryCost *, uint32_t tile, uint32_t current, const OpenTTDIndustryTileSpec *, uint8_t type, uint16_t gfx, size_t layout, uint16_t bits, uint8_t founder, uint8_t creation, const OpenTTDIndustryTransactionContext *);
-uint8_t openttd_rust_industry_slope_refused_abi(uint8_t current, uint8_t refused);
-extern "C++" inline bool openttd_rust_industry_slope_refused(uint8_t a0, uint8_t a1) { return openttd_rust_industry_slope_refused_abi(a0, a1) != 0; }
 #ifdef __cplusplus
 }
 #endif

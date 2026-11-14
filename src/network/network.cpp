@@ -90,15 +90,6 @@ uint8_t _network_clients_connected = 0;
 extern std::string GenerateUid(std::string_view subject);
 
 /**
- * Return whether there is any client connected or trying to connect at all.
- * @return whether we have any client activity
- */
-bool HasClients()
-{
-	return !NetworkClientSocket::Iterate().empty();
-}
-
-/**
  * Basically a client is leaving us right now.
  */
 NetworkClientInfo::~NetworkClientInfo()

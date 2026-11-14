@@ -302,8 +302,9 @@ pub extern "C" fn openttd_rust_cargo_climate_labels() -> Labels {
         size: usize::from(NUM_ORIGINAL_CARGO),
     }
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_bitnum_labels() -> Labels {
+/// `GetClimateIndependentCargoTranslationTable`: get default climate-independent cargo
+/// translation table for a `NewGRF`, used if the `NewGRF` does not provide its own.
+pub(crate) fn get_climate_independent_cargo_translation_table() -> Labels {
     Labels {
         data: unsafe { (&raw const (*REGISTRY.get()).climate_independent_cargo_labels).cast() },
         size: 32,
@@ -448,8 +449,7 @@ pub extern "C" fn openttd_rust_cargo_finalise() {
     }
 }
 /// `GetCargoTranslationTable`: get the cargo translation table to use for the given GRF file.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_translation_table(file: Handle) -> Labels {
+pub(crate) fn get_cargo_translation_table(file: Handle) -> Labels {
     let grffile = (services().file)(file);
     // Always use the translation table if it's installed.
     if grffile.labels.size != 0 {
@@ -459,7 +459,7 @@ pub extern "C" fn openttd_rust_cargo_translation_table(file: Handle) -> Labels {
         openttd_rust_cargo_climate_labels()
     } else {
         // Otherwise use climate-independent "bitnum" table.
-        openttd_rust_cargo_bitnum_labels()
+        get_climate_independent_cargo_translation_table()
     }
 }
 /// `GetCargoTranslation`: translate a GRF-local cargo slot/bitnum into a `CargoType`.
@@ -475,7 +475,7 @@ pub(crate) fn get_cargo_translation(cargo: u8, file: Handle, usebit: bool) -> Ca
     } else if grffile.labels.size != 0 {
         grffile.labels
     } else {
-        openttd_rust_cargo_bitnum_labels()
+        get_climate_independent_cargo_translation_table()
     };
     if usize::from(cargo) < cargo_list.size {
         let label = CargoLabel(unsafe { cargo_list.data.add(usize::from(cargo)).read() });
@@ -493,7 +493,7 @@ pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: 
 pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
     let s = services();
     (s.clear_inverse)(file);
-    let cargo_list = openttd_rust_cargo_translation_table(file);
+    let cargo_list = get_cargo_translation_table(file);
     for (_, (cs, info)) in crate::cargotype::iterate(
         |cargo| {
             let cs = (s.spec)(cargo);
@@ -524,7 +524,7 @@ pub extern "C" fn openttd_rust_cargo_fallback(file: *mut c_void, id: u32, last: 
     let s = services();
     if (s.file)(file).labels.size == 0 {
         // Cargo translation table isn't configured yet, assume it won't be and configure the cargo list as a fallback list.
-        let default_cargo_list = openttd_rust_cargo_translation_table(file);
+        let default_cargo_list = get_cargo_translation_table(file);
         (s.assign_fallback)(file, default_cargo_list);
     }
     let grffile = (s.file)(file);

@@ -217,14 +217,11 @@ static uint8_t &GetFlightFlags(DisasterVehicle *v) { return v->Flags(); }
 template <class T> int GetAircraftFlightLevel(T *v, bool takeoff) { return openttd_rust_aircraft_flight_level(&_aircraft_leaves, RustAircraftVehicle(v), &GetFlightFlags(v), takeoff); }
 template int GetAircraftFlightLevel(DisasterVehicle *v, bool takeoff);
 template int GetAircraftFlightLevel(Aircraft *v, bool takeoff);
-int GetTileHeightBelowAircraft(const Vehicle *v) { return openttd_rust_aircraft_height(&_aircraft_leaves, RustAircraftVehicle(const_cast<Vehicle *>(v))); }
-int GetAircraftHoldMaxAltitude(const Aircraft *v) { return openttd_rust_aircraft_hold_altitude(&_aircraft_leaves, RustAircraftVehicle(const_cast<Aircraft *>(v))); }
 void HandleMissingAircraftOrders(Aircraft *v) { openttd_rust_aircraft_missing_orders(&_aircraft_leaves, RustAircraftVehicle(v)); }
 uint Aircraft::Crash(bool flooded) { return openttd_rust_aircraft_crash(&_aircraft_leaves, RustAircraftVehicle(this), flooded); }
 void AircraftNextAirportPos_and_Order(Aircraft *v) { openttd_rust_aircraft_next_airport(&_aircraft_leaves, RustAircraftVehicle(v)); }
 void AircraftLeaveHangar(Aircraft *v, Direction exit_dir) { openttd_rust_aircraft_leave_hangar(&_aircraft_leaves, RustAircraftVehicle(v), exit_dir); }
 TileIndex Aircraft::GetOrderStationLocation(StationID) { openttd_rust_aircraft_order_location(&_aircraft_leaves, RustAircraftVehicle(this)); return TileIndex{}; }
-void UpdateAirplanesOnNewStation(const Station *st) { openttd_rust_aircraft_replacement(&_aircraft_leaves, RustBaseStationID(st)); }
 ClosestDepot Aircraft::FindClosestDepot()
 {
 	StationID station{openttd_rust_aircraft_closest_depot(&_aircraft_leaves, RustAircraftVehicle(this))};

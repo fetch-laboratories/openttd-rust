@@ -22,13 +22,3 @@ pub(crate) fn convert_cost(s: &Services, from: u8, to: u8) -> i64 {
 pub extern "C" fn openttd_rust_road_build_cost(s: &Services, road_type: u8) -> i64 {
     build_cost(s, road_type)
 }
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_road_clear_cost(s: &Services, road_type: u8) -> i64 {
-    clear_cost(s, road_type)
-}
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_road_convert_cost(s: &Services, from: u8, to: u8) -> i64 {
-    convert_cost(s, from, to)
-}

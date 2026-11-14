@@ -33,7 +33,6 @@ inline bool Shared_is_drive_through_stop(uint32_t tile) noexcept { return IsDriv
 inline uint8_t Shared_disallowed_road_directions(uint32_t tile) noexcept { return GetDisallowedRoadDirections(TileIndex{tile}); }
 inline bool Shared_is_bay_stop(uint32_t tile) noexcept { return IsBayRoadStopTile(TileIndex{tile}); }
 inline uint8_t Shared_bay_stop_direction(uint32_t tile) noexcept { return GetBayRoadStopDir(TileIndex{tile}); }
-inline bool SharedRoadTypeIsTram(RoadType roadtype) noexcept { return RoadTypeIsTram(roadtype); }
 inline int32_t SharedSlopePixelZ(int32_t x, int32_t y, bool ground_vehicle) noexcept { return GetSlopePixelZ(x, y, ground_vehicle); }
 
 inline uint32_t OpenTTDDistanceManhattan(uint32_t from, uint32_t to) noexcept { return DistanceManhattan(TileIndex(from), TileIndex(to)); }

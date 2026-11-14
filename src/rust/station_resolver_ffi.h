@@ -50,14 +50,12 @@ struct OpenTTDStationResolverServices {
 const OpenTTDStationResolverServices &GetStationResolverServices() noexcept;
 extern "C" {
 const OpenTTDStationResolverServices *openttd_rust_station_resolver_exchange(const OpenTTDStationResolverServices *);
-uint64_t openttd_rust_station_empty_mask(BaseStation *);
 TownScopeResolver *openttd_rust_station_town_scope(OpenTTDStationResolverState *, StationResolverObject *);
 ScopeResolver *openttd_rust_station_scope(OpenTTDStationResolverState *, StationResolverObject *, ScopeResolver *, uint8_t, uint8_t);
 uint32_t openttd_rust_station_variable(OpenTTDStationResolverState *, const ResolverObject *, const GRFFile *, uint8_t, uint32_t, bool *);
 const SpriteGroup *openttd_rust_station_resolver_init(OpenTTDStationResolverState *, const StationSpec *, BaseStation *, uint32_t);
 uint32_t openttd_rust_station_random_bits(const OpenTTDStationResolverState *);
 uint32_t openttd_rust_station_random_triggers(const OpenTTDStationResolverState *);
-uint32_t openttd_rust_platform_info(uint8_t, uint8_t, int32_t, int32_t, int32_t, int32_t, bool);
 void openttd_rust_station_randomisation(BaseStation *, uint32_t, uint8_t, uint8_t);
 uint16_t openttd_rust_station_callback(uint16_t, uint32_t, uint32_t, const StationSpec *, BaseStation *, uint32_t, int32_t *, size_t);
 void openttd_rust_station_slope_check(OpenTTDCommandCost *, uint32_t, uint32_t, const StationSpec *, uint8_t, uint8_t, uint8_t);

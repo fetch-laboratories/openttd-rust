@@ -1015,7 +1015,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     (v).write_speed(0);
 
     // SAFETY: a live shell and the static vehicle table; callbacks may reenter.
-    unsafe { super::maintenance::openttd_rust_vehicle_service_depot(v, vs) };
+    unsafe { super::maintenance::service_in_depot(v, vs) };
 
     entered_depot_this_tick(v, s);
 

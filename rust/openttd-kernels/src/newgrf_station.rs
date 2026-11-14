@@ -15,7 +15,7 @@
 use crate::cargo_type::{CargoType, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
 use crate::debug::debug;
 use crate::direction_type::Direction;
-use crate::direction_type::{AXIS_X, AXIS_Y, INVALID_AXIS, INVALID_DIAGDIR};
+use crate::direction_type::{AXIS_X, AXIS_Y, Axis, INVALID_AXIS, INVALID_DIAGDIR};
 use crate::game_state::GameState;
 use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
 use crate::slope_func::{SLOPE_E, SLOPE_EW, SLOPE_W};
@@ -245,9 +245,18 @@ pub unsafe extern "C" fn openttd_rust_station_resolver_init(
     }
     root
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_platform_info(
-    axis: u8,
+/// `GetPlatformInfo`: evaluate a tile's position within a station, and return the result in a
+/// bit-stuffed format.
+/// If not centered: `.TNLcCpP`, if centered: `.TNL..CP`
+/// - T = Tile layout number (`GetStationGfx`)
+/// - N = Number of platforms
+/// - L = Length of platforms
+/// - C = Current platform number from start, c = from end
+/// - P = Position along platform from start, p = from end
+///
+/// If centered, C/P start from the centre and c/p are not available.
+pub(crate) fn get_platform_info(
+    axis: Axis,
     tile: u8,
     mut platforms: i32,
     mut length: i32,
@@ -255,7 +264,7 @@ pub extern "C" fn openttd_rust_platform_info(
     mut y: i32,
     centred: bool,
 ) -> u32 {
-    if axis == AXIS_X {
+    if axis == Axis::AXIS_X {
         std::mem::swap(&mut platforms, &mut length);
         std::mem::swap(&mut x, &mut y);
     }
@@ -356,8 +365,8 @@ fn platform(
             check_axis,
         )))
         .wrapping_add(1);
-    openttd_rust_platform_info(
-        (native.axis)(tile).0,
+    get_platform_info(
+        (native.axis)(tile),
         (native.shared().station_gfx)(tile),
         ex.wrapping_sub(sx) as i32,
         ey.wrapping_sub(sy) as i32,
@@ -895,9 +904,8 @@ pub unsafe extern "C" fn openttd_rust_station_random_triggers(state: *const Stat
 pub(crate) fn cargo_count(st: *mut BaseStation, cargo: u8) -> u32 {
     services().count(st, cargo)
 }
-/// Shared `GetEmptyMask` reducer for remaining native callers.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_station_empty_mask(st: *mut BaseStation) -> u64 {
+/// `GetEmptyMask`: get a mask of the cargo types that are empty at the station.
+pub(crate) fn get_empty_mask(st: *mut BaseStation) -> u64 {
     services().get_empty_mask(st)
 }
 #[unsafe(no_mangle)]
@@ -1071,8 +1079,8 @@ pub(crate) fn callback(
 }
 /// Command callers use the original fixed X axis and platform ordering.
 pub(crate) fn platform_info(gfx: u8, length: u8, tracks: u8, x: u8, y: u8) -> u32 {
-    openttd_rust_platform_info(
-        AXIS_X,
+    get_platform_info(
+        Axis::AXIS_X,
         gfx,
         i32::from(length),
         i32::from(tracks),

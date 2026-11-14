@@ -203,14 +203,6 @@ EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal
 }
 
 
-/**
- * Translate the refit mask. refit_mask is uint32_t as it has not been mapped to CargoTypes.
- */
-CargoTypes TranslateRefitMask(uint32_t refit_mask)
-{
-	return openttd_rust_engine_translate_refit(refit_mask, _cur_gps.grffile);
-}
-
 
 /**
  * Get the language map associated with a given NewGRF and language.
@@ -260,17 +252,6 @@ void ResetPersistentNewGRFData()
 	_industile_mngr.ResetMapping();
 	_airport_mngr.ResetMapping();
 	_airporttile_mngr.ResetMapping();
-}
-
-/**
- * Get the cargo translation table to use for the given GRF file.
- * @param grffile GRF file.
- * @returns Readonly cargo translation table to use.
- */
- std::span<const CargoLabel> GetCargoTranslationTable(const GRFFile &grffile)
- {
-	auto labels = openttd_rust_cargo_translation_table(&grffile);
-	return {reinterpret_cast<const CargoLabel *>(labels.data), labels.size};
 }
 
 

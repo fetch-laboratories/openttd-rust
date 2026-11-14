@@ -52,16 +52,6 @@ std::span<const CargoLabel> GetClimateDependentCargoTranslationTable()
 }
 
 /**
- * Get default climate-independent cargo translation table for a NewGRF, used if the NewGRF does not provide its own.
- * @return Default translation table for GRF version.
- */
-std::span<const CargoLabel> GetClimateIndependentCargoTranslationTable()
-{
-	auto labels = openttd_rust_cargo_bitnum_labels();
-	return {reinterpret_cast<const CargoLabel *>(labels.data), labels.size};
-}
-
-/**
  * Build cargo label map.
  * This is called multiple times during NewGRF initialization as cargos are defined, so that TranslateRefitMask() and
  * GetCargoTranslation(), also used during initialization, get the correct information.

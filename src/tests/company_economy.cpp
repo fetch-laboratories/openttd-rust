@@ -280,25 +280,16 @@ static void FixtureReset(bool networking, bool server)
  * encoding. */
 TEST_CASE("Commands - local cash error encoding")
 {
-	FixtureReset(false, false);
-	auto command = GetRustCommandServices();
-	const auto &costs = GetRustCommandCostServices();
-	command.infinite_money = []() noexcept { return false; };
-	command.finance = &fixture_finance;
-	fixture_companies[0] = std::make_unique<CompanyProperties>();
-	fixture_companies[0]->Finances().money = 20;
-	fixture_current = 0;
+	const auto &command = GetRustCommandServices();
 	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0));
 	AutoRestoreBackup<CompanyID> local(_local_company, CompanyID(0));
 	for (CompanyID local_id : {CompanyID(0), CompanyID(1)}) {
 		_local_company = local_id;
 		CommandCost result(EXPENSES_CONSTRUCTION, Money(21));
-		CHECK_FALSE(openttd_rust_command_check_money(&command, &costs, RustCommandCost(&result)));
+		command.money_error(RustCommandCost(&result), 21);
 		CHECK(result.GetErrorMessage() == STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
 		CHECK(result.GetEncodedMessage() == (local_id == 0 ? GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(21)) : EncodedString{}));
 	}
-	fixture_current = 18;
-	fixture_companies[0].reset();
 }
 
 /* The production session loop reaches OnTick_Companies' port, whose competitor loop rereads
