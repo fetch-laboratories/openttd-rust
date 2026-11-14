@@ -114,6 +114,7 @@ private:
 	explicit EncodedString(std::string &&string) : string(std::move(string)) {}
 
 	friend EncodedString GetEncodedStringWithArgs(StringID str, std::span<const StringParameter> params);
+	friend EncodedString RustEncodedString(std::string_view bytes);
 
 	template <typename Tcont, typename Titer>
 	friend class EndianBufferWriter;

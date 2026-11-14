@@ -32,11 +32,19 @@ use crate::newgrf_properties::{
     PROP_AIRCRAFT_CARGO_AGE_PERIOD, PROP_AIRCRAFT_RANGE, PROP_AIRCRAFT_SPEED,
 };
 use crate::newgrf_sound::{VSE_START, VSE_TOUCHDOWN};
+use crate::news_func::{
+    add_tile_news_item, add_vehicle_advice_news_item, add_vehicle_news_item, delete_vehicle_news,
+};
+use crate::news_type::{AdviceType, NewsType};
 use crate::order_type::{ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OrderType};
+use crate::script_event_types::{CrashReason, ScriptEvent};
 use crate::services::Services;
 use crate::sound_type::{ORIGINAL_SAMPLE_COUNT, SoundFx, SoundID};
 use crate::station::Station;
 use crate::station_type::{AirportAnimationTrigger, StationID};
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::StringID;
+use crate::strings_type::StringParameterData::Integer;
 use crate::tile_type::{TILE_HEIGHT, TILE_SIZE, TileIndex};
 use crate::vehicle::maintenance;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices, YEAR_TICKS};
@@ -293,6 +301,19 @@ fn set_rotor_state(u: VehicleRef, state: HelicopterRotorStates) {
     crate::raw_field::write_field!(u.aircraft_state(), state, state.0);
 }
 
+/// The generated string IDs of the aircraft news.
+#[repr(C)]
+pub struct Strings {
+    /// `STR_NEWS_AIRCRAFT_CRASH`.
+    pub aircraft_crash: u32,
+    /// `STR_NEWS_AIRCRAFT_DEST_TOO_FAR`.
+    pub aircraft_dest_too_far: u32,
+    /// `STR_NEWS_FIRST_AIRCRAFT_ARRIVAL`.
+    pub first_aircraft_arrival: u32,
+    /// `STR_NEWS_PLANE_CRASH_OUT_OF_FUEL`.
+    pub plane_crash_out_of_fuel: u32,
+}
+
 /// The C++ leaves of the aircraft controller: shared operations and the fields of the
 /// station and `AirportFTAClass` records, which C++ stores.
 #[repr(C)]
@@ -317,22 +338,12 @@ pub struct Leaves {
     pub airport_width: unsafe extern "C" fn(*const Station) -> u8,
     /// `u->sprite_cache.sprite_seq.CopyWithoutPalette(v->sprite_cache.sprite_seq)`.
     pub copy_sprite: unsafe extern "C" fn(VehicleRef, VehicleRef),
-    /// `CrashAirplane`'s news and script events; #974's shared services replace it.
-    pub crash_news: unsafe extern "C" fn(Vehicle, u16, u32),
-    /// `DeleteVehicleNews(v->index, AdviceType::AircraftDestinationTooFar)`.
-    pub delete_range_news: unsafe extern "C" fn(Vehicle),
-    /// `AircraftHandleDestTooFar`'s script event and advice news; #974's shared services
-    /// replace it.
-    pub destination_too_far: unsafe extern "C" fn(Vehicle),
     /// `GetDirectionTowards`.
     pub direction_towards: unsafe extern "C" fn(Vehicle, i32, i32) -> u8,
     /// `AircraftLeaveHangar`'s depot and aircraft list windows.
     pub dirty_depot: unsafe extern "C" fn(Vehicle),
     /// `OnNewEconomyDay`'s details and aircraft list windows.
     pub dirty_lists: unsafe extern "C" fn(Vehicle),
-    /// `AircraftEntersTerminal`'s first-arrival news and script events; #974's shared
-    /// services replace it.
-    pub first_arrival: unsafe extern "C" fn(Vehicle, u16),
     /// `AirportFTA::blocks`.
     pub fta_blocks: unsafe extern "C" fn(*const c_void) -> AirportBlocks,
     /// `AirportFTA::heading`.
@@ -377,6 +388,7 @@ pub struct Leaves {
     pub station_owner: unsafe extern "C" fn(*const Station) -> u8,
     /// `st->xy`.
     pub station_tile: unsafe extern "C" fn(*const Station) -> u32,
+    pub strings: Strings,
     /// `SubtractMoneyFromCompanyFract(v->owner, cost)`.
     pub subtract_cost: unsafe extern "C" fn(Vehicle, i64),
     /// `AirportFTAClass::terminals[index]`.
@@ -2021,7 +2033,35 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         } else {
             v.targetairport()
         };
-        Self::call(|| unsafe { (self.leaves.crash_news)(v, station.0, victims) });
+        let strings = &self.leaves.strings;
+        let headline = if st.is_null() {
+            get_encoded_string(
+                StringID(strings.plane_crash_out_of_fuel),
+                &[Integer(u64::from(victims))],
+            )
+        } else {
+            get_encoded_string(
+                StringID(strings.aircraft_crash),
+                &[Integer(u64::from(victims)), Integer(u64::from(station.0))],
+            )
+        };
+
+        let owner = crate::company_type::CompanyID(b.owner());
+        let crash_reason = if st.is_null() {
+            CrashReason::CRASH_AIRCRAFT_NO_AIRPORT
+        } else {
+            CrashReason::CRASH_PLANE_LANDING
+        };
+        let event = || ScriptEvent::vehicle_crashed(v.index(), vt, crash_reason, victims, owner);
+        Self::call(|| crate::ai::new_event(owner, &event()));
+        Self::call(|| crate::game::new_event(&event()));
+
+        let mut newstype = NewsType::Accident;
+        if owner.0 != Self::call(|| (self.ss.local_company)()) {
+            newstype = NewsType::AccidentOther;
+        }
+
+        Self::call(|| add_tile_news_item(&headline, newstype, vt, station));
 
         crate::station::spatial::modify_station_rating_around(
             self.ss,
@@ -2084,7 +2124,29 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if Self::station_call(|| (self.ss.station_had_vehicle_of_type)(st.0)) & hvot_aircraft == 0 {
             Self::call(|| (self.ss.station_add_vehicle_of_type)(st.0, hvot_aircraft));
             /* show newsitem of celebrating citizens */
-            Self::station_call(|| unsafe { (self.leaves.first_arrival)(v, st.0) });
+            let owner = crate::company_type::CompanyID(v.base().owner());
+            let local = owner.0 == Self::call(|| (self.ss.local_company)());
+            Self::call(|| {
+                add_vehicle_news_item(
+                    &get_encoded_string(
+                        StringID(self.leaves.strings.first_aircraft_arrival),
+                        &[Integer(u64::from(st.0))],
+                    ),
+                    if local {
+                        NewsType::ArrivalCompany
+                    } else {
+                        NewsType::ArrivalOther
+                    },
+                    v.index(),
+                    st,
+                );
+            });
+            Self::call(|| {
+                crate::ai::new_event(owner, &ScriptEvent::station_first_vehicle(st, v.index()));
+            });
+            Self::call(|| {
+                crate::game::new_event(&ScriptEvent::station_first_vehicle(st, v.index()));
+            });
         }
 
         crate::vehicle::visits::begin_loading(v.base(), self.vs.visits());
@@ -2819,8 +2881,23 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 set_bit8(&mut flags, AirVehicleFlags::VAF_DEST_TOO_FAR.0);
                 v.set_flags(flags);
                 self.start_stop_dirty(v);
-                /* The script event and, for the local company, the advice news. */
-                Self::call(|| unsafe { (self.leaves.destination_too_far)(v) });
+                let owner = crate::company_type::CompanyID(v.base().owner());
+                Self::call(|| {
+                    crate::ai::new_event(owner, &ScriptEvent::aircraft_dest_too_far(v.index()));
+                });
+                if owner.0 == Self::call(|| (self.ss.local_company)()) {
+                    /* Post a news message. */
+                    Self::call(|| {
+                        add_vehicle_advice_news_item(
+                            AdviceType::AircraftDestinationTooFar,
+                            &get_encoded_string(
+                                StringID(self.leaves.strings.aircraft_dest_too_far),
+                                &[Integer(u64::from(v.index().0))],
+                            ),
+                            v.index(),
+                        );
+                    });
+                }
             }
             return;
         }
@@ -2830,7 +2907,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             clr_bit8(&mut flags, AirVehicleFlags::VAF_DEST_TOO_FAR.0);
             v.set_flags(flags);
             self.start_stop_dirty(v);
-            Self::call(|| unsafe { (self.leaves.delete_range_news)(v) });
+            Self::call(|| delete_vehicle_news(v.index(), AdviceType::AircraftDestinationTooFar));
         }
     }
 
@@ -3369,13 +3446,9 @@ crate::abi::layouts! {
         airport_type,
         airport_width,
         copy_sprite,
-        crash_news,
-        delete_range_news,
-        destination_too_far,
         direction_towards,
         dirty_depot,
         dirty_lists,
-        first_arrival,
         fta_blocks,
         fta_heading,
         fta_next,
@@ -3398,6 +3471,7 @@ crate::abi::layouts! {
         station,
         station_owner,
         station_tile,
+        strings,
         subtract_cost,
         terminal_count,
         truncate_cargo,
@@ -3405,6 +3479,12 @@ crate::abi::layouts! {
         vehicle,
         vehicle_crash,
         viewport,
+    };
+    "OpenTTDAircraftStrings" ["probe"] => Strings {
+        aircraft_crash,
+        aircraft_dest_too_far,
+        first_aircraft_arrival,
+        plane_crash_out_of_fuel,
     };
     "OpenTTDAircraftMoving" ["probe"] => AirportMovingData {
         x,

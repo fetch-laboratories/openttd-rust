@@ -269,7 +269,7 @@ pub(crate) unsafe fn setup(
     write_field!(
         INFO.get(),
         local_company,
-        CompanyID((unsafe { &*(*s.company).services }.local_company)())
+        CompanyID((unsafe { &*(*s.company).services }.shared.local_company)())
     );
     crate::company::set_local_company(unsafe { &*(*s.company).services }, CompanyID::SPECTATOR);
     if !(s.initialize)(

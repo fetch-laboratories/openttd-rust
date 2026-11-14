@@ -111,6 +111,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*bridge_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_axis);
 	uint16_t (*bridge_speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
 	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
+	uint32_t (*cargo_name)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_name);
 	OpenTTDClearSquareServices clear_square_services;
 	bool (*company_human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_human);
 	CompanyInfrastructure *(*company_infrastructure)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_infrastructure);
@@ -133,6 +134,7 @@ struct OpenTTDSharedServices {
 	bool (*is_plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_plain_rail);
 	bool (*is_road_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot);
 	bool (*is_water_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_water_tile);
+	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	const OpenTTDMapStatics *map = nullptr;
 	const OpenTTDSettingAddresses *settings = nullptr;
 	uint32_t (*map_max_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_x);

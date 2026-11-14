@@ -275,6 +275,8 @@ pub struct Services {
     pub bridge_speed: extern "C" fn(u32) -> u16,
     /// `construction.build_on_slopes`.
     pub build_on_slopes: extern "C" fn() -> bool,
+    /// `CargoSpec::Get(cargo)->name`.
+    pub cargo_name: extern "C" fn(u8) -> u32,
     /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
     /// Whether this company pool ID is a live human company.
@@ -320,6 +322,8 @@ pub struct Services {
     pub is_road_depot: extern "C" fn(u32) -> bool,
     /// `IsWaterTile`: water category and clear subtype (sea, canal or river).
     pub is_water_tile: extern "C" fn(u32) -> bool,
+    /// `_local_company`, read at the original's observation point.
+    pub local_company: extern "C" fn() -> u8,
     /// Canonical `Tile` and `Map` statics, loaded at each observation.
     pub map: *const crate::map_func::MapStatics,
     /// Shared addresses of canonical settings; field values are loaded at their source branches.
@@ -752,6 +756,7 @@ crate::abi::layouts! {
         bridge_axis,
         bridge_speed,
         build_on_slopes,
+        cargo_name,
         clear_square_services,
         company_human,
         company_infrastructure,
@@ -774,6 +779,7 @@ crate::abi::layouts! {
         is_plain_rail,
         is_road_depot,
         is_water_tile,
+        local_company,
         map,
         settings,
         map_max_x,
@@ -1099,6 +1105,7 @@ pub fn fixture(
         bridge_axis: byte,
         bridge_speed: short,
         build_on_slopes: flag0,
+        cargo_name: unused_cargo_name,
         clear_square_services: ClearSquareServices {
             docking: flag,
             generating_world: flag0,
@@ -1124,6 +1131,7 @@ pub fn fixture(
         is_plain_rail: flag,
         is_road_depot: flag,
         is_water_tile: flag,
+        local_company: unused_current_company,
         map: crate::map_func::fixture::statics(),
         settings: std::ptr::null(),
         map_max_x: word0,
@@ -1240,6 +1248,11 @@ pub(crate) extern "C" fn unused_next_company(_: u8) -> u8 {
 #[cfg(test)]
 pub(crate) extern "C" fn unused_town_owner(_: *const TownHandle) -> *mut crate::town::State {
     std::ptr::null_mut()
+}
+
+#[cfg(test)]
+pub(crate) extern "C" fn unused_cargo_name(_: u8) -> u32 {
+    u32::MAX
 }
 
 #[cfg(test)]

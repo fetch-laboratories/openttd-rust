@@ -264,7 +264,7 @@ impl<'a> Ctx<'a> {
         // SAFETY: The context's canonical command table owns the company service.
         let company = unsafe { &*(self.commands.company)() };
         error.make_error(company.owned_by);
-        if (company.local_company)() == (company.finance.current_company)() {
+        if (company.shared.local_company)() == (company.finance.current_company)() {
             (error.1.encode_owned_by)(error.0, crate::company_type::Owner::TOWN, TileIndex(tile));
         }
     }

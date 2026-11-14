@@ -27,6 +27,12 @@ struct OpenTTDAircraftState {
 };
 struct OpenTTDAircraftVehicle { OpenTTDVehicle *handle; OpenTTDAircraftState *state; uint32_t id; };
 struct OpenTTDAircraftMoving { int16_t x, y; uint16_t flags; uint8_t direction; };
+struct OpenTTDAircraftStrings {
+	uint32_t aircraft_crash;
+	uint32_t aircraft_dest_too_far;
+	uint32_t first_aircraft_arrival;
+	uint32_t plane_crash_out_of_fuel;
+};
 struct OpenTTDVehicleMassServices;
 /* Immutable callback table, borrowed for synchronous entries. Handles retain the
  * original pool identity; only raw field-sized State access occurs in Rust.
@@ -45,13 +51,9 @@ struct OpenTTDAircraftLeaves {
 	uint8_t (OPENTTD_RUST_CALL *airport_type)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_type);
 	uint8_t (OPENTTD_RUST_CALL *airport_width)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_width);
 	void (OPENTTD_RUST_CALL *copy_sprite)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(copy_sprite);
-	void (OPENTTD_RUST_CALL *crash_news)(OpenTTDAircraftVehicle, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
-	void (OPENTTD_RUST_CALL *delete_range_news)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(delete_range_news);
-	void (OPENTTD_RUST_CALL *destination_too_far)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(destination_too_far);
 	uint8_t (OPENTTD_RUST_CALL *direction_towards)(OpenTTDAircraftVehicle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(direction_towards);
 	void (OPENTTD_RUST_CALL *dirty_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_depot);
 	void (OPENTTD_RUST_CALL *dirty_lists)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_lists);
-	void (OPENTTD_RUST_CALL *first_arrival)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(first_arrival);
 	uint64_t (OPENTTD_RUST_CALL *fta_blocks)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_blocks);
 	uint8_t (OPENTTD_RUST_CALL *fta_heading)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_heading);
 	const void *(OPENTTD_RUST_CALL *fta_next)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_next);
@@ -74,6 +76,7 @@ struct OpenTTDAircraftLeaves {
 	const OpenTTDStation *(OPENTTD_RUST_CALL *station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint8_t (OPENTTD_RUST_CALL *station_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	uint32_t (OPENTTD_RUST_CALL *station_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_tile);
+	OpenTTDAircraftStrings strings;
 	void (OPENTTD_RUST_CALL *subtract_cost)(OpenTTDAircraftVehicle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_cost);
 	uint8_t (OPENTTD_RUST_CALL *terminal_count)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terminal_count);
 	void (OPENTTD_RUST_CALL *truncate_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(truncate_cargo);

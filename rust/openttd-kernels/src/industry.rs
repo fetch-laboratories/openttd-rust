@@ -29,9 +29,14 @@ use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CallbackID, IndustryCallbackMask, IndustryCallbackMasks,
 };
 use crate::newgrf_industries::IndustryAvailabilityCallType;
+use crate::news_func::{add_industry_news_item, add_tile_news_item};
+use crate::news_type::NewsType;
 use crate::random_func::chance16_i;
+use crate::script_event_types::ScriptEvent;
 use crate::sound_type::SoundFx;
+use crate::strings_func::get_encoded_string;
 use crate::strings_type::StringID;
+use crate::strings_type::StringParameterData::Integer;
 use crate::tile_type::{TileIndex, TileType};
 use crate::tilearea::TileArea;
 use crate::timer_game_tick::{DAY_TICKS, INDUSTRY_CUT_TREE_TICKS, INDUSTRY_PRODUCE_TICKS};
@@ -475,6 +480,20 @@ pub struct Change {
     pub result: u16,
     pub reg: i32,
 }
+/// The generated string IDs of the industry news.
+#[repr(C)]
+pub struct Strings {
+    /// `STR_FORMAT_INDUSTRY_NAME`.
+    pub format_industry_name: u32,
+    /// `STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH`.
+    pub industry_production_decrease_smooth: u32,
+    /// `STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH`.
+    pub industry_production_increase_smooth: u32,
+    /// `STR_LAST_STRINGID`, the build's last generated string.
+    pub last_stringid: u32,
+    /// `STR_TOWN_NAME`.
+    pub town_name: u32,
+}
 /// Typed `noexcept` C++ services in `industry_ffi.h` order. Each is a world leaf;
 /// construction and commands return values at the original call site.
 #[repr(C)]
@@ -496,17 +515,16 @@ pub struct Services {
     pub change_callback: unsafe extern "C" fn(*mut c_void, bool, u32) -> Change,
     /// Shared text owner services for `MapGRFStringID`.
     pub text: *const crate::newgrf_text::Services,
-    pub news: unsafe extern "C" fn(*mut c_void, u32, bool, Servicing),
-    pub production_news: unsafe extern "C" fn(*mut c_void, u8, i32, Servicing),
+    pub strings: Strings,
     pub callback_error: unsafe extern "C" fn(*mut c_void, bool),
     pub set_dirty: unsafe extern "C" fn(*mut c_void),
     pub destroy: unsafe extern "C" fn(*mut c_void),
-    pub opening_news: unsafe extern "C" fn(*mut c_void),
-    pub opening_events: unsafe extern "C" fn(*mut c_void),
     pub create: unsafe extern "C" fn(u8, u8) -> *mut c_void,
     pub num_items: unsafe extern "C" fn() -> u32,
     pub get: unsafe extern "C" fn(u16) -> *mut c_void,
     pub resolver: *const resolver::ResolverServices,
+    /// `Industry::town`, through the transaction table's shell accessor.
+    pub transaction: *const TransactionServices,
     pub company_none: unsafe extern "C" fn() -> u8,
     pub restore_company: unsafe extern "C" fn(u8),
     pub directory_dirty: unsafe extern "C" fn(u8),
@@ -1258,10 +1276,13 @@ fn change_industry_production(
                     closeit = false;
                 }
                 if percent.abs() >= 10 {
-                    // ReportNewsProductionChangeIndustry
-                    unsafe {
-                        (svc.production_news)(i, (*p).cargo, percent, servicing(i, obs.owner, svc));
-                    };
+                    report_news_production_change_industry(
+                        i,
+                        obs.owner,
+                        CargoType(unsafe { (*p).cargo }),
+                        percent,
+                        svc,
+                    );
                 }
             }
         }
@@ -1349,21 +1370,108 @@ fn change_industry_production(
         str = obs.closure_text;
     }
     if !suppress_message && str != StringID::STR_NULL {
-        // Compute news category, set the parameters of the news string and report the news
-        // to the user.
-        unsafe {
-            (svc.news)(
-                i,
-                str.0,
-                closeit,
-                if closeit {
-                    Servicing::Nobody
-                } else {
-                    servicing(i, obs.owner, svc)
-                },
-            );
-        };
+        change_industry_production_news(i, obs.owner, str, closeit, svc);
     }
+}
+/// The tail of `ChangeIndustryProduction`: compute the news category, set the parameters of
+/// the news string `str` and report the news to the user.
+fn change_industry_production_news(
+    i: *mut c_void,
+    owner: *mut Industry,
+    str: StringID,
+    closeit: bool,
+    svc: &Services,
+) {
+    let index = industry_index(i, svc);
+    /* Compute news category */
+    let nt = if closeit {
+        crate::ai::broadcast_new_event(&ScriptEvent::industry_close(index), CompanyID::INVALID);
+        crate::game::new_event(&ScriptEvent::industry_close(index));
+        NewsType::IndustryClose
+    } else {
+        servicing_news_type(servicing(i, owner, svc))
+    };
+    /* Set parameters of news string */
+    let strings = &svc.strings;
+    let name = || Integer(u64::from(unsafe { (*spec_of(owner)).name }));
+    let town = || Integer(u64::from(town_index(i, svc).0));
+    let headline = if str.0 > strings.last_stringid {
+        get_encoded_string(
+            str,
+            &[Integer(u64::from(strings.town_name)), town(), name()],
+        )
+    } else if closeit {
+        get_encoded_string(
+            str,
+            &[
+                Integer(u64::from(strings.format_industry_name)),
+                town(),
+                name(),
+            ],
+        )
+    } else {
+        get_encoded_string(str, &[Integer(u64::from(index.0))])
+    };
+    /* and report the news to the user */
+    if closeit {
+        let tile = location(owner).tile;
+        let diff = svc.shared().map().diff(1, 1);
+        add_tile_news_item(
+            &headline,
+            nt,
+            TileIndex(tile.0.wrapping_add_signed(diff)),
+            crate::station_type::StationID::INVALID,
+        );
+    } else {
+        add_industry_news_item(&headline, nt, index);
+    }
+}
+/// The news category of `WhoCanServiceIndustry`'s result.
+fn servicing_news_type(servicing: Servicing) -> NewsType {
+    match servicing {
+        Servicing::Nobody => NewsType::IndustryNobody,
+        Servicing::Other => NewsType::IndustryOther,
+        Servicing::Company => NewsType::IndustryCompany,
+    }
+}
+/// `i->index` of a live industry.
+fn industry_index(shell: *mut c_void, svc: &Services) -> IndustryID {
+    (crate::station::Ctx::from_shared(svc.shared()).c.industry_id)(shell.cast())
+}
+/// `i->town->index` of a live industry.
+fn town_index(shell: *mut c_void, svc: &Services) -> crate::town_type::TownId {
+    let (resolver, transaction) = unsafe { (&*svc.resolver, &*svc.transaction) };
+    crate::town_type::TownId(unsafe { (resolver.town_id)((transaction.town)(shell.cast())) })
+}
+/// Original `ReportNewsProductionChangeIndustry`: report news that industry production has
+/// changed significantly. `percent` is the percentage of change (>0 means increase, <0 means
+/// decrease).
+fn report_news_production_change_industry(
+    ind: *mut c_void,
+    owner: *mut Industry,
+    cargo: CargoType,
+    percent: i32,
+    svc: &Services,
+) {
+    let nt = servicing_news_type(servicing(ind, owner, svc));
+    let index = industry_index(ind, svc);
+    let strings = &svc.strings;
+    add_industry_news_item(
+        &get_encoded_string(
+            StringID(if percent >= 0 {
+                strings.industry_production_increase_smooth
+            } else {
+                strings.industry_production_decrease_smooth
+            }),
+            &[
+                Integer(u64::from((svc.shared().cargo_name)(cargo.0))),
+                Integer(u64::from(index.0)),
+                Integer(u64::from(percent.unsigned_abs())),
+            ],
+        ),
+        nt,
+        index,
+    );
 }
 /// `IndustryTypeBuildData::GetIndustryTypeData`: set the `probability` and `min_number`
 /// fields for the industry type `it` for a running game. Returns whether at least one of
@@ -2581,8 +2689,6 @@ crate::abi::layouts! {
     };
     "OpenTTDIndustryTilePolicyServices" ["industry"] => crate::industry::TilePolicyServices {
         object_in_way,
-        close_ai,
-        close_game,
         destroy,
         tile_max_z,
         command_checks,
@@ -2720,7 +2826,6 @@ crate::abi::layouts! {
         disassociate_field,
         release_disasters,
         delete_storage,
-        delete_news,
         close_view,
         close_production,
         delete_inspect,
@@ -2776,6 +2881,13 @@ crate::abi::layouts! {
         last_accepted,
         history,
     };
+    "OpenTTDIndustryStrings" ["industry"] => Strings {
+        format_industry_name,
+        industry_production_decrease_smooth,
+        industry_production_increase_smooth,
+        last_stringid,
+        town_name,
+    };
     "OpenTTDIndustryServices" ["industry"] => Services {
         shared,
         next_tick,
@@ -2794,17 +2906,15 @@ crate::abi::layouts! {
         harvest,
         change_callback,
         text,
-        news,
-        production_news,
+        strings,
         callback_error,
         set_dirty,
         destroy,
-        opening_news,
-        opening_events,
         create,
         num_items,
         get,
         resolver,
+        transaction,
         company_none,
         restore_company,
         directory_dirty,
@@ -3060,20 +3170,8 @@ mod production_policy_tests {
     extern "C" fn unexpected_change_callback(_: *mut c_void, _: bool, _: u32) -> Change {
         unreachable!("unexpected Services::change_callback")
     }
-    extern "C" fn unexpected_news(_: *mut c_void, _: u32, _: bool, _: Servicing) {
-        unreachable!("unexpected Services::news")
-    }
-    extern "C" fn unexpected_production_news(_: *mut c_void, _: u8, _: i32, _: Servicing) {
-        unreachable!("unexpected Services::production_news")
-    }
     extern "C" fn unexpected_destroy(_: *mut c_void) {
         unreachable!("unexpected Services::destroy")
-    }
-    extern "C" fn unexpected_opening_news(_: *mut c_void) {
-        unreachable!("unexpected Services::opening_news")
-    }
-    extern "C" fn unexpected_opening_events(_: *mut c_void) {
-        unreachable!("unexpected Services::opening_events")
     }
     extern "C" fn unexpected_create(_: u8, _: u8) -> *mut c_void {
         unreachable!("unexpected Services::create")
@@ -3111,17 +3209,21 @@ mod production_policy_tests {
             harvest: unexpected_harvest,
             change_callback: unexpected_change_callback,
             text: ptr::null(),
-            news: unexpected_news,
-            production_news: unexpected_production_news,
+            strings: Strings {
+                format_industry_name: 0,
+                industry_production_decrease_smooth: 0,
+                industry_production_increase_smooth: 0,
+                last_stringid: 0,
+                town_name: 0,
+            },
             callback_error: error,
             set_dirty: dirty,
             destroy: unexpected_destroy,
-            opening_news: unexpected_opening_news,
-            opening_events: unexpected_opening_events,
             create: unexpected_create,
             num_items: unexpected_num_items,
             get: unexpected_get,
             resolver: ptr::null(),
+            transaction: ptr::null(),
             company_none: unexpected_company_none,
             restore_company: unexpected_restore_company,
             directory_dirty: unexpected_directory_dirty,
@@ -3182,6 +3284,409 @@ mod production_policy_tests {
             0x123
         };
     }
+    /// `ReportNewsProductionChangeIndustry`: the smooth increase or decrease headline with
+    /// the cargo name, the industry and `abs(percent)`, as an industry news item whose type
+    /// follows `WhoCanServiceIndustry` (nobody, for an industry with no station nearby).
+    #[test]
+    fn report_news_production_change_industry_follows_the_original() {
+        use crate::news_func::testing::{Effect, Param, encoded, take};
+        use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle};
+        use std::sync::atomic::{AtomicPtr, Ordering};
+        static CATCHMENT: AtomicPtr<crate::station::CatchmentServices> =
+            AtomicPtr::new(ptr::null_mut());
+        extern "C" fn catchment() -> *const crate::station::CatchmentServices {
+            CATCHMENT.load(Ordering::Acquire)
+        }
+        extern "C" fn cargo_name(cargo: u8) -> u32 {
+            0x900 + u32::from(cargo)
+        }
+        extern "C" fn industry_id(_: *mut tile::ShellHandle) -> IndustryID {
+            IndustryID(12)
+        }
+        let shared = Box::leak(Box::new(crate::services::Services {
+            cargo_name,
+            station_catchment: catchment,
+            ..crate::services::fixture(ptr::null_mut(), random, unused_industry)
+        }));
+        CATCHMENT.store(
+            Box::leak(Box::new(crate::station::CatchmentServices {
+                shared,
+                industry_id,
+                ..crate::test_tables::CATCHMENT
+            })),
+            Ordering::Release,
+        );
+        let mut services = services(shared);
+        services.strings.industry_production_decrease_smooth = 0x70;
+        services.strings.industry_production_increase_smooth = 0x71;
+        let owner = Box::into_raw(Box::default());
+        take();
+        report_news_production_change_industry(ptr::null_mut(), owner, CargoType(3), 25, &services);
+        report_news_production_change_industry(
+            ptr::null_mut(),
+            owner,
+            CargoType(4),
+            -40,
+            &services,
+        );
+        let news = |id, cargo, percent| Effect::News {
+            headline: encoded(id, &[Param::N(cargo), Param::N(12), Param::N(percent)]),
+            r#type: NewsType::IndustryNobody,
+            style: NewsStyle::Thin,
+            flags: NewsFlags::new(&[NewsFlag::NoTransparency, NewsFlag::Shaded]),
+            ref1: NewsReference::Industry(IndustryID(12)),
+            ref2: NewsReference::None,
+            data: None,
+            advice_type: AdviceType::Invalid,
+        };
+        assert_eq!(take(), [news(0x71, 0x903, 25), news(0x70, 0x904, 40)]);
+        drop(unsafe { Box::from_raw(owner) });
+    }
+
+    /// The tables the news of an industry reach: its index (12) and owner through the
+    /// station catchment, its town (5) through the transaction and resolver accessors.
+    fn news_services(owner: *mut Industry) -> Services {
+        use crate::test_tables::{
+            unreachable1, unreachable2, unreachable3, unreachable4, unreachable5, unreachable6,
+        };
+        use std::sync::atomic::{AtomicPtr, Ordering};
+        static CATCHMENT: AtomicPtr<crate::station::CatchmentServices> =
+            AtomicPtr::new(ptr::null_mut());
+        thread_local! {
+            static OWNER: std::cell::Cell<*mut Industry> = const { std::cell::Cell::new(ptr::null_mut()) };
+        }
+        extern "C" fn catchment() -> *const crate::station::CatchmentServices {
+            CATCHMENT.load(Ordering::Acquire)
+        }
+        extern "C" fn industry_id(_: *mut tile::ShellHandle) -> IndustryID {
+            IndustryID(12)
+        }
+        extern "C" fn industry_owner(_: *mut tile::ShellHandle) -> *mut Industry {
+            OWNER.get()
+        }
+        extern "C" fn town(_: *mut tile::ShellHandle) -> *const crate::services::TownHandle {
+            ptr::dangling()
+        }
+        extern "C" fn town_id(_: *const crate::services::TownHandle) -> u16 {
+            5
+        }
+        OWNER.set(owner);
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: ptr::null(),
+                extended: ptr::null(),
+                count: 0,
+                assertions: true,
+            },
+            6,
+        );
+        let shared = Box::leak(Box::new(crate::services::Services {
+            station_catchment: catchment,
+            map: crate::map_func::fixture::statics(),
+            ..crate::services::fixture(ptr::null_mut(), random, unused_industry)
+        }));
+        CATCHMENT.store(
+            Box::leak(Box::new(crate::station::CatchmentServices {
+                shared,
+                industry_id,
+                industry_owner,
+                ..crate::test_tables::CATCHMENT
+            })),
+            Ordering::Release,
+        );
+        let mut s = services(shared);
+        s.resolver = Box::leak(Box::new(resolver::ResolverServices {
+            shared,
+            lifecycle: ptr::null(),
+            tile: ptr::null(),
+            get: unreachable1,
+            clean_gfx: unreachable1,
+            nearby: unreachable3,
+            water_distance: unreachable2,
+            town_tile: unreachable1,
+            town_id,
+            founder_info: unreachable1,
+            callback_id: unreachable1,
+            storage_owner: unreachable1,
+            unhandled: unreachable4,
+            base_scope: unreachable3,
+            existing_town: unreachable1,
+            make_town: unreachable3,
+            callback: unreachable6,
+            callback_error: unreachable3,
+        }));
+        s.transaction = Box::leak(Box::new(TransactionServices {
+            town,
+            population: unreachable1,
+            town_position: unreachable1,
+            industry: unreachable1,
+            edge_distance: unreachable2,
+            tile_height: unreachable1,
+            set_company: unreachable1,
+            temporary_shell: unreachable3,
+            resolve_location: unreachable5,
+            resolve_shape: unreachable4,
+            location_error: unreachable3,
+            shape_error: unreachable3,
+            ignore_restrictions: crate::test_tables::unreachable0,
+            can_allocate: crate::test_tables::unreachable0,
+            allocate: unreachable1,
+            local_company: crate::test_tables::unreachable0,
+            prospect_no_place: crate::test_tables::unreachable0,
+            prospect_unlucky: crate::test_tables::unreachable0,
+        }));
+        s.strings = IndustryNewsStrings::FIXTURE;
+        s
+    }
+    /// The string IDs of [`news_services`]: town name 0x60, industry name format 0x61, last
+    /// generated string 0x1000.
+    struct IndustryNewsStrings;
+    impl IndustryNewsStrings {
+        const FIXTURE: Strings = Strings {
+            format_industry_name: 0x61,
+            industry_production_decrease_smooth: 0x70,
+            industry_production_increase_smooth: 0x71,
+            last_stringid: 0x1000,
+            town_name: 0x60,
+        };
+    }
+    /// An industry of type `kind`, which no other test uses, at tile 0x500 whose spec has
+    /// `name` 0x77 and the given `new_industry_text`; the caller restores the spec.
+    fn news_industry(kind: IndustryType, new_industry_text: u32) -> (*mut Industry, (u32, u32)) {
+        let spec = crate::industrytype::get_industry_spec(kind);
+        let saved = unsafe { ((*spec).name, (*spec).new_industry_text) };
+        unsafe {
+            (*spec).name = 0x77;
+            (*spec).new_industry_text = new_industry_text;
+        }
+        let mut industry = Industry::default();
+        industry.metadata.kind = kind.0;
+        industry.metadata.tile = 0x500;
+        (Box::into_raw(Box::new(industry)), saved)
+    }
+    fn restore_spec(kind: IndustryType, saved: (u32, u32)) {
+        let spec = crate::industrytype::get_industry_spec(kind);
+        unsafe {
+            (*spec).name = saved.0;
+            (*spec).new_industry_text = saved.1;
+        }
+    }
+
+    /// `AdvertiseIndustryOpening`: a custom (`> STR_LAST_STRINGID`) text takes the spec name,
+    /// `STR_TOWN_NAME` and the town; a built-in text the spec name and the town. Then the
+    /// industry-open news item and the AI and game events.
+    #[test]
+    fn advertise_industry_opening_follows_the_original() {
+        use crate::news_func::testing::{Effect, Param, encoded, take};
+        use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle};
+        use crate::script_event_types::ScriptEvent;
+        for (text, params) in [
+            (0x2000, vec![Param::N(0x77), Param::N(0x60), Param::N(5)]),
+            (0x0800, vec![Param::N(0x77), Param::N(5)]),
+        ] {
+            let (owner, saved) = news_industry(IndustryType(201), text);
+            let s = news_services(owner);
+            take();
+            policy::advertise(ptr::null_mut(), &s);
+            let event = ScriptEvent::industry_open(IndustryID(12));
+            assert_eq!(
+                take(),
+                [
+                    Effect::News {
+                        headline: encoded(text, &params),
+                        r#type: NewsType::IndustryOpen,
+                        style: NewsStyle::Thin,
+                        flags: NewsFlags::new(&[NewsFlag::NoTransparency, NewsFlag::Shaded]),
+                        ref1: NewsReference::Industry(IndustryID(12)),
+                        ref2: NewsReference::None,
+                        data: None,
+                        advice_type: AdviceType::Invalid,
+                    },
+                    Effect::AiBroadcastNewEvent(event, CompanyID::INVALID.0),
+                    Effect::GameNewEvent(event),
+                ]
+            );
+            restore_spec(IndustryType(201), saved);
+            drop(unsafe { Box::from_raw(owner) });
+        }
+    }
+
+    /// The news of `ChangeIndustryProduction`. Closing raises the close events first, then a
+    /// tile news item at `location.tile + TileDiffXY(1, 1)` whose headline takes
+    /// `STR_FORMAT_INDUSTRY_NAME` (or `STR_TOWN_NAME` for a custom text), the town and the
+    /// spec name. Otherwise a built-in text takes the industry and a custom one the town
+    /// name, town and spec name, as an industry news item of the servicing category.
+    #[test]
+    fn change_industry_production_news_follows_the_original() {
+        use crate::news_func::testing::{Effect, Param, encoded, take};
+        use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle};
+        use crate::script_event_types::ScriptEvent;
+        let flags = NewsFlags::new(&[NewsFlag::NoTransparency, NewsFlag::Shaded]);
+        let item = |headline, r#type, ref1| Effect::News {
+            headline,
+            r#type,
+            style: NewsStyle::Thin,
+            flags,
+            ref1,
+            ref2: NewsReference::None,
+            data: None,
+            advice_type: AdviceType::Invalid,
+        };
+        let (owner, saved) = news_industry(IndustryType(200), 0x0800);
+        let s = news_services(owner);
+        let close = ScriptEvent::industry_close(IndustryID(12));
+        let tile = NewsReference::Tile(TileIndex(0x500 + s.shared().map().size_x() + 1));
+        let industry = NewsReference::Industry(IndustryID(12));
+        take();
+        change_industry_production_news(ptr::null_mut(), owner, StringID(0x0900), true, &s);
+        assert_eq!(
+            take(),
+            [
+                Effect::AiBroadcastNewEvent(close, CompanyID::INVALID.0),
+                Effect::GameNewEvent(close),
+                item(
+                    encoded(0x0900, &[Param::N(0x61), Param::N(5), Param::N(0x77)]),
+                    NewsType::IndustryClose,
+                    tile
+                ),
+            ]
+        );
+        change_industry_production_news(ptr::null_mut(), owner, StringID(0x2000), true, &s);
+        assert_eq!(
+            take(),
+            [
+                Effect::AiBroadcastNewEvent(close, CompanyID::INVALID.0),
+                Effect::GameNewEvent(close),
+                item(
+                    encoded(0x2000, &[Param::N(0x60), Param::N(5), Param::N(0x77)]),
+                    NewsType::IndustryClose,
+                    tile
+                ),
+            ]
+        );
+        change_industry_production_news(ptr::null_mut(), owner, StringID(0x0900), false, &s);
+        assert_eq!(
+            take(),
+            [item(
+                encoded(0x0900, &[Param::N(12)]),
+                NewsType::IndustryNobody,
+                industry
+            )]
+        );
+        change_industry_production_news(ptr::null_mut(), owner, StringID(0x2000), false, &s);
+        assert_eq!(
+            take(),
+            [item(
+                encoded(0x2000, &[Param::N(0x60), Param::N(5), Param::N(0x77)]),
+                NewsType::IndustryNobody,
+                industry
+            )]
+        );
+        restore_spec(IndustryType(200), saved);
+        drop(unsafe { Box::from_raw(owner) });
+    }
+
+    /// `ClearTile_Industry` executed in the editor: the AI close event, then the game close
+    /// event, then the industry's destruction, as the original's order.
+    #[test]
+    fn clear_tile_industry_closes_before_destroying() {
+        use crate::news_func::testing::{Effect, take};
+        use crate::script_event_types::ScriptEvent;
+        use crate::test_tables::{unreachable0, unreachable1, unreachable2};
+        use std::cell::RefCell;
+        thread_local! {
+            static OWNER: std::cell::Cell<*mut Industry> = const { std::cell::Cell::new(ptr::null_mut()) };
+            static BEFORE_DESTROY: RefCell<Option<Vec<Effect>>> = const { RefCell::new(None) };
+        }
+        extern "C" fn tile_industry(_: u32) -> tile::TileIndustry {
+            tile::TileIndustry {
+                shell: ptr::null_mut(),
+                owner: OWNER.get(),
+            }
+        }
+        extern "C" fn destroy(_: *mut tile::ShellHandle) {
+            BEFORE_DESTROY.with(|b| *b.borrow_mut() = Some(take()));
+        }
+        extern "C" fn expense(_: *mut IndustryCost, _: u8, _: i64) {}
+        extern "C" fn yes() -> bool {
+            true
+        }
+        let (owner, saved) = news_industry(IndustryType(202), 0x0800);
+        OWNER.set(owner);
+        let s = news_services(owner);
+        let tiles = tile::TileServices {
+            industry: tile_industry,
+            shared: s.shared,
+            ..crate::test_tables::INDUSTRY_TILES
+        };
+        let policy = tile::TilePolicyServices {
+            object_in_way: unreachable2,
+            destroy,
+            tile_max_z: unreachable1,
+            command_checks: ptr::null(),
+        };
+        let costs = IndustryCostServices {
+            zero: unreachable1,
+            error: unreachable2,
+            expense_money: expense,
+            success: unreachable1,
+        };
+        let generation = GenerationServices {
+            environment: crate::services::EnvironmentServices {
+                editor: yes,
+                freeform_edges: unreachable0,
+            },
+            scale_by_size_1d: unreachable1,
+            scale_by_land_proportion: unreachable1,
+            set_progress: crate::test_tables::unreachable3,
+            increase_progress: unreachable2,
+            missing_warning: unreachable1,
+        };
+        take();
+        unsafe {
+            tile::clear_tile_industry(
+                ptr::null_mut(),
+                TileIndex(0x500),
+                crate::command_type::DoCommandFlags::from_element(
+                    crate::command_type::DoCommandFlag::Execute,
+                ),
+                &raw const tiles,
+                &raw const policy,
+                &raw const costs,
+                &raw const generation,
+            );
+        }
+        let close = ScriptEvent::industry_close(IndustryID(12));
+        assert_eq!(
+            BEFORE_DESTROY.with(|b| b.borrow_mut().take()),
+            Some(vec![
+                Effect::AiBroadcastNewEvent(close, CompanyID::INVALID.0),
+                Effect::GameNewEvent(close),
+            ])
+        );
+        assert_eq!(take(), []);
+        restore_spec(IndustryType(202), saved);
+        drop(unsafe { Box::from_raw(owner) });
+    }
+
+    /// `WhoCanServiceIndustry`'s 0, 1 and 2 select `IndustryNobody`, `IndustryOther` and
+    /// `IndustryCompany`, as both original switches do.
+    #[test]
+    fn servicing_selects_the_original_news_types() {
+        assert_eq!(
+            servicing_news_type(Servicing::Nobody),
+            NewsType::IndustryNobody
+        );
+        assert_eq!(
+            servicing_news_type(Servicing::Other),
+            NewsType::IndustryOther
+        );
+        assert_eq!(
+            servicing_news_type(Servicing::Company),
+            NewsType::IndustryCompany
+        );
+    }
+
     #[test]
     fn production_callback_matches_complete_original_corpus() {
         let shared = crate::services::fixture(ptr::null_mut(), random, unused_industry);

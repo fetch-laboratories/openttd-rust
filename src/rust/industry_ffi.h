@@ -108,9 +108,15 @@ typedef struct OpenTTDIndustryChange {
 #else
 #	define OPENTTD_INDUSTRY_NOEXCEPT
 #endif
-enum class OpenTTDIndustryServicing : uint8_t { Nobody, Other, Company };
 /** Direct typed services, one per original operation. No Rust borrow survives
  * any call; construction, clearing, distribution and destruction may reenter. */
+struct OpenTTDIndustryStrings {
+	uint32_t format_industry_name;
+	uint32_t industry_production_decrease_smooth;
+	uint32_t industry_production_increase_smooth;
+	uint32_t last_stringid;
+	uint32_t town_name;
+};
 typedef struct OpenTTDIndustryServices {
 	const OpenTTDSharedServices *shared;
 	/* Periodic tick. */
@@ -131,17 +137,15 @@ typedef struct OpenTTDIndustryServices {
 	/* Monthly, daily, builder and command entries. */
 	OpenTTDIndustryChange (*change_callback)(void *industry, bool monthly, uint32_t random) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(change_callback);
 	const OpenTTDGrfTextServices *text;
-	void (*news)(void *industry, uint32_t text, bool close, OpenTTDIndustryServicing servicing) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(news);
-	void (*production_news)(void *industry, uint8_t cargo, int32_t percent, OpenTTDIndustryServicing servicing) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(production_news);
+	OpenTTDIndustryStrings strings;
 	void (*callback_error)(void *industry, bool invalid_cargo) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_error);
 	void (*set_dirty)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_dirty);
 	void (*destroy)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(destroy);
-	void (*opening_news)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(opening_news);
-	void (*opening_events)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(opening_events);
 	void *(*create)(uint8_t type, uint8_t creation) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(create);
 	uint32_t (*num_items)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(num_items);
 	void *(*get)(uint16_t id) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(get);
 	const struct OpenTTDIndustryResolverServices *resolver;
+	const struct OpenTTDIndustryTransactionServices *transaction;
 	uint8_t (*company_none)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(company_none);
 	void (*restore_company)(uint8_t company) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(restore_company);
 	void (*directory_dirty)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(directory_dirty);
@@ -179,7 +183,6 @@ typedef struct OpenTTDIndustryLifecycleServices {
 	void (*disassociate_field)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(disassociate_field);
 	void (*release_disasters)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(release_disasters);
 	void (*delete_storage)(void *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_storage);
-	void (*delete_news)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_news);
 	void (*close_view)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_view);
 	void (*close_production)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_production);
 	void (*delete_inspect)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_inspect);
@@ -260,8 +263,6 @@ typedef struct OpenTTDIndustryCostServices {
 } OpenTTDIndustryCostServices;
 typedef struct OpenTTDIndustryTilePolicyServices {
 	void (*object_in_way)(OpenTTDIndustryCost *, const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(object_in_way);
-	void (*close_ai)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_ai);
-	void (*close_game)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_game);
 	void (*destroy)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(destroy);
 	int32_t (*tile_max_z)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_max_z);
 	const OpenTTDCommandServices *command_checks;

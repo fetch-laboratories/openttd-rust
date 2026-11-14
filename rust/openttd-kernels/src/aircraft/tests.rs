@@ -239,3 +239,60 @@ fn aircraft_event_handler_general_is_a_fatal_error() {
             .contains("fatal: OK, you shouldn't be here, check your Airport Scheme!\n")
     );
 }
+
+/// `AircraftHandleDestTooFar`: on the first report the AI event, and for the local company
+/// only the advice news; when the destination is in range again the advice is deleted. The
+/// expectations are the original's events, `STR_NEWS_AIRCRAFT_DEST_TOO_FAR` with the vehicle
+/// as parameter and `AdviceType::AircraftDestinationTooFar`.
+#[test]
+fn aircraft_handle_dest_too_far_raises_the_original_event_and_advice() {
+    use crate::news_func::testing::{Effect, Param, encoded, take};
+    use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle, NewsType};
+    use crate::script_event_types::ScriptEvent;
+    use crate::vehicle_type::VehicleID;
+    extern "C" fn dirty(_: crate::vehicle::VehicleRef) {}
+    extern "C" fn local() -> u8 {
+        3
+    }
+    let mut leaves = leaves(crate::vehicle::VehicleServices {
+        start_stop_dirty: dirty,
+        ..crate::test_tables::VEHICLE
+    });
+    leaves.strings.aircraft_dest_too_far = 0x4A1;
+    let mut shared = *shared();
+    shared.local_company = local;
+    leaves.shared = Box::leak(Box::new(shared));
+    // SAFETY: The leaked tables outlive the test.
+    let w = unsafe { World::<false>::new(&raw const leaves) };
+    take();
+    for owner in [3, 4] {
+        let v = aircraft();
+        v.base().write_owner(owner);
+        w.aircraft_handle_dest_too_far(v, true);
+        // Already reported: nothing more.
+        w.aircraft_handle_dest_too_far(v, true);
+        w.aircraft_handle_dest_too_far(v, false);
+        w.aircraft_handle_dest_too_far(v, false);
+        let mut expected = vec![Effect::AiNewEvent(
+            owner,
+            ScriptEvent::aircraft_dest_too_far(VehicleID(17)),
+        )];
+        if owner == 3 {
+            expected.push(Effect::News {
+                headline: encoded(0x4A1, &[Param::N(17)]),
+                r#type: NewsType::Advice,
+                style: NewsStyle::Small,
+                flags: NewsFlags::new(&[NewsFlag::InColour, NewsFlag::VehicleParam0]),
+                ref1: NewsReference::Vehicle(VehicleID(17)),
+                ref2: NewsReference::None,
+                data: None,
+                advice_type: AdviceType::AircraftDestinationTooFar,
+            });
+        }
+        expected.push(Effect::DeleteVehicleNews(
+            17,
+            AdviceType::AircraftDestinationTooFar.0,
+        ));
+        assert_eq!(take(), expected, "owner {owner}");
+    }
+}

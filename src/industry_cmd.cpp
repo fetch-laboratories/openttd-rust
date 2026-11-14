@@ -415,17 +415,6 @@ bool IsSlopeRefused(Slope current, Slope refused)
  * @return Failed or succeeded command.
  */
 
-static void RustIndustryOpeningNews(const Industry *ind) noexcept
-{
-	const IndustrySpec *ind_spc = GetIndustrySpec(ind->type);
-	EncodedString headline;
-	if (ind_spc->new_industry_text > STR_LAST_STRINGID) {
-		headline = GetEncodedString(ind_spc->new_industry_text, ind_spc->name, STR_TOWN_NAME, ind->town->index);
-	} else {
-		headline = GetEncodedString(ind_spc->new_industry_text, ind_spc->name, ind->town->index);
-	}
-	AddIndustryNewsItem(std::move(headline), NewsType::IndustryOpen, ind->index);
-}
 
 
 /**
@@ -588,15 +577,6 @@ void ClearAllIndustryCachedNames()
  * @result true if protection is on, false otherwise (except for oil wells)
  */
 
-static NewsType RustIndustryNewsType(OpenTTDIndustryServicing servicing) noexcept
-{
-	switch (servicing) {
-		case OpenTTDIndustryServicing::Nobody: return NewsType::IndustryNobody;
-		case OpenTTDIndustryServicing::Other: return NewsType::IndustryOther;
-		case OpenTTDIndustryServicing::Company: return NewsType::IndustryCompany;
-		default: NOT_REACHED();
-	}
-}
 
 /**
  * Report news that industry production has changed significantly
@@ -605,13 +585,6 @@ static NewsType RustIndustryNewsType(OpenTTDIndustryServicing servicing) noexcep
  * @param cargo Cargo type that has changed
  * @param percent Percentage of change (>0 means increase, <0 means decrease)
  */
-static void RustIndustryProductionNews(Industry *ind, CargoType cargo, int percent, OpenTTDIndustryServicing servicing) noexcept
-{
-	AddIndustryNewsItem(
-		GetEncodedString(percent >= 0 ? STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH : STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH,
-			CargoSpec::Get(cargo)->name, ind->index, abs(percent)),
-		RustIndustryNewsType(servicing), ind->index);
-}
 
 
 /**
@@ -721,33 +694,6 @@ void TrimIndustryAcceptedProduced(Industry *ind)
 /** Industry world services with immediate effects. Script event services only enqueue
 	* events; construction, landscape clearing and industry destruction can reenter Rust.
 	* Their CommandCost failures are handled by the native transactions. */
-static void RustIndustryNews(Industry *i, StringID str, bool close, OpenTTDIndustryServicing servicing) noexcept
-{
-	NewsType nt;
-	/* Compute news category */
-	if (close) {
-		nt = NewsType::IndustryClose;
-		AI::BroadcastNewEvent(new ScriptEventIndustryClose(i->index));
-		Game::NewEvent(new ScriptEventIndustryClose(i->index));
-	} else {
-		nt = RustIndustryNewsType(servicing);
-	}
-	/* Set parameters of news string */
-	EncodedString headline;
-	if (str > STR_LAST_STRINGID) {
-		headline = GetEncodedString(str, STR_TOWN_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->type)->name);
-	} else if (close) {
-		headline = GetEncodedString(str, STR_FORMAT_INDUSTRY_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->type)->name);
-	} else {
-		headline = GetEncodedString(str, i->index);
-	}
-	/* and report the news to the user */
-	if (close) {
-		AddTileNewsItem(std::move(headline), nt, i->location.tile + TileDiffXY(1, 1));
-	} else {
-		AddIndustryNewsItem(std::move(headline), nt, i->index);
-	}
-}
 
 static Industry *RustIndustry(void *handle) noexcept { return static_cast<Industry *>(handle); }
 
@@ -812,8 +758,13 @@ static const OpenTTDIndustryServices _industry_services = {
 		return {result, reg[0]};
 	},
 	.text = &GetRustGrfTextServices(),
-	.news = [](void *i, uint32_t text, bool close, OpenTTDIndustryServicing servicing) noexcept { RustIndustryNews(RustIndustry(i), text, close, servicing); },
-	.production_news = [](void *i, uint8_t cargo, int32_t percent, OpenTTDIndustryServicing servicing) noexcept { RustIndustryProductionNews(RustIndustry(i), cargo, percent, servicing); },
+	.strings = {
+		.format_industry_name = STR_FORMAT_INDUSTRY_NAME,
+		.industry_production_decrease_smooth = STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH,
+		.industry_production_increase_smooth = STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH,
+		.last_stringid = STR_LAST_STRINGID,
+		.town_name = STR_TOWN_NAME,
+	},
 	.callback_error = [](void *handle, bool invalid_cargo) noexcept {
 		Industry *i = RustIndustry(handle);
 		const IndustrySpec *spec = GetIndustrySpec(i->type);
@@ -823,12 +774,11 @@ static const OpenTTDIndustryServices _industry_services = {
 	},
 	.set_dirty = [](void *i) noexcept { SetWindowDirty(WC_INDUSTRY_VIEW, RustIndustry(i)->index); },
 	.destroy = [](void *i) noexcept { delete RustIndustry(i); },
-	.opening_news = [](void *i) noexcept { RustIndustryOpeningNews(RustIndustry(i)); },
-	.opening_events = [](void *i) noexcept { Industry *ind = RustIndustry(i); AI::BroadcastNewEvent(new ScriptEventIndustryOpen(ind->index)); Game::NewEvent(new ScriptEventIndustryOpen(ind->index)); },
 	.create = [](uint8_t type, uint8_t creation) noexcept -> void * { return CreateNewIndustry(RandomTile(), type, static_cast<IndustryAvailabilityCallType>(creation)); },
 	.num_items = []() noexcept -> uint32_t { return static_cast<uint32_t>(Industry::GetNumItems()); },
 	.get = [](uint16_t id) noexcept -> void * { return IndustryIfValid(id); },
 	.resolver = &GetIndustryResolverServices(),
+	.transaction = &GetIndustryTransactionServices(),
 	.company_none = []() noexcept -> uint8_t {
 		CompanyID old = OpenTTDCurrentCompany();
 		OpenTTDSetCurrentCompany(OWNER_NONE);
@@ -856,7 +806,6 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.disassociate_field = [](uint32_t tile) noexcept { SetIndustryIndexOfField(TileIndex(tile), IndustryID::Invalid()); },
 	.release_disasters = [](uint16_t industry) noexcept { ReleaseDisastersTargetingIndustry(IndustryID(industry)); },
 	.delete_storage = [](void *shell) noexcept { delete static_cast<Industry *>(shell)->psa; },
-	.delete_news = [](uint16_t industry) noexcept { DeleteIndustryNews(IndustryID(industry)); },
 	.close_view = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_VIEW, industry); },
 	.close_production = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_PRODUCTION, industry); },
 	.delete_inspect = OpenTTDDeleteIndustryInspect,
@@ -970,8 +919,6 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 {
 	static const OpenTTDIndustryTilePolicyServices services = {
 		.object_in_way = [](OpenTTDIndustryCost *out, const OpenTTDIndustrySpecHandle *spec) noexcept { *out = CommandCostWithParam(STR_ERROR_GENERIC_OBJECT_IN_THE_WAY, reinterpret_cast<const IndustrySpec *>(spec)->name); },
-		.close_ai = [](Industry *industry) noexcept { AI::BroadcastNewEvent(new ScriptEventIndustryClose(industry->index)); },
-		.close_game = [](Industry *industry) noexcept { Game::NewEvent(new ScriptEventIndustryClose(industry->index)); },
 		.destroy = [](Industry *industry) noexcept { delete industry; },
 		.tile_max_z = [](uint32_t tile) noexcept -> int32_t { return OpenTTDTileMaxZ(TileIndex(tile)); },
 		.command_checks = &GetRustCommandServices(),

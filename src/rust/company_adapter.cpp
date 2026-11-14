@@ -397,7 +397,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.company_count = Co_company_count,
 		.competitor_fired = Co_competitor_fired,
 		.can_allocate_company = Co_can_allocate_company,
-		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
+		.network_server = RustNetworkServer,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
 		.company_in_trouble = Co_company_in_trouble,
 		.hq_location = RustCompanyHQ,

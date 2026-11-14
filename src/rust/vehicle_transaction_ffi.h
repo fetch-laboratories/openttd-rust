@@ -58,7 +58,6 @@ struct OpenTTDVehicleCommonServices {
 	OpenTTDVehicleTransactionStrings strings;
 	OpenTTDAircraftStartState (*aircraft_start)(void *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_start);
 	uint32_t (*grf_string)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_string);
-	void (*waiting_news)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waiting_news);
 	void (*startstop_ui)(void *) noexcept OPENTTD_SERVICE_DEFAULT(startstop_ui);
 	int64_t (*value)(void *) noexcept OPENTTD_SERVICE_DEFAULT(value);
 	bool (*valid_cargo)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_cargo);

@@ -10,15 +10,20 @@ use crate::industrytype::{
     IndustryBehaviour, IndustryBehaviours, IndustryLifeType, IndustryLifeTypes,
 };
 use crate::newgrf_callbacks::{IndustryCallbackMask, IndustryCallbackMasks};
+use crate::news_func::add_industry_news_item;
+use crate::news_type::NewsType;
 use crate::order_type::{OrderType, OrderUnloadType};
+use crate::script_event_types::ScriptEvent;
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::StringID;
+use crate::strings_type::StringParameterData::Integer;
 use crate::tile_type::{TileIndex, TileType};
 use crate::vehicle_type::VehicleType;
 use std::ffi::c_void;
 
 /// The result of `WhoCanServiceIndustry`: 0 if nobody can service the industry, 2 if the
 /// local company can service the industry, and 1 otherwise (only competitors can service the
-/// industry). The native news callbacks take the same ordinals.
-#[repr(u8)]
+/// industry).
 #[derive(Clone, Copy)]
 pub enum Servicing {
     Nobody,
@@ -67,7 +72,7 @@ pub(super) fn servicing(shell: *mut c_void, ind: *mut Industry, s: &Services) ->
     let orders = crate::orders::VisitOrders::new(unsafe { &*(vehicles.orders)() });
     let resolver = unsafe { &*s.resolver };
     let subsidies = unsafe { &*(resolver.lifecycle().subsidies)() };
-    let local_company = || CompanyID((subsidies.local_company)());
+    let local_company = || CompanyID((shared.local_company)());
     let mut result = Servicing::Nobody;
     let mut from = 0;
     while let Some(v) = (shared.vehicle_next)(from) {
@@ -225,12 +230,32 @@ pub(crate) fn is_tile_forest_industry(tile: TileIndex, s: &Services) -> bool {
 pub unsafe extern "C" fn openttd_rust_industry_forest_abi(tile: u32, s: *const Services) -> u8 {
     u8::from(is_tile_forest_industry(TileIndex(tile), unsafe { &*s }))
 }
-/// The news item and script events announcing a new industry, as `AdvertiseIndustryOpening`.
-pub(super) fn advertise(shell: *mut c_void, s: &Services) {
-    unsafe {
-        (s.opening_news)(shell);
-        (s.opening_events)(shell);
-    }
+/// Original `AdvertiseIndustryOpening`: the news item and script events announcing a new
+/// industry.
+pub(super) fn advertise(ind: *mut c_void, s: &Services) {
+    let catchment = crate::station::Ctx::from_shared(s.shared());
+    let ind_spc =
+        crate::industrytype::get_industry_spec(crate::industry_type::IndustryType(unsafe {
+            (*(catchment.c.industry_owner)(ind.cast())).metadata.kind
+        }));
+    let index = super::industry_index(ind, s);
+    let (text, name) = unsafe { ((*ind_spc).new_industry_text, (*ind_spc).name) };
+    let town = Integer(u64::from(super::town_index(ind, s).0));
+    let headline = if text > s.strings.last_stringid {
+        get_encoded_string(
+            StringID(text),
+            &[
+                Integer(u64::from(name)),
+                Integer(u64::from(s.strings.town_name)),
+                town,
+            ],
+        )
+    } else {
+        get_encoded_string(StringID(text), &[Integer(u64::from(name)), town])
+    };
+    add_industry_news_item(&headline, NewsType::IndustryOpen, index);
+    crate::ai::broadcast_new_event(&ScriptEvent::industry_open(index), CompanyID::INVALID);
+    crate::game::new_event(&ScriptEvent::industry_open(index));
 }
 /// `IndustrySpec::IsRawIndustry`: is an industry with the spec a raw industry?
 pub(crate) const fn is_raw_industry(life_type: IndustryLifeTypes) -> bool {

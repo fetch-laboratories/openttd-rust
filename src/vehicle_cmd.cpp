@@ -102,7 +102,6 @@ static OpenTTDAircraftStartState VehicleTransactionAircraftStart(void *shell) no
 	const Aircraft *v = Aircraft::From(static_cast<Vehicle *>(shell));
 	return {.state = v->state, .flags = v->flags};
 }
-static void VehicleTransactionWaitingNews(uint32_t id) noexcept { DeleteVehicleNews(VehicleID(id), AdviceType::VehicleWaiting); }
 static void VehicleTransactionStartstopUI(void *shell) noexcept
 {
 	const Vehicle *v = static_cast<Vehicle *>(shell);
@@ -135,7 +134,6 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 		},
 		.aircraft_start = VehicleTransactionAircraftStart,
 		.grf_string = RustGRFString,
-		.waiting_news = VehicleTransactionWaitingNews,
 		.startstop_ui = VehicleTransactionStartstopUI,
 		.value = RustOpaqueVehicleRead<int64_t, RustVehicleValue>,
 		.valid_cargo = OpenTTDIsValidCargo,

@@ -95,7 +95,6 @@ struct OpenTTDCompanyServices {
 	size_t (OPENTTD_RUST_CALL *company_count)() noexcept OPENTTD_SERVICE_DEFAULT(company_count);
 	bool (*competitor_fired)() noexcept OPENTTD_SERVICE_DEFAULT(competitor_fired);
 	bool (OPENTTD_RUST_CALL *can_allocate_company)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate_company);
-	uint8_t (OPENTTD_RUST_CALL *local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	bool (OPENTTD_RUST_CALL *network_server)() noexcept OPENTTD_SERVICE_DEFAULT(network_server);
 	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *company_vehicle_counts)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_vehicle_counts);
 	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *vehicle_limits)() noexcept OPENTTD_SERVICE_DEFAULT(vehicle_limits);

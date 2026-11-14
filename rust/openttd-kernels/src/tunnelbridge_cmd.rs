@@ -789,7 +789,7 @@ impl<'a> World<'a> {
         if flags & DoCommandFlag::QUERY_COST == 0
             || (valid_company
                 && (companies.identity.is_ai)((companies.identity.company)(CompanyID(company)))
-                && company != (companies.local_company)())
+                && company != (companies.shared.local_company)())
         {
             if flags & DoCommandFlag::QUERY_COST != 0 {
                 w::hit(w::TB_AI_QUERY);

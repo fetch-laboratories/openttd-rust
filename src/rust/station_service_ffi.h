@@ -86,6 +86,10 @@ struct OpenTTDLoadingStation {
 	OpenTTDBaseStation *base;
 	OpenTTDStationService *state;
 };
+struct OpenTTDStationAcceptanceStrings {
+	uint32_t station_no_longer_accepts_cargo_list;
+	uint32_t station_now_accepts_cargo_list;
+};
 struct OpenTTDStationServices {
 	const OpenTTDLiveGraphServices *graphs;
 	OpenTTDLoadingStation (*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
@@ -106,7 +110,7 @@ struct OpenTTDStationServices {
 	bool (*passenger_cargo)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(passenger_cargo);
 	bool (*packet_available)() noexcept OPENTTD_SERVICE_DEFAULT(packet_available);
 	void (*rating_redraw)(OpenTTDBaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(rating_redraw);
-	void (*acceptance_news)(OpenTTDBaseStation *, uint64_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(acceptance_news);
+	OpenTTDStationAcceptanceStrings strings;
 	void (*delete_station)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_station);
 
 	void (*append_packet)(OpenTTDBaseStation *, uint8_t, uint32_t, OpenTTDCargoSource) noexcept OPENTTD_SERVICE_DEFAULT(append_packet);

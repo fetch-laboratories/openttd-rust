@@ -66,7 +66,6 @@ pub struct Services {
     pub(crate) profit: extern "C" fn(*mut OpenTTDVehicle) -> i64,
     pub(crate) shared: *const crate::services::Services,
     pub(crate) feeder_animation: extern "C" fn(i32, i32, i32, i64, i64),
-    pub(crate) subsidy_multiplier: extern "C" fn() -> u8,
     pub(crate) feeder_payment_share: extern "C" fn() -> u8,
 }
 /// Rust-allocated payment with the `OpenTTDCargoPayment` C layout (ABI layout 60).
@@ -287,7 +286,7 @@ fn deliver_goods(
     );
     // Modify profit if a subsidy is in effect.
     if subsidies.check_subsidised(cargo_type, company, src, dest) {
-        profit = match (s.subsidy_multiplier)() {
+        profit = match (subsidies.multiplier)() {
             0 => profit.saturating_add(profit >> 1),
             1 => profit.saturating_mul(2),
             2 => profit.saturating_mul(3),
@@ -551,7 +550,6 @@ crate::abi::layouts! {
         profit,
         shared,
         feeder_animation,
-        subsidy_multiplier,
         feeder_payment_share,
     };
 }

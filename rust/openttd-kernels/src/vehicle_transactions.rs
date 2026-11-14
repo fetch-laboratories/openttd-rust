@@ -575,7 +575,6 @@ pub struct CommonServices {
     pub strings: TransactionStrings,
     pub aircraft_start: extern "C" fn(*mut ()) -> AircraftStartState,
     pub grf_string: extern "C" fn(u32, u32) -> u32,
-    pub waiting_news: extern "C" fn(u32),
     pub startstop_ui: extern "C" fn(*mut ()),
     pub value: extern "C" fn(*mut ()) -> i64,
     pub valid_cargo: extern "C" fn(u8) -> bool,
@@ -838,7 +837,10 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         if unsafe { (s.transactions.stopped_in_depot)(v) }
             && !flags.test(DoCommandFlag::AutoReplace)
         {
-            (s.waiting_news)(veh_id.0);
+            crate::news_func::delete_vehicle_news(
+                veh_id,
+                crate::news_type::AdviceType::VehicleWaiting,
+            );
         }
         // The stopped bit is read again here, after the news and callback above.
         handle.write_status(handle.status() ^ crate::vehicle_base::VS_STOPPED);
@@ -915,7 +917,7 @@ crate::abi::layouts! {
     };
     "OpenTTDVehicleCommonServices" ["probe"] => CommonServices {
         base, transactions, vehicles, orders, strings, aircraft_start,
-        grf_string, waiting_news,
+        grf_string,
         startstop_ui, value, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => SelectionServices {

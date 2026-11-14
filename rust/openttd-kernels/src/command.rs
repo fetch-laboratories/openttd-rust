@@ -235,7 +235,7 @@ fn flush_signals(s: &CommandServices) {
 pub(crate) fn is_local_company(s: &CommandServices) -> bool {
     // SAFETY: the company table is immutable for the process lifetime.
     let company = unsafe { &*(s.company)() };
-    (company.local_company)() == (s.finance.current_company)()
+    (company.shared.local_company)() == (s.finance.current_company)()
 }
 
 /// `IsCommandAllowedWhilePaused`, over the command's `CommandType`.
@@ -468,7 +468,7 @@ pub unsafe extern "C" fn openttd_rust_command_finish(
         /* A new company switches to it, a closed one to spectator; the caller restores others. */
         set_backup(None);
         // SAFETY: the company table is immutable for the process lifetime.
-        (finance.set_current_company)((unsafe { &*(s.company)() }.local_company)());
+        (finance.set_current_company)((unsafe { &*(s.company)() }.shared.local_company)());
     } else {
         /* Make sure nothing bad happened, like changing the current company. */
         (s.signals.assert_condition)(verify_company(s, cmd_flags));
