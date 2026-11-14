@@ -912,6 +912,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         reason = "`const int max_te = this->gcache.cached_max_te`"
     )]
     fn get_acceleration(s: &Services, v: VehicleRef, o: Owner) -> i32 {
+        /* Templated class used for function calls for performance reasons. */
         let w = World::new(s.shared());
         /* Speed is used squared later on, so U16 * U16, and then multiplied by other values. */
         let speed = i64::from(T::get_current_speed(v)); // [km/h-ish]
