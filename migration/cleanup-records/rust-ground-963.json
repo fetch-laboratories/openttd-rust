@@ -1,0 +1,8 @@
+[
+  {
+    "kind": "carry",
+    "tool": "clippy",
+    "from": "rust/openttd-kernels/src/ground_vehicle.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28",
+    "to": "rust/openttd-kernels/src/road.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28"
+  }
+]
