@@ -410,8 +410,7 @@ def extract(archive: bytes, destination: Path) -> None:
         tar.extractall(destination, filter="data")
     now = time.time()
     for path in destination.rglob("*"):
-        if not path.is_symlink():
-            os.utime(path, (now, now))
+        os.utime(path, (now, now), follow_symlinks=False)
 
 
 def expanded_rust(revision: str) -> str:
