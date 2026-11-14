@@ -913,21 +913,19 @@ impl Game<'_> {
         let braking = v_status & 2 != 0 || id.flag(0) || id.flag(8);
         let max = self.get_current_max_speed(id);
         if self.acc_model() == 0 {
-            crate::ground_vehicle::update_speed(
+            crate::ground_vehicle::do_update_speed(
                 id.vehicle(),
                 (i64::from(i32::from(v_acceleration) * if braking { -4 } else { 2 }) as u64) as u32,
                 0,
                 (max as u64) as i32,
-            )
-            .distance as i32
+            ) as i32
         } else {
-            crate::ground_vehicle::update_speed(
+            crate::ground_vehicle::do_update_speed(
                 id.vehicle(),
-                crate::ground_vehicle::acceleration(self.leaves.physics, id.vehicle()) as u32,
+                crate::ground_vehicle::get_acceleration(self.leaves.physics, id.vehicle()) as u32,
                 (u64::from(!braking) * 2) as i32,
                 (max as u64) as i32,
-            )
-            .distance as i32
+            ) as i32
         }
     }
     fn mark_dirty(&self, id: Handle) {
@@ -1229,7 +1227,7 @@ impl Game<'_> {
             id.set_wait_counter(0);
             (id).vehicle().write_speed(0_u16);
             (id).vehicle().write_subspeed(0_u8);
-            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+            crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
             (self.leaves.start_stop_dirty)(id);
         }
     }
@@ -1283,7 +1281,7 @@ impl Game<'_> {
                     && (self.leaves.is_bridge)(Handle::NONE, (id).vehicle().tile()) != 0
                 {
                     self.update_occupancy(id);
-                    crate::ground_vehicle::inclination(
+                    crate::ground_vehicle::update_inclination(
                         self.leaves.physics,
                         &self.movement,
                         id.vehicle(),
@@ -1900,10 +1898,10 @@ impl Game<'_> {
                 if dir != (id).vehicle().direction() {
                     if prev == Handle::NONE && self.acc_model() == 0 {
                         let diff = (id).vehicle().direction().wrapping_sub(dir) & 7;
-                        let small = if u64::from(crate::ground_vehicle::acceleration_type(
+                        let small = if crate::ground_vehicle::get_acceleration_type(
                             self.leaves.physics,
                             id.vehicle(),
-                        )) == 2
+                        ) == crate::engine_type::VehicleAccelerationModel::Maglev
                         {
                             0
                         } else {
@@ -1963,7 +1961,7 @@ impl Game<'_> {
         (id).vehicle().write_x((x as u64) as i32);
         (id).vehicle().write_y((y as u64) as i32);
         self.update_occupancy(id);
-        let old_z = crate::ground_vehicle::inclination(
+        let old_z = crate::ground_vehicle::update_inclination(
             self.leaves.physics,
             &self.movement,
             id.vehicle(),
@@ -2270,7 +2268,7 @@ impl Game<'_> {
                 );
                 if id.track() != WORMHOLE {
                     self.update_occupancy(id);
-                    crate::ground_vehicle::inclination(
+                    crate::ground_vehicle::update_inclination(
                         self.leaves.physics,
                         &self.movement,
                         id.vehicle(),
@@ -2528,7 +2526,7 @@ impl Game<'_> {
         let mut advance = (self.leaves.advance_distance)(id) as i32;
         if distance < advance {
             if (id).vehicle().speed() == 0 {
-                crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+                crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
             }
         } else {
             self.line_ends(id, true);
@@ -2560,7 +2558,7 @@ impl Game<'_> {
                     };
                 }
             }
-            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+            crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
         }
         let mut u = id;
         while u != Handle::NONE {
@@ -2609,7 +2607,7 @@ impl Game<'_> {
         if (self.leaves.servint)(id) == 0 || !self.needs_automatic_servicing(id) {
             return;
         }
-        if u64::from(crate::ground_vehicle::chain_in_depot(
+        if u64::from(crate::ground_vehicle::is_chain_in_depot(
             self.leaves.physics,
             id.vehicle(),
         )) != 0
@@ -2683,7 +2681,7 @@ impl Game<'_> {
             return 0;
         }
         if !id.flag(8) {
-            return if u64::from(crate::ground_vehicle::chain_in_depot(
+            return if u64::from(crate::ground_vehicle::is_chain_in_depot(
                 self.leaves.physics,
                 id.vehicle(),
             )) != 0
@@ -2762,7 +2760,7 @@ impl Game<'_> {
                     id.set_flag(0, !id.flag(0));
                 } else {
                     (id).vehicle().write_speed(0_u16);
-                    crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+                    crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
                     (self.leaves.hide_fill)(id);
                     self.reverse(id);
                 }

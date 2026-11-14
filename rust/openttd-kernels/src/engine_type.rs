@@ -12,10 +12,6 @@ pub const INVALID_ENGINE: u16 = EngineID::INVALID.0;
 /// `AIR_CTOL`.
 pub const AIR_CTOL: u8 = 1;
 
-/// `VehicleAccelerationModel::Normal`.
-pub const ACCELERATION_NORMAL: u8 = VehicleAccelerationModel::Normal.0;
-/// `VehicleAccelerationModel::Maglev`.
-pub const ACCELERATION_MAGLEV: u8 = VehicleAccelerationModel::Maglev.0;
 /// `VE_OFFSET_START`.
 pub const VE_OFFSET_START: u8 = 0;
 /// `VE_OFFSET_CENTRE`.

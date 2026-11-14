@@ -102,6 +102,16 @@ pub(crate) fn clamp_to_u16(a: i64) -> u16 {
     a.clamp(0, i64::from(u16::MAX)) as u16
 }
 
+/// `ClampTo<int32_t>` of a signed 64-bit value: clamp it down to lie within the `int32_t`
+/// range.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ClampTo's static_cast<To> of the clamped value"
+)]
+pub(crate) fn clamp_to_i32(a: i64) -> i32 {
+    a.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+}
+
 /// `ClampTo<uint32_t>` of an unsigned 64-bit value: clamp it down to lie within the
 /// `uint32_t` range.
 #[allow(
@@ -284,5 +294,19 @@ mod comparison_tests {
             (format!("SoftClamp<int8_t>(0, {min}, max < min)"), row, 2)
         });
         oracle::check_rows(&o, "narrow", narrow);
+    }
+}
+
+#[cfg(test)]
+mod clamp_to_tests {
+    /// `ClampTo<int32_t>` keeps both bounds and clamps one past each.
+    #[test]
+    fn clamp_to_i32_saturates_at_the_int32_bounds() {
+        let min = i64::from(i32::MIN);
+        let max = i64::from(i32::MAX);
+        assert_eq!(super::clamp_to_i32(min), i32::MIN);
+        assert_eq!(super::clamp_to_i32(max), i32::MAX);
+        assert_eq!(super::clamp_to_i32(min - 1), i32::MIN);
+        assert_eq!(super::clamp_to_i32(max + 1), i32::MAX);
     }
 }

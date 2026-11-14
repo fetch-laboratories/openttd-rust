@@ -198,6 +198,13 @@ pub fn set_bit8(value: &mut u8, bit: u8) -> u8 {
     *value
 }
 
+/// `SetBit` for 16-bit flag words such as `GroundVehicle::gv_flags`, preserving the
+/// original return value.
+pub fn set_bit16(value: &mut u16, bit: u8) -> u16 {
+    *value |= 1_u16.wrapping_shl(u32::from(bit));
+    *value
+}
+
 /// `HasBit` for native 64-bit cargo masks.
 pub fn has_bit64(value: u64, bit: u8) -> bool {
     value & 1_u64.wrapping_shl(u32::from(bit)) != 0
