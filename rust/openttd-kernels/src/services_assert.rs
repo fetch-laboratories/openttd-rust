@@ -54,8 +54,10 @@ pub(crate) fn bind_test_check(check: extern "C" fn(bool)) {
 
 /// Run a test with its native assertion policy in a separate process, so binding
 /// cannot race with parallel tests that deliberately replace the process-wide policy.
-/// Return true in the parent after successful completion; the child binds `check`
-/// and returns false to execute the existing test body.
+/// Return true in the parent after the child has run and passed exactly one test;
+/// the child binds `check` and returns false to execute the existing test body.
+/// libtest exits successfully when `name` matches no test, so the parent also
+/// reads the child's summary: a renamed test must fail, not pass having run nothing.
 #[cfg(test)]
 pub(crate) fn isolate_test_check(name: &str, check: extern "C" fn(bool)) -> bool {
     const CHILD: &str = "OPENTTD_ASSERT_TEST_CHILD";
@@ -63,11 +65,28 @@ pub(crate) fn isolate_test_check(name: &str, check: extern "C" fn(bool)) -> bool
         bind_test_check(check);
         return false;
     }
-    let status = std::process::Command::new(std::env::current_exe().unwrap())
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", name])
         .env(CHILD, name)
-        .status()
+        .output()
         .unwrap();
-    assert!(status.success(), "isolated native assertion test {name}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed;"),
+        "isolated native assertion test {name} did not run and pass exactly one test\n\
+         {stdout}{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     true
+}
+
+#[cfg(test)]
+mod tests {
+    extern "C" fn unused_check(_: bool) {}
+
+    #[test]
+    #[should_panic(expected = "did not run and pass exactly one test")]
+    fn isolating_a_name_that_matches_no_test_fails() {
+        super::isolate_test_check("services_assert::tests::no_such_test", unused_check);
+    }
 }

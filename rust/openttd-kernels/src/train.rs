@@ -2949,22 +2949,6 @@ pub unsafe extern "C" fn openttd_rust_train_reverse_swap(
 /// # Safety
 /// The descriptors and shell must remain live until the call returns; callbacks may reenter.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_train_on_tile(
-    tile: u32,
-    leaves: *const Leaves,
-    services: *const Services,
-) -> u8 {
-    // SAFETY: The entry's contract keeps both immutable tables live until it returns.
-    u8::from(train_on_crossing(
-        unsafe { &*leaves },
-        unsafe { &*services },
-        TileIndex(tile),
-    ))
-}
-/// Invoke synchronous train policy with live serialized services.
-/// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_update_crossing(
     tile: u32,
     sound: u8,

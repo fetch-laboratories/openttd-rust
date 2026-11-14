@@ -436,17 +436,6 @@ void ReverseTrainSwapVeh(Train *v, int l, int r)
  */
 
 /**
- * Check if a level crossing tile has a train on it
- * @param tile tile to test
- * @return true if a train is on the crossing
- * @pre tile is a level crossing
- */
-bool TrainOnCrossing(TileIndex tile)
-{
-	return openttd_rust_train_train_on_tile(static_cast<uint32_t>(tile.base()), &GetTrainServices(), &GetRustSharedServices()) != 0;
-}
-
-/**
  * Checks if a train is approaching a rail-road crossing
  * @param v vehicle on tile
  * @param tile tile with crossing we are testing

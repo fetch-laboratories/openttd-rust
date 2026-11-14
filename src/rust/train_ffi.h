@@ -151,7 +151,6 @@ int64_t openttd_rust_train_running_cost(OpenTTDTrainHandle, const OpenTTDTrainSe
 uint8_t openttd_rust_train_trackdir(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 void openttd_rust_train_mark_stuck(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 void openttd_rust_train_reverse_swap(OpenTTDTrainHandle, int32_t, int32_t, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
-uint8_t openttd_rust_train_train_on_tile(uint32_t, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 void openttd_rust_train_update_crossing(uint32_t, uint8_t, uint8_t, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 void openttd_rust_train_adjacent_crossing_dirty(uint32_t, uint8_t, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 void openttd_rust_train_crossing_removed(uint32_t, uint8_t, const OpenTTDTrainServices *, const OpenTTDSharedServices *);

@@ -58,7 +58,7 @@ HOOKS = ("pre-push", "pre-commit", "commit-msg")
 BASE_BRANCH = "rust-migration"
 # Titles git writes for `commit --fixup` and `--squash`; the checker refuses them.
 FOLDED = ("fixup! ", "squash! ", "amend! ")
-PREFLIGHT = "python3 tools/preflight.py --base origin/rust-migration"
+PREFLIGHT = "python3 tools/preflight.py"
 
 
 def fast_tier(base: str, head: str, inert: bool) -> list[preflight.Step]:

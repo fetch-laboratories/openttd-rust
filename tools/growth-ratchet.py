@@ -5,8 +5,9 @@ An acceptance binds to the PR's own growth: the counter and its added keys and
 counts, not the counter's base and head totals, so another PR's merge does not
 void it (#904). It names the reviewed head, and also holds at a later head while
 the source of every added key is byte-identical, so a base update or an
-unrelated push keeps it. Identity counters (exports, callback slots) stay
-exact-head.
+unrelated push keeps it. For the identity counters that source is the key's
+declaration in the expanded crate: the whole function item for an export, the
+field declaration for a callback slot.
 
 A proposal lives in the change's tracked cleanup records; the acceptance is a
 reviewer's attributed PR comment. Growth whose proposal awaits that acceptance
@@ -26,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from cleanup_contract import context, reviewed, run
+from vcs import merge_base
 
 importlib.import_module("rust_syntax")
 
@@ -62,6 +64,7 @@ def increases(
 
 BOUND = ("counter", "added")
 FILE_KEYED = {"tools_cpp", "tests_cpp", "outside_cpp"}
+IDENTITY = {"exports", "callback_slots"}
 
 
 def known(revision: str) -> bool:
@@ -85,6 +88,10 @@ def same_source(growth: dict[str, Any], current: str, accepted_at: str) -> bool:
             and METRICS.show(accepted_at, key) == text
             for key in keys
         )
+    if counter in IDENTITY:
+        before = METRICS.boundary_texts(accepted_at)
+        after = METRICS.boundary_texts(current)
+        return all(key in before and before[key] == after.get(key) for key in keys)
     return False
 
 
@@ -151,6 +158,7 @@ def main() -> int:
         help="the CI event; growth pending review fails only in merge_group",
     )
     args = parser.parse_args()
+    args.base_ref = merge_base(args.base_ref, args.head, run=METRICS.git, announce=True)
     METRICS.keep_code_lines()
     before = METRICS.growth_inventory(args.base_ref)
     after = METRICS.growth_inventory(args.head)

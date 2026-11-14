@@ -13,15 +13,20 @@ import json
 import os
 import re
 import subprocess
+import sys
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, NamedTuple
 
+import vcs
 from vcs import ROOT, gh, git
 
 ATTRIBUTION = re.compile(r"Agent: (\S+) \| Model: (\S+) \| Reasoning effort: (\S+)")
 BLOCK = re.compile(r"```cleanup-acceptance\s*\n(.*?)\n```", re.S)
 RECORDS = "migration/cleanup-records"
 REASONS = ("reason", "retiring_owner", "retirement_condition")
+# Why and until when: a change to these words keeps an acceptance, since the
+# fields left say what is excepted and the re-check reads the changed words.
+WORDING = (*REASONS, "existing_alternatives", "source_contract")
 CONTRACT = dict.fromkeys(
     ("tool", "site", "operation", "source_contract", *REASONS), "text"
 )
@@ -93,10 +98,7 @@ def file_records(text: str, where: str) -> list[dict[str, Any]]:
 
 
 def merge_base(base_ref: str) -> str:
-    try:
-        return git("merge-base", "HEAD", base_ref).strip()
-    except subprocess.CalledProcessError:
-        return base_ref
+    return vcs.merge_base(base_ref, run=git)
 
 
 def at_base(base: str, path: str) -> str | None:
@@ -165,6 +167,11 @@ def acceptances(body: str, where: str) -> list[dict[str, Any]]:
     return found
 
 
+def bound(record: dict[str, Any]) -> dict[str, Any]:
+    """The fields that say what a record excepts, without its WORDING."""
+    return {key: value for key, value in record.items() if key not in WORDING}
+
+
 def reviewed(
     proposal: dict[str, Any],
     comments: list[str],
@@ -172,10 +179,12 @@ def reviewed(
     head: str,
     unchanged: Callable[[str], bool] | None = None,
 ) -> bool:
-    """Require another attributed agent to accept the exact payload and head.
+    """Require another attributed agent to accept the payload at the head.
 
-    With `unchanged`, an acceptance at an earlier full SHA also holds while the
-    site's item text there equals the item text at the checked head.
+    An accepted entry matches the proposal on every field but the WORDING ones,
+    so rewording a reason keeps the acceptance. With `unchanged`, an acceptance
+    at an earlier full SHA also holds while the site's item text there equals
+    the item text at the checked head.
     """
     if not author:
         return False
@@ -185,7 +194,10 @@ def reviewed(
             continue
         for record in acceptances(body, f"comment {n} by {attribution[1]}"):
             accepted = record["head"]
-            if proposal in record["accept"] and (
+            if any(
+                isinstance(entry, dict) and bound(entry) == bound(proposal)
+                for entry in record["accept"]
+            ) and (
                 accepted == head
                 or unchanged is not None
                 and re.fullmatch(r"[0-9a-f]{40}", accepted) is not None
@@ -338,7 +350,11 @@ def pull_discussion(head: str) -> tuple[str, list[str], str]:
         repository = json.loads(gh("repo", "view", "--json", "nameWithOwner"))[
             "nameWithOwner"
         ]
-    number = pull.get("number")
+    # A requested run is a workflow_dispatch whose `pr` input names the PR, and
+    # the Quick it calls reads the caller's event. The commit lookup below finds
+    # a PR only while its head is still the checkout's, so a push during the run
+    # would leave the run with no PR and every acceptance unread.
+    number = pull.get("number") or (event.get("inputs") or {}).get("pr")
     if not number:
         for sha, accepts in candidates:
             pulls = [found for found in commit_pulls(repository, sha) if accepts(found)]
@@ -347,7 +363,10 @@ def pull_discussion(head: str) -> tuple[str, list[str], str]:
                 number = candidate["number"]
                 head = candidate["head"]["sha"]
                 break
-    if number is None:
+    if not number:
+        print(
+            f"no pull request found for {head}; acceptances unchecked", file=sys.stderr
+        )
         return "", [], head
     prefix = f"repos/{repository}"
     current = json.loads(gh("api", f"{prefix}/pulls/{number}"))
