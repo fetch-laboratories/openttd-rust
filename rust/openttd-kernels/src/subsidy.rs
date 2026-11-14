@@ -184,7 +184,7 @@ impl Services {
     }
     /// `AddNewsItem(headline, NewsType::Subsidies, NewsStyle::Normal, {},
     /// src.GetNewsReference(), dst.GetNewsReference())`.
-    fn add_news_item(&self, headline: &EncodedString, src: Source, dst: Source) {
+    fn add_news_item(headline: &EncodedString, src: Source, dst: Source) {
         add_news_item(&AddNewsItemArgs {
             ref1: src.get_news_reference().record(),
             ref2: dst.get_news_reference().record(),
@@ -268,7 +268,7 @@ impl Services {
             let duration = Integer(u64::from((self.duration)()));
             [name, src_format, src_id, dst_format, dst_id, duration]
         });
-        self.add_news_item(&headline, src, dst);
+        Self::add_news_item(&headline, src, dst);
         self.set_part_of_subsidy_flag(src, PartOfSubsidy::Source);
         self.set_part_of_subsidy_flag(dst, PartOfSubsidy::Destination);
         crate::ai::broadcast_new_event(&ScriptEvent::subsidy_offer(id), CompanyID::INVALID);
@@ -314,7 +314,7 @@ impl Services {
             ),
             &parameters,
         );
-        self.add_news_item(&headline, src, dst);
+        Self::add_news_item(&headline, src, dst);
         crate::ai::broadcast_new_event(&ScriptEvent::subsidy_awarded(id), CompanyID::INVALID);
         crate::game::new_event(&ScriptEvent::subsidy_awarded(id));
         (self.dirty)();
@@ -574,7 +574,7 @@ impl Services {
                     StringID(self.strings.offer_of_subsidy_expired),
                     &self.route_parameters(cargo_type, src, dst),
                 );
-                self.add_news_item(&headline, src, dst);
+                Self::add_news_item(&headline, src, dst);
                 crate::ai::broadcast_new_event(
                     &ScriptEvent::subsidy_offer_expired(id),
                     CompanyID::INVALID,
@@ -586,7 +586,7 @@ impl Services {
                         StringID(self.strings.subsidy_withdrawn_service),
                         &self.route_parameters(cargo_type, src, dst),
                     );
-                    self.add_news_item(&headline, src, dst);
+                    Self::add_news_item(&headline, src, dst);
                 }
                 crate::ai::broadcast_new_event(
                     &ScriptEvent::subsidy_expired(id),

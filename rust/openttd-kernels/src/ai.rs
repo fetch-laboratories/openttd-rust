@@ -16,11 +16,11 @@ use crate::script_event_types::ScriptEvent;
 
 /// `AI::NewEvent(company, new ScriptEvent...(...))`: queue a new event for an AI.
 pub(crate) fn new_event(company: CompanyID, event: &ScriptEvent) {
-    (services().ai_new_event)(company.0, event);
+    (services().ai_new)(company.0, event);
 }
 
 /// `AI::BroadcastNewEvent(new ScriptEvent...(...), skip_company)`: broadcast a new event to
 /// all active AIs; pass `CompanyID::INVALID` for the original's default `skip_company`.
 pub(crate) fn broadcast_new_event(event: &ScriptEvent, skip_company: CompanyID) {
-    (services().ai_broadcast_new_event)(event, skip_company.0);
+    (services().ai_broadcast)(event, skip_company.0);
 }

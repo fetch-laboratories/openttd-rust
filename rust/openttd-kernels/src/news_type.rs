@@ -130,7 +130,7 @@ impl From<NewsFlag> for NewsFlags {
 /// References to objects in news (`NewsReference`).
 ///
 /// Be careful! Vehicles are a special case, as news are kept when vehicles are
-/// autoreplaced/renewed. You have to make sure, `ChangeVehicleNews` catches the DParams of
+/// autoreplaced/renewed. You have to make sure, `ChangeVehicleNews` catches the `DParams` of
 /// your message. This is NOT ensured by the references.
 ///
 /// The original is a `std::variant`; it crosses as a [`NewsReferenceRecord`].

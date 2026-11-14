@@ -2142,10 +2142,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 );
             });
             Self::call(|| {
-                crate::ai::new_event(owner, &ScriptEvent::station_first_vehicle(st, v.index()))
+                crate::ai::new_event(owner, &ScriptEvent::station_first_vehicle(st, v.index()));
             });
             Self::call(|| {
-                crate::game::new_event(&ScriptEvent::station_first_vehicle(st, v.index()))
+                crate::game::new_event(&ScriptEvent::station_first_vehicle(st, v.index()));
             });
         }
 
@@ -2883,7 +2883,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 self.start_stop_dirty(v);
                 let owner = crate::company_type::CompanyID(v.base().owner());
                 Self::call(|| {
-                    crate::ai::new_event(owner, &ScriptEvent::aircraft_dest_too_far(v.index()))
+                    crate::ai::new_event(owner, &ScriptEvent::aircraft_dest_too_far(v.index()));
                 });
                 if owner.0 == Self::call(|| (self.ss.local_company)()) {
                     /* Post a news message. */

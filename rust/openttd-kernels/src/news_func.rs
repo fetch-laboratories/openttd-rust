@@ -189,7 +189,7 @@ fn station_reference(station: StationID) -> NewsReference {
 /// `AddVehicleNewsItem`: adds a newsitem referencing a vehicle; pass
 /// `StationID::INVALID` for the original's default `station`.
 ///
-/// The DParams may not reference the vehicle due to autoreplace stuff. See
+/// The `DParams` may not reference the vehicle due to autoreplace stuff. See
 /// [`add_vehicle_advice_news_item`] for how that can be done.
 pub(crate) fn add_vehicle_news_item(
     headline: &EncodedString,
@@ -206,7 +206,7 @@ pub(crate) fn add_vehicle_news_item(
 
 /// `AddVehicleAdviceNewsItem`: adds a vehicle-advice news item.
 ///
-/// DParam 0 must reference the vehicle!
+/// `DParam` 0 must reference the vehicle!
 pub(crate) fn add_vehicle_advice_news_item(
     advice_type: AdviceType,
     headline: &EncodedString,
@@ -330,10 +330,14 @@ pub(crate) mod testing {
             0 => R::None,
             1 => R::Tile(crate::tile_type::TileIndex(value)),
             2 => R::Vehicle(crate::vehicle_type::VehicleID(value)),
-            3 => R::Station(crate::station_type::StationID(value as u16)),
-            4 => R::Industry(crate::industry_type::IndustryID(value as u16)),
-            5 => R::Town(crate::town_type::TownId(value as u16)),
-            6 => R::Engine(crate::engine_type::EngineID(value as u16)),
+            3 => R::Station(crate::station_type::StationID(
+                u16::try_from(value).unwrap(),
+            )),
+            4 => R::Industry(crate::industry_type::IndustryID(
+                u16::try_from(value).unwrap(),
+            )),
+            5 => R::Town(crate::town_type::TownId(u16::try_from(value).unwrap())),
+            6 => R::Engine(crate::engine_type::EngineID(u16::try_from(value).unwrap())),
             _ => unreachable!(),
         }
     }
@@ -411,19 +415,19 @@ pub(crate) mod testing {
         get_string,
         string_assertions: 1,
     };
-    extern "C" fn ai_broadcast_new_event(event: *const ScriptEvent, skip_company: u8) {
+    extern "C" fn ai_broadcast(event: *const ScriptEvent, skip_company: u8) {
         push(Effect::AiBroadcastNewEvent(unsafe { *event }, skip_company));
     }
-    extern "C" fn ai_new_event(company: u8, event: *const ScriptEvent) {
+    extern "C" fn ai_new(company: u8, event: *const ScriptEvent) {
         push(Effect::AiNewEvent(company, unsafe { *event }));
     }
-    extern "C" fn game_new_event(event: *const ScriptEvent) {
+    extern "C" fn game_new(event: *const ScriptEvent) {
         push(Effect::GameNewEvent(unsafe { *event }));
     }
     static EVENTS: crate::script_event::Services = crate::script_event::Services {
-        ai_broadcast_new_event,
-        ai_new_event,
-        game_new_event,
+        ai_broadcast,
+        ai_new,
+        game_new,
     };
 
     /// Bind the recording tables once for the process; return and clear this thread's

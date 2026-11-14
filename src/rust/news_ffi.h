@@ -32,9 +32,9 @@ struct OpenTTDNewsServices {
 extern "C" void openttd_rust_news_bind(const OpenTTDNewsServices *services);
 
 struct OpenTTDScriptEventServices {
-	void (*ai_broadcast_new_event)(const OpenTTDScriptEvent *event, uint8_t skip_company) noexcept OPENTTD_SERVICE_DEFAULT(ai_broadcast_new_event);
-	void (*ai_new_event)(uint8_t company, const OpenTTDScriptEvent *event) noexcept OPENTTD_SERVICE_DEFAULT(ai_new_event);
-	void (*game_new_event)(const OpenTTDScriptEvent *event) noexcept OPENTTD_SERVICE_DEFAULT(game_new_event);
+	void (*ai_broadcast)(const OpenTTDScriptEvent *event, uint8_t skip_company) noexcept OPENTTD_SERVICE_DEFAULT(ai_broadcast);
+	void (*ai_new)(uint8_t company, const OpenTTDScriptEvent *event) noexcept OPENTTD_SERVICE_DEFAULT(ai_new);
+	void (*game_new)(const OpenTTDScriptEvent *event) noexcept OPENTTD_SERVICE_DEFAULT(game_new);
 };
 extern "C" void openttd_rust_script_event_bind(const OpenTTDScriptEventServices *services);
 #endif /* RUST_NEWS_FFI_H */

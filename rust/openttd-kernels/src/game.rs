@@ -14,5 +14,5 @@ use crate::script_event_types::ScriptEvent;
 
 /// `Game::NewEvent(new ScriptEvent...(...))`: queue a new event for a Game Script.
 pub(crate) fn new_event(event: &ScriptEvent) {
-    (services().game_new_event)(event);
+    (services().game_new)(event);
 }

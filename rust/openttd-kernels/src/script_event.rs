@@ -46,16 +46,16 @@ impl ScriptEventType {
 #[repr(C)]
 pub struct Services {
     /// `AI::BroadcastNewEvent(event, skip_company)`.
-    pub ai_broadcast_new_event: extern "C" fn(*const crate::script_event_types::ScriptEvent, u8),
+    pub ai_broadcast: extern "C" fn(*const crate::script_event_types::ScriptEvent, u8),
     /// `AI::NewEvent(company, event)`.
-    pub ai_new_event: extern "C" fn(u8, *const crate::script_event_types::ScriptEvent),
+    pub ai_new: extern "C" fn(u8, *const crate::script_event_types::ScriptEvent),
     /// `Game::NewEvent(event)`.
-    pub game_new_event: extern "C" fn(*const crate::script_event_types::ScriptEvent),
+    pub game_new: extern "C" fn(*const crate::script_event_types::ScriptEvent),
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScriptEventServices" ["script_event"] => Services { ai_broadcast_new_event, ai_new_event, game_new_event };
+    "OpenTTDScriptEventServices" ["script_event"] => Services { ai_broadcast, ai_new, game_new };
 }
 
 extern "C" fn unbound_ai_broadcast_new_event(
@@ -72,9 +72,9 @@ extern "C" fn unbound_game_new_event(_: *const crate::script_event_types::Script
 }
 /// Services before the native table binds; each call aborts.
 static UNBOUND: Services = Services {
-    ai_broadcast_new_event: unbound_ai_broadcast_new_event,
-    ai_new_event: unbound_ai_new_event,
-    game_new_event: unbound_game_new_event,
+    ai_broadcast: unbound_ai_broadcast_new_event,
+    ai_new: unbound_ai_new_event,
+    game_new: unbound_game_new_event,
 };
 static SERVICES: AtomicPtr<Services> = AtomicPtr::new((&raw const UNBOUND).cast_mut());
 

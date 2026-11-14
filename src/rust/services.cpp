@@ -934,9 +934,9 @@ static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept
 }
 
 static const OpenTTDScriptEventServices _rust_script_event_services{
-	.ai_broadcast_new_event = [](const OpenTTDScriptEvent *event, uint8_t skip_company) noexcept { AI::BroadcastNewEvent(RustScriptEvent(*event), CompanyID{skip_company}); },
-	.ai_new_event = [](uint8_t company, const OpenTTDScriptEvent *event) noexcept { AI::NewEvent(CompanyID{company}, RustScriptEvent(*event)); },
-	.game_new_event = [](const OpenTTDScriptEvent *event) noexcept { Game::NewEvent(RustScriptEvent(*event)); },
+	.ai_broadcast = [](const OpenTTDScriptEvent *event, uint8_t skip_company) noexcept { AI::BroadcastNewEvent(RustScriptEvent(*event), CompanyID{skip_company}); },
+	.ai_new = [](uint8_t company, const OpenTTDScriptEvent *event) noexcept { AI::NewEvent(CompanyID{company}, RustScriptEvent(*event)); },
+	.game_new = [](const OpenTTDScriptEvent *event) noexcept { Game::NewEvent(RustScriptEvent(*event)); },
 };
 [[maybe_unused]] static const bool _rust_script_event_bound = (openttd_rust_script_event_bind(&_rust_script_event_services), true);
 #include "abi-visit-OpenTTDScriptEventServices.hpp"

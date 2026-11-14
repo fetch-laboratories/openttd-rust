@@ -95,7 +95,7 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept { fixture->messages[0]++; };
 	static const OpenTTDNewsServices news{.add_news_item = [](const OpenTTDAddNewsItemArgs *) noexcept { fixture->messages[2]++; }, .delete_vehicle_news = [](uint32_t, uint8_t) noexcept { fixture->messages[3]++; }};
-	static const OpenTTDScriptEventServices events{.ai_new_event = [](uint8_t, const OpenTTDScriptEvent *) noexcept { fixture->messages[1]++; }}; openttd_rust_news_bind(&news); openttd_rust_script_event_bind(&events);
+	static const OpenTTDScriptEventServices events{.ai_new = [](uint8_t, const OpenTTDScriptEvent *) noexcept { fixture->messages[1]++; }}; openttd_rust_news_bind(&news); openttd_rust_script_event_bind(&events);
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&fixture->blocks); };
 	leaves.station_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
 	leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
