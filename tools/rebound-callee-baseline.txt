@@ -102,9 +102,6 @@ rebound | RustIndustryTileIndex | src/industry_cmd.cpp | industry_index
 rebound | RustIndustryTileIndex | src/rust/disaster_adapter.hpp | industry_index
 rebound | RustIsLocalCompany | src/economy.cpp | local_company
 rebound | RustIsLocalCompany | src/town_cmd.cpp | local_company
-rebound | RustLocalCompanyID | src/rust/company_adapter.cpp | local_company
-rebound | RustLocalCompanyID | src/rust/engine_adapter.hpp | local_company
-rebound | RustLocalCompanyID | src/subsidy.cpp | local_company
 rebound | RustMaxBridgeHeight | src/landscape.cpp | max_bridge_height
 rebound | RustMaxBridgeHeight | src/tunnelbridge_cmd.cpp | max_bridge_height
 rebound | RustNetworkServer | src/order_cmd.cpp | network_server

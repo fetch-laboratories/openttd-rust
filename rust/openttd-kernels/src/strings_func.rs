@@ -9,7 +9,6 @@
 //!
 //! Encoding runs in Rust; `GetString` formats natively until the strings port, through the
 //! news table of `news_func.rs`.
-#![allow(unsafe_code)]
 
 use crate::encoded::{self, Descriptor};
 use crate::news_func::services;
@@ -35,6 +34,10 @@ pub(crate) fn get_encoded_string(
     EncodedString::from_encoded(result.into_bytes())
 }
 
+#[allow(
+    unsafe_code,
+    reason = "the sink reads the native string's bytes during its call"
+)]
 extern "C" fn append(target: *mut c_void, bytes: *const u8, length: usize) {
     // SAFETY: `get_string` passes its `Vec` and the native string's live bytes.
     unsafe {

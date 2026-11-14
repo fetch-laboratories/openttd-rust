@@ -6,9 +6,8 @@
  */
 
 //! Everything to handle events from the game (`script/api/script_event.hpp`).
-#![allow(unsafe_code)]
 
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::OnceLock;
 
 /// The type of an event (`ScriptEvent::ScriptEventType`).
 #[repr(transparent)]
@@ -62,13 +61,13 @@ extern "C" fn unbound_ai_broadcast_new_event(
     _: *const crate::script_event_types::ScriptEvent,
     _: u8,
 ) {
-    unreachable!("script event services are not bound")
+    std::process::abort()
 }
 extern "C" fn unbound_ai_new_event(_: u8, _: *const crate::script_event_types::ScriptEvent) {
-    unreachable!("script event services are not bound")
+    std::process::abort()
 }
 extern "C" fn unbound_game_new_event(_: *const crate::script_event_types::ScriptEvent) {
-    unreachable!("script event services are not bound")
+    std::process::abort()
 }
 /// Services before the native table binds; each call aborts.
 static UNBOUND: Services = Services {
@@ -76,19 +75,23 @@ static UNBOUND: Services = Services {
     ai_new: unbound_ai_new_event,
     game_new: unbound_game_new_event,
 };
-static SERVICES: AtomicPtr<Services> = AtomicPtr::new((&raw const UNBOUND).cast_mut());
+static SERVICES: OnceLock<&'static Services> = OnceLock::new();
 
 /// Bind the native table during static initialization.
 ///
 /// # Safety
 /// `services` lives for the process.
+#[allow(
+    unsafe_code,
+    reason = "the binding export and its process-lifetime pointer contract"
+)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_script_event_bind(services: *const Services) {
-    SERVICES.store(services.cast_mut(), Ordering::Release);
+    // SAFETY: This function's contract; the table binds once.
+    let _ = SERVICES.set(unsafe { &*services });
 }
 
-/// The bound table.
+/// The bound table, or the aborting services before the native table binds.
 pub(crate) fn services() -> &'static Services {
-    // SAFETY: Either `UNBOUND` or a process-lifetime table from `openttd_rust_script_event_bind`.
-    unsafe { &*SERVICES.load(Ordering::Acquire) }
+    SERVICES.get().copied().unwrap_or(&UNBOUND)
 }

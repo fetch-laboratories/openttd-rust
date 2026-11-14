@@ -283,7 +283,6 @@ static const OpenTTDCargoServices _cargo_services = {
 	.profit = RustVehicleRead<int64_t, RustVehicleProfit>,
 	.shared = &GetRustSharedServices(),
 	.feeder_animation = RustFeederIncomeAnimation,
-	.subsidy_multiplier = RustSubsidyMultiplier,
 	.feeder_payment_share = RustFeederPaymentShare,
 };
 

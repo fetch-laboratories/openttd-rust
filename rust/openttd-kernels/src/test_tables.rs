@@ -1849,7 +1849,6 @@ pub(crate) const CARGO: crate::cargo_payment::Services = crate::cargo_payment::S
     profit: unreachable1,
     shared: ptr::null(),
     feeder_animation: unreachable5,
-    subsidy_multiplier: unreachable0,
     feeder_payment_share: unreachable0,
 };
 

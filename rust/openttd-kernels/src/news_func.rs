@@ -12,7 +12,6 @@
 //! bound once for the process, as `debug.rs` binds its table; it also carries the string
 //! services of `strings_func.rs` and the `CompanyNewsInformation` services of
 //! `news_type.rs`. Every service is a synchronous `noexcept` call that holds no Rust borrow.
-#![allow(unsafe_code)]
 
 use crate::encoded::Descriptor;
 use crate::industry_type::IndustryID;
@@ -25,7 +24,7 @@ use crate::strings_type::EncodedString;
 use crate::tile_type::TileIndex;
 use crate::vehicle_type::VehicleID;
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::OnceLock;
 
 /// Receives the bytes of a native `std::string` during the call that produced it.
 pub type Sink = extern "C" fn(*mut c_void, *const u8, usize);
@@ -54,8 +53,6 @@ pub struct Services {
     /// One when the native build defines `WITH_ASSERT`.
     pub string_assertions: u8,
 }
-// SAFETY: An immutable table of native functions that run on the calling thread.
-unsafe impl Sync for Services {}
 
 crate::abi::layouts! {
     fn abi_layout;
@@ -113,29 +110,29 @@ impl AddNewsItemArgs {
 }
 
 extern "C" fn unbound_add_news_item(_: *const AddNewsItemArgs) {
-    unreachable!("news services are not bound")
+    std::process::abort()
 }
 extern "C" fn unbound_assert_encoded(_: u32, _: usize) {
-    unreachable!("news services are not bound")
+    std::process::abort()
 }
 extern "C" fn unbound_company_news_company_name(
     _: *const NewsAllocatedData,
     _: Sink,
     _: *mut c_void,
 ) {
-    unreachable!("news services are not bound")
+    std::process::abort()
 }
 extern "C" fn unbound_company_news_information(_: u32, _: u8, _: u8) -> *mut NewsAllocatedData {
-    unreachable!("news services are not bound")
+    std::process::abort()
 }
 extern "C" fn unbound_delete_id(_: u16) {
-    unreachable!("news services are not bound")
+    std::process::abort()
 }
 extern "C" fn unbound_delete_vehicle_news(_: u32, _: u8) {
-    unreachable!("news services are not bound")
+    std::process::abort()
 }
 extern "C" fn unbound_get_string(_: u32, _: *const Descriptor, _: usize, _: Sink, _: *mut c_void) {
-    unreachable!("news services are not bound")
+    std::process::abort()
 }
 /// Services before the native table binds; each call aborts.
 static UNBOUND: Services = Services {
@@ -149,21 +146,25 @@ static UNBOUND: Services = Services {
     get_string: unbound_get_string,
     string_assertions: 0,
 };
-static SERVICES: AtomicPtr<Services> = AtomicPtr::new((&raw const UNBOUND).cast_mut());
+static SERVICES: OnceLock<&'static Services> = OnceLock::new();
 
 /// Bind the native table during static initialization.
 ///
 /// # Safety
 /// `services` lives for the process.
+#[allow(
+    unsafe_code,
+    reason = "the binding export and its process-lifetime pointer contract"
+)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_news_bind(services: *const Services) {
-    SERVICES.store(services.cast_mut(), Ordering::Release);
+    // SAFETY: This function's contract; the table binds once.
+    let _ = SERVICES.set(unsafe { &*services });
 }
 
-/// The bound table.
+/// The bound table, or the aborting services before the native table binds.
 pub(crate) fn services() -> &'static Services {
-    // SAFETY: Either `UNBOUND` or a process-lifetime table from `openttd_rust_news_bind`.
-    unsafe { &*SERVICES.load(Ordering::Acquire) }
+    SERVICES.get().copied().unwrap_or(&UNBOUND)
 }
 
 /// `AddNewsItem`: add a new newsitem to be shown.
@@ -268,6 +269,10 @@ pub(crate) fn delete_industry_news(iid: IndustryID) {
 
 /// Recording news, string and script event tables shared by the tests of every caller.
 #[cfg(test)]
+#[allow(
+    unsafe_code,
+    reason = "the recording services read the records Rust passes them"
+)]
 pub(crate) mod testing {
     use super::{AddNewsItemArgs, Services, Sink};
     use crate::encoded::Descriptor;
