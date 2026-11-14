@@ -1301,14 +1301,14 @@ pub(crate) fn do_update_speed(v: VehicleRef, accel: u32, min_speed: i32, max_spe
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ground_power_changed(s: *const Services, v: VehicleRef) {
     // SAFETY: immutable native table lives for the synchronous entry.
-    power_changed(unsafe { &*s }, v)
+    power_changed(unsafe { &*s }, v);
 }
 /// # Safety
 /// Services and shell must remain live under the game-state mutex.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ground_cargo_changed(s: *const Services, v: VehicleRef) {
     // SAFETY: immutable native table lives for the synchronous entry.
-    cargo_changed(unsafe { &*s }, v)
+    cargo_changed(unsafe { &*s }, v);
 }
 /// # Safety
 /// Services and shell must remain live under the game-state mutex.
