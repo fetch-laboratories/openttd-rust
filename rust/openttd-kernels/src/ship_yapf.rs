@@ -191,9 +191,12 @@ trait NodeKey: Copy + Eq + Hash + 'static {
 }
 
 /// `NodeList`: the node storage, the hash tables of open and closed nodes, and
-/// the open nodes' priority queue, which the original's `Tpf pf` builds on
-/// every search. The capacity is kept between searches of one node type, and
-/// emptied on entry, so nothing carries from one search to the next.
+/// the open nodes' priority queue, which the original builds on every search
+/// as `CShipNodeList` and `WaterRegionNodeList` inside `Tpf pf`. The capacity
+/// is kept between searches of one node type, because allocating both lists
+/// per search costs a measured 65.0 million instructions, 0.47%, under the
+/// `play-padhattan-ridge-2016-manual` scenario (#977). Each search empties its
+/// list on entry, so nothing carries from one search to the next.
 struct NodeList<K> {
     /// Storage of the nodes.
     items: Vec<Node<K>>,
