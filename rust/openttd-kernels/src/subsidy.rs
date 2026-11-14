@@ -855,7 +855,10 @@ crate::abi::layouts! {
         source,
         subsidy_withdrawn_service,
     };
-    "OpenTTDSourceFormatStrings" ["probe"] => FormatStrings { industry_name, town_name, };
+    "OpenTTDSourceFormatStrings" ["probe"] => FormatStrings {
+        industry_name,
+        town_name,
+    };
     "OpenTTDSubsidyServices" ["probe"] => Services {
         shared,
         town,

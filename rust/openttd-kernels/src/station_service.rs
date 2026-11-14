@@ -2641,7 +2641,10 @@ crate::abi::layouts! {
         time_since_unload,
         last_vehicle_type,
     };
-    "OpenTTDStationAcceptanceStrings" ["probe"] => Strings { station_no_longer_accepts_cargo_list, station_now_accepts_cargo_list, };
+    "OpenTTDStationAcceptanceStrings" ["probe"] => Strings {
+        station_no_longer_accepts_cargo_list,
+        station_now_accepts_cargo_list,
+    };
     "OpenTTDStationServices" ["probe"] => World {
         graphs,
         station,

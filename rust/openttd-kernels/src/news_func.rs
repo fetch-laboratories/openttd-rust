@@ -56,7 +56,17 @@ pub struct Services {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDNewsServices" ["news"] => Services { add_news_item, assert_encoded, company_news_company_name, company_news_information, delete_industry_news, delete_station_news, delete_vehicle_news, get_string, string_assertions };
+    "OpenTTDNewsServices" ["news"] => Services {
+        add_news_item,
+        assert_encoded,
+        company_news_company_name,
+        company_news_information,
+        delete_industry_news,
+        delete_station_news,
+        delete_vehicle_news,
+        get_string,
+        string_assertions,
+    };
 }
 
 crate::abi::shared_records! {

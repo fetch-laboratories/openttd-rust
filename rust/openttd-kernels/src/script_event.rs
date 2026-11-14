@@ -54,7 +54,11 @@ pub struct Services {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScriptEventServices" ["script_event"] => Services { ai_broadcast, ai_new, game_new };
+    "OpenTTDScriptEventServices" ["script_event"] => Services {
+        ai_broadcast,
+        ai_new,
+        game_new,
+    };
 }
 
 extern "C" fn unbound_ai_broadcast_new_event(

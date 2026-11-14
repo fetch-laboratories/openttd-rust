@@ -1009,7 +1009,11 @@ pub(crate) unsafe fn cmd_rename_town(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDTownFoundingStrings" ["probe"] => FoundingStrings { company_name, new_town, new_town_unsponsored, };
+    "OpenTTDTownFoundingStrings" ["probe"] => FoundingStrings {
+        company_name,
+        new_town,
+        new_town_unsponsored,
+    };
     "OpenTTDTownFoundingServices" ["probe"] => FoundingServices {
         shared,
         growth,

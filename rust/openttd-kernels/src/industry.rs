@@ -2870,7 +2870,13 @@ crate::abi::layouts! {
         last_accepted,
         history,
     };
-    "OpenTTDIndustryStrings" ["industry"] => Strings { format_industry_name, industry_production_decrease_smooth, industry_production_increase_smooth, last_stringid, town_name, };
+    "OpenTTDIndustryStrings" ["industry"] => Strings {
+        format_industry_name,
+        industry_production_decrease_smooth,
+        industry_production_increase_smooth,
+        last_stringid,
+        town_name,
+    };
     "OpenTTDIndustryServices" ["industry"] => Services {
         shared,
         next_tick,

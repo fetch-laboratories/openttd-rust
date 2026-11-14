@@ -1300,7 +1300,14 @@ crate::abi::layouts! {
         next,
         town,
     };
-    "OpenTTDTownCommandStrings" ["probe"] => Strings { company_name, exclusive_rights_description_minutes, exclusive_rights_description_months, exclusive_rights_title, road_rebuilding_minutes, road_rebuilding_months, };
+    "OpenTTDTownCommandStrings" ["probe"] => Strings {
+        company_name,
+        exclusive_rights_description_minutes,
+        exclusive_rights_description_months,
+        exclusive_rights_title,
+        road_rebuilding_minutes,
+        road_rebuilding_months,
+    };
     "OpenTTDTownCommandServices" ["probe"] => crate::town::commands::CommandServices {
         founding,
         rail,
