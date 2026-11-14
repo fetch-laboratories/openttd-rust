@@ -220,21 +220,6 @@ Foundation GetRailFoundation(Slope tileh, TrackBits bits)
 
 
 /**
- * Called from water_cmd if a non-flat rail-tile gets flooded and should be converted to shore.
- * The function floods the lower halftile, if the tile has a halftile foundation.
- *
- * @param t The tile to flood.
- * @return true if something was flooded.
- */
-bool FloodHalftile(TileIndex tile)
-{
-	assert(IsPlainRailTile(tile));
-	OpenTTDGroundCall call;
-	return openttd_rust_flood_halftile(tile.base(), &call, &GetRustWaterGroundServices(), &GetRustSharedServices());
-}
-
-
-/**
  * Get surface height in point (x,y)
  * On tiles with halftile foundations move (x,y) to a safe point wrt. track
  */

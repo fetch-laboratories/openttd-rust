@@ -212,18 +212,6 @@ Money GetAvailableMoney(CompanyID company)
 }
 
 /**
- * This functions returns the money which can be used to execute a command.
- * This is either the money of the current company, or INT64_MAX if infinite money
- * is enabled or there is no such a company "at the moment" like the server itself.
- *
- * @return The available money of the current company or INT64_MAX
- */
-Money GetAvailableMoneyForCommand()
-{
-	return GetAvailableMoney(_current_company);
-}
-
-/**
  * Verify whether the company can pay the bill.
  * @param[in,out] cost Money to pay, is changed to an error if the company does not have enough money.
  * @return Function returns \c true if the company has enough money or infinite money is enabled,

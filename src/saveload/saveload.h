@@ -782,16 +782,6 @@ inline constexpr VarType GetVarFileType(VarType type)
 }
 
 /**
- * Check if the given saveload type is a numeric type.
- * @param conv the type to check
- * @return True if it's a numeric type.
- */
-inline constexpr bool IsNumericType(VarType conv)
-{
-	return GetVarMemType(conv) <= SLE_VAR_U64;
-}
-
-/**
  * Return expect size in bytes of a VarType
  * @param type VarType to get size of.
  * @return size of type in bytes.

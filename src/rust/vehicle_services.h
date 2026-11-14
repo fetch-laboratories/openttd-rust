@@ -31,7 +31,6 @@ bool RustTrainIsEngine(const Vehicle *v) noexcept;
 Train *RustTrainGetIfValid(uint32_t id) noexcept;
 /** Strict Ship::Get lookup, preserving source pool assertions. */
 OpenTTDVehicle *RustShipGet(uint32_t id) noexcept;
-uint32_t RustTrainCachedWeight(const Vehicle *v) noexcept;
 uint64_t RustTrainRailTypes(const Vehicle *v) noexcept;
 uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept;
 
@@ -91,7 +90,6 @@ inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t stat
 inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
 template <class T> inline auto RustVehicleNextVehicle(const T *v) noexcept { return v->GetNextVehicle(); }
 inline OpenTTDVehicle *RustVehicleNextArticulated(OpenTTDVehicle *v) noexcept { return RustVehicle(VehicleOf(v)->GetNextArticulatedPart()); }
-inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 /** Chain, subtype and unit leaves shared by consist transactions and controllers. */
 inline Vehicle *RustVehiclePrevious(const Vehicle *v) noexcept { return v->Previous(); }
 inline uint8_t RustVehicleDirectionTowards(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept { return GetDirectionTowards(VehicleOf(v), x, y); }
@@ -129,7 +127,6 @@ bool RustVehicleInDepot(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->GetOwner().base(); }
-inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return v->GetDirection(); }
 inline uint8_t RustVehicleTick(const Vehicle *v) noexcept { return v->Record().tick_counter; }
 inline uint8_t RustVehicleStatus(const Vehicle *v) noexcept { return v->Record().vehstatus; }
 inline void RustWriteVehicleStatus(Vehicle *v, VehStates status) noexcept { v->SetVehStatus(status); }
@@ -175,8 +172,6 @@ void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept;
 void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept;
 void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept;
 ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept;
-/** Canonical cached consist length, shared by narrow and compound observations. */
-inline uint16_t RustGroundCachedTotalLength(const GroundVehicleCache *cache) noexcept { return cache->cached_total_length; }
 template <class T>
 inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticulatedPart(); }
 
@@ -188,7 +183,6 @@ inline void RustWriteVehicleX(Vehicle *v, int32_t x) noexcept { v->Record().x_po
 inline void RustWriteVehicleY(Vehicle *v, int32_t y) noexcept { v->Record().y_pos = y; }
 inline void RustWriteVehicleZ(Vehicle *v, int32_t z) noexcept { v->Record().z_pos = z; }
 inline uint16_t RustVehicleSpeed(const Vehicle *v) noexcept { return v->Record().cur_speed; }
-inline uint8_t RustVehicleSubspeed(const Vehicle *v) noexcept { return v->Record().subspeed; }
 inline int64_t RustVehicleProfit(const Vehicle *v) noexcept { return v->profit_this_year; }
 inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return v->GetType(); }
 

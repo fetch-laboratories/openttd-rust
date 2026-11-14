@@ -136,27 +136,6 @@ inline bool Chance16(const uint32_t a, const uint32_t b, const std::source_locat
 	return Chance16I(a, b, Random(location));
 }
 
-/**
- * Flips a coin with a given probability and saves the randomize-number in a variable.
- *
- * This function uses the same parameters as Chance16. The third parameter
- * must be a variable the randomize-number from Random() is saved in.
- *
- * The low 16 bits of r will already be used and can therefore not be passed to
- * Chance16I. One can only send the high 16 bits to Chance16I.
- *
- * @see Chance16I()
- * @param a The numerator of the fraction
- * @param b The denominator of the fraction
- * @param r The variable to save the randomize-number from Random()
- * @return True in (a/b) percent
- */
-inline bool Chance16R(const uint32_t a, const uint32_t b, uint32_t &r, const std::source_location location = std::source_location::current())
-{
-	r = Random(location);
-	return Chance16I(a, b, r);
-}
-
 void RandomBytesWithFallback(std::span<uint8_t> buf);
 
 #endif /* RANDOM_FUNC_HPP */

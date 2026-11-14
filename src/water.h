@@ -28,7 +28,6 @@ void ClearNeighbourNonFloodingStates(TileIndex tile);
 
 void TileLoop_Water(uint32_t tile) noexcept;
 inline void TileLoop_Water(TileIndex tile) noexcept { TileLoop_Water(tile.base()); }
-bool FloodHalftile(TileIndex t);
 
 
 void DrawShipDepotSprite(int x, int y, Axis axis, DepotPart part);

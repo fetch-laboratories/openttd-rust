@@ -140,8 +140,6 @@ bool DrawNewIndustryTile(TileInfo *ti, Industry *i, IndustryGfx gfx, const Indus
 	return true;
 }
 
-extern bool IsSlopeRefused(Slope current, Slope refused);
-
 /**
  * Check the slope of a tile of a new industry.
  * @param ind_base_tile Base tile of the industry.

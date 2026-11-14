@@ -68,21 +68,6 @@ inline bool EngineHasReplacementWhenOldForCompany(const Company *c, EngineID eng
 }
 
 /**
- * Add an engine replacement for the company.
- * @param c Company.
- * @param old_engine The original engine type.
- * @param new_engine The replacement engine type.
- * @param group The group related to this replacement.
- * @param replace_when_old Replace when old or always?
- * @param flags The calling command flags.
- * @return 0 on success, CMD_ERROR on failure.
- */
-inline CommandCost AddEngineReplacementForCompany(Company *c, EngineID old_engine, EngineID new_engine, GroupID group, bool replace_when_old, DoCommandFlags flags)
-{
-	return AddEngineReplacement(&c->RenewalList(), old_engine, new_engine, group, replace_when_old, flags);
-}
-
-/**
  * Remove an engine replacement for the company.
  * @param c Company.
  * @param engine The original engine type.

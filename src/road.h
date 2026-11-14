@@ -204,11 +204,6 @@ inline RoadTramType GetRoadTramType(RoadType roadtype)
 	return RoadTypeIsTram(roadtype) ? RTT_TRAM : RTT_ROAD;
 }
 
-inline RoadTramType OtherRoadTramType(RoadTramType rtt)
-{
-	return rtt == RTT_ROAD ? RTT_TRAM : RTT_ROAD;
-}
-
 /**
  * Returns a pointer to the Roadtype information for a given roadtype
  * @param roadtype the road type which the information is requested for

@@ -74,18 +74,6 @@
 	Map::initial_land_count = std::min(Map::initial_land_count, Map::size);
 }
 
-/**
- * Get a tile from the virtual XY-coordinate.
- * Coordinates outside of the map are clamped to the map edge.
- * @param x The virtual x coordinate of the tile.
- * @param y The virtual y coordinate of the tile.
- * @return The TileIndex calculated by the coordinate, clamped to the map bounds.
- */
-TileIndex TileVirtXYClampedToMap(int x, int y)
-{
-	return TileIndex{(static_cast<uint>(Clamp<int>(y / static_cast<int>(TILE_SIZE), 0, Map::MaxY())) << Map::LogX()) + static_cast<uint>(Clamp<int>(x / static_cast<int>(TILE_SIZE), 0, Map::MaxX()))};
-}
-
 #ifdef _DEBUG
 TileIndex TileAdd(TileIndex tile, TileIndexDiff offset)
 {
@@ -205,21 +193,6 @@ uint DistanceMax(TileIndex t0, TileIndex t1)
 	return std::max(dx, dy);
 }
 
-
-/**
- * Gets the biggest distance component (x or y) between the two given tiles
- * plus the Manhattan distance, i.e. two times the biggest distance component
- * and once the smallest component.
- * @param t0 the start tile
- * @param t1 the end tile
- * @return the distance
- */
-uint DistanceMaxPlusManhattan(TileIndex t0, TileIndex t1)
-{
-	const uint dx = Delta(TileX(t0), TileX(t1));
-	const uint dy = Delta(TileY(t0), TileY(t1));
-	return dx > dy ? 2 * dx + dy : 2 * dy + dx;
-}
 
 /**
  * Param the minimum distance to an edge

@@ -140,31 +140,6 @@ inline Track RemoveFirstTrack(TrackBits *tracks)
 }
 
 /**
- * Removes first Trackdir from TrackdirBits and returns it
- *
- * This function searches for the first bit in the TrackdirBits parameter,
- * remove this bit from the parameter and returns the fnound bit as
- * Trackdir value. It returns INVALID_TRACKDIR if the trackdirs is
- * TRACKDIR_BIT_NONE or INVALID_TRACKDIR_BIT. This is basically used in a
- * while-loop to get all track-directions step by step until the value
- * reaches TRACKDIR_BIT_NONE.
- *
- * @param trackdirs The value with the TrackdirBits
- * @return The first Trackdir from the TrackdirBits value
- * @see FindFirstTrackdir
- */
-inline Trackdir RemoveFirstTrackdir(TrackdirBits *trackdirs)
-{
-	if (*trackdirs != TRACKDIR_BIT_NONE && *trackdirs != INVALID_TRACKDIR_BIT) {
-		assert((*trackdirs & ~TRACKDIR_BIT_MASK) == TRACKDIR_BIT_NONE);
-		Trackdir first = (Trackdir)FindFirstBit(*trackdirs);
-		ClrBit(*trackdirs, first);
-		return first;
-	}
-	return INVALID_TRACKDIR;
-}
-
-/**
  * Returns first Track from TrackBits or INVALID_TRACK
  *
  * This function returns the first Track found in the TrackBits value as Track-value.
@@ -194,24 +169,6 @@ inline Track TrackBitsToTrack(TrackBits tracks)
 {
 	assert(tracks != TRACK_BIT_NONE && KillFirstBit(tracks & TRACK_BIT_MASK) == TRACK_BIT_NONE);
 	return static_cast<Track>(FindFirstBit(tracks & TRACK_BIT_MASK));
-}
-
-/**
- * Returns first Trackdir from TrackdirBits or INVALID_TRACKDIR
- *
- * This function returns the first Trackdir in the given TrackdirBits value or
- * INVALID_TRACKDIR if the value is TRACKDIR_BIT_NONE. The TrackdirBits must
- * not be INVALID_TRACKDIR_BIT.
- *
- * @param trackdirs The TrackdirBits value
- * @return The first Trackdir from the TrackdirBits or INVALID_TRACKDIR on TRACKDIR_BIT_NONE.
- * @pre trackdirs must not be INVALID_TRACKDIR_BIT
- * @see RemoveFirstTrackdir
- */
-inline Trackdir FindFirstTrackdir(TrackdirBits trackdirs)
-{
-	assert((trackdirs & ~TRACKDIR_BIT_MASK) == TRACKDIR_BIT_NONE);
-	return (trackdirs != TRACKDIR_BIT_NONE) ? (Trackdir)FindFirstBit(trackdirs) : INVALID_TRACKDIR;
 }
 
 /*
@@ -283,21 +240,6 @@ inline Trackdir TrackToTrackdir(Track track)
 }
 
 /**
- * Returns a TrackdirBit mask from a given Track
- *
- * The TrackdirBit mask contains the two TrackdirBits that
- * correspond with the given Track (one for each direction).
- *
- * @param track The track to get the TrackdirBits from
- * @return The TrackdirBits which the selected tracks
- */
-inline TrackdirBits TrackToTrackdirBits(Track track)
-{
-	Trackdir td = TrackToTrackdir(track);
-	return (TrackdirBits)(TrackdirToTrackdirBits(td) | TrackdirToTrackdirBits(ReverseTrackdir(td)));
-}
-
-/**
  * Discards all directional information from a TrackdirBits value
  *
  * Any Track which is present in either direction will be present in the result.
@@ -311,17 +253,6 @@ inline TrackBits TrackdirBitsToTrackBits(TrackdirBits bits)
 }
 
 /**
- * Converts TrackBits to TrackdirBits while allowing both directions.
- *
- * @param bits The TrackBits
- * @return The TrackdirBits containing of bits in both directions.
- */
-inline TrackdirBits TrackBitsToTrackdirBits(TrackBits bits)
-{
-	return (TrackdirBits)(bits * 0x101);
-}
-
-/**
  * Checks whether a TrackBits has a given Track.
  * @param tracks The track bits.
  * @param track The track to check.
@@ -330,17 +261,6 @@ inline bool HasTrack(TrackBits tracks, Track track)
 {
 	assert(IsValidTrack(track));
 	return HasBit(tracks, track);
-}
-
-/**
- * Checks whether a TrackdirBits has a given Trackdir.
- * @param trackdirs The trackdir bits.
- * @param trackdir The trackdir to check.
- */
-inline bool HasTrackdir(TrackdirBits trackdirs, Trackdir trackdir)
-{
-	assert(IsValidTrackdir(trackdir));
-	return HasBit(trackdirs, trackdir);
 }
 
 /**
@@ -363,31 +283,6 @@ inline TrackdirBits TrackStatusToTrackdirBits(TrackStatus ts)
 inline TrackBits TrackStatusToTrackBits(TrackStatus ts)
 {
 	return TrackdirBitsToTrackBits(TrackStatusToTrackdirBits(ts));
-}
-
-/**
- * Returns the red-signal-information of a TrackStatus.
- *
- * Note: The result may contain red signals for non-present tracks.
- *
- * @param ts The TrackStatus returned by GetTileTrackStatus()
- * @return the The trackdirs that are blocked by red-signals
- */
-inline TrackdirBits TrackStatusToRedSignals(TrackStatus ts)
-{
-	return (TrackdirBits)((ts >> 16) & TRACKDIR_BIT_MASK);
-}
-
-/**
- * Builds a TrackStatus
- *
- * @param trackdirbits present trackdirs
- * @param red_signals red signals
- * @return the TrackStatus representing the given information
- */
-inline TrackStatus CombineTrackStatus(TrackdirBits trackdirbits, TrackdirBits red_signals)
-{
-	return (TrackStatus)(trackdirbits | (red_signals << 16));
 }
 
 /**
@@ -441,29 +336,6 @@ inline DiagDirection TrackdirToExitdir(Trackdir trackdir)
 	assert(IsValidTrackdirForRoadVehicle(trackdir));
 	extern const DiagDirection _trackdir_to_exitdir[TRACKDIR_END];
 	return _trackdir_to_exitdir[trackdir];
-}
-
-/**
- * Maps a track and an (4-way) dir to the trackdir that represents the track
- * with the exit in the given direction.
- *
- * For the diagonal tracks the resulting track direction are clear for a given
- * DiagDirection. It either matches the direction or it returns INVALID_TRACKDIR,
- * as a TRACK_X cannot be applied with DIAG_SE.
- * For the straight tracks the resulting track direction will be the
- * direction which the DiagDirection is pointing. But this will be INVALID_TRACKDIR
- * if the DiagDirection is pointing 'away' the track.
- *
- * @param track The track to apply an direction on
- * @param diagdir The DiagDirection to apply on
- * @return The resulting track direction or INVALID_TRACKDIR if not possible.
- */
-inline Trackdir TrackExitdirToTrackdir(Track track, DiagDirection diagdir)
-{
-	assert(IsValidTrack(track));
-	assert(IsValidDiagDirection(diagdir));
-	extern const Trackdir _track_exitdir_to_trackdir[TRACK_END][DIAGDIR_END];
-	return _track_exitdir_to_trackdir[track][diagdir];
 }
 
 /**
@@ -653,19 +525,6 @@ inline bool TracksOverlap(TrackBits bits)
 }
 
 /**
- * Check if a given track is contained within or overlaps some other tracks.
- *
- * @param tracks Tracks to be tested against
- * @param track The track to test
- * @return true if the track is already in the tracks or overlaps the tracks.
- */
-inline bool TrackOverlapsTracks(TrackBits tracks, Track track)
-{
-	if (HasBit(tracks, track)) return true;
-	return TracksOverlap(tracks | TrackToTrackBits(track));
-}
-
-/**
  * Checks whether the trackdir means that we are reversing.
  * @param dir the trackdir to check
  * @return true if it is a reversing road trackdir
@@ -674,17 +533,6 @@ inline bool IsReversingRoadTrackdir(Trackdir dir)
 {
 	assert(IsValidTrackdirForRoadVehicle(dir));
 	return (dir & 0x07) >= 6;
-}
-
-/**
- * Checks whether the given trackdir is a straight road
- * @param dir the trackdir to check
- * @return true if it is a straight road trackdir
- */
-inline bool IsStraightRoadTrackdir(Trackdir dir)
-{
-	assert(IsValidTrackdirForRoadVehicle(dir));
-	return (dir & 0x06) == 0;
 }
 
 /**

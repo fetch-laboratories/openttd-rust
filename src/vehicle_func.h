@@ -100,19 +100,6 @@ private:
 };
 
 /**
- * Loop over vehicles on a tile, and check whether a predicate is true for any of them.
- * The predicate must have the signature: bool Predicate(const Vehicle *);
- */
-template <class UnaryPred>
-bool HasVehicleOnTile(TileIndex tile, UnaryPred &&predicate)
-{
-	for (const auto *v : VehiclesOnTile(tile)) {
-		if (predicate(v)) return true;
-	}
-	return false;
-}
-
-/**
  * Iterate over all vehicles near a given world coordinate.
  * @warning This only works for vehicles with proper Vehicle::Tile, so only ground vehicles outside wormholes.
  * @warning The order is non-deterministic. You have to make sure, that your processing is not order dependant.
@@ -163,20 +150,6 @@ public:
 private:
 	Iterator start;
 };
-
-/**
- * Loop over vehicles near a given world coordinate, and check whether a predicate is true for any of them.
- * The predicate must have the signature: bool Predicate(const Vehicle *);
- * @warning This only works for vehicles with proper Vehicle::Tile, so only ground vehicles outside wormholes.
- */
-template <class UnaryPred>
-bool HasVehicleNearTileXY(int32_t x, int32_t y, uint max_dist, UnaryPred &&predicate)
-{
-	for (const auto *v : VehiclesNearTileXY(x, y, max_dist)) {
-		if (predicate(v)) return true;
-	}
-	return false;
-}
 
 void VehicleServiceInDepot(Vehicle *v);
 uint CountVehiclesInChain(const Vehicle *v);

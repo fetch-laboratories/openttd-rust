@@ -25,7 +25,6 @@ void CompanyAdminBankrupt(CompanyID company_id);
 void UpdateCompanyLiveries(Company *c);
 
 Money GetAvailableMoney(CompanyID company);
-Money GetAvailableMoneyForCommand();
 bool CheckCompanyHasMoney(CommandCost &cost);
 void SubtractMoneyFromCompany(const CommandCost &cost);
 void SubtractMoneyFromCompanyFract(CompanyID company, const CommandCost &cost);
