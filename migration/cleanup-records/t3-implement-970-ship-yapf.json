@@ -14,9 +14,9 @@
     "kind": "growth",
     "counter": "tests_cpp",
     "added": {
-      "src/tests/ship_yapf_protocol.hpp": 50
+      "src/tests/ship_yapf_protocol.hpp": 67
     },
-    "reason": "#970's plan, Evidence: the native ship cases keep every expectation while the injected Tile, Destination, Patch and VisitNext leaves go. The fixture now states those facts as maps and a real water region owner (the shared CarveRiver, the deliberately stale region cache of the winding-river case) and reads the search's branch witnesses by name in place of the deleted stats array, through the production entries the probes in native_test_support.rs call.",
+    "reason": "#970's plan, Evidence: the native ship cases keep every expectation while the injected Tile, Destination, Patch and VisitNext leaves go. The fixture now states those facts as maps and a real water region owner (Fill with its void border, the shared CarveRiver, the deliberately stale region cache of the winding-river case) and reads the search's branch witnesses by name in place of the deleted stats array, through the production entries the probes in native_test_support.rs call.",
     "existing_alternatives": "The injected leaves are the design fault the pass removes; the Rust unit tests cannot hold these cases, which compare against the native follower fixture and the unchanged CBinaryHeapT.",
     "retiring_owner": "#734",
     "retirement_condition": "When the fork-added native tests retire with the C++ build (ADR 0001)."
