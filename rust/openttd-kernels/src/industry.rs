@@ -3263,6 +3263,65 @@ mod production_policy_tests {
             0x123
         };
     }
+    /// `ReportNewsProductionChangeIndustry`: the smooth increase or decrease headline with
+    /// the cargo name, the industry and `abs(percent)`, as an industry news item whose type
+    /// follows `WhoCanServiceIndustry` (nobody, for an industry with no station nearby).
+    #[test]
+    fn report_news_production_change_industry_follows_the_original() {
+        use crate::news_func::testing::{Effect, Param, encoded, take};
+        use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle};
+        use std::sync::atomic::{AtomicPtr, Ordering};
+        static CATCHMENT: AtomicPtr<crate::station::CatchmentServices> =
+            AtomicPtr::new(ptr::null_mut());
+        extern "C" fn catchment() -> *const crate::station::CatchmentServices {
+            CATCHMENT.load(Ordering::Acquire)
+        }
+        extern "C" fn cargo_name(cargo: u8) -> u32 {
+            0x900 + u32::from(cargo)
+        }
+        extern "C" fn industry_id(_: *mut tile::ShellHandle) -> IndustryID {
+            IndustryID(12)
+        }
+        let shared = Box::leak(Box::new(crate::services::Services {
+            cargo_name,
+            station_catchment: catchment,
+            ..crate::services::fixture(ptr::null_mut(), random, unused_industry)
+        }));
+        CATCHMENT.store(
+            Box::leak(Box::new(crate::station::CatchmentServices {
+                shared,
+                industry_id,
+                ..crate::test_tables::CATCHMENT
+            })),
+            Ordering::Release,
+        );
+        let mut services = services(shared);
+        services.strings.industry_production_decrease_smooth = 0x70;
+        services.strings.industry_production_increase_smooth = 0x71;
+        let owner = Box::into_raw(Box::default());
+        take();
+        report_news_production_change_industry(ptr::null_mut(), owner, CargoType(3), 25, &services);
+        report_news_production_change_industry(
+            ptr::null_mut(),
+            owner,
+            CargoType(4),
+            -40,
+            &services,
+        );
+        let news = |id, cargo, percent| Effect::News {
+            headline: encoded(id, &[Param::N(cargo), Param::N(12), Param::N(percent)]),
+            r#type: NewsType::IndustryNobody,
+            style: NewsStyle::Thin,
+            flags: NewsFlags::new(&[NewsFlag::NoTransparency, NewsFlag::Shaded]),
+            ref1: NewsReference::Industry(IndustryID(12)),
+            ref2: NewsReference::None,
+            data: None,
+            advice_type: AdviceType::Invalid,
+        };
+        assert_eq!(take(), [news(0x71, 0x903, 25), news(0x70, 0x904, 40)]);
+        drop(unsafe { Box::from_raw(owner) });
+    }
+
     #[test]
     fn production_callback_matches_complete_original_corpus() {
         let shared = crate::services::fixture(ptr::null_mut(), random, unused_industry);
