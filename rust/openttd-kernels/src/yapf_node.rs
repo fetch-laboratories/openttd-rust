@@ -80,3 +80,33 @@ impl Hash for CYapfNodeKeyExitDir {
         state.write_u8(self.exitdir.0);
     }
 }
+
+/// `CYapfNodeKeyTrackDir`: the exit-direction key, hashed from and compared by
+/// tile & trackdir.
+#[derive(Clone, Copy)]
+pub(crate) struct CYapfNodeKeyTrackDir(pub(crate) CYapfNodeKeyExitDir);
+impl CYapfNodeKeyTrackDir {
+    /// `CYapfNodeKeyExitDir::Set`, which the track-dir key inherits.
+    #[inline]
+    pub(crate) fn set(tile: TileIndex, td: Trackdir) -> Self {
+        Self(CYapfNodeKeyExitDir::set(tile, td))
+    }
+    /// `CYapfNodeKeyTrackDir::CalcHash`.
+    #[inline]
+    pub(crate) fn calc_hash(self) -> u32 {
+        u32::from(self.0.td.0) | (self.0.tile.0 << 4)
+    }
+}
+/// `CYapfNodeKeyTrackDir::operator==`: tile and trackdir.
+impl PartialEq for CYapfNodeKeyTrackDir {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.tile == other.0.tile && self.0.td == other.0.td
+    }
+}
+impl Eq for CYapfNodeKeyTrackDir {}
+/// Hashes `CalcHash`, whose fields are the ones `operator==` compares.
+impl Hash for CYapfNodeKeyTrackDir {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u32(self.calc_hash());
+    }
+}
