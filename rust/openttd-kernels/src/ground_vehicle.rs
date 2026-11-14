@@ -272,12 +272,7 @@ impl Services {
     }
     /// `GetVehicleProperty(v, property, orig_value)`.
     fn property(&self, v: VehicleRef, property: u8, orig_value: u16) -> i32 {
-        (self.vehicle.property)(
-            (self.vehicle.newgrf)(),
-            v,
-            property,
-            i32::from(orig_value),
-        )
+        (self.vehicle.property)((self.vehicle.newgrf)(), v, property, i32::from(orig_value))
     }
     /// `GetRailType(tile)`.
     fn get_rail_type(&self, tile: u32) -> RailType {
@@ -292,9 +287,9 @@ impl Services {
     fn stored_count(&self, v: VehicleRef) -> u32 {
         // SAFETY: the record's live canonical cargo list; no borrow survives this read.
         unsafe {
-            crate::cargo_storage::openttd_rust_cargo_list_stored(
-                (self.newgrf().cargo_owner)(v.0.as_ptr()),
-            )
+            crate::cargo_storage::openttd_rust_cargo_list_stored((self.newgrf().cargo_owner)(
+                v.0.as_ptr(),
+            ))
         }
     }
     /// `v->GetEngine()->DetermineCapacity(v)`.
@@ -366,8 +361,11 @@ impl GroundVehicleType for Train {
             && (s.powered)(o.train.get_railtypes(), s.get_rail_type(v.tile()))
         {
             let engine = (s.vehicle.engine)(v);
-            let mut power =
-                s.property(v, PROP_TRAIN_POWER, engine.ground_power(VehicleType::VEH_TRAIN)) as u16;
+            let mut power = s.property(
+                v,
+                PROP_TRAIN_POWER,
+                engine.ground_power(VehicleType::VEH_TRAIN),
+            ) as u16;
             /* Halve power for multiheaded parts */
             if is_multiheaded(v.subtype()) {
                 power /= 2;
@@ -411,8 +409,7 @@ impl GroundVehicleType for Train {
     /// fully loaded with its current cargo, in tonnes.
     fn get_max_weight(s: &Services, v: VehicleRef, o: Owner) -> u16 {
         hit(witness::GROUND_FULL_WEIGHT);
-        let mut weight =
-            (s.train_cargo_weight)(s.cargo_type(v).0, s.determine_capacity(v)) as u16;
+        let mut weight = (s.train_cargo_weight)(s.cargo_type(v).0, s.determine_capacity(v)) as u16;
         /* Vehicle weight is not added for articulated parts. */
         if !v.is_articulated_part() {
             let engine = (s.vehicle.engine)(v);
@@ -544,7 +541,11 @@ impl GroundVehicleType for RoadVehicle {
             let engine = (s.vehicle.engine)(v);
             /* Road vehicle power is in units of 10 HP. */
             return s
-                .property(v, PROP_ROADVEH_POWER, engine.ground_power(VehicleType::VEH_ROAD))
+                .property(
+                    v,
+                    PROP_ROADVEH_POWER,
+                    engine.ground_power(VehicleType::VEH_ROAD),
+                )
                 .wrapping_mul(10) as u16;
         }
         0
@@ -563,8 +564,11 @@ impl GroundVehicleType for RoadVehicle {
             let engine = (s.vehicle.engine)(v);
             /* Road vehicle weight is in units of 1/4 t. */
             weight = weight.wrapping_add(
-                (s.property(v, PROP_ROADVEH_WEIGHT, engine.ground_weight(VehicleType::VEH_ROAD))
-                    / 4) as u16,
+                (s.property(
+                    v,
+                    PROP_ROADVEH_WEIGHT,
+                    engine.ground_weight(VehicleType::VEH_ROAD),
+                ) / 4) as u16,
             );
         }
         weight
@@ -579,8 +583,11 @@ impl GroundVehicleType for RoadVehicle {
             let engine = (s.vehicle.engine)(v);
             /* Road vehicle weight is in units of 1/4 t. */
             weight = weight.wrapping_add(
-                (s.property(v, PROP_ROADVEH_WEIGHT, engine.ground_weight(VehicleType::VEH_ROAD))
-                    / 4) as u16,
+                (s.property(
+                    v,
+                    PROP_ROADVEH_WEIGHT,
+                    engine.ground_weight(VehicleType::VEH_ROAD),
+                ) / 4) as u16,
             );
         }
         weight
@@ -705,8 +712,8 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         let mut part = Some(v);
         while let Some(u) = part {
             let uo = if u == v { o } else { Owner::of(u) };
-            let current_power =
-                u32::from(T::get_power(s, u, uo)) + u32::from(T::get_powered_part_power(s, u, uo, uo));
+            let current_power = u32::from(T::get_power(s, u, uo))
+                + u32::from(T::get_powered_part_power(s, u, uo, uo));
             total_power = total_power.wrapping_add(current_power);
 
             /* Only powered parts add tractive effort. */
@@ -742,7 +749,11 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         } else {
             /* According to the specs, a value of 0x01 in the air drag property means "no air
              * drag". */
-            if air_drag_value == 1 { 0 } else { air_drag_value }
+            if air_drag_value == 1 {
+                0
+            } else {
+                air_drag_value
+            }
         };
 
         write_field!(
@@ -879,6 +890,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         });
 
         let max_te = read_field!(o.state, cache.cached_max_te) as i32; // [N]
+
         /* Constructed from power, with need to multiply by 18 and assuming
          * low speed, it needs to be a 64 bit integer too. */
         let mut force;
@@ -1012,7 +1024,12 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
     /// faster code is used for trains and road vehicles unless they are reversing on a sloped
     /// tile.
     #[inline]
-    fn update_z_position(s: &Services, movement: &crate::movement::CachedTable<'_>, v: VehicleRef, o: Owner) {
+    fn update_z_position(
+        s: &Services,
+        movement: &crate::movement::CachedTable<'_>,
+        v: VehicleRef,
+        o: Owner,
+    ) {
         /* Vehicle's Z position can change only if it has GVF_GOINGUP_BIT or GVF_GOINGDOWN_BIT set.
          * Furthermore, if this function is called once every time the vehicle's position changes,
          * we know the Z position changes by +/-1 at certain moments - when x_pos, y_pos is odd/even,
@@ -1169,7 +1186,10 @@ pub(crate) fn update_inclination_owned(
     new_tile: bool,
     update_delta: bool,
 ) -> i32 {
-    dispatch!(o, update_inclination(s, movement, v, o, new_tile, update_delta))
+    dispatch!(
+        o,
+        update_inclination(s, movement, v, o, new_tile, update_delta)
+    )
 }
 
 /// `GroundVehicle::SetLastSpeed`: update the GUI variant of the current speed of the vehicle.

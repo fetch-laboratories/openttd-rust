@@ -110,46 +110,24 @@ unsafe fn dispatch<const AMBIENT: bool>(
     // entries end their accesses before callbacks; only scalar cursor is local.
     let tile_type = types.read(tile);
     let g = &s.ground;
+    let ground = || ground::TileLoop {
+        world: crate::map_func::World {
+            types: types.without_native_assert(),
+            shared: unsafe { &*s.shared },
+            dimensions: map,
+        },
+        size_y,
+        ground: g,
+        landscape: g.climate,
+        game_mode_editor: g.editor,
+        sound_ambient: settings.ambient,
+        ambient_callback: AMBIENT,
+        mod_road_rebuild: g.rebuild,
+    };
     match tile_type {
-        TileType::MP_CLEAR => unsafe {
-            ground::clear_tile_loop(
-                tile.0,
-                g.climate,
-                g.editor,
-                AMBIENT,
-                settings.size_x,
-                g.clear,
-                s.shared,
-                types,
-            );
-        },
-        TileType::MP_RAILWAY => unsafe {
-            ground::rail_tile_loop(
-                tile.0,
-                g.climate,
-                settings.size_x,
-                size_y,
-                g.call,
-                g.water,
-                g.rail,
-                s.shared,
-                types,
-            );
-        },
-        TileType::MP_ROAD => unsafe {
-            ground::road_tile_loop(
-                tile.0,
-                g.climate,
-                settings.ambient,
-                g.rebuild,
-                settings.size_x,
-                g.call,
-                g.costs,
-                g.road,
-                g.road_command,
-                s.shared,
-            );
-        },
+        TileType::MP_CLEAR => ground::tile_loop_clear(&ground(), tile),
+        TileType::MP_RAILWAY => ground::tile_loop_track(&ground(), tile),
+        TileType::MP_ROAD => ground::tile_loop_road(&ground(), tile),
         TileType::MP_HOUSE => unsafe { town::house::tile_loop(s.town, s.shared, tile) },
         TileType::MP_TREES => unsafe {
             let settings = trees::LoopSettings {
@@ -194,9 +172,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
             let industry_services = s.industry;
             industry::tile_loop(tile, map, g.call, &industry_services);
         },
-        TileType::MP_TUNNELBRIDGE => unsafe {
-            ground::tunnel_tile_loop(tile.0, g.climate, g.tunnel, s.shared);
-        },
+        TileType::MP_TUNNELBRIDGE => ground::tile_loop_tunnel_bridge(&ground(), tile),
         TileType::MP_OBJECT => unsafe {
             crate::objects::tile_loop(s.objects, g.call, tile);
         },

@@ -147,14 +147,10 @@ static void DrawTile_Clear(TileInfo *ti)
 const OpenTTDClearServices &GetRustClearServices() noexcept
 {
 	static const OpenTTDClearServices services{
-		.field_tile = RustClearFieldTile, .density = RustClearDensity, .counter = RustClearCounter, .snow = RustSnowTile, .surface = RustClearSurface,
 		.set_ground = [](uint32_t t, ClearGround g, uint32_t d) noexcept { SetClearGroundDensity(TileIndex{t}, g, d); },
-		.set_density = [](uint32_t t, uint32_t d) noexcept { SetClearDensity(TileIndex{t}, d); },
 		.set_counter = [](uint32_t t, uint32_t c) noexcept { RustSetClearCounter(Tile{TileIndex{t}}, c); },
 		.clear_snow = [](uint32_t t) noexcept { ClearSnow(TileIndex{t}); },
 		.make_clear = RustMakeClear,
-		.fences = [](uint32_t index) noexcept { Tile t{TileIndex{index}}; return OpenTTDFieldFences{.ne = RustFieldFence(t, DIAGDIR_NE), .se = RustFieldFence(t, DIAGDIR_SE), .sw = RustFieldFence(t, DIAGDIR_SW), .nw = RustFieldFence(t, DIAGDIR_NW)}; },
-		.field = [](uint32_t index) noexcept { Tile t{TileIndex{index}}; return OpenTTDFieldGround{.industry = RustFieldIndustry(t).base(), .type = GetFieldType(t)}; },
 		.set_field = [](uint32_t t, uint32_t f) noexcept { SetFieldType(TileIndex{t}, f); },
 	};
 	return services;

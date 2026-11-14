@@ -355,6 +355,18 @@ impl crate::map_func::World<'_> {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_slope_z(m, t, x, y))
     }
+    /// `GetTileZ`.
+    #[inline]
+    pub(crate) fn tile_z(&self, t: TileIndex) -> i32 {
+        let (x, y) = self.size();
+        self.asserted(|m| get_tile_z(m, t, x, y))
+    }
+    /// `GetTileMaxZ`.
+    #[inline]
+    pub(crate) fn tile_max_z(&self, t: TileIndex) -> i32 {
+        let (x, y) = self.size();
+        self.asserted(|m| get_tile_max_z(m, t, x, y))
+    }
     /// `GetTileSlope`.
     #[allow(clippy::inline_always)]
     #[inline(always)]

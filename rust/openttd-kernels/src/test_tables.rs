@@ -807,18 +807,10 @@ pub(crate) const TILE_OWNERS: crate::tile_owner::Services = crate::tile_owner::S
 };
 /// `crate::ground::ClearServices` with every entry unreachable.
 pub(crate) const CLEAR_GROUND: crate::ground::ClearServices = crate::ground::ClearServices {
-    field_tile: unreachable1,
-    density: unreachable1,
-    counter: unreachable1,
-    snow: unreachable1,
-    surface: unreachable1,
     set_ground: unreachable3,
-    set_density: unreachable2,
     set_counter: unreachable2,
     clear_snow: unreachable1,
     make_clear: unreachable3,
-    fences: unreachable1,
-    field: unreachable1,
     set_field: unreachable2,
 };
 

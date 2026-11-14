@@ -2511,7 +2511,7 @@ impl Ctx<'_> {
                 );
             };
         }
-        crate::ground::clear_square(tile.0, self.shared);
+        crate::ground::do_clear_square(tile, self.shared);
         (self.s.close_station_inspect)(tile.0);
         if build_rail {
             (self.rail_map().make_rail_normal)(
@@ -3764,7 +3764,7 @@ impl Ctx<'_> {
                 clear_drive_through(self.shared, tile, cur_stop_state);
                 crate::animated_tile::openttd_rust_animation_delete(tile.0, false);
             } else {
-                crate::ground::clear_square(tile.0, self.shared);
+                crate::ground::do_clear_square(tile, self.shared);
             }
             (self.s.delete_stop)(cur_stop);
             /* Make sure no vehicle is going to the old roadstop. Narrow the search to any road vehicles with an order to
@@ -3881,7 +3881,7 @@ impl Ctx<'_> {
             (self.command.infrastructure_dirty)(owner.0);
             let specindex = (self.s.custom_road_index)(tile.0);
             (self.s.close_stop_inspect)(tile.0);
-            crate::ground::clear_square(tile.0, self.shared);
+            crate::ground::do_clear_square(tile, self.shared);
             self.after_remove_tile(wp, tile);
             (self.s.remove_stop_tile_data)(wp, tile.0);
             if specindex as i32 != replacement_spec_index {
@@ -4703,7 +4703,7 @@ impl Ctx<'_> {
                 Price::PR_CLEAR_STATION_AIRPORT.0,
             )));
             if flags.test(DoCommandFlag::Execute) {
-                crate::ground::clear_square(tile_cur.0, self.shared);
+                crate::ground::do_clear_square(tile_cur, self.shared);
                 (self.s.close_airport_tile_inspect)(tile_cur.0);
             }
         }
@@ -5279,7 +5279,7 @@ impl Ctx<'_> {
             return;
         }
         if flags.test(DoCommandFlag::Execute) {
-            crate::ground::clear_square(tile1.0, self.shared);
+            crate::ground::do_clear_square(tile1, self.shared);
             (self.shared.mark_dirty)(tile1.0);
             // `MakeWaterKeepingClass`.
             unsafe {
@@ -5510,7 +5510,14 @@ pub unsafe extern "C" fn openttd_rust_station_remove_docking_tile(
     s: *const CommandServicesTable,
     tile: u32,
 ) {
-    unsafe { Ctx::new(s) }.remove_docking_tile(TileIndex(tile));
+    unsafe { remove_docking_tile(s, TileIndex(tile)) };
+}
+/// `RemoveDockingTile`: the direct Rust entry.
+/// # Safety
+/// Tables and serialized map/pools remain live for this call.
+pub(crate) unsafe fn remove_docking_tile(s: *const CommandServicesTable, tile: TileIndex) {
+    // SAFETY: the caller supplies the process-lifetime tables under the game-state mutex.
+    unsafe { Ctx::new(s) }.remove_docking_tile(tile);
 }
 /// # Safety
 /// Tables and the original valid tile remain live for this call.

@@ -1145,7 +1145,7 @@ pub(crate) fn clear_tile_trees(c: &Trees, tile: TileIndex, flags: DoCommandFlags
     }
 
     if flags.test(DoCommandFlag::Execute) {
-        crate::ground::clear_square(tile.0, s);
+        crate::ground::do_clear_square(tile, s);
     }
 
     i64::from(num).saturating_mul(crate::company::price(PR_CLEAR_TREES))

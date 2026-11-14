@@ -418,7 +418,10 @@ impl Part {
     fn link(v: Option<VehicleRef>, s: *mut State) -> Option<Self> {
         v.map(|v| Self::new(v, s))
     }
-    fn ground(self, state: *mut crate::ground_vehicle::GroundState) -> crate::ground_vehicle::Owner {
+    fn ground(
+        self,
+        state: *mut crate::ground_vehicle::GroundState,
+    ) -> crate::ground_vehicle::Owner {
         crate::ground_vehicle::Owner::for_road(state, self.s.as_ptr())
     }
     fn state(self) -> u8 {

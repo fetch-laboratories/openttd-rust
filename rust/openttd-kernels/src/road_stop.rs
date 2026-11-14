@@ -672,7 +672,7 @@ pub(crate) fn clear_drive_through(s: &Services, xy: TileIndex, state: *mut State
 
     // Must only be cleared after we determined which neighbours are
     // part of our little entry 'queue'
-    crate::ground::clear_square(xy.0, s);
+    crate::ground::do_clear_square(xy, s);
 
     if north {
         // There is a tile to the north, so we can't clear ourselves.

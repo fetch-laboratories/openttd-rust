@@ -1168,8 +1168,8 @@ impl<'a> World<'a> {
                     };
                     (self.cmd.infrastructure_dirty)(owner);
                 }
-                crate::ground::clear_square(tile, self.s);
-                crate::ground::clear_square(end, self.s);
+                crate::ground::do_clear_square_raw(tile, self.s);
+                crate::ground::do_clear_square_raw(end, self.s);
                 self.signal(
                     tile,
                     reverse_diag_dir_raw(dir, |ok| crate::movement::native_assert(self.s, ok)),
@@ -1200,8 +1200,8 @@ impl<'a> World<'a> {
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
                         .wrapping_neg() as i32,
                 );
-                crate::ground::clear_square(tile, self.s);
-                crate::ground::clear_square(end, self.s);
+                crate::ground::do_clear_square_raw(tile, self.s);
+                crate::ground::do_clear_square_raw(end, self.s);
             }
         }
         cost.set(base.saturating_mul(i64::from(length)));
@@ -1303,8 +1303,8 @@ impl<'a> World<'a> {
                 };
             }
             (self.cmd.infrastructure_dirty)(owner);
-            crate::ground::clear_square(tile, self.s);
-            crate::ground::clear_square(end, self.s);
+            crate::ground::do_clear_square_raw(tile, self.s);
+            crate::ground::do_clear_square_raw(end, self.s);
             let mut middle = tile.wrapping_add(delta);
             // SAFETY: immutable table; only original scalar observations cross.
             let road_ground = unsafe { &*self.a.road_ground };

@@ -32,43 +32,21 @@ enum class LandscapeType : uint8_t;
 enum VehicleType : uint8_t;
 #include "command_services_ffi.h"
 #include "command_cost_ffi.h"
-/* Post-climate guarded reads only; inactive members contain neutral wire values.
- * Three bytes, returned in one register; density is GetClearDensity's two bits. */
 struct OpenTTDFlatTileHeight { int32_t height; bool flat; };
-struct OpenTTDClearSurface { ClearGround ground; uint8_t density; bool snow; };
-struct OpenTTDFieldFences { uint32_t ne; uint32_t se; uint32_t sw; uint32_t nw; };
-/* Strong IDs (IndustryID16, Owner/CompanyID8) and VehStates8 retain their
- * established underlying wire values;
- * nontrivial native ID classes are never passed by value across this ABI. */
-struct OpenTTDFieldGround { uint16_t industry; uint32_t type; };
 struct OpenTTDClearServices {
-	bool (*field_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(field_tile);
-	uint32_t (*density)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(density);
-	uint32_t (*counter)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(counter);
-	bool (*snow)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(snow);
-	OpenTTDClearSurface (*surface)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(surface);
 	void (*set_ground)(uint32_t, ClearGround, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_ground);
-	void (*set_density)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_density);
 	void (*set_counter)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_counter);
 	void (*clear_snow)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_snow);
 	void (*make_clear)(uint32_t, ClearGround, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_clear);
-	OpenTTDFieldFences (*fences)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(fences);
-	OpenTTDFieldGround (*field)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(field);
 	void (*set_field)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_field);
 };
-struct OpenTTDRailSnowGround { int32_t z; Slope slope; TrackBits tracks; bool plain; };
-struct OpenTTDRailFenceGround { TrackBits tracks; uint8_t owner; bool plain; };
 struct OpenTTDRailServices {
 	TrackBits (*tracks)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tracks);
 	RailGroundType (*ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ground);
 	void (*set_ground)(uint32_t, RailGroundType) noexcept OPENTTD_SERVICE_DEFAULT(set_ground);
-	OpenTTDRailSnowGround (*snow)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(snow);
-	OpenTTDRailFenceGround (*fences)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(fences);
 	bool (*owned_land)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_land);
 };
-struct OpenTTDTunnelGround { int32_t z; bool snow; };
 struct OpenTTDTunnelServices {
-	OpenTTDTunnelGround (*snow)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(snow);
 	bool (*snow_or_desert)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(snow_or_desert);
 	void (*set_snow_or_desert)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_snow_or_desert);
 };
@@ -80,20 +58,15 @@ struct OpenTTDGroundCostServices {
 	OpenTTDCommandCost *(*prepare)(OpenTTDGroundCall *) noexcept OPENTTD_SERVICE_DEFAULT(prepare);
 	void (*release)(OpenTTDGroundCall *) noexcept OPENTTD_SERVICE_DEFAULT(release);
 };
-struct OpenTTDRoadSnowGround { int32_t z; bool snow; };
 struct OpenTTDTownLeaves;
 struct OpenTTDRoadCommandContext;
 struct OpenTTDRoadGroundServices {
-	OpenTTDRoadSnowGround (*snow)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(snow);
 	bool (*snow_or_desert)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(snow_or_desert);
 	void (*toggle_snow_or_desert)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(toggle_snow_or_desert);
 	Roadside (*roadside)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(roadside);
 	void (*set_roadside)(uint32_t, Roadside) noexcept OPENTTD_SERVICE_DEFAULT(set_roadside);
-	uint32_t (*work_counter)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(work_counter);
-	void (*set_work_counter)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_work_counter);
 	RoadBits (*all_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(all_bits);
 	const OpenTTDTownLeaves *town;
-	void (*set_road_type)(uint32_t, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(set_road_type);
 };
 const OpenTTDGroundCostServices &GetRustGroundCostServices() noexcept;
 const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept;
@@ -143,14 +116,7 @@ void openttd_rust_clear_neighbour_flooding(uint32_t, uint32_t, uint32_t, const O
 /* Default native and Windows ABI call fixture: actual record returns and enum
  * parameters, including all-byte values, not just size/offset metadata. */
 struct OpenTTDGroundABICalls {
-	OpenTTDFieldFences (*fences)() noexcept OPENTTD_SERVICE_DEFAULT(fences);
-	OpenTTDClearSurface (*surface)() noexcept OPENTTD_SERVICE_DEFAULT(surface);
-	OpenTTDFieldGround (*field)() noexcept OPENTTD_SERVICE_DEFAULT(field);
-	OpenTTDRailSnowGround (*rail_snow)() noexcept OPENTTD_SERVICE_DEFAULT(rail_snow);
-	OpenTTDRailFenceGround (*rail_fence)() noexcept OPENTTD_SERVICE_DEFAULT(rail_fence);
 	OpenTTDFoundationSlope (*foundation)() noexcept OPENTTD_SERVICE_DEFAULT(foundation);
-	OpenTTDRoadSnowGround (*road_snow)() noexcept OPENTTD_SERVICE_DEFAULT(road_snow);
-	OpenTTDTunnelGround (*tunnel)() noexcept OPENTTD_SERVICE_DEFAULT(tunnel);
 	OpenTTDAirportGround (*airport)() noexcept OPENTTD_SERVICE_DEFAULT(airport);
 	bool (*enums)(ClearGround, RailGroundType, Slope, TrackBits, Track, Foundation, Roadside, RoadBits, RoadType, TreeGround, WaterClass, FloodingBehaviour, DiagDirection, LandscapeType, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(enums);
 };
