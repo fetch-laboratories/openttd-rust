@@ -254,11 +254,11 @@ Provisional, for steering 37 to judge:
 
 ## Ready queue
 
-Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. The open component PRs are two drafts, each resumed by a fresh implementer from its checkout and status comment: #976 (for #968, `rail_yapf.rs`, checkout `t3-9332b642-2e3cbe422377f934`, reviews accepted, CI left) and #977 (for #970, `ship_yapf.rs`, checkout `t3-0442faa5-4501bd863733960a`, with its two measurement worktrees `speed-970-base` and `speed-970-fresh`). Root's status comment on #3 holds the queue's state between commits to this section.
+Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. The open component PRs are two drafts: #976 (for #968, `rail_yapf.rs`, checkout `t3-9332b642-2e3cbe422377f934`, reviews accepted, CI left), which /root/finish-976 holds the first slot for since 2026-11-14, and #977 (for #970, `ship_yapf.rs`, checkout `t3-0442faa5-4501bd863733960a`, with its two measurement worktrees `speed-970-base` and `speed-970-fresh`), which a fresh implementer resumes from its checkout and status comment after #963. Root's status comment on #3 holds the queue's state between commits to this section.
 
-1. #945: the interval's tools batch. Planned; root adds three items first ([steering actions](#latest-steering-actions)). Waits on nothing, and goes before any new file pass.
-2. #974: shared typed news and script-event services in place of one C++ leaf per message, with the 29 leaves in finished files converted. Planned; waits on nothing.
-3. #963: 8g, the file pass for `ground.rs` and `ground_vehicle.rs`, workset 08's shared callees. Planned; waits on nothing.
+1. #945: the interval's tools batch, with #978 (the census's diff algorithm) and #980 (inventory rows for unsuffixed raw adapters and integer flag sets) as its items 14 and 15. Its plan is being refreshed and reviewed. Waits on nothing, and takes the second slot before any new file pass.
+2. #974: shared typed news and script-event services in place of one C++ leaf per message, with the 29 leaves in finished files converted. Its plan is being refreshed and reviewed; waits on nothing.
+3. #963: 8g, the file pass for `ground.rs` and `ground_vehicle.rs`, workset 08's shared callees. Its plan is being refreshed and reviewed; waits on nothing.
 
 **Later.** #973, 23n, the pass for `native_test_support.rs` and `native_test_support/movement.rs`, is planned and waits on #963, so that it removes C++ and adds none. #964, 8r, the single-file pass for `road.rs`, is planned and waits on #963 and #974. #975 deletes the C++ free functions the extended orphan check finds uncalled, about 35 by the planner's scan, and waits on #945. #979 replaces the other one-call-site leaves in finished files and waits on #974 and #945. In workset 08, after #963 and #964: the single-file passes for `train.rs` and `train_reservation.rs`, and one pass for `effect.rs`, `vehicle_effect.rs`, `ship_control.rs` and `disaster.rs`, which its planner splits if it must. A second slot with no entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes.
 
@@ -266,9 +266,9 @@ Full phase-3 planning remains untriggered: 180 of #734's 319 files, in 19 workse
 
 ## Resume checkpoint
 
-**Paused at the user's request (lenient wind-down, 2026-11-13).**
+**Running since 2026-11-14.** The table below is the state at the last wind-down; GitHub and root's status comment on #3 are newer.
 
-Root resumed at merge 47 on 2026-11-12 and stopped at merge 59 (`f24c05dbe9`), with no rollback and no confirmed base regression. The merge queue is empty. No implementation, repair, review, build, simulation, CI request or retry is authorized until resume. Where GitHub is newer than this section, GitHub is right. Steering 36 rewrote the [ready queue](#ready-queue) and #976's row below at merge 59.
+Root resumed at merge 47 on 2026-11-12 and stopped at merge 59 (`f24c05dbe9`) on 2026-11-13, with no rollback and no confirmed base regression. It resumed on 2026-11-14 at the same merge. Where GitHub is newer than this section, GitHub is right. Steering 36 rewrote the [ready queue](#ready-queue) and #976's row below at merge 59.
 
 Agent: /root | Model: claude-fable-5-2 | Reasoning effort: high
 
