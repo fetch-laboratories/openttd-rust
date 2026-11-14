@@ -368,7 +368,7 @@ mod tests {
 
 
 class CandidateTests(unittest.TestCase):
-    """#945 items 3 and 15 (#980): candidate rows, outside residue and the gate."""
+    """Candidate rows, outside residue and the gate."""
 
     def rows(self, source: str) -> set[tuple[str, str]]:
         rust = {RUST: source.lstrip()}
@@ -384,6 +384,18 @@ class CandidateTests(unittest.TestCase):
                 ("unsuffixed adapter", name)
                 for name in ("segment", "both", "add_track", "add_side", "flush")
             },
+        )
+
+    def test_a_same_name_alias_of_another_function_is_listed(self) -> None:
+        aliases = (
+            "fn foo(x: u32) -> u32 { other::foo(x) }\n"
+            "fn bar(w: World) { w.bar() }\n"
+            "fn rec(x: u32) -> u32 { rec(x) }\n"
+            "impl A { fn get(self) { self.get() } fn put(self) { Self::put(self) } }\n"
+        )
+        self.assertEqual(
+            self.rows(aliases),
+            {("unsuffixed adapter", "foo"), ("unsuffixed adapter", "bar")},
         )
 
     def test_flag_bits_and_integer_flag_sets(self) -> None:

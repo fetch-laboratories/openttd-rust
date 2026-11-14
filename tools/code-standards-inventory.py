@@ -748,7 +748,7 @@ def gate(base_ref: str, head: str) -> int:
     return int(bool(failures or missing))
 
 
-# Candidate rows (#945 items 3 and 15): listed for the implementer and reviewer
+# Candidate rows: listed for the implementer and reviewer
 # to judge, outside RESIDUE, the totals and --gate.
 SERVICE = re.compile(r'\bextern\s*"C"\s*fn\b')
 PRIMITIVE = re.compile(r"[iu](?:8|16|32|64|128|size)")
@@ -838,7 +838,8 @@ def forwarded_argument(node: Node, data: bytes, names: set[str]) -> bool:
 
 
 def adapter_callee(only: Node, data: bytes, names: set[str]) -> str | None:
-    """The callee a one-expression body forwards its parameters to, or None."""
+    """The callee a one-expression body forwards its parameters to, as written
+    (`other::foo`, `self.foo`), or None."""
     node: Node | None = only
     if (
         only.type == "field_expression"
@@ -855,13 +856,10 @@ def adapter_callee(only: Node, data: bytes, names: set[str]) -> str | None:
         receiver = function.child_by_field_name("value")
         if receiver is None or text(receiver, data) not in names:
             return None
-        name = text(function.child_by_field_name("field"), data)
-    elif function.type in ("identifier", "scoped_identifier"):
-        name = text(function, data).split("::")[-1]
-    else:
+    elif function.type not in ("identifier", "scoped_identifier"):
         return None
     if all(forwarded_argument(a, data, names) for a in arguments.named_children):
-        return name
+        return text(function, data)
     return None
 
 
@@ -879,7 +877,9 @@ def unsuffixed_adapter(node: Node, data: bytes) -> str | None:
     if only.type == "expression_statement" and only.named_children:
         only = only.named_children[0]
     callee = adapter_callee(only, data, parameter_names(node, data))
-    return name if callee is not None and callee != name else None
+    # Only the function itself is not another: `other::foo` and `w.foo` are.
+    recursion = (name, f"self.{name}", f"Self::{name}")
+    return name if callee is not None and callee not in recursion else None
 
 
 def function_rows(path: str, node: Node, data: bytes) -> list[Site]:
