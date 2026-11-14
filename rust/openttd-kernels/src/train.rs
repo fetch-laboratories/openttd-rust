@@ -240,7 +240,10 @@ impl Handle {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VehicleRailFlag(pub u8);
 
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "the enumerator names of the original VehicleRailFlag (train.h)"
+)]
 impl VehicleRailFlag {
     /// Train is slowing down to reverse.
     pub const Reversing: Self = Self(0);

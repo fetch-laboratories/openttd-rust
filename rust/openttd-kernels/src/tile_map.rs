@@ -298,8 +298,7 @@ impl crate::map_func::World<'_> {
         ) as u8)
     }
     /// `IsTileOwner`: checks if a tile belongs to the given owner.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn is_tile_owner(&self, tile: TileIndex, owner: crate::company_type::Owner) -> bool {
         self.owner(tile) == owner
     }
