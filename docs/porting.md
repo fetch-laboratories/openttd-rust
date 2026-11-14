@@ -104,6 +104,7 @@ Fix these before integration; root grants no exceptions. A file pass fixes every
 - Each original enum, flag set, ID and named constant has one Rust definition in the module named after its original header (`track_type.rs` for `track_type.h`): a `#[repr(transparent)]` wrapper over the original's underlying integer with associated constants and only the operators the original uses, not a Rust `enum` ([ADR 0021](adr/0021-integer-wrappers-not-rust-enums.md)).
 - Use the named constant wherever the original names the value. Literals the original writes as literals stay.
 - Reach the raw integer through the wrapper's accessors, only at ABI, save and bitfield boundaries and where the original uses the value as an integer.
+- A reader or writer of a record field takes the member's name: `cur_speed()` and `set_cur_speed()` for `cur_speed`, not `speed()`. A search for the original's member then finds its Rust accesses, and the name cannot be taken for another member or method of the record.
 - Keep element and set types distinct (`DoCommandFlag` versus `DoCommandFlags`). An internal signature takes `DoCommandFlags` where the original does, not a projected flag such as `execute: bool`.
 
 ### Comments
