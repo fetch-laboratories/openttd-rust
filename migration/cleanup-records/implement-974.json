@@ -98,16 +98,5 @@
     "existing_alternatives": "None in this PR; root records the pairing defect for the next tools batch.",
     "retiring_owner": "#734",
     "retirement_condition": "When the water-region tests retire with their native code."
-  },
-  {
-    "kind": "growth",
-    "counter": "tools_cpp",
-    "added": {
-      "tools/migration/aircraft-range.cpp": 1
-    },
-    "reason": "aircraft-range.cpp binds the two process-wide tables in place of the two deleted aircraft leaves, as plan's Files section requires.",
-    "existing_alternatives": "None.",
-    "retiring_owner": "#656",
-    "retirement_condition": "When the aircraft range fixture retires."
   }
 ]
