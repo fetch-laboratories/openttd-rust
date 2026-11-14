@@ -1,0 +1,24 @@
+[
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-settings.h": 2
+    },
+    "reason": "#970's plan, decision 1: the two _settings_game.pf.yapf fields ShipInput read in C++ (ship_curve45_penalty, ship_curve90_penalty) join the settings catalog, so ship_yapf::ship_input reads them by field-sized load and the C++ ShipInput is deleted. One generated field per original setting, as #965 did for the road search's seven.",
+    "existing_alternatives": "The catalog held neither setting; no Rust accessor reads them, and a per-setting service would be a callback slot each.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The fields stay while the settings table is native; they retire when Rust owns _settings_game."
+  },
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/ship_yapf_protocol.hpp": 50
+    },
+    "reason": "#970's plan, Evidence: the native ship cases keep every expectation while the injected Tile, Destination, Patch and VisitNext leaves go. The fixture now states those facts as maps and a real water region owner (the shared CarveRiver, the deliberately stale region cache of the winding-river case) and reads the search's branch witnesses by name in place of the deleted stats array, through the production entries the probes in native_test_support.rs call.",
+    "existing_alternatives": "The injected leaves are the design fault the pass removes; the Rust unit tests cannot hold these cases, which compare against the native follower fixture and the unchanged CBinaryHeapT.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the fork-added native tests retire with the C++ build (ADR 0001)."
+  }
+]
