@@ -142,7 +142,8 @@ struct MapLeafOracle {
 	uint32_t has_road;
 	uint32_t has_tram;
 	uint32_t tree_ground, tree_density, tree_type, tree_count, tree_growth;
-	uint32_t clear_snow, clear_density, clear_counter, fence_ne, fence_se, fence_sw, fence_nw, field_type, field_industry;
+	uint32_t clear_snow, clear_density, clear_counter;
+	uint32_t fence_ne, fence_se, fence_sw, fence_nw, field_type, field_industry;
 };
 static void ObserveMapLeaves(uint32_t index, MapLeafOracle *out) noexcept
 {
