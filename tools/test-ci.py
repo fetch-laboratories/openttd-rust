@@ -2115,6 +2115,13 @@ def pull_and_statuses(
 REQUIRE_STAMP = ci.require_stamp
 
 
+class QuickCheck(TypedDict):
+    """The fields of a Quick check run that `latest_quick` and `ready` read."""
+
+    conclusion: str
+    started_at: str
+
+
 class RequestTests(unittest.TestCase):
     def setUp(self) -> None:
         # Stamps are tools/test-preflight.py's; these tests read only the request.
@@ -2143,7 +2150,7 @@ class RequestTests(unittest.TestCase):
             gh.assert_not_called()
         self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
 
-    def ready(self, quick: list[dict[str, str]], **pull: object) -> list[tuple]:
+    def ready(self, quick: list[QuickCheck], **pull: object) -> list[tuple]:
         """Run ready on PULL with pull's changes and `quick` as the head's checks."""
 
         def answers(_repository: str, path: str) -> object:
@@ -2162,8 +2169,8 @@ class RequestTests(unittest.TestCase):
 
     def test_ready_restarts_a_quick_that_only_skipped(self) -> None:
         mark = ("pr", "ready", "170", "--repo", "example/fork")
-        skipped = {"conclusion": "skipped", "started_at": "2026-11-12T01:00:00Z"}
-        passed = {"conclusion": "success", "started_at": "2026-11-12T00:59:00Z"}
+        skipped = QuickCheck(conclusion="skipped", started_at="2026-11-12T01:00:00Z")
+        passed = QuickCheck(conclusion="success", started_at="2026-11-12T00:59:00Z")
         self.assertEqual(self.ready([skipped], draft=False), [(*mark, "--undo"), mark])
         self.assertEqual(self.ready([skipped, passed], draft=False), [mark])
         self.assertEqual(self.ready([skipped], draft=True), [mark])

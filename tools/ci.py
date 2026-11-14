@@ -251,10 +251,10 @@ def require_stamp(pr: int, head: str, unstamped: str | None) -> None:
         )
 
 
-def require_attribution(pr: int, pull: dict) -> None:
+def require_attribution(pr: int, body: str | None) -> None:
     """The PR body carries the attribution line the growth gate reads its author
     from; the merge group's Full fails without it, after every other check."""
-    if not cleanup_contract.ATTRIBUTION.search(pull.get("body") or ""):
+    if not cleanup_contract.ATTRIBUTION.search(body or ""):
         raise ValueError(
             f"PR #{pr}'s body has no attribution line; add one in the form "
             "`Agent: <path> | Model: <exact model> | Reasoning effort: <effort>`"
@@ -266,7 +266,7 @@ def ready(args: argparse.Namespace) -> None:
     pull = api(repository, f"pulls/{args.pr}")
     head = current_head(pull)
     require_stamp(args.pr, head, None)
-    require_attribution(args.pr, pull)
+    require_attribution(args.pr, pull.get("body"))
     quick = latest_quick(repository, head)
     if not pull.get("draft") and quick and quick["conclusion"] == "skipped":
         # Quick skipped a draft; a push landing with the ready mark left only
@@ -963,7 +963,7 @@ def enqueue_checks(repository: str, pr: int, pull: dict) -> str:
     head = current_head(pull)
     if pull.get("draft"):
         raise ValueError(f"PR #{pr} is a draft; mark it ready with ci.py ready")
-    require_attribution(pr, pull)
+    require_attribution(pr, pull.get("body"))
     quick = latest_quick(repository, head)
     if quick and quick["conclusion"] == "skipped":
         raise ValueError(
