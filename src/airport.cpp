@@ -70,45 +70,6 @@ static uint16_t AirportGetNofElements(const AirportFTAbuildup *apFA);
 static void AirportBuildAutomata(std::vector<AirportFTA> &layout, uint8_t nofelements, const AirportFTAbuildup *apFA);
 
 
-/**
- * Rotate the airport moving data to another rotation.
- * @param orig Pointer to the moving data to rotate.
- * @param rotation How to rotate the moving data.
- * @param num_tiles_x Number of tiles in x direction.
- * @param num_tiles_y Number of tiles in y direction.
- * @return The rotated moving data.
- */
-AirportMovingData RotateAirportMovingData(const AirportMovingData *orig, Direction rotation, uint num_tiles_x, uint num_tiles_y)
-{
-	AirportMovingData amd;
-	amd.flags = orig->flags;
-	amd.direction = ChangeDir(orig->direction, (DirDiff)rotation);
-	switch (rotation) {
-		case DIR_N:
-			amd.x = orig->x;
-			amd.y = orig->y;
-			break;
-
-		case DIR_E:
-			amd.x = orig->y;
-			amd.y = num_tiles_y * TILE_SIZE - orig->x - 1;
-			break;
-
-		case DIR_S:
-			amd.x = num_tiles_x * TILE_SIZE - orig->x - 1;
-			amd.y = num_tiles_y * TILE_SIZE - orig->y - 1;
-			break;
-
-		case DIR_W:
-			amd.x = num_tiles_x * TILE_SIZE - orig->y - 1;
-			amd.y = orig->x;
-			break;
-
-		default: NOT_REACHED();
-	}
-	return amd;
-}
-
 AirportFTAClass::AirportFTAClass(
 	const AirportMovingData *moving_data_,
 	const uint8_t *terminals_,

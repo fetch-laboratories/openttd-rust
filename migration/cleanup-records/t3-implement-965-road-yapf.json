@@ -1,0 +1,37 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/road_yapf.rs | fn yapf_road_vehicle_choose_track | allow dead_code",
+    "before": 0,
+    "after": 1,
+    "operation": "road_yapf::yapf_road_vehicle_choose_track",
+    "source_contract": "`YapfRoadVehicleChooseTrack` (src/pathfinder/yapf/yapf_road.cpp) is the road vehicle controller's entry to the road search. Its Rust port is the internal entry that road.rs calls once #964 removes the C++ route (`RoadSvc*` -> `YapfRoadVehicleChooseTrack` -> the native-test export).",
+    "reason": "#965's plan adds the two Rust-internal entries in this pass and leaves calling them to #964, so they have no production caller in between; the native tests keep the exports, which take their own Input.",
+    "retiring_owner": "#964",
+    "retirement_condition": "When road.rs calls the function from its choose_track or find_depot site."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/road_yapf.rs | fn yapf_road_vehicle_find_nearest_depot | allow dead_code",
+    "before": 0,
+    "after": 1,
+    "operation": "road_yapf::yapf_road_vehicle_find_nearest_depot",
+    "source_contract": "`YapfRoadVehicleFindNearestDepot` (src/pathfinder/yapf/yapf_road.cpp) is the road vehicle controller's entry to the road search. Its Rust port is the internal entry that road.rs calls once #964 removes the C++ route (`RoadSvc*` -> `YapfRoadVehicleFindNearestDepot` -> the native-test export).",
+    "reason": "#965's plan adds the two Rust-internal entries in this pass and leaves calling them to #964, so they have no production caller in between; the native tests keep the exports, which take their own Input.",
+    "retiring_owner": "#964",
+    "retirement_condition": "When road.rs calls the function from its choose_track or find_depot site."
+  },
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-settings.h": 7
+    },
+    "reason": "#965's plan, decision 1: the seven _settings_game.pf.yapf fields RoadInput reads (max_search_nodes, road_slope_penalty, road_crossing_penalty, road_stop_penalty, road_stop_occupied_penalty, road_stop_bay_occupied_penalty, road_curve_penalty) join the settings catalog, so road_yapf::road_input reads them by field-sized load and #964 can delete RoadInput. One generated field per original setting.",
+    "existing_alternatives": "The catalog had only maximum_go_to_depot_penalty from YAPFSettings; no Rust accessor reads the other seven, and a per-setting service would be a callback slot each.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The fields stay while the settings table is native; they retire when Rust owns _settings_game."
+  }
+]

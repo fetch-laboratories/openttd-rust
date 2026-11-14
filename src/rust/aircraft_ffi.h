@@ -26,79 +26,64 @@ struct OpenTTDAircraftState {
 	uint8_t pos, previous_pos, state, last_direction, number_consecutive_turns, turn_counter, flags;
 };
 struct OpenTTDAircraftVehicle { OpenTTDVehicle *handle; OpenTTDAircraftState *state; uint32_t id; };
-struct OpenTTDAircraftNode { const void *next; uint64_t blocks; uint8_t position, next_position, heading; };
 struct OpenTTDAircraftMoving { int16_t x, y; uint16_t flags; uint8_t direction; };
-struct OpenTTDAircraftBlockNode { uint64_t blocks; uint8_t position, next_position; };
-struct OpenTTDAircraftRouteNode { const void *next; uint8_t next_position, heading; };
-struct OpenTTDAircraftBlockChoice { const void *next; uint64_t blocks; uint8_t heading; };
+struct OpenTTDAircraftStrings {
+	uint32_t aircraft_crash;
+	uint32_t aircraft_dest_too_far;
+	uint32_t first_aircraft_arrival;
+	uint32_t plane_crash_out_of_fuel;
+};
+struct OpenTTDVehicleMassServices;
 /* Immutable callback table, borrowed for synchronous entries. Handles retain the
  * original pool identity; only raw field-sized State access occurs in Rust.
  * No borrow survives a callback, including reentry and PreDestructor deletion.
  * All native services are noexcept; environmental failures and Rust panics abort.
- * Flight helpers accept actual Vehicle identity, with null state for disasters. */
-struct OpenTTDAircraftGeometry { uint32_t tile; uint8_t rotation; uint16_t width, height; bool airport; };
-struct OpenTTDAircraftLayoutRoute { const void *node, *next; uint8_t next_position, heading; };
+ * Flight helpers accept actual Vehicle identity, with null state for disasters.
+ * Station and AirportFTAClass fields cross one typed leaf per field. */
 struct OpenTTDAircraftLeaves {
-	OpenTTDAircraftGeometry (OPENTTD_RUST_CALL *geometry)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(geometry);
-	uint64_t (OPENTTD_RUST_CALL *layout_blocks)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_blocks);
-	uint8_t (OPENTTD_RUST_CALL *layout_heading)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_heading);
-	uint8_t (OPENTTD_RUST_CALL *layout_next_position)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_next_position);
-	const void *(OPENTTD_RUST_CALL *layout_next)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_next);
-	OpenTTDAircraftLayoutRoute (OPENTTD_RUST_CALL *layout_route)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_route);
-	const OpenTTDVehicleServices *vehicle;
+	uint64_t *(OPENTTD_RUST_CALL *airport_blocks)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_blocks);
+	uint8_t (OPENTTD_RUST_CALL *airport_delta_z)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_delta_z);
+	uint8_t (OPENTTD_RUST_CALL *airport_elements)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_elements);
+	uint8_t (OPENTTD_RUST_CALL *airport_entry)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_entry);
+	uint8_t (OPENTTD_RUST_CALL *airport_flags)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_flags);
+	uint8_t (OPENTTD_RUST_CALL *airport_height)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_height);
+	uint32_t (OPENTTD_RUST_CALL *airport_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
+	uint8_t (OPENTTD_RUST_CALL *airport_type)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_type);
+	uint8_t (OPENTTD_RUST_CALL *airport_width)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_width);
+	void (OPENTTD_RUST_CALL *copy_sprite)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(copy_sprite);
+	uint8_t (OPENTTD_RUST_CALL *direction_towards)(OpenTTDAircraftVehicle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(direction_towards);
+	void (OPENTTD_RUST_CALL *dirty_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_depot);
+	void (OPENTTD_RUST_CALL *dirty_lists)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_lists);
+	uint64_t (OPENTTD_RUST_CALL *fta_blocks)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_blocks);
+	uint8_t (OPENTTD_RUST_CALL *fta_heading)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_heading);
+	const void *(OPENTTD_RUST_CALL *fta_next)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_next);
+	uint8_t (OPENTTD_RUST_CALL *fta_next_position)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_next_position);
+	uint8_t (OPENTTD_RUST_CALL *fta_position)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_position);
+	uint8_t (OPENTTD_RUST_CALL *had_vehicle)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(had_vehicle);
+	uint8_t (OPENTTD_RUST_CALL *hangar_exit)(const OpenTTDStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
+	uint8_t (OPENTTD_RUST_CALL *helipads)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(helipads);
+	void (OPENTTD_RUST_CALL *landing_rating)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(landing_rating);
+	const OpenTTDVehicleMassServices *mass;
+	OpenTTDAircraftMoving (OPENTTD_RUST_CALL *moving)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(moving);
+	OpenTTDAircraftVehicle (OPENTTD_RUST_CALL *next_aircraft)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_aircraft);
+	const void * (OPENTTD_RUST_CALL *node)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(node);
+	uint8_t (OPENTTD_RUST_CALL *rotation)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(rotation);
+	void (OPENTTD_RUST_CALL *rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image);
+	bool (OPENTTD_RUST_CALL *rotor_image_if_changed)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image_if_changed);
+	uint16_t (OPENTTD_RUST_CALL *service_interval)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
+	void (OPENTTD_RUST_CALL *service_order)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(service_order);
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStation *(OPENTTD_RUST_CALL *station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
-	uint32_t (OPENTTD_RUST_CALL *airport_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
-	uint32_t (OPENTTD_RUST_CALL *station_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_tile);
-	uint8_t (OPENTTD_RUST_CALL *rotation)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(rotation);
-	uint8_t (OPENTTD_RUST_CALL *airport_type)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_type);
 	uint8_t (OPENTTD_RUST_CALL *station_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
-	uint64_t * (OPENTTD_RUST_CALL *airport_blocks)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_blocks);
-	uint8_t (OPENTTD_RUST_CALL *had_vehicle)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(had_vehicle);
-	uint8_t (OPENTTD_RUST_CALL *airport_elements)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_elements);
-	uint8_t (OPENTTD_RUST_CALL *helipads)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(helipads);
-	uint8_t (OPENTTD_RUST_CALL *airport_flags)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_flags);
-	uint8_t (OPENTTD_RUST_CALL *airport_delta_z)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_delta_z);
-	const void * (OPENTTD_RUST_CALL *node)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(node);
-	OpenTTDAircraftNode (OPENTTD_RUST_CALL *fta)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta);
-	OpenTTDAircraftMoving (OPENTTD_RUST_CALL *moving)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(moving);
-	uint8_t (OPENTTD_RUST_CALL *airport_entry)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_entry);
-	uint8_t (OPENTTD_RUST_CALL *direction_towards)(OpenTTDAircraftVehicle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(direction_towards);
-	int32_t (OPENTTD_RUST_CALL *hangar_height)(const OpenTTDStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_height);
-	uint8_t (OPENTTD_RUST_CALL *terminal_count)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terminal_count);
-	uint8_t (OPENTTD_RUST_CALL *hangar_exit)(const OpenTTDStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
-	uint16_t (OPENTTD_RUST_CALL *service_interval)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
-	bool (OPENTTD_RUST_CALL *chain_in_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(chain_in_depot);
-	OpenTTDAircraftVehicle (OPENTTD_RUST_CALL *next_aircraft)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_aircraft);
-	void (OPENTTD_RUST_CALL *viewport)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
-	void (OPENTTD_RUST_CALL *rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image);
-	void (OPENTTD_RUST_CALL *copy_sprite)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(copy_sprite);
-	void (OPENTTD_RUST_CALL *truncate_cargo)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(truncate_cargo);
-	void (OPENTTD_RUST_CALL *crash_news)(OpenTTDAircraftVehicle, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
-	void (OPENTTD_RUST_CALL *landing_rating)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(landing_rating);
-	void (OPENTTD_RUST_CALL *dirty_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_depot);
-	void (OPENTTD_RUST_CALL *first_arrival)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(first_arrival);
-
-	void (OPENTTD_RUST_CALL *destination_too_far)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(destination_too_far);
-	void (OPENTTD_RUST_CALL *delete_range_news)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(delete_range_news);
-	void (OPENTTD_RUST_CALL *service_order)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(service_order);
+	uint32_t (OPENTTD_RUST_CALL *station_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_tile);
+	OpenTTDAircraftStrings strings;
 	void (OPENTTD_RUST_CALL *subtract_cost)(OpenTTDAircraftVehicle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_cost);
-	void (OPENTTD_RUST_CALL *dirty_lists)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_lists);
-	uint16_t (OPENTTD_RUST_CALL *next_stopping_station)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(next_stopping_station);
-	void (OPENTTD_RUST_CALL *remove_depot_orders)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_depot_orders);
-	void (OPENTTD_RUST_CALL *assert_flying)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(assert_flying);
-	void (OPENTTD_RUST_CALL *invalid_movement)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(invalid_movement);
-	void (OPENTTD_RUST_CALL *invalid_position)(OpenTTDAircraftVehicle, const void *) noexcept OPENTTD_SERVICE_DEFAULT(invalid_position);
-	void (OPENTTD_RUST_CALL *invalid_scheme)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(invalid_scheme);
-	void (OPENTTD_RUST_CALL *unreachable)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(unreachable);
-	bool (OPENTTD_RUST_CALL *rotor_image_if_changed)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image_if_changed);
+	uint8_t (OPENTTD_RUST_CALL *terminal_count)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terminal_count);
+	void (OPENTTD_RUST_CALL *truncate_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(truncate_cargo);
 	void (OPENTTD_RUST_CALL *update_rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_rotor_image);
+	const OpenTTDVehicleServices *vehicle;
 	uint32_t (OPENTTD_RUST_CALL *vehicle_crash)(OpenTTDAircraftVehicle, bool) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_crash);
-	bool (OPENTTD_RUST_CALL *send_to_depot)(OpenTTDAircraftVehicle, bool) noexcept OPENTTD_SERVICE_DEFAULT(send_to_depot);
-	uint8_t (OPENTTD_RUST_CALL *fta_next_position)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_next_position);
-	OpenTTDAircraftBlockNode (OPENTTD_RUST_CALL *block_node)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(block_node);
-	OpenTTDAircraftRouteNode (OPENTTD_RUST_CALL *route_node)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(route_node);
-	OpenTTDAircraftBlockChoice (OPENTTD_RUST_CALL *block_choice)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(block_choice);
+	void (OPENTTD_RUST_CALL *viewport)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 };
 uint8_t OPENTTD_RUST_CALL openttd_rust_aircraft_tick_abi(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_aircraft_tick(const OpenTTDAircraftLeaves *a0, OpenTTDAircraftVehicle a1) { return openttd_rust_aircraft_tick_abi(a0, a1) != 0; }

@@ -1,0 +1,37 @@
+[
+  {
+    "kind": "carry",
+    "tool": "clippy",
+    "from": "rust/openttd-kernels/src/ground_vehicle.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28",
+    "to": "rust/openttd-kernels/src/road.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/ground.rs | fn clear_tile_loop | allow clippy::inline_always",
+    "to": "rust/openttd-kernels/src/ground.rs | fn tile_loop_clear | allow clippy::inline_always"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/ground.rs | fn field_fence | allow clippy::inline_always",
+    "to": "rust/openttd-kernels/src/ground.rs | fn update_fences | allow clippy::inline_always"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/ground_vehicle.rs | fn move_incline | allow clippy::too_many_arguments",
+    "to": "rust/openttd-kernels/src/road.rs | fn move_incline | allow clippy::too_many_arguments"
+  },
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/landscape_tile_loop.cpp": 9
+    },
+    "reason": "The native map-read probe now takes its clear-tile expectations (IsSnowTile, GetClearDensity, GetClearCounter, the four GetFence sides, GetFieldType, GetIndustryIndexOfField) from MapLeafOracle, filled by ObserveMapLeaves from the original clear_map.h accessors, in place of the ClearServices readers and the FieldFences/FieldGround records this PR deletes from Rust and C++ (#963 decision 3). The nine lines are those observations and their two oracle fields; the deleted C++ lambdas and records are glue, not fork test C++, so the counter nets one line.",
+    "existing_alternatives": "A Rust test cannot read the live C++ map through the original accessors, and keeping the ClearServices readers would leave carriers for one call site in a finished file. No line of the probe is orphaned by the change: ground_protocol.hpp and clear_map.h stay in use.",
+    "retiring_owner": "#565",
+    "retirement_condition": "Map ownership moves to Rust and the map-read probe, which compares Rust's in-place reads with the native accessors over the C++ map, is deleted."
+  }
+]

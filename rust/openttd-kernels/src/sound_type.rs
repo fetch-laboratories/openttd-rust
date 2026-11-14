@@ -172,6 +172,9 @@ impl SoundFx {
     /// Native `SND_END`.
     pub const SND_END: Self = Self(73);
 }
+/// `ORIGINAL_SAMPLE_COUNT`: the number of sounds in the original sample.cat.
+pub const ORIGINAL_SAMPLE_COUNT: u32 = 73;
+
 /// Native `SoundID`, including all `NewGRF` indices and the invalid sentinel.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

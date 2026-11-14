@@ -4,8 +4,6 @@
 #define RUST_SERVICES_ASSERT_H
 inline void RustAssertCondition([[maybe_unused]] bool condition) noexcept { assert(condition); }
 inline void RustNotReached() noexcept { NOT_REACHED(); }
-template <typename Owner>
-inline void RustNotReachedWithUnusedOwner(Owner) noexcept { RustNotReached(); }
 struct OpenTTDSharedServices;
 extern "C" void openttd_rust_assert_bind(void (*check)(bool) noexcept, const OpenTTDSharedServices *shared);
 #endif /* RUST_SERVICES_ASSERT_H */

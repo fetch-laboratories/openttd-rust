@@ -228,7 +228,6 @@ pub struct Services {
     pub company_count: extern "C" fn() -> usize,
     pub competitor_fired: extern "C" fn() -> bool,
     pub can_allocate_company: extern "C" fn() -> bool,
-    pub local_company: extern "C" fn() -> u8,
     pub network_server: extern "C" fn() -> bool,
     pub company_vehicle_counts: extern "C" fn(u8) -> VehicleCounts,
     pub vehicle_limits: extern "C" fn() -> VehicleCounts,
@@ -328,18 +327,18 @@ pub(crate) fn set_local_company(s: &Services, company: crate::company_type::Comp
             || company == CompanyID::SPECTATOR
             || company == CompanyID::NONE,
     );
-    let switching = (s.local_company)() != company.0;
+    let switching = (s.shared.local_company)() != company.0;
     let windows = (s.objectives)();
     if switching {
         (windows.window_data)(
             WC_SEND_NETWORK_MSG,
             crate::network_type::DESTTYPE_TEAM,
-            i32::from((s.local_company)()),
+            i32::from((s.shared.local_company)()),
         );
     }
     crate::movement::native_assert(
         s.shared,
-        (s.local_company)() == (s.finance.current_company)(),
+        (s.shared.local_company)() == (s.finance.current_company)(),
     );
     (s.assign_company_context)(company);
     if switching {
@@ -367,7 +366,7 @@ pub(crate) fn check_ownership(
         return;
     }
     out.error(s.owned_by);
-    if (s.local_company)() == (s.finance.current_company)() {
+    if (s.shared.local_company)() == (s.finance.current_company)() {
         (out.1.encode_owned_by)(out.0, owner, tile);
         if owner.0 != OWNER_TOWN {
             (out.1.error_owner)(out.0, owner);
@@ -910,7 +909,7 @@ fn bankruptcy(s: &Services, m: &Month, p: *mut Finances, id: u8) {
         }
         _ => {
             let networking = (s.finance.networking)();
-            if !networking && (s.local_company)() == id {
+            if !networking && (s.shared.local_company)() == id {
                 write_field!(p, asked, u16::MAX);
             } else if !networking || (s.network_server)() {
                 // Singleplayer executes the deletion synchronously; `p` is dead after it.
@@ -1215,7 +1214,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     if (f.networking)() {
         (s.clients_to_spectators)(old);
     }
-    if (s.local_company)() == old {
+    if (s.shared.local_company)() == old {
         let saved = (f.current_company)();
         let mut from = 0_u32;
         loop {
@@ -1647,7 +1646,7 @@ fn buy(
     if hostile && networking {
         return error();
     }
-    if !networking && (s.local_company)() == id {
+    if !networking && (s.shared.local_company)() == id {
         return error();
     }
     if id == current {
@@ -2235,7 +2234,6 @@ crate::abi::layouts! {
         company_count,
         competitor_fired,
         can_allocate_company,
-        local_company,
         network_server,
         company_vehicle_counts,
         vehicle_limits,
@@ -2854,6 +2852,7 @@ mod control_tests {
         movement.native_assert = native_assert;
         let mut shared = SHARED;
         shared.company_valid = company_valid;
+        shared.local_company = local_company;
         shared.movement = leak(movement);
         let finance = finance();
         let mut costs = COMMAND_COSTS;
@@ -2867,7 +2866,6 @@ mod control_tests {
         s.finance = leak(finance);
         s.cost = leak(costs);
         s.can_allocate_company = can_allocate;
-        s.local_company = local_company;
         s.owned_by = OWNED_BY;
         s
     }
@@ -3503,11 +3501,13 @@ mod startup_tests {
         WINDOWS.set(leak(windows));
         let mut s = COMPANY;
         s.identity = identity(shared);
-        s.shared = shared;
+        s.shared = leak(crate::services::Services {
+            local_company: local,
+            ..*shared
+        });
         s.finance = leak(finance);
         s.cost = &COMMAND_COSTS;
         s.objectives = objectives;
-        s.local_company = local;
         s.network_server = server;
         s.can_allocate_company = yes;
         s.allocate_company = allocate;
@@ -3793,10 +3793,12 @@ mod bankruptcy_tests {
         finance.invalidate_company_windows = invalidate;
         let mut s = COMPANY;
         s.identity = leak(identity);
-        s.shared = &SHARED;
+        s.shared = leak(crate::services::Services {
+            local_company: local,
+            ..SHARED
+        });
         s.finance = leak(finance);
         s.company_next = next;
-        s.local_company = local;
         s.network_server = no;
         let s = leak(s);
         let clock = crate::timer_game_common::ClockCompany {

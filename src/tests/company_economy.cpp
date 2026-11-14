@@ -204,8 +204,8 @@ static void FixtureReset(bool networking, bool server)
 	fixture_services = GetRustCompanyServices();
 	fixture_services.finance = &fixture_finance;
 	fixture_services.company_next = FixtureNext;
-	fixture_services.local_company = FixtureLocal; fixture_services.network_server = FixtureServer;
-	fixture_shared = GetRustSharedServices();
+	fixture_services.network_server = FixtureServer;
+	fixture_shared = GetRustSharedServices(); fixture_shared.local_company = FixtureLocal;
 	fixture_services.shared = &fixture_shared;
 	fixture_post = GetRustCommandPostServices();
 	fixture_shared.command_post = []() noexcept -> const OpenTTDCommandPostServices & { return fixture_post; };
@@ -273,7 +273,7 @@ static void FixtureReset(bool networking, bool server)
 	fixture_shared.screen_dirty = FixtureVoid;
 	fixture_post_company = fixture_services;
 	/* Company-control completion restores this fixture's initial current company. */
-	fixture_post_company.local_company = []() noexcept -> uint8_t { return 18; };
+	static OpenTTDSharedServices post_shared; post_shared = fixture_shared; post_shared.local_company = []() noexcept -> uint8_t { return 18; }; fixture_post_company.shared = &post_shared;
 }
 /* Only the local company's cash error is encoded natively; the money short circuits and
  * subtraction are command::money_tests (#736 F). Retires with the native CommandCost string

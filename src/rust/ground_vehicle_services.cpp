@@ -9,30 +9,19 @@
 #include "../stdafx.h"
 #include "../train.h"
 #include "../roadveh.h"
-#include "../depot_map.h"
 #include "vehicle_services.h"
 #include "services_cargo.h"
 #include "engine_services.h"
 #include "services_rail.h"
 #include "services_map.h"
-#include "services_road.h"
 #include "road_ffi.h"
 #include "ground_vehicle_ffi.h"
 #include "../safeguards.h"
 
-static OpenTTDGroundOwner GroundResolve(OpenTTDVehicle *shell) noexcept
-{
-	Vehicle *v = VehicleOf(shell);
-	if (v->GetType() == VEH_TRAIN) { Train *t = Train::From(v); return {t->rust_ground.state, TrainHandle(t), nullptr, v->GetType()}; }
-	return {RoadVehicle::From(v)->rust_ground.state, {nullptr, nullptr}, RoadVehicle::From(v)->GetRustState(), v->GetType()};
-}
-static OpenTTDGroundWeightInput GroundWeightInput(OpenTTDVehicle *shell) noexcept { Vehicle *v = VehicleOf(shell); return {RustCargoSpec(v->cargo_type), RustVehicleCargoOwner(v)}; }
-static uint64_t GroundCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnits(count); }
-static uint64_t GroundTrainCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnitsInTrain(count); }
-static uint16_t GroundRoadSpeed(OpenTTDVehicle *shell) noexcept { const RoadVehicle *v = RoadVehicle::From(VehicleOf(shell)); return RustRoadTypeMaxSpeed(RustRoadTileType(v->GetTile().base(), RustRoadTramType(RustRoadVehicleType(v)))); }
+static uint64_t GroundCargoWeight(uint8_t cargo, uint32_t count) noexcept { return CargoSpec::Get(cargo)->WeightOfNUnits(count); }
+static uint64_t GroundTrainCargoWeight(uint8_t cargo, uint32_t count) noexcept { return CargoSpec::Get(cargo)->WeightOfNUnitsInTrain(count); }
 static uint32_t GroundSteepness(VehicleType type) noexcept { return type == VEH_TRAIN ? _settings_game.vehicle.train_slope_steepness : _settings_game.vehicle.roadveh_slope_steepness; }
 static void GroundViewport(OpenTTDVehicle *shell, bool force, bool delta) noexcept { Vehicle *v = VehicleOf(shell); if (v->GetType() == VEH_TRAIN) RustVehicleUpdateViewport(Train::From(v), force, delta); else RustVehicleUpdateViewport(RoadVehicle::From(v), force, delta); }
-static bool GroundDepotTile(uint32_t tile, TransportType type) noexcept { return IsDepotTypeTile(TileIndex(tile), type); }
 
 const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 {
@@ -44,8 +33,6 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 #else
 		.assertions = false,
 #endif
-		.resolve = GroundResolve,
-		.weight_input = GroundWeightInput,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.cargo_weight = GroundCargoWeight,
 		.train_cargo_weight = GroundTrainCargoWeight,
@@ -53,12 +40,9 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 		.rail_type = RustRailType,
 		.rail_acceleration = RustRailAccelerationType,
 		.rail_speed = RustRailMaxSpeed,
-		.road_speed = GroundRoadSpeed,
 		.steepness = GroundSteepness,
-		.display_max_speed = RustVehicleDisplaySpeed,
 		.viewport = GroundViewport,
 		.base_crash = RustVehicleBaseCrash,
-		.depot_tile = GroundDepotTile,
 	};
 	return services;
 }

@@ -102,7 +102,6 @@ static OpenTTDAircraftStartState VehicleTransactionAircraftStart(void *shell) no
 	const Aircraft *v = Aircraft::From(static_cast<Vehicle *>(shell));
 	return {.state = v->state, .flags = v->flags};
 }
-static void VehicleTransactionWaitingNews(uint32_t id) noexcept { DeleteVehicleNews(VehicleID(id), AdviceType::VehicleWaiting); }
 static void VehicleTransactionStartstopUI(void *shell) noexcept
 {
 	const Vehicle *v = static_cast<Vehicle *>(shell);
@@ -135,7 +134,6 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 		},
 		.aircraft_start = VehicleTransactionAircraftStart,
 		.grf_string = RustGRFString,
-		.waiting_news = VehicleTransactionWaitingNews,
 		.startstop_ui = VehicleTransactionStartstopUI,
 		.value = RustOpaqueVehicleRead<int64_t, RustVehicleValue>,
 		.valid_cargo = OpenTTDIsValidCargo,
@@ -148,7 +146,7 @@ static OpenTTDVehicleListId VehicleTransactionListId(const VehicleListIdentifier
 	return {.kind = static_cast<uint8_t>(vli.type), .vehicle_type = vli.vtype, .company = vli.company.base(), .index = vli.index, .valid = vli.Valid()};
 }
 static void VehicleTransactionSend(OpenTTDCommandCost *out, void *v, uint16_t flags, uint8_t command) noexcept { *reinterpret_cast<CommandCost *>(out) = static_cast<Vehicle *>(v)->SendToDepot(DoCommandFlags(flags), DepotCommandFlags(command)); }
-static const OpenTTDVehicleMassServices &GetVehicleMassServices() noexcept
+const OpenTTDVehicleMassServices &GetVehicleMassServices() noexcept
 {
 	static const OpenTTDVehicleMassServices services{
 		.common = &GetRustVehicleCommonServices(), .selection = &GetRustVehicleSelectionServices(),

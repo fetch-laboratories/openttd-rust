@@ -135,13 +135,7 @@ pub const GVSF_FRONT: u8 = GroundVehicleSubtypeFlags::GVSF_FRONT.0;
 #[allow(dead_code)] // Retain the raw compatibility name until cleanup closure.
 pub const GVSF_ARTICULATED_PART: u8 = GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
 /// Raw compatibility bit position.
-pub const GVSF_WAGON: u8 = GroundVehicleSubtypeFlags::GVSF_WAGON.0;
-/// Raw compatibility bit position.
 pub const GVSF_ENGINE: u8 = GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
-/// Raw compatibility bit position.
-pub const GVSF_FREE_WAGON: u8 = GroundVehicleSubtypeFlags::GVSF_FREE_WAGON.0;
-/// Raw compatibility bit position.
-pub const GVSF_MULTIHEADED: u8 = GroundVehicleSubtypeFlags::GVSF_MULTIHEADED.0;
 
 /// `HasBit(subtype, flag)`.
 const fn has(subtype: u8, flag: GroundVehicleSubtypeFlags) -> bool {
@@ -172,8 +166,6 @@ pub const VS_UNCLICKABLE: u8 = VehStates::from_element(VehState::Unclickable).0;
 pub const VS_TRAIN_SLOWING: u8 = VehStates::from_element(VehState::TrainSlowing).0;
 /// Raw compatibility mask for `VehState::Shadow`.
 pub const VS_SHADOW: u8 = VehStates::from_element(VehState::Shadow).0;
-/// Raw compatibility mask for `VehState::AircraftBroken`.
-pub const VS_AIRCRAFT_BROKEN: u8 = VehStates::from_element(VehState::AircraftBroken).0;
 /// Raw compatibility mask for `VehState::Crashed`.
 pub const VS_CRASHED: u8 = VehStates::from_element(VehState::Crashed).0;
 
@@ -466,6 +458,27 @@ impl crate::vehicle::VehicleRef {
             VehicleType::VEH_AIRCRAFT => crate::aircraft::is_normal_aircraft(self.subtype()),
             VehicleType::VEH_TRAIN | VehicleType::VEH_ROAD | VehicleType::VEH_SHIP => true,
             _ => false,
+        }
+    }
+    /// `Vehicle::GetOldAdvanceSpeed`: determines the effective direction-specific vehicle
+    /// movement speed.
+    ///
+    /// This method belongs to the old vehicle movement method:
+    /// A vehicle moves a step every 256 progress units.
+    /// The vehicle speed is scaled by 3/4 when moving in X or Y direction due to the longer
+    /// distance.
+    ///
+    /// However, this method is slightly wrong in corners, as the leftover progress is not
+    /// scaled correctly when changing movement direction. `GetAdvanceSpeed()` and
+    /// `GetAdvanceDistance()` are better wrt. this.
+    ///
+    /// `speed` is the direction-independent unscaled speed; returns the speed scaled by
+    /// movement direction. 256 units are required for each movement step.
+    pub(crate) fn get_old_advance_speed(self, speed: u32) -> u32 {
+        if self.direction() & 1 != 0 {
+            speed
+        } else {
+            speed.wrapping_mul(3) / 4
         }
     }
     /// `Vehicle::IsFrontEngine`.

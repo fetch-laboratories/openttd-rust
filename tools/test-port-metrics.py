@@ -5,6 +5,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import random
 import tempfile
 import unittest
 from pathlib import Path
@@ -54,6 +55,51 @@ class PortMetricsTests(unittest.TestCase):
         METRICS.git("add", "-A")
         METRICS.git("commit", "-qm", "Change: Metric fixture")
         return METRICS.git("rev-parse", "HEAD").strip()
+
+    def test_hunks_use_the_minimal_diff(self) -> None:
+        # A seeded edit whose default diff is longer than its minimal one.
+        r = random.Random(2)
+        old = [f"l{r.randrange(40)}" for _ in range(3000)]
+        new = [line for line in old if r.random() > 0.5]
+        for _ in range(1500):
+            new.insert(r.randrange(len(new) + 1), f"l{r.randrange(40)}")
+        self.write("src/town_cmd.cpp", "\n".join(old) + "\n")
+        base = self.commit()
+        self.write("src/town_cmd.cpp", "\n".join(new) + "\n")
+        head = self.commit()
+
+        def changed(*options: str) -> int:
+            diff = METRICS.git("diff", "-U0", *options, base, head)
+            return sum(
+                1
+                for line in diff.splitlines()
+                if line[:1] in "+-" and line[:3] not in ("+++", "---")
+            )
+
+        path = "src/town_cmd.cpp"
+        counted = sum(b + d for _, b, _, d in METRICS.hunks(base, head, path, path))
+        self.assertLess(changed("--diff-algorithm=minimal"), changed())
+        self.assertEqual(counted, changed("--diff-algorithm=minimal"))
+
+    def test_an_old_commits_snapshot_is_newer_than_earlier_output(self) -> None:
+        # The fixture's commit is dated 2001; a snapshot extracted from it must
+        # still be newer than build output written before the extraction.
+        self.write("src/rust.rs", "fn f() {}\n")
+        METRICS.git("add", "-A")
+        with mock.patch.dict(
+            "os.environ", {"GIT_COMMITTER_DATE": "2001-01-01T00:00:00"}
+        ):
+            METRICS.git("commit", "-qm", "Change: Old")
+        archive = METRICS.subprocess.check_output(
+            ["git", "archive", "HEAD"], cwd=self.root
+        )
+        started = METRICS.time.time()
+        destination = self.root / "snapshot"
+        destination.mkdir()
+        METRICS.extract(archive, destination)
+        stamps = [p.stat().st_mtime for p in destination.rglob("*")]
+        self.assertTrue(stamps)
+        self.assertGreaterEqual(min(stamps), started - 1)
 
     def test_generated_declarations_count_as_glue_and_retire(self) -> None:
         rust = self.root / "rust/openttd-kernels/src"

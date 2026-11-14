@@ -67,7 +67,6 @@ pub struct Services {
     pub roadstop: *const crate::newgrf_roadstop::Services,
     pub cleaning_pool: extern "C" fn() -> bool,
     pub close_view: extern "C" fn(StationID),
-    pub delete_news: extern "C" fn(StationID),
     pub sign_valid: extern "C" fn(*mut BaseStation) -> bool,
     pub remove_sign: extern "C" fn(StationID),
     pub last_loading: extern "C" fn(VehicleRef) -> StationID,
@@ -539,7 +538,7 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
     let id = (s.catchment.id)(st);
     // Normal aircraft targeting this airport lose their target.
     unsafe {
-        crate::aircraft::invalidate_target(c.aircraft, id.0);
+        crate::aircraft::invalidate_target(c.aircraft, id);
     }
     let graphs = w.graphs;
     let storage = links.storage();
@@ -628,7 +627,7 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
         );
     }
     /* Remove all news items */
-    (s.delete_news)(id);
+    crate::news_func::delete_station_news(id);
     for cargo in (0..NUM_CARGO).map(CargoType) {
         let list = links.station_cargo(st, cargo);
         if !list.is_null() {
@@ -696,7 +695,7 @@ pub(crate) fn airport_maintenance_cost(s: &Services, owner: CompanyID) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, roadstop, cleaning_pool, close_view, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }
 
 /// Test-only table for `crate::test_tables`; its private fields keep it in this module.
@@ -739,7 +738,6 @@ pub(crate) const TEST_TABLE: crate::station_lifecycle::Services =
         roadstop: std::ptr::null(),
         cleaning_pool: crate::test_tables::unreachable0,
         close_view: crate::test_tables::unreachable1,
-        delete_news: crate::test_tables::unreachable1,
         sign_valid: crate::test_tables::unreachable1,
         remove_sign: crate::test_tables::unreachable1,
         last_loading: crate::test_tables::unreachable1,

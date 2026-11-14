@@ -198,7 +198,7 @@ pub unsafe extern "C" fn openttd_rust_road_path_pop(state: *mut State) {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Entry {
-    pub ground: *mut crate::ground_vehicle::State,
+    pub ground: *mut crate::ground_vehicle::GroundState,
     pub acceleration_model: u8,
     pub road_side: u8,
     pub queue: bool,
@@ -243,7 +243,7 @@ struct SpeedPart {
 struct Link {
     pub next: Option<VehicleRef>,
     pub next_state: *mut State,
-    pub next_ground: *mut crate::ground_vehicle::State,
+    pub next_ground: *mut crate::ground_vehicle::GroundState,
 }
 /// Consist links and tile for depot traversal.
 #[derive(Clone, Copy)]
@@ -291,7 +291,7 @@ struct Candidate {
     pub state: *mut State,
     pub first: VehicleRef,
     pub first_state: *mut State,
-    pub first_ground: *mut crate::ground_vehicle::State,
+    pub first_ground: *mut crate::ground_vehicle::GroundState,
     pub index: u32,
     pub x: i32,
     pub y: i32,
@@ -418,7 +418,10 @@ impl Part {
     fn link(v: Option<VehicleRef>, s: *mut State) -> Option<Self> {
         v.map(|v| Self::new(v, s))
     }
-    fn ground(self, state: *mut crate::ground_vehicle::State) -> crate::ground_vehicle::Owner {
+    fn ground(
+        self,
+        state: *mut crate::ground_vehicle::GroundState,
+    ) -> crate::ground_vehicle::Owner {
         crate::ground_vehicle::Owner::for_road(state, self.s.as_ptr())
     }
     fn state(self) -> u8 {
@@ -683,20 +686,20 @@ impl Game<'_> {
         let over = front.overtaking() != 0;
         let (accel, min) = if self.realistic() {
             (
-                crate::ground_vehicle::acceleration_owned(self.gs.physics, front.v, ground)
+                crate::ground_vehicle::get_acceleration_owned(self.gs.physics, front.v, ground)
                     .wrapping_add(if over { 256 } else { 0 }) as u32,
                 if r.max.status & VS_STOPPED != 0 { 0 } else { 4 },
             )
         } else {
             (if over { 512 } else { 256 }, 0)
         };
-        let distance = crate::ground_vehicle::update_speed(
+        let distance = crate::ground_vehicle::do_update_speed(
             front.v,
             accel,
             min,
             max_speed(front, r.max, self.acceleration_model, self.l),
         );
-        (distance.distance as i32, distance.stored_speed)
+        (distance as i32, front.v.speed())
     }
     /// `RoadVehFindCloseTo`; `v` is always the front part.
     fn close(&self, v: Part, z: i32, x: i32, y: i32, dir: u8, update: bool) -> Option<Candidate> {
@@ -828,7 +831,7 @@ impl Game<'_> {
             return;
         }
         let u_speed = if self.original()
-            || crate::ground_vehicle::acceleration_owned(self.gs.physics, u.v, ground) > 0
+            || crate::ground_vehicle::get_acceleration_owned(self.gs.physics, u.v, ground) > 0
         {
             max_speed(
                 u,
@@ -943,7 +946,7 @@ impl Game<'_> {
         new_tile: bool,
         delta: bool,
     ) {
-        let m = crate::ground_vehicle::move_incline(
+        let m = move_incline(
             self.gs,
             &self.movement,
             self.map(),
@@ -1366,7 +1369,7 @@ impl Game<'_> {
         unsafe {
             crate::vehicle::occupancy::update_position(self.vs, v.v, self.map());
         }
-        crate::ground_vehicle::inclination_owned(
+        crate::ground_vehicle::update_inclination_owned(
             self.gs.physics,
             &self.movement,
             v.v,
@@ -1817,7 +1820,7 @@ impl Game<'_> {
         x: i32,
         y: i32,
     ) {
-        let m = crate::ground_vehicle::move_incline(
+        let m = move_incline(
             self.gs,
             &self.movement,
             self.map(),
@@ -1918,7 +1921,7 @@ impl Game<'_> {
             return true;
         }
         if b.status & VS_STOPPED != 0 {
-            crate::ground_vehicle::last_speed_owned(self.gs.physics, v.v, ground);
+            crate::ground_vehicle::set_last_speed_owned(self.gs.physics, v.v, ground);
             return true;
         }
         // SAFETY: The getter returns the immutable process-wide orders table.
@@ -1998,7 +2001,7 @@ impl Game<'_> {
                 }
             }
         }
-        crate::ground_vehicle::last_speed_owned(self.gs.physics, v.v, ground);
+        crate::ground_vehicle::set_last_speed_owned(self.gs.physics, v.v, ground);
         let mut part = Some(v.v);
         while let Some(u) = part {
             if u.status() & VS_HIDDEN == 0 {
@@ -2296,6 +2299,40 @@ macro_rules! entry {
         // owner places are accessed only through raw pointers between services.
         unsafe { Game::new($leaves, $entry) }
     }};
+}
+
+/// The native position mutation ends before the Rust inclination update.
+pub(crate) struct Moved {
+    pub old_z: i32,
+    pub z: i32,
+    pub cur_speed: u16,
+    pub max_track_speed: u16,
+}
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn move_incline(
+    gs: &crate::vehicle::GroundServices,
+    movement: &crate::movement::CachedTable<'_>,
+    map: crate::map_func::Map,
+    v: VehicleRef,
+    o: crate::ground_vehicle::Owner,
+    pos: (i32, i32),
+    new_tile: bool,
+    delta: bool,
+) -> Moved {
+    // Road supplies dimensions for its synchronous no-reset/no-yield interval.
+    let s = gs.physics;
+    (v).write_xy(pos.0, pos.1);
+    // SAFETY: Live shell; index writes end before inclination callbacks.
+    unsafe {
+        crate::vehicle::occupancy::update_position(s.vehicle, v, map);
+    }
+    let old_z = crate::ground_vehicle::update_inclination_owned(s, movement, v, o, new_tile, delta);
+    Moved {
+        old_z,
+        z: (v).z(),
+        cur_speed: (v).speed(),
+        max_track_speed: read_field!(o.state, cache.cached_max_track_speed),
+    }
 }
 
 /// # Safety

@@ -45,10 +45,10 @@
 
 ### Design faults
 
-Fix these before integration; root grants no exceptions. A file pass fixes every one in the files it finishes and cannot leave one as residue.
+Fix these before integration; root grants no exceptions. A file pass fixes every one in the files it finishes and cannot leave one as residue. The rule's one exception is a carrier whose replacement is a shared service that several files need: that service has its own work order ([integration](root-workflow.md#integration)), and until it merges a pass keeps the carrier and names the work order in its PR body.
 
 - A reader or carrier written for one call site, including a service per `Debug` or `GrfMsg` message.
-- A Rust-to-C++-to-Rust bounce into code Rust owns.
+- A Rust-to-C++-to-Rust bounce into code Rust owns: a C++ body that only forwards to Rust, where Rust could call its own code directly. A call to an unported original body that reaches Rust-owned storage further down is a call to that body's C++ owner, and stays until its port.
 - A moved field behind a service, or a Rust-called service routed through `Record()`.
 - Allocation on a hot path or per call where the original has none, including a process-wide scratch pool (`GameState<Vec<...>>`) where the original builds a local container.
   - Capacity kept between calls is not this fault where the original allocates its container on every call, as YAPF's node list and open-list heap do. The scratch is emptied on entry so that nothing carries from one call to the next, and its comment names the original's container and the measured cost of allocating per call.
@@ -61,14 +61,14 @@ Fix these before integration; root grants no exceptions. A file pass fixes every
 - Port each helper or constant once into the shared Rust module named after its original file, header or `.cpp`, and import it from there. A pass adds a missing port there; that does not make the pass own that file.
 - Before adding a binding, search `src/` for its callee, including macros and compound callbacks such as `CheckOwnership` and `GetRoadOwner`.
 - Each shared accessor (vehicle field, map predicate, setting or constant) has one typed definition; command ports share one set of command-check services. A PR adding one deletes the integrated copies.
-- Delete the C++ a change replaces in the same change, with its exports, declarations and service fields. An orphan export, declaration or callback field in the lines a PR has in scope is a finding, baselined or not.
+- Delete the C++ a change replaces in the same change, with its exports, declarations and service fields. An orphan export, declaration or callback field in the lines a PR has in scope is a finding, baselined or not. An export whose only consumer is a native fixture that [#736's classification](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013) keeps is not an orphan; it leaves with that fixture.
 - A typed accessor replaces its raw form. A raw `_raw` adapter delegates to the typed definition and serves only callers in files no pass has finished, until its last caller goes or #734 closes. A pass converts callers in already-finished files itself. Rust code calls the typed form, not a raw adapter or an `openttd_rust_*` export, where a typed form exists.
 
 ## Map access
 
 - Simulation Rust reads and writes map arrays in place through the [shared map descriptor](design/world-state.md); `map_func::World` is its single type.
 - Prove the descriptor's interval once, not per entry: `Map::Allocate` in new games and loaders, and game-state mutex yields for generation progress and GRF scanning, run outside the game loop and command execution. Re-prove it if a change adds a reset or yield there. Raw field loads use no Rust references and end before a callback that can load, reset or yield.
-- Shared header helpers preserve native assertions: on a failed precondition call the native assertion as the original accessor does, not the C++ accessor. Retire existing typed map services hottest first (#565), otherwise when a port touches them.
+- Shared header helpers preserve native assertions: on a failed precondition call the native assertion as the original accessor does, not the C++ accessor. Retire existing typed map services hottest first (#565), otherwise when an ownership port touches them. A file pass calls the in-place Rust accessor wherever one exists, and leaves a map service that has no Rust port to #565.
 
 ## Evidence
 
@@ -104,6 +104,7 @@ Fix these before integration; root grants no exceptions. A file pass fixes every
 - Each original enum, flag set, ID and named constant has one Rust definition in the module named after its original header (`track_type.rs` for `track_type.h`): a `#[repr(transparent)]` wrapper over the original's underlying integer with associated constants and only the operators the original uses, not a Rust `enum` ([ADR 0021](adr/0021-integer-wrappers-not-rust-enums.md)).
 - Use the named constant wherever the original names the value. Literals the original writes as literals stay.
 - Reach the raw integer through the wrapper's accessors, only at ABI, save and bitfield boundaries and where the original uses the value as an integer.
+- A reader or writer of a record field takes the member's name: `cur_speed()` and `set_cur_speed()` for `cur_speed`, not `speed()`. A search for the original's member then finds its Rust accesses, and the name cannot be taken for another member or method of the record.
 - Keep element and set types distinct (`DoCommandFlag` versus `DoCommandFlags`). An internal signature takes `DoCommandFlags` where the original does, not a projected flag such as `execute: bool`.
 
 ### Comments

@@ -7,9 +7,13 @@
 
 //! `airport.h` and `airport.cpp` values and helpers. `services.cpp` asserts every value.
 
-use crate::tile_type::TileIndex;
+use crate::direction_type::{DirDiff, Direction};
+use crate::tile_type::{TILE_SIZE, TileIndex};
 
 /* Some airport-related constants */
+
+/// `MAX_TERMINALS`: maximum number of terminals per airport
+pub const MAX_TERMINALS: u32 = 8;
 
 /// `NUM_AIRPORTTILES_PER_GRF`: Number of airport tiles per `NewGRF`; limited to 255 to allow
 /// extending Action3 with an extended byte later on.
@@ -66,8 +70,14 @@ pub const AT_DUMMY: u8 = AirportTypes::AT_DUMMY.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AirportMovingDataFlag(pub u8);
 impl AirportMovingDataFlag {
+    /// No speed restrictions.
+    pub const NO_SPEED_CLAMP: Self = Self(0);
+    /// Takeoff movement.
+    pub const TAKEOFF: Self = Self(1);
     /// Turn slowly (mostly used in the air).
     pub const SLOW_TURN: Self = Self(2);
+    /// Landing onto landing strip.
+    pub const LAND: Self = Self(3);
     /// Go exactly to the destination coordinates.
     pub const EXACT_POSITION: Self = Self(4);
     /// Taxiing at the airport.
@@ -78,6 +88,28 @@ impl AirportMovingDataFlag {
     pub const HELI_LOWER: Self = Self(7);
     /// Holding pattern movement (above the airport).
     pub const HOLD: Self = Self(8);
+}
+
+/// Native `AirportMovingDataFlags`: the `uint16_t` set of `AirportMovingDataFlag`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AirportMovingDataFlags(pub u16);
+impl AirportMovingDataFlags {
+    /// `Test`: whether the flag is set.
+    #[must_use]
+    pub const fn test(self, flag: AirportMovingDataFlag) -> bool {
+        self.0 & (1 << flag.0) != 0
+    }
+    /// `Any`: whether any of the flags is set.
+    #[must_use]
+    pub fn any(self, flags: &[AirportMovingDataFlag]) -> bool {
+        flags.iter().any(|&flag| self.test(flag))
+    }
+    /// `All`: whether all of the flags are set.
+    #[must_use]
+    pub fn all(self, flags: &[AirportMovingDataFlag]) -> bool {
+        flags.iter().all(|&flag| self.test(flag))
+    }
 }
 
 /// `AirportMovingDataFlag::SlowTurn` bit number.
@@ -99,6 +131,8 @@ pub const AMD_HOLD: u8 = AirportMovingDataFlag::HOLD.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AirportMovementStates(pub u8);
 impl AirportMovementStates {
+    /// Go in this direction for every target.
+    pub const TO_ALL: Self = Self(0);
     /// Heading for hangar.
     pub const HANGAR: Self = Self(1);
     /// Heading for terminal 1.
@@ -141,6 +175,8 @@ impl AirportMovementStates {
     pub const TERM8: Self = Self(20);
     /// Heading for helipad 3.
     pub const HELIPAD3: Self = Self(21);
+    /// Aircraft is looking for a free terminal in a terminalgroup.
+    pub const TERMGROUP: Self = Self(255);
 }
 
 /// `HANGAR`.
@@ -185,6 +221,164 @@ pub const TERM7: u8 = AirportMovementStates::TERM7.0;
 pub const TERM8: u8 = AirportMovementStates::TERM8.0;
 /// `HELIPAD3`.
 pub const HELIPAD3: u8 = AirportMovementStates::HELIPAD3.0;
+
+/// Native `AirportBlock`: Movement Blocks on Airports blocks (`eg_airport_flags`). The values
+/// Rust names.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AirportBlock(pub u8);
+impl AirportBlock {
+    /// Block belonging to terminal 1.
+    pub const TERM1: Self = Self(0);
+    /// Block belonging to terminal 2.
+    pub const TERM2: Self = Self(1);
+    /// Block belonging to terminal 3.
+    pub const TERM3: Self = Self(2);
+    /// Block belonging to terminal 4.
+    pub const TERM4: Self = Self(3);
+    /// Block belonging to terminal 5.
+    pub const TERM5: Self = Self(4);
+    /// Block belonging to terminal 6.
+    pub const TERM6: Self = Self(5);
+    /// Block belonging to helipad 1.
+    pub const HELIPAD1: Self = Self(6);
+    /// Block belonging to helipad 2.
+    pub const HELIPAD2: Self = Self(7);
+    /// `RunwayInOut`.
+    pub const RUNWAY_IN_OUT: Self = Self(8);
+    /// `RunwayIn`.
+    pub const RUNWAY_IN: Self = Self(8);
+    /* blocks for new airports */
+    /// Block belonging to terminal 7.
+    pub const TERM7: Self = Self(22);
+    /// Block belonging to terminal 8.
+    pub const TERM8: Self = Self(23);
+    /// Block belonging to helipad 3.
+    pub const HELIPAD3: Self = Self(24);
+    /// `RunwayIn2`.
+    pub const RUNWAY_IN2: Self = Self(29);
+    /* end of new blocks */
+    /// `Nothing`.
+    pub const NOTHING: Self = Self(30);
+    /// Block for the zeppeliner disaster vehicle.
+    pub const ZEPPELINER: Self = Self(62);
+    /// Dummy block for indicating a closed airport.
+    pub const AIRPORT_CLOSED: Self = Self(63);
+}
+
+/// Native `AirportBlocks`: the `uint64_t` set of `AirportBlock`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct AirportBlocks(pub u64);
+impl AirportBlocks {
+    /// The set holding one block.
+    #[must_use]
+    pub const fn from_element(block: AirportBlock) -> Self {
+        Self(1 << block.0)
+    }
+    /// `Test`: whether the block is set.
+    #[must_use]
+    pub const fn test(self, block: AirportBlock) -> bool {
+        self.0 & (1 << block.0) != 0
+    }
+    /// `Any()`: whether any block is set.
+    #[must_use]
+    pub const fn is_any(self) -> bool {
+        self.0 != 0
+    }
+    /// `Any(other)`: whether any of the other blocks is set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+    /// `All(other)`: whether all of the other blocks are set.
+    #[must_use]
+    pub const fn all(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+    /// `Set(other)`.
+    pub const fn set(&mut self, other: Self) -> &mut Self {
+        self.0 |= other.0;
+        self
+    }
+    /// `Reset(other)`.
+    pub const fn reset(&mut self, other: Self) -> &mut Self {
+        self.0 &= !other.0;
+        self
+    }
+    /// `Flip(other)`.
+    pub const fn flip(&mut self, other: Self) -> &mut Self {
+        self.0 ^= other.0;
+        self
+    }
+}
+
+/// Native `AirportMovingData`: a single location on an airport where aircraft can move to.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AirportMovingData {
+    /// x-coordinate of the destination.
+    pub x: i16,
+    /// y-coordinate of the destination.
+    pub y: i16,
+    /// special flags when moving towards the destination.
+    pub flags: AirportMovingDataFlags,
+    /// Direction to turn the aircraft after reaching the destination.
+    pub direction: Direction,
+}
+
+/// Original `RotateAirportMovingData`: rotate the airport moving data to another rotation.
+/// `orig` is the original moving data, `rotation` the rotation to apply and `num_tiles_x`
+/// and `num_tiles_y` the size of the airport in tiles. `check` is the native assertion of
+/// `ChangeDir`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "RotateAirportMovingData stores each uint expression in the int16_t x or y"
+)]
+pub(crate) fn rotate_airport_moving_data(
+    orig: AirportMovingData,
+    rotation: Direction,
+    num_tiles_x: u32,
+    num_tiles_y: u32,
+    check: impl Fn(bool),
+) -> AirportMovingData {
+    let mut amd = AirportMovingData {
+        x: 0,
+        y: 0,
+        flags: orig.flags,
+        direction: crate::direction_func::change_dir(orig.direction, DirDiff(rotation.0), check),
+    };
+    let size_x = num_tiles_x.wrapping_mul(TILE_SIZE);
+    let size_y = num_tiles_y.wrapping_mul(TILE_SIZE);
+    match rotation {
+        Direction::DIR_N => {
+            amd.x = orig.x;
+            amd.y = orig.y;
+        }
+        Direction::DIR_E => {
+            amd.x = orig.y;
+            amd.y = size_y
+                .wrapping_sub(i32::from(orig.x).cast_unsigned())
+                .wrapping_sub(1) as i16;
+        }
+        Direction::DIR_S => {
+            amd.x = size_x
+                .wrapping_sub(i32::from(orig.x).cast_unsigned())
+                .wrapping_sub(1) as i16;
+            amd.y = size_y
+                .wrapping_sub(i32::from(orig.y).cast_unsigned())
+                .wrapping_sub(1) as i16;
+        }
+        Direction::DIR_W => {
+            amd.x = size_x
+                .wrapping_sub(i32::from(orig.y).cast_unsigned())
+                .wrapping_sub(1) as i16;
+            amd.y = orig.x;
+        }
+        _ => crate::services_assert::not_reached(),
+    }
+    amd
+}
 
 /// Native `AirportFTAClass::Flag`: Bitmask of airport flags.
 #[repr(transparent)]

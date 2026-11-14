@@ -378,7 +378,7 @@ pub unsafe extern "C" fn openttd_rust_goal_question_abi(
                 return u8::from(true);
             }
         } else {
-            let local = CompanyID((s.company().local_company)());
+            let local = CompanyID((s.company().shared.local_company)());
             if company == CompanyID::INVALID && !s.company_valid(local) {
                 return u8::from(true);
             }
@@ -409,7 +409,7 @@ pub extern "C" fn openttd_rust_goal_question_answer_abi(
         return u8::from(true);
     }
     if (s.company().finance.networking)()
-        && (s.company().local_company)() == (s.shared().current_company)()
+        && (s.company().shared.local_company)() == (s.shared().current_company)()
     {
         if execute(flags) {
             (s.window_close)(WC_GOAL_QUESTION, u32::from(id));
@@ -666,7 +666,7 @@ pub unsafe extern "C" fn openttd_rust_show_story_page_abi(
         }
         if execute(flags) {
             let company = *(s.page_company)(page);
-            let local = CompanyID((s.company().local_company)());
+            let local = CompanyID((s.company().shared.local_company)());
             if (company != CompanyID::INVALID && company == local)
                 || (company == CompanyID::INVALID && s.company_valid(local))
             {

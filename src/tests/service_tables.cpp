@@ -47,8 +47,6 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(command_post) \
 	X(autoreplace_cmd) \
 	X(linkgraphjob) \
-	X(yapf_rail) \
-	X(yapf_road) \
 	X(network_client) \
 	X(network_command) \
 	X(network_connection) \

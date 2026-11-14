@@ -1,0 +1,98 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/aircraft.rs | impl<const COUNTED: bool> World<'_, COUNTED> > fn aircraft_controller | allow clippy::too_many_lines",
+    "before": 0,
+    "after": 1,
+    "operation": "World::aircraft_controller",
+    "source_contract": "`AircraftController` (src/aircraft_cmd.cpp:865) is one 318-line function; the port keeps it one body so it reads beside the original.",
+    "reason": "Splitting it would add functions the original does not have and break the body-by-body reading; ADR 0024 does not measure function length.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the body no longer has the original's shape this lint reports, or the lint leaves the force-warned set; the module-wide allow this pass removed covered it before."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/aircraft.rs | impl<const COUNTED: bool> World<'_, COUNTED> > fn aircraft_controller | allow clippy::many_single_char_names",
+    "before": 0,
+    "after": 1,
+    "operation": "World::aircraft_controller",
+    "source_contract": "`AircraftController` names its locals v, u, x, y, z and t.",
+    "reason": "The port keeps the original's local names.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the body no longer has the original's shape this lint reports, or the lint leaves the force-warned set; the module-wide allow this pass removed covered it before."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/aircraft.rs | impl<const COUNTED: bool> World<'_, COUNTED> > fn aircraft_controller | allow clippy::if_not_else",
+    "before": 0,
+    "after": 1,
+    "operation": "World::aircraft_controller",
+    "source_contract": "`AircraftController` tests `st->airport.tile != INVALID_TILE`, `v->x_pos != (x + amd.x)` and `newdir != v->direction` with the matching branch first.",
+    "reason": "Inverting the tests would reorder the original's branches; operators and control flow follow the original's.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the body no longer has the original's shape this lint reports, or the lint leaves the force-warned set; the module-wide allow this pass removed covered it before."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/aircraft.rs | impl<const COUNTED: bool> World<'_, COUNTED> > fn find_nearest_hangar | allow clippy::similar_names",
+    "before": 0,
+    "after": 1,
+    "operation": "World::find_nearest_hangar",
+    "source_contract": "`FindNearestHangar` (src/aircraft_cmd.cpp:120) names last_dest, next_dest, last_dist and next_dist.",
+    "reason": "The port keeps the original's local names.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the body no longer has the original's shape this lint reports, or the lint leaves the force-warned set; the module-wide allow this pass removed covered it before."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/aircraft.rs | impl<const COUNTED: bool> World<'_, COUNTED> > fn get_aircraft_flight_level | allow clippy::manual_midpoint",
+    "before": 0,
+    "after": 1,
+    "operation": "World::get_aircraft_flight_level",
+    "source_contract": "`GetAircraftFlightLevel` (src/aircraft_cmd.cpp:776) computes `(aircraft_min_altitude + aircraft_max_altitude) / 2` in int.",
+    "reason": "The port keeps the original's int expression `(aircraft_min_altitude + aircraft_max_altitude) / 2` and its operations rather than substituting `i32::midpoint`.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the body no longer has the original's shape this lint reports, or the lint leaves the force-warned set; the module-wide allow this pass removed covered it before."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/aircraft.rs | impl<const COUNTED: bool> World<'_, COUNTED> > fn handle_aircraft_smoke | allow clippy::verbose_bit_mask",
+    "before": 0,
+    "after": 1,
+    "operation": "World::handle_aircraft_smoke",
+    "source_contract": "`HandleAircraftSmoke` (src/aircraft_cmd.cpp:1275) tests `(v->tick_counter & 0x0F) == 0`.",
+    "reason": "The port keeps the original's mask test.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the body no longer has the original's shape this lint reports, or the lint leaves the force-warned set; the module-wide allow this pass removed covered it before."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/aircraft.rs | impl<const COUNTED: bool> World<'_, COUNTED> > fn on_new_economy_day | allow clippy::verbose_bit_mask",
+    "before": 0,
+    "after": 1,
+    "operation": "World::on_new_economy_day",
+    "source_contract": "`Aircraft::OnNewEconomyDay` (src/aircraft_cmd.cpp:459) tests `(++this->day_counter & 7) == 0`.",
+    "reason": "The port keeps the original's mask test.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the body no longer has the original's shape this lint reports, or the lint leaves the force-warned set; the module-wide allow this pass removed covered it before."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/aircraft.rs | impl<const COUNTED: bool> World<'_, COUNTED> > fn set_aircraft_position | allow clippy::many_single_char_names",
+    "before": 0,
+    "after": 1,
+    "operation": "World::set_aircraft_position",
+    "source_contract": "`SetAircraftPosition` (src/aircraft_cmd.cpp:532) names v, u, x, y and z.",
+    "reason": "The port keeps the original's parameter and local names.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the body no longer has the original's shape this lint reports, or the lint leaves the force-warned set; the module-wide allow this pass removed covered it before."
+  }
+]

@@ -11,6 +11,7 @@
 //! snapshots. No borrow of owner or world state survives a service that can reenter Rust.
 
 mod admin_conversion;
+mod ai;
 mod aircraft;
 mod airport;
 mod alternating;
@@ -49,12 +50,14 @@ mod disaster_vehicle;
 mod economy_func;
 pub mod economy_type;
 mod engine_type;
+mod error_func;
 /// Native engine scalar domains; native record fields remain internal.
 pub use engine_type::{
     EngineClass, EngineFlag, EngineFlags, EngineID, EngineMiscFlag, EngineMiscFlags,
     ExtraEngineFlag, ExtraEngineFlags, RailVehicleTypes, VehicleAccelerationModel,
 };
 mod follow_track;
+mod game;
 mod game_state;
 mod genland;
 mod genworld;
@@ -87,6 +90,8 @@ mod movement;
 mod native_test_support;
 mod network_config;
 mod newgrf;
+mod news_func;
+pub mod news_type;
 #[cfg(test)]
 mod oracle;
 #[cfg(test)]
@@ -151,6 +156,8 @@ pub mod road_type;
 mod road_yapf;
 pub mod roadstop_base;
 mod roadveh;
+mod script_event;
+mod script_event_types;
 mod script_host;
 mod script_list;
 mod script_marine;
@@ -184,6 +191,7 @@ mod string_func;
 mod string_services;
 pub mod string_type;
 mod string_validation;
+mod strings_func;
 pub mod strings_type;
 mod tgp;
 mod tile_cmd;
@@ -222,7 +230,9 @@ mod widget_parser;
 mod widget_type;
 mod witness;
 mod yapf_common;
+mod yapf_costbase;
 mod yapf_node;
+mod yapf_type;
 
 pub use admin_conversion::Action as AdminAction;
 pub use alternating::{AlternatingState, AlternatingStep};

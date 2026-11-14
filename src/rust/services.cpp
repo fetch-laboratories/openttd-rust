@@ -44,6 +44,7 @@
 #include "../industry.h"
 #include "../bridge_map.h"
 #include "services_rail.h"
+#include "rail_yapf_ffi.h"
 #include "services_newgrf.h"
 #include "spec_services.hpp"
 #include "services_road.h"
@@ -80,12 +81,20 @@
 #include "../effectvehicle_func.h"
 #include "clock_ffi.h"
 #include "../error.h"
+#include "../error_func.h"
 #include "../gfx_func.h"
 #include "../gui.h"
 #include "../texteff.hpp"
 #include "newgrf_storage_ffi.h"
 #include "signal_ffi.h"
 #include "debug_ffi.h"
+#include "encoded_adapter.hpp"
+#include "news_ffi.h"
+#include "services_cargo.h"
+#include "../ai/ai.hpp"
+#include "../game/game.hpp"
+#include "../news_func.h"
+#include "../script/api/script_event_types.hpp"
 #include "engine_services.h"
 #include "../debug.h"
 #include "../newgrf.h"
@@ -262,6 +271,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.max_bridge_length = &_settings_game.construction.max_bridge_length,
 	.max_companies = &_settings_client.network.max_companies,
 	.max_competitors = &_settings_game.difficulty.max_no_competitors,
+	.max_search_nodes = &_settings_game.pf.yapf.max_search_nodes,
 	.max_train_length = &_settings_game.vehicle.max_train_length,
 	.max_trains = &_settings_game.vehicle.max_trains,
 	.maximum_go_to_depot_penalty = &_settings_game.pf.yapf.maximum_go_to_depot_penalty,
@@ -272,10 +282,39 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.order_review_system = &_settings_client.gui.order_review_system,
 	.participate_survey = reinterpret_cast<const uint8_t *>(&_settings_client.network.participate_survey),
 	.pause_on_newgame = &_settings_client.gui.pause_on_newgame,
+	.rail_crossing_penalty = &_settings_game.pf.yapf.rail_crossing_penalty,
+	.rail_curve45_penalty = &_settings_game.pf.yapf.rail_curve45_penalty,
+	.rail_curve90_penalty = &_settings_game.pf.yapf.rail_curve90_penalty,
+	.rail_depot_reverse_penalty = &_settings_game.pf.yapf.rail_depot_reverse_penalty,
+	.rail_doubleslip_penalty = &_settings_game.pf.yapf.rail_doubleslip_penalty,
+	.rail_firstred_exit_penalty = &_settings_game.pf.yapf.rail_firstred_exit_penalty,
+	.rail_firstred_penalty = &_settings_game.pf.yapf.rail_firstred_penalty,
+	.rail_firstred_twoway_eol = &_settings_game.pf.yapf.rail_firstred_twoway_eol,
+	.rail_lastred_exit_penalty = &_settings_game.pf.yapf.rail_lastred_exit_penalty,
+	.rail_lastred_penalty = &_settings_game.pf.yapf.rail_lastred_penalty,
+	.rail_longer_platform_penalty = &_settings_game.pf.yapf.rail_longer_platform_penalty,
+	.rail_longer_platform_per_tile_penalty = &_settings_game.pf.yapf.rail_longer_platform_per_tile_penalty,
+	.rail_look_ahead_max_signals = &_settings_game.pf.yapf.rail_look_ahead_max_signals,
+	.rail_look_ahead_signal_p0 = &_settings_game.pf.yapf.rail_look_ahead_signal_p0,
+	.rail_look_ahead_signal_p1 = &_settings_game.pf.yapf.rail_look_ahead_signal_p1,
+	.rail_look_ahead_signal_p2 = &_settings_game.pf.yapf.rail_look_ahead_signal_p2,
+	.rail_pbs_cross_penalty = &_settings_game.pf.yapf.rail_pbs_cross_penalty,
+	.rail_pbs_signal_back_penalty = &_settings_game.pf.yapf.rail_pbs_signal_back_penalty,
+	.rail_pbs_station_penalty = &_settings_game.pf.yapf.rail_pbs_station_penalty,
+	.rail_shorter_platform_penalty = &_settings_game.pf.yapf.rail_shorter_platform_penalty,
+	.rail_shorter_platform_per_tile_penalty = &_settings_game.pf.yapf.rail_shorter_platform_per_tile_penalty,
+	.rail_slope_penalty = &_settings_game.pf.yapf.rail_slope_penalty,
+	.rail_station_penalty = &_settings_game.pf.yapf.rail_station_penalty,
 	.raw_industry_construction = &_settings_game.construction.raw_industry_construction,
 	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
 	.reload_cfg = &_settings_client.network.reload_cfg,
 	.reverse_at_signals = &_settings_game.pf.reverse_at_signals,
+	.road_crossing_penalty = &_settings_game.pf.yapf.road_crossing_penalty,
+	.road_curve_penalty = &_settings_game.pf.yapf.road_curve_penalty,
+	.road_slope_penalty = &_settings_game.pf.yapf.road_slope_penalty,
+	.road_stop_bay_occupied_penalty = &_settings_game.pf.yapf.road_stop_bay_occupied_penalty,
+	.road_stop_occupied_penalty = &_settings_game.pf.yapf.road_stop_occupied_penalty,
+	.road_stop_penalty = &_settings_game.pf.yapf.road_stop_penalty,
 	.roadveh_acceleration_model = &_settings_game.vehicle.roadveh_acceleration_model,
 	.se_flat_world_height = &_settings_game.game_creation.se_flat_world_height,
 	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
@@ -454,6 +493,9 @@ static size_t RustKdtreePartition(OpenTTDKdtreeKey *keys, size_t count) noexcept
 	return std::partition(keys, end, [=](const OpenTTDKdtreeKey &k) { return k.coordinate < split; }) - keys;
 }
 
+/** `FatalError` of a message Rust formatted. */
+static void RustFatalError(const uint8_t *message, size_t size) noexcept { FatalErrorI(std::string(reinterpret_cast<const char *>(message), size)); }
+
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.all_compatible_railtypes = RustAllCompatibleRailTypes,
 	.command_post = GetRustCommandPostServices,
@@ -464,6 +506,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.bridge_axis = Shared_bridge_axis,
 	.bridge_speed = MapSvcBridgeSpeed,
 	.build_on_slopes = RustBuildOnSlopes,
+	.cargo_name = RustCargoName,
 	.clear_square_services = {
 
 		.docking = OpenTTDIsDockingTile,
@@ -490,6 +533,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.is_plain_rail = RustPlainRailTile,
 	.is_road_depot = Shared_is_road_depot,
 	.is_water_tile = MapSvcIsWaterTile,
+	.local_company = RustLocalCompanyID,
 	.map = &_rust_map_statics,
 	.settings = &_rust_setting_addresses,
 	.map_max_x = SharedMapMaxX,
@@ -528,6 +572,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.base_station = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station)); },
 	.base_station_xy = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station))->xy.base(); },
 	.station_facilities = [](uint16_t station) noexcept { return Station::Get(StationID(station))->facilities.base(); },
+	.waypoint_is_single_tile = RustWaypointSingleTile,
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
 	.kdtree_partition = RustKdtreePartition,
 	.station_commands = []() noexcept { return &GetRustStationCommandServices(); },
@@ -601,7 +646,9 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.resolver_grf_file_id = RustResolverGRFFileID,
 	.resolver_grf_version = RustResolverGRFVersion,
 	.show_error = RustShowErrorMessage,
+	.yapf_rail_dump_state = YapfRailDumpState,
 	.not_reached = RustNotReached,
+	.fatal_error = RustFatalError,
 };
 
 /* Game entries also bind the canonical fatal slot; tool-only links keep assertion binding. */
@@ -800,4 +847,103 @@ static const OpenTTDDebugServices _rust_debug_services{
 /* Bound before main, so Rust Debug and GrfMsg see the native levels from the first message. */
 [[maybe_unused]] static const bool _rust_debug_bound = (openttd_rust_debug_bind(&_rust_debug_services), true);
 #include "abi-visit-OpenTTDDebugServices.hpp"
-bool CheckAbi_debug() { return AbiServicesComplete(_rust_debug_services); }
+
+/** An EncodedString that Rust encoded with GetEncodedStringWithArgs's encoding. */
+EncodedString RustEncodedString(std::string_view bytes)
+{
+	return EncodedString{std::string{bytes}};
+}
+
+/** The NewsReference alternative a Rust record names; no C++ variant layout crosses. */
+static NewsReference RustNewsReference(const OpenTTDNewsReference &reference) noexcept
+{
+	switch (reference.index) {
+		case 0: return {};
+		case 1: return TileIndex{reference.value};
+		case 2: return VehicleID{reference.value};
+		case 3: return StationID{static_cast<uint16_t>(reference.value)};
+		case 4: return IndustryID{static_cast<uint16_t>(reference.value)};
+		case 5: return TownID{static_cast<uint16_t>(reference.value)};
+		case 6: return EngineID{static_cast<uint16_t>(reference.value)};
+		default: NOT_REACHED();
+	}
+}
+
+static_assert(sizeof(StringParameter) <= sizeof(OpenTTDStringParameterSlot) && alignof(StringParameter) <= alignof(OpenTTDStringParameterSlot));
+/** The string parameter a Rust descriptor borrows. */
+static StringParameter RustStringParameter(const OpenTTDRustEncodedParameter &parameter) noexcept
+{
+	switch (parameter.kind) {
+		case 0: return std::monostate{};
+		case 1: return parameter.value;
+		case 2: return std::string_view{reinterpret_cast<const char *>(parameter.bytes), parameter.length};
+		default: NOT_REACHED();
+	}
+}
+
+static void RustSinkString(OpenTTDRustStringSink sink, void *target, std::string_view string) noexcept
+{
+	sink(target, reinterpret_cast<const uint8_t *>(string.data()), string.size());
+}
+
+static const OpenTTDNewsServices _rust_news_services{
+	.add_news_item = [](const OpenTTDAddNewsItemArgs *args) noexcept {
+		AddNewsItem(RustEncodedString({reinterpret_cast<const char *>(args->headline), args->headline_length}), static_cast<NewsType>(args->type), static_cast<NewsStyle>(args->style),
+			NewsFlags(args->flags), RustNewsReference(args->ref1), RustNewsReference(args->ref2), std::unique_ptr<NewsAllocatedData>(args->data), static_cast<AdviceType>(args->advice_type));
+	},
+	.assert_encoded = [](uint32_t codepoint, size_t length) noexcept {
+		AssertRustEncoded({.bytes = nullptr, .length = 0, .diagnostic_count = 0, .assertion_offset = 0, .assertion_length = length, .assertion_codepoint = codepoint, .apply = 0, .assertion_kind = 2}, {});
+	},
+	.company_news_company_name = [](const NewsAllocatedData *data, OpenTTDRustStringSink sink, void *target) noexcept { RustSinkString(sink, target, static_cast<const CompanyNewsInformation *>(data)->company_name); },
+	.company_news_information = [](uint32_t title, uint8_t company, uint8_t other) noexcept -> NewsAllocatedData * {
+		return new CompanyNewsInformation(StringID{title}, Company::Get(CompanyID{company}), CompanyID{other} == CompanyID::Invalid() ? nullptr : Company::Get(CompanyID{other}));
+	},
+	.delete_industry_news = [](uint16_t industry) noexcept { DeleteIndustryNews(IndustryID{industry}); },
+	.delete_station_news = [](uint16_t station) noexcept { DeleteStationNews(StationID{station}); },
+	.delete_vehicle_news = [](uint32_t vehicle, uint8_t advice_type) noexcept { DeleteVehicleNews(VehicleID{vehicle}, static_cast<AdviceType>(advice_type)); },
+	.get_string = [](uint32_t string, const OpenTTDRustEncodedParameter *args, OpenTTDStringParameterSlot *slots, size_t count, OpenTTDRustStringSink sink, void *target) noexcept {
+		/* The parameter array lives in the caller's stack slots, as MakeParameters builds its array. */
+		std::span<StringParameter> params = count == 0 ? std::span<StringParameter>{} : std::span{new (slots) StringParameter[count], count};
+		for (size_t i = 0; i < count; ++i) params[i] = RustStringParameter(args[i]);
+		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, params));
+		std::destroy_n(params.data(), count);
+	},
+	.string_assertions = RUST_ENCODED_STRING_ASSERTIONS,
+};
+[[maybe_unused]] static const bool _rust_news_bound = (openttd_rust_news_bind(&_rust_news_services), true);
+#include "abi-visit-OpenTTDNewsServices.hpp"
+
+static_assert(ScriptEvent::ET_SUBSIDY_OFFER == 2 && ScriptEvent::ET_SUBSIDY_OFFER_EXPIRED == 3 && ScriptEvent::ET_SUBSIDY_AWARDED == 4 && ScriptEvent::ET_SUBSIDY_EXPIRED == 5);
+static_assert(ScriptEvent::ET_VEHICLE_CRASHED == 12 && ScriptEvent::ET_INDUSTRY_OPEN == 16 && ScriptEvent::ET_INDUSTRY_CLOSE == 17 && ScriptEvent::ET_STATION_FIRST_VEHICLE == 19);
+static_assert(ScriptEvent::ET_TOWN_FOUNDED == 22 && ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR == 23 && ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS == 27 && ScriptEvent::ET_ROAD_RECONSTRUCTION == 28);
+static_assert(ScriptEventVehicleCrashed::CRASH_PLANE_LANDING == 3 && ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT == 4);
+
+/** Construct the native event a Rust record names: each case only constructs its class. */
+static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept
+{
+	switch (e.type) {
+		case ScriptEvent::ET_SUBSIDY_OFFER: return new ScriptEventSubsidyOffer(SubsidyID{e.subsidy});
+		case ScriptEvent::ET_SUBSIDY_OFFER_EXPIRED: return new ScriptEventSubsidyOfferExpired(SubsidyID{e.subsidy});
+		case ScriptEvent::ET_SUBSIDY_AWARDED: return new ScriptEventSubsidyAwarded(SubsidyID{e.subsidy});
+		case ScriptEvent::ET_SUBSIDY_EXPIRED: return new ScriptEventSubsidyExpired(SubsidyID{e.subsidy});
+		case ScriptEvent::ET_VEHICLE_CRASHED: return new ScriptEventVehicleCrashed(VehicleID{e.vehicle}, TileIndex{e.tile}, static_cast<ScriptEventVehicleCrashed::CrashReason>(e.crash_reason), e.victims, CompanyID{e.company});
+		case ScriptEvent::ET_INDUSTRY_OPEN: return new ScriptEventIndustryOpen(IndustryID{e.industry});
+		case ScriptEvent::ET_INDUSTRY_CLOSE: return new ScriptEventIndustryClose(IndustryID{e.industry});
+		case ScriptEvent::ET_STATION_FIRST_VEHICLE: return new ScriptEventStationFirstVehicle(StationID{e.station}, VehicleID{e.vehicle});
+		case ScriptEvent::ET_TOWN_FOUNDED: return new ScriptEventTownFounded(TownID{e.town});
+		case ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR: return new ScriptEventAircraftDestTooFar(VehicleID{e.vehicle});
+		case ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS: return new ScriptEventExclusiveTransportRights(CompanyID{e.company}, TownID{e.town});
+		case ScriptEvent::ET_ROAD_RECONSTRUCTION: return new ScriptEventRoadReconstruction(CompanyID{e.company}, TownID{e.town});
+		default: NOT_REACHED();
+	}
+}
+
+static const OpenTTDScriptEventServices _rust_script_event_services{
+	.ai_broadcast = [](const OpenTTDScriptEvent *event, uint8_t skip_company) noexcept { AI::BroadcastNewEvent(RustScriptEvent(*event), CompanyID{skip_company}); },
+	.ai_new = [](uint8_t company, const OpenTTDScriptEvent *event) noexcept { AI::NewEvent(CompanyID{company}, RustScriptEvent(*event)); },
+	.game_new = [](const OpenTTDScriptEvent *event) noexcept { Game::NewEvent(RustScriptEvent(*event)); },
+};
+[[maybe_unused]] static const bool _rust_script_event_bound = (openttd_rust_script_event_bind(&_rust_script_event_services), true);
+#include "abi-visit-OpenTTDScriptEventServices.hpp"
+/** The tables bound once for the process. */
+bool CheckAbi_debug() { return AbiServicesComplete(_rust_debug_services) && AbiServicesComplete(_rust_news_services) && AbiServicesComplete(_rust_script_event_services); }

@@ -82,12 +82,11 @@ pub unsafe extern "C" fn openttd_rust_shared_tile_type(
 pub unsafe extern "C" fn openttd_rust_map_read_probe(
     statics: *const MapStatics,
     shared: *const crate::services::Services,
-    clear: *const crate::ground::ClearServices,
     tile: u32,
     mutate: extern "C" fn(u32),
     observe: extern "C" fn(u32, *mut crate::movement::native_test_support::MapLeafOracle),
 ) -> u8 {
-    let (s, c) = unsafe { (&*shared, &*clear) };
+    let s = unsafe { &*shared };
     let allocation = unsafe { (*statics).load().0 };
     let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
     let x = (s.map_max_x)() + 1;
@@ -103,37 +102,41 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     match map.read(TileIndex(tile)) {
         TileType::MP_CLEAR => {
             use crate::clear_map::{
-                get_clear_counter_raw, get_clear_density_raw, get_clear_ground_raw, get_fence_raw,
-                get_field_type, get_industry_index_of_field_raw, is_snow_tile_raw,
-                require_field_raw,
+                ClearGround, get_clear_counter, get_clear_density, get_clear_ground, get_fence,
+                get_field_type, get_industry_index_of_field, is_snow_tile, require_field,
             };
-            if is_snow_tile_raw(&map, tile) != Some((c.snow)(tile))
-                || get_clear_ground_raw(&map, tile) != Some((s.clear_ground)(tile).0)
-                || get_clear_density_raw(&map, tile).map(u32::from) != Some((c.density)(tile))
-                || get_clear_counter_raw(&map, tile).map(u32::from) != Some((c.counter)(tile))
+            use crate::direction_type::DiagDirection;
+            let mut clear = crate::movement::native_test_support::MapLeafOracle::default();
+            observe(tile, &raw mut clear);
+            if is_snow_tile(&map, index).map(u32::from) != Some(clear.clear_snow)
+                || get_clear_ground(&map, index) != Some((s.clear_ground)(tile))
+                || get_clear_density(&map, index).map(u32::from) != Some(clear.clear_density)
+                || get_clear_counter(&map, index).map(u32::from) != Some(clear.clear_counter)
             {
                 return u8::from(false);
             }
-            if get_clear_ground_raw(&map, tile) == Some(crate::clear_map::CLEAR_FIELDS) {
-                let fences = (c.fences)(tile);
-                let field = (c.field)(tile);
-                if [fences.ne, fences.se, fences.sw, fences.nw]
-                    .into_iter()
-                    .zip(0_u8..)
-                    .any(|(expected, dir)| {
-                        require_field_raw(&map, tile).map(|fields| get_fence_raw(&fields, dir))
-                            != Some(expected)
-                    })
-                    || require_field_raw(&map, tile).map(|fields| get_field_type(&fields))
-                        != Some(field.field_type)
-                    || require_field_raw(&map, tile)
-                        .map(|fields| get_industry_index_of_field_raw(&fields))
-                        != Some(field.industry)
+            if get_clear_ground(&map, index) == Some(ClearGround::CLEAR_FIELDS) {
+                if [
+                    (clear.fence_ne, DiagDirection::DIAGDIR_NE),
+                    (clear.fence_se, DiagDirection::DIAGDIR_SE),
+                    (clear.fence_sw, DiagDirection::DIAGDIR_SW),
+                    (clear.fence_nw, DiagDirection::DIAGDIR_NW),
+                ]
+                .into_iter()
+                .any(|(expected, dir)| {
+                    require_field(&map, index).map(|fields| {
+                        get_fence(&fields, dir, || crate::services_assert::not_reached())
+                    }) != Some(expected)
+                }) || require_field(&map, index).map(|fields| get_field_type(&fields))
+                    != Some(clear.field_type)
+                    || require_field(&map, index)
+                        .map(|fields| u32::from(get_industry_index_of_field(&fields).0))
+                        != Some(clear.field_industry)
                 {
                     return u8::from(false);
                 }
             } else if allocation.assertions
-                && require_field_raw(&map, tile)
+                && require_field(&map, index)
                     .map(|fields| get_field_type(&fields))
                     .is_some()
             {
@@ -893,4 +896,80 @@ crate::abi::layouts! {
         path_found,
         best_origin_dir,
     };
+}
+
+/// One rail search's result, statistics and the witness counts it added.
+#[repr(C)]
+pub struct RailYapfSearch {
+    pub num_steps: i32,
+    pub open: i32,
+    pub closed: i32,
+    pub cache_hits: i32,
+    pub cost_calcs: i32,
+    pub cost: i32,
+    pub distance: i32,
+    pub flushes: u32,
+    pub limits: u32,
+    pub red: u32,
+    pub restored: u32,
+    pub found: u8,
+    pub td: u8,
+}
+/// The production rail search over the native fixture: `ChooseRailTrack`, or
+/// `FindNearestSafeTile` from `tile` and `td` with `safe_tile`. Witnesses turn
+/// on, and the counts are the differences around the search.
+/// # Safety
+/// Shared services and the front train record stay live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_rail_yapf(
+    s: *const Services,
+    v: *mut OpenTTDVehicle,
+    safe_tile: bool,
+    tile: u32,
+    td: u8,
+    reserve_track: bool,
+) -> RailYapfSearch {
+    use crate::witness::{
+        RAIL_CACHE_FLUSHES, RAIL_LIMIT_STOPS, RAIL_SIGNALS_RED, RAIL_SIGNALS_RESTORED,
+        openttd_rust_witness_count as count,
+    };
+    crate::witness::openttd_rust_witness_enable();
+    let before = [
+        RAIL_CACHE_FLUSHES,
+        RAIL_LIMIT_STOPS,
+        RAIL_SIGNALS_RED,
+        RAIL_SIGNALS_RESTORED,
+    ]
+    .map(|i| count(i));
+    let result = crate::rail_yapf::native_test_search(
+        unsafe { &*s },
+        crate::train::Handle::from_record(v),
+        safe_tile,
+        crate::tile_type::TileIndex(tile),
+        crate::track_type::Trackdir(td),
+        reserve_track,
+    );
+    let after = [
+        RAIL_CACHE_FLUSHES,
+        RAIL_LIMIT_STOPS,
+        RAIL_SIGNALS_RED,
+        RAIL_SIGNALS_RESTORED,
+    ]
+    .map(|i| count(i));
+    let delta = |i: usize| u32::try_from(after[i] - before[i]).unwrap_or(u32::MAX);
+    RailYapfSearch {
+        num_steps: result.num_steps,
+        open: result.open,
+        closed: result.closed,
+        cache_hits: result.cache_hits,
+        cost_calcs: result.cost_calcs,
+        cost: result.cost,
+        distance: result.distance,
+        flushes: delta(0),
+        limits: delta(1),
+        red: delta(2),
+        restored: delta(3),
+        found: u8::from(result.found),
+        td: result.td.0,
+    }
 }

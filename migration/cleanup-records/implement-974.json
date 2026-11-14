@@ -1,0 +1,125 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/news_func.rs | fn openttd_rust_news_bind | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "news_func::openttd_rust_news_bind",
+    "source_contract": "The native AddNewsItem, Delete*News, GetString and CompanyNewsInformation bodies stay in C++; services.cpp binds their table once before main, as it binds debug.rs's table.",
+    "reason": "`#[unsafe(no_mangle)]` on the export and the dereference of the process-lifetime table pointer are unsafe code; the crate denies it outside item-scoped allows.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native news, strings and script event bodies these tables call are ported (phases 3 to 5) and the tables are removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/script_event.rs | fn openttd_rust_script_event_bind | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "script_event::openttd_rust_script_event_bind",
+    "source_contract": "AI::NewEvent, AI::BroadcastNewEvent and Game::NewEvent stay native until the script API reader (#669); services.cpp binds their table once before main.",
+    "reason": "The export attribute and the dereference of the process-lifetime table pointer are unsafe code.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native news, strings and script event bodies these tables call are ported (phases 3 to 5) and the tables are removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/strings_func.rs | fn append | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "strings_func::append",
+    "source_contract": "GetString and CompanyNewsInformation::company_name return a native std::string; the sink copies its bytes during the call that produced them.",
+    "reason": "Building the slice from the native pointer and length and writing through the caller's Vec pointer are unsafe code.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native news, strings and script event bodies these tables call are ported (phases 3 to 5) and the tables are removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/news_func.rs | mod testing > fn copied | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "news_func::testing::copied",
+    "source_contract": "The recording news and event tables of the Rust tests receive the records production code passes to the native services.",
+    "reason": "The recording services copy the headline bytes, records and descriptors production code passes them through raw pointers, as the native services read them; this one helper is the only place they dereference.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native news, strings and script event bodies these tables call are ported (phases 3 to 5) and the tables are removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/news_func.rs | mod testing > fn take | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "news_func::testing::take",
+    "source_contract": "The recording news and event tables of the Rust tests receive the records production code passes to the native services.",
+    "reason": "Binding the recording tables calls the two unsafe binding exports with process-lifetime statics, once for the test process.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native news, strings and script event bodies these tables call are ported (phases 3 to 5) and the tables are removed."
+  },
+  {
+    "kind": "growth",
+    "counter": "exports",
+    "added": {
+      "rust/expanded.rs | openttd_rust_news_bind": 1,
+      "rust/expanded.rs | openttd_rust_script_event_bind": 1
+    },
+    "reason": "The two process-wide binding entries of the shared news and script event tables, called once from services.cpp. They replace 28 per-message service fields. The 28 leaves removed pay for shared bodies that the 46 remaining news and event leaves reuse with no further C++, so each later conversion is a net deletion: one converted leaf removes about 5.9 code lines (body, *_ffi.h line, initializer, test stub) and adds one string-ID mirror field and one initializer line per message it formats. Root's cost decision for this PR's fork C++ figure: https://github.com/fetch-laboratories/openttd-rust/issues/974#issuecomment-6872392297",
+    "existing_alternatives": "A pointer to each table in every component table: two C++ lines per table per component in 25 files (plan decision 9).",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native news, strings and script event bodies are ported and the tables are removed."
+  },
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-news.h": 18,
+      "abi-record-script_event.h": 13
+    },
+    "reason": "Generated declarations of AddNewsItem's argument record, the NewsReference record and the tagged ScriptEvent record, defined once in Rust (plan decisions 1, 2 and 7). Root's cost decision for this PR's fork C++ figure: https://github.com/fetch-laboratories/openttd-rust/issues/974#issuecomment-6872392297",
+    "existing_alternatives": "Hand-written C++ declarations, which porting.md's storage rules forbid for records both languages access.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native news and script event bodies are ported."
+  },
+  {
+    "kind": "growth",
+    "counter": "outside_cpp",
+    "added": {
+      "generated/abi-layout-industry.inc": 1,
+      "generated/abi-layout-news.inc": 4,
+      "generated/abi-layout-probe.inc": 6,
+      "generated/abi-layout-script_event.inc": 2,
+      "generated/abi-visit-OpenTTDNewsServices.hpp": 13,
+      "generated/abi-visit-OpenTTDScriptEventServices.hpp": 7,
+      "generated/abi-visit-OpenTTDSharedServices.hpp": 2
+    },
+    "reason": "Generated layout probes and service visitors of the new news and script event tables, records and Strings structs, and the shared table's local_company and cargo_name fields. Root's cost decision for this PR's fork C++ figure: https://github.com/fetch-laboratories/openttd-rust/issues/974#issuecomment-6872392297",
+    "existing_alternatives": "None; every Rust-defined table and record gets its generated probe.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the tables and records are removed."
+  },
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/water_regions.cpp": 2
+    },
+    "reason": "src/tests/water_regions.cpp is unchanged against the merge base. The census's rename detection against the pin (`git diff -M`) pairs the pin's src/script/api/script_railtypelist.cpp with src/tests/water_regions.cpp (R052) at the merge base 02850cfee5, and with this PR's new rust/openttd-kernels/src/game.rs (R052) at its head, so water_regions.cpp counts as an added file. The fork C++ total is unchanged by it. Root's cost decision for this PR's fork C++ figure: https://github.com/fetch-laboratories/openttd-rust/issues/974#issuecomment-6872392297",
+    "existing_alternatives": "None in this PR; root records the pairing defect for the next tools batch.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the water-region tests retire with their native code."
+  },
+  {
+    "kind": "growth",
+    "counter": "tools_cpp",
+    "added": {
+      "tools/migration/aircraft-range.cpp": 8
+    },
+    "reason": "aircraft-range.cpp binds the two process-wide news and script event tables in place of the two deleted aircraft leaves, as the plan's Files section requires, one field per line as Code standards require. Root's cost decision for this PR's fork C++ figure: https://github.com/fetch-laboratories/openttd-rust/issues/974#issuecomment-6872392297",
+    "existing_alternatives": "None; the fixture's message counters must observe the shared services.",
+    "retiring_owner": "#656",
+    "retirement_condition": "When the aircraft range fixture retires."
+  }
+]

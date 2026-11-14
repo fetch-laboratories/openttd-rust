@@ -164,8 +164,6 @@ pub(crate) const GROUND_VEHICLE: crate::ground_vehicle::Services =
         vehicle: &VEHICLE,
         road: &ROAD_LEAVES,
         assertions: false,
-        resolve: unreachable1,
-        weight_input: unreachable1,
         capabilities: &crate::engine_capabilities::TEST_TABLE,
         cargo_weight: unreachable2,
         train_cargo_weight: unreachable2,
@@ -173,12 +171,9 @@ pub(crate) const GROUND_VEHICLE: crate::ground_vehicle::Services =
         rail_type: unreachable1,
         rail_acceleration: unreachable1,
         rail_speed: unreachable1,
-        road_speed: unreachable1,
         steepness: unreachable1,
-        display_max_speed: unreachable1,
         viewport: unreachable3,
         base_crash: unreachable2,
-        depot_tile: unreachable2,
     };
 
 /// `crate::vehicle::VehicleServices` with every entry unreachable.
@@ -450,6 +445,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     bridge_axis: unreachable1,
     bridge_speed: unreachable1,
     build_on_slopes: unreachable0,
+    cargo_name: unreachable1,
     clear_square_services: crate::services::ClearSquareServices {
         docking: unreachable1,
         generating_world: unreachable0,
@@ -475,6 +471,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     is_plain_rail: unreachable1,
     is_road_depot: unreachable1,
     is_water_tile: unreachable1,
+    local_company: unreachable0,
     map: ptr::null(),
     settings: ptr::null(),
     map_max_x: unreachable0,
@@ -515,6 +512,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     base_station: unreachable1,
     base_station_xy: unreachable1,
     station_facilities: unreachable1,
+    waypoint_is_single_tile: unreachable1,
     road_commands: unreachable0,
     kdtree_partition: unreachable2,
     station_commands: unreachable0,
@@ -581,7 +579,9 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     resolver_grf_file_id: unreachable1,
     resolver_grf_version: unreachable1,
     show_error: unreachable2,
+    yapf_rail_dump_state: unreachable2,
     not_reached: unreachable0,
+    fatal_error: unreachable2,
 };
 
 /// `crate::rail_cmd::RailCommandServices` with every entry unreachable.
@@ -885,18 +885,10 @@ pub(crate) const TILE_OWNERS: crate::tile_owner::Services = crate::tile_owner::S
 };
 /// `crate::ground::ClearServices` with every entry unreachable.
 pub(crate) const CLEAR_GROUND: crate::ground::ClearServices = crate::ground::ClearServices {
-    field_tile: unreachable1,
-    density: unreachable1,
-    counter: unreachable1,
-    snow: unreachable1,
-    surface: unreachable1,
     set_ground: unreachable3,
-    set_density: unreachable2,
     set_counter: unreachable2,
     clear_snow: unreachable1,
     make_clear: unreachable3,
-    fences: unreachable1,
-    field: unreachable1,
     set_field: unreachable2,
 };
 
@@ -1057,6 +1049,58 @@ pub(crate) const INDUSTRY_TILES: crate::industry::tile::TileServices =
         pixel_max_z: unreachable1,
         callback: unreachable5,
     };
+
+/// `crate::aircraft::Leaves` with every entry unreachable.
+pub(crate) const AIRCRAFT_LEAVES: crate::aircraft::Leaves = crate::aircraft::Leaves {
+    airport_blocks: unreachable1,
+    airport_delta_z: unreachable1,
+    airport_elements: unreachable1,
+    airport_entry: unreachable2,
+    airport_flags: unreachable1,
+    airport_height: unreachable1,
+    airport_tile: unreachable1,
+    airport_type: unreachable1,
+    airport_width: unreachable1,
+    copy_sprite: unreachable2,
+    direction_towards: unreachable3,
+    dirty_depot: unreachable1,
+    dirty_lists: unreachable1,
+    fta_blocks: unreachable1,
+    fta_heading: unreachable1,
+    fta_next: unreachable1,
+    fta_next_position: unreachable1,
+    fta_position: unreachable1,
+    had_vehicle: unreachable1,
+    hangar_exit: unreachable3,
+    helipads: unreachable1,
+    landing_rating: unreachable2,
+    mass: ptr::null(),
+    moving: unreachable2,
+    next_aircraft: unreachable1,
+    node: unreachable2,
+    rotation: unreachable1,
+    rotor_image: unreachable1,
+    rotor_image_if_changed: unreachable1,
+    service_interval: unreachable1,
+    service_order: unreachable2,
+    shared: ptr::null(),
+    station: unreachable1,
+    station_owner: unreachable1,
+    station_tile: unreachable1,
+    strings: crate::aircraft::Strings {
+        aircraft_crash: 0,
+        aircraft_dest_too_far: 0,
+        first_aircraft_arrival: 0,
+        plane_crash_out_of_fuel: 0,
+    },
+    subtract_cost: unreachable2,
+    terminal_count: unreachable2,
+    truncate_cargo: unreachable1,
+    update_rotor_image: unreachable1,
+    vehicle: ptr::null(),
+    vehicle_crash: unreachable2,
+    viewport: unreachable1,
+};
 
 /// `crate::movement::MovementServices` with every entry unreachable.
 pub(crate) const MOVEMENT: crate::movement::MovementServices = crate::movement::MovementServices {
@@ -1407,7 +1451,6 @@ pub(crate) const COMPANY: crate::company::Services = crate::company::Services {
     company_count: unreachable0,
     competitor_fired: unreachable0,
     can_allocate_company: unreachable0,
-    local_company: unreachable0,
     network_server: unreachable0,
     company_vehicle_counts: unreachable1,
     vehicle_limits: unreachable0,
@@ -1869,7 +1912,6 @@ pub(crate) const CARGO: crate::cargo_payment::Services = crate::cargo_payment::S
     profit: unreachable1,
     shared: ptr::null(),
     feeder_animation: unreachable5,
-    subsidy_multiplier: unreachable0,
     feeder_payment_share: unreachable0,
 };
 
@@ -2346,17 +2388,21 @@ pub(crate) const INDUSTRIES: crate::industry::Services = crate::industry::Servic
     harvest: unreachable1,
     change_callback: unreachable3,
     text: ptr::null(),
-    news: unreachable4,
-    production_news: unreachable4,
+    strings: crate::industry::Strings {
+        format_industry_name: 0,
+        industry_production_decrease_smooth: 0,
+        industry_production_increase_smooth: 0,
+        last_stringid: 0,
+        town_name: 0,
+    },
     callback_error: unreachable2,
     set_dirty: unreachable1,
     destroy: unreachable1,
-    opening_news: unreachable1,
-    opening_events: unreachable1,
     create: unreachable2,
     num_items: unreachable0,
     get: unreachable1,
     resolver: ptr::null(),
+    transaction: ptr::null(),
     company_none: unreachable0,
     restore_company: unreachable1,
     directory_dirty: unreachable1,
@@ -2375,7 +2421,6 @@ pub(crate) const INDUSTRY_LIFECYCLE: crate::industry::LifecycleServices =
         disassociate_field: unreachable1,
         release_disasters: unreachable1,
         delete_storage: unreachable1,
-        delete_news: unreachable1,
         close_view: unreachable1,
         close_production: unreachable1,
         delete_inspect: unreachable1,

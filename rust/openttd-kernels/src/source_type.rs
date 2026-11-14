@@ -6,6 +6,8 @@
  */
 
 //! Inline cargo-source representation from `source_type.h`.
+
+use crate::strings_type::StringID;
 /// Canonical native source fields; padding carries no state.
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -43,6 +45,37 @@ impl Source {
     pub const fn is_valid(self) -> bool {
         self.id != u16::MAX
     }
+    /// `Source::GetNewsReference`: get the `NewsReference` for a subsidy Source.
+    #[must_use]
+    pub fn get_news_reference(self) -> crate::news_type::NewsReference {
+        match SourceType(self.kind) {
+            SourceType::Industry => {
+                crate::news_type::NewsReference::Industry(crate::industry_type::IndustryID(self.id))
+            }
+            SourceType::Town => {
+                crate::news_type::NewsReference::Town(crate::town_type::TownId(self.id))
+            }
+            _ => crate::services_assert::not_reached(),
+        }
+    }
+    /// `Source::GetFormat`: get the format string for a subsidy Source.
+    #[must_use]
+    pub fn get_format(self, strings: &FormatStrings) -> StringID {
+        match SourceType(self.kind) {
+            SourceType::Industry => StringID(strings.industry_name),
+            SourceType::Town => StringID(strings.town_name),
+            _ => crate::services_assert::not_reached(),
+        }
+    }
+}
+
+/// The generated string IDs `Source::GetFormat` returns.
+#[repr(C)]
+pub struct FormatStrings {
+    /// `STR_INDUSTRY_NAME`.
+    pub industry_name: u32,
+    /// `STR_TOWN_NAME`.
+    pub town_name: u32,
 }
 
 /// Native `SourceType`, retaining every underlying `u8` value.

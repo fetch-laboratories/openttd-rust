@@ -384,7 +384,7 @@ impl<'a> World<'a> {
                 }
             }
             MP_HOUSE => (self.s.clear)(tile, crate::company_type::OWNER_NONE),
-            MP_CLEAR | MP_TREES => crate::ground::clear_square(tile, self.shared),
+            MP_CLEAR | MP_TREES => crate::ground::do_clear_square_raw(tile, self.shared),
             _ => {}
         }
     }

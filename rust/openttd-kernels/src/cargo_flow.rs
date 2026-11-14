@@ -1020,7 +1020,10 @@ mod tests {
             passenger_cargo: unused!((u8) -> bool),
             packet_available: unused!(() -> bool),
             rating_redraw: unused!((*mut crate::station::BaseStation, bool)),
-            acceptance_news: unused!((*mut crate::station::BaseStation, u64, bool)),
+            strings: crate::station_service::Strings {
+                station_no_longer_accepts_cargo_list: 0,
+                station_now_accepts_cargo_list: 0,
+            },
             delete_station: unused!((*mut crate::station::BaseStation)),
             append_packet: unused!((
                 *mut crate::station::BaseStation,

@@ -867,16 +867,12 @@ const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 {
 	static_assert(SND_21_ROAD_WORKS == 31 && OWNER_TOWN.base() == 15);
 	static const OpenTTDRoadGroundServices services{
-		.snow = [](uint32_t index, bool flat) noexcept { TileIndex t{index}; int z = flat ? OpenTTDTileMaxZ(t) : RustTileZ(t); return OpenTTDRoadSnowGround{.z = z, .snow = RustRoadSnowOrDesert(Tile{t})}; },
 		.snow_or_desert = RustRoadSnowOrDesert,
 		.toggle_snow_or_desert = [](uint32_t t) noexcept { ToggleSnowOrDesert(TileIndex{t}); },
 		.roadside = [](uint32_t t) noexcept { return GetRoadside(TileIndex{t}); },
 		.set_roadside = [](uint32_t t, Roadside side) noexcept { SetRoadside(TileIndex{t}, side); },
-		.work_counter = [](uint32_t t) noexcept { return GB(Tile(TileIndex{t}).m7(), 0, 4); },
-		.set_work_counter = [](uint32_t t, uint32_t counter) noexcept { SB(Tile(TileIndex{t}).m7(), 0, 4, counter); },
 		.all_bits = [](uint32_t t) noexcept { return GetAllRoadBits(TileIndex{t}); },
 		.town = &GetRustTownServices(),
-		.set_road_type = [](uint32_t t, RoadType type) noexcept { RustSetRoadType(TileIndex{t}, RTT_ROAD, type); },
 	};
 	return services;
 }

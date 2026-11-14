@@ -10,10 +10,11 @@ import subprocess
 import tempfile
 import unittest
 from collections import Counter
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Mapping, Sequence
 from functools import partial
 from pathlib import Path
 from types import ModuleType
+from typing import TypedDict
 from unittest.mock import patch
 
 import cleanup_contract
@@ -22,6 +23,59 @@ from cleanup_contract import associated_pull, reviewed
 from rust_syntax import boundary_ids
 from source_fixture import initialize
 from vcs import git
+
+
+class DispatchInputs(TypedDict):
+    """The inputs ci-request.yml's workflow_dispatch carries."""
+
+    pr: str
+    head: str
+    profile: str
+
+
+class DispatchEvent(TypedDict):
+    inputs: DispatchInputs
+
+
+class PullHead(TypedDict):
+    sha: str
+
+
+class Pull(TypedDict):
+    """The fields of a pull request that `pull_discussion` reads."""
+
+    number: int
+    head: PullHead
+
+
+class Suppression(TypedDict):
+    """A suppression proposal of the cleanup records."""
+
+    kind: str
+    tool: str
+    site: str
+    operation: str
+    before: int
+    after: int
+    source_contract: str
+    reason: str
+    retiring_owner: str
+    retirement_condition: str
+
+
+class GrowthDelta(TypedDict):
+    counter: str
+    old: int
+    new: int
+    added: dict[str, int]
+
+
+class GrowthProposal(GrowthDelta):
+    kind: str
+    reason: str
+    existing_alternatives: str
+    retiring_owner: str
+    retirement_condition: str
 
 
 def load(name: str) -> ModuleType:
@@ -192,6 +246,49 @@ class DebtTests(unittest.TestCase):
                     key = next(iter(rows))
                     self.assertTrue(debt_errors({key: [magnitude + 1]}, rows, rows))
 
+    def test_only_an_assert_evaluated_at_compile_time_is_left_out(self) -> None:
+        cases = {
+            "const item": ("const _: () = assert!(A <= B);\n", False),
+            "inline const block": (
+                "pub fn f() { const { assert!(A <= B) }; }\n",
+                False,
+            ),
+            "const item in a function": (
+                "pub fn f() { const _: () = assert!(A <= B); }\n",
+                False,
+            ),
+            "const fn": ("pub const fn f(ok: bool) { assert!(ok); }\n", True),
+            "closure as a const's value": (
+                "pub const CHECK: fn(bool) = |ok| assert!(ok);\n",
+                True,
+            ),
+            "function": ("pub fn f(ok: bool) { assert!(ok); }\n", True),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "rust").mkdir()
+            for name, (text, counted) in cases.items():
+                with self.subTest(name):
+                    (root / "rust/x.rs").write_text(text)
+                    start = len(text[: text.index("assert!")].encode())
+                    diagnostic = {
+                        "reason": "compiler-message",
+                        "message": {
+                            "code": {"code": "clippy::disallowed_macros"},
+                            "message": "use of a disallowed macro `std::assert`",
+                            "spans": [
+                                {
+                                    "is_primary": True,
+                                    "file_name": "rust/x.rs",
+                                    "byte_start": start,
+                                    "byte_end": start + 7,
+                                }
+                            ],
+                        },
+                    }
+                    rows = LINT.clippy_rows(json.dumps(diagnostic), root)
+                    self.assertEqual(bool(rows), counted, rows)
+
     def test_ruff_item_identity_and_growth(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -285,6 +382,8 @@ class PolicyTests(unittest.TestCase):
                 with (
                     patch.object(POLICY, "ROOT", root),
                     patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
                     patch.object(
                         POLICY,
                         "context",
@@ -414,6 +513,8 @@ class PolicyTests(unittest.TestCase):
                 with (
                     patch.object(POLICY, "ROOT", root),
                     patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
                     patch("sys.argv", ["lint-policy.py", "--base-ref", "HEAD"]),
                 ):
                     self.assertEqual(POLICY.main(), 1)
@@ -547,7 +648,7 @@ class GrowthTests(unittest.TestCase):
 
     def pr_context(
         self,
-        pulls: Mapping[str, list[dict[str, object]]],
+        pulls: Mapping[str, Sequence[Mapping[str, object]]],
         unknown: frozenset[str] = frozenset(),
         event: Mapping[str, object] | None = None,
     ) -> str:
@@ -624,6 +725,27 @@ class GrowthTests(unittest.TestCase):
             "merge_commit_sha": "merge",
         }
         self.assertEqual(self.pr_context({"second": [merged]}), "PR 4 at second")
+
+    def test_a_requested_run_reads_its_pr_by_number(self) -> None:
+        # ci-request.yml's workflow_dispatch names the PR; the commit lookup
+        # finds none once the branch has moved.
+        event = DispatchEvent(
+            inputs=DispatchInputs(pr="13", head="second", profile="native")
+        )
+        captured = Pull(number=13, head=PullHead(sha="second"))
+        moved = Pull(number=13, head=PullHead(sha="later"))
+        self.assertEqual(
+            self.pr_context({"elsewhere": [captured]}, event=event), "PR 13 at second"
+        )
+        with self.assertRaisesRegex(cleanup_contract.ContractError, "PR head changed"):
+            self.pr_context({"elsewhere": [moved]}, event=event)
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(self.pr_context({}), "None at second")
+        self.assertEqual(
+            stderr.getvalue(),
+            "no pull request found for second; acceptances unchecked\n",
+        )
 
     def test_merge_group_reads_the_queued_pr(self) -> None:
         # Full in the merge queue checks out the group commit: its first parent is
@@ -723,10 +845,58 @@ class GrowthTests(unittest.TestCase):
                 ("/implementation", [proposal], [report("/review", "head")], "head"),
             )
         )
-        changed = dict(proposal, reason="different operation")
-        self.assertFalse(
-            reviewed(changed, [report("/review", "head")], "/implementation", "head")
+        # Rewording why or until when keeps the acceptance; what is excepted
+        # does not change without a new one.
+        for field in (
+            "reason",
+            "existing_alternatives",
+            "retiring_owner",
+            "retirement_condition",
+        ):
+            reworded = dict(proposal, **{field: "reworded"})
+            self.assertTrue(
+                reviewed(
+                    reworded, [report("/review", "head")], "/implementation", "head"
+                )
+            )
+        for changed in (
+            dict(proposal, added={"x": 2}),
+            dict(proposal, added={"y": 1}),
+            dict(proposal, counter="callback_slots"),
+            dict(proposal, retiring_owner="owner", extra="field"),
+        ):
+            self.assertFalse(
+                reviewed(
+                    changed, [report("/review", "head")], "/implementation", "head"
+                )
+            )
+        lint = Suppression(
+            kind="suppression",
+            tool="rust",
+            site="rust/x.rs | impl A | allow x",
+            operation="A::B",
+            before=0,
+            after=1,
+            source_contract="original spelling",
+            reason="keep the original's name",
+            retiring_owner="owner",
+            retirement_condition="when the API goes",
         )
+        comment = acceptance_comment("head", lint)
+        self.assertTrue(
+            reviewed(
+                dict(lint, source_contract="the original header's spelling"),
+                [comment],
+                "/implementation",
+                "head",
+            )
+        )
+        for key, value in (("site", "rust/x.rs | impl C | allow x"), ("after", 2)):
+            self.assertFalse(
+                reviewed(
+                    dict(lint, **{key: value}), [comment], "/implementation", "head"
+                )
+            )
 
     def test_growth_acceptance_binds_added_keys_not_counter_totals(self) -> None:
         reviewed_delta = {
@@ -819,7 +989,65 @@ class GrowthTests(unittest.TestCase):
         self.assertFalse(check("generated_records", "abi-record-x.h", {"at": "short"}))
         self.assertTrue(check("tools_cpp", "tools/x.cpp", {}))
         self.assertFalse(check("tools_cpp", "tools/x.cpp", {"tools/x.cpp": "int y;"}))
-        self.assertFalse(check("exports", "tools/x.cpp", {}))
+
+    def test_boundary_ids_record_each_declaration_text(self) -> None:
+        texts: dict[str, str] = {}
+        source = (
+            'pub struct S { pub cb: extern "C" fn(u32), pub n: u8 }\n'
+            'pub struct T(u8, extern "C" fn());\n'
+            '#[unsafe(no_mangle)]\npub extern "C" fn openttd_rust_x() {}\n'
+        )
+        ids = boundary_ids({"rust/x.rs": source}, texts=texts)
+        self.assertEqual(set(texts), ids["exports"] | ids["callback_slots"])
+        self.assertEqual(texts["rust/x.rs | S.cb"], 'pub cb: extern "C" fn(u32)')
+        self.assertEqual(texts["rust/x.rs | T.1"], 'extern "C" fn()')
+        self.assertEqual(
+            texts["rust/x.rs | openttd_rust_x"], 'pub extern "C" fn openttd_rust_x() {}'
+        )
+
+    def test_identity_acceptance_holds_while_its_declaration_is_unchanged(self) -> None:
+        earlier = "a" * 40
+        slot = "rust/expanded.rs | Services.callback"
+        export = "rust/expanded.rs | openttd_rust_x"
+        texts = {
+            earlier: {
+                slot: 'callback: extern "C" fn(u32)',
+                export: 'pub extern "C" fn openttd_rust_x() { a() }',
+            }
+        }
+
+        def check(counter: str, key: str, now: str) -> bool:
+            delta = GrowthDelta(counter=counter, old=1, new=2, added={key: 1})
+            proposal = GrowthProposal(
+                **delta,
+                kind="growth",
+                reason="source contract",
+                existing_alternatives="none available",
+                retiring_owner="owner",
+                retirement_condition="native shell removed",
+            )
+            current = dict(texts, HEAD={**texts[earlier], key: now})
+            with (
+                patch.object(GROWTH, "known", lambda rev: True),
+                patch.object(GROWTH.METRICS, "boundary_texts", current.__getitem__),
+            ):
+                return GROWTH.accepted(
+                    delta,
+                    (
+                        "/implementation",
+                        [proposal],
+                        [acceptance_comment(earlier, proposal)],
+                        "new-head",
+                    ),
+                )
+
+        self.assertTrue(check("callback_slots", slot, texts[earlier][slot]))
+        self.assertFalse(check("callback_slots", slot, 'callback: extern "C" fn(u8)'))
+        self.assertTrue(check("exports", export, texts[earlier][export]))
+        self.assertFalse(
+            check("exports", export, 'pub extern "C" fn openttd_rust_x() { b() }')
+        )
+        self.assertFalse(check("exports", "rust/expanded.rs | openttd_rust_new", "fn"))
 
 
 def acceptance_comment(head: str, proposal: Mapping[str, object]) -> str:
@@ -1230,6 +1458,35 @@ class CarryTests(unittest.TestCase):
         ):
             with self.subTest(rejected=rejected):
                 self.assertEqual(POLICY.fidelity_sites({"rust/x.rs": rejected}), set())
+
+    def test_a_suppression_only_the_base_removed_is_not_added(self) -> None:
+        # Base removed an allow after the branch forked; the branch's
+        # unchanged copy is not a suppression it adds.
+        allowed = "#[allow(clippy::too_many_arguments)]\npub fn wide() {}\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"rust/x.rs": allowed, "rust/y.rs": "pub fn y() {}\n"})
+            fork = git("rev-parse", "HEAD", cwd=root).strip()
+            (root / "rust/x.rs").write_text("pub fn wide() {}\n")
+            tip = commit(root)
+            git("checkout", "-q", "-b", "work", fork, cwd=root)
+            (root / "rust/y.rs").write_text("pub fn y() {}\npub fn z() {}\n")
+            head = commit(root)
+            for given in (fork, tip):
+                with (
+                    self.subTest(given=given),
+                    patch.object(POLICY, "ROOT", root),
+                    patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
+                    patch.object(
+                        POLICY, "context", return_value=("/impl", [], [], head)
+                    ),
+                    patch("sys.argv", ["lint-policy.py", "--base-ref", given]),
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
+                ):
+                    self.assertEqual(POLICY.main(), 0)
 
     def test_accepted_contract_binds_to_unchanged_item_text(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1654,6 +1911,8 @@ class TrackedRecordTests(unittest.TestCase):
             with (
                 patch.object(POLICY, "ROOT", root),
                 patch.object(POLICY, "git", partial(git, cwd=root)),
+                patch.object(cleanup_contract, "ROOT", root),
+                patch.object(cleanup_contract, "git", partial(git, cwd=root)),
                 patch("sys.argv", ["lint-policy.py", "--base-ref", base]),
                 contextlib.redirect_stdout(output),
                 self.assertRaises(SystemExit) as stop,
@@ -1733,6 +1992,8 @@ class TrackedRecordTests(unittest.TestCase):
                 with (
                     patch.object(POLICY, "ROOT", root),
                     patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
                     patch("sys.argv", ["lint-policy.py", "--base-ref", base, *flags]),
                     contextlib.redirect_stdout(output),
                 ):

@@ -13,10 +13,10 @@
 ## Landscape scheduler, ground and flooding
 
 - Rust owns: `RunTileLoop` (LFSR walk and saved cursor), seven Rust tile owners; clear, rail, road and tunnel ground evolution; flooding, half-tile rail removal, dry-up, neighbour wakeups and flood-victim traversal.
-- C++ keeps: Map arrays, allocation and writes. Scheduler clear/water/tree reads use the shared map descriptor (#274); tree owner reads use it too; standalone water and other owner reads use typed callbacks.
-- Checks: the `tile_loop::comparison_tests` and `movement::evidence_tests` Rust tests over frozen original observations, and `python3 tools/migration.py simulate landscape roads-flooding`.
+- C++ keeps: Map arrays and allocation, and the map writes without a Rust port. The clear, rail, road and tunnel/bridge ground loops (`ground.rs`) read the map in place through the shared map descriptor (#274) and write clear density, clear counter, roadside and road-works fields in place; the snow/desert, owned-land, track and any-road-bits reads keep their typed leaves until #565. Standalone water and other owner reads use typed callbacks.
+- Checks: the `tile_loop::comparison_tests`, `movement::evidence_tests` and `ground::tests` Rust tests over frozen original observations, the native map-read probe in `src/tests/landscape_tile_loop.cpp`, and `python3 tools/migration.py simulate landscape roads-flooding`.
 - Limits: These remain #156 gaps: matrix, editor, NewGRF, threaded.
-- PRs: #255; descriptor #351.
+- PRs: #255; descriptor #351; file pass #963.
 
 ## Landscape clear, terraform and level (#348)
 

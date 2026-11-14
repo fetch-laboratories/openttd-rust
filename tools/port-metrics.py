@@ -21,11 +21,13 @@ import ast
 import hashlib
 import io
 import json
+import os
 import re
 import runpy
 import subprocess
 import tarfile
 import tempfile
+import time
 from collections.abc import Iterator, Sequence
 from difflib import SequenceMatcher
 from functools import lru_cache
@@ -44,7 +46,7 @@ from code_lines import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-METRIC_VERSION = 2
+METRIC_VERSION = 3
 METRIC_SCOPE = "src-and-records; tracked-outside-src-and-generated-nonrecord-evidence"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
 # World-state owners and their commands/accessors; excludes GUI, platform, vendor
@@ -214,9 +216,21 @@ def show(rev: str, path: str) -> str:
 
 
 def hunks(base: str, head: str, old: str, new: str) -> Iterator[Hunk]:
-    """Yield (old start, old count, new start, new count) of a zero-context diff."""
+    """Yield (old start, old count, new start, new count) of a zero-context diff.
+
+    The minimal diff: the default algorithm's alignment of a heavily edited
+    file is not minimal and moves when the file is edited, which would move
+    retired and glue while no original line changes.
+    """
     for line in git(
-        "diff", "-U0", "-M", base, head, "--", *dict.fromkeys((old, new))
+        "diff",
+        "-U0",
+        "-M",
+        "--diff-algorithm=minimal",
+        base,
+        head,
+        "--",
+        *dict.fromkeys((old, new)),
     ).splitlines():
         hunk = re.match(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
         if hunk:
@@ -383,6 +397,21 @@ def boundary(head: str) -> BoundaryMetrics:
 _EXPANDED: dict[str, str] = {}
 
 
+def extract(archive: bytes, destination: Path) -> None:
+    """Unpack a `git archive` with every file stamped now, not at its commit.
+
+    Snapshots share one Cargo target directory, and the build script reruns
+    only for sources newer than its last output. An archive keeps the commit's
+    time, so an older snapshot built after a newer one would reuse the newer
+    one's generated layout list.
+    """
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        tar.extractall(destination, filter="data")
+    now = time.time()
+    for path in destination.rglob("*"):
+        os.utime(path, (now, now), follow_symlinks=False)
+
+
 def expanded_rust(revision: str) -> str:
     """Use the pinned compiler to expand macros, including test-only syntax.
 
@@ -410,8 +439,7 @@ def expanded_rust(revision: str) -> str:
     archive = subprocess.check_output(["git", "archive", revision], cwd=ROOT)
     with tempfile.TemporaryDirectory(dir=output) as directory:
         source = Path(directory)
-        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-            tar.extractall(source, filter="data")
+        extract(archive, source)
         env = migration.environment()
         env["CARGO_TARGET_DIR"] = str(ROOT / "build-rust/cargo-growth")
         env["RUSTC_BOOTSTRAP"] = "1"
@@ -445,25 +473,41 @@ def keep_code_lines() -> None:
     persist(migration.COMMON_LOCAL / "growth-inputs")
 
 
+def boundary_identities(
+    head: str, texts: dict[str, str] | None = None
+) -> dict[str, set[str]]:
+    """Exports and callback slots at head, from the expanded crate when it has one.
+
+    With texts, each key's declaration text is recorded there too.
+    """
+    from rust_syntax import boundary_ids
+
+    if show(head, "rust/openttd-kernels/Cargo.toml"):
+        return boundary_ids(
+            {"rust/expanded.rs": expanded_rust(head)}, expanded=True, texts=texts
+        )
+    files = {
+        path: show(head, path)
+        for path in git("ls-tree", "-r", "--name-only", head, "rust/").splitlines()
+        if path.endswith(".rs")
+    }
+    return boundary_ids(files, texts=texts)
+
+
+def boundary_texts(head: str) -> dict[str, str]:
+    """Each export's and callback slot's declaration text at head."""
+    texts: dict[str, str] = {}
+    boundary_identities(head, texts)
+    return texts
+
+
 def growth_inventory(head: str) -> dict[str, dict[str, int]]:
     """Independent cleanup counters, sharing this metric's code-line semantics.
 
     The AST inventory closes aliases/unprefixed exports; boundary() remains the
     historical syntactic series and is reported separately by the caller.
     """
-    from rust_syntax import boundary_ids
-
-    files = {
-        path: show(head, path)
-        for path in git("ls-tree", "-r", "--name-only", head, "rust/").splitlines()
-        if path.endswith(".rs")
-    }
-    has_crate = bool(show(head, "rust/openttd-kernels/Cargo.toml"))
-    identities = (
-        boundary_ids({"rust/expanded.rs": expanded_rust(head)}, expanded=True)
-        if has_crate
-        else boundary_ids(files)
-    )
+    identities = boundary_identities(head)
     evidence = evidence_cpp(head)
     glue: dict[str, set[int]] = {}
     source_metrics(BASELINE, head, glue_lines=glue)

@@ -743,7 +743,7 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
             ),
             1 => {
                 let ground = &*(s.ground)();
-                let owner = (ground.resolve)(handle(v));
+                let owner = crate::ground_vehicle::Owner::of(handle(v));
                 crate::road::current_max_speed(
                     handle(v),
                     owner.road,
@@ -1466,12 +1466,12 @@ unsafe fn variable(
                     );
                 }
                 0xf3 => {
-                    let owner = ((&*(s.ground)()).resolve)(handle(v));
+                    let owner = crate::ground_vehicle::Owner::of(handle(v));
                     return (0x80 + u32::from(crate::vehicle::VEHICLE_LENGTH))
                         .wrapping_sub(u32::from((*owner.state).cache.cached_veh_length));
                 }
                 0xf4..=0xf7 => {
-                    let owner = ((&*(s.ground)()).resolve)(handle(v));
+                    let owner = crate::ground_vehicle::Owner::of(handle(v));
                     return (*owner.state).cache.cached_power >> (u32::from(variable - 0xf4) * 8);
                 }
                 0xfc | 0xfd => {
@@ -1482,7 +1482,7 @@ unsafe fn variable(
             },
             1 => match variable {
                 0xe2 | 0xe4..=0xe9 => {
-                    let owner = ((&*(s.ground)()).resolve)(handle(v));
+                    let owner = crate::ground_vehicle::Owner::of(handle(v));
                     return match variable {
                         0xe2 => u32::from(crate::road::get_state(owner.road)),
                         0xe4 | 0xe5 => high(u32::from(crate::road::blocked_counter(owner.road))),

@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR 0049
 may change: user
 ---
 # At most two implementers work at once

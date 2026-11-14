@@ -211,7 +211,6 @@ pub struct Services {
     pub vehicle_cargo: unsafe extern "C" fn(*mut OpenTTDVehicle) -> VehicleCargo,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub company_engine_count: unsafe extern "C" fn(u8, u16) -> c_uint,
-    pub local_company: unsafe extern "C" fn() -> u8,
     pub toolbar_enable: unsafe extern "C" fn(VehicleType),
     pub toolbar_release: unsafe extern "C" fn(VehicleType),
     pub close_preview: unsafe extern "C" fn(u16),
@@ -571,7 +570,7 @@ unsafe fn enable(s: &Services, e: EngineRef, company: u8) {
             );
         }
     }
-    if company == unsafe { call!(s, local_company) } {
+    if company == unsafe { call!(&*s.shared, local_company) } {
         unsafe {
             call!(s, refresh_type, e.kind);
             call!(s, toolbar_enable, e.kind);
@@ -597,7 +596,7 @@ unsafe fn disable(s: &Services, e: EngineRef, company: u8) {
             );
         }
     }
-    if company == unsafe { call!(s, local_company) } {
+    if company == unsafe { call!(&*s.shared, local_company) } {
         unsafe {
             clear_last_variant(s, e);
             call!(s, refresh_type, e.kind);
@@ -1269,7 +1268,6 @@ crate::abi::layouts! {
         vehicle_cargo,
         capabilities,
         company_engine_count,
-        local_company,
         toolbar_enable,
         toolbar_release,
         close_preview,

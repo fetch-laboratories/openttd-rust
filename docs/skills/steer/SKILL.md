@@ -35,7 +35,7 @@ Done when you can list each standing correction and the issue or ADR that tracks
 
 1. `git fetch`; read `git log` from the steering commit to `origin/rust-migration`, `git diff <steer>..origin/rust-migration -- AGENTS.md docs/ .github/` and the whole roadmap.
 2. Inspect `gh run list --branch rust-migration`, cancelled runs, open PRs with their checks and latest reviews, and open issues.
-3. Run `python3 tools/port-metrics.py --whole-fork`; progress counts original C++ retired, not glue removed. Re-measure the roadmap's stream inventory rows that steering owns with `python3 tools/code-standards-inventory.py`.
+3. Run `python3 tools/port-metrics.py --whole-fork`; progress is the fall in the fork C++ census ([ADR 0022](../../adr/0022-progress-is-net-cpp-removed.md)), and original C++ retired is the share of it that ports deliver. Re-measure the roadmap's stream inventory rows that steering owns with `python3 tools/code-standards-inventory.py`.
 4. Inspect `git worktree list` and disk use. Run `python3 docs/skills/steer/issues.py`; give every unplaced or excluded issue and every exclusion line a verdict on its merits against [selection](../../planning.md#selection): selected, queued behind a named event, excluded with its return condition, or closed.
 5. Post a short status line to the user and continue.
 6. Judge each standing correction from the last two reviews and each rule changed outside steering: applied, slipped, reinterpreted or harmful, with its cost in agent hours, CI runs and parked PRs against what it caught. A rule loosened without an ADR is a red flag.

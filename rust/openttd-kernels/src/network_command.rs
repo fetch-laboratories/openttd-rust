@@ -367,7 +367,7 @@ pub(crate) fn execute_local_command_queue(session: &crate::session::Services, s:
     }
 
     /* Local company may have changed, so we should not restore the old value */
-    (company.finance.set_current_company)((company.local_company)());
+    (company.finance.set_current_company)((company.shared.local_company)());
 }
 
 /// `NetworkFreeLocalCommandQueue`: free the local command queues.

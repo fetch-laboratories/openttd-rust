@@ -3,6 +3,8 @@
 # (tools/code-standards-inventory.py --gate) fails a PR that adds residue to one.
 # Reconstructed at a30091d652 from the merged pass PRs; 92 at merge 20, as root counted.
 rust/openttd-kernels/src/admin_conversion.rs
+rust/openttd-kernels/src/aircraft.rs
+rust/openttd-kernels/src/aircraft/tests.rs
 rust/openttd-kernels/src/airport_definitions.rs
 rust/openttd-kernels/src/airport.rs
 rust/openttd-kernels/src/alternating.rs
@@ -26,8 +28,11 @@ rust/openttd-kernels/src/direction_func.rs
 rust/openttd-kernels/src/disaster_vehicle.rs
 rust/openttd-kernels/src/effectvehicle_func.rs
 rust/openttd-kernels/src/encoded.rs
+rust/openttd-kernels/src/error_func.rs
 rust/openttd-kernels/src/follow_track.rs
 rust/openttd-kernels/src/game_state.rs
+rust/openttd-kernels/src/ground_vehicle.rs
+rust/openttd-kernels/src/ground.rs
 rust/openttd-kernels/src/house_definition.rs
 rust/openttd-kernels/src/house.rs
 rust/openttd-kernels/src/industry/commands.rs
@@ -71,10 +76,12 @@ rust/openttd-kernels/src/pathfinder_func.rs
 rust/openttd-kernels/src/pbs.rs
 rust/openttd-kernels/src/pool.rs
 rust/openttd-kernels/src/pool/tests.rs
+rust/openttd-kernels/src/rail_yapf.rs
 rust/openttd-kernels/src/random_func.rs
 rust/openttd-kernels/src/raw_field.rs
 rust/openttd-kernels/src/road/availability.rs
 rust/openttd-kernels/src/road_stop.rs
+rust/openttd-kernels/src/road_yapf.rs
 rust/openttd-kernels/src/roadveh.rs
 rust/openttd-kernels/src/saveload.rs
 rust/openttd-kernels/src/ship_yapf.rs
@@ -137,4 +144,7 @@ rust/openttd-kernels/src/void_map.rs
 rust/openttd-kernels/src/water_regions.rs
 rust/openttd-kernels/src/widget_parser.rs
 rust/openttd-kernels/src/witness.rs
+rust/openttd-kernels/src/yapf_common.rs
+rust/openttd-kernels/src/yapf_costbase.rs
 rust/openttd-kernels/src/yapf_node.rs
+rust/openttd-kernels/src/yapf_type.rs

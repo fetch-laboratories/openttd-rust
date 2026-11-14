@@ -52,7 +52,6 @@ pub struct LifecycleServices {
     pub disassociate_field: unsafe extern "C" fn(u32),
     pub release_disasters: unsafe extern "C" fn(u16),
     pub delete_storage: unsafe extern "C" fn(*mut c_void),
-    pub delete_news: unsafe extern "C" fn(u16),
     pub close_view: unsafe extern "C" fn(u16),
     pub close_production: unsafe extern "C" fn(u16),
     pub delete_inspect: unsafe extern "C" fn(u16),
@@ -206,7 +205,7 @@ pub(crate) unsafe fn industry_destruct(d: IndustryDestruct, s: &Services, w: &Li
         (w.delete_storage)(industry);
         let kind = ptr::read(ptr::addr_of!((*owner).metadata.kind));
         super::industry_registry_erase(builder, crate::industry_type::IndustryType(kind), id);
-        (w.delete_news)(id.0);
+        crate::news_func::delete_industry_news(id);
         (w.close_view)(id.0);
         (w.close_production)(id.0);
         (w.delete_inspect)(id.0);

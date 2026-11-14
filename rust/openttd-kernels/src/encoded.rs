@@ -21,6 +21,7 @@ const ASSERTION_ENCODED_PREFIX: u8 = 2;
 
 /// Tagged scalar/borrowed-byte descriptor; never a C++ variant layout.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Descriptor {
     /// Numeric bits, used only for tag 1.
     pub value: u64,
@@ -94,6 +95,11 @@ impl Output {
             apply: u8::from(self.apply),
             assertion_kind: self.assertion_kind,
         }
+    }
+
+    /// The output bytes.
+    pub(super) fn into_bytes(self) -> Vec<u8> {
+        self.bytes
     }
 
     pub(super) fn diagnostics(&self) -> &[Diagnostic] {

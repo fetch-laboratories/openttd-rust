@@ -10,7 +10,8 @@ Write the plan into the issue's body under `## Implementation plan`, below root'
 
 - **Base.** The commit you planned against.
 - **Done.** What a reviewer can observe when the work is finished, and the checks that show it.
-- **Decisions.** What moves or changes, and in what order; where each boundary goes; what stays in C++ and the issue that removes it; which callers are held and how. Give each decision its reason, and name an approach you rejected when an implementer would likely try it.
+- **Decisions.** What moves or changes, and in what order; where each boundary goes; what stays in C++ and the issue that removes it; which callers are held and how. Give each decision its reason, and name an approach you rejected when an implementer would likely try it. Leave the commit split to the implementer.
+  - A plan grants no exception to [porting](porting.md). A decision that would leave a departure from it, such as a kept one-call-site carrier, a C++ service where a Rust port exists or a deferred [design fault](porting.md#design-faults), goes under open questions with the rule it departs from. Before you write that no Rust form of a callee exists, search `rust/` for it.
 - **Files.** The file set, and where it overlaps the open PRs' actual edits, which `python3 tools/retrospective.py readiness <open PRs>` lists.
 - **Size.** Counts under [sizing](planning.md#sizing). If the work exceeds one PR, say where it splits and plan the first PR only.
 - **Evidence.** The fixtures and comparisons the implementer runs, and what each new test must show.
@@ -18,7 +19,16 @@ Write the plan into the issue's body under `## Implementation plan`, below root'
 
 ## Limits
 
-- You write the plan and nothing else: every file stays as it is, and you start no agent, build, simulation or CI run. Measure with the inventory and metrics tools.
+- You write the plan and nothing else: every file stays as it is, and you start no build, simulation or CI run, and no agent but the plan's reviewer. Measure with the inventory and metrics tools.
 - If the entry should not be done as selected (already delivered, blocked, or costing more than it removes), say so under open questions in place of a plan.
 
-Your last line to root is the issue's URL and the plan's open questions.
+## Plan review
+
+Have the plan reviewed before you report to root. Nobody downstream checks a decision again: the implementer carries it out and the PR's reviewers take it as given.
+
+- Start one reviewer with T3 `delegate_task` and `isolation: "worktree"`, using the [role table](team.md#roles-and-models)'s review model, and this fixed message and nothing more:
+  > Review the plan in <issue URL> under `docs/review-brief.md`. You are /root/plan-review-<issue number>.
+- Correct the plan in place for each finding. A finding that turns on a question no recorded rule answers, or one you dispute, goes under open questions with the reviewer's point and yours.
+- One review is enough; start a second only if you rewrote a decision.
+
+Your last line to root is the issue's URL, the plan review's report URL and the plan's open questions.

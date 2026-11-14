@@ -243,7 +243,7 @@ pub(crate) fn is_drive_through_road_stop_continuation(
         && crate::map_func::World::new(s).get_drive_through_stop_axis(next)
             == crate::map_func::World::new(s).get_drive_through_stop_axis(rs)
 }
-/// Temporary raw adapter for `road.rs` and `road_yapf.rs`.
+/// Temporary raw adapter for `road.rs`.
 pub(crate) fn continuation(s: &Services, rs: u32, next: u32) -> bool {
     is_drive_through_road_stop_continuation(s, TileIndex(rs), TileIndex(next))
 }
@@ -279,7 +279,7 @@ pub(crate) fn at(s: &Services, tile: TileIndex) -> *mut State {
     )
     .1
 }
-/// Temporary raw adapter for `road.rs` and `road_yapf.rs`.
+/// Temporary raw adapter for `road.rs`.
 pub(crate) fn at_raw(s: &Services, tile: u32) -> *mut State {
     at(s, TileIndex(tile))
 }
@@ -288,10 +288,6 @@ pub(crate) fn at_raw(s: &Services, tile: u32) -> *mut State {
 pub(crate) fn entry_read(state: *mut State, dir: DiagDirection) -> Entry {
     // SAFETY: Live shared entries of a drive-through stop; the copy ends the load.
     unsafe { *entry(state, dir) }
-}
-/// Temporary raw adapter for `road_yapf.rs`.
-pub(crate) fn entry_read_raw(state: *mut State, dir: u8) -> Entry {
-    entry_read(state, DiagDirection(dir))
 }
 /// `RoadStop::HasFreeBay`: checks whether there is a free bay in this road
 /// stop.
@@ -676,7 +672,7 @@ pub(crate) fn clear_drive_through(s: &Services, xy: TileIndex, state: *mut State
 
     // Must only be cleared after we determined which neighbours are
     // part of our little entry 'queue'
-    crate::ground::clear_square(xy.0, s);
+    crate::ground::do_clear_square(xy, s);
 
     if north {
         // There is a tile to the north, so we can't clear ourselves.

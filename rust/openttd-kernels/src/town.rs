@@ -415,20 +415,12 @@ pub(crate) unsafe fn radius_from_shell(
 ) -> u8 {
     unsafe { get_town_radius_group((s.town_owner)(town), TileIndex(tile), s.map()) }.0
 }
-/// The road-work inputs of `TileLoop_Road` for a town: `road_build_months`, the
-/// tile's `GetTownRadiusGroup` and `DistanceManhattan(t->xy, tile)`, copied so that no
-/// owner reference spans a service.
-/// SAFETY: Caller supplies a live, serialized owner.
-pub(crate) unsafe fn road_context(
-    state: *const State,
-    tile: TileIndex,
-    map: crate::map_func::Map,
-) -> (u8, HouseZone, u32) {
-    // SAFETY: Immediate reads only, caller establishes owner lifetime.
-    let state = unsafe { &*state };
-    let distance = map.distance_manhattan(tile, TileIndex(state.simulation.xy));
-    let zone = unsafe { get_town_radius_group(state, tile, map) };
-    (state.growth.road, zone, distance)
+/// `Town::road_build_months`: fund road reconstruction in action?
+/// # Safety
+/// Caller supplies a live, serialized owner.
+pub(crate) unsafe fn road_build_months(state: *const State) -> u8 {
+    // SAFETY: one field-sized read of the caller's live owner.
+    unsafe { (*state).growth.road }
 }
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
 pub extern "C" fn openttd_rust_town_generating_exchange_abi(generating: bool) -> u8 {
@@ -3127,7 +3119,16 @@ pub unsafe extern "C" fn openttd_rust_town_road_type(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u32 {
-    u32::from(engine(leaves, services).get_town_road_type().0)
+    u32::from(unsafe { get_town_road_type(leaves, services) }.0)
+}
+/// `GetTownRoadType`: the direct Rust entry.
+/// # Safety
+/// Both tables are the live process-lifetime town tables.
+pub(crate) unsafe fn get_town_road_type(
+    leaves: *const Leaves,
+    services: *const Services,
+) -> RoadType {
+    engine(leaves, services).get_town_road_type()
 }
 // Original std::accumulate's literal 0 deduces an int accumulator. Each lambda
 // result narrows to int, then the final int sign-extends to the uint64 destination.

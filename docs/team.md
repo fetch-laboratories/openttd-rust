@@ -15,7 +15,7 @@ Under a Claude Code root, Opus handles all code-touching work; Sonnet handles on
 
 ## Slots
 
-At most two implementers work at once ([ADR 0010](adr/0010-two-implementers.md)). An implementer whose PRs all wait on CI, review or the merge queue does not count; a running profile counts as one. Reviews, planning and research do not count.
+At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). An implementer holds its slot from dispatch until its PR merges or root stops it, including while it waits on CI, review or the merge queue, and root gives it no new work meanwhile. A running profile counts as one. Reviews, planning and research do not count.
 
 ## Spawning
 
@@ -52,7 +52,7 @@ The review loop is in [review](workflow.md#review). Root reads dispositions, not
 - Root selects work and writes the roadmap's [ready queue](roadmap.md#ready-queue): two or three undispatched work orders. Each work order has its own issue, whose body root opens with one line saying what is finished when the work is done. An entry is that issue and the PR or issue it waits on. Size, files and method are the planner's to settle.
   - Work under a tracker that spans many PRs, such as #734, gets a sub-issue of it: `gh api repos/{owner}/{repo}/issues/<tracker>/sub_issues -F sub_issue_id=$(gh api repos/{owner}/{repo}/issues/<new issue> -q .id)`.
 - Root refills the queue when it holds no entry for the next slot to free, up to three entries at once (provisional), in a docs-only commit that edits only that section. While the [merge queue is not empty](workflow.md#change-types) the refill waits as a local commit, and root's status comment on #3 carries the queue's state.
-- **Plans.** Each work order gets an implementation plan before it gets an implementer. Once an entry waits on nothing, root starts a [planner](planner-brief.md) for it, whether or not a slot is free. The planner writes the plan into the issue's body, below root's line. Root settles the plan's open questions, then dispatches the entry to the next free slot.
+- **Plans.** Each work order gets an implementation plan before it gets an implementer. Once an entry waits on nothing, root starts a [planner](planner-brief.md) for it, whether or not a slot is free. The planner writes the plan into the issue's body, below root's line, and has it [reviewed](planner-brief.md#plan-review) by a reviewer of its own; that reviewer does not review the PR later. Root settles the plan's open questions, then dispatches the entry to the next free slot.
 - **File sets.** Before starting, the implementer checks the plan's file set against open PRs' actual edits with `python3 tools/retrospective.py readiness <PR> <open PRs>` and records the result in its status comment; root brokers no file reservation.
   - A #734/#735 pass owns the files it finishes whole. Another stream's PR may add separate test modules or one-line hooks to those files; it names the hook, and a conflict is resolved by base update.
   - Files whose edits merge mechanically are exempt, including `lib.rs` module lists, `migration/*-debt.json`, `migration/harness-inventory.json` and generated registries.

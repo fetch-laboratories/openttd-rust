@@ -192,7 +192,12 @@ impl<'a> World<'a> {
         // result slots used by this tile kind. Other cases do not read the slots.
         unsafe {
             match kind {
-                MP_CLEAR => crate::ground::clear_tile(out, tile, flags, self.s),
+                MP_CLEAR => crate::ground::clear_tile_clear(
+                    out,
+                    crate::tile_type::TileIndex(tile),
+                    crate::command_type::DoCommandFlags(flags),
+                    self.s,
+                ),
                 MP_RAILWAY => crate::rail_cmd::openttd_rust_rail_clear_tile(
                     owners.rail,
                     out.0,
@@ -392,7 +397,7 @@ impl<'a> World<'a> {
                         (self.cmd.infrastructure_dirty)(owner);
                     }
                 }
-                crate::ground::clear_square(tile, self.s);
+                crate::ground::do_clear_square_raw(tile, self.s);
                 unsafe {
                     crate::water::openttd_rust_clear_neighbour_flooding(
                         tile,

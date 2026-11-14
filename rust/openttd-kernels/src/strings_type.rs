@@ -99,3 +99,22 @@ pub(crate) enum StringParameterData<'a> {
     /// The parameter's native string bytes.
     String(&'a [u8]),
 }
+
+/// Native `EncodedString`: a string with its parameters encoded, which can be stored and
+/// decoded later without storing the parameters separately.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct EncodedString {
+    /// The encoded string.
+    string: Vec<u8>,
+}
+
+impl EncodedString {
+    /// An `EncodedString` can only be created by `GetEncodedStringWithArgs()`.
+    pub(crate) const fn from_encoded(string: Vec<u8>) -> Self {
+        Self { string }
+    }
+    /// The encoded bytes.
+    pub(crate) fn as_bytes(&self) -> &[u8] {
+        &self.string
+    }
+}

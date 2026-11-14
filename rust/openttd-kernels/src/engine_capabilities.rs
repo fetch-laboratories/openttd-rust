@@ -731,6 +731,16 @@ pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
         life_extension: crate::test_tables::unreachable0,
         invalid_string_id: 0,
     };
+/// `TEST_TABLE` over another shared table, for tests outside this module.
+#[cfg(test)]
+pub(crate) const fn test_table_with_shared(
+    shared: &'static crate::services::Services,
+) -> crate::engine_capabilities::Services {
+    crate::engine_capabilities::Services {
+        shared,
+        ..TEST_TABLE
+    }
+}
 
 #[cfg(test)]
 mod tests {

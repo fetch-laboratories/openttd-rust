@@ -374,10 +374,16 @@ def scan(
     )
 
 
+def fork_point(base_ref: str | None) -> str | None:
+    """The merge base of base_ref and HEAD, when a base is given."""
+    return base_ref and vcs.merge_base(base_ref, run=git, announce=True)
+
+
 def main() -> bool:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", help="ratchet against this Git revision")
     args = parser.parse_args()
+    args.base_ref = fork_point(args.base_ref)
     pinned = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
     tracked = set(git("ls-tree", "-r", "--name-only", pinned, "src").splitlines())
     all_files = sources()

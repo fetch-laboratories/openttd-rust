@@ -644,7 +644,7 @@ impl<'v> CYapfShip<'v> {
         if has_trackdir(trackdir_crosses_trackdirs(td1.0), td2.0, |ok| v.check(ok)) {
             /* 90-deg curve penalty. */
             return v.input.ship_curve90_penalty.cast_signed();
-        } else if td2 != next_trackdir(td1, |ok| v.check(ok)) {
+        } else if td2.0 != next_trackdir(td1.0, |ok| v.check(ok)) {
             /* 45-deg curve penalty. */
             return v.input.ship_curve45_penalty.cast_signed();
         }

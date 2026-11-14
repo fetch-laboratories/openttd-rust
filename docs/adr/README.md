@@ -35,7 +35,7 @@ A decision is the user's if it sets the goal or scope, spends money, depends on 
 
 ## How to refer to one
 
-By number and header, with a link to the file, for example [ADR 0010](0010-two-implementers.md), "At most two implementers work at once". Do not refer to a decision by its date, such as "the 11-10 decision".
+By number and header, with a link to the file, for example [ADR 0049](0049-two-implementers-waiting-keeps-slot.md), "At most two implementers exist at once, and a waiting one keeps its slot". Do not refer to a decision by its date, such as "the 11-10 decision".
 
 ## The records
 
@@ -52,7 +52,7 @@ By number and header, with a link to the file, for example [ADR 0010](0010-two-i
 | [0007](0007-no-32-bit-windows.md) | 32-bit Windows is not supported |
 | [0008](0008-paid-ci-cost-needs-approval.md) | A change that raises paid CI cost needs the user's approval |
 | [0009](0009-paid-runner-assignment.md) | The user decides which CI jobs run on paid runners |
-| [0010](0010-two-implementers.md) | At most two implementers work at once |
+| [0010](0010-two-implementers.md) | At most two implementers work at once (superseded by 0049) |
 | [0011](0011-model-and-effort-per-role.md) | Each agent role has a fixed model and effort level |
 | [0012](0012-root-decides-implementers-review-and-merge.md) | Root chooses work and settles questions; implementers run their own reviews and merges |
 | [0013](0013-stocktake-every-12-merges.md) | Root takes stock after every 12 merges |
@@ -70,6 +70,7 @@ By number and header, with a link to the file, for example [ADR 0010](0010-two-i
 | [0046](0046-no-upstream-contact.md) | Agents do not contact OpenTTD's upstream maintainers or submit changes upstream |
 | [0047](0047-output-on-the-hard-disk.md) | This machine's build and test output lives on the hard disk behind symlinks |
 | [0048](0048-agents-md-and-routing-table.md) | `AGENTS.md` holds only what every agent needs; everything else is reached through a routing table |
+| [0049](0049-two-implementers-waiting-keeps-slot.md) | At most two implementers exist at once, and a waiting one keeps its slot |
 
 ### The agents'
 

@@ -53,7 +53,6 @@ struct OpenTTDEngineServices {
 	OpenTTDEngineVehicleCargo (*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	uint (*company_engine_count)(uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(company_engine_count);
-	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*toolbar_enable)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(toolbar_enable);
 	void (*toolbar_release)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(toolbar_release);
 	void (*close_preview)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(close_preview);

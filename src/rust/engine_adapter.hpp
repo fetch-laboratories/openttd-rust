@@ -131,7 +131,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.vehicle_cargo = Engine_vehicle_cargo,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.company_engine_count = Engine_company_engine_count,
-		.local_company = RustLocalCompanyID,
 		.toolbar_enable = Engine_toolbar_enable,
 		.toolbar_release = Engine_toolbar_release,
 		.close_preview = Engine_close_preview,

@@ -170,39 +170,10 @@
     "rust/openttd-kernels/src/fleet.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
-    "rust/openttd-kernels/src/ground.rs | fn rail_tile_loop | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/ground.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8,
-      9,
-      10
-    ],
-    "rust/openttd-kernels/src/ground_vehicle.rs | fn cargo_changed | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/ground_vehicle.rs | fn power_changed_owned | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/ground_vehicle.rs | fn update_z | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1,
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/ground_vehicle.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
-    ],
-    "rust/openttd-kernels/src/heightmap.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
     "rust/openttd-kernels/src/house.rs | fn get_climate_mask_for_landscape | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/industry.rs | fn change_industry_production | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/kdtree.rs | fn native_split | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/kdtree.rs | impl < T : Copy + Ord > Kdtree < T >::impl Fn ( T , usize ) - > u16 , mut visit : impl FnMut ( T ) , ) | disallowed_macros | 4a33eacd5fa65f2b2e28": [
@@ -216,9 +187,6 @@
     ],
     "rust/openttd-kernels/src/landscape_cmd.rs | impl < ' a > World < ' a >::fn level | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
-    ],
-    "rust/openttd-kernels/src/landscape_generation.rs | impl World < ' _ >::fn greyscale | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
     ],
     "rust/openttd-kernels/src/lib.rs | fn encoded_parameter | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
@@ -235,9 +203,6 @@
     "rust/openttd-kernels/src/linkgraph/live.rs | impl Node::fn update_edge | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
       1,
-      1
-    ],
-    "rust/openttd-kernels/src/map_func.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/math.rs | fn mask | disallowed_macros | 4a33eacd5fa65f2b2e28": [
@@ -263,10 +228,6 @@
     ],
     "rust/openttd-kernels/src/movement.rs | impl MovementServices::fn enter_wormhole | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/network_action.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
       1
     ],
@@ -418,8 +379,11 @@
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn test_autoslope | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
     ],
-    "rust/openttd-kernels/src/rail_yapf.rs | impl Search::fn add_node | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
+    "rust/openttd-kernels/src/rail_yapf.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
+      9
+    ],
+    "rust/openttd-kernels/src/road.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
+      8
     ],
     "rust/openttd-kernels/src/road/availability.rs | fn engine_types | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
@@ -478,12 +442,6 @@
       1
     ],
     "rust/openttd-kernels/src/road_stop.rs | fn is_free_bay | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | impl Search < ' _ >::fn add | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | impl Search < ' _ >::fn estimate | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/script_list.rs | impl List::fn remove | disallowed_macros | 4a33eacd5fa65f2b2e28": [

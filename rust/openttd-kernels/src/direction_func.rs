@@ -85,12 +85,8 @@ pub fn change_diag_dir(
     /* Cast to uint so compiler can use bitmask. Result can never be negative. */
     DiagDirection(((u32::from(d.0) + u32::from(delta.0)) % 4) as u8)
 }
-/// `DiagDirDifference`: calculate the difference between two `DiagDirection`
-/// values; how the second direction drifts of the first one.
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "DiagDirDifference's (uint)(d0 - d1) % 4 fits its DiagDirDiff"
-)]
+/// `DiagDirDifference`: calculate the difference between two `DiagDirection` values; how
+/// the second direction drifts of the first one.
 pub fn diag_dir_difference(
     d0: DiagDirection,
     d1: DiagDirection,
@@ -103,7 +99,7 @@ pub fn diag_dir_difference(
         check(false);
     }
     /* Cast to uint so compiler can use bitmask. Result can never be negative. */
-    DiagDirDiff(((i32::from(d0.0) - i32::from(d1.0)).cast_unsigned() % 4) as u8)
+    DiagDirDiff((u32::from(d0.0).wrapping_sub(u32::from(d1.0)) % 4) as u8)
 }
 /// `DirToDiagDir`: convert a `Direction` to a `DiagDirection`.
 ///
