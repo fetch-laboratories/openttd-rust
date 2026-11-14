@@ -1898,7 +1898,7 @@ impl Game<'_> {
                 if dir != (id).vehicle().direction() {
                     if prev == Handle::NONE && self.acc_model() == 0 {
                         let diff = (id).vehicle().direction().wrapping_sub(dir) & 7;
-                        let small = if crate::ground_vehicle::get_acceleration_type(
+                        let small = if <crate::ground_vehicle::Train as crate::ground_vehicle::GroundVehicleType>::get_acceleration_type(
                             self.leaves.physics,
                             id.vehicle(),
                         ) == crate::engine_type::VehicleAccelerationModel::Maglev

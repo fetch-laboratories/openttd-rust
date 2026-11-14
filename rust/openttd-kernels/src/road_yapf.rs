@@ -644,7 +644,9 @@ impl<'a> CYapfRoad<'a> {
                 // SAFETY: The movement table's orders leaves have process lifetime.
                 let orders = unsafe { &*movement.orders };
                 (
-                    crate::ground_vehicle::RoadVehicle::get_display_max_speed(self.vehicle),
+                    <crate::ground_vehicle::RoadVehicle as crate::ground_vehicle::GroundVehicleType>::get_display_max_speed(
+                        self.vehicle,
+                    ),
                     crate::orders::VisitOrders::new(orders)
                         .current(self.vehicle)
                         .max_speed(),

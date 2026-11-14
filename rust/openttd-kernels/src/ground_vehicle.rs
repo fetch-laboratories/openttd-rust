@@ -275,8 +275,8 @@ impl Services {
         (self.vehicle.property)((self.vehicle.newgrf)(), v, property, i32::from(orig_value))
     }
     /// `GetRailType(tile)`.
-    fn get_rail_type(&self, tile: u32) -> RailType {
-        RailType(crate::map_func::World::new(self.shared()).rail_type(tile))
+    fn get_rail_type(&self, tile: TileIndex) -> RailType {
+        RailType(crate::map_func::World::new(self.shared()).rail_type(tile.0))
     }
     /// `v->cargo_type`.
     fn cargo_type(&self, v: VehicleRef) -> CargoType {
@@ -343,13 +343,6 @@ pub(crate) trait GroundVehicleType {
 
 /// `Train`'s acceleration methods (`train.h`, `train_cmd.cpp`).
 pub(crate) struct Train;
-impl Train {
-    /// `Train::GetDisplayMaxSpeed`.
-    #[inline]
-    pub(crate) fn get_display_max_speed(v: VehicleRef) -> i32 {
-        i32::from(v.max_speed())
-    }
-}
 impl GroundVehicleType for Train {
     const TRANSPORT: u8 = TRANSPORT_RAIL;
     /// Allows to know the power value that this vehicle will use. Returns the power value from
@@ -358,7 +351,10 @@ impl GroundVehicleType for Train {
     fn get_power(s: &Services, v: VehicleRef, o: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part()
-            && (s.powered)(o.train.get_railtypes(), s.get_rail_type(v.tile()))
+            && (s.powered)(
+                o.train.get_railtypes(),
+                s.get_rail_type(TileIndex(v.tile())),
+            )
         {
             let engine = (s.vehicle.engine)(v);
             let mut power = s.property(
@@ -380,7 +376,10 @@ impl GroundVehicleType for Train {
     fn get_powered_part_power(s: &Services, v: VehicleRef, o: Owner, head: Owner) -> u16 {
         /* For powered wagons the engine defines the type of engine (i.e. railtype) */
         if o.train.get_flags() & crate::train::FLAG_POWERED_WAGON != 0
-            && (s.powered)(head.train.get_railtypes(), s.get_rail_type(v.tile()))
+            && (s.powered)(
+                head.train.get_railtypes(),
+                s.get_rail_type(TileIndex(v.tile())),
+            )
         {
             return s.first_engine(o).wagon_power();
         }
@@ -477,21 +476,22 @@ impl GroundVehicleType for Train {
     /// Allows to know the acceleration type of a vehicle.
     #[inline]
     fn get_acceleration_type(s: &Services, v: VehicleRef) -> VehicleAccelerationModel {
-        VehicleAccelerationModel((s.rail_acceleration)(s.get_rail_type(v.tile())))
+        VehicleAccelerationModel((s.rail_acceleration)(s.get_rail_type(TileIndex(v.tile()))))
     }
     /// Returns the slope steepness used by this vehicle.
     #[inline]
     fn get_slope_steepness(s: &Services) -> u32 {
         (s.steepness)(VehicleType::VEH_TRAIN)
     }
+    /// `Train::GetDisplayMaxSpeed`.
     #[inline]
     fn get_display_max_speed(v: VehicleRef) -> i32 {
-        Self::get_display_max_speed(v)
+        i32::from(v.max_speed())
     }
     /// Gets the maximum speed allowed by the track for this vehicle.
     #[inline]
     fn get_max_track_speed(s: &Services, v: VehicleRef) -> u16 {
-        (s.rail_speed)(s.get_rail_type(v.tile()))
+        (s.rail_speed)(s.get_rail_type(TileIndex(v.tile())))
     }
     /// Checks if the vehicle is at a tile that can be sloped.
     #[inline]
@@ -519,11 +519,6 @@ impl GroundVehicleType for Train {
 /// `RoadVehicle`'s acceleration methods (`roadveh.h`, `roadveh_cmd.cpp`).
 pub(crate) struct RoadVehicle;
 impl RoadVehicle {
-    /// `RoadVehicle::GetDisplayMaxSpeed`.
-    #[inline]
-    pub(crate) fn get_display_max_speed(v: VehicleRef) -> i32 {
-        i32::from(v.max_speed()) / 2
-    }
     /// `this->roadtype`.
     fn roadtype(s: &Services, v: VehicleRef) -> RoadType {
         // SAFETY: a live record and the immutable binding; one field read.
@@ -651,9 +646,10 @@ impl GroundVehicleType for RoadVehicle {
     fn get_slope_steepness(s: &Services) -> u32 {
         (s.steepness)(VehicleType::VEH_ROAD)
     }
+    /// `RoadVehicle::GetDisplayMaxSpeed`.
     #[inline]
     fn get_display_max_speed(v: VehicleRef) -> i32 {
-        Self::get_display_max_speed(v)
+        i32::from(v.max_speed()) / 2
     }
     /// Gets the maximum speed allowed by the road type of the tile for this vehicle.
     #[inline]
@@ -1131,10 +1127,6 @@ pub(crate) fn is_chain_in_depot(s: &Services, v: VehicleRef) -> bool {
     let o = Owner::of(v);
     dispatch!(o, is_chain_in_depot(s, v, o))
 }
-/// `Train::GetAccelerationType`, for a train.
-pub(crate) fn get_acceleration_type(s: &Services, v: VehicleRef) -> VehicleAccelerationModel {
-    Train::get_acceleration_type(s, v)
-}
 /// `Train::GetMaxWeight` or `RoadVehicle::GetMaxWeight`.
 pub(crate) fn get_max_weight(s: &Services, v: VehicleRef) -> u16 {
     let o = Owner::of(v);
@@ -1287,7 +1279,7 @@ pub unsafe extern "C" fn openttd_rust_ground_acceleration_type(
     v: VehicleRef,
 ) -> u8 {
     // SAFETY: immutable native table lives for the synchronous entry.
-    get_acceleration_type(unsafe { &*s }, v).0
+    Train::get_acceleration_type(unsafe { &*s }, v).0
 }
 
 crate::abi::layouts! {
