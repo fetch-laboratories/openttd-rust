@@ -135,13 +135,7 @@ pub const GVSF_FRONT: u8 = GroundVehicleSubtypeFlags::GVSF_FRONT.0;
 #[allow(dead_code)] // Retain the raw compatibility name until cleanup closure.
 pub const GVSF_ARTICULATED_PART: u8 = GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
 /// Raw compatibility bit position.
-pub const GVSF_WAGON: u8 = GroundVehicleSubtypeFlags::GVSF_WAGON.0;
-/// Raw compatibility bit position.
 pub const GVSF_ENGINE: u8 = GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
-/// Raw compatibility bit position.
-pub const GVSF_FREE_WAGON: u8 = GroundVehicleSubtypeFlags::GVSF_FREE_WAGON.0;
-/// Raw compatibility bit position.
-pub const GVSF_MULTIHEADED: u8 = GroundVehicleSubtypeFlags::GVSF_MULTIHEADED.0;
 
 /// `HasBit(subtype, flag)`.
 const fn has(subtype: u8, flag: GroundVehicleSubtypeFlags) -> bool {

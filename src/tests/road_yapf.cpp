@@ -162,13 +162,13 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		map.tiles.base[row + 1].height = 1;
 		map.shared.apply_foundation = GetRustSharedServices().apply_foundation;
 		RoadOrder::limits.clear();
-		map.physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { RoadOrder::limits.push_back('D'); return 100; };
+		map.record.cached_max_speed = 200; // RoadVehicle::GetDisplayMaxSpeed() is 100.
 		map.orders.vehicle = [](void *) noexcept { RoadOrder::limits.push_back('O'); return &FollowerFixture::active->order_state; };
 		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { RoadOrder::limits.push_back('R'); return 40; };
 		OpenTTDRoadYapfInput input{}; input.tile = row + 3; input.slope = 17;
 		auto result = openttd_rust_road_yapf_depot(&input, &map.shared, map.Vehicle(), mode == MaxCost ? 99 : 0);
 		if (mode == Accepted) {
-			CHECK((RoadOrder::limits == std::vector<char>{'D', 'O', 'R'}));
+			CHECK((RoadOrder::limits == std::vector<char>{'O', 'R'}));
 			CHECK(result.found == 1); CHECK(result.cost == 417);
 		} else {
 			CHECK(RoadOrder::limits.empty());

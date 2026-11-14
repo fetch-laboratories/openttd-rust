@@ -146,7 +146,7 @@ pub fn is_tile_owner(
     tile: TileIndex,
     owner: crate::company_type::Owner,
 ) -> bool {
-    crate::map_func::World::new(s).owner(tile) == owner
+    crate::map_func::World::new(s).is_tile_owner(tile, owner)
 }
 
 /// `TileHash`, preserving the source unsigned subtraction.
@@ -297,6 +297,11 @@ impl crate::map_func::World<'_> {
             5,
         ) as u8)
     }
+    /// `IsTileOwner`: checks if a tile belongs to the given owner.
+    #[inline]
+    pub(crate) fn is_tile_owner(&self, tile: TileIndex, owner: crate::company_type::Owner) -> bool {
+        self.owner(tile) == owner
+    }
     /// `Map::SizeX` and `Map::SizeY` of the acquired allocation.
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -354,6 +359,18 @@ impl crate::map_func::World<'_> {
     fn tile_slope_z_outside(&self, t: TileIndex) -> (Slope, i32) {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_slope_z(m, t, x, y))
+    }
+    /// `GetTileZ`.
+    #[inline]
+    pub(crate) fn tile_z(&self, t: TileIndex) -> i32 {
+        let (x, y) = self.size();
+        self.asserted(|m| get_tile_z(m, t, x, y))
+    }
+    /// `GetTileMaxZ`.
+    #[inline]
+    pub(crate) fn tile_max_z(&self, t: TileIndex) -> i32 {
+        let (x, y) = self.size();
+        self.asserted(|m| get_tile_max_z(m, t, x, y))
     }
     /// `GetTileSlope`.
     #[allow(clippy::inline_always)]

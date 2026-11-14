@@ -76,15 +76,48 @@ pub(crate) fn get_clear_counter(m: &TileTypeAccess, t: TileIndex) -> Option<u8> 
     let fields = m.require_type(t, TileType::MP_CLEAR)?;
     Some(fields.m5() >> 5)
 }
+/// `AddClearDensity`: increment the density of a non-field clear tile.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "`t.m5() += d` stores the int sum back into the original uint8_t m5"
+)]
+pub(crate) fn add_clear_density(m: &TileTypeAccess, t: TileIndex, d: i32) -> Option<()> {
+    let fields = m.require_type(t, TileType::MP_CLEAR)?; // XXX incomplete
+    m.set_m5(t, i32::from(fields.m5()).wrapping_add(d) as u8)
+}
+/// `AddClearCounter`: increments the counter used to advance to the next clear density/field
+/// type.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "`t.m5() += c << 5` stores the int sum back into the original uint8_t m5"
+)]
+pub(crate) fn add_clear_counter(m: &TileTypeAccess, t: TileIndex, c: i32) -> Option<()> {
+    let fields = m.require_type(t, TileType::MP_CLEAR)?; // XXX incomplete
+    m.set_m5(t, i32::from(fields.m5()).wrapping_add(c << 5) as u8)
+}
+/// `SetClearGroundDensity`: sets ground type and density in one go, also sets the counter to 0.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`t.m5() = 0 << 5 | type << 2 | density` stores into the original uint8_t m5"
+)]
+pub(crate) fn set_clear_ground_density(
+    m: &TileTypeAccess,
+    t: TileIndex,
+    r#type: ClearGround,
+    density: u32,
+) -> Option<()> {
+    m.require_type(t, TileType::MP_CLEAR)?; // XXX incomplete
+    m.set_m5(t, (u32::from(r#type.0) << 2 | density) as u8)
+}
 /// The fields of a tile, checked as `IsClearGround(t, CLEAR_FIELDS)` when asserting.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn require_field(m: &TileTypeAccess, t: TileIndex) -> Option<TileFields<'_>> {
     let fields = if m.assertions() {
         let fields = m.require_type(t, TileType::MP_CLEAR)?;
-        if get_clear_ground_from_fields(&fields) != ClearGround::CLEAR_FIELDS {
-            return None;
-        }
+        m.check(get_clear_ground_from_fields(&fields) == ClearGround::CLEAR_FIELDS)?;
         fields
     } else {
         m.fields(t)?
@@ -122,15 +155,6 @@ pub(crate) fn get_fence(
         }
     })
 }
-/// `IsTileType(t, MP_CLEAR) && IsClearGround(t, CLEAR_FIELDS)`.
-#[allow(clippy::inline_always)]
-#[inline(always)]
-pub(crate) fn is_field_tile(m: &TileTypeAccess, t: TileIndex) -> Option<bool> {
-    Some(
-        crate::tile_map::get_tile_type(m, t)? == TileType::MP_CLEAR
-            && get_clear_ground(m, t)? == ClearGround::CLEAR_FIELDS,
-    )
-}
 
 /// Raw adapter: `IsSnowTile` over a base tile, for files no pass has finished yet.
 #[inline]
@@ -141,44 +165,6 @@ pub(crate) fn is_snow_tile_raw(m: &TileTypeAccess, t: u32) -> Option<bool> {
 #[inline]
 pub(crate) fn get_clear_ground_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
     get_clear_ground(m, TileIndex(t)).map(|g| g.0)
-}
-/// Raw adapter: `GetClearGround` over checked fields, as a base value.
-#[inline]
-pub(crate) fn get_clear_ground_from_fields_raw(fields: &TileFields<'_>) -> u8 {
-    get_clear_ground_from_fields(fields).0
-}
-/// Raw adapter: `GetClearDensity` over a base tile.
-#[inline]
-pub(crate) fn get_clear_density_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    get_clear_density(m, TileIndex(t))
-}
-/// Raw adapter: `GetClearCounter` over a base tile.
-#[inline]
-pub(crate) fn get_clear_counter_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    get_clear_counter(m, TileIndex(t))
-}
-/// Raw adapter: the checked field tile over a base tile.
-#[inline]
-pub(crate) fn require_field_raw(m: &TileTypeAccess, t: u32) -> Option<TileFields<'_>> {
-    require_field(m, TileIndex(t))
-}
-/// Raw adapter: `GetIndustryIndexOfField` as a base value.
-#[inline]
-pub(crate) fn get_industry_index_of_field_raw(fields: &TileFields<'_>) -> u16 {
-    get_industry_index_of_field(fields).0
-}
-/// Raw adapter: `GetFence` over a base side; `NOT_REACHED` fails through the
-/// canonical native assertion.
-#[inline]
-pub(crate) fn get_fence_raw(fields: &TileFields<'_>, side: u8) -> u32 {
-    get_fence(fields, DiagDirection(side), || {
-        crate::services_assert::check(false);
-    })
-}
-/// Raw adapter: the field-tile test over a base tile.
-#[inline]
-pub(crate) fn is_field_tile_raw(m: &TileTypeAccess, t: u32) -> Option<bool> {
-    is_field_tile(m, TileIndex(t))
 }
 
 /// Native `ClearGround` representation; every byte pattern is retained.

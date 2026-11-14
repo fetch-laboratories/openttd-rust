@@ -31,6 +31,8 @@ rust/openttd-kernels/src/encoded.rs
 rust/openttd-kernels/src/error_func.rs
 rust/openttd-kernels/src/follow_track.rs
 rust/openttd-kernels/src/game_state.rs
+rust/openttd-kernels/src/ground_vehicle.rs
+rust/openttd-kernels/src/ground.rs
 rust/openttd-kernels/src/house_definition.rs
 rust/openttd-kernels/src/house.rs
 rust/openttd-kernels/src/industry/commands.rs

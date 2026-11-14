@@ -467,7 +467,7 @@ impl<'a> House<'a> {
         let class = (self.l.house_class)(house);
         // SAFETY: Live owner; count access ends before the map services below.
         unsafe { super::decrease_building(town.state, house, class) };
-        crate::ground::clear_square(tile.0, self.s);
+        crate::ground::do_clear_square(tile, self.s);
         (self.h.delete_inspect)(tile.0);
     }
     /// `ClearTownHouse`: population, counts and flags precede the footprint.
@@ -1619,12 +1619,12 @@ impl<'a> House<'a> {
                 // The other tiles will get removed later in this loop because
                 // their north tile is not the correct type anymore.
                 if !valid_house {
-                    crate::ground::clear_square(t.0, self.s);
+                    crate::ground::do_clear_square(t, self.s);
                 }
             } else if !self.is_house_part(north_tile, id) {
                 // This tile should be part of a multi-tile building but the
                 // north tile of this house isn't on the map.
-                crate::ground::clear_square(t.0, self.s);
+                crate::ground::do_clear_square(t, self.s);
             }
         }
         self.rebuild_town_caches();

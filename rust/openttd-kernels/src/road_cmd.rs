@@ -657,7 +657,7 @@ impl<'a> Ctx<'a> {
                     self.infrastructure(rt, self.owner(tile, rtt), -(pieces.count_ones() as i32));
                     if present == 0 {
                         if self.rt(tile, rtt ^ 1) == INVALID {
-                            crate::ground::clear_square(tile, self.shared);
+                            crate::ground::do_clear_square_raw(tile, self.shared);
                         } else {
                             if rtt == 0 && self.owner(tile, rtt) == OWNER_TOWN {
                                 self.update_town(tile);
@@ -705,12 +705,9 @@ impl<'a> Ctx<'a> {
                     );
                     /* A full diagonal road tile has two road bits. */
                     self.infrastructure(rt, self.owner(tile, rtt), -2);
-                    let track = crate::ground::crossing_rail_track(
-                        tile,
+                    let track = crate::road_map::get_crossing_rail_track(
                         &crate::map_func::World::new(self.shared),
-                        |ok| {
-                            crate::movement::native_assert(self.shared, ok);
-                        },
+                        crate::tile_type::TileIndex(tile),
                     )
                     .0;
                     if self.rt(tile, rtt ^ 1) == INVALID {
@@ -1601,7 +1598,7 @@ impl<'a> Ctx<'a> {
                 (self.commands.infrastructure_dirty)(owner);
             }
             (self.r.delete_depot)(tile);
-            crate::ground::clear_square(tile, self.shared);
+            crate::ground::do_clear_square_raw(tile, self.shared);
         }
         cost.set(price(31));
     }
@@ -1786,12 +1783,9 @@ impl<'a> Ctx<'a> {
             && (self.shared.tile_owner)(tile) == old
         {
             if new == INVALID_OWNER {
-                let track = crate::ground::crossing_rail_track(
-                    tile,
+                let track = crate::road_map::get_crossing_rail_track(
                     &crate::map_func::World::new(self.shared),
-                    |ok| {
-                        crate::movement::native_assert(self.shared, ok);
-                    },
+                    crate::tile_type::TileIndex(tile),
                 )
                 .0;
                 self.command(
@@ -2159,10 +2153,10 @@ impl<'a> Ctx<'a> {
                         from,
                         to,
                     );
-                    crate::ground::set_tunnel_bridge_owner(
-                        tile,
-                        other,
-                        (self.shared.current_company)(),
+                    crate::tunnelbridge::set_tunnel_bridge_owner(
+                        crate::tile_type::TileIndex(tile),
+                        crate::tile_type::TileIndex(other),
+                        crate::company_type::CompanyID((self.shared.current_company)()),
                         self.shared,
                     );
                 }

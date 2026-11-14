@@ -156,7 +156,11 @@ impl Handle {
     }
 
     pub(crate) fn get_flags(self) -> u64 {
-        u64::from(read_field!(self.owner, flags).0)
+        u64::from(self.flags().0)
+    }
+    /// `Train::flags`.
+    pub(crate) fn flags(self) -> VehicleRailFlags {
+        read_field!(self.owner, flags)
     }
     pub(crate) fn set_flags(self, value: u64) {
         write_field!(self.owner, flags, VehicleRailFlags(value as u16));
@@ -231,10 +235,64 @@ impl Handle {
         self.set_flags(if value { old | mask } else { old & !mask });
     }
 }
+/// Native `VehicleRailFlag`: rail vehicle flags, as bit positions of `VehicleRailFlags`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VehicleRailFlag(pub u8);
+
+#[allow(
+    non_upper_case_globals,
+    reason = "the enumerator names of the original VehicleRailFlag (train.h)"
+)]
+impl VehicleRailFlag {
+    /// Train is slowing down to reverse.
+    pub const Reversing: Self = Self(0);
+    /// Wagon is powered.
+    pub const PoweredWagon: Self = Self(3);
+    /// Reverse the visible direction of the vehicle.
+    pub const Flipped: Self = Self(4);
+    /// Electric train engine is allowed to run on normal rail.
+    pub const AllowedOnNormalRail: Self = Self(6);
+    /// Used for vehicle var 0xFE bit 8 (toggled each time the train is reversed, accurate for
+    /// first vehicle only).
+    pub const Reversed: Self = Self(7);
+    /// Train can't get a path reservation.
+    pub const Stuck: Self = Self(8);
+    /// Train is just leaving a station.
+    pub const LeavingStation: Self = Self(9);
+}
+
 /// Native `VehicleRailFlags`: the `VehicleRailFlag` bit set, stored as `uint16_t`.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct VehicleRailFlags(pub u16);
+
+impl VehicleRailFlags {
+    /// Set containing the named element.
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "EnumBitSet<VehicleRailFlag, uint16_t> stores the element's bit in uint16_t"
+    )]
+    pub const fn from_element(element: VehicleRailFlag) -> Self {
+        Self((1_u64 << element.0) as u16)
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: VehicleRailFlag) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
+    /// Native `BaseBitSet::Any`: whether any element of `other` is set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+}
 
 /// Native `TrainForceProceeding`: Modes for ignoring signals.
 #[repr(transparent)]
@@ -913,21 +971,19 @@ impl Game<'_> {
         let braking = v_status & 2 != 0 || id.flag(0) || id.flag(8);
         let max = self.get_current_max_speed(id);
         if self.acc_model() == 0 {
-            crate::ground_vehicle::update_speed(
+            crate::ground_vehicle::do_update_speed(
                 id.vehicle(),
                 (i64::from(i32::from(v_acceleration) * if braking { -4 } else { 2 }) as u64) as u32,
                 0,
                 (max as u64) as i32,
-            )
-            .distance as i32
+            ) as i32
         } else {
-            crate::ground_vehicle::update_speed(
+            crate::ground_vehicle::do_update_speed(
                 id.vehicle(),
-                crate::ground_vehicle::acceleration(self.leaves.physics, id.vehicle()) as u32,
+                crate::ground_vehicle::get_acceleration(self.leaves.physics, id.vehicle()) as u32,
                 (u64::from(!braking) * 2) as i32,
                 (max as u64) as i32,
-            )
-            .distance as i32
+            ) as i32
         }
     }
     fn mark_dirty(&self, id: Handle) {
@@ -1229,7 +1285,7 @@ impl Game<'_> {
             id.set_wait_counter(0);
             (id).vehicle().write_speed(0_u16);
             (id).vehicle().write_subspeed(0_u8);
-            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+            crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
             (self.leaves.start_stop_dirty)(id);
         }
     }
@@ -1283,7 +1339,7 @@ impl Game<'_> {
                     && (self.leaves.is_bridge)(Handle::NONE, (id).vehicle().tile()) != 0
                 {
                     self.update_occupancy(id);
-                    crate::ground_vehicle::inclination(
+                    crate::ground_vehicle::update_inclination(
                         self.leaves.physics,
                         &self.movement,
                         id.vehicle(),
@@ -1900,10 +1956,11 @@ impl Game<'_> {
                 if dir != (id).vehicle().direction() {
                     if prev == Handle::NONE && self.acc_model() == 0 {
                         let diff = (id).vehicle().direction().wrapping_sub(dir) & 7;
-                        let small = if u64::from(crate::ground_vehicle::acceleration_type(
+                        let small = if <crate::ground_vehicle::Train as crate::ground_vehicle::GroundVehicleType>::get_acceleration_type(
                             self.leaves.physics,
+                            &crate::map_func::World::new(self.services),
                             id.vehicle(),
-                        )) == 2
+                        ) == crate::engine_type::VehicleAccelerationModel::Maglev
                         {
                             0
                         } else {
@@ -1963,7 +2020,7 @@ impl Game<'_> {
         (id).vehicle().write_x((x as u64) as i32);
         (id).vehicle().write_y((y as u64) as i32);
         self.update_occupancy(id);
-        let old_z = crate::ground_vehicle::inclination(
+        let old_z = crate::ground_vehicle::update_inclination(
             self.leaves.physics,
             &self.movement,
             id.vehicle(),
@@ -2270,7 +2327,7 @@ impl Game<'_> {
                 );
                 if id.track() != WORMHOLE {
                     self.update_occupancy(id);
-                    crate::ground_vehicle::inclination(
+                    crate::ground_vehicle::update_inclination(
                         self.leaves.physics,
                         &self.movement,
                         id.vehicle(),
@@ -2528,7 +2585,7 @@ impl Game<'_> {
         let mut advance = (self.leaves.advance_distance)(id) as i32;
         if distance < advance {
             if (id).vehicle().speed() == 0 {
-                crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+                crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
             }
         } else {
             self.line_ends(id, true);
@@ -2560,7 +2617,7 @@ impl Game<'_> {
                     };
                 }
             }
-            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+            crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
         }
         let mut u = id;
         while u != Handle::NONE {
@@ -2609,7 +2666,7 @@ impl Game<'_> {
         if (self.leaves.servint)(id) == 0 || !self.needs_automatic_servicing(id) {
             return;
         }
-        if u64::from(crate::ground_vehicle::chain_in_depot(
+        if u64::from(crate::ground_vehicle::is_chain_in_depot(
             self.leaves.physics,
             id.vehicle(),
         )) != 0
@@ -2683,7 +2740,7 @@ impl Game<'_> {
             return 0;
         }
         if !id.flag(8) {
-            return if u64::from(crate::ground_vehicle::chain_in_depot(
+            return if u64::from(crate::ground_vehicle::is_chain_in_depot(
                 self.leaves.physics,
                 id.vehicle(),
             )) != 0
@@ -2762,7 +2819,7 @@ impl Game<'_> {
                     id.set_flag(0, !id.flag(0));
                 } else {
                     (id).vehicle().write_speed(0_u16);
-                    crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+                    crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
                     (self.leaves.hide_fill)(id);
                     self.reverse(id);
                 }
@@ -3185,12 +3242,8 @@ crate::abi::layouts! {
         length,
     };
 }
-/// `VehicleRailFlag::PoweredWagon`, from `train.h`.
-pub(crate) const FLAG_POWERED_WAGON: u64 = 1 << 3;
-/// `VehicleRailFlag::Reversing`, from `train.h`.
-pub(crate) const FLAG_REVERSING: u64 = 1 << 0;
-/// `VehicleRailFlag::Stuck`, from `train.h`.
-pub(crate) const FLAG_STUCK: u64 = 1 << 8;
+/// Base mask of `VehicleRailFlag::Reversing`, for callers in files no pass has finished.
+pub(crate) const FLAG_REVERSING: u64 = 1 << VehicleRailFlag::Reversing.0;
 
 /// `GetTrainStopLocation`: the same owned stop-location callee for tile admission
 /// and train speed control. Returns the stop location, the station ahead and the

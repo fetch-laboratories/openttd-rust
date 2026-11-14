@@ -126,7 +126,7 @@ pub(crate) unsafe fn restore(
         }
         class = 1;
     }
-    crate::ground::clear_square(tile, s);
+    crate::ground::do_clear_square_raw(tile, s);
     match class {
         0 => (water.make_sea)(tile),
         1 => (r.make_canal)(tile, owner, s.random() as u8),

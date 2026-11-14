@@ -215,6 +215,10 @@ impl crate::map_func::World<'_> {
         self.check(self.road_tile_type(t).0 == ROAD_TILE_CROSSING);
         Self::byte(self.types.m5(TileIndex(t))) & 1
     }
+    /// `IsRoadDepot`: return whether a tile is a road depot.
+    pub(crate) fn is_road_depot(&self, t: TileIndex) -> bool {
+        self.road_tile_type(t.0).0 == ROAD_TILE_DEPOT
+    }
     /// `IsNormalRoad`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -312,6 +316,88 @@ pub(crate) fn has_tile_any_road_type(
 ) -> bool {
     may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile")
         && get_present_road_types(world, tile) & types != 0
+}
+
+/// `GetCrossingRailAxis`: get the rail axis of a level crossing.
+pub(crate) fn get_crossing_rail_axis(
+    world: &crate::map_func::World<'_>,
+    t: TileIndex,
+) -> crate::direction_type::Axis {
+    world.check(world.level_crossing(t.0));
+    crate::direction_func::other_axis(
+        crate::direction_type::Axis(world.crossing_road_axis(t.0)),
+        |ok| world.check(ok),
+    )
+}
+/// `GetCrossingRailTrack`: get the rail track of a level crossing.
+pub(crate) fn get_crossing_rail_track(
+    world: &crate::map_func::World<'_>,
+    tile: TileIndex,
+) -> crate::track_type::Track {
+    crate::track_func::axis_to_track(get_crossing_rail_axis(world, tile), |ok| world.check(ok))
+}
+/// `SetRoadside`: set the decorations of a road.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "SB stores back into the original uint8_t m6"
+)]
+pub(crate) fn set_roadside(
+    m: &crate::map_func::TileTypeAccess,
+    tile: TileIndex,
+    s: Roadside,
+) -> Option<()> {
+    let mut bits = u32::from(m.m6(tile)?);
+    crate::bitmath_func::sb(&mut bits, 3, 3, u32::from(s.0));
+    m.set_m6(tile, bits as u8)
+}
+/// `IncreaseRoadWorksCounter`: increase the progress counter of road works. Returns true if
+/// the road works are in the last stage.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "AB stores back into the original uint8_t m7"
+)]
+pub(crate) fn increase_road_works_counter(
+    m: &crate::map_func::TileTypeAccess,
+    t: TileIndex,
+) -> Option<bool> {
+    let mut bits = u32::from(m.m7(t)?);
+    crate::bitmath_func::ab(&mut bits, 0, 4, 1);
+    m.set_m7(t, bits as u8)?;
+
+    Some(crate::bitmath_func::gb(u32::from(m.m7(t)?), 0, 4) == 15)
+}
+/// `StartRoadWorks`: start road works on a tile. Requires `!HasRoadWorks(t)`.
+pub(crate) fn start_road_works(m: &crate::map_func::TileTypeAccess, t: TileIndex) -> Option<()> {
+    m.check(!has_road_works(m, t.0)?)?;
+    /* Remove any trees or lamps in case or roadwork */
+    match get_roadside(m, t.0)? {
+        Roadside::Barren | Roadside::Grass => set_roadside(m, t, Roadside::GrassRoadWorks),
+        _ => set_roadside(m, t, Roadside::PavedRoadWorks),
+    }
+}
+/// `TerminateRoadWorks`: terminate road works on a tile. Requires `HasRoadWorks(t)`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "SB stores back into the original uint8_t m7"
+)]
+pub(crate) fn terminate_road_works(
+    m: &crate::map_func::TileTypeAccess,
+    t: TileIndex,
+) -> Option<()> {
+    m.check(has_road_works(m, t.0)?)?;
+    set_roadside(
+        m,
+        t,
+        if get_roadside(m, t.0)? == Roadside::GrassRoadWorks {
+            Roadside::Grass
+        } else {
+            Roadside::Paved
+        },
+    )?;
+    /* Stop the counter */
+    let mut bits = u32::from(m.m7(t)?);
+    crate::bitmath_func::sb(&mut bits, 0, 4, 0);
+    m.set_m7(t, bits as u8)
 }
 
 /// Native `Roadside` representation; every byte pattern is retained.

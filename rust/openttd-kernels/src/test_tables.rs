@@ -164,8 +164,6 @@ pub(crate) const GROUND_VEHICLE: crate::ground_vehicle::Services =
         vehicle: &VEHICLE,
         road: &ROAD_LEAVES,
         assertions: false,
-        resolve: unreachable1,
-        weight_input: unreachable1,
         capabilities: &crate::engine_capabilities::TEST_TABLE,
         cargo_weight: unreachable2,
         train_cargo_weight: unreachable2,
@@ -173,12 +171,9 @@ pub(crate) const GROUND_VEHICLE: crate::ground_vehicle::Services =
         rail_type: unreachable1,
         rail_acceleration: unreachable1,
         rail_speed: unreachable1,
-        road_speed: unreachable1,
         steepness: unreachable1,
-        display_max_speed: unreachable1,
         viewport: unreachable3,
         base_crash: unreachable2,
-        depot_tile: unreachable2,
     };
 
 /// `crate::vehicle::VehicleServices` with every entry unreachable.
@@ -812,18 +807,10 @@ pub(crate) const TILE_OWNERS: crate::tile_owner::Services = crate::tile_owner::S
 };
 /// `crate::ground::ClearServices` with every entry unreachable.
 pub(crate) const CLEAR_GROUND: crate::ground::ClearServices = crate::ground::ClearServices {
-    field_tile: unreachable1,
-    density: unreachable1,
-    counter: unreachable1,
-    snow: unreachable1,
-    surface: unreachable1,
     set_ground: unreachable3,
-    set_density: unreachable2,
     set_counter: unreachable2,
     clear_snow: unreachable1,
     make_clear: unreachable3,
-    fences: unreachable1,
-    field: unreachable1,
     set_field: unreachable2,
 };
 

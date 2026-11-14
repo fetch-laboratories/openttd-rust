@@ -102,7 +102,6 @@ static void RoadBoundary()
 	road_abi_vehicle.subtype = 1;
 
 	/* A direct callback changes canonical state before Rust reobserves it. */
-	t.physics.resolve = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundOwner { return {road_abi_probe->ground.state, {}, road_abi_probe->state, VEH_ROAD}; };
 	probe.ground.state->flags = 3;
 	t.physics.base_crash = [](OpenTTDVehicle *u, bool flooded) noexcept -> uint32_t {
 		CHECK(u == RoadAbiHandle() && !flooded);

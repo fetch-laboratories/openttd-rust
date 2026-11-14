@@ -220,8 +220,6 @@ rebound | RustUpdateSignals | src/rust/disaster_adapter.hpp | update_signals
 rebound | RustVehicleCargoType | src/economy.cpp | cargo_type
 rebound | RustVehicleCargoType | src/rust/engine_capabilities_services.hpp | vehicle_cargo
 rebound | RustVehicleCargoType | src/station_cmd.cpp | cargo_type
-rebound | RustVehicleDisplaySpeed | src/rust/ground_vehicle_services.cpp | display_max_speed
-rebound | RustVehicleDisplaySpeed | src/vehicle.cpp | display_speed
 rebound | RustVehicleExpense | src/economy.cpp | expense
 rebound | RustVehicleExpense | src/rust/vehicle_refit_services.hpp | expense
 rebound | RustVehicleGetEngine | src/rust/engine_capabilities_services.hpp | vehicle_engine_object

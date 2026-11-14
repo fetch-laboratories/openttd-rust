@@ -509,7 +509,7 @@ impl World<'_> {
             if self.class(tile) == 2 {
                 (self.a.restoration.make_river)(tile, self.random());
             } else {
-                crate::ground::clear_square(tile, self.s);
+                crate::ground::do_clear_square_raw(tile, self.s);
                 self.wake_neighbours(tile);
             }
             self.restore(upper, (self.s.tile_owner)(upper));
@@ -665,7 +665,7 @@ impl World<'_> {
                     if self.canal(tile) && (self.s.company_valid)(owner) {
                         self.infra(owner, u32::MAX, true);
                     }
-                    crate::ground::clear_square(tile, self.s);
+                    crate::ground::do_clear_square_raw(tile, self.s);
                     self.dirty_neighbours(tile);
                     self.wake_neighbours(tile);
                     w::hit(w::WATER_CMD_CLEAR);
@@ -680,7 +680,7 @@ impl World<'_> {
                     return;
                 }
                 if flags & DoCommandFlag::EXECUTE != 0 {
-                    crate::ground::clear_square(tile, self.s);
+                    crate::ground::do_clear_square_raw(tile, self.s);
                     self.dirty_neighbours(tile);
                     self.wake_neighbours(tile);
                 }

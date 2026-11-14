@@ -168,11 +168,11 @@
 
 ## Common ground-vehicle dynamics and canonical cache (#372)
 
-- Rust owns: train/road power and cargo cache rebuilds, acceleration, depot checks, crash slope flags, inclination/Z updates, speed accumulation and selected physics callees.
-- C++ keeps: shell/pool identity, engine/cargo specs, NewGRF properties, viewport, map operations and base crash leaf.
-- Checks: default road, rail and fleet scenarios; fleet console against unchanged reference bodies.
+- Rust owns: `GroundVehicle<T, Type>` (`ground_vehicle.rs`) instantiated for `Train` and `RoadVehicle` with their per-type acceleration methods: power and cargo cache rebuilds, acceleration, depot checks, crash slope flags, inclination/Z updates and speed accumulation. Each entry resolves its owners from the shared vehicle record.
+- C++ keeps: shell/pool identity, rail-type and road-type info, cargo specs, slope-steepness settings, NewGRF properties, viewport and the base crash leaf.
+- Checks: default road, rail and fleet scenarios; fleet console against unchanged reference bodies; `ground_vehicle::tests` for the native assertions and owner resolution.
 - Limits: Gaps remain in external powered/articulated NewGRFs, maglev traffic, legacy saves, and threaded GUI (#156).
-- PRs: #375.
+- PRs: #375; file pass #963.
 
 ## Vehicle tile occupancy and live spatial queries (#377)
 

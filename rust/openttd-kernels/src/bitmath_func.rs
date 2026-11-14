@@ -52,6 +52,15 @@ pub fn sb(value: &mut u32, start: u8, length: u8, data: u32) {
     *value |= data.wrapping_shl(u32::from(start));
 }
 
+/// `AB`: add `i` to the `n`-bit window of `x` starting at bit `s`. An overflow does not
+/// affect the following bits of the window and is simply ignored. For uint32 fields.
+/// Preconditions: `n < 32` and `s + n <= 32`.
+pub fn ab(x: &mut u32, s: u8, n: u8, i: u32) -> u32 {
+    let mask = (1_u32.wrapping_shl(u32::from(n)) - 1).wrapping_shl(u32::from(s));
+    *x = (*x & !mask) | (x.wrapping_add(i.wrapping_shl(u32::from(s))) & mask);
+    *x
+}
+
 /// `AssignBit`: assigns a single bit in a variable. The variable is changed and the value is
 /// also returned. For promoted integer fields.
 pub fn assign_bit(value: &mut u32, bit: u8, enabled: bool) -> u32 {
@@ -195,6 +204,13 @@ pub fn clr_bit_size(value: &mut usize, bit: u8) -> usize {
 /// `SetBit` for byte-sized bitsets, preserving the original return value.
 pub fn set_bit8(value: &mut u8, bit: u8) -> u8 {
     *value |= 1_u8.wrapping_shl(u32::from(bit));
+    *value
+}
+
+/// `SetBit` for 16-bit flag words such as `GroundVehicle::gv_flags`, preserving the
+/// original return value.
+pub fn set_bit16(value: &mut u16, bit: u8) -> u16 {
+    *value |= 1_u16.wrapping_shl(u32::from(bit));
     *value
 }
 
