@@ -1009,11 +1009,31 @@ def original_path(text: str) -> str:
     return str(path)
 
 
+def in_original(commit: str, text: str) -> str:
+    """The path as the original names it, with or without its `src/` prefix.
+
+    `original grep` prints `src/...` paths while reviewers often quote a path
+    from inside `src/`; both forms name one file or folder (#945 item 16). A
+    path in neither form is returned as given, for the caller's own refusal.
+    """
+    path = original_path(text)
+    for candidate in (path, f"src/{path}"):
+        exists = subprocess.run(
+            ["git", "cat-file", "-e", f"{commit}:{candidate}"],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if not exists.returncode:
+            return candidate
+    return path
+
+
 def show_original(spec: str) -> int:
     """Print a file, or lines A-B numbered, from the pinned commit's object."""
     lines_match = re.search(r":(\d+)(?:-(\d+))?$", spec)
-    path = original_path(spec[: lines_match.start()] if lines_match else spec)
     commit = pinned_commit()
+    path = in_original(commit, spec[: lines_match.start()] if lines_match else spec)
     shown = subprocess.run(
         ["git", "show", f"{commit}:{path}"],
         cwd=ROOT,
@@ -1043,7 +1063,7 @@ def show_original(spec: str) -> int:
 def grep_original(pattern: str, paths: list[str]) -> int:
     """git grep -n over the pinned commit, printing path:line:text."""
     commit = pinned_commit()
-    pathspecs = [original_path(path) for path in paths] or ["src/"]
+    pathspecs = [in_original(commit, path) for path in paths] or ["src/"]
     command = ["git", "grep", "-n", "-E", "-e", pattern, commit, "--", *pathspecs]
     with subprocess.Popen(
         command, cwd=ROOT, stdout=subprocess.PIPE, text=True, errors="replace"
