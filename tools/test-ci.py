@@ -40,6 +40,7 @@ PULL = {
     "labels": [],
     "mergeable": True,
     "merge_commit_sha": MERGE,
+    "body": "Agent: /implementation | Model: m | Reasoning effort: high",
 }
 
 
@@ -2142,6 +2143,36 @@ class RequestTests(unittest.TestCase):
             gh.assert_not_called()
         self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
 
+    def ready(self, quick: list[dict[str, object]], **pull: object) -> list[tuple]:
+        """Run ready on PULL with pull's changes and `quick` as the head's checks."""
+
+        def answers(_repository: str, path: str) -> object:
+            if path.startswith("pulls/"):
+                return dict(PULL, **pull)
+            return {"check_runs": quick}
+
+        args = argparse.Namespace(repo="example/fork", pr=170)
+        with (
+            patch.object(ci, "api", side_effect=answers),
+            patch.object(ci, "gh", return_value="") as gh,
+            patch("builtins.print"),
+        ):
+            ci.ready(args)
+        return [call.args for call in gh.call_args_list]
+
+    def test_ready_restarts_a_quick_that_only_skipped(self) -> None:
+        mark = ("pr", "ready", "170", "--repo", "example/fork")
+        skipped = {"conclusion": "skipped", "started_at": "2026-11-12T01:00:00Z"}
+        passed = {"conclusion": "success", "started_at": "2026-11-12T00:59:00Z"}
+        self.assertEqual(self.ready([skipped], draft=False), [(*mark, "--undo"), mark])
+        self.assertEqual(self.ready([skipped, passed], draft=False), [mark])
+        self.assertEqual(self.ready([skipped], draft=True), [mark])
+        self.assertEqual(self.ready([], draft=False), [mark])
+
+    def test_ready_refuses_a_body_without_its_attribution_line(self) -> None:
+        with self.assertRaisesRegex(ValueError, "attribution line"):
+            self.ready([], draft=True, body="Agent: /x")
+
     def test_unstamped_request_is_logged_not_checked(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -2995,6 +3026,7 @@ class EnqueueTests(unittest.TestCase):
                 "parents": [{"sha": PARENT}, {"sha": world.get("ejected", HEAD)}]
             },
             f"compare/rust-migration...{HEAD}": {"behind_by": world.get("behind", 0)},
+            f"compare/{HEAD}...rust-migration": {"files": world.get("base_files", [])},
             "actions/runs/9": world.get("recorded"),
         }
         calls: list[tuple[str, ...]] = []
@@ -3131,10 +3163,66 @@ class EnqueueTests(unittest.TestCase):
 
     def test_new_head_after_ejection_needs_base_and_a_stamp(self) -> None:
         entry = {"state": "QUEUED", "position": 1}
-        with self.assertRaisesRegex(ValueError, "3 commits behind"):
-            self.enqueue(queue=[self.EJECTED], ejected=PREVIOUS, behind=3)
+        code = [{"filename": "tools/ci.py"}]
+        with self.assertRaisesRegex(
+            ValueError, "3 commits behind, changing tools/ci.py"
+        ):
+            self.enqueue(
+                queue=[self.EJECTED], ejected=PREVIOUS, behind=3, base_files=code
+            )
         self.enqueue(queue=[self.EJECTED], ejected=PREVIOUS, entry=entry)
         self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
+
+    def test_a_head_behind_only_by_inert_markdown_queues_again(self) -> None:
+        entry = {"state": "QUEUED", "position": 1}
+        roadmap = [{"filename": "docs/roadmap.md"}, {"filename": "AGENTS.md"}]
+        self.enqueue(
+            queue=[self.EJECTED],
+            ejected=PREVIOUS,
+            behind=2,
+            base_files=roadmap,
+            entry=entry,
+        )
+        self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
+        for label, files in (
+            ("code", [{"filename": "tools/ci.py"}]),
+            ("built doc", [{"filename": "docs/multiplayer.md"}]),
+            (
+                "rename from code",
+                [{"filename": "docs/x.md", "previous_filename": "tools/x.py"}],
+            ),
+            ("listing at the limit", [{"filename": "docs/roadmap.md"}] * 300),
+        ):
+            with self.subTest(label), self.assertRaisesRegex(ValueError, "behind"):
+                self.enqueue(
+                    queue=[self.EJECTED], ejected=PREVIOUS, behind=1, base_files=files
+                )
+
+    def test_enqueue_refuses_a_body_without_its_attribution_line(self) -> None:
+        for body in (
+            "",
+            "Agent: /x | Model: m",
+            "Agent /x | Model: m | Reasoning effort: high",
+        ):
+            with (
+                self.subTest(body=body),
+                patch.dict(PULL, body=body),
+                self.assertRaisesRegex(ValueError, "attribution line"),
+            ):
+                self.enqueue()
+        self.assertEqual(self.calls, [])
+
+    def test_a_skipped_quick_counts_only_when_alone(self) -> None:
+        skipped = dict(
+            self.QUICK, conclusion="skipped", started_at="2026-11-12T01:00:05Z"
+        )
+        for runs in ([self.QUICK, skipped], [skipped, self.QUICK]):
+            with patch.object(
+                ci, "api", return_value={"check_runs": [dict(run) for run in runs]}
+            ):
+                self.assertEqual(ci.latest_quick("example/fork", HEAD), self.QUICK)
+        with self.assertRaisesRegex(ValueError, "ci.py ready 170"):
+            self.enqueue(quick=skipped)
 
 
 def comment(number: int, body: str, at: str) -> review_report.Comment:

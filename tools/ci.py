@@ -18,6 +18,7 @@ from typing import Any, NotRequired, TypedDict, cast
 from urllib.parse import quote
 
 import ci_log
+import cleanup_contract
 import preflight_stamp
 import review_report
 import status_comment
@@ -250,10 +251,33 @@ def require_stamp(pr: int, head: str, unstamped: str | None) -> None:
         )
 
 
+def require_attribution(pr: int, pull: dict) -> None:
+    """The PR body carries the attribution line the growth gate reads its author
+    from; the merge group's Full fails without it, after every other check."""
+    if not cleanup_contract.ATTRIBUTION.search(pull.get("body") or ""):
+        raise ValueError(
+            f"PR #{pr}'s body has no attribution line; add one in the form "
+            "`Agent: <path> | Model: <exact model> | Reasoning effort: <effort>`"
+        )
+
+
 def ready(args: argparse.Namespace) -> None:
     repository = repository_of(args.repo)
-    head = current_head(api(repository, f"pulls/{args.pr}"))
+    pull = api(repository, f"pulls/{args.pr}")
+    head = current_head(pull)
     require_stamp(args.pr, head, None)
+    require_attribution(args.pr, pull)
+    quick = latest_quick(repository, head)
+    if not pull.get("draft") and quick and quick["conclusion"] == "skipped":
+        # Quick skipped a draft; a push landing with the ready mark left only
+        # that skip at this head. Marking ready again starts it (#936, #956).
+        gh("pr", "ready", str(args.pr), "--repo", repository, "--undo")
+        gh("pr", "ready", str(args.pr), "--repo", repository)
+        print(
+            f"PR #{args.pr} at {head} had only a skipped {QUICK}; returned it to "
+            "draft and marked it ready again to start one"
+        )
+        return
     gh("pr", "ready", str(args.pr), "--repo", repository)
     print(f"PR #{args.pr} at {head} marked ready")
 
@@ -811,11 +835,19 @@ def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
 
 
 def latest_quick(repository: str, head: str) -> dict | None:
-    """The head's latest Quick validation check run, from its pull_request run."""
+    """The head's latest Quick validation check run, from its pull_request run.
+
+    A skipped run carries no verdict: one left from the PR's draft can be stamped
+    after the run that validated the same head, so it counts only when no other
+    run exists.
+    """
     checks = api(
         repository, f"commits/{head}/check-runs?check_name={quote(QUICK)}&filter=latest"
     )
-    runs = sorted(checks["check_runs"], key=lambda run: run["started_at"] or "")
+    runs = sorted(
+        checks["check_runs"],
+        key=lambda run: (run["conclusion"] != "skipped", run["started_at"] or ""),
+    )
     return runs[-1] if runs else None
 
 
@@ -864,6 +896,29 @@ def ejected_head(repository: str, run: QueueRun) -> str:
     return api(repository, f"commits/{run['head_sha']}")["parents"][1]["sha"]
 
 
+# GitHub lists at most this many files of a comparison.
+COMPARE_FILES = 300
+
+
+def uninert_base_changes(repository: str, head: str) -> list[str]:
+    """Paths the base changed since head forked that are not inert Markdown.
+
+    Root's docs-only commits move the base several times an hour; a head behind
+    only by them needs no base merge, preflight and native run to requeue. Both
+    paths of a rename count, and a listing at GitHub's limit counts as not inert.
+    """
+    files = api(repository, f"compare/{head}...{PROTECTED_REF}").get("files", [])
+    if len(files) >= COMPARE_FILES:
+        return [f"{len(files)} or more files"]
+    paths = [
+        path
+        for row in files
+        for path in (row["filename"], row.get("previous_filename"))
+        if path
+    ]
+    return [path for path in dict.fromkeys(paths) if not preflight_stamp.inert(path)]
+
+
 def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None:
     """After the queue removes a PR for a failure, it queues again only with a new
     head that contains base and has a preflight stamp, or once unchanged after a
@@ -874,10 +929,11 @@ def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None
     url = runs[0]["html_url"]
     if ejected_head(repository, runs[0]) != head:
         behind = api(repository, f"compare/{PROTECTED_REF}...{head}")["behind_by"]
-        if behind:
+        if behind and (others := uninert_base_changes(repository, head)):
             raise ValueError(
                 f"The queue removed PR #{pr} ({url}); merge {PROTECTED_REF} into it "
-                f"first: its head is {behind} commits behind"
+                f"first: its head is {behind} commits behind, changing "
+                + ", ".join(others[:3])
             )
         require_stamp(pr, head, None)
         return
@@ -907,7 +963,13 @@ def enqueue_checks(repository: str, pr: int, pull: dict) -> str:
     head = current_head(pull)
     if pull.get("draft"):
         raise ValueError(f"PR #{pr} is a draft; mark it ready with ci.py ready")
+    require_attribution(pr, pull)
     quick = latest_quick(repository, head)
+    if quick and quick["conclusion"] == "skipped":
+        raise ValueError(
+            f"{QUICK} at {head} only skipped, as it does for a draft; run "
+            f"python3 tools/ci.py ready {pr} to start it"
+        )
     if not quick or quick["conclusion"] != "success":
         state = (
             quick and f"{quick['status']}/{quick['conclusion']}: {quick['html_url']}"
