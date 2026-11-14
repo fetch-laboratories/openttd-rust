@@ -140,7 +140,7 @@ Quick runs all but `port-metrics.py`, against `--base-ref origin/rust-migration`
 | `python3 tools/rebound-callees.py` | Duplicate bindings and forwarded service fields; macros, lambdas, wrappers, some templates and namespace resolution need review. |
 | `python3 tools/rust-only.py` | `WITH_RUST` conditionals in `src/`. |
 | `python3 tools/ffi-bool-returns.py` | Rust-defined C `bool` returns. |
-| `python3 tools/orphan-exports.py` | Rust exports and C++ declarations without production use; tests and harnesses do not count. An export used only by uncalled C++ members needs a row in `tools/uncalled-export-baseline.txt` naming the owner issue that retires it. |
+| `python3 tools/orphan-exports.py` | Rust exports and C++ declarations without production use; tests and harnesses do not count. An export used only by uncalled C++ members needs a row in `tools/uncalled-export-baseline.txt`, and one used only by uncalled free functions a row in `tools/uncalled-function-baseline.txt`, each naming the owner issue that retires it. `--report-uncalled` also lists uncalled free functions and those only tests or tools call. |
 | `python3 tools/port-metrics.py` | Code-line counts and original retirement; `--whole-fork` adds source areas, C++ evidence and exports; `--functions [AREA ...]` adds remaining original lines per file and function. |
 
 - No checker detects Rust copies of original header helpers and constants ([porting](porting.md#callees-and-shared-accessors)).

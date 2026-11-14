@@ -56,6 +56,57 @@ class OrphanTests(unittest.TestCase):
             },
         )
 
+    def test_uncalled_free_functions_and_the_exports_they_hold(self) -> None:
+        files = {
+            "src/rust/ffi.h": "uint8_t openttd_rust_dead(uint32_t);\n"
+            "uint8_t openttd_rust_tested(uint32_t);\n"
+            "uint8_t openttd_rust_live(uint32_t);\n",
+            "src/train.h": "bool Dead(TileIndex tile);\nbool Tested(TileIndex t);\n",
+            "src/train_cmd.cpp": "namespace {\n#if 1\n"
+            "static bool Live(TileIndex t)\n{\n\treturn openttd_rust_live(t.base());\n}\n"
+            "#endif\n}\n"
+            "bool Dead(TileIndex tile)\n{\n\treturn openttd_rust_dead(tile.base()) != 0;\n}\n"
+            "bool Tested(TileIndex t) { return openttd_rust_tested(t.base()); }\n"
+            "bool Callback(int32_t v) { return v != 0; }\n"
+            "void Console() noexcept { Embedded(); }\n"
+            "struct S { bool Member() { return true; } };\n"
+            "void Run()\n{\n\tLive(TileIndex{});\n}\n",
+            "src/main.cpp": "int main() { Run(); }\n",
+            "src/tests/train.cpp": 'TEST_CASE("x") { CHECK(Tested(TileIndex{})); }\n',
+            "src/table/settings/game.ini": "post_cb  = Callback\n",
+            "tools/simulation/console.py": 'SOURCE = "Embedded();"\n',
+            "src/3rdparty/lib.cpp": "void Vendored() {}\n",
+        }
+        uncalled, test_only, held = ORPHANS.uncalled_free_functions(files)
+        # main is the program's entry; Console calls a function only a tools/
+        # Python file names, and nothing calls Console.
+        self.assertEqual(
+            uncalled, {"Dead": "src/train_cmd.cpp:9", "Console": "src/train_cmd.cpp:15"}
+        )
+        self.assertEqual(test_only, {"Tested": "src/train_cmd.cpp:13"})
+        self.assertEqual(held, {"openttd_rust_dead": {"Dead"}})
+
+    def test_a_call_statement_is_not_a_declaration_of_a_free_function(self) -> None:
+        self.assertFalse(ORPHANS.declares("\n\tLive(x);", "Live", typed=True))
+        self.assertTrue(ORPHANS.declares("\nbool Live(int x);", "Live", typed=True))
+        self.assertTrue(ORPHANS.declares("\n\tLive(x);", "Live"))
+
+    def test_the_uncalled_function_baseline_gates_and_names_owners(self) -> None:
+        found = {"openttd_rust_dead": "Dead"}
+        self.assertEqual(
+            ORPHANS.uncalled_errors(found, "openttd_rust_dead | #975 Dead\n", ""),
+            ["uncalled baseline cannot grow: openttd_rust_dead"],
+        )
+        row = "openttd_rust_dead | #975 Dead\n"
+        self.assertEqual(ORPHANS.uncalled_errors(found, row, row), [])
+        self.assertEqual(
+            ORPHANS.uncalled_errors(
+                found, "openttd_rust_dead | Dead\n", "openttd_rust_dead | Dead\n"
+            ),
+            ["row names no owner issue: openttd_rust_dead"],
+        )
+        self.assertTrue(ORPHANS.uncalled_errors(found, "", ""))
+
     def test_visibility_and_intervening_attributes(self) -> None:
         for visibility in ("", "pub ", "pub(crate) "):
             for attribute in ("", "#[allow(unsafe_code)]\n"):
