@@ -46,7 +46,7 @@ from code_lines import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-METRIC_VERSION = 2
+METRIC_VERSION = 3
 METRIC_SCOPE = "src-and-records; tracked-outside-src-and-generated-nonrecord-evidence"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
 # World-state owners and their commands/accessors; excludes GUI, platform, vendor
@@ -216,9 +216,22 @@ def show(rev: str, path: str) -> str:
 
 
 def hunks(base: str, head: str, old: str, new: str) -> Iterator[Hunk]:
-    """Yield (old start, old count, new start, new count) of a zero-context diff."""
+    """Yield (old start, old count, new start, new count) of a zero-context diff.
+
+    The minimal diff, since metric version 3 (#978): the default algorithm's
+    alignment of a heavily edited file is not minimal and moves when the file is
+    edited, so retired and glue shifted by hundreds of lines while no original
+    line changed.
+    """
     for line in git(
-        "diff", "-U0", "-M", base, head, "--", *dict.fromkeys((old, new))
+        "diff",
+        "-U0",
+        "-M",
+        "--diff-algorithm=minimal",
+        base,
+        head,
+        "--",
+        *dict.fromkeys((old, new)),
     ).splitlines():
         hunk = re.match(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
         if hunk:
