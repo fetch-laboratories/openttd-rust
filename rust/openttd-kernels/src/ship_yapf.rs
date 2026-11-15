@@ -257,6 +257,8 @@ impl<K: NodeKey> NodeList<K> {
     fn insert_open_node(&mut self, world: &World<'_>, item: usize) {
         let key = self.items[item].key;
         world.assert_with(|| !self.closed_nodes.contains_key(&key));
+        // `HashTable::Push`'s `assert(slot.Find(new_item.GetKey()) == nullptr)`.
+        world.assert_with(|| !self.open_nodes.contains_key(&key));
         self.open_nodes.insert(key, item);
         let items = &self.items;
         self.open_queue
@@ -290,6 +292,8 @@ impl<K: NodeKey> NodeList<K> {
     fn insert_closed_node(&mut self, world: &World<'_>, item: usize) {
         let key = self.items[item].key;
         world.assert_with(|| !self.open_nodes.contains_key(&key));
+        // `HashTable::Push`'s `assert(slot.Find(new_item.GetKey()) == nullptr)`.
+        world.assert_with(|| !self.closed_nodes.contains_key(&key));
         self.closed_nodes.insert(key, item);
     }
     /// `FindClosedNode`: return the closed node specified by a key or `None` if
@@ -1792,6 +1796,28 @@ mod tests {
         pf.base.nodes.items[0].estimate = child.estimate;
         assert!(pf.pf_calc_estimate(&mut child));
         assert_eq!(FAILED_ASSERTIONS.get(), 1);
+    }
+
+    #[test]
+    fn inserting_a_key_twice_into_one_list_records_hashtable_push_assertion() {
+        let _scratch = scratch_lock();
+        let s = shared(&crate::test_tables::VEHICLE);
+        let v = vehicle(&s);
+        let mut pf = CYapfShip::new(&v, 0);
+        let key = CYapfNodeKeyExitDir::set(TileIndex(0), Trackdir::TRACKDIR_X_NE);
+        let nodes = &mut pf.base.nodes;
+        nodes.items.push(CYapfShipNode::set(None, key));
+        nodes.items.push(CYapfShipNode::set(None, key));
+        nodes.insert_open_node(&v.world, 0);
+        assert_eq!(FAILED_ASSERTIONS.get(), 0);
+        nodes.insert_open_node(&v.world, 1);
+        assert_eq!(FAILED_ASSERTIONS.get(), 1);
+
+        nodes.open_nodes.clear();
+        nodes.insert_closed_node(&v.world, 0);
+        assert_eq!(FAILED_ASSERTIONS.get(), 1);
+        nodes.insert_closed_node(&v.world, 1);
+        assert_eq!(FAILED_ASSERTIONS.get(), 2);
     }
 
     #[test]
