@@ -847,18 +847,18 @@ fn visit_adjacent_water_region_patch_neighbours(
 /// it by const reference, and a callback may change it between steps.
 pub(crate) fn visit_water_region_patch_neighbours(
     regions: &mut Regions,
+    world: &World<'_>,
     s: &Services,
     visit: &mut WaterVisit,
     water_region_patch: WaterRegionPatchDesc,
 ) -> Option<WaterRegionPatchDesc> {
-    let world = World::new(s);
     if visit.started == 0 {
         visit.started = 1;
         visit.origin = water_region_patch;
         if water_region_patch.label != INVALID_WATER_REGION_PATCH {
             get_updated_water_region(
                 regions,
-                &world,
+                world,
                 s,
                 to_region_coordinate(water_region_patch.x),
                 to_region_coordinate(water_region_patch.y),
@@ -889,7 +889,7 @@ pub(crate) fn visit_water_region_patch_neighbours(
         visit.read = 0;
         visit_adjacent_water_region_patch_neighbours(
             regions,
-            &world,
+            world,
             s,
             water_region_patch,
             side,
@@ -920,11 +920,11 @@ pub(crate) fn visit_water_region_patch_neighbours(
                 map.tile_y(current_region.tile()) + visit.aqueduct_tile / edge,
             );
             visit.aqueduct_tile += 1;
-            if get_water_region_patch_info(regions, &world, s, tile) != water_region_patch {
+            if get_water_region_patch_info(regions, world, s, tile) != water_region_patch {
                 continue;
             }
             crate::witness::hit(crate::witness::WATER_AQUEDUCTS);
-            if !is_aqueduct_tile(&world, tile) {
+            if !is_aqueduct_tile(world, tile) {
                 continue;
             }
             let other_end_tile = get_other_bridge_end(s, tile);
@@ -933,7 +933,7 @@ pub(crate) fn visit_water_region_patch_neighbours(
             {
                 return Some(get_water_region_patch_info(
                     regions,
-                    &world,
+                    world,
                     s,
                     other_end_tile,
                 ));
@@ -1012,7 +1012,8 @@ pub unsafe extern "C" fn openttd_rust_water_visit_next(
     out: *mut WaterRegionPatchDesc,
 ) -> u8 {
     let (regions, s, visit) = unsafe { (&mut *owner, &*shared, &mut *visit) };
-    match visit_water_region_patch_neighbours(regions, s, visit, water_region_patch) {
+    let world = World::new(s);
+    match visit_water_region_patch_neighbours(regions, &world, s, visit, water_region_patch) {
         Some(patch) => {
             unsafe { out.write(patch) };
             1

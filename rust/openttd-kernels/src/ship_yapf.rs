@@ -1294,6 +1294,7 @@ impl<'v> Yapf<'v> for YapfShipRegions<'v> {
             // SAFETY: As the module contract.
             let Some(next) = visit_water_region_patch_neighbours(
                 unsafe { &mut *v.regions },
+                &v.world,
                 v.s,
                 &mut visit,
                 water_region_patch,
