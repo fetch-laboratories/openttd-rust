@@ -297,7 +297,9 @@ pub(crate) fn is_ship_destination_tile(
 ) -> bool {
     world.assert_with(|| world.is_docking_tile(tile));
     /* Check each tile adjacent to docking tile. */
-    for d in 0..4 {
+    for d in crate::direction_type::DiagDirection::DIAGDIR_BEGIN.0
+        ..crate::direction_type::DiagDirection::DIAGDIR_END.0
+    {
         let t = tile
             + world.dimensions.tile_offs_by_diag_dir(
                 crate::direction_type::DiagDirection(d),
