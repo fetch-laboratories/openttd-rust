@@ -170,10 +170,16 @@ class GeneratedAbiTests(unittest.TestCase):
             rust.mkdir(parents=True)
             probes.mkdir(parents=True)
             # Production schema declarations are the fixture, including the real
-            # native-test shared record; only group placement changes here.
+            # native-test shared record; only group placement changes here. The
+            # file's other layouts join the existing "local" probe, so the shared
+            # record's group is the only new one.
             fixture = ROOT / "rust/openttd-kernels/src/native_test_support.rs"
             (rust / "fixture.rs").write_text(
-                fixture.read_text().replace('"record_test"', '"new_group"')
+                re.sub(
+                    r'\["(?!record_test")\w+"\] =>',
+                    '["local"] =>',
+                    fixture.read_text(),
+                ).replace('"record_test"', '"new_group"')
             )
             (rust / "tile_type.rs").write_text(
                 (ROOT / "rust/openttd-kernels/src/tile_type.rs").read_text()
