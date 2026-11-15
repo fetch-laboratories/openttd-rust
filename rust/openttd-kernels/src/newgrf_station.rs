@@ -12,7 +12,7 @@
     clippy::if_not_else, // retain source branch order
     clippy::too_many_arguments
 )]
-use crate::cargo_type::{CargoType, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
+use crate::cargo_type::{CargoType, CargoTypes, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
 use crate::debug::debug;
 use crate::direction_type::Direction;
 use crate::direction_type::{AXIS_X, AXIS_Y, Axis, INVALID_AXIS, INVALID_DIAGDIR};
@@ -905,8 +905,8 @@ pub(crate) fn cargo_count(st: *mut BaseStation, cargo: u8) -> u32 {
     services().count(st, cargo)
 }
 /// `GetEmptyMask`: get a mask of the cargo types that are empty at the station.
-pub(crate) fn get_empty_mask(st: *mut BaseStation) -> u64 {
-    services().get_empty_mask(st)
+pub(crate) fn get_empty_mask(st: *mut BaseStation) -> CargoTypes {
+    CargoTypes(services().get_empty_mask(st))
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_randomisation(

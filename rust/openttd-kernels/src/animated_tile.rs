@@ -198,7 +198,7 @@ pub(crate) fn animate_tile(tile: crate::tile_type::TileIndex) {
         MP_STATION => {
             if crate::map_func::World::new(s).station_has_rail(index) {
                 openttd_rust_animate_station(index);
-            } else if crate::station_map::is_airport_raw(index, s) {
+            } else if crate::station_map::is_airport(tile, s) {
                 openttd_rust_animate_airport(index);
             } else if crate::map_func::World::new(s).any_road_stop_tile(index) {
                 openttd_rust_animate_roadstop(index);
