@@ -26,7 +26,7 @@ use crate::order_type::{
     OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
 };
 use crate::services::Services;
-use crate::tile_type::{MP_INDUSTRY, MP_TUNNELBRIDGE};
+use crate::tile_type::MP_TUNNELBRIDGE;
 use crate::track_type::TrackBits;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 use crate::vehicle_base::VS_STOPPED;
@@ -186,11 +186,8 @@ pub struct Leaves {
     pub diag_between: extern "C" fn(u32, u32) -> u32,
     pub dist_square: extern "C" fn(u32, u32) -> u32,
     pub dist_manhattan: extern "C" fn(u32, u32) -> u32,
-    pub dock: extern "C" fn(u32) -> bool,
-    pub dock_water: extern "C" fn(u32) -> bool,
     pub station: extern "C" fn(u32) -> u32,
     pub industry_station: extern "C" fn(u32) -> u32,
-    pub oilrig: extern "C" fn(u32) -> bool,
     pub arrival: extern "C" fn(u32, u32),
     pub leave_unbunch: extern "C" fn(u32),
     pub path_result: extern "C" fn(u32, bool),
@@ -259,6 +256,77 @@ unsafe fn depot_scratch() -> *mut DepotScratch {
             queue: VecDeque::new(),
         }))
     }
+}
+/// `GetEffectiveWaterClass`: determine the effective `WaterClass` for a ship
+/// travelling on a tile.
+#[inline]
+pub(crate) fn get_effective_water_class(
+    world: &crate::map_func::World<'_>,
+    tile: crate::tile_type::TileIndex,
+) -> crate::water_map::WaterClass {
+    use crate::water_map::WaterClass;
+    if world.asserted(|m| crate::water_map::has_tile_water_class(m, tile.0)) {
+        return WaterClass(world.water_class(tile.0));
+    }
+    if world.kind(tile) == crate::tile_type::TileType::MP_TUNNELBRIDGE {
+        world.assert_with(|| {
+            crate::transport_type::TransportType(world.tunnel_bridge_transport(tile.0))
+                == crate::transport_type::TransportType::TRANSPORT_WATER
+        });
+        return WaterClass::Canal;
+    }
+    if world.kind(tile) == crate::tile_type::TileType::MP_RAILWAY {
+        world.assert_with(|| {
+            crate::rail_map::RailGroundType(world.rail_ground(tile.0))
+                == crate::rail_map::RailGroundType::HalfTileWater
+        });
+        return WaterClass::Sea;
+    }
+    crate::services_assert::not_reached()
+}
+/// `IsShipDestinationTile`: whether a docking tile serves `station`. The map
+/// is read through `world`; only the industry arm's
+/// `Industry::GetByTile(t)->neutral_station` stays behind the controller's
+/// leaves, since no shared accessor reaches the industry record (this file's
+/// pass ports it).
+pub(crate) fn is_ship_destination_tile(
+    world: &crate::map_func::World<'_>,
+    leaves: &Leaves,
+    tile: crate::tile_type::TileIndex,
+    station: crate::station_type::StationID,
+) -> bool {
+    world.assert_with(|| world.is_docking_tile(tile));
+    /* Check each tile adjacent to docking tile. */
+    for d in crate::direction_type::DiagDirection::DIAGDIR_BEGIN.0
+        ..crate::direction_type::DiagDirection::DIAGDIR_END.0
+    {
+        let t = tile
+            + world.dimensions.tile_offs_by_diag_dir(
+                crate::direction_type::DiagDirection(d),
+                crate::map_func::native_check,
+            );
+        if !world.is_valid_tile(t) {
+            continue;
+        }
+        if world.is_dock_tile(t)
+            && world.get_station_index(t) == station
+            && world.is_dock_water_part(t)
+        {
+            return true;
+        }
+        if world.kind(t) == crate::tile_type::TileType::MP_INDUSTRY
+            && (leaves.industry_station)(t.0) == u32::from(station.0)
+        {
+            return true;
+        }
+        if world.kind(t) == crate::tile_type::TileType::MP_STATION
+            && world.is_oil_rig(t)
+            && world.get_station_index(t) == station
+        {
+            return true;
+        }
+    }
+    false
 }
 struct Game<'a> {
     leaves: &'a Leaves,
@@ -608,27 +676,12 @@ impl Game<'_> {
         track
     }
     fn destination_station(&self, tile: u32, station: u32) -> bool {
-        for dir in 0..4 {
-            let adjacent = tile.wrapping_add((self.leaves.offset)(dir));
-            if !(self.leaves.tile_valid)(adjacent) {
-                continue;
-            }
-            if (self.leaves.dock)(adjacent)
-                && (self.leaves.station)(adjacent) == station
-                && (self.leaves.dock_water)(adjacent)
-            {
-                return true;
-            }
-            if (self.leaves.tile_type)(adjacent) == u32::from(MP_INDUSTRY)
-                && (self.leaves.industry_station)(adjacent) == station
-            {
-                return true;
-            }
-            if (self.leaves.oilrig)(adjacent) && (self.leaves.station)(adjacent) == station {
-                return true;
-            }
-        }
-        false
+        is_ship_destination_tile(
+            &crate::map_func::World::new(self.services),
+            self.leaves,
+            crate::tile_type::TileIndex(tile),
+            crate::station_type::StationID(station as u16),
+        )
     }
     fn arrives(&self, id: u32, station: u32) {
         let hvot_ship = crate::station_type::StationHadVehicleOfType::HVOT_SHIP.0;
@@ -1182,11 +1235,8 @@ crate::abi::layouts! {
         diag_between,
         dist_square,
         dist_manhattan,
-        dock,
-        dock_water,
         station,
         industry_station,
-        oilrig,
         arrival,
         leave_unbunch,
         path_result,
@@ -1267,6 +1317,118 @@ pub(crate) fn current_max_speed(cached: u16, order: u16) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn get_effective_water_class_takes_each_arm_and_records_each_assertion() {
+        use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, World};
+        use crate::tile_type::{TileIndex, TileType};
+        use crate::water_map::WaterClass;
+        use std::cell::Cell;
+        thread_local! {
+            static FAILED_ASSERTIONS: Cell<u32> = const { Cell::new(0) };
+        }
+        extern "C" fn record_assertion(okay: bool) {
+            if !okay {
+                FAILED_ASSERTIONS.set(FAILED_ASSERTIONS.get() + 1);
+            }
+        }
+        extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
+            unreachable!()
+        }
+        extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
+            unreachable!()
+        }
+        // An 8 by 1 map: canal water, an aqueduct head, a rail bridge head, a
+        // half-tile water rail tile and a barren rail tile.
+        let tiles = [
+            (TileType::MP_WATER, WaterClass::Canal.0 << 5, 0, 0),
+            (
+                TileType::MP_TUNNELBRIDGE,
+                0,
+                0,
+                crate::transport_type::TransportType::TRANSPORT_WATER.0 << 2,
+            ),
+            (
+                TileType::MP_TUNNELBRIDGE,
+                0,
+                0,
+                crate::transport_type::TransportType::TRANSPORT_RAIL.0 << 2,
+            ),
+            (
+                TileType::MP_RAILWAY,
+                0,
+                crate::rail_map::RailGroundType::HalfTileWater.0,
+                0,
+            ),
+            (
+                TileType::MP_RAILWAY,
+                0,
+                crate::rail_map::RailGroundType::Barren.0,
+                0,
+            ),
+            (TileType::MP_CLEAR, 0, 0, 0),
+            (TileType::MP_CLEAR, 0, 0, 0),
+            (TileType::MP_CLEAR, 0, 0, 0),
+        ];
+        let base: Vec<BaseTileLayout> = tiles
+            .iter()
+            .map(|&(kind, m1, m4, m5)| BaseTileLayout {
+                kind: kind.0 << 4,
+                height: 0,
+                m2: 0,
+                m1,
+                m3: 0,
+                m4,
+                m5,
+            })
+            .collect();
+        let extended: Vec<ExtendedTileLayout> = (0..8)
+            .map(|_| ExtendedTileLayout {
+                m6: 0,
+                m7: 0,
+                m8: 0,
+            })
+            .collect();
+        crate::map_func::fixture::set(
+            TileTypeAllocation {
+                base: base.as_ptr(),
+                extended: extended.as_ptr(),
+                count: 8,
+                assertions: true,
+            },
+            3,
+        );
+        let movement = crate::movement::MovementServices {
+            native_assert: record_assertion,
+            ..crate::test_tables::MOVEMENT
+        };
+        let s = Services {
+            movement: &raw const movement,
+            ..crate::services::fixture(std::ptr::null_mut(), random, industry)
+        };
+        let world = World::new(&s);
+        let class = |tile| get_effective_water_class(&world, TileIndex(tile));
+        assert!(
+            class(0) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 0,
+            "the tile's own class"
+        );
+        assert!(
+            class(1) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 0,
+            "an aqueduct"
+        );
+        assert!(
+            class(2) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 1,
+            "a rail bridge breaks the transport assertion"
+        );
+        assert!(
+            class(3) == WaterClass::Sea && FAILED_ASSERTIONS.get() == 1,
+            "half-tile water rail"
+        );
+        assert!(
+            class(4) == WaterClass::Sea && FAILED_ASSERTIONS.get() == 2,
+            "barren rail breaks the ground assertion"
+        );
+    }
 
     #[test]
     fn depot_capacity_is_reused_across_serialized_game_threads() {

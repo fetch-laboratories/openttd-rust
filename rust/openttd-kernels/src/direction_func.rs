@@ -219,6 +219,30 @@ mod tests {
     use std::cell::Cell;
 
     #[test]
+    fn diag_dir_difference_over_every_valid_pair() {
+        // direction_func.h: how the second direction drifts of the first one,
+        // DIAGDIRDIFF_SAME, _90RIGHT, _REVERSE or _90LEFT.
+        let expected = [[0, 3, 2, 1], [1, 0, 3, 2], [2, 1, 0, 3], [3, 2, 1, 0]];
+        for d0 in 0..4_u8 {
+            for d1 in 0..4_u8 {
+                assert_eq!(
+                    diag_dir_difference(DiagDirection(d0), DiagDirection(d1), |ok| assert!(ok)),
+                    DiagDirDiff(expected[usize::from(d0)][usize::from(d1)]),
+                    "DiagDirDifference({d0}, {d1})"
+                );
+            }
+        }
+        assert_eq!(
+            diag_dir_difference(
+                DiagDirection::DIAGDIR_NE,
+                DiagDirection::DIAGDIR_SE,
+                |ok| assert!(ok)
+            ),
+            DiagDirDiff::DIAGDIRDIFF_90LEFT
+        );
+    }
+
+    #[test]
     fn native_assertion_policy_keeps_asserts_off_arithmetic() {
         let failures = Cell::new(0);
         let disabled = |ok: bool| {

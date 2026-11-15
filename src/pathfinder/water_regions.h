@@ -46,10 +46,6 @@ struct WaterRegionDesc {
 	bool operator==(const WaterRegionDesc &other) const { return x == other.x && y == other.y; }
 };
 
-int CalculateWaterRegionPatchHash(const WaterRegionPatchDesc &water_region_patch);
-
-TileIndex GetWaterRegionCenterTile(const WaterRegionDesc &water_region);
-
 WaterRegionDesc GetWaterRegionInfo(TileIndex tile);
 WaterRegionPatchDesc GetWaterRegionPatchInfo(TileIndex tile);
 

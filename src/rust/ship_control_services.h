@@ -20,6 +20,7 @@
 #include "tile_animation_services.h"
 #include "vehicle_services.h"
 #include "engine_services.h"
+#include "../pathfinder/water_regions.h"
 static_assert(MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && TILE_HEIGHT == 8 && TILE_SIZE == 16);
 static_assert(TRACK_BIT_DEPOT == 128 && TRACK_BIT_WORMHOLE == 64 && HVOT_SHIP == 32);
 static_assert(to_underlying(WaterClass::Sea) == 0 && DIRDIFF_REVERSE == 4);
@@ -54,10 +55,6 @@ static uint32_t Ship_offset(uint32_t direction) noexcept { return static_cast<ui
 
 static uint32_t Ship_diag_between(uint32_t from, uint32_t to) noexcept { return DiagdirBetweenTiles(TileIndex(from), TileIndex(to)); }
 
-static bool Ship_dock(uint32_t tile) noexcept { return IsDockTile(TileIndex(tile)); }
-
-static bool Ship_dock_water(uint32_t tile) noexcept { return IsDockWaterPart(TileIndex(tile)); }
-
 static uint32_t Ship_station(uint32_t tile) noexcept { return GetRustSharedServices().station_index(tile); }
 
 
@@ -67,8 +64,6 @@ static uint32_t Ship_industry_station(uint32_t tile) noexcept
 	const Station *station = RustIndustryNeutralStation(i);
 	return station == nullptr ? UINT32_MAX : RustBaseStationID(station);
 }
-
-static bool Ship_oilrig(uint32_t tile) noexcept { return IsTileType(TileIndex(tile), MP_STATION) && IsOilRig(TileIndex(tile)); }
 
 static void Ship_arrival(uint32_t id, uint32_t station) noexcept
 {
@@ -251,9 +246,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.offset = Ship_offset,
 		.diag_between = Ship_diag_between, .dist_square = OpenTTDDistanceSquare,
 		.dist_manhattan = OpenTTDDistanceManhattan,
-		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
-		.oilrig = Ship_oilrig,
 		.arrival = Ship_arrival,
 		.leave_unbunch = Ship_leave_unbunch,
 		.path_result = Ship_path_result, .order_free = Ship_order_free,

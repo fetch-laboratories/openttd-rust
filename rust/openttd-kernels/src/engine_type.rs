@@ -303,3 +303,20 @@ crate::base_bitset_type::impl_bitset_ops!(EngineFlags);
 
 /// The maximum length of an engine name in characters including '\0'.
 pub const MAX_LENGTH_ENGINE_NAME_CHARS: u32 = 32;
+
+/// `ShipVehicleInfo::ApplyWaterClassSpeedFrac`: apply ocean/canal speed fraction
+/// to a velocity, given the info's `ocean_speed_frac` and `canal_speed_frac`.
+pub(crate) const fn apply_water_class_speed_frac(
+    raw_speed: u32,
+    is_ocean: bool,
+    ocean_speed_frac: u8,
+    canal_speed_frac: u8,
+) -> u32 {
+    /* speed_frac == 0 means no reduction while 0xFF means reduction to 1/256. */
+    let speed_frac = if is_ocean {
+        ocean_speed_frac
+    } else {
+        canal_speed_frac
+    };
+    raw_speed.wrapping_mul(256 - speed_frac as u32) / 256
+}

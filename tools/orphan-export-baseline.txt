@@ -19,7 +19,6 @@ no production user | openttd_rust_object_restore_first
 no production user | openttd_rust_object_tunnel_hide
 no production user | openttd_rust_pbs_follow
 no production user | openttd_rust_shared_tile_type
-no production user | openttd_rust_ship_heap_probe
 no production user | openttd_rust_signal_inspect
 no production user | openttd_rust_signal_workset_probe
 no production user | openttd_rust_subsidy_delete_with

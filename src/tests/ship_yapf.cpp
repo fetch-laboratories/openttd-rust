@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file ship_yapf.cpp Heap comparison and ship ownership ABI check. */
+/** @file ship_yapf.cpp Heap comparison, ship path ownership and production ship searches. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "ship_yapf_protocol.hpp"
@@ -14,7 +14,7 @@
 #include "../pathfinder/yapf/yapf_node.hpp"
 #include "../pathfinder/yapf/nodelist.hpp"
 /* The unchanged generic reference search checks the exact follow-before-limit
- * timing that the injected low-level fixture reaches at 5120 closed nodes. */
+ * timing that the winding-river fixture reaches at 5120 closed nodes. */
 namespace ShipYapfLimitReference {
 struct Key {
 	uint32_t index;

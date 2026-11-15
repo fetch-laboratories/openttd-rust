@@ -30,16 +30,6 @@ static WaterOwner _water_regions{nullptr, openttd_rust_water_destroy};
 
 OpenTTDWaterRegions *GetRustWaterRegions() noexcept { return _water_regions.get(); }
 
-int CalculateWaterRegionPatchHash(const WaterRegionPatchDesc &patch)
-{
-	return patch.label.base() | (Map::SizeX() / WATER_REGION_EDGE_LENGTH * patch.y + patch.x) << 8;
-}
-
-TileIndex GetWaterRegionCenterTile(const WaterRegionDesc &region)
-{
-	return TileXY(region.x * WATER_REGION_EDGE_LENGTH + WATER_REGION_EDGE_LENGTH / 2, region.y * WATER_REGION_EDGE_LENGTH + WATER_REGION_EDGE_LENGTH / 2);
-}
-
 WaterRegionDesc GetWaterRegionInfo(TileIndex tile)
 {
 	return WaterRegionDesc{static_cast<int>(TileX(tile) / WATER_REGION_EDGE_LENGTH), static_cast<int>(TileY(tile) / WATER_REGION_EDGE_LENGTH)};
@@ -63,12 +53,6 @@ void VisitWaterRegionPatchNeighbours(const WaterRegionPatchDesc &patch, VisitWat
 	while (openttd_rust_water_visit_next(_water_regions.get(), &GetRustSharedServices(), &visit, {patch.x, patch.y, patch.label.base()}, &next)) {
 		callback(WaterRegionPatchDesc{next.x, next.y, WaterRegionPatchLabel{next.label}});
 	}
-}
-
-/* Ship search holds its visit and calls the step directly; no callback reenters its arena. */
-uint8_t ShipWaterVisitNext(OpenTTDWaterVisit *visit, OpenTTDWaterPatch patch, OpenTTDWaterPatch *out) noexcept
-{
-	return openttd_rust_water_visit_next(_water_regions.get(), &GetRustSharedServices(), visit, patch, out);
 }
 
 void AllocateWaterRegions()
