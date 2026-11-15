@@ -125,7 +125,7 @@
 - C++ keeps: ship/station pools, the controller's `GetState`, `GetVehicleTrackdir` and `IsShipDestinationTile` map reads (until `ship_control.rs`'s pass), and save staging.
 - Checks: `python3 tools/migration.py simulate water --jobs 2`.
 - Limits: Gaps remain in arbitrary maps, NewGRFs or complete legacy saves.
-- PRs: #126, #308; scratch capacity #306; file pass PRNUM.
+- PRs: #126, #308; scratch capacity #306; file pass #977.
 
 ## Rail YAPF search, caches and reservation
 
