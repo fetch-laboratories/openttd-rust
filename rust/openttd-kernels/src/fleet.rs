@@ -1548,9 +1548,14 @@ pub unsafe extern "C" fn openttd_rust_fleet_flag_command(
 pub(crate) unsafe fn set_train_group_id(w: &GroupServices, v: *mut (), new_g: GroupID) {
     let id = new_g.0;
     unsafe {
-        if !group(w, id).is_null() || id == DEFAULT_GROUP {
-            train_group(w, v, id, true);
+        if group(w, id).is_null() && id != DEFAULT_GROUP {
+            return;
         }
+        crate::movement::native_assert(
+            w.shared(),
+            record(w, v).is_front_engine() || id == DEFAULT_GROUP,
+        );
+        train_group(w, v, id, true);
     }
 }
 /// `UpdateTrainGroupID`: recalculates the groupID of a train. Should be called each time a
@@ -1560,15 +1565,18 @@ pub(crate) unsafe fn set_train_group_id(w: &GroupServices, v: *mut (), new_g: Gr
 /// Static typed noexcept services; live native arguments and game-thread owners.
 /// Field accesses end before callbacks. Panics or escaping exceptions abort.
 pub(crate) unsafe fn update_train_group_id(w: &GroupServices, v: *mut ()) {
+    let front = record(w, v).is_front_engine();
+    crate::movement::native_assert(
+        w.shared(),
+        front || crate::ground_vehicle::is_free_wagon(record(w, v).subtype()),
+    );
     unsafe {
-        {
-            let id = if record(w, v).is_front_engine() {
-                (w.vehicle_group)(v)
-            } else {
-                DEFAULT_GROUP
-            };
-            train_group(w, v, id, false);
-        }
+        let id = if front {
+            (w.vehicle_group)(v)
+        } else {
+            DEFAULT_GROUP
+        };
+        train_group(w, v, id, false);
     }
 }
 /// Synchronous original fleet `sum_engines` control.
