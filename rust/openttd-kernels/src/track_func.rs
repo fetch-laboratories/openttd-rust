@@ -355,7 +355,9 @@ pub fn vehicle_exit_dir(
     let mut diagdir = crate::direction_func::dir_to_diag_dir(direction, check);
 
     /* Determine the diagonal direction in which we will exit this tile */
-    if direction.0 & 1 == 0 && track != STATE_DIR_TABLE[usize::from(diagdir.0)] {
+    if !crate::bitmath_func::has_bit(direction.0, 0)
+        && track != STATE_DIR_TABLE[usize::from(diagdir.0)]
+    {
         diagdir =
             crate::direction_func::change_diag_dir(diagdir, DiagDirDiff::DIAGDIRDIFF_90LEFT, check);
     }

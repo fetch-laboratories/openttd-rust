@@ -762,7 +762,8 @@ impl<'v> Yapf<'v> for CYapfShip<'v> {
                 .for_each_on_tile(tile.0, |other| {
                     /* Ignore other vehicles (aircraft) and ships inside depot. */
                     if other.vehicle_type() == VehicleType::VEH_SHIP.0
-                        && other.status() & crate::vehicle_base::VS_HIDDEN == 0
+                        && !crate::vehicle_base::VehStates(other.status())
+                            .test(crate::vehicle_base::VehState::Hidden)
                     {
                         count += 1;
                     }
