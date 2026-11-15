@@ -205,16 +205,6 @@ CargoTypes GetAcceptanceMask(const Station *st)
 }
 
 /**
- * Get a mask of the cargo types that are empty at the station.
- * @param st Station to query
- * @return the empty mask
- */
-CargoTypes GetEmptyMask(const Station *st)
-{
-	return openttd_rust_station_empty_mask(const_cast<Station *>(st));
-}
-
-/**
  * Get the cargo types being produced around the tile (in a rectangle).
  * @param north_tile Northern most tile of area
  * @param w X extent of the area
@@ -399,22 +389,6 @@ void UpdateStationAcceptance(Station *st, bool show_msg)
 
 CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags);
 
-/**
- * Checks if the given tile is buildable, flat and has a certain height.
- * @param tile TileIndex to check.
- * @param invalid_dirs Prohibited directions for slopes (set of #DiagDirection).
- * @param allowed_z Height allowed for the tile. If allowed_z is negative, it will be set to the height of this tile.
- * @param allow_steep Whether steep slopes are allowed.
- * @param check_bridge Check for the existence of a bridge.
- * @return The cost in case of success, or an error code if it failed.
- */
-CommandCost CheckBuildableTile(TileIndex tile, DiagDirections invalid_dirs, int &allowed_z, bool allow_steep, bool check_bridge = true)
-{
-	CommandCost cost;
-	openttd_rust_station_check_buildable(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), invalid_dirs.base(), &allowed_z, allow_steep, check_bridge);
-	return cost;
-}
-
 
 /**
  * Get bridgeable tile information for a station type.
@@ -426,21 +400,6 @@ static std::span<const BridgeableTileInfo> GetStationBridgeableTileInfo(StationT
 	return _station_bridgeable_info[to_underlying(type)];
 }
 
-
-/**
- * Test if a road station can be built below a bridge.
- * @param tile Tile to test.
- * @param spec Custom roadstop spec to test.
- * @param type Type of road station.
- * @param layout Layout piece of station to test.
- * @return Command result.
- */
-CommandCost IsRoadStationBridgeAboveOk(TileIndex tile, const RoadStopSpec *spec, StationType type, StationGfx layout)
-{
-	CommandCost cost;
-	openttd_rust_station_road_bridge_ok(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), spec, to_underlying(type), layout);
-	return cost;
-}
 
 
 /**
@@ -738,11 +697,6 @@ CommandCost CmdBuildDock(DoCommandFlags flags, TileIndex tile, StationID station
 	CommandCost cost, ret;
 	openttd_rust_station_build_dock(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), station_to_join.base(), adjacent);
 	return cost;
-}
-
-void RemoveDockingTile(TileIndex t)
-{
-	openttd_rust_station_remove_docking_tile(&GetRustStationCommandServices(), t.base());
 }
 
 /**
@@ -1341,15 +1295,6 @@ static bool ClickTile_Station(TileIndex tile)
 	return true;
 }
 
-
-/**
- * Run the watched cargo callback for all houses in the catchment area.
- * @param st Station.
- */
-void TriggerWatchedCargoCallbacks(Station *st)
-{
-	openttd_rust_station_watched(st, &_rust_station_services);
-}
 
 
 /**

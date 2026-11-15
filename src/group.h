@@ -132,9 +132,6 @@ uint GetGroupNumVehicle(CompanyID company, GroupID id_g, VehicleType type);
 uint GetGroupNumVehicleMinAge(CompanyID company, GroupID id_g, VehicleType type);
 Money GetGroupProfitLastYearMinAge(CompanyID company, GroupID id_g, VehicleType type);
 
-void SetTrainGroupID(Train *v, GroupID grp);
-void UpdateTrainGroupID(Train *v);
-void RemoveAllGroupsForCompany(const CompanyID company);
 bool GroupIsInGroup(GroupID search, GroupID group);
 
 #endif /* GROUP_H */

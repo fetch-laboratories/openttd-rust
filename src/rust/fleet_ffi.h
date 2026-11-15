@@ -172,17 +172,13 @@ uint32_t openttd_rust_fleet_add_shared_group(const OpenTTDFleetGroupServices *, 
 uint32_t openttd_rust_fleet_remove_vehicles_group(const OpenTTDFleetGroupServices *, uint32_t, uint16_t);
 uint32_t openttd_rust_fleet_set_livery(const OpenTTDFleetGroupServices *, uint32_t, uint16_t, bool, uint8_t);
 uint32_t openttd_rust_fleet_flag_command(const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint8_t, bool, bool);
-void openttd_rust_fleet_set_train_group(const OpenTTDFleetGroupServices *, void *, uint16_t);
-void openttd_rust_fleet_update_train_group(const OpenTTDFleetGroupServices *, void *);
 uint32_t openttd_rust_fleet_sum_engines(const OpenTTDFleetGroupServices *, uint8_t, uint16_t, uint16_t);
 uint32_t openttd_rust_fleet_sum_vehicles(const OpenTTDFleetGroupServices *, uint8_t, uint16_t, uint8_t);
 uint32_t openttd_rust_fleet_sum_min_age(const OpenTTDFleetGroupServices *, uint8_t, uint16_t, uint8_t);
 int64_t openttd_rust_fleet_sum_profit(const OpenTTDFleetGroupServices *, uint8_t, uint16_t, uint8_t);
-void openttd_rust_fleet_remove_company_groups(const OpenTTDFleetGroupServices *, uint8_t);
 uint8_t openttd_rust_fleet_contains_abi(const OpenTTDFleetGroupServices *, uint16_t, uint16_t);
 extern "C++" inline bool openttd_rust_fleet_contains(const OpenTTDFleetGroupServices *a0, uint16_t a1, uint16_t a2) { return openttd_rust_fleet_contains_abi(a0, a1, a2) != 0; }
 uint16_t openttd_rust_fleet_replacement(const OpenTTDFleetGroupServices *, void *, uint16_t, uint16_t, bool *);
-uint32_t openttd_rust_fleet_add_replacement(const OpenTTDFleetGroupServices *, void **, uint16_t, uint16_t, uint16_t, bool, uint32_t);
 uint32_t openttd_rust_fleet_remove_replacement(const OpenTTDFleetGroupServices *, void **, uint16_t, uint16_t, uint32_t);
 void openttd_rust_fleet_remove_all_replacements(const OpenTTDFleetGroupServices *, void **);
 uint8_t openttd_rust_fleet_valid_abi(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint16_t, uint16_t, uint8_t);

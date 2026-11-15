@@ -3046,18 +3046,6 @@ pub unsafe extern "C" fn openttd_rust_train_crossing_removed(
 /// # Safety
 /// The descriptors and shell must remain live until the call returns; callbacks may reenter.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_reverse(
-    id: Handle,
-    leaves: *const Leaves,
-    services: *const Services,
-) {
-    let g = entry_game!(leaves, services);
-    g.reverse(id);
-}
-/// Invoke synchronous train policy with live serialized services.
-/// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_controller(
     id: Handle,
     nomove: Handle,

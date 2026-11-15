@@ -13,7 +13,7 @@ use super::{
     CT_INVALID, E, File, INVALID_CARGO, RailVehicleTypes, Services, VEH_AIRCRAFT, VEH_ROAD,
     VEH_SHIP, VEH_TRAIN, is_valid_cargo_type, openttd_rust_cargo_translate,
     openttd_rust_engine_definition, openttd_rust_engine_temp_refittability,
-    openttd_rust_engine_translate_refit, openttd_rust_vehicle_order, temp,
+    openttd_rust_vehicle_order, temp, translate_refit_mask,
 };
 use crate::bitmath_func::{assign_bit, has_bit, sb, set_bit64};
 use crate::debug::grf_msg;
@@ -207,7 +207,7 @@ unsafe fn refit(_s: &Properties, e: E, id: u16, file: File, value: u32) {
     write_field!(
         e.cast_mut(),
         info.refit_mask,
-        openttd_rust_engine_translate_refit(value, file)
+        translate_refit_mask(value, file).0
     );
     unsafe {
         (*temp(id)).fields.defaultcargo_grf = file;

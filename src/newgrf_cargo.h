@@ -23,6 +23,5 @@ uint16_t GetCargoCallback(CallbackID callback, uint32_t param1, uint32_t param2,
 CargoType GetCargoTranslation(uint8_t cargo, const GRFFile *grffile, bool usebit = false);
 
 std::span<const CargoLabel> GetClimateDependentCargoTranslationTable();
-std::span<const CargoLabel> GetClimateIndependentCargoTranslationTable();
 
 #endif /* NEWGRF_CARGO_H */

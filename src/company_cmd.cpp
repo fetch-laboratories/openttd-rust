@@ -211,29 +211,6 @@ Money GetAvailableMoney(CompanyID company)
 	return openttd_rust_company_available_money(c == nullptr ? nullptr : &c->Finances(), _settings_game.difficulty.infinite_money);
 }
 
-/**
- * This functions returns the money which can be used to execute a command.
- * This is either the money of the current company, or INT64_MAX if infinite money
- * is enabled or there is no such a company "at the moment" like the server itself.
- *
- * @return The available money of the current company or INT64_MAX
- */
-Money GetAvailableMoneyForCommand()
-{
-	return GetAvailableMoney(_current_company);
-}
-
-/**
- * Verify whether the company can pay the bill.
- * @param[in,out] cost Money to pay, is changed to an error if the company does not have enough money.
- * @return Function returns \c true if the company has enough money or infinite money is enabled,
- * else it returns \c false.
- */
-bool CheckCompanyHasMoney(CommandCost &cost)
-{
-	return openttd_rust_command_check_money(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<OpenTTDCommandCost *>(&cost));
-}
-
 
 /**
  * Subtract money from the #_current_company, if the company is valid.

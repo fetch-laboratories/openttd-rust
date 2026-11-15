@@ -26,21 +26,6 @@ inline bool IsValidRoadBits(RoadBits r)
 }
 
 /**
- * Calculate the complement of a RoadBits value
- *
- * Simply flips all bits in the RoadBits value to get the complement
- * of the RoadBits.
- *
- * @param r The given RoadBits value
- * @return the complement
- */
-inline RoadBits ComplementRoadBits(RoadBits r)
-{
-	assert(IsValidRoadBits(r));
-	return (RoadBits)(ROAD_ALL ^ r);
-}
-
-/**
  * Calculate the mirrored RoadBits
  *
  * Simply move the bits to their new position.
@@ -52,36 +37,6 @@ inline RoadBits MirrorRoadBits(RoadBits r)
 {
 	assert(IsValidRoadBits(r));
 	return (RoadBits)(GB(r, 0, 2) << 2 | GB(r, 2, 2));
-}
-
-/**
- * Calculate rotated RoadBits
- *
- * Move the Roadbits clockwise until they are in their final position.
- *
- * @param r The given RoadBits value
- * @param rot The given Rotation angle
- * @return the rotated
- */
-inline RoadBits RotateRoadBits(RoadBits r, DiagDirDiff rot)
-{
-	assert(IsValidRoadBits(r));
-	for (; rot > (DiagDirDiff)0; rot--) {
-		r = (RoadBits)(GB(r, 0, 1) << 3 | GB(r, 1, 3));
-	}
-	return r;
-}
-
-/**
- * Check if we've got a straight road
- *
- * @param r The given RoadBits
- * @return true if we've got a straight road
- */
-inline bool IsStraightRoad(RoadBits r)
-{
-	assert(IsValidRoadBits(r));
-	return (r == ROAD_X || r == ROAD_Y);
 }
 
 /**

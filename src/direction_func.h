@@ -75,23 +75,6 @@ inline DirDiff DirDifference(Direction d0, Direction d1)
 }
 
 /**
- * Applies two differences together
- *
- * This function adds two differences together and returns the resulting
- * difference. So adding two DIRDIFF_REVERSE together results in the
- * DIRDIFF_SAME difference.
- *
- * @param d The first difference
- * @param delta The second difference to add on
- * @return The resulting difference
- */
-inline DirDiff ChangeDirDiff(DirDiff d, DirDiff delta)
-{
-	/* Cast to uint so compiler can use bitmask. Result can never be negative. */
-	return static_cast<DirDiff>((static_cast<uint>(d) + static_cast<uint>(delta)) % 8);
-}
-
-/**
  * Change a direction by a given difference
  *
  * This functions returns a new direction of the given direction
@@ -119,21 +102,6 @@ inline DiagDirection ReverseDiagDir(DiagDirection d)
 {
 	assert(IsValidDiagDirection(d));
 	return (DiagDirection)(2 ^ d);
-}
-
-/**
- * Calculate the difference between two DiagDirection values
- *
- * @param d0 The first direction as the base
- * @param d1 The second direction as the offset from the base
- * @return The difference how the second direction drifts of the first one.
- */
-inline DiagDirDiff DiagDirDifference(DiagDirection d0, DiagDirection d1)
-{
-	assert(IsValidDiagDirection(d0));
-	assert(IsValidDiagDirection(d1));
-	/* Cast to uint so compiler can use bitmask. Result can never be negative. */
-	return (DiagDirDiff)((uint)(d0 - d1) % 4);
 }
 
 /**
@@ -233,23 +201,6 @@ inline DiagDirection AxisToDiagDir(Axis a)
 {
 	assert(IsValidAxis(a));
 	return (DiagDirection)(2 - a);
-}
-
-/**
- * Converts an Axis to DiagDirections
- *
- * This function returns both DiagDirections which
- * belong to the axis.
- *
- * @param a The axis
- * @return The DiagDirections.
- */
-inline DiagDirections AxisToDiagDirs(Axis a)
-{
-	assert(IsValidAxis(a));
-	return a == AXIS_X
-		? DiagDirections{DIAGDIR_NE, DIAGDIR_SW}
-		: DiagDirections{DIAGDIR_SE, DIAGDIR_NW};
 }
 
 /**

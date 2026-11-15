@@ -90,7 +90,7 @@ pub(crate) fn is_station_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Optio
 pub(crate) fn is_airport(tile: TileIndex, s: &Services) -> bool {
     crate::map_func::World::new(s).is_airport(tile)
 }
-/// Temporary raw adapter for `animated_tile.rs` and `newgrf_airport.rs`.
+/// Temporary raw adapter for `newgrf_airport.rs`.
 #[inline]
 pub(crate) fn is_airport_raw(tile: u32, s: &Services) -> bool {
     is_airport(TileIndex(tile), s)

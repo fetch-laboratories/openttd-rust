@@ -568,8 +568,7 @@ unsafe fn update_autoreplace(w: &GroupServices, company: u8) {
         er = next;
     }
 }
-unsafe fn train_group(w: &GroupServices, v: *mut (), new: u16, viewport: bool) {
-    let v = record(w, v);
+unsafe fn train_group(w: &GroupServices, v: VehicleRef, new: u16, viewport: bool) {
     let owner = v.owner();
     let mut part = Some(v);
     while let Some(r) = part {
@@ -596,7 +595,7 @@ unsafe fn add_vehicle(w: &GroupServices, v: *mut (), new: u16) {
     unsafe { count_vehicle(w, v, -1) };
     let record = record(w, v);
     match record.vehicle_type() {
-        0 => unsafe { train_group(w, v, new, true) },
+        0 => unsafe { train_group(w, record, new, true) },
         1..=3 => {
             let old = unsafe { (w.vehicle_group)(v) };
             if unsafe { (w.countable)(v) } {
@@ -1198,20 +1197,6 @@ unsafe fn flag_command(
     }
     OK
 }
-unsafe fn remove_company_groups(w: &GroupServices, company: u8) {
-    let mut from = 0;
-    loop {
-        let id = unsafe { (w.next_group)(from) };
-        if id == NONE {
-            break;
-        }
-        from = id + 1;
-        let g = unsafe { group(w, id as u16) };
-        if read_field!(g, owner) == company {
-            unsafe { (w.delete_group)(id as u16) };
-        }
-    }
-}
 /// Retrieves the `EngineRenew` that specifies the replacement of the given
 /// engine type from the given renewlist
 unsafe fn get_engine_replacement(
@@ -1554,42 +1539,42 @@ pub unsafe extern "C" fn openttd_rust_fleet_flag_command(
     let w = unsafe { &*services };
     unsafe { flag_command(w, flags, id, flag, value, recursive) }
 }
-/// Synchronous original fleet `set_train_group` control.
+/// `SetTrainGroupID`: affect the groupID of a train to `new_g`.
+/// `v` is the first vehicle of the chain, `new_g` the index of array group.
 /// # Safety
 /// Static typed noexcept services; live native arguments and game-thread owners.
 /// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_set_train_group(
-    services: *const GroupServices,
-    v: *mut (),
-    id: u16,
-) {
-    let w = unsafe { &*services };
+pub(crate) unsafe fn set_train_group_id(w: &GroupServices, v: *mut (), new_g: GroupID) {
+    let id = new_g.0;
     unsafe {
-        if !group(w, id).is_null() || id == DEFAULT_GROUP {
-            train_group(w, v, id, true);
+        if group(w, id).is_null() && id != DEFAULT_GROUP {
+            return;
         }
+        let v = record(w, v);
+        crate::movement::native_assert(w.shared(), v.is_front_engine() || id == DEFAULT_GROUP);
+        train_group(w, v, id, true);
     }
 }
-/// Synchronous original fleet `update_train_group` control.
+/// `UpdateTrainGroupID`: recalculates the groupID of a train. Should be called each time a
+/// vehicle is added to/removed from the chain. This needs to be called too for 'wagon chains'
+/// (in the depot, without an engine). `v` is the first vehicle of the chain.
 /// # Safety
 /// Static typed noexcept services; live native arguments and game-thread owners.
 /// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_update_train_group(
-    services: *const GroupServices,
-    v: *mut (),
-) {
-    let w = unsafe { &*services };
+pub(crate) unsafe fn update_train_group_id(w: &GroupServices, v: *mut ()) {
+    let r = record(w, v);
+    let front = r.is_front_engine();
+    crate::movement::native_assert(
+        w.shared(),
+        front || crate::ground_vehicle::is_free_wagon(r.subtype()),
+    );
     unsafe {
-        {
-            let id = if record(w, v).is_front_engine() {
-                (w.vehicle_group)(v)
-            } else {
-                DEFAULT_GROUP
-            };
-            train_group(w, v, id, false);
-        }
+        let id = if front {
+            (w.vehicle_group)(v)
+        } else {
+            DEFAULT_GROUP
+        };
+        train_group(w, r, id, false);
     }
 }
 /// Synchronous original fleet `sum_engines` control.
@@ -1648,18 +1633,6 @@ pub unsafe extern "C" fn openttd_rust_fleet_sum_profit(
     let w = unsafe { &*services };
     unsafe { sum_profit(w, company, id, kind) }
 }
-/// Synchronous original fleet `remove_company_groups` control.
-/// # Safety
-/// Static typed noexcept services; live native arguments and game-thread owners.
-/// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_remove_company_groups(
-    services: *const GroupServices,
-    company: u8,
-) {
-    let w = unsafe { &*services };
-    unsafe { remove_company_groups(w, company) }
-}
 /// Synchronous original fleet contains control.
 /// # Safety
 /// Static typed noexcept services; live native arguments and game-thread owners.
@@ -1687,23 +1660,6 @@ pub unsafe extern "C" fn openttd_rust_fleet_replacement(
 ) -> u16 {
     let w = unsafe { &*services };
     unsafe { engine_replacement(w, head, engine, id, old) }
-}
-/// Synchronous original fleet `add_replacement` control.
-/// # Safety
-/// Static typed noexcept services; live native arguments and game-thread owners.
-/// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_add_replacement(
-    services: *const GroupServices,
-    head: *mut *mut (),
-    from: u16,
-    to: u16,
-    id: u16,
-    old: bool,
-    flags: u32,
-) -> u32 {
-    let w = unsafe { &*services };
-    unsafe { add_engine_replacement(w, head, from, to, id, old, flags) }
 }
 /// Synchronous original fleet `remove_replacement` control.
 /// # Safety

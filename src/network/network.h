@@ -13,7 +13,6 @@
 void NetworkStartUp();
 void NetworkShutDown();
 void NetworkDrawChatMessage();
-bool HasClients();
 
 extern bool _networking;         ///< are we in networking mode?
 extern bool _network_server;     ///< network-server is active

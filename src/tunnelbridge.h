@@ -32,18 +32,6 @@ inline uint GetTunnelBridgeLength(TileIndex begin, TileIndex end)
 	return abs(x2 + y2 - x1 - y1) - 1;
 }
 
-/**
- * Sets the ownership of the bridge/tunnel ramps
- * @param begin The begin of the tunnel or bridge.
- * @param end   The end of the tunnel or bridge.
- * @param owner The new owner to set
- */
-inline void SetTunnelBridgeOwner(TileIndex begin, TileIndex end, Owner owner)
-{
-	SetTileOwner(begin, owner);
-	SetTileOwner(end, owner);
-}
-
 TileIndex GetBuildTunnelEndTile();
 
 #endif /* TUNNELBRIDGE_H */

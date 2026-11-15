@@ -108,10 +108,6 @@ struct OpenTTDWaterGroundServices {
 const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept;
 extern "C" {
 void openttd_rust_water_tile_loop(uint32_t, uint32_t, uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
-uint8_t openttd_rust_flood_halftile_abi(uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
-extern "C++" inline bool openttd_rust_flood_halftile(uint32_t a0, OpenTTDGroundCall *a1, const OpenTTDWaterGroundServices *a2, const OpenTTDSharedServices *a3) { return openttd_rust_flood_halftile_abi(a0, a1, a2, a3) != 0; }
-FloodingBehaviour openttd_rust_flooding_behaviour(uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
-void openttd_rust_clear_neighbour_flooding(uint32_t, uint32_t, uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 }
 /* Default native and Windows ABI call fixture: actual record returns and enum
  * parameters, including all-byte values, not just size/offset metadata. */

@@ -264,21 +264,6 @@ pub(crate) unsafe fn check_consistency_of_articulated_vehicle(s: &Services, mut 
         (s.warning)(e);
     }
 }
-/// # Safety
-/// Same synchronous live-chain contract as `add_articulated_parts`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_add_articulated(s: &Services, first: *mut ()) {
-    unsafe { add_articulated_parts(s, first) };
-}
-/// # Safety
-/// Same synchronous live-chain contract as `check_consistency_of_articulated_vehicle`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_articulated_consistency(
-    s: &Services,
-    first: *mut (),
-) {
-    unsafe { check_consistency_of_articulated_vehicle(s, first) };
-}
 
 crate::abi::layouts! {
     fn abi_layout;

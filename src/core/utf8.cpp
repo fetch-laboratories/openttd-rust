@@ -48,12 +48,6 @@ Utf8View::iterator Utf8View::GetIterAtByte(size_t offset) const
 	return iterator(this->src, openttd_rust_utf8_at_byte(reinterpret_cast<const uint8_t *>(this->src.data()), this->src.size(), offset));
 }
 
-/* Check if the given character is part of a UTF8 sequence. */
-bool IsUtf8Part(char c)
-{
-	return openttd_rust_is_utf8_part(static_cast<uint8_t>(c)) != 0;
-}
-
 Utf8View::iterator& Utf8View::iterator::operator++()
 {
 	auto size = this->src.size();

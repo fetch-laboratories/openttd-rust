@@ -398,8 +398,6 @@ inline TileIndexDiff TileDiffXY(int x, int y)
 	return TileIndex{(y >> 4 << Map::LogX()) + (x >> 4)};
 }
 
-TileIndex TileVirtXYClampedToMap(int x, int y);
-
 /**
  * Get the X component of a tile
  * @param tile the tile to get the X component of
@@ -467,75 +465,10 @@ inline TileIndex TileAddXY(TileIndex tile, int x, int y)
 
 TileIndex TileAddWrap(TileIndex tile, int addx, int addy);
 
-/**
- * Returns the TileIndexDiffC offset from a DiagDirection.
- *
- * @param dir The given direction
- * @return The offset as TileIndexDiffC value
- */
-inline TileIndexDiffC TileIndexDiffCByDiagDir(DiagDirection dir)
-{
-	extern const TileIndexDiffC _tileoffs_by_diagdir[DIAGDIR_END];
-
-	assert(IsValidDiagDirection(dir));
-	return _tileoffs_by_diagdir[dir];
-}
-
-/**
- * Returns the TileIndexDiffC offset from a Direction.
- *
- * @param dir The given direction
- * @return The offset as TileIndexDiffC value
- */
-inline TileIndexDiffC TileIndexDiffCByDir(Direction dir)
-{
-	extern const TileIndexDiffC _tileoffs_by_dir[DIR_END];
-
-	assert(IsValidDirection(dir));
-	return _tileoffs_by_dir[dir];
-}
-
-/**
- * Add a TileIndexDiffC to a TileIndex and returns the new one.
- *
- * Returns tile + the diff given in diff. If the result tile would end up
- * outside of the map, INVALID_TILE is returned instead.
- *
- * @param tile The base tile to add the offset on
- * @param diff The offset to add on the tile
- * @return The resulting TileIndex
- */
-inline TileIndex AddTileIndexDiffCWrap(TileIndex tile, TileIndexDiffC diff)
-{
-	int x = TileX(tile) + diff.x;
-	int y = TileY(tile) + diff.y;
-	/* Negative value will become big positive value after cast */
-	if ((uint)x >= Map::SizeX() || (uint)y >= Map::SizeY()) return INVALID_TILE;
-	return TileXY(x, y);
-}
-
-/**
- * Returns the diff between two tiles
- *
- * @param tile_a from tile
- * @param tile_b to tile
- * @return the difference between tila_a and tile_b
- */
-inline TileIndexDiffC TileIndexToTileIndexDiffC(TileIndex tile_a, TileIndex tile_b)
-{
-	TileIndexDiffC difference;
-
-	difference.x = TileX(tile_a) - TileX(tile_b);
-	difference.y = TileY(tile_a) - TileY(tile_b);
-
-	return difference;
-}
-
 /* Functions to calculate distances */
 uint DistanceManhattan(TileIndex, TileIndex); ///< also known as L1-Norm. Is the shortest distance one could go over diagonal tracks (or roads)
 uint DistanceSquare(TileIndex, TileIndex); ///< Euclidean- or L2-Norm squared
 uint DistanceMax(TileIndex, TileIndex); ///< also known as L-Infinity-Norm
-uint DistanceMaxPlusManhattan(TileIndex, TileIndex); ///< Max + Manhattan
 uint DistanceFromEdge(TileIndex); ///< shortest distance from any edge of the map
 uint DistanceFromEdgeDir(TileIndex, DiagDirection); ///< distance from the map edge in given direction
 

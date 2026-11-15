@@ -301,17 +301,6 @@ void MacOSResetScriptCache(FontSize size)
 	_font_cache[size].reset();
 }
 
-/** Register an external font file with the CoreText system. */
-void MacOSRegisterExternalFont(std::string_view file_path)
-{
-	if (!MacOSVersionIsAtLeast(10, 6, 0)) return;
-
-	CFAutoRelease<CFStringRef> path(CFStringCreateWithBytes(kCFAllocatorDefault, reinterpret_cast<const UInt8 *>(file_path.data()), file_path.size(), kCFStringEncodingUTF8, false));
-	CFAutoRelease<CFURLRef> url(CFURLCreateWithFileSystemPath(kCFAllocatorDefault, path.get(), kCFURLPOSIXPathStyle, false));
-
-	CTFontManagerRegisterFontsForURL(url.get(), kCTFontManagerScopeProcess, nullptr);
-}
-
 /** Store current language locale as a CoreFoundation locale. */
 void MacOSSetCurrentLocaleName(std::string_view iso_code)
 {

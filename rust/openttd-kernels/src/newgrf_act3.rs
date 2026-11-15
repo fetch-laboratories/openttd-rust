@@ -7,7 +7,7 @@
     clippy::cast_possible_truncation
 )]
 pub(crate) mod loading;
-use crate::cargo_registry::{openttd_rust_cargo_by_label, openttd_rust_cargo_translation_table};
+use crate::cargo_registry::{get_cargo_translation_table, openttd_rust_cargo_by_label};
 use crate::cargo_type::{INVALID_CARGO, is_valid_cargo_type};
 use crate::debug::{Char, grf_msg};
 use crate::newgrf_commons::{SG_DEFAULT_NA, SG_PURCHASE};
@@ -21,7 +21,7 @@ pub(crate) fn translate_cargo(feature: u8, cargo: u8, file: *const c_void) -> u8
     if cargo == 0xff {
         return SG_PURCHASE;
     }
-    let table = openttd_rust_cargo_translation_table(file);
+    let table = get_cargo_translation_table(file);
     if usize::from(cargo) >= table.size {
         grf_msg!(
             1,

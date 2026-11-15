@@ -154,7 +154,6 @@ struct OpenTTDOccupancyCommands {
 const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept;
 extern "C" {
 void openttd_rust_occupancy_ground(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t);
-void openttd_rust_occupancy_train(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t, uint8_t);
 void openttd_rust_occupancy_wormhole(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t, uint32_t, const OpenTTDVehicle *);
 void openttd_rust_occupancy_update(const OpenTTDVehicleServices *, OpenTTDVehicle *, bool);
 void openttd_rust_occupancy_reset(const OpenTTDVehicleSchedulerServices *);

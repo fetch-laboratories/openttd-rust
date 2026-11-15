@@ -752,10 +752,6 @@ unsafe fn trigger_watched_cargo_callbacks(st: *mut BaseStation, w: &World) {
         });
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, world: *const World) {
-    unsafe { trigger_watched_cargo_callbacks(st, &*world) };
-}
 /// `byte_inc_sat`: increment a byte, saturating at its maximum.
 fn byte_inc_sat(p: *mut u8) {
     // SAFETY: Callers pass a live field of a serialized station owner.
@@ -2550,19 +2546,6 @@ unsafe fn load_unload_station_queue(
     (l.flush_delivery)();
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_load(
-    state: *mut Service,
-    world: *const World,
-    loading: *const Loading,
-    visits: *const Visits,
-    out: *mut crate::services::CommandCost,
-    temporary: *mut crate::services::CommandCost,
-) {
-    // SAFETY: Forward the native entry's live queue/table/cost contract unchanged.
-    unsafe { load_unload_station(state, world, loading, visits, out, temporary) };
-}
-
 /// `ModifyStationRatingAround`'s per-station update: change the rating of every goods entry
 /// with any status by `amount`.
 pub(crate) unsafe fn modify_rating(state: *mut Service, amount: i32) {
@@ -2734,4 +2717,23 @@ crate::abi::layouts! {
         flush_delivery,
         station_dirty,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{create, destroy, load_unload_station, loading_vehicles_size};
+    use std::ptr::{null, null_mut};
+
+    /// `LoadUnloadStation` returns at its empty-queue check before it reaches any table: every
+    /// table here is null, so a service call or table read before that return faults.
+    #[test]
+    fn empty_station_reaches_no_service() {
+        let state = create();
+        // SAFETY: `state` is a live owner; the empty queue returns before any table is read.
+        unsafe {
+            load_unload_station(state, null(), null(), null(), null_mut(), null_mut());
+            assert_eq!(loading_vehicles_size(state), 0);
+            destroy(state);
+        }
+    }
 }

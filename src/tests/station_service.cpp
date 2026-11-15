@@ -220,9 +220,6 @@ static OpenTTDCargoList *_station_loading_cargo;
 TEST_CASE("Station service - direct prepare preserves native frames and same-owner reentry")
 {
 	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
-	/* An empty station does not cross back into any native service. */
-	openttd_rust_station_load(owner.get(), nullptr, nullptr, nullptr, nullptr, nullptr);
-	CHECK(openttd_rust_station_queue_size(owner.get()) == 0);
 	StationLoadingProbe probe{owner.get(), 0, 0};
 	_station_loading_probe = &probe;
 	auto *cargo = openttd_rust_station_service_cargo(owner.get(), 0);

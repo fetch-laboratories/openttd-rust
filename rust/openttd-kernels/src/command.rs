@@ -137,17 +137,6 @@ pub unsafe extern "C" fn openttd_rust_command_subtract_money(
     }
 }
 
-/// # Safety
-/// `result` is a live exclusive native command result.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_check_money(
-    s: &CommandServices,
-    c: &CommandCostServices,
-    result: *mut CommandCost,
-) -> u8 {
-    u8::from(unsafe { check_money(s, c, result) })
-}
-
 /// `RecursiveCommandCounter::_counter`, the process-wide command nesting depth.
 static COUNTER: GameState<i32> = GameState::new(0);
 

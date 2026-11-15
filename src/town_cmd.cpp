@@ -542,15 +542,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
  */
 RoadType GetTownRoadType() { return static_cast<RoadType>(openttd_rust_town_road_type(&GetRustTownServices(), &GetRustSharedServices())); }
 
-/**
- * Check if towns are able to build road.
- * @return true iff the towns are currently able to build road.
- */
-bool CheckTownRoadTypes()
-{
-	return openttd_rust_town_check_road_types(&GetRustTownServices());
-}
-
 
 /**
  * Update the cached town zone radii of a town, based on the number of houses.

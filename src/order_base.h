@@ -302,7 +302,6 @@ OldOrderSaveLoadItem *GetOldOrder(size_t pool_index);
 OldOrderSaveLoadItem &AllocateOldOrder(size_t pool_index);
 
 void InsertOrder(Vehicle *v, Order &&new_o, VehicleOrderID sel_ord);
-void DeleteOrder(Vehicle *v, VehicleOrderID sel_ord);
 
 /**
  * Shared order list linking together the linked list of orders and the list

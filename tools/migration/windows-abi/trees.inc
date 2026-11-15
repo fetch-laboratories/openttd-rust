@@ -26,10 +26,7 @@ static const OpenTTDTreeServices tree_probe_services{
 	.authority = nullptr,
 	.cos = [](float value) noexcept { return value; },
 	.make_clear = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
-	.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {
-		++tree_probe.writes;
-		CHECK(tile == 1 && type == 12 && count == 2 && growth == 6 && ground == 0 && density == 2);
-	},
+	.make_tree = [](uint32_t, uint8_t, uint32_t, uint8_t, uint8_t, uint32_t) noexcept { ++tree_probe.writes; },
 	.progress = []() noexcept { return tree_probe.abort; },
 	.progress_total = TreeUnused<bool, uint32_t>,
 	.set_ground_density = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
@@ -94,10 +91,6 @@ static void Trees()
 	Tick(4096 * 4096, 1);
 	CHECK(*counter == 36 && tree_probe.writes == 0);
 
-	/* PlaceTree's arctic type 12, two more trees and growth stage 6 keep the clear density. */
-	openttd_rust_trees_place(1, 0x00860000, true, &tree_probe_services, &shared);
-	CHECK(tree_probe.writes == 1);
-
 	OpenTTDCommandCostServices costs{};
 	costs.error = [](OpenTTDCommandCost *, uint32_t error) noexcept { tree_probe.error = error; };
 	costs.expense_money = [](OpenTTDCommandCost *, uint8_t expense, int64_t money) noexcept { tree_probe.expense = expense; tree_probe.cost = money; };
@@ -126,7 +119,7 @@ static void Trees()
 	CHECK(*counter == 0 && counter == openttd_rust_tree_counter());
 	tree_probe.abort = true;
 	CHECK(openttd_test_trees_generate(&tree_probe_services, &shared));
-	CHECK(openttd_rust_trees_place_randomly(&tree_probe_services, &shared) && tree_probe.writes == 1);
+	CHECK(openttd_rust_trees_place_randomly(&tree_probe_services, &shared) && tree_probe.writes == 0);
 	std::printf("tree_direct_services_counter_command_and_abort passed\n");
 }
 ABI_PROBE(Trees);

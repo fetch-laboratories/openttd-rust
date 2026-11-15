@@ -1570,22 +1570,6 @@ pub unsafe extern "C" fn openttd_rust_trees_place_randomly_abi(
     }))
 }
 
-/// `PlaceTree`.
-/// # Safety
-/// Tables are live and immutable; game thread only. Services are `noexcept`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_place(
-    tile: u32,
-    r: u32,
-    keep_density: bool,
-    services: *const TreeServices,
-    shared: *const Services,
-) {
-    // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    let c = unsafe { Trees::new(services, shared) };
-    place_tree(&c, &World::new(c.s), TileIndex(tile), r, keep_density);
-}
-
 /// `PlaceTreeGroupAroundTile`, called by the native scenario-editor brush; a positional shim
 /// over the typed entry.
 /// # Safety

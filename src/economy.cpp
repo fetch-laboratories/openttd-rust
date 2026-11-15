@@ -487,12 +487,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
  */
 const OpenTTDStationLoading &GetRustStationLoading() noexcept { return _rust_station_loading; }
 
-void LoadUnloadStation(Station *st)
-{
-	CommandCost cost, temporary;
-	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading, &GetRustVehicleVisits(), RustCommandCost(&cost), RustCommandCost(&temporary));
-}
-
 OpenTTDEconomyMonth RustEconomyClockMonth() noexcept
 {
 	return {.month = TimerGameEconomy::month, .infinite_money = _settings_game.difficulty.infinite_money,

@@ -90,8 +90,6 @@ void openttd_rust_town_rebuild_index(const OpenTTDSharedServices *);
 const OpenTTDTownHandle *openttd_rust_town_calc_closest(const OpenTTDSharedServices *, uint32_t, uint32_t);
 const OpenTTDTownHandle *openttd_rust_town_closest(const OpenTTDSharedServices *, uint32_t, uint32_t);
 void openttd_rust_town_update_max_pass(const OpenTTDTownLeaves *, OpenTTDTownState *);
-uint8_t openttd_rust_town_check_road_types_abi(const OpenTTDTownLeaves *);
-extern "C++" inline bool openttd_rust_town_check_road_types(const OpenTTDTownLeaves *a0) { return openttd_rust_town_check_road_types_abi(a0) != 0; }
 uint8_t openttd_rust_town_radius_group(const OpenTTDTownState *, const OpenTTDSharedServices *, uint32_t);
 uint8_t openttd_rust_town_first_cargo(uint8_t);
 uint16_t openttd_rust_town_climate_mask(uint8_t);

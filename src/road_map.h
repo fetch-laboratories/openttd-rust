@@ -181,11 +181,6 @@ inline bool HasRoadTypeRoad(Tile t)
 	return GetRoadTypeRoad(t) != INVALID_ROADTYPE;
 }
 
-inline bool HasRoadTypeTram(Tile t)
-{
-	return GetRoadTypeTram(t) != INVALID_ROADTYPE;
-}
-
 /**
  * Check if a tile has a road or a tram road type.
  * @param t  The tile to check.
@@ -267,17 +262,6 @@ inline bool HasTownOwnedRoad(Tile t)
 }
 
 /**
- * Checks if a DisallowedRoadDirections is valid.
- *
- * @param wc The value to check
- * @return true if the given value is a valid DisallowedRoadDirections.
- */
-inline bool IsValidDisallowedRoadDirections(DisallowedRoadDirections drt)
-{
-	return drt < DRD_END;
-}
-
-/**
  * Gets the disallowed directions
  * @param t the tile to get the directions from
  * @return the disallowed directions
@@ -332,16 +316,6 @@ inline Axis GetCrossingRailAxis(Tile t)
 inline RoadBits GetCrossingRoadBits(Tile tile)
 {
 	return GetCrossingRoadAxis(tile) == AXIS_X ? ROAD_X : ROAD_Y;
-}
-
-/**
- * Get the rail track of a level crossing.
- * @param tile The tile to query.
- * @return The rail track.
- */
-inline Track GetCrossingRailTrack(Tile tile)
-{
-	return AxisToTrack(GetCrossingRailAxis(tile));
 }
 
 /**
@@ -496,18 +470,6 @@ inline bool HasRoadWorks(Tile t)
 }
 
 /**
- * Increase the progress counter of road works.
- * @param t The tile to modify.
- * @return True if the road works are in the last stage.
- */
-inline bool IncreaseRoadWorksCounter(Tile t)
-{
-	AB(t.m7(), 0, 4, 1);
-
-	return GB(t.m7(), 0, 4) == 15;
-}
-
-/**
  * Start road works on a tile.
  * @param t The tile to start the work on.
  * @pre !HasRoadWorks(t)
@@ -526,19 +488,6 @@ inline void StartRoadWorks(Tile t)
 			SetRoadside(t, Roadside::PavedRoadWorks);
 			break;
 	}
-}
-
-/**
- * Terminate road works on a tile.
- * @param t Tile to stop the road works on.
- * @pre HasRoadWorks(t)
- */
-inline void TerminateRoadWorks(Tile t)
-{
-	assert(HasRoadWorks(t));
-	SetRoadside(t, GetRoadside(t) == Roadside::GrassRoadWorks ? Roadside::Grass : Roadside::Paved);
-	/* Stop the counter */
-	SB(t.m7(), 0, 4, 0);
 }
 
 

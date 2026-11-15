@@ -221,8 +221,6 @@ struct OpenTTDStationCommandServices {
 };
 const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept;
 extern "C" {
-void openttd_rust_station_check_buildable(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, uint8_t, int32_t *, bool, bool);
-void openttd_rust_station_road_bridge_ok(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, const RoadStopSpec *, uint8_t, uint8_t);
 void openttd_rust_station_build_above(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, int32_t);
 uint8_t openttd_rust_station_airport_noise(const OpenTTDStationCommandServices *, const AirportSpec *, uint32_t);
 void openttd_rust_station_rename(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint16_t, uint16_t, const uint8_t *, size_t);
@@ -238,7 +236,6 @@ void openttd_rust_station_update_airport_noise(const OpenTTDStationCommandServic
 void openttd_rust_station_build_airport(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint16_t, bool);
 void openttd_rust_station_build_dock(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint16_t, bool);
 void openttd_rust_station_update_docking(const OpenTTDStationCommandServices *, BaseStation *);
-void openttd_rust_station_remove_docking_tile(const OpenTTDStationCommandServices *, uint32_t);
 void openttd_rust_station_clear_docking_neighbours(const OpenTTDStationCommandServices *, uint32_t);
 uint8_t openttd_rust_station_possible_docking_abi(const OpenTTDStationCommandServices *, uint32_t);
 extern "C++" inline bool openttd_rust_station_possible_docking(const OpenTTDStationCommandServices *a0, uint32_t a1) { return openttd_rust_station_possible_docking_abi(a0, a1) != 0; }

@@ -517,15 +517,6 @@ void UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval(TileIndex tile, Axis
 
 
 /**
- * Turn a train around.
- * @param v %Train to turn around.
- */
-void ReverseTrainDirection(Train *v)
-{
-	openttd_rust_train_reverse(TrainHandle(v), &GetTrainServices(), &GetRustSharedServices());
-}
-
-/**
  * Reverse train.
  * @param flags type of operation
  * @param veh_id train to reverse

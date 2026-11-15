@@ -574,7 +574,7 @@ fn builtin_case(
         w.tick = tick;
     });
     AMBIENT.store(ambient, Ordering::SeqCst);
-    crate::animated_tile::openttd_rust_animate_tile(2);
+    crate::animated_tile::animate_tile(crate::tile_type::TileIndex(2));
     assert!(
         crate::animated_tile::openttd_rust_animation_count() == 1
             && crate::animated_tile::openttd_rust_animation_at(0) == 2,
