@@ -568,8 +568,7 @@ unsafe fn update_autoreplace(w: &GroupServices, company: u8) {
         er = next;
     }
 }
-unsafe fn train_group(w: &GroupServices, v: *mut (), new: u16, viewport: bool) {
-    let v = record(w, v);
+unsafe fn train_group(w: &GroupServices, v: VehicleRef, new: u16, viewport: bool) {
     let owner = v.owner();
     let mut part = Some(v);
     while let Some(r) = part {
@@ -596,7 +595,7 @@ unsafe fn add_vehicle(w: &GroupServices, v: *mut (), new: u16) {
     unsafe { count_vehicle(w, v, -1) };
     let record = record(w, v);
     match record.vehicle_type() {
-        0 => unsafe { train_group(w, v, new, true) },
+        0 => unsafe { train_group(w, record, new, true) },
         1..=3 => {
             let old = unsafe { (w.vehicle_group)(v) };
             if unsafe { (w.countable)(v) } {
@@ -1551,10 +1550,8 @@ pub(crate) unsafe fn set_train_group_id(w: &GroupServices, v: *mut (), new_g: Gr
         if group(w, id).is_null() && id != DEFAULT_GROUP {
             return;
         }
-        crate::movement::native_assert(
-            w.shared(),
-            record(w, v).is_front_engine() || id == DEFAULT_GROUP,
-        );
+        let v = record(w, v);
+        crate::movement::native_assert(w.shared(), v.is_front_engine() || id == DEFAULT_GROUP);
         train_group(w, v, id, true);
     }
 }
@@ -1565,10 +1562,11 @@ pub(crate) unsafe fn set_train_group_id(w: &GroupServices, v: *mut (), new_g: Gr
 /// Static typed noexcept services; live native arguments and game-thread owners.
 /// Field accesses end before callbacks. Panics or escaping exceptions abort.
 pub(crate) unsafe fn update_train_group_id(w: &GroupServices, v: *mut ()) {
-    let front = record(w, v).is_front_engine();
+    let r = record(w, v);
+    let front = r.is_front_engine();
     crate::movement::native_assert(
         w.shared(),
-        front || crate::ground_vehicle::is_free_wagon(record(w, v).subtype()),
+        front || crate::ground_vehicle::is_free_wagon(r.subtype()),
     );
     unsafe {
         let id = if front {
@@ -1576,7 +1574,7 @@ pub(crate) unsafe fn update_train_group_id(w: &GroupServices, v: *mut ()) {
         } else {
             DEFAULT_GROUP
         };
-        train_group(w, v, id, false);
+        train_group(w, r, id, false);
     }
 }
 /// Synchronous original fleet `sum_engines` control.
