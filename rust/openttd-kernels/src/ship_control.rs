@@ -26,7 +26,7 @@ use crate::order_type::{
     OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
 };
 use crate::services::Services;
-use crate::tile_type::{MP_INDUSTRY, MP_TUNNELBRIDGE};
+use crate::tile_type::MP_TUNNELBRIDGE;
 use crate::track_type::TrackBits;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 use crate::vehicle_base::VS_STOPPED;
@@ -186,11 +186,8 @@ pub struct Leaves {
     pub diag_between: extern "C" fn(u32, u32) -> u32,
     pub dist_square: extern "C" fn(u32, u32) -> u32,
     pub dist_manhattan: extern "C" fn(u32, u32) -> u32,
-    pub dock: extern "C" fn(u32) -> bool,
-    pub dock_water: extern "C" fn(u32) -> bool,
     pub station: extern "C" fn(u32) -> u32,
     pub industry_station: extern "C" fn(u32) -> u32,
-    pub oilrig: extern "C" fn(u32) -> bool,
     pub arrival: extern "C" fn(u32, u32),
     pub leave_unbunch: extern "C" fn(u32),
     pub path_result: extern "C" fn(u32, bool),
@@ -287,33 +284,43 @@ pub(crate) fn get_effective_water_class(
     }
     crate::services_assert::not_reached()
 }
-/// `IsShipDestinationTile`: whether a docking tile serves `station`. The body
-/// reads the map through the controller's leaves, and the original's
-/// `assert(IsDockingTile(tile))` is missing; this file's pass ports both.
+/// `IsShipDestinationTile`: whether a docking tile serves `station`. The map
+/// is read through `world`; only the industry arm's
+/// `Industry::GetByTile(t)->neutral_station` stays behind the controller's
+/// leaves, since no shared accessor reaches the industry record (this file's
+/// pass ports it).
 pub(crate) fn is_ship_destination_tile(
+    world: &crate::map_func::World<'_>,
     leaves: &Leaves,
     tile: crate::tile_type::TileIndex,
     station: crate::station_type::StationID,
 ) -> bool {
-    let (tile, station) = (tile.0, u32::from(station.0));
+    world.assert_with(|| world.is_docking_tile(tile));
     /* Check each tile adjacent to docking tile. */
-    for dir in 0..4 {
-        let adjacent = tile.wrapping_add((leaves.offset)(dir));
-        if !(leaves.tile_valid)(adjacent) {
+    for d in 0..4 {
+        let t = tile
+            + world.dimensions.tile_offs_by_diag_dir(
+                crate::direction_type::DiagDirection(d),
+                crate::map_func::native_check,
+            );
+        if !world.is_valid_tile(t) {
             continue;
         }
-        if (leaves.dock)(adjacent)
-            && (leaves.station)(adjacent) == station
-            && (leaves.dock_water)(adjacent)
+        if world.is_dock_tile(t)
+            && world.get_station_index(t) == station
+            && world.is_dock_water_part(t)
         {
             return true;
         }
-        if (leaves.tile_type)(adjacent) == u32::from(MP_INDUSTRY)
-            && (leaves.industry_station)(adjacent) == station
+        if world.kind(t) == crate::tile_type::TileType::MP_INDUSTRY
+            && (leaves.industry_station)(t.0) == u32::from(station.0)
         {
             return true;
         }
-        if (leaves.oilrig)(adjacent) && (leaves.station)(adjacent) == station {
+        if world.kind(t) == crate::tile_type::TileType::MP_STATION
+            && world.is_oil_rig(t)
+            && world.get_station_index(t) == station
+        {
             return true;
         }
     }
@@ -668,6 +675,7 @@ impl Game<'_> {
     }
     fn destination_station(&self, tile: u32, station: u32) -> bool {
         is_ship_destination_tile(
+            &crate::map_func::World::new(self.services),
             self.leaves,
             crate::tile_type::TileIndex(tile),
             crate::station_type::StationID(station as u16),
@@ -1225,11 +1233,8 @@ crate::abi::layouts! {
         diag_between,
         dist_square,
         dist_manhattan,
-        dock,
-        dock_water,
         station,
         industry_station,
-        oilrig,
         arrival,
         leave_unbunch,
         path_result,

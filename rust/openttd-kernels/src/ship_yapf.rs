@@ -621,7 +621,7 @@ impl<'v> CYapfShip<'v> {
 
         if self.dest_station != StationID::INVALID {
             return v.world.is_docking_tile(tile)
-                && is_ship_destination_tile(v.leaves, tile, self.dest_station);
+                && is_ship_destination_tile(&v.world, v.leaves, tile, self.dest_station);
         }
 
         tile == self.dest_tile
@@ -1389,7 +1389,8 @@ pub(crate) fn find_water_region_path(
         // SAFETY: The shared table returns the static station command table.
         let commands = unsafe { &*(v.s.station_commands)() };
         for tile in (commands.tile_area)(station, StationType::Dock.0).tiles(v.world.dimensions) {
-            if v.world.is_docking_tile(tile) && is_ship_destination_tile(v.leaves, tile, station_id)
+            if v.world.is_docking_tile(tile)
+                && is_ship_destination_tile(&v.world, v.leaves, tile, station_id)
             {
                 pf.add_origin(v.get_water_region_patch_info(tile));
             }
