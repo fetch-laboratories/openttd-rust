@@ -1487,7 +1487,7 @@ impl SavedClock {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
     unsafe {
-        crate::newgrf_text::openttd_rust_grf_text_cleanup();
+        crate::newgrf_text::clean_up_strings();
         crate::newgrf_townname::clean_up();
         (s.reset_badges)();
         crate::engine_loading::openttd_rust_engine_setup(&*s.engine);

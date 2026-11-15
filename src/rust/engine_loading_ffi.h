@@ -50,7 +50,6 @@ uint8_t openttd_rust_engine_reset_config_abi(const OpenTTDEngineLoadingServices 
 extern "C++" inline bool openttd_rust_engine_reset_config(const OpenTTDEngineLoadingServices *a0) { return openttd_rust_engine_reset_config_abi(a0) != 0; }
 const GRFFile *openttd_rust_engine_current_override(const OpenTTDEngineLoadingServices *, const GRFFile *);
 void openttd_rust_engine_set_override(const OpenTTDEngineLoadingServices *, uint32_t, uint32_t);
-uint64_t openttd_rust_engine_translate_refit(uint32_t, const GRFFile *);
 void openttd_rust_engine_setup(const OpenTTDEngineLoadingServices *);
 const OpenTTDEngine *openttd_rust_engine_definition(const OpenTTDEngineLoadingServices *, const GRFFile *, VehicleType, uint16_t, bool);
 uint16_t openttd_rust_engine_new_id(const OpenTTDEngineLoadingServices *, const GRFFile *, VehicleType, uint16_t);

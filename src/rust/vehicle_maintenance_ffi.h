@@ -153,11 +153,9 @@ struct OpenTTDVehicleMaintenanceServices {
 };
 extern const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services;
 extern "C" {
-	void openttd_rust_vehicle_service_depot(OpenTTDVehicle *, const OpenTTDVehicleServices *);
 	void openttd_rust_vehicle_age(OpenTTDVehicle *, const OpenTTDVehicleServices *);
 	void openttd_rust_vehicle_economy_age(OpenTTDVehicle *, const OpenTTDVehicleServices *);
 	void openttd_rust_vehicle_decrease_value(OpenTTDVehicle *, const OpenTTDVehicleServices *);
-	void openttd_rust_vehicle_check_breakdown(OpenTTDVehicle *, const OpenTTDVehicleServices *);
 	uint8_t openttd_rust_vehicle_needs_service_abi(OpenTTDVehicle *, const OpenTTDVehicleServices *);
 	extern "C++" inline bool openttd_rust_vehicle_needs_service(OpenTTDVehicle *a0, const OpenTTDVehicleServices *a1) { return openttd_rust_vehicle_needs_service_abi(a0, a1) != 0; }
 	uint8_t openttd_rust_vehicle_needs_automatic_service_abi(OpenTTDVehicle *, const OpenTTDVehicleServices *);

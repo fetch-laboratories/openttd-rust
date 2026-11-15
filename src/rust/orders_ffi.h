@@ -174,7 +174,6 @@ uint32_t openttd_rust_timetable_start(void *, uint8_t, uint8_t, uint64_t, void *
 uint32_t openttd_rust_timetable_autofill(void *, uint8_t, uint8_t, uint8_t, void *, const OpenTTDOrdersLeaves *);
 uint32_t openttd_rust_timetable_update(void *, uint8_t, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_insert_order(void *, uint8_t, const void *, const OpenTTDOrdersLeaves *);
-uint64_t openttd_rust_delete_order(void *, uint8_t, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_delete_vehicle_orders(void *, uint8_t, uint8_t, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_add_shared(void *, void *, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_delete_implicit(void *, const OpenTTDOrdersLeaves *);

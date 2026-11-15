@@ -139,23 +139,5 @@ static void AirportBuildAutomata(std::vector<AirportFTA> &layout, uint8_t nofele
 	}
 }
 
-/**
- * Get the finite state machine of an airport type.
- * @param airport_type %Airport type to query FTA from. @see AirportTypes
- * @return Finite state machine of the airport.
- */
-const AirportFTAClass *GetAirport(const uint8_t airport_type)
-{
-	return openttd_rust_airport_fta(airport_type, &GetAirportResolverServices());
-}
 const AirportFTAClass *RustDummyAirportFTA() noexcept { return &_airportfta_dummy; }
 
-/**
- * Get the vehicle position when an aircraft is build at the given tile
- * @param hangar_tile The tile on which the vehicle is build
- * @return The position (index in airport node array) where the aircraft ends up
- */
-uint8_t GetVehiclePosOnBuild(TileIndex hangar_tile)
-{
-	return openttd_rust_vehicle_pos_on_build(hangar_tile.base(), &GetAirportResolverServices());
-}

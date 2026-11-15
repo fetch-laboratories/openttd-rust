@@ -399,8 +399,8 @@ impl<'a> World<'a> {
                 }
                 crate::ground::do_clear_square_raw(tile, self.s);
                 unsafe {
-                    crate::water::openttd_rust_clear_neighbour_flooding(
-                        tile,
+                    crate::water::clear_neighbour_non_flooding_states(
+                        TileIndex(tile),
                         self.map.size_x(),
                         (self.s.map_max_y)() + 1,
                         water,

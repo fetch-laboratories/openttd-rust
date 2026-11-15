@@ -480,17 +480,6 @@ pub(crate) fn ensure_no_train_on_track_bits(
     }
     None
 }
-/// Export shim of [`ensure_no_train_on_track_bits`] for the native facade.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_occupancy_train(
-    c: &Commands,
-    out: *mut crate::services::CommandCost,
-    tile: u32,
-    bits: u8,
-) {
-    let blocker = ensure_no_train_on_track_bits(c.vehicles, TileIndex(tile), TrackBits(bits));
-    c.result(out, blocker.map(|vehicle_type| vehicle_type.0));
-}
 
 impl crate::services::CommandServices {
     pub(crate) unsafe fn no_vehicle(&self, out: *mut crate::services::CommandCost, tile: u32) {
@@ -504,9 +493,10 @@ impl crate::services::CommandServices {
         tile: u32,
         bits: u8,
     ) {
-        unsafe {
-            openttd_rust_occupancy_train(&*(self.occupancy)(), out, tile, bits);
-        }
+        // SAFETY: the occupancy table is the live process-lifetime native table.
+        let c = unsafe { &*(self.occupancy)() };
+        let blocker = ensure_no_train_on_track_bits(c.vehicles, TileIndex(tile), TrackBits(bits));
+        c.result(out, blocker.map(|vehicle_type| vehicle_type.0));
     }
     pub(crate) unsafe fn wormhole_free(
         &self,

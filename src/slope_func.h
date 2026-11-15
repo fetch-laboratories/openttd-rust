@@ -80,17 +80,6 @@ inline Slope ComplementSlope(Slope s)
 }
 
 /**
- * Tests if a specific slope has exactly one corner raised.
- *
- * @param s The #Slope
- * @return true iff exactly one corner is raised
- */
-inline bool IsSlopeWithOneCornerRaised(Slope s)
-{
-	return (s == SLOPE_W) || (s == SLOPE_S) || (s == SLOPE_E) || (s == SLOPE_N);
-}
-
-/**
  * Returns the slope with a specific corner raised.
  *
  * @param corner The #Corner.
@@ -100,20 +89,6 @@ inline Slope SlopeWithOneCornerRaised(Corner corner)
 {
 	assert(IsValidCorner(corner));
 	return (Slope)(1 << corner);
-}
-
-/**
- * Tests if a slope has a highest corner (i.e. one corner raised or a steep slope).
- *
- * Note: A halftile slope is ignored.
- *
- * @param s The #Slope.
- * @return  true iff the slope has a highest corner.
- */
-inline bool HasSlopeHighestCorner(Slope s)
-{
-	s = RemoveHalftileSlope(s);
-	return IsSteepSlope(s) || IsSlopeWithOneCornerRaised(s);
 }
 
 /**
@@ -187,17 +162,6 @@ inline Corner OppositeCorner(Corner corner)
 }
 
 /**
- * Tests if a specific slope has exactly three corners raised.
- *
- * @param s The #Slope
- * @return true iff exactly three corners are raised
- */
-inline bool IsSlopeWithThreeCornersRaised(Slope s)
-{
-	return !IsHalftileSlope(s) && !IsSteepSlope(s) && IsSlopeWithOneCornerRaised(ComplementSlope(s));
-}
-
-/**
  * Returns the slope with all except one corner raised.
  *
  * @param corner The #Corner.
@@ -217,17 +181,6 @@ inline Slope SlopeWithThreeCornersRaised(Corner corner)
 inline Slope SteepSlope(Corner corner)
 {
 	return SLOPE_STEEP | SlopeWithThreeCornersRaised(OppositeCorner(corner));
-}
-
-/**
- * Tests if a specific slope is an inclined slope.
- *
- * @param s The #Slope
- * @return true iff the slope is inclined.
- */
-inline bool IsInclinedSlope(Slope s)
-{
-	return (s == SLOPE_NW) || (s == SLOPE_SW) || (s == SLOPE_SE) || (s == SLOPE_NE);
 }
 
 /**
@@ -360,29 +313,6 @@ inline Corner GetRailFoundationCorner(Foundation f)
 }
 
 /**
- * Returns the foundation needed to flatten a slope.
- * The returned foundation is either FOUNDATION_NONE if the tile was already flat, or FOUNDATION_LEVELED.
- *
- * @param s  The current #Slope.
- * @return   The needed #Foundation.
- */
-inline Foundation FlatteningFoundation(Slope s)
-{
-	return (s == SLOPE_FLAT ? FOUNDATION_NONE : FOUNDATION_LEVELED);
-}
-
-/**
- * Returns the along a specific axis inclined foundation.
- *
- * @param axis  The #Axis.
- * @return      The needed #Foundation.
- */
-inline Foundation InclinedFoundation(Axis axis)
-{
-	return (axis == AXIS_X ? FOUNDATION_INCLINED_X : FOUNDATION_INCLINED_Y);
-}
-
-/**
  * Returns the halftile foundation for single horizontal/vertical track.
  *
  * @param corner The #Corner with the track.
@@ -392,18 +322,6 @@ inline Foundation HalftileFoundation(Corner corner)
 {
 	assert(IsValidCorner(corner));
 	return static_cast<Foundation>(static_cast<uint>(FOUNDATION_HALFTILE_W) + static_cast<uint>(corner));
-}
-
-/**
- * Returns the special rail foundation for single horizontal/vertical track.
- *
- * @param corner The #Corner with the track.
- * @return       The wanted #Foundation.
- */
-inline Foundation SpecialRailFoundation(Corner corner)
-{
-	assert(IsValidCorner(corner));
-	return static_cast<Foundation>(static_cast<uint>(FOUNDATION_RAIL_W) + static_cast<uint>(corner));
 }
 
 /**

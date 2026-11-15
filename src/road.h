@@ -204,11 +204,6 @@ inline RoadTramType GetRoadTramType(RoadType roadtype)
 	return RoadTypeIsTram(roadtype) ? RTT_TRAM : RTT_ROAD;
 }
 
-inline RoadTramType OtherRoadTramType(RoadTramType rtt)
-{
-	return rtt == RTT_ROAD ? RTT_TRAM : RTT_ROAD;
-}
-
 /**
  * Returns a pointer to the Roadtype information for a given roadtype
  * @param roadtype the road type which the information is requested for
@@ -242,27 +237,6 @@ inline bool HasPowerOnRoad(RoadType enginetype, RoadType tiletype)
 inline Money RoadBuildCost(RoadType roadtype)
 {
 	return openttd_rust_road_build_cost(&GetRustSharedServices(), roadtype);
-}
-
-/**
- * Returns the cost of clearing the specified roadtype.
- * @param roadtype The roadtype being removed.
- * @return The cost.
- */
-inline Money RoadClearCost(RoadType roadtype)
-{
-	return openttd_rust_road_clear_cost(&GetRustSharedServices(), roadtype);
-}
-
-/**
- * Calculates the cost of road conversion
- * @param from The roadtype we are converting from
- * @param to   The roadtype we are converting to
- * @return Cost per RoadBit
- */
-inline Money RoadConvertCost(RoadType from, RoadType to)
-{
-	return openttd_rust_road_convert_cost(&GetRustSharedServices(), from, to);
 }
 
 /**

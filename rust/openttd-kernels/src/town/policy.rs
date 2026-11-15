@@ -78,10 +78,6 @@ pub unsafe extern "C" fn openttd_rust_town_update_max_pass(
     update_town_max_pass(unsafe { &*leaves }, owner);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_check_road_types_abi(leaves: *const Leaves) -> u8 {
-    u8::from(check_town_road_types(unsafe { &*leaves }))
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_radius_group(
     owner: *const State,
     s: *const Services,

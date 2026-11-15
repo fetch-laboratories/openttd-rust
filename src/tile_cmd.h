@@ -196,9 +196,7 @@ inline void AddProducedCargo(TileIndex tile, CargoArray &produced)
  */
 extern "C" uint8_t openttd_rust_may_animate_abi(uint32_t);
 extern "C++" inline bool openttd_rust_may_animate(uint32_t a0) { return openttd_rust_may_animate_abi(a0) != 0; }
-extern "C" void openttd_rust_animate_tile(uint32_t);
 inline bool MayAnimateTile(TileIndex tile) { return openttd_rust_may_animate(tile.base()); }
-inline void AnimateTile(TileIndex tile) { openttd_rust_animate_tile(tile.base()); }
 
 inline bool ClickTile(TileIndex tile)
 {

@@ -88,18 +88,12 @@ inline void RustSetDepotExit(uint32_t tile, uint8_t dir) noexcept { SetRailDepot
 inline void RustMakeRailNormal(uint32_t tile, uint8_t owner, uint8_t bits, uint8_t rt) noexcept { MakeRailNormal(TileIndex(tile), Owner(owner), static_cast<TrackBits>(bits), static_cast<RailType>(rt)); }
 inline void RustMakeRailDepot(uint32_t tile, uint8_t owner, uint16_t depot, uint8_t dir, uint8_t rt) noexcept { MakeRailDepot(TileIndex(tile), Owner(owner), DepotID(depot), static_cast<DiagDirection>(dir), static_cast<RailType>(rt)); }
 inline bool RustIsRailStation(uint32_t tile) noexcept { return IsRailStationTile(TileIndex(tile)); }
-inline Track RustRailStationTrack(uint32_t tile) noexcept { return GetRailStationTrack(TileIndex(tile)); }
 inline bool RustWormholeReserved(uint32_t tile) noexcept { return HasTunnelBridgeReservation(TileIndex(tile)); }
 inline void RustSetTunnelBridgeReservation(uint32_t tile, bool reserved) noexcept { SetTunnelBridgeReservation(TileIndex{tile}, reserved); }
 inline void RustSetTileOwner(uint32_t tile, uint8_t owner) noexcept { SetTileOwner(TileIndex(tile), Owner(owner)); }
 
 /* Shared signature adapters preserve existing legacy callback ABIs. Query is
  * compile-time and inline: each entry makes the same native query. */
-template <auto Query, typename First, typename Second>
-auto OpenTTDEnumMapQuery(std::underlying_type_t<First> first, std::underlying_type_t<Second> second) noexcept
-{
-	return Query(static_cast<First>(first), static_cast<Second>(second));
-}
 template <typename Result, auto Query, typename... Args>
 Result OpenTTDMapQuery(Args... args) noexcept
 {

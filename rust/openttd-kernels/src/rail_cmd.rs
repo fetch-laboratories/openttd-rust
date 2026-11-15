@@ -438,8 +438,8 @@ impl<'a> Ctx<'a> {
     fn check_rail_slope(&self, out: Cost<'_>, tileh: u8, bits: u8, existing: u8, tile: u32) {
         // SAFETY: Immutable shared tables outlive this synchronous command entry.
         if unsafe {
-            crate::water::openttd_rust_flooding_behaviour(
-                tile,
+            crate::water::get_flooding_behaviour(
+                crate::tile_type::TileIndex(tile),
                 (self.shared.water_services)(),
                 self.shared,
             )

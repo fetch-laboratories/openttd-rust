@@ -48,18 +48,6 @@ inline StationType GetStationType(Tile t)
 }
 
 /**
- * Get the road stop type of this tile
- * @param t the tile to query
- * @pre GetStationType(t) == StationType::Truck || GetStationType(t) == StationType::Bus
- * @return the road stop type
- */
-inline RoadStopType GetRoadStopType(Tile t)
-{
-	assert(GetStationType(t) == StationType::Truck || GetStationType(t) == StationType::Bus);
-	return GetStationType(t) == StationType::Truck ? RoadStopType::Truck : RoadStopType::Bus;
-}
-
-/**
  * Get the station graphics of this tile
  * @param t the tile to query
  * @pre IsTileType(t, MP_STATION)

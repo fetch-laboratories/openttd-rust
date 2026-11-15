@@ -174,9 +174,6 @@ inline bool IsWaypointClass(const StationClass &cls)
 	return openttd_rust_is_waypoint_class(cls.global_id);
 }
 
-/* Evaluate a tile's position within a station, and return the result a bitstuffed format. */
-uint32_t GetPlatformInfo(Axis axis, uint8_t tile, int platforms, int length, int x, int y, bool centred);
-
 SpriteID GetCustomStationRelocation(const StationSpec *statspec, BaseStation *st, TileIndex tile, uint32_t var10 = 0);
 void GetCustomStationRelocation(SpriteLayoutProcessor &processor, const StationSpec *statspec, BaseStation *st, TileIndex tile);
 SpriteID GetCustomStationFoundationRelocation(const StationSpec *statspec, BaseStation *st, TileIndex tile, uint layout, uint edge_info);

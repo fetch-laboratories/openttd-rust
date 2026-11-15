@@ -402,11 +402,6 @@ void PlantRandomFarmField(const Industry *i)
 
 static_assert(Ticks::INDUSTRY_PRODUCE_TICKS == 256);
 
-bool IsSlopeRefused(Slope current, Slope refused)
-{
-	return openttd_rust_industry_slope_refused(current, refused);
-}
-
 /**
  * Are the tiles of the industry free?
  * @param tile                    Position to check.

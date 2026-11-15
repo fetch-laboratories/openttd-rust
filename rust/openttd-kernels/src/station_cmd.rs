@@ -817,49 +817,28 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// Check one construction tile, preserving the original mutable height output.
+/// `CheckBuildableTile`: checks if the given tile is buildable, flat and has a certain height,
+/// writing the cost or error to `out`. If `allowed_z` is negative, it is set to the height of
+/// this tile.
 /// # Safety
-/// Tables and native output are live for this call; `allowed_z` is exclusively borrowed.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_check_buildable(
+/// Tables and native output are live for this call.
+pub(crate) unsafe fn check_buildable_tile(
     s: *const CommandServicesTable,
     out: *mut CommandCost,
-    tile: u32,
-    invalid: u8,
-    allowed_z: *mut i32,
+    tile: TileIndex,
+    invalid_dirs: DiagDirections,
+    allowed_z: &mut i32,
     allow_steep: bool,
     check_bridge: bool,
 ) {
     let c = unsafe { Ctx::new(s) };
     c.check_buildable(
         c.c(out),
-        TileIndex(tile),
-        DiagDirections(invalid),
-        unsafe { &mut *allowed_z },
+        tile,
+        invalid_dirs,
+        allowed_z,
         allow_steep,
         check_bridge,
-    );
-}
-
-/// Check building a road stop below a bridge.
-/// # Safety
-/// Native tables, optional spec and output are live for this synchronous call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_road_bridge_ok(
-    s: *const CommandServicesTable,
-    out: *mut CommandCost,
-    tile: u32,
-    spec: *const RoadSpec,
-    kind: u8,
-    layout: u8,
-) {
-    let c = unsafe { Ctx::new(s) };
-    c.is_road_station_bridge_above_ok(
-        c.c(out),
-        TileIndex(tile),
-        spec,
-        StationType(kind),
-        StationGfx(layout),
     );
 }
 
@@ -5502,15 +5481,6 @@ pub unsafe extern "C" fn openttd_rust_station_update_docking(
     st: *mut BaseStation,
 ) {
     unsafe { Ctx::new(s) }.update_station_docking_tiles(st);
-}
-/// # Safety
-/// Tables and serialized map/pools remain live for this call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_remove_docking_tile(
-    s: *const CommandServicesTable,
-    tile: u32,
-) {
-    unsafe { remove_docking_tile(s, TileIndex(tile)) };
 }
 /// `RemoveDockingTile`: the direct Rust entry.
 /// # Safety

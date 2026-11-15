@@ -156,7 +156,6 @@ uint8_t GetRoadStopTileAnimationSpeed(TileIndex tile);
 void TriggerRoadStopAnimation(BaseStation *st, TileIndex tile, StationAnimationTrigger trigger, CargoType cargo_type = INVALID_CARGO);
 void TriggerRoadStopRandomisation(BaseStation *st, TileIndex tile, StationRandomTrigger trigger, CargoType cargo_type = INVALID_CARGO);
 
-bool GetIfNewStopsByType(RoadStopType rs, RoadType roadtype);
 bool GetIfClassHasNewStopsByType(const RoadStopClass *roadstopclass, RoadStopType rs, RoadType roadtype);
 bool GetIfStopIsForType(const RoadStopSpec *roadstopspec, RoadStopType rs, RoadType roadtype);
 

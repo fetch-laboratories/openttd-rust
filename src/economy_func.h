@@ -37,8 +37,6 @@ void StartupIndustryDailyChanges(bool init_counter);
 
 Money GetTransportedGoodsIncome(uint num_pieces, uint dist, uint16_t transit_periods, CargoType cargo_type);
 
-void LoadUnloadStation(Station *st);
-
 Money GetPrice(Price index, uint cost_factor, const struct GRFFile *grf_file, int shift = 0);
 
 void InitializeEconomy();

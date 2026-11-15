@@ -70,6 +70,5 @@ uint8_t openttd_rust_command_backup_held();
 OpenTTDCommandAdmission openttd_rust_command_admit(const OpenTTDCommandServices *, uint8_t, uint16_t, uint32_t, uint32_t, bool);
 uint8_t openttd_rust_command_posted(const OpenTTDCommandServices *, const OpenTTDCommandCost *, uint32_t, bool, bool, uint32_t, bool, bool);
 void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);
-uint8_t openttd_rust_command_check_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
 }
 #endif /* RUST_COMMAND_SERVICES_FFI_H */

@@ -59,8 +59,6 @@ uint8_t openttd_rust_can_vehicle_use_station_abi(const OpenTTDVehicle *, const S
 extern "C++" inline bool openttd_rust_can_vehicle_use_station(const OpenTTDVehicle *a0, const Station *a1, const OpenTTDAirportResolverServices *a2) { return openttd_rust_can_vehicle_use_station_abi(a0, a1, a2) != 0; }
 uint8_t openttd_rust_is_hangar_abi(uint32_t, const OpenTTDAirportResolverServices *);
 extern "C++" inline bool openttd_rust_is_hangar(uint32_t a0, const OpenTTDAirportResolverServices *a1) { return openttd_rust_is_hangar_abi(a0, a1) != 0; }
-uint8_t openttd_rust_vehicle_pos_on_build(uint32_t, const OpenTTDAirportResolverServices *);
-const AirportFTAClass *openttd_rust_airport_fta(uint8_t, const OpenTTDAirportResolverServices *);
 const AirportSpec *openttd_rust_airport_get_spec(uint32_t, uint8_t, const OpenTTDAirportResolverServices *);
 const AirportSpec *openttd_rust_airport_spec(uint8_t, const OpenTTDAirportResolverServices *);
 uint8_t openttd_rust_airport_available_abi(const AirportSpec *, const OpenTTDAirportResolverServices *);

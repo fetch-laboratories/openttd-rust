@@ -13,16 +13,11 @@
 static void VehicleMaintenanceBoundary()
 {
 	static size_t dirty;
-	static size_t resets;
 	static size_t values;
-	dirty = resets = values = 0;
+	dirty = values = 0;
 	auto &maintenance = _vehicle_maintenance_probe;
 	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceBreakdownProbe { return {.counter = 0, .status = 0}; };
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept { dirty++; };
-	maintenance.reset = [](OpenTTDVehicle *) noexcept {
-		return OpenTTDVehicleMaintenanceReset{.economy_date = OpenTTDEconomyDate{0x1020304}, .calendar_date = OpenTTDCalendarDate{-0x12345}, .chance = 12, .breakdowns = 2};
-	};
-	maintenance.chance_write = [](OpenTTDVehicle *, uint8_t chance) noexcept { CHECK(chance == 3); resets++; };
 	maintenance.value = [](OpenTTDVehicle *) noexcept { return int64_t{-257}; };
 	maintenance.value_write = [](OpenTTDVehicle *, int64_t value) noexcept { CHECK(value == -255); values++; };
 	maintenance.renewal = [](OpenTTDVehicle *, const Company *) noexcept {
@@ -35,23 +30,17 @@ static void VehicleMaintenanceBoundary()
 	const OpenTTDEngineDefaults engine_defaults{};
 	openttd_rust_engine_construct(engine_record, &engine_defaults, VEH_ROAD, UINT16_MAX);
 	engine_record->vehicle_info.road.cost_factor = 53;
-	engine_record->reliability = 0x9876;
 	engine_record->company_avail.Set(CompanyID{0});
 	auto &base = tables.vehicle;
 	base.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine_record; };
 	base.maintenance = &maintenance;
-	base.write_economy_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == 0x1020304); };
-	base.write_calendar_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == -0x12345); };
-	base.write_breakdowns = [](OpenTTDVehicle *, uint8_t since) noexcept { CHECK(since == 0); };
-	base.write_reliability = [](OpenTTDVehicle *, uint16_t reliability) noexcept { CHECK(reliability == 0x9876); };
 	OpenTTDVehicle record{};
 	record.type = VEH_ROAD;
 	auto *shell = &record;
-	openttd_rust_vehicle_service_depot(shell, &base);
 	openttd_rust_vehicle_decrease_value(shell, &base);
 	CHECK(openttd_rust_vehicle_needs_renew(shell, &base, nullptr, false));
 	CHECK(!openttd_rust_vehicle_needs_renew(shell, &base, nullptr, true));
-	CHECK(dirty == 2 && resets == 1 && values == 1);
+	CHECK(dirty == 1 && values == 1);
 	/* Replacement budgets use the Rust engine price before observing available money. */
 	static OpenTTDEngineCapabilitiesServices capabilities{};
 	static OpenTTDVehicleResolverServices resolver{};

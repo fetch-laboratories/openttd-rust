@@ -720,28 +720,11 @@ pub(crate) unsafe fn water_tile_loop(
     // SAFETY: Resolve only the tables reached after the original early return.
     unsafe { World::new(w, s, types, size_x, size_y) }.tile_loop(tile, call);
 }
-/// # Safety
-/// Same table/context contract; original native plain-rail assertion is retained.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_flood_halftile_abi(
-    tile: u32,
-    call: *mut Call,
-    w: *const WaterServices,
-    s: *const Services,
-) -> u8 {
-    // SAFETY: Serialized native entry; no borrowed state crosses commands. Half
-    // flooding uses the canonical descriptor and original map dimensions.
-    let map = crate::map_func::World::new(unsafe { &*s });
-    u8::from(
-        unsafe { World::new(w, s, &map.types, map.dimensions.size_x(), map.size().1) }
-            .half_flood(tile, call),
-    )
-}
+/// `GetFloodingBehaviour`: returns the behaviour of a tile during flooding.
 /// # Safety
 /// Live immutable service tables; valid original tile argument.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_flooding_behaviour(
-    tile: u32,
+pub(crate) unsafe fn get_flooding_behaviour(
+    tile: crate::tile_type::TileIndex,
     w: *const WaterServices,
     s: *const Services,
 ) -> FloodingBehaviour {
@@ -749,7 +732,7 @@ pub unsafe extern "C" fn openttd_rust_flooding_behaviour(
     let map = crate::map_func::World::new(unsafe { &*s });
     FloodingBehaviour(
         unsafe { World::new(w, s, &map.types, map.dimensions.size_x(), map.size().1) }
-            .behaviour(tile),
+            .behaviour(tile.0),
     )
 }
 /// # Safety
@@ -785,27 +768,6 @@ pub(crate) unsafe fn clear_neighbour_non_flooding_states(
             (world.w.set_non_flooding)(target, false);
             crate::ground::hit(crate::ground::Witness::Wakeup);
         }
-    }
-}
-/// # Safety
-/// Live immutable service tables for the synchronous no-unwind invocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_clear_neighbour_flooding(
-    tile: u32,
-    size_x: u32,
-    size_y: u32,
-    w: *const WaterServices,
-    s: *const Services,
-) {
-    // SAFETY: The caller's contract is the function's.
-    unsafe {
-        clear_neighbour_non_flooding_states(
-            crate::tile_type::TileIndex(tile),
-            size_x,
-            size_y,
-            w,
-            s,
-        );
     }
 }
 

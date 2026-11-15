@@ -362,13 +362,6 @@ pub extern "C" fn openttd_rust_encode_utf8(codepoint: u32) -> Utf8Encoded {
     utf8::encode(codepoint)
 }
 
-/// Classify an original byte, returning one for continuation bytes and zero otherwise.
-#[allow(unsafe_code)] // Export attribute only.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_is_utf8_part(byte: u8) -> u8 {
-    u8::from(utf8::is_utf8_part(byte))
-}
-
 /// Decode the first sequence, without examining trailing bytes or rejecting surrogates.
 ///
 /// # Safety

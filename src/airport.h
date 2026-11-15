@@ -196,8 +196,6 @@ public:
 };
 
 
-const AirportFTAClass *GetAirport(const uint8_t airport_type);
 const AirportFTAClass *RustDummyAirportFTA() noexcept;
-uint8_t GetVehiclePosOnBuild(TileIndex hangar_tile);
 
 #endif /* AIRPORT_H */

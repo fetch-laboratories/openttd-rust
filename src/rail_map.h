@@ -304,16 +304,6 @@ inline void SetSignalType(Tile t, Track track, SignalType s)
 	if (track == INVALID_TRACK) SB(t.m2(), 4, 3, s);
 }
 
-inline bool IsPresignalEntry(Tile t, Track track)
-{
-	return GetSignalType(t, track) == SIGTYPE_ENTRY || GetSignalType(t, track) == SIGTYPE_COMBO;
-}
-
-inline bool IsPresignalExit(Tile t, Track track)
-{
-	return GetSignalType(t, track) == SIGTYPE_EXIT || GetSignalType(t, track) == SIGTYPE_COMBO;
-}
-
 /** One-way signals can't be passed the 'wrong' way. */
 inline bool IsOnewaySignal(Tile t, Track track)
 {

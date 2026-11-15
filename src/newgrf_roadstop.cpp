@@ -197,24 +197,6 @@ void TriggerRoadStopRandomisation(BaseStation *st, TileIndex tile, StationRandom
 }
 
 /**
- * Checks if there's any new stations by a specific RoadStopType
- * @param rs the RoadStopType to check.
- * @param roadtype the RoadType to check.
- * @return true if there was any new RoadStopSpec's found for the given RoadStopType and RoadType, else false.
- */
-bool GetIfNewStopsByType(RoadStopType rs, RoadType roadtype)
-{
-	for (const auto &cls : RoadStopClass::Classes()) {
-		/* Ignore the waypoint class. */
-		if (IsWaypointClass(cls)) continue;
-		/* Ignore the default class with only the default station. */
-		if (cls.Index() == ROADSTOP_CLASS_DFLT && cls.GetSpecCount() == 1) continue;
-		if (GetIfClassHasNewStopsByType(&cls, rs, roadtype)) return true;
-	}
-	return false;
-}
-
-/**
  * Checks if the given RoadStopClass has any specs assigned to it, compatible with the given RoadStopType.
  * @param roadstopclass the RoadStopClass to check.
  * @param rs the RoadStopType to check.
