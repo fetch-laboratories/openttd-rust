@@ -169,6 +169,43 @@ impl GroundVehicleSubtypeFlags {
     pub const GVSF_MULTIHEADED: Self = Self(5);
 }
 
+/// Structure to return information about the closest depot location,
+/// and whether it could be found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ClosestDepot {
+    pub(crate) location: TileIndex,
+    /// The DestinationID as used for orders.
+    pub(crate) destination: crate::order_type::DestinationID,
+    pub(crate) reverse: bool,
+    pub(crate) found: bool,
+}
+impl Default for ClosestDepot {
+    /// `ClosestDepot()`: not found.
+    fn default() -> Self {
+        Self {
+            location: TileIndex::INVALID,
+            destination: crate::order_type::DestinationID(0),
+            reverse: false,
+            found: false,
+        }
+    }
+}
+impl ClosestDepot {
+    /// `ClosestDepot(location, destination, reverse)`: found.
+    pub(crate) fn new(
+        location: TileIndex,
+        destination: crate::order_type::DestinationID,
+        reverse: bool,
+    ) -> Self {
+        Self {
+            location,
+            destination,
+            reverse,
+            found: true,
+        }
+    }
+}
+
 /// `Vehicle::IsFrontEngine` over a `subtype`; `ground` is `IsGroundVehicle()`.
 pub(crate) fn is_front_engine(ground: bool, subtype: u8) -> bool {
     ground && has_bit(subtype, GroundVehicleSubtypeFlags::GVSF_FRONT.0)

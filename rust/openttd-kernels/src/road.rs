@@ -83,6 +83,7 @@ use crate::track_type::{TrackBits, TrackStatus, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
 use crate::vehicle::maintenance;
 use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, YEAR_TICKS};
+use crate::vehicle_base::ClosestDepot;
 use crate::vehicle_base::{VehState, VehStates};
 use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH, VehicleID, VehicleType};
 use std::ptr::NonNull;
@@ -730,23 +731,17 @@ impl<'a> Game<'a> {
 
     /// `RoadVehicle::FindClosestDepot`.
     #[inline]
-    fn find_closest_depot(&self, v: Part) -> Closest {
+    fn find_closest_depot(&self, v: Part) -> ClosestDepot {
         let rfdd = self.find_closest_road_depot(v, 0);
         if rfdd.best_length == u32::MAX {
-            return Closest {
-                tile: TileIndex::INVALID.0,
-                destination: 0,
-                reverse: 0,
-                found: 0,
-            };
+            return ClosestDepot::default();
         }
 
-        Closest {
-            tile: rfdd.tile.0,
-            destination: service!(self.ss.depot_index)(rfdd.tile.0),
-            reverse: 0,
-            found: 1,
-        }
+        ClosestDepot::new(
+            rfdd.tile,
+            DestinationID(service!(self.ss.depot_index)(rfdd.tile.0)),
+            false,
+        )
     }
 
     /// `CmdTurnRoadVeh` after its vehicle, primary and ownership checks: turn a road
@@ -2963,7 +2958,14 @@ pub unsafe extern "C" fn openttd_rust_road_find_closest_depot(
 ) {
     let result = entry!(leaves).find_closest_depot(Part::new(v, state));
     // SAFETY: As this function's contract.
-    unsafe { closest.write(result) };
+    unsafe {
+        closest.write(Closest {
+            tile: result.location.0,
+            destination: result.destination.0,
+            reverse: u8::from(result.reverse),
+            found: u8::from(result.found),
+        });
+    };
 }
 /// `_road_stop_stop_frame[index]`, for the afterload of old saves.
 #[unsafe(no_mangle)]
