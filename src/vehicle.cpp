@@ -1539,7 +1539,6 @@ void Vehicle::ShowVisualEffectAtSpeed(uint max_speed) const
  */
 void Vehicle::SetNext(Vehicle *next)
 {
-	assert(this != next);
 	openttd_rust_vehicle_set_next(this->record, next == nullptr ? nullptr : next->record);
 }
 

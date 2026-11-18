@@ -1106,8 +1106,7 @@ impl Game<'_> {
             }
             // SAFETY: The crash chain stays live through unlinking and station copy.
             unsafe {
-                self.vs
-                    .set_next_record(previous.v.0.as_ptr(), std::ptr::null_mut());
+                crate::vehicle_base::set_next(previous.v.0.as_ptr(), std::ptr::null_mut());
             };
             let station = (v.v).last_station_visited_raw();
             (last.v).set_last_station_visited_raw(station);

@@ -154,7 +154,7 @@ impl Ctx {
     }
     fn set_next(self, v: R, next: R) {
         // SAFETY: The transaction retains every linked record until explicit deletion.
-        unsafe { self.c.vehicles.set_next_record(v, next) };
+        unsafe { crate::vehicle_base::set_next(v, next) };
     }
     fn id(self, v: R) -> VehicleID {
         VehicleID(unsafe { (self.g.vehicle_id)(Self::sh(v)) })

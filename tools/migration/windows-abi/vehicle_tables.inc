@@ -21,7 +21,6 @@ struct RoadTestTables {
 	OpenTTDRoadLeaves leaves;
 	explicit RoadTestTables(const OpenTTDSharedServices *world) : shared(*world)
 	{
-		VEHICLE_UNUSED(vehicle, assert_next);
 		VEHICLE_UNUSED(vehicle, record_from_shell);
 		VEHICLE_UNUSED(vehicle, first_sprite);
 		vehicle.maintenance = &_vehicle_maintenance_probe;

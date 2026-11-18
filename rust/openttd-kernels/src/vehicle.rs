@@ -115,7 +115,6 @@ pub struct Breakdown {
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
-    pub assert_next: extern "C" fn(*mut OpenTTDVehicle, *mut OpenTTDVehicle),
     /// Resolve a legacy opaque native shell to its canonical record.
     pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
     pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
@@ -193,22 +192,6 @@ impl VehicleServices {
         let record = (self.record_from_shell)(shell);
         let next = (self.record_from_shell)(next);
         // SAFETY: The caller preserves both resolved records.
-        unsafe { self.set_next_record(record, next) };
-    }
-
-    /// Complete chain operation on canonical records.
-    ///
-    /// # Safety
-    /// `record`, non-null `next` and all reachable links remain live.
-    pub(crate) unsafe fn set_next_record(
-        &self,
-        record: *mut OpenTTDVehicle,
-        next: *mut OpenTTDVehicle,
-    ) {
-        if record == next {
-            (self.assert_next)(record, next);
-        }
-        // SAFETY: The caller preserves the records and native assertion policy.
         unsafe { crate::vehicle_base::set_next(record, next) };
     }
 
@@ -285,7 +268,6 @@ crate::abi::layouts! {
         tile,
     };
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
-        assert_next,
         record_from_shell,
         tile_links,
         map_log_x,

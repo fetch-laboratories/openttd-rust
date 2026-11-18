@@ -750,7 +750,7 @@ impl<'a> World<'a> {
             );
             // SAFETY: Both newly allocated disaster shells remain live.
             unsafe {
-                (*self.s.vehicles).set_next_record(destroyer.handle, shadow.handle);
+                crate::vehicle_base::set_next(destroyer.handle, shadow.handle);
             };
         } else if v.state() == 0 {
             let map = self.map();
@@ -966,7 +966,7 @@ impl<'a> World<'a> {
                 let shadow = (self.s.create)(x, y, dir, subtype + 1, INVALID_VEHICLE);
                 // SAFETY: Both newly allocated disaster shells remain live.
                 unsafe {
-                    (*self.s.vehicles).set_next_record(v.handle, shadow.handle);
+                    crate::vehicle_base::set_next(v.handle, shadow.handle);
                 };
             }
             2 | 3 => {
@@ -1010,13 +1010,13 @@ impl<'a> World<'a> {
                 let shadow = (self.s.create)(x, y, dir, subtype + 1, INVALID_VEHICLE);
                 // SAFETY: Both newly allocated disaster shells remain live.
                 unsafe {
-                    (*self.s.vehicles).set_next_record(v.handle, shadow.handle);
+                    crate::vehicle_base::set_next(v.handle, shadow.handle);
                 };
                 if kind == 3 {
                     let rotor = (self.s.create)(x, y, dir, ST_HELICOPTER_ROTORS, INVALID_VEHICLE);
                     // SAFETY: Both newly allocated disaster shells remain live.
                     unsafe {
-                        (*self.s.vehicles).set_next_record(shadow.handle, rotor.handle);
+                        crate::vehicle_base::set_next(shadow.handle, rotor.handle);
                     };
                 }
             }

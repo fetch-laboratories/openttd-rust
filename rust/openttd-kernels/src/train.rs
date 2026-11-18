@@ -2251,7 +2251,7 @@ impl Game<'_> {
             id = (id).next();
         }
         // SAFETY: The crash chain remains live until the following delete.
-        unsafe { self.vs().set_next_record(last.record, std::ptr::null_mut()) };
+        unsafe { crate::vehicle_base::set_next(last.record, std::ptr::null_mut()) };
         if first != id {
             self.consist_changed(first, 3);
             if first.track() == DEPOT {
