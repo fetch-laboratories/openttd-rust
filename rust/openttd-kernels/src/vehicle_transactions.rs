@@ -15,8 +15,12 @@ pub(crate) mod construct;
 pub(crate) mod mass;
 pub(crate) mod rail;
 pub(crate) mod refit;
+use crate::aircraft::AirVehicleFlags;
+use crate::airport::AirportMovementStates;
+use crate::bitmath_func::has_bit;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
+use crate::economy_type::ExpensesType;
 use crate::fleet::{ALL_GROUP, GroupServices};
 use crate::network_type::ClientID;
 use crate::newgrf_text_type::GRFStringID;
@@ -24,6 +28,11 @@ use crate::order_type::OrderType;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, CommandServices, Services};
 use crate::strings_type::INVALID_STRING_ID as ERROR;
 use crate::strings_type::StringID;
+use crate::table::strings::{
+    STR_ERROR_AIRCRAFT_IS_IN_FLIGHT, STR_ERROR_INCOMPATIBLE_RAIL_TYPES,
+    STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT, STR_ERROR_TRAIN_START_NO_POWER,
+    STR_ERROR_VEHICLE_IS_DESTROYED, STR_NULL,
+};
 use crate::tile_type::TileIndex;
 use crate::vehicle::{VehicleRef, VehicleType};
 use crate::vehicle_base::VehState;
@@ -558,31 +567,11 @@ pub struct AircraftStartState {
     pub flags: u8,
 }
 #[repr(C)]
-pub struct TransactionStrings {
-    pub destroyed: u32,
-    pub stopped_in_depot: u32,
-    pub no_power: u32,
-    pub in_flight: u32,
-    pub incompatible_rail: u32,
-    pub null_string: u32,
-    pub grf_text: GrfStringId,
-    pub takeoff: u8,
-    pub terminal7: u8,
-    pub direct_descent: u8,
-    pub new_vehicle_expense: u8,
-    pub invalid_client: u32,
-    pub share_orders: u8,
-    pub copy_orders: u8,
-    pub cargo_count: u8,
-    pub invalid_cargo: u8,
-}
-#[repr(C)]
 pub struct CommonServices {
     pub base: &'static TransactionServices,
     pub transactions: &'static crate::fleet::transactions::Services,
     pub vehicles: &'static crate::vehicle::VehicleServices,
     pub orders: &'static crate::orders::Leaves,
-    pub strings: TransactionStrings,
     pub aircraft_start: extern "C" fn(*mut ()) -> AircraftStartState,
     pub grf_string: extern "C" fn(u32, u32) -> u32,
     pub value: extern "C" fn(*mut ()) -> i64,
@@ -670,12 +659,12 @@ pub(crate) unsafe fn cmd_sell_vehicle(
         .vehstatus()
         .test(VehState::Crashed)
     {
-        return (b.cost.error)(cost, s.strings.destroyed);
+        return (b.cost.error)(cost, STR_ERROR_VEHICLE_IS_DESTROYED.0);
     }
     if !unsafe { (s.transactions.stopped_in_depot)(front) } {
         return (b.cost.error)(
             cost,
-            s.strings.stopped_in_depot
+            STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT.0
                 + u32::from(crate::fleet::record(b.groups, front).vehicle_type().0),
         );
     }
@@ -699,7 +688,7 @@ pub(crate) unsafe fn cmd_sell_vehicle(
     }
     (b.cost.expense_money)(
         cost,
-        s.strings.new_vehicle_expense,
+        ExpensesType::EXPENSES_NEW_VEHICLES.0,
         (s.value)(front).saturating_neg(),
     );
     if flags.test(DoCommandFlag::Execute) {
@@ -772,24 +761,25 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
     };
     let status = (handle).vehstatus();
     if status.test(VehState::Crashed) {
-        return (b.cost.error)(cost, s.strings.destroyed);
+        return (b.cost.error)(cost, STR_ERROR_VEHICLE_IS_DESTROYED.0);
     }
     match handle.vehicle_type() {
         VehicleType::TRAIN => {
             if status.test(VehState::Stopped)
                 && crate::raw_field::read_field!(handle.ground_cache(), cached_power) == 0
             {
-                return (b.cost.error)(cost, s.strings.no_power);
+                return (b.cost.error)(cost, STR_ERROR_TRAIN_START_NO_POWER.0);
             }
         }
         VehicleType::ROAD | VehicleType::SHIP => (),
         VehicleType::AIRCRAFT => {
             /* cannot stop airplane when in flight, or when taking off / landing */
             let state = (s.aircraft_start)(v);
-            if (state.state >= s.strings.takeoff && state.state < s.strings.terminal7)
-                || state.flags & s.strings.direct_descent != 0
+            if (state.state >= AirportMovementStates::STARTTAKEOFF.0
+                && state.state < AirportMovementStates::TERM7.0)
+                || has_bit(state.flags, AirVehicleFlags::VAF_HELI_DIRECT_DESCENT.0)
             {
-                return (b.cost.error)(cost, s.strings.in_flight);
+                return (b.cost.error)(cost, STR_ERROR_AIRCRAFT_IS_IN_FLIGHT.0);
             }
         }
         _ => return (b.cost.error)(cost, ERROR),
@@ -810,21 +800,28 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
                 1,
             )
         };
-        let null_string = StringID(s.strings.null_string);
-        let mut error = null_string;
+        let mut error = STR_NULL;
         if callback != crate::vehicle::CALLBACK_FAILED {
             if s.engine_grf_version(handle) < 8 {
                 /* 8 bit result 0xFF means 'allow' */
                 if callback < 0x400 && callback & 0xff != 0xff {
                     error = s.grf_text(
                         handle,
-                        GRFStringID(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
+                        GRFStringID(
+                            GRFStringID::GRFSTR_MISC_GRF_TEXT
+                                .0
+                                .wrapping_add(u32::from(callback)),
+                        ),
                     );
                 }
             } else if callback < 0x400 {
                 error = s.grf_text(
                     handle,
-                    GRFStringID(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
+                    GRFStringID(
+                        GRFStringID::GRFSTR_MISC_GRF_TEXT
+                            .0
+                            .wrapping_add(u32::from(callback)),
+                    ),
                 );
             } else {
                 match callback {
@@ -836,11 +833,11 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
                             GRFStringID(unsafe { register100.assume_init() } as u32),
                         );
                     }
-                    _ => error = StringID(s.strings.incompatible_rail), // unknown reason -> disallow
+                    _ => error = STR_ERROR_INCOMPATIBLE_RAIL_TYPES, // unknown reason -> disallow
                 }
             }
         }
-        if error != null_string {
+        if error != STR_NULL {
             return (b.cost.error)(cost, error.0);
         }
     }
@@ -932,17 +929,11 @@ pub unsafe extern "C" fn openttd_rust_vehicle_startstop(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "GRFStringID" ["probe"] => GrfStringId { };
     "OpenTTDAircraftStartState" ["probe"] => AircraftStartState {
         state, flags,
     };
-    "OpenTTDVehicleTransactionStrings" ["probe"] => TransactionStrings {
-        destroyed, stopped_in_depot, no_power, in_flight, incompatible_rail, null_string,
-        grf_text, takeoff, terminal7, direct_descent, new_vehicle_expense,
-        invalid_client, share_orders, copy_orders, cargo_count, invalid_cargo,
-    };
     "OpenTTDVehicleCommonServices" ["probe"] => CommonServices {
-        base, transactions, vehicles, orders, strings, aircraft_start,
+        base, transactions, vehicles, orders, aircraft_start,
         grf_string,
         value, valid_cargo,
     };
@@ -988,6 +979,3 @@ impl TransactionServices {
         self.interval_default(CompanyID(owner), VehicleType(kind))
     }
 }
-
-/// Compatibility import of the original header identity.
-pub use crate::newgrf_text_type::GRFStringID as GrfStringId;

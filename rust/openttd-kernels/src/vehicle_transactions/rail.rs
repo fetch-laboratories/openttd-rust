@@ -59,6 +59,8 @@ pub struct Services {
     pub depot_changed: extern "C" fn(u32),
 }
 
+use crate::economy_type::ExpensesType;
+use crate::table::strings::{STR_ERROR_INCOMPATIBLE_RAIL_TYPES, STR_NULL};
 use crate::train::CCF_ARRANGE;
 
 /// Resolved immutable service tables; holds no world or owner borrow.
@@ -676,7 +678,6 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
     x.set_next(prev, ptr::null_mut());
     /* Make sure the cache is cleared. */
     (x.s.invalidate_grf)(Ctx::sh(head));
-    let strings = &x.c.strings;
     while !t.is_null() {
         allowed_len -= i32::from(x.length(t));
         let next = x.next(t);
@@ -713,17 +714,16 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
             (x.s.invalidate_grf)(Ctx::sh(head));
             if callback != CALLBACK_FAILED {
                 /* A failing callback means everything is okay */
-                let null_string = StringID(strings.null_string);
-                let mut error = null_string;
+                let mut error = STR_NULL;
                 let grf_text = |n: u32| {
                     x.c.grf_text(
                         Ctx::vref(head),
-                        GRFStringID(strings.grf_text.0.wrapping_add(n)),
+                        GRFStringID(GRFStringID::GRFSTR_MISC_GRF_TEXT.0.wrapping_add(n)),
                     )
                 };
                 if x.c.engine_grf_version(Ctx::vref(head)) < 8 {
                     if callback == 0xFD {
-                        error = StringID(strings.incompatible_rail);
+                        error = STR_ERROR_INCOMPATIBLE_RAIL_TYPES;
                     }
                     if callback < 0xFD {
                         error = grf_text(u32::from(callback));
@@ -749,10 +749,10 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
                             );
                         }
                         // unknown reason, or 0x402: disallow attaching
-                        _ => error = StringID(strings.incompatible_rail),
+                        _ => error = STR_ERROR_INCOMPATIBLE_RAIL_TYPES,
                     }
                 }
-                if error != null_string {
+                if error != STR_NULL {
                     return Some(error);
                 }
             }
@@ -1236,7 +1236,7 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
         restore_train_backup(x, &original);
         return (cost.error)(out, s.strings.no_orders);
     }
-    (cost.expense_money)(out, x.c.strings.new_vehicle_expense, 0);
+    (cost.expense_money)(out, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
     let mut part = sell_head;
     while !part.is_null() {
         (cost.amount)(out, (x.c.value)(Ctx::sh(part)).saturating_neg());
