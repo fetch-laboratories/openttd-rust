@@ -298,14 +298,17 @@ def command(data: bytes) -> Command:
 
 
 def check_reconnect_seen(joiner: Peer, welcomes: list[int]) -> None:
-    """The joiner, still active, sees the issuer's reconnect: a quit for the first identity
-    and a join for the second, each for a client it knows (Receive_SERVER_QUIT, _JOIN)."""
-    for marker in (
-        f"Client::Receive_SERVER_QUIT(): client_id={welcomes[0]}",
-        f"Client::Receive_SERVER_JOIN(): client_id={welcomes[1]}",
+    """The joiner, still active, receives the issuer's reconnect: Receive_SERVER_QUIT for the
+    first identity, for a client it knows (the unknown-client branch logs), and
+    Receive_SERVER_JOIN for the second. The join trace precedes the lookup, so it shows the
+    receiver ran, not which branch."""
+    for receiver, client_id in (
+        ("Receive_SERVER_QUIT", welcomes[0]),
+        ("Receive_SERVER_JOIN", welcomes[1]),
     ):
-        if not any(marker in line for line in joiner.lines):
-            raise RuntimeError(f"joiner missed {marker}")
+        trace = re.compile(rf"Client::{receiver}\(\): client_id={client_id}$")
+        if not any(trace.search(line) for line in joiner.lines):
+            raise RuntimeError(f"joiner missed {receiver} for client {client_id}")
     if any("Unknown client (" in line for line in joiner.lines):
         raise RuntimeError("joiner received a quit for an unknown client")
 
