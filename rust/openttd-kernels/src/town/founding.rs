@@ -38,23 +38,13 @@ use crate::news_type::NewsType;
 use crate::script_event_types::ScriptEvent;
 use crate::station_type::StationID;
 use crate::strings_func::{get_encoded_string, get_string};
-use crate::strings_type::StringID;
 use crate::strings_type::StringParameterData::{self, Integer};
+use crate::table::strings::{STR_COMPANY_NAME, STR_NEWS_NEW_TOWN, STR_NEWS_NEW_TOWN_UNSPONSORED};
 pub use crate::tile_type::TileIndex as Tile;
 pub use crate::town_type::{TownFounding, TownLayout, TownSize};
 #[repr(C)]
 pub struct Frame {
     _private: [u8; 0],
-}
-/// The generated string IDs of the town founding news.
-#[repr(C)]
-pub struct FoundingStrings {
-    /// `STR_COMPANY_NAME`.
-    pub company_name: u32,
-    /// `STR_NEWS_NEW_TOWN`.
-    pub new_town: u32,
-    /// `STR_NEWS_NEW_TOWN_UNSPONSORED`.
-    pub new_town_unsponsored: u32,
 }
 #[repr(C)]
 pub struct FoundingServices {
@@ -90,7 +80,6 @@ pub struct FoundingServices {
     pub money_deficit: extern "C" fn(*mut Frame, *const CommandCost),
     pub set_result: extern "C" fn(*mut Frame, TownId),
     pub exchange_generating: extern "C" fn(bool) -> bool,
-    pub strings: FoundingStrings,
     pub clear_station_names: extern "C" fn(),
     pub clear_industry_names: extern "C" fn(),
     pub update_station_coords: extern "C" fn(),
@@ -763,30 +752,27 @@ pub(crate) unsafe fn cmd_found_town(
             world.assert_with(|| !random_location);
 
             let current = CompanyID(observed!((f.shared.current_company)()));
-            found_town_news(&f.s.strings, current, town.id, tile);
+            found_town_news(current, town.id, tile);
         }
     }
 }
 /// `CmdFoundTown`'s news item and script events for `town`, founded at `tile` by `current`.
-fn found_town_news(strings: &FoundingStrings, current: CompanyID, town: TownId, tile: Tile) {
+fn found_town_news(current: CompanyID, town: TownId, tile: Tile) {
     if current == CompanyID::DEITY {
         observed!(add_tile_news_item(
-            &get_encoded_string(
-                StringID(strings.new_town_unsponsored),
-                &[Integer(u64::from(town.0))],
-            ),
+            &get_encoded_string(STR_NEWS_NEW_TOWN_UNSPONSORED, &[Integer(u64::from(town.0))],),
             NewsType::IndustryOpen,
             tile,
             StationID::INVALID,
         ));
     } else {
         let company_name = observed!(get_string(
-            StringID(strings.company_name),
+            STR_COMPANY_NAME,
             [Integer(u64::from(current.0))],
         ));
         observed!(add_tile_news_item(
             &get_encoded_string(
-                StringID(strings.new_town),
+                STR_NEWS_NEW_TOWN,
                 &[
                     StringParameterData::String(&company_name),
                     Integer(u64::from(town.0)),
@@ -1012,11 +998,6 @@ pub(crate) unsafe fn cmd_rename_town(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDTownFoundingStrings" ["probe"] => FoundingStrings {
-        company_name,
-        new_town,
-        new_town_unsponsored,
-    };
     "OpenTTDTownFoundingServices" ["probe"] => FoundingServices {
         shared,
         growth,
@@ -1050,7 +1031,6 @@ crate::abi::layouts! {
         money_deficit,
         set_result,
         exchange_generating,
-        strings,
         clear_station_names,
         clear_industry_names,
         update_station_coords,
@@ -1070,21 +1050,19 @@ crate::abi::layouts! {
 
 #[cfg(test)]
 mod news_tests {
-    use super::{CompanyID, FoundingStrings, Tile, TownId, found_town_news};
+    use super::{CompanyID, Tile, TownId, found_town_news};
     use crate::news_func::testing::{Effect, Param, encoded, formatted, take};
     use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle, NewsType};
     use crate::script_event_types::ScriptEvent;
+    use crate::table::strings::{
+        STR_COMPANY_NAME, STR_NEWS_NEW_TOWN, STR_NEWS_NEW_TOWN_UNSPONSORED,
+    };
 
     /// `CmdFoundTown`: for `OWNER_DEITY` the unsponsored headline with the town, otherwise
     /// the company name and the sponsored headline with it and the town; an industry-open tile
     /// news item at the town's tile, then the AI and game events.
     #[test]
     fn found_town_follows_the_original() {
-        const STRINGS: FoundingStrings = FoundingStrings {
-            company_name: 0x10,
-            new_town: 0x40,
-            new_town_unsponsored: 0x41,
-        };
         let news = |headline| Effect::News {
             headline,
             r#type: NewsType::IndustryOpen,
@@ -1097,22 +1075,25 @@ mod news_tests {
         };
         let event = ScriptEvent::town_founded(TownId(9));
         take();
-        found_town_news(&STRINGS, CompanyID::DEITY, TownId(9), Tile(0x1234));
+        found_town_news(CompanyID::DEITY, TownId(9), Tile(0x1234));
         assert_eq!(
             take(),
             [
-                news(encoded(0x41, &[Param::N(9)])),
+                news(encoded(STR_NEWS_NEW_TOWN_UNSPONSORED.0, &[Param::N(9)])),
                 Effect::AiBroadcastNewEvent(event, CompanyID::INVALID.0),
                 Effect::GameNewEvent(event),
             ]
         );
-        found_town_news(&STRINGS, CompanyID(1), TownId(9), Tile(0x1234));
-        let name = formatted(0x10, &[1]);
+        found_town_news(CompanyID(1), TownId(9), Tile(0x1234));
+        let name = formatted(STR_COMPANY_NAME.0, &[1]);
         assert_eq!(
             take(),
             [
-                Effect::GetString(0x10, vec![1]),
-                news(encoded(0x40, &[Param::S(&name), Param::N(9)])),
+                Effect::GetString(STR_COMPANY_NAME.0, vec![1]),
+                news(encoded(
+                    STR_NEWS_NEW_TOWN.0,
+                    &[Param::S(&name), Param::N(9)]
+                )),
                 Effect::AiBroadcastNewEvent(event, CompanyID::INVALID.0),
                 Effect::GameNewEvent(event),
             ]
