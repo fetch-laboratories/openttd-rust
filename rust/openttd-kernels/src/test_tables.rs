@@ -1597,6 +1597,40 @@ pub(crate) const NETWORK_CONNECTION: crate::network_connection::Services =
         valid_name: unreachable1,
     };
 
+/// `crate::settings_table::Services` with every entry unreachable.
+pub(crate) const SETTINGS: crate::settings_table::Services = crate::settings_table::Services {
+    shared: &SHARED,
+    clock: &CLOCK,
+    company: &COMPANY,
+    transactions: &VEHICLE_TRANSACTION,
+    refit: &REFIT,
+    schedule: &crate::linkgraph_schedule::TEST_TABLE,
+    engines: &crate::engine_loading::TEST_TABLE,
+    environment: crate::services::EnvironmentServices {
+        editor: unreachable0,
+        freeform_edges: unreachable0,
+    },
+    client_vehicle_defaults: unreachable0,
+    company_vehicle_defaults: unreachable1,
+    set_service_interval: unreachable2,
+    set_service_interval_percent: unreachable2,
+    newgame_minutes_per_year: unreachable0,
+    set_minutes_per_year: unreachable2,
+    set_newgame_wallclock: unreachable0,
+    setting: unreachable1,
+    company_setting: unreachable1,
+    setting_current: unreachable1,
+    setting_int: unreachable1,
+    setting_editable: unreachable1,
+    change_game_setting: unreachable2,
+    change_company_setting: unreachable3,
+    error_message: unreachable1,
+    edges_not_empty: 0,
+    edges_not_water: 0,
+    dynamic_engines_existing_vehicles: 0,
+    too_high_mountain: 0,
+};
+
 /// `crate::timer_game_common::ClockServices` with every entry unreachable.
 pub(crate) const CLOCK: crate::timer_game_common::ClockServices =
     crate::timer_game_common::ClockServices {

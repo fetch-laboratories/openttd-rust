@@ -267,6 +267,35 @@ pub struct Services {
     order_sort: extern "C" fn(*mut u16, usize),
     order_count: extern "C" fn() -> usize,
 }
+/// Test-only table for `crate::test_tables`; its private fields keep it in this module.
+#[cfg(test)]
+pub(crate) const TEST_TABLE: Services = Services {
+    identity: &crate::test_tables::COMPANY_IDENTITY,
+    shared: &crate::test_tables::SHARED,
+    resolver: ptr::null(),
+    types: ptr::null(),
+    resolve: crate::test_tables::unreachable1,
+    dynamic: crate::test_tables::unreachable0,
+    find_file: crate::test_tables::unreachable1,
+    mapping_log: crate::test_tables::unreachable3,
+    can_allocate: crate::test_tables::unreachable0,
+    pool_size: crate::test_tables::unreachable0,
+    construct: crate::test_tables::unreachable2,
+    construct_at: crate::test_tables::unreachable3,
+    close_previews: crate::test_tables::unreachable0,
+    clean_pool: crate::test_tables::unreachable0,
+    cargo_next: crate::test_tables::unreachable1,
+    cargo_list_size: crate::test_tables::unreachable1,
+    unknown_refit: crate::test_tables::unreachable3,
+    use_livery: crate::test_tables::unreachable1,
+    variant_flags: crate::test_tables::unreachable1,
+    override_log: crate::test_tables::unreachable2,
+    vehicle_next: crate::test_tables::unreachable1,
+    reload: crate::test_tables::unreachable0,
+    default_counts: crate::test_tables::unreachable0,
+    order_sort: crate::test_tables::unreachable2,
+    order_count: crate::test_tables::unreachable0,
+};
 /// `Engine::Iterate(from)`, through the engine table's type-availability owner.
 fn next(s: &Services, from: u32) -> EngineRef {
     // SAFETY: The immutable table names the process-lifetime type-availability table.

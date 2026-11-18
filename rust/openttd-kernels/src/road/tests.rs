@@ -1006,4 +1006,335 @@ mod controller {
         }
         BAY.set(std::ptr::null());
     }
+
+    thread_local! {
+        /// The service search's fixture map, for the tile type service.
+        static SERVICE_MAP: Cell<*const crate::map_func::BaseTileLayout> =
+            const { Cell::new(std::ptr::null()) };
+        /// The depot tile the search is expected to report.
+        static SERVICE_DEPOT: Cell<u32> = const { Cell::new(0) };
+        /// The road speed reads of the search's followed tiles since the last reset.
+        static FOLLOWED: Cell<u32> = const { Cell::new(0) };
+        /// The orders marked dirty by the service handler since the last reset.
+        static DEPOT_ORDERS: Cell<u32> = const { Cell::new(0) };
+        static SERVICE_DEFAULTS: Cell<crate::settings_table::VehicleDefaults> =
+            const {
+                Cell::new(crate::settings_table::VehicleDefaults {
+                    servint_ispercent: false,
+                    servint_trains: 0,
+                    servint_roadveh: 1,
+                    servint_aircraft: 0,
+                    servint_ships: 0,
+                })
+            };
+        static SERVICE_PENALTY: Cell<u32> = const { Cell::new(0) };
+        static SERVICE_ORDERS: Cell<*mut crate::orders::VehicleOrders> =
+            const { Cell::new(std::ptr::null_mut()) };
+    }
+    /// The vehicle's order owner, for the search's current order speed limit.
+    unsafe extern "C" fn service_order_vehicle(
+        shell_ptr: *mut std::ffi::c_void,
+    ) -> *mut crate::orders::VehicleOrders {
+        assert_eq!(shell_ptr, shell());
+        SERVICE_ORDERS.get()
+    }
+    extern "C" fn service_tile_type(tile: u32) -> u8 {
+        // SAFETY: The test's live 4096-tile map; `tile` is on it.
+        unsafe { (*SERVICE_MAP.get().add(tile as usize)).kind >> 4 }
+    }
+    extern "C" fn service_may_have_road(_: u32) -> bool {
+        true
+    }
+    extern "C" fn service_depot_index(tile: u32) -> u16 {
+        assert_eq!(tile, SERVICE_DEPOT.get());
+        55
+    }
+    extern "C" fn service_road_kind(_: VehicleRef) -> crate::road_type::RoadTramType {
+        crate::road_type::RoadTramType::RTT_ROAD
+    }
+    extern "C" fn service_road_compatible(_: VehicleRef) -> u64 {
+        1
+    }
+    /// `GetRoadTypeInfo(rt)->max_speed` of a followed tile: counted, no limit.
+    extern "C" fn service_road_type_speed(_: crate::services::RoadType) -> u16 {
+        FOLLOWED.set(FOLLOWED.get() + 1);
+        0
+    }
+    extern "C" fn service_vehicle_defaults(
+        _: crate::company_type::CompanyID,
+    ) -> *mut crate::settings_table::VehicleDefaults {
+        SERVICE_DEFAULTS.with(Cell::as_ptr)
+    }
+    extern "C" fn service_settings() -> &'static crate::settings_table::Services {
+        thread_local! {
+            static SETTINGS: &'static crate::settings_table::Services =
+                Box::leak(Box::new(crate::settings_table::Services {
+                    company_vehicle_defaults: service_vehicle_defaults,
+                    ..crate::test_tables::SETTINGS
+                }));
+        }
+        SETTINGS.with(|s| *s)
+    }
+    extern "C" fn service_company() -> *const crate::company::Services {
+        thread_local! {
+            static COMPANY: crate::company::Services = crate::company::Services {
+                settings: service_settings,
+                ..crate::test_tables::COMPANY
+            };
+        }
+        COMPANY.with(std::ptr::from_ref)
+    }
+    /// No depot order, and not loading.
+    extern "C" fn service_automatic(_: VehicleRef) -> crate::vehicle::maintenance::Automatic {
+        crate::vehicle::maintenance::Automatic {
+            has_depot_order: false,
+            order_type: OrderType::OT_NOTHING,
+        }
+    }
+    /// Serviced on day 0 with no interval, now day 1, breakdowns on: due.
+    extern "C" fn service_interval(_: VehicleRef) -> crate::vehicle::maintenance::Interval {
+        crate::vehicle::maintenance::Interval {
+            company: std::ptr::null(),
+            last_service: crate::timer_game_economy::EconomyDate(0),
+            now: crate::timer_game_economy::EconomyDate(1),
+            interval: 0,
+            reliability: 0,
+            percent: false,
+            wallclock: false,
+            no_service: false,
+            breakdowns: 0,
+        }
+    }
+    /// Each order the handler sends to the depot: service at depot 55, no stopping on
+    /// the way, implicit orders suppressed.
+    extern "C" fn service_start_stop_dirty(v: VehicleRef) {
+        let order = v.current_order();
+        assert_eq!(order.kind(), OrderType::OT_GOTO_DEPOT);
+        assert_eq!(order.destination().0, 55);
+        // SAFETY: The test's live ground owner of `v`.
+        let flags = unsafe { (*(*v.0.as_ptr()).ground).flags };
+        assert_ne!(
+            flags
+                & (1 << crate::ground_vehicle::GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0),
+            0
+        );
+        DEPOT_ORDERS.set(DEPOT_ORDERS.get() + 1);
+    }
+
+    /// `CheckIfRoadVehNeedsService` (`roadveh_cmd.cpp`) of a stopped bus due for service
+    /// on a straight road, searching the real road YAPF over a fixture map for a depot
+    /// within `maximum_go_to_depot_penalty`. The vehicle at tile 2080 faces north-east
+    /// (`TRACKDIR_X_NE`); the depot's south-west entrance faces it. With the depot one
+    /// tile on, at cost 100, a penalty of 99 orders nothing and 100 orders the depot.
+    /// With the depot three tiles on, a penalty of 150 ends the search on the second
+    /// road tile (cost 200) before following it, where an unlimited search follows on
+    /// to the depot: the road speed of each followed tile counts the follows.
+    #[test]
+    fn service_search_orders_the_depot_only_within_the_configured_penalty() {
+        /* The ground vehicle accessors check the vehicle type through the process-wide
+         * native policy, and the search takes the process-wide YAPF scratch: run in a
+         * child process. */
+        if crate::services_assert::isolate_test_check(
+            "road::tests::controller::service_search_orders_the_depot_only_within_the_configured_penalty",
+            record_check,
+        ) {
+            return;
+        }
+        let _types = DefaultRoadTypes::new();
+        const VEHICLE_TILE: u32 = 32 + 32 * 64;
+        let road = |kind: &mut crate::map_func::BaseTileLayout, m5: u8| {
+            kind.kind = crate::tile_type::TileType::MP_ROAD.0 << 4;
+            kind.m5 = m5;
+        };
+        let depot = (crate::road_map::ROAD_TILE_DEPOT << 6)
+            | crate::direction_type::DiagDirection::DIAGDIR_SW.0;
+        let mut base: Vec<_> = (0..4096)
+            .map(|_| crate::map_func::BaseTileLayout {
+                kind: 0,
+                height: 0,
+                m2: 0,
+                m1: 0,
+                m3: 0,
+                m4: 0,
+                m5: 0,
+            })
+            .collect();
+        let extended: Vec<_> = (0..4096)
+            .map(|_| crate::map_func::ExtendedTileLayout {
+                m6: 0,
+                m7: 0,
+                m8: 0,
+            })
+            .collect();
+        road(&mut base[VEHICLE_TILE as usize], crate::road_type::ROAD_X);
+        road(&mut base[VEHICLE_TILE as usize - 1], depot);
+        let install = |base: &[crate::map_func::BaseTileLayout]| {
+            SERVICE_MAP.set(base.as_ptr());
+            crate::map_func::fixture::set(
+                crate::map_func::TileTypeAllocation {
+                    base: base.as_ptr(),
+                    extended: extended.as_ptr(),
+                    count: 4096,
+                    assertions: true,
+                },
+                6,
+            );
+        };
+        install(&base);
+
+        /* The pf.yapf road settings the search reads, at their defaults. */
+        let yapf = [10_000_u32, 200, 300, 800, 800, 1500, 100];
+        let settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
+            maximum_go_to_depot_penalty: SERVICE_PENALTY.with(Cell::as_ptr).cast_const(),
+            max_search_nodes: &raw const yapf[0],
+            road_slope_penalty: &raw const yapf[1],
+            road_crossing_penalty: &raw const yapf[2],
+            road_stop_penalty: &raw const yapf[3],
+            road_stop_occupied_penalty: &raw const yapf[4],
+            road_stop_bay_occupied_penalty: &raw const yapf[5],
+            road_curve_penalty: &raw const yapf[6],
+            ..crate::settings_type::SettingAddresses::NULL
+        }));
+        let movement = Box::leak(Box::new(crate::movement::MovementServices {
+            native_assert: record_check,
+            road_kind: service_road_kind,
+            road_compatible: service_road_compatible,
+            road_type_speed: service_road_type_speed,
+            ..crate::test_tables::MOVEMENT
+        }));
+        let shared: &'static crate::services::Services =
+            Box::leak(Box::new(crate::services::Services {
+                map: crate::map_func::fixture::statics(),
+                settings,
+                movement,
+                tile_type: service_tile_type,
+                may_have_road: service_may_have_road,
+                depot_index: service_depot_index,
+                road_stops,
+                ..SHARED
+            }));
+        movement.shared = shared;
+        let mut f = Fixture::new(0, shared);
+        let commands = Box::leak(Box::new(crate::services::CommandServices {
+            company: service_company,
+            ..crate::test_tables::COMMANDS
+        }));
+        let transactions = Box::leak(Box::new(crate::fleet::transactions::Services {
+            commands,
+            ..crate::test_tables::FLEET_TRANSACTIONS
+        }));
+        let maintenance = Box::leak(Box::new(crate::vehicle::maintenance::Services {
+            transaction: transactions,
+            automatic: service_automatic,
+            interval: service_interval,
+            ..crate::test_tables::MAINTENANCE
+        }));
+        movement.vehicle = f.leaves.vehicle;
+        /* IsChainInDepot reads the map through the ground services' shared table. */
+        let physics = Box::leak(Box::new(crate::ground_vehicle::Services {
+            capabilities: Box::leak(Box::new(
+                crate::engine_capabilities::test_table_with_shared(shared),
+            )),
+            ..GROUND_VEHICLE
+        }));
+        f.leaves = Box::leak(Box::new(Leaves {
+            ground: Box::leak(Box::new(GroundServices {
+                physics,
+                has_articulated: unreachable1,
+            })),
+            vehicle: Box::leak(Box::new(crate::vehicle::VehicleServices {
+                maintenance,
+                start_stop_dirty: service_start_stop_dirty,
+                ..*f.game().vs
+            })),
+            ..*f.leaves
+        }));
+        let orders = crate::orders::openttd_rust_vehicle_orders_new();
+        SERVICE_ORDERS.set(orders);
+        movement.orders = Box::leak(Box::new(crate::orders::Leaves {
+            vehicle: service_order_vehicle,
+            ..crate::test_tables::ORDERS
+        }));
+        // SAFETY: The fixture's live record and its fresh order owner.
+        unsafe {
+            (*f.record).orders = orders;
+            (*f.record).shell = shell().cast();
+        }
+        BUS.set(true);
+        ROADTYPE.set(RoadType::ROADTYPE_ROAD.0);
+
+        /* A stopped vehicle with no order heading north-east, due for service. */
+        let day = |f: &mut Fixture, penalty: u32| {
+            SERVICE_PENALTY.set(penalty);
+            FOLLOWED.set(0);
+            DEPOT_ORDERS.set(0);
+            // SAFETY: The fixture's live record and owners.
+            unsafe {
+                let r = &mut *f.record;
+                r.tile = TileIndex(VEHICLE_TILE);
+                r.dest_tile = TileIndex(42);
+                r.cur_speed = 0;
+                (*r.ground).flags = 0;
+                (*orders).current.write(crate::orders::Order {
+                    kind: OrderType::OT_NOTHING.0,
+                    flags: 0,
+                    destination: 0,
+                    refit: 0,
+                    wait: 0,
+                    travel: 0,
+                    speed: 0,
+                });
+            }
+            f.state.fields.state = Trackdir::TRACKDIR_X_NE.0;
+            let part = f.part();
+            f.game().check_if_road_veh_needs_service(part);
+            // SAFETY: The fixture's live record.
+            unsafe { (*f.record).dest_tile.0 }
+        };
+
+        /* The depot one tile on costs 100. */
+        SERVICE_DEPOT.set(VEHICLE_TILE - 1);
+        assert_eq!(day(&mut f, 99), 42, "a penalty below the depot's cost");
+        assert_eq!((DEPOT_ORDERS.get(), FOLLOWED.get()), (0, 0));
+        assert_eq!(day(&mut f, 100), VEHICLE_TILE - 1, "a penalty covering it");
+        assert_eq!((DEPOT_ORDERS.get(), FOLLOWED.get()), (1, 0));
+
+        /* The depot three tiles on costs 300. */
+        road(
+            &mut base[VEHICLE_TILE as usize - 1],
+            crate::road_type::ROAD_X,
+        );
+        road(
+            &mut base[VEHICLE_TILE as usize - 2],
+            crate::road_type::ROAD_X,
+        );
+        road(&mut base[VEHICLE_TILE as usize - 3], depot);
+        install(&base);
+        SERVICE_DEPOT.set(VEHICLE_TILE - 3);
+        assert_eq!(day(&mut f, 150), 42, "the search stops at its limit");
+        assert_eq!(
+            (DEPOT_ORDERS.get(), FOLLOWED.get()),
+            (0, 1),
+            "one tile is followed before the second exceeds the penalty"
+        );
+        FOLLOWED.set(0);
+        let part = f.part();
+        let unlimited = f.game().find_closest_road_depot(part, 0);
+        assert_eq!(
+            (unlimited.tile.0, unlimited.best_length),
+            (VEHICLE_TILE - 3, 300),
+            "an unlimited search reaches the depot"
+        );
+        assert!(
+            FOLLOWED.get() > 1,
+            "an unlimited search follows past the limited one's last tile"
+        );
+        assert_eq!(FAILED_CHECKS.load(std::sync::atomic::Ordering::Relaxed), 0);
+
+        // SAFETY: The owner created above, released once; the record forgets it first.
+        unsafe {
+            (*f.record).orders = std::ptr::null_mut();
+            crate::orders::openttd_rust_vehicle_orders_delete(orders);
+        }
+    }
 }
