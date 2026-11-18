@@ -106,38 +106,35 @@ def raise_core_limit() -> None:
     resource.setrlimit(resource.RLIMIT_CORE, (hard, hard))
 
 
-def core_file(folder: Path | None, pid: int, cwd: Path, started: float) -> Path | None:
-    """The crashed process's core: in our folder on CI, else where the host's
-    pattern writes a plain file, written since the child started. A piped
-    pattern (apport, systemd) has none."""
-    if folder is not None:
-        found = folder / f"core.{pid}"
-        return found if found.is_file() else None
+def pid_named_pattern() -> str | None:
+    """The host's core pattern when it writes a plain file named with the
+    crashing PID, else None. A piped pattern (apport, systemd) writes none, and
+    with a plain `core` any process in the same folder could have written it."""
     try:
         pattern = PATTERN.read_text().strip()
+        uses_pid = USES_PID.read_text().strip() == "1"
     except OSError:
         return None
     if not pattern or pattern.startswith("|"):
         return None
-    # Only a name that carries the PID is this child's: with a plain `core`
-    # any process in the same folder could have written it.
-    qualified = "%p" in pattern
-    if not qualified:
-        try:
-            qualified = USES_PID.read_text().strip() == "1"
-        except OSError:
-            qualified = False
-    if not qualified:
-        return None
-    name = pattern.replace("%p", str(pid)).replace("%%", "%")
-    if "%" in name:
+    if "%p" in pattern:
+        return pattern
+    return f"{pattern}.%p" if uses_pid else None
+
+
+def core_file(folder: Path | None, pid: int, cwd: Path, started: float) -> Path | None:
+    """The crashed process's core: in our folder on CI, else where the host's
+    PID-named pattern writes it, written since the child started."""
+    if folder is not None:
+        found = folder / f"core.{pid}"
+        return found if found.is_file() else None
+    pattern = pid_named_pattern()
+    name = pattern and pattern.replace("%p", str(pid)).replace("%%", "%")
+    if not name or "%" in name:
         return None  # Other specifiers name a file this script cannot predict.
     path = Path(name) if name.startswith("/") else cwd / name
-    if "%p" not in pattern:
-        path = path.with_name(f"{path.name}.{pid}")
-    if path.is_file() and path.stat().st_mtime >= started:
-        return path
-    return None
+    fresh = path.is_file() and path.stat().st_mtime >= started
+    return path if fresh else None
 
 
 def debugger() -> str | None:
