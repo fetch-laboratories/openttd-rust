@@ -17,7 +17,7 @@ use crate::industrytype::{
 use crate::newgrf::GrfSpecFeature;
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::ChangeInfoResult;
-use crate::strings_type::StringID;
+use crate::table::strings::STR_NULL;
 use crate::{newgrf_loading, override_manager};
 use std::{ffi::c_void, ptr};
 #[repr(C)]
@@ -688,7 +688,7 @@ unsafe fn industries_change_info(
             0x24 => {
                 let str = buf.word()?;
                 if str == 0 {
-                    unsafe { (*indsp).station_name = StringID::STR_NULL.0 };
+                    unsafe { (*indsp).station_name = STR_NULL.0 };
                 } else {
                     unsafe { (s.map_string)(str, &raw mut (*indsp).station_name) };
                 }

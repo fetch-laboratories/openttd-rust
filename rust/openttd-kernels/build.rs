@@ -1,4 +1,5 @@
-//! List every module that invokes `layouts!` or `shared_records!`, so `abi::layout` needs no registry file.
+//! List every module that invokes `layouts!` or `shared_records!`, so `abi::layout` needs no registry file,
+//! and generate `table::strings` from the master language file as strgen assigns its IDs.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -40,8 +41,25 @@ fn collect(dir: &Path, module: &str, found: &mut Vec<String>) -> io::Result<()> 
     Ok(())
 }
 
+/// One `StringID` constant per name of `table/strings.h`, in `openttd-strgen`'s text. The `CMake`
+/// archive command copies this `strings.rs` out of `OUT_DIR` for its check against the build's
+/// `table/strings.h`.
+fn write_strings(out_dir: &Path) -> io::Result<()> {
+    const MASTER_LANG_FILE: &str = "../../src/lang/english.txt";
+    println!("cargo:rerun-if-changed={MASTER_LANG_FILE}");
+    println!("cargo:rerun-if-changed=../openttd-strgen/src");
+    let ids = openttd_strgen::strgen_base::master_string_ids(&fs::read(MASTER_LANG_FILE)?)
+        .map_err(|error| io::Error::other(format!("{MASTER_LANG_FILE}: {error}")))?;
+    fs::write(
+        out_dir.join("strings.rs"),
+        openttd_strgen::table_strings::write(&ids),
+    )
+}
+
 fn main() -> io::Result<()> {
     println!("cargo:rerun-if-changed=src");
+    let out_dir = env::var("OUT_DIR").unwrap();
+    write_strings(Path::new(&out_dir))?;
     let mut found = Vec::new();
     collect(Path::new("src"), "", &mut found)?;
     found.sort();
@@ -50,8 +68,5 @@ fn main() -> io::Result<()> {
         writeln!(list, "    {name} as fn(&str, usize) -> usize,").unwrap();
     }
     list.push(']');
-    fs::write(
-        Path::new(&env::var("OUT_DIR").unwrap()).join("abi_layouts.rs"),
-        list,
-    )
+    fs::write(Path::new(&out_dir).join("abi_layouts.rs"), list)
 }

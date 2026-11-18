@@ -35,8 +35,11 @@ use crate::station_base::{
 };
 use crate::station_type::{StationFacilities, StationFacility, StationID};
 use crate::strings_func::get_encoded_string;
-use crate::strings_type::StringID;
 use crate::strings_type::StringParameterData::Integer;
+use crate::table::strings::{
+    STR_NEWS_STATION_NO_LONGER_ACCEPTS_CARGO_LIST, STR_NEWS_STATION_NOW_ACCEPTS_CARGO_LIST,
+    STR_NULL,
+};
 use crate::tile_type::TILE_SIZE;
 use crate::timer_game_common::INVALID_DATE;
 use crate::timer_game_tick::{
@@ -432,14 +435,6 @@ pub struct TruncatedSource {
     pub(crate) source: u16,
     pub(crate) present: bool,
 }
-/// The generated string IDs of the acceptance news.
-#[repr(C)]
-pub struct Strings {
-    /// `STR_NEWS_STATION_NO_LONGER_ACCEPTS_CARGO_LIST`.
-    pub station_no_longer_accepts_cargo_list: u32,
-    /// `STR_NEWS_STATION_NOW_ACCEPTS_CARGO_LIST`.
-    pub station_now_accepts_cargo_list: u32,
-}
 #[repr(C)]
 pub struct World {
     pub(crate) graphs: &'static live::Services,
@@ -461,7 +456,6 @@ pub struct World {
     pub(crate) passenger_cargo: extern "C" fn(u8) -> bool,
     pub(crate) packet_available: extern "C" fn() -> bool,
     pub(crate) rating_redraw: extern "C" fn(*mut BaseStation, bool),
-    pub(crate) strings: Strings,
     pub(crate) delete_station: extern "C" fn(*mut BaseStation),
 
     pub(crate) append_packet:
@@ -624,15 +618,12 @@ unsafe fn truncate_cargo(st: *mut BaseStation, cargo: CargoType, amount: u32, w:
 /// station rejects the cargo types.
 fn show_reject_or_accept_news(st: *mut BaseStation, cargoes: CargoTypes, reject: bool, w: &World) {
     let msg = if reject {
-        w.strings.station_no_longer_accepts_cargo_list
+        STR_NEWS_STATION_NO_LONGER_ACCEPTS_CARGO_LIST
     } else {
-        w.strings.station_now_accepts_cargo_list
+        STR_NEWS_STATION_NOW_ACCEPTS_CARGO_LIST
     };
     let index = StationID((w.graphs.station_id)(st));
-    let headline = get_encoded_string(
-        StringID(msg),
-        &[Integer(u64::from(index.0)), Integer(cargoes.0)],
-    );
+    let headline = get_encoded_string(msg, &[Integer(u64::from(index.0)), Integer(cargoes.0)]);
     add_news_item(&AddNewsItemArgs {
         ref1: NewsReference::Station(index).record(),
         ..AddNewsItemArgs::new(
@@ -2407,7 +2398,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
          * if _settings_client.gui.loading_indicators == 0, do not display indicators ... 0 is never greater than anything
          */
         if (l.indicator)(front) {
-            let mut percent_up_down = StringID::STR_NULL;
+            let mut percent_up_down = STR_NULL;
             let percent = crate::vehicle::visits::percent_filled(
                 front,
                 Some(&mut percent_up_down.0),
@@ -2621,10 +2612,6 @@ crate::abi::layouts! {
         time_since_unload,
         last_vehicle_type,
     };
-    "OpenTTDStationAcceptanceStrings" ["probe"] => Strings {
-        station_no_longer_accepts_cargo_list,
-        station_now_accepts_cargo_list,
-    };
     "OpenTTDStationServices" ["probe"] => World {
         graphs,
         station,
@@ -2645,7 +2632,6 @@ crate::abi::layouts! {
         passenger_cargo,
         packet_available,
         rating_redraw,
-        strings,
         delete_station,
 
         append_packet,

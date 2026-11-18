@@ -158,11 +158,16 @@ dependencies = [
  "blake2",
  "chacha20",
  "curve25519-dalek",
+ "openttd-strgen",
  "poly1305",
  "sha2",
  "subtle",
  "zeroize",
 ]
+
+[[package]]
+name = "openttd-strgen"
+version = "0.1.0"
 
 [[package]]
 name = "poly1305"

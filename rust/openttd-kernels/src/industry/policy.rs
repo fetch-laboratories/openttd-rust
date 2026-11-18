@@ -17,6 +17,7 @@ use crate::script_event_types::ScriptEvent;
 use crate::strings_func::get_encoded_string;
 use crate::strings_type::StringID;
 use crate::strings_type::StringParameterData::Integer;
+use crate::table::strings::{STR_LAST_STRINGID, STR_TOWN_NAME};
 use crate::tile_type::{TileIndex, TileType};
 use crate::vehicle_type::VehicleType;
 use std::ffi::c_void;
@@ -241,12 +242,12 @@ pub(super) fn advertise(ind: *mut c_void, s: &Services) {
     let index = super::industry_index(ind, s);
     let (text, name) = unsafe { ((*ind_spc).new_industry_text, (*ind_spc).name) };
     let town = Integer(u64::from(super::town_index(ind, s).0));
-    let headline = if text > s.strings.last_stringid {
+    let headline = if StringID(text) > STR_LAST_STRINGID {
         get_encoded_string(
             StringID(text),
             &[
                 Integer(u64::from(name)),
-                Integer(u64::from(s.strings.town_name)),
+                Integer(u64::from(STR_TOWN_NAME.0)),
                 town,
             ],
         )

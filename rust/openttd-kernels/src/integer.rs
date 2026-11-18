@@ -173,7 +173,7 @@ crate::abi::layouts! {
 /// (with its logged diagnostics), `SkipIntegerBase` and `ParseInteger` for every width,
 /// signedness, base and clamp over the `compare-integers.py` `cases()` corpus.
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use crate::consumer::tests::{Consumer, hex_or_dash, messages, parse_integer};
 
     fn octal(value: u128) -> String {
@@ -181,7 +181,7 @@ mod tests {
     }
 
     /// `cases()` samples for one width, deduplicated in first-appearance order.
-    fn samples(width: u32) -> Vec<Vec<u8>> {
+    pub(crate) fn samples(width: u32) -> Vec<Vec<u8>> {
         let mut samples: Vec<Vec<u8>> = [
             &b""[..],
             b"-",

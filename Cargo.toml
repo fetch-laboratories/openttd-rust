@@ -1,5 +1,5 @@
 [workspace]
-members = ["rust/openttd-kernels"]
+members = ["rust/openttd-kernels", "rust/openttd-strgen"]
 resolver = "3"
 
 [workspace.package]

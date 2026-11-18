@@ -212,7 +212,7 @@ pub(crate) mod tests {
 
     /// The probe's codec section: encode with every prefix/corruption/trailing decode, then
     /// every single byte with `IsUtf8Part`, then the malformed decode list.
-    fn codec_cases() -> Vec<(String, String)> {
+    pub(crate) fn codec_cases() -> Vec<(String, String)> {
         const BOUNDARIES: [u32; 25] = [
             0,
             1,

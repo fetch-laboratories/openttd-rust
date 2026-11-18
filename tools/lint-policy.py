@@ -99,6 +99,9 @@ RETIRED_THRESHOLDS = {
 def permitted_change(key: str, before: object, after: object) -> bool:
     if key in RETIRED_THRESHOLDS and after is None:
         return True
+    if key == "workspace" and before is None and after is True:
+        # A new crate's `[lints] workspace = true` adopts the workspace policy.
+        return True
     if key in ("select", "extend-select", "disallowed-macros") and isinstance(
         after, list
     ):

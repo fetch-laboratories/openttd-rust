@@ -44,8 +44,11 @@ use crate::sound_type::{ORIGINAL_SAMPLE_COUNT, SoundFx, SoundID};
 use crate::station::Station;
 use crate::station_type::{AirportAnimationTrigger, StationID};
 use crate::strings_func::get_encoded_string;
-use crate::strings_type::StringID;
 use crate::strings_type::StringParameterData::Integer;
+use crate::table::strings::{
+    STR_NEWS_AIRCRAFT_CRASH, STR_NEWS_AIRCRAFT_DEST_TOO_FAR, STR_NEWS_FIRST_AIRCRAFT_ARRIVAL,
+    STR_NEWS_PLANE_CRASH_OUT_OF_FUEL,
+};
 use crate::tile_type::{TILE_HEIGHT, TILE_SIZE, TileIndex};
 use crate::vehicle::maintenance;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices, YEAR_TICKS};
@@ -305,19 +308,6 @@ fn set_rotor_state(u: VehicleRef, state: HelicopterRotorStates) {
     crate::raw_field::write_field!(u.aircraft_state(), state, state.0);
 }
 
-/// The generated string IDs of the aircraft news.
-#[repr(C)]
-pub struct Strings {
-    /// `STR_NEWS_AIRCRAFT_CRASH`.
-    pub aircraft_crash: u32,
-    /// `STR_NEWS_AIRCRAFT_DEST_TOO_FAR`.
-    pub aircraft_dest_too_far: u32,
-    /// `STR_NEWS_FIRST_AIRCRAFT_ARRIVAL`.
-    pub first_aircraft_arrival: u32,
-    /// `STR_NEWS_PLANE_CRASH_OUT_OF_FUEL`.
-    pub plane_crash_out_of_fuel: u32,
-}
-
 /// The C++ leaves of the aircraft controller: shared operations and the fields of the
 /// station and `AirportFTAClass` records, which C++ stores.
 #[repr(C)]
@@ -392,7 +382,6 @@ pub struct Leaves {
     pub station_owner: unsafe extern "C" fn(*const Station) -> u8,
     /// `st->xy`.
     pub station_tile: unsafe extern "C" fn(*const Station) -> u32,
-    pub strings: Strings,
     /// `SubtractMoneyFromCompanyFract(v->owner, cost)`.
     pub subtract_cost: unsafe extern "C" fn(Vehicle, i64),
     /// `AirportFTAClass::terminals[index]`.
@@ -2050,15 +2039,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         } else {
             v.targetairport()
         };
-        let strings = &self.leaves.strings;
         let headline = if st.is_null() {
             get_encoded_string(
-                StringID(strings.plane_crash_out_of_fuel),
+                STR_NEWS_PLANE_CRASH_OUT_OF_FUEL,
                 &[Integer(u64::from(victims))],
             )
         } else {
             get_encoded_string(
-                StringID(strings.aircraft_crash),
+                STR_NEWS_AIRCRAFT_CRASH,
                 &[Integer(u64::from(victims)), Integer(u64::from(station.0))],
             )
         };
@@ -2140,7 +2128,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             Self::call(|| {
                 add_vehicle_news_item(
                     &get_encoded_string(
-                        StringID(self.leaves.strings.first_aircraft_arrival),
+                        STR_NEWS_FIRST_AIRCRAFT_ARRIVAL,
                         &[Integer(u64::from(st.0))],
                     ),
                     if local {
@@ -2902,7 +2890,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                         add_vehicle_advice_news_item(
                             AdviceType::AircraftDestinationTooFar,
                             &get_encoded_string(
-                                StringID(self.leaves.strings.aircraft_dest_too_far),
+                                STR_NEWS_AIRCRAFT_DEST_TOO_FAR,
                                 &[Integer(u64::from(v.index().0))],
                             ),
                             v.index(),
@@ -3457,7 +3445,6 @@ crate::abi::layouts! {
         station,
         station_owner,
         station_tile,
-        strings,
         subtract_cost,
         terminal_count,
         truncate_cargo,
@@ -3465,12 +3452,6 @@ crate::abi::layouts! {
         vehicle,
         vehicle_crash,
         viewport,
-    };
-    "OpenTTDAircraftStrings" ["probe"] => Strings {
-        aircraft_crash,
-        aircraft_dest_too_far,
-        first_aircraft_arrival,
-        plane_crash_out_of_fuel,
     };
     "OpenTTDAircraftMoving" ["probe"] => AirportMovingData {
         x,

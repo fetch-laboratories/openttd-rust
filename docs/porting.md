@@ -61,6 +61,7 @@ A pass owns the faults in the files it finishes, and every call those files make
 
 - Call the original helper, virtual method or named constant via its shared accessor or Rust port, not a hand-written equivalent: a raw store for a setter, a hand-written bound for `TileAddWrap` or a literal for `INVALID_RAILTYPE` diverges when the callee changes.
 - Port each helper or constant once into the shared Rust module named after its original file, header or `.cpp`, and import it from there. A pass adds a missing port there; that does not make the pass own that file.
+- A crate that `openttd-kernels` builds with cannot import a kernels port. Until #998's shared crate exists, it keeps its own copy, named after the original, only where a test in `openttd-kernels` holds the copy to the port; the copy's comment names the port and #998.
 - Before adding a binding, search `src/` for its callee, including macros and compound callbacks such as `CheckOwnership` and `GetRoadOwner`.
 - Each shared accessor (vehicle field, map predicate, setting or constant) has one typed definition; command ports share one set of command-check services. A PR adding one deletes the integrated copies.
 - Delete the C++ a change replaces in the same change, with its exports, declarations and service fields. An orphan export, declaration or callback field in the lines a PR has in scope is a finding, baselined or not. An export whose only consumer is a native fixture that [#736's classification](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013) keeps is not an orphan; it leaves with that fixture.
@@ -105,6 +106,7 @@ A pass owns the faults in the files it finishes, and every call those files make
 
 - Each original enum, flag set, ID and named constant has one Rust definition in the module named after its original header (`track_type.rs` for `track_type.h`): a `#[repr(transparent)]` wrapper over the original's underlying integer with associated constants and only the operators the original uses, not a Rust `enum` ([ADR 0021](adr/0021-integer-wrappers-not-rust-enums.md)).
 - Use the named constant wherever the original names the value. Literals the original writes as literals stay.
+- Name a string ID by its `table::strings` constant, imported by name. No record, service table or call carries a string ID the original writes as a constant.
 - Reach the raw integer through the wrapper's accessors, only at ABI, save and bitfield boundaries and where the original uses the value as an integer.
 - A reader or writer of a record field takes the member's name: `cur_speed()` and `set_cur_speed()` for `cur_speed`, not `speed()`. A search for the original's member then finds its Rust accesses, and the name cannot be taken for another member or method of the record.
 - Keep element and set types distinct (`DoCommandFlag` versus `DoCommandFlags`). An internal signature takes `DoCommandFlags` where the original does, not a projected flag such as `execute: bool`.
