@@ -33,8 +33,7 @@ use crate::random_func::chance16_i;
 use crate::services::Services as Shared;
 use crate::vehicle::{RailVehicleTypes, VEHICLE_LENGTH, VehicleRef, VehicleServices, VehicleType};
 use crate::vehicle_base::{
-    VESM_DIESEL, VESM_ELECTRIC, VESM_END, VESM_NONE, VESM_STEAM, VS_HIDDEN, VS_STOPPED,
-    VS_TRAIN_SLOWING,
+    VESM_DIESEL, VESM_ELECTRIC, VESM_END, VESM_NONE, VESM_STEAM, VS_HIDDEN, VehState, VehStates,
 };
 use std::sync::atomic::{AtomicPtr, Ordering};
 /// The front's speed and kind with the smoke setting, observed at entry.
@@ -173,9 +172,17 @@ pub(crate) fn show_visual_effect_allowed(v: VehicleRef) -> bool {
         // SAFETY: The shared orders table and live shell obey the vehicle entry contract.
         assert!(unsafe { (s.vehicle.orders().primary_vehicle)(v.shell()) } != 0);
     }
-    (s.smoke)() != 0
-        && v.vehstatus_raw() & (VS_TRAIN_SLOWING | VS_STOPPED) == 0
-        && v.cur_speed() >= 2
+    /* Do not show any smoke when:
+     * - vehicle smoke is disabled by the player
+     * - the vehicle is slowing down or stopped (by the player)
+     * - the vehicle is moving very slowly
+     */
+    !((s.smoke)() == 0
+        || v.vehstatus().any(
+            VehStates::from_element(VehState::TrainSlowing)
+                .with(VehStates::from_element(VehState::Stopped)),
+        )
+        || v.cur_speed() < 2)
 }
 const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate::train::Handle>) {
