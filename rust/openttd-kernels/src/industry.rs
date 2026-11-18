@@ -3410,8 +3410,11 @@ mod production_policy_tests {
         }));
         s
     }
-    /// A `NewGRF` text ID (`TEXT_TAB_NEWGRF_START`), above `STR_LAST_STRINGID`: a custom news text.
-    const CUSTOM_TEXT: u32 = 0xD401;
+    /// A `NewGRF` text as `MapGRFStringID` maps it (`MakeStringID(TEXT_TAB_NEWGRF_START, 1)`),
+    /// above `STR_LAST_STRINGID`: a custom news text.
+    fn custom_text() -> u32 {
+        crate::strings_type::grf_string_id(1)
+    }
     /// An industry of type `kind`, which no other test uses, at tile 0x500 whose spec has
     /// `name` 0x77 and the given `new_industry_text`; the caller restores the spec.
     fn news_industry(kind: IndustryType, new_industry_text: u32) -> (*mut Industry, (u32, u32)) {
@@ -3444,7 +3447,7 @@ mod production_policy_tests {
         use crate::script_event_types::ScriptEvent;
         for (text, params) in [
             (
-                CUSTOM_TEXT,
+                custom_text(),
                 vec![
                     Param::N(0x77),
                     Param::N(STR_TOWN_NAME.0.into()),
@@ -3527,7 +3530,7 @@ mod production_policy_tests {
                 ),
             ]
         );
-        change_industry_production_news(ptr::null_mut(), owner, StringID(CUSTOM_TEXT), true, &s);
+        change_industry_production_news(ptr::null_mut(), owner, StringID(custom_text()), true, &s);
         assert_eq!(
             take(),
             [
@@ -3535,7 +3538,7 @@ mod production_policy_tests {
                 Effect::GameNewEvent(close),
                 item(
                     encoded(
-                        CUSTOM_TEXT,
+                        custom_text(),
                         &[
                             Param::N(STR_TOWN_NAME.0.into()),
                             Param::N(5),
@@ -3556,12 +3559,12 @@ mod production_policy_tests {
                 industry
             )]
         );
-        change_industry_production_news(ptr::null_mut(), owner, StringID(CUSTOM_TEXT), false, &s);
+        change_industry_production_news(ptr::null_mut(), owner, StringID(custom_text()), false, &s);
         assert_eq!(
             take(),
             [item(
                 encoded(
-                    CUSTOM_TEXT,
+                    custom_text(),
                     &[
                         Param::N(STR_TOWN_NAME.0.into()),
                         Param::N(5),
