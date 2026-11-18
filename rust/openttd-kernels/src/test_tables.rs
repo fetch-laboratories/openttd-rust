@@ -1084,12 +1084,6 @@ pub(crate) const AIRCRAFT_LEAVES: crate::aircraft::Leaves = crate::aircraft::Lea
     station: unreachable1,
     station_owner: unreachable1,
     station_tile: unreachable1,
-    strings: crate::aircraft::Strings {
-        aircraft_crash: 0,
-        aircraft_dest_too_far: 0,
-        first_aircraft_arrival: 0,
-        plane_crash_out_of_fuel: 0,
-    },
     subtract_cost: unreachable2,
     terminal_count: unreachable2,
     truncate_cargo: unreachable1,

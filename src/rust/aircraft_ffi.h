@@ -27,12 +27,6 @@ struct OpenTTDAircraftState {
 };
 struct OpenTTDAircraftVehicle { OpenTTDVehicle *handle; OpenTTDAircraftState *state; uint32_t id; };
 struct OpenTTDAircraftMoving { int16_t x, y; uint16_t flags; uint8_t direction; };
-struct OpenTTDAircraftStrings {
-	uint32_t aircraft_crash;
-	uint32_t aircraft_dest_too_far;
-	uint32_t first_aircraft_arrival;
-	uint32_t plane_crash_out_of_fuel;
-};
 struct OpenTTDVehicleMassServices;
 /* Immutable callback table, borrowed for synchronous entries. Handles retain the
  * original pool identity; only raw field-sized State access occurs in Rust.
@@ -76,7 +70,6 @@ struct OpenTTDAircraftLeaves {
 	const OpenTTDStation *(OPENTTD_RUST_CALL *station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint8_t (OPENTTD_RUST_CALL *station_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	uint32_t (OPENTTD_RUST_CALL *station_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_tile);
-	OpenTTDAircraftStrings strings;
 	void (OPENTTD_RUST_CALL *subtract_cost)(OpenTTDAircraftVehicle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_cost);
 	uint8_t (OPENTTD_RUST_CALL *terminal_count)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terminal_count);
 	void (OPENTTD_RUST_CALL *truncate_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(truncate_cargo);
