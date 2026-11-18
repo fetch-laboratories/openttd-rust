@@ -776,7 +776,7 @@ impl GroundVehicleType for RoadVehicle {
     #[inline]
     fn is_in_depot(o: Owner) -> bool {
         // SAFETY: a live serialized road owner; one scalar read.
-        unsafe { crate::road::state(o.road) == crate::roadveh::RVSB_IN_DEPOT }
+        unsafe { crate::road::is_in_depot(o.road) }
     }
 }
 

@@ -31,7 +31,7 @@ use crate::direction_func::{
 };
 use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::engine_type::EngineID;
-use crate::ground_vehicle::{GroundVehicleFlags, GroundVehicleType, RoadVehicle};
+use crate::ground_vehicle::GroundVehicleFlags;
 use crate::map_func::{Map, World};
 use crate::math::is_inside_mm;
 use crate::movement::CachedTable;
@@ -256,6 +256,12 @@ pub unsafe extern "C" fn openttd_rust_road_path_pop(state: *mut State) {
 pub(crate) unsafe fn state(s: *const State) -> u8 {
     read_field!(s, fields.state)
 }
+/// `RoadVehicle::IsInDepot`: reads only `state`.
+/// # Safety
+/// The serialized native shell owns this live state for the scalar access.
+pub(crate) unsafe fn is_in_depot(s: *const State) -> bool {
+    unsafe { state(s) == crate::roadveh::RVSB_IN_DEPOT }
+}
 /// Store `RoadVehicle::state`.
 /// # Safety
 /// The serialized native shell owns this live state for the scalar access.
@@ -357,6 +363,11 @@ impl Part {
     fn state(self) -> u8 {
         // SAFETY: A live serialized road owner; one scalar read.
         unsafe { state(self.s.as_ptr()) }
+    }
+    /// `RoadVehicle::IsInDepot`, over the road owner alone.
+    fn is_in_depot(self) -> bool {
+        // SAFETY: A live serialized road owner; one scalar read.
+        unsafe { is_in_depot(self.s.as_ptr()) }
     }
     fn set_state(self, value: u8) {
         // SAFETY: A live serialized road owner; one scalar store.
@@ -792,7 +803,7 @@ impl<'a> Game<'a> {
         ) || v.v.breakdown_ctr() != 0
             || v.overtaking() != 0
             || v.state() == RVSB_WORMHOLE
-            || RoadVehicle::is_in_depot(v.ground())
+            || v.is_in_depot()
             || v.v.current_order().is_type(OrderType::OT_LOADING)
         {
             return false;
@@ -1020,7 +1031,7 @@ impl<'a> Game<'a> {
 
         /* Not a close Road vehicle when it's not a road vehicle, in the depot, or ourself. */
         if v.vehicle_type() != VehicleType::VEH_ROAD
-            || RoadVehicle::is_in_depot(Part::of(v).ground())
+            || Part::of(v).is_in_depot()
             || rvf.veh.first() == v.first()
         {
             return;
@@ -1843,7 +1854,7 @@ impl<'a> Game<'a> {
         /* If this vehicle is in a depot and we've reached this point it must be
          * one of the articulated parts. It will stay in the depot until activated
          * by the previous vehicle in the chain when it gets to the right place. */
-        if RoadVehicle::is_in_depot(v.ground()) {
+        if v.is_in_depot() {
             return true;
         }
 
@@ -2459,7 +2470,7 @@ impl<'a> Game<'a> {
             return true;
         }
 
-        if RoadVehicle::is_in_depot(v.ground()) {
+        if v.is_in_depot() {
             /* Check if we should wait here for unbunching. */
             if service!(self.vs.waiting_for_unbunching)(v.v) {
                 return true;
@@ -2708,7 +2719,7 @@ impl<'a> Game<'a> {
             return Trackdir::INVALID_TRACKDIR;
         }
 
-        if RoadVehicle::is_in_depot(v.ground()) {
+        if v.is_in_depot() {
             /* We'll assume the road vehicle is facing outwards */
             return Trackdir(diag_dir_to_diag_trackdir(
                 self.get_road_depot_direction(v.v.tile()).0,
