@@ -37,6 +37,7 @@ mod controller {
     use super::super::*;
     use crate::news_func::testing::{Effect, Param, encoded, take};
     use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle};
+    use crate::script_event::ScriptEventType;
     use crate::table::strings::{
         STR_NEWS_FIRST_BUS_ARRIVAL, STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL,
         STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL, STR_NEWS_FIRST_TRUCK_ARRIVAL,
@@ -58,6 +59,20 @@ mod controller {
     const STATION: StationID = StationID(55);
     const LOCAL: u8 = 3;
     const TILE: TileIndex = TileIndex(100);
+    /// `new ScriptEventStationFirstVehicle(st->index, v->index)`, field by field,
+    /// independent of its constructor.
+    const FIRST_VEHICLE: ScriptEvent = ScriptEvent {
+        r#type: ScriptEventType::ET_STATION_FIRST_VEHICLE,
+        vehicle: VEHICLE_ID,
+        tile: 0,
+        crash_reason: CrashReason(0),
+        victims: 0,
+        station: 55,
+        subsidy: 0,
+        industry: 0,
+        town: 0,
+        company: 0,
+    };
     /// The default road type table's classification, `ROADTYPE_ROAD` a road type and
     /// `ROADTYPE_TRAM` a tram type, held under the game-state test lock until dropped,
     /// which restores the previous masks.
@@ -275,14 +290,8 @@ mod controller {
                         data: None,
                         advice_type: AdviceType::Invalid,
                     },
-                    Effect::AiNewEvent(
-                        owner,
-                        ScriptEvent::station_first_vehicle(STATION, VehicleID(VEHICLE_ID)),
-                    ),
-                    Effect::GameNewEvent(ScriptEvent::station_first_vehicle(
-                        STATION,
-                        VehicleID(VEHICLE_ID),
-                    )),
+                    Effect::AiNewEvent(owner, FIRST_VEHICLE),
+                    Effect::GameNewEvent(FIRST_VEHICLE),
                 ];
                 assert_eq!(
                     take(),
@@ -363,13 +372,20 @@ mod controller {
         };
         f.leaves = Box::leak(Box::new(leaves));
         let victims = base_victims + 1; // the driver
-        let crashed = ScriptEvent::vehicle_crashed(
-            VehicleID(VEHICLE_ID),
-            TILE,
-            CrashReason::CRASH_RV_LEVEL_CROSSING,
+        // `new ScriptEventVehicleCrashed(v->index, v->tile, CRASH_RV_LEVEL_CROSSING,
+        // victims, v->owner)`, field by field, independent of its constructor.
+        let crashed = ScriptEvent {
+            r#type: ScriptEventType::ET_VEHICLE_CRASHED,
+            vehicle: VEHICLE_ID,
+            tile: TILE.0,
+            crash_reason: CrashReason(1),
             victims,
-            crate::company_type::CompanyID(owner),
-        );
+            station: 0,
+            subsidy: 0,
+            industry: 0,
+            town: 0,
+            company: owner,
+        };
         let headline = if victims == 1 {
             encoded(STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER.0, &[])
         } else {
