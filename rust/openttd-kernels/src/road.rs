@@ -50,7 +50,7 @@ use crate::order_type::{
 use crate::orders::Closest;
 use crate::pathfinder_type::FindDepotData;
 use crate::raw_field::{read_field, write_field};
-use crate::road_type::{RoadBits, RoadTramType, RoadType};
+use crate::road_type::{RoadBits, RoadTramType, RoadType, RoadTypes};
 use crate::roadveh::{
     RDE_NEXT_TILE, RDE_TURNED, RV_OVERTAKE_TIMEOUT, RVC_DEFAULT_START_FRAME, RVC_DEPOT_START_FRAME,
     RVC_DRIVE_THROUGH_STOP_FRAME, RVC_START_FRAME_AFTER_LONG_TRAM, RVC_TURN_AROUND_START_FRAME,
@@ -522,8 +522,8 @@ impl<'a> Game<'a> {
         unsafe { ((*(self.vs.newgrf)()).roadtype)(v.0.as_ptr()) }
     }
     /// `v->compatible_roadtypes`.
-    fn compatible_roadtypes(&self, v: VehicleRef) -> u64 {
-        (self.movement.get().road_compatible)(v)
+    fn compatible_roadtypes(&self, v: VehicleRef) -> RoadTypes {
+        RoadTypes((self.movement.get().road_compatible)(v))
     }
     /// `v->index`.
     fn index(&self, v: VehicleRef) -> VehicleID {
@@ -531,8 +531,8 @@ impl<'a> Game<'a> {
         VehicleID(unsafe { ((*(self.vs.newgrf)()).id)(v.0.as_ptr()) })
     }
     /// `HasTileAnyRoadType(tile, types)`.
-    fn has_tile_any_road_type(&self, tile: TileIndex, types: u64) -> bool {
-        crate::road_map::has_tile_any_road_type(self.world(), tile.0, types)
+    fn has_tile_any_road_type(&self, tile: TileIndex, types: RoadTypes) -> bool {
+        crate::road_map::has_tile_any_road_type(self.world(), tile.0, types.0)
     }
     /// `GetTileTrackStatus(tile, TRANSPORT_ROAD, GetRoadTramType(v->roadtype))`.
     fn get_road_vehicle_track_status(&self, v: VehicleRef, tile: TileIndex) -> TrackStatus {
@@ -965,13 +965,12 @@ impl<'a> Game<'a> {
     #[inline]
     fn start_road_veh_sound(&self, v: VehicleRef) {
         if !service!(self.vs.play_vehicle_sound)(v, VSE_START) {
-            let mut s = service!(self.vs.engine)(v).road_sound();
-            if s == SoundID::from(SoundFx::SND_19_DEPARTURE_OLD_RV_1).0
-                && (v.tick_counter() & 3) == 0
+            let mut s = SoundID(service!(self.vs.engine)(v).road_sound());
+            if s == SoundID::from(SoundFx::SND_19_DEPARTURE_OLD_RV_1) && (v.tick_counter() & 3) == 0
             {
-                s = SoundID::from(SoundFx::SND_1A_DEPARTURE_OLD_RV_2).0;
+                s = SoundID::from(SoundFx::SND_1A_DEPARTURE_OLD_RV_2);
             }
-            service!(self.vs.play_sound)(v, s);
+            service!(self.vs.play_sound)(v, s.0);
         }
     }
 
