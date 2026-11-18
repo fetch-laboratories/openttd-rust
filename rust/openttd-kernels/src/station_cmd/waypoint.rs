@@ -33,7 +33,7 @@ use crate::strings_type::StringID;
 use crate::table::strings::{
     STR_ERROR_BUOY_IS_IN_USE, STR_ERROR_FLAT_LAND_REQUIRED,
     STR_ERROR_MUST_REMOVE_RAILWAYPOINT_FIRST, STR_ERROR_MUST_REMOVE_ROADWAYPOINT_FIRST,
-    STR_ERROR_NAME_MUST_BE_UNIQUE, STR_ERROR_SITE_UNSUITABLE,
+    STR_ERROR_NAME_MUST_BE_UNIQUE, STR_ERROR_NO_SUITABLE_RAILROAD_TRACK, STR_ERROR_SITE_UNSUITABLE,
     STR_ERROR_TOO_CLOSE_TO_ANOTHER_WAYPOINT, STR_ERROR_TOO_MANY_STATION_SPECS,
     STR_ERROR_TOO_MANY_STATIONS_LOADING, STR_ERROR_WAYPOINT_ADJOINS_MORE_THAN_ONE_EXISTING,
     STR_SV_STNAME_BUOY, STR_SV_STNAME_WAYPOINT,
@@ -395,7 +395,7 @@ impl Ctx<'_> {
             }
         }
         if self.get_axis_for_new_rail_waypoint(tile) != axis {
-            return out.error(self.rail().strings.no_suitable_track);
+            return out.error(STR_ERROR_NO_SUITABLE_RAILROAD_TRACK.0);
         }
         let owner = CompanyID((self.shared.tile_owner)(tile.0));
         unsafe { self.command.ownership(out.0, owner.0, 0) };

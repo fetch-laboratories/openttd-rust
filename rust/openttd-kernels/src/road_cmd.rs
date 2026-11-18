@@ -185,6 +185,12 @@ const RATING_ROAD_DOWN_STEP_INNER: i32 = -50;
 const RATING_ROAD_MINIMUM: i32 = -100;
 const ROAD_DEPOT_TRACKBIT_FACTOR: u32 = 2;
 use crate::economy_type::ROAD_STOP_TRACKBIT_FACTOR;
+use crate::table::strings::{
+    STR_ERROR_ALREADY_BUILT, STR_ERROR_BUILDING_MUST_BE_DEMOLISHED,
+    STR_ERROR_CROSSING_DISALLOWED_RAIL, STR_ERROR_CROSSING_DISALLOWED_ROAD,
+    STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
+    STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_OWNED_BY, STR_ERROR_ROAD_WORKS_IN_PROGRESS,
+};
 pub(crate) const INVALID_SLOPES: [[u8; 15]; 2] = [
     [0, 12, 9, 8, 3, 0, 1, 0, 6, 4, 0, 0, 2, 0, 0],
     [0, 0, 0, 5, 0, 15, 10, 15, 0, 10, 15, 15, 5, 15, 15],
@@ -617,7 +623,7 @@ impl<'a> Ctx<'a> {
                 if crate::map_func::World::new(self.shared).has_road_works(tile)
                     && (self.shared.current_company)() != OWNER_WATER
                 {
-                    cost.error(self.r.strings.road_works);
+                    cost.error(STR_ERROR_ROAD_WORKS_IN_PROGRESS.0);
                     return;
                 }
                 if (straight(other) && other & INVALID_SLOPES[0][usize::from(slope & 15)] != 0)
@@ -882,7 +888,7 @@ impl<'a> Ctx<'a> {
             MP_ROAD => match self.kind(tile) {
                 0 => {
                     if crate::map_func::World::new(self.shared).has_road_works(tile) {
-                        cost.error(self.r.strings.road_works);
+                        cost.error(STR_ERROR_ROAD_WORKS_IN_PROGRESS.0);
                         return;
                     }
                     other = self.bits(tile, rtt ^ 1);
@@ -926,7 +932,7 @@ impl<'a> Ctx<'a> {
                                 cost.zero();
                                 return;
                             }
-                            cost.error(self.r.strings.already_built);
+                            cost.error(STR_ERROR_ALREADY_BUILT.0);
                             return;
                         }
                         if rtt == 1 && existing.is_power_of_two() {
@@ -943,7 +949,7 @@ impl<'a> Ctx<'a> {
                 }
                 1 => {
                     if (self.r.road_no_crossing)(rt) {
-                        cost.error(self.r.strings.crossing_road);
+                        cost.error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
                         return;
                     }
                     other = (self.shared.crossing_road_bits)(tile).0;
@@ -952,14 +958,14 @@ impl<'a> Ctx<'a> {
                     } else {
                         pieces = other;
                         if self.rt(tile, rtt) != INVALID {
-                            cost.error(self.r.strings.already_built);
+                            cost.error(STR_ERROR_ALREADY_BUILT.0);
                             return;
                         }
                     }
                 }
                 2 => {
                     if self.any_bits(tile, rtt) & pieces == pieces {
-                        cost.error(self.r.strings.already_built);
+                        cost.error(STR_ERROR_ALREADY_BUILT.0);
                         return;
                     }
                     clear = true;
@@ -968,7 +974,7 @@ impl<'a> Ctx<'a> {
             },
             MP_RAILWAY => {
                 if is_steep_slope_raw(slope.0) || CROSSING_SLOPES & (1 << slope.0) == 0 {
-                    cost.error(self.r.strings.sloped_wrong);
+                    cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
                     return;
                 }
                 if !(self.r.crossing_with_competitor)()
@@ -989,7 +995,7 @@ impl<'a> Ctx<'a> {
                     clear = true;
                 } else {
                     if (self.r.road_no_crossing)(rt) {
-                        cost.error(self.r.strings.crossing_road);
+                        cost.error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
                         return;
                     }
                     if (self.r.rail_no_crossings)(
@@ -998,7 +1004,7 @@ impl<'a> Ctx<'a> {
                         )
                         .0,
                     ) {
-                        cost.error(self.r.strings.crossing_rail);
+                        cost.error(STR_ERROR_CROSSING_DISALLOWED_RAIL.0);
                         return;
                     }
                     let tracks = (self.ground.tracks)(tile).0;
@@ -1078,7 +1084,7 @@ impl<'a> Ctx<'a> {
             }
             MP_STATION => {
                 if self.any_bits(tile, rtt) & pieces == pieces {
-                    cost.error(self.r.strings.already_built);
+                    cost.error(STR_ERROR_ALREADY_BUILT.0);
                     return;
                 }
                 if !crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
@@ -1092,7 +1098,7 @@ impl<'a> Ctx<'a> {
                     } else {
                         pieces = bits;
                         if self.rt(tile, rtt) != INVALID {
-                            cost.error(self.r.strings.already_built);
+                            cost.error(STR_ERROR_ALREADY_BUILT.0);
                             return;
                         }
                     }
@@ -1105,7 +1111,7 @@ impl<'a> Ctx<'a> {
                     clear = true;
                 } else {
                     if self.rt(tile, rtt) != INVALID {
-                        cost.error(self.r.strings.already_built);
+                        cost.error(STR_ERROR_ALREADY_BUILT.0);
                         return;
                     }
                     ret.wormhole_free(
@@ -1133,7 +1139,7 @@ impl<'a> Ctx<'a> {
         if other != pieces {
             self.slope(ret, slope.0, &mut pieces, existing, other);
             if !ret.ok() || (ret.money() != 0 && !(self.shared.build_on_slopes)()) {
-                cost.error(self.r.strings.sloped_wrong);
+                cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
                 return;
             }
             cost.add_money(ret.money());
@@ -1153,7 +1159,7 @@ impl<'a> Ctx<'a> {
                             crate::movement::native_assert(self.shared, ok);
                         }) != new
                     {
-                        cost.error(self.r.strings.sloped_wrong);
+                        cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
                         return;
                     }
                 }
@@ -1360,12 +1366,12 @@ impl<'a> Ctx<'a> {
                 drd,
                 INVALID_TOWN,
             );
-            if !ai && ret.message() == self.r.strings.already_built {
+            if !ai && ret.message() == STR_ERROR_ALREADY_BUILT.0 {
                 success = true;
             }
             if !ret.ok() {
                 last.take(ret);
-                if last.message() != self.r.strings.already_built {
+                if last.message() != STR_ERROR_ALREADY_BUILT.0 {
                     if ai {
                         cost.take(last);
                         return;
@@ -1476,7 +1482,7 @@ impl<'a> Ctx<'a> {
                     }
                     cost.add_money(ret.money());
                     success = true;
-                } else if last.message() != self.r.strings.owned_by
+                } else if last.message() != STR_ERROR_OWNED_BY.0
                     && last.message() != self.s.strings.authority
                 {
                     last.take(ret);
@@ -1502,7 +1508,7 @@ impl<'a> Ctx<'a> {
         let slope = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
         if slope != crate::slope_type::Slope::SLOPE_FLAT {
             if !(self.shared.build_on_slopes)() || !(self.s.depot_slope)(dir, slope.0) {
-                cost.error(self.r.strings.flat_land);
+                cost.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
                 return;
             }
             cost.add_money(price(57));
@@ -1540,7 +1546,7 @@ impl<'a> Ctx<'a> {
                 return;
             }
             if crate::map_func::World::new(self.shared).bridge_above(tile) {
-                cost.error(self.r.strings.demolish_bridge);
+                cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                 return;
             }
             if !(self.r.depot_available)() {
@@ -1657,7 +1663,7 @@ impl<'a> Ctx<'a> {
             }
             _ => {
                 if flags & DoCommandFlag::AUTO != 0 {
-                    cost.error(self.r.strings.demolish_building);
+                    cost.error(STR_ERROR_BUILDING_MUST_BE_DEMOLISHED.0);
                     return;
                 }
                 self.remove_depot(cost, flags, tile);
@@ -2029,7 +2035,7 @@ impl<'a> Ctx<'a> {
                 if crate::map_func::World::new(self.shared).level_crossing_tile(tile)
                     && (self.r.road_no_crossing)(to)
                 {
-                    error.make_error(self.r.strings.crossing_road);
+                    error.make_error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
                     return;
                 }
             }

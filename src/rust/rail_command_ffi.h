@@ -25,19 +25,12 @@ struct OpenTTDRailConvertFrame; ///< Caller-owned ordered affected-train list.
 struct OpenTTDRailTrainParking { uint8_t track; uint8_t status; uint16_t speed; uint8_t order; };
 struct OpenTTDRailTrainPosition { uint32_t tile; uint8_t trackdir; };
 struct OpenTTDCrossingRoad { uint8_t bits, road_type, tram_type; uint16_t town; uint8_t road_owner, tram_owner; };
-struct OpenTTDRailCommandStrings {
-	uint32_t impossible_combination, already_built, build_on_water, sloped_wrong, remove_signals_first;
-	uint32_t road_works, oneway_road, crossing_rail, crossing_road, no_track, owned_by, flat_land;
-	uint32_t demolish_bridge, no_suitable_track, no_signals, owned_by_another, remove_track;
-	uint32_t demolish_building, ship_in_way;
-};
 struct OpenTTDRailCommandServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDRailMapServices *rail;
 	const OpenTTDCommandCostServices *cost;
 	const OpenTTDCommandServices *command;
 	const OpenTTDSignalServices *signal;
-	OpenTTDRailCommandStrings strings;
 	bool (*compatible_rail)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_rail);
 	bool (*powered_rail)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(powered_rail);
 	bool (*train_powered)(Train *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(train_powered);
