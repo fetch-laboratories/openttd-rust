@@ -127,7 +127,7 @@ impl From<StationID> for WindowNumber {
 
 impl From<TileIndex> for WindowNumber {
     fn from(value: TileIndex) -> Self {
-        Self(value.0 as i32)
+        Self(value.0.cast_signed())
     }
 }
 
@@ -139,7 +139,7 @@ impl From<TownId> for WindowNumber {
 
 impl From<VehicleID> for WindowNumber {
     fn from(value: VehicleID) -> Self {
-        Self(value.0 as i32)
+        Self(value.0.cast_signed())
     }
 }
 

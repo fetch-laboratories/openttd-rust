@@ -161,20 +161,19 @@ impl Services {
         let map = crate::map_func::World::new(self.shared());
         crate::tile_map::is_valid_tile(&map.types, tile, map.types.count()).unwrap()
     }
-    fn goal_dirty(&self, company: CompanyID) {
-        if company == CompanyID::INVALID {
-            invalidate_window_classes_data(WindowClass::WC_GOALS_LIST, 0, false);
-        } else {
-            invalidate_window_data(
-                WindowClass::WC_GOALS_LIST,
-                WindowNumber::from(company),
-                0,
-                false,
-            );
-        }
-    }
-    fn toolbar_dirty(&self) {
-        invalidate_window_data(WindowClass::WC_MAIN_TOOLBAR, WindowNumber(0), 0, false);
+}
+/// The goal list invalidation every goal command makes: all lists for a global goal,
+/// else the company's.
+fn goal_dirty(company: CompanyID) {
+    if company == CompanyID::INVALID {
+        invalidate_window_classes_data(WindowClass::WC_GOALS_LIST, 0, false);
+    } else {
+        invalidate_window_data(
+            WindowClass::WC_GOALS_LIST,
+            WindowNumber::from(company),
+            0,
+            false,
+        );
     }
 }
 unsafe fn valid_goal_destination(s: &Services, company: CompanyID, kind: u8, dest: u32) -> bool {
@@ -223,9 +222,9 @@ pub unsafe extern "C" fn openttd_rust_create_goal_abi(
         if execute(flags) {
             let id = (s.goal_allocate)(kind, dest, company, text);
             let goal = (s.goal)(id);
-            s.goal_dirty(*(s.goal_company)(goal));
+            goal_dirty(*(s.goal_company)(goal));
             if (s.goal_count)() == 1 {
-                s.toolbar_dirty();
+                invalidate_window_data(WindowClass::WC_MAIN_TOOLBAR, WindowNumber(0), 0, false);
             }
             result.write(id);
         }
@@ -245,9 +244,9 @@ pub unsafe extern "C" fn openttd_rust_remove_goal_abi(s: &Services, flags: u16, 
         if execute(flags) {
             let company = *(s.goal_company)(goal);
             (s.company().delete_goal)(u32::from(id.0));
-            s.goal_dirty(company);
+            goal_dirty(company);
             if (s.goal_count)() == 0 {
-                s.toolbar_dirty();
+                invalidate_window_data(WindowClass::WC_MAIN_TOOLBAR, WindowNumber(0), 0, false);
             }
         }
         true
@@ -296,7 +295,7 @@ pub unsafe extern "C" fn openttd_rust_set_goal_text_abi(
         }
         if execute(flags) {
             (s.text_assign)((s.goal_text)(goal), text);
-            s.goal_dirty(*(s.goal_company)(goal));
+            goal_dirty(*(s.goal_company)(goal));
         }
         true
     })
@@ -318,7 +317,7 @@ pub unsafe extern "C" fn openttd_rust_set_goal_progress_abi(
         }
         if execute(flags) {
             (s.text_assign)((s.goal_progress)(goal), text);
-            s.goal_dirty(*(s.goal_company)(goal));
+            goal_dirty(*(s.goal_company)(goal));
         }
         true
     })
@@ -340,7 +339,7 @@ pub unsafe extern "C" fn openttd_rust_set_goal_completed_abi(
         }
         if execute(flags) {
             (s.goal_completed)(goal).write(completed);
-            s.goal_dirty(*(s.goal_company)(goal));
+            goal_dirty(*(s.goal_company)(goal));
         }
         true
     })
@@ -522,7 +521,7 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_abi(
             );
             invalidate_window_classes_data(WindowClass::WC_STORY_BOOK, -1, false);
             if (s.page_count)() == 1 {
-                s.toolbar_dirty();
+                invalidate_window_data(WindowClass::WC_MAIN_TOOLBAR, WindowNumber(0), 0, false);
             }
             let next = page_sort();
             next.write((*next).wrapping_add(1));
@@ -721,7 +720,7 @@ pub unsafe extern "C" fn openttd_rust_remove_story_page_abi(
             (s.company().delete_story_page)(u32::from(id.0));
             invalidate_window_classes_data(WindowClass::WC_STORY_BOOK, -1, false);
             if (s.page_count)() == 0 {
-                s.toolbar_dirty();
+                invalidate_window_data(WindowClass::WC_MAIN_TOOLBAR, WindowNumber(0), 0, false);
             }
         }
         true

@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Functions related to NewGRF debugging (`newgrf_debug.h`). The native entry point is in
+//! Functions related to `NewGRF` debugging (`newgrf_debug.h`). The native entry point is in
 //! the window table of `window_func.rs`.
 
 use crate::newgrf::GrfSpecFeature;

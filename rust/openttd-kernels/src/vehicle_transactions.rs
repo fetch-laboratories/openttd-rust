@@ -750,6 +750,7 @@ pub(crate) unsafe fn startstop(
 /// # Safety
 /// Immutable service tables and stack cost remain live for this synchronous entry.
 /// Register 100 follows the original successful `NewGRF` callback preconditions.
+#[allow(clippy::too_many_lines)] // The complete CmdStartStopVehicle body.
 pub(crate) unsafe fn cmd_start_stop_vehicle(
     s: &CommonServices,
     cost: *mut CommandCost,
