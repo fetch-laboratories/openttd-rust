@@ -29,6 +29,14 @@ use crate::slope_func::{
     get_inclined_slope_direction_raw, is_inclined_slope_raw, is_slope_with_one_corner_raised_raw,
 };
 use crate::strings_type::INVALID_STRING_ID;
+use crate::table::strings::{
+    STR_ERROR_ALREADY_BUILT, STR_ERROR_BRIDGE_TOO_LOW_FOR_LOCK,
+    STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_CAN_T_BUILD_ON_WATER,
+    STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
+    STR_ERROR_MUST_BE_BUILT_ON_WATER, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
+    STR_ERROR_MUST_DEMOLISH_CANAL_FIRST, STR_ERROR_SITE_UNSUITABLE,
+    STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP,
+};
 use crate::tile_type::{INVALID_TILE, MP_WATER};
 use crate::viewport_func::TILE_HEIGHT_STEP;
 use crate::water::{RIVER_OFFSET_DESERT_DISTANCE, WaterServices};
@@ -39,20 +47,6 @@ macro_rules! carrier {
 }
 carrier!(WaterTileType, LockPart, DepotPart);
 pub use crate::direction_type::Axis;
-#[repr(C)]
-pub struct Strings {
-    pub built_on_water: u32,
-    pub demolish_bridge: u32,
-    pub unsuitable: u32,
-    pub sloped_wrong: u32,
-    pub edge: u32,
-    pub low_bridge: u32,
-    pub flat: u32,
-    pub already_built: u32,
-    pub build_on_water: u32,
-    pub demolish_building: u32,
-    pub demolish_canal: u32,
-}
 #[repr(C)]
 pub struct WaterCommandServices {
     pub shared: *const Services,
@@ -69,7 +63,6 @@ pub struct WaterCommandServices {
     pub make_depot: extern "C" fn(u32, u8, u16, DepotPart, Axis, WaterClass),
     pub make_lock_tile:
         extern "C" fn(u32, u8, LockPart, crate::services::DiagDirection, WaterClass),
-    pub strings: Strings,
 }
 const FACTOR: u32 = 2;
 
@@ -240,17 +233,17 @@ impl World<'_> {
                 .cast_unsigned(),
         );
         if !(self.s.has_water_ground)(tile) || !(self.s.has_water_ground)(tile2) {
-            self.error(out, self.a.strings.built_on_water);
+            self.error(out, STR_ERROR_MUST_BE_BUILT_ON_WATER.0);
             return;
         }
         if crate::map_func::World::new(self.s).bridge_above(tile)
             || crate::map_func::World::new(self.s).bridge_above(tile2)
         {
-            self.error(out, self.a.strings.demolish_bridge);
+            self.error(out, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
             return;
         }
         if !self.flat(tile) || !self.flat(tile2) {
-            self.error(out, self.a.strings.unsuitable);
+            self.error(out, STR_ERROR_SITE_UNSUITABLE.0);
             return;
         }
         if !(self.rail().depot_available)() {
@@ -382,7 +375,7 @@ impl World<'_> {
                 (self.c.amount)(out, crate::company::price(60));
             }
             if !self.flat(t) {
-                self.error(out, self.a.strings.sloped_wrong);
+                self.error(out, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
                 return;
             }
             classes[index] = if (self.s.is_water_tile)(t) {
@@ -400,7 +393,7 @@ impl World<'_> {
                 let diff = ((self.s.tile_max_z)(tile) + get_lock_part_minimal_bridge_height(part))
                     .wrapping_sub(self.bridge_height(t))
                     .wrapping_mul(TILE_HEIGHT_STEP);
-                (self.c.error_param)(out, self.a.strings.low_bridge, diff as u64);
+                (self.c.error_param)(out, STR_ERROR_BRIDGE_TOO_LOW_FOR_LOCK.0, diff as u64);
                 return;
             }
         }
@@ -461,7 +454,7 @@ impl World<'_> {
                 .0,
         );
         if dir == INVALID_DIAGDIR {
-            self.error(out, self.a.strings.sloped_wrong);
+            self.error(out, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
             return;
         }
         let lower = self
@@ -477,7 +470,7 @@ impl World<'_> {
             .0;
         /* If freeform edges are disabled, don't allow building on edge tiles. */
         if !(self.a.environment.freeform_edges)() && self.edge(lower) {
-            self.error(out, self.a.strings.edge);
+            self.error(out, STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP.0);
             return;
         }
         self.do_build_lock(out, ret, flags, tile, dir);
@@ -573,7 +566,7 @@ impl World<'_> {
             if slope != crate::slope_type::Slope::SLOPE_FLAT
                 && (wc != crate::water_map::WaterClass::River || !is_inclined_slope_raw(slope.0))
             {
-                self.error(out, self.a.strings.flat);
+                self.error(out, STR_ERROR_FLAT_LAND_REQUIRED.0);
                 return;
             }
             let water = (self.s.is_water_tile)(tile);
@@ -631,14 +624,14 @@ impl World<'_> {
             iter.advance(self.map, size, check);
         }
         if (self.c.money)(out) == 0 {
-            self.error(out, self.a.strings.already_built);
+            self.error(out, STR_ERROR_ALREADY_BUILT.0);
         }
     }
     fn clear(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         match self.kind(tile) {
             0 => {
                 if flags & DoCommandFlag::NO_WATER != 0 {
-                    self.error(out, self.a.strings.build_on_water);
+                    self.error(out, STR_ERROR_CAN_T_BUILD_ON_WATER.0);
                     return;
                 }
                 let price = if self.canal(tile) {
@@ -647,7 +640,7 @@ impl World<'_> {
                     crate::company::price(34)
                 };
                 if !(self.a.environment.freeform_edges)() && self.edge(tile) {
-                    self.error(out, self.a.strings.edge);
+                    self.error(out, STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP.0);
                     return;
                 }
                 self.cost(ret).no_vehicle(self.cmd, tile);
@@ -695,7 +688,7 @@ impl World<'_> {
             }
             2 => {
                 if flags & DoCommandFlag::AUTO != 0 {
-                    self.error(out, self.a.strings.demolish_building);
+                    self.error(out, STR_ERROR_BUILDING_MUST_BE_DEMOLISHED.0);
                     return;
                 }
                 if (self.s.current_company)() == OWNER_WATER {
@@ -720,7 +713,7 @@ impl World<'_> {
             }
             3 => {
                 if flags & DoCommandFlag::AUTO != 0 {
-                    self.error(out, self.a.strings.demolish_building);
+                    self.error(out, STR_ERROR_BUILDING_MUST_BE_DEMOLISHED.0);
                     return;
                 }
                 self.remove_depot(out, ret, flags, tile);
@@ -872,7 +865,7 @@ entry!(openttd_rust_water_make_river(tile:u32) |world:&World<'_>| {
 entry!(openttd_rust_water_clear(out:*mut CommandCost,ret:*mut CommandCost,flags:u16,tile:u32)
     |world:&World<'_>| world.clear(out,ret,flags,tile));
 entry!(openttd_rust_water_terraform(out:*mut CommandCost,flags:u16,tile:u32) |world:&World<'_>| {
-    if (world.s.is_water_tile)(tile) && world.canal(tile) { world.error(out,world.a.strings.demolish_canal); }
+    if (world.s.is_water_tile)(tile) && world.canal(tile) { world.error(out,STR_ERROR_MUST_DEMOLISH_CANAL_FIRST.0); }
     else { world.clear_command(out,tile,flags); }
 });
 entry!(openttd_rust_water_build_above(out:*mut CommandCost,flags:u16,tile:u32,height:i32) |world:&World<'_>| {
@@ -881,7 +874,7 @@ entry!(openttd_rust_water_build_above(out:*mut CommandCost,flags:u16,tile:u32,he
         2=>{
             let required=(world.s.tile_max_z)(tile)+get_lock_part_minimal_bridge_height(usize::from((world.a.lock_part)(tile).0));
             if required<=height { (world.c.zero)(out); }
-            else { (world.c.error_param)(out,world.a.strings.low_bridge,required.wrapping_sub(height).wrapping_mul(TILE_HEIGHT_STEP) as u64); }
+            else { (world.c.error_param)(out,STR_ERROR_BRIDGE_TOO_LOW_FOR_LOCK.0,required.wrapping_sub(height).wrapping_mul(TILE_HEIGHT_STEP) as u64); }
         },
         _=>world.clear_command(out,tile,flags),
     }
@@ -903,19 +896,6 @@ pub(crate) unsafe fn openttd_rust_water_change_owner(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDWaterCommandStrings" ["common"] => Strings {
-        built_on_water,
-        demolish_bridge,
-        unsuitable,
-        sloped_wrong,
-        edge,
-        low_bridge,
-        flat,
-        already_built,
-        build_on_water,
-        demolish_building,
-        demolish_canal,
-    };
     "OpenTTDWaterCommandServices" ["common"] => WaterCommandServices {
         shared,
         cost,
@@ -930,6 +910,5 @@ crate::abi::layouts! {
         environment,
         make_depot,
         make_lock_tile,
-        strings,
     };
 }
