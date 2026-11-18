@@ -2948,9 +2948,10 @@ class RetryTests(unittest.TestCase):
         self.assertEqual(self.enqueue_after(0, False, 1), ("queued at position 1", 1))
 
 
-def job_row(job_id: int, name: str, conclusion: str | None) -> dict[str, object]:
+def job_row(job_id: int, name: str, conclusion: str | None) -> ci_log.Job:
     return {
         "id": job_id,
+        "run_id": 123,
         "name": name,
         "status": "completed" if conclusion else "in_progress",
         "conclusion": conclusion,
@@ -2964,8 +2965,8 @@ class RunWaitTests(unittest.TestCase):
     def wait_run(
         self,
         argv: list[str],
-        reads: list[tuple[str, str | None, list[dict[str, object]]]],
-        latest: int = 1,
+        reads: list[tuple[str, str | None, list[ci_log.Job]]],
+        latest: int | None = 1,
     ) -> tuple[int, str, list[str]]:
         """`reads` are successive (status, conclusion, jobs) of the attempt."""
         steps = iter(reads)
@@ -2975,6 +2976,8 @@ class RunWaitTests(unittest.TestCase):
         def api(_repository: str, path: str) -> dict[str, Any]:
             paths.append(path)
             if path == "actions/runs/123":
+                if latest is None:  # The latest-attempt lookup fails.
+                    raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502")
                 return {"run_attempt": latest}
             status, conclusion, jobs = next(steps, reads[-1])
             current["jobs"] = jobs
@@ -3005,7 +3008,7 @@ class RunWaitTests(unittest.TestCase):
     PASSED = job_row(2, "platform / Windows", "success")
 
     def test_complete_outlives_a_failed_job_and_exits_1_at_completion(self) -> None:
-        reads: list[tuple[str, str | None, list[dict[str, object]]]] = [
+        reads: list[tuple[str, str | None, list[ci_log.Job]]] = [
             ("in_progress", None, [self.FAILED, self.RUNNING]),
             ("in_progress", None, [self.FAILED, self.RUNNING]),
             ("completed", "failure", [self.FAILED, self.PASSED]),
@@ -3046,7 +3049,7 @@ class RunWaitTests(unittest.TestCase):
         self.assertIn(f"wait --run {RUN}/attempts/2 --complete", output)
 
     def test_a_pinned_attempts_failure_summary_reads_that_attempt(self) -> None:
-        failed: list[tuple[str, str | None, list[dict[str, object]]]] = [
+        failed: list[tuple[str, str | None, list[ci_log.Job]]] = [
             ("completed", "failure", [self.FAILED])
         ]
         code, output, _ = self.wait_run(["--run", RUN + "/attempts/1"], failed, 2)
@@ -3057,6 +3060,17 @@ class RunWaitTests(unittest.TestCase):
         )
         self.assertEqual(self.logs.call_args.args, ("example/fork", 123, 1))
         self.assertIn("reruns attempt 2's failed jobs, not attempt 1's", output)
+
+    def test_a_failed_attempt_lookup_keeps_the_pinned_summary(self) -> None:
+        failed: list[tuple[str, str | None, list[ci_log.Job]]] = [
+            ("completed", "failure", [self.FAILED])
+        ]
+        code, output, _ = self.wait_run(
+            ["--run", RUN + "/attempts/1", "--complete"], failed, None
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("gh run rerun 123 --failed", output)
+        self.assertEqual(self.logs.call_args.args, ("example/fork", 123, 1))
 
     def test_a_bare_number_is_still_a_pr(self) -> None:
         with (
@@ -3155,6 +3169,12 @@ class RunWaitTests(unittest.TestCase):
         )
         self.assertEqual(status, 1)
         self.assertIn("ready 170 --wait", output)
+        # A caller's timeout shorter than the grace is a timeout, exit 2.
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick", "--timeout", "5"], [skipped], draft=False
+        )
+        self.assertEqual(status, 2)
+        self.assertIn("wait 170 --quick", output)
 
     def test_ready_wait_follows_the_head_it_marked(self) -> None:
         # A push lands between the ready mark and the wait: the wait stops.
@@ -4943,6 +4963,11 @@ class FallbackGitHub:
         self.calls: list[tuple[str, ...]] = []
         self.on_wait: Callable[[], None] = lambda: None
 
+    def read_variable(self, _repository: str, _name: str) -> str | None:
+        if self.create == "lost unread":
+            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502")
+        return self.variable
+
     def preset(self, variable: str | None, create: str) -> None:
         """The variable before the command runs, and how its create goes."""
         self.variable = variable
@@ -4987,7 +5012,10 @@ class FallbackGitHub:
         if self.variable is not None:
             raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 409: Conflict")
         self.variable = args[-1].removeprefix("value=")
-        if self.create == "lost":
+        if self.create == "terminated":
+            # SIGTERM lands while the create's answer is still on its way.
+            os.kill(os.getpid(), signal.SIGTERM)
+        if self.create in ("lost", "lost unread"):
             raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502: Bad Gateway")
         return ""
 
@@ -5028,7 +5056,7 @@ class MacosFallbackTests(unittest.TestCase):
             patch.object(ci, "api", side_effect=github.api),
             patch.object(ci, "run_jobs", side_effect=github.jobs),
             patch.object(ci, "gh", side_effect=github.gh),
-            patch.object(ci, "variable", side_effect=lambda _r, _n: github.variable),
+            patch.object(ci, "variable", side_effect=github.read_variable),
             patch.object(ci, "failure_logs"),
             patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
             patch.object(ci.time, "sleep"),
@@ -5114,6 +5142,24 @@ class MacosFallbackTests(unittest.TestCase):
         self.assertEqual([c[:2] for c in writes], [("api", "-X")])
         self.assertIn("owner unknown", output)
         self.assertEqual(self.left, ci.MACOS_RUNNER)
+        # The read-back fails too: both are reported and the change recorded.
+        code, writes, output = self.fallback(
+            self.TWO, setup=lambda fake: fake.preset(None, "lost unread")
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("reading it back failed too", output)
+        self.assertIn("**macOS fallback**", output)
+
+    def test_sigterm_during_the_create_still_deletes_what_it_created(self) -> None:
+        code, writes, output = self.fallback(
+            self.TWO, setup=lambda fake: fake.preset(None, "terminated")
+        )
+        self.assertEqual(code, 128 + signal.SIGTERM)
+        self.assertEqual(
+            [c[:2] for c in writes], [("api", "-X"), ("variable", "delete")]
+        )
+        self.assertIn("stopped: SIGTERM", output)
+        self.assertIsNone(self.left)
 
     def test_a_failed_rerun_a_timeout_or_sigterm_still_deletes_and_records(
         self,

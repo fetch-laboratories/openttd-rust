@@ -597,7 +597,12 @@ def rerun_hint(
         f"gh run rerun {run_id} --failed --repo {repository}"
     )
     if attempt is not None:
-        latest = api(repository, f"actions/runs/{run_id}").get("run_attempt", attempt)
+        try:
+            latest = api(repository, f"actions/runs/{run_id}").get(
+                "run_attempt", attempt
+            )
+        except subprocess.CalledProcessError:
+            return hint  # Best effort: the failure itself is already known.
         if latest != attempt:
             hint += (
                 f" (it reruns attempt {latest}'s failed jobs, not attempt {attempt}'s)"
@@ -732,7 +737,8 @@ def quick_wait(
         current_head(pull, head)
         quick = latest_quick(repository, head)
         skipped = quick is not None and quick["conclusion"] == "skipped"
-        if skipped and (pull.get("draft") or time.monotonic() >= grace):
+        now = time.monotonic()
+        if skipped and now < deadline and (pull.get("draft") or now >= grace):
             raise ValueError(
                 f"{QUICK} at {head} only skipped, as it does for a draft; start it "
                 f"with: python3 tools/ci.py ready {pr} --wait"
@@ -1078,7 +1084,17 @@ def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
 
 
-def latest_quick(repository: str, head: str) -> dict | None:
+class CheckRun(TypedDict):
+    """A check run as the check-runs API lists it, with the fields read here."""
+
+    status: str
+    conclusion: str | None
+    started_at: str | None
+    html_url: str
+    details_url: NotRequired[str]
+
+
+def latest_quick(repository: str, head: str) -> CheckRun | None:
     """The head's latest Quick validation check run, from its pull_request run.
 
     A skipped run carries no verdict: one left from the PR's draft can be stamped
@@ -1088,7 +1104,7 @@ def latest_quick(repository: str, head: str) -> dict | None:
     checks = api(
         repository, f"commits/{head}/check-runs?check_name={quote(QUICK)}&filter=latest"
     )
-    runs = sorted(
+    runs: list[CheckRun] = sorted(
         checks["check_runs"],
         key=lambda run: (run["conclusion"] != "skipped", run["started_at"] or ""),
     )
@@ -1821,10 +1837,14 @@ def acquire_fallback(repository: str, lines: list[str]) -> bool:
                 f"{MACOS_VARIABLE} already exists; another invocation or a person "
                 "owns it. Nothing changed."
             ) from error
-        observed = variable(repository, MACOS_VARIABLE)
+        try:
+            observed = repr(variable(repository, MACOS_VARIABLE))
+        except subprocess.CalledProcessError as unread:
+            observed = f"unknown (reading it back failed too: {unread})"
         lines.append(
-            f"{stamp_now()} creating {MACOS_VARIABLE} failed ({error}); it now "
-            f"reads {observed!r}, owner unknown, so it was left for root to check"
+            f"{stamp_now()} creating {MACOS_VARIABLE} failed ({error}); it may be "
+            f"set (it reads {observed}), owner unknown, so it was left for root "
+            "to check"
         )
         raise ValueError(lines[-1]) from error
     lines.append(f"{stamp_now()} set {MACOS_VARIABLE}={MACOS_RUNNER}")
@@ -1867,7 +1887,13 @@ def macos_fallback(args: argparse.Namespace) -> None:
     owned = left = False
     previous = signal.signal(signal.SIGTERM, terminate)
     try:
-        owned = acquire_fallback(repository, lines)
+        # A SIGTERM during the create waits until the create's outcome is known,
+        # so a variable this invocation set is always owned, and so deleted.
+        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        try:
+            owned = acquire_fallback(repository, lines)
+        finally:
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})
         gh("run", "rerun", str(run_id), "--failed", "--repo", repository)
         lines.append(
             f"{stamp_now()} reran the failed jobs of {url} after attempt {before}"
