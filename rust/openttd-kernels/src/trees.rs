@@ -35,6 +35,10 @@ use crate::services::{CommandCost, CommandServices, Cost, Services, TownHandle};
 use crate::settings_type::TreePlacer;
 use crate::sound_type::SoundFx;
 use crate::strings_type::StringID;
+use crate::table::strings::{
+    STR_ERROR_CAN_T_BUILD_ON_WATER, STR_ERROR_SITE_UNSUITABLE, STR_ERROR_TREE_ALREADY_HERE,
+    STR_ERROR_TREE_PLANT_LIMIT_REACHED, STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE,
+};
 use crate::tile_type::{TileIndex, TileType, TropicZone};
 use crate::tree_land::{TREE_BASE_BY_LANDSCAPE, TREE_COUNT_BY_LANDSCAPE};
 use crate::tree_map::{
@@ -92,21 +96,6 @@ pub struct LoopSettings {
     pub ambient_callback: bool,
 }
 
-/// The error messages of `CmdPlantTree`, filled once by C++.
-#[repr(C)]
-pub struct Strings {
-    /// `STR_ERROR_TREE_ALREADY_HERE`.
-    pub already_here: u32,
-    /// `STR_ERROR_CAN_T_BUILD_ON_WATER`.
-    pub on_water: u32,
-    /// `STR_ERROR_TREE_PLANT_LIMIT_REACHED`.
-    pub plant_limit: u32,
-    /// `STR_ERROR_SITE_UNSUITABLE`.
-    pub site_unsuitable: u32,
-    /// `STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE`.
-    pub wrong_terrain: u32,
-}
-
 /// Tree services: the `tree_map.h` and `clear_map.h` writers of the same names, the native
 /// `sinf` and `cosf` that keep grove shapes identical across platforms, and the generation
 /// progress updates. `progress` and `progress_total` return true when world generation was
@@ -125,7 +114,6 @@ pub struct TreeServices {
     pub set_ground_density: extern "C" fn(u32, u8, u32),
     pub set_growth: extern "C" fn(u32, u8),
     pub sin: extern "C" fn(f32) -> f32,
-    pub strings: Strings,
     /// Town leaves of `ChangeTownRating`.
     pub town: *const crate::town::Leaves,
 }
@@ -881,7 +869,6 @@ fn cmd_plant_tree(
     out: Cost<'_>,
 ) {
     let s = c.s;
-    let strings = &c.t.strings;
     let mut msg = StringID::INVALID_STRING_ID;
     // CommandCost cost(EXPENSES_OTHER): `AddCost` saturates.
     let mut cost: i64 = 0;
@@ -947,14 +934,14 @@ fn cmd_plant_tree(
                 TileType::MP_TREES => {
                     // no more space for trees?
                     if w.asserted(|m| get_tree_count(m, current_tile)) == 4 {
-                        msg = StringID(strings.already_here);
+                        msg = STR_ERROR_TREE_ALREADY_HERE;
                         break 'next;
                     }
 
                     // Test tree limit.
                     limit -= 1;
                     if limit < 1 {
-                        msg = StringID(strings.plant_limit);
+                        msg = STR_ERROR_TREE_PLANT_LIMIT_REACHED;
                     } else {
                         if flags.test(DoCommandFlag::Execute) {
                             c.add_tree_count(current_tile, 1);
@@ -975,12 +962,12 @@ fn cmd_plant_tree(
                                 w.tile_slope(current_tile),
                             ))
                     {
-                        msg = StringID(strings.on_water);
+                        msg = STR_ERROR_CAN_T_BUILD_ON_WATER;
                         break 'next;
                     }
 
                     if w.bridge_above(current_tile.0) {
-                        msg = StringID(strings.site_unsuitable);
+                        msg = STR_ERROR_SITE_UNSUITABLE;
                         break 'next;
                     }
 
@@ -1008,14 +995,14 @@ fn cmd_plant_tree(
                                 ) && zone() != TropicZone::TROPICZONE_NORMAL)
                         )
                     {
-                        msg = StringID(strings.wrong_terrain);
+                        msg = STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE;
                         break 'next;
                     }
 
                     // Test tree limit.
                     limit -= 1;
                     if limit < 1 {
-                        msg = StringID(strings.plant_limit);
+                        msg = STR_ERROR_TREE_PLANT_LIMIT_REACHED;
                     } else {
                         if w.kind(current_tile) == TileType::MP_CLEAR {
                             // Remove fields or rocks. Note that the ground will get barrened
@@ -1096,7 +1083,7 @@ fn cmd_plant_tree(
                     }
                 }
 
-                _ => msg = StringID(strings.site_unsuitable),
+                _ => msg = STR_ERROR_SITE_UNSUITABLE,
             }
 
             // Tree limit used up? No need to check more.
@@ -1638,15 +1625,7 @@ crate::abi::layouts! {
         set_ground_density,
         set_growth,
         sin,
-        strings,
         town,
-    };
-    "OpenTTDTreeStrings" ["probe"] => Strings {
-        already_here,
-        on_water,
-        plant_limit,
-        site_unsuitable,
-        wrong_terrain,
     };
     "OpenTTDTreeLoopSettings" ["probe"] => LoopSettings {
         tick_counter,
@@ -1662,6 +1641,7 @@ crate::abi::layouts! {
 mod tests {
     use super::*;
     use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
+    use crate::table::strings::STR_ERROR_CLEARING_LIMIT_REACHED;
     use std::cell::{Cell, RefCell};
     use std::ffi::c_void;
 
@@ -2014,13 +1994,6 @@ mod tests {
         PROGRESS.set(PROGRESS.get() + 1);
         PROGRESS.get() == ABORT_AT.get()
     }
-    const STRINGS: Strings = Strings {
-        already_here: 101,
-        on_water: 103,
-        plant_limit: 102,
-        site_unsuitable: 104,
-        wrong_terrain: 105,
-    };
     fn services() -> &'static TreeServices {
         Box::leak(Box::new(TreeServices {
             add_count,
@@ -2038,7 +2011,6 @@ mod tests {
             set_ground_density,
             set_growth,
             sin: trig,
-            strings: STRINGS,
             town: Box::leak(Box::new(crate::town::Leaves {
                 dirty_authority,
                 ..crate::test_tables::TOWN_LEAVES
@@ -2427,7 +2399,7 @@ mod tests {
             [
                 Event::Error(StringID::INVALID_STRING_ID.0),
                 Event::Error(StringID::INVALID_STRING_ID.0),
-                Event::Error(STRINGS.wrong_terrain),
+                Event::Error(STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE.0),
             ]
         );
         CLIMATE.set(0);
@@ -2452,7 +2424,7 @@ mod tests {
             TreeType(20),
             false,
         );
-        assert_eq!(events(), [Event::Error(STRINGS.on_water)]);
+        assert_eq!(events(), [Event::Error(STR_ERROR_CAN_T_BUILD_ON_WATER.0)]);
         CLIMATE.set(0);
         set_mode(saved);
     }
@@ -2489,7 +2461,7 @@ mod tests {
             TreeType(255),
             false,
         );
-        assert_eq!(events(), [Event::Error(STRINGS.already_here)]);
+        assert_eq!(events(), [Event::Error(STR_ERROR_TREE_ALREADY_HERE.0)]);
         // A negative limit stops before tile 4.
         plant(
             &trees(),
@@ -2499,7 +2471,10 @@ mod tests {
             TreeType(255),
             false,
         );
-        assert_eq!(events(), [Event::Error(STRINGS.plant_limit)]);
+        assert_eq!(
+            events(),
+            [Event::Error(STR_ERROR_TREE_PLANT_LIMIT_REACHED.0)]
+        );
         COMPANY.set(std::ptr::null_mut());
         set_mode(saved);
     }
@@ -2556,7 +2531,10 @@ mod tests {
             TreeType(0),
             false,
         );
-        assert_eq!(events(), [Event::Error(STRINGS.plant_limit)]);
+        assert_eq!(
+            events(),
+            [Event::Error(STR_ERROR_TREE_PLANT_LIMIT_REACHED.0)]
+        );
         COMPANY.set(std::ptr::null_mut());
         set_mode(saved);
     }
@@ -2619,7 +2597,7 @@ mod tests {
             events(),
             [
                 Event::Expense(crate::economy_type::EXPENSES_CONSTRUCTION, 0),
-                Event::Error(crate::table::strings::STR_ERROR_CLEARING_LIMIT_REACHED.0)
+                Event::Error(STR_ERROR_CLEARING_LIMIT_REACHED.0)
             ]
         );
         assert_eq!(company.tree, 5 << 16);
