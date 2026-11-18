@@ -557,6 +557,10 @@ impl<'a> Game<'a> {
     fn get_road_depot_direction(&self, tile: TileIndex) -> DiagDirection {
         DiagDirection(self.world().road_depot_dir(tile.0))
     }
+    /// `GetTunnelBridgeDirection(tile)`.
+    fn get_tunnel_bridge_direction(&self, tile: TileIndex) -> DiagDirection {
+        DiagDirection(self.world().tunnel_bridge_dir(tile.0))
+    }
     /// The `RoadDriveEntry` row `_road_drive_data[GetRoadTramType(v->roadtype)][index]`,
     /// at `frame`.
     fn road_drive_entry(&self, v: VehicleRef, index: usize, frame: usize) -> (u8, u8) {
@@ -768,8 +772,8 @@ impl<'a> Game<'a> {
         }
 
         if self.is_tile_type(v.v.tile(), TileType::MP_TUNNELBRIDGE)
-            && dir_to_diag_dir(v.v.direction(), self.check()).0
-                == service!(self.ss.tunnel_bridge_direction)(v.v.tile().0)
+            && dir_to_diag_dir(v.v.direction(), self.check())
+                == self.get_tunnel_bridge_direction(v.v.tile())
         {
             return false;
         }
@@ -1164,7 +1168,7 @@ impl<'a> Game<'a> {
                 v.v,
                 if v.overtaking() != 0 { 512 } else { 256 },
                 0,
-                get_current_max_speed(self.ss, v),
+                get_current_max_speed(self.ss, || self.world(), v),
             ) as i32,
 
             AccelerationModel::AM_REALISTIC => {
@@ -1183,7 +1187,7 @@ impl<'a> Game<'a> {
                     v.v,
                     accel as u32,
                     min_speed,
-                    get_current_max_speed(self.ss, v),
+                    get_current_max_speed(self.ss, || self.world(), v),
                 ) as i32
             }
             _ => crate::services_assert::not_reached(),
@@ -1297,11 +1301,11 @@ impl<'a> Game<'a> {
         let u_speed = if self.roadveh_acceleration_model() == AccelerationModel::AM_ORIGINAL
             || self.get_acceleration(u) > 0
         {
-            get_current_max_speed(self.ss, u)
+            get_current_max_speed(self.ss, || self.world(), u)
         } else {
             i32::from(u.v.cur_speed())
         };
-        if u_speed >= get_current_max_speed(self.ss, v)
+        if u_speed >= get_current_max_speed(self.ss, || self.world(), v)
             && !u.v.vehstatus().test(VehState::Stopped)
             && u.v.cur_speed() != 0
         {
@@ -1640,7 +1644,7 @@ impl<'a> Game<'a> {
             let mut diag_dir = DiagDirection::INVALID_DIAGDIR;
 
             if self.is_tile_type(tile, TileType::MP_TUNNELBRIDGE) {
-                diag_dir = DiagDirection(service!(self.ss.tunnel_bridge_direction)(tile.0));
+                diag_dir = self.get_tunnel_bridge_direction(tile);
             } else if self.is_road_depot_tile(tile) {
                 diag_dir = reverse_diag_dir(self.get_road_depot_direction(tile), self.check());
             }
@@ -2434,7 +2438,7 @@ impl<'a> Game<'a> {
         /* Vehicle::ShowVisualEffect */
         if crate::vehicle_effect::show_visual_effect_allowed(v.v) {
             /* Use the speed as limited by underground and orders. */
-            let max_speed = get_current_max_speed(self.ss, v) as u32;
+            let max_speed = get_current_max_speed(self.ss, || self.world(), v) as u32;
             crate::vehicle_effect::show_visual_effect(v.v, max_speed);
         }
 
@@ -2708,7 +2712,11 @@ impl<'a> Game<'a> {
     reason = "Specialize the existing loop at each speed observation."
 )]
 #[inline(always)]
-fn get_current_max_speed(ss: &Services, v: Part) -> i32 {
+fn get_current_max_speed<'w, 'a: 'w>(
+    ss: &Services,
+    world: impl Fn() -> &'w World<'a>,
+    v: Part,
+) -> i32 {
     let cached_max_track_speed =
         || i32::from(read_field!(v.v.ground_cache(), cached_max_track_speed));
     let mut max_speed = cached_max_track_speed();
@@ -2734,7 +2742,9 @@ fn get_current_max_speed(ss: &Services, v: Part) -> i32 {
 
         /* Vehicle is on the middle part of a bridge. */
         if u.state() == RVSB_WORMHOLE && !u.v.vehstatus().test(VehState::Hidden) {
-            max_speed = max_speed.min(i32::from(service!(ss.bridge_speed)(u.v.tile().0)) * 2);
+            let bridge_type = world().bridge_type(u.v.tile().0);
+            let speed = service!(crate::movement::table(ss).tunnel_bridge().speed)(bridge_type);
+            max_speed = max_speed.min(i32::from(speed) * 2);
         }
         part = u.next();
     }
@@ -2744,7 +2754,8 @@ fn get_current_max_speed(ss: &Services, v: Part) -> i32 {
 
 /// `RoadVehicle::GetCurrentMaxSpeed` of the road vehicle record `v`.
 pub(crate) fn current_max_speed(ss: &Services, v: VehicleRef) -> i32 {
-    get_current_max_speed(ss, Part::of(v))
+    let world = std::cell::OnceCell::new();
+    get_current_max_speed(ss, || world.get_or_init(|| World::new(ss)), Part::of(v))
 }
 
 /// `RoadVehicle::SetDestTile`.
@@ -2900,7 +2911,13 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
     state: *mut State,
     leaves: *const Leaves,
 ) -> i32 {
-    get_current_max_speed(entry!(leaves).ss, Part::new(v, state))
+    let ss = entry!(leaves).ss;
+    let world = std::cell::OnceCell::new();
+    get_current_max_speed(
+        ss,
+        || world.get_or_init(|| World::new(ss)),
+        Part::new(v, state),
+    )
 }
 /// `RoadVehicle::SetDestTile`.
 /// # Safety
