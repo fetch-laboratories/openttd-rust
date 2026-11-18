@@ -15,6 +15,7 @@ Write the plan into the issue's body under `## Implementation plan`, below root'
 - **Files.** The file set, and where it overlaps the open PRs' actual edits, which `python3 tools/retrospective.py readiness <open PRs>` lists.
 - **Size.** Counts under [sizing](planning.md#sizing). If the work exceeds one PR, say where it splits and plan the first PR only.
 - **Evidence.** The fixtures and comparisons the implementer runs, and what each new test must show.
+  - For a body on a per-tick or per-tile path, name the canonical scenario in which the latest retained profile shows that body costing most, and have the implementer compare instruction counts there at base and head (provisional). A play save does not show what the tile loop costs in the generation scenario.
 - **Open questions.** What only root can settle, or `none`.
 
 ## Limits
