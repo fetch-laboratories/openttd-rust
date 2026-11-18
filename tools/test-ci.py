@@ -4943,6 +4943,11 @@ class FallbackGitHub:
         self.calls: list[tuple[str, ...]] = []
         self.on_wait: Callable[[], None] = lambda: None
 
+    def preset(self, variable: str | None, create: str) -> None:
+        """The variable before the command runs, and how its create goes."""
+        self.variable = variable
+        self.create = create
+
     def latest(self, run_id: int) -> int:
         count = max(self.attempts[run_id])
         if run_id != max(self.attempts) or not self.rerun:
@@ -4987,6 +4992,11 @@ class FallbackGitHub:
         return ""
 
 
+def terminate() -> None:
+    """SIGTERM to this process, as signal-witness.py forwards it."""
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
 class MacosFallbackTests(unittest.TestCase):
     """ci.py macos-fallback against stubbed gh, never the live repository."""
 
@@ -5001,21 +5011,16 @@ class MacosFallbackTests(unittest.TestCase):
         self,
         attempts: dict[int, dict[int, list[ci_log.Job]]],
         *extra: str,
-        variable: str | None = None,
-        create: str = "",
         rerun_jobs: list[ci_log.Job] | None = None,
         names: list[str] | None = None,
-        on_wait: Callable[[], None] | None = None,
+        setup: Callable[[FallbackGitHub], None] = lambda _: None,
     ) -> tuple[int, list[tuple[str, ...]], str]:
-        """Run macos-fallback on the runs (or `names`) against a FallbackGitHub."""
+        """Run macos-fallback on the runs (or `names`) against a FallbackGitHub
+        that `setup` adjusts."""
         github = FallbackGitHub(
-            attempts,
-            self.PASSED if rerun_jobs is None else rerun_jobs,
-            variable,
-            create,
+            attempts, self.PASSED if rerun_jobs is None else rerun_jobs, None
         )
-        if on_wait:
-            github.on_wait = on_wait
+        setup(github)
         clock = itertools.count(0, 10)
         runs = names or [str(run) for run in attempts]
         argv = ["ci.py", "macos-fallback", *runs, "--repo", "x/y"]
@@ -5094,14 +5099,17 @@ class MacosFallbackTests(unittest.TestCase):
         ):
             with self.subTest(label):
                 code, writes, output = self.fallback(
-                    self.TWO, variable=variable, create=create
+                    self.TWO,
+                    setup=lambda fake, v=variable, c=create: fake.preset(v, c),
                 )
                 self.assertEqual(code, 1)
                 self.assertEqual([c[:3] for c in writes], [("api", "-X", "POST")])
                 self.assertIn("already exists", output)
                 self.assertNotEqual(self.left, None)
         # A create whose answer was lost: reported, not deleted, not rerun.
-        code, writes, output = self.fallback(self.TWO, create="lost")
+        code, writes, output = self.fallback(
+            self.TWO, setup=lambda fake: fake.preset(None, "lost")
+        )
         self.assertEqual(code, 1)
         self.assertEqual([c[:2] for c in writes], [("api", "-X")])
         self.assertIn("owner unknown", output)
@@ -5110,7 +5118,9 @@ class MacosFallbackTests(unittest.TestCase):
     def test_a_failed_rerun_a_timeout_or_sigterm_still_deletes_and_records(
         self,
     ) -> None:
-        code, writes, output = self.fallback(self.TWO, create="rerun fails")
+        code, writes, output = self.fallback(
+            self.TWO, setup=lambda fake: fake.preset(None, "rerun fails")
+        )
         self.assertEqual(code, 1)
         self.assertEqual(writes[-1][:2], ("variable", "delete"))
         self.assertIn("stopped:", output)
@@ -5124,7 +5134,7 @@ class MacosFallbackTests(unittest.TestCase):
         self.assertIn("deleted CI_MACOS_HEAVY", output)
         # signal-witness.py forwards SIGTERM to a background job.
         code, writes, output = self.fallback(
-            self.TWO, on_wait=lambda: os.kill(os.getpid(), signal.SIGTERM)
+            self.TWO, setup=lambda fake: setattr(fake, "on_wait", terminate)
         )
         self.assertEqual(code, 128 + signal.SIGTERM)
         self.assertEqual(writes[-1][:2], ("variable", "delete"))

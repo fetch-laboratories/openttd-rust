@@ -1744,15 +1744,12 @@ def capacity_cancellations(repository: str, runs: list[int]) -> list[str]:
 
 
 def macos_attempt(
-    repository: str,
-    run_id: int,
-    after: int,
-    expected: set[str],
-    deadline: float,
-    interval: int,
+    rerun: RunTarget, expected: set[str], deadline: float, interval: int
 ) -> list[ci_log.Job]:
-    """Wait for the rerun's attempt to appear, then for every expected macOS
-    job, by name, to complete in it; return them. Other jobs are not waited on."""
+    """Wait for an attempt after `rerun`'s to appear, then for every expected
+    macOS job, by name, to complete in it; return them. Other jobs are not
+    waited on."""
+    repository, run_id, after = rerun.repository, rerun.run_id, rerun.attempt
     attempt = None
     while True:
         if attempt is None:
@@ -1877,7 +1874,7 @@ def macos_fallback(args: argparse.Namespace) -> None:
         )
         deadline = time.monotonic() + args.timeout
         jobs = macos_attempt(
-            repository, run_id, before, expected, deadline, args.interval
+            RunTarget(repository, run_id, before), expected, deadline, args.interval
         )
         lines += [
             f"{job['name']}: {job['conclusion']} {job['html_url']}" for job in jobs
