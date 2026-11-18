@@ -745,7 +745,7 @@ fn choose(
     let mut orders = Orders::new(g, id);
     let v_tile: u32 = id.vehicle().tile_raw();
     let v_dest: u32 = id.vehicle().dest_tile_raw();
-    let v_destination: u16 = id.vehicle().current_order().destination();
+    let v_destination: u16 = id.vehicle().current_order().destination_raw();
     let v_order: u8 = id.vehicle().current_order().kind_raw();
     if v_order == OT_LEAVESTATION {
         orders.next(false);
@@ -947,7 +947,7 @@ fn check_next(g: &Game, id: Handle) {
     }
     let v_tile: u32 = id.vehicle().tile_raw();
     let v_dest: u32 = id.vehicle().dest_tile_raw();
-    let v_destination: u16 = id.vehicle().current_order().destination();
+    let v_destination: u16 = id.vehicle().current_order().destination_raw();
     let v_order: u8 = id.vehicle().current_order().kind_raw();
     let v_num_orders: u8 = g.read_num_orders(id);
     match v_order {

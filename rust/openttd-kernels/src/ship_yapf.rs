@@ -116,7 +116,7 @@ fn ship_input(s: &Services, v: &Ship<'_>) -> Input {
     let tile = v.v.tile().0;
     let dest_tile = v.v.dest_tile().0;
     let order = v.v.current_order();
-    let (order_type, order_destination) = (order.kind().0, order.destination());
+    let (order_type, order_destination) = (order.kind().0, order.destination().0);
     let direction = v.v.direction().0;
     let svi = (crate::movement::table(s).vehicle().engine)(v.v);
     let settings = s.settings();

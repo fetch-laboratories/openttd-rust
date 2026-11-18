@@ -25,14 +25,14 @@
     clippy::if_not_else,
     clippy::collapsible_match
 )]
-use crate::bitmath_func::{assign_bit16, has_bit};
+use crate::bitmath_func::{assign_bit16, gb_u8, has_bit};
 use crate::company_type::OWNER_NONE;
 use crate::depot_type::DepotID;
 use crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
 use crate::order_type::{
-    OLFB_FULL_LOAD, OLFB_FULL_LOAD_ANY, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT,
-    OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
-    OUFB_TRANSFER, OUFB_UNLOAD, OrderType, VehicleOrderID,
+    OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT,
+    OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OUFB_TRANSFER, OUFB_UNLOAD, OrderType,
+    VehicleOrderID,
 };
 use crate::raw_field::{read_field, write_field};
 use crate::station_type::StationID;
@@ -884,64 +884,85 @@ pub(crate) struct OrderView(*const Order);
 
 // An `OrderView` names a live order of the serialized game state at every read.
 impl OrderView {
-    /// View the live order at `order`.
-    pub(crate) fn of(order: *const Order) -> Self {
+    /// View the order at `order`.
+    ///
+    /// # Safety
+    /// `order` is a live, initialized `Order` of the serialized game state for
+    /// every read made through the view.
+    pub(crate) unsafe fn of(order: *const Order) -> Self {
         Self(order)
     }
     /// `Order::GetType`: get the type of order of this order.
     #[inline]
     pub(crate) fn kind(self) -> crate::order_type::OrderType {
-        crate::order_type::OrderType(read_field!(self.0, kind) & 15)
+        crate::order_type::OrderType(gb_u8(read_field!(self.0, kind), 0, 4))
     }
     #[inline]
     pub(crate) fn kind_raw(self) -> u8 {
         self.kind().0
     }
-    /// `Order::GetNonStopType`.
+    /// `Order::IsType`: check whether this order is of the given type.
+    #[inline]
+    pub(crate) fn is_type(self, kind: crate::order_type::OrderType) -> bool {
+        self.kind() == kind
+    }
+    /// `Order::GetNonStopType`: at which stations must we stop?
     #[inline]
     pub(crate) fn non_stop(self) -> crate::order_type::OrderNonStopFlags {
-        crate::order_type::OrderNonStopFlags(read_field!(self.0, kind) >> 6)
+        crate::order_type::OrderNonStopFlags(gb_u8(read_field!(self.0, kind), 6, 2))
     }
     #[inline]
     pub(crate) fn non_stop_raw(self) -> u8 {
         self.non_stop().0
     }
-    /// `Order::GetDepotOrderType`.
+    /// `Order::GetLoadType`: how must the consist be loaded?
+    #[inline]
+    pub(crate) fn load_type(self) -> crate::order_type::OrderLoadType {
+        crate::order_type::OrderLoadType(gb_u8(read_field!(self.0, flags), 4, 3))
+    }
+    /// `Order::GetDepotOrderType`: what caused us going to the depot?
     #[inline]
     pub(crate) fn depot_type(self) -> crate::order_type::OrderDepotTypeFlags {
-        crate::order_type::OrderDepotTypeFlags(read_field!(self.0, flags) & 7)
+        crate::order_type::OrderDepotTypeFlags(gb_u8(read_field!(self.0, flags), 0, 3))
     }
     #[inline]
     pub(crate) fn depot_type_raw(self) -> u8 {
         self.depot_type().0
     }
-    /// `Order::GetDepotActionType`.
+    /// `Order::GetDepotActionType`: what are we going to do when in the depot.
     #[inline]
     pub(crate) fn depot_action_flags(self) -> crate::order_type::OrderDepotActionFlags {
-        crate::order_type::OrderDepotActionFlags((read_field!(self.0, flags) >> 3) & 15)
+        crate::order_type::OrderDepotActionFlags(gb_u8(read_field!(self.0, flags), 3, 4))
     }
     #[inline]
     pub(crate) fn depot_action_flags_raw(self) -> u8 {
         self.depot_action_flags().0
     }
-    /// `Order::GetDestination`: the destination of the order. `DestinationID`
-    /// has no Rust wrapper; this is its base integer.
+    /// `Order::GetDestination`: gets the destination of this order.
+    ///
+    /// Precondition: `IsType(OT_GOTO_WAYPOINT) || IsType(OT_GOTO_DEPOT) ||
+    /// IsType(OT_GOTO_STATION)`.
     #[inline]
-    pub(crate) fn destination(self) -> u16 {
-        read_field!(self.0, destination)
+    pub(crate) fn destination(self) -> crate::order_type::DestinationID {
+        crate::order_type::DestinationID(read_field!(self.0, destination))
     }
-    /// `Order::GetMaxSpeed`: the maximum speed in the vehicle's units.
+    #[inline]
+    pub(crate) fn destination_raw(self) -> u16 {
+        self.destination().0
+    }
+    /// `Order::GetMaxSpeed`: get the maxmimum speed in km-ish/h a vehicle is
+    /// allowed to reach on the way to the destination.
     #[inline]
     pub(crate) fn max_speed(self) -> u16 {
         read_field!(self.0, speed)
     }
-    /// `Order::IsFullLoadOrder`: is this order a full load or full load any order?
+    /// `Order::IsFullLoadOrder`: is this order a `OrderLoadType::FullLoad` or
+    /// `OrderLoadType::FullLoadAny`?
     #[inline]
     pub(crate) fn is_full_load(self) -> bool {
-        matches!(
-            (read_field!(self.0, flags) >> 4) & 7,
-            OLFB_FULL_LOAD | OLFB_FULL_LOAD_ANY
-        )
+        let kind = self.load_type();
+        kind == crate::order_type::OrderLoadType::FullLoad
+            || kind == crate::order_type::OrderLoadType::FullLoadAny
     }
     /// A copy of the whole order, where the original copies it.
     pub(crate) fn copied(self) -> Order {
@@ -951,26 +972,33 @@ impl OrderView {
 }
 
 impl Order {
+    /// This order, read through `OrderView`.
+    fn view(&self) -> OrderView {
+        // SAFETY: A reference names a live, initialized order.
+        unsafe { OrderView::of(ptr::from_ref(self)) }
+    }
     /// `Order::GetType`.
     pub(crate) fn kind(&self) -> u8 {
-        OrderView::of(ptr::from_ref(self)).kind_raw()
+        self.view().kind_raw()
     }
     /// `Order::GetNonStopType`.
     pub(crate) fn non_stop(self) -> u8 {
-        OrderView::of(ptr::from_ref(&self)).non_stop_raw()
+        self.view().non_stop_raw()
     }
+    /// `Order::GetLoadType`.
     pub(crate) fn load(self) -> u8 {
-        (self.flags >> 4) & 7
+        self.view().load_type().0
     }
     pub(crate) fn unload(self) -> u8 {
         self.flags & 7
     }
+    /// `Order::GetDepotActionType`.
     pub(crate) fn action(&self) -> u8 {
-        (self.flags >> 3) & 15
+        self.view().depot_action_flags_raw()
     }
     /// `Order::GetDepotOrderType`.
     pub(crate) fn depot_type(&self) -> u8 {
-        OrderView::of(ptr::from_ref(self)).depot_type_raw()
+        self.view().depot_type_raw()
     }
     fn variable(self) -> u8 {
         (self.destination >> 11) as u8
@@ -986,7 +1014,7 @@ impl Order {
     }
     /// `Order::GetMaxSpeed`.
     pub(crate) fn max_speed(self) -> u16 {
-        OrderView::of(ptr::from_ref(&self)).max_speed()
+        self.view().max_speed()
     }
     /// `Order::GetConditionSkipToOrder`.
     pub(crate) fn condition_skip_to(self) -> u8 {
@@ -999,7 +1027,7 @@ impl Order {
     }
     /// `Order::IsFullLoadOrder`.
     pub(crate) fn is_full_load(self) -> bool {
-        OrderView::of(ptr::from_ref(&self)).is_full_load()
+        self.view().is_full_load()
     }
     fn wait_timetabled(self) -> bool {
         if self.kind() == OT_CONDITIONAL {
@@ -4573,17 +4601,6 @@ impl Control {
     }
 }
 
-/// Short raw access to the canonical aliased Order; never retained across calls.
-pub(crate) struct OrderHandle(pub(crate) *const Order);
-impl OrderHandle {
-    /// # Safety
-    /// Handle denotes a live Order under the serial game-state mutex.
-    pub(crate) unsafe fn is_type(&self, kind: u8) -> bool {
-        // SAFETY: One scalar read from the live canonical record.
-        unsafe { (&*self.0).kind() == kind }
-    }
-}
-
 /// Direct access to the canonical orders owner for route prediction.
 /// Handles are live for the synchronous entry; no owner borrow crosses a leaf.
 #[derive(Clone, Copy)]
@@ -4874,7 +4891,8 @@ mod order_view_tests {
             travel: 0x3456,
             speed: 0x4567,
         };
-        let view = OrderView::of(&raw const order);
+        // SAFETY: The order lives on this stack through every read.
+        let view = unsafe { OrderView::of(&raw const order) };
         assert_eq!(view.kind(), OrderType(6));
         assert_eq!(view.kind_raw(), 6);
         assert_eq!(view.non_stop(), OrderNonStopFlags(2));
@@ -4883,7 +4901,8 @@ mod order_view_tests {
         assert_eq!(view.depot_type_raw(), 2);
         assert_eq!(view.depot_action_flags(), OrderDepotActionFlags(11));
         assert_eq!(view.depot_action_flags_raw(), 11);
-        assert_eq!(view.destination(), 0x1234);
+        assert_eq!(view.destination(), crate::order_type::DestinationID(0x1234));
+        assert_eq!(view.destination_raw(), 0x1234);
         assert_eq!(view.max_speed(), 0x4567);
         // Load type 5 is neither `FullLoad` (2) nor `FullLoadAny` (3).
         assert!(!view.is_full_load());
@@ -4921,7 +4940,8 @@ mod order_view_tests {
                 speed: 0,
             };
             assert_eq!(
-                OrderView::of(&raw const order).is_full_load(),
+                // SAFETY: The order lives on this stack through the read.
+                unsafe { OrderView::of(&raw const order) }.is_full_load(),
                 full,
                 "flags {flags:#x}"
             );

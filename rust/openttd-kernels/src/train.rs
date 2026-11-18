@@ -882,7 +882,7 @@ impl Game<'_> {
             .wrapping_mul(TILE_SIZE as i32);
         let v_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));
         let v_total_length: u16 = read_field!(id.vehicle().ground_cache(), cached_total_length);
-        let v_order_destination = StationID(id.vehicle().current_order().destination());
+        let v_order_destination = StationID(id.vehicle().current_order().destination_raw());
         let v_order = OrderType(id.vehicle().current_order().kind_raw());
         // Default to the middle of the station for stations stops that are not in
         // the order list like intermediate stations when non-stop is disabled.
@@ -2605,7 +2605,7 @@ impl Game<'_> {
                     break;
                 }
                 let v_tile: u32 = id.vehicle().tile_raw();
-                let v_order_destination: u16 = id.vehicle().current_order().destination();
+                let v_order_destination: u16 = id.vehicle().current_order().destination_raw();
                 let v_order: u8 = id.vehicle().current_order().kind_raw();
                 let v_nonstop: u8 = id.vehicle().current_order().non_stop_raw();
                 if (v_order == OT_GOTO_WAYPOINT || v_order == OT_GOTO_STATION)
@@ -2693,7 +2693,7 @@ impl Game<'_> {
         }
         let tile = depot.tile;
         let depot_id = (self.services.depot_index)(tile);
-        let v_order_destination: u16 = id.vehicle().current_order().destination();
+        let v_order_destination: u16 = id.vehicle().current_order().destination_raw();
         let v_order: u8 = id.vehicle().current_order().kind_raw();
         if v_order == OT_GOTO_DEPOT
             && v_order_destination != depot_id

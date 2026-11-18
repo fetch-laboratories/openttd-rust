@@ -474,7 +474,7 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
         let order_type = order.kind();
         if order_type == OrderType::OT_GOTO_WAYPOINT || order_type == OrderType::OT_GOTO_STATION {
             if order_type == OrderType::OT_GOTO_WAYPOINT
-                && !(pf.s.waypoint_is_single_tile)(order.destination())
+                && !(pf.s.waypoint_is_single_tile)(order.destination().to_station_id().0)
             {
                 /* In case of 'complex' waypoints we need to do a look
                  * ahead. This look ahead messes a bit about, which
@@ -488,7 +488,7 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
                 // SAFETY: The shared table returns the static station command table.
                 unsafe { &*(pf.s.station_commands)() },
                 &pf.world,
-                StationID(order.destination()),
+                order.destination().to_station_id(),
                 v.tile(),
                 if v.current_order().kind() == OrderType::OT_GOTO_STATION {
                     StationType::Rail
@@ -496,7 +496,7 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
                     StationType::RailWaypoint
                 },
             );
-            pf.dest.dest_station_id = StationID(order.destination());
+            pf.dest.dest_station_id = order.destination().to_station_id();
             pf.dest.dest_trackdirs = TrackdirBits::INVALID_TRACKDIR_BIT;
         } else {
             if order_type == OrderType::OT_GOTO_DEPOT
@@ -1567,8 +1567,8 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
             {
                 let order = v.current_order();
                 if order.kind() == OrderType::OT_GOTO_WAYPOINT
-                    && self.world.get_station_index(cur.tile) == StationID(order.destination())
-                    && !(self.s.waypoint_is_single_tile)(order.destination())
+                    && self.world.get_station_index(cur.tile) == order.destination().to_station_id()
+                    && !(self.s.waypoint_is_single_tile)(order.destination().to_station_id().0)
                 {
                     /* This waypoint is our destination; maybe this isn't an unreserved
                      * one, so check that and if so see that as the last signal being

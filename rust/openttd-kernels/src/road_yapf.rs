@@ -1017,7 +1017,7 @@ fn road_input(s: &Services, v: VehicleRef, trackdir: Trackdir) -> Input {
         occupied: occupied.cast_signed(),
         bay: bay.cast_signed(),
         curve: curve.cast_signed(),
-        order_destination: order.destination(),
+        order_destination: order.destination().0,
         order_type: order.kind().0,
         bus: u8::from(crate::road_stop::is_bus(s, v)),
         articulated: u8::from(v.has_articulated_part()),

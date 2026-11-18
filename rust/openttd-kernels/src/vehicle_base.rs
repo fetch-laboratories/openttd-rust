@@ -629,7 +629,8 @@ impl crate::vehicle::VehicleRef {
     /// `Vehicle::current_order`: the current order (+ status, like: loading),
     /// read in place.
     pub(crate) fn current_order(self) -> crate::orders::OrderView {
-        crate::orders::OrderView::of(self.current_order_pointer())
+        // SAFETY: Vehicle construction starts the order's lifetime before publication.
+        unsafe { crate::orders::OrderView::of(self.current_order_pointer()) }
     }
     /// `&Vehicle::current_order`, for its writers.
     pub(crate) fn current_order_pointer(self) -> *mut crate::orders::Order {

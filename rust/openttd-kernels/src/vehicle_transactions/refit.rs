@@ -645,10 +645,9 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     let loading = || {
         if auto_refit {
             let state = unsafe { (c.orders.vehicle)(front.cast()) };
-            unsafe {
-                crate::orders::OrderHandle(ptr::addr_of!((*state).current).cast())
-                    .is_type(crate::vehicle::OT_LOADING)
-            }
+            // SAFETY: The front's order state holds its live current order.
+            unsafe { crate::orders::OrderView::of(ptr::addr_of!((*state).current).cast()) }
+                .is_type(crate::order_type::OrderType::OT_LOADING)
         } else {
             false
         }
