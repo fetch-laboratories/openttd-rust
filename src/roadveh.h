@@ -181,7 +181,8 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 		const size_t size = this->PathSize();
 		path.reserve(size);
 		for (size_t i = 0; i < size; ++i) {
-			const auto element = openttd_rust_road_path_get(this->rust_state.get(), i);
+			OpenTTDRoadPathElement element;
+			openttd_rust_road_path_get(this->rust_state.get(), i, &element);
 			path.emplace_back(static_cast<Trackdir>(element.trackdir), TileIndex(element.tile));
 		}
 		return path;
@@ -203,7 +204,8 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 	}
 	RoadVehPathElement PathBack() const
 	{
-		const auto element = openttd_rust_road_path_get(this->rust_state.get(), this->PathSize() - 1);
+		OpenTTDRoadPathElement element;
+		openttd_rust_road_path_get(this->rust_state.get(), this->PathSize() - 1, &element);
 		return {static_cast<Trackdir>(element.trackdir), TileIndex(element.tile)};
 	}
 	void PathPush(Trackdir trackdir, TileIndex tile)

@@ -193,15 +193,17 @@ pub unsafe extern "C" fn openttd_rust_road_path_size(state: *const State) -> usi
     // SAFETY: As this function's contract.
     unsafe { (*state).path.len() }
 }
+/// Write the path element at `index` to the caller-owned `out`.
 /// # Safety
-/// A live owner and the original vector's index precondition.
+/// A live owner, the original vector's index precondition and a writable `out`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_path_get(
     state: *const State,
     index: usize,
-) -> PathElement {
+    out: *mut PathElement,
+) {
     // SAFETY: As this function's contract.
-    unsafe { (&(*state).path)[index] }
+    unsafe { out.write((&(*state).path)[index]) }
 }
 /// # Safety
 /// A live owner and a disjoint call-scoped staging array of `count` elements.

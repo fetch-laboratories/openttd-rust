@@ -176,7 +176,10 @@ static void RoadBoundary()
 	openttd_rust_road_update_cache(v, probe.state, false, &t.leaves);
 	CHECK(road_abi_vehicle.cached_max_speed == 80);
 	CHECK(probe.ground.state->cache.cached_veh_length == 8 && probe.ground.state->cache.cached_total_length == 8 && probe.ground.state->cache.first_engine == UINT16_MAX);
-	CHECK(probe.nested == 2 && probe.dest == 144 && openttd_rust_road_path_get(probe.state, 0).tile == 10815);
+	CHECK(probe.nested == 2 && probe.dest == 144 && openttd_rust_road_path_size(probe.state) != 0);
+	OpenTTDRoadPathElement element{};
+	openttd_rust_road_path_get(probe.state, 0, &element);
+	CHECK(element.tile == 10815);
 
 	/* Failed/invalid properties consume late fallback reads and the post-callback link.
 	 * The first, !same_length run rejects conditional reads; a changed engine

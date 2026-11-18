@@ -161,9 +161,12 @@ static void Calls()
 	CHECK(openttd_rust_road_path_size(road.get()) == 0);
 	const OpenTTDRoadPathElement road_path[] = {{255, UINT32_MAX}, {9, 123456}};
 	openttd_rust_road_path_replace(road.get(), road_path, 2);
-	CHECK(openttd_rust_road_path_get(road.get(), 1).tile == 123456);
+	OpenTTDRoadPathElement road_element{};
+	openttd_rust_road_path_get(road.get(), 1, &road_element);
+	CHECK(road_element.tile == 123456);
 	openttd_rust_road_path_push(road.get(), {6, 42});
-	CHECK(openttd_rust_road_path_get(road.get(), 2).trackdir == 6);
+	openttd_rust_road_path_get(road.get(), 2, &road_element);
+	CHECK(road_element.trackdir == 6);
 	openttd_rust_road_path_pop(road.get());
 	CHECK(openttd_rust_road_path_size(road.get()) == 2);
 	openttd_rust_road_path_clear(road.get());

@@ -57,7 +57,7 @@ OpenTTDRoadState *OPENTTD_RUST_CALL openttd_rust_road_new();
 void OPENTTD_RUST_CALL openttd_rust_road_destroy(OpenTTDRoadState *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_road_stop_frame(uint32_t);
 size_t OPENTTD_RUST_CALL openttd_rust_road_path_size(const OpenTTDRoadState *);
-OpenTTDRoadPathElement OPENTTD_RUST_CALL openttd_rust_road_path_get(const OpenTTDRoadState *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_road_path_get(const OpenTTDRoadState *, size_t, OpenTTDRoadPathElement *);
 void OPENTTD_RUST_CALL openttd_rust_road_path_replace(OpenTTDRoadState *, const OpenTTDRoadPathElement *, size_t);
 void OPENTTD_RUST_CALL openttd_rust_road_path_clear(OpenTTDRoadState *);
 void OPENTTD_RUST_CALL openttd_rust_road_path_push(OpenTTDRoadState *, OpenTTDRoadPathElement);
