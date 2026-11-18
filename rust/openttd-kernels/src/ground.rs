@@ -244,7 +244,8 @@ pub struct RoadServices {
     pub town: *const crate::town::Leaves,
 }
 
-/// The tile loop batch's inputs for the ground tile types, built by `tile_loop`'s dispatch.
+/// The tile loop batch's inputs for the ground tile types, built once per batch by
+/// `tile_loop::run`.
 pub(crate) struct TileLoop<'a> {
     /// The batch's map descriptor.
     pub world: World<'a>,
@@ -255,7 +256,28 @@ pub(crate) struct TileLoop<'a> {
     /// The batch's client settings, with its `AmbientSoundEffect` callback gate.
     pub settings: crate::trees::LoopSettings,
 }
-impl TileLoop<'_> {
+impl<'a> TileLoop<'a> {
+    /// The batch's context over `world`, whose reader is stripped of its native handler: the
+    /// bodies probe preconditions without assertions ([`ClearTile`]) and report a failed one
+    /// through `World::asserted`, which retries with the shared table's handler.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn new(
+        world: World<'a>,
+        size_y: u32,
+        ground: &'a crate::tile_loop::GroundServices,
+        settings: crate::trees::LoopSettings,
+    ) -> Self {
+        Self {
+            world: World {
+                types: world.types.without_native_assert(),
+                ..world
+            },
+            size_y,
+            ground,
+            settings,
+        }
+    }
     /// `_settings_game.game_creation.landscape`.
     fn landscape(&self) -> LandscapeType {
         self.ground.climate
@@ -1137,15 +1159,16 @@ mod tests {
         rebuild: false,
     };
 
+    /// The batch context `tile_loop::run` builds, over this thread's map.
     fn tile_loop(s: &'static Services, landscape: LandscapeType) -> TileLoop<'static> {
-        TileLoop {
-            world: World::new(s),
-            size_y: 64,
-            ground: Box::leak(Box::new(crate::tile_loop::GroundServices {
+        TileLoop::new(
+            World::new(s),
+            64,
+            Box::leak(Box::new(crate::tile_loop::GroundServices {
                 climate: landscape,
                 ..NO_TABLES
             })),
-            settings: crate::trees::LoopSettings {
+            crate::trees::LoopSettings {
                 tick_counter: 0,
                 size_x: 64,
                 climate: landscape,
