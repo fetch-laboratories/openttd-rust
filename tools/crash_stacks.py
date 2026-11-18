@@ -24,6 +24,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # Signals whose default action writes a core.
@@ -70,15 +71,31 @@ def on_ci() -> bool:
     return bool(os.environ.get("GITHUB_ACTIONS"))
 
 
-def prepare_cores() -> Path | None:
-    """On CI, a fresh folder the kernel writes cores to; otherwise None."""
+def prepare_cores() -> tuple[Path, str] | None:
+    """On CI, a fresh folder the kernel writes cores to, and the pattern it
+    replaced, which `restore_cores` puts back; otherwise None."""
     if not on_ci():
+        return None
+    try:
+        previous = PATTERN.read_text().rstrip("\n")
+    except OSError as error:
+        say(f"kernel.core_pattern unreadable ({error}); a crash will have no core")
         return None
     folder = Path(tempfile.mkdtemp(prefix="crash-stacks-"))
     folder.chmod(0o1777)
     if not sudo("sysctl", "-w", f"kernel.core_pattern={folder}/core.%p"):
         say("kernel.core_pattern unchanged; a crash will have no core")
-    return folder
+    return folder, previous
+
+
+def restore_cores(prepared: tuple[Path, str] | None) -> None:
+    """Point kernel.core_pattern back where it was, then delete the folder."""
+    if prepared is None:
+        return
+    folder, previous = prepared
+    if not sudo("sysctl", "-w", f"kernel.core_pattern={previous}"):
+        say(f"kernel.core_pattern still names the deleted {folder}")
+    shutil.rmtree(folder, ignore_errors=True)
 
 
 def raise_core_limit() -> None:
@@ -86,9 +103,10 @@ def raise_core_limit() -> None:
     resource.setrlimit(resource.RLIMIT_CORE, (hard, hard))
 
 
-def core_file(folder: Path | None, pid: int, cwd: Path) -> Path | None:
+def core_file(folder: Path | None, pid: int, cwd: Path, started: float) -> Path | None:
     """The crashed process's core: in our folder on CI, else where the host's
-    pattern writes a plain file. A piped pattern (apport, systemd) has none."""
+    pattern writes a plain file, written since the child started. A piped
+    pattern (apport, systemd) has none."""
     if folder is not None:
         found = folder / f"core.{pid}"
         return found if found.is_file() else None
@@ -103,7 +121,8 @@ def core_file(folder: Path | None, pid: int, cwd: Path) -> Path | None:
         return None  # Other specifiers name a file this script cannot predict.
     path = Path(name) if name.startswith("/") else cwd / name
     for candidate in (path, path.with_name(f"{path.name}.{pid}")):
-        if candidate.is_file():
+        # An older file of the same name is another process's dump.
+        if candidate.is_file() and candidate.stat().st_mtime >= started:
             return candidate
     return None
 
@@ -128,7 +147,8 @@ def trace_path(binary: str, pid: int) -> Path:
     return folder / f"{Path(binary).name}-{pid}.txt"
 
 
-def stacks(binary: str, core: Path, gdb: str) -> str:
+def stacks(binary: str, core: Path, gdb: str) -> tuple[str, str | None]:
+    """gdb's output, and why it is not every thread's stack (None when it is)."""
     try:
         done = subprocess.run(
             [gdb, *DEBUGGER[1:], binary, str(core)],
@@ -137,12 +157,24 @@ def stacks(binary: str, core: Path, gdb: str) -> str:
             errors="replace",
             timeout=DEBUG_TIMEOUT,
         )
-    except subprocess.TimeoutExpired:
-        return f"gdb did not finish within {DEBUG_TIMEOUT} seconds\n"
-    return done.stdout + done.stderr
+    except subprocess.TimeoutExpired as error:
+        output = (
+            (error.stdout or b"").decode(errors="replace")
+            if isinstance(error.stdout, bytes)
+            else (error.stdout or "")
+        )
+        return output, f"gdb did not finish within {DEBUG_TIMEOUT} seconds"
+    text = done.stdout + done.stderr
+    if done.returncode:
+        return text, f"gdb exited {done.returncode}"
+    if "is truncated" in text or "\nThread " not in f"\n{text}":
+        return text, "gdb read an incomplete core"
+    return text, None
 
 
-def report(command: list[str], pid: int, number: int, folder: Path | None) -> None:
+def report(
+    command: list[str], pid: int, number: int, folder: Path | None, started: float
+) -> None:
     """Print the signal and, from the core when there is one, every stack."""
     name = signal.Signals(number).name
     binary = command[0]
@@ -154,7 +186,7 @@ def report(command: list[str], pid: int, number: int, folder: Path | None) -> No
     if number not in CORE_SIGNALS:
         say(f"{name} writes no core, so there are no stacks")
         return
-    core = core_file(folder, pid, Path.cwd())
+    core = core_file(folder, pid, Path.cwd(), started)
     if core is None:
         say(f"no core file was written; to rerun under gdb: {rerun}")
         return
@@ -162,28 +194,35 @@ def report(command: list[str], pid: int, number: int, folder: Path | None) -> No
     if gdb is None:
         say(f"gdb is not available to read {core}; to rerun under gdb: {rerun}")
         return
-    text = stacks(binary, core, gdb)
+    text, problem = stacks(binary, core, gdb)
     path = trace_path(binary, pid)
-    path.write_text(f"{binary} (pid {pid}) died by {name}\n{text}")
+    heading = f"{binary} (pid {pid}) died by {name}"
+    if problem:
+        heading += f"; {problem}, so these stacks may be incomplete"
+    path.write_text(f"{heading}\n{text}")
     print(text, file=sys.stderr, flush=True)
-    say(f"every thread's stack is in {path}")
+    if problem:
+        say(f"{problem}; its output is in {path}; to rerun under gdb: {rerun}")
+    else:
+        say(f"every thread's stack is in {path}")
 
 
 def run(command: list[str]) -> int:
-    folder = prepare_cores()
+    prepared = prepare_cores()
+    folder = prepared[0] if prepared else None
+    started = time.time()
     try:
         process = subprocess.Popen(command, preexec_fn=raise_core_limit)
         code = process.wait()
         if code < 0:
             try:
-                report(command, process.pid, -code, folder)
+                report(command, process.pid, -code, folder, started)
             except Exception as error:  # The crash's status stands regardless.
                 say(f"reading the stacks failed: {error}")
             return 128 - code
         return code
     finally:
-        if folder is not None:
-            shutil.rmtree(folder, ignore_errors=True)
+        restore_cores(prepared)
 
 
 def main() -> int:
