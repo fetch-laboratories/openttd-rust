@@ -173,25 +173,24 @@ class RetryTests(unittest.TestCase):
         steps = iter(outcomes)
         folders: list[str] = []
 
-        def session(*args: object) -> tuple[Path, dict[str, int]]:
-            folders.append(Path(str(args[2])).name)
+        def play(where: Path, _role: str) -> tuple[Path, network_protocol.Summary]:
+            folders.append(where.name)
             outcome = next(steps)
             if outcome == "stall":
                 raise network_protocol.Stalled("issuer: stuck (#693)", "issuer")
             if outcome == "fail":
                 raise RuntimeError("issuer: missing NET574 ready issuer")
-            return Path("stop.sav"), {"callbacks": 24}
+            return Path("stop.sav"), cast(network_protocol.Summary, {"callbacks": 24})
 
         result = cast(network_protocol.Result, {})
         output = io.StringIO()
         error = None
         with (
-            patch.object(network_protocol, "session", side_effect=session),
             patch.object(network_protocol, "connecter_differs", return_value=differs),
             contextlib.redirect_stdout(output),
         ):
             try:
-                network_protocol.sessions({}, Path("s"), Path("f"), 1200, {}, result)
+                network_protocol.sessions(play, Path("f"), result)
             except RuntimeError as raised:
                 error = raised
         return result, folders, output.getvalue(), error

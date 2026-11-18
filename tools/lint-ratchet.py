@@ -44,6 +44,8 @@ ITEM = hashlib.sha256(b"item").hexdigest()[:20]
 PRODUCTION = '"code":"clippy::disallowed_macros"'
 RUFF = ("C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915")
 VERSIONS = {"clippy": "1.99.0", "ruff": "0.16.8"}
+# The CI event the gate checks for; main sets it from --event.
+EVENT = "pull_request"
 
 
 def compact(text: str) -> str:
@@ -345,14 +347,13 @@ def reviewed_debt(
     previous: dict[str, list[int]],
     rows: dict[str, list[int]] | None = None,
     base: str | None = None,
-    event: str = "pull_request",
 ) -> dict[str, list[int]]:
     """Allowed head debt: base rows, renamed rows and reviewed lint contracts.
 
     A renamed row's allowance moves to its new key; the old key loses it, so
     one diagnostic never holds two allowances. A proposed lint exception
-    awaiting its acceptance is allowed as pending review, except on an event
-    where pending fails.
+    awaiting its acceptance is allowed as pending review, except when EVENT is
+    one where pending fails.
     """
     measured = baseline if rows is None else rows
 
@@ -398,7 +399,7 @@ def reviewed_debt(
                     sort_keys=True,
                 )
             )
-        elif state == PENDING and pending_fails(event):
+        elif state == PENDING and pending_fails(EVENT):
             print(f"lint exception {site} lacks its reviewer's acceptance")
         elif state == PENDING:
             allowed[site] = values
@@ -433,7 +434,6 @@ def check(
     recorded: dict[str, list[int]],
     previous: dict[str, list[int]],
     base: str | None,
-    event: str = "pull_request",
 ) -> tuple[list[str], list[str]]:
     """Return growth errors in the measured and in the recorded debt.
 
@@ -447,7 +447,7 @@ def check(
         else {key: v for key, v in previous.items() if item_exists(kind, key, base)}
     )
     changed = {key: v for key, v in recorded.items() if previous.get(key) != v}
-    allowed = reviewed_debt(kind, changed, live, rows, base, event)
+    allowed = reviewed_debt(kind, changed, live, rows, base)
     renamed_from = live.keys() - allowed.keys()
     kept = {key: v for key, v in previous.items() if key not in renamed_from}
     measured = debt_errors(rows, {}, allowed)
@@ -481,6 +481,8 @@ def main() -> int:
         " a lint exception pending review fails only in merge_group",
     )
     args = parser.parse_args()
+    global EVENT
+    EVENT = args.event
     kind = args.kind
     raw, version = (
         (args.input.read_text(), VERSIONS[kind]) if args.input else collect(kind, ROOT)
@@ -534,7 +536,6 @@ def main() -> int:
         collected(recorded["sites"]),
         collected(previous["sites"]),
         base,
-        args.event,
     )
     if args.write and not measured:
         recorded["sites"] = rows

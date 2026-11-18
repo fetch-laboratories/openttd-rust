@@ -10,7 +10,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypedDict, cast
@@ -451,6 +451,20 @@ def observe(peers: list[Peer], rejected: bytes, source: Path) -> Summary:
     }
 
 
+def invalid_admission(host: str, port: int, step: int) -> bytes:
+    """The server's answer to a client that sends a map-done packet first."""
+    with socket.create_connection((host, port), timeout=step) as invalid:
+        invalid.sendall(bytes((3, 0, 29)))
+        with invalid.makefile("rb") as response:
+            header = response.read(2)
+            if len(header) != 2:
+                raise RuntimeError("missing invalid-admission response header")
+            size = struct.unpack("<H", header)[0]
+            if size != 4:
+                raise RuntimeError("invalid-admission response size differs")
+            return header + response.read(size - 2)
+
+
 def session(
     binaries: dict[str, Path],
     source: Path,
@@ -512,16 +526,7 @@ def session(
             issuer.wait("NET574 callback ", 24)
             joiner.wait("NET574 ready hold", failure=JOIN_FAILURE)
             server.wait("status = ACTIVE", 2, JOIN_FAILURE)
-            with socket.create_connection((host, port), timeout=server.step) as invalid:
-                invalid.sendall(bytes((3, 0, 29)))
-                with invalid.makefile("rb") as response:
-                    header = response.read(2)
-                    if len(header) != 2:
-                        raise RuntimeError("missing invalid-admission response header")
-                    size = struct.unpack("<H", header)[0]
-                    if size != 4:
-                        raise RuntimeError("invalid-admission response size differs")
-                    rejected = header + response.read(size - 2)
+            rejected = invalid_admission(host, port, server.step)
             issuer.trigger("reconnect 1")
             issuer.wait("NET574 ready issuer", 2, SEND_ERROR)
             server.wait("status = ACTIVE", 3, SEND_ERROR, allowed=INVALID_ADMISSION)
@@ -609,12 +614,7 @@ def connecter_differs() -> str | None:
 
 
 def sessions(
-    executables: dict[str, Path],
-    source: Path,
-    folder: Path,
-    timeout: int,
-    env: dict[str, str],
-    result: Result,
+    play: Callable[[Path, str], tuple[Path, Summary]], folder: Path, result: Result
 ) -> tuple[dict[str, Path], dict[str, Summary]]:
     """Both server roles' sessions. A session that stalls on the #693 signature
     runs once more in a fresh folder, at most once per scenario run and only
@@ -625,9 +625,7 @@ def sessions(
     result["network_protocol_retries"] = 0
     for role in ("reference", "candidate"):
         try:
-            saves[role], summaries[role] = session(
-                executables, source, folder / role, role, timeout, env
-            )
+            saves[role], summaries[role] = play(folder / role, role)
             continue
         except Stalled as stall:
             if result["network_protocol_retries"]:
@@ -640,9 +638,7 @@ def sessions(
                 f"with {SIGNATURE}; running that session once more",
                 flush=True,
             )
-        saves[role], summaries[role] = session(
-            executables, source, folder / f"{role}-retry", role, timeout, env
-        )
+        saves[role], summaries[role] = play(folder / f"{role}-retry", role)
     return saves, summaries
 
 
@@ -662,7 +658,11 @@ def prepare(
     executables = prepared_console(
         "network_protocol", adapter, binaries, builds, folder, env
     )
-    saves, summaries = sessions(executables, source, folder, timeout, env, result)
+    saves, summaries = sessions(
+        lambda where, role: session(executables, source, where, role, timeout, env),
+        folder,
+        result,
+    )
     for key in ("command_payloads", "callbacks", "rejected", "rng"):
         if summaries["reference"][key] != summaries["candidate"][key]:
             raise RuntimeError(f"mixed server-role {key} differs")

@@ -4807,6 +4807,56 @@ def mac_job(
     }
 
 
+class FallbackGitHub:
+    """Runs, their attempts' jobs and the variable, as macos-fallback reads them.
+    A rerun of the last run adds an attempt that shows only on the third read
+    after it, so the wait must outlast reads of the old attempt."""
+
+    APPEARS_AFTER = 2
+
+    def __init__(
+        self,
+        attempts: dict[int, dict[int, list[dict[str, object]]]],
+        rerun_jobs: list[dict[str, object]],
+        variable: str | None,
+        rerun_fails: bool,
+    ) -> None:
+        self.attempts = attempts
+        self.rerun_jobs = rerun_jobs
+        self.variable = variable
+        self.rerun_fails = rerun_fails
+        self.rerun = False
+        self.reads = 0
+        self.calls: list[tuple[str, ...]] = []
+
+    def latest(self, run_id: int) -> int:
+        count = max(self.attempts[run_id])
+        if run_id != max(self.attempts) or not self.rerun:
+            return count
+        self.reads += 1
+        return count + (self.reads > self.APPEARS_AFTER)
+
+    def api(self, _repository: str, path: str) -> dict[str, object]:
+        return {"run_attempt": self.latest(int(path.rsplit("/", 1)[1]))}
+
+    def jobs(self, _repository: str, run_id: int, attempt: int) -> list[object]:
+        if attempt > max(self.attempts[run_id]):
+            return list(self.rerun_jobs)
+        return list(self.attempts[run_id][attempt])
+
+    def gh(self, *args: str) -> str:
+        self.calls.append(args)
+        if args[:2] == ("variable", "set"):
+            self.variable = args[4]
+        elif args[:2] == ("variable", "delete"):
+            self.variable = None
+        elif args[:2] == ("run", "rerun") and self.rerun_fails:
+            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 403")
+        elif args[:2] == ("run", "rerun"):
+            self.rerun = True
+        return ""
+
+
 class MacosFallbackTests(unittest.TestCase):
     """ci.py macos-fallback against stubbed gh, never the live repository."""
 
@@ -4820,51 +4870,19 @@ class MacosFallbackTests(unittest.TestCase):
         *extra: str,
         variable: str | None = None,
         rerun_fails: bool = False,
-        appears_after: int = 2,
         rerun_jobs: list[dict[str, object]] | None = None,
     ) -> tuple[int, list[tuple[str, ...]], str]:
-        """`attempts` maps run to attempt to jobs; a rerun of the last run adds
-        an attempt that shows only after `appears_after` reads."""
-        calls: list[tuple[str, ...]] = []
-        state: dict[str, object] = {"variable": variable, "rerun": False}
-        reads = [0]
-        last = max(attempts)
-
-        def latest(run_id: int) -> int:
-            count = max(attempts[run_id])
-            if run_id == last and state["rerun"]:
-                reads[0] += 1
-                if reads[0] > appears_after:
-                    return count + 1
-            return count
-
-        def api(_repository: str, path: str) -> dict[str, object]:
-            return {"run_attempt": latest(int(path.rsplit("/", 1)[1]))}
-
-        def jobs(_repository: str, run_id: int, attempt: int) -> list[object]:
-            if attempt > max(attempts[run_id]):
-                return list(rerun_jobs if rerun_jobs is not None else self.PASSED)
-            return list(attempts[run_id][attempt])
-
-        def gh(*args: str) -> str:
-            calls.append(args)
-            if args[:2] == ("variable", "set"):
-                state["variable"] = args[4]
-            elif args[:2] == ("variable", "delete"):
-                state["variable"] = None
-            elif args[:2] == ("run", "rerun"):
-                if rerun_fails:
-                    raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 403")
-                state["rerun"] = True
-            return ""
-
+        """Run macos-fallback on the named runs against a FallbackGitHub."""
+        github = FallbackGitHub(
+            attempts, rerun_jobs or self.PASSED, variable, rerun_fails
+        )
         clock = itertools.count(0, 10)
         argv = ["ci.py", "macos-fallback", *map(str, attempts), "--repo", "x/y"]
         with (
-            patch.object(ci, "api", side_effect=api),
-            patch.object(ci, "run_jobs", side_effect=jobs),
-            patch.object(ci, "gh", side_effect=gh),
-            patch.object(ci, "variable", side_effect=lambda _r, _n: state["variable"]),
+            patch.object(ci, "api", side_effect=github.api),
+            patch.object(ci, "run_jobs", side_effect=github.jobs),
+            patch.object(ci, "gh", side_effect=github.gh),
+            patch.object(ci, "variable", side_effect=lambda _r, _n: github.variable),
             patch.object(ci, "failure_logs"),
             patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
             patch.object(ci.time, "sleep"),
@@ -4875,8 +4893,8 @@ class MacosFallbackTests(unittest.TestCase):
             code = ci.main()
         output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
         output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
-        self.left = state["variable"]
-        return code, calls, output
+        self.left = github.variable
+        return code, github.calls, output
 
     def test_one_capacity_cancellation_or_a_started_job_changes_nothing(self) -> None:
         for label, attempts in (

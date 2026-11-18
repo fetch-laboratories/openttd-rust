@@ -148,6 +148,7 @@ class DebtTests(unittest.TestCase):
             output = io.StringIO()
             with (
                 self.subTest(head=head, event=event),
+                patch.object(LINT, "EVENT", event),
                 patch.object(
                     LINT,
                     "context",
@@ -156,7 +157,7 @@ class DebtTests(unittest.TestCase):
                 contextlib.redirect_stdout(output),
             ):
                 self.assertEqual(
-                    LINT.reviewed_debt("clippy", {"operation": [1]}, {}, event=event),
+                    LINT.reviewed_debt("clippy", {"operation": [1]}, {}),
                     expected,
                 )
                 self.assertIn(shown, output.getvalue())
@@ -172,12 +173,11 @@ class DebtTests(unittest.TestCase):
                     later,
                 ),
             ),
+            patch.object(LINT, "EVENT", "merge_group"),
             contextlib.redirect_stdout(io.StringIO()),
         ):
             self.assertEqual(
-                LINT.reviewed_debt(
-                    "clippy", {"operation": [2]}, {}, event="merge_group"
-                ),
+                LINT.reviewed_debt("clippy", {"operation": [2]}, {}),
                 {},
             )
 
@@ -1563,12 +1563,11 @@ class CarryTests(unittest.TestCase):
                     patch.object(
                         LINT, "context", return_value=("/impl", [lint], [comment], head)
                     ),
+                    patch.object(LINT, "EVENT", "merge_group"),
                     contextlib.redirect_stdout(io.StringIO()),
                 ):
                     self.assertEqual(
-                        LINT.reviewed_debt(
-                            "clippy", {row: [9]}, {}, event="merge_group"
-                        ),
+                        LINT.reviewed_debt("clippy", {row: [9]}, {}),
                         {row: [9]},
                     )
 
