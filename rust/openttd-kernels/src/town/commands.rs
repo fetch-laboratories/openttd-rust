@@ -1093,7 +1093,7 @@ impl Commands<'_> {
                     crate::station::spatial::modify_station_rating_around(
                         self.shared,
                         unsafe { super::position(t.state) },
-                        CompanyID((self.shared.current_company)()),
+                        self.current_company(),
                         [0x40, 0x70, 0xA0][usize::from(action.0)],
                         [10, 15, 20][usize::from(action.0)],
                     );
@@ -1152,7 +1152,7 @@ impl Commands<'_> {
                     crate::station::spatial::modify_station_rating_around(
                         self.shared,
                         unsafe { super::position(t.state) },
-                        CompanyID((self.shared.current_company)()),
+                        self.current_company(),
                         130,
                         17,
                     );
