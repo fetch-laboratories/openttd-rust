@@ -3369,9 +3369,9 @@ class EnqueueTests(unittest.TestCase):
             patch.object(ci, "gh", side_effect=gh),
             patch.object(ci, "added_records", return_value=world.get("records", [])),
             patch.object(
-                ci,
-                "listing",
-                side_effect=lambda _, path: discussion if "/comments" in path else [],
+                ci.cleanup_contract,
+                "discussion",
+                return_value=[row["body"] for row in discussion],
             ),
             patch.object(ci, "require_stamp") as stamp,
             patch.object(
@@ -3664,11 +3664,7 @@ class EnqueueTests(unittest.TestCase):
                         return_value={"merge_base_commit": {"sha": base}},
                     ),
                     patch.object(
-                        ci,
-                        "listing",
-                        side_effect=lambda _, path: (
-                            [{"body": body}] if "/comments" in path else []
-                        ),
+                        ci.cleanup_contract, "discussion", return_value=[body]
                     ),
                 ):
                     self.assertEqual(ci.added_records("example/fork", head), [record])
@@ -3688,6 +3684,38 @@ class EnqueueTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, f"{PREVIOUS} is not in this clone"),
             ):
                 ci.added_records("example/fork", PREVIOUS)
+
+    def test_an_unreadable_accepted_commit_does_not_hide_other_records(
+        self,
+    ) -> None:
+        site = "rust/x.rs | impl Native | allow unsafe_code"
+        unsafe = {"kind": "suppression", "site": site, "before": 0, "after": 1}
+        growth = {"kind": "growth", "counter": "tools_cpp", "added": {"t.cpp": 1}}
+
+        def block(at: str) -> str:
+            return (
+                "Agent: /review | Model: m | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": at, "accept": [unsafe]})
+                + "\n```"
+            )
+
+        for comments, expected in (
+            # An older acceptance at a commit this clone lacks, then one at head.
+            ([block(PREVIOUS), block(HEAD)], ["growth tools_cpp"]),
+            ([block(PREVIOUS)], ["growth tools_cpp", f"fetch the accepted {PREVIOUS}"]),
+        ):
+            with (
+                self.subTest(comments=len(comments)),
+                patch.object(ci, "added_records", return_value=[unsafe, growth]),
+                patch.object(ci.cleanup_contract, "discussion", return_value=comments),
+                self.assertRaises(ValueError) as raised,
+            ):
+                ci.missing_acceptances("example/fork", 170, PULL, HEAD)
+            text = str(raised.exception)
+            for part in expected:
+                self.assertIn(part, text)
+            self.assertIn(f"lacks {len(expected)} cleanup", text)
 
     def test_a_skipped_quick_counts_only_when_alone(self) -> None:
         skipped = dict(

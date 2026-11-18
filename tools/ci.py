@@ -1215,8 +1215,12 @@ def added_records(repository: str, head: str) -> list[dict[str, Any]]:
     return cleanup_contract.records_between(base, head)
 
 
-def unsafe_item_unchanged(site: str, head: str) -> Callable[[str], bool]:
+def unsafe_item_unchanged(
+    site: str, head: str, unreadable: set[str]
+) -> Callable[[str], bool]:
     """Whether an unsafe_code item's text at an accepted commit equals head's.
+    An accepted commit this clone lacks counts as changed and is noted in
+    `unreadable`, so the search goes on through later acceptances.
 
     lint-policy.py runs as its own process: its parser dependencies re-execute
     the importing process under uv.
@@ -1224,10 +1228,8 @@ def unsafe_item_unchanged(site: str, head: str) -> Callable[[str], bool]:
 
     def unchanged(accepted: str) -> bool:
         if not cleanup_contract.has_commit(accepted):
-            raise ValueError(
-                f"The accepted commit {accepted} of {site} is not in this clone; "
-                "fetch it"
-            )
+            unreadable.add(accepted)
+            return False
         script = Path(__file__).with_name("lint-policy.py")
         command = [sys.executable, str(script), "--same-item", site, accepted, head]
         return subprocess.run(command, capture_output=True).returncode == 0
@@ -1250,22 +1252,22 @@ def missing_acceptances(repository: str, pr: int, pull: dict, head: str) -> None
         return
     attribution = cleanup_contract.ATTRIBUTION.search(pull.get("body") or "")
     author = attribution[1] if attribution else ""
-    rows = listing(repository, f"issues/{pr}/comments?per_page=100")
-    rows += listing(repository, f"pulls/{pr}/reviews?per_page=100")
-    comments = [row.get("body") or "" for row in rows]
+    comments = cleanup_contract.discussion(f"repos/{repository}", pr, run=gh)
     missing = []
     for record in records:
         name = cleanup_contract.record_name(record)
         if not cleanup_contract.reviewed(record, comments, author, head):
             missing.append(name)
-        elif cleanup_contract.unsafe_site(record) and not cleanup_contract.reviewed(
-            record,
-            comments,
-            author,
-            head,
-            unsafe_item_unchanged(record["site"], head),
-        ):
-            missing.append(f"{name}: item changed since the accepted head")
+            continue
+        if not cleanup_contract.unsafe_site(record):
+            continue
+        unreadable: set[str] = set()
+        unchanged = unsafe_item_unchanged(record["site"], head, unreadable)
+        if not cleanup_contract.reviewed(record, comments, author, head, unchanged):
+            why = "item changed since the accepted head"
+            if unreadable:
+                why += f", or fetch the accepted {', '.join(sorted(unreadable))}"
+            missing.append(f"{name}: {why}")
     if missing:
         raise ValueError(
             f"PR #{pr} at {head} lacks {len(missing)} cleanup acceptance(s); have "
