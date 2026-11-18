@@ -111,8 +111,12 @@ pub unsafe extern "C" fn openttd_test_shared_tile_type(
 /// Compare the in-place map reads with the typed services and with the native
 /// header accessors that `observe` runs, before and after `mutate`.
 /// # Safety
-/// The map allocation and dimensions stay unchanged for the call: `mutate`
-/// preserves them and cannot reset, load or yield.
+/// `statics` is the canonical descriptor after `Map::Allocate`, or a copy of it
+/// with assertions off, so `TileTypeAccess::raw`'s contract holds: its base and
+/// extended arrays are initialized for its count. `tile` is in range where
+/// assertions are off. The allocation and dimensions stay live and unchanged
+/// through both `observe` and `mutate` calls: `mutate` preserves them and
+/// cannot reset, load or yield.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_map_read_probe(
     statics: *const MapStatics,
