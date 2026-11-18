@@ -714,13 +714,10 @@ pub(crate) fn subtract_money_from_company_fract(
     cost: i64,
     expense: crate::economy_type::ExpensesType,
 ) {
-    subtract_fraction(
-        f,
-        (f.company_finances)(company.0),
-        company.0,
-        cost,
-        usize::from(expense.0),
-    );
+    // `Company::Get(company)`: the pool asserts the company exists before the fraction is read.
+    let p = (f.company_finances)(company.0);
+    crate::services_assert::assert_with(|| !p.is_null());
+    subtract_fraction(f, p, company.0, cost, usize::from(expense.0));
 }
 /// The `StationID` of a station pool index that `NextOwned<Station>` yields.
 #[allow(
