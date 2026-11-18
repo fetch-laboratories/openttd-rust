@@ -879,18 +879,19 @@ impl Game {
 }
 /// A live `Order` read in place, such as `Vehicle::current_order`: each getter
 /// loads only the fields its `order_base.h` getter reads, when it is called.
+/// A view of a borrowed order lives no longer than the borrow.
 #[derive(Clone, Copy)]
-pub(crate) struct OrderView(*const Order);
+pub(crate) struct OrderView<'a>(*const Order, std::marker::PhantomData<&'a Order>);
 
 // An `OrderView` names a live order of the serialized game state at every read.
-impl OrderView {
+impl OrderView<'_> {
     /// View the order at `order`.
     ///
     /// # Safety
     /// `order` is a live, initialized `Order` of the serialized game state for
     /// every read made through the view.
     pub(crate) unsafe fn of(order: *const Order) -> Self {
-        Self(order)
+        Self(order, std::marker::PhantomData)
     }
     /// `Order::GetType`: get the type of order of this order.
     #[inline]
@@ -972,8 +973,8 @@ impl OrderView {
 }
 
 impl Order {
-    /// This order, read through `OrderView`.
-    fn view(&self) -> OrderView {
+    /// This order, read through `OrderView` for as long as it is borrowed.
+    fn view(&self) -> OrderView<'_> {
         // SAFETY: A reference names a live, initialized order.
         unsafe { OrderView::of(ptr::from_ref(self)) }
     }

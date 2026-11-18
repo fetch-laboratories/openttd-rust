@@ -476,11 +476,16 @@ impl crate::vehicle::VehicleRef {
     }
     /// `Vehicle::IsFrontEngine`: is the vehicle a front engine?
     pub(crate) fn is_front_engine(self) -> bool {
-        is_front_engine(is_ground_vehicle(self.vehicle_type()), self.subtype())
+        is_ground_vehicle(self.vehicle_type())
+            && has_bit(self.subtype(), GroundVehicleSubtypeFlags::GVSF_FRONT.0)
     }
     /// `Vehicle::IsArticulatedPart`: is the vehicle an articulated part of an engine?
     pub(crate) fn is_articulated_part(self) -> bool {
-        is_articulated_part(is_ground_vehicle(self.vehicle_type()), self.subtype())
+        is_ground_vehicle(self.vehicle_type())
+            && has_bit(
+                self.subtype(),
+                GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0,
+            )
     }
     /// `Vehicle::HasArticulatedPart`: does the engine have an articulated part?
     pub(crate) fn has_articulated_part(self) -> bool {
@@ -646,7 +651,7 @@ impl crate::vehicle::VehicleRef {
 
     /// `Vehicle::current_order`: the current order (+ status, like: loading),
     /// read in place.
-    pub(crate) fn current_order(self) -> crate::orders::OrderView {
+    pub(crate) fn current_order(self) -> crate::orders::OrderView<'static> {
         // SAFETY: Vehicle construction starts the order's lifetime before publication.
         unsafe { crate::orders::OrderView::of(self.current_order_pointer()) }
     }

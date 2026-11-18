@@ -772,7 +772,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let mut best: u32 = 0;
         let mut index = StationID::INVALID;
         let vtile = self.map.tile_virt_xy_clamped_to_map(b.x_pos(), b.y_pos());
-        let avi_subtype = self.engine_subtype(v);
+        let avi = Self::call(|| (self.vs.engine)(b));
         let max_range = v.cached_max_range_sqr();
 
         /* Determine destinations where it's coming from and where it's heading to */
@@ -800,7 +800,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             }
         }
 
-        let no_jetcrash = Self::call(|| (self.ss.no_jetcrash)());
         let owner = b.owner();
         self.ss.for_each_station(|st, _, station_index| {
             if self.station_owner(st) != owner
@@ -811,18 +810,19 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             }
 
             let afc = Self::airport_get_fta(st);
-            let flags = self.fta_flags(afc);
 
             /* don't crash the plane if we know it can't land at the airport */
-            if flags.test(AirportFTAClassFlag::SHORT_STRIP)
-                && avi_subtype & AIR_FAST != 0
-                && !no_jetcrash
+            if self.fta_flags(afc).test(AirportFTAClassFlag::SHORT_STRIP)
+                && avi.aircraft_subtype() & AIR_FAST != 0
+                && !Self::call(|| (self.ss.no_jetcrash)())
             {
                 return;
             }
 
             /* the plane won't land at any helicopter station */
-            if !flags.test(AirportFTAClassFlag::AIRPLANES) && avi_subtype & AIR_CTOL != 0 {
+            if !self.fta_flags(afc).test(AirportFTAClassFlag::AIRPLANES)
+                && avi.aircraft_subtype() & AIR_CTOL != 0
+            {
                 return;
             }
 

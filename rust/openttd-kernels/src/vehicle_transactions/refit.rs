@@ -627,16 +627,16 @@ pub(crate) unsafe fn cmd_refit_vehicle(
         return Capacity::default();
     }
     let front = crate::fleet::transactions::first(c.transactions, v);
+    let front_handle = crate::fleet::record(b.groups, front);
     unsafe {
-        b.commands
-            .ownership(cost, crate::fleet::record(b.groups, front).owner().0, 0);
+        b.commands.ownership(cost, front_handle.owner().0, 0);
     }
     if !(b.cost.success)(cost) {
         return Capacity::default();
     }
     // used by autoreplace/renew
-    let free_wagon = kind == VehicleType::TRAIN
-        && crate::ground_vehicle::is_free_wagon(crate::fleet::record(b.groups, front).subtype());
+    let free_wagon =
+        kind == VehicleType::TRAIN && crate::ground_vehicle::is_free_wagon(front_handle.subtype());
     /* Don't allow shadows and such to be refitted. */
     if v != front && matches!(kind, VehicleType::SHIP | VehicleType::AIRCRAFT) {
         (b.cost.error)(cost, ERROR);
@@ -644,9 +644,8 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     }
     let loading = || {
         if auto_refit {
-            let state = unsafe { (c.orders.vehicle)(front.cast()) };
-            // SAFETY: The front's order state holds its live current order.
-            unsafe { crate::orders::OrderView::of(ptr::addr_of!((*state).current).cast()) }
+            front_handle
+                .current_order()
                 .is_type(crate::order_type::OrderType::OT_LOADING)
         } else {
             false

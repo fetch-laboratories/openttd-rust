@@ -25,7 +25,7 @@ use crate::services::{ByteSpan, CommandCost, CommandCostServices, CommandService
 use crate::strings_type::INVALID_STRING_ID as ERROR;
 use crate::strings_type::StringID;
 use crate::tile_type::TileIndex;
-use crate::vehicle::VehicleType;
+use crate::vehicle::{VehicleRef, VehicleType};
 use crate::vehicle_base::VehState;
 use crate::vehicle_type::VehicleID;
 use crate::vehiclelist::{VehicleListIdentifier, VehicleListType};
@@ -61,27 +61,29 @@ unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
     }
 }
 /// `Vehicle::GetIfValid`, `IsPrimaryVehicle` and `CheckOwnership(v->owner)`:
-/// resolve once, preserving the original primary check before ownership.
+/// resolve once, preserving the original primary check before ownership. A
+/// non-null shell comes with its record's handle.
 unsafe fn owned_primary(
     s: &TransactionServices,
     cost: *mut CommandCost,
     id: VehicleID,
-) -> (*mut (), CompanyID) {
+) -> (*mut (), CompanyID, Option<VehicleRef>) {
     let v = unsafe { (s.groups.vehicle)(id.0) };
     if v.is_null() {
         (s.cost.error)(cost, ERROR);
-        return (v, CompanyID(0));
+        return (v, CompanyID(0), None);
     }
     if !unsafe { (s.groups.primary)(v) } {
         (s.cost.error)(cost, ERROR);
-        return (std::ptr::null_mut(), CompanyID(0));
+        return (std::ptr::null_mut(), CompanyID(0), None);
     }
-    let owner = crate::fleet::record(s.groups, v).owner();
+    let handle = crate::fleet::record(s.groups, v);
+    let owner = handle.owner();
     unsafe { s.commands.ownership(cost, owner.0, 0) };
     if !(s.cost.success)(cost) {
-        return (std::ptr::null_mut(), CompanyID(0));
+        return (std::ptr::null_mut(), CompanyID(0), None);
     }
-    (v, owner)
+    (v, owner, Some(handle))
 }
 /// # Safety
 /// Immutable tables and readable name span live for this synchronous call.
@@ -111,7 +113,7 @@ pub(crate) unsafe fn cmd_rename_vehicle(
     flags: DoCommandFlags,
     cmd: CmdRenameVehicle,
 ) {
-    let (v, _) = unsafe { owned_primary(s, cost, cmd.veh_id) };
+    let (v, _, _) = unsafe { owned_primary(s, cost, cmd.veh_id) };
     if v.is_null() {
         return;
     }
@@ -186,7 +188,7 @@ pub(crate) unsafe fn cmd_change_service_int(
         is_custom,
         mut is_percent,
     } = cmd;
-    let (v, owner) = unsafe { owned_primary(s, cost, veh_id) };
+    let (v, owner, _) = unsafe { owned_primary(s, cost, veh_id) };
     if v.is_null() {
         return;
     }
@@ -753,11 +755,10 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         evaluate_startstop_cb = true;
     }
     let b = s.base;
-    let (v, _) = unsafe { owned_primary(b, cost, veh_id) };
-    if v.is_null() {
+    let (v, _, handle) = unsafe { owned_primary(b, cost, veh_id) };
+    let Some(handle) = handle else {
         return;
-    }
-    let handle = unsafe { vehicle_ref(v, s.vehicles) };
+    };
     let status = (handle).vehstatus();
     if status.test(VehState::Crashed) {
         return (b.cost.error)(cost, s.strings.destroyed);
@@ -805,13 +806,13 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
                 /* 8 bit result 0xFF means 'allow' */
                 if callback < 0x400 && callback & 0xff != 0xff {
                     error = s.grf_text(
-                        v,
+                        handle,
                         GRFStringID(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
                     );
                 }
             } else if callback < 0x400 {
                 error = s.grf_text(
-                    v,
+                    handle,
                     GRFStringID(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
                 );
             } else {
@@ -819,8 +820,10 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
                     0x400 => (), // allow
                     0x40f => {
                         // The original reads register 100 only for this result.
-                        error =
-                            s.grf_text(v, GRFStringID(unsafe { register100.assume_init() } as u32));
+                        error = s.grf_text(
+                            handle,
+                            GRFStringID(unsafe { register100.assume_init() } as u32),
+                        );
                     }
                     _ => error = StringID(s.strings.incompatible_rail), // unknown reason -> disallow
                 }
@@ -931,11 +934,9 @@ impl CommonServices {
         (self.vehicles.engine)(v).grf_version(self.base.shared)
     }
     /// `GetGRFStringID(v->GetGRFID(), string)`.
-    fn grf_text(&self, v: *mut (), string: GRFStringID) -> StringID {
+    fn grf_text(&self, v: VehicleRef, string: GRFStringID) -> StringID {
         let cap = unsafe { (&*(self.vehicles.newgrf)()).capabilities };
-        let e = (self.vehicles.engine)(unsafe { vehicle_ref(v, self.vehicles) })
-            .0
-            .as_ptr();
+        let e = (self.vehicles.engine)(v).0.as_ptr();
         let grfid = unsafe { crate::engine_capabilities::openttd_rust_engine_grfid(cap, e) };
         StringID((self.grf_string)(grfid, string.0))
     }

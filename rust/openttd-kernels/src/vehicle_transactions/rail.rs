@@ -711,7 +711,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
                 let mut error = null_string;
                 let grf_text = |n: u32| {
                     x.c.grf_text(
-                        Ctx::sh(head),
+                        Ctx::vref(head),
                         GRFStringID(strings.grf_text.0.wrapping_add(n)),
                     )
                 };
@@ -738,7 +738,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
                         0x40F => {
                             // The original reads register 100 only for this result.
                             error = x.c.grf_text(
-                                Ctx::sh(head),
+                                Ctx::vref(head),
                                 GRFStringID(unsafe { regs100.assume_init() } as u32),
                             );
                         }
