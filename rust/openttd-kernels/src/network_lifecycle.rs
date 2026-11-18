@@ -487,7 +487,8 @@ pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionSe
                 == company_services.identity.strings.unnamed
                 && (company_services.identity.name)(company).size == 0
             {
-                crate::network_server::new_company(s, f, company, info);
+                // SAFETY: `info` is the server's own non-null pool record.
+                unsafe { crate::network_server::new_company(s, f, company, info) };
             }
         }
         (f.client.show_client_list)();

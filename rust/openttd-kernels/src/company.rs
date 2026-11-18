@@ -2418,7 +2418,8 @@ fn network_new(s: &Services, id: u8, client: Option<u32>) {
             crate::network_type::ClientID(id),
         )
     });
-    crate::network_server::new_company(f.lifecycle, f, company, info);
+    // SAFETY: `info` is null or the pool's record for the client, which the call keeps.
+    unsafe { crate::network_server::new_company(f.lifecycle, f, company, info) };
 }
 
 #[cfg(test)]

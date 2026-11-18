@@ -86,11 +86,14 @@ pub(crate) fn network_server_send_chat(
 
 /// `ServerNetworkGameSocketHandler::GetClientName`: get the name of the client, if the user
 /// did not send it yet, Client ID is used.
+///
+/// # Safety
+/// `cs` is a live server socket, the member function's receiver.
 #[allow(
     unsafe_code,
-    reason = "reads the client info's name after the original's null check"
+    reason = "a member function of a live native socket, reading its client info's name"
 )]
-pub(crate) fn get_client_name(f: &FrameServices, cs: *mut GameSocket) -> Vec<u8> {
+pub(crate) unsafe fn get_client_name(f: &FrameServices, cs: *mut GameSocket) -> Vec<u8> {
     let ci = ClientInfo::get_info(f.connection, cs);
     // SAFETY: A non-null `GetInfo()` of a live socket is live, and the name is copied before
     // any other call.
@@ -104,11 +107,14 @@ pub(crate) fn get_client_name(f: &FrameServices, cs: *mut GameSocket) -> Vec<u8>
 /// `NetworkServerNewCompany`: perform all the server specific administration of a new
 /// company. `c` is the newly created company and can't be null; `ci` is the client
 /// information of the client that made the company and can be null.
+///
+/// # Safety
+/// `ci` is null or a live record that nothing deletes before this function returns.
 #[allow(
     unsafe_code,
-    reason = "reads the client info's ID after the original's null check"
+    reason = "takes a client info that is null or live, reading its ID after the null check"
 )]
-pub(crate) fn new_company(
+pub(crate) unsafe fn new_company(
     s: &LifecycleServices,
     f: &FrameServices,
     c: *mut OpenTTDCompany,
@@ -158,7 +164,7 @@ pub(crate) fn new_company(
             DestType::DESTTYPE_BROADCAST,
             0,
             b"",
-            // SAFETY: `ci` is not null here and the caller's lookup keeps it live.
+            // SAFETY: `ci` is not null here, and live by this function's contract.
             unsafe { ci.client_id(f.connection) },
             i64::from(index.0) + 1,
             false,
@@ -196,74 +202,5 @@ mod tests {
                 from_admin: true,
             }]
         );
-    }
-}
-
-#[cfg(test)]
-mod client_name_tests {
-    use crate::network_socket::GameSocket;
-    use crate::services::ByteSpan;
-    use std::ffi::c_void;
-
-    /// A named client's name, else `Client #<socket client_id>` for an empty name or a null
-    /// info.
-    #[test]
-    fn get_client_name_falls_back_to_the_socket_client_id() {
-        // The test sockets are tags: 1 has a named info, 2 an unnamed one and 3 none.
-        extern "C" fn info(socket: *mut c_void) -> *mut c_void {
-            match socket.addr() {
-                1 => b"n\xE4me".as_ptr().cast_mut().cast(),
-                2 => b"".as_ptr().cast_mut().cast(),
-                _ => std::ptr::null_mut(),
-            }
-        }
-        extern "C" fn client_name(ci: *const c_void) -> ByteSpan {
-            let name: &[u8] = if ci == b"n\xE4me".as_ptr().cast() {
-                b"n\xE4me"
-            } else {
-                b""
-            };
-            ByteSpan {
-                data: name.as_ptr(),
-                size: name.len(),
-            }
-        }
-        extern "C" fn client_id(socket: *mut GameSocket) -> u32 {
-            u32::try_from(crate::network_socket::server(socket).addr()).unwrap() + 40
-        }
-        const CONNECTION: crate::network_connection::Services =
-            crate::network_connection::Services {
-                client_name,
-                info,
-                ..crate::test_tables::NETWORK_CONNECTION
-            };
-        const DISPATCH: crate::network_dispatch::Services = crate::network_dispatch::Services {
-            client_id,
-            ..crate::test_tables::NETWORK_DISPATCH
-        };
-        let f = crate::network_frame::Services {
-            connection: &CONNECTION,
-            dispatch: &DISPATCH,
-            ..crate::test_tables::NETWORK_FRAME
-        };
-        let name = |tag: usize| {
-            let mut socket = GameSocket {
-                base: std::ptr::null_mut(),
-                game: std::ptr::null_mut(),
-                incoming: std::ptr::null_mut(),
-                last_packet_ns: 0,
-                outgoing: std::ptr::null_mut(),
-                pending: false,
-                role: 0,
-                server: std::ptr::without_provenance_mut(tag),
-                status: 0,
-                sync: std::ptr::null_mut(),
-                tcp: std::ptr::null_mut(),
-            };
-            super::get_client_name(&f, &raw mut socket)
-        };
-        assert_eq!(name(1), b"n\xE4me");
-        assert_eq!(name(2), b"Client #42");
-        assert_eq!(name(3), b"Client #43");
     }
 }

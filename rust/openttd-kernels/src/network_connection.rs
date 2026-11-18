@@ -643,7 +643,8 @@ pub(crate) fn receive_map_ok(
             (f.dispatch.client_id)(socket)
         );
 
-        let client_name = server::get_client_name(f, socket);
+        let client_name = // SAFETY: The entry's socket is live.
+        unsafe { server::get_client_name(f, socket) };
 
         network_text_message(
             NetworkAction::NETWORK_ACTION_JOIN,
@@ -1093,7 +1094,8 @@ pub(crate) fn send_error(
 
     /* Only send when the current client was in game */
     if server::status(socket) >= ClientStatus::STATUS_AUTHORIZED {
-        let client_name = server::get_client_name(f, socket);
+        let client_name = // SAFETY: The entry's socket is live.
+        unsafe { server::get_client_name(f, socket) };
 
         debug!(
             net,
@@ -1323,7 +1325,8 @@ pub(crate) fn receive_error(
         );
     }
 
-    let client_name = server::get_client_name(f, socket);
+    let client_name = // SAFETY: The entry's socket is live.
+        unsafe { server::get_client_name(f, socket) };
     let strid = get_network_error_msg(errorno);
 
     debug!(
@@ -1395,7 +1398,8 @@ pub(crate) fn receive_quit(
     );
 
     /* The client wants to leave. Display this and report it to the other clients. */
-    let client_name = server::get_client_name(f, socket);
+    let client_name = // SAFETY: The entry's socket is live.
+        unsafe { server::get_client_name(f, socket) };
     network_text_message(
         NetworkAction::NETWORK_ACTION_LEAVE,
         CC_DEFAULT,
@@ -1454,7 +1458,8 @@ pub(crate) fn close_connection(
         && server::status(socket) >= ClientStatus::STATUS_AUTHORIZED
     {
         /* We did not receive a leave message from this client... */
-        let client_name = server::get_client_name(f, socket);
+        let client_name = // SAFETY: The entry's socket is live.
+        unsafe { server::get_client_name(f, socket) };
 
         network_text_message(
             NetworkAction::NETWORK_ACTION_LEAVE,
@@ -1554,4 +1559,74 @@ pub extern "C" fn openttd_rust_network_server_close(
     work: Actions,
 ) -> u8 {
     server_close(s, f, socket, NetworkRecvStatus(result), work).0
+}
+
+#[cfg(test)]
+mod client_name_tests {
+    use crate::network_socket::GameSocket;
+    use crate::services::ByteSpan;
+    use std::ffi::c_void;
+
+    /// A named client's name, else `Client #<socket client_id>` for an empty name or a null
+    /// info.
+    #[test]
+    fn get_client_name_falls_back_to_the_socket_client_id() {
+        // The test sockets are tags: 1 has a named info, 2 an unnamed one and 3 none.
+        extern "C" fn info(socket: *mut c_void) -> *mut c_void {
+            match socket.addr() {
+                1 => b"n\xE4me".as_ptr().cast_mut().cast(),
+                2 => b"".as_ptr().cast_mut().cast(),
+                _ => std::ptr::null_mut(),
+            }
+        }
+        extern "C" fn client_name(ci: *const c_void) -> ByteSpan {
+            let name: &[u8] = if ci == b"n\xE4me".as_ptr().cast() {
+                b"n\xE4me"
+            } else {
+                b""
+            };
+            ByteSpan {
+                data: name.as_ptr(),
+                size: name.len(),
+            }
+        }
+        extern "C" fn client_id(socket: *mut GameSocket) -> u32 {
+            u32::try_from(crate::network_socket::server(socket).addr()).unwrap() + 40
+        }
+        const CONNECTION: crate::network_connection::Services =
+            crate::network_connection::Services {
+                client_name,
+                info,
+                ..crate::test_tables::NETWORK_CONNECTION
+            };
+        const DISPATCH: crate::network_dispatch::Services = crate::network_dispatch::Services {
+            client_id,
+            ..crate::test_tables::NETWORK_DISPATCH
+        };
+        let f = crate::network_frame::Services {
+            connection: &CONNECTION,
+            dispatch: &DISPATCH,
+            ..crate::test_tables::NETWORK_FRAME
+        };
+        let name = |tag: usize| {
+            let mut socket = GameSocket {
+                base: std::ptr::null_mut(),
+                game: std::ptr::null_mut(),
+                incoming: std::ptr::null_mut(),
+                last_packet_ns: 0,
+                outgoing: std::ptr::null_mut(),
+                pending: false,
+                role: 0,
+                server: std::ptr::without_provenance_mut(tag),
+                status: 0,
+                sync: std::ptr::null_mut(),
+                tcp: std::ptr::null_mut(),
+            };
+            // SAFETY: The test socket lives for the call.
+            unsafe { crate::network_server::get_client_name(&f, &raw mut socket) }
+        };
+        assert_eq!(name(1), b"n\xE4me");
+        assert_eq!(name(2), b"Client #42");
+        assert_eq!(name(3), b"Client #43");
+    }
 }

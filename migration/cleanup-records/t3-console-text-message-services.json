@@ -6,8 +6,8 @@
     "before": 0,
     "after": 1,
     "operation": "network_server::get_client_name",
-    "source_contract": "`ServerNetworkGameSocketHandler::GetClientName` (src/network/network_server.cpp:2104) reads `ci->client_name` twice after its own `ci != nullptr` test and copies it into the returned string before any other call.",
-    "reason": "The `ClientInfo` readers are unsafe because they dereference the native record unchecked, as the original's member accesses do (#1008's rewrite review). This body states the original's null check and the copy before any other call as the reads' safety; `network_server.rs` has no module-wide allowance, and a module-wide one is not accepted.",
+    "source_contract": "`ServerNetworkGameSocketHandler::GetClientName` (src/network/network_server.cpp:2104) is a member function of a live socket: it reads `ci->client_name` twice after its own `ci != nullptr` test and copies it into the returned string before any other call.",
+    "reason": "The `ClientInfo` readers are unsafe because they dereference the native record unchecked, as the original's member accesses do (#1008's rewrite review). `get_client_name` is an `unsafe fn` whose contract is the live receiver socket; its body states the original's null check and the copy before any other call as the reads' safety. `network_server.rs` has no module-wide allowance, and a module-wide one is not accepted.",
     "retiring_owner": "#730",
     "retirement_condition": "Retires when the client-info pool moves to Rust and its records are reached as Rust references."
   },
@@ -18,8 +18,8 @@
     "before": 0,
     "after": 1,
     "operation": "network_server::new_company",
-    "source_contract": "`NetworkServerNewCompany` (src/network/network_server.cpp:2150) reads `ci->client_id` for its `NetworkServerSendChat` only inside its `ci != nullptr` branch; both callers pass a pool lookup or `nullptr`.",
-    "reason": "The `ClientInfo` readers are unsafe because they dereference the native record unchecked, as the original's member accesses do (#1008's rewrite review). This body states the original's null branch and the caller's lookup as the read's safety; `network_server.rs` has no module-wide allowance, and a module-wide one is not accepted.",
+    "source_contract": "`NetworkServerNewCompany` (src/network/network_server.cpp:2150) takes a client info that its callers pass as a live pool record or `nullptr`, and reads `ci->client_id` for its `NetworkServerSendChat` only inside its `ci != nullptr` branch.",
+    "reason": "The `ClientInfo` readers are unsafe because they dereference the native record unchecked, as the original's member accesses do (#1008's rewrite review). `new_company` is an `unsafe fn` whose contract is that `ci` is null or live until it returns, which its two callers state; its body reads the ID only inside the original's null branch. `network_server.rs` has no module-wide allowance, and a module-wide one is not accepted.",
     "retiring_owner": "#730",
     "retirement_condition": "Retires when the client-info pool moves to Rust and its records are reached as Rust references."
   }

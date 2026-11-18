@@ -714,7 +714,8 @@ pub(crate) fn receive_server_join(
             NetworkAction::NETWORK_ACTION_JOIN,
             CC_DEFAULT,
             false,
-            // SAFETY: A known client's info lives until the `delete_info` below.
+            // SAFETY: The known client's pool record stays live and unrenamed through this
+            // synchronous call.
             unsafe { ci.client_name(f.connection) },
             b"",
             StringParameterData::Empty,
