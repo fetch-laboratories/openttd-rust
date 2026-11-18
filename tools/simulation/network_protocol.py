@@ -345,6 +345,16 @@ def observe(peers: list[Peer], rejected: bytes, source: Path) -> Summary:
         raise RuntimeError("reconnect did not allocate a fresh client identity")
     if len(packets(server, 40)) < 3 or rejected != bytes((4, 0, 3, 7)):
         raise RuntimeError("quit or invalid-admission reason differs")
+    # The joiner, still active, sees the issuer's reconnect: a quit for the first identity and
+    # a join for the second, each for a client it knows (Receive_SERVER_QUIT, _SERVER_JOIN).
+    for marker in (
+        f"Client::Receive_SERVER_QUIT(): client_id={welcomes[0]}",
+        f"Client::Receive_SERVER_JOIN(): client_id={welcomes[1]}",
+    ):
+        if not any(marker in line for line in joiner.lines):
+            raise RuntimeError(f"joiner missed {marker}")
+    if any("Unknown client (" in line for line in joiner.lines):
+        raise RuntimeError("joiner received a quit for an unknown client")
     saves = [peer.folder / "save/stop.sav" for peer in peers]
     stats: core.Stats = core.empty_stats()
     for save in saves[1:]:
