@@ -28,7 +28,7 @@ impl crate::map_func::World<'_> {
     /// `GetTunnelBridgeDirection`: the tile type is read only inside the assertion.
     #[inline]
     pub(crate) fn tunnel_bridge_dir(&self, t: u32) -> u8 {
-        self.assert_with(|| self.kind(TileIndex(t)) == TileType::MP_TUNNELBRIDGE);
+        self.assert_with(|| self.is_tile_type(TileIndex(t), TileType::MP_TUNNELBRIDGE));
         gb(u32::from(Self::byte(self.types.m5(TileIndex(t)))), 0, 2) as u8
     }
 }

@@ -43,7 +43,7 @@ impl crate::map_func::World<'_> {
     /// `IsBridge`: the tile type is read only inside the assertion.
     #[inline]
     pub(crate) fn bridge(&self, t: u32) -> bool {
-        self.assert_with(|| self.kind(TileIndex(t)) == TileType::MP_TUNNELBRIDGE);
+        self.assert_with(|| self.is_tile_type(TileIndex(t), TileType::MP_TUNNELBRIDGE));
         crate::bitmath_func::has_bit(Self::byte(self.types.m5(TileIndex(t))), 7)
     }
 }
@@ -52,7 +52,9 @@ impl crate::map_func::World<'_> {
     /// `GetBridgeType`: `IsBridgeTile`'s operands are read only inside the assertion.
     #[inline]
     pub(crate) fn bridge_type(&self, t: u32) -> u32 {
-        self.assert_with(|| self.kind(TileIndex(t)) == TileType::MP_TUNNELBRIDGE && self.bridge(t));
+        self.assert_with(|| {
+            self.is_tile_type(TileIndex(t), TileType::MP_TUNNELBRIDGE) && self.bridge(t)
+        });
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(TileIndex(t)))), 2, 4)
     }
 }
