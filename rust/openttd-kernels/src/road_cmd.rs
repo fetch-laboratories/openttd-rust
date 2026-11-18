@@ -112,17 +112,6 @@ pub struct WorksEffect {
     pub id: u32,
     pub tile: u32,
 }
-/// Native `StringID` constants.
-#[repr(C)]
-pub struct Strings {
-    pub no_road: u32,
-    pub no_tram: u32,
-    pub junction: u32,
-    pub remove_road: u32,
-    pub no_suitable_road: u32,
-    pub no_suitable_tram: u32,
-    pub authority: u32,
-}
 /// Native immutable table; pointer callbacks require live stack costs/frames.
 #[repr(C)]
 pub struct RoadCommandServices {
@@ -146,8 +135,6 @@ pub struct RoadCommandServices {
     pub town: *const crate::town::Leaves,
     /// Native `authority` service.
     pub authority: *const crate::town::AuthorityServices,
-    /// Native `strings` service.
-    pub strings: Strings,
     /// Native `town_valid` service.
     pub nearest_tile: extern "C" fn(u32) -> NearestTownTile,
     pub town_valid: extern "C" fn(u16) -> bool,
@@ -189,7 +176,10 @@ use crate::table::strings::{
     STR_ERROR_ALREADY_BUILT, STR_ERROR_BUILDING_MUST_BE_DEMOLISHED,
     STR_ERROR_CROSSING_DISALLOWED_RAIL, STR_ERROR_CROSSING_DISALLOWED_ROAD,
     STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
-    STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_OWNED_BY, STR_ERROR_ROAD_WORKS_IN_PROGRESS,
+    STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
+    STR_ERROR_MUST_REMOVE_ROAD_FIRST, STR_ERROR_NO_SUITABLE_ROAD, STR_ERROR_NO_SUITABLE_TRAMWAY,
+    STR_ERROR_ONEWAY_ROADS_CAN_T_HAVE_JUNCTION, STR_ERROR_OWNED_BY,
+    STR_ERROR_ROAD_WORKS_IN_PROGRESS, STR_ERROR_THERE_IS_NO_ROAD, STR_ERROR_THERE_IS_NO_TRAMWAY,
 };
 pub(crate) const INVALID_SLOPES: [[u8; 15]; 2] = [
     [0, 12, 9, 8, 3, 0, 1, 0, 6, 4, 0, 0, 2, 0, 0],
@@ -365,9 +355,9 @@ impl<'a> Ctx<'a> {
     }
     fn no_road(&self, c: Cost<'_>, rtt: u8) {
         c.error(if rtt == 1 {
-            self.s.strings.no_tram
+            STR_ERROR_THERE_IS_NO_TRAMWAY.0
         } else {
-            self.s.strings.no_road
+            STR_ERROR_THERE_IS_NO_ROAD.0
         });
     }
     fn clear(&self, c: Cost<'_>, flags: u16, tile: u32) {
@@ -473,7 +463,7 @@ impl<'a> Ctx<'a> {
             if !(self.s.extra_dynamite)() {
                 (self.costs.error_param)(
                     c.0,
-                    self.s.strings.authority,
+                    STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS.0,
                     u64::from((self.authority.town_index)(town)),
                 );
                 return;
@@ -901,7 +891,7 @@ impl<'a> Ctx<'a> {
                                 || toggle != 0)
                             && !straight(existing | pieces)
                         {
-                            cost.error(self.s.strings.junction);
+                            cost.error(STR_ERROR_ONEWAY_ROADS_CAN_T_HAVE_JUNCTION.0);
                             return;
                         }
                         if existing & pieces == pieces {
@@ -1483,7 +1473,7 @@ impl<'a> Ctx<'a> {
                     cost.add_money(ret.money());
                     success = true;
                 } else if last.message() != STR_ERROR_OWNED_BY.0
-                    && last.message() != self.s.strings.authority
+                    && last.message() != STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS.0
                 {
                     last.take(ret);
                 }
@@ -1629,13 +1619,13 @@ impl<'a> Ctx<'a> {
                         cost.add_money(ret.money());
                     }
                 } else {
-                    cost.error(self.s.strings.remove_road);
+                    cost.error(STR_ERROR_MUST_REMOVE_ROAD_FIRST.0);
                 }
             }
             1 => {
                 cost.set(0);
                 if flags & DoCommandFlag::AUTO != 0 {
-                    cost.error(self.s.strings.remove_road);
+                    cost.error(STR_ERROR_MUST_REMOVE_ROAD_FIRST.0);
                     return;
                 }
                 for rtt in [1, 0] {
@@ -1964,9 +1954,9 @@ impl<'a> Ctx<'a> {
         let rtt = u8::from(crate::road::get_road_tram_type_raw(to).0);
         cost.set(0);
         error.error(if rtt == 1 {
-            self.s.strings.no_suitable_tram
+            STR_ERROR_NO_SUITABLE_TRAMWAY.0
         } else {
-            self.s.strings.no_suitable_road
+            STR_ERROR_NO_SUITABLE_ROAD.0
         });
         let mut found = false;
         let check = |ok| crate::movement::native_assert(self.shared, ok);
@@ -2513,7 +2503,6 @@ crate::abi::layouts! {
         rail_commands,
         town,
         authority,
-        strings,
         nearest_tile,
         town_valid,
         town_edge,
@@ -2543,15 +2532,6 @@ crate::abi::layouts! {
     "OpenTTDRoadWorksEffect" ["probe"] => WorksEffect {
         id,
         tile,
-    };
-    "OpenTTDRoadCommandStrings" ["probe"] => Strings {
-        no_road,
-        no_tram,
-        junction,
-        remove_road,
-        no_suitable_road,
-        no_suitable_tram,
-        authority,
     };
 }
 
