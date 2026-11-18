@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file news_ffi.h Native news, string, error message and script event entries that Rust calls, bound once for the process. */
+/** @file news_ffi.h Native news, string, error message, console, network chat and text message and script event entries that Rust calls, bound once for the process. */
 #ifndef RUST_NEWS_FFI_H
 #define RUST_NEWS_FFI_H
 #include <cstddef>
@@ -32,6 +32,9 @@ struct OpenTTDNewsServices {
 	void (*delete_station_news)(uint16_t station) noexcept OPENTTD_SERVICE_DEFAULT(delete_station_news);
 	void (*delete_vehicle_news)(uint32_t vehicle, uint8_t advice_type) noexcept OPENTTD_SERVICE_DEFAULT(delete_vehicle_news);
 	void (*get_string)(uint32_t string, const OpenTTDRustEncodedParameter *args, OpenTTDStringParameterSlot *slots, size_t count, OpenTTDRustStringSink sink, void *target) noexcept OPENTTD_SERVICE_DEFAULT(get_string);
+	void (*iconsole_print)(uint16_t colour_code, OpenTTDByteSpan string) noexcept OPENTTD_SERVICE_DEFAULT(iconsole_print);
+	void (*network_server_send_chat)(uint8_t action, uint8_t type, int32_t dest, OpenTTDByteSpan msg, uint32_t from_id, int64_t data, bool from_admin) noexcept OPENTTD_SERVICE_DEFAULT(network_server_send_chat);
+	void (*network_text_message)(uint8_t action, uint16_t colour, bool self_send, OpenTTDByteSpan name, OpenTTDByteSpan str, const OpenTTDRustEncodedParameter *data) noexcept OPENTTD_SERVICE_DEFAULT(network_text_message);
 	void (*show_error_message)(OpenTTDByteSpan summary_msg, OpenTTDByteSpan detailed_msg, uint8_t wl, int32_t x, int32_t y, OpenTTDByteSpan extra_msg, uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(show_error_message);
 	uint8_t string_assertions;
 };

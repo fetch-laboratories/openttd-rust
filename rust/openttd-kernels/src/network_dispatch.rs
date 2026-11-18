@@ -234,7 +234,7 @@ fn handle_packet(
             _ => receive_invalid_packet(s, game, packet_type),
         },
         PacketGameType::PACKET_SERVER_JOIN => match read_field!(game, role) {
-            role::CLIENT => crate::network_client::receive_server_join(s.client, s, game, p),
+            role::CLIENT => crate::network_client::receive_server_join(s, game, p),
             _ => receive_invalid_packet(s, game, packet_type),
         },
         PacketGameType::PACKET_SERVER_MAP_BEGIN => match read_field!(game, role) {

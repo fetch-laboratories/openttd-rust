@@ -10,7 +10,7 @@ use crate::network_action::{Actions, Resume};
 use crate::network_command::next_client;
 use crate::network_frame::Services as FrameServices;
 use crate::network_socket as socket;
-use crate::network_type::{CLIENT_ID_SERVER, NetworkRecvStatus, SERVER_GAME_TYPE_LOCAL};
+use crate::network_type::{CLIENT_ID_SERVER, ClientID, NetworkRecvStatus, SERVER_GAME_TYPE_LOCAL};
 use crate::openttd::{GameMode, SwitchMode};
 use crate::services::ByteSpan;
 use crate::session::Services as SessionServices;
@@ -25,7 +25,6 @@ pub struct Services {
     pub admins_shutdown: extern "C" fn(),
     pub admins_welcome: extern "C" fn(),
     pub allocate_server_info: extern "C" fn() -> *mut c_void,
-    pub announce_company: extern "C" fn(*mut c_void, u8),
     pub auth_client_key: extern "C" fn(),
     pub check_names: extern "C" fn(),
     pub close_admin_listeners: extern "C" fn(),
@@ -75,7 +74,6 @@ crate::abi::layouts! {
         admins_shutdown,
         admins_welcome,
         allocate_server_info,
-        announce_company,
         auth_client_key,
         check_names,
         close_admin_listeners,
@@ -473,9 +471,15 @@ pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionSe
         } else {
             std::ptr::null_mut()
         };
-        let info = (f.command.company.shared.network_client_info)(CLIENT_ID_SERVER);
+        let info = crate::network_connection::ClientInfo::get_by_client_id(
+            f.command.company.shared,
+            ClientID::CLIENT_ID_SERVER,
+        );
         if !company.is_null() && !info.is_null() {
-            (s.set_info_company)(info, (company_services.identity.company_id)(company).0);
+            (s.set_info_company)(
+                info.as_ptr(),
+                (company_services.identity.company_id)(company).0,
+            );
             /*
              * If the company has not been named yet, the company was just started.
              * Otherwise it would have gotten a name already, so announce it as a new company.
@@ -483,7 +487,8 @@ pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionSe
             if (company_services.identity.name_id)(company) == STR_SV_UNNAMED.0
                 && (company_services.identity.name)(company).size == 0
             {
-                crate::network_server::new_company(s, f, company, info);
+                // SAFETY: `info` is the server's own non-null pool record.
+                unsafe { crate::network_server::new_company(s, f, company, info) };
             }
         }
         (f.client.show_client_list)();

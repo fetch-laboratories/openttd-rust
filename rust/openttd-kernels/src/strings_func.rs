@@ -89,7 +89,7 @@ pub(crate) fn get_string<const N: usize>(
 }
 
 /// The tagged descriptor of one parameter, borrowed for a synchronous call.
-fn descriptor(parameter: StringParameterData<'_>) -> Descriptor {
+pub(crate) fn descriptor(parameter: StringParameterData<'_>) -> Descriptor {
     match parameter {
         StringParameterData::Empty => Descriptor {
             value: 0,

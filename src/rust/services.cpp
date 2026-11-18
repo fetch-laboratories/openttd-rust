@@ -66,6 +66,9 @@
 #include "services_linkgraph.h"
 #include "../company_base.h"
 #include "../network/network_base.h"
+#include "../network/network_internal.h"
+#include "../network/network_func.h"
+#include "../console_func.h"
 #include "../company_func.h"
 #include "../command_type.h"
 #include "../command_func.h"
@@ -909,6 +912,10 @@ static EncodedString RustEncodedString(OpenTTDByteSpan bytes) noexcept
 }
 
 static_assert(WL_INFO == 0 && WL_WARNING == 1 && WL_ERROR == 2 && WL_CRITICAL == 3);
+static_assert(std::is_same_v<std::underlying_type_t<TextColour>, uint16_t> && TC_SILVER == 0x01 && TC_LIGHT_BLUE == 0x0D);
+static_assert(CC_DEFAULT == TC_SILVER && CC_WARNING == TC_LIGHT_BLUE);
+static_assert(std::is_same_v<std::underlying_type_t<NetworkAction>, uint8_t> && NETWORK_ACTION_JOIN == 0 && NETWORK_ACTION_LEAVE == 1 && NETWORK_ACTION_SERVER_MESSAGE == 2 && NETWORK_ACTION_COMPANY_NEW == 10 && NETWORK_ACTION_KICKED == 11);
+static_assert(std::is_same_v<std::underlying_type_t<DestType>, uint8_t> && DESTTYPE_BROADCAST == 0 && DESTTYPE_CLIENT == 2);
 static const OpenTTDNewsServices _rust_news_services{
 	.add_news_item = [](const OpenTTDAddNewsItemArgs *args) noexcept {
 		AddNewsItem(RustEncodedString({reinterpret_cast<const char *>(args->headline), args->headline_length}), static_cast<NewsType>(args->type), static_cast<NewsStyle>(args->style),
@@ -930,6 +937,16 @@ static const OpenTTDNewsServices _rust_news_services{
 		for (size_t i = 0; i < count; ++i) params[i] = RustStringParameter(args[i]);
 		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, params));
 		std::destroy_n(params.data(), count);
+	},
+	.iconsole_print = [](uint16_t colour_code, OpenTTDByteSpan string) noexcept {
+		IConsolePrint(static_cast<TextColour>(colour_code), std::string_view{reinterpret_cast<const char *>(string.data), string.size});
+	},
+	.network_server_send_chat = [](uint8_t action, uint8_t type, int32_t dest, OpenTTDByteSpan msg, uint32_t from_id, int64_t data, bool from_admin) noexcept {
+		NetworkServerSendChat(static_cast<NetworkAction>(action), static_cast<DestType>(type), dest, {reinterpret_cast<const char *>(msg.data), msg.size}, static_cast<ClientID>(from_id), data, from_admin);
+	},
+	.network_text_message = [](uint8_t action, uint16_t colour, bool self_send, OpenTTDByteSpan name, OpenTTDByteSpan str, const OpenTTDRustEncodedParameter *data) noexcept {
+		NetworkTextMessage(static_cast<NetworkAction>(action), static_cast<TextColour>(colour), self_send, {reinterpret_cast<const char *>(name.data), name.size},
+			{reinterpret_cast<const char *>(str.data), str.size}, RustStringParameter(*data));
 	},
 	.show_error_message = [](OpenTTDByteSpan summary_msg, OpenTTDByteSpan detailed_msg, uint8_t wl, int32_t x, int32_t y, OpenTTDByteSpan extra_msg, uint8_t company) noexcept {
 		ShowErrorMessage(RustEncodedString(summary_msg), RustEncodedString(detailed_msg), static_cast<WarningLevel>(wl), x, y, RustEncodedString(extra_msg), CompanyID{company});

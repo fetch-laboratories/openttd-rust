@@ -297,6 +297,22 @@ def command(data: bytes) -> Command:
     )
 
 
+def check_reconnect_seen(joiner: Peer, welcomes: list[int]) -> None:
+    """The joiner, still active, receives the issuer's reconnect: Receive_SERVER_QUIT for the
+    first identity, for a client it knows (the unknown-client branch logs), and
+    Receive_SERVER_JOIN for the second. The join trace precedes the lookup, so it shows the
+    receiver ran, not which branch."""
+    for receiver, client_id in (
+        ("Receive_SERVER_QUIT", welcomes[0]),
+        ("Receive_SERVER_JOIN", welcomes[1]),
+    ):
+        trace = re.compile(rf"Client::{receiver}\(\): client_id={client_id}$")
+        if not any(trace.search(line) for line in joiner.lines):
+            raise RuntimeError(f"joiner missed {receiver} for client {client_id}")
+    if any("Unknown client (" in line for line in joiner.lines):
+        raise RuntimeError("joiner received a quit for an unknown client")
+
+
 def observe(peers: list[Peer], rejected: bytes, source: Path) -> Summary:
     server, issuer, joiner = peers
     sent = [
@@ -345,6 +361,7 @@ def observe(peers: list[Peer], rejected: bytes, source: Path) -> Summary:
         raise RuntimeError("reconnect did not allocate a fresh client identity")
     if len(packets(server, 40)) < 3 or rejected != bytes((4, 0, 3, 7)):
         raise RuntimeError("quit or invalid-admission reason differs")
+    check_reconnect_seen(joiner, welcomes)
     saves = [peer.folder / "save/stop.sav" for peer in peers]
     stats: core.Stats = core.empty_stats()
     for save in saves[1:]:

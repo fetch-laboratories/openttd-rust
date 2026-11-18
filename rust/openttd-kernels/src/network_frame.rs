@@ -2,13 +2,15 @@
 //! `NetworkGameLoop`, `NetworkServer_Tick`, `NetworkCalculateLag` and the frame, sync and ack
 //! packets. The frame counters and sync seeds are process-wide state that C++ aliases in place;
 //! each game socket shell holds its `SocketSync` record in place as a base subobject.
-//! Packets, sockets and console presentation stay native leaves. No borrow of either record
-//! survives a leaf: fields are read and written by raw place access.
+//! Packets and sockets stay native leaves; console messages print through `console_func`.
+//! No borrow of either record survives a leaf: fields are read and written by raw place access.
 //! `RANDOM_DEBUG` builds (`ENABLE_NETWORK_SYNC_EVERY_FRAME`, `NETWORK_SEND_DOUBLE_SEED`) are
 //! developer-only and outside this owner.
 #![allow(unsafe_code, missing_docs)]
 
-use crate::debug::{SignedHex, debug};
+use crate::console_func::iconsole_print;
+use crate::console_type::CC_WARNING;
+use crate::debug::{Bytes, SignedHex, debug};
 use crate::game_state::GameState;
 use crate::gfx_type::MILLISECONDS_PER_TICK;
 use crate::network_action::{Actions, Resume};
@@ -76,13 +78,6 @@ pub struct Services {
     pub client_game: extern "C" fn() -> *mut socket::GameSocket,
     pub command: &'static crate::network_command::Services,
     pub connection: &'static crate::network_connection::Services,
-    pub console_bad_acks: extern "C" fn(*mut c_void),
-    pub console_download_timeout: extern "C" fn(*mut c_void),
-    pub console_init_timeout: extern "C" fn(*mut c_void),
-    pub console_join_timeout: extern "C" fn(*mut c_void),
-    pub console_lagging: extern "C" fn(*mut c_void, u32, bool),
-    pub console_password_timeout: extern "C" fn(*mut c_void),
-    pub console_slow: extern "C" fn(*mut c_void, u32),
     pub dispatch: &'static crate::network_dispatch::Services,
     pub frame_freq: extern "C" fn() -> u8,
     pub interactive_random_range: extern "C" fn(u32) -> u32,
@@ -587,8 +582,25 @@ pub(crate) fn server_tick_clients(
                 if lag > u32::from((s.max_lag_time)()) {
                     /* Client did still not report in within the specified limit. */
 
-                    let recent = within(lag.wrapping_mul(MILLISECONDS_PER_TICK));
-                    (s.console_lagging)(socket::server(socket), lag, recent);
+                    if within(lag.wrapping_mul(MILLISECONDS_PER_TICK)) {
+                        /* A packet was received in the last three game days, so the client is likely lagging behind. */
+                        iconsole_print!(
+                            CC_WARNING,
+                            "Client #{} (IP: {}) is dropped because the client's game state is more than {} ticks behind.",
+                            (s.dispatch.client_id)(socket),
+                            Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
+                            lag
+                        );
+                    } else {
+                        /* No packet was received in the last three game days; sounds like a lost connection. */
+                        iconsole_print!(
+                            CC_WARNING,
+                            "Client #{} (IP: {}) is dropped because the client did not respond for more than {} ticks.",
+                            (s.dispatch.client_id)(socket),
+                            Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
+                            lag
+                        );
+                    }
                     send_error(
                         s,
                         socket,
@@ -608,7 +620,12 @@ pub(crate) fn server_tick_clients(
                  * slow, but the connection is likely severed. Mentioning
                  * frame_freq is not useful in this case. */
                 if lag > DAY_TICKS as u32 && read_field!(sync, lag_test) == 0 && within(2000) {
-                    (s.console_slow)(socket::server(socket), frame_counter());
+                    iconsole_print!(
+                        CC_WARNING,
+                        "[{}] Client #{} is slow, try increasing [network.]frame_freq to a higher value!",
+                        frame_counter(),
+                        (s.dispatch.client_id)(socket)
+                    );
                     write_field!(sync, lag_test, 1);
                 }
 
@@ -616,7 +633,12 @@ pub(crate) fn server_tick_clients(
                     .wrapping_sub(read_field!(sync, last_token_frame));
                 if token_age >= u32::from((s.max_lag_time)()) {
                     /* This is a bad client! It didn't send the right token back within time. */
-                    (s.console_bad_acks)(socket::server(socket));
+                    iconsole_print!(
+                        CC_WARNING,
+                        "Client #{} (IP: {}) is dropped because it fails to send valid acks.",
+                        (s.dispatch.client_id)(socket),
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) })
+                    );
                     send_error(
                         s,
                         socket,
@@ -638,7 +660,13 @@ pub(crate) fn server_tick_clients(
                 /* NewGRF check and authorized states should be handled almost instantly.
                  * So give them some lee-way, likewise for the query with inactive. */
                 if lag > u32::from((s.max_init_time)()) {
-                    (s.console_init_timeout)(socket::server(socket));
+                    iconsole_print!(
+                        CC_WARNING,
+                        "Client #{} (IP: {}) is dropped because it took longer than {} ticks to start the joining process.",
+                        (s.dispatch.client_id)(socket),
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
+                        (s.max_init_time)()
+                    );
                     send_error(
                         s,
                         socket,
@@ -671,7 +699,13 @@ pub(crate) fn server_tick_clients(
             ClientStatus::STATUS_MAP => {
                 /* Downloading the map... this is the amount of time since starting the saving. */
                 if lag > u32::from((s.max_download_time)()) {
-                    (s.console_download_timeout)(socket::server(socket));
+                    iconsole_print!(
+                        CC_WARNING,
+                        "Client #{} (IP: {}) is dropped because it took longer than {} ticks to download the map.",
+                        (s.dispatch.client_id)(socket),
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
+                        (s.max_download_time)()
+                    );
                     send_error(s, socket, NetworkErrorCode::NETWORK_ERROR_TIMEOUT_MAP, work);
                     if work.pending() {
                         work.push(Resume::ServerTick(cursor, send_frame, send_sync));
@@ -684,7 +718,13 @@ pub(crate) fn server_tick_clients(
             ClientStatus::STATUS_DONE_MAP | ClientStatus::STATUS_PRE_ACTIVE => {
                 /* The map has been sent, so this is for loading the map and syncing up. */
                 if lag > u32::from((s.max_join_time)()) {
-                    (s.console_join_timeout)(socket::server(socket));
+                    iconsole_print!(
+                        CC_WARNING,
+                        "Client #{} (IP: {}) is dropped because it took longer than {} ticks to join.",
+                        (s.dispatch.client_id)(socket),
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
+                        (s.max_join_time)()
+                    );
                     send_error(
                         s,
                         socket,
@@ -702,7 +742,13 @@ pub(crate) fn server_tick_clients(
             ClientStatus::STATUS_AUTH_GAME => {
                 /* These don't block? */
                 if lag > u32::from((s.max_password_time)()) {
-                    (s.console_password_timeout)(socket::server(socket));
+                    iconsole_print!(
+                        CC_WARNING,
+                        "Client #{} (IP: {}) is dropped because it took longer than {} ticks to enter the password.",
+                        (s.dispatch.client_id)(socket),
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
+                        (s.max_password_time)()
+                    );
                     send_error(
                         s,
                         socket,
@@ -857,13 +903,6 @@ crate::abi::layouts! {
         client_game,
         command,
         connection,
-        console_bad_acks,
-        console_download_timeout,
-        console_init_timeout,
-        console_join_timeout,
-        console_lagging,
-        console_password_timeout,
-        console_slow,
         dispatch,
         frame_freq,
         interactive_random_range,

@@ -182,11 +182,6 @@ static constexpr auto _cmd_dispatch = MakeDispatchTable(std::make_integer_sequen
 
 static_assert(NetworkClientSocket::STATUS_MAP == 6); // network_server.rs ClientStatus::STATUS_MAP
 
-static std::string_view CommandDecodeMessage(OpenTTDNetworkCommandDecodeError error) noexcept
-{
-	static constexpr std::array<std::string_view, 4> messages{"", "invalid command", "single-player only command", "invalid callback"};
-	return messages[to_underlying(error)];
-}
 static OpenTTDCommandData TakeNetworkCommandData(CommandData &&data) noexcept
 {
 	return std::exchange(static_cast<OpenTTDCommandData &>(data), {});
@@ -203,23 +198,6 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 		.commands_per_frame = RustCommandsPerFrame,
 		.commands_per_frame_server = RustCommandsPerFrameServer,
 		.company = &GetRustCompanyServices(),
-		.console_bad_client = [](void *owner, OpenTTDNetworkCommandDecodeError error) noexcept {
-			auto *cs = static_cast<NetworkClientSocket *>(owner);
-			IConsolePrint(CC_WARNING, "Dropping client #{} (IP: {}) due to {}.", cs->GetInfo()->client_id, cs->GetClientIP(), CommandDecodeMessage(error));
-		},
-		.console_bad_server = [](OpenTTDNetworkCommandDecodeError error) noexcept { IConsolePrint(CC_WARNING, "Dropping server connection due to {}.", CommandDecodeMessage(error)); },
-		.console_company_mismatch = [](void *owner, uint8_t company) noexcept {
-			auto *cs = static_cast<NetworkClientSocket *>(owner);
-			IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a command as another company {}.", cs->GetInfo()->client_playas + 1, cs->GetClientIP(), company + 1);
-		},
-		.console_server_only = [](void *owner, uint8_t cmd) noexcept {
-			auto *cs = static_cast<NetworkClientSocket *>(owner);
-			IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a server only command {}.", cs->GetInfo()->client_id, cs->GetClientIP(), static_cast<Commands>(cmd));
-		},
-		.console_spectator = [](void *owner, uint8_t cmd) noexcept {
-			auto *cs = static_cast<NetworkClientSocket *>(owner);
-			IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a non-spectator command {}.", cs->GetInfo()->client_id, cs->GetClientIP(), static_cast<Commands>(cmd));
-		},
 		.control_action = [](OpenTTDByteSpan data) noexcept { return static_cast<uint8_t>(std::get<0>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_CTRL>::Args>(std::span(data.data, data.size)))); },
 		.execute = [](const OpenTTDCommandPacket *cp, size_t cb_index) noexcept {
 			assert(cb_index < _callback_tuple_size);
@@ -244,7 +222,6 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 		},
 		.replace_client_id = [](uint8_t cmd, OpenTTDByteSpan data, uint32_t client) noexcept { return TakeNetworkCommandData(_cmd_dispatch[cmd].ReplaceClientId(std::span(data.data, data.size), static_cast<ClientID>(client))); },
 		.sanitize_strings = [](uint8_t cmd, OpenTTDByteSpan data) noexcept { return TakeNetworkCommandData(_cmd_dispatch[cmd].Sanitize(std::span(data.data, data.size))); },
-		.server_full = [](uint32_t client) noexcept { NetworkServerSendChat(NETWORK_ACTION_SERVER_MESSAGE, DESTTYPE_CLIENT, static_cast<ClientID>(client), "cannot create new company, server full", CLIENT_ID_SERVER); },
 	};
 	return services;
 }

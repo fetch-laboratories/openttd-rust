@@ -60,7 +60,6 @@ public:
 	~ServerNetworkGameSocketHandler();
 
 	NetworkRecvStatus CloseConnection(NetworkRecvStatus status) override;
-	std::string GetClientName() const;
 
 
 	NetworkRecvStatus SendRConResult(uint16_t colour, std::string_view command);

@@ -1079,19 +1079,6 @@ bool NetworkCompanyHasClients(CompanyID company)
 }
 
 /**
- * Get the name of the client, if the user did not send it yet, Client ID is used.
- * @param client_name The variable to write the name to.
- * @param last        The pointer to the last element of the destination buffer
- */
-std::string ServerNetworkGameSocketHandler::GetClientName() const
-{
-	const NetworkClientInfo *ci = this->GetInfo();
-	if (ci != nullptr && !ci->client_name.empty()) return ci->client_name;
-
-	return fmt::format("Client #{}", this->client_id);
-}
-
-/**
  * Print all the clients to the console
  */
 void NetworkPrintClients()
@@ -1152,13 +1139,12 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		},
 		.auth = [](void *socket) noexcept -> const NetworkAuthenticationHandler * { return static_cast<NetworkClientSocket *>(socket)->authentication_handler.get(); },
 		.auth_create = [](void *socket) noexcept { static_cast<NetworkClientSocket *>(socket)->authentication_handler = NetworkAuthenticationServerHandler::Create(&_password_provider, &_authorized_key_handler); },
-		.client_company = [](void *socket) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->GetInfo()->client_playas.base(); },
-		.client_error_announcement = [](void *socket, uint8_t error) noexcept {
-			std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName();
-			StringID strid = GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error));
-			Debug(net, 1, "'{}' reported an error and is closing its connection: {}", client_name, GetString(strid));
-			NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", strid);
+		.client_id = [](const NetworkClientInfo *ci) noexcept -> uint32_t { return ci->client_id; },
+		.client_name = [](const NetworkClientInfo *ci) noexcept {
+			const std::string &name = ci->client_name;
+			return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(name.data()), name.size()};
 		},
+		.client_playas = [](const NetworkClientInfo *ci) noexcept -> uint8_t { return ci->client_playas.base(); },
 		.clients_connected = &_network_clients_connected,
 		.clients_on = &_network_game_info.clients_on,
 		.company_allows_client = [](uint8_t company, void *socket) noexcept { return RustCompanyAllowsPublicKey(company, static_cast<NetworkClientSocket *>(socket)->GetPeerPublicKey()); },
@@ -1169,27 +1155,13 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			cs->send_encryption_handler = MakeNetworkEncryptionHandler(send);
 			cs->authentication_handler = nullptr;
 		},
-		.error_announcement = [](void *socket, uint32_t strid, OpenTTDByteSpan reason, bool kicked, bool authorized) noexcept {
-			if (!authorized) {
-				Debug(net, 1, "Client {} made an error and has been disconnected: {}", static_cast<NetworkClientSocket *>(socket)->client_id, GetString(strid));
-				return;
-			}
-			std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName();
-			Debug(net, 1, "'{}' made an error and has been disconnected: {}", client_name, GetString(strid));
-			NetworkTextMessage(kicked ? NETWORK_ACTION_KICKED : NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, kicked ? std::string_view(reinterpret_cast<const char *>(reason.data), reason.size) : "", strid);
+		.get_client_ip = [](void *socket) noexcept {
+			std::string_view ip = static_cast<NetworkClientSocket *>(socket)->GetClientIP();
+			return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(ip.data()), ip.size()};
 		},
-		.error_message = [](uint8_t error) noexcept -> uint32_t { return GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error)); },
 		.grf = &GetRustGrfLoadingServices(),
 		.info = [](void *socket) noexcept -> void * { return static_cast<NetworkClientSocket *>(socket)->GetInfo(); },
 		.join_date = [](void *socket) noexcept -> int32_t { return static_cast<NetworkClientSocket *>(socket)->GetInfo()->join_date.base(); },
-		.joined = [](void *socket) noexcept {
-			auto *cs = static_cast<NetworkClientSocket *>(socket);
-			std::string client_name = cs->GetClientName();
-			NetworkTextMessage(NETWORK_ACTION_JOIN, CC_DEFAULT, false, client_name, "", cs->client_id);
-			InvalidateWindowData(WC_CLIENT_LIST, 0, 0);
-			Debug(net, 3, "[{}] Client #{} ({}) joined as {}", ServerNetworkGameSocketHandler::GetName(), cs->client_id, cs->GetClientIP(), client_name);
-		},
-		.lost_connection_announcement = [](void *socket) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName(); NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", STR_NETWORK_ERROR_CLIENT_CONNECTION_LOST); },
 		.map_begin = [](void *socket) noexcept -> PacketWriter * {
 			auto *writer = static_cast<NetworkClientSocket *>(socket)->savegame.get();
 			/* TransferToNetworkQueue checks emptiness before locking. */
@@ -1207,7 +1179,6 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.min_active_clients = RustNetworkMinActiveClients,
 		.newgrf_version = []() noexcept -> uint32_t { return _openttd_newgrf_version; },
 		.pause_on_join = RustNetworkPauseOnJoin,
-		.quit_announcement = [](void *socket) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName(); NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", STR_NETWORK_MESSAGE_CLIENT_LEAVING); },
 		.revision_compatible = [](void *revision) noexcept -> bool { return IsNetworkCompatibleVersion(*static_cast<std::string *>(revision)); },
 		.send_client_info = [](void *socket, void *info) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->SendClientInfo(static_cast<NetworkClientInfo *>(info)); },
 		.send_config = [](void *socket) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->SendConfigUpdate(); },

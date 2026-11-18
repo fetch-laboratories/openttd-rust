@@ -22,7 +22,7 @@ void IConsoleFree();
 void IConsoleClose();
 
 /* console output */
-void IConsolePrint(TextColour colour_code, const std::string &string);
+void IConsolePrint(TextColour colour_code, std::string_view string);
 
 /**
  * Handle the printing of text entered into the console or redirected there

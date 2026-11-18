@@ -27,13 +27,6 @@ struct OpenTTDNetworkFrameServices {
 	OpenTTDNetworkGameSocket *(*client_game)() noexcept OPENTTD_SERVICE_DEFAULT(client_game);
 	const OpenTTDNetworkCommandServices *command;
 	const OpenTTDNetworkConnectionServices *connection;
-	void (*console_bad_acks)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_bad_acks);
-	void (*console_download_timeout)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_download_timeout);
-	void (*console_init_timeout)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_init_timeout);
-	void (*console_join_timeout)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_join_timeout);
-	void (*console_lagging)(void *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(console_lagging);
-	void (*console_password_timeout)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_password_timeout);
-	void (*console_slow)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(console_slow);
 	const OpenTTDNetworkDispatchServices *dispatch;
 	uint8_t (*frame_freq)() noexcept OPENTTD_SERVICE_DEFAULT(frame_freq);
 	uint32_t (*interactive_random_range)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(interactive_random_range);
