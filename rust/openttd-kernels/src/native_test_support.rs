@@ -9,9 +9,10 @@
 //! adapters. Each export hands a native fixture one production Rust function.
 //!
 //! # Safety
-//! Fixtures run serialized, and every pointer, record and table an export
-//! receives is live for the call. An export states its own `# Safety` only
-//! where it adds a condition.
+//! Fixtures run serialized. Every pointer, record and table an export receives
+//! is live for the call; a `*mut` or `&mut` argument is borrowed exclusively
+//! for the call, and a `*const` or `&` table is not mutated during it. An
+//! export states its own `# Safety` only where it adds a condition.
 #![allow(unsafe_code)]
 use crate::clear_map::{
     ClearGround, get_clear_counter, get_clear_density, get_clear_ground, get_fence, get_field_type,
@@ -224,6 +225,7 @@ fn follower_output(state: &State, followed: bool) -> FollowerOutput {
 /// A boxed production follower, initialised by `Init(const VehicleType *v,
 /// RailTypes)` when `from_vehicle`, else by `Init(Owner, RailTypes)`.
 /// # Safety
+/// `v` is null or a vehicle that stays live while the follower is used;
 /// `openttd_test_follower_delete` frees the result.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_follower_new(
@@ -275,6 +277,8 @@ pub unsafe extern "C" fn openttd_test_follower_mask(
     follower_output(state, masked)
 }
 /// `CFollowTrackT::GetSpeedLimit` on `tile`, with no minimum speed requested.
+/// # Safety
+/// `v` is null or a live vehicle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_follower_speed(
     s: *const Services,
@@ -323,6 +327,10 @@ pub extern "C" fn openttd_test_world_abort_callback() -> Callback {
 }
 
 /// `GenerateLandscape`.
+/// # Safety
+/// As `landscape_generation::generate_landscape`: native abortion during
+/// progress returns false, and no native exception or Rust panic unwinds
+/// across the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_generate_landscape_abi(
     a: *const GenerationServices,
@@ -335,6 +343,8 @@ pub unsafe extern "C" fn openttd_test_generate_landscape_abi(
 }
 
 /// `LoadHeightmap`, which has no production caller beside `GenerateLandscape`.
+/// # Safety
+/// As `landscape_generation::load_heightmap`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_load_heightmap_abi(
     a: *const GenerationServices,
