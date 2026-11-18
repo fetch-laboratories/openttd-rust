@@ -212,7 +212,6 @@ struct MaxSpeedRead {
     pub next_state: *mut State,
     pub tile: u32,
     pub max_track_speed: u16,
-    pub order_max_speed: u16,
     pub direction: u8,
     pub status: u8,
 }
@@ -547,7 +546,7 @@ fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -
             status: next.v.vehstatus_raw(),
         };
     }
-    speed.min(i32::from(r.order_max_speed) * 2)
+    speed.min(i32::from(front.v.current_order().max_speed()) * 2)
 }
 
 impl Game<'_> {
@@ -647,7 +646,6 @@ impl Game<'_> {
                     v.v.ground_cache(),
                     cached_max_track_speed
                 ),
-                order_max_speed: v.v.current_order().max_speed(),
                 direction: v.v.direction_raw(),
                 status: v.v.vehstatus_raw(),
             };
@@ -665,7 +663,6 @@ impl Game<'_> {
                     v.v.ground_cache(),
                     cached_max_track_speed
                 ),
-                order_max_speed: v.v.current_order().max_speed(),
                 direction: v.v.direction_raw(),
                 status: v.v.vehstatus_raw(),
             },
@@ -846,7 +843,6 @@ impl Game<'_> {
                         u.v.ground_cache(),
                         cached_max_track_speed
                     ),
-                    order_max_speed: u.v.current_order().max_speed(),
                     direction: u.v.direction_raw(),
                     status: u.v.vehstatus_raw(),
                 },
@@ -869,7 +865,6 @@ impl Game<'_> {
                         v.v.ground_cache(),
                         cached_max_track_speed
                     ),
-                    order_max_speed: v.v.current_order().max_speed(),
                     direction: v.v.direction_raw(),
                     status: v.v.vehstatus_raw(),
                 },
@@ -2482,7 +2477,6 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
         }),
         tile: v.tile_raw(),
         max_track_speed: crate::raw_field::read_field!(v.ground_cache(), cached_max_track_speed),
-        order_max_speed: v.current_order().max_speed(),
         direction: v.direction_raw(),
         status: v.vehstatus_raw(),
     };
@@ -2664,7 +2658,6 @@ pub(crate) unsafe fn current_max_speed(
                 v.ground_cache(),
                 cached_max_track_speed
             ),
-            order_max_speed: v.current_order().max_speed(),
             direction: v.direction_raw(),
             status: v.vehstatus_raw(),
         },
