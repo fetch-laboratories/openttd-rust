@@ -4,9 +4,11 @@
 import contextlib
 import io
 import os
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from collections.abc import Generator
@@ -87,6 +89,42 @@ class StepLimitTests(unittest.TestCase):
         self.assertFalse(stuck(CONNECTED.splitlines()))
         self.assertTrue(stuck([*CONNECTED.splitlines(), *RESOLVED.splitlines()]))
         self.assertFalse(stuck(["status = CONNECTING"]))
+        # Anything after the block, such as an assertion, is not the stall.
+        self.assertFalse(stuck([*RESOLVED.splitlines(), "candidate assertion failed"]))
+
+    def test_the_invalid_admission_has_one_deadline_for_every_receive(self) -> None:
+        # A server that sends its four bytes 0.45 s apart, past a one-second step.
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+
+        def answer() -> None:
+            connection, _ = listener.accept()
+            with connection:
+                connection.recv(3)
+                for byte in (4, 0, 3, 7):
+                    time.sleep(0.45)
+                    with contextlib.suppress(OSError):
+                        connection.sendall(bytes((byte,)))
+
+        thread = threading.Thread(target=answer, daemon=True)
+        thread.start()
+        with stubs() as peers:
+            server = peers.start("server", "NET574 ready server")
+            started = time.monotonic()
+            with self.assertRaisesRegex(StepExpired, "invalid admission: no full"):
+                network_protocol.invalid_admission(server, "127.0.0.1", port)
+            self.assertLess(time.monotonic() - started, 1.5)
+        listener.close()
+
+    def test_an_unreadable_pin_is_a_no_retry_reason(self) -> None:
+        def slow(*_: object, **__: object) -> object:
+            raise subprocess.TimeoutExpired("git fetch", 120)
+
+        with patch.object(network_protocol.subprocess, "run", side_effect=slow):
+            reason = network_protocol.connecter_differs()
+        self.assertIn("could not be read", reason or "")
 
     def test_a_joiner_that_has_exited_does_not_block_its_release(self) -> None:
         with stubs() as peers:
@@ -116,20 +154,35 @@ class StepLimitTests(unittest.TestCase):
             peer = peers.start("joiner", "", held)
             peer.wait("up")
             started = time.monotonic()
-            with self.assertRaisesRegex(StepExpired, "joiner: log still open"):
-                network_protocol.clean_up([peer])
+            problems = network_protocol.clean_up([peer])
             self.assertLess(time.monotonic() - started, 4)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("joiner: log still open", problems[0])
+        # Behind another failure, the cleanup problem stays in the reported text.
+        with stubs() as peers:
+            peer = peers.start("joiner", "", held)
+            peer.wait("up")
+            error = network_protocol.failure(RuntimeError("missing marker"), [peer])
+        self.assertIn("missing marker; cleanup: joiner: log still open", str(error))
 
 
 class SessionTests(unittest.TestCase):
-    def session(self, issuer_text: str) -> tuple[Exception, float, list[Peer]]:
+    def session(
+        self, issuer_text: str, issuer_exits: bool = False
+    ) -> tuple[Exception, float, list[Peer]]:
         """A session whose server starts and whose issuer never connects."""
         texts = {"server": "NET574 ready server\nNET574 allowed", "issuer": issuer_text}
+        exits = "import sys\nprint(sys.argv[1], flush=True)\nraise SystemExit(23)\n"
         with stubs() as peers:
 
             def start(*args: object) -> Peer:
                 folder = Path(str(args[1]))
-                return peers.start(folder.name, texts[folder.name])
+                text = texts[folder.name]
+                if folder.name == "issuer" and issuer_exits:
+                    return peers.start(
+                        "issuer", text, [sys.executable, "-c", exits, text]
+                    )
+                return peers.start(folder.name, text)
 
             started = time.monotonic()
             with (
@@ -163,6 +216,10 @@ class SessionTests(unittest.TestCase):
         error, _, _ = self.session(CONNECTED)
         self.assertNotIsInstance(error, network_protocol.Stalled)
         self.assertIn("missing NET574 ready issuer", str(error))
+        # A client that exits after its resolve is a failure, never the stall.
+        error, _, _ = self.session(RESOLVED, issuer_exits=True)
+        self.assertNotIsInstance(error, network_protocol.Stalled)
+        self.assertIn("the process ended", str(error))
 
 
 class RetryTests(unittest.TestCase):
