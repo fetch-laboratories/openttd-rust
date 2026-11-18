@@ -152,7 +152,7 @@ def scan_source_files(path, strings_found):
             scan_source_files(new_path, strings_found)
             continue
 
-        if not new_path.endswith((".c", ".h", ".cpp", ".hpp", ".inc", ".ini")):
+        if not new_path.endswith((".c", ".h", ".cpp", ".hpp", ".inc", ".ini", ".rs")):
             continue
 
         # Most files we can just open, but some use magic, that requires the
@@ -174,6 +174,8 @@ def main():
     errors = []
 
     scan_source_files("src", strings_found)
+    # Rust names its string IDs through the generated table::strings.
+    scan_source_files("rust/openttd-kernels/src", strings_found)
     strings_defined = read_language_file("src/lang/english.txt", strings_found, errors)
 
     # STR_LAST_STRINGID is special, and not really a string.
