@@ -228,14 +228,6 @@ pub(crate) const ROAD_LEAVES: crate::road::Leaves = crate::road::Leaves {
     vehicle: ptr::null(),
     ground: ptr::null(),
     shared: ptr::null(),
-    strings: crate::road::Strings {
-        first_bus_arrival: 0,
-        first_cargo_tram_arrival: 0,
-        first_passenger_tram_arrival: 0,
-        first_truck_arrival: 0,
-        road_vehicle_crash: 0,
-        road_vehicle_crash_driver: 0,
-    },
     build_road_context: unreachable1,
     roadveh_list_dirty: unreachable0,
 };

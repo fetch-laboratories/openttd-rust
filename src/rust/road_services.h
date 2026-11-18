@@ -33,14 +33,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.vehicle = &_rust_vehicle_services,
 	.ground = &_rust_ground_services<RoadVehicle>,
 	.shared = &_rust_shared_services,
-	.strings = {
-		.first_bus_arrival = STR_NEWS_FIRST_BUS_ARRIVAL,
-		.first_cargo_tram_arrival = STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL,
-		.first_passenger_tram_arrival = STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL,
-		.first_truck_arrival = STR_NEWS_FIRST_TRUCK_ARRIVAL,
-		.road_vehicle_crash = STR_NEWS_ROAD_VEHICLE_CRASH,
-		.road_vehicle_crash_driver = STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER,
-	},
 	.build_road_context = RoadSvcBuildRoadContext,
 	.roadveh_list_dirty = RoadSvcRoadVehListDirty,
 };

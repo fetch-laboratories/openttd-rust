@@ -21,19 +21,10 @@ struct OpenTTDOrdersClosest;
 struct OpenTTDRoadCommandContext;
 struct OpenTTDRoadCommandSlot;
 struct OpenTTDRoadPathElement { uint8_t trackdir; uint32_t tile; };
-struct OpenTTDRoadStrings {
-	uint32_t first_bus_arrival;
-	uint32_t first_cargo_tram_arrival;
-	uint32_t first_passenger_tram_arrival;
-	uint32_t first_truck_arrival;
-	uint32_t road_vehicle_crash;
-	uint32_t road_vehicle_crash_driver;
-};
 struct OpenTTDRoadLeaves {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDGroundServices *ground;
 	const OpenTTDSharedServices *shared;
-	OpenTTDRoadStrings strings;
 	const OpenTTDRoadCommandContext *(OPENTTD_RUST_CALL *build_road_context)(OpenTTDRoadCommandSlot *) noexcept OPENTTD_SERVICE_DEFAULT(build_road_context);
 	void (OPENTTD_RUST_CALL *roadveh_list_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(roadveh_list_dirty);
 };

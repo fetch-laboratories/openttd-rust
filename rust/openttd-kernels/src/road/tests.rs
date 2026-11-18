@@ -37,6 +37,11 @@ mod controller {
     use super::super::*;
     use crate::news_func::testing::{Effect, Param, encoded, take};
     use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle};
+    use crate::table::strings::{
+        STR_NEWS_FIRST_BUS_ARRIVAL, STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL,
+        STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL, STR_NEWS_FIRST_TRUCK_ARRIVAL,
+        STR_NEWS_ROAD_VEHICLE_CRASH, STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER,
+    };
     use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE, unreachable1};
     use std::cell::Cell;
 
@@ -51,15 +56,6 @@ mod controller {
     const STATION: StationID = StationID(55);
     const LOCAL: u8 = 3;
     const TILE: TileIndex = TileIndex(100);
-    /// String IDs distinct from each other and from the parameters.
-    const STRINGS: Strings = Strings {
-        first_bus_arrival: 0x401,
-        first_cargo_tram_arrival: 0x402,
-        first_passenger_tram_arrival: 0x403,
-        first_truck_arrival: 0x404,
-        road_vehicle_crash: 0x405,
-        road_vehicle_crash_driver: 0x406,
-    };
     /// The default road type table's classification: `ROADTYPE_ROAD` is a road type and
     /// `ROADTYPE_TRAM` a tram type.
     fn default_road_types() {
@@ -152,7 +148,6 @@ mod controller {
                 vehicle,
                 ground,
                 shared,
-                strings: STRINGS,
                 ..ROAD_LEAVES
             }));
             let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
@@ -204,25 +199,25 @@ mod controller {
                 true,
                 0,
                 StationHadVehicleOfType::HVOT_BUS,
-                STRINGS.first_bus_arrival,
+                STR_NEWS_FIRST_BUS_ARRIVAL,
             ),
             (
                 true,
                 1,
                 StationHadVehicleOfType::HVOT_BUS,
-                STRINGS.first_passenger_tram_arrival,
+                STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL,
             ),
             (
                 false,
                 0,
                 StationHadVehicleOfType::HVOT_TRUCK,
-                STRINGS.first_truck_arrival,
+                STR_NEWS_FIRST_TRUCK_ARRIVAL,
             ),
             (
                 false,
                 1,
                 StationHadVehicleOfType::HVOT_TRUCK,
-                STRINGS.first_cargo_tram_arrival,
+                STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL,
             ),
         ];
         default_road_types();
@@ -237,7 +232,7 @@ mod controller {
                 assert_eq!(HAD.get(), bit.0, "bus {bus}, road type {road_type}");
                 let expected = vec![
                     Effect::News {
-                        headline: encoded(headline, &[Param::N(u64::from(STATION.0))]),
+                        headline: encoded(headline.0, &[Param::N(u64::from(STATION.0))]),
                         r#type: if owner == LOCAL {
                             NewsType::ArrivalCompany
                         } else {
@@ -330,11 +325,10 @@ mod controller {
             physics,
             has_articulated: unreachable1,
         }));
-        let mut leaves = Leaves {
+        let leaves = Leaves {
             ground,
             ..*f.leaves
         };
-        leaves.strings = STRINGS;
         f.leaves = Box::leak(Box::new(leaves));
         let victims = base_victims + 1; // the driver
         let crashed = ScriptEvent::vehicle_crashed(
@@ -345,9 +339,12 @@ mod controller {
             crate::company_type::CompanyID(owner),
         );
         let headline = if victims == 1 {
-            encoded(STRINGS.road_vehicle_crash_driver, &[])
+            encoded(STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER.0, &[])
         } else {
-            encoded(STRINGS.road_vehicle_crash, &[Param::N(u64::from(victims))])
+            encoded(
+                STR_NEWS_ROAD_VEHICLE_CRASH.0,
+                &[Param::N(u64::from(victims))],
+            )
         };
         let expected = Box::leak(Box::new(vec![
             Effect::AiNewEvent(owner, crashed),

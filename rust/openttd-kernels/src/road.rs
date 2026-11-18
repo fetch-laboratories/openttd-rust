@@ -66,8 +66,12 @@ use crate::station_type::{
     StationAnimationTrigger, StationHadVehicleOfType, StationID, StationRandomTrigger,
 };
 use crate::strings_func::get_encoded_string;
-use crate::strings_type::StringID;
 use crate::strings_type::StringParameterData::Integer;
+use crate::table::strings::{
+    STR_NEWS_FIRST_BUS_ARRIVAL, STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL,
+    STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL, STR_NEWS_FIRST_TRUCK_ARRIVAL,
+    STR_NEWS_ROAD_VEHICLE_CRASH, STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER,
+};
 use crate::tile_cmd::{VehicleEnterTileState, VehicleEnterTileStates};
 use crate::tile_type::{TILE_SIZE, TileIndex, TileType};
 use crate::track_func::{
@@ -292,24 +296,6 @@ pub(crate) unsafe fn crashed_ctr(s: *const State) -> u16 {
     read_field!(s, fields.crashed_ctr)
 }
 
-/// The generated string IDs of the road vehicle news.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Strings {
-    /// `STR_NEWS_FIRST_BUS_ARRIVAL`.
-    pub first_bus_arrival: u32,
-    /// `STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL`.
-    pub first_cargo_tram_arrival: u32,
-    /// `STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL`.
-    pub first_passenger_tram_arrival: u32,
-    /// `STR_NEWS_FIRST_TRUCK_ARRIVAL`.
-    pub first_truck_arrival: u32,
-    /// `STR_NEWS_ROAD_VEHICLE_CRASH`.
-    pub road_vehicle_crash: u32,
-    /// `STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER`.
-    pub road_vehicle_crash_driver: u32,
-}
-
 /// The services a road vehicle entry calls; the shared tables are borrowed through pointers.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -317,7 +303,6 @@ pub struct Leaves {
     pub vehicle: *const VehicleServices,
     pub ground: *const GroundServices,
     pub shared: *const Services,
-    pub strings: Strings,
     /// Construct, in the controller's native stack slot, the road command context that
     /// `CanBuildTramTrackOnTile` runs `CmdBuildRoad` in.
     pub build_road_context:
@@ -903,12 +888,9 @@ impl<'a> Game<'a> {
         crate::game::new_event(&crashed());
 
         let headline = if victims == 1 {
-            get_encoded_string(StringID(self.l.strings.road_vehicle_crash_driver), &[])
+            get_encoded_string(STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER, &[])
         } else {
-            get_encoded_string(
-                StringID(self.l.strings.road_vehicle_crash),
-                &[Integer(u64::from(victims))],
-            )
+            get_encoded_string(STR_NEWS_ROAD_VEHICLE_CRASH, &[Integer(u64::from(victims))])
         };
         let newstype = if v.v.owner().0 == service!(self.ss.local_company)() {
             NewsType::Accident
@@ -1104,9 +1086,9 @@ impl<'a> Game<'a> {
                 add_vehicle_news_item(
                     &get_encoded_string(
                         if road_type_is_road(self.roadtype(v.v)) {
-                            StringID(self.l.strings.first_bus_arrival)
+                            STR_NEWS_FIRST_BUS_ARRIVAL
                         } else {
-                            StringID(self.l.strings.first_passenger_tram_arrival)
+                            STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL
                         },
                         &[Integer(u64::from(st.0))],
                     ),
@@ -1137,9 +1119,9 @@ impl<'a> Game<'a> {
                 add_vehicle_news_item(
                     &get_encoded_string(
                         if road_type_is_road(self.roadtype(v.v)) {
-                            StringID(self.l.strings.first_truck_arrival)
+                            STR_NEWS_FIRST_TRUCK_ARRIVAL
                         } else {
-                            StringID(self.l.strings.first_cargo_tram_arrival)
+                            STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL
                         },
                         &[Integer(u64::from(st.0))],
                     ),
@@ -2969,19 +2951,10 @@ crate::abi::layouts! {
         trackdir,
         tile,
     };
-    "OpenTTDRoadStrings" ["probe"] => Strings {
-        first_bus_arrival,
-        first_cargo_tram_arrival,
-        first_passenger_tram_arrival,
-        first_truck_arrival,
-        road_vehicle_crash,
-        road_vehicle_crash_driver,
-    };
     "OpenTTDRoadLeaves" ["probe"] => Leaves {
         vehicle,
         ground,
         shared,
-        strings,
         build_road_context,
         roadveh_list_dirty,
     };
