@@ -258,11 +258,6 @@ static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept
 	static const OpenTTDTownDataServices services{
 		.shared = &GetRustSharedServices(),
 		.founding = &GetRustTownFoundingServices(),
-		.strings = {
-			.load_failed = STR_TOWN_DATA_ERROR_LOAD_FAILED, .json_format = STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY,
-			.town_format = STR_TOWN_DATA_ERROR_TOWN_FORMATTED_INCORRECTLY, .bad_coordinate = STR_TOWN_DATA_ERROR_BAD_COORDINATE,
-			.failed_towns = STR_TOWN_DATA_ERROR_FAILED_TO_FOUND_TOWN,
-		},
 		.load = TownDataLoad,
 		.feature = TownDataFeature,
 		.named_error = [](uint32_t summary, uint32_t detail, const OpenTTDTownDataFrame *frame) noexcept { ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail, frame->name), WL_ERROR); },
