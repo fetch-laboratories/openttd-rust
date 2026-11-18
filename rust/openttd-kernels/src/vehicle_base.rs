@@ -83,10 +83,24 @@ impl VehStates {
     pub const fn test(self, element: VehState) -> bool {
         self.0 & Self::from_element(element).0 != 0
     }
-    /// Native `EnumBitSet::Flip`: toggle the named state.
+    /// Native `EnumBitSet::Set`: set the named state.
+    #[must_use]
+    pub const fn set(self, element: VehState) -> Self {
+        self.with(Self::from_element(element))
+    }
+    /// Native `EnumBitSet::Reset`: reset the named state.
+    #[must_use]
+    pub const fn reset(self, element: VehState) -> Self {
+        self.without(Self::from_element(element))
+    }
+    /// Native `EnumBitSet::Flip`: flip the named state.
     #[must_use]
     pub const fn flip(self, element: VehState) -> Self {
-        Self(self.0 ^ Self::from_element(element).0)
+        if self.test(element) {
+            self.reset(element)
+        } else {
+            self.set(element)
+        }
     }
     /// Native `BaseBitSet::Any`: is any state of `other` set?
     #[must_use]
@@ -384,7 +398,7 @@ pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord
         let mut v = old;
         while !v.is_null() {
             write_field!(v, first, old);
-            v = read_field!(v, next);
+            v = record_of(crate::vehicle::VehicleRef::of(v).next());
         }
         write_field!(old, previous, std::ptr::null_mut());
     }
@@ -401,9 +415,14 @@ pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord
         let mut v = next;
         while !v.is_null() {
             write_field!(v, first, read_field!(this, first));
-            v = read_field!(v, next);
+            v = record_of(crate::vehicle::VehicleRef::of(v).next());
         }
     }
+}
+
+/// A nullable record pointer from an optional handle, as the original's `Vehicle *`.
+fn record_of(v: Option<crate::vehicle::VehicleRef>) -> *mut VehicleRecord {
+    v.map_or(std::ptr::null_mut(), |v| v.0.as_ptr())
 }
 
 /// `Vehicle::orders`: the native `OrderList` shell named by the live record's canonical order
@@ -443,13 +462,13 @@ impl crate::vehicle::VehicleRef {
         if n < 0 {
             let mut i = 0;
             while i != n && !v.is_null() {
-                v = read_field!(v, previous);
+                v = record_of(Self::of(v).previous());
                 i -= 1;
             }
         } else {
             let mut i = 0;
             while i != n && !v.is_null() {
-                v = read_field!(v, next);
+                v = record_of(Self::of(v).next());
                 i += 1;
             }
         }
@@ -588,12 +607,11 @@ impl crate::vehicle::VehicleRef {
     }
     /// `v->vehstatus.Set(VehState::Hidden)` or `.Reset(VehState::Hidden)`.
     pub(crate) fn set_hidden(self, value: bool) {
-        let hidden = VehStates::from_element(VehState::Hidden);
         let status = self.vehstatus();
         self.set_vehstatus(if value {
-            status.with(hidden)
+            status.set(VehState::Hidden)
         } else {
-            status.without(hidden)
+            status.reset(VehState::Hidden)
         });
     }
 

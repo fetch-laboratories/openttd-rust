@@ -1111,16 +1111,11 @@ pub unsafe extern "C" fn openttd_rust_ship_station_destination(
         if station == (u32::from(game.vehicle().last_station_visited_raw())) {
             game.vehicle().set_last_station_visited_raw(65535);
         }
-        if unsafe {
-            crate::vehicle_func::can_vehicle_use_station(
-                vehicle,
-                crate::newgrf_airport::station_by_id(
-                    station as u16,
-                    crate::newgrf_airport::runtime(),
-                ),
-                crate::newgrf_airport::runtime(),
-            )
-        } {
+        if crate::vehicle_func::can_vehicle_use_station(
+            crate::vehicle::VehicleRef::of(vehicle.cast_mut()),
+            crate::newgrf_airport::station_by_id(station as u16, crate::newgrf_airport::runtime()),
+            crate::newgrf_airport::runtime(),
+        ) {
             (game.services.station_xy)(station as u16)
         } else {
             (game.leaves.order_increment)(id);

@@ -47,7 +47,7 @@ pub struct Services {
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
     pub(crate) by_tile: extern "C" fn(u32) -> *mut crate::station::Station,
     station_id: extern "C" fn(*const BaseStation) -> u16,
-    facilities: extern "C" fn(*const BaseStation) -> u8,
+    pub(crate) facilities: extern "C" fn(*const BaseStation) -> u8,
     pub(crate) get_station: extern "C" fn(u16) -> *mut BaseStation,
     pub(crate) check: extern "C" fn(bool),
     pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,
@@ -580,7 +580,11 @@ pub unsafe extern "C" fn openttd_rust_can_vehicle_use_station_abi(
     station: *const BaseStation,
     s: *const Services,
 ) -> u8 {
-    u8::from(unsafe { crate::vehicle_func::can_vehicle_use_station(vehicle, station, &*s) })
+    u8::from(crate::vehicle_func::can_vehicle_use_station(
+        crate::vehicle::VehicleRef::of(vehicle.cast_mut()),
+        station,
+        unsafe { &*s },
+    ))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_is_hangar_abi(tile: u32, s: *const Services) -> u8 {

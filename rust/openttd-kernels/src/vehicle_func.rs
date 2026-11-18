@@ -1,9 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `vehicle_func.h`: the custom sprite numbers, `IsCompanyBuildableVehicleType`,
 //! and both `CanVehicleUseStation` overloads (`vehicle.cpp`).
-#![allow(unsafe_code)]
-use crate::airport::AirportFTAClassFlag;
-use crate::bitmath_func::has_bit;
+use crate::airport::{AirportFTAClassFlag, AirportFTAClassFlags};
 use crate::engine_type::{AIR_CTOL, EngineID};
 use crate::station_type::{StationFacilities, StationFacility};
 use crate::vehicle::{EngineRef, VehicleRef};
@@ -43,41 +41,36 @@ pub(crate) fn can_engine_use_station(
     s: &crate::newgrf_airport::Services,
 ) -> bool {
     let e = (s.engine_if_valid)(engine_type.0);
-    (s.check)(!e.is_null());
-    // SAFETY: The shared table returns the static station services.
-    let station = unsafe { &*s.commands().station };
+    crate::services_assert::assert_with(|| !e.is_null());
 
     match EngineRef::of(e).kind() {
         VehicleType::VEH_TRAIN => {
-            StationFacilities((station.facilities)(st.cast_mut())).test(StationFacility::Train)
+            StationFacilities((s.facilities)(st)).test(StationFacility::Train)
         }
 
         VehicleType::VEH_ROAD => {
             // For road vehicles we need the vehicle to know whether it can actually
             // use the station, but if it doesn't have facilities for RVs it is
             // certainly not possible that the station can be used.
-            StationFacilities((station.facilities)(st.cast_mut())).any(
+            StationFacilities((s.facilities)(st)).any(
                 StationFacilities::from_element(StationFacility::BusStop)
                     .with(StationFacilities::from_element(StationFacility::TruckStop)),
             )
         }
 
-        VehicleType::VEH_SHIP => {
-            StationFacilities((station.facilities)(st.cast_mut())).test(StationFacility::Dock)
-        }
+        VehicleType::VEH_SHIP => StationFacilities((s.facilities)(st)).test(StationFacility::Dock),
 
         VehicleType::VEH_AIRCRAFT => {
-            StationFacilities((station.facilities)(st.cast_mut())).test(StationFacility::Airport)
-                && {
-                    // `GetFTA()`, then the flag the engine selects, then its test.
-                    let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
-                    let flag = if EngineRef::of(e).aircraft_subtype() & AIR_CTOL != 0 {
-                        AirportFTAClassFlag::AIRPLANES
-                    } else {
-                        AirportFTAClassFlag::HELICOPTERS
-                    };
-                    has_bit((s.fta_flags)(fta), flag.0)
-                }
+            StationFacilities((s.facilities)(st)).test(StationFacility::Airport) && {
+                // `GetFTA()`, then the flag the engine selects, then its test.
+                let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
+                let flag = if EngineRef::of(e).aircraft_subtype() & AIR_CTOL != 0 {
+                    AirportFTAClassFlag::AIRPLANES
+                } else {
+                    AirportFTAClassFlag::HELICOPTERS
+                };
+                AirportFTAClassFlags((s.fta_flags)(fta)).test(flag)
+            }
         }
 
         _ => false,
@@ -86,15 +79,11 @@ pub(crate) fn can_engine_use_station(
 
 /// `CanVehicleUseStation(const Vehicle *, const Station *)`: can this station be
 /// used by the given vehicle?
-///
-/// # Safety
-/// `v` and `st` are live for this serialized entry.
-pub(crate) unsafe fn can_vehicle_use_station(
-    v: *const crate::vehicle::OpenTTDVehicle,
+pub(crate) fn can_vehicle_use_station(
+    v: VehicleRef,
     st: *const crate::station::BaseStation,
     s: &crate::newgrf_airport::Services,
 ) -> bool {
-    let v = VehicleRef::of(v.cast_mut());
     if v.vehicle_type() == VehicleType::VEH_ROAD {
         return !crate::road_stop::primary_for_vehicle(s.shared(), st.cast_mut(), v).is_null();
     }

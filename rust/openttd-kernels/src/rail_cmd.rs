@@ -1705,6 +1705,9 @@ impl<'a> Ctx<'a> {
                         if remove || minimise_gaps {
                             signal_ctr = signal_ctr.wrapping_add(len as i32);
                         } else {
+                            // To keep regular interval we need to emulate placing signals on a
+                            // bridge. We start with TILE_AXIAL_DISTANCE as one bridge tile gets
+                            // processed in the main loop.
                             signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE.cast_signed());
                             let mut i = TILE_AXIAL_DISTANCE;
                             while i < len {

@@ -14,10 +14,11 @@
 #![allow(unsafe_code)]
 
 use crate::airport::{
-    AT_DUMMY, AT_OILRIG, AirportBlock, AirportBlocks, AirportFTAClassFlag, AirportMovementStates,
-    AirportMovingData, AirportMovingDataFlag, ENDLANDING, ENDTAKEOFF, FLYING, HANGAR,
-    HELIENDLANDING, HELILANDING, HELIPAD1, HELIPAD2, HELIPAD3, HELITAKEOFF, LANDING, MAX_TERMINALS,
-    STARTTAKEOFF, TAKEOFF, TERM1, TERM2, TERM3, TERM4, TERM5, TERM6, TERM7, TERM8,
+    AT_DUMMY, AT_OILRIG, AirportBlock, AirportBlocks, AirportFTAClassFlag, AirportFTAClassFlags,
+    AirportMovementStates, AirportMovingData, AirportMovingDataFlag, ENDLANDING, ENDTAKEOFF,
+    FLYING, HANGAR, HELIENDLANDING, HELILANDING, HELIPAD1, HELIPAD2, HELIPAD3, HELITAKEOFF,
+    LANDING, MAX_TERMINALS, STARTTAKEOFF, TAKEOFF, TERM1, TERM2, TERM3, TERM4, TERM5, TERM6, TERM7,
+    TERM8,
 };
 use crate::bitmath_func::{clr_bit8, gb, has_bit, set_bit8};
 use crate::company_type::Owner;
@@ -48,7 +49,7 @@ use crate::strings_type::StringParameterData::Integer;
 use crate::tile_type::{TILE_HEIGHT, TILE_SIZE, TileIndex};
 use crate::vehicle::maintenance;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices, YEAR_TICKS};
-use crate::vehicle_base::{VehState, VehStates};
+use crate::vehicle_base::VehState;
 use crate::vehicle_type::{DepotCommandFlag, DepotCommandFlags, VehicleID, VehicleType};
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -289,12 +290,11 @@ fn vehstatus_test(v: VehicleRef, state: VehState) -> bool {
 }
 /// `v->vehstatus.Set(state)` or `Reset(state)`.
 fn vehstatus_assign(v: VehicleRef, state: VehState, on: bool) {
-    let mask = VehStates::from_element(state);
     let status = v.vehstatus();
     v.set_vehstatus(if on {
-        status.with(mask)
+        status.set(state)
     } else {
-        status.without(mask)
+        status.reset(state)
     });
 }
 /// `Aircraft::state` of a rotor, which stores its `HelicopterRotorStates` there.
@@ -569,14 +569,11 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `CanVehicleUseStation(v, st)`.
     fn can_vehicle_use_station(v: Vehicle, st: *const Station) -> bool {
-        // SAFETY: A live vehicle and station for this synchronous call.
-        unsafe {
-            crate::vehicle_func::can_vehicle_use_station(
-                v.handle,
-                st.cast(),
-                crate::newgrf_airport::runtime(),
-            )
-        }
+        crate::vehicle_func::can_vehicle_use_station(
+            v.base(),
+            st.cast(),
+            crate::newgrf_airport::runtime(),
+        )
     }
 
     /* AirportFTAClass fields. */
@@ -586,11 +583,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn num_helipads(&self, apc: *const c_void) -> u8 {
         Self::call(|| unsafe { (self.leaves.helipads)(apc) })
     }
-    fn fta_flags(&self, apc: *const c_void) -> u8 {
-        Self::call(|| unsafe { (self.leaves.airport_flags)(apc) })
-    }
-    fn fta_flags_test(flags: u8, flag: AirportFTAClassFlag) -> bool {
-        flags & (1 << flag.0) != 0
+    /// `AirportFTAClass::flags`.
+    fn fta_flags(&self, apc: *const c_void) -> AirportFTAClassFlags {
+        AirportFTAClassFlags(Self::call(|| unsafe { (self.leaves.airport_flags)(apc) }))
     }
     fn delta_z(&self, apc: *const c_void) -> u8 {
         Self::call(|| unsafe { (self.leaves.airport_delta_z)(apc) })
@@ -628,15 +623,15 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
     /* Vehicle services. */
     /// `v->current_order.GetType()`.
-    fn order_type(&self, v: Vehicle) -> OrderType {
+    fn order_type(v: Vehicle) -> OrderType {
         v.base().current_order().kind()
     }
     /// `v->current_order.IsType(order_type)`.
-    fn current_order_is_type(&self, v: Vehicle, order_type: OrderType) -> bool {
+    fn current_order_is_type(v: Vehicle, order_type: OrderType) -> bool {
         v.base().current_order().is_type(order_type)
     }
     /// `v->current_order.GetDestination().ToStationID()`.
-    fn order_destination(&self, v: Vehicle) -> StationID {
+    fn order_destination(v: Vehicle) -> StationID {
         v.base().current_order().destination().to_station_id()
     }
     fn plane_speed(&self) -> u8 {
@@ -784,15 +779,15 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let mut last_dest: *const Station = std::ptr::null();
         let mut next_dest: *const Station = std::ptr::null();
         if max_range != 0 {
-            if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
-                || (self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
+            if Self::current_order_is_type(v, OrderType::OT_GOTO_STATION)
+                || (Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
                     && !b
                         .current_order()
                         .depot_action_flags()
                         .test(OrderDepotActionFlag::NearestDepot))
             {
                 last_dest = self.station_get_if_valid(b.last_station_visited());
-                next_dest = self.station_get_if_valid(self.order_destination(v));
+                next_dest = self.station_get_if_valid(Self::order_destination(v));
             } else {
                 last_dest = self.get_target_airport_if_valid(v);
                 let mut next_station = None;
@@ -819,7 +814,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             let flags = self.fta_flags(afc);
 
             /* don't crash the plane if we know it can't land at the airport */
-            if Self::fta_flags_test(flags, AirportFTAClassFlag::SHORT_STRIP)
+            if flags.test(AirportFTAClassFlag::SHORT_STRIP)
                 && avi_subtype & AIR_FAST != 0
                 && !no_jetcrash
             {
@@ -827,9 +822,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             }
 
             /* the plane won't land at any helicopter station */
-            if !Self::fta_flags_test(flags, AirportFTAClassFlag::AIRPLANES)
-                && avi_subtype & AIR_CTOL != 0
-            {
+            if !flags.test(AirportFTAClassFlag::AIRPLANES) && avi_subtype & AIR_CTOL != 0 {
                 return;
             }
 
@@ -890,13 +883,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
         /* When we're parsing conditional orders and the like
          * we don't want to consider going to a depot too. */
-        if !self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
-            && !self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
+        if !Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
+            && !Self::current_order_is_type(v, OrderType::OT_GOTO_STATION)
         {
             return;
         }
 
-        let destination = self.order_destination(v);
+        let destination = Self::order_destination(v);
         let st = Self::station_get(destination);
 
         self.check(!st.is_null());
@@ -905,7 +898,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if Self::airport_has_hangar(st) && Self::can_vehicle_use_station(v, st) {
             Self::call(|| unsafe { (self.leaves.service_order)(v, destination.0) });
             self.start_stop_dirty(v);
-        } else if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
+        } else if Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
             Self::call(|| (self.vs.make_dummy)(v.base()));
             self.start_stop_dirty(v);
         }
@@ -974,7 +967,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
         /* if true, helicopter rotors do not rotate. This should only be the case if a helicopter is
          * loading/unloading at a terminal or stopped */
-        if self.current_order_is_type(v, OrderType::OT_LOADING)
+        if Self::current_order_is_type(v, OrderType::OT_LOADING)
             || vehstatus_test(v.base(), VehState::Stopped)
         {
             if u.cur_speed() != 0 {
@@ -1456,7 +1449,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 let pos = self.aircraft_get_entry_point(v, afc, Direction::DIR_N);
                 v.set_previous_pos(pos);
                 v.set_pos(pos);
-            } else if v.targetairport() != self.order_destination(v) {
+            } else if v.targetairport() != Self::order_destination(v) {
                 /* If not possible, just get out of here fast */
                 v.set_state(FLYING);
                 self.update_aircraft_cache(v, false);
@@ -2015,7 +2008,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             if failed {
                 self.crash_airplane(v);
             }
-        } else if !self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
+        } else if !Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
             Self::call(|| (self.vs.order_free)(v.base()));
         }
     }
@@ -2097,10 +2090,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn maybe_crash_airplane(&self, v: Vehicle) {
         let st = Self::station_get(v.targetairport());
 
-        let prob: u32 = if Self::fta_flags_test(
-            self.fta_flags(Self::airport_get_fta(st)),
-            AirportFTAClassFlag::SHORT_STRIP,
-        ) && self.engine_subtype(v) & AIR_FAST != 0
+        let prob: u32 = if self
+            .fta_flags(Self::airport_get_fta(st))
+            .test(AirportFTAClassFlag::SHORT_STRIP)
+            && self.engine_subtype(v) & AIR_FAST != 0
             && !Self::call(|| (self.ss.no_jetcrash)())
         {
             3276
@@ -2129,7 +2122,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// Original `AircraftEntersTerminal`: aircraft arrives at a terminal. If it is the
     /// first aircraft, throw a party. Start loading cargo.
     fn aircraft_enters_terminal(&self, v: Vehicle) {
-        if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
+        if Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
             return;
         }
 
@@ -2193,10 +2186,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// Original `AircraftNextAirportPos_and_Order`: set the right pos when heading to
     /// other airports after takeoff.
     fn aircraft_next_airport_pos_and_order(&self, v: Vehicle) {
-        if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
-            || self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
+        if Self::current_order_is_type(v, OrderType::OT_GOTO_STATION)
+            || Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
         {
-            v.set_targetairport(self.order_destination(v));
+            v.set_targetairport(Self::order_destination(v));
         }
 
         let st = self.get_target_airport_if_valid(v);
@@ -2266,7 +2259,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         /* if we were sent to the depot, stay there */
-        if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
+        if Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
             && vehstatus_test(v.base(), VehState::Stopped)
         {
             Self::call(|| (self.vs.order_free)(v.base()));
@@ -2278,15 +2271,15 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             return;
         }
 
-        if !self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
-            && !self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
+        if !Self::current_order_is_type(v, OrderType::OT_GOTO_STATION)
+            && !Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
         {
             return;
         }
 
         /* We are leaving a hangar, but have to go to the exact same one; re-enter */
-        if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
-            && self.order_destination(v) == v.targetairport()
+        if Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
+            && Self::order_destination(v) == v.targetairport()
         {
             Self::call(|| self.vs.enter_depot(v.base()));
             return;
@@ -2298,7 +2291,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         /* We are already at the target airport, we need to find a terminal */
-        if self.order_destination(v) == v.targetairport() {
+        if Self::order_destination(v) == v.targetairport() {
             /* FindFreeTerminal:
              * 1. Find a free terminal, 2. Occupy it, 3. Set the vehicle's state to that terminal */
             if v.base().subtype() == AIR_HELICOPTER {
@@ -2357,7 +2350,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             return;
         }
 
-        if self.current_order_is_type(v, OrderType::OT_NOTHING) {
+        if Self::current_order_is_type(v, OrderType::OT_NOTHING) {
             return;
         }
 
@@ -2370,11 +2363,11 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
          * ---> start moving */
 
         let mut go_to_hangar = false;
-        match self.order_type(v) {
+        match Self::order_type(v) {
             OrderType::OT_GOTO_STATION => {} // ready to fly to another airport
             OrderType::OT_GOTO_DEPOT => {
                 // visit hangar for servicing, sale, etc.
-                go_to_hangar = self.order_destination(v) == v.targetairport();
+                go_to_hangar = Self::order_destination(v) == v.targetairport();
             }
             OrderType::OT_CONDITIONAL => {
                 /* In case of a conditional order we just have to wait a tick
@@ -2530,7 +2523,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
          * 1. in case all terminals are busy AirportFindFreeTerminal() returns false or
          * 2. not going for terminal (but depot, no order),
          * --> get out of the way to the hangar. */
-        if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
+        if Self::current_order_is_type(v, OrderType::OT_GOTO_STATION)
             && self.airport_find_free_terminal(v, apc)
         {
             return;
@@ -2552,7 +2545,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
          * --> else TAKEOFF
          * the reason behind this is that if an airport has a terminal, it also has a hangar. Airplanes
          * must go to a hangar. */
-        if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
+        if Self::current_order_is_type(v, OrderType::OT_GOTO_STATION)
             && self.airport_find_free_helipad(v, apc)
         {
             return;
@@ -2948,8 +2941,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         crate::orders::process_orders(b, orders);
         Self::call(|| self.vs.handle_loading(b, r#loop != 0, orders));
 
-        if self.current_order_is_type(v, OrderType::OT_LOADING)
-            || self.current_order_is_type(v, OrderType::OT_LEAVESTATION)
+        if Self::current_order_is_type(v, OrderType::OT_LOADING)
+            || Self::current_order_is_type(v, OrderType::OT_LEAVESTATION)
         {
             return true;
         }
@@ -2961,10 +2954,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             /* Check the distance to the next destination. This code works because the target
              * airport is only updated after take off and not on the ground. */
             let cur_st = self.station_get_if_valid(v.targetairport());
-            let next_st = if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
-                || self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
+            let next_st = if Self::current_order_is_type(v, OrderType::OT_GOTO_STATION)
+                || Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
             {
-                self.station_get_if_valid(self.order_destination(v))
+                self.station_get_if_valid(Self::order_destination(v))
             } else {
                 std::ptr::null()
             };
@@ -3061,13 +3054,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
             /* The aircraft is heading to a hangar, but the new station doesn't have one,
              * or the aircraft can't land on the new station. Cancel current order. */
-            if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
+            if Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
                 && !v
                     .base()
                     .current_order()
                     .depot_type()
                     .test(OrderDepotTypeFlag::PartOfOrders)
-                && self.order_destination(v) == index
+                && Self::order_destination(v) == index
                 && (!Self::airport_has_hangar(st) || !Self::can_vehicle_use_station(v, st))
             {
                 Self::call(|| (self.vs.make_dummy)(v.base()));
