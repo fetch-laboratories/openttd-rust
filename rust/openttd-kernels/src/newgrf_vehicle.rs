@@ -428,27 +428,35 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_cache_delete(cache: *mut Cache
         drop(Box::from_raw(cache.cast::<VehicleCacheOwner>()));
     }
 }
+/// `Vehicle::InvalidateNewGRFCache`: invalidates cached `NewGRF` variables.
+///
+/// # Safety
+/// `v` is a live serialized record.
+pub(crate) unsafe fn invalidate_newgrf_cache(s: &Services, v: VehicleRef) {
+    // SAFETY: As this function's contract; the cache belongs to `v`.
+    unsafe { (*(s.cache)(v.0.as_ptr())).cache_valid = 0 };
+}
 /// `Vehicle::InvalidateNewGRFCacheOfChain`: invalidates cached `NewGRF` variables of all
 /// vehicles in the chain (after the current vehicle).
 ///
 /// # Safety
 /// `v` and its chain are live serialized records.
-pub(crate) unsafe fn invalidate_newgrf_cache_of_chain(s: &Services, v: crate::vehicle::VehicleRef) {
-    // SAFETY: As this function's contract.
-    unsafe { openttd_rust_vehicle_grf_invalidate(s, v.0.as_ptr(), true) };
+pub(crate) unsafe fn invalidate_newgrf_cache_of_chain(s: &Services, v: VehicleRef) {
+    let mut u = Some(v);
+    while let Some(part) = u {
+        // SAFETY: As this function's contract.
+        unsafe { invalidate_newgrf_cache(s, part) };
+        u = part.next();
+    }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_grf_invalidate(s: &Services, mut v: V, chain: bool) {
+pub unsafe extern "C" fn openttd_rust_vehicle_grf_invalidate(s: &Services, v: V, chain: bool) {
+    // SAFETY: The native `this` is a live serialized record.
     unsafe {
-        loop {
-            (*(s.cache)(v)).cache_valid = 0;
-            if !chain {
-                break;
-            }
-            v = next(v);
-            if v.is_null() {
-                break;
-            }
+        if chain {
+            invalidate_newgrf_cache_of_chain(s, handle(v));
+        } else {
+            invalidate_newgrf_cache(s, handle(v));
         }
     }
 }
@@ -773,9 +781,9 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_randomise(s: &Services, v: V, trigger: u8) {
     unsafe {
-        openttd_rust_vehicle_grf_invalidate(s, v, true);
+        invalidate_newgrf_cache_of_chain(s, handle(v));
         randomise(s, v, trigger, 0, true);
-        openttd_rust_vehicle_grf_invalidate(s, v, true);
+        invalidate_newgrf_cache_of_chain(s, handle(v));
     }
 }
 // Vehicle property/callback table entries point directly to Rust. The caller
