@@ -1027,14 +1027,9 @@ mod tests {
         });
     }
 
-    /// `Receive_SERVER_ERROR_QUIT`, `Receive_SERVER_QUIT` and `Receive_SERVER_JOIN` announce a
-    /// known client by its name before deleting its info and invalidating the client list, read
-    /// the error code only for a known client, and skip the message for an unknown one.
-    #[test]
-    fn quit_and_join_receivers_announce_known_clients() {
-        use crate::news_func::testing::{Effect as News, Parameter};
-        use crate::table::strings::STR_NETWORK_ERROR_CLIENT_KICKED;
-        use crate::window_func::testing::Effect as Window;
+    /// Frame and client services that know client 5 by the tag 0x50 and the name `n\xE4me`,
+    /// and record each deleted client info.
+    fn recording_client_services() -> (FrameServices, &'static Services) {
         // Client 5 is known by the tag 0x50 and named; every other client is unknown.
         extern "C" fn network_client_info(client_id: u32) -> *mut c_void {
             if client_id == 5 {
@@ -1053,9 +1048,6 @@ mod tests {
         extern "C" fn delete_info(ci: *mut c_void) {
             record(Call::DeleteInfo(ci.addr()));
         }
-        fn window(effect: &Window) {
-            record(Call::Window(*effect));
-        }
         const SHARED: crate::services::Services = crate::services::Services {
             network_client_info,
             ..crate::test_tables::SHARED
@@ -1073,16 +1065,33 @@ mod tests {
                 client_name,
                 ..crate::test_tables::NETWORK_CONNECTION
             };
-        const CLIENT: Services = Services {
+        pub(super) const CLIENT: Services = Services {
             delete_info,
             ..crate::test_tables::NETWORK_CLIENT
         };
-        let f = FrameServices {
-            command: &COMMAND,
-            connection: &CONNECTION,
-            packet: packet::test_services(),
-            ..crate::test_tables::NETWORK_FRAME
-        };
+        (
+            FrameServices {
+                command: &COMMAND,
+                connection: &CONNECTION,
+                packet: packet::test_services(),
+                ..crate::test_tables::NETWORK_FRAME
+            },
+            &CLIENT,
+        )
+    }
+
+    /// `Receive_SERVER_ERROR_QUIT`, `Receive_SERVER_QUIT` and `Receive_SERVER_JOIN` announce a
+    /// known client by its name before deleting its info and invalidating the client list, read
+    /// the error code only for a known client, and skip the message for an unknown one.
+    #[test]
+    fn quit_and_join_receivers_announce_known_clients() {
+        use crate::news_func::testing::{Effect as News, Parameter};
+        use crate::table::strings::STR_NETWORK_ERROR_CLIENT_KICKED;
+        use crate::window_func::testing::Effect as Window;
+        fn window(effect: &Window) {
+            record(Call::Window(*effect));
+        }
+        let (f, client) = recording_client_services();
         let mut game = socket::GameSocket {
             base: std::ptr::null_mut(),
             game: std::ptr::null_mut(),
@@ -1118,13 +1127,13 @@ mod tests {
         crate::window_func::testing::observe(Some(window));
 
         let mut p = packet(5, NetworkErrorCode::NETWORK_ERROR_KICKED.0);
-        receive_server_error_quit(&CLIENT, &f, game, &raw mut p);
+        receive_server_error_quit(client, &f, game, &raw mut p);
         assert_eq!(p.position, 5);
         let mut p = packet(6, NetworkErrorCode::NETWORK_ERROR_KICKED.0);
-        receive_server_error_quit(&CLIENT, &f, game, &raw mut p);
+        receive_server_error_quit(client, &f, game, &raw mut p);
         assert_eq!(p.position, 4);
-        receive_server_quit(&CLIENT, &f, game, &mut packet(5, 0));
-        receive_server_quit(&CLIENT, &f, game, &mut packet(6, 0));
+        receive_server_quit(client, &f, game, &mut packet(5, 0));
+        receive_server_quit(client, &f, game, &mut packet(6, 0));
         receive_server_join(&f, game, &mut packet(5, 0));
         receive_server_join(&f, game, &mut packet(6, 0));
         record(Call::DeleteInfo(0));
