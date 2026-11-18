@@ -81,7 +81,7 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
     let v = (k.new_road)(tile);
     unsafe {
         crate::road::set_state(
-            (r.road_state)(super::vehicle_ref(v, r.common.vehicles).0.as_ptr()),
+            super::vehicle_ref(v, r.common.vehicles).road(),
             crate::roadveh::RVSB_IN_DEPOT,
         );
     };
@@ -136,12 +136,7 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
         u = unsafe { super::refit::next(r, u) };
     }
     unsafe {
-        crate::road::road_veh_update_cache(
-            r.road,
-            vehicle_ref(v, r.common.vehicles),
-            (r.road_state)(super::vehicle_ref(v, r.common.vehicles).0.as_ptr()),
-            false,
-        );
+        crate::road::road_veh_update_cache(r.road, vehicle_ref(v, r.common.vehicles), false);
     }
     /* Initialize cached values for realistic acceleration. */
     if r.common.base.shared.settings().roadveh_acceleration_model()

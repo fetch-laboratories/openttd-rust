@@ -213,8 +213,7 @@ impl Owner {
             Self {
                 state: v.ground(),
                 train: crate::train::Handle::NONE,
-                // `OpenTTDRoadState` is the first field of the `#[repr(C)]` road owner.
-                road: read_field!(record, road).cast(),
+                road: v.road(),
                 kind,
             }
         }

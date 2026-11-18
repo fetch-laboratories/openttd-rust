@@ -620,6 +620,11 @@ impl crate::vehicle::VehicleRef {
         });
     }
 
+    /// The road vehicle owner link; the record is a live road vehicle.
+    pub(crate) fn road(self) -> *mut crate::road::State {
+        // `OpenTTDRoadState` is the first field of the `#[repr(C)]` road owner.
+        read_field!(self.0.as_ptr(), road).cast()
+    }
     /// The ground vehicle owner link; the record is a live train or road vehicle.
     pub(crate) fn ground(self) -> *mut crate::ground_vehicle::GroundState {
         read_field!(self.0.as_ptr(), ground)

@@ -335,8 +335,7 @@ impl Part {
     /// The road vehicle record `v` with the road owner its record names.
     #[inline]
     fn of(v: VehicleRef) -> Self {
-        // `OpenTTDRoadState` is the first field of the `#[repr(C)]` road owner.
-        Self::new(v, read_field!(v.0.as_ptr(), road).cast())
+        Self::new(v, v.road())
     }
     /// `RoadVehicle::Next`.
     #[inline]
@@ -2783,14 +2782,9 @@ pub(crate) unsafe fn clear_removed_drive_stop(rv: *mut State) {
 /// `RoadVehUpdateCache`.
 /// # Safety
 /// A live serialized front road vehicle and immutable tables for the call.
-pub(crate) unsafe fn road_veh_update_cache(
-    leaves: &Leaves,
-    v: VehicleRef,
-    state: *mut State,
-    same_length: bool,
-) {
+pub(crate) unsafe fn road_veh_update_cache(leaves: &Leaves, v: VehicleRef, same_length: bool) {
     // SAFETY: As this function's contract.
-    unsafe { Game::new(leaves) }.road_veh_update_cache(Part::new(v, state), same_length);
+    unsafe { Game::new(leaves) }.road_veh_update_cache(Part::of(v), same_length);
 }
 
 macro_rules! entry {

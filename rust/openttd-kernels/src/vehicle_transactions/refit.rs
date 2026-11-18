@@ -66,7 +66,6 @@ pub struct Services {
     pub set_cargo_kind: extern "C" fn(*mut OpenTTDVehicle, u8, u8),
     pub expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> ExpenseType,
     pub invalidate_chain: extern "C" fn(*mut OpenTTDVehicle),
-    pub road_state: extern "C" fn(*mut OpenTTDVehicle) -> *mut crate::road::State,
     pub aircraft_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::aircraft::Vehicle,
     pub details_ui: extern "C" fn(*mut OpenTTDVehicle),
     pub lists_ui: extern "C" fn(u8),
@@ -706,7 +705,6 @@ pub(crate) unsafe fn cmd_refit_vehicle(
                     crate::road::road_veh_update_cache(
                         s.road,
                         vehicle_ref(front, s.common.vehicles),
-                        (s.road_state)(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
                         auto_refit,
                     );
                 }
@@ -819,6 +817,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, road_state, aircraft_handle, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, aircraft_handle, details_ui, lists_ui,
     };
 }
