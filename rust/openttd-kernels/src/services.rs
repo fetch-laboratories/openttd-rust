@@ -542,8 +542,6 @@ pub struct Services {
     pub resolver_grf_file_id: extern "C" fn(*const c_void) -> u32,
     /// `GRFFile::grf_version` of the resolver's non-null file.
     pub resolver_grf_version: extern "C" fn(*const c_void) -> u8,
-    /// `ShowErrorMessage` with two string IDs at `WL_ERROR`.
-    pub show_error: extern "C" fn(u32, u32),
     /// The rail search's `DumpState`, from the words `rail_yapf.rs` encodes:
     /// the native `DumpTarget` and node and segment `Dump` templates, which
     /// #725 retires.
@@ -884,7 +882,6 @@ crate::abi::layouts! {
         resolver_badges,
         resolver_grf_file_id,
         resolver_grf_version,
-        show_error,
         yapf_rail_dump_state,
         not_reached,
         fatal_error,
@@ -1000,9 +997,6 @@ pub fn fixture(
     extern "C" fn two_types(_: u8, _: u8) -> bool {
         false
     }
-    extern "C" fn unexpected_error(_: u32, _: u32) {
-        std::process::abort()
-    }
     extern "C" fn unexpected_path() {
         std::process::abort()
     }
@@ -1094,7 +1088,6 @@ pub fn fixture(
         screen_dirty: unexpected_path,
         string_data: unexpected_string_data,
         terrain_type: unexpected_terrain,
-        show_error: unexpected_error,
         yapf_rail_dump_state: unexpected_dump,
         not_reached: unexpected_path,
         fatal_error: unexpected_fatal,

@@ -816,11 +816,6 @@ const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 		.increase_progress = [](OpenTTDIndustryGenerationContext *context, bool water) noexcept -> bool {
 			return RunGenerationProgress(context, [&] { RustIncreaseGeneratingWorldProgress(water ? GWP_WATER_INDUSTRY : GWP_LAND_INDUSTRY); });
 		},
-		.missing_warning = [](const OpenTTDIndustrySpecHandle *handle) noexcept {
-			const auto *spec = reinterpret_cast<const IndustrySpec *>(handle);
-			ShowErrorMessage(GetEncodedString(STR_ERROR_NO_SUITABLE_PLACES_FOR_INDUSTRIES, spec->name),
-				GetEncodedString(STR_ERROR_NO_SUITABLE_PLACES_FOR_INDUSTRIES_EXPLANATION), WL_WARNING);
-		},
 	};
 	return services;
 }
@@ -922,8 +917,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.can_allocate = []() noexcept -> bool { return Industry::CanAllocateItem(); },
 		.allocate = [](uint32_t tile) noexcept -> OpenTTDIndustryAllocation { Industry *i = new Industry(TileIndex(tile)); return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)}; },
 		.local_company = []() noexcept -> bool { return IsLocalCompany(); },
-		.prospect_no_place = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_PROSPECT_INDUSTRY), GetEncodedString(STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING), WL_INFO); },
-		.prospect_unlucky = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_PROSPECT_INDUSTRY), GetEncodedString(STR_ERROR_PROSPECTING_WAS_UNLUCKY), WL_INFO); },
 	};
 	return services;
 }

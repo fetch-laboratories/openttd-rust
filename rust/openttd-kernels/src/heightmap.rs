@@ -3,9 +3,13 @@
 //! libpng (with its setjmp frame), the BMP codec and file objects stay native; each
 //! decode is one call whose output stays valid until `finish`.
 #![allow(unsafe_code)]
+use crate::company_type::CompanyID;
+use crate::error::{WarningLevel, show_error_message};
 use crate::fileio_type::{DFT_HEIGHTMAP_BMP, DFT_HEIGHTMAP_PNG};
 use crate::gfx_type::Colour;
 use crate::map_type::MAX_MAP_SIZE;
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::{EncodedString, StringID};
 use std::ffi::c_void;
 
 /// Order of these enums has to be the same as in `lang/english.txt`.
@@ -114,9 +118,22 @@ fn ordered_palette(gray: &mut [u8; 256], size: usize) {
     }
 }
 
+/// `ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail), WL_ERROR)`.
+fn show_error(summary: u32, detail: u32) {
+    show_error_message(
+        get_encoded_string(StringID(summary), &[]),
+        get_encoded_string(StringID(detail), &[]),
+        WarningLevel::WL_ERROR,
+        0,
+        0,
+        EncodedString::default(),
+        CompanyID::INVALID,
+    );
+}
+
 impl Input {
     fn fail(&self, summary: u32, detail: u32) -> Option<Image> {
-        (unsafe { &*self.shared }.show_error)(summary, detail);
+        show_error(summary, detail);
         (self.finish)(self.context);
         None
     }
@@ -175,7 +192,7 @@ impl Input {
         match (self.bmp_header)(self.context, &raw mut bmp) {
             DECODE_OK => {}
             DECODE_NOT_FOUND => {
-                (unsafe { &*self.shared }.show_error)(s.bmp, s.not_found);
+                show_error(s.bmp, s.not_found);
                 return None;
             }
             _ => return self.fail(s.bmp, s.bmp_image_type),

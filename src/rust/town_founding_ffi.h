@@ -67,7 +67,6 @@ struct OpenTTDTownFoundingServices {
 	OpenTTDByteSpan (*cached_name)(const Town *) noexcept OPENTTD_SERVICE_DEFAULT(cached_name);
 	bool (*set_progress)(OpenTTDTownFoundingFrame *, uint) noexcept OPENTTD_SERVICE_DEFAULT(set_progress);
 	bool (*increase_progress)(OpenTTDTownFoundingFrame *) noexcept OPENTTD_SERVICE_DEFAULT(increase_progress);
-	void (*no_town_error)() noexcept OPENTTD_SERVICE_DEFAULT(no_town_error);
 	Randomizer *random;
 	StringID edge_error, close_error, unsuitable_error, unique_error, too_many_error, no_space_error;
 };

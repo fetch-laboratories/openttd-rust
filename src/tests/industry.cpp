@@ -297,7 +297,6 @@ struct IndustryGenerationFixture {
 			.scale_by_land_proportion = [](uint32_t n) noexcept -> uint32_t { return n; },
 			.set_progress = [](OpenTTDIndustryGenerationContext *, bool water, uint32_t total) noexcept -> bool { CHECK(company == 9); CHECK(total == 27); ++sets; return cancel_set != int(water); },
 			.increase_progress = [](OpenTTDIndustryGenerationContext *, bool) noexcept -> bool { CHECK(company == 255); return int(++increases) != cancel_increase; },
-			.missing_warning = [](const OpenTTDIndustrySpecHandle *) noexcept { },
 		};
 	}
 	/** Types 0 and 1 are enabled with one layout and appear once; type 1 is built on water. */

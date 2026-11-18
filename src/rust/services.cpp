@@ -652,7 +652,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.resolver_badges = [](const ResolverObject *resolver, const BadgeID *badges, size_t count, uint32_t parameter) noexcept { return GetBadgeVariableResult(*RustResolverGRFFile(resolver), std::span{badges, count}, parameter); },
 	.resolver_grf_file_id = RustResolverGRFFileID,
 	.resolver_grf_version = RustResolverGRFVersion,
-	.show_error = RustShowErrorMessage,
 	.yapf_rail_dump_state = YapfRailDumpState,
 	.not_reached = RustNotReached,
 	.fatal_error = RustFatalError,
@@ -893,6 +892,13 @@ static void RustSinkString(OpenTTDRustStringSink sink, void *target, std::string
 	sink(target, reinterpret_cast<const uint8_t *>(string.data()), string.size());
 }
 
+/** The EncodedString whose bytes a Rust span borrows. */
+static EncodedString RustEncodedString(OpenTTDByteSpan bytes) noexcept
+{
+	return RustEncodedString({reinterpret_cast<const char *>(bytes.data), bytes.size});
+}
+
+static_assert(WL_INFO == 0 && WL_WARNING == 1 && WL_ERROR == 2 && WL_CRITICAL == 3);
 static const OpenTTDNewsServices _rust_news_services{
 	.add_news_item = [](const OpenTTDAddNewsItemArgs *args) noexcept {
 		AddNewsItem(RustEncodedString({reinterpret_cast<const char *>(args->headline), args->headline_length}), static_cast<NewsType>(args->type), static_cast<NewsStyle>(args->style),
@@ -914,6 +920,9 @@ static const OpenTTDNewsServices _rust_news_services{
 		for (size_t i = 0; i < count; ++i) params[i] = RustStringParameter(args[i]);
 		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, params));
 		std::destroy_n(params.data(), count);
+	},
+	.show_error_message = [](OpenTTDByteSpan summary_msg, OpenTTDByteSpan detailed_msg, uint8_t wl, int32_t x, int32_t y, OpenTTDByteSpan extra_msg, uint8_t company) noexcept {
+		ShowErrorMessage(RustEncodedString(summary_msg), RustEncodedString(detailed_msg), static_cast<WarningLevel>(wl), x, y, RustEncodedString(extra_msg), CompanyID{company});
 	},
 	.string_assertions = RUST_ENCODED_STRING_ASSERTIONS,
 };

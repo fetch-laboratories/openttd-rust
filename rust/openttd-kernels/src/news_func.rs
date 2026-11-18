@@ -10,8 +10,8 @@
 //! The inline wrappers of `news_func.h` are ported here; they call the native `AddNewsItem`
 //! (`news_gui.cpp`), which owns the news list until the GUI is ported. The native table is
 //! bound once for the process, as `debug.rs` binds its table; it also carries the string
-//! services of `strings_func.rs` and the `CompanyNewsInformation` services of
-//! `news_type.rs`. Every service is a synchronous `noexcept` call that holds no Rust borrow.
+//! services of `strings_func.rs`, `ShowErrorMessage` of `error.rs` and the
+//! `CompanyNewsInformation` services of `news_type.rs`. Every service is a synchronous `noexcept` call that holds no Rust borrow.
 
 use crate::encoded::Descriptor;
 use crate::industry_type::IndustryID;
@@ -19,6 +19,7 @@ use crate::news_type::{
     AdviceType, NewsAllocatedData, NewsFlag, NewsFlags, NewsReference, NewsReferenceRecord,
     NewsStyle, NewsType,
 };
+use crate::services::ByteSpan;
 use crate::station_type::StationID;
 use crate::strings_type::EncodedString;
 use crate::tile_type::TileIndex;
@@ -57,6 +58,9 @@ pub struct Services {
         Sink,
         *mut c_void,
     ),
+    /// `ShowErrorMessage(summary_msg, detailed_msg, wl, x, y, extra_msg, company)`, with the
+    /// encoded strings' bytes borrowed for the call.
+    pub show_error_message: extern "C" fn(ByteSpan, ByteSpan, u8, i32, i32, ByteSpan, u8),
     /// One when the native build defines `WITH_ASSERT`.
     pub string_assertions: u8,
 }
@@ -72,6 +76,7 @@ crate::abi::layouts! {
         delete_station_news,
         delete_vehicle_news,
         get_string,
+        show_error_message,
         string_assertions,
     };
 }
@@ -159,6 +164,17 @@ extern "C" fn unbound_get_string(
 ) {
     std::process::abort()
 }
+extern "C" fn unbound_show_error_message(
+    _: ByteSpan,
+    _: ByteSpan,
+    _: u8,
+    _: i32,
+    _: i32,
+    _: ByteSpan,
+    _: u8,
+) {
+    std::process::abort()
+}
 /// Services before the native table binds; each call aborts.
 static UNBOUND: Services = Services {
     add_news_item: unbound_add_news_item,
@@ -169,6 +185,7 @@ static UNBOUND: Services = Services {
     delete_station_news: unbound_delete_id,
     delete_vehicle_news: unbound_delete_vehicle_news,
     get_string: unbound_get_string,
+    show_error_message: unbound_show_error_message,
     string_assertions: 0,
 };
 static SERVICES: OnceLock<&'static Services> = OnceLock::new();
@@ -325,6 +342,17 @@ pub(crate) mod testing {
         DeleteIndustryNews(u16),
         /// `GetString(string, args...)`: the string and its numeric parameters.
         GetString(u32, Vec<u64>),
+        /// `ShowErrorMessage(summary_msg, detailed_msg, wl, x, y, extra_msg, company)`, with
+        /// the encoded strings' bytes.
+        ShowErrorMessage {
+            summary_msg: Vec<u8>,
+            detailed_msg: Vec<u8>,
+            wl: u8,
+            x: i32,
+            y: i32,
+            extra_msg: Vec<u8>,
+            company: u8,
+        },
         /// `new CompanyNewsInformation(title, Company::Get(company), other)`.
         CompanyNewsInformation(u32, u8, u8),
         AiNewEvent(u8, ScriptEvent),
@@ -440,6 +468,45 @@ pub(crate) mod testing {
         push(Effect::GetString(string, params));
         sink(target, text.as_ptr(), text.len());
     }
+    fn bytes(span: crate::services::ByteSpan) -> Vec<u8> {
+        if span.size == 0 {
+            Vec::new()
+        } else {
+            copied(span.data, span.size)
+        }
+    }
+    extern "C" fn show_error_message(
+        summary_msg: crate::services::ByteSpan,
+        detailed_msg: crate::services::ByteSpan,
+        wl: u8,
+        x: i32,
+        y: i32,
+        extra_msg: crate::services::ByteSpan,
+        company: u8,
+    ) {
+        push(Effect::ShowErrorMessage {
+            summary_msg: bytes(summary_msg),
+            detailed_msg: bytes(detailed_msg),
+            wl,
+            x,
+            y,
+            extra_msg: bytes(extra_msg),
+            company,
+        });
+    }
+    /// The recorded `ShowErrorMessage(summary_msg, detailed_msg, wl)` with the original's
+    /// defaults for the other arguments.
+    pub(crate) fn error_message(summary_msg: Vec<u8>, detailed_msg: Vec<u8>, wl: u8) -> Effect {
+        Effect::ShowErrorMessage {
+            summary_msg,
+            detailed_msg,
+            wl,
+            x: 0,
+            y: 0,
+            extra_msg: Vec::new(),
+            company: crate::company_type::CompanyID::INVALID.0,
+        }
+    }
     static NEWS: Services = Services {
         add_news_item,
         assert_encoded,
@@ -449,6 +516,7 @@ pub(crate) mod testing {
         delete_station_news,
         delete_vehicle_news,
         get_string,
+        show_error_message,
         string_assertions: 1,
     };
     extern "C" fn ai_broadcast(event: *const ScriptEvent, skip_company: u8) {

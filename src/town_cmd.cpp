@@ -512,13 +512,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 
 		.update_virt = [](Town *town) noexcept { town->UpdateVirtCoord(); },
 		.house_count = RustHouseSpecCount32,
-		.road_type_error = [](int32_t date) noexcept {
-			if (date < INT32_MAX) {
-				ShowErrorMessage(GetEncodedString(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET), GetEncodedString(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET_EXPLANATION, TimerGameCalendar::Date{date}), WL_CRITICAL);
-			} else {
-				ShowErrorMessage(GetEncodedString(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL), GetEncodedString(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL_EXPLANATION), WL_CRITICAL);
-			}
-		},
 		.build_bridge = RustTown_build_bridge,
 		.build_tunnel = RustTown_build_tunnel,
 		.assert_clear_house = RustTown_assert_clear_house,
@@ -604,7 +597,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.cached_name = [](const Town *town) noexcept -> OpenTTDByteSpan { const auto &name = town->GetCachedName(); return {reinterpret_cast<const uint8_t *>(name.data()), name.size()}; },
 		.set_progress = [](OpenTTDTownFoundingFrame *frame, uint total) noexcept { return RunGenerationProgress(frame, [total] { RustSetGeneratingWorldProgress(GWP_TOWN, total); }); },
 		.increase_progress = [](OpenTTDTownFoundingFrame *frame) noexcept { return RunGenerationProgress(frame, [] { RustIncreaseGeneratingWorldProgress(GWP_TOWN); }); },
-		.no_town_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_COULD_NOT_CREATE_TOWN), {}, WL_CRITICAL); },
 		.random = &_random,
 		.edge_error = STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB,
 		.close_error = STR_ERROR_TOO_CLOSE_TO_ANOTHER_TOWN,
@@ -727,7 +719,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.airport_tile = RustStationAirportTile,
 		.station_activity_owner = OpenTTDStationActivityOwner,
 		.local_company = RustIsLocalCompany,
-		.bribe_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_BRIBE_FAILED), {}, WL_INFO); },
 		.next_waypoint = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Waypoint *wp : Waypoint::Iterate(from)) return {.next = RustBaseStationID(wp) + 1U, .town = OpenTTDBaseStationTown(wp)}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.next_depot = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Depot *d : Depot::Iterate(from)) return {.next = d->index.base() + 1U, .town = d->town}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.next_industry = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { if (const Industry *i = OpenTTDNextIndustry(from)) return {.next = i->index.base() + 1U, .town = OpenTTDIndustryTown(i)}; return {.next = UINT32_MAX, .town = nullptr}; },

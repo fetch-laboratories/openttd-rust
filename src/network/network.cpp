@@ -919,11 +919,6 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.bytes_per_frame = RustNetworkBytesPerFrame,
 		.bytes_per_frame_burst = RustNetworkBytesPerFrameBurst,
 		.client = &GetRustNetworkClientServices(),
-		.client_desync = []() noexcept {
-			ShowNetworkError(STR_NETWORK_ERROR_DESYNC);
-			Debug(desync, 1, "sync_err: {:08x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract);
-			Debug(net, 0, "Sync error detected");
-		},
 		.client_game = []() noexcept -> OpenTTDNetworkGameSocket * { return ClientNetworkGameSocketHandler::my_client; },
 		.command = &GetRustNetworkCommandServices(),
 		.connection = &GetRustNetworkConnectionServices(),
@@ -989,7 +984,6 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 			return FD_ISSET(socket->sock, &sets.first) != 0;
 		},
 		.server_poll_end = [](OpenTTDSessionFrame *f) noexcept { f->socket_accept.reset(); f->socket_poll.reset(); },
-		.show_lost_connection = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_LOSTCONNECTION), {}, WL_CRITICAL); },
 		.socket_delete = RustDeleteNetworkSocket,
 		.sync_freq = RustNetworkSyncFreq,
 		.sync_log = []() noexcept { NetworkSyncLog(); },

@@ -3,7 +3,17 @@
 use super::{Leaves, State};
 use crate::cargo_type::{CargoType, INVALID_CARGO};
 use crate::cargotype::TownProductionEffect;
+use crate::company_type::CompanyID;
+use crate::error::{WarningLevel, show_error_message};
 use crate::road_type::RoadTramType;
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::{EncodedString, StringParameterData};
+use crate::table::strings::{
+    STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL,
+    STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL_EXPLANATION,
+    STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET,
+    STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET_EXPLANATION,
+};
 use crate::tile_type::TileIndex;
 use crate::timer_game_calendar::CalendarDate;
 use crate::{cargo_registry, services::Services};
@@ -57,8 +67,36 @@ pub(crate) fn check_town_road_types(leaves: &Leaves) -> bool {
     if min_date <= crate::timer_game_common::calendar_date() {
         return true;
     }
-    // The native error distinguishes "not yet" from "not at all" by `min_date < INT32_MAX`.
-    (leaves.road_type_error)(min_date.0);
+    if min_date < CalendarDate(i32::MAX) {
+        show_error_message(
+            get_encoded_string(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET, &[]),
+            get_encoded_string(
+                STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET_EXPLANATION,
+                // `StringParameter` stores the date's `int32_t` base as `uint64_t`.
+                &[StringParameterData::Integer(
+                    i64::from(min_date.0).cast_unsigned(),
+                )],
+            ),
+            WarningLevel::WL_CRITICAL,
+            0,
+            0,
+            EncodedString::default(),
+            CompanyID::INVALID,
+        );
+    } else {
+        show_error_message(
+            get_encoded_string(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL, &[]),
+            get_encoded_string(
+                STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL_EXPLANATION,
+                &[],
+            ),
+            WarningLevel::WL_CRITICAL,
+            0,
+            0,
+            EncodedString::default(),
+            CompanyID::INVALID,
+        );
+    }
     false
 }
 // Compatibility name for the scalar world-generation caller.
@@ -93,4 +131,71 @@ pub extern "C" fn openttd_rust_town_first_cargo(effect: u8) -> u8 {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_climate_mask(landscape: u8) -> u16 {
     crate::house::get_climate_mask_for_landscape(crate::landscape_type::LandscapeType(landscape)).0
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::news_func::testing::{Param, encoded, error_message, take};
+    use crate::table::strings::{
+        STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL,
+        STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL_EXPLANATION,
+        STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET,
+        STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET_EXPLANATION,
+    };
+    use crate::town::RoadChoice;
+    use std::cell::Cell;
+
+    thread_local! {
+        static INTRODUCTION: Cell<i32> = const { Cell::new(0) };
+    }
+    extern "C" fn road_info(rt: u8) -> RoadChoice {
+        assert_eq!(rt, 0);
+        RoadChoice {
+            introduction_date: INTRODUCTION.get(),
+            max_speed: 0,
+            town_build: true,
+        }
+    }
+
+    /// `CheckTownRoadTypes`: a road type introduced later shows "not yet" with the date as the
+    /// detail's one parameter; none at all (`INT32_MAX`) shows "not at all" without parameters.
+    #[test]
+    fn check_town_road_types_shows_the_original_messages() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let mask = crate::type_registry::openttd_rust_road_mask();
+        // SAFETY: The registry mask is a process-wide scalar serialized by the lock.
+        let saved_mask = unsafe { mask.replace(1) };
+        let mut leaves = crate::test_tables::TOWN_LEAVES;
+        leaves.road_info = road_info;
+        take();
+        // Later than any date of the test clock.
+        INTRODUCTION.set(i32::MAX - 1);
+        let later = super::check_town_road_types(&leaves);
+        INTRODUCTION.set(i32::MAX);
+        let never = super::check_town_road_types(&leaves);
+        // SAFETY: Same serialized registry scalar.
+        unsafe { mask.write(saved_mask) };
+        assert!(!later && !never);
+        assert_eq!(
+            take(),
+            [
+                error_message(
+                    encoded(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET.0, &[]),
+                    encoded(
+                        STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET_EXPLANATION.0,
+                        &[Param::N(0x7FFF_FFFE)]
+                    ),
+                    3
+                ),
+                error_message(
+                    encoded(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL.0, &[]),
+                    encoded(
+                        STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL_EXPLANATION.0,
+                        &[]
+                    ),
+                    3
+                ),
+            ]
+        );
+    }
 }
