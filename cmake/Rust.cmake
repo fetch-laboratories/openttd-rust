@@ -182,7 +182,9 @@ if(NOT RUST_CONFIGURATION STREQUAL RUST_PREVIOUS_CONFIGURATION)
     file(WRITE "${CMAKE_BINARY_DIR}/rust-build-configuration.txt" "${RUST_CONFIGURATION}")
 endif()
 file(GLOB_RECURSE RUST_INPUTS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/*.rs" "${CMAKE_SOURCE_DIR}/rust/*/Cargo.toml")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${RUST_INPUTS}
+# openttd-kernels' build script derives table::strings from the master language file.
+set(RUST_MASTER_LANG_FILE "${CMAKE_SOURCE_DIR}/src/lang/english.txt")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${RUST_INPUTS} "${RUST_MASTER_LANG_FILE}"
     "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
     "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake")
 # Build the real crate once so dependency-added native libraries participate in linkage.
@@ -216,7 +218,7 @@ add_custom_command(OUTPUT "${RUST_ARCHIVE}"
         "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-build-configuration.txt" "-DFEATURES=${RUST_FEATURES}"
         -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    DEPENDS ${RUST_INPUTS} "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
+    DEPENDS ${RUST_INPUTS} "${RUST_MASTER_LANG_FILE}" "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
         "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
         "${CMAKE_SOURCE_DIR}/cmake/Rust.cmake"
         "${CMAKE_BINARY_DIR}/rust-build-configuration.txt"
@@ -277,7 +279,7 @@ if(NOT OPTION_TOOLS_ONLY)
             "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
             -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        DEPENDS ${RUST_INPUTS} "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
+        DEPENDS ${RUST_INPUTS} "${RUST_MASTER_LANG_FILE}" "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
             "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
             "${CMAKE_SOURCE_DIR}/cmake/Rust.cmake"
             "${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
@@ -292,6 +294,26 @@ if(NOT OPTION_TOOLS_ONLY)
             set_property(TARGET openttd_rust_native_test_support PROPERTY ${RUST_PROPERTY} "${RUST_VALUE}")
         endif()
     endforeach()
+endif()
+
+# Hold table::strings, which Rust derives from the master language file, to the table/strings.h
+# strgen writes from it. The check builds on the host in its own target directory, so it neither
+# waits on nor delays the archive builds. The game and the native test executables wait on it;
+# strgen and settingsgen, which link the archive but no string ID, cannot.
+if(NOT OPTION_TOOLS_ONLY)
+    set(RUST_STRINGS_CHECK_STAMP "${CMAKE_BINARY_DIR}/rust-strings-check.stamp")
+    add_custom_command(OUTPUT "${RUST_STRINGS_CHECK_STAMP}"
+        COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo-strgen"
+            "${CARGO_EXECUTABLE}" run --quiet --release --locked --package openttd-strgen
+            --manifest-path "${CMAKE_SOURCE_DIR}/Cargo.toml" --
+            "${RUST_MASTER_LANG_FILE}" "${CMAKE_BINARY_DIR}/generated/table/strings.h"
+        COMMAND ${CMAKE_COMMAND} -E touch "${RUST_STRINGS_CHECK_STAMP}"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        DEPENDS table_strings "${CMAKE_BINARY_DIR}/generated/table/strings.h" "${RUST_MASTER_LANG_FILE}"
+            ${RUST_INPUTS} "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
+            "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/Rust.cmake"
+        COMMENT "Checking Rust string IDs against table/strings.h" VERBATIM)
+    add_custom_target(openttd_rust_strings_check DEPENDS "${RUST_STRINGS_CHECK_STAMP}")
 endif()
 
 # Derive native ABI checks from the same declarations compiled by Rust.

@@ -193,6 +193,7 @@ pub mod string_type;
 mod string_validation;
 mod strings_func;
 pub mod strings_type;
+pub mod table;
 mod tgp;
 mod tile_cmd;
 mod tile_loop;

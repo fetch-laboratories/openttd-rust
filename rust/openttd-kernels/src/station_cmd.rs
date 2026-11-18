@@ -43,6 +43,7 @@ use crate::slope_type::Slope;
 use crate::station_type::StationFacilities;
 use crate::station_type::{StationID, StationType};
 use crate::strings_type::StringID;
+use crate::table::strings::STR_NULL;
 use crate::tile_type::{TileIndex, TileType};
 use crate::tilearea::TileArea;
 use crate::town::TownCouncilAttitudes;
@@ -4365,7 +4366,7 @@ impl Ctx<'_> {
         nearest: *const crate::services::TownHandle,
         newnoise_level: u32,
     ) -> (StringID, *const crate::services::TownHandle) {
-        let mut authority_refuse_message = StringID::STR_NULL;
+        let mut authority_refuse_message = STR_NULL;
         let mut authority_refuse_town = std::ptr::null();
         if unsafe { (*self.s.shared).settings().station_noise.read() } {
             /* do not allow to build a new airport if this raise the town noise over the maximum allowed by town */
@@ -4532,7 +4533,7 @@ impl Ctx<'_> {
         /* Check if local auth would allow a new airport */
         let (authority_refuse_message, authority_refuse_town) =
             self.check_local_authority_allows_airport(tile, nearest, newnoise_level);
-        if authority_refuse_message != StringID::STR_NULL {
+        if authority_refuse_message != STR_NULL {
             (self.cost.error_param)(
                 cost.0,
                 authority_refuse_message.0,

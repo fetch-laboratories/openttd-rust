@@ -37,6 +37,7 @@ use crate::station_type::{StationFacilities, StationFacility, StationID};
 use crate::strings_func::get_encoded_string;
 use crate::strings_type::StringID;
 use crate::strings_type::StringParameterData::Integer;
+use crate::table::strings::STR_NULL;
 use crate::tile_type::TILE_SIZE;
 use crate::timer_game_common::INVALID_DATE;
 use crate::timer_game_tick::{
@@ -2416,7 +2417,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
          * if _settings_client.gui.loading_indicators == 0, do not display indicators ... 0 is never greater than anything
          */
         if (l.indicator)(front) {
-            let mut percent_up_down = StringID::STR_NULL;
+            let mut percent_up_down = STR_NULL;
             let percent = crate::vehicle::visits::percent_filled(
                 front,
                 Some(&mut percent_up_down.0),

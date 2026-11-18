@@ -37,6 +37,7 @@ use crate::sound_type::SoundFx;
 use crate::strings_func::get_encoded_string;
 use crate::strings_type::StringID;
 use crate::strings_type::StringParameterData::Integer;
+use crate::table::strings::STR_NULL;
 use crate::tile_type::{TileIndex, TileType};
 use crate::tilearea::TileArea;
 use crate::timer_game_tick::{DAY_TICKS, INDUSTRY_CUT_TREE_TICKS, INDUSTRY_PRODUCE_TICKS};
@@ -1099,7 +1100,7 @@ fn change_industry_production(
 ) {
     let obs = observe(owner);
     let state = fields(obs.owner);
-    let mut str = StringID::STR_NULL;
+    let mut str = STR_NULL;
     let mut closeit = false;
     let mut standard = false;
     let mut suppress_message = false;
@@ -1320,7 +1321,7 @@ fn change_industry_production(
                 (u16::from((*state).prod_level) * 2).min(u16::from(PRODLEVEL_MAXIMUM)) as u8;
         }
         recalculate_multipliers = true;
-        if str == StringID::STR_NULL {
+        if str == STR_NULL {
             str = obs.up_text;
         }
     }
@@ -1335,7 +1336,7 @@ fn change_industry_production(
             (*state).prod_level = ((*state).prod_level / 2).max(PRODLEVEL_MINIMUM);
         }
         recalculate_multipliers = true;
-        if str == StringID::STR_NULL {
+        if str == STR_NULL {
             str = obs.down_text;
         }
     }
@@ -1369,7 +1370,7 @@ fn change_industry_production(
         }
         str = obs.closure_text;
     }
-    if !suppress_message && str != StringID::STR_NULL {
+    if !suppress_message && str != STR_NULL {
         change_industry_production_news(i, obs.owner, str, closeit, svc);
     }
 }

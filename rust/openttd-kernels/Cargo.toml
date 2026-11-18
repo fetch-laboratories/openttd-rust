@@ -24,3 +24,6 @@ poly1305 = { features = ["zeroize"], version = "=0.9.1", default-features = fals
 sha2 = { features = ["zeroize"], version = "=0.11.1", default-features = false }
 subtle = { version = "=2.6.1", default-features = false }
 zeroize = { version = "=1.9.1", default-features = false }
+
+[build-dependencies]
+openttd-strgen = { path = "../openttd-strgen" }
