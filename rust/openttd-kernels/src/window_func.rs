@@ -119,8 +119,10 @@ pub(crate) fn set_window_classes_dirty(cls: WindowClass) {
     (services().set_window_classes_dirty)(cls.0);
 }
 
-/// `InvalidateWindowData`: mark the window of the given class and number as invalid, so its
-/// `OnInvalidateData` runs, now with `gui_scope` or else at the next GUI tick.
+/// `InvalidateWindowData`: mark the window of the given class and number as invalid. The
+/// window's `OnInvalidateData(data, gui_scope)` runs synchronously during the call; when
+/// `gui_scope` is false it is also scheduled to run again with `gui_scope` at the next redraw.
+/// The synchronous call can reenter game state, so no Rust borrow spans this call.
 pub(crate) fn invalidate_window_data(
     cls: WindowClass,
     number: WindowNumber,
@@ -130,8 +132,8 @@ pub(crate) fn invalidate_window_data(
     (services().invalidate_window_data)(cls.0, number.0, data, gui_scope);
 }
 
-/// `InvalidateWindowClassesData`: mark all windows of a class as invalid, as
-/// [`invalidate_window_data`] does for one window.
+/// `InvalidateWindowClassesData`: mark all windows of a class as invalid, with the
+/// synchronous and scheduled `OnInvalidateData` calls of [`invalidate_window_data`].
 pub(crate) fn invalidate_window_classes_data(cls: WindowClass, data: i32, gui_scope: bool) {
     (services().invalidate_window_classes_data)(cls.0, data, gui_scope);
 }
@@ -164,9 +166,18 @@ pub(crate) mod testing {
 
     thread_local! {
         static EFFECTS: RefCell<Vec<Effect>> = const { RefCell::new(Vec::new()) };
+        static OBSERVER: std::cell::Cell<Option<fn(&Effect)>> = const { std::cell::Cell::new(None) };
     }
     fn push(effect: Effect) {
+        if let Some(observe) = OBSERVER.get() {
+            observe(&effect);
+        }
         EFFECTS.with(|e| e.borrow_mut().push(effect));
+    }
+    /// Call `observe` with each of this thread's window calls as it is made, so a test can
+    /// read its own state at the call's observation point.
+    pub(crate) fn observe(observe: Option<fn(&Effect)>) {
+        OBSERVER.set(observe);
     }
 
     extern "C" fn close_window_by_id(cls: u16, number: i32, force: bool, data: i32) {

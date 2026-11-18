@@ -3227,37 +3227,33 @@ mod startup_tests {
         static FRAME: Cell<*const crate::network_frame::Services> = const { Cell::new(std::ptr::null()) };
         static WINDOWS: Cell<*const crate::objectives::Services> = const { Cell::new(std::ptr::null()) };
     }
-    /// Append the native window calls made since the last entry, then `entry`.
     fn trace(entry: &'static str) {
-        windows();
         TRACE.with(|t| t.borrow_mut().push(entry));
     }
     fn traced() -> Vec<&'static str> {
-        windows();
         TRACE.with(|t| t.borrow().clone())
     }
-    /// Trace the recorded window calls: `chat` for `SetLocalCompany`'s team chat
-    /// invalidation, `classes` for a class invalidation.
-    fn windows() {
-        use crate::window_func::testing::{Effect, take};
+    /// Trace each native window call as it is made: `chat` for `SetLocalCompany`'s team chat
+    /// invalidation, which still sees the spectator as local and current company, and
+    /// `classes` for a class invalidation.
+    fn window_call(effect: &crate::window_func::testing::Effect) {
+        use crate::window_func::testing::Effect;
         use crate::window_type::{WindowClass, WindowNumber};
-        for effect in take() {
-            let entry = match effect {
-                Effect::InvalidateWindowData(
-                    WindowClass::WC_SEND_NETWORK_MSG,
-                    number,
-                    data,
-                    false,
-                ) if number == WindowNumber::from(crate::network_type::DestType::DESTTYPE_TEAM)
+        let entry = match *effect {
+            Effect::InvalidateWindowData(WindowClass::WC_SEND_NETWORK_MSG, number, data, false)
+                if number == WindowNumber::from(crate::network_type::DestType::DESTTYPE_TEAM)
                     && data == i32::from(COMPANY_SPECTATOR) =>
-                {
-                    "chat"
-                }
-                Effect::InvalidateWindowClassesData(..) => "classes",
-                effect => panic!("unexpected window call {effect:?}"),
-            };
-            TRACE.with(|t| t.borrow_mut().push(entry));
-        }
+            {
+                assert_eq!(
+                    (LOCAL.get(), CURRENT.get()),
+                    (COMPANY_SPECTATOR, COMPANY_SPECTATOR)
+                );
+                "chat"
+            }
+            Effect::InvalidateWindowClassesData(..) => "classes",
+            effect => panic!("unexpected window call {effect:?}"),
+        };
+        trace(entry);
     }
     fn handle() -> *mut OpenTTDCompany {
         std::ptr::without_provenance_mut(usize::from(ID) + 1)
@@ -3557,6 +3553,7 @@ mod startup_tests {
     }
     fn reset() {
         crate::window_func::testing::take();
+        crate::window_func::testing::observe(Some(window_call));
         TRACE.with(|t| t.borrow_mut().clear());
         CURRENT.set(18);
         LOCAL.set(0);
