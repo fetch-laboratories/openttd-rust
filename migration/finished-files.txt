@@ -56,6 +56,8 @@ rust/openttd-kernels/src/math.rs
 rust/openttd-kernels/src/md5.rs
 rust/openttd-kernels/src/movement.rs
 rust/openttd-kernels/src/movement/tests.rs
+rust/openttd-kernels/src/native_test_support.rs
+rust/openttd-kernels/src/native_test_support/movement.rs
 rust/openttd-kernels/src/network_action.rs
 rust/openttd-kernels/src/network_auth.rs
 rust/openttd-kernels/src/network_client.rs

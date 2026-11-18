@@ -5,15 +5,46 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Native evidence bridges; linked by `openttd_test` and fixture-only game adapters.
-#![allow(unsafe_code, clippy::too_many_lines)]
-use crate::map_func::{MapStatics, TileTypeAccess};
+//! Native evidence bridges, linked by `openttd_test` and the fixture-only game
+//! adapters. Each export hands a native fixture one production Rust function.
+//!
+//! # Safety
+//! Fixtures run serialized. Every pointer, record and table an export receives
+//! is live for the call; a `*mut` or `&mut` argument is borrowed exclusively
+//! for the call, and a `*const` or `&` table is not mutated during it. An
+//! export states its own `# Safety` only where it adds a condition.
+#![allow(unsafe_code)]
+use crate::clear_map::{
+    ClearGround, get_clear_counter, get_clear_density, get_clear_ground, get_fence, get_field_type,
+    get_industry_index_of_field, is_clear_ground, is_snow_tile, require_field,
+};
+use crate::company_type::CompanyID;
+use crate::direction_type::DiagDirection;
+use crate::follow_track::{CFollowTrackT as State, get_speed_limit};
+use crate::genworld::Callback;
+use crate::heightmap::Input as HeightmapInput;
+use crate::landscape_generation::{Frame as GenerationFrame, GenerationServices, Settings};
+use crate::map_func::{MapStatics, TileTypeAccess, World};
+use crate::movement::native_test_support::{MapLeafOracle, map_read_probe};
+use crate::pbs::Pbs;
+use crate::rail_type::RailTypes;
+use crate::road_type::RoadBits;
+use crate::services::Services;
+use crate::station::{BaseStation, get_platform_length, get_platform_length_in_direction};
 use crate::tile_map::{get_tile_z, get_tropic_zone};
 use crate::tile_type::{TileIndex, TileType};
+use crate::track_type::Trackdir;
+use crate::transport_type::TransportType;
+use crate::tree_map::{
+    get_tree_count, get_tree_density, get_tree_ground, get_tree_growth, get_tree_type,
+};
+use crate::vehicle::{OpenTTDVehicle, VehicleRef};
+use crate::witness::{
+    RAIL_CACHE_FLUSHES, RAIL_LIMIT_STOPS, RAIL_SIGNALS_RED, RAIL_SIGNALS_RESTORED,
+    openttd_rust_witness_count as count, openttd_rust_witness_enable,
+};
 
-/// Observe the production edge timestamp calculation in the original graph trace.
-/// # Safety
-/// `edge` is a live canonical edge, read under serialized fixture execution.
+/// `Edge::LastUpdate`, compared with the original graph trace.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_linkgraph_last_update(
     edge: *const crate::linkgraph::live::Edge,
@@ -21,30 +52,32 @@ pub unsafe extern "C" fn openttd_test_linkgraph_last_update(
     unsafe { &*edge }.last_update()
 }
 
-/// Exercise the production edge update with the original native trace inputs.
-/// # Safety
-/// `edge` is a live canonical edge borrowed exclusively for this fixture call.
+/// `Edge::Update` on the economy date, with the original trace's inputs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_linkgraph_edge_update(
     edge: *mut crate::linkgraph::live::Edge,
     capacity: u32,
     usage: u32,
     time: u32,
-    modes: crate::linkgraph_type::EdgeUpdateModes,
+    modes: u8,
 ) {
     let date = crate::timer_game_common::economy_date().0;
-    unsafe { &mut *edge }.update(capacity, usage, time, modes, date);
+    unsafe { &mut *edge }.update(
+        capacity,
+        usage,
+        time,
+        crate::linkgraph_type::EdgeUpdateModes(modes),
+        date,
+    );
 }
-/// # Safety
-/// `edge` is a live canonical edge borrowed exclusively for this fixture call.
+/// `Edge::Restrict`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_linkgraph_edge_restrict(
     edge: *mut crate::linkgraph::live::Edge,
 ) {
     unsafe { &mut *edge }.restrict();
 }
-/// # Safety
-/// `edge` is a live canonical edge borrowed exclusively for this fixture call.
+/// `Edge::Release`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_linkgraph_edge_release(
     edge: *mut crate::linkgraph::live::Edge,
@@ -58,12 +91,14 @@ pub extern "C" fn openttd_test_industry_removal_cost(multiplier: u32) -> i64 {
     crate::industry::removal_cost(multiplier)
 }
 
+/// `GetTileType` through the shared map descriptor, with `callback` as the
+/// accessor it calls.
 /// # Safety
-/// For nonzero counts, uphold `TileTypeAccess::raw`'s validity/serialization
-/// contract for this call. The callback is the original noexcept accessor or an
-/// equivalent live fixture; it keeps the native out-of-range assertion policy.
+/// For a nonzero map count, `TileTypeAccess::raw`'s contract holds for the
+/// call. `callback` is the original noexcept accessor or a fixture equivalent,
+/// and keeps the native out-of-range assertion.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_shared_tile_type(
+pub unsafe extern "C" fn openttd_test_shared_tile_type(
     statics: *const MapStatics,
     callback: extern "C" fn(u32) -> u8,
     tile: u32,
@@ -73,49 +108,53 @@ pub unsafe extern "C" fn openttd_rust_shared_tile_type(
         .0
 }
 
-/// Native default probe: compare audited reads with the unchanged typed services.
+/// Compare the in-place map reads with the typed services and with the native
+/// header accessors that `observe` runs, before and after `mutate`.
 /// # Safety
-/// Same allocation contract as the scheduler; all tables are live and immutable.
-/// Mutation preserves the allocation/dimensions and cannot reset/load/yield.
+/// `statics` is the canonical descriptor after `Map::Allocate`, or a copy of it
+/// with assertions off, so `TileTypeAccess::raw`'s contract holds: its base and
+/// extended arrays are initialized for its count. `tile` is in range where
+/// assertions are off. The allocation and dimensions stay live and unchanged
+/// through both `observe` and `mutate` calls: `mutate` preserves them and
+/// cannot reset, load or yield.
 #[unsafe(no_mangle)]
-#[allow(unsafe_code)]
-pub unsafe extern "C" fn openttd_rust_map_read_probe(
+pub unsafe extern "C" fn openttd_test_map_read_probe(
     statics: *const MapStatics,
-    shared: *const crate::services::Services,
+    shared: *const Services,
     tile: u32,
     mutate: extern "C" fn(u32),
-    observe: extern "C" fn(u32, *mut crate::movement::native_test_support::MapLeafOracle),
+    observe: extern "C" fn(u32, *mut MapLeafOracle),
 ) -> u8 {
     let s = unsafe { &*shared };
-    let allocation = unsafe { (*statics).load().0 };
-    let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
-    let x = (s.map_max_x)() + 1;
-    let y = (s.map_max_y)() + 1;
-    let index = crate::tile_type::TileIndex(tile);
-    if crate::tile_map::is_tile_flat(&map, index, x, y)
+    let (allocation, dimensions) = unsafe { (*statics).load() };
+    let world = World {
+        types: unsafe { TileTypeAccess::raw(allocation, s.tile_type) },
+        shared: s,
+        dimensions,
+    };
+    let map = &world.types;
+    let x = world.dimensions.size_x();
+    let y = world.size_y();
+    let index = TileIndex(tile);
+    if crate::tile_map::is_tile_flat(map, index, x, y)
         != Some((unsafe { &*(s.station_commands)() }.tile_flat)(tile))
-        || get_tile_z(&map, index, x, y) != Some((s.tile_z)(tile))
-        || get_tropic_zone(&map, index) != Some(crate::tile_type::TropicZone((s.tropic_zone)(tile)))
+        || get_tile_z(map, index, x, y) != Some((s.tile_z)(tile))
+        || get_tropic_zone(map, index) != Some(crate::tile_type::TropicZone((s.tropic_zone)(tile)))
     {
         return u8::from(false);
     }
-    match map.read(TileIndex(tile)) {
+    match map.read(index) {
         TileType::MP_CLEAR => {
-            use crate::clear_map::{
-                ClearGround, get_clear_counter, get_clear_density, get_clear_ground, get_fence,
-                get_field_type, get_industry_index_of_field, is_snow_tile, require_field,
-            };
-            use crate::direction_type::DiagDirection;
-            let mut clear = crate::movement::native_test_support::MapLeafOracle::default();
+            let mut clear = MapLeafOracle::default();
             observe(tile, &raw mut clear);
-            if is_snow_tile(&map, index).map(u32::from) != Some(clear.clear_snow)
-                || get_clear_ground(&map, index) != Some((s.clear_ground)(tile))
-                || get_clear_density(&map, index).map(u32::from) != Some(clear.clear_density)
-                || get_clear_counter(&map, index).map(u32::from) != Some(clear.clear_counter)
+            if is_snow_tile(map, index).map(u32::from) != Some(clear.clear_snow)
+                || get_clear_ground(map, index) != Some((s.clear_ground)(tile))
+                || get_clear_density(map, index).map(u32::from) != Some(clear.clear_density)
+                || get_clear_counter(map, index).map(u32::from) != Some(clear.clear_counter)
             {
                 return u8::from(false);
             }
-            if get_clear_ground(&map, index) == Some(ClearGround::CLEAR_FIELDS) {
+            if is_clear_ground(map, index, ClearGround::CLEAR_FIELDS) == Some(true) {
                 if [
                     (clear.fence_ne, DiagDirection::DIAGDIR_NE),
                     (clear.fence_se, DiagDirection::DIAGDIR_SE),
@@ -124,19 +163,19 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
                 ]
                 .into_iter()
                 .any(|(expected, dir)| {
-                    require_field(&map, index).map(|fields| {
+                    require_field(map, index).map(|fields| {
                         get_fence(&fields, dir, || crate::services_assert::not_reached())
                     }) != Some(expected)
-                }) || require_field(&map, index).map(|fields| get_field_type(&fields))
+                }) || require_field(map, index).map(|fields| get_field_type(&fields))
                     != Some(clear.field_type)
-                    || require_field(&map, index)
+                    || require_field(map, index)
                         .map(|fields| u32::from(get_industry_index_of_field(&fields).0))
                         != Some(clear.field_industry)
                 {
                     return u8::from(false);
                 }
             } else if allocation.assertions
-                && require_field(&map, index)
+                && require_field(map, index)
                     .map(|fields| get_field_type(&fields))
                     .is_some()
             {
@@ -144,44 +183,34 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
             }
         }
         TileType::MP_TREES => {
-            use crate::tree_map::{
-                get_tree_count, get_tree_density, get_tree_ground, get_tree_growth, get_tree_type,
-            };
-            let mut tree = crate::movement::native_test_support::MapLeafOracle::default();
+            let mut tree = MapLeafOracle::default();
             observe(tile, &raw mut tree);
-            if get_tree_ground(&map, index).map(|g| u32::from(g.0)) != Some(tree.tree_ground)
-                || get_tree_density(&map, index).map(u32::from) != Some(tree.tree_density)
-                || get_tree_type(&map, index).map(|t| u32::from(t.0)) != Some(tree.tree_type)
-                || get_tree_count(&map, index).map(u32::from) != Some(tree.tree_count)
-                || get_tree_growth(&map, index).map(|g| u32::from(g.0)) != Some(tree.tree_growth)
+            if get_tree_ground(map, index).map(|g| u32::from(g.0)) != Some(tree.tree_ground)
+                || get_tree_density(map, index).map(u32::from) != Some(tree.tree_density)
+                || get_tree_type(map, index).map(|t| u32::from(t.0)) != Some(tree.tree_type)
+                || get_tree_count(map, index).map(u32::from) != Some(tree.tree_count)
+                || get_tree_growth(map, index).map(|g| u32::from(g.0)) != Some(tree.tree_growth)
             {
                 return u8::from(false);
             }
         }
         _ => {}
     }
-    let kind = map.read(TileIndex(tile));
+    let kind = map.read(index);
     u8::from(
         (!allocation.assertions
             || kind == TileType::MP_CLEAR
-            || crate::clear_map::is_snow_tile_raw(&map, tile).is_none())
+            || is_snow_tile(map, index).is_none())
             && (!allocation.assertions
                 || kind == TileType::MP_TREES
-                || crate::tree_map::get_tree_type(&map, index).is_none())
+                || get_tree_type(map, index).is_none())
             && (!allocation.assertions
                 || kind == TileType::MP_WATER
-                || crate::water_map::is_coast(&map, tile).is_none())
-            && (allocation.assertions || crate::clear_map::is_snow_tile_raw(&map, tile).is_some())
-            && crate::movement::native_test_support::map_read_probe(
-                allocation, s, tile, mutate, observe,
-            ),
+                || crate::water_map::is_coast(map, tile).is_none())
+            && (allocation.assertions || is_snow_tile(map, index).is_some())
+            && map_read_probe(&world, index, mutate, observe),
     )
 }
-
-use crate::follow_track::{CFollowTrackT as State, get_speed_limit_raw};
-use crate::pbs::Pbs;
-use crate::services::Services;
-use crate::vehicle::{OpenTTDVehicle, VehicleRef};
 
 /// Follower fields the native evidence adapters print and compare after each call.
 #[repr(C)]
@@ -213,9 +242,11 @@ fn follower_output(state: &State, followed: bool) -> FollowerOutput {
         err: state.err.0,
     }
 }
-/// A boxed production follower; `openttd_test_follower_delete` frees it.
+/// A boxed production follower, initialised by `Init(const VehicleType *v,
+/// RailTypes)` when `from_vehicle`, else by `Init(Owner, RailTypes)`.
 /// # Safety
-/// Services and optional native vehicle remain live and serialized.
+/// `v` is null or a vehicle that stays live while the follower is used;
+/// `openttd_test_follower_delete` frees the result.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_follower_new(
     s: *const Services,
@@ -227,21 +258,23 @@ pub unsafe extern "C" fn openttd_test_follower_new(
     from_vehicle: bool,
 ) -> *mut State {
     let s = unsafe { &*s };
+    let mode = TransportType(mode);
     let v = std::ptr::NonNull::new(v).map(VehicleRef);
+    let types = RailTypes(types);
     Box::into_raw(Box::new(if from_vehicle {
-        State::vehicle_raw(s, mode, v, types, allow90)
+        State::vehicle(s, mode, v, types, allow90)
     } else {
-        State::new_raw(s, mode, v, owner, types, allow90)
+        State::new(s, mode, v, CompanyID(owner), types, allow90)
     }))
 }
+/// Frees a follower from `openttd_test_follower_new`.
 /// # Safety
 /// `state` came from `openttd_test_follower_new` and is not used afterwards.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_follower_delete(state: *mut State) {
     drop(unsafe { Box::from_raw(state) });
 }
-/// # Safety
-/// The follower and shared game world remain live and serialized throughout the call.
+/// `CFollowTrackT::Follow` from `tile` and `td`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_follower_follow(
     s: *const Services,
@@ -250,12 +283,10 @@ pub unsafe extern "C" fn openttd_test_follower_follow(
     td: u8,
 ) -> FollowerOutput {
     let state = unsafe { &mut *state };
-    let followed = state.follow_raw(unsafe { &*s }, tile, td);
+    let followed = state.follow(unsafe { &*s }, TileIndex(tile), Trackdir(td));
     follower_output(state, followed)
 }
 /// The production `MaskReservedTracks` step after a successful follow.
-/// # Safety
-/// Same follower and serialized world contract as Follow.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_follower_mask(
     s: *const Services,
@@ -265,8 +296,9 @@ pub unsafe extern "C" fn openttd_test_follower_mask(
     let masked = state.mask_reserved_tracks(Pbs::acquire(unsafe { &*s }));
     follower_output(state, masked)
 }
+/// `CFollowTrackT::GetSpeedLimit` on `tile`, with no minimum speed requested.
 /// # Safety
-/// Shared services and optional vehicle stay live under the game-state mutex.
+/// `v` is null or a live vehicle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_follower_speed(
     s: *const Services,
@@ -274,35 +306,33 @@ pub unsafe extern "C" fn openttd_test_follower_speed(
     v: *mut OpenTTDVehicle,
     tile: u32,
 ) -> i32 {
-    get_speed_limit_raw(
+    get_speed_limit(
         unsafe { &*s },
-        mode,
+        TransportType(mode),
         std::ptr::NonNull::new(v).map(VehicleRef),
-        tile,
+        TileIndex(tile),
+        None,
     )
 }
 
-/// # Safety
-/// The station and tile satisfy the original overload's preconditions in the serialized world.
+/// `Station::GetPlatformLength(TileIndex, DiagDirection)` when `directional`,
+/// else `Station::GetPlatformLength(TileIndex)`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_platform_length(
     s: *const Services,
-    station: *mut crate::station_type::BaseStation,
+    station: *mut BaseStation,
     tile: u32,
     dir: u8,
     directional: bool,
 ) -> u32 {
-    let world = crate::map_func::World::new(unsafe { &*s });
+    let world = World::new(unsafe { &*s });
+    let tile = TileIndex(tile);
     if directional {
-        crate::station::get_platform_length_in_direction_raw(&world, tile, dir)
+        get_platform_length_in_direction(&world, tile, DiagDirection(dir))
     } else {
-        crate::station::get_platform_length_raw(&world, station, tile)
+        get_platform_length(&world, station, tile)
     }
 }
-
-use crate::genworld::Callback;
-use crate::heightmap::Input as HeightmapInput;
-use crate::landscape_generation::{Frame as GenerationFrame, GenerationServices, Settings};
 
 /// `GenerateWorldSetAbortCallback`, for fixtures that replace the registered cleanup.
 #[unsafe(no_mangle)]
@@ -310,7 +340,7 @@ pub extern "C" fn openttd_test_world_set_abort_callback(callback: Callback) {
     crate::genworld::set_abort_callback(callback);
 }
 
-/// The registered `GenWorldInfo::abortp`, which Rust TGP sets without a native call.
+/// The registered `GenWorldInfo::abortp`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_test_world_abort_callback() -> Callback {
     crate::genworld::abort_callback()
@@ -318,7 +348,9 @@ pub extern "C" fn openttd_test_world_abort_callback() -> Callback {
 
 /// `GenerateLandscape`.
 /// # Safety
-/// Same contract as the production generation entry.
+/// As `landscape_generation::generate_landscape`: native abortion during
+/// progress returns false, and no native exception or Rust panic unwinds
+/// across the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_generate_landscape_abi(
     a: *const GenerationServices,
@@ -332,7 +364,7 @@ pub unsafe extern "C" fn openttd_test_generate_landscape_abi(
 
 /// `LoadHeightmap`, which has no production caller beside `GenerateLandscape`.
 /// # Safety
-/// Same contract as the production generation entry.
+/// As `landscape_generation::load_heightmap`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_load_heightmap_abi(
     a: *const GenerationServices,
@@ -355,8 +387,6 @@ pub unsafe extern "C" fn openttd_test_load_heightmap_abi(
 }
 
 /// `FlatEmptyWorld`.
-/// # Safety
-/// Same native map/service contract as the production generation entry.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_flat_empty_world(
     a: *const GenerationServices,
@@ -368,8 +398,6 @@ pub unsafe extern "C" fn openttd_test_flat_empty_world(
 }
 
 /// `LoadTownData` coordinate policy, compared with the original native expression.
-/// # Safety
-/// Live shared services and map for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_town_data_target(
     services: *const crate::town::import::ImportServices,
@@ -382,74 +410,67 @@ pub unsafe extern "C" fn openttd_test_town_data_target(
         .0
 }
 
+/// `IsMapSurroundedByWater`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_test_map_surrounded_by_water_abi(s: &crate::services::Services) -> u8 {
+pub extern "C" fn openttd_test_map_surrounded_by_water_abi(s: &Services) -> u8 {
     u8::from(crate::landscape::surrounded_by_water(s))
 }
 
+/// `HighestSnowLine`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_test_snow_line_highest(s: &crate::services::Services) -> u8 {
+pub extern "C" fn openttd_test_snow_line_highest(s: &Services) -> u8 {
     crate::snow_line::highest(s)
 }
 
-/// Planned-road evidence enters the production Rust owner without a native facade.
-/// # Safety
-/// Shared services and canonical map statics are live for this serialized entry.
+/// `CleanUpRoadBits` over a town's planned road bits.
 #[unsafe(no_mangle)]
-#[allow(clippy::cast_possible_truncation)] // Native uint32 town plans narrow to RoadBits.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the roads console's static_cast<RoadBits>(bits)"
+)]
 pub unsafe extern "C" fn openttd_test_clean_up_road_bits(
-    shared: *const crate::services::Services,
+    shared: *const Services,
     tile: u32,
     bits: u32,
 ) -> u32 {
     u32::from(
-        crate::road_cleanup::clean_up_road_bits(
-            unsafe { &*shared },
-            tile,
-            crate::services::RoadBits(bits as u8),
-        )
-        .0,
+        crate::road_cleanup::clean_up_road_bits(unsafe { &*shared }, tile, RoadBits(bits as u8)).0,
     )
 }
 
-/// # Safety
-/// Every station, road vehicle and service table is live and serialized throughout these probes.
+/// `_station_kdtree.Insert(st->index)`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_station_insert(
-    s: *const Services,
-    st: *mut crate::station::BaseStation,
-) {
+pub unsafe extern "C" fn openttd_test_station_insert(s: *const Services, st: *mut BaseStation) {
     crate::station::spatial::insert(unsafe { &*s }, st);
 }
+/// `Station::MoveSign`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_move_sign(
     s: *const Services,
-    st: *mut crate::station::BaseStation,
+    st: *mut BaseStation,
     tile: u32,
 ) {
-    crate::station::spatial::station_move_sign(
-        unsafe { &*s },
-        st,
-        crate::tile_type::TileIndex(tile),
-    );
+    crate::station::spatial::station_move_sign(unsafe { &*s }, st, TileIndex(tile));
 }
+/// `ForAllStationsRadius`, visiting each station through `visit`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_radius(
     s: *const Services,
     center: u32,
     distance: u32,
     context: *mut std::ffi::c_void,
-    visit: extern "C" fn(*mut std::ffi::c_void, *mut crate::station::BaseStation),
+    visit: extern "C" fn(*mut std::ffi::c_void, *mut BaseStation),
 ) {
     crate::station::spatial::for_all_stations_radius(
         unsafe { &*s },
-        crate::tile_type::TileIndex(center),
+        TileIndex(center),
         distance,
         |st| {
             visit(context, st);
         },
     );
 }
+/// `ModifyStationRatingAround`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_rating_around(
     s: *const Services,
@@ -458,8 +479,15 @@ pub unsafe extern "C" fn openttd_test_station_rating_around(
     amount: i32,
     radius: u32,
 ) {
-    crate::station::spatial::modify_rating_around(unsafe { &*s }, tile, owner, amount, radius);
+    crate::station::spatial::modify_station_rating_around(
+        unsafe { &*s },
+        TileIndex(tile),
+        CompanyID(owner),
+        amount,
+        radius,
+    );
 }
+/// `ModifyStationRatingAround`'s per-station update.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_modify_rating(
     st: *mut crate::station_service::Service,
@@ -470,8 +498,6 @@ pub unsafe extern "C" fn openttd_test_station_modify_rating(
     }
 }
 /// Exercise production unload preparation with native fixture callback frames.
-/// # Safety
-/// The live record and immutable tables meet `prepare_unload`'s entry contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_prepare(
     front: VehicleRef,
@@ -480,14 +506,16 @@ pub unsafe extern "C" fn openttd_test_station_prepare(
 ) {
     crate::station_service::prepare_unload(front, unsafe { &*world }, unsafe { &*loading });
 }
+/// `Station::GetPrimaryRoadStop(const RoadVehicle *)`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_primary_stop(
     s: *const Services,
-    st: *mut crate::station::BaseStation,
+    st: *mut BaseStation,
     vehicle: VehicleRef,
 ) -> *mut crate::road_stop::Stop {
     crate::road_stop::primary_for_vehicle(unsafe { &*s }, st, vehicle)
 }
+/// `RoadStop::GetNextRoadStop`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_next_stop(
     s: *const Services,
@@ -496,17 +524,19 @@ pub unsafe extern "C" fn openttd_test_station_next_stop(
 ) -> *mut crate::road_stop::Stop {
     crate::road_stop::next_for_vehicle(unsafe { &*s }, stop, vehicle)
 }
+/// `GetRailTileArea`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_rail_area(
     s: *const Services,
-    st: *mut crate::station::BaseStation,
+    st: *mut BaseStation,
     tile: u32,
     area: u8,
 ) -> crate::tilearea::TileArea {
     crate::newgrf_station::rail_tile_area(unsafe { &*s }, st, tile, area)
 }
 
-/// Fixed build/mutation observations against the original native template.
+/// The station kd-tree's builds, insertions, removals and searches over
+/// fixed ids, compared with the original `Kdtree` template.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_tree_sequence(
     s: *const Services,
@@ -558,9 +588,10 @@ crate::abi::shared_records! {
     }
 }
 
-/// Native default test of distinct nested stack results and early return cleanup.
+/// Nested `CommandCost` results on the stack stay distinct, and each is
+/// destroyed on return.
 /// # Safety
-/// The supplied table constructs/destroys native objects in the advertised storage.
+/// The supplied table constructs and destroys native objects in the advertised storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_command_stack_probe(
     s: &crate::services::CommandCostServices,
@@ -597,8 +628,6 @@ pub unsafe extern "C" fn openttd_test_grf_text_dump(
 }
 
 /// Exercise the aircraft controller over native fixture handles.
-/// # Safety
-/// Handles and immutable services satisfy the aircraft module's synchronous contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_aircraft_event(
     leaves: *const crate::aircraft::Leaves,
@@ -610,7 +639,7 @@ pub unsafe extern "C" fn openttd_test_aircraft_event(
 
 /// Exercise native record returns and enum arguments.
 /// # Safety
-/// The immutable table returns only ABI marker values, never dereferenced handles.
+/// The table returns only ABI marker values, never dereferenced handles.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_ground_abi_calls(
     calls: *const crate::ground::ABICalls,
@@ -619,8 +648,6 @@ pub unsafe extern "C" fn openttd_test_ground_abi_calls(
 }
 
 /// Exercise production object generation through native fixture storage.
-/// # Safety
-/// The services, cost objects and frame satisfy the object module's entry contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_object_generate(
     s: *const crate::objects::ObjectServices,
@@ -633,12 +660,10 @@ pub unsafe extern "C" fn openttd_test_object_generate(
 }
 
 /// Exercise production tree generation with native fixture callbacks.
-/// # Safety
-/// Immutable tables and settings satisfy the tree module's serialized entry contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_trees_generate(
     services: *const crate::trees::TreeServices,
-    shared: *const crate::services::Services,
+    shared: *const Services,
 ) -> u8 {
     u8::from(unsafe { crate::trees::generate(services, shared) })
 }
@@ -655,41 +680,43 @@ pub extern "C" fn openttd_test_network_wait_queue_clear() {
     crate::network_command::clear_wait_queue();
 }
 
-/// Deep snapshot for the existing native engine fixtures; it has no shell/pool owner.
+/// A deep copy of an engine's bindings, which no pool owns.
 /// # Safety
-/// Source is a live serialized binding record; the result is uniquely owned by the fixture.
+/// The fixture owns the result, and `openttd_test_engine_bindings_drop` frees it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_engine_bindings_clone(
     source: &crate::engine::bindings::Bindings,
 ) -> *mut crate::engine::bindings::Bindings {
     Box::into_raw(Box::new(source.clone()))
 }
+/// Frees a copy from `openttd_test_engine_bindings_clone`.
 /// # Safety
-/// Retire exactly one fixture snapshot, after all borrowed views end.
+/// `snapshot` is freed once, after every view of it has ended.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_engine_bindings_drop(
     snapshot: *mut crate::engine::bindings::Bindings,
 ) {
     drop(unsafe { Box::from_raw(snapshot) });
 }
-/// # Safety
-/// Destination is a live serialized Rust-owned vector.
+/// Empties an engine's cargo sprite groups.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_engine_sprites_clear(
     destination: &mut crate::industrytype::NativeVec<crate::engine::bindings::CargoBinding>,
 ) {
     *destination = crate::industrytype::NativeVec::new();
 }
+/// Empties an engine's wagon overrides.
 /// # Safety
-/// Destination is a live serialized Rust-owned vector, with no retained nested views.
+/// No view of the overrides' engine lists outlives the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_engine_overrides_clear(
     destination: &mut crate::industrytype::NativeVec<crate::engine::bindings::WagonOverride>,
 ) {
     *destination = crate::industrytype::NativeVec::new();
 }
+/// Replaces an engine's badges with `count` ids from `items`.
 /// # Safety
-/// Source IDs are readable for count; destination is live/serialized and may alias source.
+/// `items` is readable for `count` ids and may alias `destination`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_engine_badges_assign(
     destination: &mut crate::industrytype::NativeVec<u32>,
@@ -703,8 +730,7 @@ pub unsafe extern "C" fn openttd_test_engine_badges_assign(
     };
     *destination = crate::industrytype::NativeVec::from_vec(items);
 }
-/// # Safety
-/// Live serialized props and borrowed group share the fixture lifetime.
+/// `GRFFilePropsBase::SetSpriteGroup` for `cargo`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_engine_sprite(
     props: *mut crate::engine::bindings::GrfProps,
@@ -715,11 +741,12 @@ pub unsafe extern "C" fn openttd_test_engine_sprite(
         crate::engine::bindings::set_sprite_group(props, cargo, group);
     }
 }
+/// Appends a wagon override, as `SetWagonOverrideSprites`.
 /// # Safety
-/// Bindings and shared table are live/serialized; IDs are readable for count.
+/// `ids` is readable for `count` ids.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_engine_override(
-    shared: &crate::services::Services,
+    shared: &Services,
     bindings: *mut crate::engine::bindings::Bindings,
     cargo: u8,
     group: *const std::ffi::c_void,
@@ -749,14 +776,14 @@ pub struct ShipYapfProbe {
 impl ShipYapfProbe {
     fn vehicle<'a>(
         &self,
-        s: &'a crate::services::Services,
+        s: &'a Services,
         leaves: &'a crate::ship_control::Leaves,
     ) -> crate::ship_yapf::Vehicle<'a> {
         crate::ship_yapf::Vehicle::new(
             s,
             self.input,
             crate::track_type::TrackBits(self.state),
-            crate::track_type::Trackdir(self.trackdir),
+            Trackdir(self.trackdir),
             leaves,
         )
     }
@@ -764,11 +791,10 @@ impl ShipYapfProbe {
 
 /// Run the production `ChooseShipTrack` over the probe's input.
 /// # Safety
-/// The shared table, leaves, probe and path cache are live and exclusive for the
-/// call, under the ship search's module contract.
+/// The probe and path cache are exclusive for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_ship_choose_ship_track(
-    shared: *const crate::services::Services,
+    shared: *const Services,
     leaves: *const crate::ship_control::Leaves,
     probe: *mut ShipYapfProbe,
     tile: u32,
@@ -780,7 +806,7 @@ pub unsafe extern "C" fn openttd_test_ship_choose_ship_track(
         unsafe { (&*shared, &*leaves, &mut *probe, &mut *path_cache) };
     let v = probe.vehicle(s, leaves);
     let mut path_found = false;
-    let mut best_origin_dir = crate::track_type::Trackdir::INVALID_TRACKDIR;
+    let mut best_origin_dir = Trackdir::INVALID_TRACKDIR;
     let td = crate::ship_yapf::choose_ship_track(
         &v,
         TileIndex(tile),
@@ -798,17 +824,17 @@ pub unsafe extern "C" fn openttd_test_ship_choose_ship_track(
 /// Run the production `CheckShipReverse` over the probe's input; `trackdir`
 /// may be null, as the original's.
 /// # Safety
-/// As [`openttd_test_ship_choose_ship_track`]; `trackdir` is null or writable.
+/// `trackdir` is null or writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_ship_check_ship_reverse(
-    shared: *const crate::services::Services,
+    shared: *const Services,
     leaves: *const crate::ship_control::Leaves,
     probe: *const ShipYapfProbe,
     trackdir: *mut u8,
 ) -> u8 {
     let (s, leaves, probe) = unsafe { (&*shared, &*leaves, &*probe) };
     let v = probe.vehicle(s, leaves);
-    let mut out = crate::track_type::Trackdir::INVALID_TRACKDIR;
+    let mut out = Trackdir::INVALID_TRACKDIR;
     let reverse =
         crate::ship_yapf::check_ship_reverse(&v, (!trackdir.is_null()).then_some(&mut out));
     if !trackdir.is_null() {
@@ -820,10 +846,10 @@ pub unsafe extern "C" fn openttd_test_ship_check_ship_reverse(
 /// Run the production `FindWaterRegionPath` over the probe's input, writing at
 /// most `capacity` patches of the path to `out`; returns the path's length.
 /// # Safety
-/// As [`openttd_test_ship_choose_ship_track`]; `out` holds `capacity` writable patches.
+/// `out` holds `capacity` writable patches.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_ship_find_water_region_path(
-    shared: *const crate::services::Services,
+    shared: *const Services,
     leaves: *const crate::ship_control::Leaves,
     probe: *const ShipYapfProbe,
     start_tile: u32,
@@ -922,8 +948,6 @@ pub struct RailYapfSearch {
 /// The production rail search over the native fixture: `ChooseRailTrack`, or
 /// `FindNearestSafeTile` from `tile` and `td` with `safe_tile`. Witnesses turn
 /// on, and the counts are the differences around the search.
-/// # Safety
-/// Shared services and the front train record stay live under the game-state mutex.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_rail_yapf(
     s: *const Services,
@@ -933,11 +957,7 @@ pub unsafe extern "C" fn openttd_test_rail_yapf(
     td: u8,
     reserve_track: bool,
 ) -> RailYapfSearch {
-    use crate::witness::{
-        RAIL_CACHE_FLUSHES, RAIL_LIMIT_STOPS, RAIL_SIGNALS_RED, RAIL_SIGNALS_RESTORED,
-        openttd_rust_witness_count as count,
-    };
-    crate::witness::openttd_rust_witness_enable();
+    openttd_rust_witness_enable();
     let before = [
         RAIL_CACHE_FLUSHES,
         RAIL_LIMIT_STOPS,
@@ -949,8 +969,8 @@ pub unsafe extern "C" fn openttd_test_rail_yapf(
         unsafe { &*s },
         crate::train::Handle::from_record(v),
         safe_tile,
-        crate::tile_type::TileIndex(tile),
-        crate::track_type::Trackdir(td),
+        TileIndex(tile),
+        Trackdir(td),
         reserve_track,
     );
     let after = [

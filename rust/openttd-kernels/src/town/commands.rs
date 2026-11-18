@@ -1094,10 +1094,10 @@ impl Commands<'_> {
             | TownAction::AdvertiseMedium
             | TownAction::AdvertiseLarge => {
                 if execute {
-                    crate::station::spatial::modify_rating_around(
+                    crate::station::spatial::modify_station_rating_around(
                         self.shared,
-                        unsafe { super::position(t.state) }.0,
-                        (self.shared.current_company)(),
+                        unsafe { super::position(t.state) },
+                        self.current_company(),
                         [0x40, 0x70, 0xA0][usize::from(action.0)],
                         [10, 15, 20][usize::from(action.0)],
                     );
@@ -1153,10 +1153,10 @@ impl Commands<'_> {
                         (*t.state).simulation.exclusive_counter = 12;
                         (*t.state).simulation.exclusivity = (self.shared.current_company)();
                     }
-                    crate::station::spatial::modify_rating_around(
+                    crate::station::spatial::modify_station_rating_around(
                         self.shared,
-                        unsafe { super::position(t.state) }.0,
-                        (self.shared.current_company)(),
+                        unsafe { super::position(t.state) },
+                        self.current_company(),
                         130,
                         17,
                     );

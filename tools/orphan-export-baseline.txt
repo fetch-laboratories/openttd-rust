@@ -1,5 +1,3 @@
-no declaration | openttd_rust_map_read_probe
-no declaration | openttd_rust_shared_tile_type
 no declaration | openttd_rust_tgp_estimate
 no production user | openttd_rust_abi_layout_named
 no production user | openttd_rust_action2_reset
@@ -14,11 +12,9 @@ no production user | openttd_rust_house_resolver_exchange
 no production user | openttd_rust_industry_location_check
 no production user | openttd_rust_industry_shape_check
 no production user | openttd_rust_list_token
-no production user | openttd_rust_map_read_probe
 no production user | openttd_rust_object_restore_first
 no production user | openttd_rust_object_tunnel_hide
 no production user | openttd_rust_pbs_follow
-no production user | openttd_rust_shared_tile_type
 no production user | openttd_rust_signal_inspect
 no production user | openttd_rust_signal_workset_probe
 no production user | openttd_rust_subsidy_delete_with
