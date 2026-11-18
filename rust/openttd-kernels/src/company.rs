@@ -2412,8 +2412,11 @@ fn network_new(s: &Services, id: u8, client: Option<u32>) {
     let f = ((s.shared.command_post)().network)();
     let f = (f.network)();
     let company = (s.identity.company)(crate::company_type::CompanyID(id));
-    let info = client.map_or(std::ptr::null_mut(), |id| {
-        (s.shared.network_client_info)(id)
+    let info = client.map_or(crate::network_connection::ClientInfo::NONE, |id| {
+        crate::network_connection::ClientInfo::get_by_client_id(
+            s.shared,
+            crate::network_type::ClientID(id),
+        )
     });
     crate::network_server::new_company(f.lifecycle, f, company, info);
 }

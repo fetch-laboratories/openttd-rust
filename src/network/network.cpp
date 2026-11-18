@@ -1049,7 +1049,6 @@ const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcep
 			ci->client_name = _settings_client.network.client_name;
 			return ci;
 		},
-		.announce_company = [](void *info, uint8_t company) noexcept { NetworkServerSendChat(NETWORK_ACTION_COMPANY_NEW, DESTTYPE_BROADCAST, 0, "", static_cast<NetworkClientInfo *>(info)->client_id, company + 1); },
 		.auth_client_key = []() noexcept { NetworkAuthenticationClientHandler::EnsureValidSecretKeyAndUpdatePublicKey(_settings_client.network.client_secret_key, _settings_client.network.client_public_key); },
 		.check_names = []() noexcept { CheckClientAndServerName(); },
 		.close_admin_listeners = []() noexcept { ServerNetworkAdminSocketHandler::CloseListeners(); },

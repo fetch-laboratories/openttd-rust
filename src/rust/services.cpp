@@ -908,8 +908,8 @@ static EncodedString RustEncodedString(OpenTTDByteSpan bytes) noexcept
 static_assert(WL_INFO == 0 && WL_WARNING == 1 && WL_ERROR == 2 && WL_CRITICAL == 3);
 static_assert(std::is_same_v<std::underlying_type_t<TextColour>, uint16_t> && TC_SILVER == 0x01 && TC_LIGHT_BLUE == 0x0D);
 static_assert(CC_DEFAULT == TC_SILVER && CC_WARNING == TC_LIGHT_BLUE);
-static_assert(std::is_same_v<std::underlying_type_t<NetworkAction>, uint8_t> && NETWORK_ACTION_JOIN == 0 && NETWORK_ACTION_LEAVE == 1 && NETWORK_ACTION_SERVER_MESSAGE == 2 && NETWORK_ACTION_KICKED == 11);
-static_assert(std::is_same_v<std::underlying_type_t<DestType>, uint8_t> && DESTTYPE_CLIENT == 2);
+static_assert(std::is_same_v<std::underlying_type_t<NetworkAction>, uint8_t> && NETWORK_ACTION_JOIN == 0 && NETWORK_ACTION_LEAVE == 1 && NETWORK_ACTION_SERVER_MESSAGE == 2 && NETWORK_ACTION_COMPANY_NEW == 10 && NETWORK_ACTION_KICKED == 11);
+static_assert(std::is_same_v<std::underlying_type_t<DestType>, uint8_t> && DESTTYPE_BROADCAST == 0 && DESTTYPE_CLIENT == 2);
 static const OpenTTDNewsServices _rust_news_services{
 	.add_news_item = [](const OpenTTDAddNewsItemArgs *args) noexcept {
 		AddNewsItem(RustEncodedString({reinterpret_cast<const char *>(args->headline), args->headline_length}), static_cast<NewsType>(args->type), static_cast<NewsStyle>(args->style),

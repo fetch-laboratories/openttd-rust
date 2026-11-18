@@ -6,7 +6,7 @@ use crate::company_type::CompanyID;
 use crate::console_type::CC_DEFAULT;
 use crate::debug::debug;
 use crate::error::{WarningLevel, show_error_message};
-use crate::network_connection::client_name;
+use crate::network_connection::ClientInfo;
 use crate::network_frame::Services as FrameServices;
 use crate::network_frame::{
     packet_check, packet_new, packet_recv_string, packet_send, packet_send_string,
@@ -626,20 +626,20 @@ pub(crate) fn receive_server_error_quit(
         9, "Client::Receive_SERVER_ERROR_QUIT(): client_id={}", client_id.0
     );
 
-    let ci = (f.command.company.shared.network_client_info)(client_id.0);
+    let ci = ClientInfo::get_by_client_id(f.command.company.shared, client_id);
     if !ci.is_null() {
         network_text_message(
             NetworkAction::NETWORK_ACTION_LEAVE,
             CC_DEFAULT,
             false,
-            unsafe { client_name(f.connection, ci) },
+            ci.client_name(f.connection),
             b"",
             StringParameterData::Integer(u64::from(
                 get_network_error_msg(NetworkErrorCode(unsafe { packet::recv_uint8(p, f.packet) }))
                     .0,
             )),
         );
-        (s.delete_info)(ci);
+        (s.delete_info)(ci.as_ptr());
     }
 
     invalidate_window_data(WindowClass::WC_CLIENT_LIST, WindowNumber(0), 0, false);
@@ -665,7 +665,7 @@ pub(crate) fn receive_server_quit(
         9, "Client::Receive_SERVER_QUIT(): client_id={}", client_id.0
     );
 
-    let ci = (f.command.company.shared.network_client_info)(client_id.0);
+    let ci = ClientInfo::get_by_client_id(f.command.company.shared, client_id);
     if ci.is_null() {
         debug!(
             net,
@@ -676,11 +676,11 @@ pub(crate) fn receive_server_quit(
             NetworkAction::NETWORK_ACTION_LEAVE,
             CC_DEFAULT,
             false,
-            unsafe { client_name(f.connection, ci) },
+            ci.client_name(f.connection),
             b"",
             StringParameterData::Integer(u64::from(STR_NETWORK_MESSAGE_CLIENT_LEAVING.0)),
         );
-        (s.delete_info)(ci);
+        (s.delete_info)(ci.as_ptr());
     }
 
     invalidate_window_data(WindowClass::WC_CLIENT_LIST, WindowNumber(0), 0, false);
@@ -706,13 +706,13 @@ pub(crate) fn receive_server_join(
         9, "Client::Receive_SERVER_JOIN(): client_id={}", client_id.0
     );
 
-    let ci = (f.command.company.shared.network_client_info)(client_id.0);
+    let ci = ClientInfo::get_by_client_id(f.command.company.shared, client_id);
     if !ci.is_null() {
         network_text_message(
             NetworkAction::NETWORK_ACTION_JOIN,
             CC_DEFAULT,
             false,
-            unsafe { client_name(f.connection, ci) },
+            ci.client_name(f.connection),
             b"",
             StringParameterData::Empty,
         );

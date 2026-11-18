@@ -1648,7 +1648,6 @@ pub(crate) const NETWORK_LIFECYCLE: crate::network_lifecycle::Services =
         admins_shutdown: unreachable0,
         admins_welcome: unreachable0,
         allocate_server_info: unreachable0,
-        announce_company: unreachable2,
         auth_client_key: unreachable0,
         check_names: unreachable0,
         close_admin_listeners: unreachable0,

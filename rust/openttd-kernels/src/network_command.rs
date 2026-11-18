@@ -698,7 +698,6 @@ pub(crate) fn receive_client(
         return send_error(NetworkErrorCode::NETWORK_ERROR_TOO_MANY_COMMANDS);
     }
 
-    let shell = socket::server(game);
     debug!(
         net,
         9,
@@ -713,9 +712,9 @@ pub(crate) fn receive_client(
         return NetworkRecvStatus::NETWORK_RECV_STATUS_CLIENT_QUIT;
     }
 
-    let ci = (f.connection.info)(shell);
-    let client_id = |ci| crate::network_connection::client_id(f.connection, ci);
-    let client_playas = |ci| crate::network_connection::client_playas(f.connection, ci);
+    let ci = crate::network_connection::ClientInfo::get_info(f.connection, game);
+    let client_id = |ci: crate::network_connection::ClientInfo| ci.client_id(f.connection);
+    let client_playas = |ci: crate::network_connection::ClientInfo| ci.client_playas(f.connection);
 
     if let Some(err) = err {
         iconsole_print!(

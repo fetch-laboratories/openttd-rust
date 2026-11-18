@@ -13,7 +13,6 @@ struct OpenTTDNetworkLifecycleServices {
 	void (*admins_shutdown)() noexcept OPENTTD_SERVICE_DEFAULT(admins_shutdown);
 	void (*admins_welcome)() noexcept OPENTTD_SERVICE_DEFAULT(admins_welcome);
 	void * (*allocate_server_info)() noexcept OPENTTD_SERVICE_DEFAULT(allocate_server_info);
-	void (*announce_company)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(announce_company);
 	void (*auth_client_key)() noexcept OPENTTD_SERVICE_DEFAULT(auth_client_key);
 	void (*check_names)() noexcept OPENTTD_SERVICE_DEFAULT(check_names);
 	void (*close_admin_listeners)() noexcept OPENTTD_SERVICE_DEFAULT(close_admin_listeners);
