@@ -27,5 +27,28 @@
     "reason": "#964 decision 4: RoadVehLeaveDepot, IndividualRoadVehicleController and RoadFindPathToDest read these two settings at their observation points with one field-sized load each. Two catalog fields against the deleted OpenTTDRoadEntry record (5 fields), GetRoadEntry and RustRoadQueue.",
     "retiring_owner": "#734",
     "retirement_condition": "The fields leave the catalog when Rust owns the game settings storage."
+  },
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/roadvehicle.cpp": 5
+    },
+    "reason": "Review of #1000 (group 2 porting, finding 2): GetCurrentMaxSpeed now reads GetBridgeType through World::bridge_type and the speed through TunnelBridgeServices::speed instead of the deleted-in-road MapSvcBridgeSpeed path, so the native max-speed case supplies a bridge tile in its fixture map and a TunnelBridgeServices fixture and checks the bridge type passed to the speed lookup.",
+    "existing_alternatives": "The case already compares against the native RoadVehicle::GetCurrentMaxSpeed; without the map and speed fixture the bridge branch would read an unset map.",
+    "retiring_owner": "#736",
+    "retirement_condition": "Retires with src/tests/roadvehicle.cpp when #736 moves the road vehicle test evidence off C++."
+  },
+  {
+    "kind": "growth",
+    "counter": "tools_cpp",
+    "added": {
+      "tools/migration/windows-abi.cpp": 3,
+      "tools/migration/windows-abi/road.inc": 122
+    },
+    "reason": "Review of #1000 (group 3 behaviour 5, group 4 behaviour 3-4, group 4 porting 3, 6-7, group 1 porting 10): the road probe regains two observations the leaf removal had lost, the entrance clear of a scheduled destination-bay arrival before BeginLoading and the economy-day depot search with the configured penalty on a small road map (99 orders nothing, 100 orders the depot), supplies the orders owner the controller's typed CheckOrders now reads, and reads path elements through the new out-pointer getter.",
+    "existing_alternatives": "No scenario or Rust test drives these controller paths; the standalone YAPF tests call the pathfinder without CheckIfRoadVehNeedsService.",
+    "retiring_owner": "#736",
+    "retirement_condition": "Retires with the road ABI probe cases when #736 moves the road vehicle evidence off C++."
   }
 ]
