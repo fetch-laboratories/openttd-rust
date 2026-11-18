@@ -1091,7 +1091,8 @@ mod controller {
             order_type: OrderType::OT_NOTHING,
         }
     }
-    /// Serviced on day 0 with no interval, now day 1, breakdowns on: due.
+    /// Serviced on day 0 with no interval, now day 1, servicing allowed and breakdowns
+    /// off (`breakdowns: 0`): due, since the zero interval has passed.
     extern "C" fn service_interval(_: VehicleRef) -> crate::vehicle::maintenance::Interval {
         crate::vehicle::maintenance::Interval {
             company: std::ptr::null(),
@@ -1105,8 +1106,8 @@ mod controller {
             breakdowns: 0,
         }
     }
-    /// Each order the handler sends to the depot: service at depot 55, no stopping on
-    /// the way, implicit orders suppressed.
+    /// Each order the handler sends to the depot: a go-to-depot order for depot 55, with
+    /// implicit orders suppressed.
     extern "C" fn service_start_stop_dirty(v: VehicleRef) {
         let order = v.current_order();
         assert_eq!(order.kind(), OrderType::OT_GOTO_DEPOT);
