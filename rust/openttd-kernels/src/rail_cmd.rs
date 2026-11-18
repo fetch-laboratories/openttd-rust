@@ -1693,7 +1693,7 @@ impl<'a> Ctx<'a> {
                         });
                     }
                     MP_ROAD => {
-                        signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE.cast_signed())
+                        signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE.cast_signed());
                     }
                     MP_TUNNELBRIDGE => {
                         w::hit(w::RAIL_CMD_SIGNAL_WORMHOLE);

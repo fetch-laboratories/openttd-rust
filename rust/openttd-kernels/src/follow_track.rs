@@ -152,7 +152,7 @@ impl CFollowTrackT {
                     v.vehicle_type() == crate::vehicle_type::VehicleType::VEH_TRAIN
                 }),
         );
-        let o = v.map_or(Owner::INVALID, |v| v.owner());
+        let o = v.map_or(Owner::INVALID, crate::vehicle::VehicleRef::owner);
         let railtypes = if mode == RAIL && railtype_override == RailTypes::INVALID_RAILTYPES {
             RailTypes(
                 (m.vehicle().train_handle)(deref_veh(v).0.as_ptr()).get_compatible_railtypes(),

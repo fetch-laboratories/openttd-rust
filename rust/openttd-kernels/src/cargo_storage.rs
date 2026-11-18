@@ -2418,8 +2418,8 @@ mod tests {
     fn articulate(part: &Part) {
         unsafe {
             (*part.record).subtype |=
-                1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0
-        };
+                1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
+        }
     }
     fn head(part: &Part) -> Option<VehicleRef> {
         std::ptr::NonNull::new(part.record).map(VehicleRef)

@@ -26,6 +26,7 @@ use crate::strings_type::INVALID_STRING_ID as ERROR;
 use crate::strings_type::StringID;
 use crate::tile_type::TileIndex;
 use crate::vehicle::VehicleType;
+use crate::vehicle_base::VehState;
 use crate::vehicle_type::VehicleID;
 use crate::vehiclelist::{VehicleListIdentifier, VehicleListType};
 
@@ -657,7 +658,7 @@ pub(crate) unsafe fn cmd_sell_vehicle(
     }
     if crate::fleet::transactions::record(s.transactions, front)
         .vehstatus()
-        .test(crate::vehicle_base::VehState::Crashed)
+        .test(VehState::Crashed)
     {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
@@ -760,12 +761,12 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
     }
     let handle = unsafe { vehicle_ref(v, s.vehicles) };
     let status = (handle).vehstatus();
-    if status.test(crate::vehicle_base::VehState::Crashed) {
+    if status.test(VehState::Crashed) {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
     match crate::fleet::record(b.groups, v).vehicle_type() {
         VehicleType::TRAIN => {
-            if status.test(crate::vehicle_base::VehState::Stopped)
+            if status.test(VehState::Stopped)
                 && crate::raw_field::read_field!(handle.ground_cache(), cached_power) == 0
             {
                 return (b.cost.error)(cost, s.strings.no_power);
@@ -841,11 +842,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             );
         }
         // The stopped bit is read again here, after the news and callback above.
-        handle.set_vehstatus(
-            handle
-                .vehstatus()
-                .flip(crate::vehicle_base::VehState::Stopped),
-        );
+        handle.set_vehstatus(handle.vehstatus().flip(VehState::Stopped));
         if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN {
             (handle).set_cur_speed(0); // trains can stop 'slowly'
         }
