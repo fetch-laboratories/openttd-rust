@@ -43,6 +43,7 @@ CORE_SIGNALS = frozenset(
     }
 )
 PATTERN = Path("/proc/sys/kernel/core_pattern")
+USES_PID = Path("/proc/sys/kernel/core_uses_pid")
 TRACE_DIR = "CRASH_STACKS_DIR"
 DEBUGGER = ("gdb", "-batch", "-nx", "-ex", "thread apply all bt")
 INSTALL_TIMEOUT = 600
@@ -94,7 +95,9 @@ def restore_cores(prepared: tuple[Path, str] | None) -> None:
         return
     folder, previous = prepared
     if not sudo("sysctl", "-w", f"kernel.core_pattern={previous}"):
-        say(f"kernel.core_pattern still names the deleted {folder}")
+        # The kernel still writes cores there, so the folder stays.
+        say(f"kernel.core_pattern still names {folder}; it is kept")
+        return
     shutil.rmtree(folder, ignore_errors=True)
 
 
@@ -116,14 +119,24 @@ def core_file(folder: Path | None, pid: int, cwd: Path, started: float) -> Path 
         return None
     if not pattern or pattern.startswith("|"):
         return None
+    # Only a name that carries the PID is this child's: with a plain `core`
+    # any process in the same folder could have written it.
+    qualified = "%p" in pattern
+    if not qualified:
+        try:
+            qualified = USES_PID.read_text().strip() == "1"
+        except OSError:
+            qualified = False
+    if not qualified:
+        return None
     name = pattern.replace("%p", str(pid)).replace("%%", "%")
     if "%" in name:
         return None  # Other specifiers name a file this script cannot predict.
     path = Path(name) if name.startswith("/") else cwd / name
-    for candidate in (path, path.with_name(f"{path.name}.{pid}")):
-        # An older file of the same name is another process's dump.
-        if candidate.is_file() and candidate.stat().st_mtime >= started:
-            return candidate
+    if "%p" not in pattern:
+        path = path.with_name(f"{path.name}.{pid}")
+    if path.is_file() and path.stat().st_mtime >= started:
+        return path
     return None
 
 

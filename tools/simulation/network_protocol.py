@@ -40,7 +40,6 @@ STEP_LIMIT = 120
 # resolver thread may already have stored Connecting; the connecter then never
 # connects and reports nothing (#693). Its log shows a resolve and no attempt.
 RESOLVED = "resolved in:"
-ATTEMPT = "Attempting to connect"
 SIGNATURE = "TCPConnecter stuck in Resolving (#693)"
 # The race is the pair of stores in the first and the start-up lock in the second.
 RACE_FILES = ("src/network/core/tcp_connect.cpp", "src/thread.h")
@@ -65,12 +64,13 @@ class Result(core.Result, total=False):
 
 
 class StepExpired(RuntimeError):
-    """A bounded wait of a session ended without what it waited for;
-    `timed_out` when its peer was still running at the step limit."""
+    """A bounded wait of a session ended without what it waited for.
+    `connecting` names the client of a connection wait that timed out while
+    that client still ran: the only wait the #693 stall can explain."""
 
-    def __init__(self, message: str, timed_out: bool = False) -> None:
+    def __init__(self, message: str, connecting: "Peer | None" = None) -> None:
         super().__init__(message)
-        self.timed_out = timed_out
+        self.connecting = connecting
 
 
 class Stalled(RuntimeError):
@@ -87,11 +87,12 @@ ADDRESS = re.compile(r" - \S+ \(IPv[46]\)\s*$")
 
 def stuck_resolving(lines: Sequence[str]) -> bool:
     """The #693 signature: the log ends on a resolve block, the `resolved in:`
-    line and its address lines, with nothing after it."""
+    line and at least one address line, with nothing after it."""
     resolved = [n for n, line in enumerate(lines) if RESOLVED in line]
-    return bool(resolved) and all(
-        ADDRESS.search(line) for line in lines[resolved[-1] + 1 :] if line.strip()
-    )
+    if not resolved:
+        return False
+    after = [line for line in lines[resolved[-1] + 1 :] if line.strip()]
+    return bool(after) and all(ADDRESS.search(line) for line in after)
 
 
 def step_limit(timeout: int) -> int:
@@ -183,8 +184,10 @@ class Peer:
         count: int = 1,
         failure: re.Pattern[str] | None = None,
         allowed: re.Pattern[str] | None = None,
+        connecting: bool = False,
     ) -> None:
-        """Wait for `count` markers, allowing one full match of `allowed`."""
+        """Wait for `count` markers, allowing one full match of `allowed`.
+        `connecting` marks a wait for this client's own connection."""
 
         def failed() -> list[str]:
             if failure is None:
@@ -218,7 +221,7 @@ class Peer:
                 raise StepExpired(
                     f"{self.folder.name}: missing {marker} of {count} ({why}); "
                     f"last line: {self.last()}",
-                    timed_out=not self.ended,
+                    self if connecting and not self.ended else None,
                 )
 
     def last(self) -> str:
@@ -557,7 +560,7 @@ def session(
                 env,
             )
             peers.append(issuer)
-            issuer.wait("NET574 ready issuer", failure=JOIN_FAILURE)
+            issuer.wait("NET574 ready issuer", failure=JOIN_FAILURE, connecting=True)
             server.wait("status = ACTIVE", failure=JOIN_FAILURE)
             joiner = start(
                 binaries[client_role],
@@ -571,7 +574,7 @@ def session(
             )
             peers.append(joiner)
             # Decrypted SERVER_MAP_DONE, before its handler runs.
-            joiner.wait(" 23 17", failure=JOIN_FAILURE)
+            joiner.wait(" 23 17", failure=JOIN_FAILURE, connecting=True)
             issuer.trigger("issue")
             issuer.wait("NET574 callback ", 8)
             joiner.release()
@@ -580,7 +583,7 @@ def session(
             server.wait("status = ACTIVE", 2, JOIN_FAILURE)
             rejected = invalid_admission(server, host, port)
             issuer.trigger("reconnect 1")
-            issuer.wait("NET574 ready issuer", 2, SEND_ERROR)
+            issuer.wait("NET574 ready issuer", 2, SEND_ERROR, connecting=True)
             server.wait("status = ACTIVE", 3, SEND_ERROR, allowed=INVALID_ADMISSION)
             assert server.process.stdin is not None
             server.process.stdin.write("unpause\n")
@@ -595,7 +598,10 @@ def session(
             if server.exited("its exit command") != 0:
                 raise RuntimeError("server exit failed")
             if not server.joined():
-                raise StepExpired("server: its log stayed open after exit")
+                raise StepExpired(
+                    f"server: its log stayed open {server.step} s after exit; "
+                    f"last line: {server.last()}"
+                )
             summary = observe(peers, rejected, source)
     except Exception as error:
         raise failure(error, peers) from error
@@ -608,20 +614,22 @@ def session(
 
 
 def failure(error: Exception, peers: list[Peer]) -> Exception:
-    """The session's error, with any cleanup problem in its message. A wait
-    that timed out while a client still runs with its log ending on a resolve
-    block is the #693 stall; an exit or any other failure is not."""
-    stuck = [
-        peer
-        for peer in peers[1:]
-        if peer.process.poll() is None and stuck_resolving(peer.lines)
-    ]
-    problems = clean_up(peers)
-    suffix = "; cleanup: " + "; ".join(problems) if problems else ""
-    if isinstance(error, StepExpired) and error.timed_out and stuck:
-        name = stuck[0].folder.name
-        return Stalled(f"{error}; {name}: {SIGNATURE}{suffix}", name)
-    return RuntimeError(f"{error}{suffix}") if suffix else error
+    """The session's error, with any cleanup problem in its message. Only a
+    connection wait that timed out while its own client still runs, with that
+    client's log ending on a resolve block, is the #693 stall; and a session
+    whose cleanup also failed is never retried."""
+    client = error.connecting if isinstance(error, StepExpired) else None
+    stuck = (
+        client is not None
+        and client.process.poll() is None
+        and stuck_resolving(client.lines)
+    )
+    if problems := clean_up(peers):
+        return RuntimeError(f"{error}; cleanup: " + "; ".join(problems))
+    if stuck and client is not None:
+        name = client.folder.name
+        return Stalled(f"{error}; {name}: {SIGNATURE}", name)
+    return error
 
 
 def clean_up(peers: list[Peer]) -> list[str]:
@@ -634,7 +642,8 @@ def clean_up(peers: list[Peer]) -> list[str]:
             peer.process.wait(timeout=peer.step)
         except subprocess.TimeoutExpired:
             problems.append(
-                f"{peer.folder.name}: still running {peer.step} s after kill"
+                f"{peer.folder.name}: still running {peer.step} s after kill; "
+                f"last line: {peer.last()}"
             )
         if peer.process.stdin is not None:
             try:
@@ -643,7 +652,8 @@ def clean_up(peers: list[Peer]) -> list[str]:
                 pass
         if not peer.joined():
             problems.append(
-                f"{peer.folder.name}: log still open {peer.step} s after kill"
+                f"{peer.folder.name}: log still open {peer.step} s after kill; "
+                f"last line: {peer.last()}"
             )
     return problems
 
@@ -670,8 +680,11 @@ def connecter_differs() -> str | None:
         if pinned.returncode != 0:
             return f"the pinned original's {path} could not be read"
         current = core.ROOT / path
-        if not current.is_file() or current.read_bytes() != pinned.stdout:
-            return f"{path} differs from the pinned original's"
+        try:
+            if current.read_bytes() != pinned.stdout:
+                return f"{path} differs from the pinned original's"
+        except OSError as error:
+            return f"the candidate's {path} could not be read ({error})"
     return None
 
 

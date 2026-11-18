@@ -89,6 +89,9 @@ class StepLimitTests(unittest.TestCase):
         self.assertFalse(stuck(CONNECTED.splitlines()))
         self.assertTrue(stuck([*CONNECTED.splitlines(), *RESOLVED.splitlines()]))
         self.assertFalse(stuck(["status = CONNECTING"]))
+        # The header alone is not the recorded ending: the original always
+        # logs at least one address after it.
+        self.assertFalse(stuck([RESOLVED.splitlines()[0]]))
         # Anything after the block, such as an assertion, is not the stall.
         self.assertFalse(stuck([*RESOLVED.splitlines(), "candidate assertion failed"]))
 
@@ -117,6 +120,50 @@ class StepLimitTests(unittest.TestCase):
                 network_protocol.invalid_admission(server, "127.0.0.1", port)
             self.assertLess(time.monotonic() - started, 1.5)
         listener.close()
+
+    def test_only_the_waited_clients_connection_wait_is_the_stall(self) -> None:
+        with stubs() as peers:
+            server = peers.start("server", "NET574 ready server")
+            joiner = peers.start("joiner", RESOLVED)
+            joiner.wait("(IPv4)")
+            # A wait on something else while the joiner sits on its resolve.
+            other = StepExpired("issuer: missing NET574 callback  of 8")
+            self.assertIs(network_protocol.failure(other, [server, joiner]), other)
+        with stubs() as peers:
+            server = peers.start("server", "NET574 ready server")
+            joiner = peers.start("joiner", RESOLVED)
+            joiner.wait("(IPv4)")
+            own = StepExpired("joiner: missing  23 17 of 1", joiner)
+            error = network_protocol.failure(own, [server, joiner])
+            self.assertIsInstance(error, network_protocol.Stalled)
+
+    def test_a_cleanup_problem_makes_a_stall_unretriable(self) -> None:
+        held = [
+            sys.executable,
+            "-c",
+            "import subprocess, sys, time\n"
+            f"subprocess.Popen(['sleep', '5'])\nprint({RESOLVED!r}, flush=True)\n"
+            "time.sleep(60)",
+        ]
+        with stubs() as peers:
+            server = peers.start("server", "NET574 ready server")
+            joiner = peers.start("joiner", "", held)
+            joiner.wait("(IPv4)")
+            own = StepExpired("joiner: missing  23 17 of 1", joiner)
+            error = network_protocol.failure(own, [server, joiner])
+        self.assertNotIsInstance(error, network_protocol.Stalled)
+        self.assertIn("cleanup: joiner: log still open", str(error))
+        self.assertIn("last line:", str(error))
+
+    def test_an_unreadable_candidate_file_is_a_no_retry_reason(self) -> None:
+        def unreadable(_self: Path) -> bytes:
+            raise PermissionError("denied")
+
+        with patch.object(network_protocol.Path, "read_bytes", unreadable):
+            reason = network_protocol.connecter_differs()
+        self.assertIn(
+            "candidate's src/network/core/tcp_connect.cpp could not", reason or ""
+        )
 
     def test_an_unreadable_pin_is_a_no_retry_reason(self) -> None:
         def slow(*_: object, **__: object) -> object:

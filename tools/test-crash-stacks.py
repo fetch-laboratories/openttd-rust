@@ -179,6 +179,34 @@ class CrashStackTests(unittest.TestCase):
             second, "-n sysctl -w kernel.core_pattern=|/usr/share/apport/apport -p%p"
         )
 
+    def test_a_failed_restore_keeps_the_folder_cores_still_go_to(self) -> None:
+        pattern = self.root / "core_pattern"
+        pattern.write_text("core\n")
+        stubs = self.root / "stubs"
+        stubs.mkdir()
+        calls = self.root / "sudo.calls"
+        # The first sysctl succeeds; the restore fails.
+        (stubs / "sudo").write_text(
+            f'#!/bin/sh\necho "$*" >> {calls}\n[ "$(wc -l < {calls})" -le 1 ]\n'
+        )
+        (stubs / "sudo").chmod(0o755)
+        environment = {
+            "GITHUB_ACTIONS": "true",
+            "PATH": f"{stubs}{os.pathsep}{os.environ['PATH']}",
+        }
+        stderr = io.StringIO()
+        with (
+            patch.dict(os.environ, environment),
+            patch.object(crash_stacks, "PATTERN", pattern),
+            contextlib.redirect_stderr(stderr),
+        ):
+            self.assertEqual(crash_stacks.run([sys.executable, "-c", "pass"]), 0)
+        first = calls.read_text().splitlines()[0]
+        folder = Path(first.split("=", 1)[1].removesuffix("/core.%p"))
+        self.assertTrue(folder.is_dir())
+        self.assertIn("it is kept", stderr.getvalue())
+        folder.rmdir()
+
     def test_a_failed_debugger_is_not_reported_as_every_stack(self) -> None:
         gdb = self.root / "gdb"
         gdb.write_text("#!/bin/sh\necho 'warning: core file is truncated'\nexit 1\n")
@@ -206,18 +234,25 @@ class CrashStackTests(unittest.TestCase):
         pattern = self.root / "core_pattern"
         (self.root / "core.7").write_bytes(b"core")
         written = (self.root / "core.7").stat().st_mtime
-        for text, started, expected in (
-            ("|/usr/share/apport/apport -p%p", written, None),
-            (f"{self.root}/core.%p", written, self.root / "core.7"),
-            (f"{self.root}/core.%e.%p", written, None),
+        uses_pid = self.root / "core_uses_pid"
+        (self.root / "core").write_bytes(b"another process's core")
+        for text, pid_suffix, started, expected in (
+            ("|/usr/share/apport/apport -p%p", "0", written, None),
+            (f"{self.root}/core.%p", "0", written, self.root / "core.7"),
+            (f"{self.root}/core.%e.%p", "0", written, None),
             # A core older than the child is another process's dump.
-            (f"{self.root}/core.%p", written + 60, None),
-            ("core", written + 60, None),
+            (f"{self.root}/core.%p", "0", written + 60, None),
+            # A plain `core` names no PID: any process could have written it.
+            ("core", "0", written, None),
+            # With core_uses_pid the kernel appends the PID.
+            ("core", "1", written, self.root / "core.7"),
         ):
             pattern.write_text(text + "\n")
+            uses_pid.write_text(pid_suffix + "\n")
             with (
-                self.subTest(text=text, started=started),
+                self.subTest(text=text, uses_pid=pid_suffix, started=started),
                 patch.object(crash_stacks, "PATTERN", pattern),
+                patch.object(crash_stacks, "USES_PID", uses_pid),
             ):
                 found = crash_stacks.core_file(None, 7, self.root, started)
                 self.assertEqual(found, expected)
