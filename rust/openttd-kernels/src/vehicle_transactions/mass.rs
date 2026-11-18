@@ -174,9 +174,9 @@ pub(crate) unsafe fn cmd_mass_start_stop_vehicle(
     }
     for i in 0..list.0.len() {
         let v = list.0[i];
-        if (crate::fleet::transactions::record(s.common.transactions, v).status()
-            & crate::vehicle_base::VS_STOPPED
-            != 0)
+        if crate::fleet::transactions::record(s.common.transactions, v)
+            .vehstatus()
+            .test(crate::vehicle_base::VehState::Stopped)
             != cmd.do_start
         {
             continue;

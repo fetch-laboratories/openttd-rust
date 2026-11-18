@@ -178,7 +178,6 @@ pub(crate) const GROUND_VEHICLE: crate::ground_vehicle::Services =
 
 /// `crate::vehicle::VehicleServices` with every entry unreachable.
 pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::VehicleServices {
-    assert_next: unreachable2,
     record_from_shell: unreachable1,
     tile_links: unreachable1,
     map_log_x: unreachable0,

@@ -429,20 +429,20 @@ impl<'a> World<'a> {
     }
     fn victim(&self, v: VehicleRef, z: i32) {
         // Fields are read at the source's points; no callback intervenes before Crash.
-        if v.status() & crate::vehicle_base::VS_CRASHED != 0 {
+        if v.vehstatus_raw() & crate::vehicle_base::VS_CRASHED != 0 {
             crate::ground::hit(crate::ground::Witness::CrashedSkip);
             return;
         }
-        match v.vehicle_type() {
+        match v.vehicle_type_raw() {
             3 => {
-                let tile = v.tile();
+                let tile = v.tile_raw();
                 if !(self.w.airport_tile)(tile) || (self.s.tile_max_z)(tile) != 0 {
                     return;
                 }
                 if v.subtype() == crate::aircraft::AIR_SHADOW {
                     return;
                 }
-                if v.z()
+                if v.z_pos()
                     != (self.w.airport_z)(crate::newgrf_airport::station_fta(
                         crate::station_map::station_by_tile(tile, crate::newgrf_airport::runtime()),
                         crate::newgrf_airport::runtime(),
@@ -453,7 +453,7 @@ impl<'a> World<'a> {
                 self.crash(v);
             }
             0 | 1 => {
-                if v.z() <= z {
+                if v.z_pos() <= z {
                     // Source dereferences First only after this z test.
                     self.crash(v.first());
                 }

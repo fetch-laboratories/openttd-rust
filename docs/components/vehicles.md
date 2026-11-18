@@ -202,6 +202,13 @@
 - Checks: original operations/order review and exact-head Full. Archive equivalence is unclaimed; inherited ship-depot assertion and coverage limits remain on #156. Private-field/operator closure stays later.
 - PRs: #771, integrated in #773. Other Vehicle workset files remain pending.
 
+## Vehicle record and station-use file pass (#983)
+
+- `vehicle_base.rs` and `vehicle_func.rs` are finished. The shared record's fields and `VehicleRef`'s readers and writers take the original members' names and types; `_raw` adapters serve unfinished files only. `VehicleRef::current_order` reads in place through `orders::OrderView`.
+- `Vehicle::SetNext`'s self-link assertion and `GetNextArticulatedPart`'s precondition run in Rust through the native assertion policy; `GetNextVehicle`, `GetLastEnginePart` and `Move` follow their originals. C++ keeps the record allocation exports for the shell and the `SetNext` facade.
+- Checks: `vehicle_base::record_tests`, `orders::order_view_tests`, source review and exact-head Full. Archive equivalence is unclaimed: signatures change.
+- PRs: #996. Workset 07 continues in #984 to #987.
+
 ## Original renewal and servicing vocabulary (#734)
 
 - Renewal, servicing and automatic-servicing bodies use the original helper names, canonical vehicle states, subtype flags, engine/cargo identities and economy-month constant. Scalar maintenance observations and record layouts remain unchanged.

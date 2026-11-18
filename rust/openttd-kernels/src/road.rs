@@ -212,7 +212,6 @@ struct MaxSpeedRead {
     pub next_state: *mut State,
     pub tile: u32,
     pub max_track_speed: u16,
-    pub order_max_speed: u16,
     pub direction: u8,
     pub status: u8,
 }
@@ -542,12 +541,12 @@ fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -
             next_state: next.v.next().map_or(std::ptr::null_mut(), |n| {
                 crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
             }),
-            tile: next.v.tile(),
-            direction: next.v.direction(),
-            status: next.v.status(),
+            tile: next.v.tile_raw(),
+            direction: next.v.direction_raw(),
+            status: next.v.vehstatus_raw(),
         };
     }
-    speed.min(i32::from(r.order_max_speed) * 2)
+    speed.min(i32::from(front.v.current_order().max_speed()) * 2)
 }
 
 impl Game<'_> {
@@ -584,7 +583,7 @@ impl Game<'_> {
         })
     }
     fn can_build_tram(&self, v: VehicleRef, tile: u32, bits: u8) -> bool {
-        let owner = v.owner();
+        let owner = v.owner_raw();
         let read = service!(self.l.tram_build_read)(v, self.road);
         // SAFETY: the read built live native stack scratch and results in the slot.
         unsafe {
@@ -626,7 +625,7 @@ impl Game<'_> {
         )
     }
     fn set_speed(v: Part, s: &mut Step, speed: u16) {
-        (v.v).write_speed(speed);
+        (v.v).set_cur_speed(speed);
         s.cur_speed = speed;
     }
     fn observe(s: &mut Step, e: Entered) {
@@ -642,14 +641,13 @@ impl Game<'_> {
                 next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
                     crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
                 }),
-                tile: v.v.tile(),
+                tile: v.v.tile_raw(),
                 max_track_speed: crate::raw_field::read_field!(
                     v.v.ground_cache(),
                     cached_max_track_speed
                 ),
-                order_max_speed: v.v.current_order().speed,
-                direction: v.v.direction(),
-                status: v.v.status(),
+                direction: v.v.direction_raw(),
+                status: v.v.vehstatus_raw(),
             };
             let speed = max_speed(v, r, self.acceleration_model, self.l);
             crate::vehicle_effect::show_visual_effect(v.v, speed as u32);
@@ -660,18 +658,17 @@ impl Game<'_> {
                 next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
                     crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
                 }),
-                tile: v.v.tile(),
+                tile: v.v.tile_raw(),
                 max_track_speed: crate::raw_field::read_field!(
                     v.v.ground_cache(),
                     cached_max_track_speed
                 ),
-                order_max_speed: v.v.current_order().speed,
-                direction: v.v.direction(),
-                status: v.v.status(),
+                direction: v.v.direction_raw(),
+                status: v.v.vehstatus_raw(),
             },
-            x: v.v.x(),
-            y: v.v.y(),
-            z: v.v.z(),
+            x: v.v.x_pos(),
+            y: v.v.y_pos(),
+            z: v.v.z_pos(),
             length: crate::raw_field::read_field!(v.v.ground_cache(), cached_veh_length),
             tram: (crate::movement::table(self.ss).road_kind)(v.v).0,
         }
@@ -699,7 +696,7 @@ impl Game<'_> {
             min,
             max_speed(front, r.max, self.acceleration_model, self.l),
         );
-        (distance as i32, front.v.speed())
+        (distance as i32, front.v.cur_speed())
     }
     /// `RoadVehFindCloseTo`; `v` is always the front part.
     fn close(&self, v: Part, z: i32, x: i32, y: i32, dir: u8, update: bool) -> Option<Candidate> {
@@ -710,7 +707,8 @@ impl Game<'_> {
         let mut best_diff = u32::MAX;
         let wormhole = v.state() == RVSB_WORMHOLE;
         let mut offer = |vehicle: VehicleRef| {
-            if vehicle.vehicle_type() != crate::vehicle_type::VEH_ROAD || vehicle.first() == v.v {
+            if vehicle.vehicle_type_raw() != crate::vehicle_type::VEH_ROAD || vehicle.first() == v.v
+            {
                 return false;
             }
             let first = vehicle.first();
@@ -721,11 +719,11 @@ impl Game<'_> {
                 first_ground: first.ground(),
                 // SAFETY: The spatial cursor offers a live record and the shared resolver table is static.
                 index: unsafe { ((*((self.vs.newgrf)())).id)(vehicle.0.as_ptr()) },
-                x: vehicle.x(),
-                y: vehicle.y(),
-                z: vehicle.z(),
-                first_speed: first.speed(),
-                direction: vehicle.direction(),
+                x: vehicle.x_pos(),
+                y: vehicle.y_pos(),
+                z: vehicle.z_pos(),
+                first_speed: first.cur_speed(),
+                direction: vehicle.direction_raw(),
             };
             let u = &candidate;
             crate::witness::hit(crate::witness::ROAD_VISITORS);
@@ -765,7 +763,7 @@ impl Game<'_> {
             false
         };
         if wormhole {
-            let tile = (v.v).tile();
+            let tile = (v.v).tile_raw();
             self.vs.any_on_tile(tile, &mut offer);
             self.vs
                 .any_on_tile(service!(self.ss.other_tunnel_end)(tile), &mut offer);
@@ -798,7 +796,7 @@ impl Game<'_> {
             return true;
         }
         self.vs.any_on_tile(tile, |w| {
-            w.vehicle_type() == crate::vehicle::VehicleType::ROAD.0
+            w.vehicle_type_raw() == crate::vehicle::VehicleType::ROAD.0
                 && w.first() == w
                 && w != u
                 && w != v.v
@@ -810,10 +808,10 @@ impl Game<'_> {
             return;
         }
         let ur = OvertakeRead {
-            tile: u.v.tile(),
-            cur_speed: u.v.speed(),
-            direction: u.v.direction(),
-            status: u.v.status(),
+            tile: u.v.tile_raw(),
+            cur_speed: u.v.cur_speed(),
+            direction: u.v.direction_raw(),
+            status: u.v.vehstatus_raw(),
         };
         if s.direction != ur.direction || s.direction & 1 == 0 {
             return;
@@ -840,14 +838,13 @@ impl Game<'_> {
                     next_state: u.v.next().map_or(std::ptr::null_mut(), |n| {
                         crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
                     }),
-                    tile: u.v.tile(),
+                    tile: u.v.tile_raw(),
                     max_track_speed: crate::raw_field::read_field!(
                         u.v.ground_cache(),
                         cached_max_track_speed
                     ),
-                    order_max_speed: u.v.current_order().speed,
-                    direction: u.v.direction(),
-                    status: u.v.status(),
+                    direction: u.v.direction_raw(),
+                    status: u.v.vehstatus_raw(),
                 },
                 self.acceleration_model,
                 self.l,
@@ -863,14 +860,13 @@ impl Game<'_> {
                     next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
                         crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
                     }),
-                    tile: v.v.tile(),
+                    tile: v.v.tile_raw(),
                     max_track_speed: crate::raw_field::read_field!(
                         v.v.ground_cache(),
                         cached_max_track_speed
                     ),
-                    order_max_speed: v.v.current_order().speed,
-                    direction: v.v.direction(),
-                    status: v.v.status(),
+                    direction: v.v.direction_raw(),
+                    status: v.v.vehstatus_raw(),
                 },
                 self.acceleration_model,
                 self.l,
@@ -930,7 +926,7 @@ impl Game<'_> {
     }
     /// Direction store with the original-acceleration curve slowdown.
     fn set_direction(&self, v: Part, s: &mut Step, dir: u8) {
-        (v.v).write_direction(dir);
+        (v.v).set_direction_raw(dir);
         s.direction = dir;
         if self.original() {
             Self::set_speed(v, s, s.cur_speed - (s.cur_speed >> 2));
@@ -977,7 +973,7 @@ impl Game<'_> {
         if !service!(self.vs.play_vehicle_sound)(v.v, VSE_START) {
             let r = SoundRead {
                 sound: (self.vs.engine)(v.v).road_sound(),
-                tick: v.v.tick(),
+                tick: v.v.tick_counter(),
             };
             let mut sound = r.sound;
             if sound == SND_DEPARTURE_OLD_RV_1 && r.tick & 3 == 0 {
@@ -1015,19 +1011,19 @@ impl Game<'_> {
         loop {
             if part.state() != RVSB_WORMHOLE && u.crossing {
                 let z = u.z;
-                let x = v.v.x();
-                let y = v.v.y();
+                let x = v.v.x_pos();
+                let y = v.v.y_pos();
                 let hit = self.vs.any_near(x, y, 4, |t| {
-                    t.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
-                        && (t).z().wrapping_sub(z).wrapping_abs() <= 6
+                    t.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
+                        && (t).z_pos().wrapping_sub(z).wrapping_abs() <= 6
                 });
                 if hit {
                     let victims = self.crash(v, false);
                     service!(self.l.crash_news)(v.v, victims);
                     crate::station::spatial::modify_rating_around(
                         self.ss,
-                        (v.v).tile(),
-                        (v.v).owner(),
+                        (v.v).tile_raw(),
+                        (v.v).owner_raw(),
                         -160,
                         22,
                     );
@@ -1046,8 +1042,9 @@ impl Game<'_> {
                 next_state: next.v.next().map_or(std::ptr::null_mut(), |n| {
                     crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
                 }),
-                z: next.v.z(),
-                crossing: crate::map_func::World::new(self.ss).level_crossing_tile(next.v.tile()),
+                z: next.v.z_pos(),
+                crossing: crate::map_func::World::new(self.ss)
+                    .level_crossing_tile(next.v.tile_raw()),
             };
         }
     }
@@ -1069,8 +1066,8 @@ impl Game<'_> {
                 let mut u = Some(v.v);
                 while let Some(part) = u {
                     let random = self.random();
-                    let direction = (part).direction();
-                    part.write_direction((direction + DELTA[(random & 3) as usize]) & 7);
+                    let direction = (part).direction_raw();
+                    part.set_direction_raw((direction + DELTA[(random & 3) as usize]) & 7);
                     (self.gs.physics.viewport)(part, true, true);
                     u = (part).next();
                 }
@@ -1104,11 +1101,10 @@ impl Game<'_> {
             }
             // SAFETY: The crash chain stays live through unlinking and station copy.
             unsafe {
-                self.vs
-                    .set_next_record(previous.v.0.as_ptr(), std::ptr::null_mut());
+                crate::vehicle_base::set_next(previous.v.0.as_ptr(), std::ptr::null_mut());
             };
-            let station = (v.v).last_station();
-            (last.v).write_last_station(station);
+            let station = (v.v).last_station_visited_raw();
+            (last.v).set_last_station_visited_raw(station);
             if in_range(last.state(), STOP, STOP + 16) {
                 // SAFETY: Live last part owner; no owner access spans the stop update.
                 unsafe {
@@ -1137,7 +1133,7 @@ impl Game<'_> {
             let first_engine = if u == v.v {
                 INVALID_ENGINE
             } else {
-                (v.v).engine_id()
+                (v.v).engine_type_raw()
             };
             crate::raw_field::write_field!(u.ground_cache(), first_engine, first_engine);
             let engine = service!(self.vs.engine)(u);
@@ -1179,14 +1175,14 @@ impl Game<'_> {
                 crate::newgrf_properties::PROP_ROADVEH_CARGO_AGE_PERIOD,
                 i32::from(period),
             );
-            (u).write_cargo_age(age as u16);
+            (u).set_cached_cargo_age_period(age as u16);
             let Some(next) = (u).next() else {
                 break;
             };
             u = next;
         }
         let speed = service!(self.vs.property)((self.vs.newgrf)(), v.v, 0x15, 0) as u32;
-        (v.v).write_max_speed(if speed != 0 {
+        (v.v).set_cached_max_speed(if speed != 0 {
             speed.wrapping_mul(4)
         } else {
             u32::from(service!(self.vs.engine)(v.v).road_speed())
@@ -1198,8 +1194,8 @@ impl Game<'_> {
         let red = (ts >> 16) & 0x3f3f;
         let mut trackdirs = ts & 0x3f3f;
         let p = PathRead {
-            dest: v.v.dest_tile(),
-            owner: v.v.owner(),
+            dest: v.v.dest_tile_raw(),
+            owner: v.v.owner_raw(),
             articulated: v.v.next().is_some_and(|next| {
                 crate::vehicle_base::is_articulated_part(
                     crate::vehicle_base::is_ground_vehicle(next.vehicle_type()),
@@ -1315,8 +1311,8 @@ impl Game<'_> {
             next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
                 crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
             }),
-            tile: v.v.tile(),
-            z: v.v.z(),
+            tile: v.v.tile_raw(),
+            z: v.v.z_pos(),
             tram: (crate::movement::table(self.ss).road_kind)(v.v).0,
         };
         let mut next = Part::link(d.next, d.next_state);
@@ -1332,7 +1328,7 @@ impl Game<'_> {
                     }),
                     next_ground: u.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
                 },
-                tile: u.v.tile(),
+                tile: u.v.tile_raw(),
             };
             if r.tile != d.tile {
                 return false;
@@ -1341,14 +1337,15 @@ impl Game<'_> {
         }
         let dir = service!(self.l.depot_direction)(d.tile);
         let direction = dir * 2 + 1;
-        (v.v).write_direction(direction);
+        (v.v).set_direction_raw(direction);
         let tdir = crate::track_func::diag_dir_to_diag_trackdir(dir, |ok| {
             crate::movement::native_assert(self.ss, ok);
         });
         let rd = road_data::entry(d.tram, self.side() + usize::from(tdir), 6);
         let (x, y) = self.tile_xy(d.tile, (rd.0 & 15, rd.1 & 15));
         if first {
-            if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT && d.tile == (v.v).dest_tile() {
+            if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT && d.tile == (v.v).dest_tile_raw()
+            {
                 self.vs.enter_depot(v.v);
                 return true;
             }
@@ -1358,13 +1355,13 @@ impl Game<'_> {
             unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
             service!(self.vs.leave_unbunching_depot)(v.v);
             self.start_sound(v);
-            (v.v).write_speed(0);
+            (v.v).set_cur_speed(0);
         }
         v.v.set_hidden(false);
         write_field!(v.s.as_ptr(), fields.state, tdir);
         write_field!(v.s.as_ptr(), fields.frame, 6);
-        v.v.write_x(x);
-        v.v.write_y(y);
+        v.v.set_x_pos(x);
+        v.v.set_y_pos(y);
         // SAFETY: The newly visible shell survives depot exit.
         unsafe {
             crate::vehicle::occupancy::update_position(self.vs, v.v, self.map());
@@ -1382,7 +1379,7 @@ impl Game<'_> {
     }
     /// `FollowPreviousRoadVehicle`.
     fn follow(&self, v: Part, s: &Step, prev: Part, tile: u32, entry: u8, reversed: bool) -> u8 {
-        let prev_tile = (prev.v).tile();
+        let prev_tile = (prev.v).tile_raw();
         if prev_tile == s.tile && !reversed {
             return REVERSE[usize::from(entry)];
         }
@@ -1437,14 +1434,14 @@ impl Game<'_> {
         crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
         crate::animated_tile::road_event(
             crate::animated_tile::station_base(station),
-            (v.v).tile(),
+            (v.v).tile_raw(),
             crate::station_type::SAT_VEHICLE_ARRIVES,
             crate::station_type::SRT_VEHICLE_ARRIVES,
         );
     }
     /// Drive-through stop test shared by the blocked and stop-frame paths.
     fn stops_here(&self, v: Part, tile: u32) -> bool {
-        let owner = (v.v).owner();
+        let owner = (v.v).owner_raw();
         let bus = crate::road_stop::is_bus(self.ss, v.v);
         service!(self.l.should_stop)(v.v, tile)
             && owner == service!(self.ss.tile_owner)(tile)
@@ -1488,12 +1485,12 @@ impl Game<'_> {
                     return true;
                 }
             }
-            service!(v.v).write_xy(gp.x, gp.y);
+            service!(v.v).set_xy(gp.x, gp.y);
             // SAFETY: The live road shell survives the synchronous index update.
             unsafe {
                 crate::vehicle::occupancy::update_position(self.vs, v.v, self.map());
             }
-            let status = (v.v).status();
+            let status = (v.v).vehstatus_raw();
             s.x = gp.x;
             s.y = gp.y;
             if status & VS_HIDDEN == 0 {
@@ -1543,7 +1540,7 @@ impl Game<'_> {
                         let big = v
                             .v
                             .previous()
-                            .is_some_and(|previous| previous.tile() == tile)
+                            .is_some_and(|previous| previous.tile_raw() == tile)
                             || (s.front
                                 && crate::map_func::World::new(self.ss).is_normal_road_tile(tile)
                                 && !crate::map_func::World::new(self.ss).has_road_works(tile)
@@ -1618,8 +1615,8 @@ impl Game<'_> {
                     }
                 }
                 if e.flags & VETS_ENTERED_WORMHOLE == 0 {
-                    let old_tile = v.v.tile();
-                    v.v.write_tile(tile);
+                    let old_tile = v.v.tile_raw();
+                    v.v.set_tile_raw(tile);
                     let tram = (self.movement.get().road_kind)(v.v).0;
                     let world = crate::map_func::World::new(self.ss);
                     let before = world.road_type(old_tile, tram);
@@ -1714,7 +1711,7 @@ impl Game<'_> {
                     && in_range(v.state(), DT_STOP, DT_STOP + 16)
                     && service!(self.l.should_stop)(v.v, s.tile)
                 {
-                    let owner = (v.v).owner();
+                    let owner = (v.v).owner_raw();
                     let bus = crate::road_stop::is_bus(self.ss, v.v);
                     if owner == service!(self.ss.tile_owner)(s.tile)
                         && service!(self.vs.order_type)(v.v) != OT_LEAVESTATION
@@ -1722,7 +1719,7 @@ impl Game<'_> {
                             == u8::from(!bus)
                     {
                         let station = service!(self.ss.station_index)(s.tile);
-                        (v.v).write_last_station(station);
+                        (v.v).set_last_station_visited_raw(station);
                         self.arrive_load(v, s, station);
                     }
                 }
@@ -1733,7 +1730,7 @@ impl Game<'_> {
             if self.original() {
                 Self::set_speed(v, s, s.cur_speed - (s.cur_speed >> 2));
             }
-            v.v.write_direction(new_dir);
+            v.v.set_direction_raw(new_dir);
             (self.gs.physics.viewport)(v.v, true, true);
             s.direction = new_dir;
             return true;
@@ -1771,7 +1768,7 @@ impl Game<'_> {
                 }
                 crate::road_stop::set_entrance_busy(rs, false);
                 write_field!(v.s.as_ptr(), fields.state, state | 4);
-                (v.v).write_last_station(station);
+                (v.v).set_last_station_visited_raw(station);
                 if crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile)
                     || (service!(self.vs.order_type)(v.v) == OT_GOTO_STATION
                         && service!(self.vs.order_destination)(v.v) == station)
@@ -1857,12 +1854,12 @@ impl Game<'_> {
         let traversed_tail = next.is_some();
         while let Some(u) = next {
             let mut us = Step {
-                tile: u.v.tile(),
-                x: u.v.x(),
-                y: u.v.y(),
-                z: u.v.z(),
-                cur_speed: u.v.speed(),
-                direction: u.v.direction(),
+                tile: u.v.tile_raw(),
+                x: u.v.x_pos(),
+                y: u.v.y_pos(),
+                z: u.v.z_pos(),
+                cur_speed: u.v.cur_speed(),
+                direction: u.v.direction_raw(),
                 length: crate::raw_field::read_field!(u.v.ground_cache(), cached_veh_length),
                 front: crate::vehicle_base::is_front_engine(
                     crate::vehicle_base::is_ground_vehicle(u.v.vehicle_type()),
@@ -1905,8 +1902,9 @@ impl Game<'_> {
                     next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
                         crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
                     }),
-                    z: v.v.z(),
-                    crossing: crate::map_func::World::new(self.ss).level_crossing_tile(v.v.tile()),
+                    z: v.v.z_pos(),
+                    crossing: crate::map_func::World::new(self.ss)
+                        .level_crossing_tile(v.v.tile_raw()),
                 },
             )
         {
@@ -1965,12 +1963,12 @@ impl Game<'_> {
             if traversed_tail {
                 // A traversed tail may have changed the front, including by detaching itself.
                 s = Step {
-                    tile: v.v.tile(),
-                    x: v.v.x(),
-                    y: v.v.y(),
-                    z: v.v.z(),
-                    cur_speed: v.v.speed(),
-                    direction: v.v.direction(),
+                    tile: v.v.tile_raw(),
+                    x: v.v.x_pos(),
+                    y: v.v.y_pos(),
+                    z: v.v.z_pos(),
+                    cur_speed: v.v.cur_speed(),
+                    direction: v.v.direction_raw(),
                     length: crate::raw_field::read_field!(v.v.ground_cache(), cached_veh_length),
                     front: crate::vehicle_base::is_front_engine(
                         crate::vehicle_base::is_ground_vehicle(v.v.vehicle_type()),
@@ -2004,25 +2002,25 @@ impl Game<'_> {
         crate::ground_vehicle::set_last_speed_owned(self.gs.physics, v.v, ground);
         let mut part = Some(v.v);
         while let Some(u) = part {
-            if u.status() & VS_HIDDEN == 0 {
+            if u.vehstatus_raw() & VS_HIDDEN == 0 {
                 service!(self.gs.update_viewport)(u);
             }
             part = u.next();
         }
         let progress = v.v.progress();
         if progress == 0 {
-            (v.v).write_progress(if blocked { adv - 1 } else { j } as u8);
+            (v.v).set_progress(if blocked { adv - 1 } else { j } as u8);
         }
         true
     }
     /// `RoadVehicle::Tick`.
     fn tick(&mut self, v: Part, entry: &Entry) -> bool {
-        let tick = v.v.tick().wrapping_add(1);
+        let tick = v.v.tick_counter().wrapping_add(1);
         if !crate::vehicle_base::is_front_engine(
             crate::vehicle_base::is_ground_vehicle(v.v.vehicle_type()),
             v.v.subtype(),
         ) {
-            v.v.write_tick(tick);
+            v.v.set_tick_counter(tick);
             return true;
         }
         self.acceleration_model = entry.acceleration_model;
@@ -2030,24 +2028,24 @@ impl Game<'_> {
         self.queue = entry.queue;
         self.map_log_x = u32::from(entry.map_log_x);
         self.map.take();
-        let running = if v.v.status() & VS_STOPPED == 0 {
-            v.v.running().wrapping_add(1)
+        let running = if v.v.vehstatus_raw() & VS_STOPPED == 0 {
+            v.v.running_ticks().wrapping_add(1)
         } else {
-            v.v.running()
+            v.v.running_ticks()
         };
-        let order_time = v.v.order_time().wrapping_add(1);
-        v.v.write_tick(tick);
-        v.v.write_running(running);
-        v.v.write_order_time(order_time);
-        self.controller(v, v.ground(entry.ground), v.v.status(), tick)
+        let order_time = v.v.current_order_time().wrapping_add(1);
+        v.v.set_tick_counter(tick);
+        v.v.set_running_ticks(running);
+        v.v.set_current_order_time(order_time);
+        self.controller(v, v.ground(entry.ground), v.v.vehstatus_raw(), tick)
     }
     /// `RoadVehicle::SetDestTile`.
     fn set_dest(v: Part, tile: u32) {
-        if tile == v.v.dest_tile() {
+        if tile == v.v.dest_tile_raw() {
             return;
         }
         v.path_clear();
-        (v.v).write_dest(tile);
+        (v.v).set_dest_tile_raw(tile);
     }
     /// `RoadVehicle::GetRunningCost`.
     fn running_cost(&self, v: Part) -> i64 {
@@ -2076,18 +2074,18 @@ impl Game<'_> {
     /// `CheckIfRoadVehNeedsService`; `IsChainInDepot` and `FindClosestRoadDepot` inline.
     fn service(&self, v: Part) {
         let r = ServiceRead {
-            tile: v.v.tile(),
+            tile: v.v.tile_raw(),
             servint: {
                 // SAFETY: Base maintenance names the shared static command and company tables.
                 let command = unsafe { &*(*(*self.vs.maintenance).transaction).commands };
                 let company = unsafe { &*(command.company)() };
                 let settings = (company.settings)();
                 let defaults = (settings.company_vehicle_defaults)(crate::company_type::CompanyID(
-                    v.v.owner(),
+                    v.v.owner_raw(),
                 ));
                 crate::raw_field::read_field!(defaults, servint_roadveh)
             },
-            cur_speed: v.v.speed(),
+            cur_speed: v.v.cur_speed(),
         };
         if r.servint == 0
             || !unsafe {
@@ -2122,7 +2120,7 @@ impl Game<'_> {
                         }),
                         next_ground: u.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
                     },
-                    tile: u.v.tile(),
+                    tile: u.v.tile_raw(),
                 };
                 if u.state() != DEPOT || p.tile != r.tile {
                     all_in_depot = false;
@@ -2182,8 +2180,8 @@ impl Game<'_> {
     /// `RoadVehicle::OnNewEconomyDay`.
     fn economy_day(&self, v: Part) {
         unsafe { self.vs.maintain(v.v, maintenance::economy_age_vehicle) };
-        let day = (v.v).day().wrapping_add(1);
-        (v.v).write_day(day);
+        let day = (v.v).day_counter().wrapping_add(1);
+        (v.v).set_day_counter(day);
         if day & 7 == 0 {
             unsafe { self.vs.maintain(v.v, maintenance::decrease_vehicle_value) };
         }
@@ -2192,24 +2190,24 @@ impl Game<'_> {
         }
         self.service(v);
         service!(self.vs.check_orders_only)(v.v);
-        let running = v.v.running();
+        let running = v.v.running_ticks();
         if running == 0 {
             return;
         }
         let cost = self.running_cost(v).saturating_mul(i64::from(running)) / YEAR_TICKS;
         let profit = service!(self.vs.profit)(v.v).saturating_sub(cost);
         service!(self.vs.write_profit)(v.v, profit);
-        v.v.write_running(0);
+        v.v.set_running_ticks(0);
         service!(self.l.pay_running)(v.v, cost);
     }
     /// `CmdTurnRoadVeh` after the ownership checks.
     fn turn(&self, v: Part, execute: bool) -> bool {
         let r = TurnRead {
-            tile: v.v.tile(),
+            tile: v.v.tile_raw(),
             breakdown_ctr: crate::raw_field::read_field!(v.v.0.as_ptr(), breakdown_ctr),
-            direction: v.v.direction(),
-            order_type: v.v.current_order().kind(),
-            status: v.v.status(),
+            direction: v.v.direction_raw(),
+            order_type: v.v.current_order().kind_raw(),
+            status: v.v.vehstatus_raw(),
         };
         if r.status & (VS_STOPPED | VS_CRASHED) != 0
             || r.breakdown_ctr != 0
@@ -2241,9 +2239,9 @@ impl Game<'_> {
     /// `RoadVehicle::GetVehicleTrackdir`.
     fn trackdir(&self, v: Part) -> u8 {
         let r = TrackdirRead {
-            tile: v.v.tile(),
-            direction: v.v.direction(),
-            status: v.v.status(),
+            tile: v.v.tile_raw(),
+            direction: v.v.direction_raw(),
+            status: v.v.vehstatus_raw(),
         };
         if r.status & VS_CRASHED != 0 {
             return INVALID_TRACKDIR;
@@ -2279,7 +2277,7 @@ impl Game<'_> {
         }
         let mut u = first.v;
         while u != v {
-            if direction != (u).direction() {
+            if direction != (u).direction_raw() {
                 return true;
             }
             // The walk reaches `v` before the chain ends, as in the original.
@@ -2321,7 +2319,7 @@ pub(crate) fn move_incline(
 ) -> Moved {
     // Road supplies dimensions for its synchronous no-reset/no-yield interval.
     let s = gs.physics;
-    (v).write_xy(pos.0, pos.1);
+    (v).set_xy(pos.0, pos.1);
     // SAFETY: Live shell; index writes end before inclination callbacks.
     unsafe {
         crate::vehicle::occupancy::update_position(s.vehicle, v, map);
@@ -2329,8 +2327,8 @@ pub(crate) fn move_incline(
     let old_z = crate::ground_vehicle::update_inclination_owned(s, movement, v, o, new_tile, delta);
     Moved {
         old_z,
-        z: (v).z(),
-        cur_speed: (v).speed(),
+        z: (v).z_pos(),
+        cur_speed: (v).cur_speed(),
         max_track_speed: read_field!(o.state, cache.cached_max_track_speed),
     }
 }
@@ -2369,12 +2367,12 @@ pub unsafe extern "C" fn openttd_rust_road_individual_abi(
     let mut g = entry!(leaves, Some(e));
     g.road = road;
     let mut s = Step {
-        tile: v.tile(),
-        x: v.x(),
-        y: v.y(),
-        z: v.z(),
-        cur_speed: v.speed(),
-        direction: v.direction(),
+        tile: v.tile_raw(),
+        x: v.x_pos(),
+        y: v.y_pos(),
+        z: v.z_pos(),
+        cur_speed: v.cur_speed(),
+        direction: v.direction_raw(),
         length: crate::raw_field::read_field!(v.ground_cache(), cached_veh_length),
         front: crate::vehicle_base::is_front_engine(
             crate::vehicle_base::is_ground_vehicle(v.vehicle_type()),
@@ -2477,11 +2475,10 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
         next_state: v.next().map_or(std::ptr::null_mut(), |n| {
             crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
         }),
-        tile: v.tile(),
+        tile: v.tile_raw(),
         max_track_speed: crate::raw_field::read_field!(v.ground_cache(), cached_max_track_speed),
-        order_max_speed: v.current_order().speed,
-        direction: v.direction(),
-        status: v.status(),
+        direction: v.direction_raw(),
+        status: v.vehstatus_raw(),
     };
     // SAFETY: The static table and live state outlive this synchronous query.
     max_speed(Part::new(v, state), r, acceleration_model, unsafe {
@@ -2614,11 +2611,11 @@ impl Game<'_> {
             crate::movement::openttd_rust_movement_enter(self.movement.get(), v, tile, x, y)
         };
         Entered {
-            tile: v.tile(),
-            cur_speed: v.speed(),
+            tile: v.tile_raw(),
+            cur_speed: v.cur_speed(),
             flags,
-            direction: v.direction(),
-            order_type: v.current_order().kind(),
+            direction: v.direction_raw(),
+            order_type: v.current_order().kind_raw(),
         }
     }
 }
@@ -2656,14 +2653,13 @@ pub(crate) unsafe fn current_max_speed(
             next_state: v.next().map_or(std::ptr::null_mut(), |n| {
                 crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
             }),
-            tile: v.tile(),
+            tile: v.tile_raw(),
             max_track_speed: crate::raw_field::read_field!(
                 v.ground_cache(),
                 cached_max_track_speed
             ),
-            order_max_speed: v.current_order().speed,
-            direction: v.direction(),
-            status: v.status(),
+            direction: v.direction_raw(),
+            status: v.vehstatus_raw(),
         },
         model,
         leaves,

@@ -393,10 +393,18 @@ impl AirportFTAClassFlag {
     pub const SHORT_STRIP: Self = Self(2);
 }
 
-/// `AirportFTAClass::Flags` mask of `Flag::Airplanes`.
-pub const FTA_AIRPLANES: u8 = 1 << AirportFTAClassFlag::AIRPLANES.0;
-/// `AirportFTAClass::Flags` mask of `Flag::Helicopters`.
-pub const FTA_HELICOPTERS: u8 = 1 << AirportFTAClassFlag::HELICOPTERS.0;
+/// Native `AirportFTAClass::Flags`: the `uint8_t` set of `AirportFTAClass::Flag`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AirportFTAClassFlags(pub u8);
+impl AirportFTAClassFlags {
+    /// Native `EnumBitSet::Test`: is the named flag set?
+    #[must_use]
+    pub fn test(self, element: AirportFTAClassFlag) -> bool {
+        crate::bitmath_func::has_bit(self.0, element.0)
+    }
+}
+
 /// `AirportFTAClass::Flags` mask of `Flag::ShortStrip`.
 pub const FTA_SHORT_STRIP: u8 = 1 << AirportFTAClassFlag::SHORT_STRIP.0;
 

@@ -939,7 +939,7 @@ impl<'a> Signals<'a> {
 
 /// Check whether there is a train on rail, not in a depot.
 fn is_train_and_not_in_depot(vehicles: &VehicleServices, v: VehicleRef) -> bool {
-    VehicleType(v.vehicle_type()) == VehicleType::TRAIN && {
+    v.vehicle_type() == VehicleType::TRAIN && {
         crate::witness::hit(crate::witness::SIGNAL_OCCUPANCY_ACCESSORS);
         TrackBits((vehicles.train_handle)(v.0.as_ptr()).track()) != TrackBits::TRACK_BIT_DEPOT
     }

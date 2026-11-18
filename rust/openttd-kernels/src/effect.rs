@@ -226,15 +226,15 @@ impl Controller<'_> {
     }
     fn set_x(&mut self, value: i32) {
         self.v.x = value;
-        self.record.write_x(value);
+        self.record.set_x_pos(value);
     }
     fn set_y(&mut self, value: i32) {
         self.v.y = value;
-        self.record.write_y(value);
+        self.record.set_y_pos(value);
     }
     fn set_z(&mut self, value: i32) {
         self.v.z = value;
-        self.record.write_z(value);
+        self.record.set_z_pos(value);
     }
     fn set_sprite_sequence(&mut self, value: u32) {
         self.v.sprite = value;
@@ -246,7 +246,7 @@ impl Controller<'_> {
     }
     fn set_progress(&mut self, value: u8) {
         self.v.progress = value;
-        self.record.write_progress(value);
+        self.record.set_progress(value);
     }
     fn set_spritenum(&mut self, value: u8) {
         self.v.spritenum = value;
@@ -504,9 +504,9 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
     let leaves = unsafe { &*leaves };
     let vehicles = unsafe { &*leaves.vehicles };
     let v = View {
-        x: record.x(),
-        y: record.y(),
-        z: record.z(),
+        x: record.x_pos(),
+        y: record.y_pos(),
+        z: record.z_pos(),
         sprite: (vehicles.first_sprite)(record),
         progress: record.progress(),
         spritenum: unsafe { ((*((vehicles.newgrf)())).sprite)(record.0.as_ptr()) },
@@ -609,12 +609,13 @@ pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -
     }
     let v = (s.allocate)();
     crate::raw_field::write_field!(v.record.0.as_ptr(), subtype, kind);
-    v.record.write_x(x);
-    v.record.write_y(y);
-    v.record.write_z(z);
-    v.record.write_tile(0);
+    v.record.set_x_pos(x);
+    v.record.set_y_pos(y);
+    v.record.set_z_pos(z);
+    v.record.set_tile_raw(0);
     (vehicles.update_delta)(v.record);
-    v.record.write_status(crate::vehicle_base::VS_UNCLICKABLE);
+    v.record
+        .set_vehstatus_raw(crate::vehicle_base::VS_UNCLICKABLE);
     unsafe {
         initialize(v.owner, v.record, kind, s.effect, s.shared);
     }
@@ -656,9 +657,9 @@ pub(crate) fn create_effect_vehicle_rel(
     kind: crate::effectvehicle_func::EffectVehicleType,
 ) -> *mut c_void {
     openttd_rust_effect_create(
-        v.x().wrapping_add(x),
-        v.y().wrapping_add(y),
-        v.z().wrapping_add(z),
+        v.x_pos().wrapping_add(x),
+        v.y_pos().wrapping_add(y),
+        v.z_pos().wrapping_add(z),
         kind.0,
     )
 }

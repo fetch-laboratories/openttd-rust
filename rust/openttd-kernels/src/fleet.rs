@@ -398,13 +398,13 @@ unsafe fn contains(w: &GroupServices, mut search: u16, target: u16) -> bool {
     }
 }
 unsafe fn vehicle_stats(w: &GroupServices, v: VehicleRef, all: bool) -> *mut Stats {
-    let owner = v.owner();
+    let owner = v.owner_raw();
     let id = if all {
         ALL_GROUP
     } else {
         unsafe { (w.vehicle_group)(v.shell().cast()) }
     };
-    let kind = v.vehicle_type();
+    let kind = v.vehicle_type_raw();
     unsafe { (w.stats)(owner, id, kind).cast() }
 }
 unsafe fn count_vehicle(w: &GroupServices, v: *mut (), delta: i32) {
@@ -428,7 +428,7 @@ unsafe fn count_vehicle(w: &GroupServices, v: *mut (), delta: i32) {
 }
 unsafe fn count_engine(w: &GroupServices, v: *mut (), delta: i32) {
     let v = record(w, v);
-    let engine = v.engine_id();
+    let engine = v.engine_type_raw();
     let all = unsafe { vehicle_stats(w, v, true) };
     let stats = unsafe { vehicle_stats(w, v, false) };
     unsafe {
@@ -460,9 +460,9 @@ unsafe fn engine_membership(w: &GroupServices, v: VehicleRef, old: u16, new: u16
     if old == new {
         return;
     }
-    let owner = v.owner();
-    let kind = v.vehicle_type();
-    let engine = v.engine_id();
+    let owner = v.owner_raw();
+    let kind = v.vehicle_type_raw();
+    let engine = v.engine_type_raw();
     let old_stats = unsafe { (w.stats)(owner, old, kind) };
     unsafe { openttd_rust_fleet_engine_change(old_stats, engine, -1) };
     let new_stats = unsafe { (w.stats)(owner, new, kind) };
@@ -569,7 +569,7 @@ unsafe fn update_autoreplace(w: &GroupServices, company: u8) {
     }
 }
 unsafe fn train_group(w: &GroupServices, v: VehicleRef, new: u16, viewport: bool) {
-    let owner = v.owner();
+    let owner = v.owner_raw();
     let mut part = Some(v);
     while let Some(r) = part {
         let u = r.shell().cast();
@@ -594,7 +594,7 @@ unsafe fn train_group(w: &GroupServices, v: VehicleRef, new: u16, viewport: bool
 unsafe fn add_vehicle(w: &GroupServices, v: *mut (), new: u16) {
     unsafe { count_vehicle(w, v, -1) };
     let record = record(w, v);
-    match record.vehicle_type() {
+    match record.vehicle_type_raw() {
         0 => unsafe { train_group(w, record, new, true) },
         1..=3 => {
             let old = unsafe { (w.vehicle_group)(v) };
@@ -1035,12 +1035,12 @@ unsafe fn add_vehicle_group(
         VehicleList::Single(v)
     };
     let first = unsafe { list.at(w, 0) };
-    let kind = VehicleType(record(w, first).vehicle_type());
+    let kind = VehicleType(record(w, first).vehicle_type_raw());
     let owner = CompanyID(w.current_company());
     let size = unsafe { list.size(w) };
     for i in 0..size {
         let v = unsafe { list.at(w, i) };
-        if CompanyID(record(w, v).owner()) != owner || !unsafe { (w.primary)(v) } {
+        if CompanyID(record(w, v).owner_raw()) != owner || !unsafe { (w.primary)(v) } {
             return ERROR;
         }
     }
@@ -1098,7 +1098,7 @@ unsafe fn add_shared_group(w: &GroupServices, flags: u32, id: u16, kind: u8) -> 
             let record = VehicleRef(record);
             let v = record.shell().cast();
             from = unsafe { (w.vehicle_id)(v) } + 1;
-            if record.vehicle_type() != kind
+            if record.vehicle_type_raw() != kind
                 || !unsafe { (w.primary)(v) }
                 || unsafe { (w.vehicle_group)(v) } != id
             {

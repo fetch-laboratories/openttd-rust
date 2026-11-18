@@ -581,6 +581,8 @@ RESIDUE = (
     "long command",
 )
 FINISHED = "migration/finished-files.txt"
+# Standard-library calls named like raw adapters, which no pass can retire.
+STD_RAW = re.compile(r"(?:std::boxed::)?Box::(?:into|from)_raw")
 
 
 def export_shim(node: Node, data: bytes) -> bool:
@@ -606,7 +608,8 @@ def callee(call: Node, data: bytes) -> str:
 def residue(path: str, source: str) -> list[Site]:
     """Finished-file residue of one non-test Rust file, outside test code.
 
-    Calls to a `*_raw` adapter or an `openttd_rust_*` export outside export shims,
+    Calls to a `*_raw` adapter (not the standard library's `Box::into_raw` and
+    `Box::from_raw`) or an `openttd_rust_*` export outside export shims,
     Rust-internal functions taking `execute: bool`, `GameState<Vec<...>>` scratch
     pools and commands over LONG_PARAMETERS parameters.
     """
@@ -622,6 +625,9 @@ def residue(path: str, source: str) -> list[Site]:
             kind = (
                 "raw adapter call"
                 if name.endswith("_raw")
+                and not STD_RAW.fullmatch(
+                    text(node.child_by_field_name("function"), data)
+                )
                 else "export call"
                 if name.startswith("openttd_rust_")
                 else None

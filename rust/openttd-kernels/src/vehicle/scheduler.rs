@@ -13,9 +13,7 @@ use crate::aircraft::AIR_AIRCRAFT;
 use crate::newgrf_callbacks::CBID_VEHICLE_32DAY_CALLBACK;
 use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16, VehicleSoundEvent};
 use crate::timer_game_tick::DAY_TICKS;
-use crate::vehicle_base::{
-    GVSF_ENGINE, GVSF_FRONT, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VS_TRAIN_SLOWING,
-};
+use crate::vehicle_base::{GVSF_ENGINE, GVSF_FRONT, VehState, VehStates};
 use crate::{cargo_storage, fleet, services, station_service};
 
 use super::VehicleType;
@@ -42,8 +40,8 @@ pub struct PostTick {
     pub front_type: *const VehicleType,
     pub subtype: *const u8,
     pub tick: *const u8,
-    pub front_status: *const u8,
-    pub status: *const u8,
+    pub front_status: *const crate::vehicle_base::VehStates,
+    pub status: *const crate::vehicle_base::VehStates,
 }
 #[repr(C)]
 pub struct SchedulerServices {
@@ -137,7 +135,7 @@ unsafe fn day<const COUNTED: bool>(
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_DAYS);
         }
-        if !calendar && vehicle.day() & 0x1f == 0 && vehicle.has_engine_type() {
+        if !calendar && vehicle.day_counter() & 0x1f == 0 && vehicle.has_engine_type() {
             if COUNTED {
                 crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
             }
@@ -182,7 +180,7 @@ impl PostTick {
     /// `v->type` and `v->First()` after the survival assertion; motion types
     /// address the record fields `CallVehicleTicks` reads and writes next.
     fn after_tick(v: VehicleRef) -> Self {
-        let vehicle_type = v.vehicle_type();
+        let vehicle_type = v.vehicle_type_raw();
         let record = v.0.as_ptr();
         if VehicleType(vehicle_type).0 > AIRCRAFT.0 {
             return Self {
@@ -305,14 +303,14 @@ unsafe fn post_tick<const COUNTED: bool>(
         }
     }
     let front_status = unsafe { scalar_read::<_, COUNTED>(cargo.front_status) };
-    if front_status & VS_CRASHED != 0 {
+    if front_status.test(VehState::Crashed) {
         return;
     }
-    if unsafe { scalar_read::<_, COUNTED>(cargo.status) } & VS_HIDDEN != 0 {
+    if unsafe { scalar_read::<_, COUNTED>(cargo.status) }.test(VehState::Hidden) {
         return;
     }
     let motion = cargo;
-    if unsafe { scalar_read::<_, COUNTED>(cargo.front_status) } & VS_STOPPED != 0
+    if unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.test(VehState::Stopped)
         && (unsafe { scalar_read::<_, COUNTED>(motion.front_type) } != TRAIN
             || unsafe { scalar_read::<_, COUNTED>(motion.speed) } == 0)
     {
@@ -347,9 +345,10 @@ unsafe fn post_tick<const COUNTED: bool>(
     // Running sound can change the following observations; load after it returns.
     if unsafe { scalar_read::<_, COUNTED>(motion.tick) } & 15 == 0 {
         let running = unsafe { scalar_read::<_, COUNTED>(motion.speed) } > 0
-            && unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }
-                & (VS_STOPPED | VS_TRAIN_SLOWING)
-                == 0;
+            && !unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.any(
+                VehStates::from_element(VehState::Stopped)
+                    .with(VehStates::from_element(VehState::TrainSlowing)),
+            );
         post_svc!(
             COUNTED,
             crate::witness::VEHICLE_PERIODIC_SOUND,
@@ -518,6 +517,7 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
     use std::ffi::c_void;
 
     /// The survivor's own fields and its front's speed, type and status are the
@@ -684,8 +684,8 @@ mod tests {
             } else {
                 &raw const c.tick
             },
-            front_status: &raw const c.front_status,
-            status: &raw const c.status,
+            front_status: (&raw const c.front_status).cast(),
+            status: (&raw const c.status).cast(),
         }
     }
     extern "C" fn cargo_owner(v: VehicleRef) -> *mut cargo_storage::List {

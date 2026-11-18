@@ -189,7 +189,7 @@ unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) ->
     let s = (w.build_services)();
     let b = s.refit.common.base;
     let v = unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) };
-    let tile = (v).tile();
+    let tile = (v).tile_raw();
     let result = crate::command::nested(
         b.commands,
         b.shared,
@@ -417,14 +417,14 @@ unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u
     a == 0 || b == 0 || a & b != 0
 }
 unsafe fn order_vehicle(w: &Services, gw: &GroupServices, v: *mut ()) -> *mut () {
-    if crate::fleet::record(gw, v).vehicle_type() == 0 {
+    if crate::fleet::record(gw, v).vehicle_type_raw() == 0 {
         crate::fleet::transactions::first(w, v)
     } else {
         v
     }
 }
 unsafe fn verify_refits(w: &Services, gw: &GroupServices, v: *mut (), engine: u16) -> bool {
-    let old_engine = crate::fleet::record(gw, v).engine_id();
+    let old_engine = crate::fleet::record(gw, v).engine_type_raw();
     let old_mask = unsafe {
         crate::engine_capabilities::openttd_rust_articulated_refit_union(
             w.capabilities,
@@ -529,7 +529,7 @@ unsafe fn new_cargo(
         return INVALID_CARGO;
     }
     if cargo == INVALID_CARGO {
-        if crate::fleet::record(gw, v).vehicle_type() != 0 || !chain {
+        if crate::fleet::record(gw, v).vehicle_type_raw() != 0 || !chain {
             return NO_REFIT;
         }
         v = crate::fleet::transactions::first(w, v);
@@ -565,7 +565,7 @@ unsafe fn new_engine(
     always: bool,
     cost: *mut (),
 ) -> u16 {
-    let kind = crate::fleet::record(gw, v).vehicle_type();
+    let kind = crate::fleet::record(gw, v).vehicle_type_raw();
     check!(
         w,
         kind != 0 || !crate::fleet::transactions::articulated(w, v)
@@ -576,7 +576,7 @@ unsafe fn new_engine(
     }
     let company = gw.current_company();
     let head = unsafe { (gw.head)(company).cast::<*mut ()>().read() };
-    let from = crate::fleet::record(gw, v).engine_id();
+    let from = crate::fleet::record(gw, v).engine_type_raw();
     let id = unsafe { (gw.vehicle_group)(v) };
     let mut old = false;
     let mut engine = unsafe { engine_replacement(gw, head, from, id, &raw mut old) };
@@ -628,7 +628,7 @@ unsafe fn build(
         }
         check!(w, unsafe { (w.success)(cost) });
     }
-    if crate::fleet::record(gw, new).vehicle_type() == 0
+    if crate::fleet::record(gw, new).vehicle_type_raw() == 0
         && (w.refit_services)()
             .train_handle(
                 unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) }
@@ -680,7 +680,7 @@ unsafe fn copy_head(
     if unsafe { (w.success)(cost) } {
         check!(
             w,
-            record(w, new).status() & crate::vehicle_base::VS_STOPPED != 0
+            record(w, new).vehstatus_raw() & crate::vehicle_base::VS_STOPPED != 0
         );
         unsafe {
             direct_start(w, costs.temporary, new, true);
@@ -775,7 +775,7 @@ unsafe fn replace_chain(
     check!(w, unsafe { (gw.primary)(old_head) });
     let cost = costs.replace;
     unsafe { (w.cost_vehicles)(cost) };
-    if crate::fleet::record(gw, old_head).vehicle_type() == 0 {
+    if crate::fleet::record(gw, old_head).vehicle_type_raw() == 0 {
         let length = read_field!(record(w, old_head).ground_cache(), cached_total_length);
         let old_total_length = (u32::from(length).div_ceil(TILE_SIZE) * TILE_SIZE) as u16;
         let mut replacements = Vec::<ChainItem>::new();
@@ -822,7 +822,7 @@ unsafe fn replace_chain(
             if unsafe { (w.success)(cost) } {
                 for item in replacements.iter().rev() {
                     let append = item.vehicle();
-                    let engine = crate::fleet::record(gw, append).engine_id();
+                    let engine = crate::fleet::record(gw, append).engine_type_raw();
                     if crate::vehicle::EngineRef::of((w.capabilities.engine)(engine)).wagon() {
                         continue;
                     }
@@ -872,7 +872,7 @@ unsafe fn replace_chain(
                 for item in replacements.iter().rev() {
                     check!(w, !last_engine.is_null());
                     let append = item.vehicle();
-                    let engine = crate::fleet::record(gw, append).engine_id();
+                    let engine = crate::fleet::record(gw, append).engine_type_raw();
                     if crate::vehicle::EngineRef::of((w.capabilities.engine)(engine)).wagon() {
                         unsafe {
                             move_vehicle(
@@ -936,7 +936,7 @@ unsafe fn replace_chain(
                     check!(
                         w,
                         crate::vehicle::EngineRef::of((w.capabilities.engine)(
-                            crate::fleet::record(gw, wagon).engine_id()
+                            crate::fleet::record(gw, wagon).engine_type_raw()
                         ))
                         .wagon()
                     );
@@ -1084,17 +1084,17 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
     }
-    let owner = crate::fleet::record(gw, v).owner();
+    let owner = crate::fleet::record(gw, v).owner_raw();
     // Native cost is live caller-owned CommandCost storage; no owner borrow spans the call.
     unsafe { (*w.commands).ownership(cost.cast(), owner, 0) };
     if !unsafe { (w.success)(cost) } {
         return;
     }
-    if record(w, v).status() & crate::vehicle_base::VS_CRASHED != 0 {
+    if record(w, v).vehstatus_raw() & crate::vehicle_base::VS_CRASHED != 0 {
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
     }
-    let kind = crate::fleet::record(gw, v).vehicle_type();
+    let kind = crate::fleet::record(gw, v).vehicle_type_raw();
     let mut free = false;
     if kind == 0 {
         if crate::fleet::transactions::articulated(w, v)
@@ -1133,7 +1133,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
             return;
         }
         any |= engine != INVALID_ENGINE;
-        unit = if !free && crate::fleet::record(gw, unit).vehicle_type() == 0 {
+        unit = if !free && crate::fleet::record(gw, unit).vehicle_type_raw() == 0 {
             next_unit(w, unit)
         } else {
             ptr::null_mut()
@@ -1142,7 +1142,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
     unsafe { (w.cost_vehicles)(cost) };
     let mut nothing = true;
     if any {
-        let stopped = free || (record(w, v).status() & crate::vehicle_base::VS_STOPPED != 0);
+        let stopped = free || (record(w, v).vehstatus_raw() & crate::vehicle_base::VS_STOPPED != 0);
         if !stopped {
             unsafe {
                 direct_start(w, costs.temporary, v, true);

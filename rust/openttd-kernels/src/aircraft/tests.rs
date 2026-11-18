@@ -49,14 +49,31 @@ fn leaves(vehicle: crate::vehicle::VehicleServices) -> Leaves {
     leaves
 }
 
-/// A live aircraft record and state with the original constructor defaults.
+/// A live aircraft record and state with the original constructor defaults,
+/// including a default (`OT_NOTHING`) current order.
 fn aircraft() -> Vehicle {
+    let handle = crate::vehicle_base::VehicleRecord::new(
+        std::ptr::null_mut(),
+        crate::vehicle_type::VehicleType::VEH_AIRCRAFT,
+    );
+    let orders = Box::leak(Box::new(crate::orders::VehicleOrders {
+        current: std::mem::MaybeUninit::new(crate::orders::Order {
+            kind: crate::order_type::OrderType::OT_NOTHING.0,
+            flags: 0,
+            destination: 0,
+            refit: crate::cargo_type::CARGO_NO_REFIT,
+            wait: 0,
+            travel: 0,
+            speed: u16::MAX,
+        }),
+        orders: std::ptr::null_mut(),
+        next: std::ptr::null_mut(),
+        previous: std::ptr::null_mut(),
+    }));
+    // SAFETY: The record is live and owned by the test.
+    unsafe { (*handle).orders = orders };
     Vehicle {
-        handle: crate::vehicle_base::openttd_rust_vehicle_record_new(
-            std::ptr::null_mut(),
-            crate::vehicle_type::VehicleType::VEH_AIRCRAFT,
-        )
-        .cast(),
+        handle: handle.cast(),
         state: super::openttd_rust_aircraft_state_new(),
         id: 17,
     }
@@ -161,12 +178,7 @@ fn airport_move_past_the_last_position_reports_and_asserts() {
     extern "C" fn heading(_: *const c_void) -> u8 {
         TERM1
     }
-    extern "C" fn nothing(_: crate::vehicle::VehicleRef) -> u8 {
-        crate::order_type::OT_NOTHING
-    }
-    let mut vehicle = crate::test_tables::VEHICLE;
-    vehicle.order_type = nothing;
-    let mut leaves = leaves(vehicle);
+    let mut leaves = leaves(crate::test_tables::VEHICLE);
     leaves.airport_elements = one_element;
     leaves.node = node;
     leaves.fta_heading = heading;
@@ -267,7 +279,7 @@ fn aircraft_handle_dest_too_far_raises_the_original_event_and_advice() {
     take();
     for owner in [3, 4] {
         let v = aircraft();
-        v.base().write_owner(owner);
+        v.base().set_owner(crate::company_type::CompanyID(owner));
         w.aircraft_handle_dest_too_far(v, true);
         // Already reported: nothing more.
         w.aircraft_handle_dest_too_far(v, true);

@@ -168,7 +168,7 @@ fn next(v: V) -> V {
     (handle(v)).next().map_or(null_mut(), |v| v.0.as_ptr())
 }
 fn engine(v: V) -> u16 {
-    handle(v).engine_id()
+    handle(v).engine_type_raw()
 }
 fn ground(v: V) -> bool {
     crate::vehicle_base::is_ground_vehicle(handle(v).vehicle_type())
@@ -190,7 +190,7 @@ unsafe fn livery(s: &Services, id: u16, v: V) -> *const c_void {
             } else {
                 crate::engine_type::INVALID_ENGINE
             };
-            (s.livery)(engine(v), handle(v).owner(), first_engine, v)
+            (s.livery)(engine(v), handle(v).owner_raw(), first_engine, v)
         }
     }
 }
@@ -255,7 +255,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     let mut user_data = 0u8;
                     let mut u = v;
                     while !u.is_null() {
-                        if handle(v).vehicle_type() == 0 {
+                        if handle(v).vehicle_type_raw() == 0 {
                             user_data |= (s.vehicle.train_handle)(u).get_user_def_data() as u8;
                         }
                         if crate::engine_capabilities::openttd_rust_engine_can_carry_abi(
@@ -291,7 +291,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                         | u32::from(first_max(&subtypes)) << 16
                         | u32::from(user_data) << 24
                 }
-                0x43 => (s.company_info)(handle(v).owner(), livery(s, engine(v), v)),
+                0x43 => (s.company_info)(handle(v).owner_raw(), livery(s, engine(v), v)),
                 0x4d => {
                     let mut before = 0u8;
                     let mut after = 0u8;
@@ -432,7 +432,7 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
         } else {
             if wagon != 0 && !v.is_null() && ground(v) {
                 crate::movement::native_assert(s.shared, engine(v) == id);
-                state.root = if wagon == 2 && handle(v).vehicle_type() == 0 {
+                state.root = if wagon == 2 && handle(v).vehicle_type_raw() == 0 {
                     (s.cached_override)(v)
                 } else {
                     wagon_override(s, engine(v), (s.cargo_type)(v), first_engine(v))
@@ -753,10 +753,10 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
                 )
             }
             2 => crate::ship_control::current_max_speed(
-                (handle(v)).max_speed(),
+                (handle(v)).cached_max_speed(),
                 (s.order_max_speed)(v),
             ),
-            3 => crate::aircraft::speed_old_units(u32::from((handle(v)).max_speed())) as i32,
+            3 => crate::aircraft::speed_old_units(u32::from((handle(v)).cached_max_speed())) as i32,
             _ => 0,
         }
     }
@@ -928,7 +928,7 @@ unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
         let a = crate::vehicle::VehicleRef::of(v).aircraft_state();
         match (*a).state {
             HANGAR => {
-                if (handle(v)).speed() > 0 {
+                if (handle(v)).cur_speed() > 0 {
                     AMA_TTDP_LANDING_TO_HANGAR
                 } else {
                     AMA_TTDP_IN_HANGAR
@@ -1004,7 +1004,7 @@ unsafe fn variable(
     };
     unsafe {
         let h = handle(v);
-        let kind = || h.vehicle_type();
+        let kind = || h.vehicle_type_raw();
         let check = |ok| crate::movement::native_assert(s.shared, ok);
         match variable {
             0x25 => {
@@ -1021,8 +1021,8 @@ unsafe fn variable(
                 let w = next(v);
                 crate::movement::native_assert(s.shared, !w.is_null());
                 let altitude = (h)
-                    .z()
-                    .wrapping_sub((handle(w)).z())
+                    .z_pos()
+                    .wrapping_sub((handle(w)).z_pos())
                     .clamp(0, i32::from(u16::MAX));
                 let st = (s.target_airport)(v);
                 let leaves = &*(s.aircraft_leaves)();
@@ -1047,16 +1047,16 @@ unsafe fn variable(
                     .previous()
                     .map_or(std::ptr::null_mut(), |v| v.0.as_ptr());
                 let n = next(v);
-                let direction = (h).direction();
+                let direction = (h).direction_raw();
                 let f = if p.is_null() {
                     DIRDIFF_SAME
                 } else {
-                    dir_difference_raw((handle(p)).direction(), direction, check)
+                    dir_difference_raw((handle(p)).direction_raw(), direction, check)
                 };
                 let b = if n.is_null() {
                     DIRDIFF_SAME
                 } else {
-                    dir_difference_raw(direction, (handle(n)).direction(), check)
+                    dir_difference_raw(direction, (handle(n)).direction_raw(), check)
                 };
                 let t = change_dir_diff_raw(f, b);
                 let encode = |d| u32::from(if d > DIRDIFF_REVERSE { d | 8 } else { d });
@@ -1069,7 +1069,7 @@ unsafe fn variable(
             }
             0x49 => return (s.build_year)(v) as u32,
             0x4a => {
-                let tile = (h).tile();
+                let tile = (h).tile_raw();
                 match kind() {
                     0 => {
                         let rt = crate::rail::get_tile_rail_type(
@@ -1176,8 +1176,8 @@ unsafe fn variable(
                     return 0;
                 }
                 let prev = (parameter as i8) < 0;
-                let a = (h).direction();
-                let b = (handle(u)).direction();
+                let a = (h).direction_raw();
+                let b = (handle(u)).direction_raw();
                 let mut result = u32::from(if prev {
                     dir_difference_raw(b, a, check)
                 } else {
@@ -1186,11 +1186,11 @@ unsafe fn variable(
                 if result > u32::from(DIRDIFF_REVERSE) {
                     result |= 8;
                 }
-                if (handle(u)).status() & crate::vehicle_base::VS_HIDDEN != 0 {
+                if (handle(u)).vehstatus_raw() & crate::vehicle_base::VS_HIDDEN != 0 {
                     result |= 0x80;
                 }
-                let a = (h.x(), h.y(), h.z());
-                let b = (handle(u).x(), handle(u).y(), handle(u).z());
+                let a = (h.x_pos(), h.y_pos(), h.z_pos());
+                let b = (handle(u).x_pos(), handle(u).y_pos(), handle(u).z_pos());
                 let difference = |a: i32, b: i32| {
                     (if prev {
                         b.wrapping_sub(a)
@@ -1214,7 +1214,7 @@ unsafe fn variable(
                     }
                     let tile = crate::rail::get_tile_rail_type(
                         s.shared,
-                        crate::tile_type::TileIndex((h).tile()),
+                        crate::tile_type::TileIndex((h).tile_raw()),
                     );
                     if tile.0 == param.0 {
                         return 15;
@@ -1235,7 +1235,7 @@ unsafe fn variable(
                     if param.0 == crate::road_type::INVALID_ROADTYPE {
                         return 0;
                     }
-                    let tile = (s.tile_roadtype)((h).tile(), rtt);
+                    let tile = (s.tile_roadtype)((h).tile_raw(), rtt);
                     if tile.0 == param.0 {
                         return 15;
                     }
@@ -1273,12 +1273,12 @@ unsafe fn variable(
             }
             0x65 => match kind() {
                 0 => {
-                    return (s.rail_badge)(((&*(s.ground)()).rail_type)((h).tile()))
+                    return (s.rail_badge)(((&*(s.ground)()).rail_type)((h).tile_raw()))
                         .resolve(s.shared, ro, parameter);
                 }
                 1 => {
                     let rtt = crate::road::get_road_tram_type((s.roadtype)(v));
-                    return (s.road_badge)((s.tile_roadtype)((h).tile(), rtt))
+                    return (s.road_badge)((s.tile_roadtype)((h).tile_raw(), rtt))
                         .resolve(s.shared, ro, parameter);
                 }
                 _ => return u32::MAX,
@@ -1300,7 +1300,7 @@ unsafe fn variable(
                     } else {
                         t
                     };
-                    let rt = ((&*(s.ground)()).rail_type)((h).tile());
+                    let rt = ((&*(s.ground)()).rail_type)((h).tile_raw());
                     let powered = crate::ground_vehicle::is_engine(h.subtype()) || wagon;
                     let power = (s.powered_rail)(u.get_railtypes(), rt);
                     if powered {
@@ -1354,26 +1354,26 @@ unsafe fn variable(
             }
             0x92 | 0x93 => return high(service_date((s.last_service)(v))),
             0x94 | 0x95 => return high(u32::from((s.service_interval)(v))),
-            0x96 => return u32::from((h).last_station()),
-            0x97 => return u32::from((h).tick()),
+            0x96 => return u32::from((h).last_station_visited_raw()),
+            0x97 => return u32::from((h).tick_counter()),
             0x98 | 0x99 => {
-                let speed = u32::from((h).max_speed());
+                let speed = u32::from((h).cached_max_speed());
                 return high(if kind() == 3 {
                     crate::aircraft::speed_old_units(speed)
                 } else {
                     speed
                 });
             }
-            0x9a | 0x9b => return high((h).x() as u32),
-            0x9c | 0x9d => return high((h).y() as u32),
-            0x9e => return (h).z() as u32,
+            0x9a | 0x9b => return high((h).x_pos() as u32),
+            0x9c | 0x9d => return high((h).y_pos() as u32),
+            0x9e => return (h).z_pos() as u32,
             0x9f => {
-                return u32::from(if rotor { DIR_W } else { (h).direction() });
+                return u32::from(if rotor { DIR_W } else { (h).direction_raw() });
             }
             0xa8 | 0xa9 | 0xb3 => return 0,
-            0xb2 => return u32::from((h).status()),
+            0xb2 => return u32::from((h).vehstatus_raw()),
             0xb4 | 0xb5 => {
-                let speed = u32::from((h).speed());
+                let speed = u32::from((h).cur_speed());
                 return high(if kind() == 3 { speed * 10 / 128 } else { speed });
             }
             0xb6 => return u32::from((h).subspeed()),
@@ -1421,9 +1421,9 @@ unsafe fn variable(
                     },
                 );
             }
-            0xc9 => return u32::from((h).day()),
+            0xc9 => return u32::from((h).day_counter()),
             0xca => return u32::from((s.breakdowns)(v)),
-            0xcb => return u32::from(crate::vehicle::VehicleRef::of(v).breakdown_counter()),
+            0xcb => return u32::from(crate::vehicle::VehicleRef::of(v).breakdown_ctr()),
             0xcc => return u32::from((s.breakdown_delay)(v)),
             0xcd => return u32::from((s.breakdown_chance)(v)),
             0xce | 0xcf => return high(u32::from((s.reliability)(v))),
@@ -1605,7 +1605,12 @@ pub(crate) unsafe fn cache_override(vs: &VehicleServices, v: VehicleRef) {
     unsafe {
         let s = &*(vs.newgrf)();
         let shell = v.0.as_ptr();
-        let group = wagon_override(s, v.engine_id(), (s.cargo_type)(shell), first_engine(shell));
+        let group = wagon_override(
+            s,
+            v.engine_type_raw(),
+            (s.cargo_type)(shell),
+            first_engine(shell),
+        );
         (s.write_override)(shell, group);
     }
 }
@@ -1650,7 +1655,7 @@ pub(crate) unsafe fn signed_property(
     unsafe {
         openttd_rust_vehicle_property(
             &*(vs.newgrf)(),
-            v.engine_id(),
+            v.engine_type_raw(),
             property,
             fallback,
             v.0.as_ptr(),
@@ -1664,7 +1669,7 @@ pub(crate) unsafe fn reverse_probability(vs: &VehicleServices, v: VehicleRef) ->
         openttd_rust_vehicle_build_probability(
             &*(vs.newgrf)(),
             v.0.as_ptr(),
-            v.engine_id(),
+            v.engine_type_raw(),
             BUILD_PROBABILITY_REVERSED,
         ) >= 0
     }

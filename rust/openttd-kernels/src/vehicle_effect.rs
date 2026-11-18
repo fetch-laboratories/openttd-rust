@@ -53,11 +53,11 @@ struct Part {
 }
 fn part(v: VehicleRef) -> Part {
     Part {
-        tile: v.tile(),
-        kind: VehicleType(v.vehicle_type()),
-        status: v.status(),
-        tick: v.tick(),
-        cache: v.visual_effect(),
+        tile: v.tile_raw(),
+        kind: VehicleType(v.vehicle_type_raw()),
+        status: v.vehstatus_raw(),
+        tick: v.tick_counter(),
+        cache: v.cached_vis_effect(),
     }
 }
 /// `v->direction` and the ground part length (`VEHICLE_LENGTH` otherwise).
@@ -67,7 +67,7 @@ fn pose(v: VehicleRef) -> (u8, u8) {
     } else {
         VEHICLE_LENGTH
     };
-    (v.direction(), length)
+    (v.direction_raw(), length)
 }
 /// The gate callback initializes every output field and retains no output pointer.
 #[repr(C)]
@@ -94,7 +94,7 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
     let s = services();
     let engine = (s.vehicle.engine)(v);
     let cache = crate::raw_field::read_field!(v.0.as_ptr(), visual);
-    let id = v.engine_id();
+    let id = v.engine_type_raw();
     let powered_before = has_bit(unsafe { *cache }, VE_DISABLE_WAGON_POWER);
     let mut visual = u32::from(engine.visual_effect());
     if engine.callbacks() & crate::newgrf_callbacks::VEHICLE_VISUAL_EFFECT != 0 {
@@ -165,14 +165,16 @@ pub extern "C" fn openttd_rust_visual_eligible_abi(v: VehicleRef) -> u8 {
         assert!(unsafe { (s.vehicle.orders().primary_vehicle)(v.shell()) } != 0);
     }
     u8::from(
-        (s.smoke)() != 0 && v.status() & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && v.speed() >= 2,
+        (s.smoke)() != 0
+            && v.vehstatus_raw() & (VS_TRAIN_SLOWING | VS_STOPPED) == 0
+            && v.cur_speed() >= 2,
     )
 }
 const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate::train::Handle>) {
     let mut regs = [0_i32; 4];
     let n = (s.vehicle.newgrf)();
-    let engine_id = v.engine_id();
+    let engine_id = v.engine_type_raw();
     let callback = unsafe {
         crate::newgrf_vehicle::openttd_rust_vehicle_callback(
             &*n,
@@ -337,13 +339,13 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
 pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
     let s = services();
     let gate = Show {
-        speed: front.speed(),
-        kind: VehicleType(front.vehicle_type()),
+        speed: front.cur_speed(),
+        kind: VehicleType(front.vehicle_type_raw()),
         smoke: (s.smoke)(),
     };
     let front_train = if gate.kind == VehicleType::TRAIN {
         let handle = crate::train::Handle::from_record(front.0.as_ptr());
-        let tile = front.tile();
+        let tile = front.tile_raw();
         // For trains, do not show any smoke when:
         // - the train is reversing
         // - is entering a station with an order to stop there and its speed is equal to maximum station entering speed
@@ -351,7 +353,7 @@ pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
             || (crate::map_func::World::new(s.shared).rail_station(tile)
                 && front.is_front_engine()
                 && crate::movement::should_stop(s.shared, front, (s.shared.station_index)(tile))
-                && u32::from(front.speed()) >= max_speed)
+                && u32::from(front.cur_speed()) >= max_speed)
         {
             return;
         }
@@ -388,7 +390,7 @@ pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
             }
             let bridge = if (s.shared.is_bridge)(p.tile) {
                 let map = s.shared.map();
-                map.tile_virt_xy(v.x() as u32, v.y() as u32).0 == p.tile
+                map.tile_virt_xy(v.x_pos() as u32, v.y_pos() as u32).0 == p.tile
                     && crate::map_func::World::new(s.shared).bridge_above(p.tile)
             } else {
                 crate::map_func::World::new(s.shared).bridge_above(p.tile)

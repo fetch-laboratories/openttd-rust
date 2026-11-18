@@ -54,7 +54,6 @@ pub struct Services {
 }
 
 use crate::train::CCF_ARRANGE;
-use crate::vehicle_type::VEH_TRAIN;
 
 /// Resolved immutable service tables; holds no world or owner borrow.
 #[derive(Clone, Copy)]
@@ -155,16 +154,16 @@ impl Ctx {
     }
     fn set_next(self, v: R, next: R) {
         // SAFETY: The transaction retains every linked record until explicit deletion.
-        unsafe { self.c.vehicles.set_next_record(v, next) };
+        unsafe { crate::vehicle_base::set_next(v, next) };
     }
     fn id(self, v: R) -> VehicleID {
         VehicleID(unsafe { (self.g.vehicle_id)(Self::sh(v)) })
     }
     fn engine(self, v: R) -> EngineID {
-        EngineID(Self::vref(v).engine_id())
+        Self::vref(v).engine_type()
     }
     fn tile(self, v: R) -> TileIndex {
-        TileIndex(Self::vref(v).tile())
+        Self::vref(v).tile()
     }
     fn assert(self, condition: impl FnOnce() -> bool) {
         if self.w.assertions {
@@ -219,10 +218,13 @@ fn get_free_wagons_in_depot(x: Ctx, tile: TileIndex) -> Vec<VehicleID> {
         // SAFETY: synchronous traversal; only the caller-local list is mutated.
         let c = unsafe { &mut *ctx.cast::<Visit>() };
         let v = handle.0.as_ptr();
-        if handle.vehicle_type() != VEH_TRAIN {
+        if handle.vehicle_type() != crate::vehicle::VehicleType::VEH_TRAIN {
             return;
         }
-        if handle.status() & crate::vehicle_base::VS_CRASHED != 0 {
+        if handle
+            .vehstatus()
+            .test(crate::vehicle_base::VehState::Crashed)
+        {
             return;
         }
         if !gv::is_free_wagon(c.x.subtype(v)) {
@@ -709,7 +711,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
                 let mut error = null_string;
                 let grf_text = |n: u32| {
                     x.c.grf_text(
-                        Ctx::sh(head),
+                        Ctx::vref(head),
                         GRFStringID(strings.grf_text.0.wrapping_add(n)),
                     )
                 };
@@ -736,7 +738,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
                         0x40F => {
                             // The original reads register 100 only for this result.
                             error = x.c.grf_text(
-                                Ctx::sh(head),
+                                Ctx::vref(head),
                                 GRFStringID(unsafe { regs100.assume_init() } as u32),
                             );
                         }
@@ -908,12 +910,15 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
     if src.is_null() {
         return (cost.error)(out, ERROR);
     }
-    unsafe { x.t.commands.ownership(out, Ctx::vref(src).owner(), 0) };
+    unsafe { x.t.commands.ownership(out, Ctx::vref(src).owner().0, 0) };
     if !(cost.success)(out) {
         return;
     }
     /* Do not allow moving crashed vehicles inside the depot, it is likely to cause asserts later */
-    if Ctx::vref(src).status() & crate::vehicle_base::VS_CRASHED != 0 {
+    if Ctx::vref(src)
+        .vehstatus()
+        .test(crate::vehicle_base::VehState::Crashed)
+    {
         return (cost.error)(out, ERROR);
     }
     /* if nothing is selected as destination, try and find a matching vehicle to drag to. */
@@ -929,12 +934,15 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
         if dst.is_null() {
             return (cost.error)(out, ERROR);
         }
-        unsafe { x.t.commands.ownership(out, Ctx::vref(dst).owner(), 0) };
+        unsafe { x.t.commands.ownership(out, Ctx::vref(dst).owner().0, 0) };
         if !(cost.success)(out) {
             return;
         }
         /* Do not allow appending to crashed vehicles, too */
-        if Ctx::vref(dst).status() & crate::vehicle_base::VS_CRASHED != 0 {
+        if Ctx::vref(dst)
+            .vehstatus()
+            .test(crate::vehicle_base::VehState::Crashed)
+        {
             return (cost.error)(out, ERROR);
         }
     }

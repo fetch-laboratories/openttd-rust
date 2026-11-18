@@ -25,7 +25,8 @@ use crate::services::{ByteSpan, CommandCost, CommandCostServices, CommandService
 use crate::strings_type::INVALID_STRING_ID as ERROR;
 use crate::strings_type::StringID;
 use crate::tile_type::TileIndex;
-use crate::vehicle::VehicleType;
+use crate::vehicle::{VehicleRef, VehicleType};
+use crate::vehicle_base::VehState;
 use crate::vehicle_type::VehicleID;
 use crate::vehiclelist::{VehicleListIdentifier, VehicleListType};
 
@@ -60,27 +61,29 @@ unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
     }
 }
 /// `Vehicle::GetIfValid`, `IsPrimaryVehicle` and `CheckOwnership(v->owner)`:
-/// resolve once, preserving the original primary check before ownership.
+/// resolve once, preserving the original primary check before ownership. A
+/// non-null shell comes with its record's handle.
 unsafe fn owned_primary(
     s: &TransactionServices,
     cost: *mut CommandCost,
     id: VehicleID,
-) -> (*mut (), CompanyID) {
+) -> (*mut (), CompanyID, Option<VehicleRef>) {
     let v = unsafe { (s.groups.vehicle)(id.0) };
     if v.is_null() {
         (s.cost.error)(cost, ERROR);
-        return (v, CompanyID(0));
+        return (v, CompanyID(0), None);
     }
     if !unsafe { (s.groups.primary)(v) } {
         (s.cost.error)(cost, ERROR);
-        return (std::ptr::null_mut(), CompanyID(0));
+        return (std::ptr::null_mut(), CompanyID(0), None);
     }
-    let owner = CompanyID(crate::fleet::record(s.groups, v).owner());
+    let handle = crate::fleet::record(s.groups, v);
+    let owner = handle.owner();
     unsafe { s.commands.ownership(cost, owner.0, 0) };
     if !(s.cost.success)(cost) {
-        return (std::ptr::null_mut(), CompanyID(0));
+        return (std::ptr::null_mut(), CompanyID(0), None);
     }
-    (v, owner)
+    (v, owner, Some(handle))
 }
 /// # Safety
 /// Immutable tables and readable name span live for this synchronous call.
@@ -110,7 +113,7 @@ pub(crate) unsafe fn cmd_rename_vehicle(
     flags: DoCommandFlags,
     cmd: CmdRenameVehicle,
 ) {
-    let (v, _) = unsafe { owned_primary(s, cost, cmd.veh_id) };
+    let (v, _, _) = unsafe { owned_primary(s, cost, cmd.veh_id) };
     if v.is_null() {
         return;
     }
@@ -185,7 +188,7 @@ pub(crate) unsafe fn cmd_change_service_int(
         is_custom,
         mut is_percent,
     } = cmd;
-    let (v, owner) = unsafe { owned_primary(s, cost, veh_id) };
+    let (v, owner, _) = unsafe { owned_primary(s, cost, veh_id) };
     if v.is_null() {
         return;
     }
@@ -198,10 +201,8 @@ pub(crate) unsafe fn cmd_change_service_int(
             return (s.cost.error)(cost, ERROR);
         }
     } else {
-        serv_int = s.interval_default(
-            owner,
-            VehicleType(crate::fleet::record(s.groups, v).vehicle_type()),
-        ) as u16;
+        serv_int =
+            s.interval_default(owner, crate::fleet::record(s.groups, v).vehicle_type()) as u16;
     }
     if flags.test(DoCommandFlag::Execute) {
         (s.set_interval)(v, serv_int, is_custom, is_percent);
@@ -254,7 +255,7 @@ unsafe fn vehicle_set(
     mut num_vehicles: u8,
     mut emit: impl FnMut(VehicleID),
 ) {
-    if crate::fleet::record(s.groups, v).vehicle_type() != VehicleType::TRAIN.0 {
+    if crate::fleet::record(s.groups, v).vehicle_type() != VehicleType::TRAIN {
         return;
     }
     /* Only include whole vehicles, so start with the first articulated part */
@@ -324,7 +325,7 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
         // Callback runs synchronously; emit mutates only caller-local selection.
         let c = unsafe { &mut *ctx.cast::<Visit<'_, F>>() };
         let v = handle.shell().cast();
-        if VehicleType(crate::fleet::record(c.s.groups, v).vehicle_type()) != c.vehicle_type
+        if crate::fleet::record(c.s.groups, v).vehicle_type() != c.vehicle_type
             || !(c.s.in_depot)(v)
         {
             return;
@@ -425,7 +426,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
     mut emit: F,
 ) -> bool {
     let kind = vli.list_type;
-    let vehicle_type = vli.vtype.0;
+    let vehicle_type = vli.vtype;
     if kind == VehicleListType::VL_STATION_LIST || kind == VehicleListType::VL_DEPOT_LIST {
         let destination = vli.index as u16;
         let ord_pred = |order: &crate::station_service::OrderDestination| {
@@ -442,7 +443,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         };
         crate::vehiclelist_func::find_vehicles_with_order(
             s.links,
-            |v| VehicleType(v.vehicle_type()) == vli.vtype,
+            |v| v.vehicle_type() == vli.vtype,
             ord_pred,
             |v| emit(v.shell().cast()),
         );
@@ -470,17 +471,18 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
     }
     let mut from = 0;
     loop {
-        let v = crate::vehicle::VehicleRef::shell_from_record(s.groups.next_vehicle(from));
-        if v.is_null() {
+        let record = s.groups.next_vehicle(from);
+        let Some(handle) = std::ptr::NonNull::new(record).map(crate::vehicle::VehicleRef) else {
             break;
-        }
+        };
+        let v = crate::vehicle::VehicleRef::shell_from_record(record);
         // Preserve the distinct predicate order of group and standard lists.
-        if crate::fleet::record(s.groups, v).vehicle_type() == vehicle_type {
+        if handle.vehicle_type() == vehicle_type {
             let selected =
                 if kind == VehicleListType::VL_GROUP_LIST && vli.index as u16 != ALL_GROUP {
                     unsafe {
                         (s.groups.primary)(v)
-                            && CompanyID(crate::fleet::record(s.groups, v).owner()) == vli.company
+                            && handle.owner() == vli.company
                             && (crate::fleet::openttd_rust_fleet_contains_abi(
                                 s.groups,
                                 (s.groups.vehicle_group)(v),
@@ -488,10 +490,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
                             ) != 0)
                     }
                 } else {
-                    unsafe {
-                        CompanyID(crate::fleet::record(s.groups, v).owner()) == vli.company
-                            && (s.groups.primary)(v)
-                    }
+                    unsafe { handle.owner() == vli.company && (s.groups.primary)(v) }
                 };
             if selected {
                 emit(v);
@@ -652,14 +651,14 @@ pub(crate) unsafe fn cmd_sell_vehicle(
     let front = crate::fleet::transactions::first(s.transactions, v);
     unsafe {
         b.commands
-            .ownership(cost, crate::fleet::record(b.groups, front).owner(), 0);
+            .ownership(cost, crate::fleet::record(b.groups, front).owner().0, 0);
     };
     if !(b.cost.success)(cost) {
         return;
     }
-    if crate::fleet::transactions::record(s.transactions, front).status()
-        & crate::vehicle_base::VS_CRASHED
-        != 0
+    if crate::fleet::transactions::record(s.transactions, front)
+        .vehstatus()
+        .test(VehState::Crashed)
     {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
@@ -667,10 +666,10 @@ pub(crate) unsafe fn cmd_sell_vehicle(
         return (b.cost.error)(
             cost,
             s.strings.stopped_in_depot
-                + u32::from(crate::fleet::record(b.groups, front).vehicle_type()),
+                + u32::from(crate::fleet::record(b.groups, front).vehicle_type().0),
         );
     }
-    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0 {
+    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN {
         // The build root is late-bound through the fleet table, as autoreplace does.
         let root = (s.transactions.build_services)();
         unsafe {
@@ -756,18 +755,17 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         evaluate_startstop_cb = true;
     }
     let b = s.base;
-    let (v, _) = unsafe { owned_primary(b, cost, veh_id) };
-    if v.is_null() {
+    let (v, _, handle) = unsafe { owned_primary(b, cost, veh_id) };
+    let Some(handle) = handle else {
         return;
-    }
-    let handle = unsafe { vehicle_ref(v, s.vehicles) };
-    let status = (handle).status();
-    if status & crate::vehicle_base::VS_CRASHED != 0 {
+    };
+    let status = (handle).vehstatus();
+    if status.test(VehState::Crashed) {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
-    match VehicleType(crate::fleet::record(b.groups, v).vehicle_type()) {
+    match handle.vehicle_type() {
         VehicleType::TRAIN => {
-            if status & crate::vehicle_base::VS_STOPPED != 0
+            if status.test(VehState::Stopped)
                 && crate::raw_field::read_field!(handle.ground_cache(), cached_power) == 0
             {
                 return (b.cost.error)(cost, s.strings.no_power);
@@ -791,8 +789,8 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         let callback = unsafe {
             crate::newgrf_vehicle::callback(
                 s.vehicles,
-                Some(vehicle_ref(v, s.vehicles)),
-                (vehicle_ref(v, s.vehicles)).engine_id(),
+                Some(handle),
+                handle.engine_type().0,
                 crate::newgrf_callbacks::CBID_VEHICLE_START_STOP_CHECK.0,
                 0,
                 std::ptr::null_mut(),
@@ -804,17 +802,17 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         let null_string = StringID(s.strings.null_string);
         let mut error = null_string;
         if callback != crate::vehicle::CALLBACK_FAILED {
-            if s.engine_grf_version(unsafe { vehicle_ref(v, s.vehicles) }) < 8 {
+            if s.engine_grf_version(handle) < 8 {
                 /* 8 bit result 0xFF means 'allow' */
                 if callback < 0x400 && callback & 0xff != 0xff {
                     error = s.grf_text(
-                        v,
+                        handle,
                         GRFStringID(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
                     );
                 }
             } else if callback < 0x400 {
                 error = s.grf_text(
-                    v,
+                    handle,
                     GRFStringID(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
                 );
             } else {
@@ -822,8 +820,10 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
                     0x400 => (), // allow
                     0x40f => {
                         // The original reads register 100 only for this result.
-                        error =
-                            s.grf_text(v, GRFStringID(unsafe { register100.assume_init() } as u32));
+                        error = s.grf_text(
+                            handle,
+                            GRFStringID(unsafe { register100.assume_init() } as u32),
+                        );
                     }
                     _ => error = StringID(s.strings.incompatible_rail), // unknown reason -> disallow
                 }
@@ -843,9 +843,9 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             );
         }
         // The stopped bit is read again here, after the news and callback above.
-        handle.write_status(handle.status() ^ crate::vehicle_base::VS_STOPPED);
-        if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN.0 {
-            (handle).write_speed(0); // trains can stop 'slowly'
+        handle.set_vehstatus(handle.vehstatus().flip(VehState::Stopped));
+        if handle.vehicle_type() != VehicleType::TRAIN {
+            (handle).set_cur_speed(0); // trains can stop 'slowly'
         }
         /* Unbunching data is no longer valid. */
         (s.vehicles.reset_depot_unbunching)(handle);
@@ -934,11 +934,9 @@ impl CommonServices {
         (self.vehicles.engine)(v).grf_version(self.base.shared)
     }
     /// `GetGRFStringID(v->GetGRFID(), string)`.
-    fn grf_text(&self, v: *mut (), string: GRFStringID) -> StringID {
+    fn grf_text(&self, v: VehicleRef, string: GRFStringID) -> StringID {
         let cap = unsafe { (&*(self.vehicles.newgrf)()).capabilities };
-        let e = (self.vehicles.engine)(unsafe { vehicle_ref(v, self.vehicles) })
-            .0
-            .as_ptr();
+        let e = (self.vehicles.engine)(v).0.as_ptr();
         let grfid = unsafe { crate::engine_capabilities::openttd_rust_engine_grfid(cap, e) };
         StringID((self.grf_string)(grfid, string.0))
     }

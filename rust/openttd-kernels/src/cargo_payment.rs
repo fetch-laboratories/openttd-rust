@@ -322,7 +322,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_front(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_payment_afterload(p: *mut Payment) {
     let front = unsafe { (*p).fields.front };
-    let station = StationID(record(front).last_station());
+    let station = StationID(record(front).last_station_visited_raw());
     unsafe {
         (*p).station = station;
     }
@@ -341,7 +341,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
             let finance = unsafe { &*s.finance };
             let vehicles = unsafe { &*s.vehicles };
             let old_company = CompanyID((finance.current_company)());
-            let company = CompanyID(record(fields.front).owner());
+            let company = CompanyID(record(fields.front).owner_raw());
             (finance.set_current_company)(company.0);
             let expense = (s.expense)(fields.front, true);
             let finances = (finance.company_finances)(company.0);
@@ -375,7 +375,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
                 (vehicles.play_sound)(front, crate::sound_type::SND_14_CASHTILL);
             }
             let front = record(fields.front);
-            let (x_pos, y_pos, z_pos) = (front.x(), front.y(), front.z());
+            let (x_pos, y_pos, z_pos) = (front.x_pos(), front.y_pos(), front.z_pos());
             if fields.visual_transfer != 0 {
                 (s.feeder_animation)(
                     x_pos,
@@ -445,7 +445,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
     let s = unsafe { &*s };
     let front = unsafe { (*p).fields.front };
     let station = unsafe { (*p).station };
-    let company = CompanyID(record(front).owner());
+    let company = CompanyID(record(front).owner_raw());
     // Handle end-of-route payment.
     let profit = deliver_goods(
         d,

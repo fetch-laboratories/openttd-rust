@@ -80,13 +80,12 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.station = [](uint16_t id) noexcept -> const OpenTTDStation * { return reinterpret_cast<const OpenTTDStation *>(Station::GetIfValid(id)); };
 	AircraftTestAirportServices().get_station = [](uint16_t id) noexcept { return reinterpret_cast<Station *>(Station::GetIfValid(id)); };
 	leaves.airport_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
-	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(fixture->aircraft.current_order.type); };
-	vehicle.order_destination = [](OpenTTDVehicle *) noexcept { return fixture->aircraft.current_order.destination; };
 	vehicle.maintenance = &maintenance;
 	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	range_orders = std::make_unique<ControllerOrders>(&vehicle);
 	/* Matching current/list station orders take the ordinary unchanged-order
-	 * path. This preserves the range reference's deliberate no-op orders. */
+	 * path. This preserves the range reference's deliberate no-op orders; the
+	 * current order equals the reference's (OT_GOTO_STATION to station 1). */
 	range_orders->vehicle->current = openttd_rust_order_vector_data(range_orders->vector.get())[0];
 	range_orders->services.vehicle_type = [](void *) noexcept { return uint64_t{3}; };
 	range_orders->services.vehicle = [](void *v) noexcept { if (v != fixture) std::abort(); return range_orders->vehicle.get(); };
@@ -166,6 +165,7 @@ int main()
 		f.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f);
 		f.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.shadow);
 		const auto leaves = RangeLeaves();
+		f.record.orders = range_orders->vehicle.get();
 		openttd_test_aircraft_event(&leaves, {&f.record, f.state.get(), 17}, false);
 		if ((f.state->flags & 1) != (f.aircraft.flags & 1) || f.messages != expected) { std::fprintf(stderr, "range mismatch range=%u dest=%u state=%u flags=%u validity=%u\n", range, destination, state, flag, validity); return 1; }
 		openttd_rust_occupancy_update(&vehicle, &f.record, true);

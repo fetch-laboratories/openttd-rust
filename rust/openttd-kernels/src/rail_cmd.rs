@@ -258,10 +258,8 @@ const SIG_SEMAPHORE: u8 = 1;
 use crate::rail_type::{RAILTYPE_ELECTRIC, RAILTYPE_RAIL};
 use crate::road_type::INVALID_ROADTYPE;
 use crate::road_type::{ROAD_X, ROAD_Y};
-use crate::vehicle_base::VS_STOPPED;
+use crate::vehicle_base::{TILE_AXIAL_DISTANCE, TILE_CORNER_DISTANCE, VS_STOPPED};
 
-const TILE_AXIAL_DISTANCE: i32 = 192;
-const TILE_CORNER_DISTANCE: i32 = 128;
 pub(crate) const LEVELCROSSING_TRACKBIT_FACTOR: u32 = 2;
 pub(crate) use crate::tunnelbridge::TUNNELBRIDGE_TRACKBIT_FACTOR;
 
@@ -371,7 +369,7 @@ impl<'a> Ctx<'a> {
     }
     unsafe fn collect_trains(&self, frame: *mut ConvertFrame, tile: u32) {
         self.vehicles().for_each_on_tile(tile, |v| {
-            if v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0 {
+            if v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0 {
                 unsafe {
                     (self.s.include_train)(frame, v);
                 }
@@ -1563,7 +1561,7 @@ impl<'a> Ctx<'a> {
             return total.error(self.s.strings.no_track);
         }
         let start_tile = tile;
-        signal_density = signal_density.wrapping_mul(TILE_AXIAL_DISTANCE);
+        signal_density = signal_density.wrapping_mul(TILE_AXIAL_DISTANCE.cast_signed());
         let mut trackdir = track;
         if !self.validate_auto_drag(&mut trackdir, tile, end_tile) {
             return total.error(INVALID_STRING_ID);
@@ -1689,30 +1687,36 @@ impl<'a> Ctx<'a> {
                 match self.tile_type(tile) {
                     MP_RAILWAY => {
                         signal_ctr = signal_ctr.wrapping_add(if diagonal(trackdir) {
-                            TILE_AXIAL_DISTANCE
+                            TILE_AXIAL_DISTANCE.cast_signed()
                         } else {
-                            TILE_CORNER_DISTANCE
+                            TILE_CORNER_DISTANCE.cast_signed()
                         });
                     }
-                    MP_ROAD => signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE),
+                    MP_ROAD => {
+                        signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE.cast_signed());
+                    }
                     MP_TUNNELBRIDGE => {
                         w::hit(w::RAIL_CMD_SIGNAL_WORMHOLE);
                         let other = (self.rail.other_tunnel_bridge_end)(tile);
                         let len = self
                             .tunnel_length(tile, other)
                             .wrapping_add(2)
-                            .wrapping_mul(TILE_AXIAL_DISTANCE as u32);
+                            .wrapping_mul(TILE_AXIAL_DISTANCE);
                         if remove || minimise_gaps {
                             signal_ctr = signal_ctr.wrapping_add(len as i32);
                         } else {
-                            signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE);
-                            let mut i = TILE_AXIAL_DISTANCE as u32;
+                            // To keep regular interval we need to emulate placing signals on a
+                            // bridge. We start with TILE_AXIAL_DISTANCE as one bridge tile gets
+                            // processed in the main loop.
+                            signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE.cast_signed());
+                            let mut i = TILE_AXIAL_DISTANCE;
                             while i < len {
                                 if signal_ctr >= last_used_ctr.wrapping_add(signal_density) {
                                     last_used_ctr = signal_ctr;
                                 }
-                                signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE);
-                                i = i.wrapping_add(TILE_AXIAL_DISTANCE as u32);
+                                signal_ctr =
+                                    signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE.cast_signed());
+                                i = i.wrapping_add(TILE_AXIAL_DISTANCE);
                             }
                         }
                     }
@@ -1729,9 +1733,9 @@ impl<'a> Ctx<'a> {
                     break;
                 }
                 signal_ctr = signal_ctr.wrapping_add(if diagonal(trackdir) {
-                    TILE_AXIAL_DISTANCE
+                    TILE_AXIAL_DISTANCE.cast_signed()
                 } else {
-                    TILE_CORNER_DISTANCE
+                    TILE_CORNER_DISTANCE.cast_signed()
                 });
                 tile = self.step(tile, trackdir);
                 if !diagonal(trackdir) {
@@ -2436,7 +2440,7 @@ impl<'a> Ctx<'a> {
                 && is_slope_with_one_corner_raised_raw(tileh_old.0);
             if was_water
                 && self.vehicles().any_on_tile(tile, |v| {
-                    v.vehicle_type() == crate::vehicle::VehicleType::SHIP.0
+                    v.vehicle_type_raw() == crate::vehicle::VehicleType::SHIP.0
                 })
             {
                 return cost.error(self.s.strings.ship_in_way);

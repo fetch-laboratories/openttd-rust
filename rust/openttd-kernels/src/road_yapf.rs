@@ -449,7 +449,7 @@ impl<'a> CYapfRoad<'a> {
             // `TransportTypeChar`
             'r',
             if destination_found { '-' } else { '!' },
-            self.vehicle.unit_number(self.s),
+            self.vehicle.unitnumber(self.s),
             self.num_steps,
             self.open_count(),
             self.closed_count(),
@@ -708,7 +708,7 @@ impl<'a> CYapfRoad<'a> {
                 self.station_commands(),
                 &self.world,
                 self.dest_station,
-                TileIndex(self.vehicle.tile()),
+                self.vehicle.tile(),
                 self.station_type,
             );
             self.non_artic = self.settings.articulated == 0;
@@ -721,7 +721,7 @@ impl<'a> CYapfRoad<'a> {
                 self.station_commands(),
                 &self.world,
                 self.dest_station,
-                TileIndex(self.vehicle.tile()),
+                self.vehicle.tile(),
                 self.station_type,
             );
             self.non_artic = self.settings.articulated == 0;
@@ -992,8 +992,8 @@ impl Drop for CYapfRoad<'_> {
 /// belongs to the road vehicle controller, so the caller supplies it.
 fn road_input(s: &Services, v: VehicleRef, trackdir: Trackdir) -> Input {
     let settings = s.settings();
-    let tile = v.tile();
-    let dest_tile = v.dest_tile();
+    let tile = v.tile().0;
+    let dest_tile = v.dest_tile().0;
     // SAFETY: The settings catalog holds canonical process-lifetime addresses.
     let (max_nodes, slope, crossing, stop, occupied, bay, curve) = unsafe {
         (
@@ -1017,8 +1017,8 @@ fn road_input(s: &Services, v: VehicleRef, trackdir: Trackdir) -> Input {
         occupied: occupied.cast_signed(),
         bay: bay.cast_signed(),
         curve: curve.cast_signed(),
-        order_destination: order.destination,
-        order_type: order.kind(),
+        order_destination: order.destination().0,
+        order_type: order.kind().0,
         bus: u8::from(crate::road_stop::is_bus(s, v)),
         articulated: u8::from(v.has_articulated_part()),
         trackdir: trackdir.0,
@@ -1306,7 +1306,7 @@ mod tests {
     }
     /// A search for a road vehicle record that lives for the test process.
     fn search(s: &Services, input: Input) -> CYapfRoad<'_> {
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let record = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_ROAD,
         );
@@ -1431,11 +1431,11 @@ mod tests {
             next: ptr::null_mut(),
             previous: ptr::null_mut(),
         };
-        let front = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let front = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_ROAD,
         );
-        let part = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let part = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_ROAD,
         );
@@ -1444,7 +1444,8 @@ mod tests {
             (*front).tile = TileIndex(1111);
             (*front).dest_tile = TileIndex(2222);
             (*front).orders = &raw mut orders;
-            (*part).subtype = 1 << crate::vehicle_base::GVSF_ARTICULATED_PART;
+            (*part).subtype =
+                1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
         }
         let v = VehicleRef(NonNull::new(front).unwrap());
         for (bus, articulated, trackdir) in [
@@ -1483,10 +1484,10 @@ mod tests {
                 (u8::from(bus), u8::from(articulated), trackdir.0)
             );
         }
-        // SAFETY: The records came from the allocation export and are released once.
+        // SAFETY: The records came from `VehicleRecord::new` and are released once.
         unsafe {
-            crate::vehicle_base::openttd_rust_vehicle_record_delete(part);
-            crate::vehicle_base::openttd_rust_vehicle_record_delete(front);
+            crate::vehicle_base::VehicleRecord::delete(part);
+            crate::vehicle_base::VehicleRecord::delete(front);
         }
     }
 

@@ -477,7 +477,7 @@ pub extern "C" fn openttd_rust_company_colour_abi(
         while let Some(v) = (s.shared.vehicle_next)(from) {
             let shell = v.0.as_ptr();
             from = (s.vehicle_id)(shell).0 + 1;
-            if crate::company_type::CompanyID(v.owner()) == id {
+            if crate::company_type::CompanyID(v.owner_raw()) == id {
                 (s.invalidate_vehicle)(shell);
             }
         }

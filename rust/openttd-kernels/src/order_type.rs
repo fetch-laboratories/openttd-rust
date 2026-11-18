@@ -238,6 +238,25 @@ impl OrderListID {
     pub const INVALID: Self = Self(65535);
 }
 
+/// Native `DestinationID`: the station or depot an order heads for, retaining
+/// every underlying `u16` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DestinationID(pub u16);
+
+impl DestinationID {
+    /// `DestinationID::ToDepotID`.
+    #[must_use]
+    pub const fn to_depot_id(self) -> crate::depot_type::DepotID {
+        crate::depot_type::DepotID(self.0)
+    }
+    /// `DestinationID::ToStationID`.
+    #[must_use]
+    pub const fn to_station_id(self) -> crate::station_type::StationID {
+        crate::station_type::StationID(self.0)
+    }
+}
+
 /// Native `VehicleOrderID`, retaining every underlying `u8` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

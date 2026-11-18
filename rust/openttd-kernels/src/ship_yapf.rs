@@ -113,10 +113,11 @@ pub(crate) struct Ship<'a> {
 /// tile and destination, its current order, its direction, its engine's speed
 /// and speed fractions, the two curve penalties and its unit number.
 fn ship_input(s: &Services, v: &Ship<'_>) -> Input {
-    let tile = v.v.tile();
-    let dest_tile = v.v.dest_tile();
+    let tile = v.v.tile().0;
+    let dest_tile = v.v.dest_tile().0;
     let order = v.v.current_order();
-    let direction = v.v.direction();
+    let (order_type, order_destination) = (order.kind().0, order.destination().0);
+    let direction = v.v.direction().0;
     let svi = (crate::movement::table(s).vehicle().engine)(v.v);
     let settings = s.settings();
     // SAFETY: The settings catalog holds canonical process-lifetime addresses.
@@ -129,15 +130,15 @@ fn ship_input(s: &Services, v: &Ship<'_>) -> Input {
     Input {
         tile,
         dest_tile,
-        order_type: order.kind(),
-        order_destination: order.destination,
+        order_type,
+        order_destination,
         direction,
         max_speed: svi.ship_speed(),
         ocean_speed_frac: svi.ship_speed_fraction(true),
         canal_speed_frac: svi.ship_speed_fraction(false),
         ship_curve45_penalty,
         ship_curve90_penalty,
-        unit_number: v.v.unit_number(s),
+        unit_number: v.v.unitnumber(s),
     }
 }
 
@@ -761,8 +762,9 @@ impl<'v> Yapf<'v> for CYapfShip<'v> {
                 .vehicle()
                 .for_each_on_tile(tile.0, |other| {
                     /* Ignore other vehicles (aircraft) and ships inside depot. */
-                    if other.vehicle_type() == VehicleType::VEH_SHIP.0
-                        && !crate::vehicle_base::VehStates(other.status())
+                    if other.vehicle_type() == VehicleType::VEH_SHIP
+                        && !other
+                            .vehstatus()
                             .test(crate::vehicle_base::VehState::Hidden)
                     {
                         count += 1;
@@ -1725,7 +1727,7 @@ mod tests {
             next: ptr::null_mut(),
             previous: ptr::null_mut(),
         };
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let record = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_SHIP,
         );
@@ -1733,7 +1735,7 @@ mod tests {
         unsafe {
             (*record).tile = TileIndex(1111);
             (*record).dest_tile = TileIndex(2222);
-            (*record).direction = 5;
+            (*record).direction = crate::direction_type::Direction(5);
             (*record).orders = &raw mut orders;
         }
         let ship = Ship {
@@ -1770,8 +1772,8 @@ mod tests {
         );
         assert_eq!(input.unit_number, 4242, "unit number");
         ENGINE.set(ptr::null_mut());
-        // SAFETY: The record came from the allocation export and is released once.
-        unsafe { crate::vehicle_base::openttd_rust_vehicle_record_delete(record) };
+        // SAFETY: The record came from `VehicleRecord::new` and is released once.
+        unsafe { crate::vehicle_base::VehicleRecord::delete(record) };
     }
 
     #[test]

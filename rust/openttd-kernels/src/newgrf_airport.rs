@@ -569,7 +569,7 @@ pub unsafe extern "C" fn openttd_rust_can_engine_use_station_abi(
     s: *const Services,
 ) -> u8 {
     u8::from(crate::vehicle_func::can_engine_use_station(
-        engine,
+        crate::engine_type::EngineID(engine),
         station,
         unsafe { &*s },
     ))
@@ -580,7 +580,11 @@ pub unsafe extern "C" fn openttd_rust_can_vehicle_use_station_abi(
     station: *const BaseStation,
     s: *const Services,
 ) -> u8 {
-    u8::from(unsafe { crate::vehicle_func::can_vehicle_use_station(vehicle, station, &*s) })
+    u8::from(crate::vehicle_func::can_vehicle_use_station(
+        crate::vehicle::VehicleRef::of(vehicle.cast_mut()),
+        station,
+        unsafe { &*s },
+    ))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_is_hangar_abi(tile: u32, s: *const Services) -> u8 {

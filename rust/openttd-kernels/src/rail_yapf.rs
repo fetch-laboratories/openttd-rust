@@ -29,7 +29,7 @@ use crate::follow_track::{CFollowTrackT, ErrorCode, get_speed_limit};
 use crate::game_state::GameState;
 use crate::map_func::World;
 use crate::node_hash::NodeMap;
-use crate::order_type::{ODATF_NEAREST_DEPOT, OrderType};
+use crate::order_type::{OrderDepotActionFlag, OrderType};
 use crate::pathfinder_func::calc_closest_station_tile;
 use crate::pathfinder_type::{
     FindDepotData, FindDepotDataRecord, YAPF_INFINITE_PENALTY, YAPF_TILE_CORNER_LENGTH,
@@ -471,10 +471,10 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
         let v = pf.v.vehicle();
         pf.dest.any_depot = false;
         let order = v.current_order();
-        let order_type = OrderType(order.kind());
+        let order_type = order.kind();
         if order_type == OrderType::OT_GOTO_WAYPOINT || order_type == OrderType::OT_GOTO_STATION {
             if order_type == OrderType::OT_GOTO_WAYPOINT
-                && !(pf.s.waypoint_is_single_tile)(order.destination)
+                && !(pf.s.waypoint_is_single_tile)(order.destination().to_station_id().0)
             {
                 /* In case of 'complex' waypoints we need to do a look
                  * ahead. This look ahead messes a bit about, which
@@ -488,28 +488,30 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
                 // SAFETY: The shared table returns the static station command table.
                 unsafe { &*(pf.s.station_commands)() },
                 &pf.world,
-                StationID(order.destination),
-                TileIndex(v.tile()),
-                if OrderType(v.current_order().kind()) == OrderType::OT_GOTO_STATION {
+                order.destination().to_station_id(),
+                v.tile(),
+                if v.current_order().kind() == OrderType::OT_GOTO_STATION {
                     StationType::Rail
                 } else {
                     StationType::RailWaypoint
                 },
             );
-            pf.dest.dest_station_id = StationID(order.destination);
+            pf.dest.dest_station_id = order.destination().to_station_id();
             pf.dest.dest_trackdirs = TrackdirBits::INVALID_TRACKDIR_BIT;
         } else {
             if order_type == OrderType::OT_GOTO_DEPOT
-                && order.depot_action_flags() & ODATF_NEAREST_DEPOT != 0
+                && order
+                    .depot_action_flags()
+                    .test(OrderDepotActionFlag::NearestDepot)
             {
                 pf.dest.any_depot = true;
             }
-            pf.dest.dest_tile = TileIndex(v.dest_tile());
+            pf.dest.dest_tile = v.dest_tile();
             pf.dest.dest_station_id = StationID::INVALID;
             pf.dest.dest_trackdirs = TrackdirBits(track_status_to_trackdir_bits(
                 crate::movement::get_tile_track_status(
                     pf.s,
-                    TileIndex(v.dest_tile()),
+                    v.dest_tile(),
                     TransportType::TRANSPORT_RAIL,
                     0,
                     DiagDirection::INVALID_DIAGDIR,
@@ -870,7 +872,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         let destination_found = self.best_dest_node.is_some();
 
         if crate::debug::level(|d| d.yapf) >= 3 {
-            let veh_idx = self.v.vehicle().unit_number(self.s);
+            let veh_idx = self.v.vehicle().unitnumber(self.s);
             // `TransportTypeChar`
             let ttc = 't';
             #[allow(
@@ -1336,7 +1338,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         self.world.assert_with(|| !self.v.record.is_null());
         let v = self.v.vehicle();
         self.world
-            .assert_with(|| v.vehicle_type() == crate::vehicle_type::VEH_TRAIN);
+            .assert_with(|| v.vehicle_type() == crate::vehicle_type::VehicleType::VEH_TRAIN);
         let cached_total_length =
             crate::raw_field::read_field!(v.ground_cache(), cached_total_length);
         self.world.assert_with(|| cached_total_length != 0);
@@ -1564,9 +1566,9 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
             } else if cur.tile_type == TileType::MP_STATION && self.world.is_rail_waypoint(cur.tile)
             {
                 let order = v.current_order();
-                if OrderType(order.kind()) == OrderType::OT_GOTO_WAYPOINT
-                    && self.world.get_station_index(cur.tile) == StationID(order.destination)
-                    && !(self.s.waypoint_is_single_tile)(order.destination)
+                if order.kind() == OrderType::OT_GOTO_WAYPOINT
+                    && self.world.get_station_index(cur.tile) == order.destination().to_station_id()
+                    && !(self.s.waypoint_is_single_tile)(order.destination().to_station_id().0)
                 {
                     /* This waypoint is our destination; maybe this isn't an unreserved
                      * one, so check that and if so see that as the last signal being
@@ -1670,7 +1672,8 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                     Some(&mut min_speed),
                 );
                 // `GetDisplayMaxSpeed()`, which a train answers from `vcache.cached_max_speed`.
-                let max_veh_speed = i32::from(v.max_speed().min(v.current_order().max_speed()));
+                let max_veh_speed =
+                    i32::from(v.cached_max_speed().min(v.current_order().max_speed()));
                 if max_speed < max_veh_speed {
                     extra_cost = extra_cost.wrapping_add(
                         YAPF_TILE_LENGTH
@@ -2751,8 +2754,8 @@ pub(crate) fn yapf_train_check_reverse(s: &Services, v: crate::train::Handle) ->
     ));
 
     /* tiles where front and back are */
-    let mut tile = TileIndex(v.vehicle().tile());
-    let mut tile_rev = TileIndex(last_veh.vehicle().tile());
+    let mut tile = v.vehicle().tile();
+    let mut tile_rev = last_veh.vehicle().tile();
 
     let mut reverse_penalty = 0_i32;
 
@@ -2840,7 +2843,7 @@ pub(crate) fn yapf_train_check_reverse(s: &Services, v: crate::train::Handle) ->
     reason = "TileVirtXY takes the int x_pos and y_pos as its uint parameters"
 )]
 fn virt_tile(map: crate::map_func::Map, v: crate::train::Handle) -> TileIndex {
-    map.tile_virt_xy(v.vehicle().x() as u32, v.vehicle().y() as u32)
+    map.tile_virt_xy(v.vehicle().x_pos() as u32, v.vehicle().y_pos() as u32)
 }
 
 /// `YapfTrainFindNearestDepot`: used when user sends train to the nearest
@@ -2856,7 +2859,7 @@ pub(crate) fn yapf_train_find_nearest_depot(
     let last_veh = v.last();
 
     let origin = pbs.follow_train_reservation(v, None::<&mut crate::train::Handle>);
-    let last_tile = TileIndex(last_veh.vehicle().tile());
+    let last_tile = last_veh.vehicle().tile();
     let td_rev = Trackdir(reverse_trackdir(
         crate::train::get_vehicle_trackdir(leaves, s, last_veh).0,
     ));
@@ -3334,7 +3337,7 @@ mod tests {
             has_pbs: unreachable2,
             index: unreachable1,
         })));
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let record = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_TRAIN,
         );

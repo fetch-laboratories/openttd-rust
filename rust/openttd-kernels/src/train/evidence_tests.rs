@@ -315,8 +315,8 @@ impl Fixture {
                 v.x_pos = x as i32;
                 v.y_pos = y as i32;
                 v.z_pos = z as i32;
-                v.direction = direction as u8;
-                v.vehstatus = status as u8;
+                v.direction = crate::direction_type::Direction(direction as u8);
+                v.vehstatus = crate::vehicle_base::VehStates(status as u8);
                 v.subtype = ((i % 2) << 2) as u8;
                 let g = &mut *self.grounds[i];
                 g.cache.cached_veh_length = t.lengths[i] as u8;
@@ -337,13 +337,13 @@ impl Fixture {
                 let v = &*self.records[i];
                 [
                     u32::from((*self.states[i]).track.0),
-                    u32::from(v.direction),
+                    u32::from(v.direction.0),
                     v.x_pos as u32,
                     v.y_pos as u32,
                     v.z_pos as u32,
                     v.tile.0,
                     u32::from((*self.grounds[i]).flags),
-                    u32::from(v.vehstatus),
+                    u32::from(v.vehstatus.0),
                 ]
             }
         })

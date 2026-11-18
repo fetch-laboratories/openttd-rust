@@ -186,7 +186,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
     let st = (k.station)(tile);
     /* Prevent building aircraft types at places which can't handle them */
     if !crate::vehicle_func::can_engine_use_station(
-        (crate::newgrf_airport::runtime().engine_id)(e),
+        crate::engine_type::EngineID((crate::newgrf_airport::runtime().engine_id)(e)),
         st.cast(),
         crate::newgrf_airport::runtime(),
     ) {
@@ -219,7 +219,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
             .0
             .as_ptr(),
     )
-    .write_refit_cap(0);
+    .set_refit_cap(0);
     let mail =
         crate::cargo_registry::get_cargo_type_by_label(crate::cargo_type::CargoLabel::CT_MAIL).0;
     if (c.valid_cargo)(mail) {
@@ -234,7 +234,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
                 .0
                 .as_ptr(),
         )
-        .write_cargo_cap(u16::from(engine.mail_capacity()));
+        .set_cargo_cap(u16::from(engine.mail_capacity()));
     }
     (b.clear_name)(v);
     (k.engine_common)(
@@ -310,7 +310,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
             .0
             .as_ptr(),
     )
-    .write_cargo_cap(capacity as u16);
+    .set_cargo_cap(capacity as u16);
     (r.invalidate_chain)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
             .0
