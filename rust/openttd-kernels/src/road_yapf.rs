@@ -1031,7 +1031,6 @@ fn road_input(s: &Services, v: VehicleRef, trackdir: Trackdir) -> Input {
 /// # Safety
 /// The caller holds the game-state mutex; `v` is the live road vehicle whose
 /// road owner `state` is, and no service reenters either.
-#[allow(dead_code)] // The road vehicle controller calls it from #964 on.
 pub(crate) unsafe fn yapf_road_vehicle_choose_track(
     s: &Services,
     v: VehicleRef,
@@ -1062,7 +1061,6 @@ pub(crate) unsafe fn yapf_road_vehicle_choose_track(
 /// # Safety
 /// The caller holds the game-state mutex; `v` is a live road vehicle and no
 /// service reenters it.
-#[allow(dead_code)] // The road vehicle controller calls it from #964 on.
 pub(crate) unsafe fn yapf_road_vehicle_find_nearest_depot(
     s: &Services,
     v: VehicleRef,
