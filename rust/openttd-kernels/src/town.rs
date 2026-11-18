@@ -4174,6 +4174,9 @@ mod policy_tests {
         extern "C" fn unexpected_expense_money(_: *mut CommandCost, _: u8, _: i64) {
             unreachable!("unexpected CommandCostServices::expense_money")
         }
+        extern "C" fn unexpected_error_extra(_: *mut CommandCost, _: u32, _: u32) {
+            unreachable!("unexpected CommandCostServices::error_extra")
+        }
         extern "C" fn unexpected_add(_: *mut CommandCost, _: *mut CommandCost) {
             unreachable!("unexpected CommandCostServices::add")
         }
@@ -4215,6 +4218,7 @@ mod policy_tests {
             error: unexpected_error,
             expense_money: unexpected_expense_money,
             error_param: error,
+            error_extra: unexpected_error_extra,
             add: unexpected_add,
             move_cost: unexpected_move_cost,
             amount: unexpected_amount,

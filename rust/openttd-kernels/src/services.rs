@@ -82,6 +82,8 @@ pub struct CommandCostServices {
     pub expense_money: extern "C" fn(*mut CommandCost, u8, i64),
     /// Use native `CommandCostWithParam(StringID, uint64_t)` encoding.
     pub error_param: extern "C" fn(*mut CommandCost, u32, u64),
+    /// Assign the native `CommandCost(StringID msg, StringID extra_msg)` error constructor.
+    pub error_extra: extern "C" fn(*mut CommandCost, u32, u32),
     /// Add the moved native result, retaining first-error semantics.
     pub add: extern "C" fn(*mut CommandCost, *mut CommandCost),
     /// Move-assign every native field, including encoded parameters.
@@ -727,6 +729,7 @@ crate::abi::layouts! {
         error,
         expense_money,
         error_param,
+        error_extra,
         add,
         move_cost => move,
         amount,
@@ -1349,6 +1352,14 @@ impl Cost<'_> {
     }
     pub(crate) fn error(self, message: u32) {
         (self.1.error)(self.0, message);
+    }
+    /// `CommandCost(msg, extra_msg)`: an error with an extra message.
+    pub(crate) fn error_extra(
+        self,
+        msg: crate::strings_type::StringID,
+        extra_msg: crate::strings_type::StringID,
+    ) {
+        (self.1.error_extra)(self.0, msg.0, extra_msg.0);
     }
     pub(crate) fn set(self, money: i64) {
         (self.1.expense_money)(self.0, crate::economy_type::EXPENSES_CONSTRUCTION, money);

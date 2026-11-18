@@ -36,6 +36,17 @@ use crate::order_type::{
 };
 use crate::raw_field::{read_field, write_field};
 use crate::station_type::StationID;
+use crate::strings_type::StringID;
+use crate::table::strings::{
+    STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE, STR_ERROR_CAN_T_ADD_ORDER,
+    STR_ERROR_CAN_T_ADD_ORDER_SHARED, STR_ERROR_CAN_T_COPY_SHARE_ORDER, STR_ERROR_NO_BUOY,
+    STR_ERROR_NO_MORE_SPACE_FOR_ORDERS, STR_ERROR_NO_RAIL_WAYPOINT, STR_ERROR_NO_ROAD_WAYPOINT,
+    STR_ERROR_TIMETABLE_INCOMPLETE, STR_ERROR_TIMETABLE_NOT_STARTED,
+    STR_ERROR_TIMETABLE_NOT_STOPPING_HERE, STR_ERROR_TIMETABLE_ONLY_WAIT_AT_STATIONS,
+    STR_ERROR_TOO_MANY_ORDERS, STR_ERROR_UNBUNCHING_NO_CONDITIONAL,
+    STR_ERROR_UNBUNCHING_NO_FULL_LOAD, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL,
+    STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED,
+};
 use crate::tile_type::TileIndex;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
 use crate::timer_game_tick::DAY_TICKS;
@@ -560,7 +571,6 @@ pub struct Leaves {
     pub no_jet_crash: extern "C" fn() -> u64,
     pub append_station: unsafe extern "C" fn(ctx: *mut c_void, station: u16),
     pub station_commands: *const crate::station_cmd::CommandServicesTable,
-    pub command_error: unsafe extern "C" fn(ctx: *mut c_void, error: u32, detail: u32),
     pub timetable_dirty: unsafe extern "C" fn(ctx: *mut c_void),
     pub invalidate_order: unsafe extern "C" fn(ctx: *mut c_void, data: i32),
     pub delete_order_news: unsafe extern "C" fn(ctx: *mut c_void),
@@ -1482,11 +1492,25 @@ impl Game {
         let owner = (native_vehicle(v, self.0.base)).owner_raw();
         self.check_owner(u64::from(owner), output)
     }
-    fn command_error(self, output: *mut c_void, error: u32) -> u32 {
-        // SAFETY: Output is the entry's live, writable native CommandCost.
-        unsafe {
-            (self.0.command_error)(output, error, 0);
-        }
+    /// The entry's native `CommandCost`, written through the shared cost services.
+    fn cost(self, output: *mut c_void) -> crate::services::Cost<'static> {
+        // SAFETY: The entry supplies immutable owning tables that outlive it, and its live,
+        // writable native cost slot.
+        let costs = unsafe { &*(*self.0.station_commands).cost };
+        crate::services::Cost(output.cast(), costs)
+    }
+    /// `return CMD_ERROR;`
+    fn cmd_error(self, output: *mut c_void) -> u32 {
+        self.command_cost(output, StringID::INVALID_STRING_ID)
+    }
+    /// `return CommandCost(msg);`
+    fn command_cost(self, output: *mut c_void, msg: StringID) -> u32 {
+        self.cost(output).error(msg.0);
+        0
+    }
+    /// `return CommandCost(msg, extra_msg);`
+    fn command_cost_extra(self, output: *mut c_void, msg: StringID, extra_msg: StringID) -> u32 {
+        self.cost(output).error_extra(msg, extra_msg);
         0
     }
     fn primary(self, v: *mut c_void) -> bool {
@@ -1522,7 +1546,7 @@ impl Game {
 }
 
 /// Timetable command validation and execution. Ownership is a shared company
-/// service. Error IDs are mapped to unchanged strings by the C++ command facade.
+/// service. Each error return writes the `CommandCost` the original returns there.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_timetable_change(
     v: *mut c_void,
@@ -1535,17 +1559,17 @@ pub unsafe extern "C" fn openttd_rust_timetable_change(
 ) -> u32 {
     let g = Game(leaves);
     if !g.primary(v) {
-        return g.command_error(output, 0);
+        return g.cmd_error(output);
     }
     if !g.owner_check(v, output) {
         return 0;
     }
     {
         let Some(order) = g.vehicle_order(v, index) else {
-            return g.command_error(output, 0);
+            return g.cmd_error(output);
         };
         if order.kind() == OT_IMPLICIT || field >= 3 {
-            return g.command_error(output, 0);
+            return g.cmd_error(output);
         }
         let mut wait = order.wait;
         let mut travel = order.travel;
@@ -1560,20 +1584,20 @@ pub unsafe extern "C" fn openttd_rust_timetable_change(
             match order.kind() {
                 OT_GOTO_STATION => {
                     if order.non_stop() & 2 != 0 {
-                        return g.command_error(output, 1);
+                        return g.command_cost(output, STR_ERROR_TIMETABLE_NOT_STOPPING_HERE);
                     }
                 }
                 OT_CONDITIONAL => {}
-                _ => return g.command_error(output, 2),
+                _ => return g.command_cost(output, STR_ERROR_TIMETABLE_ONLY_WAIT_AT_STATIONS),
             }
         }
         if travel != order.travel && order.kind() == OT_CONDITIONAL {
-            return g.command_error(output, 0);
+            return g.cmd_error(output);
         }
         if speed != order.speed
             && (order.kind() == OT_CONDITIONAL || g.vehicle_type(v) == u64::from(VEH_AIRCRAFT))
         {
-            return g.command_error(output, 0);
+            return g.cmd_error(output);
         }
         if execute != 0 {
             match field {
@@ -1612,13 +1636,13 @@ pub unsafe extern "C" fn openttd_rust_timetable_validate_bulk(
 ) -> u32 {
     let g = Game(leaves);
     if !g.primary(v) {
-        return g.command_error(output, 0);
+        return g.cmd_error(output);
     }
     if !g.owner_check(v, output) {
         return 0;
     }
     if field >= 3 || g.count(v) == 0 {
-        return g.command_error(output, 0);
+        return g.cmd_error(output);
     }
     1
 }
@@ -1633,14 +1657,14 @@ pub unsafe extern "C" fn openttd_rust_timetable_on_time(
 ) -> u32 {
     let g = Game(leaves);
     if !g.primary(v) {
-        return g.command_error(output, 0);
+        return g.cmd_error(output);
     }
     if g.orders(v).is_null() {
-        return g.command_error(output, 0);
+        return g.cmd_error(output);
     }
     let state = g.consist(v);
     if apply_group == 0 && read_field!(state, flags) & (1 << 3) == 0 {
-        return g.command_error(output, 3);
+        return g.command_cost(output, STR_ERROR_TIMETABLE_NOT_STARTED);
     }
     if !g.owner_check(v, output) {
         return 0;
@@ -1693,10 +1717,10 @@ struct TimetableStart {
 /// `CmdSetTimetableStart`: set the start date of the timetable.
 fn set_timetable_start(g: Game, call: &CommandCall, args: &TimetableStart) -> u32 {
     if !g.primary(args.veh) {
-        return g.command_error(call.output, 0);
+        return g.cmd_error(call.output);
     }
     if g.orders(args.veh).is_null() {
-        return g.command_error(call.output, 0);
+        return g.cmd_error(call.output);
     }
     if !g.owner_check(args.veh, call.output) {
         return 0;
@@ -1713,7 +1737,7 @@ fn set_timetable_start(g: Game, call: &CommandCall, args: &TimetableStart) -> u3
         let max_date = (g.0.maximum_date)() as i32;
         // Don't let a timetable start at an invalid date.
         if start_date < 0 || start_date > max_date {
-            return g.command_error(call.output, 0);
+            return g.cmd_error(call.output);
         }
         // Don't let a timetable start more than 15 years into the future...
         if start_date.wrapping_sub(date)
@@ -1721,19 +1745,19 @@ fn set_timetable_start(g: Game, call: &CommandCall, args: &TimetableStart) -> u3
                 crate::timetable::MAX_TIMETABLE_START_YEARS,
             )
         {
-            return g.command_error(call.output, 0);
+            return g.cmd_error(call.output);
         }
         // ...or 1 year in the past.
         if date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR {
-            return g.command_error(call.output, 0);
+            return g.cmd_error(call.output);
         }
         // If trying to distribute start dates over a shared order group, we need to know the total duration.
         if args.timetable_all && !g.complete(list) {
-            return g.command_error(call.output, 4);
+            return g.command_cost(call.output, STR_ERROR_TIMETABLE_INCOMPLETE);
         }
         // Don't allow invalid start dates for other vehicles in the shared order group.
         if args.timetable_all && start_date.wrapping_add(total / DAY_TICKS) > max_date {
-            return g.command_error(call.output, 0);
+            return g.cmd_error(call.output);
         }
         if call.execute {
             let mut vehicles = Vec::new();
@@ -1807,10 +1831,10 @@ pub unsafe extern "C" fn openttd_rust_timetable_autofill(
 ) -> u32 {
     let g = Game(leaves);
     if !g.primary(v) {
-        return g.command_error(output, 0);
+        return g.cmd_error(output);
     }
     if g.orders(v).is_null() {
-        return g.command_error(output, 0);
+        return g.cmd_error(output);
     }
     let state = g.consist(v);
     if !g.owner_check(v, output) {
@@ -3346,13 +3370,6 @@ impl Control {
 }
 
 impl Game {
-    fn error_with(self, output: *mut c_void, error: u32, detail: u64) -> u64 {
-        // SAFETY: Output is the entry's live, writable native CommandCost.
-        unsafe {
-            (self.0.command_error)(output, error, detail as u32);
-        }
-        0
-    }
     fn check_owner(self, owner: u64, output: *mut c_void) -> bool {
         // SAFETY: The entry supplies immutable owning tables and a live native cost slot.
         let station = unsafe { &*self.0.station_commands };
@@ -3361,9 +3378,6 @@ impl Game {
         let result = crate::services::Cost(output.cast(), costs);
         result.ownership(commands, owner as u8, 0);
         result.ok()
-    }
-    fn error(self, output: *mut c_void, error: u32) -> u64 {
-        u64::from(self.command_error(output, error))
     }
 }
 impl Control {
@@ -3377,71 +3391,76 @@ impl Control {
     ) -> u64 {
         let g = self.g;
         if !self.g.primary(v) {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.owner_check(v, output) {
             return 0;
         }
         if order.refit != 0xfe || order.wait != 0 || order.travel != 0 || order.speed != u16::MAX {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         let kind = g.vehicle_type(v);
         let destination = u64::from(order.destination);
         match order.kind() {
             OT_GOTO_STATION => {
                 if (g.0.valid_station)(destination as u16) == 0 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 let owner = g.station_owner(destination as u16);
                 if owner != u64::from(OWNER_NONE) && !self.g.check_owner(owner, output) {
                     return 0;
                 }
                 if order_can_use_station(v, destination as u16) == 0 {
-                    return self
-                        .g
-                        .error_with(output, 5, g.station_error(v, destination as u16));
+                    return u64::from(self.g.command_cost_extra(
+                        output,
+                        STR_ERROR_CAN_T_ADD_ORDER,
+                        StringID(g.station_error(v, destination as u16) as u32),
+                    ));
                 }
                 let mut u = g.first(v);
                 while !u.is_null() {
                     if order_can_use_station(u, destination as u16) == 0 {
-                        return self.g.error_with(
+                        return u64::from(self.g.command_cost_extra(
                             output,
-                            6,
-                            g.station_error(u, destination as u16),
-                        );
+                            STR_ERROR_CAN_T_ADD_ORDER_SHARED,
+                            StringID(g.station_error(u, destination as u16) as u32),
+                        ));
                     }
                     u = g.next(u);
                 }
                 if order.non_stop() != 0 && kind >= u64::from(VEH_SHIP) {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 match order.load() {
                     0 | 4 => {}
                     2 | 3 => {
                         if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
-                            return self.g.error(output, 7);
+                            return u64::from(
+                                self.g
+                                    .command_cost(output, STR_ERROR_UNBUNCHING_NO_FULL_LOAD),
+                            );
                         }
                     }
-                    _ => return self.g.error(output, 0),
+                    _ => return u64::from(self.g.cmd_error(output)),
                 }
                 if !matches!(order.unload(), 0 | 1 | 2 | 4) {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 match (order.kind >> 4) & 3 {
                     0 | 1 => {
                         if kind != u64::from(VEH_TRAIN) {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                     }
                     2 => {}
-                    _ => return self.g.error(output, 0),
+                    _ => return u64::from(self.g.cmd_error(output)),
                 }
             }
             OT_GOTO_DEPOT => {
                 if order.action() & 2 == 0 {
                     if kind == u64::from(VEH_AIRCRAFT) {
                         if (g.0.valid_station)(destination as u16) == 0 {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                         if !self
                             .g
@@ -3458,11 +3477,11 @@ impl Control {
                                 crate::newgrf_airport::runtime(),
                             )) == 0
                         {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                     } else {
                         if (g.0.valid_depot)(destination as u16) == 0 {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                         if !self
                             .g
@@ -3477,12 +3496,12 @@ impl Control {
                                 _ => g.ship_depot(destination as u16),
                             } == 0
                         {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                     }
                 }
                 if order.non_stop() != 0 && kind >= u64::from(VEH_SHIP) {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 let mut flags = order.depot_type();
                 if flags & 2 != 0 {
@@ -3490,34 +3509,49 @@ impl Control {
                 }
                 flags &= !2;
                 if flags != 0 || order.action() & !7 != 0 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 if order.depot_type() & 1 != 0 && order.action() & 5 != 0 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 if order.action() & 4 != 0 {
                     if g.any_order(v, |o| {
                         o.kind() == OT_GOTO_STATION && matches!(o.load(), 2 | 3)
                     }) {
-                        return self.g.error(output, 8);
+                        return u64::from(
+                            self.g
+                                .command_cost(output, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD),
+                        );
                     }
                     if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
-                        return self.g.error(output, 9);
+                        return u64::from(
+                            self.g
+                                .command_cost(output, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED),
+                        );
                     }
                     if g.any_order(v, |o| o.kind() == OT_CONDITIONAL) {
-                        return self.g.error(output, 10);
+                        return u64::from(
+                            self.g.command_cost(
+                                output,
+                                STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL,
+                            ),
+                        );
                     }
                 }
             }
             OT_GOTO_WAYPOINT => {
                 if (g.0.valid_waypoint)(destination as u16) == 0 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 let facilities = g.waypoint_facilities(destination as u16);
                 match kind {
                     k if k == u64::from(VEH_TRAIN) => {
                         if facilities & 1 == 0 {
-                            return self.g.error(output, 11);
+                            return u64::from(self.g.command_cost_extra(
+                                output,
+                                STR_ERROR_CAN_T_ADD_ORDER,
+                                STR_ERROR_NO_RAIL_WAYPOINT,
+                            ));
                         }
                         if !self
                             .g
@@ -3528,7 +3562,11 @@ impl Control {
                     }
                     k if k == u64::from(VEH_ROAD) => {
                         if facilities & 6 == 0 {
-                            return self.g.error(output, 12);
+                            return u64::from(self.g.command_cost_extra(
+                                output,
+                                STR_ERROR_CAN_T_ADD_ORDER,
+                                STR_ERROR_NO_ROAD_WAYPOINT,
+                            ));
                         }
                         if !self
                             .g
@@ -3539,64 +3577,74 @@ impl Control {
                     }
                     k if k == u64::from(VEH_SHIP) => {
                         if facilities & 16 == 0 {
-                            return self.g.error(output, 13);
+                            return u64::from(self.g.command_cost_extra(
+                                output,
+                                STR_ERROR_CAN_T_ADD_ORDER,
+                                STR_ERROR_NO_BUOY,
+                            ));
                         }
                         let owner = g.waypoint_owner(destination as u16);
                         if owner != u64::from(OWNER_NONE) && !self.g.check_owner(owner, output) {
                             return 0;
                         }
                     }
-                    _ => return self.g.error(output, 0),
+                    _ => return u64::from(self.g.cmd_error(output)),
                 }
                 if order.non_stop() != 0 && kind >= u64::from(VEH_SHIP) {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
             OT_CONDITIONAL => {
                 if order.flags != 0 && order.flags >= g.count(v) {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 if order.variable() >= 8 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
-                    return self.g.error(output, 14);
+                    return u64::from(
+                        self.g
+                            .command_cost(output, STR_ERROR_UNBUNCHING_NO_CONDITIONAL),
+                    );
                 }
                 let compare = order.comparator();
                 if compare >= 8 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 match order.variable() {
                     4 => {
                         if compare != 6 && compare != 7 {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                     }
                     5 => {
                         if compare != 0 || order.value() != 0 {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                     }
                     variable => {
                         if matches!(variable, 0 | 1 | 7) && order.value() > 100 {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                         if compare == 6 || compare == 7 {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                     }
                 }
             }
-            _ => return self.g.error(output, 0),
+            _ => return u64::from(self.g.cmd_error(output)),
         }
         if index > g.count(v) {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if g.count(v) >= 254 {
-            return self.g.error(output, 15);
+            return u64::from(self.g.command_cost(output, STR_ERROR_TOO_MANY_ORDERS));
         }
         if g.orders(v).is_null() && (g.0.list_capacity)() == 0 {
-            return self.g.error(output, 16);
+            return u64::from(
+                self.g
+                    .command_cost(output, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS),
+            );
         }
         if execute {
             self.insert(v, order, index);
@@ -3614,7 +3662,7 @@ impl Control {
     fn delete_command(&self, v: *mut c_void, index: u8, execute: bool, output: *mut c_void) -> u64 {
         let g = self.g;
         if !self.g.primary(v) {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.owner_check(v, output) {
             return 0;
@@ -3623,7 +3671,7 @@ impl Control {
             return self.declone(v, execute);
         }
         if g.vehicle_order(v, index).is_none() {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if execute {
             self.delete(v, index);
@@ -3633,11 +3681,11 @@ impl Control {
     fn skip_command(&self, v: *mut c_void, index: u8, execute: bool, output: *mut c_void) -> u64 {
         let g = self.g;
         if !self.g.primary(v) {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         let state = g.consist(v);
         if index == read_field!(state, implicit) || index >= g.count(v) || g.count(v) < 2 {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.owner_check(v, output) {
             return 0;
@@ -3668,7 +3716,7 @@ impl Control {
     ) -> u64 {
         let g = self.g;
         if !self.g.primary(v) {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.owner_check(v, output) {
             return 0;
@@ -3679,7 +3727,7 @@ impl Control {
             || g.count(v) <= 1
             || g.vehicle_order(v, from).is_none()
         {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if execute {
             self.move_order(v, from, to);
@@ -3697,41 +3745,41 @@ impl Control {
     ) -> u64 {
         let g = self.g;
         if field >= 9 {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.primary(v) {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.owner_check(v, output) {
             return 0;
         }
         if index >= g.count(v) {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         let list = g.orders(v);
         let mut order = g.order(list, index).unwrap();
         match order.kind() {
             OT_GOTO_STATION => {
                 if !matches!(field, 0..=3) {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
             OT_GOTO_DEPOT => {
                 if !matches!(field, 0 | 4) {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
             OT_GOTO_WAYPOINT => {
                 if field != 0 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
             OT_CONDITIONAL => {
                 if !matches!(field, 5..=8) {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
-            _ => return self.g.error(output, 0),
+            _ => return u64::from(self.g.cmd_error(output)),
         }
         let byte = data as u8;
         match field {
@@ -3740,12 +3788,12 @@ impl Control {
                     || byte == order.non_stop()
                     || byte & !3 != 0
                 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
             1 => {
                 if g.vehicle_type(v) != u64::from(VEH_TRAIN) || data >= 3 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
             2 => {
@@ -3753,82 +3801,96 @@ impl Control {
                     || byte == order.unload()
                     || !matches!(byte, 0 | 1 | 2 | 4)
                 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
             3 => {
                 if order.non_stop() & 2 != 0 || byte == order.load() {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 match byte {
                     0 | 4 => {}
                     2 | 3 => {
                         if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
-                            return self.g.error(output, 7);
+                            return u64::from(
+                                self.g
+                                    .command_cost(output, STR_ERROR_UNBUNCHING_NO_FULL_LOAD),
+                            );
                         }
                     }
-                    _ => return self.g.error(output, 0),
+                    _ => return u64::from(self.g.cmd_error(output)),
                 }
             }
             4 => {
                 if byte >= 4 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 if byte == 3 {
                     if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0)
                         && order.action() & 4 == 0
                     {
-                        return self.g.error(output, 9);
+                        return u64::from(
+                            self.g
+                                .command_cost(output, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED),
+                        );
                     }
                     if g.any_order(v, |o| o.kind() == OT_CONDITIONAL) {
-                        return self.g.error(output, 10);
+                        return u64::from(
+                            self.g.command_cost(
+                                output,
+                                STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL,
+                            ),
+                        );
                     }
                     if g.any_order(v, |o| {
                         o.kind() == OT_GOTO_STATION && matches!(o.load(), 2 | 3)
                     }) {
-                        return self.g.error(output, 8);
+                        return u64::from(
+                            self.g
+                                .command_cost(output, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD),
+                        );
                     }
                 }
             }
             5 => {
                 if byte >= 8 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
             6 => {
                 if byte >= 8 {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
                 match order.variable() {
-                    5 => return self.g.error(output, 0),
+                    5 => return u64::from(self.g.cmd_error(output)),
                     4 => {
                         if byte != 6 && byte != 7 {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                     }
                     _ => {
                         if byte == 6 || byte == 7 {
-                            return self.g.error(output, 0);
+                            return u64::from(self.g.cmd_error(output));
                         }
                     }
                 }
             }
             7 => match order.variable() {
-                4 | 5 => return self.g.error(output, 0),
+                4 | 5 => return u64::from(self.g.cmd_error(output)),
                 0 | 1 | 7 => {
                     if data > 100 {
-                        return self.g.error(output, 0);
+                        return u64::from(self.g.cmd_error(output));
                     }
                 }
                 _ => {
                     if data > 2047 {
-                        return self.g.error(output, 0);
+                        return u64::from(self.g.cmd_error(output));
                     }
                 }
             },
             8 => {
                 if data >= u16::from(g.count(v)) {
-                    return self.g.error(output, 0);
+                    return u64::from(self.g.cmd_error(output));
                 }
             }
             _ => unreachable!(),
@@ -3926,22 +3988,22 @@ impl Control {
     ) -> u64 {
         let g = self.g;
         if cargo >= 64 && cargo != 0xfe && cargo != 0xfd {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.primary(v) {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.owner_check(v, output) {
             return 0;
         }
         let Some(mut order) = g.vehicle_order(v, index) else {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         };
         if cargo == 0xfd && order.kind() != OT_GOTO_STATION {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if order.load() == 4 {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if execute {
             order.refit = cargo;
@@ -4059,7 +4121,7 @@ impl Control {
     ) -> u64 {
         let g = self.g;
         if !self.g.primary(dst) {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.owner_check(dst, output) {
             return 0;
@@ -4068,10 +4130,10 @@ impl Control {
             return self.declone(dst, execute);
         }
         if action != 0 && action != 1 {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.primary(src) || g.vehicle_type(dst) != g.vehicle_type(src) || dst == src {
-            return self.g.error(output, 0);
+            return u64::from(self.g.cmd_error(output));
         }
         if !self.g.owner_check(src, output) {
             return 0;
@@ -4079,10 +4141,10 @@ impl Control {
         let kind = g.vehicle_type(src);
         if action == 0 {
             if kind == u64::from(VEH_ROAD) && g.bus(src) != g.bus(dst) {
-                return self.g.error(output, 0);
+                return u64::from(self.g.cmd_error(output));
             }
             if g.first(src) == g.first(dst) {
-                return self.g.error(output, 0);
+                return u64::from(self.g.cmd_error(output));
             }
         }
         let list = g.orders(src);
@@ -4100,17 +4162,26 @@ impl Control {
                 if (action == 1 || order_can_use_station(src, destination as u16) != 0)
                     && order_can_use_station(dst, destination as u16) == 0
                 {
-                    return self
-                        .g
-                        .error_with(output, 17, g.station_error(dst, destination as u16));
+                    // Both the share and the copy branch of `CmdCloneOrder` return this.
+                    return u64::from(self.g.command_cost_extra(
+                        output,
+                        STR_ERROR_CAN_T_COPY_SHARE_ORDER,
+                        StringID(g.station_error(dst, destination as u16) as u32),
+                    ));
                 }
             }
         }
         if kind == u64::from(VEH_AIRCRAFT) && !g.aircraft_range(dst, src) {
-            return self.g.error(output, 18);
+            return u64::from(
+                self.g
+                    .command_cost(output, STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE),
+            );
         }
         if (action == 1 || list.is_null()) && (g.0.list_capacity)() == 0 {
-            return self.g.error(output, 16);
+            return u64::from(
+                self.g
+                    .command_cost(output, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS),
+            );
         }
         if execute {
             self.delete_vehicle_orders(dst, action == 1, g.count(dst) != g.count(src));
@@ -4841,7 +4912,6 @@ crate::abi::layouts! {
         no_jet_crash,
         append_station,
         station_commands,
-        command_error,
         timetable_dirty,
         invalidate_order,
         delete_order_news,
@@ -4967,5 +5037,175 @@ mod order_view_tests {
                 "flags {flags:#x}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod command_cost_tests {
+    use super::{Game, Leaves, openttd_rust_timetable_validate_bulk};
+    use crate::services::{CommandCost, CommandCostServices};
+    use crate::station_cmd::CommandServicesTable;
+    use crate::strings_type::StringID;
+    use crate::table::strings::{
+        STR_ERROR_CAN_T_COPY_SHARE_ORDER, STR_ERROR_NO_RAIL_WAYPOINT, STR_ERROR_TOO_MANY_ORDERS,
+    };
+    use crate::test_tables::{
+        unreachable0, unreachable1, unreachable2, unreachable3, unreachable4,
+    };
+    use std::cell::RefCell;
+    use std::ptr;
+
+    /// One native `CommandCost` constructor call.
+    #[derive(Debug, PartialEq, Eq)]
+    enum Constructed {
+        /// `CommandCost(msg)`.
+        Error(u32),
+        /// `CommandCost(msg, extra_msg)`.
+        ErrorExtra(u32, u32),
+    }
+    thread_local! {
+        static CONSTRUCTED: RefCell<Vec<Constructed>> = const { RefCell::new(Vec::new()) };
+    }
+    extern "C" fn error(_: *mut CommandCost, msg: u32) {
+        CONSTRUCTED.with(|c| c.borrow_mut().push(Constructed::Error(msg)));
+    }
+    extern "C" fn error_extra(_: *mut CommandCost, msg: u32, extra_msg: u32) {
+        CONSTRUCTED.with(|c| c.borrow_mut().push(Constructed::ErrorExtra(msg, extra_msg)));
+    }
+
+    /// Order leaves whose only reachable service is the recording cost table.
+    fn leaves() -> &'static Leaves {
+        let cost: &'static CommandCostServices = Box::leak(Box::new(CommandCostServices {
+            error,
+            error_extra,
+            ..crate::test_tables::COMMAND_COSTS
+        }));
+        let station_commands: *const CommandServicesTable =
+            Box::leak(Box::new(CommandServicesTable {
+                cost,
+                ..crate::test_tables::STATION_COMMANDS
+            }));
+        Box::leak(Box::new(Leaves {
+            vehicle: unreachable1,
+            consist: unreachable1,
+            list: unreachable1,
+            vector: unreachable1,
+            backup: unreachable1,
+            backup_vector: unreachable1,
+            backup_consist: unreachable1,
+            ownerless_station: unreachable2,
+            vehicle_type: unreachable1,
+            tick_counter: unreachable0,
+            primary_vehicle: unreachable1,
+            ticks_per_second: unreachable0,
+            unit_number: unreachable1,
+            maximum_date: unreachable0,
+            allocate_list: unreachable0,
+            shared_window: unreachable2,
+            vehicle_id: unreachable1,
+            reliability: unreachable1,
+            display_speed: unreachable1,
+            age_years: unreachable1,
+            needs_service: unreachable1,
+            remaining_years: unreachable1,
+            airport_tile: unreachable1,
+            depot_tile: unreachable1,
+            distance: unreachable3,
+            station_location: unreachable2,
+            destination_tile: unreachable1,
+            aircraft_flying: unreachable1,
+            target_airport: unreachable1,
+            waypoint_tile: unreachable1,
+            at_station: unreachable1,
+            tile_station: unreachable1,
+            ship_station_tile: unreachable1,
+            valid_station: unreachable1,
+            station_owner: unreachable1,
+            station_error: unreachable2,
+            valid_depot: unreachable1,
+            depot_owner: unreachable1,
+            rail_depot: unreachable1,
+            road_depot: unreachable1,
+            ship_depot: unreachable1,
+            valid_waypoint: unreachable1,
+            waypoint_facilities: unreachable1,
+            waypoint_owner: unreachable1,
+            list_capacity: unreachable0,
+            next_backup: unreachable1,
+            next_vehicle: unreachable1,
+            aircraft_range: unreachable1,
+            aircraft_range_square: unreachable1,
+            backup_capacity: unreachable0,
+            create_backup: unreachable2,
+            networking: unreachable0,
+            network_server: unreachable0,
+            network_client: unreachable0,
+            server_client: unreachable0,
+            default_group: unreachable0,
+            vehicle_group: unreachable1,
+            unique_backup_name: unreachable1,
+            local_owner: unreachable1,
+            no_jet_crash: unreachable0,
+            append_station: unreachable2,
+            station_commands,
+            timetable_dirty: unreachable1,
+            invalidate_order: unreachable2,
+            delete_order_news: unreachable1,
+            invalidate_vehicle_list: unreachable1,
+            close_shared_window: unreachable2,
+            invalidate_shared_window: unreachable3,
+            dirty_vehicle_windows: unreachable1,
+            capture_backup_metadata: unreachable2,
+            clear_backup_name: unreachable1,
+            restore_backup_metadata: unreachable2,
+            order_news: unreachable2,
+            debug_list: unreachable1,
+            assert_departure_range: unreachable2,
+            delete_list: unreachable1,
+            reverse_train: unreachable1,
+            next_airport: unreachable1,
+            set_destination: unreachable2,
+            closest_depot: unreachable2,
+            share_command: unreachable2,
+            group_command: unreachable2,
+            delete_backup: unreachable1,
+            clear_backup_gui: unreachable2,
+            clear_backup_post: unreachable1,
+            missing_aircraft_orders: unreachable1,
+            change_timetable_command: unreachable4,
+            base: &crate::test_tables::VEHICLE,
+        }))
+    }
+
+    /// An order entry's `return CMD_ERROR;` writes `CommandCost(INVALID_STRING_ID)`, and the
+    /// one- and two-string returns pass the message and extra message in the original's
+    /// positions.
+    #[test]
+    fn order_errors_construct_the_original_command_costs() {
+        let leaves = leaves();
+        let output = ptr::NonNull::<u8>::dangling().as_ptr().cast();
+        CONSTRUCTED.with(|c| c.borrow_mut().clear());
+        // `CmdBulkChangeTimetable`: `if (v == nullptr || !v->IsPrimaryVehicle()) return CMD_ERROR;`
+        // SAFETY: The null vehicle fails the first check; the output is never dereferenced.
+        let valid =
+            unsafe { openttd_rust_timetable_validate_bulk(ptr::null_mut(), 0, output, leaves) };
+        Game(leaves).command_cost(output, STR_ERROR_TOO_MANY_ORDERS);
+        Game(leaves).command_cost_extra(
+            output,
+            STR_ERROR_CAN_T_COPY_SHARE_ORDER,
+            STR_ERROR_NO_RAIL_WAYPOINT,
+        );
+        assert_eq!(valid, 0);
+        assert_eq!(
+            CONSTRUCTED.with(RefCell::take),
+            [
+                Constructed::Error(StringID::INVALID_STRING_ID.0),
+                Constructed::Error(STR_ERROR_TOO_MANY_ORDERS.0),
+                Constructed::ErrorExtra(
+                    STR_ERROR_CAN_T_COPY_SHARE_ORDER.0,
+                    STR_ERROR_NO_RAIL_WAYPOINT.0
+                ),
+            ]
+        );
     }
 }

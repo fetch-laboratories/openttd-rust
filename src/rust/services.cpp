@@ -154,6 +154,7 @@ static void CostZero(OpenTTDCommandCost *out) noexcept { OpenTTDCommandCostZero(
 static void CostError(OpenTTDCommandCost *out, uint32_t message) noexcept { OpenTTDCommandCostError(NativeCost(out), message); }
 static void CostExpenseMoney(OpenTTDCommandCost *out, uint8_t expense, int64_t amount) noexcept { OpenTTDCommandCostExpenseMoney(NativeCost(out), static_cast<ExpensesType>(expense), Money(amount)); }
 static void CostErrorParam(OpenTTDCommandCost *out, uint32_t message, uint64_t parameter) noexcept { *NativeCost(out) = CommandCostWithParam(message, parameter); }
+static void CostErrorExtra(OpenTTDCommandCost *out, uint32_t message, uint32_t extra_message) noexcept { *NativeCost(out) = CommandCost(message, extra_message); }
 static void CostAdd(OpenTTDCommandCost *out, OpenTTDCommandCost *item) noexcept { NativeCost(out)->AddCost(std::move(*NativeCost(item))); }
 static void CostMove(OpenTTDCommandCost *out, OpenTTDCommandCost *item) noexcept { *NativeCost(out) = std::move(*NativeCost(item)); }
 static void CostAmount(OpenTTDCommandCost *out, int64_t amount) noexcept { NativeCost(out)->AddCost(Money(amount)); }
@@ -169,7 +170,7 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 	static const OpenTTDCommandCostServices services{
 		.construct = CostConstruct, .destroy = CostDestroy,
 		.zero = CostZero, .error = CostError, .expense_money = CostExpenseMoney,
-		.error_param = CostErrorParam, .add = CostAdd, .move = CostMove,
+		.error_param = CostErrorParam, .error_extra = CostErrorExtra, .add = CostAdd, .move = CostMove,
 		.amount = CostAmount, .success = CostSuccess, .error_message = CostErrorMessage, .money = CostMoney,
 		.expense = CostExpense, .make_error = CostMakeError,
 		.encode_owned_by = CostEncodeOwnedBy, .error_owner = CostErrorOwner,

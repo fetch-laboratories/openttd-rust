@@ -650,6 +650,7 @@ pub(crate) const COMMAND_COSTS: crate::services::CommandCostServices =
         error: unreachable2,
         expense_money: unreachable3,
         error_param: unreachable3,
+        error_extra: unreachable3,
         add: unreachable2,
         move_cost: unreachable2,
         amount: unreachable2,

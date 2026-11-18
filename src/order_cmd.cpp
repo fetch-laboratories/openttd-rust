@@ -310,20 +310,6 @@ extern "C" void openttd_orders_append_station(void *ctx, uint16_t station) noexc
 	static_cast<std::vector<StationID> *>(ctx)->push_back(StationID(station));
 }
 
-extern "C" void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept
-{
-	{
-			static const StringID errors[] = {INVALID_STRING_ID, STR_ERROR_TIMETABLE_NOT_STOPPING_HERE, STR_ERROR_TIMETABLE_ONLY_WAIT_AT_STATIONS, STR_ERROR_TIMETABLE_NOT_STARTED, STR_ERROR_TIMETABLE_INCOMPLETE,
-				STR_ERROR_CAN_T_ADD_ORDER, STR_ERROR_CAN_T_ADD_ORDER_SHARED, STR_ERROR_UNBUNCHING_NO_FULL_LOAD, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL,
-				STR_ERROR_NO_RAIL_WAYPOINT, STR_ERROR_NO_ROAD_WAYPOINT, STR_ERROR_NO_BUOY, STR_ERROR_UNBUNCHING_NO_CONDITIONAL, STR_ERROR_TOO_MANY_ORDERS, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS, STR_ERROR_CAN_T_COPY_SHARE_ORDER, STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE};
-			if (error == 0) *static_cast<CommandCost *>(ctx) = CMD_ERROR;
-			else if (error == 5 || error == 6 || error == 17) *static_cast<CommandCost *>(ctx) = CommandCost(errors[error], StringID(detail));
-			else if (error >= 11 && error <= 13) *static_cast<CommandCost *>(ctx) = CommandCost(STR_ERROR_CAN_T_ADD_ORDER, errors[error]);
-			else *static_cast<CommandCost *>(ctx) = CommandCost(errors[error]);
-
-		}
-}
-
 extern "C" void openttd_orders_timetable_dirty(void *ctx) noexcept
 {
 	SetWindowDirty(WC_VEHICLE_TIMETABLE, static_cast<Vehicle *>(ctx)->index);
@@ -517,7 +503,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.no_jet_crash = openttd_orders_no_jet_crash,
 	.append_station = openttd_orders_append_station,
 	.station_commands = &GetRustStationCommandServices(),
-	.command_error = openttd_orders_command_error,
 	.timetable_dirty = openttd_orders_timetable_dirty,
 	.invalidate_order = openttd_orders_invalidate_order,
 	.delete_order_news = openttd_orders_delete_order_news,
