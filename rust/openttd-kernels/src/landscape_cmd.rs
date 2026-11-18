@@ -937,9 +937,23 @@ pub(crate) fn terraform_command(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDLandscapeCommandServices" ["landscape"] => crate::landscape_cmd::LandscapeServices {
-        shared, costs, commands, tile_procs, water, on_water, coast, buoy, canal,
-        max_bridge_height, freeform_edges, editor, founding,
-        tunnel_in_way, mark_dirty_height, set_height, paused,
+        shared,
+        costs,
+        commands,
+        tile_procs,
+        water,
+        on_water,
+        coast,
+        buoy,
+        canal,
+        max_bridge_height,
+        freeform_edges,
+        editor,
+        founding,
+        tunnel_in_way,
+        mark_dirty_height,
+        set_height,
+        paused,
     };
     "OpenTTDLandscapeTileServices" ["landscape"] => crate::landscape_cmd::TileServices {
         clear, terraform, owners, trees, industry_policy, industry_costs, industry_generation,
