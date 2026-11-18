@@ -304,7 +304,7 @@ if(NOT OPTION_TOOLS_ONLY)
     set(RUST_STRINGS_CHECK_STAMP "${CMAKE_BINARY_DIR}/rust-strings-check.stamp")
     add_custom_command(OUTPUT "${RUST_STRINGS_CHECK_STAMP}"
         COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo-strgen"
-            "${CARGO_EXECUTABLE}" run --quiet --release --locked --package openttd-strgen
+            "${CARGO_EXECUTABLE}" run --quiet --release --locked --package openttd-strgen --target "${RUST_HOST}"
             --manifest-path "${CMAKE_SOURCE_DIR}/Cargo.toml" --
             "${RUST_MASTER_LANG_FILE}" "${CMAKE_BINARY_DIR}/generated/table/strings.h"
         COMMAND ${CMAKE_COMMAND} -E touch "${RUST_STRINGS_CHECK_STAMP}"
