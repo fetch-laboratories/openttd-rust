@@ -2528,7 +2528,7 @@ class RequestTests(unittest.TestCase):
                     patch("builtins.print") as printed,
                 ):
                     self.assertEqual(ci.main(), 2)
-                self.assertEqual(waited.call_args.args[1:], (timeout, 15))
+                self.assertEqual(waited.call_args.args[1:], (timeout, 15, False))
                 printed.assert_called_once()
 
     def test_successful_run_without_full_status_is_rejected(self) -> None:
@@ -2624,7 +2624,7 @@ class RequestPathTests(unittest.TestCase):
     def test_pending_then_mergeable_dispatches_the_pinned_head(self) -> None:
         path, calls, output, sleeps = self.request(self.PENDING, self.PENDING, PULL)
         self.assertEqual(sleeps, 2)
-        self.assertEqual(output.count("Waiting up to 60 seconds"), 1)
+        self.assertEqual(output.count(f"Waiting up to {ci.MERGEABLE_WAIT} seconds"), 1)
         ((dispatch),) = calls
         self.assertEqual(dispatch[:2], ("workflow", "run"))
         self.assertIn(f"head={HEAD}", dispatch)
@@ -2670,13 +2670,22 @@ class RequestPathTests(unittest.TestCase):
         self.assertNotIn("Waiting", self.output)
         # Pending past the bound stops without dispatching, and says so.
         with self.assertRaisesRegex(ci.MergeabilityPending, "still computing"):
-            self.request(*[self.PENDING] * 40)
+            self.request(*[self.PENDING] * (ci.MERGEABLE_WAIT // 3 + 2))
         self.assertNotIn("Requested", self.output)
 
     def test_head_option_refuses_another_remote_head(self) -> None:
+        # GitHub keeps answering with another head: refused at the bound.
+        reads = [PULL] * (ci.MERGEABLE_WAIT // 3 + 2)
         with self.assertRaisesRegex(ValueError, f"head on GitHub is {HEAD}, not"):
-            self.request(PULL, head=PREVIOUS)
+            self.request(*reads, head=PREVIOUS)
+        self.assertEqual(self.output.count("waiting up to"), 1)
         self.stamp.assert_not_called()
+        # Just after a push the first read shows the old head, then the pushed one.
+        stale = dict(PULL, head={"sha": PREVIOUS})
+        path, calls, output, sleeps = self.request(stale, PULL, PULL, head=HEAD)
+        self.assertIsNotNone(path)
+        self.assertEqual(sleeps, 1)
+        self.assertIn(f"head={HEAD}", calls[0])
         path, calls, _, _ = self.request(PULL, head=HEAD[:12])
         self.assertIsNotNone(path)
         self.assertEqual(calls[0][:2], ("workflow", "run"))
@@ -2773,22 +2782,24 @@ class RequestPathTests(unittest.TestCase):
         code, path, output, _ = self.wait_pr(runs=[[listed, remote]])
         self.assertEqual((code, path), (0, newest))
         self.assertIn("(from local record)", output)
-        # A remote request of another profile is a choice to name.
+        # With a newer remote request of another profile, that one is followed
+        # and the other is named with the command that waits on it.
         rust = requested("rust", "a" * 32, "2026-11-12T04:00:00Z")
         code, path, output, _ = self.wait_pr(runs=[[listed, rust]])
-        self.assertEqual((code, path), (1, None))
-        self.assertIn("for native, rust; name one", output)
+        self.assertEqual((code, path), (0, ci.REQUESTS / f"{'a' * 32}-{HEAD}.json"))
+        self.assertIn("also has a native request", output)
+        self.assertIn("wait 170 --profile native", output)
         self.assertTrue(local.exists())
 
-    def test_wait_on_a_pr_with_several_profiles_needs_one_named(self) -> None:
-        self.record("native")
+    def test_wait_on_a_pr_with_several_profiles_follows_the_newest(self) -> None:
+        native = self.record("native")
         rust = self.record("rust", profile="rust", created_at="2026-11-12T05:00:00Z")
         code, path, output, _ = self.wait_pr()
-        self.assertEqual((code, path), (1, None))
-        self.assertIn("for native, rust; name one", output)
-        self.assertIn("wait 170 --profile PROFILE", output)
-        code, path, _, _ = self.wait_pr("--profile", "rust")
         self.assertEqual((code, path), (0, rust))
+        self.assertIn("also has a native request", output)
+        self.assertIn("wait 170 --profile native", output)
+        code, path, _, _ = self.wait_pr("--profile", "native")
+        self.assertEqual((code, path), (0, native))
 
     def test_wait_on_a_pr_without_a_request_names_the_request_command(self) -> None:
         self.record("native")
@@ -2806,6 +2817,301 @@ class RequestPathTests(unittest.TestCase):
         ):
             self.assertEqual(ci.main(), 1)
         waited.assert_not_called()
+
+
+def gateway_error(*args: str) -> subprocess.CalledProcessError:
+    return subprocess.CalledProcessError(
+        1, ["gh", *args], stderr="gh: HTTP 502: Bad Gateway (https://api.github.com/)"
+    )
+
+
+class RetryTests(unittest.TestCase):
+    """Reads survive a gateway error; nothing that writes is repeated (#1013)."""
+
+    def run_gh(
+        self, failures: int, *args: str
+    ) -> tuple[str | None, list[tuple[str, ...]], Exception | None]:
+        calls: list[tuple[str, ...]] = []
+
+        def flaky(*arguments: str, **_: object) -> str:
+            calls.append(arguments)
+            if len(calls) <= failures:
+                raise gateway_error(*arguments)
+            return "answer\n"
+
+        with (
+            patch.object(ci.vcs, "gh", side_effect=flaky),
+            patch.object(ci.time, "sleep"),
+            patch("sys.stderr"),
+        ):
+            try:
+                return ci.gh(*args), calls, None
+            except subprocess.CalledProcessError as error:
+                return None, calls, error
+
+    def test_a_read_that_fails_once_with_a_502_succeeds(self) -> None:
+        queue = ("api", "graphql", "-f", f"query={ci.QUEUE_STATE}", "-F", "n=1")
+        for read in (
+            ("api", "repos/x/y/pulls/1"),
+            ("api", "--paginate", "--slurp", "repos/x/y/actions/runs"),
+            ("variable", "list", "--repo", "x/y"),
+            ("repo", "view", "--json", "nameWithOwner"),
+            queue,
+        ):
+            with self.subTest(read=read[:2]):
+                answer, calls, _ = self.run_gh(1, *read)
+                self.assertEqual((answer, len(calls)), ("answer", 2))
+                _, calls, error = self.run_gh(5, *read)
+                self.assertEqual(len(calls), ci.READ_ATTEMPTS)
+                self.assertIsNotNone(error)
+
+    def test_writes_and_other_errors_are_not_repeated(self) -> None:
+        for write in (
+            ("workflow", "run", "ci-request.yml", "-f", "pr=1"),
+            ("pr", "merge", "1", "--merge"),
+            ("run", "rerun", "1", "--failed"),
+            ("variable", "set", "CI_MACOS_HEAVY", "--body", "x"),
+            ("api", "-X", "PATCH", "repos/x/y/issues/comments/1"),
+            ("api", "repos/x/y/issues/1/comments", "-f", "body=x"),
+            ("api", "graphql", "-f", "query=mutation { x }"),
+        ):
+            with self.subTest(write=write[:2]):
+                _, calls, error = self.run_gh(1, *write)
+                self.assertEqual(len(calls), 1)
+                self.assertIsNotNone(error)
+        with (
+            patch.object(
+                ci.vcs,
+                "gh",
+                side_effect=subprocess.CalledProcessError(1, "gh", stderr="HTTP 404"),
+            ) as called,
+            self.assertRaises(subprocess.CalledProcessError),
+        ):
+            ci.gh("api", "repos/x/y/pulls/1")
+        self.assertEqual(called.call_count, 1)
+
+    def enqueue_after(
+        self, merge_failures: int, queued_after_failure: bool, state_failures: int
+    ) -> tuple[str, int]:
+        """enqueue with gh's merge and queue-state calls failing as given."""
+        merges = 0
+        states = 0
+        entry = {"state": "QUEUED", "position": 1}
+
+        def fake(*args: str, **_: object) -> str:
+            nonlocal merges, states
+            if args[:2] == ("pr", "merge"):
+                merges += 1
+                if merges <= merge_failures:
+                    raise gateway_error(*args)
+                return ""
+            states += 1
+            if states <= state_failures:
+                raise gateway_error(*args)
+            queued = merges > merge_failures or queued_after_failure
+            pull = {
+                "mergeQueueEntry": entry if queued else None,
+                "autoMergeRequest": None,
+            }
+            return json.dumps({"data": {"repository": {"pullRequest": pull}}})
+
+        args = argparse.Namespace(repo="example/fork", pr=170, retry=None)
+        with (
+            patch.object(ci.vcs, "gh", side_effect=fake),
+            patch.object(ci, "api", return_value=PULL),
+            patch.object(ci, "enqueue_checks", return_value=HEAD),
+            patch.object(ci, "requeue_gate"),
+            patch.object(ci.time, "sleep"),
+            patch("sys.stderr"),
+            patch("builtins.print"),
+        ):
+            return ci.enqueue(args), merges
+
+    def test_enqueue_survives_a_502_on_the_merge_or_the_queue_read(self) -> None:
+        # The merge took effect though its answer was lost: no second merge.
+        self.assertEqual(self.enqueue_after(1, True, 0), ("queued at position 1", 1))
+        # It did not: one more merge.
+        self.assertEqual(self.enqueue_after(1, False, 0), ("queued at position 1", 2))
+        # The merge answered; the queue-state read after it is retried.
+        self.assertEqual(self.enqueue_after(0, False, 1), ("queued at position 1", 1))
+
+
+def job_row(job_id: int, name: str, conclusion: str | None) -> dict[str, object]:
+    return {
+        "id": job_id,
+        "name": name,
+        "status": "completed" if conclusion else "in_progress",
+        "conclusion": conclusion,
+        "html_url": f"https://github.com/example/fork/actions/runs/123/job/{job_id}",
+    }
+
+
+class RunWaitTests(unittest.TestCase):
+    """wait --run, --complete and the Quick waits, on a fake clock (#1013)."""
+
+    def wait_run(
+        self,
+        argv: list[str],
+        reads: list[tuple[str, str | None, list[dict[str, object]]]],
+        latest: int = 1,
+    ) -> tuple[int, str, list[str]]:
+        """`reads` are successive (status, conclusion, jobs) of the attempt."""
+        steps = iter(reads)
+        paths: list[str] = []
+        current: dict[str, Any] = {}
+
+        def api(_repository: str, path: str) -> dict[str, Any]:
+            paths.append(path)
+            if path == "actions/runs/123":
+                return {"run_attempt": latest}
+            status, conclusion, jobs = next(steps, reads[-1])
+            current["jobs"] = jobs
+            return {"status": status, "conclusion": conclusion}
+
+        def jobs(_repository: str, _run: int, attempt: int | None) -> list[object]:
+            paths.append(f"jobs of attempt {attempt}")
+            return current["jobs"]
+
+        clock = itertools.count(0, 10)
+        with (
+            patch.object(ci, "api", side_effect=api),
+            patch.object(ci, "run_jobs", side_effect=jobs),
+            patch.object(ci, "failure_logs"),
+            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+            patch.object(ci.time, "sleep"),
+            patch("sys.argv", ["ci.py", "wait", *argv, "--repo", "example/fork"]),
+            patch("builtins.print") as printed,
+            patch("sys.stderr") as stderr,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
+        return code, output, paths
+
+    FAILED = job_row(1, "native / build", "failure")
+    RUNNING = job_row(2, "platform / Windows", None)
+    PASSED = job_row(2, "platform / Windows", "success")
+
+    def test_complete_outlives_a_failed_job_and_exits_1_at_completion(self) -> None:
+        reads = [
+            ("in_progress", None, [self.FAILED, self.RUNNING]),
+            ("in_progress", None, [self.FAILED, self.RUNNING]),
+            ("completed", "failure", [self.FAILED, self.PASSED]),
+        ]
+        code, output, paths = self.wait_run(["--run", "123", "--complete"], reads)
+        self.assertEqual(code, 1)
+        self.assertEqual(output.count("failed job: native / build"), 1)
+        self.assertIn("gh run rerun 123 --failed", output)
+        self.assertEqual(paths.count("actions/runs/123/attempts/1"), 3)
+        # Without --complete the first failed job ends the wait.
+        code, output, paths = self.wait_run(["--run", "123"], reads)
+        self.assertEqual(code, 1)
+        self.assertEqual(paths.count("actions/runs/123/attempts/1"), 1)
+        self.assertIn("wait with --complete", output)
+        # A passing run exits 0.
+        code, _, _ = self.wait_run(["--run", RUN], [("completed", "success", [])])
+        self.assertEqual(code, 0)
+
+    def test_an_attempt_url_pins_that_attempt_and_resumes_on_it(self) -> None:
+        url = RUN + "/attempts/1"
+        code, output, paths = self.wait_run(
+            ["--run", url, "--timeout", "30"],
+            [("in_progress", None, [self.RUNNING])],
+            latest=2,
+        )
+        self.assertEqual(code, 2)
+        self.assertNotIn("actions/runs/123", paths)
+        self.assertTrue(all("attempts/2" not in p for p in paths))
+        self.assertIn(f"wait --run {url}", output)
+        # Without one, the latest attempt read at the start is pinned.
+        code, output, paths = self.wait_run(
+            ["--run", "123", "--complete", "--timeout", "30"],
+            [("in_progress", None, [self.RUNNING])],
+            latest=2,
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("jobs of attempt 2", paths)
+        self.assertIn(f"wait --run {RUN}/attempts/2 --complete", output)
+
+    def test_a_bare_number_is_still_a_pr(self) -> None:
+        with (
+            patch.object(ci, "resolve_request", return_value=Path("r.json")) as found,
+            patch.object(ci, "wait") as waited,
+            patch("sys.argv", ["ci.py", "wait", "123", "--repo", "example/fork"]),
+        ):
+            self.assertEqual(ci.main(), 0)
+        self.assertEqual(found.call_args.args[1:], (123, None))
+        self.assertEqual(waited.call_args.args[0], Path("r.json"))
+
+    def quick(
+        self, argv: list[str], checks: list[dict[str, object] | None]
+    ) -> tuple[int, str, list[tuple[str, ...]]]:
+        """Run argv against successive Quick check runs of the PR's head."""
+        reads = iter(checks)
+        calls: list[tuple[str, ...]] = []
+        pull = dict(PULL, draft=True)
+
+        def api(_repository: str, path: str) -> dict[str, Any]:
+            if path == "pulls/170":
+                return pull
+            check = next(reads, checks[-1])
+            return {"check_runs": [check] if check else []}
+
+        clock = itertools.count(0, 10)
+        with (
+            patch.object(ci, "api", side_effect=api),
+            patch.object(ci, "gh", side_effect=lambda *a: calls.append(a) or ""),
+            patch.object(ci, "require_stamp"),
+            patch.object(ci, "failure_logs"),
+            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+            patch.object(ci.time, "sleep"),
+            patch("sys.argv", ["ci.py", *argv, "--repo", "example/fork"]),
+            patch("builtins.print") as printed,
+            patch("sys.stderr") as stderr,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
+        return code, output, calls
+
+    def check(self, status: str, conclusion: str | None) -> dict[str, object]:
+        return {
+            "status": status,
+            "conclusion": conclusion,
+            "started_at": "2026-11-12T01:00:00Z",
+            "html_url": "https://github.com/example/fork/runs/7",
+            "details_url": RUN + "/job/7",
+        }
+
+    def test_ready_wait_and_wait_quick_return_0_1_and_2(self) -> None:
+        skipped = dict(self.check("completed", "skipped"), started_at="")
+        running = self.check("in_progress", None)
+        for outcome, code in (("success", 0), ("failure", 1)):
+            done = self.check("completed", outcome)
+            with self.subTest(outcome=outcome):
+                # Just after the ready mark only the draft's skip exists.
+                status, _, calls = self.quick(
+                    ["ready", "170", "--wait"], [skipped, None, running, done]
+                )
+                self.assertEqual(status, code)
+                self.assertEqual(
+                    calls, [("pr", "ready", "170", "--repo", "example/fork")]
+                )
+                status, _, _ = self.quick(["wait", "170", "--quick"], [running, done])
+                self.assertEqual(status, code)
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick", "--timeout", "30"], [running]
+        )
+        self.assertEqual(status, 2)
+        self.assertIn("resume with: python3 tools/ci.py wait 170 --quick", output)
+        status, output, _ = self.quick(
+            ["ready", "170", "--wait", "--timeout", "30"], [skipped]
+        )
+        self.assertEqual(status, 2)
+        # A skip alone is no verdict: wait --quick says to mark the PR ready.
+        status, output, _ = self.quick(["wait", "170", "--quick"], [skipped])
+        self.assertEqual(status, 1)
+        self.assertIn("ready 170 --wait", output)
 
 
 class QueueWaitTests(unittest.TestCase):
