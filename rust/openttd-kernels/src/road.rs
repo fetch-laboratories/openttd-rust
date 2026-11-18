@@ -84,7 +84,6 @@ use crate::vehicle::maintenance;
 use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, YEAR_TICKS};
 use crate::vehicle_base::{VehState, VehStates};
 use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH, VehicleID, VehicleType};
-use std::cell::OnceCell;
 use std::ptr::NonNull;
 
 /// Roadtype flags (`road.h`), as bit numbers, retaining every underlying byte.
@@ -461,10 +460,6 @@ struct Game<'a> {
     movement: CachedTable<'a>,
     /// The controller's native stack slot for `CanBuildTramTrackOnTile`; null elsewhere.
     road: *mut crate::road_cmd::CommandSlot,
-    /// The map dimensions, read once per entry. Orders, sound, `NewGRF`, movement, crash and
-    /// viewport callbacks cannot load or reset the map or yield the game-state mutex; nested
-    /// entries have their own `Game`.
-    map: OnceCell<Map>,
 }
 
 impl<'a> Game<'a> {
@@ -481,7 +476,6 @@ impl<'a> Game<'a> {
                 ss: &*l.shared,
                 movement: CachedTable::audited(&*l.shared),
                 road: std::ptr::null_mut(),
-                map: OnceCell::new(),
             }
         }
     }
@@ -495,11 +489,16 @@ impl<'a> Game<'a> {
             crate::movement::native_assert(self.ss, condition());
         }
     }
-    fn map(&self) -> Map {
-        *self.map.get_or_init(|| self.ss.map())
+    /// The entry's map descriptor, loaded at its first map use and shared with the movement
+    /// table's track queries. Orders, sound, `NewGRF`, movement, crash and viewport callbacks
+    /// cannot load or reset the map or yield the game-state mutex; nested entries have their
+    /// own `Game`.
+    fn world(&self) -> &World<'a> {
+        self.movement.world()
     }
-    fn world(&self) -> World<'a> {
-        World::new(self.ss)
+    /// The map dimensions of [`Self::world`].
+    fn map(&self) -> Map {
+        self.world().dimensions
     }
     /// `_settings_game.vehicle.roadveh_acceleration_model`.
     fn roadveh_acceleration_model(&self) -> AccelerationModel {
@@ -532,11 +531,11 @@ impl<'a> Game<'a> {
     }
     /// `HasTileAnyRoadType(tile, types)`.
     fn has_tile_any_road_type(&self, tile: TileIndex, types: u64) -> bool {
-        crate::road_map::has_tile_any_road_type(&self.world(), tile.0, types)
+        crate::road_map::has_tile_any_road_type(self.world(), tile.0, types)
     }
     /// `IsTileType(tile, type)`.
     fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
-        self.world().kind(tile) == kind
+        self.world().is_tile_type(tile, kind)
     }
     /// `IsRoadDepotTile(tile)`.
     fn is_road_depot_tile(&self, tile: TileIndex) -> bool {

@@ -95,12 +95,19 @@ impl<'a> CachedTable<'a> {
             ..Self::new(shared)
         }
     }
+    /// The entry's map descriptor, loaded at its first use and shared by every query of the
+    /// entry. Only an audited table's entry contract bounds the descriptor to the entry.
+    #[inline]
+    pub(crate) fn world(&self) -> &World<'a> {
+        self.world.get_or_init(|| World::new(self.shared))
+    }
     #[inline]
     fn observed(&self) -> Context<'_> {
         let s = self.get();
-        // The audited constructor bounds the descriptor to this entry.
-        let world = self.world.get_or_init(|| World::new(s.shared()));
-        Context { s, world }
+        Context {
+            s,
+            world: self.world(),
+        }
     }
     /// `GetTileTrackStatus(tile, TRANSPORT_ROAD, GetRoadTramType(v->roadtype))`.
     pub(crate) fn get_road_vehicle_track_status(
