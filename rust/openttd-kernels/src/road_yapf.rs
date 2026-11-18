@@ -1484,7 +1484,7 @@ mod tests {
                 (u8::from(bus), u8::from(articulated), trackdir.0)
             );
         }
-        // SAFETY: The records came from the allocation export and are released once.
+        // SAFETY: The records came from `VehicleRecord::new` and are released once.
         unsafe {
             crate::vehicle_base::VehicleRecord::delete(part);
             crate::vehicle_base::VehicleRecord::delete(front);

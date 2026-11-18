@@ -68,14 +68,16 @@ pub(crate) fn can_engine_use_station(
 
         VehicleType::VEH_AIRCRAFT => {
             StationFacilities((station.facilities)(st.cast_mut())).test(StationFacility::Airport)
-                && has_bit(
-                    (s.fta_flags)(crate::newgrf_airport::station_fta(st.cast_mut(), s)),
-                    if EngineRef::of(e).aircraft_subtype() & AIR_CTOL != 0 {
-                        AirportFTAClassFlag::AIRPLANES.0
+                && {
+                    // `GetFTA()`, then the flag the engine selects, then its test.
+                    let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
+                    let flag = if EngineRef::of(e).aircraft_subtype() & AIR_CTOL != 0 {
+                        AirportFTAClassFlag::AIRPLANES
                     } else {
-                        AirportFTAClassFlag::HELICOPTERS.0
-                    },
-                )
+                        AirportFTAClassFlag::HELICOPTERS
+                    };
+                    has_bit((s.fta_flags)(fta), flag.0)
+                }
         }
 
         _ => false,

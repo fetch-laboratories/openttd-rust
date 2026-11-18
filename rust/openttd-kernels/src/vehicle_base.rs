@@ -471,9 +471,7 @@ impl crate::vehicle::VehicleRef {
     ///
     /// Precondition: the vehicle is an articulated engine.
     pub(crate) fn get_next_articulated_part(self) -> Option<Self> {
-        if !self.has_articulated_part() {
-            crate::services_assert::check(false);
-        }
+        crate::services_assert::assert_with(|| self.has_articulated_part());
         self.next()
     }
     /// `Vehicle::GetFirstEnginePart`: get the first part of an articulated engine.
@@ -641,9 +639,12 @@ impl crate::vehicle::VehicleRef {
     }
     /// `Vehicle::cur_real_order_index`: the index of the current real order
     /// (non-implicit, non-implicit-only).
-    pub(crate) fn cur_real_order_index(self) -> u8 {
+    pub(crate) fn cur_real_order_index(self) -> crate::order_type::VehicleOrderID {
         let consist = read_field!(self.0.as_ptr(), consist);
-        read_field!(consist, real)
+        crate::order_type::VehicleOrderID(read_field!(consist, real))
+    }
+    pub(crate) fn cur_real_order_index_raw(self) -> u8 {
+        self.cur_real_order_index().0
     }
     /// `Vehicle::current_order_time`: how many ticks have passed since this order started.
     pub(crate) fn current_order_time(self) -> i32 {
@@ -927,6 +928,16 @@ mod record_tests {
         records
     }
 
+    /// `GroundVehicle::SetArticulatedPart` of an empty subtype.
+    fn articulated_part() -> u8 {
+        let mut subtype = 0;
+        crate::bitmath_func::set_bit8(
+            &mut subtype,
+            GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0,
+        );
+        subtype
+    }
+
     fn release(records: Vec<VehicleRef>) {
         for record in records {
             // SAFETY: No traversal follows these private records after cleanup.
@@ -934,8 +945,9 @@ mod record_tests {
         }
     }
 
-    /// `GetNextArticulatedPart` asserts `HasArticulatedPart()` and returns `Next()`
-    /// whether or not the assertion holds.
+    /// `GetNextArticulatedPart` asserts `HasArticulatedPart()`. Under this test's
+    /// recording policy, which returns from a failed assertion, it then returns
+    /// `Next()`.
     #[test]
     fn next_articulated_part_asserts_that_one_follows() {
         if crate::services_assert::isolate_test_check(
@@ -944,7 +956,7 @@ mod record_tests {
         ) {
             return;
         }
-        let articulated = 1 << GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
+        let articulated = articulated_part();
         let records = chain(&[0, articulated, 0]);
         let [engine, part, wagon] = records[..] else {
             unreachable!()
@@ -964,7 +976,6 @@ mod record_tests {
     fn set_next_asserts_against_a_self_link() {
         if crate::services_assert::isolate_test_exit(
             "vehicle_base::record_tests::set_next_asserts_against_a_self_link",
-            86,
         ) {
             return;
         }
@@ -991,9 +1002,9 @@ mod record_tests {
     #[test]
     fn train_units_skip_articulated_parts_and_one_rear_head() {
         use crate::vehicle::VehicleRef;
-        let articulated = 1 << GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
-        let rear = 1 << GroundVehicleSubtypeFlags::GVSF_MULTIHEADED.0;
-        let engine = 1 << GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
+        let articulated = articulated_part();
+        let rear = crate::ground_vehicle::set_multiheaded(0);
+        let engine = crate::ground_vehicle::set_engine(0);
         let records: Vec<_> = [
             engine,
             articulated,

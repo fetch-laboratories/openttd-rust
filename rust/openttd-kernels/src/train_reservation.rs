@@ -572,7 +572,7 @@ impl<'a> Orders<'a> {
     fn new(g: &Game<'a>, id: Handle) -> Self {
         let v_dest: u32 = id.vehicle().dest_tile_raw();
         let v_last_station: u16 = id.vehicle().last_station_visited_raw();
-        let v_order_index: u8 = id.vehicle().cur_real_order_index();
+        let v_order_index: u8 = id.vehicle().cur_real_order_index_raw();
         let v_suppress: u8 = u8::from(
             read_field!(id.vehicle().ground(), flags)
                 & (1 << crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS)
@@ -635,7 +635,7 @@ impl<'a> Orders<'a> {
                     if next != 0xff {
                         depth += 1;
                         self.index = next;
-                        if self.index != id.vehicle().cur_real_order_index()
+                        if self.index != id.vehicle().cur_real_order_index_raw()
                             && depth < i32::from(g.read_num_orders(id))
                         {
                             continue;
@@ -647,7 +647,7 @@ impl<'a> Orders<'a> {
             }
             self.index = self.index.wrapping_add(1);
             depth += 1;
-            if self.index == id.vehicle().cur_real_order_index()
+            if self.index == id.vehicle().cur_real_order_index_raw()
                 || depth >= i32::from(g.read_num_orders(id))
             {
                 return false;

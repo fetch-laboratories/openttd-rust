@@ -33,6 +33,18 @@ pub extern "C" fn check(condition: bool) {
     check(condition);
 }
 
+/// `assert(condition)`: evaluate `condition` only where the native build asserts,
+/// and report a failure through `check`. Before the shared table is bound (tests
+/// and tools that bind only the callback) the condition is evaluated.
+pub(crate) fn assert_with(condition: impl FnOnce() -> bool) {
+    let shared = SHARED.load(Ordering::Acquire);
+    // SAFETY: Installed only by the startup binding's process-lifetime contract;
+    // the map statics it names are immutable.
+    if (shared.is_null() || unsafe { (*(*shared).map).assertions }) && !condition() {
+        check(false);
+    }
+}
+
 /// The canonical native `NOT_REACHED` operation, independent of assertion policy.
 pub(crate) fn not_reached() -> ! {
     let shared = SHARED.load(Ordering::Acquire);
@@ -82,26 +94,29 @@ pub(crate) fn isolate_test_check(name: &str, check: extern "C" fn(bool)) -> bool
 
 /// Exit code of `isolate_test_exit`'s child after a failed native assertion.
 #[cfg(test)]
-static EXIT_CODE: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+const ASSERT_EXIT_CODE: i32 = 86;
+/// What the exiting assertion policy writes before it ends the child.
+#[cfg(test)]
+const ASSERT_EXIT_MARKER: &str = "openttd-rust test: native assertion failed";
 
 #[cfg(test)]
 extern "C" fn exit_on_failure(condition: bool) {
     if !condition {
-        std::process::exit(EXIT_CODE.load(Ordering::Acquire));
+        eprintln!("{ASSERT_EXIT_MARKER}");
+        std::process::exit(ASSERT_EXIT_CODE);
     }
 }
 
 /// Run a test in a separate process whose native assertion policy ends the
-/// process with `code` at the first failed assertion, and require the child to
-/// start the named test and end with that code. A body that cannot continue
-/// past a failed assertion is observed this way without returning into it.
-/// Return true in the parent; the child binds the policy and returns false to
-/// execute the test body.
+/// process at the first failed assertion, and require the child to start the
+/// named test and end through that policy: with its exit code, after writing its
+/// marker. A body that cannot continue past a failed assertion is observed this
+/// way without returning into it. Return true in the parent; the child binds the
+/// policy and returns false to execute the test body.
 #[cfg(test)]
-pub(crate) fn isolate_test_exit(name: &str, code: i32) -> bool {
+pub(crate) fn isolate_test_exit(name: &str) -> bool {
     const CHILD: &str = "OPENTTD_ASSERT_EXIT_TEST_CHILD";
     if std::env::var(CHILD).ok().as_deref() == Some(name) {
-        EXIT_CODE.store(code, Ordering::Release);
         bind_test_check(exit_on_failure);
         return false;
     }
@@ -120,12 +135,14 @@ pub(crate) fn isolate_test_exit(name: &str, code: i32) -> bool {
     let _ = child.kill();
     let output = child.wait_with_output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        output.status.code() == Some(code) && stdout.contains("running 1 test"),
-        "isolated native assertion test {name} did not run and exit with code {code}: {:?}\n\
-         {stdout}{}",
+        output.status.code() == Some(ASSERT_EXIT_CODE)
+            && stdout.contains("running 1 test")
+            && stderr.contains(ASSERT_EXIT_MARKER),
+        "isolated native assertion test {name} did not run and end at a failed native \
+         assertion: {:?}\n{stdout}{stderr}",
         output.status,
-        String::from_utf8_lossy(&output.stderr)
     );
     true
 }
@@ -141,8 +158,21 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "did not run and exit with code")]
+    #[should_panic(expected = "did not run and end at a failed native assertion")]
     fn isolating_an_exit_for_a_name_that_matches_no_test_fails() {
-        super::isolate_test_exit("services_assert::tests::no_such_test", 86);
+        super::isolate_test_exit("services_assert::tests::no_such_test");
+    }
+
+    /// A child that ends without a failed assertion fails the parent, whatever
+    /// its exit code.
+    #[test]
+    #[should_panic(expected = "did not run and end at a failed native assertion")]
+    fn isolating_an_exit_for_a_test_that_makes_no_assertion_fails() {
+        if super::isolate_test_exit(
+            "services_assert::tests::isolating_an_exit_for_a_test_that_makes_no_assertion_fails",
+        ) {
+            return;
+        }
+        std::process::exit(super::ASSERT_EXIT_CODE);
     }
 }

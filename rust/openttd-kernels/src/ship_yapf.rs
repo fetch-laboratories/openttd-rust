@@ -1771,7 +1771,7 @@ mod tests {
         );
         assert_eq!(input.unit_number, 4242, "unit number");
         ENGINE.set(ptr::null_mut());
-        // SAFETY: The record came from the allocation export and is released once.
+        // SAFETY: The record came from `VehicleRecord::new` and is released once.
         unsafe { crate::vehicle_base::VehicleRecord::delete(record) };
     }
 
