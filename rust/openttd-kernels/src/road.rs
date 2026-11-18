@@ -284,6 +284,7 @@ pub(crate) unsafe fn crashed_ctr(s: *const State) -> u16 {
 
 /// The generated string IDs of the road vehicle news.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Strings {
     /// `STR_NEWS_FIRST_BUS_ARRIVAL`.
     pub first_bus_arrival: u32,
@@ -301,6 +302,7 @@ pub struct Strings {
 
 /// The services a road vehicle entry calls; the shared tables are borrowed through pointers.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Leaves {
     pub vehicle: *const VehicleServices,
     pub ground: *const GroundServices,

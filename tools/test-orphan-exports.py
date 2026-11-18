@@ -79,7 +79,9 @@ class OrphanTests(unittest.TestCase):
                 "kept fixture no longer names its export | openttd_rust_kept",
             },
         )
-        unowned = ORPHANS.kept_fixtures("openttd_rust_kept | src/tests/kept.cpp | later\n")
+        unowned = ORPHANS.kept_fixtures(
+            "openttd_rust_kept | src/tests/kept.cpp | later\n"
+        )
         self.assertIn(
             "kept fixture row names no owner issue | openttd_rust_kept",
             ORPHANS.violations(files, kept=unowned),

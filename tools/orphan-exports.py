@@ -371,7 +371,9 @@ def scan(
         fixture = files.get(row.fixture, "")
         if not re.search(r"#\d+", row.owner):
             result[f"kept fixture row names no owner issue | {row.export}"] = set()
-        elif row.export not in re.findall(NAME, without_comments(fixture, row.fixture, strings=True)):
+        elif row.export not in re.findall(
+            NAME, without_comments(fixture, row.fixture, strings=True)
+        ):
             result[f"kept fixture no longer names its export | {row.export}"] = set()
         else:
             result.pop(f"no production user | {row.export}", None)
