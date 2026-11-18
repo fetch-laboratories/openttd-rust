@@ -18,28 +18,6 @@
  * survives reentry. Direct noexcept leaves terminate on environmental failure;
  * no ordinary-play service throws, and Rust panics abort across this boundary. */
 struct OpenTTDBridgeAvailability { int32_t year; uint8_t min; uint16_t max; };
-struct OpenTTDTunnelBridgeStrings {
-	uint32_t bridge_border;
-	uint32_t map_edge;
-	uint32_t same_end;
-	uint32_t straight;
-	uint32_t too_long;
-	uint32_t wrong_slope;
-	uint32_t unequal_height;
-	uint32_t demolish_bridge;
-	uint32_t already_built;
-	uint32_t authority;
-	uint32_t other_owner;
-	uint32_t too_low;
-	uint32_t too_high;
-	uint32_t tunnel_site;
-	uint32_t water;
-	uint32_t tunnel_border;
-	uint32_t tunnel_way;
-	uint32_t tunnel_long;
-	uint32_t excavate;
-	uint32_t demolish_tunnel;
-};
 struct OpenTTDTunnelBridgeServices {
 	const OpenTTDRailCommandServices *rail;
 	const OpenTTDRoadCommandServices *road;
@@ -69,7 +47,6 @@ struct OpenTTDTunnelBridgeServices {
 	void (*mark_dirty_height)(uint32_t t, int32_t h) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty_height);
 	void (*terraform)(OpenTTDCommandCost *out, uint16_t flags, uint32_t t, Slope slope) noexcept OPENTTD_SERVICE_DEFAULT(terraform);
 	const OpenTTDObjectServices *objects;
-	OpenTTDTunnelBridgeStrings strings;
 };
 const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept;
 extern "C" {
