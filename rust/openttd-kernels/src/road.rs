@@ -448,6 +448,17 @@ struct StationHandle {
     index: StationID,
 }
 
+/// `Station::GetByTile(tile)`, with the station's `index`.
+#[inline]
+fn station_get_by_tile(tile: TileIndex) -> StationHandle {
+    let airport = crate::newgrf_airport::runtime();
+    let st = crate::station_map::station_get_by_tile(tile, airport);
+    StationHandle {
+        st,
+        index: airport.station_index(st),
+    }
+}
+
 /// `IndividualRoadVehicleController`: the road bits a tram needs on its tile to turn
 /// around on the reversing trackdir `dir` using the 'big' corner loop. The caller has
 /// tested `IsReversingRoadTrackdir(dir)`, so the default is unreachable.
@@ -1112,17 +1123,6 @@ impl<'a> Game<'a> {
         let best = rvf.best;
         self.assert(|| best.is_some_and(|best| best.vehicle_type() == VehicleType::VEH_ROAD));
         best
-    }
-
-    /// `Station::GetByTile(tile)`, with the station's `index`.
-    #[inline]
-    fn station_get_by_tile(&self, tile: TileIndex) -> StationHandle {
-        let airport = crate::newgrf_airport::runtime();
-        let st = crate::station_map::station_get_by_tile(tile, airport);
-        StationHandle {
-            st,
-            index: airport.station_index(st),
-        }
     }
 
     /// `st->had_vehicle_of_type`, through the station's native field.
@@ -2272,7 +2272,7 @@ impl<'a> Game<'a> {
                             RoadStopType::Truck
                         })
                 {
-                    let st = self.station_get_by_tile(v.v.tile());
+                    let st = station_get_by_tile(v.v.tile());
                     v.v.set_last_station_visited(st.index);
                     self.road_veh_arrives_at(v, st);
                     crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
@@ -2333,7 +2333,7 @@ impl<'a> Game<'a> {
                     && v.frame() == RVC_DRIVE_THROUGH_STOP_FRAME))
         {
             let rs = crate::road_stop::at(self.ss, v.v.tile());
-            let st = self.station_get_by_tile(v.v.tile());
+            let st = station_get_by_tile(v.v.tile());
 
             /* Vehicle is at the stop position (at a bay) in a road stop.
              * Note, if vehicle is loading/unloading it has already been handled,

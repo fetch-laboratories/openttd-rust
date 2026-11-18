@@ -2099,7 +2099,7 @@ pub unsafe extern "C" fn openttd_rust_wait_unbunching(
 }
 
 /// `Order::Free`: 'Free' the order.
-/// @note ONLY use on "current_order" vehicle orders!
+/// @note ONLY use on "`current_order`" vehicle orders!
 pub(crate) fn free(v: VehicleRef) {
     // SAFETY: The live vehicle's current order.
     unsafe { free_order(v.current_order_pointer()) };
