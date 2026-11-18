@@ -632,7 +632,7 @@ pub(crate) fn receive_server_error_quit(
             NetworkAction::NETWORK_ACTION_LEAVE,
             CC_DEFAULT,
             false,
-            client_name(f.connection, ci),
+            unsafe { client_name(f.connection, ci) },
             b"",
             StringParameterData::Integer(u64::from(
                 get_network_error_msg(NetworkErrorCode(unsafe { packet::recv_uint8(p, f.packet) }))
@@ -676,7 +676,7 @@ pub(crate) fn receive_server_quit(
             NetworkAction::NETWORK_ACTION_LEAVE,
             CC_DEFAULT,
             false,
-            client_name(f.connection, ci),
+            unsafe { client_name(f.connection, ci) },
             b"",
             StringParameterData::Integer(u64::from(STR_NETWORK_MESSAGE_CLIENT_LEAVING.0)),
         );
@@ -712,7 +712,7 @@ pub(crate) fn receive_server_join(
             NetworkAction::NETWORK_ACTION_JOIN,
             CC_DEFAULT,
             false,
-            client_name(f.connection, ci),
+            unsafe { client_name(f.connection, ci) },
             b"",
             StringParameterData::Empty,
         );

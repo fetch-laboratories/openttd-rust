@@ -5,6 +5,7 @@
 #include "network_frame_ffi.h"
 #include "auth_ffi.h"
 class NetworkAuthenticationHandler;
+struct NetworkClientInfo;
 struct OpenTTDGrfLoadingServices;
 struct Packet;
 struct PacketWriter;
@@ -15,9 +16,9 @@ struct OpenTTDNetworkConnectionServices {
 	void (*allocate_info)(void *, void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate_info);
 	const NetworkAuthenticationHandler *(*auth)(void *) noexcept OPENTTD_SERVICE_DEFAULT(auth);
 	void (*auth_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(auth_create);
-	uint32_t (*client_id)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(client_id);
-	OpenTTDByteSpan (*client_name)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(client_name);
-	uint8_t (*client_playas)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(client_playas);
+	uint32_t (*client_id)(const NetworkClientInfo *) noexcept OPENTTD_SERVICE_DEFAULT(client_id);
+	OpenTTDByteSpan (*client_name)(const NetworkClientInfo *) noexcept OPENTTD_SERVICE_DEFAULT(client_name);
+	uint8_t (*client_playas)(const NetworkClientInfo *) noexcept OPENTTD_SERVICE_DEFAULT(client_playas);
 	uint8_t *clients_connected;
 	uint8_t *clients_on;
 	bool (*company_allows_client)(uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(company_allows_client);

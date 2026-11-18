@@ -1139,12 +1139,12 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		},
 		.auth = [](void *socket) noexcept -> const NetworkAuthenticationHandler * { return static_cast<NetworkClientSocket *>(socket)->authentication_handler.get(); },
 		.auth_create = [](void *socket) noexcept { static_cast<NetworkClientSocket *>(socket)->authentication_handler = NetworkAuthenticationServerHandler::Create(&_password_provider, &_authorized_key_handler); },
-		.client_id = [](const void *ci) noexcept -> uint32_t { return static_cast<const NetworkClientInfo *>(ci)->client_id; },
-		.client_name = [](const void *ci) noexcept {
-			const std::string &name = static_cast<const NetworkClientInfo *>(ci)->client_name;
+		.client_id = [](const NetworkClientInfo *ci) noexcept -> uint32_t { return ci->client_id; },
+		.client_name = [](const NetworkClientInfo *ci) noexcept {
+			const std::string &name = ci->client_name;
 			return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(name.data()), name.size()};
 		},
-		.client_playas = [](const void *ci) noexcept -> uint8_t { return static_cast<const NetworkClientInfo *>(ci)->client_playas.base(); },
+		.client_playas = [](const NetworkClientInfo *ci) noexcept -> uint8_t { return ci->client_playas.base(); },
 		.clients_connected = &_network_clients_connected,
 		.clients_on = &_network_game_info.clients_on,
 		.company_allows_client = [](uint8_t company, void *socket) noexcept { return RustCompanyAllowsPublicKey(company, static_cast<NetworkClientSocket *>(socket)->GetPeerPublicKey()); },

@@ -588,7 +588,7 @@ pub(crate) fn server_tick_clients(
                             CC_WARNING,
                             "Client #{} (IP: {}) is dropped because the client's game state is more than {} ticks behind.",
                             (s.dispatch.client_id)(socket),
-                            Bytes(crate::network_connection::get_client_ip(s, socket)),
+                            Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
                             lag
                         );
                     } else {
@@ -597,7 +597,7 @@ pub(crate) fn server_tick_clients(
                             CC_WARNING,
                             "Client #{} (IP: {}) is dropped because the client did not respond for more than {} ticks.",
                             (s.dispatch.client_id)(socket),
-                            Bytes(crate::network_connection::get_client_ip(s, socket)),
+                            Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
                             lag
                         );
                     }
@@ -637,7 +637,7 @@ pub(crate) fn server_tick_clients(
                         CC_WARNING,
                         "Client #{} (IP: {}) is dropped because it fails to send valid acks.",
                         (s.dispatch.client_id)(socket),
-                        Bytes(crate::network_connection::get_client_ip(s, socket))
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) })
                     );
                     send_error(
                         s,
@@ -664,7 +664,7 @@ pub(crate) fn server_tick_clients(
                         CC_WARNING,
                         "Client #{} (IP: {}) is dropped because it took longer than {} ticks to start the joining process.",
                         (s.dispatch.client_id)(socket),
-                        Bytes(crate::network_connection::get_client_ip(s, socket)),
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
                         (s.max_init_time)()
                     );
                     send_error(
@@ -703,7 +703,7 @@ pub(crate) fn server_tick_clients(
                         CC_WARNING,
                         "Client #{} (IP: {}) is dropped because it took longer than {} ticks to download the map.",
                         (s.dispatch.client_id)(socket),
-                        Bytes(crate::network_connection::get_client_ip(s, socket)),
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
                         (s.max_download_time)()
                     );
                     send_error(s, socket, NetworkErrorCode::NETWORK_ERROR_TIMEOUT_MAP, work);
@@ -722,7 +722,7 @@ pub(crate) fn server_tick_clients(
                         CC_WARNING,
                         "Client #{} (IP: {}) is dropped because it took longer than {} ticks to join.",
                         (s.dispatch.client_id)(socket),
-                        Bytes(crate::network_connection::get_client_ip(s, socket)),
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
                         (s.max_join_time)()
                     );
                     send_error(
@@ -746,7 +746,7 @@ pub(crate) fn server_tick_clients(
                         CC_WARNING,
                         "Client #{} (IP: {}) is dropped because it took longer than {} ticks to enter the password.",
                         (s.dispatch.client_id)(socket),
-                        Bytes(crate::network_connection::get_client_ip(s, socket)),
+                        Bytes(unsafe { crate::network_connection::get_client_ip(s, socket) }),
                         (s.max_password_time)()
                     );
                     send_error(

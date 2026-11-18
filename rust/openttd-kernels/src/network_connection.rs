@@ -12,7 +12,7 @@ use crate::network_frame::{
     packet_check, packet_new, packet_recv_string, packet_send, packet_send_string,
 };
 use crate::network_internal::{get_network_error_msg, network_text_message};
-use crate::network_server::{self as server, ClientStatus, get_client_name};
+use crate::network_server::{self as server, ClientStatus};
 use crate::network_socket as socket;
 use crate::network_type::{ClientID, NetworkAction, NetworkErrorCode, NetworkRecvStatus};
 use crate::openttd::{PauseMode, PauseModes};
@@ -117,19 +117,48 @@ crate::abi::layouts! {
     };
 }
 
-/// `ci->client_name` of a live `NetworkClientInfo`. The bytes live in the record until its
-/// name changes or it is deleted, which no caller does while it holds them.
-pub(crate) fn client_name<'a>(s: &Services, ci: *const c_void) -> &'a [u8] {
-    // SAFETY: This function's contract.
+/// `ci->client_id` of a live `NetworkClientInfo`.
+pub(crate) fn client_id(s: &Services, ci: *const c_void) -> ClientID {
+    ClientID((s.client_id)(ci))
+}
+
+/// `ci->client_playas` of a live `NetworkClientInfo`.
+pub(crate) fn client_playas(s: &Services, ci: *const c_void) -> CompanyID {
+    CompanyID((s.client_playas)(ci))
+}
+
+/// `ci->client_name` of a live `NetworkClientInfo`.
+///
+/// # Safety
+/// `ci` is live, and the client is neither renamed nor deleted while the returned bytes are
+/// borrowed.
+pub(crate) unsafe fn client_name<'a>(s: &Services, ci: *const c_void) -> &'a [u8] {
     unsafe { (s.client_name)(ci).bytes() }
 }
 
 /// `ServerNetworkGameSocketHandler::GetClientIP`: get the IP address/hostname of the
-/// connected client. The bytes live in the socket's address until it changes, which no
-/// caller does while it holds them.
-pub(crate) fn get_client_ip<'a>(f: &FrameServices, cs: *mut socket::GameSocket) -> &'a [u8] {
-    // SAFETY: This function's contract.
+/// connected client.
+///
+/// # Safety
+/// `cs` is a live server socket whose address does not change while the returned bytes are
+/// borrowed.
+pub(crate) unsafe fn get_client_ip<'a>(f: &FrameServices, cs: *mut socket::GameSocket) -> &'a [u8] {
     unsafe { (f.connection.get_client_ip)(socket::server(cs)).bytes() }
+}
+
+/// `ServerNetworkGameSocketHandler::GetClientName`: get the name of the client, if the user
+/// did not send it yet, Client ID is used.
+pub(crate) fn get_client_name(f: &FrameServices, cs: *mut socket::GameSocket) -> Vec<u8> {
+    let ci = (f.connection.info)(socket::server(cs));
+    if !ci.is_null() {
+        // The name is copied before any other call.
+        let name = unsafe { client_name(f.connection, ci) };
+        if !name.is_empty() {
+            return name.to_vec();
+        }
+    }
+
+    format!("Client #{}", (f.dispatch.client_id)(cs)).into_bytes()
 }
 
 // Native sockets and their fields remain live until their original deferred-deletion point.
@@ -602,7 +631,7 @@ pub(crate) fn receive_map_ok(
             "[{}] Client #{} ({}) joined as {}",
             server::get_name(),
             (f.dispatch.client_id)(socket),
-            Bytes(get_client_ip(f, socket)),
+            Bytes(unsafe { get_client_ip(f, socket) }),
             Bytes(&client_name)
         );
 
@@ -1495,4 +1524,73 @@ pub extern "C" fn openttd_rust_network_server_close(
     work: Actions,
 ) -> u8 {
     server_close(s, f, socket, NetworkRecvStatus(result), work).0
+}
+
+#[cfg(test)]
+mod client_name_tests {
+    use crate::network_socket::GameSocket;
+    use crate::services::ByteSpan;
+    use std::ffi::c_void;
+
+    /// A named client's name, else `Client #<socket client_id>` for an empty name or a null
+    /// info.
+    #[test]
+    fn get_client_name_falls_back_to_the_socket_client_id() {
+        // The test sockets are tags: 1 has a named info, 2 an unnamed one and 3 none.
+        extern "C" fn info(socket: *mut c_void) -> *mut c_void {
+            match socket.addr() {
+                1 => b"n\xE4me".as_ptr().cast_mut().cast(),
+                2 => b"".as_ptr().cast_mut().cast(),
+                _ => std::ptr::null_mut(),
+            }
+        }
+        extern "C" fn client_name(ci: *const c_void) -> ByteSpan {
+            let name: &[u8] = if ci == b"n\xE4me".as_ptr().cast() {
+                b"n\xE4me"
+            } else {
+                b""
+            };
+            ByteSpan {
+                data: name.as_ptr(),
+                size: name.len(),
+            }
+        }
+        extern "C" fn client_id(socket: *mut GameSocket) -> u32 {
+            u32::try_from(crate::network_socket::server(socket).addr()).unwrap() + 40
+        }
+        const CONNECTION: crate::network_connection::Services =
+            crate::network_connection::Services {
+                client_name,
+                info,
+                ..crate::test_tables::NETWORK_CONNECTION
+            };
+        const DISPATCH: crate::network_dispatch::Services = crate::network_dispatch::Services {
+            client_id,
+            ..crate::test_tables::NETWORK_DISPATCH
+        };
+        let f = crate::network_frame::Services {
+            connection: &CONNECTION,
+            dispatch: &DISPATCH,
+            ..crate::test_tables::NETWORK_FRAME
+        };
+        let name = |tag: usize| {
+            let mut socket = GameSocket {
+                base: std::ptr::null_mut(),
+                game: std::ptr::null_mut(),
+                incoming: std::ptr::null_mut(),
+                last_packet_ns: 0,
+                outgoing: std::ptr::null_mut(),
+                pending: false,
+                role: 0,
+                server: std::ptr::without_provenance_mut(tag),
+                status: 0,
+                sync: std::ptr::null_mut(),
+                tcp: std::ptr::null_mut(),
+            };
+            super::get_client_name(&f, &raw mut socket)
+        };
+        assert_eq!(name(1), b"n\xE4me");
+        assert_eq!(name(2), b"Client #42");
+        assert_eq!(name(3), b"Client #43");
+    }
 }

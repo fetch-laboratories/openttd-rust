@@ -674,8 +674,8 @@ pub(crate) fn receive_client(
     frame: *mut crate::session::Frame,
     work: crate::network_action::Actions,
 ) -> NetworkRecvStatus {
-    use crate::company_type::{CCA_NEW, COMPANY_NEW_COMPANY, COMPANY_SPECTATOR};
-    use crate::network_type::CLIENT_ID_SERVER;
+    use crate::company_type::{CCA_NEW, COMPANY_SPECTATOR};
+    use crate::network_type::ClientID;
     let send_error = |error| {
         crate::network_connection::send_error(
             f.connection,
@@ -715,15 +715,15 @@ pub(crate) fn receive_client(
     }
 
     let ci = (f.connection.info)(shell);
-    let client_id = |ci| (f.connection.client_id)(ci);
-    let client_playas = |ci| (f.connection.client_playas)(ci);
+    let client_id = |ci| crate::network_connection::client_id(f.connection, ci);
+    let client_playas = |ci| crate::network_connection::client_playas(f.connection, ci);
 
     if let Some(err) = err {
         iconsole_print!(
             CC_WARNING,
             "Dropping client #{} (IP: {}) due to {}.",
-            client_id(ci),
-            Bytes(crate::network_connection::get_client_ip(f, game)),
+            client_id(ci).0,
+            Bytes(unsafe { crate::network_connection::get_client_ip(f, game) }),
             err
         );
         return send_error(NetworkErrorCode::NETWORK_ERROR_NOT_EXPECTED);
@@ -731,13 +731,13 @@ pub(crate) fn receive_client(
 
     let commands = commands(s);
     if CommandFlags((commands.command_flags)(cp.cmd)).test(CommandFlag::Server)
-        && client_id(ci) != CLIENT_ID_SERVER
+        && client_id(ci) != ClientID::CLIENT_ID_SERVER
     {
         iconsole_print!(
             CC_WARNING,
             "Kicking client #{} (IP: {}) due to calling a server only command {}.",
-            client_id(ci),
-            Bytes(crate::network_connection::get_client_ip(f, game)),
+            client_id(ci).0,
+            Bytes(unsafe { crate::network_connection::get_client_ip(f, game) }),
             cp.cmd
         );
         return send_error(NetworkErrorCode::NETWORK_ERROR_KICKED);
@@ -745,13 +745,13 @@ pub(crate) fn receive_client(
 
     if !CommandFlags((commands.command_flags)(cp.cmd)).test(CommandFlag::Spectator)
         && !(s.company.shared.company_valid)(cp.company)
-        && client_id(ci) != CLIENT_ID_SERVER
+        && client_id(ci) != ClientID::CLIENT_ID_SERVER
     {
         iconsole_print!(
             CC_WARNING,
             "Kicking client #{} (IP: {}) due to calling a non-spectator command {}.",
-            client_id(ci),
-            Bytes(crate::network_connection::get_client_ip(f, game)),
+            client_id(ci).0,
+            Bytes(unsafe { crate::network_connection::get_client_ip(f, game) }),
             cp.cmd
         );
         return send_error(NetworkErrorCode::NETWORK_ERROR_KICKED);
@@ -769,15 +769,15 @@ pub(crate) fn receive_client(
     };
     if !(Commands(cp.cmd) == Commands::CMD_COMPANY_CTRL
         && cca == CCA_NEW
-        && client_playas(ci) == COMPANY_NEW_COMPANY)
-        && client_playas(ci) != cp.company
+        && client_playas(ci) == CompanyID::NEW_COMPANY)
+        && client_playas(ci) != CompanyID(cp.company)
     {
         // `PoolID::operator+` promotes to `int`, so a spectator prints as 256.
         iconsole_print!(
             CC_WARNING,
             "Kicking client #{} (IP: {}) due to calling a command as another company {}.",
-            i32::from(client_playas(ci)) + 1,
-            Bytes(crate::network_connection::get_client_ip(f, game)),
+            i32::from(client_playas(ci).0) + 1,
+            Bytes(unsafe { crate::network_connection::get_client_ip(f, game) }),
             i32::from(cp.company) + 1
         );
         return send_error(NetworkErrorCode::NETWORK_ERROR_COMPANY_MISMATCH);
@@ -790,14 +790,15 @@ pub(crate) fn receive_client(
 
         /* Check if we are full - else it's possible for spectators to send a CMD_COMPANY_CTRL and the company is created regardless of max_companies! */
         if (s.company.company_count)() >= usize::from((f.connection.max_companies)()) {
-            (s.server_full)(client_id(ci));
+            (s.server_full)(client_id(ci).0);
             return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
     }
 
     if Commands(cp.cmd) == Commands::CMD_COMPANY_ALLOW_LIST_CTRL {
         /* Maybe the client just got moved before allowing? */
-        if client_id(ci) != CLIENT_ID_SERVER && client_playas(ci) != cp.company {
+        if client_id(ci) != ClientID::CLIENT_ID_SERVER && client_playas(ci) != CompanyID(cp.company)
+        {
             return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
 
