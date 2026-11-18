@@ -1859,17 +1859,16 @@ impl<'a> Game<'a> {
                 } else {
                     dir = ROAD_REVERSE_TABLE[usize::from(rd.0 & 3)];
                 }
-            } else if let Some(prev) = prev {
+            } else {
+                // The original dereferences `prev` unchecked: under the consist invariant
+                // every part after the front has its previous part.
                 dir = self.follow_previous_road_vehicle(
                     v,
-                    prev,
+                    prev.unwrap(),
                     tile,
                     DiagDirection(rd.0 & 3),
                     false,
                 );
-            } else {
-                /* An articulated part always has a previous part. */
-                crate::services_assert::not_reached();
             }
 
             if dir == Trackdir::INVALID_TRACKDIR {
@@ -2107,17 +2106,16 @@ impl<'a> Game<'a> {
             } else if v.v.is_front_engine() {
                 /* If this is the front engine, look for the right path. */
                 dir = self.road_find_path_to_dest(v, v.v.tile(), DiagDirection(rd.0 & 3));
-            } else if let Some(prev) = prev {
+            } else {
+                // The original dereferences `prev` unchecked: under the consist invariant
+                // every part after the front has its previous part.
                 dir = self.follow_previous_road_vehicle(
                     v,
-                    prev,
+                    prev.unwrap(),
                     v.v.tile(),
                     DiagDirection(rd.0 & 3),
                     true,
                 );
-            } else {
-                /* An articulated part always has a previous part. */
-                crate::services_assert::not_reached();
             }
 
             if dir == Trackdir::INVALID_TRACKDIR {

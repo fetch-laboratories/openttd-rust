@@ -766,11 +766,9 @@ impl GroundVehicleType for RoadVehicle {
             if v.direction() != rv.direction() {
                 return true;
             }
-            // The original dereferences `Next()` unchecked; the walk reaches `v` first.
-            let Some(next) = rv.next() else {
-                return false;
-            };
-            rv = next;
+            // The original dereferences `Next()` unchecked; on its chain the walk reaches
+            // `v` first.
+            rv = rv.next().unwrap();
         }
 
         false
