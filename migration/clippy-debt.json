@@ -211,26 +211,6 @@
     "rust/openttd-kernels/src/math.rs | fn soft_clamp | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/movement.rs | fn openttd_rust_movement_depot_ticks | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/movement.rs | fn rail_foundation | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/movement.rs | fn road_foundation | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/movement.rs | impl Context < ' _ >::fn track_status | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/movement.rs | impl Context < ' _ >::fn track_status::mod e | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/movement.rs | impl MovementServices::fn enter_wormhole | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1,
-      1
-    ],
     "rust/openttd-kernels/src/newgrf.rs | fn get_active_cargo_label | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
@@ -321,9 +301,6 @@
       1,
       1
     ],
-    "rust/openttd-kernels/src/pbs.rs | impl < ' a > Pbs < ' a >::fn train_for | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
     "rust/openttd-kernels/src/pool.rs | impl < I : PoolId , R , S > TypedPool < I , R , S > | missing_safety_doc | 4a33eacd5fa65f2b2e28": [
       1,
       1,
@@ -381,12 +358,6 @@
     ],
     "rust/openttd-kernels/src/rail_yapf.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
-    ],
-    "rust/openttd-kernels/src/road.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
-    ],
-    "rust/openttd-kernels/src/road/availability.rs | fn engine_types | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
     ],
     "rust/openttd-kernels/src/road_cmd.rs | fn simple_slope | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
@@ -532,10 +503,10 @@
       1,
       1
     ],
-    "rust/openttd-kernels/src/vehicle_effect.rs | fn openttd_rust_visual_eligible_abi | disallowed_macros | 4a33eacd5fa65f2b2e28": [
+    "rust/openttd-kernels/src/vehicle_effect.rs | fn show_visual_effect | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/vehicle_effect.rs | fn show_visual_effect | disallowed_macros | 4a33eacd5fa65f2b2e28": [
+    "rust/openttd-kernels/src/vehicle_effect.rs | fn show_visual_effect_allowed | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/vehicle_transactions/build.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [

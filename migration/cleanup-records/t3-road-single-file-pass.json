@@ -1,5 +1,11 @@
 [
   {
+    "kind": "carry",
+    "tool": "clippy",
+    "from": "rust/openttd-kernels/src/vehicle_effect.rs | fn openttd_rust_visual_eligible_abi | disallowed_macros | 4a33eacd5fa65f2b2e28",
+    "to": "rust/openttd-kernels/src/vehicle_effect.rs | fn show_visual_effect_allowed | disallowed_macros | 4a33eacd5fa65f2b2e28"
+  },
+  {
     "kind": "growth",
     "counter": "generated_records",
     "added": {
