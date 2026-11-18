@@ -37,7 +37,6 @@ struct OpenTTDTownCommandServices {
 	uint32_t (*airport_tile)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
 	const OpenTTDStationService *(*station_activity_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_activity_owner);
 	bool (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
-	void (*bribe_error)() noexcept OPENTTD_SERVICE_DEFAULT(bribe_error);
 	OpenTTDTownPoolRelation (*next_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_waypoint);
 	OpenTTDTownPoolRelation (*next_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_depot);
 	OpenTTDTownPoolRelation (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);

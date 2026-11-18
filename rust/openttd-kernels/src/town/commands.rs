@@ -6,6 +6,7 @@ use super::{Engine, State, TownAction, TownActions, TownId, TownRef, engine};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, OWNER_NONE};
 use crate::economy_type::PR_TOWN_ACTION;
+use crate::error::{WarningLevel, show_error_message};
 use crate::movement::native_assert;
 use crate::newgrf::GrfSpecFeature;
 use crate::newgrf_debug::delete_newgrf_inspect_window;
@@ -18,10 +19,10 @@ use crate::slope_func::is_steep_slope;
 use crate::station::BaseStation;
 use crate::station::Station;
 use crate::strings_func::{get_encoded_string, get_string};
-use crate::strings_type::INVALID_STRING_ID;
 use crate::strings_type::StringParameterData::{self, Integer};
+use crate::strings_type::{EncodedString, INVALID_STRING_ID};
 use crate::table::strings::{
-    STR_COMPANY_NAME, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES,
+    STR_COMPANY_NAME, STR_ERROR_BRIBE_FAILED, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES,
     STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS, STR_NEWS_EXCLUSIVE_RIGHTS_TITLE,
     STR_NEWS_ROAD_REBUILDING_MINUTES, STR_NEWS_ROAD_REBUILDING_MONTHS,
 };
@@ -66,7 +67,6 @@ pub struct CommandServices {
     pub station_activity_owner:
         extern "C" fn(*const Station) -> *const crate::station_service::Service,
     pub local_company: extern "C" fn() -> bool,
-    pub bribe_error: extern "C" fn(),
     pub next_waypoint: extern "C" fn(u32) -> Relation,
     pub next_depot: extern "C" fn(u32) -> Relation,
     pub next_industry: extern "C" fn(u32) -> Relation,
@@ -456,7 +456,15 @@ impl<'a> Commands<'a> {
             // command.c but this is special, because it can only 'fail' on a
             // DoCommandFlag::Execute.
             if (self.s.local_company)() {
-                (self.s.bribe_error)();
+                show_error_message(
+                    &get_encoded_string(STR_ERROR_BRIBE_FAILED, &[]),
+                    &EncodedString::default(),
+                    WarningLevel::WL_INFO,
+                    0,
+                    0,
+                    &EncodedString::default(),
+                    CompanyID::INVALID,
+                );
             }
             // Decrease by a lot! ChangeTownRating is only for stuff in demolishing.
             // Bribe failure should be independent of any cheat settings.
@@ -1326,7 +1334,6 @@ crate::abi::layouts! {
         airport_tile,
         station_activity_owner,
         local_company,
-        bribe_error,
         next_waypoint,
         next_depot,
         next_industry,

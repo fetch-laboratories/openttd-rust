@@ -31,7 +31,6 @@ struct OpenTTDContentServices {
 	OpenTTDContentIdSpan (*dependencies)(const OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(dependencies);
 	void (*dependency_push)(OpenTTDContentInfo *, ContentID) noexcept OPENTTD_SERVICE_DEFAULT(dependency_push);
 	void *(*description)(OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(description);
-	void (*error_extract)() noexcept OPENTTD_SERVICE_DEFAULT(error_extract);
 	void (*error_not_writable)() noexcept OPENTTD_SERVICE_DEFAULT(error_not_writable);
 	bool (*extract)(const OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(extract);
 	void (*file_close)() noexcept OPENTTD_SERVICE_DEFAULT(file_close);

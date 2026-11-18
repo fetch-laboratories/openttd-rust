@@ -199,7 +199,6 @@ typedef struct OpenTTDIndustryGenerationServices {
 	uint32_t (*scale_by_land_proportion)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_by_land_proportion);
 	bool (*set_progress)(OpenTTDIndustryGenerationContext *, bool, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_progress);
 	bool (*increase_progress)(OpenTTDIndustryGenerationContext *, bool) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(increase_progress);
-	void (*missing_warning)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(missing_warning);
 } OpenTTDIndustryGenerationServices;
 uint8_t openttd_rust_industry_generate_abi(OpenTTDIndustryBuilder *, OpenTTDIndustryGenerationContext *, const OpenTTDIndustryServices *, const OpenTTDIndustryGenerationServices *);
 extern "C++" inline bool openttd_rust_industry_generate(OpenTTDIndustryBuilder *a0, OpenTTDIndustryGenerationContext *a1, const OpenTTDIndustryServices *a2, const OpenTTDIndustryGenerationServices *a3) { return openttd_rust_industry_generate_abi(a0, a1, a2, a3) != 0; }
@@ -348,8 +347,6 @@ typedef struct OpenTTDIndustryTransactionServices {
 	bool (*can_allocate)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(can_allocate);
 	OpenTTDIndustryAllocation (*allocate)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(allocate);
 	bool (*local_company)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(local_company);
-	void (*prospect_no_place)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(prospect_no_place);
-	void (*prospect_unlucky)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(prospect_unlucky);
 } OpenTTDIndustryTransactionServices;
 /** Stack-only immutable service context; no live owner observation. */
 typedef struct OpenTTDIndustryTransactionContext {

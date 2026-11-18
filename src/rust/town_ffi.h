@@ -73,7 +73,6 @@ struct OpenTTDTownLeaves {
 
 	void (*update_virt)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(update_virt);
 	uint32_t (*house_count)() noexcept OPENTTD_SERVICE_DEFAULT(house_count);
-	void (*road_type_error)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_error);
 	bool (*build_bridge)(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_bridge);
 	bool (*build_tunnel)(uint32_t tile, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_tunnel);
 	void (*assert_clear_house)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_clear_house);

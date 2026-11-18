@@ -259,14 +259,13 @@ static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.founding = &GetRustTownFoundingServices(),
 		.strings = {
-			.load_failed = STR_TOWN_DATA_ERROR_LOAD_FAILED, .json_format = STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY,
-			.town_format = STR_TOWN_DATA_ERROR_TOWN_FORMATTED_INCORRECTLY, .bad_coordinate = STR_TOWN_DATA_ERROR_BAD_COORDINATE,
-			.failed_towns = STR_TOWN_DATA_ERROR_FAILED_TO_FOUND_TOWN,
+			.load_failed = STR_TOWN_DATA_ERROR_LOAD_FAILED,
+			.town_format = STR_TOWN_DATA_ERROR_TOWN_FORMATTED_INCORRECTLY,
+			.bad_coordinate = STR_TOWN_DATA_ERROR_BAD_COORDINATE,
 		},
 		.load = TownDataLoad,
 		.feature = TownDataFeature,
 		.named_error = [](uint32_t summary, uint32_t detail, const OpenTTDTownDataFrame *frame) noexcept { ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail, frame->name), WL_ERROR); },
-		.failed_warning = [](uint32_t detail, uint32_t count) noexcept { ShowErrorMessage(GetEncodedString(detail, count), {}, WL_WARNING); },
 		.found = [](const OpenTTDTownDataFrame *frame, uint32_t tile, TownSize size, bool city, TownLayout layout, bool random, uint32_t parts) noexcept {
 			return std::get<TownID>(Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, TileIndex(tile), size, city, layout, random, parts, frame->name)).base();
 		},

@@ -8,18 +8,20 @@
 //! developer-only and outside this owner.
 #![allow(unsafe_code, missing_docs)]
 
-use crate::debug::debug;
+use crate::debug::{SignedHex, debug};
 use crate::game_state::GameState;
 use crate::gfx_type::MILLISECONDS_PER_TICK;
 use crate::network_action::{Actions, Resume};
 use crate::network_client::ServerStatus;
 use crate::network_command::next_client;
+use crate::network_internal::show_network_error;
 use crate::network_server::{self as server, ClientStatus};
 use crate::network_socket as socket;
 use crate::network_type::{NetworkErrorCode, NetworkRecvStatus};
 use crate::packet::{self, State as PacketState};
 use crate::raw_field::{read_field, write_field};
 use crate::session::Frame;
+use crate::table::strings::STR_NETWORK_ERROR_DESYNC;
 use crate::tcp_game::PacketGameType;
 use crate::timer_game_tick::DAY_TICKS;
 use std::ffi::c_void;
@@ -70,7 +72,6 @@ pub struct Services {
     pub bytes_per_frame: extern "C" fn() -> u16,
     pub bytes_per_frame_burst: extern "C" fn() -> u16,
     pub client: &'static crate::network_client::Services,
-    pub client_desync: extern "C" fn(),
     /// `my_client` as a `NetworkGameSocketHandler *`.
     pub client_game: extern "C" fn() -> *mut socket::GameSocket,
     pub command: &'static crate::network_command::Services,
@@ -103,7 +104,6 @@ pub struct Services {
     pub server_poll: extern "C" fn(*mut Frame) -> socket::Poll,
     pub server_poll_client: extern "C" fn(*mut Frame, *mut socket::GameSocket) -> bool,
     pub server_poll_end: extern "C" fn(*mut Frame),
-    pub show_lost_connection: extern "C" fn(),
     pub socket_delete: extern "C" fn(*mut c_void),
     pub sync_freq: extern "C" fn() -> u16,
     /// The server's daily `sync:` desync log line.
@@ -482,7 +482,15 @@ fn client_game_loop(
     if sync_frame != 0 {
         if sync_frame == frame_counter() {
             if state!(sync_seed_1) != random_state(s, 0) {
-                (s.client_desync)();
+                show_network_error(STR_NETWORK_ERROR_DESYNC);
+                debug!(
+                    desync,
+                    1,
+                    "sync_err: {:08x}; {:02x}",
+                    SignedHex(crate::timer_game_common::economy_date().0),
+                    crate::timer_game_common::economy_fraction()
+                );
+                debug!(net, 0, "Sync error detected");
                 crate::network_client::client_error(
                     s.client,
                     s,
@@ -846,7 +854,6 @@ crate::abi::layouts! {
         bytes_per_frame,
         bytes_per_frame_burst,
         client,
-        client_desync,
         client_game,
         command,
         connection,
@@ -876,7 +883,6 @@ crate::abi::layouts! {
         server_poll,
         server_poll_client,
         server_poll_end,
-        show_lost_connection,
         socket_delete,
         sync_freq,
         sync_log,

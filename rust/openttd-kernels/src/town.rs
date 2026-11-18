@@ -1034,7 +1034,6 @@ pub struct Leaves {
     /// `Town::UpdateVirtCoord`: resize the sign (label) of the town after it changes.
     pub update_virt: extern "C" fn(*mut crate::services::TownHandle),
     pub house_count: extern "C" fn() -> u32,
-    pub road_type_error: extern "C" fn(i32),
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
     pub assert_clear_house: extern "C" fn(bool),
@@ -3610,7 +3609,6 @@ crate::abi::layouts! {
 
         update_virt,
         house_count,
-        road_type_error,
         build_bridge,
         build_tunnel,
         assert_clear_house,
@@ -3881,9 +3879,6 @@ mod policy_tests {
     extern "C" fn unexpected_house_count() -> u32 {
         unreachable!("unexpected Leaves::house_count")
     }
-    extern "C" fn unexpected_road_type_error(_: i32) {
-        unreachable!("unexpected Leaves::road_type_error")
-    }
     extern "C" fn unexpected_build_bridge(_: u32, _: u32, _: u32, _: u32, _: u32) -> bool {
         unreachable!("unexpected Leaves::build_bridge")
     }
@@ -3920,7 +3915,6 @@ mod policy_tests {
             make_house: unexpected_make_house,
             update_virt: unexpected_update_virt,
             house_count: unexpected_house_count,
-            road_type_error: unexpected_road_type_error,
             build_bridge: unexpected_build_bridge,
             build_tunnel: unexpected_build_tunnel,
             assert_clear_house: unexpected_assert_clear_house,
@@ -4180,6 +4174,9 @@ mod policy_tests {
         extern "C" fn unexpected_expense_money(_: *mut CommandCost, _: u8, _: i64) {
             unreachable!("unexpected CommandCostServices::expense_money")
         }
+        extern "C" fn unexpected_error_extra(_: *mut CommandCost, _: u32, _: u32) {
+            unreachable!("unexpected CommandCostServices::error_extra")
+        }
         extern "C" fn unexpected_add(_: *mut CommandCost, _: *mut CommandCost) {
             unreachable!("unexpected CommandCostServices::add")
         }
@@ -4220,6 +4217,7 @@ mod policy_tests {
             zero,
             error: unexpected_error,
             expense_money: unexpected_expense_money,
+            error_extra: unexpected_error_extra,
             error_param: error,
             add: unexpected_add,
             move_cost: unexpected_move_cost,

@@ -17,6 +17,7 @@ use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, Owner};
 use crate::direction_type::DiagDirection;
 use crate::economy_type::ExpensesType;
+use crate::error::{WarningLevel, show_error_message};
 use crate::industry_type::{IndustryGfx, IndustryID, IndustryType};
 use crate::industrytype::{
     CheckProc, IndustryBehaviour, IndustryBehaviours, IndustryLifeTypes, IndustryTileSpec,
@@ -30,7 +31,12 @@ use crate::newgrf_callbacks::{
 use crate::newgrf_industries::IndustryAvailabilityCallType;
 use crate::slope_func::{complement_slope, is_steep_slope};
 use crate::slope_type::Slope;
-use crate::strings_type::StringID;
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::{EncodedString, StringID};
+use crate::table::strings::{
+    STR_ERROR_CAN_T_PROSPECT_INDUSTRY, STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING,
+    STR_ERROR_PROSPECTING_WAS_UNLUCKY,
+};
 use crate::tile_type::{TileIndex, TileType, TropicZone};
 use crate::tilearea::TileArea;
 use std::{cell::OnceCell, ffi::c_void, ptr};
@@ -90,8 +96,6 @@ pub struct TransactionServices {
     pub can_allocate: unsafe extern "C" fn() -> bool,
     pub allocate: unsafe extern "C" fn(u32) -> Allocation,
     pub local_company: unsafe extern "C" fn() -> bool,
-    pub prospect_no_place: unsafe extern "C" fn(),
-    pub prospect_unlucky: unsafe extern "C" fn(),
 }
 #[repr(C)]
 pub struct TransactionContext {
@@ -1094,9 +1098,25 @@ pub(crate) unsafe fn cmd_build_industry(
             }
             if !e.succeeded() && unsafe { (e.x.local_company)() } {
                 if prospect_success {
-                    unsafe { (e.x.prospect_no_place)() };
+                    show_error_message(
+                        &get_encoded_string(STR_ERROR_CAN_T_PROSPECT_INDUSTRY, &[]),
+                        &get_encoded_string(STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING, &[]),
+                        WarningLevel::WL_INFO,
+                        0,
+                        0,
+                        &EncodedString::default(),
+                        CompanyID::INVALID,
+                    );
                 } else {
-                    unsafe { (e.x.prospect_unlucky)() };
+                    show_error_message(
+                        &get_encoded_string(STR_ERROR_CAN_T_PROSPECT_INDUSTRY, &[]),
+                        &get_encoded_string(STR_ERROR_PROSPECTING_WAS_UNLUCKY, &[]),
+                        WarningLevel::WL_INFO,
+                        0,
+                        0,
+                        &EncodedString::default(),
+                        CompanyID::INVALID,
+                    );
                 }
             }
         }

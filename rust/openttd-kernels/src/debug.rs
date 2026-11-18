@@ -126,6 +126,28 @@ impl fmt::Display for Char {
     }
 }
 
+/// A signed integer formatted with `fmt`'s `{:x}`: a minus sign before the magnitude's digits,
+/// with zero padding after the sign, where Rust's `{:x}` writes the two's complement.
+pub(crate) struct SignedHex(pub i32);
+impl fmt::LowerHex for SignedHex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut digits = [0u8; 8];
+        let mut magnitude = self.0.unsigned_abs();
+        let mut start = digits.len();
+        loop {
+            start -= 1;
+            digits[start] = b"0123456789abcdef"[(magnitude % 16) as usize];
+            magnitude /= 16;
+            if magnitude == 0 {
+                break;
+            }
+        }
+        // The digits are ASCII.
+        let digits = std::str::from_utf8(&digits[start..]).unwrap_or_default();
+        f.pad_integral(self.0 >= 0, "", digits)
+    }
+}
+
 struct Sink(Vec<u8>);
 impl fmt::Write for Sink {
     fn write_str(&mut self, s: &str) -> fmt::Result {
@@ -191,7 +213,7 @@ pub(crate) use grf_msg;
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::{Bytes, Char, Services, format};
+    use super::{Bytes, Char, Services, SignedHex, format};
     use std::cell::RefCell;
     use std::ffi::c_int;
     use std::sync::Once;
@@ -286,7 +308,7 @@ pub(crate) mod tests {
     #[test]
     fn specifiers_match_fmt() {
         // Expected text is `fmt::format` of the same values.
-        let cases: [(Vec<u8>, &[u8]); 14] = [
+        let cases: [(Vec<u8>, &[u8]); 18] = [
             (format(format_args!("{}", 0u8)), b"0"),
             (format(format_args!("{}", u32::MAX)), b"4294967295"),
             (format(format_args!("{}", -5i32)), b"-5"),
@@ -301,6 +323,19 @@ pub(crate) mod tests {
                 b"04030201",
             ),
             (format(format_args!("{:08x}", 0xDEADu32)), b"0000dead"),
+            (
+                format(format_args!("{:08x}", SignedHex(0xBEEF))),
+                b"0000beef",
+            ),
+            (format(format_args!("{:08x}", SignedHex(0))), b"00000000"),
+            (
+                format(format_args!("{:08x}", SignedHex(-0x1A))),
+                b"-000001a",
+            ),
+            (
+                format(format_args!("{:08x}", SignedHex(i32::MIN))),
+                b"-80000000",
+            ),
             (
                 format(format_args!(
                     "{}{}{}{}",

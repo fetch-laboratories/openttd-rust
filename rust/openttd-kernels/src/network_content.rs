@@ -9,9 +9,11 @@
 //! the `ContentInfo` base records the native owner allocates and deletes through leaves.
 #![allow(unsafe_code)]
 
+use crate::company_type::CompanyID;
 use crate::consumer::{self, SeparatorUsage};
 use crate::container_func::include;
 use crate::debug::{Bytes, debug};
+use crate::error::{WarningLevel, show_error_message};
 use crate::game_state::GameState;
 use crate::network_config::{
     NETWORK_CONTENT_DESC_LENGTH, NETWORK_CONTENT_FILENAME_LENGTH, NETWORK_CONTENT_NAME_LENGTH,
@@ -24,6 +26,9 @@ use crate::services::ByteSpan;
 use crate::services_assert::check;
 use crate::string_services::append;
 use crate::string_type::{StringValidationSetting, StringValidationSettings};
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::EncodedString;
+use crate::table::strings::STR_CONTENT_ERROR_COULD_NOT_EXTRACT;
 use crate::tcp_content_type::{
     ContentID, ContentInfo, ContentInfoState, ContentType, PacketContentType,
 };
@@ -78,8 +83,6 @@ pub struct Services {
     pub dependencies: extern "C" fn(*const ContentInfo) -> IdSpan,
     pub dependency_push: extern "C" fn(*mut ContentInfo, u32),
     pub description: extern "C" fn(*mut ContentInfo) -> *mut c_void,
-    /// `ShowErrorMessage(STR_CONTENT_ERROR_COULD_NOT_EXTRACT)`.
-    pub error_extract: extern "C" fn(),
     /// Close the download window and show the not-writable error.
     pub error_not_writable: extern "C" fn(),
     /// `GunzipFile`, then remove the archive, scan the tar and extract music.
@@ -747,7 +750,15 @@ fn after_download(s: &Services) {
     if (s.extract)(ci) {
         on_download_complete(s, info(ci).id());
     } else {
-        (s.error_extract)();
+        show_error_message(
+            &get_encoded_string(STR_CONTENT_ERROR_COULD_NOT_EXTRACT, &[]),
+            &EncodedString::default(),
+            WarningLevel::WL_ERROR,
+            0,
+            0,
+            &EncodedString::default(),
+            CompanyID::INVALID,
+        );
     }
 }
 
@@ -1451,7 +1462,7 @@ crate::abi::layouts! {
     "OpenTTDContentServices" ["probe"] => Services {
         callback_complete, callback_connect, callback_disconnect, callback_progress,
         callback_receive, client, close_socket, connect, content_version, dependencies,
-        dependency_push, description, error_extract, error_not_writable, extract, file_close,
+        dependency_push, description, error_not_writable, extract, file_close,
         file_create, file_open, file_write, filename, has_content, http_get, http_mirror,
         info_assign, info_delete, info_new, list_get, list_release, list_size, name,
         queue_reset, string_assign,
