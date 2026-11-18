@@ -507,14 +507,14 @@ mod controller {
     fn is_straight_road_trackdir_matches_the_original_over_every_trackdir() {
         for dir in 0..16_u8 {
             let failed = Cell::new(false);
-            let straight = crate::track_func::is_straight_road_trackdir(dir, |ok| {
+            let straight = crate::track_func::is_straight_road_trackdir(Trackdir(dir), |ok| {
                 failed.set(failed.get() || !ok);
             });
             assert!(!failed.get());
             assert_eq!(straight, matches!(dir, 0 | 1 | 8 | 9), "trackdir {dir}");
         }
         let failed = Cell::new(false);
-        crate::track_func::is_straight_road_trackdir(Trackdir::INVALID_TRACKDIR.0, |ok| {
+        crate::track_func::is_straight_road_trackdir(Trackdir::INVALID_TRACKDIR, |ok| {
             failed.set(failed.get() || !ok);
         });
         assert!(failed.get());

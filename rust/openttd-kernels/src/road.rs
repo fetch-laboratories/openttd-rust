@@ -1245,7 +1245,7 @@ impl<'a> Game<'a> {
         }
         let ts = self.get_road_vehicle_track_status(od.v.v, od.tile);
         let trackdirbits = TrackdirBits(track_status_to_trackdir_bits(ts));
-        let red_signals = TrackdirBits(track_status_to_red_signals(ts)); // barred level crossing
+        let red_signals = track_status_to_red_signals(ts); // barred level crossing
         let trackbits = TrackBits(trackdir_bits_to_track_bits(trackdirbits.0));
 
         /* Track does not continue along overtaking direction || track has junction || levelcrossing is barred */
@@ -1289,7 +1289,7 @@ impl<'a> Game<'a> {
 
         /* Check if vehicle is in a road stop, depot, tunnel or bridge or not on a straight road */
         if v.state() >= RVSB_IN_ROAD_STOP
-            || !is_straight_road_trackdir(v.state() & RVSB_TRACKDIR_MASK, self.check())
+            || !is_straight_road_trackdir(Trackdir(v.state() & RVSB_TRACKDIR_MASK), self.check())
         {
             return;
         }
@@ -1402,7 +1402,7 @@ impl<'a> Game<'a> {
         let mut path_found = true;
 
         let ts = self.get_road_vehicle_track_status(v.v, tile);
-        let red_signals = TrackdirBits(track_status_to_red_signals(ts)); // crossing
+        let red_signals = track_status_to_red_signals(ts); // crossing
         let mut trackdirs = TrackdirBits(track_status_to_trackdir_bits(ts));
 
         if self.is_tile_type(tile, TileType::MP_ROAD) {
@@ -1784,7 +1784,7 @@ impl<'a> Game<'a> {
                      *  if the vehicle started a corner. To protect that, only allow an abort of
                      *  overtake if we are on straight roads */
                     if v.state() < RVSB_IN_ROAD_STOP
-                        && is_straight_road_trackdir(v.state(), self.check())
+                        && is_straight_road_trackdir(Trackdir(v.state()), self.check())
                     {
                         v.set_overtaking(0);
                     }
