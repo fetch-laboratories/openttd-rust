@@ -31,7 +31,7 @@ use crate::direction_func::{
 };
 use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::engine_type::EngineID;
-use crate::ground_vehicle::GroundVehicleFlags;
+use crate::ground_vehicle::{GroundVehicleFlags, GroundVehicleType, RoadVehicle};
 use crate::map_func::{Map, World};
 use crate::math::is_inside_mm;
 use crate::movement::CachedTable;
@@ -353,38 +353,47 @@ impl Part {
     fn ground(self) -> crate::ground_vehicle::Owner {
         crate::ground_vehicle::Owner::for_road(self.v.ground(), self.s.as_ptr())
     }
+    /// `RoadVehicle::state`, through the shared field accessor.
     fn state(self) -> u8 {
-        read_field!(self.s.as_ptr(), fields.state)
+        // SAFETY: A live serialized road owner; one scalar read.
+        unsafe { state(self.s.as_ptr()) }
     }
-    fn set_state(self, state: u8) {
-        write_field!(self.s.as_ptr(), fields.state, state);
+    fn set_state(self, value: u8) {
+        // SAFETY: A live serialized road owner; one scalar store.
+        unsafe { set_state(self.s.as_ptr(), value) }
     }
     fn frame(self) -> u8 {
-        read_field!(self.s.as_ptr(), fields.frame)
+        // SAFETY: A live serialized road owner; one scalar read.
+        unsafe { frame(self.s.as_ptr()) }
     }
-    fn set_frame(self, frame: u8) {
-        write_field!(self.s.as_ptr(), fields.frame, frame);
+    fn set_frame(self, value: u8) {
+        // SAFETY: A live serialized road owner; one scalar store.
+        unsafe { set_frame(self.s.as_ptr(), value) }
     }
     fn blocked_ctr(self) -> u16 {
-        read_field!(self.s.as_ptr(), fields.blocked_ctr)
+        // SAFETY: A live serialized road owner; one scalar read.
+        unsafe { blocked_ctr(self.s.as_ptr()) }
     }
     fn set_blocked_ctr(self, blocked_ctr: u16) {
         write_field!(self.s.as_ptr(), fields.blocked_ctr, blocked_ctr);
     }
     fn overtaking(self) -> u8 {
-        read_field!(self.s.as_ptr(), fields.overtaking)
+        // SAFETY: A live serialized road owner; one scalar read.
+        unsafe { overtaking(self.s.as_ptr()) }
     }
     fn set_overtaking(self, overtaking: u8) {
         write_field!(self.s.as_ptr(), fields.overtaking, overtaking);
     }
     fn overtaking_ctr(self) -> u8 {
-        read_field!(self.s.as_ptr(), fields.overtaking_ctr)
+        // SAFETY: A live serialized road owner; one scalar read.
+        unsafe { overtaking_ctr(self.s.as_ptr()) }
     }
     fn set_overtaking_ctr(self, overtaking_ctr: u8) {
         write_field!(self.s.as_ptr(), fields.overtaking_ctr, overtaking_ctr);
     }
     fn crashed_ctr(self) -> u16 {
-        read_field!(self.s.as_ptr(), fields.crashed_ctr)
+        // SAFETY: A live serialized road owner; one scalar read.
+        unsafe { crashed_ctr(self.s.as_ptr()) }
     }
     fn set_crashed_ctr(self, crashed_ctr: u16) {
         write_field!(self.s.as_ptr(), fields.crashed_ctr, crashed_ctr);
@@ -394,10 +403,6 @@ impl Part {
     }
     fn set_reverse_ctr(self, reverse_ctr: u8) {
         write_field!(self.s.as_ptr(), fields.reverse_ctr, reverse_ctr);
-    }
-    /// `RoadVehicle::IsInDepot`.
-    fn is_in_depot(self) -> bool {
-        self.state() == RVSB_IN_DEPOT
     }
     /// `path.empty()`.
     fn path_empty(self) -> bool {
@@ -758,7 +763,7 @@ impl<'a> Game<'a> {
         ) || v.v.breakdown_ctr() != 0
             || v.overtaking() != 0
             || v.state() == RVSB_WORMHOLE
-            || v.is_in_depot()
+            || RoadVehicle::is_in_depot(v.ground())
             || v.v.current_order().is_type(OrderType::OT_LOADING)
         {
             return false;
@@ -986,7 +991,7 @@ impl<'a> Game<'a> {
 
         /* Not a close Road vehicle when it's not a road vehicle, in the depot, or ourself. */
         if v.vehicle_type() != VehicleType::VEH_ROAD
-            || Part::of(v).is_in_depot()
+            || RoadVehicle::is_in_depot(Part::of(v).ground())
             || rvf.veh.first() == v.first()
         {
             return;
@@ -1795,7 +1800,7 @@ impl<'a> Game<'a> {
         /* If this vehicle is in a depot and we've reached this point it must be
          * one of the articulated parts. It will stay in the depot until activated
          * by the previous vehicle in the chain when it gets to the right place. */
-        if v.is_in_depot() {
+        if RoadVehicle::is_in_depot(v.ground()) {
             return true;
         }
 
@@ -2424,7 +2429,7 @@ impl<'a> Game<'a> {
             return true;
         }
 
-        if v.is_in_depot() {
+        if RoadVehicle::is_in_depot(v.ground()) {
             /* Check if we should wait here for unbunching. */
             if service!(self.vs.waiting_for_unbunching)(v.v) {
                 return true;
@@ -2671,7 +2676,7 @@ impl<'a> Game<'a> {
             return Trackdir::INVALID_TRACKDIR;
         }
 
-        if v.is_in_depot() {
+        if RoadVehicle::is_in_depot(v.ground()) {
             /* We'll assume the road vehicle is facing outwards */
             return Trackdir(diag_dir_to_diag_trackdir(
                 self.get_road_depot_direction(v.v.tile()).0,
@@ -2769,11 +2774,13 @@ fn set_dest_tile(v: Part, tile: TileIndex) {
 /// Construction removal clears only drive-through stop state bits. The raw field access ends
 /// before any callback can reenter this owner.
 /// # Safety
-/// `state` is live and serialized by the game-state mutex.
-pub(crate) unsafe fn clear_removed_drive_stop(state: *mut State) {
-    let value = read_field!(state, fields.state);
-    if value & RVSB_IN_DT_ROAD_STOP != 0 {
-        write_field!(state, fields.state, value & RVSB_ROAD_STOP_TRACKDIR_MASK);
+/// `rv` is live and serialized by the game-state mutex.
+pub(crate) unsafe fn clear_removed_drive_stop(rv: *mut State) {
+    // SAFETY: As this function's contract.
+    unsafe {
+        if crate::bitmath_func::has_bit(state(rv), RVS_IN_DT_ROAD_STOP) {
+            set_state(rv, state(rv) & RVSB_ROAD_STOP_TRACKDIR_MASK);
+        }
     }
 }
 
