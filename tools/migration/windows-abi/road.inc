@@ -26,7 +26,7 @@ struct RoadAbiProbe {
 	/* The settings Rust reads through the catalog. */
 	uint8_t acceleration_model = 0, road_side = 0;
 	bool queue = false;
-	OpenTTDSettingAddresses settings{.road_side = &road_side, .roadveh_acceleration_model = &acceleration_model, .roadveh_queue = &queue};
+	OpenTTDSettingAddresses settings = [this] { OpenTTDSettingAddresses s{}; s.road_side = &road_side; s.roadveh_acceleration_model = &acceleration_model; s.roadveh_queue = &queue; return s; }();
 	uint32_t &dest = road_abi_vehicle.dest_tile;
 	uint8_t &progress = road_abi_vehicle.progress;
 	uint32_t nested = 0, destroyed = 0;
