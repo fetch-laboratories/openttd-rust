@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypedDict, cast
@@ -76,7 +77,7 @@ class Stalled(RuntimeError):
         self.peer = peer
 
 
-def stuck_resolving(lines: list[str]) -> bool:
+def stuck_resolving(lines: Sequence[str]) -> bool:
     """A resolve with no connection attempt after it: the #693 signature."""
     resolved = [n for n, line in enumerate(lines) if RESOLVED in line]
     return bool(resolved) and not any(ATTEMPT in line for line in lines[resolved[-1] :])

@@ -9,8 +9,9 @@ import sys
 import tempfile
 import time
 import unittest
-from collections.abc import Iterator
+from collections.abc import Generator
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 from simulation import network_protocol
@@ -57,7 +58,7 @@ class StubPeers:
 
 
 @contextlib.contextmanager
-def stubs(step: int = 1) -> Iterator[StubPeers]:
+def stubs(step: int = 1) -> Generator[StubPeers]:
     with tempfile.TemporaryDirectory() as directory:
         found = StubPeers(Path(directory), step)
         try:
@@ -181,7 +182,7 @@ class RetryTests(unittest.TestCase):
                 raise RuntimeError("issuer: missing NET574 ready issuer")
             return Path("stop.sav"), {"callbacks": 24}
 
-        result: network_protocol.Result = {}
+        result = cast(network_protocol.Result, {})
         output = io.StringIO()
         error = None
         with (
