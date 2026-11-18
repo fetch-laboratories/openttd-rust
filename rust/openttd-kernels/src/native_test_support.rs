@@ -38,6 +38,10 @@ use crate::tree_map::{
     get_tree_count, get_tree_density, get_tree_ground, get_tree_growth, get_tree_type,
 };
 use crate::vehicle::{OpenTTDVehicle, VehicleRef};
+use crate::witness::{
+    RAIL_CACHE_FLUSHES, RAIL_LIMIT_STOPS, RAIL_SIGNALS_RED, RAIL_SIGNALS_RESTORED,
+    openttd_rust_witness_count as count, openttd_rust_witness_enable,
+};
 
 /// `Edge::LastUpdate`, compared with the original graph trace.
 #[unsafe(no_mangle)]
@@ -939,11 +943,7 @@ pub unsafe extern "C" fn openttd_test_rail_yapf(
     td: u8,
     reserve_track: bool,
 ) -> RailYapfSearch {
-    use crate::witness::{
-        RAIL_CACHE_FLUSHES, RAIL_LIMIT_STOPS, RAIL_SIGNALS_RED, RAIL_SIGNALS_RESTORED,
-        openttd_rust_witness_count as count,
-    };
-    crate::witness::openttd_rust_witness_enable();
+    openttd_rust_witness_enable();
     let before = [
         RAIL_CACHE_FLUSHES,
         RAIL_LIMIT_STOPS,
