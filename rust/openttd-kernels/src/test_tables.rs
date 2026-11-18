@@ -2379,13 +2379,6 @@ pub(crate) const INDUSTRIES: crate::industry::Services = crate::industry::Servic
     harvest: unreachable1,
     change_callback: unreachable3,
     text: ptr::null(),
-    strings: crate::industry::Strings {
-        format_industry_name: 0,
-        industry_production_decrease_smooth: 0,
-        industry_production_increase_smooth: 0,
-        last_stringid: 0,
-        town_name: 0,
-    },
     callback_error: unreachable2,
     set_dirty: unreachable1,
     destroy: unreachable1,

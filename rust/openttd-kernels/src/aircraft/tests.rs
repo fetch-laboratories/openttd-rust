@@ -247,9 +247,9 @@ fn aircraft_event_handler_general_is_a_fatal_error() {
 #[test]
 fn aircraft_handle_dest_too_far_raises_the_original_event_and_advice() {
     use crate::news_func::testing::{Effect, Param, encoded, take};
-    use crate::table::strings::STR_NEWS_AIRCRAFT_DEST_TOO_FAR;
     use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle, NewsType};
     use crate::script_event_types::ScriptEvent;
+    use crate::table::strings::STR_NEWS_AIRCRAFT_DEST_TOO_FAR;
     use crate::vehicle_type::VehicleID;
     extern "C" fn dirty(_: crate::vehicle::VehicleRef) {}
     extern "C" fn local() -> u8 {

@@ -304,7 +304,6 @@ fn set_rotor_state(u: VehicleRef, state: HelicopterRotorStates) {
     crate::raw_field::write_field!(u.aircraft_state(), state, state.0);
 }
 
-
 /// The C++ leaves of the aircraft controller: shared operations and the fields of the
 /// station and `AirportFTAClass` records, which C++ stores.
 #[repr(C)]

@@ -37,7 +37,10 @@ use crate::sound_type::SoundFx;
 use crate::strings_func::get_encoded_string;
 use crate::strings_type::StringID;
 use crate::strings_type::StringParameterData::Integer;
-use crate::table::strings::STR_NULL;
+use crate::table::strings::{
+    STR_FORMAT_INDUSTRY_NAME, STR_LAST_STRINGID, STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH,
+    STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH, STR_NULL, STR_TOWN_NAME,
+};
 use crate::tile_type::{TileIndex, TileType};
 use crate::tilearea::TileArea;
 use crate::timer_game_tick::{DAY_TICKS, INDUSTRY_CUT_TREE_TICKS, INDUSTRY_PRODUCE_TICKS};
@@ -481,20 +484,6 @@ pub struct Change {
     pub result: u16,
     pub reg: i32,
 }
-/// The generated string IDs of the industry news.
-#[repr(C)]
-pub struct Strings {
-    /// `STR_FORMAT_INDUSTRY_NAME`.
-    pub format_industry_name: u32,
-    /// `STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH`.
-    pub industry_production_decrease_smooth: u32,
-    /// `STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH`.
-    pub industry_production_increase_smooth: u32,
-    /// `STR_LAST_STRINGID`, the build's last generated string.
-    pub last_stringid: u32,
-    /// `STR_TOWN_NAME`.
-    pub town_name: u32,
-}
 /// Typed `noexcept` C++ services in `industry_ffi.h` order. Each is a world leaf;
 /// construction and commands return values at the original call site.
 #[repr(C)]
@@ -516,7 +505,6 @@ pub struct Services {
     pub change_callback: unsafe extern "C" fn(*mut c_void, bool, u32) -> Change,
     /// Shared text owner services for `MapGRFStringID`.
     pub text: *const crate::newgrf_text::Services,
-    pub strings: Strings,
     pub callback_error: unsafe extern "C" fn(*mut c_void, bool),
     pub set_dirty: unsafe extern "C" fn(*mut c_void),
     pub destroy: unsafe extern "C" fn(*mut c_void),
@@ -1393,19 +1381,15 @@ fn change_industry_production_news(
         servicing_news_type(servicing(i, owner, svc))
     };
     /* Set parameters of news string */
-    let strings = &svc.strings;
     let name = || Integer(u64::from(unsafe { (*spec_of(owner)).name }));
     let town = || Integer(u64::from(town_index(i, svc).0));
-    let headline = if str.0 > strings.last_stringid {
-        get_encoded_string(
-            str,
-            &[Integer(u64::from(strings.town_name)), town(), name()],
-        )
+    let headline = if str > STR_LAST_STRINGID {
+        get_encoded_string(str, &[Integer(u64::from(STR_TOWN_NAME.0)), town(), name()])
     } else if closeit {
         get_encoded_string(
             str,
             &[
-                Integer(u64::from(strings.format_industry_name)),
+                Integer(u64::from(STR_FORMAT_INDUSTRY_NAME.0)),
                 town(),
                 name(),
             ],
@@ -1456,14 +1440,13 @@ fn report_news_production_change_industry(
 ) {
     let nt = servicing_news_type(servicing(ind, owner, svc));
     let index = industry_index(ind, svc);
-    let strings = &svc.strings;
     add_industry_news_item(
         &get_encoded_string(
-            StringID(if percent >= 0 {
-                strings.industry_production_increase_smooth
+            if percent >= 0 {
+                STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH
             } else {
-                strings.industry_production_decrease_smooth
-            }),
+                STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH
+            },
             &[
                 Integer(u64::from((svc.shared().cargo_name)(cargo.0))),
                 Integer(u64::from(index.0)),
@@ -2882,13 +2865,6 @@ crate::abi::layouts! {
         last_accepted,
         history,
     };
-    "OpenTTDIndustryStrings" ["industry"] => Strings {
-        format_industry_name,
-        industry_production_decrease_smooth,
-        industry_production_increase_smooth,
-        last_stringid,
-        town_name,
-    };
     "OpenTTDIndustryServices" ["industry"] => Services {
         shared,
         next_tick,
@@ -2907,7 +2883,6 @@ crate::abi::layouts! {
         harvest,
         change_callback,
         text,
-        strings,
         callback_error,
         set_dirty,
         destroy,
@@ -3210,13 +3185,6 @@ mod production_policy_tests {
             harvest: unexpected_harvest,
             change_callback: unexpected_change_callback,
             text: ptr::null(),
-            strings: Strings {
-                format_industry_name: 0,
-                industry_production_decrease_smooth: 0,
-                industry_production_increase_smooth: 0,
-                last_stringid: 0,
-                town_name: 0,
-            },
             callback_error: error,
             set_dirty: dirty,
             destroy: unexpected_destroy,
@@ -3317,9 +3285,7 @@ mod production_policy_tests {
             })),
             Ordering::Release,
         );
-        let mut services = services(shared);
-        services.strings.industry_production_decrease_smooth = 0x70;
-        services.strings.industry_production_increase_smooth = 0x71;
+        let services = services(shared);
         let owner = Box::into_raw(Box::default());
         take();
         report_news_production_change_industry(ptr::null_mut(), owner, CargoType(3), 25, &services);
@@ -3340,7 +3306,13 @@ mod production_policy_tests {
             data: None,
             advice_type: AdviceType::Invalid,
         };
-        assert_eq!(take(), [news(0x71, 0x903, 25), news(0x70, 0x904, 40)]);
+        assert_eq!(
+            take(),
+            [
+                news(STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH.0, 0x903, 25),
+                news(STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH.0, 0x904, 40),
+            ]
+        );
         drop(unsafe { Box::from_raw(owner) });
     }
 
@@ -3436,21 +3408,10 @@ mod production_policy_tests {
             prospect_no_place: crate::test_tables::unreachable0,
             prospect_unlucky: crate::test_tables::unreachable0,
         }));
-        s.strings = IndustryNewsStrings::FIXTURE;
         s
     }
-    /// The string IDs of [`news_services`]: town name 0x60, industry name format 0x61, last
-    /// generated string 0x1000.
-    struct IndustryNewsStrings;
-    impl IndustryNewsStrings {
-        const FIXTURE: Strings = Strings {
-            format_industry_name: 0x61,
-            industry_production_decrease_smooth: 0x70,
-            industry_production_increase_smooth: 0x71,
-            last_stringid: 0x1000,
-            town_name: 0x60,
-        };
-    }
+    /// A NewGRF text ID (`TEXT_TAB_NEWGRF_START`), above `STR_LAST_STRINGID`: a custom news text.
+    const CUSTOM_TEXT: u32 = 0xD401;
     /// An industry of type `kind`, which no other test uses, at tile 0x500 whose spec has
     /// `name` 0x77 and the given `new_industry_text`; the caller restores the spec.
     fn news_industry(kind: IndustryType, new_industry_text: u32) -> (*mut Industry, (u32, u32)) {
@@ -3482,7 +3443,14 @@ mod production_policy_tests {
         use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle};
         use crate::script_event_types::ScriptEvent;
         for (text, params) in [
-            (0x2000, vec![Param::N(0x77), Param::N(0x60), Param::N(5)]),
+            (
+                CUSTOM_TEXT,
+                vec![
+                    Param::N(0x77),
+                    Param::N(STR_TOWN_NAME.0.into()),
+                    Param::N(5),
+                ],
+            ),
             (0x0800, vec![Param::N(0x77), Param::N(5)]),
         ] {
             let (owner, saved) = news_industry(IndustryType(201), text);
@@ -3546,20 +3514,34 @@ mod production_policy_tests {
                 Effect::AiBroadcastNewEvent(close, CompanyID::INVALID.0),
                 Effect::GameNewEvent(close),
                 item(
-                    encoded(0x0900, &[Param::N(0x61), Param::N(5), Param::N(0x77)]),
+                    encoded(
+                        0x0900,
+                        &[
+                            Param::N(STR_FORMAT_INDUSTRY_NAME.0.into()),
+                            Param::N(5),
+                            Param::N(0x77)
+                        ]
+                    ),
                     NewsType::IndustryClose,
                     tile
                 ),
             ]
         );
-        change_industry_production_news(ptr::null_mut(), owner, StringID(0x2000), true, &s);
+        change_industry_production_news(ptr::null_mut(), owner, StringID(CUSTOM_TEXT), true, &s);
         assert_eq!(
             take(),
             [
                 Effect::AiBroadcastNewEvent(close, CompanyID::INVALID.0),
                 Effect::GameNewEvent(close),
                 item(
-                    encoded(0x2000, &[Param::N(0x60), Param::N(5), Param::N(0x77)]),
+                    encoded(
+                        CUSTOM_TEXT,
+                        &[
+                            Param::N(STR_TOWN_NAME.0.into()),
+                            Param::N(5),
+                            Param::N(0x77)
+                        ]
+                    ),
                     NewsType::IndustryClose,
                     tile
                 ),
@@ -3574,11 +3556,18 @@ mod production_policy_tests {
                 industry
             )]
         );
-        change_industry_production_news(ptr::null_mut(), owner, StringID(0x2000), false, &s);
+        change_industry_production_news(ptr::null_mut(), owner, StringID(CUSTOM_TEXT), false, &s);
         assert_eq!(
             take(),
             [item(
-                encoded(0x2000, &[Param::N(0x60), Param::N(5), Param::N(0x77)]),
+                encoded(
+                    CUSTOM_TEXT,
+                    &[
+                        Param::N(STR_TOWN_NAME.0.into()),
+                        Param::N(5),
+                        Param::N(0x77)
+                    ]
+                ),
                 NewsType::IndustryNobody,
                 industry
             )]
