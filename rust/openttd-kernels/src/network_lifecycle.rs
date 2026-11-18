@@ -14,6 +14,7 @@ use crate::network_type::{CLIENT_ID_SERVER, NetworkRecvStatus, SERVER_GAME_TYPE_
 use crate::openttd::{GameMode, SwitchMode};
 use crate::services::ByteSpan;
 use crate::session::Services as SessionServices;
+use crate::table::strings::STR_SV_UNNAMED;
 use std::ffi::c_void;
 #[repr(C)]
 pub struct Services {
@@ -479,8 +480,7 @@ pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionSe
              * If the company has not been named yet, the company was just started.
              * Otherwise it would have gotten a name already, so announce it as a new company.
              */
-            if (company_services.identity.name_id)(company)
-                == company_services.identity.strings.unnamed
+            if (company_services.identity.name_id)(company) == STR_SV_UNNAMED.0
                 && (company_services.identity.name)(company).size == 0
             {
                 crate::network_server::new_company(s, f, company, info);

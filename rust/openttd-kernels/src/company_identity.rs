@@ -14,6 +14,11 @@ use crate::livery::{Livery, LiveryScheme, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, Services as Shared};
 use crate::strings_type::StringID;
+use crate::strings_type::{
+    SPECSTR_ANDCO_NAME, SPECSTR_COMPANY_NAME_START, SPECSTR_PRESIDENT_NAME, SPECSTR_TOWNNAME_END,
+    SPECSTR_TOWNNAME_START,
+};
+use crate::table::strings::{STR_COMPANY_NAME, STR_PRESIDENT_NAME, STR_SV_UNNAMED};
 use crate::tile_type::TileIndex;
 use crate::vehicle_type::{OpenTTDVehicle, VehicleID};
 use std::mem::MaybeUninit;
@@ -23,23 +28,11 @@ pub struct NameStorage {
     bytes: [MaybeUninit<u8>; 128],
 }
 #[repr(C)]
-pub struct Strings {
-    pub unnamed: u32,
-    pub president: u32,
-    pub company: u32,
-    pub president_generated: u32,
-    pub andco: u32,
-    pub town_begin: u32,
-    pub town_end: u32,
-    pub company_begin: u32,
-}
-#[repr(C)]
 pub struct Services {
     pub shared: &'static Shared,
     pub randomizer: *mut crate::town::names::Randomizer,
     pub faces: &'static crate::company_manager_face::Services,
     pub groups: &'static crate::fleet::GroupServices,
-    pub strings: Strings,
     pub company: extern "C" fn(CompanyID) -> *mut OpenTTDCompany,
     pub next_company: extern "C" fn(u32) -> *mut OpenTTDCompany,
     pub company_id: extern "C" fn(*mut OpenTTDCompany) -> CompanyID,
@@ -222,7 +215,7 @@ pub(crate) fn generate_company_colour(s: &Services) -> u8 {
 }
 /// Generate the name of a company from the last build coordinate.
 pub(crate) fn generate_company_name(s: &Services, c: *mut OpenTTDCompany) {
-    if StringID((s.name_id)(c)) != StringID(s.strings.unnamed) || (s.last_build)(c).0 == 0 {
+    if StringID((s.name_id)(c)) != STR_SV_UNNAMED || (s.last_build)(c).0 == 0 {
         return;
     }
     let t = crate::town::spatial::closest(s.shared, (s.last_build)(c).0, u32::MAX);
@@ -230,23 +223,23 @@ pub(crate) fn generate_company_name(s: &Services, c: *mut OpenTTDCompany) {
     let simulation = unsafe { crate::town::openttd_rust_town_simulation(town) };
     let mut slot = NameStorage::new();
     let mut names = Names::new(s, &mut slot);
-    let mut str = StringID(s.strings.andco);
+    let mut str = SPECSTR_ANDCO_NAME;
     let mut strp;
     let town_name = unsafe { crate::town::names::town_name(town).size == 0 }
         && crate::math::is_inside_mm(
             usize::from(read_field!(simulation, townnametype)),
-            s.strings.town_begin as usize,
-            s.strings.town_end as usize,
+            SPECSTR_TOWNNAME_START.0 as usize,
+            SPECSTR_TOWNNAME_END.0 as usize,
         );
     let mut try_town = town_name;
     loop {
         if try_town {
             str = StringID(
-                u32::from(read_field!(simulation, townnametype)) - s.strings.town_begin
-                    + s.strings.company_begin,
+                u32::from(read_field!(simulation, townnametype)) - SPECSTR_TOWNNAME_START.0
+                    + SPECSTR_COMPANY_NAME_START.0,
             );
             strp = read_field!(simulation, townnameparts);
-        } else if StringID((s.president_id)(c)) == StringID(s.strings.president_generated) {
+        } else if StringID((s.president_id)(c)) == SPECSTR_PRESIDENT_NAME {
             strp = (s.president_parts)(c);
             names.render(str.0, strp);
             break;
@@ -265,7 +258,7 @@ pub(crate) fn generate_company_name(s: &Services, c: *mut OpenTTDCompany) {
                 break;
             }
         }
-        str = StringID(s.strings.andco);
+        str = SPECSTR_ANDCO_NAME;
         try_town = false;
     }
     (s.set_name_id)(c, str.0);
@@ -282,10 +275,10 @@ pub(crate) fn generate_president_name(s: &Services, c: *mut OpenTTDCompany) {
     let mut names = Names::new(s, &mut slot);
     loop {
         (s.set_president_parts)(c, s.shared.random());
-        (s.set_president_id)(c, s.strings.president_generated);
+        (s.set_president_id)(c, SPECSTR_PRESIDENT_NAME.0);
         // Reserve space for an extra unicode character so a too-long president
         // name can be detected.
-        let name = names.render(s.strings.president, u32::from((s.company_id)(c).0));
+        let name = names.render(STR_PRESIDENT_NAME.0, u32::from((s.company_id)(c).0));
         if (s.shared.utf8_length)(name.data, name.size)
             >= crate::company_type::MAX_LENGTH_PRESIDENT_NAME_CHARS
         {
@@ -295,7 +288,7 @@ pub(crate) fn generate_president_name(s: &Services, c: *mut OpenTTDCompany) {
             cc == c
                 || !name.same_bytes((s.render_other)(
                     names.slot,
-                    s.strings.president,
+                    STR_PRESIDENT_NAME.0,
                     u32::from((s.company_id)(cc).0),
                 ))
         }) {
@@ -516,10 +509,7 @@ fn rename_company_or_president(s: &Services, text: ByteSpan, execute: bool, pres
         // An empty text clears the selected name, resetting it to the default.
         if president {
             (s.set_president)(c, text);
-            if !reset
-                && StringID((s.name_id)(c)) == StringID(s.strings.unnamed)
-                && (s.name)(c).size == 0
-            {
+            if !reset && StringID((s.name_id)(c)) == STR_SV_UNNAMED && (s.name)(c).size == 0 {
                 (s.rename_transport)(text);
             }
             (s.president_windows)();
@@ -531,11 +521,11 @@ fn rename_company_or_president(s: &Services, text: ByteSpan, execute: bool, pres
         let mut slot = NameStorage::new();
         let mut names = Names::new(s, &mut slot);
         names.render(
-            StringID(if president {
-                s.strings.president
+            if president {
+                STR_PRESIDENT_NAME
             } else {
-                s.strings.company
-            })
+                STR_COMPANY_NAME
+            }
             .0,
             u32::from(id.0),
         );
@@ -748,6 +738,5 @@ pub extern "C" fn openttd_rust_engine_livery_scheme(
 crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
- "OpenTTDCompanyIdentityStrings" ["company_economy"] => Strings { unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin, };
- "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, capabilities, wagon_override, cargo_freight, vehicle_id, invalidate_vehicle, };
+ "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, capabilities, wagon_override, cargo_freight, vehicle_id, invalidate_vehicle, };
 }
