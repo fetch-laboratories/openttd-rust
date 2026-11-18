@@ -4263,17 +4263,17 @@ impl Control {
         let mut ob = self.g.next_backup(&mut cursor);
         while !ob.is_null() {
             let state = g.backup(ob);
-            let tile = crate::tile_type::TileIndex(read_field!(state, tile));
+            let tile = || crate::tile_type::TileIndex(read_field!(state, tile));
             /* If this is a GUI action, and it's not a backup of us, ignore it.
              * If it's not for our chosen tile either, ignore it. */
             if (!from_gui || read_field!(state, user) == user)
-                && (t == crate::tile_type::TileIndex::INVALID || t == tile)
+                && (t == crate::tile_type::TileIndex::INVALID || t == tile())
             {
                 if from_gui {
                     /* We need to circumvent the "prevention" from this command being executed
                      * while the game is paused, so use the internal method. Nor do we want
                      * this command to get its cost estimated when shift is pressed. */
-                    (g.0.clear_backup_gui)(tile.0, user);
+                    (g.0.clear_backup_gui)(tile().0, user);
                 } else {
                     /* The command came from the game logic, i.e. the clearing of a tile.
                      * In that case we have no need to actually sync this, just do it. */

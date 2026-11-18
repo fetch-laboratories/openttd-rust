@@ -4890,7 +4890,7 @@ mod protocol_tests {
     enum Presentation {
         Window(crate::window_func::testing::Effect),
         UpdateVirtCoord(*mut TownHandle),
-        ClearSquare,
+        ClearSquare(u32),
     }
     fn window_call(effect: &crate::window_func::testing::Effect) {
         with(|w| w.presentation.push(Presentation::Window(*effect)));
@@ -5137,9 +5137,9 @@ mod protocol_tests {
         static REGIONS: Cell<*mut crate::water_regions::Regions> = const { Cell::new(ptr::null_mut()) };
     }
     /// The synthetic map has no docking tiles and no water neighbours.
-    extern "C" fn make_clear(_: u32, _: crate::services::ClearGroundType, _: u32) {
+    extern "C" fn make_clear(tile: u32, _: crate::services::ClearGroundType, _: u32) {
         with(|w| w.square_clears += 1);
-        with(|w| w.presentation.push(Presentation::ClearSquare));
+        with(|w| w.presentation.push(Presentation::ClearSquare(tile)));
     }
     extern "C" fn water_services() -> *const crate::water::WaterServices {
         WATER_TABLE.get()
@@ -5513,7 +5513,7 @@ mod protocol_tests {
                 1,
                 false,
             )),
-            Presentation::ClearSquare,
+            Presentation::ClearSquare(2080),
             Presentation::Window(Effect::DeleteNewGRFInspectWindow(
                 crate::newgrf::GrfSpecFeature::GSF_HOUSES,
                 2080,
