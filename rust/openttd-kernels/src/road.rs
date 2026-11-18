@@ -1582,7 +1582,7 @@ impl<'a> Game<'a> {
             if v.v.current_order().is_type(OrderType::OT_GOTO_DEPOT)
                 && v.v.tile() == v.v.dest_tile()
             {
-                self.vs.enter_depot(v.v);
+                crate::vehicle::visits::enter_depot(v.v, self.vs.visits());
                 return true;
             }
 
