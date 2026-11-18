@@ -2243,11 +2243,15 @@ def pr_parsers(commands: argparse._SubParsersAction) -> None:
     counted.add_argument("--since", required=True, help="date, such as 2026-11-10")
     counted.add_argument("--controls", action="store_true", help="count them too")
     counted.add_argument("--repo")
-    fallback = commands.add_parser(
-        "macos-fallback",
-        help=f"after two hosted-capacity cancellations of macOS jobs: set "
+    fallback_text = (
+        f"after two hosted-capacity cancellations of macOS jobs: set "
         f"{MACOS_VARIABLE}, rerun the last run's failed jobs, delete the variable "
-        "when its macOS jobs finish, and record both changes",
+        "when its macOS jobs finish, and record both changes. A SIGKILL cannot be "
+        f"caught and can leave {MACOS_VARIABLE} set; the command refuses to start "
+        f"while it is set, and `gh variable list` shows it"
+    )
+    fallback = commands.add_parser(
+        "macos-fallback", help=fallback_text, description=fallback_text
     )
     fallback.add_argument("runs", nargs="+", metavar="RUN", help="run IDs or URLs")
     fallback.add_argument("--pr", type=int, help="record the changes on this PR")
