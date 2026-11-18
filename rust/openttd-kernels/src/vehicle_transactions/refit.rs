@@ -334,7 +334,7 @@ unsafe fn refit_vehicle(
         if !crate::fleet::transactions::articulated(c.transactions, v) {
             actual_subtype = subtype;
         }
-        if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0
+        if crate::fleet::record(b.groups, v).vehicle_type_raw() == VehicleType::TRAIN.0
             && !only
             && !transaction
                 .0
@@ -432,7 +432,7 @@ unsafe fn refit_vehicle(
                 old.cargo,
                 old.subtype,
             );
-            let engine = EngineID(crate::fleet::record(b.groups, v).engine_id());
+            let engine = EngineID(crate::fleet::record(b.groups, v).engine_type_raw());
             let allowed =
                 unsafe { get_refit_cost(s, temp, v, engine, new_cargo_type, actual_subtype) };
             if automatic && !flags.test(DoCommandFlag::QueryCost) && !allowed {
@@ -451,7 +451,9 @@ unsafe fn refit_vehicle(
                         )
                         .cargo_cap(),
                     ));
-                    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT.0 {
+                    if crate::fleet::record(b.groups, v).vehicle_type_raw()
+                        == VehicleType::AIRCRAFT.0
+                    {
                         mail_total = mail_total.wrapping_add(u32::from(
                             crate::vehicle::VehicleRef::of(
                                 unsafe { super::vehicle_ref(next(s, v), s.common.vehicles) }
@@ -500,14 +502,14 @@ unsafe fn refit_vehicle(
             } else {
                 0
             };
-            u.write_refit_cap(cap);
+            u.set_refit_cap(cap);
             unsafe {
                 truncate(s, v, cap);
             }
             // `u->cargo_type`, `u->cargo_cap` and `u->cargo_subtype` are plain stores.
-            u.write_cargo_cap(result.capacity as u16);
+            u.set_cargo_cap(result.capacity as u16);
             (s.set_cargo_kind)(u.0.as_ptr(), cargo, result.subtype);
-            if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT.0 {
+            if crate::fleet::record(b.groups, v).vehicle_type_raw() == VehicleType::AIRCRAFT.0 {
                 let shadow = unsafe { next(s, v) };
                 if c.transactions.assertions {
                     c.transactions.check(!shadow.is_null());
@@ -524,13 +526,13 @@ unsafe fn refit_vehicle(
                         .0
                         .as_ptr(),
                 )
-                .write_refit_cap(cap);
+                .set_refit_cap(cap);
                 crate::vehicle::VehicleRef::of(
                     unsafe { super::vehicle_ref(shadow, s.common.vehicles) }
                         .0
                         .as_ptr(),
                 )
-                .write_cargo_cap(result.mail as u16);
+                .set_cargo_cap(result.mail as u16);
                 unsafe {
                     truncate(s, shadow, cap);
                 }
@@ -621,7 +623,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     }
     /* Don't allow disasters and sparks and such to be refitted.
      * We cannot check for IsPrimaryVehicle as autoreplace also refits in free wagon chains. */
-    let kind = crate::fleet::record(b.groups, v).vehicle_type();
+    let kind = crate::fleet::record(b.groups, v).vehicle_type_raw();
     if !unsafe { (b.groups.buildable_type)(kind) } {
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
@@ -629,7 +631,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     let front = crate::fleet::transactions::first(c.transactions, v);
     unsafe {
         b.commands
-            .ownership(cost, crate::fleet::record(b.groups, front).owner(), 0);
+            .ownership(cost, crate::fleet::record(b.groups, front).owner_raw(), 0);
     }
     if !(b.cost.success)(cost) {
         return Capacity::default();
@@ -663,11 +665,11 @@ pub(crate) unsafe fn cmd_refit_vehicle(
         (b.cost.error)(
             cost,
             c.strings.stopped_in_depot
-                + u32::from(crate::fleet::record(b.groups, front).vehicle_type()),
+                + u32::from(crate::fleet::record(b.groups, front).vehicle_type_raw()),
         );
         return Capacity::default();
     }
-    if crate::fleet::transactions::record(c.transactions, front).status()
+    if crate::fleet::transactions::record(c.transactions, front).vehstatus_raw()
         & crate::vehicle_base::VS_CRASHED
         != 0
     {
@@ -681,7 +683,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     }
     /* For ships and aircraft there is always only one. */
     only_this |= matches!(
-        VehicleType(crate::fleet::record(b.groups, front).vehicle_type()),
+        VehicleType(crate::fleet::record(b.groups, front).vehicle_type_raw()),
         VehicleType::SHIP | VehicleType::AIRCRAFT
     );
     let result = unsafe {
@@ -702,7 +704,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     };
     if flags.test(DoCommandFlag::Execute) {
         /* Update the cached variables */
-        match VehicleType(crate::fleet::record(b.groups, v).vehicle_type()) {
+        match VehicleType(crate::fleet::record(b.groups, v).vehicle_type_raw()) {
             VehicleType::TRAIN => unsafe {
                 crate::train::openttd_rust_train_consist_changed(
                     s.train_handle(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
@@ -773,7 +775,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
                     .0
                     .as_ptr(),
             );
-            (s.lists_ui)(crate::fleet::record(b.groups, v).vehicle_type());
+            (s.lists_ui)(crate::fleet::record(b.groups, v).vehicle_type_raw());
         }
         unsafe {
             (b.groups.depot_dirty)(front);

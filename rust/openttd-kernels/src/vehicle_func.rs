@@ -88,11 +88,11 @@ pub(crate) unsafe fn can_vehicle_use_station(
 ) -> bool {
     let vehicle =
         crate::vehicle::VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast_mut()) });
-    if VehicleType(vehicle.vehicle_type()) == VehicleType::VEH_ROAD {
+    if VehicleType(vehicle.vehicle_type_raw()) == VehicleType::VEH_ROAD {
         return !crate::road_stop::primary_for_vehicle(s.shared(), st.cast_mut(), vehicle)
             .is_null();
     }
-    can_engine_use_station(vehicle.engine_id(), st, s)
+    can_engine_use_station(vehicle.engine_type_raw(), st, s)
 }
 
 /// Original type admission for a company's vehicles.

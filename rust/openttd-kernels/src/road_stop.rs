@@ -415,7 +415,7 @@ pub(crate) unsafe fn enter(
     // Vehicles entering a drive-through stop from the 'normal' side use first bay (bay 0).
     let e = entry(
         state,
-        dir_to_diag_dir(Direction(v.direction()), |ok| {
+        dir_to_diag_dir(Direction(v.direction_raw()), |ok| {
             crate::movement::native_assert(s, ok);
         }),
     );
@@ -461,7 +461,7 @@ pub(crate) unsafe fn leave(
         // Otherwise just leave the drive through's entry cache.
         let e = entry(
             state,
-            dir_to_diag_dir(Direction(v.direction()), |ok| {
+            dir_to_diag_dir(Direction(v.direction_raw()), |ok| {
                 crate::movement::native_assert(s, ok);
             }),
         );
@@ -472,7 +472,7 @@ pub(crate) unsafe fn leave(
 /// # Safety
 /// Live serialized road owner of the front vehicle `v`.
 pub(crate) unsafe fn leave_vehicle(s: &Services, v: VehicleRef, road: *mut RoadState) {
-    let tile = TileIndex(v.tile());
+    let tile = TileIndex(v.tile_raw());
     // SAFETY: Caller's contract.
     unsafe { leave(s, at(s, tile), tile, v, road) };
 }
@@ -522,12 +522,12 @@ fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool, thi
         unsafe { (*this).length = (*this).length.wrapping_add(TILE_UNITS) };
         vehicle.for_each_on_tile(tile.0, |v| {
             // Not a RV or not in the right direction or crashed :(
-            if v.vehicle_type() != VehicleType::ROAD.0
-                || dir_to_diag_dir(Direction(v.direction()), |ok| {
+            if v.vehicle_type_raw() != VehicleType::ROAD.0
+                || dir_to_diag_dir(Direction(v.direction_raw()), |ok| {
                     crate::movement::native_assert(s, ok);
                 }) != entry_dir
                 || !v.is_front_engine()
-                || v.status() & VS_CRASHED != 0
+                || v.vehstatus_raw() & VS_CRASHED != 0
             {
                 return;
             }

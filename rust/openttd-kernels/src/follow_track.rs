@@ -147,10 +147,11 @@ impl CFollowTrackT {
     ) -> Self {
         let m = crate::movement::table(s);
         m.native_assert_call(
-            mode != RAIL || v.is_some_and(|v| v.vehicle_type() == crate::vehicle_type::VEH_TRAIN),
+            mode != RAIL
+                || v.is_some_and(|v| v.vehicle_type_raw() == crate::vehicle_type::VEH_TRAIN),
         );
         let o = v.map_or(Owner::INVALID, |v| {
-            crate::company_type::CompanyID(v.owner())
+            crate::company_type::CompanyID(v.owner_raw())
         });
         let railtypes = if mode == RAIL && railtype_override == RailTypes::INVALID_RAILTYPES {
             RailTypes(

@@ -115,7 +115,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
         if s.assertions {
             crate::movement::native_assert(
                 s.shared,
-                v.is_null() || (s.id)(e) == crate::vehicle::VehicleRef::of(v).engine_id(),
+                v.is_null() || (s.id)(e) == crate::vehicle::VehicleRef::of(v).engine_type_raw(),
             );
         }
         if !mail.is_null() {
@@ -280,7 +280,7 @@ pub(crate) unsafe fn openttd_rust_articulated_next(
         if s.assertions {
             crate::movement::native_assert(
                 s.shared,
-                v.is_null() || crate::vehicle::VehicleRef::of(v).engine_id() == engine,
+                v.is_null() || crate::vehicle::VehicleRef::of(v).engine_type_raw() == engine,
             );
         }
         let e = (s.engine)(engine);
@@ -348,8 +348,8 @@ unsafe fn count_articulated_parts(
             null_mut()
         } else {
             let v = (s.new_temporary)();
-            crate::vehicle::VehicleRef::of(v).write_engine(engine.0);
-            crate::vehicle::VehicleRef::of(v).write_owner((s.shared.current_company)());
+            crate::vehicle::VehicleRef::of(v).set_engine_type_raw(engine.0);
+            crate::vehicle::VehicleRef::of(v).set_owner_raw((s.shared.current_company)());
             v
         };
         let mut i = 1;

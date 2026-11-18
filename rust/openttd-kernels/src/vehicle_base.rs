@@ -450,11 +450,11 @@ impl crate::vehicle::VehicleRef {
     }
     /// `Vehicle::IsArticulatedPart`.
     pub(crate) fn is_articulated_part(self) -> bool {
-        is_articulated_part(is_ground_vehicle(self.vehicle_type()), self.subtype())
+        is_articulated_part(is_ground_vehicle(self.vehicle_type_raw()), self.subtype())
     }
     /// `Vehicle::HasEngineType`: whether `engine_type` has any meaning.
     pub(crate) fn has_engine_type(self) -> bool {
-        match VehicleType(self.vehicle_type()) {
+        match VehicleType(self.vehicle_type_raw()) {
             VehicleType::VEH_AIRCRAFT => crate::aircraft::is_normal_aircraft(self.subtype()),
             VehicleType::VEH_TRAIN | VehicleType::VEH_ROAD | VehicleType::VEH_SHIP => true,
             _ => false,
@@ -475,7 +475,7 @@ impl crate::vehicle::VehicleRef {
     /// `speed` is the direction-independent unscaled speed; returns the speed scaled by
     /// movement direction. 256 units are required for each movement step.
     pub(crate) fn get_old_advance_speed(self, speed: u32) -> u32 {
-        if self.direction() & 1 != 0 {
+        if self.direction_raw() & 1 != 0 {
             speed
         } else {
             speed.wrapping_mul(3) / 4
@@ -483,7 +483,7 @@ impl crate::vehicle::VehicleRef {
     }
     /// `Vehicle::IsFrontEngine`.
     pub(crate) fn is_front_engine(self) -> bool {
-        is_front_engine(is_ground_vehicle(self.vehicle_type()), self.subtype())
+        is_front_engine(is_ground_vehicle(self.vehicle_type_raw()), self.subtype())
     }
     /// `Vehicle::GetLastEnginePart`: last part of an articulated engine.
     pub(crate) fn last_engine_part(self) -> Self {
@@ -516,12 +516,12 @@ impl crate::vehicle::VehicleRef {
     }
     /// `Vehicle::GetGroundVehicleFlags`: the flags of this train or road vehicle.
     pub(crate) fn ground_vehicle_flags(self) -> u16 {
-        crate::services_assert::check(is_ground_vehicle(self.vehicle_type()));
+        crate::services_assert::check(is_ground_vehicle(self.vehicle_type_raw()));
         crate::raw_field::read_field!(self.ground(), flags)
     }
     /// Store through `Vehicle::GetGroundVehicleFlags` of this train or road vehicle.
-    pub(crate) fn write_ground_vehicle_flags(self, value: u16) {
-        crate::services_assert::check(is_ground_vehicle(self.vehicle_type()));
+    pub(crate) fn set_ground_vehicle_flags(self, value: u16) {
+        crate::services_assert::check(is_ground_vehicle(self.vehicle_type_raw()));
         crate::raw_field::write_field!(self.ground(), flags, value);
     }
     pub(crate) fn ground_cache(self) -> *mut crate::ground_vehicle::GroundCache {
@@ -535,7 +535,7 @@ impl crate::vehicle::VehicleRef {
         let order = crate::raw_field::read_field!(orders, current);
         unsafe { order.assume_init() }
     }
-    pub(crate) fn order_index(self) -> u8 {
+    pub(crate) fn cur_real_order_index(self) -> u8 {
         let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
         crate::raw_field::read_field!(consist, real)
     }
@@ -544,11 +544,11 @@ impl crate::vehicle::VehicleRef {
         // SAFETY: The native Order lifetime begins during Vehicle construction.
         unsafe { std::ptr::addr_of_mut!((*orders).current).cast() }
     }
-    pub(crate) fn order_time(self) -> i32 {
+    pub(crate) fn current_order_time(self) -> i32 {
         let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
         crate::raw_field::read_field!(consist, time)
     }
-    pub(crate) fn write_order_time(self, value: i32) {
+    pub(crate) fn set_current_order_time(self, value: i32) {
         let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
         crate::raw_field::write_field!(consist, time, value);
     }
@@ -566,12 +566,12 @@ impl crate::vehicle::VehicleRef {
         std::ptr::NonNull::new(crate::raw_field::read_field!(self.0.as_ptr(), previous)).map(Self)
     }
     pub(crate) fn set_hidden(self, value: bool) {
-        self.write_status(if value {
-            VehStates(self.status())
+        self.set_vehstatus_raw(if value {
+            VehStates(self.vehstatus_raw())
                 .with(VehStates::from_element(VehState::Hidden))
                 .0
         } else {
-            VehStates(self.status())
+            VehStates(self.vehstatus_raw())
                 .without(VehStates::from_element(VehState::Hidden))
                 .0
         });
@@ -582,10 +582,10 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn refit_cap(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), refit_cap)
     }
-    pub(crate) fn write_refit_cap(self, value: u16) {
+    pub(crate) fn set_refit_cap(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), refit_cap, value);
     }
-    pub(crate) fn breakdown_counter(self) -> u8 {
+    pub(crate) fn breakdown_ctr(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), breakdown_ctr)
     }
     pub(crate) fn motion_counter(self) -> u32 {
@@ -634,7 +634,7 @@ impl crate::vehicle::VehicleRef {
         }
         v
     }
-    pub(crate) fn write_cargo_cap(self, value: u16) {
+    pub(crate) fn set_cargo_cap(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), cargo_cap, value);
     }
     /// `Vehicle::unitnumber`, a field still stored in the C++ shell, read
@@ -644,31 +644,31 @@ impl crate::vehicle::VehicleRef {
         // SAFETY: The vehicle table returns the static resolver service table.
         unsafe { ((*(vehicles.newgrf)()).unit)(self.0.as_ptr()) }
     }
-    pub(crate) fn engine_id(self) -> u16 {
+    pub(crate) fn engine_type_raw(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), engine_type).0
     }
-    pub(crate) fn owner(self) -> u8 {
+    pub(crate) fn owner_raw(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), owner).0
     }
     pub(crate) fn subtype(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), subtype)
     }
-    pub(crate) fn vehicle_type(self) -> u8 {
+    pub(crate) fn vehicle_type_raw(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), r#type).0
     }
-    pub(crate) fn day(self) -> u8 {
+    pub(crate) fn day_counter(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), day_counter)
     }
 
-    pub(crate) fn direction(self) -> u8 {
+    pub(crate) fn direction_raw(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), direction)
     }
 
-    pub(crate) fn speed(self) -> u16 {
+    pub(crate) fn cur_speed(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), cur_speed)
     }
 
-    pub(crate) fn last_station(self) -> u16 {
+    pub(crate) fn last_station_visited_raw(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), last_station_visited).0
     }
 
@@ -676,31 +676,31 @@ impl crate::vehicle::VehicleRef {
         crate::raw_field::read_field!(self.0.as_ptr(), progress)
     }
 
-    pub(crate) fn dest_tile(self) -> u32 {
+    pub(crate) fn dest_tile_raw(self) -> u32 {
         crate::raw_field::read_field!(self.0.as_ptr(), dest_tile).0
     }
 
-    pub(crate) fn status(self) -> u8 {
+    pub(crate) fn vehstatus_raw(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), vehstatus)
     }
 
-    pub(crate) fn tile(self) -> u32 {
+    pub(crate) fn tile_raw(self) -> u32 {
         crate::raw_field::read_field!(self.0.as_ptr(), tile).0
     }
 
-    pub(crate) fn x(self) -> i32 {
+    pub(crate) fn x_pos(self) -> i32 {
         crate::raw_field::read_field!(self.0.as_ptr(), x_pos)
     }
 
-    pub(crate) fn y(self) -> i32 {
+    pub(crate) fn y_pos(self) -> i32 {
         crate::raw_field::read_field!(self.0.as_ptr(), y_pos)
     }
 
-    pub(crate) fn z(self) -> i32 {
+    pub(crate) fn z_pos(self) -> i32 {
         crate::raw_field::read_field!(self.0.as_ptr(), z_pos)
     }
 
-    pub(crate) fn tick(self) -> u8 {
+    pub(crate) fn tick_counter(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), tick_counter)
     }
 
@@ -708,97 +708,97 @@ impl crate::vehicle::VehicleRef {
         crate::raw_field::read_field!(self.0.as_ptr(), subspeed)
     }
 
-    pub(crate) fn running(self) -> u8 {
+    pub(crate) fn running_ticks(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), running_ticks)
     }
 
     pub(crate) fn acceleration(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), acceleration)
     }
-    pub(crate) fn max_speed(self) -> u16 {
+    pub(crate) fn cached_max_speed(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), cached_max_speed)
     }
 
-    pub(crate) fn write_day(self, value: u8) {
+    pub(crate) fn set_day_counter(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), day_counter, value);
     }
 
-    pub(crate) fn write_direction(self, value: u8) {
+    pub(crate) fn set_direction_raw(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), direction, value);
     }
 
-    pub(crate) fn write_speed(self, value: u16) {
+    pub(crate) fn set_cur_speed(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), cur_speed, value);
     }
 
-    pub(crate) fn write_engine(self, value: u16) {
+    pub(crate) fn set_engine_type_raw(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), engine_type, EngineID(value));
     }
-    pub(crate) fn write_owner(self, value: u8) {
+    pub(crate) fn set_owner_raw(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), owner, CompanyID(value));
     }
-    pub(crate) fn write_last_station(self, value: u16) {
+    pub(crate) fn set_last_station_visited_raw(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), last_station_visited, StationID(value));
     }
 
-    pub(crate) fn write_progress(self, value: u8) {
+    pub(crate) fn set_progress(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), progress, value);
     }
 
-    pub(crate) fn write_status(self, value: u8) {
+    pub(crate) fn set_vehstatus_raw(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), vehstatus, value);
     }
 
-    pub(crate) fn write_tile(self, value: u32) {
+    pub(crate) fn set_tile_raw(self, value: u32) {
         crate::raw_field::write_field!(self.0.as_ptr(), tile, TileIndex(value));
     }
 
-    pub(crate) fn write_x(self, value: i32) {
+    pub(crate) fn set_x_pos(self, value: i32) {
         crate::raw_field::write_field!(self.0.as_ptr(), x_pos, value);
     }
 
-    pub(crate) fn write_y(self, value: i32) {
+    pub(crate) fn set_y_pos(self, value: i32) {
         crate::raw_field::write_field!(self.0.as_ptr(), y_pos, value);
     }
 
-    pub(crate) fn write_z(self, value: i32) {
+    pub(crate) fn set_z_pos(self, value: i32) {
         crate::raw_field::write_field!(self.0.as_ptr(), z_pos, value);
     }
 
-    pub(crate) fn write_tick(self, value: u8) {
+    pub(crate) fn set_tick_counter(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), tick_counter, value);
     }
 
-    pub(crate) fn write_subspeed(self, value: u8) {
+    pub(crate) fn set_subspeed(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), subspeed, value);
     }
 
-    pub(crate) fn write_running(self, value: u8) {
+    pub(crate) fn set_running_ticks(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), running_ticks, value);
     }
 
-    pub(crate) fn write_dest(self, value: u32) {
+    pub(crate) fn set_dest_tile_raw(self, value: u32) {
         crate::raw_field::write_field!(self.0.as_ptr(), dest_tile, TileIndex(value));
     }
 
-    pub(crate) fn write_max_speed(self, value: u16) {
+    pub(crate) fn set_cached_max_speed(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), cached_max_speed, value);
     }
 
-    pub(crate) fn write_breakdown_counter(self, value: u8) {
+    pub(crate) fn set_breakdown_ctr(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), breakdown_ctr, value);
     }
 
-    pub(crate) fn write_cargo_age(self, value: u16) {
+    pub(crate) fn set_cached_cargo_age_period(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), cached_cargo_age_period, value);
     }
-    pub(crate) fn write_xy(self, x: i32, y: i32) {
-        self.write_x(x);
-        self.write_y(y);
+    pub(crate) fn set_xy(self, x: i32, y: i32) {
+        self.set_x_pos(x);
+        self.set_y_pos(y);
     }
-    pub(crate) fn write_coordinates(self, x: i32, y: i32, z: i32) {
-        self.write_xy(x, y);
-        self.write_z(z);
+    pub(crate) fn set_coordinates(self, x: i32, y: i32, z: i32) {
+        self.set_xy(x, y);
+        self.set_z_pos(z);
     }
 }
 

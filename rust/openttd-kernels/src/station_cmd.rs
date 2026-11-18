@@ -1574,7 +1574,7 @@ impl Ctx<'_> {
         let handle = crate::pbs::Pbs::acquire(self.shared).handle(v);
         // SAFETY: The reached platform update always supplies a live train shell.
         let vehicle = handle.vehicle();
-        let tile = TileIndex(vehicle.tile());
+        let tile = TileIndex(vehicle.tile_raw());
         if self.is_rail_station_tile(tile) {
             // SAFETY: The immutable train table outlives every synchronous entry.
             let td =
@@ -3667,7 +3667,7 @@ impl Ctx<'_> {
             /* remove the 'going through road stop' status from all vehicles on that tile */
             if flags.test(DoCommandFlag::Execute) {
                 self.vehicle().for_each_on_tile(tile.0, |v| {
-                    if VehicleType(v.vehicle_type()) != VehicleType::VEH_ROAD {
+                    if VehicleType(v.vehicle_type_raw()) != VehicleType::VEH_ROAD {
                         return;
                     }
                     /* Okay... we are a road vehicle on a drive through road stop.
@@ -3751,13 +3751,13 @@ impl Ctx<'_> {
             let station_id = StationID((self.links().graphs.station_id)(st));
             crate::vehiclelist_func::find_vehicles_with_order(
                 self.links(),
-                |v| VehicleType(v.vehicle_type()) == VehicleType::VEH_ROAD,
+                |v| VehicleType(v.vehicle_type_raw()) == VehicleType::VEH_ROAD,
                 |order| {
                     order.kind == OrderType::OT_GOTO_STATION && order.destination == station_id.0
                 },
                 |v| {
                     if OrderType((self.vehicle().order_type)(v)) == OrderType::OT_GOTO_STATION
-                        && v.dest_tile() == tile.0
+                        && v.dest_tile_raw() == tile.0
                     {
                         let destination = (self.s.order_station_location)(v, station_id.0);
                         (self.vehicle().set_dest_tile)(v, destination);
@@ -4632,7 +4632,7 @@ impl Ctx<'_> {
             let a = (self.s.aircraft_vehicle)(v);
             from = a.id + 1;
             // `Aircraft::Iterate()`.
-            if VehicleType(v.vehicle_type()) != VehicleType::VEH_AIRCRAFT
+            if VehicleType(v.vehicle_type_raw()) != VehicleType::VEH_AIRCRAFT
                 || !crate::aircraft::is_normal_aircraft(v.subtype())
             {
                 continue;
@@ -5174,7 +5174,7 @@ impl Ctx<'_> {
             let identity = (self.s.aircraft_vehicle)(s);
             from = identity.id + 1;
             /* Find all ships going to our dock. */
-            if VehicleType(s.vehicle_type()) != VehicleType::VEH_SHIP
+            if VehicleType(s.vehicle_type_raw()) != VehicleType::VEH_SHIP
                 || (self.vehicle().order_destination)(s) != index
             {
                 continue;
@@ -5183,7 +5183,7 @@ impl Ctx<'_> {
              * docking tile. Force them to leave the station (as they were loading
              * on the removed dock). */
             if OrderType((self.vehicle().order_type)(s)) == OrderType::OT_LOADING {
-                let tile = s.tile();
+                let tile = s.tile_raw();
                 if !((self.shared.docking_tile)(tile)
                     && unsafe {
                         crate::ship_control::openttd_rust_ship_is_destination_abi(
@@ -5432,7 +5432,7 @@ impl Ctx<'_> {
             let Some(v) = v else {
                 crate::services_assert::not_reached()
             };
-            if (CompanyID(v.owner()) == company) != include_company {
+            if (CompanyID(v.owner_raw()) == company) != include_company {
                 continue;
             }
             for index in 0..(self.links().order_count)(orderlist) {

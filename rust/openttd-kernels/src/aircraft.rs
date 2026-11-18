@@ -285,13 +285,13 @@ fn next_part(v: VehicleRef) -> VehicleRef {
 }
 /// `v->vehstatus.Test(state)`.
 fn vehstatus_test(v: VehicleRef, state: VehState) -> bool {
-    v.status() & VehStates::from_element(state).0 != 0
+    v.vehstatus_raw() & VehStates::from_element(state).0 != 0
 }
 /// `v->vehstatus.Set(state)` or `Reset(state)`.
 fn vehstatus_assign(v: VehicleRef, state: VehState, on: bool) {
     let mask = VehStates::from_element(state).0;
-    let status = v.status();
-    v.write_status(if on { status | mask } else { status & !mask });
+    let status = v.vehstatus_raw();
+    v.set_vehstatus_raw(if on { status | mask } else { status & !mask });
 }
 /// `Aircraft::state` of a rotor, which stores its `HelicopterRotorStates` there.
 fn rotor_state(u: VehicleRef) -> HelicopterRotorStates {
@@ -711,7 +711,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.check(is_primary_vehicle(b.subtype()));
         vehstatus_test(b, VehState::Hidden)
             && crate::station_map::is_hangar_tile(
-                TileIndex(b.tile()),
+                TileIndex(b.tile_raw()),
                 crate::newgrf_airport::runtime(),
             )
     }
@@ -725,7 +725,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let base = mass.common.base;
         let finance = base.commands.finance;
         let old = Self::call(|| (finance.current_company)());
-        Self::call(|| (finance.set_current_company)(v.base().owner()));
+        Self::call(|| (finance.set_current_company)(v.base().owner_raw()));
         // SAFETY: Both native results live on this stack for the synchronous command.
         let failed = unsafe {
             crate::command::with_cost(base.cost, |out| {
@@ -774,7 +774,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let b = v.base();
         let mut best: u32 = 0;
         let mut index = StationID::INVALID;
-        let vtile = self.map.tile_virt_xy_clamped_to_map(b.x(), b.y());
+        let vtile = self.map.tile_virt_xy_clamped_to_map(b.x_pos(), b.y_pos());
         let avi_subtype = self.engine_subtype(v);
         let max_range = v.cached_max_range_sqr();
 
@@ -786,7 +786,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 || (self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
                     && b.current_order().depot_action_flags() & ODATF_NEAREST_DEPOT == 0)
             {
-                last_dest = self.station_get_if_valid(StationID(b.last_station()));
+                last_dest = self.station_get_if_valid(StationID(b.last_station_visited_raw()));
                 next_dest = self.station_get_if_valid(self.order_destination(v));
             } else {
                 last_dest = self.get_target_airport_if_valid(v);
@@ -801,7 +801,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         let no_jetcrash = Self::call(|| (self.ss.no_jetcrash)());
-        let owner = b.owner();
+        let owner = b.owner_raw();
         self.ss.for_each_station(|st, _, station_index| {
             if self.station_owner(st).0 != owner
                 || !Self::station_has_airport(st)
@@ -928,8 +928,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         // SAFETY: A live vehicle and its immutable maintenance table.
         unsafe { maintenance::economy_age_vehicle(b, self.vs) };
 
-        let day_counter = b.day().wrapping_add(1);
-        b.write_day(day_counter);
+        let day_counter = b.day_counter().wrapping_add(1);
+        b.set_day_counter(day_counter);
         if day_counter & 7 == 0 {
             // SAFETY: As above.
             unsafe { maintenance::decrease_vehicle_value(b, self.vs) };
@@ -941,18 +941,18 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         unsafe { maintenance::check_vehicle_breakdown(b, self.vs) };
         self.check_if_aircraft_needs_service(v);
 
-        if b.running() == 0 {
+        if b.running_ticks() == 0 {
             return;
         }
 
         // SAFETY: A live vehicle and its static NewGRF tables.
         let running_cost = Self::call(|| unsafe { self.vs.running_cost(b) });
         /* Money's OverflowSafeInt multiplication saturates; the division does not. */
-        let cost = running_cost.saturating_mul(i64::from(b.running())) / YEAR_TICKS;
+        let cost = running_cost.saturating_mul(i64::from(b.running_ticks())) / YEAR_TICKS;
 
         let profit = Self::call(|| (self.vs.profit)(b));
         Self::call(|| (self.vs.write_profit)(b, profit.saturating_sub(cost)));
-        b.write_running(0);
+        b.set_running_ticks(0);
 
         Self::call(|| unsafe { (self.leaves.subtract_cost)(v, cost) });
 
@@ -972,26 +972,27 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if self.current_order_is_type(v, OrderType::OT_LOADING)
             || vehstatus_test(v.base(), VehState::Stopped)
         {
-            if u.speed() != 0 {
-                u.write_speed(u.speed().wrapping_add(1));
-                if u.speed() >= 0x80 && rotor_state(u) == HelicopterRotorStates::HRS_ROTOR_MOVING_3
+            if u.cur_speed() != 0 {
+                u.set_cur_speed(u.cur_speed().wrapping_add(1));
+                if u.cur_speed() >= 0x80
+                    && rotor_state(u) == HelicopterRotorStates::HRS_ROTOR_MOVING_3
                 {
-                    u.write_speed(0);
+                    u.set_cur_speed(0);
                 }
             }
         } else {
-            if u.speed() == 0 {
-                u.write_speed(0x70);
+            if u.cur_speed() == 0 {
+                u.set_cur_speed(0x70);
             }
-            if u.speed() >= 0x50 {
-                u.write_speed(u.speed() - 1);
+            if u.cur_speed() >= 0x50 {
+                u.set_cur_speed(u.cur_speed() - 1);
             }
         }
 
-        let tick = u.tick().wrapping_add(1);
-        u.write_tick(tick);
+        let tick = u.tick_counter().wrapping_add(1);
+        u.set_tick_counter(tick);
         let tick = i32::from(tick);
-        let spd = i32::from(u.speed() >> 4);
+        let spd = i32::from(u.cur_speed() >> 4);
 
         if spd == 0 {
             set_rotor_state(u, HelicopterRotorStates::HRS_ROTOR_STOPPED);
@@ -999,7 +1000,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 return;
             }
         } else if tick >= spd {
-            u.write_tick(0);
+            u.set_tick_counter(0);
             set_rotor_state(u, HelicopterRotorStates(rotor_state(u).0.wrapping_add(1)));
             if rotor_state(u) > HelicopterRotorStates::HRS_ROTOR_MOVING_3 {
                 set_rotor_state(u, HelicopterRotorStates::HRS_ROTOR_MOVING_1);
@@ -1019,7 +1020,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     )]
     fn set_aircraft_position(&self, v: Vehicle, x: i32, y: i32, z: i32) {
         let b = v.base();
-        b.write_coordinates(x, y, z);
+        b.set_coordinates(x, y, z);
 
         self.update_position_and_full_viewport(v);
         if b.subtype() == AIR_HELICOPTER {
@@ -1031,19 +1032,25 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let (max_x, max_y) = self.map_max_xy();
         let safe_x = self.clamp(x, 0, max_x);
         let mut safe_y = self.clamp(y.wrapping_sub(1), 0, max_y);
-        u.write_x(x);
-        u.write_y(y.wrapping_sub(b.z().wrapping_sub(self.get_slope_pixel_z(safe_x, safe_y)) >> 3));
+        u.set_x_pos(x);
+        u.set_y_pos(
+            y.wrapping_sub(
+                b.z_pos()
+                    .wrapping_sub(self.get_slope_pixel_z(safe_x, safe_y))
+                    >> 3,
+            ),
+        );
 
-        safe_y = self.clamp(u.y(), 0, max_y);
-        u.write_z(self.get_slope_pixel_z(safe_x, safe_y));
+        safe_y = self.clamp(u.y_pos(), 0, max_y);
+        u.set_z_pos(self.get_slope_pixel_z(safe_x, safe_y));
         Self::call(|| unsafe { (self.leaves.copy_sprite)(u, b) }); // the shadow is never coloured
 
         self.update_position_and_viewport(u);
 
         if let Some(u) = u.next() {
-            u.write_x(x);
-            u.write_y(y);
-            u.write_z(z.wrapping_add(ROTOR_Z_OFFSET));
+            u.set_x_pos(x);
+            u.set_y_pos(y);
+            u.set_z_pos(z.wrapping_add(ROTOR_Z_OFFSET));
 
             self.update_position_and_viewport(u);
         }
@@ -1053,17 +1060,17 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// enters a hangar.
     fn handle_aircraft_enter_hangar(&self, v: Vehicle) {
         let b = v.base();
-        b.write_subspeed(0);
-        b.write_progress(0);
+        b.set_subspeed(0);
+        b.set_progress(0);
 
         let u = next_part(b);
         vehstatus_assign(u, VehState::Hidden, true);
         if let Some(u) = u.next() {
             vehstatus_assign(u, VehState::Hidden, true);
-            u.write_speed(0);
+            u.set_cur_speed(0);
         }
 
-        self.set_aircraft_position(v, b.x(), b.y(), b.z());
+        self.set_aircraft_position(v, b.x_pos(), b.y_pos(), b.z_pos());
     }
 
     /// Original `PlayAircraftSound`.
@@ -1089,22 +1096,22 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             /* Convert from original units to km-ish/h */
             max_speed = max_speed.wrapping_mul(128) / 10;
 
-            b.write_max_speed(max_speed as u16);
+            b.set_cached_max_speed(max_speed as u16);
         } else {
             /* Use the default max speed of the vehicle. */
-            b.write_max_speed(Self::call(|| (self.vs.engine)(b)).aircraft_speed());
+            b.set_cached_max_speed(Self::call(|| (self.vs.engine)(b)).aircraft_speed());
         }
 
         /* Update cargo aging period. */
         let cargo_age = Self::call(|| (self.vs.engine)(b)).cargo_age();
-        b.write_cargo_age(self.get_vehicle_property(
+        b.set_cached_cargo_age_period(self.get_vehicle_property(
             b,
             PROP_AIRCRAFT_CARGO_AGE_PERIOD,
             i32::from(cargo_age),
         ) as u16);
         let u = next_part(b); // Shadow for mail
         let cargo_age = Self::call(|| (self.vs.engine)(u)).cargo_age();
-        u.write_cargo_age(self.get_vehicle_property(
+        u.set_cached_cargo_age_period(self.get_vehicle_property(
             u,
             PROP_AIRCRAFT_CARGO_AGE_PERIOD,
             i32::from(cargo_age),
@@ -1154,15 +1161,15 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             speed_limit = speed_limit.min(u32::from(SPEED_LIMIT_BROKEN));
         }
 
-        if u32::from(b.max_speed()) < speed_limit {
-            if u32::from(b.speed()) < speed_limit {
+        if u32::from(b.cached_max_speed()) < speed_limit {
+            if u32::from(b.cur_speed()) < speed_limit {
                 hard_limit = false;
             }
-            speed_limit = u32::from(b.max_speed());
+            speed_limit = u32::from(b.cached_max_speed());
         }
 
         let t = b.subspeed();
-        b.write_subspeed(t.wrapping_add(spd as u8));
+        b.set_subspeed(t.wrapping_add(spd as u8));
 
         /* Aircraft's current speed is used twice so that very fast planes are
          * forced to slow down rapidly in the short distance needed. The magic
@@ -1170,7 +1177,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
          * method at slower speeds. This also results in less reduction at slow
          * speeds to that aircraft do not get to taxi speed straight after
          * touchdown. */
-        let cur_speed = i32::from(b.speed());
+        let cur_speed = i32::from(b.cur_speed());
         if !hard_limit && cur_speed.cast_unsigned() > speed_limit {
             speed_limit = cur_speed
                 .wrapping_sub(
@@ -1179,11 +1186,12 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 .cast_unsigned();
         }
 
-        spd = (u32::from(b.speed()) + (spd >> 8) + u32::from(b.subspeed() < t)).min(speed_limit);
+        spd =
+            (u32::from(b.cur_speed()) + (spd >> 8) + u32::from(b.subspeed() < t)).min(speed_limit);
 
         /* updates statusbar only if speed have changed to save CPU time */
-        if spd != u32::from(b.speed()) {
-            b.write_speed(spd as u16);
+        if spd != u32::from(b.cur_speed()) {
+            b.set_cur_speed(spd as u16);
             self.start_stop_dirty(v);
         }
 
@@ -1196,7 +1204,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         spd = b.get_old_advance_speed(spd);
 
         spd = spd.wrapping_add(u32::from(b.progress()));
-        b.write_progress(spd as u8);
+        b.set_progress(spd as u8);
         (spd >> 8).cast_signed()
     }
 
@@ -1204,8 +1212,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// This function is needed because aircraft can leave the mapborders.
     fn get_tile_height_below_aircraft(&self, v: VehicleRef) -> i32 {
         let (max_x, max_y) = self.map_max_xy();
-        let safe_x = self.clamp(v.x(), 0, max_x);
-        let safe_y = self.clamp(v.y(), 0, max_y);
+        let safe_x = self.clamp(v.x_pos(), 0, max_x);
+        let safe_y = self.clamp(v.y_pos(), 0, max_y);
         crate::tile_map::tile_height_in(&self.map, self.tile_virt_xy(safe_x, safe_y))
             .wrapping_mul(TILE_HEIGHT)
             .cast_signed()
@@ -1222,7 +1230,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         max_level: Option<&mut i32>,
     ) {
         let mut base_altitude = self.get_tile_height_below_aircraft(v);
-        if VehicleType(v.vehicle_type()) == VehicleType::VEH_AIRCRAFT
+        if VehicleType(v.vehicle_type_raw()) == VehicleType::VEH_AIRCRAFT
             && v.subtype() == AIR_HELICOPTER
         {
             base_altitude += HELICOPTER_HOLD_MAX_FLYING_ALTITUDE - PLANE_HOLD_MAX_FLYING_ALTITUDE;
@@ -1231,7 +1239,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         /* Make sure eastbound and westbound planes do not "crash" into each
          * other by providing them with vertical separation
          */
-        match Direction(v.direction()) {
+        match Direction(v.direction_raw()) {
             Direction::DIR_N | Direction::DIR_NE | Direction::DIR_E | Direction::DIR_SE => {
                 base_altitude += 10;
             }
@@ -1239,7 +1247,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         /* Make faster planes fly higher so that they can overtake slower ones */
-        base_altitude += (20 * (i32::from(v.max_speed()) / 200) - 90).min(0);
+        base_altitude += (20 * (i32::from(v.cached_max_speed()) / 200) - 90).min(0);
 
         if let Some(min_level) = min_level {
             *min_level = base_altitude + AIRCRAFT_MIN_FLYING_ALTITUDE;
@@ -1287,7 +1295,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         // SAFETY: The flags belong to the live aircraft or disaster owner; no callback
         // runs between this load and the store below.
         let mut f = unsafe { flags.read() };
-        let mut z = v.z();
+        let mut z = v.z_pos();
         if z < aircraft_min_altitude
             || (has_bit(f, AirVehicleFlags::VAF_IN_MIN_HEIGHT_CORRECTION.0)
                 && z < aircraft_middle_altitude)
@@ -1355,13 +1363,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         let b = v.base();
-        let delta_x = b.x().wrapping_sub(
+        let delta_x = b.x_pos().wrapping_sub(
             self.dims()
                 .tile_x(tile)
                 .wrapping_mul(TILE_SIZE)
                 .cast_signed(),
         );
-        let delta_y = b.y().wrapping_sub(
+        let delta_y = b.y_pos().wrapping_sub(
             self.dims()
                 .tile_y(tile)
                 .wrapping_mul(TILE_SIZE)
@@ -1452,7 +1460,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 self.aircraft_next_airport_pos_and_order(v);
                 /* get aircraft back on running altitude */
                 let z = self.aircraft_flight_level(v, false);
-                self.set_aircraft_position(v, b.x(), b.y(), z);
+                self.set_aircraft_position(v, b.x_pos(), b.y_pos(), z);
                 return false;
             }
         }
@@ -1482,10 +1490,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             let u = next_part(next_part(b));
 
             /* Make sure the rotors don't rotate too fast */
-            if u.speed() > 32 {
-                b.write_speed(0);
-                u.write_speed(u.speed() - 1);
-                if u.speed() == 32 && !self.vehicle_sound(v, VSE_START) {
+            if u.cur_speed() > 32 {
+                b.set_cur_speed(0);
+                u.set_cur_speed(u.cur_speed() - 1);
+                if u.cur_speed() == 32 && !self.vehicle_sound(v, VSE_START) {
                     let mut sfx = self.engine_sfx(v);
                     /* For compatibility with old NewGRF we ignore the sfx property, unless a NewGRF-defined sound is used.
                      * The baseset has only one helicopter sound, so this only limits using plane or cow sounds. */
@@ -1495,20 +1503,25 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     self.snd_play_vehicle_fx(sfx, v);
                 }
             } else {
-                u.write_speed(32);
+                u.set_cur_speed(32);
                 let count = self.update_aircraft_speed(v, u32::from(SPEED_LIMIT_NONE), true);
                 if count > 0 {
-                    b.write_tile(0);
+                    b.set_tile_raw(0);
 
                     let mut z_dest = 0;
                     self.get_aircraft_flight_level_bounds(b, Some(&mut z_dest), None);
 
                     /* Reached altitude? */
-                    if b.z() >= z_dest {
-                        b.write_speed(0);
+                    if b.z_pos() >= z_dest {
+                        b.set_cur_speed(0);
                         return true;
                     }
-                    self.set_aircraft_position(v, b.x(), b.y(), (b.z() + count).min(z_dest));
+                    self.set_aircraft_position(
+                        v,
+                        b.x_pos(),
+                        b.y_pos(),
+                        (b.z_pos() + count).min(z_dest),
+                    );
                 }
             }
             return false;
@@ -1532,33 +1545,43 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
              * Except for Oilrigs which are special due to being a 1x1 station, and helicopters land outside it. */
             let (mut x, mut y) = (x, y);
             if self.airport_type(st) != AT_OILRIG {
-                x = b.x();
-                y = b.y();
+                x = b.x_pos();
+                y = b.y_pos();
                 tile = self.tile_virt_xy(x, y);
             }
-            b.write_tile(tile.0);
+            b.set_tile_raw(tile.0);
 
             /* Find altitude of landing position. */
             let z = self.get_slope_pixel_z(x, y) + 1 + i32::from(self.delta_z(afc));
 
-            if z == b.z() {
+            if z == b.z_pos() {
                 let u = next_part(next_part(b));
 
                 /*  Increase speed of rotors. When speed is 80, we've landed. */
-                if u.speed() >= 80 {
+                if u.cur_speed() >= 80 {
                     let mut flags = v.flags();
                     clr_bit8(&mut flags, AirVehicleFlags::VAF_HELI_DIRECT_DESCENT.0);
                     v.set_flags(flags);
                     return true;
                 }
-                u.write_speed(u.speed().wrapping_add(4));
+                u.set_cur_speed(u.cur_speed().wrapping_add(4));
             } else {
                 let count = self.update_aircraft_speed(v, u32::from(SPEED_LIMIT_NONE), true);
                 if count > 0 {
-                    if b.z() > z {
-                        self.set_aircraft_position(v, b.x(), b.y(), (b.z() - count).max(z));
+                    if b.z_pos() > z {
+                        self.set_aircraft_position(
+                            v,
+                            b.x_pos(),
+                            b.y_pos(),
+                            (b.z_pos() - count).max(z),
+                        );
                     } else {
-                        self.set_aircraft_position(v, b.x(), b.y(), (b.z() + count).min(z));
+                        self.set_aircraft_position(
+                            v,
+                            b.x_pos(),
+                            b.y_pos(),
+                            (b.z_pos() + count).min(z),
+                        );
                     }
                 }
             }
@@ -1566,8 +1589,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         /* Get distance from destination pos to current pos. */
-        let dist = ((x + i32::from(amd.x) - b.x()).abs() + (y + i32::from(amd.y) - b.y()).abs())
-            .cast_unsigned();
+        let dist = ((x + i32::from(amd.x) - b.x_pos()).abs()
+            + (y + i32::from(amd.y) - b.y_pos()).abs())
+        .cast_unsigned();
 
         /* Need exact position? */
         if !amd.flags.test(AirportMovingDataFlag::EXACT_POSITION)
@@ -1586,11 +1610,11 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         /* At final pos? */
         if dist == 0 {
             /* Change direction smoothly to final direction. */
-            let dirdiff = dir_difference(amd.direction, Direction(b.direction()), check);
+            let dirdiff = dir_difference(amd.direction, Direction(b.direction_raw()), check);
             /* if distance is 0, and plane points in right direction, no point in calling
              * UpdateAircraftSpeed(). So do it only afterwards */
             if dirdiff == DirDiff::DIRDIFF_SAME {
-                b.write_speed(0);
+                b.set_cur_speed(0);
                 return true;
             }
 
@@ -1598,9 +1622,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 return false;
             }
 
-            b.write_direction(
+            b.set_direction_raw(
                 change_dir(
-                    Direction(b.direction()),
+                    Direction(b.direction_raw()),
                     if dirdiff > DirDiff::DIRDIFF_REVERSE {
                         DirDiff::DIRDIFF_45LEFT
                     } else {
@@ -1610,14 +1634,15 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 )
                 .0,
             );
-            b.write_speed(b.speed() >> 1);
+            b.set_cur_speed(b.cur_speed() >> 1);
 
-            self.set_aircraft_position(v, b.x(), b.y(), b.z());
+            self.set_aircraft_position(v, b.x_pos(), b.y_pos(), b.z_pos());
             return false;
         }
 
         if amd.flags.test(AirportMovingDataFlag::BRAKE)
-            && i32::from(b.speed()) > i32::from(SPEED_LIMIT_TAXI) * i32::from(self.plane_speed())
+            && i32::from(b.cur_speed())
+                > i32::from(SPEED_LIMIT_TAXI) * i32::from(self.plane_speed())
         {
             self.maybe_crash_airplane(v);
             if vehstatus_test(b, VehState::Crashed) {
@@ -1670,15 +1695,15 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     /* move vehicle one pixel towards target */
                     let target_x = x + i32::from(amd.x);
                     let target_y = y + i32::from(amd.y);
-                    gp_x = if b.x() != target_x {
-                        b.x() + if target_x > b.x() { 1 } else { -1 }
+                    gp_x = if b.x_pos() != target_x {
+                        b.x_pos() + if target_x > b.x_pos() { 1 } else { -1 }
                     } else {
-                        b.x()
+                        b.x_pos()
                     };
-                    gp_y = if b.y() != target_y {
-                        b.y() + if target_y > b.y() { 1 } else { -1 }
+                    gp_y = if b.y_pos() != target_y {
+                        b.y_pos() + if target_y > b.y_pos() { 1 } else { -1 }
                     } else {
-                        b.y()
+                        b.y_pos()
                     };
 
                     /* Oilrigs must keep v->tile as st->airport.tile, since the landing pad is in a non-airport tile */
@@ -1691,7 +1716,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     /* Turn. Do it slowly if in the air. */
                     let newdir =
                         self.get_direction_towards(v, x + i32::from(amd.x), y + i32::from(amd.y));
-                    if newdir != Direction(b.direction()) {
+                    if newdir != Direction(b.direction_raw()) {
                         if amd.flags.test(AirportMovingDataFlag::SLOW_TURN)
                             && v.number_consecutive_turns() < 8
                             && b.subtype() == AIR_AIRCRAFT
@@ -1705,8 +1730,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                                     );
                                 }
                                 v.set_turn_counter(2_u8.wrapping_mul(self.plane_speed()));
-                                v.set_last_direction(Direction(b.direction()));
-                                b.write_direction(newdir.0);
+                                v.set_last_direction(Direction(b.direction_raw()));
+                                b.set_direction_raw(newdir.0);
                             }
 
                             /* Move vehicle. */
@@ -1715,17 +1740,17 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                             gp_y = gp.y;
                             gp_new_tile = TileIndex(gp.tile);
                         } else {
-                            b.write_speed(b.speed() >> 1);
-                            b.write_direction(newdir.0);
+                            b.set_cur_speed(b.cur_speed() >> 1);
+                            b.set_direction_raw(newdir.0);
 
                             /* When leaving a terminal an aircraft often goes to a position
                              * directly in front of it. If it would move while turning it
                              * would need an two extra turns to end up at the correct position.
                              * To make it easier just disallow all moving while turning as
                              * long as an aircraft is on the ground. */
-                            gp_x = b.x();
-                            gp_y = b.y();
-                            gp_new_tile = TileIndex(b.tile());
+                            gp_x = b.x_pos();
+                            gp_y = b.y_pos();
+                            gp_new_tile = TileIndex(b.tile_raw());
                         }
                     } else {
                         v.set_number_consecutive_turns(0);
@@ -1737,18 +1762,18 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     }
                 }
 
-                b.write_tile(gp_new_tile.0);
+                b.set_tile_raw(gp_new_tile.0);
                 /* If vehicle is in the air, use tile coordinate 0. */
                 if amd.flags.any(&[
                     AirportMovingDataFlag::TAKEOFF,
                     AirportMovingDataFlag::SLOW_TURN,
                     AirportMovingDataFlag::LAND,
                 ]) {
-                    b.write_tile(0);
+                    b.set_tile_raw(0);
                 }
 
                 /* Adjust Z for land or takeoff? */
-                let mut z = b.z();
+                let mut z = b.z_pos();
 
                 if amd.flags.test(AirportMovingDataFlag::TAKEOFF) {
                     z = self.aircraft_flight_level(v, true);
@@ -1770,7 +1795,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                  * Given we are landing/breaking, and as such are not a helicopter, we know that there has to be a hangar.
                  * We also know that the airport itself has to be completely flat (otherwise it is not a valid airport).
                  * Therefore, use the height of this hangar to calculate our z-value. */
-                let mut airport_z = b.z();
+                let mut airport_z = b.z_pos();
                 if amd
                     .flags
                     .any(&[AirportMovingDataFlag::LAND, AirportMovingDataFlag::BRAKE])
@@ -1856,16 +1881,18 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         /* make aircraft crash down to the ground */
         if v.crashed_counter() < 500 && st.is_null() && v.crashed_counter().is_multiple_of(3) {
             let (max_x, max_y) = self.map_max_xy();
-            let z =
-                self.get_slope_pixel_z(self.clamp(b.x(), 0, max_x), self.clamp(b.y(), 0, max_y));
-            b.write_z(b.z() - 1);
-            if b.z() <= z {
+            let z = self.get_slope_pixel_z(
+                self.clamp(b.x_pos(), 0, max_x),
+                self.clamp(b.y_pos(), 0, max_y),
+            );
+            b.set_z_pos(b.z_pos() - 1);
+            if b.z_pos() <= z {
                 v.set_crashed_counter(500);
-                b.write_z(z + 1);
+                b.set_z_pos(z + 1);
             } else {
                 v.set_crashed_counter(0);
             }
-            self.set_aircraft_position(v, b.x(), b.y(), b.z());
+            self.set_aircraft_position(v, b.x_pos(), b.y_pos(), b.z_pos());
         }
 
         if v.crashed_counter() < 650 {
@@ -1878,9 +1905,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     DirDiff::DIRDIFF_45RIGHT,
                 ];
 
-                b.write_direction(
+                b.set_direction_raw(
                     change_dir(
-                        Direction(b.direction()),
+                        Direction(b.direction_raw()),
                         DELTA[gb(r, 16, 2) as usize],
                         |c| {
                             self.check(c);
@@ -1888,7 +1915,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     )
                     .0,
                 );
-                self.set_aircraft_position(v, b.x(), b.y(), b.z());
+                self.set_aircraft_position(v, b.x_pos(), b.y_pos(), b.z_pos());
                 r = self.random();
                 Self::create_effect_vehicle_rel(
                     v,
@@ -1944,15 +1971,15 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         /* Stop smoking when landed */
-        if b.speed() < 10 {
+        if b.cur_speed() < 10 {
             vehstatus_assign(b, VehState::AircraftBroken, false);
-            b.write_breakdown_counter(0);
+            b.set_breakdown_ctr(0);
             return;
         }
 
         /* Spawn effect et most once per Tick, i.e. !mode */
-        if !mode && b.tick() & 0x0F == 0 {
-            let (x, y) = SMOKE_POS[usize::from(b.direction())];
+        if !mode && b.tick_counter() & 0x0F == 0 {
+            let (x, y) = SMOKE_POS[usize::from(b.direction_raw())];
             Self::create_effect_vehicle_rel(
                 v,
                 i32::from(x),
@@ -2026,7 +2053,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         Self::call(|| unsafe { (self.leaves.truncate_cargo)(b) });
         Self::call(|| unsafe { (self.leaves.truncate_cargo)(next_part(b)) });
         let st = self.get_target_airport_if_valid(v);
-        let vt = self.map.tile_virt_xy_clamped_to_map(b.x(), b.y());
+        let vt = self.map.tile_virt_xy_clamped_to_map(b.x_pos(), b.y_pos());
 
         let station = if st.is_null() {
             StationID::INVALID
@@ -2046,7 +2073,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             )
         };
 
-        let owner = crate::company_type::CompanyID(b.owner());
+        let owner = crate::company_type::CompanyID(b.owner_raw());
         let crash_reason = if st.is_null() {
             CrashReason::CRASH_AIRCRAFT_NO_AIRPORT
         } else {
@@ -2066,7 +2093,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         crate::station::spatial::modify_station_rating_around(
             self.ss,
             vt,
-            crate::company_type::CompanyID(b.owner()),
+            crate::company_type::CompanyID(b.owner_raw()),
             -160,
             30,
         );
@@ -2117,14 +2144,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
         /* Station::Get(v->targetairport) runs inside the had_vehicle_of_type services. */
         let st = v.targetairport();
-        v.base().write_last_station(st.0);
+        v.base().set_last_station_visited_raw(st.0);
 
         let hvot_aircraft = crate::station_type::StationHadVehicleOfType::HVOT_AIRCRAFT.0;
         /* Check if station was ever visited before */
         if Self::station_call(|| (self.ss.station_had_vehicle_of_type)(st.0)) & hvot_aircraft == 0 {
             Self::call(|| (self.ss.station_add_vehicle_of_type)(st.0, hvot_aircraft));
             /* show newsitem of celebrating citizens */
-            let owner = crate::company_type::CompanyID(v.base().owner());
+            let owner = crate::company_type::CompanyID(v.base().owner_raw());
             let local = owner.0 == Self::call(|| (self.ss.local_company)());
             Self::call(|| {
                 add_vehicle_news_item(
@@ -2157,7 +2184,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let st = Self::station_get(v.targetairport());
 
         let b = v.base();
-        let vt = self.tile_virt_xy(b.x(), b.y());
+        let vt = self.tile_virt_xy(b.x_pos(), b.y_pos());
 
         self.update_delta_xy(v);
 
@@ -2202,10 +2229,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// especially not on the vehicle being on the ground inside a depot.
     fn aircraft_leave_hangar(&self, v: Vehicle, exit_dir: Direction) {
         let b = v.base();
-        b.write_speed(0);
-        b.write_subspeed(0);
-        b.write_progress(0);
-        b.write_direction(exit_dir.0);
+        b.set_cur_speed(0);
+        b.set_subspeed(0);
+        b.set_progress(0);
+        b.set_direction_raw(exit_dir.0);
         vehstatus_assign(b, VehState::Hidden, false);
         {
             let u = next_part(b);
@@ -2214,13 +2241,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             /* Rotor blades */
             if let Some(u) = u.next() {
                 vehstatus_assign(u, VehState::Hidden, false);
-                u.write_speed(80);
+                u.set_cur_speed(80);
             }
         }
 
         self.service_in_depot(v);
         Self::call(|| (self.vs.leave_unbunching_depot)(b));
-        self.set_aircraft_position(v, b.x(), b.y(), b.z());
+        self.set_aircraft_position(v, b.x_pos(), b.y_pos(), b.z_pos());
         Self::call(|| unsafe { (self.leaves.dirty_depot)(v) });
     }
 
@@ -2299,7 +2326,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 TAKEOFF
             });
         }
-        let tile = v.base().tile();
+        let tile = v.base().tile_raw();
         let st = Self::station_get(StationID(Self::call(|| (self.ss.station_index)(tile))));
         let exit_dir = Direction(Self::station_call(|| unsafe {
             (self.leaves.hangar_exit)(st, tile, Self::airport_spec(st))
@@ -2435,7 +2462,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         /* Runway busy, not allowed to use this airstation or closed, circle. */
         let owner = self.station_owner(st);
         if Self::can_vehicle_use_station(v, st)
-            && (owner == Owner::NONE || owner.0 == v.base().owner())
+            && (owner == Owner::NONE || owner.0 == v.base().owner_raw())
             && !self.airport_blocks(st).test(AirportBlock::AIRPORT_CLOSED)
         {
             /* {32,FLYING,AirportBlock::Nothing,37}, {32,LANDING,N,33}, {32,HELILANDING,N,41},
@@ -2452,7 +2479,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     /* save speed before, since if AirportHasBlock is false, it resets them to 0
                      * we don't want that for plane in air
                      * hack for speed thingy */
-                    let tcur_speed = v.base().speed();
+                    let tcur_speed = v.base().cur_speed();
                     let tsubspeed = v.base().subspeed();
                     if !self.airport_has_block(v, current, apc) {
                         v.set_state(landingtype); // LANDING / HELILANDING
@@ -2471,8 +2498,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                         });
                         return;
                     }
-                    v.base().write_speed(tcur_speed);
-                    v.base().write_subspeed(tsubspeed);
+                    v.base().set_cur_speed(tcur_speed);
+                    v.base().set_subspeed(tsubspeed);
                 }
                 current = self.next(current);
             }
@@ -2696,8 +2723,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             }
 
             if self.airport_blocks(st).any(blocks) {
-                v.base().write_speed(0);
-                v.base().write_subspeed(0);
+                v.base().set_cur_speed(0);
+                v.base().set_subspeed(0);
                 return true;
             }
         }
@@ -2748,8 +2775,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
             let st = Self::station_get(v.targetairport());
             if self.airport_blocks(st).any(blocks) {
-                v.base().write_speed(0);
-                v.base().write_subspeed(0);
+                v.base().set_cur_speed(0);
+                v.base().set_subspeed(0);
                 return false;
             }
 
@@ -2881,7 +2908,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 set_bit8(&mut flags, AirVehicleFlags::VAF_DEST_TOO_FAR.0);
                 v.set_flags(flags);
                 self.start_stop_dirty(v);
-                let owner = crate::company_type::CompanyID(v.base().owner());
+                let owner = crate::company_type::CompanyID(v.base().owner_raw());
                 Self::call(|| {
                     crate::ai::new_event(owner, &ScriptEvent::aircraft_dest_too_far(v.index()));
                 });
@@ -2979,17 +3006,17 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
         crate::witness::hit(crate::witness::AIRCRAFT_TICKS);
 
-        b.write_tick(b.tick().wrapping_add(1));
+        b.set_tick_counter(b.tick_counter().wrapping_add(1));
 
         if !vehstatus_test(b, VehState::Stopped) {
-            b.write_running(b.running().wrapping_add(1));
+            b.set_running_ticks(b.running_ticks().wrapping_add(1));
         }
 
         if b.subtype() == AIR_HELICOPTER {
             self.helicopter_tick_handler(v);
         }
 
-        b.write_order_time(b.order_time().wrapping_add(1));
+        b.set_current_order_time(b.current_order_time().wrapping_add(1));
 
         for i in 0..2 {
             /* stop if the aircraft was deleted */
@@ -3004,7 +3031,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// Original `GetTargetAirportIfValid`: returns aircraft's target station if
     /// `v->target_airport` is a valid station with airport, null if invalid.
     fn get_target_airport_if_valid(&self, v: Vehicle) -> *const Station {
-        self.check(VehicleType(v.base().vehicle_type()) == VehicleType::VEH_AIRCRAFT);
+        self.check(VehicleType(v.base().vehicle_type_raw()) == VehicleType::VEH_AIRCRAFT);
 
         let st = self.station_get_if_valid(v.targetairport());
         if st.is_null() {

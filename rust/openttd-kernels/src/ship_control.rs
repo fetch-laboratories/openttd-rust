@@ -386,15 +386,15 @@ impl Game<'_> {
         (self.leaves.path_clear)(id);
     }
     fn destination(&self, id: u32, tile: u32) {
-        if tile == (self.vehicle().dest_tile()) {
+        if tile == (self.vehicle().dest_tile_raw()) {
             return;
         }
         self.path_clear(id);
-        self.vehicle().write_dest(tile);
+        self.vehicle().set_dest_tile_raw(tile);
     }
     fn remember_rotation(&self) {
-        let observed_x = self.vehicle().x() as u32;
-        let observed_y = self.vehicle().y() as u32;
+        let observed_x = self.vehicle().x_pos() as u32;
+        let observed_y = self.vehicle().y_pos() as u32;
         self.set_rotation_x(observed_x as u16);
         self.set_rotation_y(observed_y as u16);
     }
@@ -402,15 +402,15 @@ impl Game<'_> {
         crate::witness::hit(crate::witness::SHIP_REVERSE);
         if trackdir == INVALID {
             self.vehicle()
-                .write_direction((((u32::from(self.vehicle().direction())) + 4) & 7) as u8);
+                .set_direction_raw((((u32::from(self.vehicle().direction_raw())) + 4) & 7) as u8);
         } else {
             const DIRS: [u32; 16] = [1, 3, 2, 2, 4, 4, 255, 255, 5, 7, 6, 6, 0, 0, 255, 255];
             self.vehicle()
-                .write_direction(DIRS[trackdir as usize] as u8);
+                .set_direction_raw(DIRS[trackdir as usize] as u8);
             self.set_state(1 << (trackdir & 7));
         }
         self.remember_rotation();
-        self.vehicle().write_speed(0);
+        self.vehicle().set_cur_speed(0);
         self.path_clear(id);
         // SAFETY: Caller retains the live shell across this index update.
         unsafe {
@@ -422,8 +422,8 @@ impl Game<'_> {
         crate::witness::hit(crate::witness::SHIP_DEPOT_SEARCH);
         // SAFETY: The native game-state mutex serializes depot searches.
         let scratch = unsafe { depot_scratch() };
-        let observed_tile = self.vehicle().tile();
-        let observed_owner = u32::from(self.vehicle().owner());
+        let observed_tile = self.vehicle().tile_raw();
+        let observed_owner = u32::from(self.vehicle().owner_raw());
         let start = (self.leaves.patch)(observed_tile);
         // SAFETY: The serialized game-thread entry owns scratch access. No reference crosses a service call.
         unsafe {
@@ -506,7 +506,7 @@ impl Game<'_> {
         }
     }
     fn cache(&self, v: VehicleRef) {
-        let observed_tile = self.vehicle().tile();
+        let observed_tile = self.vehicle().tile_raw();
         let sea = (self.leaves.water_class)(observed_tile) == 0;
         let speed = u32::from((self.vs().engine)(v).ship_speed());
         let raw = (self.vs().property)(
@@ -517,7 +517,7 @@ impl Game<'_> {
         ) as u32;
         let frac = u32::from((self.vs().engine)(v).ship_speed_fraction(sea));
         self.vehicle()
-            .write_max_speed((raw.wrapping_mul(256 - frac) / 256) as u16);
+            .set_cached_max_speed((raw.wrapping_mul(256 - frac) / 256) as u16);
         let period = u32::from((self.vs().engine)(v).cargo_age());
         let age = (self.vs().property)(
             (self.vs().newgrf)(),
@@ -525,7 +525,7 @@ impl Game<'_> {
             crate::newgrf_properties::PROP_SHIP_CARGO_AGE_PERIOD,
             period as i32,
         ) as u32;
-        self.vehicle().write_cargo_age(age as u16);
+        self.vehicle().set_cached_cargo_age_period(age as u16);
         crate::vehicle_effect::openttd_rust_visual_update(v, true);
     }
     fn stay_depot(&self, id: u32, v: VehicleRef) -> bool {
@@ -535,8 +535,8 @@ impl Game<'_> {
         if (self.leaves.wait_unbunch)(id) {
             return true;
         }
-        let observed_tile = self.vehicle().tile();
-        let observed_dest = self.vehicle().dest_tile();
+        let observed_tile = self.vehicle().tile_raw();
+        let observed_dest = self.vehicle().dest_tile_raw();
         let observed_order_destination = (self.leaves.order_destination)(id);
         let observed_order_type = (self.leaves.order_type)(id);
         if observed_order_type == u32::from(OT_GOTO_DEPOT)
@@ -547,23 +547,23 @@ impl Game<'_> {
             return true;
         }
         if observed_dest == 0
-            || self.vs().any_on_tile(self.vehicle().tile(), |u| {
-                u.vehicle_type() == crate::vehicle::VehicleType::SHIP.0 && (u).speed() != 0
+            || self.vs().any_on_tile(self.vehicle().tile_raw(), |u| {
+                u.vehicle_type_raw() == crate::vehicle::VehicleType::SHIP.0 && (u).cur_speed() != 0
             })
         {
             return true;
         }
         let mut direction = (self.leaves.depot_dir)(observed_tile) * 2 + 1;
-        self.vehicle().write_direction(direction as u8);
+        self.vehicle().set_direction_raw(direction as u8);
         if (self.leaves.yapf_reverse)(id, false).reverse {
             direction = (direction + 4) & 7;
-            self.vehicle().write_direction(direction as u8);
+            self.vehicle().set_direction_raw(direction as u8);
         }
         crate::witness::hit(crate::witness::SHIP_DEPOT_LEAVE);
         self.set_state(1 << (self.leaves.depot_axis)(observed_tile));
         self.set_rotation(direction as u16);
         self.vehicle().set_hidden(false);
-        self.vehicle().write_speed(0);
+        self.vehicle().set_cur_speed(0);
         self.viewport(id);
         (self.leaves.depot_dirty)(id);
         unsafe { self.vs().maintain(v, maintenance::service_in_depot) };
@@ -574,21 +574,23 @@ impl Game<'_> {
         false
     }
     fn lock_delta(&self) -> i32 {
-        let tile = self.vehicle().tile();
+        let tile = self.vehicle().tile_raw();
         if !(self.services.water_middle_lock)(tile)
-            || (self.vehicle().x() as u32) & 15 != 8
-            || (self.vehicle().y() as u32) & 15 != 8
+            || (self.vehicle().x_pos() as u32) & 15 != 8
+            || (self.vehicle().y_pos() as u32) & 15 != 8
         {
             return 0;
         }
         let diag = (self.leaves.lock_dir)(tile);
-        if (u32::from(self.vehicle().direction())) / 2 == diag {
+        if (u32::from(self.vehicle().direction_raw())) / 2 == diag {
             i32::from(
-                ((self.vehicle().z() as u32) as i32) < (self.leaves.tile_max_z)(tile) as i32 * 8,
+                ((self.vehicle().z_pos() as u32) as i32)
+                    < (self.leaves.tile_max_z)(tile) as i32 * 8,
             )
         } else {
             -i32::from(
-                ((self.vehicle().z() as u32) as i32) > (self.leaves.tile_min_z)(tile) as i32 * 8,
+                ((self.vehicle().z_pos() as u32) as i32)
+                    > (self.leaves.tile_min_z)(tile) as i32 * 8,
             )
         }
     }
@@ -602,16 +604,16 @@ impl Game<'_> {
         if delta == 0 {
             return false;
         }
-        let observed_z = self.vehicle().z() as u32;
-        let observed_speed = u32::from(self.vehicle().speed());
-        let observed_tick = u32::from(self.vehicle().tick());
+        let observed_z = self.vehicle().z_pos() as u32;
+        let observed_speed = u32::from(self.vehicle().cur_speed());
+        let observed_tick = u32::from(self.vehicle().tick_counter());
         if observed_speed != 0 {
-            self.vehicle().write_speed(0);
+            self.vehicle().set_cur_speed(0);
             (self.leaves.start_dirty)(id);
         }
         if observed_tick & 7 == 0 {
             self.vehicle()
-                .write_z(observed_z.wrapping_add(delta as u32) as i32);
+                .set_z_pos(observed_z.wrapping_add(delta as u32) as i32);
             // SAFETY: Caller retains the live shell across this index update.
             unsafe {
                 crate::vehicle::occupancy::update(self.vs(), v, false);
@@ -621,18 +623,18 @@ impl Game<'_> {
         true
     }
     fn accelerate(&self, id: u32) -> u32 {
-        let observed_direction = u32::from(self.vehicle().direction());
-        let observed_speed = u32::from(self.vehicle().speed());
+        let observed_direction = u32::from(self.vehicle().direction_raw());
+        let observed_speed = u32::from(self.vehicle().cur_speed());
         let observed_progress = u32::from(self.vehicle().progress());
         let observed_order_max_speed = (self.leaves.order_max_speed)(id);
         let observed_acceleration = u32::from(self.vehicle().acceleration());
-        let observed_max_speed = u32::from(self.vehicle().max_speed());
+        let observed_max_speed = u32::from(self.vehicle().cached_max_speed());
         let speed = observed_speed
             .wrapping_add(observed_acceleration)
             .min(observed_max_speed)
             .min(observed_order_max_speed.wrapping_mul(2));
         if speed != observed_speed {
-            self.vehicle().write_speed(speed as u16);
+            self.vehicle().set_cur_speed(speed as u16);
             (self.leaves.start_dirty)(id);
         }
         let advance = speed.wrapping_mul(3) / 4;
@@ -642,13 +644,13 @@ impl Game<'_> {
             256
         };
         let progress = advance.wrapping_add(observed_progress);
-        self.vehicle().write_progress((progress % distance) as u8);
+        self.vehicle().set_progress((progress % distance) as u8);
         progress / distance
     }
     fn choose(&self, id: u32, tile: u32, tracks: u32) -> u32 {
         let found;
         let track;
-        if (self.vehicle().dest_tile()) == 0 {
+        if (self.vehicle().dest_tile_raw()) == 0 {
             let mut choice = first_bit(u32::from(self.state()) & 63);
             if choice >= 2 {
                 choice ^= 1;
@@ -691,12 +693,12 @@ impl Game<'_> {
         }
     }
     fn controller(&self, id: u32, v: VehicleRef) {
-        let observed_tick = u32::from(self.vehicle().tick());
-        let observed_order_time = self.vehicle().order_time() as u32;
+        let observed_tick = u32::from(self.vehicle().tick_counter());
+        let observed_order_time = self.vehicle().current_order_time() as u32;
         self.vehicle()
-            .write_tick(observed_tick.wrapping_add(1) as u8);
+            .set_tick_counter(observed_tick.wrapping_add(1) as u8);
         self.vehicle()
-            .write_order_time(observed_order_time.wrapping_add(1) as i32);
+            .set_current_order_time(observed_order_time.wrapping_add(1) as i32);
         let breakdown = unsafe { self.vs().maintain(v, maintenance::handle_breakdown_status) };
         if breakdown.broken {
             return;
@@ -722,13 +724,13 @@ impl Game<'_> {
         }
         if crate::vehicle_effect::openttd_rust_visual_eligible_abi(v) != 0 {
             let maximum = current_max_speed(
-                (u32::from(self.vehicle().max_speed())) as u16,
+                (u32::from(self.vehicle().cached_max_speed())) as u16,
                 (self.leaves.order_max_speed)(id) as u16,
             );
             crate::vehicle_effect::show_visual_effect(v, maximum as u32);
         }
-        let observed_direction = u32::from(self.vehicle().direction());
-        let observed_tick = u32::from(self.vehicle().tick());
+        let observed_direction = u32::from(self.vehicle().direction_raw());
+        let observed_tick = u32::from(self.vehicle().tick_counter());
         let rotation = u32::from(self.rotation());
         if observed_direction != rotation {
             crate::witness::hit(crate::witness::SHIP_ROTATE);
@@ -756,8 +758,8 @@ impl Game<'_> {
             if self.state() != WORMHOLE {
                 if old_tile == new_tile {
                     if self.state() == DEPOT {
-                        x = self.vehicle().x() as u32;
-                        y = self.vehicle().y() as u32;
+                        x = self.vehicle().x_pos() as u32;
+                        y = self.vehicle().y_pos() as u32;
                     } else {
                         if u32::from(unsafe {
                             crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
@@ -767,9 +769,9 @@ impl Game<'_> {
                             self.reverse(id, v, INVALID);
                             return;
                         }
-                        let observed_tile = self.vehicle().tile();
-                        let observed_dest = self.vehicle().dest_tile();
-                        let observed_direction = u32::from(self.vehicle().direction());
+                        let observed_tile = self.vehicle().tile_raw();
+                        let observed_dest = self.vehicle().dest_tile_raw();
+                        let observed_direction = u32::from(self.vehicle().direction_raw());
                         let observed_order_destination = (self.leaves.order_destination)(id);
                         let observed_order_type = (self.leaves.order_type)(id);
                         if observed_order_type == u32::from(OT_LEAVESTATION) {
@@ -817,7 +819,7 @@ impl Game<'_> {
                                     },
                                 ) && self.destination_station(new_tile, station)
                                 {
-                                    self.vehicle().write_last_station(station as u16);
+                                    self.vehicle().set_last_station_visited_raw(station as u16);
                                     if (self.services.station_facilities)(station as u16)
                                         & crate::station_type::FACILITY_DOCK
                                         != 0
@@ -866,7 +868,7 @@ impl Game<'_> {
                         return;
                     }
                     if entered & 2 == 0 {
-                        self.vehicle().write_tile(new_tile);
+                        self.vehicle().set_tile_raw(new_tile);
                         self.set_state(1 << track);
                         if (self.leaves.water_class)(old_tile)
                             != (self.leaves.water_class)(new_tile)
@@ -876,14 +878,14 @@ impl Game<'_> {
                         }
                     }
                     let diff = u32::from(direction)
-                        .wrapping_sub(u32::from(self.vehicle().direction()))
+                        .wrapping_sub(u32::from(self.vehicle().direction_raw()))
                         & 7;
                     if diff == 0 || diff == 1 || diff == 7 {
                         self.set_rotation(u16::from(direction));
-                        self.vehicle().write_direction(direction);
+                        self.vehicle().set_direction_raw(direction);
                     } else {
-                        self.vehicle().write_speed(0);
-                        self.vehicle().write_direction(direction);
+                        self.vehicle().set_cur_speed(0);
+                        self.vehicle().set_direction_raw(direction);
                         self.remember_rotation();
                     }
                 }
@@ -895,13 +897,13 @@ impl Game<'_> {
                     }) & 2
                         == 0
                 {
-                    self.vehicle().write_x(x as i32);
-                    self.vehicle().write_y(y as i32);
+                    self.vehicle().set_x_pos(x as i32);
+                    self.vehicle().set_y_pos(y as i32);
                     // SAFETY: Caller retains the live shell across this index update.
                     unsafe {
                         crate::vehicle::occupancy::update(self.vs(), v, false);
                     }
-                    if (u32::from(self.vehicle().status())) & 1 == 0 {
+                    if (u32::from(self.vehicle().vehstatus_raw())) & 1 == 0 {
                         (self.leaves.base_viewport)(id);
                     }
                     continue;
@@ -910,8 +912,8 @@ impl Game<'_> {
                     (self.leaves.path_pop)(id);
                 }
             }
-            self.vehicle().write_x(x as i32);
-            self.vehicle().write_y(y as i32);
+            self.vehicle().set_x_pos(x as i32);
+            self.vehicle().set_y_pos(y as i32);
             // SAFETY: Caller retains the live shell across this index update.
             unsafe {
                 crate::vehicle::occupancy::update(self.vs(), v, false);
@@ -975,11 +977,11 @@ pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
     services: *const Services,
 ) -> u8 {
     let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(vehicle));
-    let observed_running = u32::from(game.vehicle().running());
-    let observed_status = u32::from(game.vehicle().status());
+    let observed_running = u32::from(game.vehicle().running_ticks());
+    let observed_status = u32::from(game.vehicle().vehstatus_raw());
     if observed_status & 2 == 0 {
         game.vehicle()
-            .write_running(observed_running.wrapping_add(1) as u8);
+            .set_running_ticks(observed_running.wrapping_add(1) as u8);
     }
     game.controller(id, vehicle);
     u8::from(true)
@@ -1007,8 +1009,8 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
         game.vs()
             .maintain(vehicle, maintenance::economy_age_vehicle);
     };
-    let day = (u32::from(game.vehicle().day())).wrapping_add(1);
-    game.vehicle().write_day(day as u8);
+    let day = (u32::from(game.vehicle().day_counter())).wrapping_add(1);
+    game.vehicle().set_day_counter(day as u8);
     if day & 7 == 0 {
         unsafe {
             game.vs()
@@ -1021,13 +1023,13 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
     };
     game.service(id, vehicle);
     (game.leaves.check_orders)(id);
-    let ticks = u32::from(game.vehicle().running());
+    let ticks = u32::from(game.vehicle().running_ticks());
     if ticks != 0 {
         let cost = unsafe { game.vs().running_cost(vehicle) };
         let cost = cost.saturating_mul(i64::from(ticks)) / i64::from((game.leaves.cost_divisor)());
         let profit = (game.vs().profit)(vehicle).saturating_sub(cost);
         (game.vs().write_profit)(vehicle, profit);
-        game.vehicle().write_running(0);
+        game.vehicle().set_running_ticks(0);
         (game.leaves.pay_running)(id, cost);
         // SAFETY: The base table names its immutable maintenance table.
         (unsafe { &*game.vs().maintenance }.details_dirty)(vehicle);
@@ -1106,8 +1108,8 @@ pub unsafe extern "C" fn openttd_rust_ship_station_destination(
         }))
     );
     {
-        if station == (u32::from(game.vehicle().last_station())) {
-            game.vehicle().write_last_station(65535);
+        if station == (u32::from(game.vehicle().last_station_visited_raw())) {
+            game.vehicle().set_last_station_visited_raw(65535);
         }
         if unsafe {
             crate::vehicle_func::can_vehicle_use_station(
@@ -1138,17 +1140,17 @@ pub unsafe extern "C" fn openttd_rust_ship_trackdir(
         (leaves.state_owner)(id),
         Some((unsafe { &*leaves.vehicle }.ship_get)(id))
     );
-    (if (u32::from(game.vehicle().status())) & 128 != 0 {
+    (if (u32::from(game.vehicle().vehstatus_raw())) & 128 != 0 {
         255
     } else if game.state() == DEPOT {
-        let tile = game.vehicle().tile();
+        let tile = game.vehicle().tile_raw();
         [0_u32, 1, 8, 9][(game.leaves.depot_dir)(tile) as usize]
     } else if game.state() == WORMHOLE {
-        [0_u32, 1, 8, 9][((u32::from(game.vehicle().direction())) / 2) as usize]
+        [0_u32, 1, 8, 9][((u32::from(game.vehicle().direction_raw())) / 2) as usize]
     } else {
         (game.leaves.track_direction)(
             first_track(u32::from(game.state())),
-            u32::from(game.vehicle().direction()),
+            u32::from(game.vehicle().direction_raw()),
         )
     }) as u8
 }
@@ -1162,15 +1164,15 @@ pub(crate) unsafe fn ship_build(
 ) {
     let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(v));
     crate::witness::hit(crate::witness::SHIP_BUILD);
-    let tile = game.vehicle().tile();
+    let tile = game.vehicle().tile_raw();
     let x = (game.leaves.tile_x)(tile).wrapping_mul(16) + 8;
     let y = (game.leaves.tile_y)(tile).wrapping_mul(16) + 8;
     (game.leaves.build_owner)(id);
-    game.vehicle().write_x(x as i32);
-    game.vehicle().write_y(y as i32);
+    game.vehicle().set_x_pos(x as i32);
+    game.vehicle().set_y_pos(y as i32);
     (game.leaves.build_z)(id);
     let direction = (game.leaves.depot_dir)(tile) * 2 + 1;
-    game.vehicle().write_direction(direction as u8);
+    game.vehicle().set_direction_raw(direction as u8);
     game.set_rotation(direction as u16);
     (game.leaves.update_delta)(id);
     (game.leaves.build_properties)(id, engine);
@@ -1201,7 +1203,7 @@ pub(crate) unsafe fn ship_build(
             std::ptr::null_mut(),
         )
     };
-    game.vehicle().write_cargo_cap(capacity as u16);
+    game.vehicle().set_cargo_cap(capacity as u16);
     (game.leaves.cache_invalidate)(id);
     // SAFETY: The build transaction retains the new shell.
     unsafe {

@@ -78,13 +78,13 @@ pub(super) fn servicing(shell: *mut c_void, ind: *mut Industry, s: &Services) ->
     while let Some(v) = (shared.vehicle_next)(from) {
         from = unsafe { (grf.id)(v.0.as_ptr()) }.wrapping_add(1);
         // Is it worthwhile to try this vehicle?
-        if CompanyID(v.owner()) != local_company() && !matches!(result, Servicing::Nobody) {
+        if CompanyID(v.owner_raw()) != local_company() && !matches!(result, Servicing::Nobody) {
             continue;
         }
         // Check whether it accepts the right kind of cargo
         let mut c_accepts = false;
         let mut c_produces = false;
-        match VehicleType(v.vehicle_type()) {
+        match VehicleType(v.vehicle_type_raw()) {
             VehicleType::VEH_TRAIN if crate::vehicle_base::is_front_engine(true, v.subtype()) => {
                 let mut part = Some(v);
                 while let Some(u) = part {
@@ -141,7 +141,7 @@ pub(super) fn servicing(shell: *mut c_void, ind: *mut Industry, s: &Services) ->
                         .iter()
                         .any(|entry| entry.station == st)
                 } {
-                    if CompanyID(v.owner()) == local_company() {
+                    if CompanyID(v.owner_raw()) == local_company() {
                         return Servicing::Company; // Company services industry
                     }
                     result = Servicing::Other; // Competitor services industry

@@ -219,7 +219,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
             .0
             .as_ptr(),
     )
-    .write_refit_cap(0);
+    .set_refit_cap(0);
     let mail =
         crate::cargo_registry::get_cargo_type_by_label(crate::cargo_type::CargoLabel::CT_MAIL).0;
     if (c.valid_cargo)(mail) {
@@ -234,7 +234,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
                 .0
                 .as_ptr(),
         )
-        .write_cargo_cap(u16::from(engine.mail_capacity()));
+        .set_cargo_cap(u16::from(engine.mail_capacity()));
     }
     (b.clear_name)(v);
     (k.engine_common)(
@@ -310,7 +310,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
             .0
             .as_ptr(),
     )
-    .write_cargo_cap(capacity as u16);
+    .set_cargo_cap(capacity as u16);
     (r.invalidate_chain)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
             .0

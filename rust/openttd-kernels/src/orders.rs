@@ -682,11 +682,11 @@ fn suppress_implicit(v: VehicleRef) -> bool {
 fn assign_suppress_implicit(v: VehicleRef, suppress: bool) {
     let mut flags = v.ground_vehicle_flags();
     assign_bit16(&mut flags, GVF_SUPPRESS_IMPLICIT_ORDERS, suppress);
-    v.write_ground_vehicle_flags(flags);
+    v.set_ground_vehicle_flags(flags);
 }
 /// `v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed})`.
 fn stopped_or_crashed(v: VehicleRef) -> bool {
-    v.status() & (VS_STOPPED | VS_CRASHED) != 0
+    v.vehstatus_raw() & (VS_STOPPED | VS_CRASHED) != 0
 }
 
 impl Game {
@@ -862,7 +862,7 @@ impl Game {
                 return;
             }
             let order = self.order(list, next).unwrap();
-            let last = native_vehicle(v, self.0.base).last_station();
+            let last = native_vehicle(v, self.0.base).last_station_visited_raw();
             if (order.kind() == OT_GOTO_STATION || order.kind() == OT_IMPLICIT)
                 && order.destination == last
                 && matches!(order.unload(), 1 | 2)
@@ -1378,7 +1378,7 @@ impl Game {
         }
     }
     fn owner_check(self, v: *mut c_void, output: *mut c_void) -> bool {
-        let owner = (native_vehicle(v, self.0.base)).owner();
+        let owner = (native_vehicle(v, self.0.base)).owner_raw();
         self.check_owner(u64::from(owner), output)
     }
     fn command_error(self, output: *mut c_void, error: u32) -> u32 {
@@ -3175,7 +3175,7 @@ impl Control {
             && u64::from(current.destination) == g.tile_station(v)
         {
             self.delete_implicit(v);
-            native_vehicle(v, g.0.base).write_last_station(current.destination);
+            native_vehicle(v, g.0.base).set_last_station_visited_raw(current.destination);
             g.update_timetable(v, true);
             g.increment_implicit(v);
             // Deletion/timetable/index updates may mutate the list or reenter.
@@ -3888,7 +3888,7 @@ impl Game {
     fn captured(self, backup: *mut c_void, v: *mut c_void, user: u32) {
         let state = self.backup(backup);
         write_field!(state, user, user);
-        write_field!(state, tile, native_vehicle(v, self.0.base).tile());
+        write_field!(state, tile, native_vehicle(v, self.0.base).tile_raw());
         write_field!(state, group, self.vehicle_group(v) as u16);
         reenter!(openttd_rust_consist_copy(
             self.backup_consist(backup),
@@ -4094,7 +4094,7 @@ impl Control {
         let mut ob = self.g.next_backup(&mut cursor);
         while !ob.is_null() {
             let state = g.backup(ob);
-            if native_vehicle(v, g.0.base).tile() == read_field!(state, tile)
+            if native_vehicle(v, g.0.base).tile_raw() == read_field!(state, tile)
                 && read_field!(state, user) == a as u32
             {
                 self.restore_backup(ob, v);
@@ -4312,7 +4312,7 @@ impl Control {
         if review == 0 {
             return;
         }
-        let status = native_vehicle(v, g.0.base).status();
+        let status = native_vehicle(v, g.0.base).vehstatus_raw();
         // Do nothing for crashed vehicles
         if status & VS_CRASHED != 0 {
             return;
@@ -4326,7 +4326,11 @@ impl Control {
             return;
         }
         // Only check every 20 days, so that we don't flood the message log
-        if g.local_owner(v) == 0 || !(native_vehicle(v, g.0.base)).day().is_multiple_of(20) {
+        if g.local_owner(v) == 0
+            || !(native_vehicle(v, g.0.base))
+                .day_counter()
+                .is_multiple_of(20)
+        {
             return;
         }
         let mut message = 0u32;
@@ -4388,7 +4392,7 @@ impl Control {
         let g = self.g;
         let current = g.current(v);
         let record = native_vehicle(v, g.0.base);
-        let last = record.last_station();
+        let last = record.last_station_visited_raw();
         if current.kind() == OT_GOTO_STATION && current.destination == last {
             self.delete_implicit(v);
             let mut current = g.current(v);

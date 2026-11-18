@@ -81,14 +81,14 @@ pub(crate) unsafe fn drain(
     let previous = g.current_company();
     let visit = |id, leave| {
         let v = crate::fleet::record(g, unsafe { (g.vehicle)(id) });
-        let owner = v.owner();
+        let owner = v.owner_raw();
         set_current_company(t, crate::company_type::CompanyID(owner));
         if leave {
-            v.write_status(v.status() & !crate::vehicle_base::VS_STOPPED);
+            v.set_vehstatus_raw(v.vehstatus_raw() & !crate::vehicle_base::VS_STOPPED);
         }
-        let x = v.x();
-        let y = v.y();
-        let z = v.z();
+        let x = v.x_pos();
+        let y = v.y_pos();
+        let z = v.z_pos();
         let company = unsafe { &*w.company };
         let reserve = i64::from((company.renew_reserve)((company.company)(
             crate::company_type::CompanyID(owner),

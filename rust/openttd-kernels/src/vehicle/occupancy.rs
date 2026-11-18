@@ -93,7 +93,7 @@ pub(crate) unsafe fn update_position(s: &VehicleServices, v: VehicleRef, map: Ma
             s,
             v,
             links,
-            get_tile_hash_for_tile(map, TileIndex(v.tile())),
+            get_tile_hash_for_tile(map, TileIndex(v.tile_raw())),
         );
     };
 }
@@ -191,7 +191,7 @@ impl OnTile {
     /// Advance until it reaches a vehicle on the correct tile or the end.
     unsafe fn skip_false_matches(&mut self, s: &VehicleServices) {
         while !self.current.is_null()
-            && TileIndex(unsafe { handle(self.current) }.tile()) != TileIndex(self.tile)
+            && TileIndex(unsafe { handle(self.current) }.tile_raw()) != TileIndex(self.tile)
         {
             crate::witness::hit(crate::witness::OCCUPANCY_ALIAS);
             self.current = unsafe { next(s, self.current) };
@@ -314,8 +314,8 @@ impl Near {
                 self.top,
                 self.right,
                 self.bottom,
-                v.x(),
-                v.y(),
+                v.x_pos(),
+                v.y_pos(),
             ) {
                 break;
             }
@@ -400,10 +400,10 @@ pub unsafe extern "C" fn openttd_rust_occupancy_ground(
     // error message only (which may be different for different machines).
     // Such a message does not affect MP synchronisation.
     while let Some(v) = it.get() {
-        let vehicle_type = VehicleType(v.vehicle_type());
+        let vehicle_type = VehicleType(v.vehicle_type_raw());
         if vehicle_type != VehicleType::DISASTER
             && !(vehicle_type == VehicleType::AIRCRAFT && v.subtype() == AIR_SHADOW)
-            && v.z() <= z
+            && v.z_pos() <= z
         {
             c.result(out, Some(vehicle_type.0));
             return;
@@ -439,7 +439,7 @@ pub(crate) unsafe fn wormhole_blocker(
         // error message only (which may be different for different machines).
         // Such a message does not affect MP synchronisation.
         while let Some(v) = it.get() {
-            let vehicle_type = VehicleType(v.vehicle_type());
+            let vehicle_type = VehicleType(v.vehicle_type_raw());
             if [VehicleType::TRAIN, VehicleType::ROAD, VehicleType::SHIP].contains(&vehicle_type)
                 && !ptr::eq(v.0.as_ptr(), ignore)
             {
@@ -468,11 +468,11 @@ pub(crate) fn ensure_no_train_on_track_bits(
     unsafe {
         let mut it = OnTile::new(s, tile.0);
         while let Some(v) = it.get() {
-            if VehicleType(v.vehicle_type()) == VehicleType::TRAIN {
+            if VehicleType(v.vehicle_type_raw()) == VehicleType::TRAIN {
                 let track = TrackBits((s.train_handle)(v.0.as_ptr()).track());
                 if track == track_bits || crate::track_func::tracks_overlap(track.0 | track_bits.0)
                 {
-                    return Some(VehicleType(v.vehicle_type()));
+                    return Some(VehicleType(v.vehicle_type_raw()));
                 }
             }
             it.advance(s);

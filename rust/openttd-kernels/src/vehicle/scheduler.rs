@@ -137,7 +137,7 @@ unsafe fn day<const COUNTED: bool>(
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_DAYS);
         }
-        if !calendar && vehicle.day() & 0x1f == 0 && vehicle.has_engine_type() {
+        if !calendar && vehicle.day_counter() & 0x1f == 0 && vehicle.has_engine_type() {
             if COUNTED {
                 crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
             }
@@ -182,7 +182,7 @@ impl PostTick {
     /// `v->type` and `v->First()` after the survival assertion; motion types
     /// address the record fields `CallVehicleTicks` reads and writes next.
     fn after_tick(v: VehicleRef) -> Self {
-        let vehicle_type = v.vehicle_type();
+        let vehicle_type = v.vehicle_type_raw();
         let record = v.0.as_ptr();
         if VehicleType(vehicle_type).0 > AIRCRAFT.0 {
             return Self {

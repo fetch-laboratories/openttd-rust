@@ -489,7 +489,7 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
                 unsafe { &*(pf.s.station_commands)() },
                 &pf.world,
                 StationID(order.destination),
-                TileIndex(v.tile()),
+                TileIndex(v.tile_raw()),
                 if OrderType(v.current_order().kind()) == OrderType::OT_GOTO_STATION {
                     StationType::Rail
                 } else {
@@ -504,12 +504,12 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
             {
                 pf.dest.any_depot = true;
             }
-            pf.dest.dest_tile = TileIndex(v.dest_tile());
+            pf.dest.dest_tile = TileIndex(v.dest_tile_raw());
             pf.dest.dest_station_id = StationID::INVALID;
             pf.dest.dest_trackdirs = TrackdirBits(track_status_to_trackdir_bits(
                 crate::movement::get_tile_track_status(
                     pf.s,
-                    TileIndex(v.dest_tile()),
+                    TileIndex(v.dest_tile_raw()),
                     TransportType::TRANSPORT_RAIL,
                     0,
                     DiagDirection::INVALID_DIAGDIR,
@@ -1336,7 +1336,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         self.world.assert_with(|| !self.v.record.is_null());
         let v = self.v.vehicle();
         self.world
-            .assert_with(|| v.vehicle_type() == crate::vehicle_type::VEH_TRAIN);
+            .assert_with(|| v.vehicle_type_raw() == crate::vehicle_type::VEH_TRAIN);
         let cached_total_length =
             crate::raw_field::read_field!(v.ground_cache(), cached_total_length);
         self.world.assert_with(|| cached_total_length != 0);
@@ -1670,7 +1670,8 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                     Some(&mut min_speed),
                 );
                 // `GetDisplayMaxSpeed()`, which a train answers from `vcache.cached_max_speed`.
-                let max_veh_speed = i32::from(v.max_speed().min(v.current_order().max_speed()));
+                let max_veh_speed =
+                    i32::from(v.cached_max_speed().min(v.current_order().max_speed()));
                 if max_speed < max_veh_speed {
                     extra_cost = extra_cost.wrapping_add(
                         YAPF_TILE_LENGTH
@@ -2751,8 +2752,8 @@ pub(crate) fn yapf_train_check_reverse(s: &Services, v: crate::train::Handle) ->
     ));
 
     /* tiles where front and back are */
-    let mut tile = TileIndex(v.vehicle().tile());
-    let mut tile_rev = TileIndex(last_veh.vehicle().tile());
+    let mut tile = TileIndex(v.vehicle().tile_raw());
+    let mut tile_rev = TileIndex(last_veh.vehicle().tile_raw());
 
     let mut reverse_penalty = 0_i32;
 
@@ -2840,7 +2841,7 @@ pub(crate) fn yapf_train_check_reverse(s: &Services, v: crate::train::Handle) ->
     reason = "TileVirtXY takes the int x_pos and y_pos as its uint parameters"
 )]
 fn virt_tile(map: crate::map_func::Map, v: crate::train::Handle) -> TileIndex {
-    map.tile_virt_xy(v.vehicle().x() as u32, v.vehicle().y() as u32)
+    map.tile_virt_xy(v.vehicle().x_pos() as u32, v.vehicle().y_pos() as u32)
 }
 
 /// `YapfTrainFindNearestDepot`: used when user sends train to the nearest
@@ -2856,7 +2857,7 @@ pub(crate) fn yapf_train_find_nearest_depot(
     let last_veh = v.last();
 
     let origin = pbs.follow_train_reservation(v, None::<&mut crate::train::Handle>);
-    let last_tile = TileIndex(last_veh.vehicle().tile());
+    let last_tile = TileIndex(last_veh.vehicle().tile_raw());
     let td_rev = Trackdir(reverse_trackdir(
         crate::train::get_vehicle_trackdir(leaves, s, last_veh).0,
     ));

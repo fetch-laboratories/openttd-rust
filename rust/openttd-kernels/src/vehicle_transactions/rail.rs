@@ -161,10 +161,10 @@ impl Ctx {
         VehicleID(unsafe { (self.g.vehicle_id)(Self::sh(v)) })
     }
     fn engine(self, v: R) -> EngineID {
-        EngineID(Self::vref(v).engine_id())
+        EngineID(Self::vref(v).engine_type_raw())
     }
     fn tile(self, v: R) -> TileIndex {
-        TileIndex(Self::vref(v).tile())
+        TileIndex(Self::vref(v).tile_raw())
     }
     fn assert(self, condition: impl FnOnce() -> bool) {
         if self.w.assertions {
@@ -219,10 +219,10 @@ fn get_free_wagons_in_depot(x: Ctx, tile: TileIndex) -> Vec<VehicleID> {
         // SAFETY: synchronous traversal; only the caller-local list is mutated.
         let c = unsafe { &mut *ctx.cast::<Visit>() };
         let v = handle.0.as_ptr();
-        if handle.vehicle_type() != VEH_TRAIN {
+        if handle.vehicle_type_raw() != VEH_TRAIN {
             return;
         }
-        if handle.status() & crate::vehicle_base::VS_CRASHED != 0 {
+        if handle.vehstatus_raw() & crate::vehicle_base::VS_CRASHED != 0 {
             return;
         }
         if !gv::is_free_wagon(c.x.subtype(v)) {
@@ -908,12 +908,12 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
     if src.is_null() {
         return (cost.error)(out, ERROR);
     }
-    unsafe { x.t.commands.ownership(out, Ctx::vref(src).owner(), 0) };
+    unsafe { x.t.commands.ownership(out, Ctx::vref(src).owner_raw(), 0) };
     if !(cost.success)(out) {
         return;
     }
     /* Do not allow moving crashed vehicles inside the depot, it is likely to cause asserts later */
-    if Ctx::vref(src).status() & crate::vehicle_base::VS_CRASHED != 0 {
+    if Ctx::vref(src).vehstatus_raw() & crate::vehicle_base::VS_CRASHED != 0 {
         return (cost.error)(out, ERROR);
     }
     /* if nothing is selected as destination, try and find a matching vehicle to drag to. */
@@ -929,12 +929,12 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
         if dst.is_null() {
             return (cost.error)(out, ERROR);
         }
-        unsafe { x.t.commands.ownership(out, Ctx::vref(dst).owner(), 0) };
+        unsafe { x.t.commands.ownership(out, Ctx::vref(dst).owner_raw(), 0) };
         if !(cost.success)(out) {
             return;
         }
         /* Do not allow appending to crashed vehicles, too */
-        if Ctx::vref(dst).status() & crate::vehicle_base::VS_CRASHED != 0 {
+        if Ctx::vref(dst).vehstatus_raw() & crate::vehicle_base::VS_CRASHED != 0 {
             return (cost.error)(out, ERROR);
         }
     }

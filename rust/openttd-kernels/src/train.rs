@@ -97,13 +97,13 @@ impl Handle {
     }
     pub(crate) fn front(self) -> u8 {
         u8::from(crate::vehicle_base::is_front_engine(
-            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type()),
+            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type_raw()),
             self.vehicle().subtype(),
         ))
     }
     pub(crate) fn articulated(self) -> u8 {
         u8::from(crate::vehicle_base::is_articulated_part(
-            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type()),
+            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type_raw()),
             self.vehicle().subtype(),
         ))
     }
@@ -563,14 +563,14 @@ impl<'a> Game<'a> {
     fn visit_tile<F: FnMut(Handle) -> bool>(&self, tile: u32, mut visitor: F) -> bool {
         let vs = self.vs();
         vs.any_on_tile(tile, |v| {
-            v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
+            v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
                 && visitor((vs.train_handle)(v.0.as_ptr()))
         })
     }
     fn visit_near<F: FnMut(Handle) -> bool>(&self, x: i32, y: i32, mut visitor: F) -> bool {
         let vs = self.vs();
         vs.any_near(x, y, 7, |v| {
-            v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
+            v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
                 && visitor((vs.train_handle)(v.0.as_ptr()))
         })
     }
@@ -579,7 +579,7 @@ impl<'a> Game<'a> {
         crate::signal::acquire_context(self.leaves.signal_context)
     }
     fn signal_segment(&self, id: Handle, tile: u32, side: u8) -> u64 {
-        let owner = (id).vehicle().owner();
+        let owner = (id).vehicle().owner_raw();
         crate::signal::count_context_owner_read();
         u64::from(self.signal_context().segment(tile, side, owner))
     }
@@ -595,7 +595,7 @@ impl Game<'_> {
     }
     fn consist_changed(&self, id: Handle, allowed: u8) {
         let mut max_speed = u16::MAX;
-        let head_engine: u16 = id.vehicle().engine_id();
+        let head_engine: u16 = id.vehicle().engine_type_raw();
         let head_front: u8 = id.front();
         let mut first_engine = if head_front != 0 {
             head_engine
@@ -608,7 +608,7 @@ impl Game<'_> {
         let mut min_curve_mod = i16::MAX;
         let mut u = id;
         while u != Handle::NONE {
-            let part_engine: u16 = u.vehicle().engine_id();
+            let part_engine: u16 = u.vehicle().engine_type_raw();
             let part_engine_part: u8 =
                 u8::from(crate::ground_vehicle::is_engine(u.vehicle().subtype()));
             write_field!(
@@ -662,7 +662,7 @@ impl Game<'_> {
             if (u).articulated() == 0 {
                 if u64::from(
                     self.engine(u)
-                        .ground_power(crate::vehicle::VehicleType(u.vehicle().vehicle_type())),
+                        .ground_power(crate::vehicle::VehicleType(u.vehicle().vehicle_type_raw())),
                 ) > 0
                 {
                     id.set_compatible_railtypes(
@@ -707,7 +707,7 @@ impl Game<'_> {
                     refit_cap,
                     (u64::from(cap.min(read_field!((u).record, refit_cap)))) as u16
                 );
-                (u).vehicle().write_cargo_cap((u64::from(cap)) as u16);
+                (u).vehicle().set_cargo_cap((u64::from(cap)) as u16);
             } else if cap != part_cargo_cap {
                 (self.leaves.capacity_error)(u);
             }
@@ -771,7 +771,7 @@ impl Game<'_> {
             u = (u).next();
         }
         (id).vehicle()
-            .write_max_speed((u64::from(max_speed)) as u16);
+            .set_cached_max_speed((u64::from(max_speed)) as u16);
         id.set_cached_tilt(u64::from(tilt));
         id.set_cached_curve_speed_mod(u64::from(min_curve_mod as u16));
         id.set_cached_max_curve_speed(u64::from(self.get_curve_speed_limit(id)));
@@ -795,11 +795,11 @@ impl Game<'_> {
         let mut u = id;
         loop {
             let part_next: Handle = u.next();
-            let this_dir = Direction(u.vehicle().direction());
+            let this_dir = Direction(u.vehicle().direction_raw());
             if part_next == Handle::NONE {
                 break;
             }
-            let next_dir = Direction((part_next).vehicle().direction());
+            let next_dir = Direction((part_next).vehicle().direction_raw());
             let dirdiff = DirDiff(this_dir.0.wrapping_sub(next_dir.0) & 7);
             if dirdiff != DirDiff::DIRDIFF_SAME {
                 if dirdiff == DirDiff::DIRDIFF_45LEFT {
@@ -870,9 +870,10 @@ impl Game<'_> {
         // SAFETY: The process-lifetime tables resolve the original Station::Get once.
         let stations = unsafe { &*(*((self.services.station_catchment)())).station };
         let st = (stations.station)(station_id.0);
-        let dir = crate::direction_func::dir_to_diag_dir_raw((id).vehicle().direction(), |ok| {
-            world.check(ok);
-        });
+        let dir =
+            crate::direction_func::dir_to_diag_dir_raw((id).vehicle().direction_raw(), |ok| {
+                world.check(ok);
+            });
         let station_ahead =
             (crate::station::get_platform_length_in_direction_raw(&world, tile.0, dir) as i32)
                 .wrapping_mul(TILE_SIZE as i32);
@@ -909,10 +910,10 @@ impl Game<'_> {
     }
     /// Calculates the maximum speed of the vehicle under its current conditions.
     fn get_current_max_speed(&self, id: Handle) -> i32 {
-        let v_tile = TileIndex(id.vehicle().tile());
+        let v_tile = TileIndex(id.vehicle().tile_raw());
         let v_max_track_speed: u16 =
             read_field!(id.vehicle().ground_cache(), cached_max_track_speed);
-        let v_speed: u16 = id.vehicle().speed();
+        let v_speed: u16 = id.vehicle().cur_speed();
         let model = self.acc_model();
         let mut max_speed = if model == u64::from(AccelerationModel::AM_ORIGINAL.0) {
             i32::from(v_max_track_speed)
@@ -951,10 +952,11 @@ impl Game<'_> {
             }
             // Vehicle is on the middle part of a bridge.
             if u.get_track() == u64::from(TrackBits::TRACK_BIT_WORMHOLE.0)
-                && VehStates((u).vehicle().status()).0 & VehStates::from_element(VehState::Hidden).0
+                && VehStates((u).vehicle().vehstatus_raw()).0
+                    & VehStates::from_element(VehState::Hidden).0
                     == 0
             {
-                let tile = (u).vehicle().tile();
+                let tile = (u).vehicle().tile_raw();
                 max_speed = max_speed.min(i32::from((self.services.bridge_speed)(tile)));
             }
             u = (u).next();
@@ -966,7 +968,7 @@ impl Game<'_> {
         )))
     }
     fn update_speed(&self, id: Handle) -> i32 {
-        let v_status: u8 = id.vehicle().status();
+        let v_status: u8 = id.vehicle().vehstatus_raw();
         let v_acceleration: u8 = id.vehicle().acceleration();
         let braking = v_status & 2 != 0 || id.flag(0) || id.flag(8);
         let max = self.get_current_max_speed(id);
@@ -1000,9 +1002,9 @@ impl Game<'_> {
         update_acceleration(id);
     }
     fn trackdir(&self, id: Handle) -> u8 {
-        let v_tile: u32 = id.vehicle().tile();
-        let v_direction: u8 = id.vehicle().direction();
-        let v_status: u8 = id.vehicle().status();
+        let v_tile: u32 = id.vehicle().tile_raw();
+        let v_direction: u8 = id.vehicle().direction_raw();
+        let v_status: u8 = id.vehicle().vehstatus_raw();
         if v_status & 128 != 0 {
             return u8::MAX;
         }
@@ -1060,26 +1062,26 @@ const BREAKDOWN_SPEEDS: [u16; 16] = [
 ];
 impl Game<'_> {
     fn write_status(id: Handle, mask: u8, value: bool) {
-        let old = (id).vehicle().status();
+        let old = (id).vehicle().vehstatus_raw();
         (id).vehicle()
-            .write_status((u64::from(if value { old | mask } else { old & !mask })) as u8);
+            .set_vehstatus_raw((u64::from(if value { old | mask } else { old & !mask })) as u8);
     }
 
     fn exitdir(&self, id: Handle) -> u8 {
-        (self.leaves.veh_exit_dir)(id, (id).vehicle().direction(), id.track()) as u8
+        (self.leaves.veh_exit_dir)(id, (id).vehicle().direction_raw(), id.track()) as u8
     }
     fn compatible(&self, id: Handle, tile: u32) -> bool {
         crate::tile_map::is_tile_owner(
             self.services,
             TileIndex(tile),
-            crate::company_type::CompanyID((id).vehicle().owner()),
+            crate::company_type::CompanyID((id).vehicle().owner_raw()),
         ) && ((id).front() == 0
             || id.get_compatible_railtypes() & (1 << (self.leaves.rail_type)(Handle::NONE, tile))
                 != 0)
     }
     fn can_leave(&self, id: Handle) -> bool {
-        let v_tile: u32 = id.vehicle().tile();
-        let v_direction: u8 = id.vehicle().direction();
+        let v_tile: u32 = id.vehicle().tile_raw();
+        let v_direction: u8 = id.vehicle().direction_raw();
         let track = id.track();
         if track == WORMHOLE || track == DEPOT {
             return false;
@@ -1103,7 +1105,7 @@ impl Game<'_> {
         if !self.can_leave(id) {
             return INVALID_TILE;
         }
-        let base = (id).vehicle().tile();
+        let base = (id).vehicle().tile_raw();
         let dir = self.exitdir(id);
         let tile = base.wrapping_add((self.leaves.tile_offset_diag)(id, dir) as u32);
         if (self.leaves.is_crossing)(Handle::NONE, tile) == 0
@@ -1126,7 +1128,7 @@ impl Game<'_> {
         for d in [dir, dir ^ 2] {
             let from = tile.wrapping_add((self.leaves.tile_offset_diag)(Handle::NONE, d) as u32);
             if self.visit_tile(from, |id| {
-                let v_status: u8 = id.vehicle().status();
+                let v_status: u8 = id.vehicle().vehstatus_raw();
                 let v_front: u8 = id.front();
                 if v_status & 128 == 0 && v_front != 0 && self.approaching_crossing(id) == tile {
                     return true;
@@ -1283,17 +1285,17 @@ impl Game<'_> {
         if !id.flag(8) {
             id.set_flag(8, true);
             id.set_wait_counter(0);
-            (id).vehicle().write_speed(0_u16);
-            (id).vehicle().write_subspeed(0_u8);
+            (id).vehicle().set_cur_speed(0_u16);
+            (id).vehicle().set_subspeed(0_u8);
             crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
             (self.leaves.start_stop_dirty)(id);
         }
     }
     fn whole_in_depot(id: Handle) -> bool {
-        let tile = (id).vehicle().tile();
+        let tile = (id).vehicle().tile_raw();
         let mut u = id;
         while u != Handle::NONE {
-            if u.track() != DEPOT || (u).vehicle().tile() != tile {
+            if u.track() != DEPOT || (u).vehicle().tile_raw() != tile {
                 return false;
             }
             u = (u).next();
@@ -1320,11 +1322,11 @@ impl Game<'_> {
         }
         if id.track() != DEPOT {
             (id).vehicle()
-                .write_direction((u64::from((id).vehicle().direction() ^ 4)) as u8);
+                .set_direction_raw((u64::from((id).vehicle().direction_raw() ^ 4)) as u8);
         }
-        let v_tile: u32 = id.vehicle().tile();
-        let v_x: i32 = id.vehicle().x();
-        let v_y: i32 = id.vehicle().y();
+        let v_tile: u32 = id.vehicle().tile_raw();
+        let v_x: i32 = id.vehicle().x_pos();
+        let v_y: i32 = id.vehicle().y_pos();
         if id.track() != WORMHOLE {
             self.movement_enter(id, v_tile, (v_x as u64) as i32, (v_y as u64) as i32);
         } else {
@@ -1336,7 +1338,7 @@ impl Game<'_> {
             ) {
                 self.movement_enter(id, vt, (v_x as u64) as i32, (v_y as u64) as i32);
                 if id.track() != WORMHOLE
-                    && (self.leaves.is_bridge)(Handle::NONE, (id).vehicle().tile()) != 0
+                    && (self.leaves.is_bridge)(Handle::NONE, (id).vehicle().tile_raw()) != 0
                 {
                     self.update_occupancy(id);
                     crate::ground_vehicle::update_inclination(
@@ -1398,35 +1400,35 @@ impl Game<'_> {
             b = (b).next();
         }
         if a != b {
-            let va_tile: u32 = a.vehicle().tile();
-            let va_x: i32 = a.vehicle().x();
-            let va_y: i32 = a.vehicle().y();
-            let va_z: i32 = a.vehicle().z();
-            let va_direction: u8 = a.vehicle().direction();
-            let va_status: u8 = a.vehicle().status();
-            let vb_tile: u32 = b.vehicle().tile();
-            let vb_x: i32 = b.vehicle().x();
-            let vb_y: i32 = b.vehicle().y();
-            let vb_z: i32 = b.vehicle().z();
-            let vb_direction: u8 = b.vehicle().direction();
-            let vb_status: u8 = b.vehicle().status();
+            let va_tile: u32 = a.vehicle().tile_raw();
+            let va_x: i32 = a.vehicle().x_pos();
+            let va_y: i32 = a.vehicle().y_pos();
+            let va_z: i32 = a.vehicle().z_pos();
+            let va_direction: u8 = a.vehicle().direction_raw();
+            let va_status: u8 = a.vehicle().vehstatus_raw();
+            let vb_tile: u32 = b.vehicle().tile_raw();
+            let vb_x: i32 = b.vehicle().x_pos();
+            let vb_y: i32 = b.vehicle().y_pos();
+            let vb_z: i32 = b.vehicle().z_pos();
+            let vb_direction: u8 = b.vehicle().direction_raw();
+            let vb_status: u8 = b.vehicle().vehstatus_raw();
             Self::write_status(b, 1, va_status & 1 != 0);
             Self::write_status(a, 1, vb_status & 1 != 0);
             let ta = a.track();
             a.set_track(u64::from(b.track()));
             b.set_track(u64::from(ta));
             (a).vehicle()
-                .write_direction((u64::from(vb_direction)) as u8);
+                .set_direction_raw((u64::from(vb_direction)) as u8);
             (b).vehicle()
-                .write_direction((u64::from(va_direction)) as u8);
-            (a).vehicle().write_x((vb_x as u64) as i32);
-            (b).vehicle().write_x((va_x as u64) as i32);
-            (a).vehicle().write_y((vb_y as u64) as i32);
-            (b).vehicle().write_y((va_y as u64) as i32);
-            (a).vehicle().write_tile((u64::from(vb_tile)) as u32);
-            (b).vehicle().write_tile((u64::from(va_tile)) as u32);
-            (a).vehicle().write_z((vb_z as u64) as i32);
-            (b).vehicle().write_z((va_z as u64) as i32);
+                .set_direction_raw((u64::from(va_direction)) as u8);
+            (a).vehicle().set_x_pos((vb_x as u64) as i32);
+            (b).vehicle().set_x_pos((va_x as u64) as i32);
+            (a).vehicle().set_y_pos((vb_y as u64) as i32);
+            (b).vehicle().set_y_pos((va_y as u64) as i32);
+            (a).vehicle().set_tile_raw((u64::from(vb_tile)) as u32);
+            (b).vehicle().set_tile_raw((u64::from(va_tile)) as u32);
+            (a).vehicle().set_z_pos((vb_z as u64) as i32);
+            (b).vehicle().set_z_pos((va_z as u64) as i32);
             Self::swap_ground_flags(a, b);
             self.after_swap(a);
             self.after_swap(b);
@@ -1463,7 +1465,7 @@ impl Game<'_> {
             if d <= 0 {
                 Self::write_status(leave, 1, false);
                 leave.set_track(
-                    1 << (self.leaves.depot_track)(Handle::NONE, (leave).vehicle().tile()),
+                    1 << (self.leaves.depot_track)(Handle::NONE, (leave).vehicle().tile_raw()),
                 );
                 for _ in d..=0 {
                     self.controller(leave, Handle::NONE, true);
@@ -1499,7 +1501,7 @@ impl Game<'_> {
     }
     fn reverse(&self, id: Handle) {
         crate::witness::hit(crate::witness::TRAIN_REVERSAL);
-        if (self.leaves.is_depot)(Handle::NONE, (id).vehicle().tile()) != 0 {
+        if (self.leaves.is_depot)(Handle::NONE, (id).vehicle().tile_raw()) != 0 {
             if Self::whole_in_depot(id) {
                 return;
             }
@@ -1521,7 +1523,7 @@ impl Game<'_> {
             }
         }
         self.advance_after_swap(id);
-        if (self.leaves.is_depot)(Handle::NONE, (id).vehicle().tile()) != 0 {
+        if (self.leaves.is_depot)(Handle::NONE, (id).vehicle().tile_raw()) != 0 {
             (self.leaves.depot_dirty)(id);
         }
         id.set_flag(7, !id.flag(7));
@@ -1546,7 +1548,7 @@ impl Game<'_> {
             id.set_flag(8, false);
             return;
         }
-        let tile = (id).vehicle().tile();
+        let tile = (id).vehicle().tile_raw();
         let mut dir = self.exitdir(id);
         if (self.leaves.is_depot)(Handle::NONE, tile) != 0
             || is_tile_type(
@@ -1594,11 +1596,11 @@ impl Game<'_> {
         }
     }
     fn approaching_end(&self, id: Handle, signal: bool, reverse: bool) -> bool {
-        let v_x: i32 = id.vehicle().x();
-        let v_y: i32 = id.vehicle().y();
+        let v_x: i32 = id.vehicle().x_pos();
+        let v_y: i32 = id.vehicle().y_pos();
         let v_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));
-        let v_speed: u16 = id.vehicle().speed();
-        let v_direction: u8 = id.vehicle().direction();
+        let v_speed: u16 = id.vehicle().cur_speed();
+        let v_direction: u8 = id.vehicle().direction_raw();
         let mut x = v_x as u32 & 15;
         let y = v_y as u32 & 15;
         match v_direction {
@@ -1616,7 +1618,7 @@ impl Game<'_> {
                 u32::from(v_length + 1) / 2 * if v_direction & 1 != 0 { 1 } else { 2 },
             ) >= 16
         {
-            (id).vehicle().write_speed(0_u16);
+            (id).vehicle().set_cur_speed(0_u16);
             if reverse {
                 self.reverse(id);
             }
@@ -1625,20 +1627,20 @@ impl Game<'_> {
         Self::write_status(id, 16, true);
         let speed = BREAKDOWN_SPEEDS[(x & 15) as usize];
         if speed < v_speed {
-            (id).vehicle().write_speed((u64::from(speed)) as u16);
+            (id).vehicle().set_cur_speed((u64::from(speed)) as u16);
         }
         true
     }
     fn line_ends(&self, id: Handle, reverse: bool) -> bool {
-        let v_tile: u32 = id.vehicle().tile();
-        let v_speed: u16 = id.vehicle().speed();
+        let v_tile: u32 = id.vehicle().tile_raw();
+        let v_speed: u16 = id.vehicle().cur_speed();
         let v_breakdown: u8 = read_field!(id.record, breakdown_ctr);
         let t = v_breakdown;
         if t > 1 {
             Self::write_status(id, 16, true);
             let speed = BREAKDOWN_SPEEDS[usize::from((!t >> 4) & 15)];
             if speed < v_speed {
-                (id).vehicle().write_speed((u64::from(speed)) as u16);
+                (id).vehicle().set_cur_speed((u64::from(speed)) as u16);
             }
         } else {
             Self::write_status(id, 16, false);
@@ -1684,7 +1686,7 @@ const INITIAL_SUBCOORD: [[[u8; 3]; 4]; 6] = [
 impl Game<'_> {
     fn enter_station(&self, id: Handle, station: u16) {
         (id).vehicle()
-            .write_last_station((u64::from(station)) as u16);
+            .set_last_station_visited_raw((u64::from(station)) as u16);
         if (self.services.station_had_vehicle_of_type)(station) & HVOT_TRAIN.0 == 0 {
             (self.services.station_add_vehicle_of_type)(station, HVOT_TRAIN.0);
             (self.leaves.arrival_news)(id, station);
@@ -1694,26 +1696,27 @@ impl Game<'_> {
         crate::vehicle::visits::begin_loading(id.vehicle(), self.vs().visits());
         crate::animated_tile::rail_event(
             crate::animated_tile::station_base(station),
-            (id.vehicle()).tile(),
+            (id.vehicle()).tile_raw(),
             crate::station_type::SAT_VEHICLE_ARRIVES,
             crate::station_type::SRT_VEHICLE_ARRIVES,
         );
     }
     fn speed_z(&self, id: Handle, old: i32) {
-        let v_z: i32 = id.vehicle().z();
+        let v_z: i32 = id.vehicle().z_pos();
         let v_max_track_speed: u16 =
             read_field!(id.vehicle().ground_cache(), cached_max_track_speed);
-        let v_speed: u16 = id.vehicle().speed();
+        let v_speed: u16 = id.vehicle().cur_speed();
         if old == v_z || self.acc_model() != 0 {
             return;
         }
         if old < v_z {
-            (id).vehicle()
-                .write_speed((u64::from(v_speed - ((u32::from(v_speed) * 64) >> 8) as u16)) as u16);
+            (id).vehicle().set_cur_speed(
+                (u64::from(v_speed - ((u32::from(v_speed) * 64) >> 8) as u16)) as u16,
+            );
         } else {
             let speed = v_speed.wrapping_add(2);
             if speed <= v_max_track_speed {
-                (id).vehicle().write_speed((u64::from(speed)) as u16);
+                (id).vehicle().set_cur_speed((u64::from(speed)) as u16);
             }
         }
     }
@@ -1747,10 +1750,10 @@ impl Game<'_> {
     }
     // Result: 0 moved, 1 no move/early stop, 2 invalid rail, 3 requested reversal.
     fn move_vehicle(&self, id: Handle, prev: Handle, reverse: bool) -> (u8, bool) {
-        let v_tile: u32 = id.vehicle().tile();
-        let v_x: i32 = id.vehicle().x();
-        let v_y: i32 = id.vehicle().y();
-        let v_direction: u8 = id.vehicle().direction();
+        let v_tile: u32 = id.vehicle().tile_raw();
+        let v_x: i32 = id.vehicle().x_pos();
+        let v_y: i32 = id.vehicle().y_pos();
+        let v_direction: u8 = id.vehicle().direction_raw();
         let v_front: u8 = id.front();
         let v_articulated: u8 = id.articulated();
         if v_articulated != 0 {
@@ -1837,9 +1840,9 @@ impl Game<'_> {
                             return (1, false);
                         }
                         if (self.leaves.has_signal_td)(id, new, td ^ 8) == 0 {
-                            (id).vehicle().write_speed(0_u16);
-                            (id).vehicle().write_subspeed(0_u8);
-                            (id).vehicle().write_progress(255_u8);
+                            (id).vehicle().set_cur_speed(0_u16);
+                            (id).vehicle().set_subspeed(0_u8);
+                            (id).vehicle().set_progress(255_u8);
                             crate::witness::hit(crate::witness::TRAIN_RED_ONEWAY);
                             if self.reverse_at_signals() == 0
                                 || u64::from(id.wait_inc())
@@ -1848,9 +1851,9 @@ impl Game<'_> {
                                 return (1, false);
                             }
                         } else if (self.leaves.has_signal_td)(id, new, td) != 0 {
-                            (id).vehicle().write_speed(0_u16);
-                            (id).vehicle().write_subspeed(0_u8);
-                            (id).vehicle().write_progress(255_u8);
+                            (id).vehicle().set_cur_speed(0_u16);
+                            (id).vehicle().set_subspeed(0_u8);
+                            (id).vehicle().set_progress(255_u8);
                             crate::witness::hit(crate::witness::TRAIN_RED_TWOWAY);
                             if self.reverse_at_signals() == 0
                                 || u64::from(id.wait_inc())
@@ -1868,8 +1871,8 @@ impl Game<'_> {
                                     .0;
                                 let mut waiting = false;
                                 self.visit_tile(tile, |u| {
-                                    let other_speed: u16 = u.vehicle().speed();
-                                    let other_status: u8 = u.vehicle().status();
+                                    let other_speed: u16 = u.vehicle().cur_speed();
+                                    let other_status: u8 = u.vehicle().vehstatus_raw();
                                     let other_front: u8 = u.front();
                                     if other_status & 128 == 0
                                         && other_front != 0
@@ -1890,7 +1893,7 @@ impl Game<'_> {
                         }
                         if self.reverse_at_signals() == 0
                             && (self.leaves.oneway_blocking)(id, new, td) == 0
-                            && self.signal_segment(id, (id).vehicle().tile(), entered)
+                            && self.signal_segment(id, (id).vehicle().tile_raw(), entered)
                                 == (self.leaves.sigseg_pbs)(id)
                         {
                             id.set_wait_counter(0);
@@ -1904,7 +1907,7 @@ impl Game<'_> {
                         false,
                     );
                 } else {
-                    let before = (prev).vehicle().tile();
+                    let before = (prev).vehicle().tile_raw();
                     if before == new {
                         chosen = if prev.track() == WORMHOLE {
                             bits
@@ -1940,11 +1943,11 @@ impl Game<'_> {
                     if (id).next() == Handle::NONE {
                         (self.leaves.clear_reservation)(
                             id,
-                            (id).vehicle().tile(),
+                            (id).vehicle().tile_raw(),
                             self.trackdir(id),
                         );
                     }
-                    (id).vehicle().write_tile((u64::from(new)) as u32);
+                    (id).vehicle().set_tile_raw((u64::from(new)) as u32);
                     if (self.leaves.tile_rail_type)(Handle::NONE, new)
                         != (self.leaves.tile_rail_type)(Handle::NONE, old)
                     {
@@ -1953,9 +1956,9 @@ impl Game<'_> {
                     id.set_track(u64::from(chosen));
                 }
                 signals = true;
-                if dir != (id).vehicle().direction() {
+                if dir != (id).vehicle().direction_raw() {
                     if prev == Handle::NONE && self.acc_model() == 0 {
-                        let diff = (id).vehicle().direction().wrapping_sub(dir) & 7;
+                        let diff = (id).vehicle().direction_raw().wrapping_sub(dir) & 7;
                         let small = if <crate::ground_vehicle::Train as crate::ground_vehicle::GroundVehicleType>::get_acceleration_type(
                             self.leaves.physics,
                             &crate::map_func::World::new(self.services),
@@ -1967,13 +1970,13 @@ impl Game<'_> {
                             64
                         };
                         let fraction = if diff == 1 || diff == 7 { small } else { 128 };
-                        let speed = (id).vehicle().speed();
-                        (id).vehicle().write_speed(
+                        let speed = (id).vehicle().cur_speed();
+                        (id).vehicle().set_cur_speed(
                             (u64::from(speed - ((u32::from(speed) * fraction) >> 8) as u16)) as u16,
                         );
                     }
                     changed = true;
-                    (id).vehicle().write_direction((u64::from(dir)) as u8);
+                    (id).vehicle().set_direction_raw((u64::from(dir)) as u8);
                 }
                 if (id).front() != 0 {
                     id.set_wait_counter(0);
@@ -2007,18 +2010,18 @@ impl Game<'_> {
                     old = (self.leaves.other_end)(Handle::NONE, old) as u32;
                 }
             } else {
-                (id).vehicle().write_x((x as u64) as i32);
-                (id).vehicle().write_y((y as u64) as i32);
+                (id).vehicle().set_x_pos((x as u64) as i32);
+                (id).vehicle().set_y_pos((y as u64) as i32);
                 self.update_occupancy(id);
-                if (id).vehicle().status() & 1 == 0 {
+                if (id).vehicle().vehstatus_raw() & 1 == 0 {
                     (self.leaves.base_viewport)(id, 1);
                 }
                 return (0, false);
             }
         }
         (self.vs().update_delta)(id.vehicle());
-        (id).vehicle().write_x((x as u64) as i32);
-        (id).vehicle().write_y((y as u64) as i32);
+        (id).vehicle().set_x_pos((x as u64) as i32);
+        (id).vehicle().set_y_pos((y as u64) as i32);
         self.update_occupancy(id);
         let old_z = crate::ground_vehicle::update_inclination(
             self.leaves.physics,
@@ -2048,7 +2051,7 @@ impl Game<'_> {
             }
         }
         if (id).front() != 0
-            && u64::from((id).vehicle().tick()) % u64::from((self.leaves.backoff)()) == 0
+            && u64::from((id).vehicle().tick_counter()) % u64::from((self.leaves.backoff)()) == 0
         {
             (self.leaves.check_next)(id);
         }
@@ -2070,8 +2073,8 @@ impl Game<'_> {
             if outcome >= 2 {
                 if reverse {
                     id.set_wait_counter(0);
-                    (id).vehicle().write_speed(0_u16);
-                    (id).vehicle().write_subspeed(0_u8);
+                    (id).vehicle().set_cur_speed(0_u16);
+                    (id).vehicle().set_subspeed(0_u8);
                     self.reverse(id);
                 }
                 return false;
@@ -2102,7 +2105,7 @@ impl Game<'_> {
             }
             let mut u = id;
             while u != Handle::NONE {
-                let tile = (u).vehicle().tile();
+                let tile = (u).vehicle().tile_raw();
                 (self.leaves.clear_reservation)(u, tile, self.trackdir(u));
                 if is_tile_type(
                     self.services,
@@ -2133,7 +2136,7 @@ impl Game<'_> {
     }
     fn crashed(&self, id: Handle) -> u32 {
         let mut victims = 0;
-        if (id).vehicle().status() & 128 == 0 {
+        if (id).vehicle().vehstatus_raw() & 128 == 0 {
             victims = self.crash(id, false);
             (self.leaves.crash_event)(id, victims);
         }
@@ -2145,19 +2148,19 @@ impl Game<'_> {
             return 0;
         }
         let v_first: Handle = other.first();
-        let v_x: i32 = other.vehicle().x();
-        let v_y: i32 = other.vehicle().y();
-        let v_z: i32 = other.vehicle().z();
+        let v_x: i32 = other.vehicle().x_pos();
+        let v_y: i32 = other.vehicle().y_pos();
+        let v_z: i32 = other.vehicle().z_pos();
         let v_length: u16 = u16::from(read_field!(
             other.vehicle().ground_cache(),
             cached_veh_length
         ));
-        let v_owner: u8 = other.vehicle().owner();
-        let t_x: i32 = id.vehicle().x();
-        let t_y: i32 = id.vehicle().y();
-        let t_z: i32 = id.vehicle().z();
+        let v_owner: u8 = other.vehicle().owner_raw();
+        let t_x: i32 = id.vehicle().x_pos();
+        let t_y: i32 = id.vehicle().y_pos();
+        let t_z: i32 = id.vehicle().z_pos();
         let t_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));
-        let t_owner: u8 = id.vehicle().owner();
+        let t_owner: u8 = id.vehicle().owner_raw();
         if v_owner != t_owner || v_first == id {
             return 0;
         }
@@ -2179,9 +2182,9 @@ impl Game<'_> {
         if id.track() == DEPOT {
             return false;
         }
-        let v_tile: u32 = id.vehicle().tile();
-        let v_x: i32 = id.vehicle().x();
-        let v_y: i32 = id.vehicle().y();
+        let v_tile: u32 = id.vehicle().tile_raw();
+        let v_x: i32 = id.vehicle().x_pos();
+        let v_y: i32 = id.vehicle().y_pos();
         let mut victims = 0_u32;
         if id.track() == WORMHOLE {
             self.visit_tile(v_tile, |u| {
@@ -2208,8 +2211,8 @@ impl Game<'_> {
         (self.leaves.crash_news)(id, victims);
         crate::station::spatial::modify_rating_around(
             self.services,
-            (id.vehicle()).tile(),
-            (id.vehicle()).owner(),
+            (id.vehicle()).tile_raw(),
+            (id.vehicle()).owner_raw(),
             -160,
             30,
         );
@@ -2252,14 +2255,15 @@ impl Game<'_> {
         if first != id {
             self.consist_changed(first, 3);
             if first.track() == DEPOT {
-                (self.leaves.depot_window)(first, (first).vehicle().tile());
+                (self.leaves.depot_window)(first, (first).vehicle().tile_raw());
             }
-            (id).vehicle()
-                .write_last_station((u64::from((first).vehicle().last_station())) as u16);
+            (id).vehicle().set_last_station_visited_raw(
+                (u64::from((first).vehicle().last_station_visited_raw())) as u16,
+            );
         }
         let mut tracks = id.track();
-        let v_tile: u32 = id.vehicle().tile();
-        let v_owner: u8 = id.vehicle().owner();
+        let v_tile: u32 = id.vehicle().tile_raw();
+        let v_owner: u8 = id.vehicle().owner_raw();
         let tile = v_tile;
         let owner = v_owner;
         (self.leaves.delete_vehicle)(id);
@@ -2271,13 +2275,14 @@ impl Game<'_> {
             crate::pbs::Pbs::acquire(self.services).unreserve_rail_track_raw(tile, track);
             let mut remaining = 0_u8;
             self.visit_tile(tile, |u| {
-                if (u).vehicle().status() & 128 == 0 {
+                if (u).vehicle().vehstatus_raw() & 128 == 0 {
                     return false;
                 }
                 let t = u.track();
                 if t == WORMHOLE {
-                    remaining |=
-                        1 << (u64::from(self.world().tunnel_bridge_dir((u).vehicle().tile())) & 1);
+                    remaining |= 1
+                        << (u64::from(self.world().tunnel_bridge_dir((u).vehicle().tile_raw()))
+                            & 1);
                 } else if t != DEPOT {
                     remaining |= t;
                 }
@@ -2320,10 +2325,10 @@ impl Game<'_> {
     }
     fn change_dir_randomly(&self, mut id: Handle) {
         loop {
-            if (id).vehicle().status() & 1 == 0 {
+            if (id).vehicle().vehstatus_raw() & 1 == 0 {
                 let delta = [7, 0, 0, 1][(self.services.random() & 3) as usize];
-                (id).vehicle().write_direction(
-                    (u64::from((id).vehicle().direction().wrapping_add(delta) & 7)) as u8,
+                (id).vehicle().set_direction_raw(
+                    (u64::from((id).vehicle().direction_raw().wrapping_add(delta) & 7)) as u8,
                 );
                 if id.track() != WORMHOLE {
                     self.update_occupancy(id);
@@ -2347,7 +2352,7 @@ impl Game<'_> {
     fn handle_crashed(&self, id: Handle) -> bool {
         let state = (id.get_crash_anim_pos() as u16).wrapping_add(1);
         id.set_crash_anim_pos(u64::from(state));
-        if state == 4 && (id).vehicle().status() & 1 == 0 {
+        if state == 4 && (id).vehicle().vehstatus_raw() & 1 == 0 {
             crate::effect::openttd_rust_effect_create_rel(
                 id.vehicle().0.as_ptr(),
                 4,
@@ -2381,7 +2386,7 @@ impl Game<'_> {
                 }
             }
         }
-        let tick = (id).vehicle().tick();
+        let tick = (id).vehicle().tick_counter();
         if state <= 240 && tick & 3 == 0 {
             self.change_dir_randomly(id);
         }
@@ -2396,7 +2401,7 @@ impl Game<'_> {
         if !Self::whole_in_depot(id) {
             return false;
         }
-        let v_tile: u32 = id.vehicle().tile();
+        let v_tile: u32 = id.vehicle().tile_raw();
         let v_power: u32 = read_field!(id.vehicle().ground_cache(), cached_power);
         if v_power == 0 {
             Self::write_status(id, 2, true);
@@ -2426,9 +2431,9 @@ impl Game<'_> {
             return true;
         }
         if (id).vehicle().current_order().kind() == OT_GOTO_DEPOT
-            && (id).vehicle().tile() == (id).vehicle().dest_tile()
+            && (id).vehicle().tile_raw() == (id).vehicle().dest_tile_raw()
         {
-            if (self.leaves.has_depot_res)(Handle::NONE, (id).vehicle().tile()) == 0 {
+            if (self.leaves.has_depot_res)(Handle::NONE, (id).vehicle().tile_raw()) == 0 {
                 crate::witness::hit(crate::witness::TRAIN_DEPOT_REENTRY);
                 self.vs().enter_depot(id.vehicle());
             }
@@ -2442,25 +2447,25 @@ impl Game<'_> {
             self.mark_stuck(id);
             return true;
         }
-        (self.leaves.set_depot_res)(id, (id).vehicle().tile(), 1);
+        (self.leaves.set_depot_res)(id, (id).vehicle().tile_raw(), 1);
         if (self.leaves.show_reservation)(id) != 0 {
-            (self.services.mark_dirty)((id).vehicle().tile());
+            (self.services.mark_dirty)((id).vehicle().tile_raw());
         }
         crate::witness::hit(crate::witness::TRAIN_DEPOT_START);
         self.service_in_depot(id);
         (self.leaves.leave_unbunch)(id);
         (self.leaves.leave_sound)(id);
         (self.leaves.train_list)(id);
-        id.set_track(if (id).vehicle().direction() & 2 != 0 {
+        id.set_track(if (id).vehicle().direction_raw() & 2 != 0 {
             2
         } else {
             1
         });
         Self::write_status(id, 1, false);
-        (id).vehicle().write_speed(0_u16);
+        (id).vehicle().set_cur_speed(0_u16);
         (self.leaves.viewport)(id, 1, 1);
         self.update_occupancy(id);
-        self.signal_segment(id, (id).vehicle().tile(), u8::MAX);
+        self.signal_segment(id, (id).vehicle().tile_raw(), u8::MAX);
         update_acceleration(id);
         (self.leaves.depot_dirty)(id);
         false
@@ -2471,7 +2476,7 @@ impl Game<'_> {
         } else {
             crate::witness::TRAIN_TICK_FIRST
         });
-        if (id).vehicle().status() & 128 != 0 {
+        if (id).vehicle().vehstatus_raw() & 128 != 0 {
             return if mode { true } else { self.handle_crashed(id) };
         }
         if id.get_force_proceed() != 0 {
@@ -2481,11 +2486,11 @@ impl Game<'_> {
         if self.handle_breakdown(id) {
             return true;
         }
-        if id.flag(0) && (id).vehicle().speed() == 0 {
+        if id.flag(0) && (id).vehicle().cur_speed() == 0 {
             self.reverse(id);
         }
-        let v_speed: u16 = id.vehicle().speed();
-        let v_status: u8 = id.vehicle().status();
+        let v_speed: u16 = id.vehicle().cur_speed();
+        let v_status: u8 = id.vehicle().vehstatus_raw();
         let v_order: u8 = id.vehicle().current_order().kind();
         if v_status & 2 != 0 && v_speed == 0 {
             return true;
@@ -2499,13 +2504,13 @@ impl Game<'_> {
             && (self.leaves.check_reverse)(id) != 0
         {
             id.set_wait_counter(0);
-            (id).vehicle().write_speed(0_u16);
-            (id).vehicle().write_subspeed(0_u8);
+            (id).vehicle().set_cur_speed(0_u16);
+            (id).vehicle().set_subspeed(0_u8);
             id.set_flag(9, false);
             self.reverse(id);
             return true;
         } else if id.flag(9) {
-            let tile = (id).vehicle().tile();
+            let tile = (id).vehicle().tile_raw();
             let mut dir = self.exitdir(id);
             if (self.leaves.is_depot)(Handle::NONE, tile) != 0
                 || is_tile_type(
@@ -2558,7 +2563,7 @@ impl Game<'_> {
                     && id.get_wait_counter() > 2 * self.wait_pbs() * (self.leaves.day_ticks)(id)
                 {
                     if self.lost_warn() != 0
-                        && u64::from((id).vehicle().owner()) == (self.leaves.local_company)(id)
+                        && u64::from((id).vehicle().owner_raw()) == (self.leaves.local_company)(id)
                     {
                         (self.leaves.stuck_news)(id);
                     }
@@ -2578,13 +2583,13 @@ impl Game<'_> {
             return true;
         }
         let mut distance = self.update_speed(id);
-        if (id).vehicle().speed() == 0 && (id).vehicle().status() & 2 != 0 {
+        if (id).vehicle().cur_speed() == 0 && (id).vehicle().vehstatus_raw() & 2 != 0 {
             id.set_force_proceed(0);
             self.view_dirty(id);
         }
         let mut advance = (self.leaves.advance_distance)(id) as i32;
         if distance < advance {
-            if (id).vehicle().speed() == 0 {
+            if (id).vehicle().cur_speed() == 0 {
                 crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
             }
         } else {
@@ -2596,10 +2601,10 @@ impl Game<'_> {
                     break;
                 }
                 advance = (self.leaves.advance_distance)(id) as i32;
-                if distance < advance || (id).vehicle().speed() == 0 {
+                if distance < advance || (id).vehicle().cur_speed() == 0 {
                     break;
                 }
-                let v_tile: u32 = id.vehicle().tile();
+                let v_tile: u32 = id.vehicle().tile_raw();
                 let v_order_destination: u16 = id.vehicle().current_order().destination;
                 let v_order: u8 = id.vehicle().current_order().kind();
                 let v_nonstop: u8 = id.vehicle().current_order().non_stop();
@@ -2621,32 +2626,33 @@ impl Game<'_> {
         }
         let mut u = id;
         while u != Handle::NONE {
-            if (u).vehicle().status() & 1 == 0 {
+            if (u).vehicle().vehstatus_raw() & 1 == 0 {
                 (self.leaves.viewport)(u, 0, 0);
             }
             u = (u).next();
         }
         if (id).vehicle().progress() == 0 {
-            (id).vehicle().write_progress((distance as u64) as u8);
+            (id).vehicle().set_progress((distance as u64) as u8);
         }
         true
     }
     fn tick(&self, id: Handle) -> bool {
         (id).vehicle()
-            .write_tick((u64::from((id).vehicle().tick().wrapping_add(1))) as u8);
-        let v_speed: u16 = id.vehicle().speed();
-        let v_status: u8 = id.vehicle().status();
-        let v_running: u8 = id.vehicle().running();
+            .set_tick_counter((u64::from((id).vehicle().tick_counter().wrapping_add(1))) as u8);
+        let v_speed: u16 = id.vehicle().cur_speed();
+        let v_status: u8 = id.vehicle().vehstatus_raw();
+        let v_running: u8 = id.vehicle().running_ticks();
         let v_front: u8 = id.front();
         let v_free_wagon: u8 =
             u8::from(crate::ground_vehicle::is_free_wagon(id.vehicle().subtype()));
         if v_front != 0 {
             if v_status & 2 == 0 || v_speed > 0 {
                 (id).vehicle()
-                    .write_running((u64::from(v_running.wrapping_add(1))) as u8);
+                    .set_running_ticks((u64::from(v_running.wrapping_add(1))) as u8);
             }
-            (id).vehicle()
-                .write_order_time(((id).vehicle().order_time().wrapping_add(1) as u64) as i32);
+            (id).vehicle().set_current_order_time(
+                ((id).vehicle().current_order_time().wrapping_add(1) as u64) as i32,
+            );
             if !self.loco(id, false) {
                 return false;
             }
@@ -2697,14 +2703,14 @@ impl Game<'_> {
         }
         (self.leaves.suppress_implicit)(id);
         (self.leaves.order_depot_service)(id, depot_id);
-        (id).vehicle().write_dest((u64::from(tile)) as u32);
+        (id).vehicle().set_dest_tile_raw((u64::from(tile)) as u32);
         (self.leaves.start_stop_dirty)(id);
     }
     fn economy_day(&self, id: Handle) {
         // SAFETY: The live train and unborrowed owner satisfy `economy_age_vehicle`.
         unsafe { self.maintain(id, maintenance::economy_age_vehicle) };
-        let day = (id).vehicle().day().wrapping_add(1);
-        (id).vehicle().write_day((u64::from(day)) as u8);
+        let day = (id).vehicle().day_counter().wrapping_add(1);
+        (id).vehicle().set_day_counter((u64::from(day)) as u8);
         if day & 7 == 0 {
             // SAFETY: The live train and unborrowed owner satisfy `decrease_vehicle_value`.
             unsafe { self.maintain(id, maintenance::decrease_vehicle_value) };
@@ -2717,15 +2723,15 @@ impl Game<'_> {
             if (id).vehicle().current_order().kind() == OT_GOTO_STATION {
                 let tile = (self.leaves.station_dest)(id) as u32;
                 if tile != INVALID_TILE {
-                    (id).vehicle().write_dest((u64::from(tile)) as u32);
+                    (id).vehicle().set_dest_tile_raw((u64::from(tile)) as u32);
                 }
             }
-            let running = (id).vehicle().running();
+            let running = (id).vehicle().running_ticks();
             if running != 0 {
                 let cost = self.running_cost(id).saturating_mul(i64::from(running))
                     / ((self.leaves.cost_divisor)(id) as i64);
                 // `running_ticks = 0` precedes the company payment; nothing between observes it.
-                (id).vehicle().write_running(0);
+                (id).vehicle().set_running_ticks(0);
                 (self.leaves.pay_running)(id, (cost as u64) as i64);
                 (self.leaves.running_windows)(id);
             }
@@ -2734,8 +2740,8 @@ impl Game<'_> {
 }
 impl Game<'_> {
     fn next_force(&self, id: Handle) -> u8 {
-        let v_tile: u32 = id.vehicle().tile();
-        let v_status: u8 = id.vehicle().status();
+        let v_tile: u32 = id.vehicle().tile_raw();
+        let v_status: u8 = id.vehicle().vehstatus_raw();
         if v_status & 128 != 0 || id.get_force_proceed() == 2 {
             return 0;
         }
@@ -2795,7 +2801,7 @@ impl Game<'_> {
                 (self.leaves.reverse_windows)(first);
             }
         } else {
-            let v_status: u8 = id.vehicle().status();
+            let v_status: u8 = id.vehicle().vehstatus_raw();
             let v_breakdown: u8 = read_field!(id.record, breakdown_ctr);
             let v_front: u8 = id.front();
             if v_front == 0 || v_status & 128 != 0 || v_breakdown != 0 {
@@ -2803,22 +2809,22 @@ impl Game<'_> {
             }
             if execute {
                 if (id).vehicle().current_order().kind() == OT_LOADING {
-                    let last = ((id).last()).vehicle().tile();
+                    let last = ((id).last()).vehicle().tile_raw();
                     if (self.leaves.is_station_any)(Handle::NONE, last) == 0
                         || self.world().get_station_index(TileIndex(last))
                             != self
                                 .world()
-                                .get_station_index(TileIndex((id).vehicle().tile()))
+                                .get_station_index(TileIndex((id).vehicle().tile_raw()))
                     {
                         crate::vehicle::visits::leave_station(id.vehicle(), self.vs().visits());
                     }
                 }
                 id.set_force_proceed(0);
                 self.view_dirty(id);
-                if self.acc_model() != 0 && (id).vehicle().speed() != 0 {
+                if self.acc_model() != 0 && (id).vehicle().cur_speed() != 0 {
                     id.set_flag(0, !id.flag(0));
                 } else {
-                    (id).vehicle().write_speed(0_u16);
+                    (id).vehicle().set_cur_speed(0_u16);
                     crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
                     (self.leaves.hide_fill)(id);
                     self.reverse(id);
@@ -2850,7 +2856,7 @@ pub const VRF_REVERSED: u64 = 1 << 7;
 /// update the segment's signals and arrange the consist.
 pub(crate) fn enter_depot(id: Handle, leaves: &Leaves, services: &Services) {
     let g = Game::new(leaves, services);
-    let tile = id.vehicle().tile();
+    let tile = id.vehicle().tile_raw();
     (leaves.set_depot_res)(id, tile, 0);
     if (leaves.show_reservation)(id) != 0 {
         (services.mark_dirty)(tile);

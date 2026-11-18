@@ -1646,7 +1646,7 @@ fn iterate_vehicle_parts(
         if !action(part) {
             return false;
         }
-        if VehicleType(part.vehicle_type()) == VehicleType::TRAIN
+        if VehicleType(part.vehicle_type_raw()) == VehicleType::TRAIN
             && crate::ground_vehicle::is_multiheaded(part.subtype())
             && !action(part.other_multiheaded_part().unwrap())
         {
@@ -1658,7 +1658,7 @@ fn iterate_vehicle_parts(
             None
         };
     }
-    if VehicleType(v.vehicle_type()) == VehicleType::AIRCRAFT
+    if VehicleType(v.vehicle_type_raw()) == VehicleType::AIRCRAFT
         && crate::aircraft::is_normal_aircraft(v.subtype())
     {
         return action(unsafe { v.next().unwrap_unchecked() });
@@ -1680,7 +1680,7 @@ fn may_load_under_exclusive_rights(st: LoadingStation, v: VehicleRef, w: &World)
         return true;
     }
     let observed = (w.station_exclusivity)(st.base);
-    observed.counter == 0 || observed.exclusive == v.owner()
+    observed.counter == 0 || observed.exclusive == v.owner_raw()
 }
 /// `ReserveConsist`: reserves cargo if the full load order and `improved_load` is set or if
 /// the current order allows autorefit.
@@ -1710,7 +1710,7 @@ fn reserve_consist(
         let reserve = if v.is_articulated_part() {
             false
         } else {
-            let kind = VehicleType(v.vehicle_type());
+            let kind = VehicleType(v.vehicle_type_raw());
             (kind != VehicleType::TRAIN || !crate::ground_vehicle::is_rear_dualheaded(v.subtype()))
                 && (kind != VehicleType::AIRCRAFT
                     || crate::aircraft::is_normal_aircraft(v.subtype()))
@@ -1752,7 +1752,7 @@ fn get_load_amount(
     let e = (vehicle.engine)(v);
     let mut load_amount = u32::from(e.load_amount());
     /* The default loadamount for mail is 1/4 of the load amount for passengers */
-    let air_mail = VehicleType(v.vehicle_type()) == VehicleType::AIRCRAFT
+    let air_mail = VehicleType(v.vehicle_type_raw()) == VehicleType::AIRCRAFT
         && !crate::aircraft::is_normal_aircraft(v.subtype());
     if air_mail {
         load_amount = ceil_div(load_amount, 4);
@@ -1876,7 +1876,7 @@ fn handle_station_refit(
         return;
     }
     let cur_company = (l.current_company)();
-    (l.set_current_company)(v.owner());
+    (l.set_current_company)(v.owner_raw());
     let mut refit_mask = (unsafe { &*l.vehicle }.engine)(v).refit_mask();
     /* Remove old capacity from consist capacity and collect refit mask. */
     // `PrepareRefitAction`.
@@ -1972,7 +1972,7 @@ fn handle_station_refit(
 }
 /// `PrepareUnload`: prepare the vehicle to be unloaded.
 pub(crate) fn prepare_unload(front_v: VehicleRef, w: &World, l: &Loading) {
-    let curr_station = (w.station)(front_v.last_station());
+    let curr_station = (w.station)(front_v.last_station_visited_raw());
     unsafe {
         loading_vehicles_push_back(curr_station.state, front_v.shell().cast());
     }
@@ -2019,13 +2019,13 @@ fn update_load_unload_ticks(
     w: &World,
     l: &Loading,
 ) {
-    if VehicleType(front.vehicle_type()) == VehicleType::TRAIN && (l.station_length_penalty)() {
+    if VehicleType(front.vehicle_type_raw()) == VehicleType::TRAIN && (l.station_length_penalty)() {
         /* Each platform tile is worth 2 rail vehicles. */
         let cached_length = u32::from(crate::raw_field::read_field!(
             front.ground_cache(),
             cached_total_length
         ));
-        let tile = front.tile();
+        let tile = front.tile_raw();
         // SAFETY: The loading entry keeps the immutable shared services live.
         let world = crate::map_func::World::new(unsafe { &*w.shared });
         let length =
@@ -2051,7 +2051,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
 
     // SAFETY: The immutable shared vehicle table outlives this entry.
     let vehicle = unsafe { &*l.vehicle };
-    let st = (w.station)(front.last_station());
+    let st = (w.station)(front.last_station_visited_raw());
     let mut body = |next_station| {
         let control = (l.control)(front);
         let use_autorefit =
@@ -2083,8 +2083,8 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
         if control.ticks != 0 {
             return;
         }
-        if VehicleType(front.vehicle_type()) == VehicleType::TRAIN && {
-            let tile = front.tile();
+        if VehicleType(front.vehicle_type_raw()) == VehicleType::TRAIN && {
+            let tile = front.tile_raw();
             let shared = unsafe { &*w.shared };
             (shared.tile_type)(tile) != crate::vehicle::MP_STATION
                 || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
@@ -2106,7 +2106,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
         let mut cargo_not_full = 0_u64;
         let mut cargo_full = 0_u64;
         let mut reservation_left = 0_u64;
-        front.write_speed(0);
+        front.set_cur_speed(0);
         let payment = (l.get_payment)(front);
         let mut artic_part = 0_u32; // Articulated part we are currently trying to load. (not counting parts without capacity)
         let mut current = Some(front);
@@ -2232,14 +2232,14 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
                 ge = unsafe { cp(state, cargo) };
             }
             /* As we're loading here the following link can carry the full capacity of the vehicle. */
-            v.write_refit_cap(v.cargo_cap());
+            v.set_refit_cap(v.cargo_cap());
             /* update stats */
-            let t = match VehicleType(front.vehicle_type()) {
-                VehicleType::TRAIN | VehicleType::SHIP => i32::from(front.max_speed()),
-                VehicleType::ROAD => i32::from(front.max_speed()) / 2,
+            let t = match VehicleType(front.vehicle_type_raw()) {
+                VehicleType::TRAIN | VehicleType::SHIP => i32::from(front.cached_max_speed()),
+                VehicleType::ROAD => i32::from(front.cached_max_speed()) / 2,
                 VehicleType::AIRCRAFT => {
                     // Convert to old units.
-                    crate::aircraft::speed_old_units(u32::from(front.max_speed())) as i32
+                    crate::aircraft::speed_old_units(u32::from(front.cached_max_speed())) as i32
                 }
                 _ => unreachable!("original NOT_REACHED vehicle type"),
             };
@@ -2308,7 +2308,8 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
                         anything_loaded = true;
                         unsafe {
                             (&raw mut (*state).fields.time_since_load).write(0);
-                            (&raw mut (*state).fields.last_vehicle_type).write(v.vehicle_type());
+                            (&raw mut (*state).fields.last_vehicle_type)
+                                .write(v.vehicle_type_raw());
                         }
                         if (l.station_cargo_total)(st.native, cargo.0) == 0 {
                             crate::animated_tile::cargo_event(
@@ -2333,17 +2334,17 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
             current = v.next();
         }
         if anything_loaded || anything_unloaded {
-            if VehicleType(front.vehicle_type()) == VehicleType::TRAIN {
+            if VehicleType(front.vehicle_type_raw()) == VehicleType::TRAIN {
                 crate::animated_tile::rail_event(
                     st.base,
-                    front.tile(),
+                    front.tile_raw(),
                     crate::station_type::SAT_VEHICLE_LOADS,
                     crate::station_type::SRT_VEHICLE_LOADS,
                 );
-            } else if VehicleType(front.vehicle_type()) == VehicleType::ROAD {
+            } else if VehicleType(front.vehicle_type_raw()) == VehicleType::ROAD {
                 crate::animated_tile::road_event(
                     st.base,
-                    front.tile(),
+                    front.tile_raw(),
                     crate::station_type::SAT_VEHICLE_LOADS,
                     crate::station_type::SRT_VEHICLE_LOADS,
                 );
@@ -2361,7 +2362,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
                  * on the vehicle type - the values here are those found in TTDPatch */
                 const GRADUAL_LOADING_WAIT_TIME: [i32; 4] = [40, 20, 10, 20];
                 new_load_unload_ticks =
-                    GRADUAL_LOADING_WAIT_TIME[usize::from(front.vehicle_type())];
+                    GRADUAL_LOADING_WAIT_TIME[usize::from(front.vehicle_type_raw())];
             }
             /* We loaded less cargo than possible for all cargo types and it's not full
              * load and we're not supposed to wait any longer: stop loading. */
@@ -2371,7 +2372,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
                 && !control.full_load
                 && {
                     let observed = (l.wait_observation)(front);
-                    front.order_time()
+                    front.current_order_time()
                         >= i32::from(observed.wait)
                             .wrapping_sub(observed.lateness)
                             .max(0)
@@ -2387,7 +2388,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
                 if OrderLoadType(control.load_type) == OrderLoadType::FullLoadAny {
                     /* if the aircraft carries passengers and is NOT full, then
                      * continue loading, no matter how much mail is in */
-                    if (VehicleType(front.vehicle_type()) == VehicleType::AIRCRAFT
+                    if (VehicleType(front.vehicle_type_raw()) == VehicleType::AIRCRAFT
                         && (l.passenger_cargo)(front)
                         && u32::from(front.cargo_cap()) > l.cargo_list(front).stored_count())
                         || (cargo_not_full != 0 && (cargo_full & !cargo_not_full) == 0)
@@ -2507,7 +2508,7 @@ unsafe fn load_unload_station_queue(
     /* Check if anything will be loaded at all. Otherwise we don't need to reserve either. */
     while !node.is_null() {
         let v = unsafe { VehicleRef::from_shell(loading_vehicles_value(node).cast(), &*l.vehicle) };
-        if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
+        if v.vehstatus_raw() & (VS_STOPPED | VS_CRASHED) == 0 {
             if map.types.assertions() {
                 map.check((l.load_unload_ticks)(v) != 0);
             }
@@ -2532,7 +2533,7 @@ unsafe fn load_unload_station_queue(
     node = unsafe { loading_vehicles_begin(state) };
     while !node.is_null() {
         let v = unsafe { VehicleRef::from_shell(loading_vehicles_value(node).cast(), &*l.vehicle) };
-        if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
+        if v.vehstatus_raw() & (VS_STOPPED | VS_CRASHED) == 0 {
             unsafe {
                 load_unload_vehicle(v, c);
             }

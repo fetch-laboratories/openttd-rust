@@ -265,7 +265,7 @@ unsafe fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServi
     let s = unsafe { &*base.maintenance };
     // Stopped or crashed vehicles will not move, as such making unmovable
     // vehicles to go for service is lame.
-    if VehStates(v.status()).0
+    if VehStates(v.vehstatus_raw()).0
         & VehStates::from_element(VehState::Stopped)
             .with(VehStates::from_element(VehState::Crashed))
             .0
@@ -323,7 +323,7 @@ unsafe fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServi
         } {
             return false;
         }
-        vehicle = if v.vehicle_type() == VehicleType::VEH_TRAIN.0 {
+        vehicle = if v.vehicle_type_raw() == VehicleType::VEH_TRAIN.0 {
             v.next_unit()
         } else {
             None
@@ -348,7 +348,7 @@ unsafe fn replacement_needed<const C: bool>(
             new_engine.0,
         ))
         .company_availability()
-            & (1 << CompanyID(v.owner()).0)
+            & (1 << CompanyID(v.owner_raw()).0)
             == 0
     {
         return false;
@@ -538,7 +538,7 @@ unsafe fn handle_breakdown_impl<const C: bool>(
                 svc!(C, s.aircraft_broken, v);
                 branch!(C, VEHICLE_MAINT_AIRCRAFT);
             } else {
-                (v).write_speed(0);
+                (v).set_cur_speed(0);
                 if !svc!(C, base.play_vehicle_sound, v, VSE_BREAKDOWN) {
                     let train_or_ship =
                         start.kind == VehicleType::VEH_TRAIN || start.kind == VehicleType::VEH_SHIP;
@@ -557,7 +557,8 @@ unsafe fn handle_breakdown_impl<const C: bool>(
                     };
                     svc!(C, base.play_sound, v, u16::from(sound.0));
                 }
-                if VehStates((v).status()).0 & VehStates::from_element(VehState::Hidden).0 == 0
+                if VehStates((v).vehstatus_raw()).0 & VehStates::from_element(VehState::Hidden).0
+                    == 0
                     && EngineMiscFlags((base.engine)(v).misc()).0 & NO_BREAKDOWN_SMOKE == 0
                 {
                     let u = crate::effect::openttd_rust_effect_create_rel(
@@ -584,7 +585,7 @@ unsafe fn handle_breakdown_impl<const C: bool>(
             if countdown.order_type == OrderType::OT_LOADING {
                 branch!(C, VEHICLE_MAINT_LOADING);
             } else {
-                (v).write_breakdown_counter(countdown.counter.wrapping_sub(1));
+                (v).set_breakdown_ctr(countdown.counter.wrapping_sub(1));
                 branch!(C, VEHICLE_MAINT_COUNTDOWN);
             }
             return false;
@@ -608,7 +609,7 @@ unsafe fn handle_breakdown_impl<const C: bool>(
         svc!(C, s.breakdown_delay_write, v, delay);
         branch!(C, VEHICLE_MAINT_DELAY);
         if delay == 0 {
-            (v).write_breakdown_counter(0);
+            (v).set_breakdown_ctr(0);
             svc!(C, s.mark_dirty, v);
             svc!(C, s.view_dirty, v);
             branch!(C, VEHICLE_MAINT_ENDED);
@@ -631,7 +632,7 @@ unsafe fn handle_breakdown_result<const C: bool>(
     let broken = unsafe { handle_breakdown_impl::<C>(v, base, probe.counter) };
     Breakdown {
         broken,
-        status: (v).status(),
+        status: (v).vehstatus_raw(),
     }
 }
 /// Direct shared Rust policy for controllers that consume both source results.
@@ -670,7 +671,7 @@ unsafe fn age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices)
     }
     let g = unsafe { &*s.group };
     if !unsafe { svc!(C, g.primary, v.shell().cast()) }
-        && (VehicleType(v.vehicle_type()) != VehicleType::VEH_TRAIN
+        && (VehicleType(v.vehicle_type_raw()) != VehicleType::VEH_TRAIN
             || v.subtype() & (1 << GroundVehicleSubtypeFlags::GVSF_ENGINE.0) == 0)
     {
         return;
@@ -848,7 +849,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_automatic_service_abi(
 /// # Safety
 /// As the direct maintenance calls.
 pub(crate) unsafe fn vehicle_handle_breakdown(v: VehicleRef, base: &VehicleServices) -> bool {
-    let counter = v.breakdown_counter();
+    let counter = v.breakdown_ctr();
     if crate::witness::enabled() {
         crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
         unsafe { handle_breakdown_impl::<true>(v, base, counter) }

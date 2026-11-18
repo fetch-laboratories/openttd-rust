@@ -191,7 +191,7 @@ impl Game<'_> {
         let owner = unsafe {
             let vehicle =
                 crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(self.vehicle));
-            vehicle.owner()
+            vehicle.owner_raw()
         };
         crate::signal::count_context_owner_read();
         crate::signal::acquire_context(self.leaves.signal_context).add_side(tile, td, owner);
@@ -275,7 +275,7 @@ impl Game<'_> {
 fn reserve_track_under_consist(g: &Game, id: Handle) {
     let mut part = id;
     while part != Handle::NONE {
-        let v_tile: u32 = part.vehicle().tile();
+        let v_tile: u32 = part.vehicle().tile_raw();
         let track = part.get_track() as u8;
         match track {
             WORMHOLE => {
@@ -352,7 +352,7 @@ fn free(g: &Game, id: Handle) {
     if g.pbs().0.assertions {
         crate::movement::native_assert(g.shared(), id.front() != 0);
     }
-    let v_tile: u32 = id.vehicle().tile();
+    let v_tile: u32 = id.vehicle().tile_raw();
     let mut tile = v_tile;
     let mut td = g.td(id);
     let mut free_tile = !(((g.leaves.is_station)(g.context, id, tile) != 0)
@@ -376,7 +376,7 @@ fn free(g: &Game, id: Handle) {
     if id.get_track() == u64::from(DEPOT) {
         let mut u = id;
         while u != Handle::NONE {
-            let part_tile: u32 = u.vehicle().tile();
+            let part_tile: u32 = u.vehicle().tile_raw();
             let part_next: Handle = u.next();
             if u.get_track() != u64::from(DEPOT) || part_tile != v_tile {
                 return;
@@ -570,9 +570,9 @@ struct Orders<'a> {
 }
 impl<'a> Orders<'a> {
     fn new(g: &Game<'a>, id: Handle) -> Self {
-        let v_dest: u32 = id.vehicle().dest_tile();
-        let v_last_station: u16 = id.vehicle().last_station();
-        let v_order_index: u8 = id.vehicle().order_index();
+        let v_dest: u32 = id.vehicle().dest_tile_raw();
+        let v_last_station: u16 = id.vehicle().last_station_visited_raw();
+        let v_order_index: u8 = id.vehicle().cur_real_order_index();
         let v_suppress: u8 = u8::from(
             read_field!(id.vehicle().ground(), flags)
                 & (1 << crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS)
@@ -599,8 +599,8 @@ impl<'a> Orders<'a> {
                 .current_order_pointer()
                 .write(self.saved_order);
         };
-        self.id.vehicle().write_dest(self.dest);
-        self.id.vehicle().write_last_station(self.last);
+        self.id.vehicle().set_dest_tile_raw(self.dest);
+        self.id.vehicle().set_last_station_visited_raw(self.last);
         self.id.set_suppress_implicit(self.suppress != 0);
         self.restored = true;
     }
@@ -635,7 +635,7 @@ impl<'a> Orders<'a> {
                     if next != 0xff {
                         depth += 1;
                         self.index = next;
-                        if self.index != id.vehicle().order_index()
+                        if self.index != id.vehicle().cur_real_order_index()
                             && depth < i32::from(g.read_num_orders(id))
                         {
                             continue;
@@ -647,7 +647,8 @@ impl<'a> Orders<'a> {
             }
             self.index = self.index.wrapping_add(1);
             depth += 1;
-            if self.index == id.vehicle().order_index() || depth >= i32::from(g.read_num_orders(id))
+            if self.index == id.vehicle().cur_real_order_index()
+                || depth >= i32::from(g.read_num_orders(id))
             {
                 return false;
             }
@@ -730,7 +731,7 @@ fn choose(
             if changed {
                 (g.shared().mark_dirty)(tile);
             }
-            g.reserve(id.vehicle().tile(), g.td(id));
+            g.reserve(id.vehicle().tile_raw(), g.td(id));
             return (best, true);
         }
         (g.leaves.service)(g.context, id);
@@ -742,8 +743,8 @@ fn choose(
         }
     }
     let mut orders = Orders::new(g, id);
-    let v_tile: u32 = id.vehicle().tile();
-    let v_dest: u32 = id.vehicle().dest_tile();
+    let v_tile: u32 = id.vehicle().tile_raw();
+    let v_dest: u32 = id.vehicle().dest_tile_raw();
     let v_destination: u16 = id.vehicle().current_order().destination;
     let v_order: u8 = id.vehicle().current_order().kind();
     if v_order == OT_LEAVESTATION {
@@ -787,7 +788,7 @@ fn choose(
         if g.safe_track(id, origin.tile, origin.td, false) {
             let res = g.reserved(tile) & (g.leaves.reach_tracks)(g.context, id, dir) as u8;
             best = first(u16::from(res));
-            g.reserve(id.vehicle().tile(), g.td(id));
+            g.reserve(id.vehicle().tile_raw(), g.td(id));
             got = true;
             if changed {
                 (g.shared().mark_dirty)(tile);
@@ -844,7 +845,7 @@ fn choose(
         }
         break;
     }
-    g.reserve(id.vehicle().tile(), g.td(id));
+    g.reserve(id.vehicle().tile_raw(), g.td(id));
     if changed {
         (g.shared().mark_dirty)(tile);
     }
@@ -862,13 +863,13 @@ fn choose(
         let destination = (g.shared().depot_index)(final_dest);
         // SAFETY: The live current order belongs to this serialized train.
         unsafe { (*id.vehicle().current_order_pointer()).destination = destination };
-        id.vehicle().write_dest(final_dest);
+        id.vehicle().set_dest_tile_raw(final_dest);
         (g.leaves.start_stop)(g.context, id);
     }
     (best, got)
 }
 fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
-    let v_tile: u32 = id.vehicle().tile();
+    let v_tile: u32 = id.vehicle().tile_raw();
     if id.get_track() == u64::from(DEPOT) {
         if (g.leaves.depot_reserved)(g.context, id, v_tile) != 0 {
             if mark {
@@ -928,7 +929,7 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
     let (_, made) = choose(g, id, new_tile, exit, reachable, true, mark);
     if !made {
         if id.get_track() == u64::from(DEPOT) {
-            (g.leaves.set_depot)(g.context, id, id.vehicle().tile(), 0);
+            (g.leaves.set_depot)(g.context, id, id.vehicle().tile_raw(), 0);
         }
         return false;
     }
@@ -943,8 +944,8 @@ fn check_next(g: &Game, id: Handle) {
     if (g.leaves.backoff)() == 255 || id.get_track() == u64::from(DEPOT) {
         return;
     }
-    let v_tile: u32 = id.vehicle().tile();
-    let v_dest: u32 = id.vehicle().dest_tile();
+    let v_tile: u32 = id.vehicle().tile_raw();
+    let v_dest: u32 = id.vehicle().dest_tile_raw();
     let v_destination: u16 = id.vehicle().current_order().destination;
     let v_order: u8 = id.vehicle().current_order().kind();
     let v_num_orders: u8 = g.read_num_orders(id);
@@ -967,7 +968,7 @@ fn check_next(g: &Game, id: Handle) {
         OT_NOTHING | OT_LOADING | OT_LEAVESTATION if v_num_orders > 0 => return,
         _ => {}
     }
-    let tile = id.vehicle().tile();
+    let tile = id.vehicle().tile_raw();
     if ((g.leaves.is_station)(g.context, id, tile) != 0)
         && g.order_stop(
             id,
@@ -1108,7 +1109,7 @@ fn check_reverse_train(g: &Game, id: Handle) -> bool {
     if unsafe { g.shared().settings().line_reverse_mode.read() }
         || id.get_track() == u64::from(DEPOT)
         || id.get_track() == u64::from(WORMHOLE)
-        || id.vehicle().direction() & 1 == 0
+        || id.vehicle().direction_raw() & 1 == 0
     {
         return false;
     }
@@ -1127,8 +1128,8 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_station_location(
     context: *mut std::ffi::c_void,
 ) -> u32 {
     let g = unsafe { Game::entry(vehicle, leaves, context) };
-    if station == id.vehicle().last_station() {
-        id.vehicle().write_last_station(u16::MAX);
+    if station == id.vehicle().last_station_visited_raw() {
+        id.vehicle().set_last_station_visited_raw(u16::MAX);
     }
     if (g.shared().station_facilities)(station) & crate::station_type::FACILITY_TRAIN == 0 {
         (g.leaves.increment_order)(g.context, id);

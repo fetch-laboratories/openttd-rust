@@ -1579,7 +1579,7 @@ fn vehicle(services: CapacityServices, v: VehicleRef) -> CapacityPart {
         list: fields.list,
         cargo: fields.cargo,
         capacity: crate::raw_field::read_field!(v.0.as_ptr(), cargo_cap),
-        train: v.vehicle_type() == crate::vehicle_type::VEH_TRAIN,
+        train: v.vehicle_type_raw() == crate::vehicle_type::VEH_TRAIN,
         articulated: v.is_articulated_part(),
     }
 }
@@ -1701,7 +1701,7 @@ pub(crate) unsafe fn cargo_capacity(
     u8::from(
         transfer
             && part_chain != 0
-            && new.is_some_and(|v| v.vehicle_type() == crate::vehicle_type::VEH_TRAIN),
+            && new.is_some_and(|v| v.vehicle_type_raw() == crate::vehicle_type::VEH_TRAIN),
     )
 }
 

@@ -200,7 +200,7 @@ impl Owner {
     /// its train or road vehicle owner by type.
     #[inline]
     pub(crate) fn of(v: VehicleRef) -> Self {
-        let kind = VehicleType(v.vehicle_type());
+        let kind = VehicleType(v.vehicle_type_raw());
         let record = v.0.as_ptr();
         if kind == VehicleType::VEH_TRAIN {
             Self {
@@ -363,7 +363,7 @@ impl GroundVehicleType for Train {
     fn get_power(s: &Services, w: &World<'_>, v: VehicleRef, o: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part()
-            && (s.powered)(o.train.get_railtypes(), RailType(w.rail_type(v.tile())))
+            && (s.powered)(o.train.get_railtypes(), RailType(w.rail_type(v.tile_raw())))
         {
             let engine = (s.vehicle.engine)(v);
             let mut power = s.property(
@@ -391,7 +391,10 @@ impl GroundVehicleType for Train {
     ) -> u16 {
         /* For powered wagons the engine defines the type of engine (i.e. railtype) */
         if o.train.flags().test(VehicleRailFlag::PoweredWagon)
-            && (s.powered)(head.train.get_railtypes(), RailType(w.rail_type(v.tile())))
+            && (s.powered)(
+                head.train.get_railtypes(),
+                RailType(w.rail_type(v.tile_raw())),
+            )
         {
             return s.first_engine(o).wagon_power();
         }
@@ -471,7 +474,7 @@ impl GroundVehicleType for Train {
     fn get_air_drag_area(v: VehicleRef, o: Owner) -> u8 {
         /* Air drag is higher in tunnels due to the limited cross-section. */
         if TrackBits(o.train.track()) == TrackBits::TRACK_BIT_WORMHOLE
-            && VehStates(v.status()).test(VehState::Hidden)
+            && VehStates(v.vehstatus_raw()).test(VehState::Hidden)
         {
             28
         } else {
@@ -481,7 +484,7 @@ impl GroundVehicleType for Train {
     /// Checks the current acceleration status of this vehicle.
     #[inline]
     fn get_acceleration_status(v: VehicleRef, o: Owner) -> AccelStatus {
-        if VehStates(v.status()).test(VehState::Stopped)
+        if VehStates(v.vehstatus_raw()).test(VehState::Stopped)
             || o.train.flags().any(
                 VehicleRailFlags::from_element(VehicleRailFlag::Reversing)
                     .with(VehicleRailFlags::from_element(VehicleRailFlag::Stuck)),
@@ -495,7 +498,7 @@ impl GroundVehicleType for Train {
     /// Calculates the current speed of this vehicle, in km/h-ish.
     #[inline]
     fn get_current_speed(v: VehicleRef) -> u16 {
-        v.speed()
+        v.cur_speed()
     }
     /// Returns the rolling friction coefficient of this vehicle, in [1e-4].
     #[inline]
@@ -512,7 +515,7 @@ impl GroundVehicleType for Train {
         w: &World<'_>,
         v: VehicleRef,
     ) -> VehicleAccelerationModel {
-        VehicleAccelerationModel((s.rail_acceleration)(RailType(w.rail_type(v.tile()))))
+        VehicleAccelerationModel((s.rail_acceleration)(RailType(w.rail_type(v.tile_raw()))))
     }
     /// Returns the slope steepness used by this vehicle.
     #[inline]
@@ -522,12 +525,12 @@ impl GroundVehicleType for Train {
     /// `Train::GetDisplayMaxSpeed`.
     #[inline]
     fn get_display_max_speed(v: VehicleRef) -> i32 {
-        i32::from(v.max_speed())
+        i32::from(v.cached_max_speed())
     }
     /// Gets the maximum speed allowed by the track for this vehicle.
     #[inline]
     fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
-        (s.rail_speed)(RailType(w.rail_type(v.tile())))
+        (s.rail_speed)(RailType(w.rail_type(v.tile_raw())))
     }
     /// Checks if the vehicle is at a tile that can be sloped.
     #[inline]
@@ -673,7 +676,7 @@ impl GroundVehicleType for RoadVehicle {
     /// Checks the current acceleration status of this vehicle.
     #[inline]
     fn get_acceleration_status(v: VehicleRef, _: Owner) -> AccelStatus {
-        if VehStates(v.status()).test(VehState::Stopped) {
+        if VehStates(v.vehstatus_raw()).test(VehState::Stopped) {
             AccelStatus::AS_BRAKE
         } else {
             AccelStatus::AS_ACCEL
@@ -682,7 +685,7 @@ impl GroundVehicleType for RoadVehicle {
     /// Calculates the current speed of this vehicle, in km/h-ish.
     #[inline]
     fn get_current_speed(v: VehicleRef) -> u16 {
-        v.speed() / 2
+        v.cur_speed() / 2
     }
     /// Returns the rolling friction coefficient of this vehicle, in [1e-4].
     #[inline]
@@ -715,13 +718,13 @@ impl GroundVehicleType for RoadVehicle {
     /// `RoadVehicle::GetDisplayMaxSpeed`.
     #[inline]
     fn get_display_max_speed(v: VehicleRef) -> i32 {
-        i32::from(v.max_speed()) / 2
+        i32::from(v.cached_max_speed()) / 2
     }
     /// Gets the maximum speed allowed by the road type of the tile for this vehicle.
     #[inline]
     fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
         let rtt = crate::road::availability::get_road_tram_type(Self::roadtype(s, v));
-        let tile = v.tile();
+        let tile = v.tile_raw();
         let roadtype = w.asserted(|m| crate::road_map::get_road_type(m, tile, rtt));
         (crate::movement::table(s.shared()).road_type_speed)(roadtype)
     }
@@ -732,7 +735,7 @@ impl GroundVehicleType for RoadVehicle {
         v: VehicleRef,
         _: Owner,
     ) -> bool {
-        let ts = movement.get_road_vehicle_track_status(v, TileIndex(v.tile()));
+        let ts = movement.get_road_vehicle_track_status(v, TileIndex(v.tile_raw()));
         let trackbits = TrackBits(track_status_to_track_bits(ts));
         trackbits == TrackBits::TRACK_BIT_X || trackbits == TrackBits::TRACK_BIT_Y
     }
@@ -744,7 +747,7 @@ impl GroundVehicleType for RoadVehicle {
         let rv = v.first();
         let first = Owner::of(rv);
         // SAFETY: the shared slope predicate gets live owners and immutable services.
-        unsafe { crate::road::slope_pixel(v, rv, first.road, v.direction()) }
+        unsafe { crate::road::slope_pixel(v, rv, first.road, v.direction_raw()) }
     }
     #[inline]
     fn is_in_depot(o: Owner) -> bool {
@@ -774,7 +777,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         let mut total_power = 0_u32;
         let mut max_te = 0_u32;
         let mut number_of_parts = 0_u32;
-        let mut max_track_speed = v.max_speed(); // Max track speed in internal units.
+        let mut max_track_speed = v.cached_max_speed(); // Max track speed in internal units.
 
         let mut part = Some(v);
         while let Some(u) = part {
@@ -841,8 +844,8 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         {
             /* Stop the vehicle if it has no power. */
             if total_power == 0 {
-                v.write_status(
-                    VehStates(v.status())
+                v.set_vehstatus_raw(
+                    VehStates(v.vehstatus_raw())
                         .with(VehStates::from_element(VehState::Stopped))
                         .0,
                 );
@@ -1013,7 +1016,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
     fn is_chain_in_depot(s: &Services, this: VehicleRef, o: Owner) -> bool {
         let v = this.first();
         /* Is the front engine stationary in the depot? */
-        if !World::new(s.shared()).depot(v.tile(), T::TRANSPORT.0) || v.speed() != 0 {
+        if !World::new(s.shared()).depot(v.tile_raw(), T::TRANSPORT.0) || v.cur_speed() != 0 {
             return false;
         }
 
@@ -1021,7 +1024,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         let mut part = Some(v);
         while let Some(u) = part {
             let uo = if u == this { o } else { Owner::of(u) };
-            if !T::is_in_depot(uo) || u.tile() != this.tile() {
+            if !T::is_in_depot(uo) || u.tile_raw() != this.tile_raw() {
                 return false;
             }
             part = u.next();
@@ -1060,7 +1063,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         v: VehicleRef,
         o: Owner,
     ) {
-        v.write_z(movement.get().get_slope_pixel_z(v.x(), v.y(), true));
+        v.set_z_pos(movement.get().get_slope_pixel_z(v.x_pos(), v.y_pos(), true));
         let mut flags = o.gv_flags();
         clr_bit16(&mut flags, GroundVehicleFlags::GVF_GOINGUP_BIT.0);
         clr_bit16(&mut flags, GroundVehicleFlags::GVF_GOINGDOWN_BIT.0);
@@ -1072,16 +1075,16 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
              * the tile (middle_z) and the edge of the tile (old_z),
              * which we then can compare. */
             let middle_z = movement.get().get_slope_pixel_z(
-                (v.x() & !TILE_UNIT_MASK.cast_signed()) | (TILE_SIZE / 2).cast_signed(),
-                (v.y() & !TILE_UNIT_MASK.cast_signed()) | (TILE_SIZE / 2).cast_signed(),
+                (v.x_pos() & !TILE_UNIT_MASK.cast_signed()) | (TILE_SIZE / 2).cast_signed(),
+                (v.y_pos() & !TILE_UNIT_MASK.cast_signed()) | (TILE_SIZE / 2).cast_signed(),
                 true,
             );
 
-            if middle_z != v.z() {
+            if middle_z != v.z_pos() {
                 let mut flags = o.gv_flags();
                 set_bit16(
                     &mut flags,
-                    if middle_z > v.z() {
+                    if middle_z > v.z_pos() {
                         GroundVehicleFlags::GVF_GOINGUP_BIT.0
                     } else {
                         GroundVehicleFlags::GVF_GOINGDOWN_BIT.0
@@ -1116,15 +1119,15 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         {
             if T::has_to_use_get_slope_pixel_z(v) {
                 /* In some cases, we have to use GetSlopePixelZ() */
-                v.write_z(movement.get().get_slope_pixel_z(v.x(), v.y(), true));
+                v.set_z_pos(movement.get().get_slope_pixel_z(v.x_pos(), v.y_pos(), true));
                 return;
             }
             let check = |ok| crate::movement::native_assert(s.shared(), ok);
             /* DirToDiagDir() is a simple right shift */
-            let dir = dir_to_diag_dir(Direction(v.direction()), check);
+            let dir = dir_to_diag_dir(Direction(v.direction_raw()), check);
             /* Read variables, so the compiler knows the access doesn't trap */
-            let x_pos = v.x() as i8;
-            let y_pos = v.y() as i8;
+            let x_pos = v.x_pos() as i8;
+            let y_pos = v.y_pos() as i8;
             /* DiagDirToAxis() is a simple mask */
             let mut d = if diag_dir_to_axis(dir, check) == Axis::AXIS_X {
                 x_pos
@@ -1142,10 +1145,10 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
             } else {
                 -d
             };
-            v.write_z(v.z().wrapping_add(i32::from(delta)));
+            v.set_z_pos(v.z_pos().wrapping_add(i32::from(delta)));
         }
 
-        s.assert(|| v.z() == movement.get().get_slope_pixel_z(v.x(), v.y(), true));
+        s.assert(|| v.z_pos() == movement.get().get_slope_pixel_z(v.x_pos(), v.y_pos(), true));
     }
 
     /// Checks if the vehicle is in a slope and sets the required flags in that case. Returns
@@ -1159,7 +1162,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         new_tile: bool,
         update_delta: bool,
     ) -> i32 {
-        let old_z = v.z();
+        let old_z = v.z_pos();
 
         if new_tile {
             Self::update_z_position_and_inclination(movement, v, o);
@@ -1274,9 +1277,9 @@ pub(crate) fn set_last_speed(s: &Services, v: VehicleRef) {
 /// `GroundVehicle::SetLastSpeed` with the owner the caller resolved.
 #[inline]
 pub(crate) fn set_last_speed_owned(s: &Services, v: VehicleRef, o: Owner) {
-    if v.speed() != read_field!(o.state, cache.last_speed) {
+    if v.cur_speed() != read_field!(o.state, cache.last_speed) {
         (s.vehicle.start_stop_dirty)(v);
-        write_field!(o.state, cache.last_speed, v.speed());
+        write_field!(o.state, cache.last_speed, v.cur_speed());
     }
 }
 
@@ -1296,12 +1299,12 @@ pub(crate) fn set_last_speed_owned(s: &Services, v: VehicleRef, o: Owner) {
 pub(crate) fn do_update_speed(v: VehicleRef, accel: u32, min_speed: i32, max_speed: i32) -> u32 {
     hit(witness::GROUND_SPEED);
     let mut spd = u32::from(v.subspeed()).wrapping_add(accel);
-    v.write_subspeed(spd as u8);
+    v.set_subspeed(spd as u8);
 
     /* When we are going faster than the maximum speed, reduce the speed
      * somewhat gradually. But never lower than the maximum speed. */
     let mut tempmax = max_speed;
-    let cur_speed = i32::from(v.speed());
+    let cur_speed = i32::from(v.cur_speed());
     if cur_speed > max_speed {
         tempmax = (cur_speed - cur_speed / 10 - 1).max(max_speed);
     }
@@ -1315,12 +1318,12 @@ pub(crate) fn do_update_speed(v: VehicleRef, accel: u32, min_speed: i32, max_spe
         .wrapping_add((spd as i32) >> 8)
         .min(tempmax)
         .max(min_speed) as u32;
-    v.write_speed(spd as u16);
+    v.set_cur_speed(spd as u16);
 
     let mut scaled_spd = crate::vehicle::advance_speed(spd) as i32;
 
     scaled_spd = scaled_spd.wrapping_add(i32::from(v.progress()));
-    v.write_progress(0); // set later in *Handler or *Controller
+    v.set_progress(0); // set later in *Handler or *Controller
     scaled_spd as u32
 }
 
@@ -1632,11 +1635,11 @@ mod tests {
         let s = services(Box::new(shared), true);
         let part = LaterPart::new();
         let v = part.v();
-        v.write_xy(5 * 16 + 8, 5 * 16 + 8);
+        v.set_xy(5 * 16 + 8, 5 * 16 + 8);
         let movement = crate::movement::CachedTable::new(s.shared());
         GroundVehicle::<Fixed>::update_z_position(s, &movement, v, Owner::of(v));
         assert_eq!(FAILED.get(), 1);
-        v.write_z(3 * crate::tile_type::TILE_HEIGHT.cast_signed());
+        v.set_z_pos(3 * crate::tile_type::TILE_HEIGHT.cast_signed());
         GroundVehicle::<Fixed>::update_z_position(s, &movement, v, Owner::of(v));
         assert_eq!(FAILED.get(), 1);
     }
