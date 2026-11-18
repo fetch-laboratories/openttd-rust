@@ -17,7 +17,8 @@
 //! process; no Rust borrow of map or owner state spans a leaf call, and leaves do not unwind.
 #![allow(unsafe_code)]
 use crate::clear_map::{
-    ClearGround, ClearTile, get_clear_density, get_clear_ground, is_clear_ground, is_snow_tile,
+    ClearGround, ClearTile, FieldTile, get_clear_density, get_clear_ground, is_clear_ground,
+    is_snow_tile,
 };
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::direction_type::{DiagDirection, DiagDirections};
@@ -327,7 +328,7 @@ impl<'a> TileLoop<'a> {
     reason = "the clear tile loop's measured hot path"
 )]
 #[inline(always)]
-fn update_fences(c: &TileLoop<'_>, clear: &ClearTile<'_>) {
+fn update_fences(c: &TileLoop<'_>, clear: ClearTile<'_>) {
     let w = &c.world;
     let tile = clear.tile();
     let field = clear.field();
@@ -340,20 +341,12 @@ fn update_fences(c: &TileLoop<'_>, clear: &ClearTile<'_>) {
     }
     let mut dirty = false;
 
-    for dir in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-        let dir = DiagDirection(dir);
-        if field.get_fence(dir) != 0 {
-            continue;
-        }
-        let neighbour = c.neighbour(tile, dir);
-        if w.kind(neighbour) == TileType::MP_CLEAR
-            && w.asserted(|m| is_clear_ground(m, neighbour, ClearGround::CLEAR_FIELDS))
-        {
-            continue;
-        }
-        (c.s().set_fence)(tile.0, dir, 3);
-        dirty = true;
-    }
+    // `for (DiagDirection dir = DIAGDIR_BEGIN; dir < DIAGDIR_END; dir++)`, one call per
+    // direction in order, so that each direction's offset and fence bits are constants.
+    dirty |= update_fence(c, field, DiagDirection::DIAGDIR_NE);
+    dirty |= update_fence(c, field, DiagDirection::DIAGDIR_SE);
+    dirty |= update_fence(c, field, DiagDirection::DIAGDIR_SW);
+    dirty |= update_fence(c, field, DiagDirection::DIAGDIR_NW);
 
     if dirty {
         c.mark_tile_dirty_by_tile(tile);
@@ -361,9 +354,31 @@ fn update_fences(c: &TileLoop<'_>, clear: &ClearTile<'_>) {
     }
 }
 
+/// One direction of `UpdateFences`'s loop; whether it set the fence.
+#[allow(
+    clippy::inline_always,
+    reason = "the clear tile loop's measured hot path"
+)]
+#[inline(always)]
+fn update_fence(c: &TileLoop<'_>, field: FieldTile<'_>, dir: DiagDirection) -> bool {
+    let w = &c.world;
+    let tile = field.tile();
+    if field.get_fence(dir) != 0 {
+        return false;
+    }
+    let neighbour = c.neighbour(tile, dir);
+    if w.kind(neighbour) == TileType::MP_CLEAR
+        && w.asserted(|m| is_clear_ground(m, neighbour, ClearGround::CLEAR_FIELDS))
+    {
+        return false;
+    }
+    (c.s().set_fence)(tile.0, dir, 3);
+    true
+}
+
 /// `TileLoopClearAlps`: convert to or from snowy tiles.
 #[inline]
-fn tile_loop_clear_alps(c: &TileLoop<'_>, clear: &ClearTile<'_>) {
+fn tile_loop_clear_alps(c: &TileLoop<'_>, clear: ClearTile<'_>) {
     let w = &c.world;
     let tile = clear.tile();
     let k = w.tile_z(tile) - c.get_snow_line() + 1;
@@ -424,7 +439,7 @@ fn neighbour_is_normal(c: &TileLoop<'_>, tile: TileIndex) -> bool {
 
 /// `TileLoopClearDesert`.
 #[inline]
-fn tile_loop_clear_desert(c: &TileLoop<'_>, clear: &ClearTile<'_>) {
+fn tile_loop_clear_desert(c: &TileLoop<'_>, clear: ClearTile<'_>) {
     let tile = clear.tile();
     /* Current desert level - 0 if it is not desert */
     let mut current = 0;
@@ -453,19 +468,20 @@ fn tile_loop_clear_desert(c: &TileLoop<'_>, clear: &ClearTile<'_>) {
     hit(Witness::Desert);
 }
 
-/// `TileLoop_Clear`.
+/// `TileLoop_Clear`. `AMBIENT` is `c.settings.ambient_callback` as the batch's constant, so a
+/// disabled `AmbientSoundEffect` gate costs nothing per visit.
 #[allow(
     clippy::inline_always,
     reason = "the clear tile loop's measured hot path"
 )]
 #[inline(always)]
-pub(crate) fn tile_loop_clear(c: &TileLoop<'_>, tile: TileIndex) {
-    crate::newgrf_generic::ambient(c.settings.ambient_callback, tile.0);
+pub(crate) fn tile_loop_clear<const AMBIENT: bool>(c: &TileLoop<'_>, tile: TileIndex) {
+    crate::newgrf_generic::ambient(AMBIENT, tile.0);
     let clear = ClearTile::new(&c.world, tile);
 
     match c.landscape() {
-        LandscapeType::Tropic => tile_loop_clear_desert(c, &clear),
-        LandscapeType::Arctic => tile_loop_clear_alps(c, &clear),
+        LandscapeType::Tropic => tile_loop_clear_desert(c, clear),
+        LandscapeType::Arctic => tile_loop_clear_alps(c, clear),
         _ => {}
     }
 
@@ -500,7 +516,7 @@ pub(crate) fn tile_loop_clear(c: &TileLoop<'_>, tile: TileIndex) {
         }
 
         ClearGround::CLEAR_FIELDS => {
-            update_fences(c, &clear);
+            update_fences(c, clear);
 
             if c.game_mode_editor() {
                 return;
@@ -1188,7 +1204,7 @@ mod tests {
         map.tiles[t].m4 = 1 << 5 | 1 << 2;
         map.extended[t].m6 = 1 << 2;
         let c = tile_loop(shared(), LandscapeType::Temperate);
-        update_fences(&c, &ClearTile::new(&c.world, tile));
+        update_fences(&c, ClearTile::new(&c.world, tile));
         assert_eq!(FAILED.get(), 5);
     }
 
@@ -1202,7 +1218,7 @@ mod tests {
         let map = Map::new(TileType::MP_ROAD);
         let tile = TileIndex(13 * 64 + 13);
         let c = tile_loop(shared(), LandscapeType::Temperate);
-        tile_loop_clear(&c, tile);
+        tile_loop_clear::<false>(&c, tile);
         assert_eq!(FAILED.get(), 5);
         assert_eq!(map.tiles[tile.0 as usize].m5, 1 << 5);
     }
@@ -1220,7 +1236,7 @@ mod tests {
         }
         let tile = TileIndex(17 * 64 + 17);
         let c = tile_loop(shared(), LandscapeType::Tropic);
-        tile_loop_clear(&c, tile);
+        tile_loop_clear::<false>(&c, tile);
         assert_eq!(FAILED.get(), 0);
         assert_eq!(
             map.tiles[tile.0 as usize].m5,
@@ -1242,7 +1258,7 @@ mod tests {
         map.tiles[t].m4 = 1 << 5 | 1 << 2;
         map.extended[t].m6 = 1 << 2;
         let c = tile_loop(shared(), LandscapeType::Temperate);
-        tile_loop_clear(&c, tile);
+        tile_loop_clear::<false>(&c, tile);
         assert_eq!(FAILED.get(), 0);
         assert_eq!(map.tiles[t].m5, 3 << 5 | fields);
         assert_eq!(

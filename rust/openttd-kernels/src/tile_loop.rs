@@ -112,7 +112,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
     let tile_type = types.read(tile);
     let g = &s.ground;
     match tile_type {
-        TileType::MP_CLEAR => ground::tile_loop_clear(ground, tile),
+        TileType::MP_CLEAR => ground::tile_loop_clear::<AMBIENT>(ground, tile),
         TileType::MP_RAILWAY => ground::tile_loop_track(ground, tile),
         TileType::MP_ROAD => ground::tile_loop_road(ground, tile),
         TileType::MP_HOUSE => unsafe { town::house::tile_loop(s.town, s.shared, tile) },

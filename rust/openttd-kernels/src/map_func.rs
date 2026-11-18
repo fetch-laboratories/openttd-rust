@@ -569,6 +569,7 @@ macro_rules! map_fields {
 /// borrow keeps allocation metadata live; scalars are loaded afresh, never
 /// copied or referenced as a tile record. Field meanings are in the original
 /// `docs/landscape.html`.
+#[derive(Clone, Copy)]
 pub(crate) struct TileFields<'a> {
     base: *const BaseTileLayout,
     extended: *const ExtendedTileLayout,
