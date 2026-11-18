@@ -71,12 +71,12 @@ pub struct ImportServices {
 impl ImportServices {
     fn format_error() {
         show_error_message(
-            get_encoded_string(STR_TOWN_DATA_ERROR_LOAD_FAILED, &[]),
-            get_encoded_string(STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY, &[]),
+            &get_encoded_string(STR_TOWN_DATA_ERROR_LOAD_FAILED, &[]),
+            &get_encoded_string(STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY, &[]),
             WarningLevel::WL_ERROR,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
     }
@@ -224,15 +224,15 @@ impl ImportServices {
         // If we couldn't found a town (or multiple), display a message to the player with the number of failed towns.
         if failed_towns > 0 {
             show_error_message(
-                get_encoded_string(
+                &get_encoded_string(
                     STR_TOWN_DATA_ERROR_FAILED_TO_FOUND_TOWN,
                     &[StringParameterData::Integer(u64::from(failed_towns))],
                 ),
-                EncodedString::default(),
+                &EncodedString::default(),
                 WarningLevel::WL_WARNING,
                 0,
                 0,
-                EncodedString::default(),
+                &EncodedString::default(),
                 CompanyID::INVALID,
             );
         }

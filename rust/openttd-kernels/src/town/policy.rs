@@ -69,8 +69,8 @@ pub(crate) fn check_town_road_types(leaves: &Leaves) -> bool {
     }
     if min_date < CalendarDate(i32::MAX) {
         show_error_message(
-            get_encoded_string(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET, &[]),
-            get_encoded_string(
+            &get_encoded_string(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET, &[]),
+            &get_encoded_string(
                 STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_YET_EXPLANATION,
                 // `StringParameter` stores the date's `int32_t` base as `uint64_t`.
                 &[StringParameterData::Integer(
@@ -80,20 +80,20 @@ pub(crate) fn check_town_road_types(leaves: &Leaves) -> bool {
             WarningLevel::WL_CRITICAL,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
     } else {
         show_error_message(
-            get_encoded_string(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL, &[]),
-            get_encoded_string(
+            &get_encoded_string(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL, &[]),
+            &get_encoded_string(
                 STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL_EXPLANATION,
                 &[],
             ),
             WarningLevel::WL_CRITICAL,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
     }

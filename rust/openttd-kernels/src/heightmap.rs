@@ -121,12 +121,12 @@ fn ordered_palette(gray: &mut [u8; 256], size: usize) {
 /// `ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail), WL_ERROR)`.
 fn show_error(summary: u32, detail: u32) {
     show_error_message(
-        get_encoded_string(StringID(summary), &[]),
-        get_encoded_string(StringID(detail), &[]),
+        &get_encoded_string(StringID(summary), &[]),
+        &get_encoded_string(StringID(detail), &[]),
         WarningLevel::WL_ERROR,
         0,
         0,
-        EncodedString::default(),
+        &EncodedString::default(),
         CompanyID::INVALID,
     );
 }

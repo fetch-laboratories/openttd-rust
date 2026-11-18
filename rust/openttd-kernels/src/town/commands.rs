@@ -457,12 +457,12 @@ impl<'a> Commands<'a> {
             // DoCommandFlag::Execute.
             if (self.s.local_company)() {
                 show_error_message(
-                    get_encoded_string(STR_ERROR_BRIBE_FAILED, &[]),
-                    EncodedString::default(),
+                    &get_encoded_string(STR_ERROR_BRIBE_FAILED, &[]),
+                    &EncodedString::default(),
                     WarningLevel::WL_INFO,
                     0,
                     0,
-                    EncodedString::default(),
+                    &EncodedString::default(),
                     CompanyID::INVALID,
                 );
             }

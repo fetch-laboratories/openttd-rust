@@ -37,12 +37,12 @@ impl NetworkJoinStatus {
 pub(crate) fn show_network_error(error_string: StringID) {
     crate::session::set_pending(SwitchMode::MENU);
     show_error_message(
-        get_encoded_string(error_string, &[]),
-        EncodedString::default(),
+        &get_encoded_string(error_string, &[]),
+        &EncodedString::default(),
         WarningLevel::WL_CRITICAL,
         0,
         0,
-        EncodedString::default(),
+        &EncodedString::default(),
         CompanyID::INVALID,
     );
 }

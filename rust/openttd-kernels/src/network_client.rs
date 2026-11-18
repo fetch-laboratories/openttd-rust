@@ -245,12 +245,12 @@ pub(crate) fn receive_server_full() -> NetworkRecvStatus {
 
     /* We try to join a server which is full */
     show_error_message(
-        get_encoded_string(STR_NETWORK_ERROR_SERVER_FULL, &[]),
-        EncodedString::default(),
+        &get_encoded_string(STR_NETWORK_ERROR_SERVER_FULL, &[]),
+        &EncodedString::default(),
         WarningLevel::WL_CRITICAL,
         0,
         0,
-        EncodedString::default(),
+        &EncodedString::default(),
         CompanyID::INVALID,
     );
 
@@ -263,12 +263,12 @@ pub(crate) fn receive_server_banned() -> NetworkRecvStatus {
 
     /* We try to join a server where we are banned */
     show_error_message(
-        get_encoded_string(STR_NETWORK_ERROR_SERVER_BANNED, &[]),
-        EncodedString::default(),
+        &get_encoded_string(STR_NETWORK_ERROR_SERVER_BANNED, &[]),
+        &EncodedString::default(),
         WarningLevel::WL_CRITICAL,
         0,
         0,
-        EncodedString::default(),
+        &EncodedString::default(),
         CompanyID::INVALID,
     );
 
@@ -333,12 +333,12 @@ pub(crate) fn receive_server_check_newgrfs(
 
     /* NewGRF mismatch, bail out */
     show_error_message(
-        get_encoded_string(STR_NETWORK_ERROR_NEWGRF_MISMATCH, &[]),
-        EncodedString::default(),
+        &get_encoded_string(STR_NETWORK_ERROR_NEWGRF_MISMATCH, &[]),
+        &EncodedString::default(),
         WarningLevel::WL_CRITICAL,
         0,
         0,
-        EncodedString::default(),
+        &EncodedString::default(),
         CompanyID::INVALID,
     );
     ret
@@ -566,12 +566,12 @@ pub(crate) fn map_loaded(
 
     if !load_success {
         show_error_message(
-            get_encoded_string(STR_NETWORK_ERROR_SAVEGAMEERROR, &[]),
-            EncodedString::default(),
+            &get_encoded_string(STR_NETWORK_ERROR_SAVEGAMEERROR, &[]),
+            &EncodedString::default(),
             WarningLevel::WL_CRITICAL,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
         return NetworkRecvStatus::NETWORK_RECV_STATUS_SAVEGAME;
@@ -715,12 +715,12 @@ pub(crate) fn receive_server_shutdown(
      * care about the server shutting down. */
     if status(game) >= ServerStatus::STATUS_JOIN {
         show_error_message(
-            get_encoded_string(STR_NETWORK_MESSAGE_SERVER_SHUTDOWN, &[]),
-            EncodedString::default(),
+            &get_encoded_string(STR_NETWORK_MESSAGE_SERVER_SHUTDOWN, &[]),
+            &EncodedString::default(),
             WarningLevel::WL_CRITICAL,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
     }
@@ -750,12 +750,12 @@ pub(crate) fn receive_server_newgame(
             s.reconnect.write((own_client_id(s).0 % 16 + 1) as u8);
         };
         show_error_message(
-            get_encoded_string(STR_NETWORK_MESSAGE_SERVER_REBOOT, &[]),
-            EncodedString::default(),
+            &get_encoded_string(STR_NETWORK_MESSAGE_SERVER_REBOOT, &[]),
+            &EncodedString::default(),
             WarningLevel::WL_CRITICAL,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
     }
@@ -913,8 +913,8 @@ pub(crate) fn check_connection(
 
     unsafe { LAST_LAG.get().write(lag) };
     show_error_message(
-        get_encoded_string(STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION_CAPTION, &[]),
-        get_encoded_string(
+        &get_encoded_string(STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION_CAPTION, &[]),
+        &get_encoded_string(
             STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION,
             // `StringParameter` stores the `int64_t` count as `uint64_t`.
             &[StringParameterData::Integer(
@@ -924,7 +924,7 @@ pub(crate) fn check_connection(
         WarningLevel::WL_INFO,
         0,
         0,
-        EncodedString::default(),
+        &EncodedString::default(),
         CompanyID::INVALID,
     );
 }

@@ -927,12 +927,12 @@ pub(crate) unsafe fn generate_towns(
         && !observed!((f.leaves.environment.editor)())
     {
         show_error_message(
-            get_encoded_string(STR_ERROR_COULD_NOT_CREATE_TOWN, &[]),
-            EncodedString::default(),
+            &get_encoded_string(STR_ERROR_COULD_NOT_CREATE_TOWN, &[]),
+            &EncodedString::default(),
             WarningLevel::WL_CRITICAL,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
     }

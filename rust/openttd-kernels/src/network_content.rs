@@ -751,12 +751,12 @@ fn after_download(s: &Services) {
         on_download_complete(s, info(ci).id());
     } else {
         show_error_message(
-            get_encoded_string(STR_CONTENT_ERROR_COULD_NOT_EXTRACT, &[]),
-            EncodedString::default(),
+            &get_encoded_string(STR_CONTENT_ERROR_COULD_NOT_EXTRACT, &[]),
+            &EncodedString::default(),
             WarningLevel::WL_ERROR,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
     }

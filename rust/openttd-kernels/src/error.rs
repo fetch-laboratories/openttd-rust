@@ -25,7 +25,7 @@ impl WarningLevel {
     pub const WL_WARNING: Self = Self(1);
     /// Errors (eg. saving/loading failed).
     pub const WL_ERROR: Self = Self(2);
-    /// Critical errors, the MessageBox is shown in all cases.
+    /// Critical errors, the `MessageBox` is shown in all cases.
     pub const WL_CRITICAL: Self = Self(3);
 }
 
@@ -50,21 +50,21 @@ fn span(string: &EncodedString) -> ByteSpan {
 /// - `extra_msg`: extra error message shown in third line. Can be empty.
 /// - `company`: company belonging to the face being shown; `CompanyID::INVALID` if no face.
 pub(crate) fn show_error_message(
-    summary_msg: EncodedString,
-    detailed_msg: EncodedString,
+    summary_msg: &EncodedString,
+    detailed_msg: &EncodedString,
     wl: WarningLevel,
     x: i32,
     y: i32,
-    extra_msg: EncodedString,
+    extra_msg: &EncodedString,
     company: CompanyID,
 ) {
     (crate::news_func::services().show_error_message)(
-        span(&summary_msg),
-        span(&detailed_msg),
+        span(summary_msg),
+        span(detailed_msg),
         wl.0,
         x,
         y,
-        span(&extra_msg),
+        span(extra_msg),
         company.0,
     );
 }
@@ -82,21 +82,21 @@ mod tests {
     fn show_error_message_passes_each_argument_in_order() {
         take();
         super::show_error_message(
-            get_encoded_string(StringID(1), &[]),
-            get_encoded_string(StringID(2), &[]),
+            &get_encoded_string(StringID(1), &[]),
+            &get_encoded_string(StringID(2), &[]),
             WarningLevel::WL_WARNING,
             -5,
             7,
-            get_encoded_string(StringID(3), &[]),
+            &get_encoded_string(StringID(3), &[]),
             CompanyID(4),
         );
         super::show_error_message(
-            get_encoded_string(StringID(8), &[]),
-            EncodedString::default(),
+            &get_encoded_string(StringID(8), &[]),
+            &EncodedString::default(),
             WarningLevel::WL_CRITICAL,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
         assert_eq!(

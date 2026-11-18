@@ -294,18 +294,18 @@ pub(crate) fn check_industries(
         }
         let is = industrytype::get_industry_spec(IndustryType(it));
         show_error_message(
-            get_encoded_string(
+            &get_encoded_string(
                 STR_ERROR_NO_SUITABLE_PLACES_FOR_INDUSTRIES,
                 // SAFETY: `GetIndustrySpec` returns a live spec of the process-lifetime table.
                 &[StringParameterData::Integer(u64::from(unsafe {
                     (*is).name
                 }))],
             ),
-            get_encoded_string(STR_ERROR_NO_SUITABLE_PLACES_FOR_INDUSTRIES_EXPLANATION, &[]),
+            &get_encoded_string(STR_ERROR_NO_SUITABLE_PLACES_FOR_INDUSTRIES_EXPLANATION, &[]),
             WarningLevel::WL_WARNING,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
         count += 1;

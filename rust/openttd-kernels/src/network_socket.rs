@@ -151,12 +151,12 @@ pub(crate) fn close_connection(
         crate::session::set_pending(crate::openttd::SwitchMode::MENU);
         (s.lifecycle.set_networking)(false);
         show_error_message(
-            get_encoded_string(STR_NETWORK_ERROR_LOSTCONNECTION, &[]),
-            EncodedString::default(),
+            &get_encoded_string(STR_NETWORK_ERROR_LOSTCONNECTION, &[]),
+            &EncodedString::default(),
             WarningLevel::WL_CRITICAL,
             0,
             0,
-            EncodedString::default(),
+            &EncodedString::default(),
             CompanyID::INVALID,
         );
 

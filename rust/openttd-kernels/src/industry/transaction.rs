@@ -1099,22 +1099,22 @@ pub(crate) unsafe fn cmd_build_industry(
             if !e.succeeded() && unsafe { (e.x.local_company)() } {
                 if prospect_success {
                     show_error_message(
-                        get_encoded_string(STR_ERROR_CAN_T_PROSPECT_INDUSTRY, &[]),
-                        get_encoded_string(STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING, &[]),
+                        &get_encoded_string(STR_ERROR_CAN_T_PROSPECT_INDUSTRY, &[]),
+                        &get_encoded_string(STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING, &[]),
                         WarningLevel::WL_INFO,
                         0,
                         0,
-                        EncodedString::default(),
+                        &EncodedString::default(),
                         CompanyID::INVALID,
                     );
                 } else {
                     show_error_message(
-                        get_encoded_string(STR_ERROR_CAN_T_PROSPECT_INDUSTRY, &[]),
-                        get_encoded_string(STR_ERROR_PROSPECTING_WAS_UNLUCKY, &[]),
+                        &get_encoded_string(STR_ERROR_CAN_T_PROSPECT_INDUSTRY, &[]),
+                        &get_encoded_string(STR_ERROR_PROSPECTING_WAS_UNLUCKY, &[]),
                         WarningLevel::WL_INFO,
                         0,
                         0,
-                        EncodedString::default(),
+                        &EncodedString::default(),
                         CompanyID::INVALID,
                     );
                 }
