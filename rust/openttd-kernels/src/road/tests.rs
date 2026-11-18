@@ -31,6 +31,35 @@ fn original_movement_and_stop_tables() {
     }
 }
 
+/// The two reversal switches of `IndividualRoadVehicleController`, every valid input
+/// against the original's case table (`roadveh_cmd.cpp:1237-1242` and `:1380-1385`),
+/// written out as the original's enum values.
+#[test]
+fn tram_reversal_switches() {
+    use super::{tram_long_corner_trackdir, tram_turn_around_needed};
+    use crate::road_type::RoadBits;
+    use crate::track_type::Trackdir;
+    /* TRACKDIR_RVREV_NE = 6, _SE = 7, _SW = 14, _NW = 15; ROAD_NW = 1, _SW = 2,
+     * _SE = 4, _NE = 8. */
+    for (dir, needed) in [(6, 2), (7, 1), (14, 8), (15, 4)] {
+        assert_eq!(
+            tram_turn_around_needed(Trackdir(dir)),
+            RoadBits(needed),
+            "trackdir {dir}"
+        );
+    }
+    /* DIAGDIR_NE = 0, _SE = 1, _SW = 2, _NW = 3; the upper drive data bits are ignored. */
+    for (x, dir) in [(3, 7), (0, 14), (1, 15), (2, 6)] {
+        for high in [0, 0xFC] {
+            assert_eq!(
+                tram_long_corner_trackdir(x | high),
+                Trackdir(dir),
+                "x {x:#x}"
+            );
+        }
+    }
+}
+
 /// The controller bodies against `src/roadveh_cmd.cpp`, through recording tables.
 #[cfg(test)]
 mod controller {

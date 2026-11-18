@@ -440,6 +440,32 @@ impl Part {
     }
 }
 
+/// `IndividualRoadVehicleController`: the road bits a tram needs on its tile to turn
+/// around on the reversing trackdir `dir` using the 'big' corner loop. The caller has
+/// tested `IsReversingRoadTrackdir(dir)`, so the default is unreachable.
+fn tram_turn_around_needed(dir: Trackdir) -> RoadBits {
+    match dir {
+        Trackdir::TRACKDIR_RVREV_NE => RoadBits::ROAD_SW,
+        Trackdir::TRACKDIR_RVREV_SE => RoadBits::ROAD_NW,
+        Trackdir::TRACKDIR_RVREV_SW => RoadBits::ROAD_NE,
+        Trackdir::TRACKDIR_RVREV_NW => RoadBits::ROAD_SE,
+        _ => crate::services_assert::not_reached(),
+    }
+}
+
+/// `IndividualRoadVehicleController`: the reversing trackdir that shows a tram's turn
+/// around the long corner, from the drive data's `x` direction bits. Two bits name
+/// every `DiagDirection`, so the default is unreachable.
+fn tram_long_corner_trackdir(x: u8) -> Trackdir {
+    match DiagDirection(x & 0x3) {
+        DiagDirection::DIAGDIR_NW => Trackdir::TRACKDIR_RVREV_SE,
+        DiagDirection::DIAGDIR_NE => Trackdir::TRACKDIR_RVREV_SW,
+        DiagDirection::DIAGDIR_SE => Trackdir::TRACKDIR_RVREV_NW,
+        DiagDirection::DIAGDIR_SW => Trackdir::TRACKDIR_RVREV_NE,
+        _ => crate::services_assert::not_reached(),
+    }
+}
+
 /// `RoadVehFindData`.
 struct RoadVehFindData {
     x: i32,
@@ -1891,13 +1917,7 @@ impl<'a> Game<'a> {
                     if road_type_is_tram(self.roadtype(v.v)) {
                         /* Determine the road bits the tram needs to be able to turn around
                          * using the 'big' corner loop. */
-                        let needed = match dir {
-                            Trackdir::TRACKDIR_RVREV_NE => RoadBits::ROAD_SW,
-                            Trackdir::TRACKDIR_RVREV_SE => RoadBits::ROAD_NW,
-                            Trackdir::TRACKDIR_RVREV_SW => RoadBits::ROAD_NE,
-                            Trackdir::TRACKDIR_RVREV_NW => RoadBits::ROAD_SE,
-                            _ => crate::services_assert::not_reached(),
-                        };
+                        let needed = tram_turn_around_needed(dir);
                         if v.v
                             .previous()
                             .is_some_and(|previous| previous.tile() == tile)
@@ -2097,13 +2117,7 @@ impl<'a> Game<'a> {
                  * going to be properly shown.
                  */
                 turn_around_start_frame = RVC_START_FRAME_AFTER_LONG_TRAM;
-                dir = match DiagDirection(rd.0 & 0x3) {
-                    DiagDirection::DIAGDIR_NW => Trackdir::TRACKDIR_RVREV_SE,
-                    DiagDirection::DIAGDIR_NE => Trackdir::TRACKDIR_RVREV_SW,
-                    DiagDirection::DIAGDIR_SE => Trackdir::TRACKDIR_RVREV_NW,
-                    DiagDirection::DIAGDIR_SW => Trackdir::TRACKDIR_RVREV_NE,
-                    _ => crate::services_assert::not_reached(),
-                };
+                dir = tram_long_corner_trackdir(rd.0);
             } else if v.v.is_front_engine() {
                 /* If this is the front engine, look for the right path. */
                 dir = self.road_find_path_to_dest(v, v.v.tile(), DiagDirection(rd.0 & 3));
