@@ -931,7 +931,7 @@ static const OpenTTDNewsServices _rust_news_services{
 		std::destroy_n(params.data(), count);
 	},
 	.iconsole_print = [](uint16_t colour_code, OpenTTDByteSpan string) noexcept {
-		IConsolePrint(static_cast<TextColour>(colour_code), std::string{reinterpret_cast<const char *>(string.data), string.size});
+		IConsolePrint(static_cast<TextColour>(colour_code), std::string_view{reinterpret_cast<const char *>(string.data), string.size});
 	},
 	.network_text_message = [](uint8_t action, uint16_t colour, bool self_send, OpenTTDByteSpan name, OpenTTDByteSpan str, const OpenTTDRustEncodedParameter *data) noexcept {
 		NetworkTextMessage(static_cast<NetworkAction>(action), static_cast<TextColour>(colour), self_send, {reinterpret_cast<const char *>(name.data), name.size},
