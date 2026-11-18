@@ -110,6 +110,7 @@ static CompanyFinances *Fin_company_finances(uint8_t id) noexcept
 	Company *c = Company::GetIfValid(id);
 	return c == nullptr ? nullptr : &c->Finances();
 }
+static CompanyFinances *Fin_company_get_finances(uint8_t id) noexcept { return &Company::Get(id)->Finances(); }
 static void Fin_invalidate_company_windows(uint8_t id) noexcept { InvalidateCompanyWindows(Company::Get(id)); }
 static void Fin_give_money_message(uint8_t dest, int64_t amount) noexcept
 {
@@ -355,6 +356,7 @@ const OpenTTDCompanyFinanceServices &GetRustCompanyFinanceServices() noexcept
 	static const OpenTTDCompanyFinanceServices services{
 		.current_company = RustCurrentCompanyID, .set_current_company = RustSetCurrentCompanyID,
 		.networking = RustNetworking, .company_finances = Fin_company_finances,
+		.company_get_finances = Fin_company_get_finances,
 		.invalidate_company_windows = Fin_invalidate_company_windows,
 		.give_money_message = Fin_give_money_message, .money_animation = Fin_money_animation,
 	};
