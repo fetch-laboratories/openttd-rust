@@ -103,18 +103,24 @@ unsafe fn orders(
         0,
         flags.0,
         |flags| {
-            crate::orders::clone_order(
-                new.cast(),
-                old.cast(),
-                if share {
-                    CloneOptions::CO_SHARE
-                } else {
-                    CloneOptions::CO_COPY
-                },
-                flags & DoCommandFlag::EXECUTE != 0,
-                out.cast(),
-                c.orders,
-            );
+            // SAFETY: `out` is the caller's live native cost, and `new` and `old` are live
+            // vehicle shells.
+            unsafe {
+                crate::orders::cmd_clone_order(
+                    c.orders,
+                    out.cast(),
+                    flags & DoCommandFlag::EXECUTE != 0,
+                    crate::orders::CmdCloneOrder {
+                        action: if share {
+                            CloneOptions::CO_SHARE
+                        } else {
+                            CloneOptions::CO_COPY
+                        },
+                        veh_dst: new.cast(),
+                        veh_src: old.cast(),
+                    },
+                )
+            };
         },
     );
 }

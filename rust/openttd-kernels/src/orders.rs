@@ -2874,27 +2874,47 @@ pub unsafe extern "C" fn openttd_rust_command_clone(
     output: *mut c_void,
     leaves: &'static Leaves,
 ) -> u64 {
-    clone_order(
-        v,
-        source,
-        CloneOptions(action),
-        execute != 0,
-        output,
-        leaves,
-    )
+    // SAFETY: the native command passes its live CommandCost slot and the vehicle
+    // shells `Vehicle::GetIfValid` returned.
+    unsafe {
+        cmd_clone_order(
+            leaves,
+            output,
+            execute != 0,
+            CmdCloneOrder {
+                action: CloneOptions(action),
+                veh_dst: v,
+                veh_src: source,
+            },
+        )
+    }
 }
 
-/// `CmdCloneOrder` on the destination and source vehicle shells, for Rust callers.
-pub(crate) fn clone_order(
-    v: *mut c_void,
-    source: *mut c_void,
-    action: CloneOptions,
-    execute: bool,
-    output: *mut c_void,
+/// `CmdCloneOrder`'s arguments, with each vehicle as its shell.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdCloneOrder {
+    /// Action to perform.
+    pub(crate) action: CloneOptions,
+    /// Destination vehicle to clone orders to.
+    pub(crate) veh_dst: *mut c_void,
+    /// Source vehicle to clone orders from, if any (none for `CO_UNSHARE`).
+    pub(crate) veh_src: *mut c_void,
+}
+
+/// `CmdCloneOrder`: clone, share or copy an order list of another vehicle. The cost or
+/// error is in `output`.
+///
+/// # Safety
+/// `output` is a live native `CommandCost`, and each vehicle is null or a live vehicle
+/// shell, for the whole synchronous call.
+pub(crate) unsafe fn cmd_clone_order(
     leaves: &'static Leaves,
+    output: *mut c_void,
+    execute: bool,
+    args: CmdCloneOrder,
 ) -> u64 {
     let control = Control { g: Game(leaves) };
-    control.clone_command(v, source, action, execute, output)
+    control.clone_command(args.veh_dst, args.veh_src, args.action, execute, output)
 }
 
 #[unsafe(no_mangle)]

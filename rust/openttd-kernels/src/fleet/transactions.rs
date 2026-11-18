@@ -307,14 +307,20 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
         0,
         DoCommandFlag::EXECUTE,
         |flags| {
-            crate::orders::clone_order(
-                new.cast(),
-                old.cast(),
-                CloneOptions::CO_SHARE,
-                flags & DoCommandFlag::EXECUTE != 0,
-                out.cast(),
-                s.orders,
-            );
+            // SAFETY: `out` is the caller's live native cost, and `new` and `old` are live
+            // vehicle shells.
+            unsafe {
+                crate::orders::cmd_clone_order(
+                    s.orders,
+                    out.cast(),
+                    flags & DoCommandFlag::EXECUTE != 0,
+                    crate::orders::CmdCloneOrder {
+                        action: CloneOptions::CO_SHARE,
+                        veh_dst: new.cast(),
+                        veh_src: old.cast(),
+                    },
+                )
+            };
         },
     );
 }
