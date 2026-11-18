@@ -8,7 +8,7 @@ Each role has a fixed model and effort, in the table below ([ADR 0011](adr/0011-
 | --- | --- | --- |
 | Implementation and fixes | `claude-opus-5-5`, medium; high for difficult analysis | `gpt-6.1-sol`, high |
 | Planning | `claude-fable-5-2`, medium | `gpt-6-astra`, high |
-| Independent review | `gpt-6.1-sol`, high | `gpt-6.1-sol`, high |
+| Independent review | `gpt-6.2-sol`, high | `gpt-6.2-sol`, high |
 | Routine runs, measurements and tracker edits | `claude-sonnet-5-5`, medium | `gpt-6.1-terra`, high |
 
 Under a Claude Code root, Opus handles all code-touching work; Sonnet handles only non-code work. Under a Codex root, Sol handles substantive implementation and analysis; Terra handles bounded mechanical work.
