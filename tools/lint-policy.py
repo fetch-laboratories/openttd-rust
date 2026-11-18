@@ -457,7 +457,15 @@ def main() -> int:
         help="the CI event (default: GITHUB_EVENT_NAME, else pull_request);"
         " a suppression pending review fails only in merge_group",
     )
+    parser.add_argument(
+        "--same-item",
+        nargs=3,
+        metavar=("SITE", "ACCEPTED", "HEAD"),
+        help="only exit 0 when the suppressed item's text is equal at both commits",
+    )
     args = parser.parse_args()
+    if args.same_item:
+        return int(not unchanged_scope(*args.same_item))
     args.base_ref = merge_base(args.base_ref, run=git, announce=True)
     # Quick runs lint policy on every change, so every record file is validated
     # here even when no gate needs its records.

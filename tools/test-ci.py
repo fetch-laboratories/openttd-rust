@@ -13,6 +13,7 @@ import threading
 import unittest
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
+from functools import partial
 from pathlib import Path
 from typing import Any, TypedDict, cast
 from unittest.mock import patch
@@ -20,7 +21,9 @@ from unittest.mock import patch
 import ci
 import ci_log
 import review_report
+import source_fixture
 import status_comment
+import vcs
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -3053,10 +3056,17 @@ class EnqueueTests(unittest.TestCase):
 
         retry = world.get("retry")
         args = argparse.Namespace(repo="example/fork", pr=170, retry=retry)
+        discussion = cast(list[dict[str, str]], world.get("comments", []))
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(ci, "api", side_effect=api),
             patch.object(ci, "gh", side_effect=gh),
+            patch.object(ci, "added_records", return_value=world.get("records", [])),
+            patch.object(
+                ci,
+                "listing",
+                side_effect=lambda _, path: discussion if "/comments" in path else [],
+            ),
             patch.object(ci, "require_stamp") as stamp,
             patch.object(
                 ci.preflight_stamp, "common_local", return_value=Path(directory)
@@ -3218,6 +3228,160 @@ class EnqueueTests(unittest.TestCase):
             ):
                 self.enqueue()
         self.assertEqual(self.calls, [])
+
+    def test_enqueue_names_every_missing_acceptance(self) -> None:
+        growth = {"kind": "growth", "counter": "tools_cpp", "added": {"t.cpp": 3}}
+        lint = {
+            "kind": "lint",
+            "tool": "clippy",
+            "site": "rust/x.rs | fn f | too_many_lines | item",
+            "before": [],
+            "after": [120],
+        }
+        carry = {"kind": "carry", "tool": "clippy", "from": "a", "to": "b"}
+        records = [growth, lint, carry]
+
+        def accepting(*accepted: Mapping[str, object]) -> dict[str, str]:
+            return {
+                "body": "Agent: /review | Model: m | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": PREVIOUS, "accept": list(accepted)})
+                + "\n```"
+            }
+
+        entry = {"state": "QUEUED", "position": 1}
+        for comments, missing in (
+            ([], 2),
+            ([accepting(growth)], 1),
+            # The implementer's own block accepts nothing.
+            (
+                [
+                    dict(
+                        accepting(growth, lint),
+                        body=accepting(growth, lint)["body"].replace(
+                            "/review", "/implementation"
+                        ),
+                    )
+                ],
+                2,
+            ),
+        ):
+            with (
+                self.subTest(comments=len(comments), missing=missing),
+                self.assertRaisesRegex(
+                    ValueError, f"lacks {missing} cleanup"
+                ) as raised,
+            ):
+                self.enqueue(records=records, comments=comments, entry=entry)
+            self.assertEqual(self.calls, [])
+            text = str(raised.exception)
+            self.assertIn("too_many_lines", text)
+            self.assertNotIn("carry", text)
+        # An acceptance read at an earlier head holds at this one.
+        reported, calls = self.enqueue(
+            records=records, comments=[accepting(growth, lint)], entry=entry
+        )
+        self.assertTrue(reported.startswith("queued"))
+        self.assertEqual(calls[0][:2], ("pr", "merge"))
+
+    def test_records_and_an_unsafe_item_are_read_from_commits(self) -> None:
+        site = "rust/x.rs | impl Native | allow unsafe_code"
+        record = {
+            "kind": "suppression",
+            "tool": "rust",
+            "site": site,
+            "before": 0,
+            "after": 1,
+            "operation": "o",
+            "source_contract": "s",
+            "reason": "r",
+            "retiring_owner": "w",
+            "retirement_condition": "c",
+        }
+        item = "#[allow(unsafe_code)]\nimpl Native { pub const N: u8 = 1; }\n"
+        records = "migration/cleanup-records/t3-x.json"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_fixture.initialize(root, {"rust/x.rs": "pub struct Native;\n"})
+            base = vcs.git("rev-parse", "HEAD", cwd=root).strip()
+
+            def commit(files: Mapping[str, str]) -> str:
+                for path, text in files.items():
+                    (root / path).parent.mkdir(parents=True, exist_ok=True)
+                    (root / path).write_text(text)
+                vcs.git("add", "-A", cwd=root)
+                vcs.git(
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@example.invalid",
+                    "commit",
+                    "-qm",
+                    "Change: x",
+                    cwd=root,
+                )
+                return vcs.git("rev-parse", "HEAD", cwd=root).strip()
+
+            reviewed = commit(
+                {
+                    "rust/x.rs": "pub struct Native;\n" + item,
+                    records: json.dumps([record]),
+                }
+            )
+            other = commit({"rust/x.rs": "pub struct Native;\nfn g() {}\n" + item})
+            changed = commit(
+                {"rust/x.rs": "pub struct Native;\n" + item.replace("1", "2")}
+            )
+            # The checkout stays at the base: records come from the commits.
+            vcs.git("checkout", "-q", base, cwd=root)
+            body = (
+                "Agent: /review | Model: m | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": reviewed, "accept": [record]})
+                + "\n```"
+            )
+            rooted = partial(vcs.git, cwd=root)
+            for head, refused in (
+                (reviewed, ""),
+                (other, ""),
+                (changed, "item changed"),
+            ):
+                with (
+                    self.subTest(head=head),
+                    patch.object(ci.cleanup_contract, "git", rooted),
+                    patch.object(ci.cleanup_contract, "ROOT", root),
+                    # lint-policy.py runs as a process in this repository.
+                    patch.dict(os.environ, {"GIT_DIR": str(root / ".git")}),
+                    patch.object(
+                        ci,
+                        "api",
+                        return_value={"merge_base_commit": {"sha": base}},
+                    ),
+                    patch.object(
+                        ci,
+                        "listing",
+                        side_effect=lambda _, path: (
+                            [{"body": body}] if "/comments" in path else []
+                        ),
+                    ),
+                ):
+                    self.assertEqual(ci.added_records("example/fork", head), [record])
+                    check = partial(
+                        ci.missing_acceptances, "example/fork", 170, PULL, head
+                    )
+                    if refused:
+                        with self.assertRaisesRegex(ValueError, refused):
+                            check()
+                    else:
+                        check()
+            with (
+                patch.object(ci.cleanup_contract, "git", rooted),
+                patch.object(
+                    ci, "api", return_value={"merge_base_commit": {"sha": base}}
+                ),
+                self.assertRaisesRegex(ValueError, f"{PREVIOUS} is not in this clone"),
+            ):
+                ci.added_records("example/fork", PREVIOUS)
 
     def test_a_skipped_quick_counts_only_when_alone(self) -> None:
         skipped = dict(
@@ -3386,6 +3550,7 @@ class World:
     heads: list[str] = field(default_factory=lambda: [HEAD, HEAD])
     comments: list[list[review_report.Comment]] = field(default_factory=lambda: [[]])
     group: list[ci.QueueRun] = field(default_factory=list)
+    records: list[dict[str, Any]] = field(default_factory=list)
 
 
 class FakeGitHub:
@@ -3466,6 +3631,7 @@ class StateTests(unittest.TestCase):
             patch.object(ci, "REQUESTS", Path(directory)),
             patch.object(ci, "api", side_effect=github.api),
             patch.object(ci, "gh", side_effect=github.gh),
+            patch.object(ci, "added_records", return_value=github.world.records),
             patch(
                 "sys.argv",
                 ["ci.py", *(argv or ("state", "170")), "--repo", "example/fork"],
@@ -3592,6 +3758,10 @@ class StateTests(unittest.TestCase):
         red = replace(green, quick=quick_run("failure"))
         _, output, _ = self.state(world=red)
         self.assertIn("enqueue checks: blocked: Quick validation at", output)
+        growth = {"kind": "growth", "counter": "tools_cpp", "added": {"t.cpp": 1}}
+        _, output, _ = self.state(world=replace(green, records=[growth]))
+        self.assertIn("enqueue checks: blocked: PR #170 at", output)
+        self.assertIn("growth tools_cpp", output)
 
     def test_moved_head_prints_no_mixed_view(self) -> None:
         code, output, _ = self.state(

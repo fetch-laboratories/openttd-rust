@@ -108,6 +108,15 @@ def at_base(base: str, path: str) -> str | None:
     return git("show", f"{base}:{path}")
 
 
+def has_commit(revision: str) -> bool:
+    """Whether this clone holds the commit; a shallow or stale one may not."""
+    try:
+        git("rev-parse", "-q", "--verify", f"{revision}^{{commit}}")
+    except subprocess.CalledProcessError:
+        return False
+    return True
+
+
 def tracked(base_ref: str) -> list[dict[str, Any]]:
     """The records this change adds, from the working tree."""
     return records_between(merge_base(base_ref))

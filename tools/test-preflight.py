@@ -47,6 +47,43 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertIn("Python complexity debt and lint policy", ran)
 
+    def test_cleanup_gates_see_a_pending_event_locally_and_merge_group_queued(
+        self,
+    ) -> None:
+        """A record awaiting review passes preflight, so it stamps (#1013)."""
+        quick = yaml.safe_load(preflight.WORKFLOW.read_text())
+        gates = ("lint-ratchet.py", "lint-policy.py", "growth-ratchet.py")
+        steps = [
+            step
+            for step in preflight.workflow_steps(quick, "base")
+            if any(gate in step.command[-1] for gate in gates)
+        ]
+        # Each gate's command, with the event it would read from its environment.
+        shim = 'python3() { echo "$* | event=${GITHUB_EVENT_NAME:-}"; }\n'
+        for runner_event, pending_fails in (("", False), ("merge_group", True)):
+            env = {k: v for k, v in os.environ.items() if k != "GITHUB_EVENT_NAME"}
+            if runner_event:
+                env["GITHUB_EVENT_NAME"] = runner_event
+            seen = []
+            for step in steps:
+                output = subprocess.run(
+                    ["bash", "-c", shim + step.command[-1]],
+                    env=env | step.env,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+                seen += [line for line in output.splitlines() if "tools/" in line]
+            self.assertEqual(
+                sorted(gate for line in seen for gate in gates if gate in line),
+                sorted(["lint-ratchet.py", "lint-ratchet.py", *gates[1:]]),
+            )
+            for line in seen:
+                arguments, _, environment = line.partition(" | event=")
+                given = re.search(r"--event (\S+)", arguments)
+                event = given[1] if given else environment or "pull_request"
+                self.assertEqual(event == "merge_group", pending_fails, line)
+
     def test_a_new_run_step_runs_without_a_list_entry(self) -> None:
         steps = preflight.workflow_steps(
             workflow({"uses": "actions/checkout@v6"}, {"name": "New", "run": "true"}),

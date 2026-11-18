@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -982,7 +982,81 @@ def enqueue_checks(repository: str, pr: int, pull: dict) -> str:
             f"The latest requested run at {head} is not green: {state or 'none; '}"
             + ("" if run else f"run ci.py request {pr} --profile native")
         )
+    missing_acceptances(repository, pr, pull, head)
     return head
+
+
+def added_records(repository: str, head: str) -> list[dict[str, Any]]:
+    """The cleanup records the PR adds at its head.
+
+    They are read from the commit, not the working tree, against the merge base
+    GitHub reports, so neither this checkout nor a stale local base matters.
+    """
+    found = api(repository, f"compare/{PROTECTED_REF}...{head}")
+    base = found["merge_base_commit"]["sha"]
+    for commit in (head, base):
+        if not cleanup_contract.has_commit(commit):
+            raise ValueError(f"Commit {commit} is not in this clone; fetch it")
+    return cleanup_contract.records_between(base, head)
+
+
+def unsafe_item_unchanged(site: str, head: str) -> Callable[[str], bool]:
+    """Whether an unsafe_code item's text at an accepted commit equals head's.
+
+    lint-policy.py runs as its own process: its parser dependencies re-execute
+    the importing process under uv.
+    """
+
+    def unchanged(accepted: str) -> bool:
+        if not cleanup_contract.has_commit(accepted):
+            raise ValueError(
+                f"The accepted commit {accepted} of {site} is not in this clone; "
+                "fetch it"
+            )
+        script = Path(__file__).with_name("lint-policy.py")
+        command = [sys.executable, str(script), "--same-item", site, accepted, head]
+        return subprocess.run(command, capture_output=True).returncode == 0
+
+    return unchanged
+
+
+def missing_acceptances(repository: str, pr: int, pull: dict, head: str) -> None:
+    """Refuse, naming each record the PR adds that no reviewer has accepted.
+
+    With Quick green at the head every growth, suppression and exception has a
+    record, so every record accepted is what the merge group's gates will read.
+    """
+    records = [
+        record
+        for record in added_records(repository, head)
+        if record["kind"] in cleanup_contract.NEEDS_REVIEW
+    ]
+    if not records:
+        return
+    attribution = cleanup_contract.ATTRIBUTION.search(pull.get("body") or "")
+    author = attribution[1] if attribution else ""
+    rows = listing(repository, f"issues/{pr}/comments?per_page=100")
+    rows += listing(repository, f"pulls/{pr}/reviews?per_page=100")
+    comments = [row.get("body") or "" for row in rows]
+    missing = []
+    for record in records:
+        name = cleanup_contract.record_name(record)
+        if not cleanup_contract.reviewed(record, comments, author, head):
+            missing.append(name)
+        elif cleanup_contract.unsafe_site(record) and not cleanup_contract.reviewed(
+            record,
+            comments,
+            author,
+            head,
+            unsafe_item_unchanged(record["site"], head),
+        ):
+            missing.append(f"{name}: item changed since the accepted head")
+    if missing:
+        raise ValueError(
+            f"PR #{pr} at {head} lacks {len(missing)} cleanup acceptance(s); have "
+            "each accepted, or delete a record nothing uses:\n"
+            + "\n".join(f"  {line}" for line in missing)
+        )
 
 
 def enqueue(args: argparse.Namespace) -> str:
