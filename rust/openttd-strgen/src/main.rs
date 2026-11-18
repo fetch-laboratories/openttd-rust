@@ -5,16 +5,18 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! `openttd-strgen ENGLISH_TXT STRINGS_H`: fails unless the string IDs `master_string_ids` derives
-//! from the master language file, which `openttd-kernels` compiles as `table::strings`, are the
-//! `StringID` constants of the `table/strings.h` C++ strgen wrote from it, name for name and
-//! value for value. Each `CMake` build runs it before linking the game and its native tests.
+//! `openttd-strgen ENGLISH_TXT STRINGS_H`: fails unless the constants of `table::strings`, the text
+//! `openttd-kernels`' build script writes from the master language file, are the `StringID`
+//! constants of the `table/strings.h` C++ strgen wrote from it, name for name and value for value.
+//! It reads back the same text the build script writes, so a fault in deriving or in writing the
+//! constants fails it. Each `CMake` build runs it before linking the game and its native tests.
 
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 use std::{env, fs};
 
 use openttd_strgen::strgen_base::master_string_ids;
+use openttd_strgen::table_strings;
 
 /// The `static const StringID NAME = 0xID;` lines of `HeaderFileWriter::WriteStringID`, in file
 /// order.
@@ -61,13 +63,19 @@ fn differences(derived: &[(String, u32)], header: &[(String, u32)]) -> Vec<Strin
     lines
 }
 
+/// The names and IDs of the constants the build script writes for the master file `master`.
+fn compiled_string_ids(master: &[u8]) -> Result<Vec<(String, u32)>, String> {
+    let ids = master_string_ids(master).map_err(|error| error.to_string())?;
+    table_strings::read(&table_strings::write(&ids))
+}
+
 fn check(english: &str, strings_h: &str) -> Result<(), String> {
-    let read = |path: &str| fs::read_to_string(path).map_err(|error| format!("{path}: {error}"));
-    let derived =
-        master_string_ids(&read(english)?).map_err(|error| format!("{english}: {error}"))?;
-    let header =
-        header_string_ids(&read(strings_h)?).map_err(|error| format!("{strings_h}: {error}"))?;
-    let lines = differences(&derived, &header);
+    let read = |path: &str| fs::read(path).map_err(|error| format!("{path}: {error}"));
+    let compiled =
+        compiled_string_ids(&read(english)?).map_err(|error| format!("{english}: {error}"))?;
+    let header = header_string_ids(&String::from_utf8_lossy(&read(strings_h)?))
+        .map_err(|error| format!("{strings_h}: {error}"))?;
+    let lines = differences(&compiled, &header);
     if lines.is_empty() {
         return Ok(());
     }
@@ -109,7 +117,7 @@ mod tests {
     }
 
     fn compare(lines: &[&str]) -> Vec<String> {
-        let derived = master_string_ids(MASTER).unwrap();
+        let derived = compiled_string_ids(MASTER.as_bytes()).unwrap();
         differences(&derived, &header_string_ids(&header(lines)).unwrap())
     }
 

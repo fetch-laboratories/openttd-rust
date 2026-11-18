@@ -12,6 +12,7 @@
 //! Only the IDs are derived. Every other pragma is ignored, and strings are neither compiled nor
 //! checked against the command table, so the language pack and `LANGUAGE_PACK_VERSION` stay with
 //! C++ strgen. Where strgen reports an error or a fatal error for the master file, this fails.
+//! The file is read as bytes, as strgen reads it; only string values are decoded, by `DecodeUtf8`.
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
@@ -19,9 +20,9 @@ use std::fmt;
 /// `StringData::max_strings` of the language files: `TEXT_TAB_END * TAB_SIZE`.
 const MAX_STRINGS: u32 = 32 << 11;
 /// `StringConsumer::WHITESPACE_NO_NEWLINE`.
-const WHITESPACE_NO_NEWLINE: &[char] = &['\t', '\x0B', '\x0C', '\r', ' '];
+const WHITESPACE_NO_NEWLINE: &[u8] = b"\t\x0B\x0C\r ";
 /// `StringConsumer::WHITESPACE_OR_NEWLINE`.
-const WHITESPACE_OR_NEWLINE: &[char] = &['\t', '\n', '\x0B', '\x0C', '\r', ' '];
+const WHITESPACE_OR_NEWLINE: &[u8] = b"\t\n\x0B\x0C\r ";
 
 /// A line strgen rejects, with strgen's message.
 #[derive(Debug, PartialEq, Eq)]
@@ -42,9 +43,9 @@ impl fmt::Display for Error {
 #[derive(Default)]
 struct StringData {
     /// `StringData::strings`: the name at each populated ID.
-    strings: BTreeMap<u32, String>,
+    strings: BTreeMap<u32, Vec<u8>>,
     /// The names in `strings`, for `StringData::Find`.
-    names: HashSet<String>,
+    names: HashSet<Vec<u8>>,
     /// `StringData::next_string_id`.
     next_string_id: u32,
 }
@@ -53,20 +54,17 @@ struct StringData {
 /// IDs `HeaderWriter::WriteHeader` writes: in ID order, then `STR_LAST_STRINGID`.
 ///
 /// # Errors
-/// The first line strgen would report as an error or a fatal error.
-pub fn master_string_ids(text: &str) -> Result<Vec<(String, u32)>, Error> {
+/// The first line strgen would report as an error or a fatal error, and a name that is not UTF-8,
+/// which strgen writes but no Rust or C++ identifier can hold.
+pub fn master_string_ids(text: &[u8]) -> Result<Vec<(String, u32)>, Error> {
     let mut data = StringData::default();
-    let mut lines = text.split('\n');
+    let mut lines = text.split(|&b| b == b'\n');
     let mut cur_line = 1;
     while data.next_string_id < MAX_STRINGS {
         let Some(line) = lines.next() else {
             break;
         };
-        handle_string(
-            &mut data,
-            line.trim_matches(WHITESPACE_OR_NEWLINE),
-            cur_line,
-        )?;
+        handle_string(&mut data, trim(line, WHITESPACE_OR_NEWLINE), cur_line)?;
         cur_line += 1;
     }
 
@@ -80,15 +78,67 @@ pub fn master_string_ids(text: &str) -> Result<Vec<(String, u32)>, Error> {
     let mut header = Vec::with_capacity(data.strings.len() + 1);
     let mut last = 0;
     for (&id, name) in &data.strings {
-        header.push((name.clone(), id));
+        let name = String::from_utf8(name.clone()).map_err(|_| Error {
+            line: cur_line,
+            message: format!(
+                "String name '{}' at 0x{id:X} is not UTF-8",
+                String::from_utf8_lossy(name)
+            ),
+        })?;
+        header.push((name, id));
         last = id;
     }
     header.push(("STR_LAST_STRINGID".to_owned(), last));
     Ok(header)
 }
 
+/// `StrTrimView`.
+fn trim<'a>(src: &'a [u8], characters_to_trim: &[u8]) -> &'a [u8] {
+    let Some(first) = src.iter().position(|b| !characters_to_trim.contains(b)) else {
+        return &[];
+    };
+    let last = src
+        .iter()
+        .rposition(|b| !characters_to_trim.contains(b))
+        .unwrap_or(first);
+    &src[first..=last]
+}
+
+/// `IsUtf8Part`.
+const fn is_utf8_part(c: u8) -> bool {
+    c & 0xC0 == 0x80
+}
+
+/// `DecodeUtf8`: the length and character at the start of `buf`, or `None` for invalid data. It
+/// accepts encoded surrogates, as the original does.
+fn decode_utf8(buf: &[u8]) -> Option<(usize, u32)> {
+    match *buf {
+        [b0, ..] if b0 & 0x80 == 0 => Some((1, u32::from(b0))),
+        [b0, b1, ..] if b0 >> 5 == 6 => {
+            let c = u32::from(b0 & 0x1F) << 6 | u32::from(b1 & 0x3F);
+            (is_utf8_part(b1) && c >= 0x80).then_some((2, c))
+        }
+        [b0, b1, b2, ..] if b0 >> 4 == 14 => {
+            let c = u32::from(b0 & 0x0F) << 12 | u32::from(b1 & 0x3F) << 6 | u32::from(b2 & 0x3F);
+            (is_utf8_part(b1) && is_utf8_part(b2) && c >= 0x800).then_some((3, c))
+        }
+        [b0, b1, b2, b3, ..] if b0 >> 3 == 30 => {
+            let c = u32::from(b0 & 0x07) << 18
+                | u32::from(b1 & 0x3F) << 12
+                | u32::from(b2 & 0x3F) << 6
+                | u32::from(b3 & 0x3F);
+            (is_utf8_part(b1)
+                && is_utf8_part(b2)
+                && is_utf8_part(b3)
+                && (0x1_0000..=0x10_FFFF).contains(&c))
+            .then_some((4, c))
+        }
+        _ => None,
+    }
+}
+
 /// `StringReader::HandleString` for the master file.
-fn handle_string(data: &mut StringData, src: &str, cur_line: u32) -> Result<(), Error> {
+fn handle_string(data: &mut StringData, src: &[u8], cur_line: u32) -> Result<(), Error> {
     let error = |message: String| Error {
         line: cur_line,
         message,
@@ -99,41 +149,55 @@ fn handle_string(data: &mut StringData, src: &str, cur_line: u32) -> Result<(), 
         return Ok(());
     }
 
-    if let Some(rest) = src.strip_prefix('#') {
-        if let Some(pragma) = rest.strip_prefix('#')
-            && !pragma.starts_with('#')
+    if let Some(rest) = src.strip_prefix(b"#") {
+        if let Some(pragma) = rest.strip_prefix(b"#")
+            && !pragma.starts_with(b"#")
         {
-            handle_pragma(data, pragma);
+            handle_pragma(data, pragma).map_err(error)?;
         }
         return Ok(()); // ignore comments
     }
 
     /* Read string name */
-    let Some((str_name, value)) = src.split_once(':') else {
+    let Some(colon) = src.iter().position(|&b| b == b':') else {
         return Err(error("Line has no ':' delimiter".to_owned()));
     };
-    let mut str_name = str_name.trim_matches(WHITESPACE_NO_NEWLINE);
+    let mut str_name = trim(&src[..colon], WHITESPACE_NO_NEWLINE);
 
     /* Read string case */
     let mut casep = None;
-    if let Some(index) = str_name.find('.') {
+    if let Some(index) = str_name.iter().position(|&b| b == b'.') {
         casep = Some(&str_name[index + 1..]);
         str_name = &str_name[..index];
     }
 
+    /* Read string data */
+    let value = &src[colon + 1..];
+
     /* Check string is valid UTF-8 */
-    if let Some(c) = value.chars().find(|&c| {
-        c <= '\u{1F}' // ASCII control character range
-            || c == '\u{200B}' // Zero width space
-            || ('\u{E000}'..='\u{F8FF}').contains(&c) // Private range
-            || ('\u{FFF0}'..='\u{FFFF}').contains(&c) // Specials range
-    }) {
-        return Err(error(format!(
-            "Unwanted UTF-8 character U+{:04X} in sequence '{value}'",
-            u32::from(c)
-        )));
+    let mut rest = value;
+    while !rest.is_empty() {
+        let Some((len, c)) = decode_utf8(rest) else {
+            return Err(error(format!(
+                "Invalid UTF-8 sequence in '{}'",
+                String::from_utf8_lossy(value)
+            )));
+        };
+        if c <= 0x001F // ASCII control character range
+            || c == 0x200B // Zero width space
+            || (0xE000..=0xF8FF).contains(&c) // Private range
+            || (0xFFF0..=0xFFFF).contains(&c)
+        // Specials range
+        {
+            return Err(error(format!(
+                "Unwanted UTF-8 character U+{c:04X} in sequence '{}'",
+                String::from_utf8_lossy(value)
+            )));
+        }
+        rest = &rest[len..];
     }
 
+    let name = || String::from_utf8_lossy(str_name);
     if casep.is_some() {
         return Err(error(
             "Cases in the base translation are not supported.".to_owned(),
@@ -143,49 +207,63 @@ fn handle_string(data: &mut StringData, src: &str, cur_line: u32) -> Result<(), 
     /* Check if this string already exists.. */
     if data.names.contains(str_name) {
         return Err(error(format!(
-            "String name '{str_name}' is used multiple times"
+            "String name '{}' is used multiple times",
+            name()
         )));
     }
 
     if let Some(used) = data.strings.get(&data.next_string_id) {
         return Err(error(format!(
-            "String ID 0x{:X} for '{str_name}' already in use by '{used}'",
-            data.next_string_id
+            "String ID 0x{:X} for '{}' already in use by '{}'",
+            data.next_string_id,
+            name(),
+            String::from_utf8_lossy(used)
         )));
     }
 
     /* Allocate a new LangString */
-    data.names.insert(str_name.to_owned());
-    data.strings
-        .insert(data.next_string_id, str_name.to_owned());
+    data.names.insert(str_name.to_vec());
+    data.strings.insert(data.next_string_id, str_name.to_vec());
     data.next_string_id += 1;
     Ok(())
 }
 
 /// The `id` branch of `FileStringReader::HandlePragma`; the master file's other pragmas set
 /// language-pack metadata.
-fn handle_pragma(data: &mut StringData, src: &str) {
-    let (name, rest) = match src.split_once(' ') {
-        Some((name, rest)) => (name, rest.trim_start_matches(' ')),
-        None => (src, ""),
+fn handle_pragma(data: &mut StringData, src: &[u8]) -> Result<(), String> {
+    let (name, rest) = match src.iter().position(|&b| b == b' ') {
+        Some(space) => {
+            let rest = &src[space..];
+            let skipped = rest.iter().position(|&b| b != b' ').unwrap_or(rest.len());
+            (&src[..space], &rest[skipped..])
+        }
+        None => (src, &[][..]),
     };
-    if name == "id" {
-        data.next_string_id = read_integer_base_0(rest);
+    if name == b"id" {
+        data.next_string_id = read_integer_base_0(rest)?;
     }
+    Ok(())
 }
 
 /// `StringConsumer::ReadIntegerBase<uint32_t>(0)`: a `0x` or `0X` prefix selects hexadecimal,
-/// otherwise decimal; the longest digit prefix is parsed, and no digits or an out-of-range value
-/// give 0.
-fn read_integer_base_0(src: &str) -> u32 {
-    let (digits, radix) = match src.strip_prefix("0x").or_else(|| src.strip_prefix("0X")) {
+/// otherwise decimal, and the longest digit prefix is parsed. No digits, or a value out of range,
+/// is an error strgen reports through `StringConsumer::LogError` as fatal.
+fn read_integer_base_0(src: &[u8]) -> Result<u32, String> {
+    let (digits, radix) = match src.strip_prefix(b"0x").or_else(|| src.strip_prefix(b"0X")) {
         Some(hex) => (hex, 16),
         None => (src, 10),
     };
     let end = digits
-        .find(|c: char| !c.is_digit(radix))
+        .iter()
+        .position(|&b| !char::from(b).is_digit(radix))
         .unwrap_or(digits.len());
-    u32::from_str_radix(&digits[..end], radix).unwrap_or(0)
+    let text = String::from_utf8_lossy(src);
+    if end == 0 {
+        return Err(format!("Cannot parse integer: '{text}'"));
+    }
+    // The digits are ASCII.
+    let digits = std::str::from_utf8(&digits[..end]).unwrap_or_default();
+    u32::from_str_radix(digits, radix).map_err(|_| format!("Integer out of range: '{text}'"))
 }
 
 #[cfg(test)]
@@ -198,8 +276,8 @@ mod tests {
             .collect()
     }
 
-    fn failure(text: &str) -> Error {
-        master_string_ids(text).unwrap_err()
+    fn failure(text: impl AsRef<[u8]>) -> Error {
+        master_string_ids(text.as_ref()).unwrap_err()
     }
 
     /// Expectations follow `HandleString`, the `id` pragma and `WriteHeader`: lines are trimmed,
@@ -222,7 +300,7 @@ mod tests {
                     ##id 0X8\n\
                     STR_E :\n";
         assert_eq!(
-            master_string_ids(text),
+            master_string_ids(text.as_bytes()),
             Ok(ids(&[
                 ("STR_A", 0),
                 ("STR_B", 1),
@@ -238,28 +316,67 @@ mod tests {
     #[test]
     fn empty_file_has_last_id_zero() {
         assert_eq!(
-            master_string_ids("##name x\n"),
+            master_string_ids(b"##name x\n"),
             Ok(ids(&[("STR_LAST_STRINGID", 0)]))
         );
     }
 
-    /// `ReadIntegerBase(0)` parses a digit prefix and gives 0 for no digits or overflow.
+    /// `ReadIntegerBase(0)` parses a digit prefix; no digits or an out-of-range value is an error
+    /// `LogError` makes fatal in strgen.
     #[test]
     fn id_pragma_reads_integer_prefix() {
-        assert_eq!(read_integer_base_0("0x1fg"), 0x1F);
-        assert_eq!(read_integer_base_0("42 junk"), 42);
-        assert_eq!(read_integer_base_0("junk"), 0);
-        assert_eq!(read_integer_base_0("0x"), 0);
-        assert_eq!(read_integer_base_0("-1"), 0);
-        assert_eq!(read_integer_base_0("4294967296"), 0);
-        assert_eq!(read_integer_base_0(""), 0);
+        assert_eq!(read_integer_base_0(b"0x1fg"), Ok(0x1F));
+        assert_eq!(read_integer_base_0(b"42 junk"), Ok(42));
+        assert_eq!(read_integer_base_0(b"4294967295"), Ok(u32::MAX));
+        for bad in [&b"junk"[..], b"0x", b"-1", b""] {
+            assert!(
+                read_integer_base_0(bad)
+                    .unwrap_err()
+                    .starts_with("Cannot parse integer")
+            );
+        }
+        assert!(
+            read_integer_base_0(b"4294967296")
+                .unwrap_err()
+                .starts_with("Integer out of range")
+        );
+        assert_eq!(
+            failure("STR_A :a\n##id junk\nSTR_B :b\n"),
+            Error {
+                line: 2,
+                message: "Cannot parse integer: 'junk'".to_owned()
+            }
+        );
+        assert_eq!(failure("##id 4294967296\n").line, 1);
+    }
+
+    /// strgen reads bytes: comments are never decoded, and `DecodeUtf8` accepts an encoded
+    /// surrogate (`ED A0 80`, U+D800) in a value. Invalid UTF-8 in a value is fatal.
+    #[test]
+    fn reads_bytes_as_strgen() {
+        assert_eq!(
+            master_string_ids(b"# \xFF comment\nSTR_A :\xED\xA0\x80\n"),
+            Ok(ids(&[("STR_A", 0), ("STR_LAST_STRINGID", 0)]))
+        );
+        assert_eq!(
+            failure(b"STR_A :a\xFF\n").message,
+            "Invalid UTF-8 sequence in 'a\u{FFFD}'"
+        );
+        assert_eq!(
+            failure(b"STR_A :\xC0\x80\n").message,
+            "Invalid UTF-8 sequence in '\u{FFFD}\u{FFFD}'"
+        );
+        assert_eq!(
+            failure(b"STR_\xFF :a\n").message,
+            "String name 'STR_\u{FFFD}' at 0x0 is not UTF-8"
+        );
     }
 
     /// `ParseFile` stops reading at `max_strings` and reports an error only at exactly that ID.
     #[test]
     fn stops_at_max_strings() {
         assert_eq!(
-            master_string_ids("##id 0x20000\nSTR_A :a\n"),
+            master_string_ids(b"##id 0x20000\nSTR_A :a\n"),
             Ok(ids(&[("STR_LAST_STRINGID", 0)]))
         );
         assert_eq!(

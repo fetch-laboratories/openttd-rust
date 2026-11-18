@@ -10,3 +10,4 @@
 //! while C++ strgen still writes `table/strings.h`; the binary holds the two to the same values.
 
 pub mod strgen_base;
+pub mod table_strings;

@@ -41,23 +41,18 @@ fn collect(dir: &Path, module: &str, found: &mut Vec<String>) -> io::Result<()> 
     Ok(())
 }
 
-/// One `StringID` constant per name of `table/strings.h`.
+/// One `StringID` constant per name of `table/strings.h`, in `openttd-strgen`'s text, which its
+/// build check reads back.
 fn write_strings(out_dir: &Path) -> io::Result<()> {
     const MASTER_LANG_FILE: &str = "../../src/lang/english.txt";
     println!("cargo:rerun-if-changed={MASTER_LANG_FILE}");
     println!("cargo:rerun-if-changed=../openttd-strgen/src");
-    let ids =
-        openttd_strgen::strgen_base::master_string_ids(&fs::read_to_string(MASTER_LANG_FILE)?)
-            .map_err(|error| io::Error::other(format!("{MASTER_LANG_FILE}: {error}")))?;
-    let mut constants = String::new();
-    for (name, id) in ids {
-        writeln!(
-            constants,
-            "/// `{name}` of `table/strings.h`.\npub const {name}: StringID = StringID(0x{id:X});"
-        )
-        .unwrap();
-    }
-    fs::write(out_dir.join("strings.rs"), constants)
+    let ids = openttd_strgen::strgen_base::master_string_ids(&fs::read(MASTER_LANG_FILE)?)
+        .map_err(|error| io::Error::other(format!("{MASTER_LANG_FILE}: {error}")))?;
+    fs::write(
+        out_dir.join("strings.rs"),
+        openttd_strgen::table_strings::write(&ids),
+    )
 }
 
 fn main() -> io::Result<()> {
