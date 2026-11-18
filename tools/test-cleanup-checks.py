@@ -1581,6 +1581,23 @@ class RetiredThresholdTests(unittest.TestCase):
         self.assertFalse(POLICY.permitted_change(key, macros, macros[:1]))
         self.assertFalse(POLICY.permitted_change(key, macros, None))
 
+    def test_a_new_crate_may_adopt_the_workspace_lints(self) -> None:
+        self.assertFalse(
+            POLICY.config_errors(
+                {"lints": {}}, {"lints": {"workspace": True}}, "new/Cargo.toml"
+            )
+        )
+        self.assertTrue(
+            POLICY.config_errors(
+                {"lints": {"workspace": True}}, {"lints": {}}, "old/Cargo.toml"
+            )
+        )
+        self.assertTrue(
+            POLICY.config_errors(
+                {"lints": {}}, {"lints": {"workspace": False}}, "new/Cargo.toml"
+            )
+        )
+
 
 class ArchiveTests(unittest.TestCase):
     def test_local_relocation_targets_remain_in_their_object(self) -> None:

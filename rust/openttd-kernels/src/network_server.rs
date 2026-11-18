@@ -7,7 +7,7 @@ use crate::company_type::{CompanyID, OpenTTDCompany};
 use crate::network_frame::Services as FrameServices;
 use crate::network_lifecycle::Services as LifecycleServices;
 use crate::network_socket::{self as socket, GameSocket};
-use crate::strings_type::StringID;
+use crate::table::strings::STR_NULL;
 use std::ffi::c_void;
 
 /// Status of a client, retaining every underlying byte.
@@ -81,7 +81,7 @@ pub(crate) fn new_company(
         crate::network_command::send_command(
             f.command,
             Commands::CMD_COMPANY_ALLOW_LIST_CTRL,
-            StringID::STR_NULL,
+            STR_NULL,
             std::ptr::null(),
             index,
             allow.span(),
@@ -91,7 +91,7 @@ pub(crate) fn new_company(
         crate::network_command::send_command(
             f.command,
             Commands::CMD_RENAME_PRESIDENT,
-            StringID::STR_NULL,
+            STR_NULL,
             std::ptr::null(),
             index,
             president.span(),

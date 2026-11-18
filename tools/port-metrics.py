@@ -450,10 +450,12 @@ def expanded_rust(revision: str) -> str:
                 "-p",
                 "openttd-kernels",
                 "--lib",
+                # The test profile builds with cfg(test) and the dev-dependencies test
+                # modules import, such as openttd-strgen.
+                "--profile",
+                "test",
                 "--locked",
                 "--",
-                "--cfg",
-                "test",
                 "-Zunpretty=expanded",
             ],
             cwd=source,

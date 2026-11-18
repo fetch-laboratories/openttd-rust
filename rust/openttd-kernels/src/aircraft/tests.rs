@@ -261,6 +261,7 @@ fn aircraft_handle_dest_too_far_raises_the_original_event_and_advice() {
     use crate::news_func::testing::{Effect, Param, encoded, take};
     use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle, NewsType};
     use crate::script_event_types::ScriptEvent;
+    use crate::table::strings::STR_NEWS_AIRCRAFT_DEST_TOO_FAR;
     use crate::vehicle_type::VehicleID;
     extern "C" fn dirty(_: crate::vehicle::VehicleRef) {}
     extern "C" fn local() -> u8 {
@@ -270,7 +271,6 @@ fn aircraft_handle_dest_too_far_raises_the_original_event_and_advice() {
         start_stop_dirty: dirty,
         ..crate::test_tables::VEHICLE
     });
-    leaves.strings.aircraft_dest_too_far = 0x4A1;
     let mut shared = *shared();
     shared.local_company = local;
     leaves.shared = Box::leak(Box::new(shared));
@@ -291,7 +291,7 @@ fn aircraft_handle_dest_too_far_raises_the_original_event_and_advice() {
         )];
         if owner == 3 {
             expected.push(Effect::News {
-                headline: encoded(0x4A1, &[Param::N(17)]),
+                headline: encoded(STR_NEWS_AIRCRAFT_DEST_TOO_FAR.0, &[Param::N(17)]),
                 r#type: NewsType::Advice,
                 style: NewsStyle::Small,
                 flags: NewsFlags::new(&[NewsFlag::InColour, NewsFlag::VehicleParam0]),

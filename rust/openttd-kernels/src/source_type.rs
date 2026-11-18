@@ -8,6 +8,7 @@
 //! Inline cargo-source representation from `source_type.h`.
 
 use crate::strings_type::StringID;
+use crate::table::strings::{STR_INDUSTRY_NAME, STR_TOWN_NAME};
 /// Canonical native source fields; padding carries no state.
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -60,22 +61,13 @@ impl Source {
     }
     /// `Source::GetFormat`: get the format string for a subsidy Source.
     #[must_use]
-    pub fn get_format(self, strings: &FormatStrings) -> StringID {
+    pub fn get_format(self) -> StringID {
         match SourceType(self.kind) {
-            SourceType::Industry => StringID(strings.industry_name),
-            SourceType::Town => StringID(strings.town_name),
+            SourceType::Industry => STR_INDUSTRY_NAME,
+            SourceType::Town => STR_TOWN_NAME,
             _ => crate::services_assert::not_reached(),
         }
     }
-}
-
-/// The generated string IDs `Source::GetFormat` returns.
-#[repr(C)]
-pub struct FormatStrings {
-    /// `STR_INDUSTRY_NAME`.
-    pub industry_name: u32,
-    /// `STR_TOWN_NAME`.
-    pub town_name: u32,
 }
 
 /// Native `SourceType`, retaining every underlying `u8` value.

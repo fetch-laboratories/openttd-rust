@@ -16,8 +16,13 @@ use crate::slope_func::is_steep_slope;
 use crate::station::BaseStation;
 use crate::station::Station;
 use crate::strings_func::{get_encoded_string, get_string};
+use crate::strings_type::INVALID_STRING_ID;
 use crate::strings_type::StringParameterData::{self, Integer};
-use crate::strings_type::{INVALID_STRING_ID, StringID};
+use crate::table::strings::{
+    STR_COMPANY_NAME, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES,
+    STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS, STR_NEWS_EXCLUSIVE_RIGHTS_TITLE,
+    STR_NEWS_ROAD_REBUILDING_MINUTES, STR_NEWS_ROAD_REBUILDING_MONTHS,
+};
 use crate::tile_type::{TileIndex, TileType};
 use crate::town_type::{
     RATING_BRIBE_DOWN_TO, RATING_BRIBE_MAXIMUM, RATING_BRIBE_UP_STEP, RATING_MAXIMUM,
@@ -35,22 +40,6 @@ pub struct StationCursor {
     pub shell: *mut BaseStation,
     pub next: u32,
 }
-/// The generated string IDs of the town action news.
-#[repr(C)]
-pub struct Strings {
-    /// `STR_COMPANY_NAME`.
-    pub company_name: u32,
-    /// `STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES`.
-    pub exclusive_rights_description_minutes: u32,
-    /// `STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS`.
-    pub exclusive_rights_description_months: u32,
-    /// `STR_NEWS_EXCLUSIVE_RIGHTS_TITLE`.
-    pub exclusive_rights_title: u32,
-    /// `STR_NEWS_ROAD_REBUILDING_MINUTES`.
-    pub road_rebuilding_minutes: u32,
-    /// `STR_NEWS_ROAD_REBUILDING_MONTHS`.
-    pub road_rebuilding_months: u32,
-}
 #[repr(C)]
 pub struct CommandServices {
     pub founding: *const FoundingServices,
@@ -65,7 +54,6 @@ pub struct CommandServices {
     pub invalidate_view: extern "C" fn(u16),
     pub invalidate_authority: extern "C" fn(u16),
     pub clock: *const crate::timer_game_common::ClockServices,
-    pub strings: Strings,
     pub station_views_dirty: extern "C" fn(),
     pub next_station: extern "C" fn(u32) -> StationCursor,
     pub station_town: extern "C" fn(*mut BaseStation) -> *const TownHandle,
@@ -97,23 +85,15 @@ pub struct CommandServices {
 }
 /// `TownActionRoadRebuild`'s news and script events for `current`'s road works in `town`;
 /// `minutes` is `TimerGameEconomy::UsingWallclockUnits()`.
-fn town_action_road_rebuild_news(
-    strings: &Strings,
-    minutes: bool,
-    current: CompanyID,
-    town: TownId,
-) {
-    let company_name = get_string(
-        StringID(strings.company_name),
-        [Integer(u64::from(current.0))],
-    );
+fn town_action_road_rebuild_news(minutes: bool, current: CompanyID, town: TownId) {
+    let company_name = get_string(STR_COMPANY_NAME, [Integer(u64::from(current.0))]);
 
     let headline = get_encoded_string(
-        StringID(if minutes {
-            strings.road_rebuilding_minutes
+        if minutes {
+            STR_NEWS_ROAD_REBUILDING_MINUTES
         } else {
-            strings.road_rebuilding_months
-        }),
+            STR_NEWS_ROAD_REBUILDING_MONTHS
+        },
         &[
             Integer(u64::from(town.0)),
             StringParameterData::String(&company_name),
@@ -136,15 +116,15 @@ fn town_action_road_rebuild_news(
 }
 /// `TownActionBuyRights`' news message and script events for `current`'s rights in `town`;
 /// `minutes` is `TimerGameEconomy::UsingWallclockUnits()`.
-fn town_action_buy_rights_news(strings: &Strings, minutes: bool, current: CompanyID, town: TownId) {
-    let cni = CompanyNewsInformation::new(StringID(strings.exclusive_rights_title), current, None);
+fn town_action_buy_rights_news(minutes: bool, current: CompanyID, town: TownId) {
+    let cni = CompanyNewsInformation::new(STR_NEWS_EXCLUSIVE_RIGHTS_TITLE, current, None);
     let company_name = cni.company_name();
     let message = get_encoded_string(
-        StringID(if minutes {
-            strings.exclusive_rights_description_minutes
+        if minutes {
+            STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES
         } else {
-            strings.exclusive_rights_description_months
-        }),
+            STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS
+        },
         &[
             Integer(u64::from(town.0)),
             StringParameterData::String(&company_name),
@@ -1132,7 +1112,6 @@ impl Commands<'_> {
                     }
 
                     town_action_road_rebuild_news(
-                        &self.s.strings,
                         self.using_wallclock_units(),
                         CompanyID((self.shared.current_company)()),
                         t.id,
@@ -1180,7 +1159,6 @@ impl Commands<'_> {
                     (self.s.station_views_dirty)();
                     /* Spawn news message */
                     town_action_buy_rights_news(
-                        &self.s.strings,
                         self.using_wallclock_units(),
                         CompanyID((self.shared.current_company)()),
                         t.id,
@@ -1319,14 +1297,6 @@ crate::abi::layouts! {
         next,
         town,
     };
-    "OpenTTDTownCommandStrings" ["probe"] => Strings {
-        company_name,
-        exclusive_rights_description_minutes,
-        exclusive_rights_description_months,
-        exclusive_rights_title,
-        road_rebuilding_minutes,
-        road_rebuilding_months,
-    };
     "OpenTTDTownCommandServices" ["probe"] => crate::town::commands::CommandServices {
         founding,
         rail,
@@ -1340,7 +1310,6 @@ crate::abi::layouts! {
         invalidate_view,
         invalidate_authority,
         clock,
-        strings,
         station_views_dirty,
         next_station,
         station_town,
@@ -1373,21 +1342,16 @@ crate::abi::layouts! {
 
 #[cfg(test)]
 mod news_tests {
-    use super::{
-        CompanyID, Strings, TownId, town_action_buy_rights_news, town_action_road_rebuild_news,
-    };
+    use super::{CompanyID, TownId, town_action_buy_rights_news, town_action_road_rebuild_news};
     use crate::news_func::testing::{Effect, Param, company_news_name, encoded, formatted, take};
     use crate::news_type::{AdviceType, NewsFlags, NewsReference, NewsStyle, NewsType};
     use crate::script_event_types::ScriptEvent;
-
-    const STRINGS: Strings = Strings {
-        company_name: 0x10,
-        exclusive_rights_description_minutes: 0x21,
-        exclusive_rights_description_months: 0x22,
-        exclusive_rights_title: 0x23,
-        road_rebuilding_minutes: 0x31,
-        road_rebuilding_months: 0x32,
+    use crate::table::strings::{
+        STR_COMPANY_NAME, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES,
+        STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS, STR_NEWS_EXCLUSIVE_RIGHTS_TITLE,
+        STR_NEWS_ROAD_REBUILDING_MINUTES, STR_NEWS_ROAD_REBUILDING_MONTHS,
     };
+
     fn news(headline: Vec<u8>, style: NewsStyle, data: Option<Vec<u8>>) -> Effect {
         Effect::News {
             headline,
@@ -1406,14 +1370,17 @@ mod news_tests {
     #[test]
     fn road_rebuild_follows_the_original() {
         take();
-        for (minutes, id) in [(true, 0x31), (false, 0x32)] {
-            town_action_road_rebuild_news(&STRINGS, minutes, CompanyID(2), TownId(7));
-            let name = formatted(0x10, &[2]);
+        for (minutes, id) in [
+            (true, STR_NEWS_ROAD_REBUILDING_MINUTES.0),
+            (false, STR_NEWS_ROAD_REBUILDING_MONTHS.0),
+        ] {
+            town_action_road_rebuild_news(minutes, CompanyID(2), TownId(7));
+            let name = formatted(STR_COMPANY_NAME.0, &[2]);
             let event = ScriptEvent::road_reconstruction(CompanyID(2), TownId(7));
             assert_eq!(
                 take(),
                 [
-                    Effect::GetString(0x10, vec![2]),
+                    Effect::GetString(STR_COMPANY_NAME.0, vec![2]),
                     news(
                         encoded(id, &[Param::N(7), Param::S(&name)]),
                         NewsStyle::Normal,
@@ -1432,14 +1399,21 @@ mod news_tests {
     #[test]
     fn buy_rights_follows_the_original() {
         take();
-        for (minutes, id) in [(true, 0x21), (false, 0x22)] {
-            town_action_buy_rights_news(&STRINGS, minutes, CompanyID(3), TownId(7));
+        for (minutes, id) in [
+            (true, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES.0),
+            (false, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS.0),
+        ] {
+            town_action_buy_rights_news(minutes, CompanyID(3), TownId(7));
             let name = company_news_name(3);
             let event = ScriptEvent::exclusive_transport_rights(CompanyID(3), TownId(7));
             assert_eq!(
                 take(),
                 [
-                    Effect::CompanyNewsInformation(0x23, 3, CompanyID::INVALID.0),
+                    Effect::CompanyNewsInformation(
+                        STR_NEWS_EXCLUSIVE_RIGHTS_TITLE.0,
+                        3,
+                        CompanyID::INVALID.0
+                    ),
                     news(
                         encoded(id, &[Param::N(7), Param::S(&name)]),
                         NewsStyle::Company,

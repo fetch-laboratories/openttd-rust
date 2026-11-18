@@ -25,7 +25,6 @@ use crate::industry_type::IndustryID;
 use crate::news_func::{AddNewsItemArgs, add_news_item};
 use crate::news_type::{NewsFlags, NewsStyle, NewsType};
 use crate::script_event_types::ScriptEvent;
-use crate::source_type::FormatStrings;
 pub use crate::source_type::Source;
 use crate::station::Station;
 use crate::station_type::StationID;
@@ -33,6 +32,10 @@ use crate::strings_func::{get_encoded_string, get_string};
 use crate::strings_type::StringParameterData::{self, Integer};
 use crate::strings_type::{EncodedString, StringID};
 use crate::subsidy_type::{PartOfSubsidy, SubsidyID};
+use crate::table::strings::{
+    STR_COMPANY_NAME, STR_NEWS_OFFER_OF_SUBSIDY_EXPIRED, STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF,
+    STR_NEWS_SERVICE_SUBSIDY_OFFERED, STR_NEWS_SUBSIDY_WITHDRAWN_SERVICE,
+};
 use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
 use crate::town_type::TownID;
@@ -70,22 +73,6 @@ impl State {
 pub struct Cargo {
     pub data: *mut u32,
 }
-/// The generated string IDs of the subsidy news.
-#[repr(C)]
-pub struct Strings {
-    /// `STR_COMPANY_NAME`.
-    pub company_name: u32,
-    /// `STR_NEWS_OFFER_OF_SUBSIDY_EXPIRED`.
-    pub offer_of_subsidy_expired: u32,
-    /// `STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF`.
-    pub service_subsidy_awarded_half: u32,
-    /// `STR_NEWS_SERVICE_SUBSIDY_OFFERED`.
-    pub service_subsidy_offered: u32,
-    /// The formats of `Source::GetFormat`.
-    pub source: FormatStrings,
-    /// `STR_NEWS_SUBSIDY_WITHDRAWN_SERVICE`.
-    pub subsidy_withdrawn_service: u32,
-}
 #[repr(C)]
 pub struct Services {
     pub shared: *const crate::services::Services,
@@ -108,7 +95,6 @@ pub struct Services {
     pub manual: extern "C" fn(u8) -> bool,
     pub manual_pax: extern "C" fn() -> bool,
     pub any_manual: extern "C" fn() -> bool,
-    pub strings: Strings,
     pub dirty: extern "C" fn(),
     pub station: extern "C" fn(u16) -> *const Station,
     pub assert_destination: extern "C" fn(Source),
@@ -173,12 +159,11 @@ impl Services {
         src: Source,
         dst: Source,
     ) -> [StringParameterData<'static>; 5] {
-        let format = &self.strings.source;
         [
             Integer(u64::from((self.shared().cargo_name)(cargo_type.0))),
-            Integer(u64::from(src.get_format(format).0)),
+            Integer(u64::from(src.get_format().0)),
             Integer(u64::from(src.id)),
-            Integer(u64::from(dst.get_format(format).0)),
+            Integer(u64::from(dst.get_format().0)),
             Integer(u64::from(dst.id)),
         ]
     }
@@ -262,7 +247,7 @@ impl Services {
             dst,
             SUBSIDY_OFFER_MONTHS,
         ));
-        let headline = get_encoded_string(StringID(self.strings.service_subsidy_offered), &{
+        let headline = get_encoded_string(STR_NEWS_SERVICE_SUBSIDY_OFFERED, &{
             let [name, src_format, src_id, dst_format, dst_id] =
                 self.route_parameters(cargo_type, src, dst);
             let duration = Integer(u64::from((self.duration)()));
@@ -287,10 +272,7 @@ impl Services {
         unsafe {
             (*state).remaining = remaining as u16;
         }
-        let company_name = get_string(
-            StringID(self.strings.company_name),
-            [Integer(u64::from(company.0))],
-        );
+        let company_name = get_string(STR_COMPANY_NAME, [Integer(u64::from(company.0))]);
 
         /* Add a news item */
         let (cargo_type, src, dst) = unsafe { ((*state).cargo_type, (*state).src, (*state).dst) };
@@ -308,8 +290,8 @@ impl Services {
         ];
         let headline = get_encoded_string(
             StringID(
-                self.strings
-                    .service_subsidy_awarded_half
+                STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF
+                    .0
                     .wrapping_add(u32::from((self.multiplier)())),
             ),
             &parameters,
@@ -571,7 +553,7 @@ impl Services {
                 unsafe { ((*state).cargo_type, (*state).src, (*state).dst) };
             if !unsafe { (*state).is_awarded() } {
                 let headline = get_encoded_string(
-                    StringID(self.strings.offer_of_subsidy_expired),
+                    STR_NEWS_OFFER_OF_SUBSIDY_EXPIRED,
                     &self.route_parameters(cargo_type, src, dst),
                 );
                 Self::add_news_item(&headline, src, dst);
@@ -583,7 +565,7 @@ impl Services {
             } else {
                 if unsafe { (*state).awarded } == CompanyID((self.shared().local_company)()) {
                     let headline = get_encoded_string(
-                        StringID(self.strings.subsidy_withdrawn_service),
+                        STR_NEWS_SUBSIDY_WITHDRAWN_SERVICE,
                         &self.route_parameters(cargo_type, src, dst),
                     );
                     Self::add_news_item(&headline, src, dst);
@@ -847,18 +829,6 @@ crate::abi::layouts! {
     "Source" ["probe"] => crate::subsidy::Source { id, kind => type, };
     "OpenTTDSubsidyState" ["probe"] => State { cargo_type, remaining, awarded, src, dst, };
     "OpenTTDSubsidyCargo" ["probe"] => Cargo { data, };
-    "OpenTTDSubsidyStrings" ["probe"] => Strings {
-        company_name,
-        offer_of_subsidy_expired,
-        service_subsidy_awarded_half,
-        service_subsidy_offered,
-        source,
-        subsidy_withdrawn_service,
-    };
-    "OpenTTDSourceFormatStrings" ["probe"] => FormatStrings {
-        industry_name,
-        town_name,
-    };
     "OpenTTDSubsidyServices" ["probe"] => Services {
         shared,
         town,
@@ -879,7 +849,6 @@ crate::abi::layouts! {
         manual,
         manual_pax,
         any_manual,
-        strings,
         dirty,
         station,
         assert_destination,
@@ -888,13 +857,16 @@ crate::abi::layouts! {
 
 #[cfg(test)]
 mod tests {
-    use super::{Services, Source, Strings, SubsidyID};
+    use super::{Services, Source, SubsidyID};
     use crate::cargo_type::CargoType;
     use crate::company_type::CompanyID;
     use crate::news_func::testing::{Effect, Param, encoded, formatted, take};
     use crate::news_type::{AdviceType, NewsFlags, NewsReference, NewsStyle, NewsType};
     use crate::script_event_types::ScriptEvent;
-    use crate::source_type::FormatStrings;
+    use crate::table::strings::{
+        STR_COMPANY_NAME, STR_INDUSTRY_NAME, STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF,
+        STR_NEWS_SERVICE_SUBSIDY_OFFERED, STR_TOWN_NAME,
+    };
     use crate::test_tables::{unreachable0, unreachable1, unreachable2};
     use std::ptr;
 
@@ -937,17 +909,6 @@ mod tests {
             manual: unreachable1,
             manual_pax: unreachable0,
             any_manual: unreachable0,
-            strings: Strings {
-                company_name: 0x10,
-                offer_of_subsidy_expired: 0x20,
-                service_subsidy_awarded_half: 0x30,
-                service_subsidy_offered: 0x40,
-                source: FormatStrings {
-                    industry_name: 0x50,
-                    town_name: 0x60,
-                },
-                subsidy_withdrawn_service: 0x70,
-            },
             dirty: nothing,
             station: unreachable1,
             assert_destination: unreachable1,
@@ -977,12 +938,12 @@ mod tests {
             take(),
             [
                 subsidy_news(encoded(
-                    0x40,
+                    STR_NEWS_SERVICE_SUBSIDY_OFFERED.0,
                     &[
                         Param::N(0x304),
-                        Param::N(0x50),
+                        Param::N(STR_INDUSTRY_NAME.0.into()),
                         Param::N(8),
-                        Param::N(0x60),
+                        Param::N(STR_TOWN_NAME.0.into()),
                         Param::N(9),
                         Param::N(2)
                     ]
@@ -1008,20 +969,20 @@ mod tests {
         }
         take();
         s.award_to(id, CompanyID(2));
-        let name = formatted(0x10, &[2]);
+        let name = formatted(STR_COMPANY_NAME.0, &[2]);
         let awarded = ScriptEvent::subsidy_awarded(id);
         assert_eq!(
             take(),
             [
-                Effect::GetString(0x10, vec![2]),
+                Effect::GetString(STR_COMPANY_NAME.0, vec![2]),
                 subsidy_news(encoded(
-                    0x33,
+                    STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF.0 + 3,
                     &[
                         Param::S(&name),
                         Param::N(0x305),
-                        Param::N(0x50),
+                        Param::N(STR_INDUSTRY_NAME.0.into()),
                         Param::N(8),
-                        Param::N(0x60),
+                        Param::N(STR_TOWN_NAME.0.into()),
                         Param::N(9),
                         Param::N(2),
                     ]

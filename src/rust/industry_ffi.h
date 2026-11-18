@@ -110,13 +110,6 @@ typedef struct OpenTTDIndustryChange {
 #endif
 /** Direct typed services, one per original operation. No Rust borrow survives
  * any call; construction, clearing, distribution and destruction may reenter. */
-struct OpenTTDIndustryStrings {
-	uint32_t format_industry_name;
-	uint32_t industry_production_decrease_smooth;
-	uint32_t industry_production_increase_smooth;
-	uint32_t last_stringid;
-	uint32_t town_name;
-};
 typedef struct OpenTTDIndustryServices {
 	const OpenTTDSharedServices *shared;
 	/* Periodic tick. */
@@ -137,7 +130,6 @@ typedef struct OpenTTDIndustryServices {
 	/* Monthly, daily, builder and command entries. */
 	OpenTTDIndustryChange (*change_callback)(void *industry, bool monthly, uint32_t random) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(change_callback);
 	const OpenTTDGrfTextServices *text;
-	OpenTTDIndustryStrings strings;
 	void (*callback_error)(void *industry, bool invalid_cargo) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_error);
 	void (*set_dirty)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_dirty);
 	void (*destroy)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(destroy);
