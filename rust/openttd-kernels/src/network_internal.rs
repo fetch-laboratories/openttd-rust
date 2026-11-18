@@ -49,17 +49,30 @@ pub(crate) fn show_network_error(error_string: StringID) {
 
 #[cfg(test)]
 mod tests {
-    use crate::news_func::testing::{encoded, error_message, take};
+    use crate::news_func::testing::{encoded, error_message, on_error_message, take};
     use crate::openttd::SwitchMode;
     use crate::table::strings::STR_NETWORK_ERROR_DESYNC;
+    use std::cell::Cell;
 
-    /// `ShowNetworkError` sets the pending mode to the menu, then shows the message as critical.
+    thread_local! {
+        static PENDING_AT_MESSAGE: Cell<Option<SwitchMode>> = const { Cell::new(None) };
+    }
+    fn observe_pending() {
+        PENDING_AT_MESSAGE.set(Some(crate::session::pending()));
+    }
+
+    /// `ShowNetworkError` sets the pending mode to the menu before it shows the message as
+    /// critical.
     #[test]
     fn show_network_error_switches_to_the_menu_and_shows_a_critical_message() {
         take();
+        let saved = crate::session::pending();
         crate::session::set_pending(SwitchMode::NONE);
+        on_error_message(Some(observe_pending));
         super::show_network_error(STR_NETWORK_ERROR_DESYNC);
-        assert_eq!(crate::session::pending(), SwitchMode::MENU);
+        on_error_message(None);
+        crate::session::set_pending(saved);
+        assert_eq!(PENDING_AT_MESSAGE.get(), Some(SwitchMode::MENU));
         assert_eq!(
             take(),
             [error_message(

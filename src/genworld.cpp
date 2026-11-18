@@ -259,7 +259,8 @@ static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.founding = &GetRustTownFoundingServices(),
 		.strings = {
-			.load_failed = STR_TOWN_DATA_ERROR_LOAD_FAILED, .town_format = STR_TOWN_DATA_ERROR_TOWN_FORMATTED_INCORRECTLY,
+			.load_failed = STR_TOWN_DATA_ERROR_LOAD_FAILED,
+			.town_format = STR_TOWN_DATA_ERROR_TOWN_FORMATTED_INCORRECTLY,
 			.bad_coordinate = STR_TOWN_DATA_ERROR_BAD_COORDINATE,
 		},
 		.load = TownDataLoad,

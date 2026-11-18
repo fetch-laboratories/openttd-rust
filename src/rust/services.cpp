@@ -170,7 +170,9 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 	static const OpenTTDCommandCostServices services{
 		.construct = CostConstruct, .destroy = CostDestroy,
 		.zero = CostZero, .error = CostError, .expense_money = CostExpenseMoney,
-		.error_param = CostErrorParam, .error_extra = CostErrorExtra, .add = CostAdd, .move = CostMove,
+		.error_extra = CostErrorExtra,
+		.error_param = CostErrorParam,
+		.add = CostAdd, .move = CostMove,
 		.amount = CostAmount, .success = CostSuccess, .error_message = CostErrorMessage, .money = CostMoney,
 		.expense = CostExpense, .make_error = CostMakeError,
 		.encode_owned_by = CostEncodeOwnedBy, .error_owner = CostErrorOwner,

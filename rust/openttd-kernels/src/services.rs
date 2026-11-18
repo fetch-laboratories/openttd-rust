@@ -80,10 +80,10 @@ pub struct CommandCostServices {
     pub error: extern "C" fn(*mut CommandCost, u32),
     /// Assign native `ExpensesType` and saturating `Money` value.
     pub expense_money: extern "C" fn(*mut CommandCost, u8, i64),
-    /// Use native `CommandCostWithParam(StringID, uint64_t)` encoding.
-    pub error_param: extern "C" fn(*mut CommandCost, u32, u64),
     /// Assign the native `CommandCost(StringID msg, StringID extra_msg)` error constructor.
     pub error_extra: extern "C" fn(*mut CommandCost, u32, u32),
+    /// Use native `CommandCostWithParam(StringID, uint64_t)` encoding.
+    pub error_param: extern "C" fn(*mut CommandCost, u32, u64),
     /// Add the moved native result, retaining first-error semantics.
     pub add: extern "C" fn(*mut CommandCost, *mut CommandCost),
     /// Move-assign every native field, including encoded parameters.
@@ -728,8 +728,8 @@ crate::abi::layouts! {
         zero,
         error,
         expense_money,
-        error_param,
         error_extra,
+        error_param,
         add,
         move_cost => move,
         amount,

@@ -24,8 +24,8 @@ struct OpenTTDCommandCostServices {
 	void (*zero)(OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(zero);
 	void (*error)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error);
 	void (*expense_money)(OpenTTDCommandCost *, uint8_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(expense_money);
-	void (*error_param)(OpenTTDCommandCost *, uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(error_param);
 	void (*error_extra)(OpenTTDCommandCost *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_extra);
+	void (*error_param)(OpenTTDCommandCost *, uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(error_param);
 	void (*add)(OpenTTDCommandCost *, OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(add);
 	void (*move)(OpenTTDCommandCost *, OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(move);
 	void (*amount)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(amount);

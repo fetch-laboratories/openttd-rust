@@ -119,10 +119,10 @@ fn ordered_palette(gray: &mut [u8; 256], size: usize) {
 }
 
 /// `ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail), WL_ERROR)`.
-fn show_error(summary: u32, detail: u32) {
+fn show_error(summary: StringID, detail: StringID) {
     show_error_message(
-        &get_encoded_string(StringID(summary), &[]),
-        &get_encoded_string(StringID(detail), &[]),
+        &get_encoded_string(summary, &[]),
+        &get_encoded_string(detail, &[]),
         WarningLevel::WL_ERROR,
         0,
         0,
@@ -132,7 +132,7 @@ fn show_error(summary: u32, detail: u32) {
 }
 
 impl Input {
-    fn fail(&self, summary: u32, detail: u32) -> Option<Image> {
+    fn fail(&self, summary: StringID, detail: StringID) -> Option<Image> {
         show_error(summary, detail);
         (self.finish)(self.context);
         None
@@ -153,15 +153,15 @@ impl Input {
         };
         match (self.png)(self.context, &raw mut png) {
             DECODE_OK => {}
-            DECODE_NOT_FOUND => return self.fail(s.png, s.not_found),
-            _ => return self.fail(s.png, s.png_misc),
+            DECODE_NOT_FOUND => return self.fail(StringID(s.png), StringID(s.not_found)),
+            _ => return self.fail(StringID(s.png), StringID(s.png_misc)),
         }
         // Unreachable after the strip transforms, kept with the original's && chain.
         if png.channels != 1 && png.channels != 3 && png.bit_depth != 8 {
-            return self.fail(s.png, s.png_image_type);
+            return self.fail(StringID(s.png), StringID(s.png_image_type));
         }
         if !is_valid_heightmap_dimension(png.width, png.height) {
-            return self.fail(s.png, s.too_large);
+            return self.fail(StringID(s.png), StringID(s.too_large));
         }
         let mut map = Vec::new();
         if want_map {
@@ -192,18 +192,18 @@ impl Input {
         match (self.bmp_header)(self.context, &raw mut bmp) {
             DECODE_OK => {}
             DECODE_NOT_FOUND => {
-                show_error(s.bmp, s.not_found);
+                show_error(StringID(s.bmp), StringID(s.not_found));
                 return None;
             }
-            _ => return self.fail(s.bmp, s.bmp_image_type),
+            _ => return self.fail(StringID(s.bmp), StringID(s.bmp_image_type)),
         }
         if !is_valid_heightmap_dimension(bmp.width, bmp.height) {
-            return self.fail(s.bmp, s.too_large);
+            return self.fail(StringID(s.bmp), StringID(s.too_large));
         }
         let mut map = Vec::new();
         if want_map {
             if !(self.bmp_bitmap)(self.context, &raw mut bmp) {
-                return self.fail(s.bmp, s.bmp_image_type);
+                return self.fail(StringID(s.bmp), StringID(s.bmp_image_type));
             }
             map.resize(bmp.width as usize * bmp.height as usize, 0);
             // SAFETY: BmpData stays alive until finish below.

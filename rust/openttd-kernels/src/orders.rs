@@ -1501,7 +1501,8 @@ impl Game {
     }
     /// `return CMD_ERROR;`
     fn cmd_error(self, output: *mut c_void) -> u32 {
-        self.command_cost(output, StringID::INVALID_STRING_ID)
+        crate::command_func::cmd_error(self.cost(output));
+        0
     }
     /// `return CommandCost(msg);`
     fn command_cost(self, output: *mut c_void, msg: StringID) -> u32 {

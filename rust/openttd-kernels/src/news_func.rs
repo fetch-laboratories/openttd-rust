@@ -362,6 +362,12 @@ pub(crate) mod testing {
 
     thread_local! {
         static EFFECTS: RefCell<Vec<Effect>> = const { RefCell::new(Vec::new()) };
+        static ON_ERROR_MESSAGE: std::cell::Cell<Option<fn()>> = const { std::cell::Cell::new(None) };
+    }
+    /// Run `observe` as this thread's recording `ShowErrorMessage` receives each message,
+    /// so a test sees state at the call itself; `None` stops.
+    pub(crate) fn on_error_message(observe: Option<fn()>) {
+        ON_ERROR_MESSAGE.set(observe);
     }
     /// The `len` values at `p`, which the code under test passes for this call.
     #[allow(
@@ -484,6 +490,9 @@ pub(crate) mod testing {
         extra_msg: crate::services::ByteSpan,
         company: u8,
     ) {
+        if let Some(observe) = ON_ERROR_MESSAGE.get() {
+            observe();
+        }
         push(Effect::ShowErrorMessage {
             summary_msg: bytes(summary_msg),
             detailed_msg: bytes(detailed_msg),
