@@ -62,7 +62,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
                         << 16
             }
             0x03 => u32::from(shared.settings().climate.read()),
-            0x06 => u32::from(shared.settings().road_side.read()) << 4,
+            0x06 => u32::from(shared.settings().road_side()) << 4,
             0x09 => u32::from(crate::timer_game_common::calendar_fraction()) * 885,
             0x0A => gb((shared.tick_counter)() as u32, 0, 16),
             0x0B => (2 << 24) | (6 << 20) | (1 << 16) | 1382,

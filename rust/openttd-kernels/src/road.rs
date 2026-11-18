@@ -551,11 +551,6 @@ impl<'a> Game<'a> {
     fn map(&self) -> Map {
         self.world().dimensions
     }
-    /// `_settings_game.vehicle.road_side`.
-    fn road_side(&self) -> u8 {
-        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        unsafe { self.ss.settings().road_side.read() }
-    }
     /// `_settings_game.pf.roadveh_queue`.
     fn roadveh_queue(&self) -> bool {
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
@@ -614,7 +609,7 @@ impl<'a> Game<'a> {
     }
     /// `_settings_game.vehicle.road_side << RVS_DRIVE_SIDE`.
     fn drive_side(&self) -> usize {
-        usize::from(self.road_side()) << RVS_DRIVE_SIDE
+        usize::from(self.ss.settings().road_side()) << RVS_DRIVE_SIDE
     }
     /// `v->UpdatePosition()`.
     fn update_position(&self, v: VehicleRef) {
