@@ -326,6 +326,13 @@ pub struct Leaves {
     pub roadveh_list_dirty: extern "C" fn(),
 }
 
+/// Count one C++ service call for the road witness; returns the unchanged function pointer.
+macro_rules! service {
+    ($function:expr) => {
+        crate::witness::counted!(before ROAD_SERVICES, $function)
+    };
+}
+
 /// A road vehicle part: its live record and the live road owner its shell holds.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Part {
@@ -600,13 +607,13 @@ impl<'a> Game<'a> {
     /// Get length of a road vehicle.
     #[inline]
     fn get_road_veh_length(&self, v: VehicleRef) -> u32 {
-        let e = (self.vs.engine)(v);
+        let e = service!(self.vs.engine)(v);
         let mut length = VEHICLE_LENGTH;
 
         let mut veh_len;
         if e.grf_version(self.ss) >= 8 {
             /* Use callback 36 */
-            veh_len = (self.vs.property)(
+            veh_len = service!(self.vs.property)(
                 (self.vs.newgrf)(),
                 v,
                 PROP_ROADVEH_SHORTEN_FACTOR,
@@ -620,7 +627,7 @@ impl<'a> Game<'a> {
             }
         } else {
             /* Use callback 11 */
-            veh_len = (self.vs.callback)((self.vs.newgrf)(), v, CBID_VEHICLE_LENGTH);
+            veh_len = service!(self.vs.callback)((self.vs.newgrf)(), v, CBID_VEHICLE_LENGTH);
         }
         if veh_len == crate::newgrf_callbacks::CALLBACK_FAILED {
             veh_len = u16::from(e.road_shorten());
@@ -669,7 +676,7 @@ impl<'a> Game<'a> {
             /* Verify length hasn't changed. */
             if same_length && veh_len != u32::from(read_field!(u.ground_cache(), cached_veh_length))
             {
-                (self.vs.length_changed)(u);
+                service!(self.vs.length_changed)(u);
             }
 
             write_field!(u.ground_cache(), cached_veh_length, veh_len as u8);
@@ -681,8 +688,8 @@ impl<'a> Game<'a> {
             crate::vehicle_effect::update_visual_effect(u, true);
 
             /* Update cargo aging period. */
-            let cargo_age_period = (self.vs.engine)(u).cargo_age();
-            let period = (self.vs.property)(
+            let cargo_age_period = service!(self.vs.engine)(u).cargo_age();
+            let period = service!(self.vs.property)(
                 (self.vs.newgrf)(),
                 u,
                 PROP_ROADVEH_CARGO_AGE_PERIOD,
@@ -692,11 +699,12 @@ impl<'a> Game<'a> {
             part = u.next();
         }
 
-        let max_speed = (self.vs.property)((self.vs.newgrf)(), v.v, PROP_ROADVEH_SPEED, 0) as u32;
+        let max_speed =
+            service!(self.vs.property)((self.vs.newgrf)(), v.v, PROP_ROADVEH_SPEED, 0) as u32;
         v.v.set_cached_max_speed(if max_speed != 0 {
             max_speed.wrapping_mul(4) as u16
         } else {
-            (self.vs.engine)(v.v).road_speed()
+            service!(self.vs.engine)(v.v).road_speed()
         });
     }
 
@@ -734,7 +742,7 @@ impl<'a> Game<'a> {
 
         Closest {
             tile: rfdd.tile.0,
-            destination: (self.ss.depot_index)(rfdd.tile.0),
+            destination: service!(self.ss.depot_index)(rfdd.tile.0),
             reverse: 0,
             found: 1,
         }
@@ -765,7 +773,7 @@ impl<'a> Game<'a> {
 
         if self.is_tile_type(v.v.tile(), TileType::MP_TUNNELBRIDGE)
             && dir_to_diag_dir(v.v.direction(), self.check()).0
-                == (self.ss.tunnel_bridge_direction)(v.v.tile().0)
+                == service!(self.ss.tunnel_bridge_direction)(v.v.tile().0)
         {
             return false;
         }
@@ -774,7 +782,7 @@ impl<'a> Game<'a> {
             v.set_reverse_ctr(180);
 
             /* Unbunching data is no longer valid. */
-            (self.vs.reset_depot_unbunching)(v.v);
+            service!(self.vs.reset_depot_unbunching)(v.v);
         }
 
         true
@@ -803,7 +811,7 @@ impl<'a> Game<'a> {
             unsafe { crate::road_stop::leave_vehicle(self.ss, v.v, v.s.as_ptr()) };
         }
 
-        (self.vs.destroy)(v.v);
+        service!(self.vs.destroy)(v.v);
     }
 
     /// `RoadVehSetRandomDirection`.
@@ -902,7 +910,7 @@ impl<'a> Game<'a> {
                 &[Integer(u64::from(victims))],
             )
         };
-        let newstype = if v.v.owner().0 == (self.ss.local_company)() {
+        let newstype = if v.v.owner().0 == service!(self.ss.local_company)() {
             NewsType::Accident
         } else {
             NewsType::AccidentOther
@@ -917,8 +925,8 @@ impl<'a> Game<'a> {
             -160,
             22,
         );
-        if (self.ss.disaster_sound)() {
-            (self.vs.play_sound)(v.v, SoundID::from(SoundFx::SND_12_EXPLOSION).0);
+        if service!(self.ss.disaster_sound)() {
+            service!(self.vs.play_sound)(v.v, SoundID::from(SoundFx::SND_12_EXPLOSION).0);
         }
     }
 
@@ -959,14 +967,14 @@ impl<'a> Game<'a> {
     /// `StartRoadVehSound`.
     #[inline]
     fn start_road_veh_sound(&self, v: VehicleRef) {
-        if !(self.vs.play_vehicle_sound)(v, VSE_START) {
-            let mut s = (self.vs.engine)(v).road_sound();
+        if !service!(self.vs.play_vehicle_sound)(v, VSE_START) {
+            let mut s = service!(self.vs.engine)(v).road_sound();
             if s == SoundID::from(SoundFx::SND_19_DEPARTURE_OLD_RV_1).0
                 && (v.tick_counter() & 3) == 0
             {
                 s = SoundID::from(SoundFx::SND_1A_DEPARTURE_OLD_RV_2).0;
             }
-            (self.vs.play_sound)(v, s);
+            service!(self.vs.play_sound)(v, s);
         }
     }
 
@@ -1050,7 +1058,7 @@ impl<'a> Game<'a> {
                 false
             });
             self.vs
-                .any_on_tile((self.ss.other_tunnel_end)(v.v.tile().0), |u| {
+                .any_on_tile(service!(self.ss.other_tunnel_end)(v.v.tile().0), |u| {
                     self.find_closest_blocking_road_veh(u, &mut rvf);
                     false
                 });
@@ -1085,10 +1093,14 @@ impl<'a> Game<'a> {
     fn road_veh_arrives_at(&self, v: Part, st: StationID) {
         if crate::road_stop::is_bus(self.ss, v.v) {
             /* Check if station was ever visited before */
-            if (self.ss.station_had_vehicle_of_type)(st.0) & StationHadVehicleOfType::HVOT_BUS.0
+            if service!(self.ss.station_had_vehicle_of_type)(st.0)
+                & StationHadVehicleOfType::HVOT_BUS.0
                 == 0
             {
-                (self.ss.station_add_vehicle_of_type)(st.0, StationHadVehicleOfType::HVOT_BUS.0);
+                service!(self.ss.station_add_vehicle_of_type)(
+                    st.0,
+                    StationHadVehicleOfType::HVOT_BUS.0,
+                );
                 add_vehicle_news_item(
                     &get_encoded_string(
                         if road_type_is_road(self.roadtype(v.v)) {
@@ -1098,7 +1110,7 @@ impl<'a> Game<'a> {
                         },
                         &[Integer(u64::from(st.0))],
                     ),
-                    if v.v.owner().0 == (self.ss.local_company)() {
+                    if v.v.owner().0 == service!(self.ss.local_company)() {
                         NewsType::ArrivalCompany
                     } else {
                         NewsType::ArrivalOther
@@ -1114,10 +1126,14 @@ impl<'a> Game<'a> {
             }
         } else {
             /* Check if station was ever visited before */
-            if (self.ss.station_had_vehicle_of_type)(st.0) & StationHadVehicleOfType::HVOT_TRUCK.0
+            if service!(self.ss.station_had_vehicle_of_type)(st.0)
+                & StationHadVehicleOfType::HVOT_TRUCK.0
                 == 0
             {
-                (self.ss.station_add_vehicle_of_type)(st.0, StationHadVehicleOfType::HVOT_TRUCK.0);
+                service!(self.ss.station_add_vehicle_of_type)(
+                    st.0,
+                    StationHadVehicleOfType::HVOT_TRUCK.0,
+                );
                 add_vehicle_news_item(
                     &get_encoded_string(
                         if road_type_is_road(self.roadtype(v.v)) {
@@ -1127,7 +1143,7 @@ impl<'a> Game<'a> {
                         },
                         &[Integer(u64::from(st.0))],
                     ),
-                    if v.v.owner().0 == (self.ss.local_company)() {
+                    if v.v.owner().0 == service!(self.ss.local_company)() {
                         NewsType::ArrivalCompany
                     } else {
                         NewsType::ArrivalOther
@@ -1459,7 +1475,7 @@ impl<'a> Game<'a> {
                 if road_type_is_tram(self.roadtype(v.v)) {
                     /* Trams may only reverse on a tile if it contains at least the straight
                      * trackbits or when it is a valid turning tile (i.e. one roadbit) */
-                    let rb = RoadBits((self.ss.road_bits)(
+                    let rb = RoadBits(service!(self.ss.road_bits)(
                         tile.0,
                         u8::from(RoadTramType::RTT_TRAM.0),
                         false,
@@ -1531,7 +1547,7 @@ impl<'a> Game<'a> {
                 )
             };
 
-            (self.vs.pathfinding_result)(v.v, path_found);
+            service!(self.vs.pathfinding_result)(v.v, path_found);
 
             best_track
         };
@@ -1586,7 +1602,7 @@ impl<'a> Game<'a> {
 
             // SAFETY: A live front shell; no owner borrow spans the servicing.
             unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
-            (self.vs.leave_unbunching_depot)(v.v);
+            service!(self.vs.leave_unbunching_depot)(v.v);
 
             self.start_road_veh_sound(v.v);
 
@@ -1631,7 +1647,7 @@ impl<'a> Game<'a> {
             let mut diag_dir = DiagDirection::INVALID_DIAGDIR;
 
             if self.is_tile_type(tile, TileType::MP_TUNNELBRIDGE) {
-                diag_dir = DiagDirection((self.ss.tunnel_bridge_direction)(tile.0));
+                diag_dir = DiagDirection(service!(self.ss.tunnel_bridge_direction)(tile.0));
             } else if self.is_road_depot_tile(tile) {
                 diag_dir = reverse_diag_dir(self.get_road_depot_direction(tile), self.check());
             }
@@ -1704,7 +1720,7 @@ impl<'a> Game<'a> {
         let required = REQUIRED_ROADBITS[usize::from(dir.0 & 0x07)];
 
         if (required.0
-            & RoadBits((self.ss.road_bits)(
+            & RoadBits(service!(self.ss.road_bits)(
                 tile.0,
                 u8::from(get_road_tram_type(self.roadtype(v.v)).0),
                 true,
@@ -1729,7 +1745,7 @@ impl<'a> Game<'a> {
         rt: RoadType,
         r: RoadBits,
     ) -> bool {
-        let road = (self.l.build_road_context)(self.road);
+        let road = service!(self.l.build_road_context)(self.road);
         // SAFETY: The leaf constructed a live native stack context and results in the slot.
         unsafe {
             let context = &*road;
@@ -1789,7 +1805,7 @@ impl<'a> Game<'a> {
 
         if v.state() == RVSB_WORMHOLE {
             /* Vehicle is entering a depot or is on a bridge or in a tunnel */
-            let gp = (self.vs.new_position)(v.v);
+            let gp = service!(self.vs.new_position)(v.v);
 
             if v.v.is_front_engine() {
                 if let Some(u) = self.road_veh_find_close_to(v, gp.x, gp.y, v.v.direction(), true) {
@@ -1815,7 +1831,7 @@ impl<'a> Game<'a> {
             v.v.set_y_pos(gp.y);
             self.update_position(v.v);
             if !v.v.vehstatus().test(VehState::Hidden) {
-                (self.vs.base_viewport)(v.v);
+                service!(self.vs.base_viewport)(v.v);
             }
             return true;
         }
@@ -1919,7 +1935,7 @@ impl<'a> Game<'a> {
                                 needed,
                             )
                             || ((!needed.0
-                                & RoadBits((self.ss.road_bits)(
+                                & RoadBits(service!(self.ss.road_bits)(
                                     v.v.tile().0,
                                     u8::from(RoadTramType::RTT_TRAM.0),
                                     false,
@@ -2068,7 +2084,7 @@ impl<'a> Game<'a> {
             if road_type_is_tram(self.roadtype(v.v))
                 && !self.is_road_depot_tile(v.v.tile())
                 && crate::bitmath_func::has_exactly_one_bit(
-                    RoadBits((self.ss.road_bits)(
+                    RoadBits(service!(self.ss.road_bits)(
                         v.v.tile().0,
                         u8::from(RoadTramType::RTT_TRAM.0),
                         true,
@@ -2345,7 +2361,7 @@ impl<'a> Game<'a> {
             }
 
             self.start_road_veh_sound(v.v);
-            (self.vs.start_stop_dirty)(v.v);
+            service!(self.vs.start_stop_dirty)(v.v);
         }
 
         /* Check tile position conditions - i.e. stop position in depot,
@@ -2414,7 +2430,7 @@ impl<'a> Game<'a> {
 
         if v.is_in_depot() {
             /* Check if we should wait here for unbunching. */
-            if (self.vs.waiting_for_unbunching)(v.v) {
+            if service!(self.vs.waiting_for_unbunching)(v.v) {
                 return true;
             }
             if self.road_veh_leave_depot(v, true) {
@@ -2485,12 +2501,12 @@ impl<'a> Game<'a> {
     fn get_running_cost(&self, v: Part) -> i64 {
         // SAFETY: The vehicle table names the immutable process-lifetime NewGRF table.
         let capabilities = unsafe { (*(self.vs.newgrf)()).capabilities };
-        let e = (self.vs.engine)(v.v);
+        let e = service!(self.vs.engine)(v.v);
         if e.road_price() == crate::economy_type::INVALID_PRICE {
             return 0;
         }
 
-        let cost_factor = (self.vs.property)(
+        let cost_factor = service!(self.vs.property)(
             (self.vs.newgrf)(),
             v.v,
             PROP_ROADVEH_RUNNING_COST_FACTOR,
@@ -2555,12 +2571,12 @@ impl<'a> Game<'a> {
                  * schedule? */
                 // SAFETY: The current order belongs to this live serialized record.
                 unsafe { crate::orders::make_dummy(v.v.current_order_pointer()) };
-                (self.vs.start_stop_dirty)(v.v);
+                service!(self.vs.start_stop_dirty)(v.v);
             }
             return;
         }
 
-        let depot = (self.ss.depot_index)(rfdd.tile.0);
+        let depot = service!(self.ss.depot_index)(rfdd.tile.0);
 
         if v.v.current_order().is_type(OrderType::OT_GOTO_DEPOT)
             && v.v
@@ -2590,7 +2606,7 @@ impl<'a> Game<'a> {
             );
         }
         set_dest_tile(v, rfdd.tile);
-        (self.vs.start_stop_dirty)(v.v);
+        service!(self.vs.start_stop_dirty)(v.v);
     }
 
     /// Calendar day handler.
@@ -2624,7 +2640,7 @@ impl<'a> Game<'a> {
 
         self.check_if_road_veh_needs_service(v);
 
-        (self.vs.check_orders_only)(v.v);
+        service!(self.vs.check_orders_only)(v.v);
 
         if v.v.running_ticks() == 0 {
             return;
@@ -2635,7 +2651,7 @@ impl<'a> Game<'a> {
             .saturating_mul(i64::from(v.v.running_ticks()))
             / YEAR_TICKS;
 
-        (self.vs.write_profit)(v.v, (self.vs.profit)(v.v).saturating_sub(cost));
+        service!(self.vs.write_profit)(v.v, service!(self.vs.profit)(v.v).saturating_sub(cost));
         v.v.set_running_ticks(0);
 
         // SAFETY: Base maintenance names the shared static command and company tables.
@@ -2649,7 +2665,7 @@ impl<'a> Game<'a> {
 
         // SAFETY: The static maintenance table outlives the call.
         (unsafe { &*self.vs.maintenance }.details_dirty)(v.v);
-        (self.l.roadveh_list_dirty)();
+        service!(self.l.roadveh_list_dirty)();
     }
 
     /// `RoadVehicle::GetVehicleTrackdir`.
@@ -2725,7 +2741,7 @@ fn get_current_max_speed(ss: &Services, v: Part) -> i32 {
 
         /* Vehicle is on the middle part of a bridge. */
         if u.state() == RVSB_WORMHOLE && !u.v.vehstatus().test(VehState::Hidden) {
-            max_speed = max_speed.min(i32::from((ss.bridge_speed)(u.v.tile().0)) * 2);
+            max_speed = max_speed.min(i32::from(service!(ss.bridge_speed)(u.v.tile().0)) * 2);
         }
         part = u.next();
     }
