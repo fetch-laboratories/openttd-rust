@@ -119,7 +119,7 @@ extern "C" fn tile_type(tile: u32) -> u8 {
     assert_eq!(tile, 2, "only the animated tile is read");
     MP_INDUSTRY
 }
-unsafe extern "C" fn play_sound(sound: u16, tile: u32) {
+extern "C" fn play_sound(tile: u32, sound: u16) {
     record([11, tile, sound.into(), 0]);
 }
 unsafe extern "C" fn set_construction_stage(tile: u32, stage: u8) {
@@ -319,11 +319,11 @@ fn tables() -> Tables {
     shared.tile_animation_set_frame = set_frame;
     shared.tick_counter = tick_counter;
     shared.tile_type = tile_type;
+    shared.play_sound = play_sound;
     shared.settings = leak(settings);
     let shared = leak(shared);
     let mut industries = INDUSTRIES;
     industries.shared = shared;
-    industries.play_sound = play_sound;
     let industries = leak(industries);
     let mut tiles = INDUSTRY_TILES;
     tiles.shared = shared;

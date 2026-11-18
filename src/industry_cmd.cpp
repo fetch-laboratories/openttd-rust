@@ -700,7 +700,6 @@ static const OpenTTDIndustryServices _industry_services = {
 		if (i == nullptr) return {};
 		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)};
 	},
-	.play_sound = RustPlayTileSoundBySound,
 	.special_effect = [](void *handle, uint32_t random, uint32_t parameter) noexcept -> uint16_t {
 		Industry *i = RustIndustry(handle);
 		return GetIndustryCallback(CBID_INDUSTRY_SPECIAL_EFFECT, random, parameter, i, i->type, i->location.tile);

@@ -114,7 +114,6 @@ typedef struct OpenTTDIndustryServices {
 	const OpenTTDSharedServices *shared;
 	/* Periodic tick. */
 	OpenTTDIndustryEntry (*next_tick)(uint32_t from) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(next_tick);
-	void (*play_sound)(uint16_t sound, uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(play_sound);
 	uint16_t (*special_effect)(void *industry, uint32_t random, uint32_t parameter) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(special_effect);
 	void (*tick_trigger)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tick_trigger);
 	void (*production_callback)(void *industry, uint8_t reason) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(production_callback);

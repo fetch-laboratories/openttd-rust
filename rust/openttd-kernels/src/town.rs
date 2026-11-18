@@ -506,7 +506,15 @@ impl TownDirectoryInvalidateWindowData {
 }
 /// `ChangePopulation`: change the town's population as recorded in the town cache, town
 /// label, and town directory.
-unsafe fn change_population(leaves: &Leaves, state: *mut State, t: TownID, amount: i32) {
+///
+/// `shell` supplies the town's native shell, which only the label update reads.
+unsafe fn change_population(
+    leaves: &Leaves,
+    state: *mut State,
+    shell: impl FnOnce() -> *mut crate::services::TownHandle,
+    t: TownID,
+    amount: i32,
+) {
     // SAFETY: Field mutation ends before the presentation service can reenter.
     unsafe {
         (*state).simulation.population = population(state).wrapping_add(amount as u32);
@@ -519,7 +527,7 @@ unsafe fn change_population(leaves: &Leaves, state: *mut State, t: TownID, amoun
     invalidate_window_data(WindowClass::WC_TOWN_VIEW, WindowNumber::from(t), 0, false);
     // SAFETY: Canonical client setting; the immediate load ends before the service.
     if unsafe { leaves.shared().settings().population_in_label.read() } {
-        (leaves.update_virt)((leaves.shared().town_by_id)(u32::from(t.0)));
+        (leaves.update_virt)(shell());
     }
     invalidate_window_data(
         WindowClass::WC_TOWN_DIRECTORY,
@@ -1171,6 +1179,13 @@ impl Engine<'_> {
 }
 /// The bound town's fields, each read or written at its original observation point.
 impl Engine<'_> {
+    /// The town's native shell, resolved at its first use in the entry; the entry
+    /// already resolved its owner.
+    fn town_shell(&self, t: TownID) -> *mut crate::services::TownHandle {
+        *self
+            .house_shell
+            .get_or_init(|| (self.services.town_by_id)(u32::from(t.0)))
+    }
     fn bind(mut self, town: TownID) -> Self {
         self.owner = (self.leaves.resolve_owner)(u32::from(town.0));
         self
@@ -2794,6 +2809,7 @@ impl Engine<'_> {
                     change_population(
                         self.leaves,
                         self.owner,
+                        || self.town_shell(t),
                         t,
                         i32::from((self.leaves.house_population)(house)),
                     );
@@ -2822,10 +2838,7 @@ impl Engine<'_> {
         // Resolve only the native shell at the first construction trigger; the
         // entry already resolved its owner. House lifecycle callers also supplied
         // their shell. No owner reference spans any construction callback.
-        let shell = *self.house_shell.get_or_init(|| {
-            // SAFETY: Static house table referenced by the town leaves.
-            (self.services.town_by_id)(u32::from(t.0))
-        });
+        let shell = self.town_shell(t);
         let town_ref = TownRef {
             shell,
             state: self.owner,

@@ -91,8 +91,13 @@ static SERVICES: OnceLock<&'static Services> = OnceLock::new();
 )]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_window_bind(services: *const Services) {
-    // SAFETY: This function's contract; the table binds once.
-    let _ = SERVICES.set(unsafe { &*services });
+    // SAFETY: This function's contract.
+    bind(unsafe { &*services });
+}
+
+/// Bind `services` for the process; the first binding stays.
+fn bind(services: &'static Services) {
+    let _ = SERVICES.set(services);
 }
 
 /// The bound table, or the aborting services before the native table binds.
@@ -150,7 +155,6 @@ pub(crate) mod testing {
     use crate::newgrf::GrfSpecFeature;
     use crate::window_type::{WidgetID, WindowClass, WindowNumber};
     use std::cell::RefCell;
-    use std::sync::Once;
 
     /// One native window call, in the order the code under test made it.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -237,10 +241,8 @@ pub(crate) mod testing {
 
     /// Bind the recording table once for the process; return and clear this thread's
     /// recorded calls.
-    #[allow(unsafe_code, reason = "binding the recording table for the process")]
     pub(crate) fn take() -> Vec<Effect> {
-        static BIND: Once = Once::new();
-        BIND.call_once(|| unsafe { super::openttd_rust_window_bind(&raw const WINDOWS) });
+        super::bind(&WINDOWS);
         EFFECTS.with(|e| std::mem::take(&mut *e.borrow_mut()))
     }
 }

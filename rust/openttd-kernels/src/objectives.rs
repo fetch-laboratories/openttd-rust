@@ -162,8 +162,8 @@ impl Services {
         crate::tile_map::is_valid_tile(&map.types, tile, map.types.count()).unwrap()
     }
 }
-/// The goal list invalidation every goal command makes: all lists for a global goal,
-/// else the company's.
+/// The goal list invalidation of the goal commands that change what the list shows: all
+/// lists for a global goal, else the company's.
 fn goal_dirty(company: CompanyID) {
     if company == CompanyID::INVALID {
         invalidate_window_classes_data(WindowClass::WC_GOALS_LIST, 0, false);
@@ -405,6 +405,7 @@ pub extern "C" fn openttd_rust_goal_question_answer_abi(
         return u8::from(false);
     }
     if s.deity() {
+        /* It has been requested to close this specific question on all clients */
         if execute(flags) {
             close_window_by_id(
                 WindowClass::WC_GOAL_QUESTION,
@@ -418,6 +419,7 @@ pub extern "C" fn openttd_rust_goal_question_answer_abi(
     if (s.company().finance.networking)()
         && (s.company().shared.local_company)() == (s.shared().current_company)()
     {
+        /* Somebody in the same company answered the question. Close the window */
         if execute(flags) {
             close_window_by_id(
                 WindowClass::WC_GOAL_QUESTION,
@@ -854,7 +856,7 @@ pub unsafe extern "C" fn openttd_rust_create_league_table_element_abi(
             ));
             invalidate_window_data(
                 WindowClass::WC_COMPANY_LEAGUE,
-                WindowNumber(i32::from(table.0)),
+                WindowNumber::from(table),
                 0,
                 false,
             );
@@ -892,7 +894,7 @@ pub unsafe extern "C" fn openttd_rust_update_league_table_element_data_abi(
             (s.entry_link_target)(entry).write(target);
             invalidate_window_data(
                 WindowClass::WC_COMPANY_LEAGUE,
-                WindowNumber(i32::from((*(s.entry_table)(entry)).0)),
+                WindowNumber::from(*(s.entry_table)(entry)),
                 0,
                 false,
             );
@@ -921,7 +923,7 @@ pub unsafe extern "C" fn openttd_rust_update_league_table_element_score_abi(
             (s.text_assign)((s.entry_score)(entry), score);
             invalidate_window_data(
                 WindowClass::WC_COMPANY_LEAGUE,
-                WindowNumber(i32::from((*(s.entry_table)(entry)).0)),
+                WindowNumber::from(*(s.entry_table)(entry)),
                 0,
                 false,
             );
@@ -948,7 +950,7 @@ pub unsafe extern "C" fn openttd_rust_remove_league_table_element_abi(
             (s.entry_destroy)(entry);
             invalidate_window_data(
                 WindowClass::WC_COMPANY_LEAGUE,
-                WindowNumber(i32::from(table.0)),
+                WindowNumber::from(table),
                 0,
                 false,
             );

@@ -14,18 +14,6 @@
   {
     "kind": "suppression",
     "tool": "rust",
-    "site": "rust/openttd-kernels/src/window_func.rs | mod testing > fn take | allow unsafe_code",
-    "before": 0,
-    "after": 1,
-    "operation": "window_func::testing::take",
-    "source_contract": "The recording window table of the Rust tests receives the calls production code makes to the native window services.",
-    "reason": "Binding the recording table calls the unsafe binding export with a process-lifetime static, once for the test process, as news_func::testing::take does.",
-    "retiring_owner": "#734",
-    "retirement_condition": "When the native window bodies are ported and the table is removed."
-  },
-  {
-    "kind": "suppression",
-    "tool": "rust",
     "site": "rust/openttd-kernels/src/vehicle_transactions.rs | fn cmd_start_stop_vehicle | allow clippy::too_many_lines",
     "before": 0,
     "after": 1,

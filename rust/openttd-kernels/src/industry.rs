@@ -490,7 +490,6 @@ pub struct Change {
 pub struct Services {
     pub shared: *const crate::services::Services,
     pub next_tick: unsafe extern "C" fn(u32) -> Entry,
-    pub play_sound: unsafe extern "C" fn(u16, u32),
     pub special_effect: unsafe extern "C" fn(*mut c_void, u32, u32) -> u16,
     pub tick_trigger: unsafe extern "C" fn(*mut c_void),
     pub production_callback: unsafe extern "C" fn(*mut c_void, u8),
@@ -764,11 +763,12 @@ fn produce_industry_goods_helper(owner: *mut Industry, s: &Services, scale: bool
 fn produce_industry_goods(entry: Entry, svc: &Services, builder: *mut Builder) {
     let (i, owner) = (entry.industry, entry.owner);
     let state = fields(owner);
+    let indsp = spec_of(owner);
     // play a sound?
     if gb(u32::from(unsafe { (*state).counter }), 0, 6) == 0 {
         let r = random(svc);
         if chance16_i(1, 14, r) {
-            let sounds = unsafe { (*spec_of(owner)).random_sounds.len() } as u16;
+            let sounds = unsafe { (*indsp).random_sounds.len() } as u16;
             if sounds != 0
                 && unsafe { svc.shared().settings().ambient.read() }
                 && (0..produced_count(owner)).any(|slot| unsafe {
@@ -777,15 +777,15 @@ fn produce_industry_goods(entry: Entry, svc: &Services, builder: *mut Builder) {
             {
                 // Play sound since last month had production
                 let index = (((r >> 16) * u32::from(sounds)) >> 16) as usize;
-                let sound = SoundFx(unsafe { (&(*spec_of(owner)).random_sounds)[index] });
-                unsafe { (svc.play_sound)(u16::from(sound.0), (*owner).metadata.tile) };
+                let sound = SoundFx(unsafe { (&(*indsp).random_sounds)[index] });
+                (svc.shared().play_sound)(unsafe { (*owner).metadata.tile }, u16::from(sound.0));
             }
         }
     }
     unsafe {
         (*state).counter = (*state).counter.wrapping_sub(1);
     }
-    let callbacks = spec_callback_mask(spec_of(owner));
+    let callbacks = spec_callback_mask(indsp);
     let callback = callbacks.test(IndustryCallbackMask::Production256Ticks);
     // If using an industry callback, scale the callback interval by cargo scale percentage.
     if callback
@@ -869,12 +869,18 @@ pub(crate) unsafe fn on_tick_industry(builder: *mut Builder, services: *const Se
             (*b).sound_ctr = (*b).sound_ctr.wrapping_add(1);
             if (*b).sound_ctr == 75 {
                 if s.shared().settings().ambient.read() {
-                    (s.play_sound)(u16::from(SoundFx::SND_37_LUMBER_MILL_2.0), (*b).sound_tile);
+                    (s.shared().play_sound)(
+                        (*b).sound_tile,
+                        u16::from(SoundFx::SND_37_LUMBER_MILL_2.0),
+                    );
                 }
             } else if (*b).sound_ctr == 160 {
                 (*b).sound_ctr = 0;
                 if s.shared().settings().ambient.read() {
-                    (s.play_sound)(u16::from(SoundFx::SND_36_LUMBER_MILL_3.0), (*b).sound_tile);
+                    (s.shared().play_sound)(
+                        (*b).sound_tile,
+                        u16::from(SoundFx::SND_36_LUMBER_MILL_3.0),
+                    );
                 }
             }
         }
@@ -2863,7 +2869,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryServices" ["industry"] => Services {
         shared,
         next_tick,
-        play_sound,
         special_effect,
         tick_trigger,
         production_callback,
@@ -3104,9 +3109,6 @@ mod production_policy_tests {
     extern "C" fn unexpected_next_tick(_: u32) -> Entry {
         unreachable!("unexpected Services::next_tick")
     }
-    extern "C" fn unexpected_play_sound(_: u16, _: u32) {
-        unreachable!("unexpected Services::play_sound")
-    }
     extern "C" fn unexpected_special_effect(_: *mut c_void, _: u32, _: u32) -> u16 {
         unreachable!("unexpected Services::special_effect")
     }
@@ -3162,7 +3164,6 @@ mod production_policy_tests {
         Services {
             shared,
             next_tick: unexpected_next_tick,
-            play_sound: unexpected_play_sound,
             special_effect: unexpected_special_effect,
             tick_trigger: unexpected_tick_trigger,
             production_callback: unexpected_production_callback,

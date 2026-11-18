@@ -959,7 +959,7 @@ static_assert(WC_STATION_LIST == 40 && WC_TRAINS_LIST == 41 && WC_ROADVEH_LIST =
 static_assert(WC_VEHICLE_VIEW == 46 && WC_STATION_VIEW == 47 && WC_VEHICLE_DEPOT == 48 && WC_INDUSTRY_VIEW == 50 && WC_COMPANY == 51 && WC_BUILD_VEHICLE == 54);
 static_assert(WC_MAIN_TOOLBAR == 1 && WC_BUILD_INDUSTRY == 62 && WC_CLIENT_LIST == 68 && WC_NETWORK_STATUS_WINDOW == 69 && WC_SEND_NETWORK_MSG == 72 && WC_COMPANY_LEAGUE == 81);
 static_assert(WC_INDUSTRY_PRODUCTION == 84 && WC_TOWN_CARGO_GRAPH == 85 && WC_ENGINE_PREVIEW == 88 && WC_GAME_OPTIONS == 91 && WN_NETWORK_STATUS_WINDOW_JOIN == 0);
-static_assert(std::is_same_v<WidgetID, int32_t> && std::is_same_v<std::underlying_type_t<WindowClass>, uint16_t>);
+static_assert(std::is_same_v<WidgetID, int32_t> && std::is_same_v<std::underlying_type_t<WindowClass>, uint16_t> && std::is_same_v<std::underlying_type_t<WindowNumberEnum>, uint8_t>);
 static_assert(TDIWD_POPULATION_CHANGE == 1 && TDIWD_FORCE_RESORT == 2);
 static_assert(VIWD_CONSIST_CHANGED == -3);
 static_assert(WID_SV_CLOSE_AIRPORT == 11);

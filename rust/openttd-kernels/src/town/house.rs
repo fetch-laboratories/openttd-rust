@@ -486,6 +486,7 @@ impl<'a> House<'a> {
                 change_population(
                     self.l,
                     town.state,
+                    || town.shell,
                     town.id,
                     -i32::from((self.l.house_population)(house)),
                 );
@@ -692,7 +693,13 @@ impl<'a> House<'a> {
             let population = (self.l.house_population)(rec.house);
             // SAFETY: Live owner; presentation callbacks follow the write.
             unsafe {
-                change_population(self.l, town.state, town.id, i32::from(population));
+                change_population(
+                    self.l,
+                    town.state,
+                    || town.shell,
+                    town.id,
+                    i32::from(population),
+                );
             }
             (self.h.reset_age)(tile.0);
         }

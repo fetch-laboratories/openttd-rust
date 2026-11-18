@@ -15,7 +15,7 @@ use crate::openttd::{GameMode, SwitchMode};
 use crate::packet::{self, State as PacketState};
 use crate::tcp_game::PacketGameType;
 use crate::window_func::{invalidate_window_data, set_window_dirty};
-use crate::window_type::{WN_NETWORK_STATUS_WINDOW_JOIN, WindowClass, WindowNumber};
+use crate::window_type::{WindowClass, WindowNumber, WindowNumberEnum};
 use std::ffi::c_void;
 #[repr(C)]
 pub struct Services {
@@ -167,7 +167,7 @@ pub(crate) fn send_join(s: &Services, f: &FrameServices) -> NetworkRecvStatus {
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_AUTHORIZING);
     set_window_dirty(
         WindowClass::WC_NETWORK_STATUS_WINDOW,
-        WN_NETWORK_STATUS_WINDOW_JOIN,
+        WindowNumber::from(WindowNumberEnum::WN_NETWORK_STATUS_WINDOW_JOIN),
     );
 
     let mut p = packet_new(f, my_client, PacketGameType::PACKET_CLIENT_JOIN);
@@ -372,7 +372,7 @@ pub(crate) fn receive_server_wait(
     unsafe { s.join_waiting.write(packet::recv_uint8(p, f.packet)) };
     set_window_dirty(
         WindowClass::WC_NETWORK_STATUS_WINDOW,
-        WN_NETWORK_STATUS_WINDOW_JOIN,
+        WindowNumber::from(WindowNumberEnum::WN_NETWORK_STATUS_WINDOW_JOIN),
     );
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
@@ -416,7 +416,7 @@ pub(crate) fn receive_server_map_begin(
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_DOWNLOADING);
     set_window_dirty(
         WindowClass::WC_NETWORK_STATUS_WINDOW,
-        WN_NETWORK_STATUS_WINDOW_JOIN,
+        WindowNumber::from(WindowNumberEnum::WN_NETWORK_STATUS_WINDOW_JOIN),
     );
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
@@ -439,7 +439,7 @@ pub(crate) fn receive_server_map_size(
     unsafe { s.join_bytes_total.write(packet::recv_uint32(p, f.packet)) };
     set_window_dirty(
         WindowClass::WC_NETWORK_STATUS_WINDOW,
-        WN_NETWORK_STATUS_WINDOW_JOIN,
+        WindowNumber::from(WindowNumberEnum::WN_NETWORK_STATUS_WINDOW_JOIN),
     );
 
     debug!(
@@ -479,7 +479,7 @@ pub(crate) fn receive_server_map_data(
     }
     set_window_dirty(
         WindowClass::WC_NETWORK_STATUS_WINDOW,
-        WN_NETWORK_STATUS_WINDOW_JOIN,
+        WindowNumber::from(WindowNumberEnum::WN_NETWORK_STATUS_WINDOW_JOIN),
     );
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
@@ -508,7 +508,7 @@ pub(crate) fn receive_server_map_done(
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_PROCESSING);
     set_window_dirty(
         WindowClass::WC_NETWORK_STATUS_WINDOW,
-        WN_NETWORK_STATUS_WINDOW_JOIN,
+        WindowNumber::from(WindowNumberEnum::WN_NETWORK_STATUS_WINDOW_JOIN),
     );
 
     /* The map is done downloading, load it */

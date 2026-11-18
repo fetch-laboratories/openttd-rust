@@ -280,6 +280,8 @@ fn update_consists(s: &Services) {
 }
 
 fn acceleration_windows() {
+    /* These windows show acceleration values only when realistic acceleration is on. They must
+     * be redrawn after a setting change. */
     set_window_classes_dirty(WindowClass::WC_ENGINE_PREVIEW);
     invalidate_window_classes_data(WindowClass::WC_BUILD_VEHICLE, 0, false);
     set_window_classes_dirty(WindowClass::WC_VEHICLE_DETAILS);

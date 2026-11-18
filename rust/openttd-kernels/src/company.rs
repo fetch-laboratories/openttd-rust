@@ -327,6 +327,7 @@ pub(crate) fn set_local_company(s: &Services, company: crate::company_type::Comp
             || company == CompanyID::SPECTATOR
             || company == CompanyID::NONE,
     );
+    /* If actually changing to another company, several windows need closing */
     let switching = (s.shared.local_company)() != company.0;
     /* Delete the chat window, if you were team chatting. */
     if switching {
@@ -344,8 +345,10 @@ pub(crate) fn set_local_company(s: &Services, company: crate::company_type::Comp
     (s.assign_company_context)(company);
     if switching {
         invalidate_window_classes_data(WindowClass::WC_COMPANY, 0, false);
+        /* Delete any construction windows... */
         (s.close_construction_windows)();
     }
+    /* ... and redraw the whole screen. */
     (s.identity.shared.screen_dirty)();
     invalidate_window_classes_data(WindowClass::WC_SIGN_LIST, -1, false);
     invalidate_window_classes_data(WindowClass::WC_GOALS_LIST, 0, false);

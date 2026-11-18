@@ -2351,7 +2351,6 @@ pub(crate) const DISASTER: crate::disaster::Services = crate::disaster::Services
 pub(crate) const INDUSTRIES: crate::industry::Services = crate::industry::Services {
     shared: ptr::null(),
     next_tick: unreachable1,
-    play_sound: unreachable2,
     special_effect: unreachable3,
     tick_trigger: unreachable1,
     production_callback: unreachable2,

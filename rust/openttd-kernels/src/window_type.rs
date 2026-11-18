@@ -10,14 +10,22 @@
 
 use crate::company_type::CompanyID;
 use crate::industry_type::IndustryID;
+use crate::league_type::LeagueTableID;
 use crate::network_type::DestType;
 use crate::station_type::StationID;
 use crate::tile_type::TileIndex;
 use crate::town_type::TownId;
 use crate::vehicle_type::VehicleID;
 
-/// Window numbers of `WC_NETWORK_STATUS_WINDOW`: network join status.
-pub const WN_NETWORK_STATUS_WINDOW_JOIN: WindowNumber = WindowNumber(0);
+/// Native `WindowNumberEnum`: window numbers.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct WindowNumberEnum(pub u8);
+
+impl WindowNumberEnum {
+    /// Network join status.
+    pub const WN_NETWORK_STATUS_WINDOW_JOIN: Self = Self(0);
+}
 
 /// Native `WindowClass`, retaining every underlying `u16` value.
 #[repr(transparent)]
@@ -119,6 +127,12 @@ impl From<IndustryID> for WindowNumber {
     }
 }
 
+impl From<LeagueTableID> for WindowNumber {
+    fn from(value: LeagueTableID) -> Self {
+        Self(i32::from(value.0))
+    }
+}
+
 impl From<StationID> for WindowNumber {
     fn from(value: StationID) -> Self {
         Self(i32::from(value.0))
@@ -128,6 +142,12 @@ impl From<StationID> for WindowNumber {
 impl From<TileIndex> for WindowNumber {
     fn from(value: TileIndex) -> Self {
         Self(value.0.cast_signed())
+    }
+}
+
+impl From<WindowNumberEnum> for WindowNumber {
+    fn from(value: WindowNumberEnum) -> Self {
+        Self(i32::from(value.0))
     }
 }
 
