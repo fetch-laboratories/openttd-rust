@@ -187,6 +187,9 @@ set(RUST_MASTER_LANG_FILE "${CMAKE_SOURCE_DIR}/src/lang/english.txt")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${RUST_INPUTS} "${RUST_MASTER_LANG_FILE}"
     "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
     "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake")
+# The build script copies the table::strings it compiles here for the string-ID check.
+set(RUST_TABLE_STRINGS "${CMAKE_BINARY_DIR}/rust-table-strings.rs")
+list(APPEND RUST_BUILD_ENV "OPENTTD_RUST_TABLE_STRINGS=${RUST_TABLE_STRINGS}")
 # Build the real crate once so dependency-added native libraries participate in linkage.
 execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${RUST_BUILD_ENV} "${CMAKE_COMMAND}"
     "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
@@ -212,6 +215,7 @@ else()
 endif()
 set(RUST_NATIVE_LIBS "${RUST_NATIVE_LIBS}" CACHE INTERNAL "Pinned Rust native link flags" FORCE)
 add_custom_command(OUTPUT "${RUST_ARCHIVE}"
+    BYPRODUCTS "${RUST_TABLE_STRINGS}"
     COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "${CMAKE_COMMAND}"
         "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
         "-DLOG=${CMAKE_BINARY_DIR}/rust-build.log"
@@ -272,8 +276,11 @@ if(NOT OPTION_TOOLS_ONLY)
     endif()
     file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
         CONTENT "${RUST_CONFIGURATION}features=${RUST_TEST_FEATURES}\n")
+    set(RUST_TEST_TABLE_STRINGS "${CMAKE_BINARY_DIR}/rust-native-test-table-strings.rs")
     add_custom_command(OUTPUT "${RUST_TEST_ARCHIVE}"
-        COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "CARGO_TARGET_DIR=${RUST_TEST_TARGET_DIR}" "${CMAKE_COMMAND}"
+        BYPRODUCTS "${RUST_TEST_TABLE_STRINGS}"
+        COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "CARGO_TARGET_DIR=${RUST_TEST_TARGET_DIR}"
+            "OPENTTD_RUST_TABLE_STRINGS=${RUST_TEST_TABLE_STRINGS}" "${CMAKE_COMMAND}"
             "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
             "-DFEATURES=${RUST_TEST_FEATURES}" "-DLOG=${CMAKE_BINARY_DIR}/rust-native-test-build.log"
             "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
@@ -296,20 +303,21 @@ if(NOT OPTION_TOOLS_ONLY)
     endforeach()
 endif()
 
-# Hold table::strings, which Rust derives from the master language file, to the table/strings.h
-# strgen writes from it. The check builds on the host in its own target directory, so it neither
-# waits on nor delays the archive builds. The game and the native test executables wait on it;
-# strgen and settingsgen, which link the archive but no string ID, cannot.
+# Hold the table::strings each Rust archive compiled, which its build script derives from the
+# master language file, to the table/strings.h strgen writes from it. The check builds on the host
+# in its own target directory. The game and the native test executables wait on it; strgen and
+# settingsgen, which link the archive but no string ID, cannot.
 if(NOT OPTION_TOOLS_ONLY)
     set(RUST_STRINGS_CHECK_STAMP "${CMAKE_BINARY_DIR}/rust-strings-check.stamp")
     add_custom_command(OUTPUT "${RUST_STRINGS_CHECK_STAMP}"
         COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo-strgen"
             "${CARGO_EXECUTABLE}" run --quiet --release --locked --package openttd-strgen --target "${RUST_HOST}"
             --manifest-path "${CMAKE_SOURCE_DIR}/Cargo.toml" --
-            "${RUST_MASTER_LANG_FILE}" "${CMAKE_BINARY_DIR}/generated/table/strings.h"
+            "${CMAKE_BINARY_DIR}/generated/table/strings.h" "${RUST_TABLE_STRINGS}" "${RUST_TEST_TABLE_STRINGS}"
         COMMAND ${CMAKE_COMMAND} -E touch "${RUST_STRINGS_CHECK_STAMP}"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        DEPENDS table_strings "${CMAKE_BINARY_DIR}/generated/table/strings.h" "${RUST_MASTER_LANG_FILE}"
+        DEPENDS table_strings "${CMAKE_BINARY_DIR}/generated/table/strings.h"
+            "${RUST_ARCHIVE}" "${RUST_TABLE_STRINGS}" "${RUST_TEST_ARCHIVE}" "${RUST_TEST_TABLE_STRINGS}"
             ${RUST_INPUTS} "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
             "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/Rust.cmake"
         COMMENT "Checking Rust string IDs against table/strings.h" VERBATIM)

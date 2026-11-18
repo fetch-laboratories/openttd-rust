@@ -5,17 +5,16 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! `openttd-strgen ENGLISH_TXT STRINGS_H`: fails unless the constants of `table::strings`, the text
-//! `openttd-kernels`' build script writes from the master language file, are the `StringID`
-//! constants of the `table/strings.h` C++ strgen wrote from it, name for name and value for value.
-//! It reads back the same text the build script writes, so a fault in deriving or in writing the
-//! constants fails it. Each `CMake` build runs it before linking the game and its native tests.
+//! `openttd-strgen STRINGS_H TABLE_STRINGS_RS...`: fails unless each `table::strings` source a
+//! Rust archive compiled, which `openttd-kernels`' build script writes from the master language
+//! file and copies for this check, holds the `StringID` constants of the `table/strings.h` C++
+//! strgen wrote from the same file, name for name and value for value. Each `CMake` build runs it
+//! on both archives' copies before linking the game and its native tests.
 
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 use std::{env, fs};
 
-use openttd_strgen::strgen_base::master_string_ids;
 use openttd_strgen::table_strings;
 
 /// The `static const StringID NAME = 0xID;` lines of `HeaderFileWriter::WriteStringID`, in file
@@ -63,35 +62,39 @@ fn differences(derived: &[(String, u32)], header: &[(String, u32)]) -> Vec<Strin
     lines
 }
 
-/// The names and IDs of the constants the build script writes for the master file `master`.
-fn compiled_string_ids(master: &[u8]) -> Result<Vec<(String, u32)>, String> {
-    let ids = master_string_ids(master).map_err(|error| error.to_string())?;
-    table_strings::read(&table_strings::write(&ids))
-}
-
-fn check(english: &str, strings_h: &str) -> Result<(), String> {
+fn check(strings_h: &str, tables: &[String]) -> Result<(), String> {
     let read = |path: &str| fs::read(path).map_err(|error| format!("{path}: {error}"));
-    let compiled =
-        compiled_string_ids(&read(english)?).map_err(|error| format!("{english}: {error}"))?;
     let header = header_string_ids(&String::from_utf8_lossy(&read(strings_h)?))
         .map_err(|error| format!("{strings_h}: {error}"))?;
-    let lines = differences(&compiled, &header);
-    if lines.is_empty() {
-        return Ok(());
+    let mut failures = Vec::new();
+    for table in tables {
+        let compiled = table_strings::read(&String::from_utf8_lossy(&read(table)?))
+            .map_err(|error| format!("{table}: {error}"))?;
+        let lines = differences(&compiled, &header);
+        if !lines.is_empty() {
+            failures.push(format!(
+                "table::strings compiled from {table} differs from {strings_h}:\n{}",
+                lines.join("\n")
+            ));
+        }
     }
-    Err(format!(
-        "table::strings, derived from {english}, differs from {strings_h}:\n{}",
-        lines.join("\n")
-    ))
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n"))
+    }
 }
 
 fn main() -> ExitCode {
     let arguments: Vec<String> = env::args().skip(1).collect();
-    let [english, strings_h] = arguments.as_slice() else {
-        eprintln!("usage: openttd-strgen ENGLISH_TXT STRINGS_H");
+    let Some((strings_h, tables)) = arguments
+        .split_first()
+        .filter(|(_, tables)| !tables.is_empty())
+    else {
+        eprintln!("usage: openttd-strgen STRINGS_H TABLE_STRINGS_RS...");
         return ExitCode::FAILURE;
     };
-    match check(english, strings_h) {
+    match check(strings_h, tables) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("{message}");
@@ -117,7 +120,8 @@ mod tests {
     }
 
     fn compare(lines: &[&str]) -> Vec<String> {
-        let derived = compiled_string_ids(MASTER.as_bytes()).unwrap();
+        let ids = openttd_strgen::strgen_base::master_string_ids(MASTER.as_bytes()).unwrap();
+        let derived = table_strings::read(&table_strings::write(&ids)).unwrap();
         differences(&derived, &header_string_ids(&header(lines)).unwrap())
     }
 
