@@ -86,10 +86,16 @@ pub(crate) fn network_server_send_chat(
 
 /// `ServerNetworkGameSocketHandler::GetClientName`: get the name of the client, if the user
 /// did not send it yet, Client ID is used.
+#[allow(
+    unsafe_code,
+    reason = "reads the client info's name after the original's null check"
+)]
 pub(crate) fn get_client_name(f: &FrameServices, cs: *mut GameSocket) -> Vec<u8> {
     let ci = ClientInfo::get_info(f.connection, cs);
-    if !ci.is_null() && !ci.client_name(f.connection).is_empty() {
-        return ci.client_name(f.connection).to_vec();
+    // SAFETY: A non-null `GetInfo()` of a live socket is live, and the name is copied before
+    // any other call.
+    if !ci.is_null() && !unsafe { ci.client_name(f.connection) }.is_empty() {
+        return unsafe { ci.client_name(f.connection) }.to_vec();
     }
 
     format!("Client #{}", (f.dispatch.client_id)(cs)).into_bytes()
@@ -98,6 +104,10 @@ pub(crate) fn get_client_name(f: &FrameServices, cs: *mut GameSocket) -> Vec<u8>
 /// `NetworkServerNewCompany`: perform all the server specific administration of a new
 /// company. `c` is the newly created company and can't be null; `ci` is the client
 /// information of the client that made the company and can be null.
+#[allow(
+    unsafe_code,
+    reason = "reads the client info's ID after the original's null check"
+)]
 pub(crate) fn new_company(
     s: &LifecycleServices,
     f: &FrameServices,
@@ -148,7 +158,8 @@ pub(crate) fn new_company(
             DestType::DESTTYPE_BROADCAST,
             0,
             b"",
-            ci.client_id(f.connection),
+            // SAFETY: `ci` is not null here and the caller's lookup keeps it live.
+            unsafe { ci.client_id(f.connection) },
             i64::from(index.0) + 1,
             false,
         );

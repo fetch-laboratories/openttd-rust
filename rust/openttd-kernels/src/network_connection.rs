@@ -117,10 +117,14 @@ crate::abi::layouts! {
     };
 }
 
-/// A `NetworkClientInfo *` of the native pool, null when there is none. Only `NONE` and its two
-/// lookups make one: `GetInfo()` of a live server socket and `NetworkClientInfo::GetByClientID`.
-/// The record lives until it is deleted, which no holder does before its last use of the
-/// handle; its readers dereference it as the original's member accesses do.
+/// A `NetworkClientInfo *` of the native pool, null when there is none: `NONE`, `GetInfo()` of a
+/// live server socket or `NetworkClientInfo::GetByClientID`. Its readers dereference it as the
+/// original's member accesses do.
+///
+/// # Safety
+/// A reader's caller ensures the handle is not null and its record is live, as the original
+/// does before the member access; a name borrow also requires that nothing renames or deletes
+/// the client while the bytes are borrowed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ClientInfo(*mut c_void);
 
@@ -151,19 +155,27 @@ impl ClientInfo {
     }
 
     /// `ci->client_id`.
-    pub(crate) fn client_id(self, s: &Services) -> ClientID {
+    ///
+    /// # Safety
+    /// The handle is not null and its record is live.
+    pub(crate) unsafe fn client_id(self, s: &Services) -> ClientID {
         ClientID((s.client_id)(self.0))
     }
 
     /// `ci->client_playas`.
-    pub(crate) fn client_playas(self, s: &Services) -> CompanyID {
+    ///
+    /// # Safety
+    /// The handle is not null and its record is live.
+    pub(crate) unsafe fn client_playas(self, s: &Services) -> CompanyID {
         CompanyID((s.client_playas)(self.0))
     }
 
-    /// `ci->client_name`, borrowed while the handle is; no holder renames or deletes the
-    /// client during that borrow.
-    pub(crate) fn client_name<'a>(&'a self, s: &Services) -> &'a [u8] {
-        // SAFETY: The type's contract.
+    /// `ci->client_name`.
+    ///
+    /// # Safety
+    /// The handle is not null, its record is live, and nothing renames or deletes the client
+    /// while the returned bytes are borrowed.
+    pub(crate) unsafe fn client_name<'a>(self, s: &Services) -> &'a [u8] {
         unsafe { (s.client_name)(self.0).bytes() }
     }
 }
@@ -216,7 +228,8 @@ fn network_count_active_clients(f: &FrameServices) -> u32 {
             continue;
         }
         if !(f.command.company.shared.company_valid)(
-            ClientInfo::get_info(s, client.socket).client_playas(s).0,
+            // SAFETY: An active client's socket has its client info, as the original assumes.
+            unsafe { ClientInfo::get_info(s, client.socket).client_playas(s) }.0,
         ) {
             continue;
         }

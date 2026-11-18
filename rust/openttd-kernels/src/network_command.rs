@@ -713,8 +713,12 @@ pub(crate) fn receive_client(
     }
 
     let ci = crate::network_connection::ClientInfo::get_info(f.connection, game);
-    let client_id = |ci: crate::network_connection::ClientInfo| ci.client_id(f.connection);
-    let client_playas = |ci: crate::network_connection::ClientInfo| ci.client_playas(f.connection);
+    // SAFETY: A client past `STATUS_DONE_MAP` has its client info for this whole entry, as the
+    // original's unchecked `ci->` reads assume.
+    let client_id =
+        |ci: crate::network_connection::ClientInfo| unsafe { ci.client_id(f.connection) };
+    let client_playas =
+        |ci: crate::network_connection::ClientInfo| unsafe { ci.client_playas(f.connection) };
 
     if let Some(err) = err {
         iconsole_print!(
