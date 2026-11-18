@@ -346,8 +346,6 @@ pub struct Leaves {
     pub fta_next_position: unsafe extern "C" fn(*const c_void) -> u8,
     /// `AirportFTA::position`.
     pub fta_position: unsafe extern "C" fn(*const c_void) -> u8,
-    /// `st->had_vehicle_of_type`, for `NewGRF` station variable 0x8A.
-    pub had_vehicle: unsafe extern "C" fn(*const Station) -> u8,
     /// `Airport::GetHangarExitDirection(tile)`.
     pub hangar_exit:
         unsafe extern "C" fn(*const Station, u32, *const crate::station_cmd::AirportSpec) -> u8,
@@ -3438,7 +3436,6 @@ crate::abi::layouts! {
         fta_next,
         fta_next_position,
         fta_position,
-        had_vehicle,
         hangar_exit,
         helipads,
         landing_rating,

@@ -30,12 +30,6 @@ static uint64_t * OPENTTD_RUST_CALL Aircraft_airport_blocks(const OpenTTDStation
 	return st->airport.rust_blocks.get();
 }
 
-static uint8_t OPENTTD_RUST_CALL Aircraft_had_vehicle(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return st->had_vehicle_of_type;
-}
-
 static uint8_t OPENTTD_RUST_CALL Aircraft_airport_elements(const void * airport) noexcept
 {
 	const auto *ap = static_cast<const AirportFTAClass *>(airport);
@@ -156,7 +150,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.fta_next = Aircraft_fta_next,
 	.fta_next_position = Aircraft_fta_next_position,
 	.fta_position = Aircraft_fta_position,
-	.had_vehicle = Aircraft_had_vehicle,
 	.hangar_exit = Aircraft_hangar_exit,
 	.helipads = Aircraft_helipads,
 	.landing_rating = Aircraft_landing_rating,

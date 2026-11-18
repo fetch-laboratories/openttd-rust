@@ -459,21 +459,27 @@ impl Part {
 }
 
 /// A `Station *` from `Station::GetByTile`, carried through the arrival and its
-/// triggers, with its `index`.
+/// triggers. Its `index` is read at each original use.
 #[derive(Clone, Copy)]
 struct StationHandle {
-    st: *mut crate::station::BaseStation,
-    index: StationID,
+    st: *mut crate::station::Station,
+}
+impl StationHandle {
+    /// `st->index`, through the shared station index reader.
+    fn index(self) -> StationID {
+        crate::newgrf_airport::runtime().station_index(self.base())
+    }
+    /// The station as its `BaseStation`.
+    fn base(self) -> *mut crate::station::BaseStation {
+        self.st.cast()
+    }
 }
 
-/// `Station::GetByTile(tile)`, with the station's `index`.
+/// `Station::GetByTile(tile)`.
 #[inline]
 fn station_get_by_tile(tile: TileIndex) -> StationHandle {
-    let airport = crate::newgrf_airport::runtime();
-    let st = crate::station_map::station_get_by_tile(tile, airport);
     StationHandle {
-        st,
-        index: airport.station_index(st),
+        st: (crate::newgrf_airport::runtime().by_tile)(tile.0),
     }
 }
 
@@ -1170,7 +1176,7 @@ impl<'a> Game<'a> {
                         } else {
                             STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL
                         },
-                        &[Integer(u64::from(st.index.0))],
+                        &[Integer(u64::from(st.index().0))],
                     ),
                     if v.v.owner().0 == service!(self.ss.local_company)() {
                         NewsType::ArrivalCompany
@@ -1178,14 +1184,14 @@ impl<'a> Game<'a> {
                         NewsType::ArrivalOther
                     },
                     self.index(v.v),
-                    st.index,
+                    st.index(),
                 );
                 crate::ai::new_event(
                     v.v.owner(),
-                    &ScriptEvent::station_first_vehicle(st.index, self.index(v.v)),
+                    &ScriptEvent::station_first_vehicle(st.index(), self.index(v.v)),
                 );
                 crate::game::new_event(&ScriptEvent::station_first_vehicle(
-                    st.index,
+                    st.index(),
                     self.index(v.v),
                 ));
             }
@@ -1200,7 +1206,7 @@ impl<'a> Game<'a> {
                         } else {
                             STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL
                         },
-                        &[Integer(u64::from(st.index.0))],
+                        &[Integer(u64::from(st.index().0))],
                     ),
                     if v.v.owner().0 == service!(self.ss.local_company)() {
                         NewsType::ArrivalCompany
@@ -1208,14 +1214,14 @@ impl<'a> Game<'a> {
                         NewsType::ArrivalOther
                     },
                     self.index(v.v),
-                    st.index,
+                    st.index(),
                 );
                 crate::ai::new_event(
                     v.v.owner(),
-                    &ScriptEvent::station_first_vehicle(st.index, self.index(v.v)),
+                    &ScriptEvent::station_first_vehicle(st.index(), self.index(v.v)),
                 );
                 crate::game::new_event(&ScriptEvent::station_first_vehicle(
-                    st.index,
+                    st.index(),
                     self.index(v.v),
                 ));
             }
@@ -2282,11 +2288,11 @@ impl<'a> Game<'a> {
                         })
                 {
                     let st = station_get_by_tile(v.v.tile());
-                    v.v.set_last_station_visited(st.index);
+                    v.v.set_last_station_visited(st.index());
                     self.road_veh_arrives_at(v, st);
                     crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
                     crate::animated_tile::road_event(
-                        st.st,
+                        st.base(),
                         v.v.tile().0,
                         StationAnimationTrigger::VehicleArrives.0,
                         StationRandomTrigger::VehicleArrives.0,
@@ -2376,16 +2382,16 @@ impl<'a> Game<'a> {
                 crate::bitmath_func::set_bit8(&mut state, RVS_ENTERED_STOP);
                 v.set_state(state);
 
-                v.v.set_last_station_visited(st.index);
+                v.v.set_last_station_visited(st.index());
 
                 if self.world().is_drive_through_stop_tile(v.v.tile())
                     || (v.v.current_order().is_type(OrderType::OT_GOTO_STATION)
-                        && v.v.current_order().destination() == DestinationID(st.index.0))
+                        && v.v.current_order().destination() == DestinationID(st.index().0))
                 {
                     self.road_veh_arrives_at(v, st);
                     crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
                     crate::animated_tile::road_event(
-                        st.st,
+                        st.base(),
                         v.v.tile().0,
                         StationAnimationTrigger::VehicleArrives.0,
                         StationRandomTrigger::VehicleArrives.0,

@@ -81,6 +81,8 @@ mod controller {
         static HAD: Cell<u8> = const { Cell::new(0) };
         /// The `had_vehicle_of_type` field accesses since the last reset.
         static ACCESSES: Cell<u32> = const { Cell::new(0) };
+        /// The `st->index` reads since the last reset.
+        static INDEX_READS: Cell<u32> = const { Cell::new(0) };
         static VICTIMS: Cell<u32> = const { Cell::new(0) };
         static EXPECTED: Cell<*const Vec<Effect>> = const { Cell::new(std::ptr::null()) };
     }
@@ -89,8 +91,30 @@ mod controller {
     /// The arrival's `Station *`, never dereferenced by the controller.
     const STATION_HANDLE: StationHandle = StationHandle {
         st: std::ptr::dangling_mut(),
-        index: STATION,
     };
+    /// `st->index` of the arrival's station, counted at each read.
+    extern "C" fn station_id(st: *const crate::station::BaseStation) -> u16 {
+        assert_eq!(st, STATION_HANDLE.base().cast_const());
+        INDEX_READS.set(INDEX_READS.get() + 1);
+        STATION.0
+    }
+    /// The airport services table holding [`station_id`], installed until dropped.
+    struct StationIndexReader(*const crate::newgrf_airport::Services);
+    impl StationIndexReader {
+        fn install() -> Self {
+            // SAFETY: Serialized by the game-state test lock the caller holds; restored on drop.
+            let table = Box::leak(Box::new(crate::newgrf_airport::Services::with_station_id(
+                station_id,
+            )));
+            Self(unsafe { crate::newgrf_airport::openttd_rust_airport_exchange(table) })
+        }
+    }
+    impl Drop for StationIndexReader {
+        fn drop(&mut self) {
+            // SAFETY: As `install`; the lock is still held.
+            unsafe { crate::newgrf_airport::openttd_rust_airport_exchange(self.0) };
+        }
+    }
     const LOCAL: u8 = 3;
     const TILE: TileIndex = TileIndex(100);
     /// `new ScriptEventStationFirstVehicle(st->index, v->index)`, field by field,
@@ -184,7 +208,7 @@ mod controller {
     }
     /// `&st->had_vehicle_of_type` of the arrival's station, at each access: the read,
     /// then on a first arrival the store, both before any news or event.
-    extern "C" fn had_vehicle_of_type_field(st: *mut crate::station::BaseStation) -> *mut u8 {
+    extern "C" fn had_vehicle_of_type_field(st: *mut crate::station::Station) -> *mut u8 {
         assert_eq!(st, STATION_HANDLE.st);
         assert_eq!(
             take(),
@@ -294,6 +318,7 @@ mod controller {
             ),
         ];
         let _types = DefaultRoadTypes::new();
+        let _index = StationIndexReader::install();
         take();
         for (bus, road_type, bit, headline) in cases {
             ROADTYPE.set(road_type);
@@ -302,9 +327,15 @@ mod controller {
                 let mut f = Fixture::new(owner, &SHARED);
                 HAD.set(0);
                 ACCESSES.set(0);
+                INDEX_READS.set(0);
                 f.game().road_veh_arrives_at(f.part(), STATION_HANDLE);
                 assert_eq!(HAD.get(), bit.0, "bus {bus}, road type {road_type}");
                 assert_eq!(ACCESSES.get(), 2, "a read and a store on the first arrival");
+                assert_eq!(
+                    INDEX_READS.get(),
+                    4,
+                    "st->index at the headline, the news reference and both events"
+                );
                 let expected = vec![
                     Effect::News {
                         headline: encoded(headline.0, &[Param::N(u64::from(STATION.0))]),
@@ -331,9 +362,11 @@ mod controller {
 
                 // Visited before: no store, news or event.
                 ACCESSES.set(0);
+                INDEX_READS.set(0);
                 f.game().road_veh_arrives_at(f.part(), STATION_HANDLE);
                 assert_eq!(HAD.get(), bit.0);
                 assert_eq!(ACCESSES.get(), 1, "only the read on a repeat visit");
+                assert_eq!(INDEX_READS.get(), 0, "no st->index read on a repeat visit");
                 assert_eq!(take(), Vec::new());
             }
         }

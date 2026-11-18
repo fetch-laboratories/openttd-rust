@@ -276,7 +276,7 @@ static void RoadBoundary()
 	road_abi_vehicle.last_station_visited = 0;
 	/* The station has had a bus: no first-arrival news. */
 	static uint8_t bay_had_vehicle_of_type = HVOT_BUS;
-	t.shared.station_had_vehicle_of_type_field = [](BaseStation *st) noexcept { CHECK(st == reinterpret_cast<BaseStation *>(&road_abi_stop)); return &bay_had_vehicle_of_type; };
+	t.shared.station_had_vehicle_of_type_field = [](Station *st) noexcept { CHECK(st == reinterpret_cast<Station *>(&road_abi_stop)); return &bay_had_vehicle_of_type; };
 	static uint32_t bay_arrivals = 0;
 	static OpenTTDFleetTransactionServices bay_transactions{};
 	bay_transactions.assertions = false;

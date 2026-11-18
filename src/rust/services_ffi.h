@@ -168,7 +168,7 @@ struct OpenTTDSharedServices {
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	uint8_t (*station_had_vehicle_of_type)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_had_vehicle_of_type);
 	void (*station_add_vehicle_of_type)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_add_vehicle_of_type);
-	uint8_t *(*station_had_vehicle_of_type_field)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_had_vehicle_of_type_field);
+	uint8_t *(*station_had_vehicle_of_type_field)(Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_had_vehicle_of_type_field);
 	uint32_t (*station_xy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_xy);
 	BaseStation *(*base_station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(base_station);
 	uint32_t (*base_station_xy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(base_station_xy);

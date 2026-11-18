@@ -505,6 +505,9 @@ static size_t RustKdtreePartition(OpenTTDKdtreeKey *keys, size_t count) noexcept
 /** `FatalError` of a message Rust formatted. */
 static void RustFatalError(const uint8_t *message, size_t size) noexcept { FatalErrorI(std::string(reinterpret_cast<const char *>(message), size)); }
 
+/** `&st->had_vehicle_of_type` of a resolved station, as its base byte's address. */
+static uint8_t *StationHadVehicleOfTypeField(Station *st) noexcept { return reinterpret_cast<uint8_t *>(&st->had_vehicle_of_type); }
+
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.all_compatible_railtypes = RustAllCompatibleRailTypes,
 	.command_post = GetRustCommandPostServices,
@@ -575,9 +578,9 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 
 	.snow_line_support = { .height = &_settings_game.game_creation.snow_line_height, .destroy = DestroySnowLine },
 	.station_index = MapSvcStationIndex,
-	.station_had_vehicle_of_type = [](uint16_t station) noexcept -> uint8_t { return Station::Get(StationID(station))->had_vehicle_of_type; },
-	.station_add_vehicle_of_type = [](uint16_t station, uint8_t type) noexcept { Station::Get(StationID(station))->had_vehicle_of_type |= static_cast<StationHadVehicleOfType>(type); },
-	.station_had_vehicle_of_type_field = [](BaseStation *st) noexcept { return reinterpret_cast<uint8_t *>(&Station::From(st)->had_vehicle_of_type); },
+	.station_had_vehicle_of_type = [](uint16_t station) noexcept -> uint8_t { return *StationHadVehicleOfTypeField(Station::Get(StationID(station))); },
+	.station_add_vehicle_of_type = [](uint16_t station, uint8_t type) noexcept { *StationHadVehicleOfTypeField(Station::Get(StationID(station))) |= type; },
+	.station_had_vehicle_of_type_field = StationHadVehicleOfTypeField,
 	.station_xy = [](uint16_t station) noexcept { return Station::Get(StationID(station))->xy.base(); },
 	.base_station = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station)); },
 	.base_station_xy = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station))->xy.base(); },

@@ -391,8 +391,8 @@ pub struct Services {
     /// `Station::Get(station)->had_vehicle_of_type |= type`.
     pub station_add_vehicle_of_type: extern "C" fn(u16, u8),
     /// `&st->had_vehicle_of_type` of a resolved `Station *`, as its base byte's address.
-    pub station_had_vehicle_of_type_field:
-        extern "C" fn(*mut crate::station::BaseStation) -> *mut u8,
+    /// The ID-based readers above delegate to it after `Station::Get`.
+    pub station_had_vehicle_of_type_field: extern "C" fn(*mut crate::station::Station) -> *mut u8,
     /// `Station::Get(station)->xy`.
     pub station_xy: extern "C" fn(u16) -> u32,
     /// `BaseStation::Get(station)`.
@@ -912,7 +912,7 @@ extern "C" fn unexpected_station_visits(_: u16) -> u8 {
     unreachable!()
 }
 #[cfg(test)]
-extern "C" fn unexpected_station_field_address(_: *mut crate::station::BaseStation) -> *mut u8 {
+extern "C" fn unexpected_station_field_address(_: *mut crate::station::Station) -> *mut u8 {
     unreachable!()
 }
 #[cfg(test)]
