@@ -2993,7 +2993,7 @@ class RunWaitTests(unittest.TestCase):
     PASSED = job_row(2, "platform / Windows", "success")
 
     def test_complete_outlives_a_failed_job_and_exits_1_at_completion(self) -> None:
-        reads = [
+        reads: list[tuple[str, str | None, list[dict[str, object]]]] = [
             ("in_progress", None, [self.FAILED, self.RUNNING]),
             ("in_progress", None, [self.FAILED, self.RUNNING]),
             ("completed", "failure", [self.FAILED, self.PASSED]),
@@ -4790,6 +4790,157 @@ class CommentTests(unittest.TestCase):
             github, "--issue", "171", "--agent", "/root/a", "--show"
         )
         self.assertIn("on issue #171", out)
+
+
+def mac_job(
+    job_id: int, conclusion: str | None, runner: bool, name: str = "Release"
+) -> dict[str, object]:
+    return {
+        "id": job_id,
+        "name": f"platform / Mac OS (arm64 - {name}) / CI",
+        "status": "completed" if conclusion else "in_progress",
+        "conclusion": conclusion,
+        "runner_id": 1000 + job_id if runner else 0,
+        "runner_name": f"GitHub Actions {job_id}" if runner else "",
+        "steps": [{}] * 28 if runner else [],
+        "html_url": f"https://github.com/example/fork/actions/runs/2/job/{job_id}",
+    }
+
+
+class MacosFallbackTests(unittest.TestCase):
+    """ci.py macos-fallback against stubbed gh, never the live repository."""
+
+    CAPACITY = [mac_job(1, "cancelled", False), mac_job(2, "cancelled", False, "Debug")]
+    STARTED = [mac_job(3, "cancelled", True)]
+    PASSED = [mac_job(4, "success", True), mac_job(5, "success", True, "Debug")]
+
+    def fallback(
+        self,
+        attempts: dict[int, dict[int, list[dict[str, object]]]],
+        *extra: str,
+        variable: str | None = None,
+        rerun_fails: bool = False,
+        appears_after: int = 2,
+        rerun_jobs: list[dict[str, object]] | None = None,
+    ) -> tuple[int, list[tuple[str, ...]], str]:
+        """`attempts` maps run to attempt to jobs; a rerun of the last run adds
+        an attempt that shows only after `appears_after` reads."""
+        calls: list[tuple[str, ...]] = []
+        state: dict[str, object] = {"variable": variable, "rerun": False}
+        reads = [0]
+        last = max(attempts)
+
+        def latest(run_id: int) -> int:
+            count = max(attempts[run_id])
+            if run_id == last and state["rerun"]:
+                reads[0] += 1
+                if reads[0] > appears_after:
+                    return count + 1
+            return count
+
+        def api(_repository: str, path: str) -> dict[str, object]:
+            return {"run_attempt": latest(int(path.rsplit("/", 1)[1]))}
+
+        def jobs(_repository: str, run_id: int, attempt: int) -> list[object]:
+            if attempt > max(attempts[run_id]):
+                return list(rerun_jobs if rerun_jobs is not None else self.PASSED)
+            return list(attempts[run_id][attempt])
+
+        def gh(*args: str) -> str:
+            calls.append(args)
+            if args[:2] == ("variable", "set"):
+                state["variable"] = args[4]
+            elif args[:2] == ("variable", "delete"):
+                state["variable"] = None
+            elif args[:2] == ("run", "rerun"):
+                if rerun_fails:
+                    raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 403")
+                state["rerun"] = True
+            return ""
+
+        clock = itertools.count(0, 10)
+        argv = ["ci.py", "macos-fallback", *map(str, attempts), "--repo", "x/y"]
+        with (
+            patch.object(ci, "api", side_effect=api),
+            patch.object(ci, "run_jobs", side_effect=jobs),
+            patch.object(ci, "gh", side_effect=gh),
+            patch.object(ci, "variable", side_effect=lambda _r, _n: state["variable"]),
+            patch.object(ci, "failure_logs"),
+            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+            patch.object(ci.time, "sleep"),
+            patch("sys.argv", [*argv, *extra]),
+            patch("builtins.print") as printed,
+            patch("sys.stderr") as stderr,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
+        self.left = state["variable"]
+        return code, calls, output
+
+    def test_one_capacity_cancellation_or_a_started_job_changes_nothing(self) -> None:
+        for label, attempts in (
+            ("one attempt", {2: {1: self.CAPACITY}}),
+            ("started job", {1: {1: self.STARTED}, 2: {1: self.CAPACITY}}),
+        ):
+            with self.subTest(label):
+                code, calls, output = self.fallback(attempts)
+                self.assertEqual((code, calls), (1, []))
+                self.assertIn("Counted 1 hosted-capacity cancellation", output)
+
+    def test_two_cancellations_set_rerun_wait_and_delete_in_order(self) -> None:
+        attempts = {1: {1: self.CAPACITY}, 2: {1: self.CAPACITY}}
+        code, calls, output = self.fallback(
+            attempts, "--pr", "995", "--agent", "/root", "--model", "m", "--effort", "e"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            [call[:2] for call in calls],
+            [
+                ("variable", "set"),
+                ("run", "rerun"),
+                ("variable", "delete"),
+                ("pr", "comment"),
+            ],
+        )
+        self.assertEqual(calls[0][4], ci.MACOS_RUNNER)
+        self.assertEqual(calls[1][2], "2")
+        record = calls[3][calls[3].index("--body") + 1]
+        self.assertIn("set CI_MACOS_HEAVY=blacksmith-6vcpu-macos-26", record)
+        self.assertIn("deleted CI_MACOS_HEAVY", record)
+        self.assertIn("Agent: /root | Model: m | Reasoning effort: e", record)
+        self.assertIsNone(self.left)
+        # Two attempts of one run count as two cancellations too.
+        code, _, _ = self.fallback({2: {1: self.CAPACITY, 2: self.CAPACITY}})
+        self.assertEqual(code, 0)
+
+    def test_an_existing_variable_is_left_alone(self) -> None:
+        attempts = {1: {1: self.CAPACITY}, 2: {1: self.CAPACITY}}
+        code, calls, output = self.fallback(attempts, variable="someone's")
+        self.assertEqual((code, calls), (1, []))
+        self.assertIn("already set", output)
+        self.assertEqual(self.left, "someone's")
+
+    def test_a_failed_rerun_or_a_timeout_still_deletes_and_records(self) -> None:
+        attempts = {1: {1: self.CAPACITY}, 2: {1: self.CAPACITY}}
+        code, calls, output = self.fallback(attempts, rerun_fails=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(calls[-1][:2], ("variable", "delete"))
+        self.assertIn("stopped:", output)
+        self.assertIn("deleted CI_MACOS_HEAVY", output)
+        self.assertIsNone(self.left)
+        code, calls, output = self.fallback(
+            attempts, "--timeout", "60", rerun_jobs=[mac_job(6, None, True)]
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(calls[-1][:2], ("variable", "delete"))
+        self.assertIn("deleted CI_MACOS_HEAVY", output)
+        # A macOS job that fails on the paid runner fails the command, deleted.
+        code, _, output = self.fallback(
+            attempts, rerun_jobs=[mac_job(7, "failure", True)]
+        )
+        self.assertEqual(code, 1)
+        self.assertIsNone(self.left)
 
 
 class FailureCountTests(unittest.TestCase):

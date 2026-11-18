@@ -1644,6 +1644,175 @@ def failure_logs(repository: str, run_id: int | None) -> None:
         )
 
 
+# CI administration's macOS fallback: the paid runner, set by hand before.
+MACOS_VARIABLE = "CI_MACOS_HEAVY"
+MACOS_RUNNER = "blacksmith-6vcpu-macos-26"
+MACOS_JOB = "Mac OS"
+
+
+def capacity_cancelled(job: Mapping[str, Any]) -> bool:
+    """A macOS job GitHub cancelled before any runner took it: hosted capacity.
+    A job cancelled after a runner started it is some other cancellation."""
+    return (
+        MACOS_JOB in job["name"]
+        and job["conclusion"] == "cancelled"
+        and not job.get("runner_id")
+        and not job.get("runner_name")
+        and not job.get("steps")
+    )
+
+
+def run_id_of(text: str) -> int:
+    if match := RUN_URL.fullmatch(text):
+        return int(match[2])
+    if text.isdigit():
+        return int(text)
+    raise ValueError(f"a run is an ID or URL, not {text!r}")
+
+
+def capacity_cancellations(repository: str, runs: list[int]) -> list[str]:
+    """Each attempt of the runs whose macOS jobs hosted capacity cancelled; the
+    jobs of one attempt are one cancellation."""
+    found = []
+    for run_id in runs:
+        latest = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
+        for attempt in range(1, latest + 1):
+            jobs = run_jobs(repository, run_id, attempt)
+            if any(capacity_cancelled(job) for job in jobs):
+                found.append(f"run {run_id} attempt {attempt}")
+    return found
+
+
+def macos_attempt(
+    repository: str, run_id: int, after: int, timeout: int, interval: int
+) -> list[ci_log.Job]:
+    """Wait for the rerun's attempt to appear, then for its macOS jobs, by name,
+    to complete; return them. Other jobs of the attempt are not waited on."""
+    deadline = time.monotonic() + timeout
+    attempt = None
+    while True:
+        if attempt is None:
+            latest = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
+            if latest > after:
+                attempt = latest
+                print(f"Rerun is attempt {attempt} of run {run_id}", flush=True)
+        if attempt is not None:
+            jobs = [
+                job
+                for job in run_jobs(repository, run_id, attempt)
+                if MACOS_JOB in job["name"]
+            ]
+            if jobs and all(job["status"] == "completed" for job in jobs):
+                return jobs
+        if time.monotonic() >= deadline:
+            raise WaitTimeout(
+                f"The macOS jobs of run {run_id} were still running after "
+                f"{timeout} seconds"
+            )
+        time.sleep(min(interval, max(0, deadline - time.monotonic())))
+
+
+def stamp_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def record_fallback(
+    args: argparse.Namespace, repository: str, lines: list[str]
+) -> None:
+    """Record the variable's changes on the PR, or print them for the cadence."""
+    body = "**macOS fallback** ([CI administration](docs/root-workflow.md#ci-administration))\n\n"
+    body += "\n".join(f"- {line}" for line in lines)
+    if args.pr is None:
+        print(body)
+        return
+    body += f"\n\nAgent: {args.agent} | Model: {args.model} | Reasoning effort: {args.effort}"
+    try:
+        gh("pr", "comment", str(args.pr), "--repo", repository, "--body", body)
+    except subprocess.CalledProcessError as error:
+        print(f"Could not comment on PR #{args.pr} ({error}); the record:\n{body}")
+
+
+def macos_fallback(args: argparse.Namespace) -> None:
+    """Set the paid macOS runner, rerun the failed jobs, and delete the variable
+    once the rerun's macOS jobs finish, after two hosted-capacity cancellations."""
+    if args.pr is not None and not (args.agent and args.model and args.effort):
+        raise ValueError("--pr records on the PR: pass --agent, --model and --effort")
+    repository = repository_of(args.repo)
+    runs = [run_id_of(text) for text in args.runs]
+    counted = capacity_cancellations(repository, runs)
+    if len(counted) < 2:
+        raise ValueError(
+            f"Counted {len(counted)} hosted-capacity cancellation(s) of macOS jobs "
+            f"({', '.join(counted) or 'none'}); the fallback needs two. A cancelled "
+            "job that had a runner does not count. Nothing changed."
+        )
+    if (current := variable(repository, MACOS_VARIABLE)) is not None:
+        raise ValueError(
+            f"{MACOS_VARIABLE} is already set ({current}); another invocation or a "
+            "person owns it. Nothing changed."
+        )
+    run_id = runs[-1]
+    url = f"https://github.com/{repository}/actions/runs/{run_id}"
+    lines = [f"capacity cancellations: {', '.join(counted)}"]
+    owned = left = False
+    try:
+        gh(
+            "variable",
+            "set",
+            MACOS_VARIABLE,
+            "--body",
+            MACOS_RUNNER,
+            "--repo",
+            repository,
+        )
+        owned = True
+        lines.append(f"{stamp_now()} set {MACOS_VARIABLE}={MACOS_RUNNER}")
+        before = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
+        gh("run", "rerun", str(run_id), "--failed", "--repo", repository)
+        lines.append(
+            f"{stamp_now()} reran the failed jobs of {url} after attempt {before}"
+        )
+        jobs = macos_attempt(repository, run_id, before, args.timeout, args.interval)
+        lines += [
+            f"{job['name']}: {job['conclusion']} {job['html_url']}" for job in jobs
+        ]
+        if failed := [job["name"] for job in jobs if job["conclusion"] != "success"]:
+            raise RunFailed(
+                f"macOS jobs did not pass: {', '.join(failed)}", repository, run_id
+            )
+    except BaseException as error:
+        lines.append(f"{stamp_now()} stopped: {str(error) or type(error).__name__}")
+        raise
+    finally:
+        if owned:
+            left = delete_fallback(repository, lines)
+        record_fallback(args, repository, lines)
+    if owned and left:
+        raise ValueError(f"{MACOS_VARIABLE} is still set; delete it by hand")
+    print(f"macOS jobs of {url} passed on {MACOS_RUNNER}; {MACOS_VARIABLE} deleted")
+
+
+def delete_fallback(repository: str, lines: list[str]) -> bool:
+    """Delete the variable this invocation set and read it back; whether it is
+    still set."""
+    try:
+        gh("variable", "delete", MACOS_VARIABLE, "--repo", repository)
+    except subprocess.CalledProcessError as error:
+        lines.append(f"{stamp_now()} deleting {MACOS_VARIABLE} failed: {error}")
+    try:
+        left = variable(repository, MACOS_VARIABLE) is not None
+    except subprocess.CalledProcessError:
+        left = True
+    if left:
+        lines.append(f"{stamp_now()} {MACOS_VARIABLE} is still set: delete it by hand")
+        print(f"{MACOS_VARIABLE} is still set; delete it by hand", file=sys.stderr)
+    else:
+        lines.append(
+            f"{stamp_now()} deleted {MACOS_VARIABLE}; the variable list no longer has it"
+        )
+    return left
+
+
 def control(repository: str, run: dict, branches: dict[int, str]) -> bool:
     """Whether a run tested a negative control: a PR branch under CONTROL."""
     branch = run.get("head_branch") or ""
@@ -1782,6 +1951,7 @@ HANDLERS = {
     "failures": failures,
     "request": request_command,
     "wait": lambda args: wait_command(args),
+    "macos-fallback": macos_fallback,
 }
 # The commands whose failure prints the failed jobs' log summary.
 WAITS = ("wait", "request", "queue-wait", "ready")
@@ -1930,6 +2100,19 @@ def pr_parsers(commands: argparse._SubParsersAction) -> None:
     counted.add_argument("--since", required=True, help="date, such as 2026-11-10")
     counted.add_argument("--controls", action="store_true", help="count them too")
     counted.add_argument("--repo")
+    fallback = commands.add_parser(
+        "macos-fallback",
+        help=f"after two hosted-capacity cancellations of macOS jobs: set "
+        f"{MACOS_VARIABLE}, rerun the last run's failed jobs, delete the variable "
+        "when its macOS jobs finish, and record both changes",
+    )
+    fallback.add_argument("runs", nargs="+", metavar="RUN", help="run IDs or URLs")
+    fallback.add_argument("--pr", type=int, help="record the changes on this PR")
+    fallback.add_argument("--agent", help="with --pr: your agent path")
+    fallback.add_argument("--model", help="with --pr")
+    fallback.add_argument("--effort", help="with --pr")
+    fallback.add_argument("--repo")
+    timing(fallback)
     queued = commands.add_parser(
         "queue-wait",
         help="wait until a queued PR merges (exit 0) or leaves the queue (exit 3)",
