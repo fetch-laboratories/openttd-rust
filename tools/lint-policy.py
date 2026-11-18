@@ -18,6 +18,8 @@ from typing import Any
 from cleanup_contract import (
     ACCEPTED,
     MISSING,
+    UNSAFE,
+    Excepted,
     Ledger,
     carry_hints,
     checked_carries,
@@ -25,9 +27,9 @@ from cleanup_contract import (
     default_event,
     pending_fails,
     review_state,
+    rule_name,
     run,
     tracked,
-    unsafe_site,
     write,
 )
 from code_lines import without_comments
@@ -292,10 +294,6 @@ def inventory(revision: str | None) -> dict[str, str]:
     }
 
 
-def rule_name(site: str) -> str:
-    return re.sub(r"\s+|r#", "", site.rsplit(" | ", 1)[1].split(" ", 1)[1])
-
-
 def item_scoped(site: str) -> bool:
     """A named Rust item below module level, suppressing one lint, not a group."""
     path, scope, _ = site.rsplit(" | ", 2)
@@ -357,20 +355,10 @@ def suppression_state(
     if not item_scoped(site):
         return MISSING
     author, proposals, comments, head = contract
-    expected = {
-        "kind": "suppression",
-        "tool": "rust",
-        "site": site,
-        "before": before,
-        "after": after,
-    }
-    matching = [
-        proposal
-        for proposal in proposals
-        if all(proposal.get(key) == value for key, value in expected.items())
-    ]
-    unchanged = partial(unchanged_scope, site) if unsafe_site(expected) else None
-    state = review_state(matching, comments, author, head, unchanged)
+    matching = Excepted("suppression", "rust", site, before, after).proposals(proposals)
+    unsafe = rule_name(site) == UNSAFE
+    unchanged = partial(unchanged_scope, site) if unsafe else None
+    state, _ = review_state(matching, comments, author, head, unchanged)
     if state == ACCEPTED:
         print(f"reviewed suppression at {head}: {site} ({before} -> {after})")
     return state

@@ -90,7 +90,7 @@ def unaccepted(
     for delta in growth:
         counter = delta["counter"]
         matching = [proposal for proposal in proposals if proposed(delta, proposal)]
-        state = review_state(matching, comments, author, head)
+        state, _ = review_state(matching, comments, author, head)
         if state == ACCEPTED:
             print(json.dumps({"accepted_at": head, "growth": delta}, sort_keys=True))
         elif state == MISSING:

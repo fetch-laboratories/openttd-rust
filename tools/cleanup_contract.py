@@ -15,7 +15,8 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any, NamedTuple
+from dataclasses import asdict, dataclass
+from typing import Any, NamedTuple, TypedDict
 
 import vcs
 from vcs import ROOT, gh, git
@@ -184,7 +185,40 @@ ACCEPTED, PENDING, MISSING = "accepted", "pending", "missing"
 NEEDS_REVIEW = ("growth", "suppression", "lint")
 
 
-def acceptances(body: str, where: str) -> list[dict[str, Any]]:
+class Acceptance(TypedDict):
+    """A validated cleanup-acceptance block: the commit read and its entries."""
+
+    head: str
+    accept: list[object]
+
+
+@dataclass(frozen=True)
+class Excepted:
+    """A suppression or lint exception a gate observed, as its record states it."""
+
+    kind: str
+    tool: str
+    site: str
+    before: object
+    after: object
+
+    def proposals(self, records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+        """The records that propose exactly this exception."""
+        return [
+            record
+            for record in records
+            if all(record.get(key) == value for key, value in asdict(self).items())
+        ]
+
+
+class Review(NamedTuple):
+    """A record's review state, with the proposal it concerns (None if MISSING)."""
+
+    state: str
+    proposal: dict[str, Any] | None
+
+
+def acceptances(body: str, where: str) -> list[Acceptance]:
     """A comment's acceptance blocks: objects with `head` and `accept`.
 
     `head` names the commit the reviewer read. It is not compared with the
@@ -204,7 +238,7 @@ def acceptances(body: str, where: str) -> list[dict[str, Any]]:
                 f"{where} block {n}: field accept must be a list"
                 " and head a full 40-digit SHA"
             )
-        found.append(block)
+        found.append(Acceptance(head=head, accept=block["accept"]))
     return found
 
 
@@ -213,12 +247,21 @@ def bound(record: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in record.items() if key not in WORDING}
 
 
+def rule_name(site: str) -> str:
+    """The lint a suppression site names, without spacing or raw-identifier marks."""
+    return re.sub(r"\s+|r#", "", site.rsplit(" | ", 1)[1].split(" ", 1)[1])
+
+
 def unsafe_site(record: dict[str, Any]) -> bool:
     """An `unsafe_code` suppression, whose acceptance holds only for its item text."""
-    if record.get("kind") != "suppression" or not isinstance(record.get("site"), str):
-        return False
-    rule = record["site"].rsplit(" | ", 1)[-1].split(" ", 1)[-1]
-    return re.sub(r"\s+|r#", "", rule) == UNSAFE
+    site = record.get("site")
+    return (
+        record.get("kind") == "suppression"
+        and isinstance(site, str)
+        and site.count(" | ") >= 1
+        and " " in site.rsplit(" | ", 1)[1]
+        and rule_name(site) == UNSAFE
+    )
 
 
 def reviewed(
@@ -258,14 +301,16 @@ def review_state(
     author: str,
     head: str,
     unchanged: Callable[[str], bool] | None = None,
-) -> str:
-    """ACCEPTED, PENDING while a matching proposal awaits it, or MISSING."""
+) -> Review:
+    """ACCEPTED with the accepted proposal, PENDING with the first matching
+    proposal awaiting it, or MISSING when no proposal matches."""
     matching = list(proposals)
     if not matching:
-        return MISSING
-    if any(reviewed(p, comments, author, head, unchanged) for p in matching):
-        return ACCEPTED
-    return PENDING
+        return Review(MISSING, None)
+    for proposal in matching:
+        if reviewed(proposal, comments, author, head, unchanged):
+            return Review(ACCEPTED, proposal)
+    return Review(PENDING, matching[0])
 
 
 def pending_fails(event: str) -> bool:
@@ -456,11 +501,12 @@ def pull_discussion(head: str) -> tuple[str, list[str], str]:
     return author[1] if author else "", discussion(prefix, number), head
 
 
-def discussion(prefix: str, number: int) -> list[str]:
-    """Ordinary comments and submitted review bodies of one PR."""
+def discussion(prefix: str, number: int, run: Callable[..., str] = gh) -> list[str]:
+    """Ordinary comments and submitted review bodies of one PR; `run` is the
+    caller's gh, such as ci.py's, which retries a read."""
     comments: list[str] = []
     for endpoint in (f"issues/{number}/comments", f"pulls/{number}/reviews"):
-        pages = json.loads(gh("api", "--paginate", "--slurp", f"{prefix}/{endpoint}"))
+        pages = json.loads(run("api", "--paginate", "--slurp", f"{prefix}/{endpoint}"))
         comments.extend(row.get("body") or "" for page in pages for row in page)
     return comments
 

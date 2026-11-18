@@ -22,6 +22,7 @@ from baseline_ratchet import debt_errors, exceeds
 from cleanup_contract import (
     ACCEPTED,
     PENDING,
+    Excepted,
     Ledger,
     carry_hints,
     checked_carries,
@@ -378,25 +379,15 @@ def reviewed_debt(
     for old in {**carried, **renamed}.values():
         allowed.pop(old, None)
     for site, values in grown(allowed).items():
-        expected = {
-            "kind": "lint",
-            "tool": kind,
-            "site": site,
-            "before": previous.get(site, []),
-            "after": values,
-        }
-        matching = [
-            proposal
-            for proposal in proposals
-            if all(proposal.get(key) == value for key, value in expected.items())
-        ]
-        state = review_state(matching, comments, author, head)
+        excepted = Excepted("lint", kind, site, previous.get(site, []), values)
+        state, proposal = review_state(
+            excepted.proposals(proposals), comments, author, head
+        )
         if state == ACCEPTED:
             allowed[site] = values
             print(
                 json.dumps(
-                    {"accepted_at": head, "lint_exception": matching[0]},
-                    sort_keys=True,
+                    {"accepted_at": head, "lint_exception": proposal}, sort_keys=True
                 )
             )
         elif state == PENDING and pending_fails(EVENT):
