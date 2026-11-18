@@ -1935,6 +1935,24 @@ class TrackedRecordTests(unittest.TestCase):
                 cleanup_contract.tracked(base), [self.MERGED, carry, other]
             )
 
+    def test_a_committed_record_file_with_a_non_ascii_name_is_read(self) -> None:
+        record = {"kind": "carry", "tool": "rust", "from": "a", "to": "b"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"README": "x\n"})
+            base = git("rev-parse", "HEAD", cwd=root).strip()
+            path = root / "migration/cleanup-records/t3-cleanup-café.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps([record]))
+            git("add", "-A", cwd=root)
+            head = commit(root)
+            with (
+                patch.object(cleanup_contract, "ROOT", root),
+                patch.object(cleanup_contract, "git", partial(git, cwd=root)),
+            ):
+                self.assertEqual(cleanup_contract.records_between(base, head), [record])
+                self.assertEqual(cleanup_contract.records_between(base), [record])
+
     def test_lint_policy_rejects_a_malformed_file_with_no_delta(self) -> None:
         path = "migration/cleanup-records/tools-921-x.json"
         with self.branch({path: "[[]]"}) as (root, base):

@@ -37,6 +37,8 @@ from rust_syntax import Node, item_source, nodes, syntax_trees
 from vcs import git, merge_base
 
 ROOT = Path(__file__).resolve().parents[1]
+# --same-item's status for an item whose text differs between the two commits.
+ITEM_DIFFERS = 3
 RANK = {"allow": 0, "warn": 1, "deny": 2, "forbid": 3}
 LINT_GROUPS = {
     "all",
@@ -449,11 +451,14 @@ def main() -> int:
         "--same-item",
         nargs=3,
         metavar=("SITE", "ACCEPTED", "HEAD"),
-        help="only exit 0 when the suppressed item's text is equal at both commits",
+        help="exit 0 when the suppressed item's text is equal at both commits, "
+        "3 when it differs",
     )
     args = parser.parse_args()
     if args.same_item:
-        return int(not unchanged_scope(*args.same_item))
+        # 0: the item's text is equal; ITEM_DIFFERS: it differs. A crash or a
+        # failed start exits otherwise, so a caller never reads it as a change.
+        return 0 if unchanged_scope(*args.same_item) else ITEM_DIFFERS
     args.base_ref = merge_base(args.base_ref, run=git, announce=True)
     # Quick runs lint policy on every change, so every record file is validated
     # here even when no gate needs its records.

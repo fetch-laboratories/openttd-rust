@@ -3737,6 +3737,25 @@ class EnqueueTests(unittest.TestCase):
             ):
                 ci.added_records("example/fork", PREVIOUS)
 
+    def test_a_comparator_that_fails_is_an_error_not_a_changed_item(self) -> None:
+        site = "rust/x.rs | impl Native | allow unsafe_code"
+        unsafe = {"kind": "suppression", "site": site, "before": 0, "after": 1}
+        comment = (
+            "Agent: /review | Model: m | Reasoning effort: high\n"
+            "```cleanup-acceptance\n"
+            + json.dumps({"head": PREVIOUS, "accept": [unsafe]})
+            + "\n```"
+        )
+        crashed = subprocess.CompletedProcess([], 2, "", "ModuleNotFoundError: x")
+        with (
+            patch.object(ci, "added_records", return_value=[unsafe]),
+            patch.object(ci.cleanup_contract, "discussion", return_value=[comment]),
+            patch.object(ci.cleanup_contract, "has_commit", return_value=True),
+            patch.object(ci.subprocess, "run", return_value=crashed),
+            self.assertRaisesRegex(ValueError, "failed \\(exit 2\\): ModuleNotFound"),
+        ):
+            ci.missing_acceptances("example/fork", 170, PULL, HEAD)
+
     def test_an_unreadable_accepted_commit_does_not_hide_other_records(
         self,
     ) -> None:

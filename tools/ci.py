@@ -1244,6 +1244,10 @@ def added_records(repository: str, head: str) -> list[dict[str, Any]]:
     return cleanup_contract.records_between(base, head)
 
 
+# lint-policy.py --same-item's status for a changed item.
+ITEM_DIFFERS = 3
+
+
 def unsafe_item_unchanged(
     site: str, head: str, unreadable: set[str]
 ) -> Callable[[str], bool]:
@@ -1261,7 +1265,13 @@ def unsafe_item_unchanged(
             return False
         script = Path(__file__).with_name("lint-policy.py")
         command = [sys.executable, str(script), "--same-item", site, accepted, head]
-        return subprocess.run(command, capture_output=True).returncode == 0
+        done = subprocess.run(command, capture_output=True, text=True)
+        if done.returncode not in (0, ITEM_DIFFERS):
+            raise ValueError(
+                f"Comparing {site} at {accepted} and {head} failed (exit "
+                f"{done.returncode}): {(done.stderr or done.stdout).strip()[-2000:]}"
+            )
+        return done.returncode == 0
 
     return unchanged
 

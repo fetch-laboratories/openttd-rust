@@ -130,7 +130,9 @@ def record_files(revision: str | None) -> dict[str, str]:
             str(path.relative_to(ROOT)): path.read_text()
             for path in sorted((ROOT / RECORDS).glob("*.json"))
         }
-    paths = git("ls-tree", "--name-only", revision, "--", RECORDS + "/").split()
+    # NUL-delimited: Git quotes a path with non-ASCII bytes otherwise.
+    listed = git("ls-tree", "-z", "--name-only", revision, "--", RECORDS + "/")
+    paths = [path for path in listed.split("\0") if path]
     return {
         path: git("show", f"{revision}:{path}")
         for path in sorted(paths)
