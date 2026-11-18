@@ -891,10 +891,8 @@ crate::abi::layouts! {
 mod tests {
     use super::*;
 
-    /// `ReceiveCommand` returns the original's literal for a single-player-only command, after
-    /// reading the company and the command and before reading anything else.
-    #[test]
-    fn receive_command_reports_a_single_player_only_command() {
+    /// Frame services whose one valid command, 0x34, is single-player only.
+    fn offline_command_services() -> crate::network_frame::Services {
         extern "C" fn command_valid(cmd: u8) -> bool {
             assert_eq!(cmd, 0x34, "the wire's u16 narrows to the native command");
             true
@@ -929,21 +927,68 @@ mod tests {
             company: &COMPANY,
             ..crate::test_tables::NETWORK_COMMAND
         };
-        let f = crate::network_frame::Services {
+        crate::network_frame::Services {
             command: &NETWORK_COMMAND,
             packet: crate::packet::test_services(),
             ..crate::test_tables::NETWORK_FRAME
-        };
+        }
+    }
+
+    /// A command packet for company 3 and the wire command 0x1234, followed by eight 0xAA.
+    fn offline_command_packet() -> crate::packet::State {
         let mut p = crate::packet::State::new(100, std::ptr::null_mut());
         p.send_bytes(&[3]);
         p.send_bytes(&0x1234_u16.to_le_bytes());
         p.send_bytes(&[0xAA; 8]);
+        p
+    }
+
+    /// `ReceiveCommand` returns the original's literal for a single-player-only command, after
+    /// reading the company and the command and before reading anything else.
+    #[test]
+    fn receive_command_reports_a_single_player_only_command() {
+        let f = offline_command_services();
+        let mut p = offline_command_packet();
         let mut cp = empty_packet();
         assert_eq!(
             receive_command(&f, &raw mut p, &mut cp),
             Some("single-player only command")
         );
         assert_eq!((cp.company, cp.cmd, p.position), (3, 0x34, 3));
+    }
+
+    /// `Receive_SERVER_COMMAND` still reads the frame and `my_cmd` after a decode error, then
+    /// prints the warning in the warning colour and reports a malformed packet.
+    #[test]
+    fn receive_server_warns_of_an_undecodable_command() {
+        let f = offline_command_services();
+        let mut p = offline_command_packet();
+        let mut game = socket::GameSocket {
+            base: null_mut(),
+            game: null_mut(),
+            incoming: null_mut(),
+            last_packet_ns: 0,
+            outgoing: null_mut(),
+            pending: false,
+            role: 0,
+            server: null_mut(),
+            status: crate::network_client::ServerStatus::STATUS_ACTIVE.0,
+            sync: null_mut(),
+            tcp: null_mut(),
+        };
+        crate::news_func::testing::take();
+        assert_eq!(
+            receive_server(&f, &raw mut game, &raw mut p),
+            NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET
+        );
+        assert_eq!(p.position, 8);
+        assert_eq!(
+            crate::news_func::testing::take(),
+            [crate::news_func::testing::Effect::IConsolePrint(
+                crate::console_type::CC_WARNING.0,
+                b"Dropping server connection due to single-player only command.".to_vec()
+            )]
+        );
     }
 
     fn packet(frame: u32, bytes: &[u8]) -> CommandPacket {
