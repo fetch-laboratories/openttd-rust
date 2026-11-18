@@ -52,7 +52,7 @@ fn leaves(vehicle: crate::vehicle::VehicleServices) -> Leaves {
 /// A live aircraft record and state with the original constructor defaults.
 fn aircraft() -> Vehicle {
     Vehicle {
-        handle: crate::vehicle_base::openttd_rust_vehicle_record_new(
+        handle: crate::vehicle_base::VehicleRecord::new(
             std::ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_AIRCRAFT,
         )

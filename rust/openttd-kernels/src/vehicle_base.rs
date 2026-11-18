@@ -893,6 +893,100 @@ impl crate::vehicle::VehicleRef {
 #[cfg(test)]
 mod record_tests {
     use super::*;
+    use crate::vehicle::VehicleRef;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// Failed native assertions seen by `record_failure` in this test process.
+    static FAILED: AtomicU32 = AtomicU32::new(0);
+
+    extern "C" fn record_failure(condition: bool) {
+        if !condition {
+            FAILED.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    extern "C" fn exit_on_any_call(_: bool) {
+        std::process::exit(87);
+    }
+
+    /// A private train chain of `subtypes`, linked in order.
+    fn chain(subtypes: &[u8]) -> Vec<VehicleRef> {
+        let records: Vec<_> = subtypes
+            .iter()
+            .map(|&subtype| {
+                let record = VehicleRecord::new(std::ptr::null_mut(), VehicleType::TRAIN);
+                // SAFETY: Each record is privately owned through its test.
+                unsafe { (*record).subtype = subtype };
+                VehicleRef::of(record)
+            })
+            .collect();
+        for pair in records.windows(2) {
+            // SAFETY: Both records remain live through the test.
+            unsafe { set_next(pair[0].0.as_ptr(), pair[1].0.as_ptr()) };
+        }
+        records
+    }
+
+    fn release(records: Vec<VehicleRef>) {
+        for record in records {
+            // SAFETY: No traversal follows these private records after cleanup.
+            unsafe { VehicleRecord::delete(record.0.as_ptr()) };
+        }
+    }
+
+    /// `GetNextArticulatedPart` asserts `HasArticulatedPart()` and returns `Next()`
+    /// whether or not the assertion holds.
+    #[test]
+    fn next_articulated_part_asserts_that_one_follows() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle_base::record_tests::next_articulated_part_asserts_that_one_follows",
+            record_failure,
+        ) {
+            return;
+        }
+        let articulated = 1 << GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
+        let records = chain(&[0, articulated, 0]);
+        let [engine, part, wagon] = records[..] else {
+            unreachable!()
+        };
+        assert_eq!(engine.get_next_articulated_part(), Some(part));
+        assert_eq!(FAILED.load(Ordering::SeqCst), 0);
+        assert_eq!(part.get_next_articulated_part(), Some(wagon));
+        assert_eq!(FAILED.load(Ordering::SeqCst), 1);
+        assert_eq!(wagon.get_next_articulated_part(), None);
+        assert_eq!(FAILED.load(Ordering::SeqCst), 2);
+        release(records);
+    }
+
+    /// `SetNext` asserts `this != next` before it links anything: linking a
+    /// vehicle to itself reaches the native assertion, which here ends the process.
+    #[test]
+    fn set_next_asserts_against_a_self_link() {
+        if crate::services_assert::isolate_test_exit(
+            "vehicle_base::record_tests::set_next_asserts_against_a_self_link",
+            86,
+        ) {
+            return;
+        }
+        let records = chain(&[0]);
+        // SAFETY: The record stays live; the failed assertion ends the process.
+        unsafe { set_next(records[0].0.as_ptr(), records[0].0.as_ptr()) };
+        unreachable!("set_next returned past its failed self-link assertion");
+    }
+
+    /// Linking two distinct vehicles makes no assertion call.
+    #[test]
+    fn set_next_of_distinct_vehicles_makes_no_assertion_call() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle_base::record_tests::set_next_of_distinct_vehicles_makes_no_assertion_call",
+            exit_on_any_call,
+        ) {
+            return;
+        }
+        let records = chain(&[0, 0]);
+        assert_eq!(records[0].next(), Some(records[1]));
+        release(records);
+    }
 
     #[test]
     fn train_units_skip_articulated_parts_and_one_rear_head() {
@@ -912,7 +1006,7 @@ mod record_tests {
         ]
         .into_iter()
         .map(|subtype| {
-            let record = openttd_rust_vehicle_record_new(std::ptr::null_mut(), VehicleType::TRAIN);
+            let record = VehicleRecord::new(std::ptr::null_mut(), VehicleType::TRAIN);
             // SAFETY: Each record is privately owned through this test.
             unsafe { (*record).subtype = subtype };
             VehicleRef::of(record)
@@ -944,14 +1038,14 @@ mod record_tests {
         }
         for record in records {
             // SAFETY: No traversal follows these private records after cleanup.
-            unsafe { openttd_rust_vehicle_record_delete(record.0.as_ptr()) };
+            unsafe { VehicleRecord::delete(record.0.as_ptr()) };
         }
     }
 
     #[test]
     fn set_next_detaches_old_suffix_and_new_predecessor() {
         let records: Vec<_> = (0..5)
-            .map(|_| openttd_rust_vehicle_record_new(std::ptr::null_mut(), VehicleType::TRAIN))
+            .map(|_| VehicleRecord::new(std::ptr::null_mut(), VehicleType::TRAIN))
             .collect();
         let [head, old, tail, other, attached] = records[..] else {
             unreachable!()
@@ -983,7 +1077,7 @@ mod record_tests {
             assert!((*tail).previous.is_null());
             assert_eq!((*tail).first, tail);
             for record in records {
-                openttd_rust_vehicle_record_delete(record);
+                VehicleRecord::delete(record);
             }
         }
     }

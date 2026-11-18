@@ -1519,11 +1519,11 @@ mod tests {
     }
     impl LaterPart {
         fn new() -> Self {
-            let front = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            let front = crate::vehicle_base::VehicleRecord::new(
                 std::ptr::null_mut(),
                 VehicleType::VEH_ROAD,
             );
-            let part = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            let part = crate::vehicle_base::VehicleRecord::new(
                 std::ptr::null_mut(),
                 VehicleType::VEH_ROAD,
             );
@@ -1546,10 +1546,10 @@ mod tests {
     }
     impl Drop for LaterPart {
         fn drop(&mut self) {
-            // SAFETY: both records came from `openttd_rust_vehicle_record_new`.
+            // SAFETY: both records came from `VehicleRecord::new`.
             unsafe {
-                crate::vehicle_base::openttd_rust_vehicle_record_delete(self.part);
-                crate::vehicle_base::openttd_rust_vehicle_record_delete(self.front);
+                crate::vehicle_base::VehicleRecord::delete(self.part);
+                crate::vehicle_base::VehicleRecord::delete(self.front);
             }
         }
     }
@@ -1664,10 +1664,8 @@ mod tests {
     fn owner_of_reads_the_record_links_by_vehicle_type() {
         let mut ground = GroundState::default();
         let train = crate::train_state::openttd_rust_train_state_new();
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
-            std::ptr::null_mut(),
-            VehicleType::VEH_TRAIN,
-        );
+        let record =
+            crate::vehicle_base::VehicleRecord::new(std::ptr::null_mut(), VehicleType::VEH_TRAIN);
         // SAFETY: the record and owners are live and unshared for this test.
         unsafe {
             (*record).ground = &raw mut ground;
@@ -1680,10 +1678,8 @@ mod tests {
         assert!(o.road.is_null());
 
         let mut road = crate::road::State::default();
-        let road_record = crate::vehicle_base::openttd_rust_vehicle_record_new(
-            std::ptr::null_mut(),
-            VehicleType::VEH_ROAD,
-        );
+        let road_record =
+            crate::vehicle_base::VehicleRecord::new(std::ptr::null_mut(), VehicleType::VEH_ROAD);
         // SAFETY: as above.
         unsafe {
             (*road_record).ground = &raw mut ground;
@@ -1696,8 +1692,8 @@ mod tests {
         assert!(o.train.record.is_null());
         // SAFETY: each allocation is released once.
         unsafe {
-            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
-            crate::vehicle_base::openttd_rust_vehicle_record_delete(road_record);
+            crate::vehicle_base::VehicleRecord::delete(record);
+            crate::vehicle_base::VehicleRecord::delete(road_record);
             crate::train_state::openttd_rust_train_state_destroy(train);
         }
     }

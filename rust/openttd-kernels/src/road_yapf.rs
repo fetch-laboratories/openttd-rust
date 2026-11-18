@@ -1306,7 +1306,7 @@ mod tests {
     }
     /// A search for a road vehicle record that lives for the test process.
     fn search(s: &Services, input: Input) -> CYapfRoad<'_> {
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let record = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_ROAD,
         );
@@ -1431,11 +1431,11 @@ mod tests {
             next: ptr::null_mut(),
             previous: ptr::null_mut(),
         };
-        let front = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let front = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_ROAD,
         );
-        let part = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let part = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_ROAD,
         );
@@ -1486,8 +1486,8 @@ mod tests {
         }
         // SAFETY: The records came from the allocation export and are released once.
         unsafe {
-            crate::vehicle_base::openttd_rust_vehicle_record_delete(part);
-            crate::vehicle_base::openttd_rust_vehicle_record_delete(front);
+            crate::vehicle_base::VehicleRecord::delete(part);
+            crate::vehicle_base::VehicleRecord::delete(front);
         }
     }
 

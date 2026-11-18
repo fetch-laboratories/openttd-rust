@@ -1726,7 +1726,7 @@ mod tests {
             next: ptr::null_mut(),
             previous: ptr::null_mut(),
         };
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let record = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_SHIP,
         );
@@ -1772,7 +1772,7 @@ mod tests {
         assert_eq!(input.unit_number, 4242, "unit number");
         ENGINE.set(ptr::null_mut());
         // SAFETY: The record came from the allocation export and is released once.
-        unsafe { crate::vehicle_base::openttd_rust_vehicle_record_delete(record) };
+        unsafe { crate::vehicle_base::VehicleRecord::delete(record) };
     }
 
     #[test]

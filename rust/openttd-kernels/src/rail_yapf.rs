@@ -3337,7 +3337,7 @@ mod tests {
             has_pbs: unreachable2,
             index: unreachable1,
         })));
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+        let record = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_TRAIN,
         );

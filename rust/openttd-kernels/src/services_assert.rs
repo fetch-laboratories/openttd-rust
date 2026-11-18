@@ -80,6 +80,56 @@ pub(crate) fn isolate_test_check(name: &str, check: extern "C" fn(bool)) -> bool
     true
 }
 
+/// Exit code of `isolate_test_exit`'s child after a failed native assertion.
+#[cfg(test)]
+static EXIT_CODE: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+#[cfg(test)]
+extern "C" fn exit_on_failure(condition: bool) {
+    if !condition {
+        std::process::exit(EXIT_CODE.load(Ordering::Acquire));
+    }
+}
+
+/// Run a test in a separate process whose native assertion policy ends the
+/// process with `code` at the first failed assertion, and require the child to
+/// start the named test and end with that code. A body that cannot continue
+/// past a failed assertion is observed this way without returning into it.
+/// Return true in the parent; the child binds the policy and returns false to
+/// execute the test body.
+#[cfg(test)]
+pub(crate) fn isolate_test_exit(name: &str, code: i32) -> bool {
+    const CHILD: &str = "OPENTTD_ASSERT_EXIT_TEST_CHILD";
+    if std::env::var(CHILD).ok().as_deref() == Some(name) {
+        EXIT_CODE.store(code, Ordering::Release);
+        bind_test_check(exit_on_failure);
+        return false;
+    }
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name, "--test-threads", "1", "--nocapture"])
+        .env(CHILD, name)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    // A body that returns from the failed assertion may never end: kill it.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while child.try_wait().unwrap().is_none() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let _ = child.kill();
+    let output = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.code() == Some(code) && stdout.contains("running 1 test"),
+        "isolated native assertion test {name} did not run and exit with code {code}: {:?}\n\
+         {stdout}{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    true
+}
+
 #[cfg(test)]
 mod tests {
     extern "C" fn unused_check(_: bool) {}
@@ -88,5 +138,11 @@ mod tests {
     #[should_panic(expected = "did not run and pass exactly one test")]
     fn isolating_a_name_that_matches_no_test_fails() {
         super::isolate_test_check("services_assert::tests::no_such_test", unused_check);
+    }
+
+    #[test]
+    #[should_panic(expected = "did not run and exit with code")]
+    fn isolating_an_exit_for_a_name_that_matches_no_test_fails() {
+        super::isolate_test_exit("services_assert::tests::no_such_test", 86);
     }
 }
