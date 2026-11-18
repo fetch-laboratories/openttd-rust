@@ -17,7 +17,16 @@ use crate::tile_type::TropicZone;
 #[inline(always)]
 /// `IsTileType`: whether `GetTileType` of the tile is `kind`.
 pub(crate) fn is_tile_type(s: &crate::services::Services, tile: TileIndex, kind: TileType) -> bool {
-    crate::map_func::World::new(s).kind(tile) == kind
+    crate::map_func::World::new(s).is_tile_type(tile, kind)
+}
+
+impl crate::map_func::World<'_> {
+    /// `IsTileType`: whether `GetTileType` of the tile is `kind`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
+        self.kind(tile) == kind
+    }
 }
 
 #[allow(clippy::inline_always)]

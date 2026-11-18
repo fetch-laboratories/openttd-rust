@@ -37,7 +37,7 @@ use crate::table::strings::{
     STR_ERROR_MUST_DEMOLISH_CANAL_FIRST, STR_ERROR_SITE_UNSUITABLE,
     STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP,
 };
-use crate::tile_type::{INVALID_TILE, MP_WATER};
+use crate::tile_type::{INVALID_TILE, MP_WATER, TileIndex};
 use crate::viewport_func::TILE_HEIGHT_STEP;
 use crate::water::{RIVER_OFFSET_DESERT_DISTANCE, WaterServices};
 use crate::witness as w;
@@ -866,7 +866,7 @@ entry!(openttd_rust_water_clear(out:*mut CommandCost,ret:*mut CommandCost,flags:
     |world:&World<'_>| world.clear(out,ret,flags,tile));
 entry!(openttd_rust_water_terraform(out:*mut CommandCost,flags:u16,tile:u32) |world:&World<'_>| {
     let map = crate::map_func::World::new(world.s);
-    if map.is_water_tile(tile) && map.is_canal(tile) { world.error(out,STR_ERROR_MUST_DEMOLISH_CANAL_FIRST.0); }
+    if map.is_water_tile(TileIndex(tile)) && map.is_canal(TileIndex(tile)) { world.error(out,STR_ERROR_MUST_DEMOLISH_CANAL_FIRST.0); }
     else { world.clear_command(out,tile,flags); }
 });
 entry!(openttd_rust_water_build_above(out:*mut CommandCost,flags:u16,tile:u32,height:i32) |world:&World<'_>| {

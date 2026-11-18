@@ -136,12 +136,12 @@ impl crate::map_func::World<'_> {
         self.asserted(|m| is_sea(m, t))
     }
     /// `IsCanal`.
-    pub(crate) fn is_canal(&self, t: u32) -> bool {
-        self.asserted(|m| is_canal(m, t))
+    pub(crate) fn is_canal(&self, t: TileIndex) -> bool {
+        self.asserted(|m| is_canal(m, t.0))
     }
     /// `IsWaterTile`: is it a water tile with plain water?
-    pub(crate) fn is_water_tile(&self, t: u32) -> bool {
-        self.kind(TileIndex(t)) == TileType::MP_WATER && self.asserted(|m| is_water(m, t))
+    pub(crate) fn is_water_tile(&self, t: TileIndex) -> bool {
+        self.is_tile_type(t, TileType::MP_WATER) && self.asserted(|m| is_water(m, t.0))
     }
     /// `IsDockingTile`: checks whether the tile is marked as a destination tile
     /// for ships. Always inlined: the ship search's cost callback reads it per
