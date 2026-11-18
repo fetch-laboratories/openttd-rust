@@ -8,6 +8,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from collections import Counter
@@ -1934,6 +1935,16 @@ class TrackedRecordTests(unittest.TestCase):
             self.assertEqual(
                 cleanup_contract.tracked(base), [self.MERGED, carry, other]
             )
+
+    def test_same_item_never_reports_an_unreadable_file_as_changed(self) -> None:
+        script = Path(__file__).with_name("lint-policy.py")
+        site = "rust/absent.rs | impl Native | allow unsafe_code"
+        done = subprocess.run(
+            [sys.executable, str(script), "--same-item", site, "HEAD", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotIn(done.returncode, (0, POLICY.ITEM_DIFFERS), done.stderr)
 
     def test_a_committed_record_file_with_a_non_ascii_name_is_read(self) -> None:
         record = {"kind": "carry", "tool": "rust", "from": "a", "to": "b"}

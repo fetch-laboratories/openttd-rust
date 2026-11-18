@@ -456,9 +456,14 @@ def main() -> int:
     )
     args = parser.parse_args()
     if args.same_item:
-        # 0: the item's text is equal; ITEM_DIFFERS: it differs. A crash or a
-        # failed start exits otherwise, so a caller never reads it as a change.
-        return 0 if unchanged_scope(*args.same_item) else ITEM_DIFFERS
+        # 0: the item's text is equal; ITEM_DIFFERS: it differs. An unreadable
+        # file, a crash or a failed start exits otherwise, so a caller never
+        # reads it as a change.
+        site, accepted, head = args.same_item
+        path = site.rsplit(" | ", 2)[0]
+        for revision in (accepted, head):
+            git("show", f"{revision}:{path}")  # Raises, exiting 1, when unreadable.
+        return 0 if unchanged_scope(site, accepted, head) else ITEM_DIFFERS
     args.base_ref = merge_base(args.base_ref, run=git, announce=True)
     # Quick runs lint policy on every change, so every record file is validated
     # here even when no gate needs its records.
