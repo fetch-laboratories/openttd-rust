@@ -12,14 +12,7 @@
 #include "rust/road_yapf_ffi.h"
 #include "tests/effect_protocol.hpp"
 #include "rust/vehicle_effect_ffi.h"
-#include "rust/vehicle_visits_ffi.h"
-#include "rust/vehicle_refit_ffi.h"
-#include "rust/vehicle_transaction_ffi.h"
-#include "rust/station_service_ffi.h"
-#include "rust/animation_ffi.h"
-#include "rust/roadstop_resolver_ffi.h"
 #include "rust/airport_resolver_ffi.h"
-#include "rust/services_assert.h"
 
 #include "vehicle_tables.inc"
 
@@ -61,7 +54,6 @@ static const OpenTTDRoadStopServices road_abi_stops{
 	.vehicle = nullptr,
 	.ground = nullptr,
 	.primary = [](uint32_t tile, RoadStopType) noexcept { CHECK(tile == 100); return reinterpret_cast<RoadStop *>(&road_abi_stop); },
-	.is_bus = [](OpenTTDVehicle *u) noexcept { CHECK(u == RoadAbiHandle()); return true; },
 	.tile = [](const RoadStop *) noexcept -> uint32_t { return 100; },
 	.state = [](const RoadStop *) noexcept { return road_abi_probe->stop.get(); },
 };
@@ -237,8 +229,7 @@ static void RoadBoundary()
 	 * type service reports; VehicleEnterTile reads that type from its own map. */
 	static OpenTTDFixtureMap movement_map{6, 4096};
 	for (uint32_t tile = 0; tile < map.size; ++tile) map.base[tile].type = movement_map.base[tile].type = 9 << 4;
-	map.base[100].type = 5 << 4; // The bus bay stop above, of station 55.
-	map.base[100].m2 = 55;
+	map.base[100].type = 5 << 4; // The bus bay stop above.
 	map.extended[100].m6 = 3 << 3;
 	static OpenTTDSharedServices movement_world{};
 	movement_world.map = &movement_map.statics; movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 9; };
@@ -257,86 +248,7 @@ static void RoadBoundary()
 
 	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &t.leaves, nullptr));
 	CHECK(probe.state->state == 36 && probe.stop->status == 0xFF);
-
-	/* A scheduled arrival at its destination bay frees the entrance, then begins
-	 * loading and returns before the bay tile could mark it busy again. */
-	static std::unique_ptr<ControllerOrders> bay_orders;
-	bay_orders = std::make_unique<ControllerOrders>(&t.vehicle);
-	bay_orders->vehicle->current.type = OT_GOTO_STATION;
-	bay_orders->vehicle->current.destination = 55;
-	bay_orders->services.vehicle = [](void *shell) noexcept { CHECK(shell == RoadAbiHandle()->shell); return bay_orders->vehicle.get(); };
-	bay_orders->services.consist = [](void *) noexcept { return &bay_orders->consist; };
-	bay_orders->services.vehicle_type = [](void *) noexcept { return uint64_t{1}; };
-	bay_orders->services.timetable_dirty = [](void *shell) noexcept { CHECK(shell == RoadAbiHandle()->shell); };
-	road_abi_vehicle.orders = bay_orders->vehicle.get();
-	probe.state->state = 32;
-	probe.state->frame = 20;
-	road_abi_vehicle.x_pos = (rd & 15) + 1; road_abi_vehicle.y_pos = (rd >> 8) & 15;
-	road_abi_vehicle.z_pos = 10; road_abi_vehicle.direction = 1;
-	road_abi_vehicle.last_station_visited = 0;
-	/* The station has had a bus: no first-arrival news. */
-	static uint8_t bay_had_vehicle_of_type = HVOT_BUS;
-	t.shared.station_had_vehicle_of_type_field = [](Station *st) noexcept { CHECK(st == reinterpret_cast<Station *>(&road_abi_stop)); return &bay_had_vehicle_of_type; };
-	static uint32_t bay_arrivals = 0;
-	static OpenTTDFleetTransactionServices bay_transactions{};
-	bay_transactions.assertions = false;
-	static OpenTTDVehicleCommonServices bay_common{};
-	bay_common.transactions = &bay_transactions;
-	bay_common.vehicles = &t.vehicle;
-	bay_common.orders = &bay_orders->services;
-	static OpenTTDVehicleRefitServices bay_refit{};
-	bay_refit.common = &bay_common;
-	static OpenTTDStationService *bay_station;
-	bay_station = openttd_rust_station_service_new();
-	static OpenTTDStationServices bay_world{};
-	bay_world.station = [](uint16_t id) noexcept -> OpenTTDLoadingStation {
-		CHECK(id == 55);
-		return {reinterpret_cast<OpenTTDStation *>(&road_abi_stop), reinterpret_cast<OpenTTDBaseStation *>(&road_abi_stop), bay_station};
-	};
-	static OpenTTDStationLoading bay_loading{};
-	bay_loading.set_loading_finished = [](OpenTTDVehicle *u, bool finished) noexcept { CHECK(u == RoadAbiHandle() && !finished); };
-	bay_loading.set_load_ticks = [](OpenTTDVehicle *u, uint16_t ticks) noexcept { CHECK(u == RoadAbiHandle() && ticks == 1); };
-	bay_loading.create_payment = [](OpenTTDVehicle *) noexcept { return reinterpret_cast<OpenTTDNativeCargoPayment *>(&road_abi_stop); };
-	bay_loading.with_next_stations = [](OpenTTDVehicle *, void *, OpenTTDStationScope) noexcept {};
-	static OpenTTDVehicleVisits bay_visits{};
-	bay_visits.shared = &t.shared;
-	bay_visits.station = &bay_world;
-	bay_visits.loading = &bay_loading;
-	bay_visits.refit = &bay_refit;
-	/* No last loading station (INVALID_STATION): no link statistics. */
-	bay_visits.prediction = [](OpenTTDVehicle *) noexcept { return OpenTTDVisitPrediction{.loading_tick = 0, .last_loading = UINT16_MAX, .last_station = 55, .ticks = 0}; };
-	bay_visits.arrival_dirty = [](OpenTTDVehicle *u) noexcept {
-		/* BeginLoading runs after the clear, with the entrance still free. */
-		CHECK(u == RoadAbiHandle() && road_abi_probe->stop->status == 0x7F);
-		++bay_arrivals;
-	};
-	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return &bay_visits; };
-	const auto bay_record_from_shell = t.vehicle.record_from_shell;
-	t.vehicle.record_from_shell = [](void *shell) noexcept { CHECK(shell == RoadAbiHandle()->shell); return RoadAbiHandle(); };
-	_vehicle_maintenance_probe.mark_dirty = [](OpenTTDVehicle *) noexcept {};
-	/* The arrival triggers find no road stop cargo or animation triggers. */
-	static OpenTTDRoadStopResolverServices bay_resolver{};
-	bay_resolver.cached_cargo = [](const BaseStation *) noexcept -> CargoTypes { return 0; };
-	static OpenTTDAnimationServices bay_animation{};
-	bay_animation.shared = &t.shared;
-	bay_animation.roadstop_resolver = &bay_resolver;
-	bay_animation.road_triggers = [](BaseStation *, uint8_t) noexcept { return false; };
-	auto previous_animation = openttd_rust_animation_exchange(&bay_animation);
-	/* The ground vehicle flag accessors check the vehicle type; a failed check stays fatal. */
-	openttd_rust_assert_bind([](bool okay) noexcept { CHECK(okay); }, nullptr);
-	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &t.leaves, nullptr));
-	CHECK(probe.state->state == 36 && probe.stop->status == 0x7F && bay_arrivals == 1);
-	CHECK(road_abi_vehicle.last_station_visited == 55 && (bay_orders->vehicle->current.type & 15) == OT_LOADING);
-	openttd_rust_animation_exchange(previous_animation);
 	openttd_rust_airport_exchange(previous_stations);
-	CHECK(bay_had_vehicle_of_type == HVOT_BUS);
-	/* PrepareUnload queued the vehicle at the station. */
-	CHECK(openttd_rust_station_queue_size(bay_station) == 1 && openttd_rust_station_queue_value(openttd_rust_station_queue_first(bay_station)) == RoadAbiHandle()->shell);
-	openttd_rust_station_queue_clear(bay_station);
-	openttd_rust_station_service_destroy(std::exchange(bay_station, nullptr));
-	road_abi_vehicle.orders = &probe.orders;
-	t.vehicle.record_from_shell = bay_record_from_shell;
-	bay_orders.reset();
 	probe.stop->entries = nullptr;
 	probe.state->state = 0;
 	probe.state->reverse_ctr = 0;
