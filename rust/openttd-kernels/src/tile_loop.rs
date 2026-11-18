@@ -215,7 +215,7 @@ unsafe fn run_batch<const AMBIENT: bool>(
     let shared = unsafe { &*s.shared };
     let size_y: c_uint = 1 << log_y;
     let ground = ground::TileLoop::new(
-        crate::map_func::World::new(shared),
+        &crate::map_func::World::new(shared),
         size_y,
         &s.ground,
         trees::LoopSettings {

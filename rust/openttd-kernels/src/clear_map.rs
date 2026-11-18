@@ -78,8 +78,7 @@ pub(crate) fn get_clear_counter(m: &TileTypeAccess, t: TileIndex) -> Option<u8> 
     ))
 }
 /// `GetClearCounter` over fields already checked as `MP_CLEAR`.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn get_clear_counter_from_fields(fields: &TileFields<'_>) -> u8 {
     fields.m5() >> 5
 }
@@ -94,8 +93,7 @@ pub(crate) fn add_clear_density(m: &TileTypeAccess, t: TileIndex, d: i32) -> Opt
     clippy::cast_sign_loss,
     reason = "`t.m5() += d` stores the int sum back into the original uint8_t m5"
 )]
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn add_clear_density_from_fields(
     m: &TileTypeAccess,
     t: TileIndex,
@@ -116,8 +114,7 @@ pub(crate) fn add_clear_counter(m: &TileTypeAccess, t: TileIndex, c: i32) -> Opt
     clippy::cast_sign_loss,
     reason = "`t.m5() += c << 5` stores the int sum back into the original uint8_t m5"
 )]
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn add_clear_counter_from_fields(
     m: &TileTypeAccess,
     t: TileIndex,
@@ -142,8 +139,7 @@ pub(crate) fn set_clear_ground_density(
     clippy::cast_possible_truncation,
     reason = "`t.m5() = 0 << 5 | type << 2 | density` stores into the original uint8_t m5"
 )]
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn set_clear_ground_density_from_fields(
     m: &TileTypeAccess,
     t: TileIndex,
@@ -222,8 +218,7 @@ pub(crate) struct ClearTile<'w> {
 }
 impl<'w> ClearTile<'w> {
     /// Probe `tile` once. `world.types` carries no native handler.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn new(world: &'w World<'w>, tile: TileIndex) -> Self {
         Self {
             world,
@@ -232,14 +227,12 @@ impl<'w> ClearTile<'w> {
         }
     }
     /// The tile.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn tile(self) -> TileIndex {
         self.tile
     }
     /// `IsSnowTile`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn is_snow_tile(self) -> bool {
         let Self {
             world,
@@ -248,12 +241,11 @@ impl<'w> ClearTile<'w> {
         } = self;
         match fields {
             Some(fields) => is_snow_tile_from_fields(&fields),
-            None => world.asserted(move |m| is_snow_tile(m, tile)),
+            None => asserted(world, move |m| is_snow_tile(m, tile)),
         }
     }
     /// `GetClearGround`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn get_clear_ground(self) -> ClearGround {
         let Self {
             world,
@@ -262,18 +254,16 @@ impl<'w> ClearTile<'w> {
         } = self;
         match fields {
             Some(fields) => get_clear_ground_from_fields(&fields),
-            None => world.asserted(move |m| get_clear_ground(m, tile)),
+            None => asserted(world, move |m| get_clear_ground(m, tile)),
         }
     }
     /// `IsClearGround`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn is_clear_ground(self, ct: ClearGround) -> bool {
         self.get_clear_ground() == ct
     }
     /// `GetClearDensity`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn get_clear_density(self) -> u8 {
         let Self {
             world,
@@ -282,12 +272,11 @@ impl<'w> ClearTile<'w> {
         } = self;
         match fields {
             Some(fields) => get_clear_density_from_fields(&fields),
-            None => world.asserted(move |m| get_clear_density(m, tile)),
+            None => asserted(world, move |m| get_clear_density(m, tile)),
         }
     }
     /// `GetClearCounter`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn get_clear_counter(self) -> u8 {
         let Self {
             world,
@@ -296,12 +285,11 @@ impl<'w> ClearTile<'w> {
         } = self;
         match fields {
             Some(fields) => get_clear_counter_from_fields(&fields),
-            None => world.asserted(move |m| get_clear_counter(m, tile)),
+            None => asserted(world, move |m| get_clear_counter(m, tile)),
         }
     }
     /// `AddClearDensity`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn add_clear_density(self, d: i32) {
         let Self {
             world,
@@ -311,12 +299,11 @@ impl<'w> ClearTile<'w> {
         match fields {
             Some(fields) => add_clear_density_from_fields(&world.types, tile, &fields, d)
                 .expect("live map scalar"),
-            None => world.asserted(move |m| add_clear_density(m, tile, d)),
+            None => asserted(world, move |m| add_clear_density(m, tile, d)),
         }
     }
     /// `AddClearCounter`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn add_clear_counter(self, c: i32) {
         let Self {
             world,
@@ -326,12 +313,11 @@ impl<'w> ClearTile<'w> {
         match fields {
             Some(fields) => add_clear_counter_from_fields(&world.types, tile, &fields, c)
                 .expect("live map scalar"),
-            None => world.asserted(move |m| add_clear_counter(m, tile, c)),
+            None => asserted(world, move |m| add_clear_counter(m, tile, c)),
         }
     }
     /// `SetClearGroundDensity`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn set_clear_ground_density(self, r#type: ClearGround, density: u32) {
         let Self {
             world,
@@ -341,9 +327,11 @@ impl<'w> ClearTile<'w> {
         match fields {
             Some(fields) => {
                 set_clear_ground_density_from_fields(&world.types, tile, &fields, r#type, density)
-                    .expect("live map scalar")
+                    .expect("live map scalar");
             }
-            None => world.asserted(move |m| set_clear_ground_density(m, tile, r#type, density)),
+            None => asserted(world, move |m| {
+                set_clear_ground_density(m, tile, r#type, density)
+            }),
         }
     }
     /// The field proof, taken where `UpdateFences` asserts
@@ -351,8 +339,7 @@ impl<'w> ClearTile<'w> {
     /// write to `m5`: present when the clear proof holds and either the build does not assert
     /// or the ground read from it is `CLEAR_FIELDS`, so none of the field accessors'
     /// `GetClearGround(t) == CLEAR_FIELDS` assertions could fire.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn field(self) -> FieldTile<'w> {
         let Self {
             world,
@@ -380,20 +367,17 @@ pub(crate) struct FieldTile<'w> {
 }
 impl FieldTile<'_> {
     /// The tile.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn tile(self) -> TileIndex {
         self.tile
     }
     /// Whether the proof is present.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn is_proven(self) -> bool {
         self.fields.is_some()
     }
     /// `GetFence`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn get_fence(self, side: DiagDirection) -> u32 {
         let Self {
             world,
@@ -403,13 +387,13 @@ impl FieldTile<'_> {
         let not_reached = || crate::services_assert::not_reached();
         match fields {
             Some(fields) => get_fence(&fields, side, not_reached),
-            None => world
-                .asserted(move |m| Some(get_fence(&require_field(m, tile)?, side, not_reached))),
+            None => asserted(world, move |m| {
+                Some(get_fence(&require_field(m, tile)?, side, not_reached))
+            }),
         }
     }
     /// `GetFieldType`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn get_field_type(self) -> u32 {
         let Self {
             world,
@@ -418,12 +402,13 @@ impl FieldTile<'_> {
         } = self;
         match fields {
             Some(fields) => get_field_type(&fields),
-            None => world.asserted(move |m| Some(get_field_type(&require_field(m, tile)?))),
+            None => asserted(world, move |m| {
+                Some(get_field_type(&require_field(m, tile)?))
+            }),
         }
     }
     /// `GetIndustryIndexOfField`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn get_industry_index_of_field(self) -> IndustryID {
         let Self {
             world,
@@ -432,11 +417,19 @@ impl FieldTile<'_> {
         } = self;
         match fields {
             Some(fields) => get_industry_index_of_field(&fields),
-            None => {
-                world.asserted(move |m| Some(get_industry_index_of_field(&require_field(m, tile)?)))
-            }
+            None => asserted(world, move |m| {
+                Some(get_industry_index_of_field(&require_field(m, tile)?))
+            }),
         }
     }
+}
+
+/// `World::asserted` for a failed proof, kept out of line so each proof's methods stay a
+/// two-arm match.
+#[cold]
+#[inline(never)]
+fn asserted<T>(world: &World<'_>, read: impl Fn(&TileTypeAccess) -> Option<T>) -> T {
+    world.asserted(read)
 }
 
 /// Raw adapter: `IsSnowTile` over a base tile, for files no pass has finished yet.

@@ -1,0 +1,14 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/ground.rs | fn update_fence | allow clippy::inline_always",
+    "before": 0,
+    "after": 1,
+    "operation": "ground::update_fence",
+    "source_contract": "`UpdateFences` (src/clear_cmd.cpp:170-184) loops over the four diagonal directions in order; each iteration reads `GetFence`, offsets to the neighbour with `TileOffsByDiagDir(dir)`, tests the neighbour for a field and may call `SetFence`.",
+    "reason": "#1014's repair: `update_fence` is one iteration, called once per direction in DIAGDIR order so that each direction's offset and fence bits are constants. With `#[inline]` the compiler keeps it out of line and the clear loop's `generate-tgp-256-1` cost rises by 346.6M instructions (6,415,180 calls); `update_fences` beside it carries the same allowance at base.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires if the compiler inlines the four calls without the attribute, or when the clear tile loop is no longer on the measured hot path."
+  }
+]

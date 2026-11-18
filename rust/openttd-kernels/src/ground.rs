@@ -259,10 +259,9 @@ impl<'a> TileLoop<'a> {
     /// The batch's context over `world`, whose reader is stripped of its native handler: the
     /// bodies probe preconditions without assertions ([`ClearTile`]) and report a failed one
     /// through `World::asserted`, which retries with the shared table's handler.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn new(
-        world: World<'a>,
+        world: &World<'a>,
         size_y: u32,
         ground: &'a crate::tile_loop::GroundServices,
         settings: crate::trees::LoopSettings,
@@ -270,7 +269,8 @@ impl<'a> TileLoop<'a> {
         Self {
             world: World {
                 types: world.types.without_native_assert(),
-                ..world
+                shared: world.shared,
+                dimensions: world.dimensions,
             },
             size_y,
             ground,
@@ -1174,7 +1174,7 @@ mod tests {
     /// The batch context `tile_loop::run` builds, over this thread's map.
     fn tile_loop(s: &'static Services, landscape: LandscapeType) -> TileLoop<'static> {
         TileLoop::new(
-            World::new(s),
+            &World::new(s),
             64,
             Box::leak(Box::new(crate::tile_loop::GroundServices {
                 climate: landscape,
