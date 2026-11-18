@@ -24,7 +24,7 @@ use crate::map_func::{Map, World, tile_index_diff_c_by_diag_dir};
 use crate::movement::CachedTable;
 use crate::rail_type::RailTypes;
 use crate::services::Services;
-use crate::tile_type::{TileIndex, TileType};
+use crate::tile_type::TileIndex;
 use crate::tilearea::TileArea;
 use crate::track_func::{
     set_trackdir_bit_iterator, track_bits_to_trackdir_bits, track_status_to_track_bits,
@@ -134,8 +134,7 @@ fn get_water_tracks(movement: &CachedTable<'_>, tile: TileIndex) -> TrackBits {
 /// `IsAqueductTile`: `IsBridgeTile` (the tile type before `IsBridge`, which
 /// asserts it) and then the transport type.
 fn is_aqueduct_tile(world: &World<'_>, tile: TileIndex) -> bool {
-    world.kind(tile) == TileType::MP_TUNNELBRIDGE
-        && world.bridge(tile.0)
+    world.bridge_tile(tile)
         && TransportType(world.tunnel_bridge_transport(tile.0)) == TransportType::TRANSPORT_WATER
 }
 

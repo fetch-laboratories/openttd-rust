@@ -2797,7 +2797,7 @@ fn get_current_max_speed<'w, 'a: 'w>(
 
         /* Vehicle is on the middle part of a bridge. */
         if u.state() == RVSB_WORMHOLE && !u.v.vehstatus().test(VehState::Hidden) {
-            let bridge_type = world().bridge_type(u.v.tile().0);
+            let bridge_type = world().bridge_type(u.v.tile());
             let speed = service!(crate::movement::table(ss).tunnel_bridge().speed)(bridge_type);
             max_speed = max_speed.min(i32::from(speed) * 2);
         }

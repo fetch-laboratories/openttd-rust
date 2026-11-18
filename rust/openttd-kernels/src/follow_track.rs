@@ -699,8 +699,8 @@ pub(crate) fn get_speed_limit_with_road(
     let mut max_speed = i32::MAX; // no limit
 
     /* Check for on-bridge speed limit */
-    if mode != WATER && w.kind(old_tile) == TileType::MP_TUNNELBRIDGE && w.bridge(old_tile.0) {
-        let mut spd = i32::from((m.tunnel_bridge().speed)(w.bridge_type(old_tile.0)));
+    if mode != WATER && w.bridge_tile(old_tile) {
+        let mut spd = i32::from((m.tunnel_bridge().speed)(w.bridge_type(old_tile)));
         if mode == ROAD {
             spd *= 2;
         }

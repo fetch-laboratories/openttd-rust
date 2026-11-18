@@ -30,7 +30,7 @@ fn valid_bridge(tb: &TunnelBridgeServices, bridge_type: u32) -> bool {
 
 fn bridge_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE && w.bridge(tile)
+    valid(&w, tile) && w.bridge_tile(TileIndex(tile))
 }
 
 fn tunnel_tile(s: &Services, tile: u32) -> bool {
@@ -44,7 +44,7 @@ pub extern "C" fn openttd_rust_script_bridge_type(s: &Services, tile: u32) -> u3
     if !bridge_tile(s, tile) {
         return u32::MAX;
     }
-    world(s).bridge_type(tile)
+    world(s).bridge_type(TileIndex(tile))
 }
 
 /// `ScriptBridge::GetMaxSpeed`.

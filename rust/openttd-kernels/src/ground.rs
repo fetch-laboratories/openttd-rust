@@ -711,7 +711,7 @@ pub(crate) fn tile_loop_tunnel_bridge(c: &TileLoop<'_>, tile: TileIndex) {
             /* As long as we do not have a snow density, we want to use the density
              * from the entry edge. For tunnels this is the lowest point for bridges the highest point.
              * (Independent of foundations) */
-            let z = if w.bridge(tile.0) {
+            let z = if w.bridge(tile) {
                 w.tile_max_z(tile)
             } else {
                 w.tile_z(tile)
