@@ -2574,10 +2574,6 @@ mod tests {
                         ..crate::test_tables::COMMAND_COSTS
                     })),
                     commands: COMMANDS.get(),
-                    strings: crate::landscape_cmd::Strings {
-                        clear_limit: 201,
-                        ..crate::test_tables::LANDSCAPE.strings
-                    },
                     ..crate::test_tables::LANDSCAPE
                 };
             }
@@ -2623,7 +2619,7 @@ mod tests {
             events(),
             [
                 Event::Expense(crate::economy_type::EXPENSES_CONSTRUCTION, 0),
-                Event::Error(201)
+                Event::Error(crate::table::strings::STR_ERROR_CLEARING_LIMIT_REACHED.0)
             ]
         );
         assert_eq!(company.tree, 5 << 16);

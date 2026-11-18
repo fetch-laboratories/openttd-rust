@@ -19,6 +19,13 @@ use crate::map_type::{LM_LEVEL, LM_LOWER, LM_RAISE};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{SLOPE_E, SLOPE_FLAT, SLOPE_N, SLOPE_S, SLOPE_STEEP, SLOPE_W};
 use crate::strings_type::INVALID_STRING_ID;
+use crate::table::strings::{
+    STR_ERROR_ALREADY_AT_SEA_LEVEL, STR_ERROR_ALREADY_LEVELLED,
+    STR_ERROR_BRIDGE_TOO_HIGH_AFTER_LOWER_LAND, STR_ERROR_CAN_T_BUILD_ON_WATER,
+    STR_ERROR_CLEARING_LIMIT_REACHED, STR_ERROR_EXCAVATION_WOULD_DAMAGE,
+    STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_MUST_DEMOLISH_CANAL_FIRST,
+    STR_ERROR_TERRAFORM_LIMIT_REACHED, STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP, STR_ERROR_TOO_HIGH,
+};
 use crate::tile_type::TileIndex;
 use crate::tile_type::{
     INVALID_TILE, MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION,
@@ -29,25 +36,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ptr::{addr_of, addr_of_mut};
 
 #[repr(C)]
-pub struct Strings {
-    pub canal: u32,
-    pub clear_limit: u32,
-    pub water: u32,
-    pub sea_level: u32,
-    pub high: u32,
-    pub edge: u32,
-    pub bridge: u32,
-    pub bridge_high: u32,
-    pub tunnel: u32,
-    pub terraform_limit: u32,
-    pub levelled: u32,
-}
-#[repr(C)]
 pub struct LandscapeServices {
     pub shared: *const Services,
     pub costs: *const CommandCostServices,
     pub commands: *const CommandServices,
-    pub strings: Strings,
     pub tile_procs: *const TileServices,
     pub water: *const crate::water_cmd::WaterCommandServices,
     pub on_water: extern "C" fn(u32) -> bool,
@@ -346,7 +338,7 @@ impl<'a> World<'a> {
         {
             let class = crate::map_func::World::new(self.s).water_class(tile);
             if flags & F::AUTO != 0 && class == WATER_CLASS_CANAL.0 {
-                out.error(self.a.strings.canal);
+                out.error(STR_ERROR_MUST_DEMOLISH_CANAL_FIRST.0);
                 return;
             }
             if !(self.a.buoy)(tile) || (self.s.tile_owner)(tile) == (self.s.current_company)() {
@@ -360,13 +352,13 @@ impl<'a> World<'a> {
         }
         let company = self.finance(flags, true);
         if Self::clear_limit(company) < 1 {
-            out.error(self.a.strings.clear_limit);
+            out.error(STR_ERROR_CLEARING_LIMIT_REACHED.0);
             return;
         }
         if self.indirectly_cleared(tile) {
             if flags & F::NO_WATER != 0 && (self.s.has_water_class)(tile) && (self.a.on_water)(tile)
             {
-                out.error(self.a.strings.water);
+                out.error(STR_ERROR_CAN_T_BUILD_ON_WATER.0);
                 return;
             }
         } else {
@@ -570,17 +562,17 @@ impl<'a> World<'a> {
                             self.s,
                         );
                         if direction == 1 && height <= high {
-                            out.error(self.a.strings.bridge);
+                            out.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                             return t;
                         }
                         if direction == -1 && height > low + i32::from((self.a.max_bridge_height)())
                         {
-                            out.error(self.a.strings.bridge_high);
+                            out.error(STR_ERROR_BRIDGE_TOO_HIGH_AFTER_LOWER_LAND.0);
                             return t;
                         }
                     }
                     if direction == -1 && (self.a.tunnel_in_way)(t, low) {
-                        out.error(self.a.strings.tunnel);
+                        out.error(STR_ERROR_EXCAVATION_WOULD_DAMAGE.0);
                         return t;
                     }
                 }
@@ -621,7 +613,7 @@ impl<'a> World<'a> {
         }
         let company = self.finance(flags, false);
         if !company.is_null() && (Self::terraform_limit(company) as usize) < ts.heights.len() {
-            out.error(self.a.strings.terraform_limit);
+            out.error(STR_ERROR_TERRAFORM_LIMIT_REACHED.0);
             return INVALID_TILE;
         }
         if flags & F::EXECUTE != 0 {
@@ -648,11 +640,11 @@ impl<'a> World<'a> {
     }
     fn tile_height(&self, ts: &mut TerraformerState, out: Cost<'_>, tile: u32, height: i32) -> u32 {
         if height < 0 {
-            out.error(self.a.strings.sea_level);
+            out.error(STR_ERROR_ALREADY_AT_SEA_LEVEL.0);
             return INVALID_TILE;
         }
         if height > i32::from(unsafe { self.s.settings().height_limit.read() }) {
-            out.error(self.a.strings.high);
+            out.error(STR_ERROR_TOO_HIGH.0);
             return INVALID_TILE;
         }
         if height == ts.height(self, tile) {
@@ -670,7 +662,7 @@ impl<'a> World<'a> {
             if y == 1 {
                 y = 0;
             }
-            out.error(self.a.strings.edge);
+            out.error(STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP.0);
             return y * self.map.size_x() + x;
         }
         if self.map.tile_y(TileIndex(tile)) >= 1 {
@@ -753,16 +745,16 @@ impl<'a> World<'a> {
         };
         if h > u32::from(unsafe { self.s.settings().height_limit.read() }) {
             out.error(if old == 0 {
-                self.a.strings.sea_level
+                STR_ERROR_ALREADY_AT_SEA_LEVEL.0
             } else {
-                self.a.strings.high
+                STR_ERROR_TOO_HIGH.0
             });
             return (0, INVALID_TILE);
         }
         let mut money = crate::command::available_money(self.cmd);
         out.set(0);
         last.error(if mode == LM_LEVEL {
-            self.a.strings.levelled
+            STR_ERROR_ALREADY_LEVELLED.0
         } else {
             INVALID_STRING_ID
         });
@@ -770,7 +762,7 @@ impl<'a> World<'a> {
         let company = self.finance(flags, false);
         let mut limit = Self::terraform_limit(company);
         if limit == 0 {
-            out.error(self.a.strings.terraform_limit);
+            out.error(STR_ERROR_TERRAFORM_LIMIT_REACHED.0);
             return (0, INVALID_TILE);
         }
         let mut error = INVALID_TILE;
@@ -781,7 +773,7 @@ impl<'a> World<'a> {
                 error = self.terraform_do(ret, t, SLOPE_N, current <= h, flags & !F::EXECUTE);
                 if !ret.ok() {
                     last.take(ret);
-                    if last.message() == self.a.strings.terraform_limit {
+                    if last.message() == STR_ERROR_TERRAFORM_LIMIT_REACHED.0 {
                         limit = 0;
                     }
                     break;
@@ -944,12 +936,8 @@ pub(crate) fn terraform_command(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDLandscapeCommandStrings" ["landscape"] => crate::landscape_cmd::Strings {
-        canal, clear_limit, water, sea_level, high, edge, bridge, bridge_high,
-        tunnel, terraform_limit, levelled,
-    };
     "OpenTTDLandscapeCommandServices" ["landscape"] => crate::landscape_cmd::LandscapeServices {
-        shared, costs, commands, strings, tile_procs, water, on_water, coast, buoy, canal,
+        shared, costs, commands, tile_procs, water, on_water, coast, buoy, canal,
         max_bridge_height, freeform_edges, editor, founding,
         tunnel_in_way, mark_dirty_height, set_height, paused,
     };

@@ -661,7 +661,6 @@ const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcep
 	};
 	static const OpenTTDLandscapeCommandServices services{
 		.shared = &GetRustSharedServices(), .costs = &GetRustCommandCostServices(), .commands = &GetRustCommandServices(),
-		.strings = {STR_ERROR_MUST_DEMOLISH_CANAL_FIRST, STR_ERROR_CLEARING_LIMIT_REACHED, STR_ERROR_CAN_T_BUILD_ON_WATER, STR_ERROR_ALREADY_AT_SEA_LEVEL, STR_ERROR_TOO_HIGH, STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_BRIDGE_TOO_HIGH_AFTER_LOWER_LAND, STR_ERROR_EXCAVATION_WOULD_DAMAGE, STR_ERROR_TERRAFORM_LIMIT_REACHED, STR_ERROR_ALREADY_LEVELLED},
 		.tile_procs = &tiles, .water = &GetRustWaterCommandServices(),
 		.on_water = RustOnWater,
 		.coast = [](uint32_t t) noexcept { return IsCoastTile(TileIndex{t}); },

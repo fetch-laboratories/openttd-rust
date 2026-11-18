@@ -5,9 +5,6 @@
 #include "tile_owner_ffi.h"
 #include "trees_ffi.h"
 struct OpenTTDTownFoundingServices;
-struct OpenTTDLandscapeCommandStrings {
-	uint32_t canal, clear_limit, water, sea_level, high, edge, bridge, bridge_high, tunnel, terraform_limit, levelled;
-};
 struct OpenTTDLandscapeTileServices {
 	void (*clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*terraform)(OpenTTDCommandCost *, uint32_t, uint16_t, int32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(terraform);
@@ -23,7 +20,6 @@ struct OpenTTDLandscapeCommandServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCommandCostServices *costs;
 	const OpenTTDCommandServices *commands;
-	OpenTTDLandscapeCommandStrings strings;
 	const OpenTTDLandscapeTileServices *tile_procs;
 	const OpenTTDWaterCommandServices *water;
 	bool (*on_water)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(on_water);
