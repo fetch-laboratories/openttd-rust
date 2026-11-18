@@ -12,7 +12,17 @@
 //! live and serialized by the game-state mutex for the synchronous call. Every field is
 //! read and written in place at the original's observation point, and no owner borrow spans
 //! a service that can reenter or mutate it.
-#![allow(unsafe_code)]
+#![allow(
+    unsafe_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines,
+    clippy::verbose_bit_mask,
+    clippy::items_after_statements,
+    clippy::collapsible_if,
+    clippy::if_not_else
+)]
 
 use crate::company_type::Owner;
 use crate::direction_func::{
@@ -459,7 +469,7 @@ struct Game<'a> {
     movement: CachedTable<'a>,
     /// The controller's native stack slot for `CanBuildTramTrackOnTile`; null elsewhere.
     road: *mut crate::road_cmd::CommandSlot,
-    /// The map dimensions, read once per entry. Orders, sound, NewGRF, movement, crash and
+    /// The map dimensions, read once per entry. Orders, sound, `NewGRF`, movement, crash and
     /// viewport callbacks cannot load or reset the map or yield the game-state mutex; nested
     /// entries have their own `Game`.
     map: OnceCell<Map>,
@@ -1640,56 +1650,54 @@ impl<'a> Game<'a> {
                 return Trackdir::INVALID_TRACKDIR;
             }
             dir = Trackdir(diag_dir_to_diag_trackdir(diag_dir.0, self.check()));
-        } else {
-            if already_reversed
-                && (prev.v.tile() != tile
-                    || (prev_state < Trackdir::TRACKDIR_END.0
-                        && is_reversing_road_trackdir(prev_state, self.check())))
-            {
-                /*
-                 * The vehicle has reversed, but did not go straight back.
-                 * It immediately turn onto another tile. This means that
-                 * the roadstate of the previous vehicle cannot be used
-                 * as the direction we have to go with this vehicle.
-                 *
-                 * Next table is build in the following way:
-                 *  - first row for when the vehicle in front went to the northern or
-                 *    western tile, second for southern and eastern.
-                 *  - columns represent the entry direction.
-                 *  - cell values are determined by the Trackdir one has to take from
-                 *    the entry dir (column) to the tile in north or south by only
-                 *    going over the trackdirs used for turning 90 degrees, i.e.
-                 *    TRACKDIR_{UPPER,RIGHT,LOWER,LEFT}_{N,E,S,W}.
-                 */
-                let north = if prev.v.tile() != tile {
-                    prev.v.tile() < tile
-                } else {
-                    prev_state == Trackdir::TRACKDIR_RVREV_NW.0
-                        || prev_state == Trackdir::TRACKDIR_RVREV_NE.0
-                };
-                const REVERSED_TURN_LOOKUP: [[Trackdir; 4]; 2] = [
-                    [
-                        Trackdir::TRACKDIR_UPPER_W,
-                        Trackdir::TRACKDIR_RIGHT_N,
-                        Trackdir::TRACKDIR_LEFT_N,
-                        Trackdir::TRACKDIR_UPPER_E,
-                    ],
-                    [
-                        Trackdir::TRACKDIR_RIGHT_S,
-                        Trackdir::TRACKDIR_LOWER_W,
-                        Trackdir::TRACKDIR_LOWER_E,
-                        Trackdir::TRACKDIR_LEFT_S,
-                    ],
-                ];
-                dir = REVERSED_TURN_LOOKUP[if north { 0 } else { 1 }]
-                    [usize::from(reverse_diag_dir(entry_dir, self.check()).0)];
-            } else if crate::bitmath_func::has_bit(prev_state, RVS_IN_DT_ROAD_STOP) {
-                dir = Trackdir(prev_state & RVSB_ROAD_STOP_TRACKDIR_MASK);
-            } else if prev_state < Trackdir::TRACKDIR_END.0 {
-                dir = Trackdir(prev_state);
+        } else if already_reversed
+            && (prev.v.tile() != tile
+                || (prev_state < Trackdir::TRACKDIR_END.0
+                    && is_reversing_road_trackdir(prev_state, self.check())))
+        {
+            /*
+             * The vehicle has reversed, but did not go straight back.
+             * It immediately turn onto another tile. This means that
+             * the roadstate of the previous vehicle cannot be used
+             * as the direction we have to go with this vehicle.
+             *
+             * Next table is build in the following way:
+             *  - first row for when the vehicle in front went to the northern or
+             *    western tile, second for southern and eastern.
+             *  - columns represent the entry direction.
+             *  - cell values are determined by the Trackdir one has to take from
+             *    the entry dir (column) to the tile in north or south by only
+             *    going over the trackdirs used for turning 90 degrees, i.e.
+             *    TRACKDIR_{UPPER,RIGHT,LOWER,LEFT}_{N,E,S,W}.
+             */
+            let north = if prev.v.tile() != tile {
+                prev.v.tile() < tile
             } else {
-                return Trackdir::INVALID_TRACKDIR;
-            }
+                prev_state == Trackdir::TRACKDIR_RVREV_NW.0
+                    || prev_state == Trackdir::TRACKDIR_RVREV_NE.0
+            };
+            const REVERSED_TURN_LOOKUP: [[Trackdir; 4]; 2] = [
+                [
+                    Trackdir::TRACKDIR_UPPER_W,
+                    Trackdir::TRACKDIR_RIGHT_N,
+                    Trackdir::TRACKDIR_LEFT_N,
+                    Trackdir::TRACKDIR_UPPER_E,
+                ],
+                [
+                    Trackdir::TRACKDIR_RIGHT_S,
+                    Trackdir::TRACKDIR_LOWER_W,
+                    Trackdir::TRACKDIR_LOWER_E,
+                    Trackdir::TRACKDIR_LEFT_S,
+                ],
+            ];
+            dir = REVERSED_TURN_LOOKUP[usize::from(!north)]
+                [usize::from(reverse_diag_dir(entry_dir, self.check()).0)];
+        } else if crate::bitmath_func::has_bit(prev_state, RVS_IN_DT_ROAD_STOP) {
+            dir = Trackdir(prev_state & RVSB_ROAD_STOP_TRACKDIR_MASK);
+        } else if prev_state < Trackdir::TRACKDIR_END.0 {
+            dir = Trackdir(prev_state);
+        } else {
+            return Trackdir::INVALID_TRACKDIR;
         }
 
         /* Do some sanity checking. */

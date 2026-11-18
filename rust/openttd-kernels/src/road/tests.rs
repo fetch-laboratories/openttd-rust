@@ -131,7 +131,7 @@ mod controller {
         leaves: &'static Leaves,
     }
     impl Fixture {
-        fn new(owner: u8, shared: crate::services::Services) -> Self {
+        fn new(owner: u8, shared: &crate::services::Services) -> Self {
             let vehicle = Box::leak(Box::new(crate::vehicle::VehicleServices {
                 newgrf,
                 ..VEHICLE
@@ -145,7 +145,7 @@ mod controller {
                 local_company,
                 station_had_vehicle_of_type: had_vehicle_of_type,
                 station_add_vehicle_of_type: add_vehicle_of_type,
-                ..shared
+                ..*shared
             }));
             let leaves = Box::leak(Box::new(Leaves {
                 vehicle,
@@ -230,7 +230,7 @@ mod controller {
             ROADTYPE.set(road_type);
             BUS.set(bus);
             for owner in [LOCAL, LOCAL + 1] {
-                let mut f = Fixture::new(owner, SHARED);
+                let mut f = Fixture::new(owner, &SHARED);
                 HAD.set(0);
                 f.game().road_veh_arrives_at(f.part(), STATION);
                 assert_eq!(HAD.get(), bit.0, "bus {bus}, road type {road_type}");
@@ -320,7 +320,7 @@ mod controller {
         }));
         let mut f = Fixture::new(
             owner,
-            crate::services::Services {
+            &crate::services::Services {
                 station_catchment,
                 ..SHARED
             },
@@ -386,6 +386,7 @@ mod controller {
     fn update_speed_of_an_unknown_acceleration_model_takes_the_native_unreachable_path() {
         const NAME: &str = "road::tests::controller::update_speed_of_an_unknown_acceleration_model_takes_the_native_unreachable_path";
         const CHILD: &str = "OPENTTD_ROAD_UPDATE_SPEED_CHILD";
+        static MODEL: u8 = 2;
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["--exact", NAME])
@@ -395,7 +396,6 @@ mod controller {
             assert_eq!(status.code(), Some(NOT_REACHED_EXIT));
             return;
         }
-        static MODEL: u8 = 2;
         let settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
             roadveh_acceleration_model: &raw const MODEL,
             ..crate::settings_type::SettingAddresses::NULL
@@ -405,7 +405,7 @@ mod controller {
             not_reached,
             ..SHARED
         };
-        let mut f = Fixture::new(LOCAL, shared);
+        let mut f = Fixture::new(LOCAL, &shared);
         // SAFETY: The leaked table outlives the child's only call.
         unsafe { crate::services_assert::openttd_rust_assert_bind(no_assertion, f.leaves.shared) };
         let part = f.part();
@@ -421,7 +421,7 @@ mod controller {
     /// `RoadVehUpdateCache` asserts `v->type == VEH_ROAD`, then `v->IsFrontEngine()`,
     /// where the native build asserts. A non-front part fails the second: the native
     /// assertion handler, which ends the child here, gets the failed condition before
-    /// any NewGRF cache or length is touched.
+    /// any `NewGRF` cache or length is touched.
     #[test]
     fn road_veh_update_cache_of_a_part_asserts_that_it_is_the_front_engine() {
         const NAME: &str = "road::tests::controller::road_veh_update_cache_of_a_part_asserts_that_it_is_the_front_engine";
@@ -439,7 +439,7 @@ mod controller {
             native_assert,
             ..crate::test_tables::MOVEMENT
         }));
-        let mut f = Fixture::new(LOCAL, crate::services::Services { movement, ..SHARED });
+        let mut f = Fixture::new(LOCAL, &crate::services::Services { movement, ..SHARED });
         let vehicle = Box::leak(Box::new(crate::vehicle::VehicleServices {
             assertions: true,
             newgrf,

@@ -358,7 +358,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_cache_delete(cache: *mut Cache
         drop(Box::from_raw(cache.cast::<VehicleCacheOwner>()));
     }
 }
-/// `Vehicle::InvalidateNewGRFCacheOfChain`: invalidates cached NewGRF variables of all
+/// `Vehicle::InvalidateNewGRFCacheOfChain`: invalidates cached `NewGRF` variables of all
 /// vehicles in the chain (after the current vehicle).
 ///
 /// # Safety
