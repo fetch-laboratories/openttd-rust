@@ -26,13 +26,10 @@ static const OpenTTDRoadCommandContext *OPENTTD_RUST_CALL RoadSvcBuildRoadContex
 	slot->built = true;
 	return &std::construct_at(&slot->road)->view;
 }
-/** `SetWindowClassesDirty(WC_ROADVEH_LIST)` of `RoadVehicle::OnNewEconomyDay`. */
-static void OPENTTD_RUST_CALL RoadSvcRoadVehListDirty() noexcept { SetWindowClassesDirty(WC_ROADVEH_LIST); }
 
 static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.build_road_context = RoadSvcBuildRoadContext,
 	.ground = &_rust_ground_services<RoadVehicle>,
-	.roadveh_list_dirty = RoadSvcRoadVehListDirty,
 	.shared = &_rust_shared_services,
 	.vehicle = &_rust_vehicle_services,
 };

@@ -228,7 +228,6 @@ pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::Vehi
 pub(crate) const ROAD_LEAVES: crate::road::Leaves = crate::road::Leaves {
     build_road_context: unreachable1,
     ground: ptr::null(),
-    roadveh_list_dirty: unreachable0,
     shared: ptr::null(),
     vehicle: ptr::null(),
 };

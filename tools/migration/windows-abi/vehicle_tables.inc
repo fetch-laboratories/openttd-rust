@@ -65,7 +65,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(shared, tunnel_bridge_direction);
 		VEHICLE_UNUSED(shared, bridge_speed);
 		VEHICLE_UNUSED(leaves, build_road_context);
-		VEHICLE_UNUSED(leaves, roadveh_list_dirty);
 		VEHICLE_UNUSED(vehicle, engine);
 		leaves.ground = &ground;
 		leaves.shared = &shared;

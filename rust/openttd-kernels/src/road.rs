@@ -308,8 +308,6 @@ pub struct Leaves {
     pub build_road_context:
         extern "C" fn(*mut crate::road_cmd::CommandSlot) -> *const crate::road_cmd::CommandContext,
     pub ground: *const GroundServices,
-    /// `SetWindowClassesDirty(WC_ROADVEH_LIST)`.
-    pub roadveh_list_dirty: extern "C" fn(),
     pub shared: *const Services,
     pub vehicle: *const VehicleServices,
 }
@@ -2703,7 +2701,9 @@ impl<'a> Game<'a> {
 
         // SAFETY: The static maintenance table outlives the call.
         (unsafe { &*self.vs.maintenance }.details_dirty)(v.v);
-        service!(self.l.roadveh_list_dirty)();
+        crate::window_func::set_window_classes_dirty(
+            crate::window_type::WindowClass::WC_ROADVEH_LIST,
+        );
     }
 
     /// `RoadVehicle::GetVehicleTrackdir`.
@@ -3024,7 +3024,6 @@ crate::abi::layouts! {
     "OpenTTDRoadLeaves" ["probe"] => Leaves {
         build_road_context,
         ground,
-        roadveh_list_dirty,
         shared,
         vehicle,
     };
