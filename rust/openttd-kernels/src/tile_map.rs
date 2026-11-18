@@ -22,8 +22,7 @@ pub(crate) fn is_tile_type(s: &crate::services::Services, tile: TileIndex, kind:
 
 impl crate::map_func::World<'_> {
     /// `IsTileType`: whether `GetTileType` of the tile is `kind`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
         self.kind(tile) == kind
     }
