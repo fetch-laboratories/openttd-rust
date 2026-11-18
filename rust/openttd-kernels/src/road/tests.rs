@@ -497,6 +497,55 @@ mod controller {
         f.game().road_veh_update_cache(part, false);
     }
 
+    /// `RoadVehUpdateCache` asserts `u->First() == v` for each part. `First()` returns the
+    /// stored link, so a null first link fails the comparison: the native assertion
+    /// handler, which ends the child here, gets the failed condition instead of a Rust
+    /// panic on the null link.
+    #[test]
+    fn road_veh_update_cache_asserts_a_null_first_link_through_the_native_handler() {
+        const NAME: &str = "road::tests::controller::road_veh_update_cache_asserts_a_null_first_link_through_the_native_handler";
+        const CHILD: &str = "OPENTTD_ROAD_UPDATE_CACHE_FIRST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", NAME])
+                .env(CHILD, "1")
+                .status()
+                .unwrap();
+            assert_eq!(status.code(), Some(ASSERTION_EXIT));
+            return;
+        }
+        unsafe extern "C" fn cache(
+            _: *mut crate::vehicle::OpenTTDVehicle,
+        ) -> *mut crate::newgrf_vehicle::Cache {
+            Box::leak(Box::default())
+        }
+        extern "C" fn newgrf_with_cache() -> *const crate::newgrf_vehicle::Services {
+            let mut table = crate::newgrf_vehicle::TEST_TABLE;
+            table.id = id;
+            table.roadtype = roadtype;
+            table.cache = cache;
+            Box::leak(Box::new(table))
+        }
+        let movement = Box::leak(Box::new(crate::movement::MovementServices {
+            native_assert,
+            ..crate::test_tables::MOVEMENT
+        }));
+        let mut f = Fixture::new(LOCAL, &crate::services::Services { movement, ..SHARED });
+        let vehicle = Box::leak(Box::new(crate::vehicle::VehicleServices {
+            assertions: true,
+            newgrf: newgrf_with_cache,
+            ..VEHICLE
+        }));
+        f.leaves = Box::leak(Box::new(Leaves {
+            vehicle,
+            ..*f.leaves
+        }));
+        // SAFETY: The fixture's front record; its first link is broken.
+        unsafe { (*f.record).first = std::ptr::null_mut() };
+        let part = f.part();
+        f.game().road_veh_update_cache(part, false);
+    }
+
     /// `IsStraightRoadTrackdir` is `(dir & 0x06) == 0` over the sixteen trackdirs, and
     /// asserts `IsValidTrackdirForRoadVehicle` first.
     #[test]

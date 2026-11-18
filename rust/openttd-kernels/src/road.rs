@@ -663,7 +663,7 @@ impl<'a> Game<'a> {
         let mut part = Some(v.v);
         while let Some(u) = part {
             /* Check the v->first cache. */
-            self.assert(|| u.first() == v.v);
+            self.assert(|| u.first_link() == Some(v.v));
 
             /* Update the 'first engine' */
             let first_engine = if v.v == u {

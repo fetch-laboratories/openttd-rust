@@ -89,7 +89,7 @@ pub struct CargoInfo {
 pub struct Services {
     pub(crate) vehicle: &'static VehicleServices,
     pub(crate) shared: &'static crate::services::Services,
-    cache: unsafe extern "C" fn(V) -> *mut Cache,
+    pub(crate) cache: unsafe extern "C" fn(V) -> *mut Cache,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub(crate) cargo_classes: unsafe extern "C" fn(u8) -> u16,
     cargo_bitnum: unsafe extern "C" fn(u8) -> u8,

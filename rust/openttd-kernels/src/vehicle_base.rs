@@ -473,7 +473,11 @@ impl crate::vehicle::VehicleRef {
     /// `Vehicle::First`: get the first vehicle of this vehicle chain.
     pub(crate) fn first(self) -> Self {
         // The original dereferences `this->first` unchecked; every live record has one.
-        Self(std::ptr::NonNull::new(read_field!(self.0.as_ptr(), first)).unwrap())
+        self.first_link().unwrap()
+    }
+    /// `Vehicle::First` as stored: the `first` link, `None` where a broken cache holds null.
+    pub(crate) fn first_link(self) -> Option<Self> {
+        std::ptr::NonNull::new(read_field!(self.0.as_ptr(), first)).map(Self)
     }
     /// `Vehicle::Last`: get the last vehicle of this vehicle chain.
     pub(crate) fn last(self) -> Self {
