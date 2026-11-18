@@ -30,6 +30,14 @@ use crate::station_type::{
     MAX_LENGTH_STATION_NAME_CHARS, StationFacilities, StationFacility, StationID, StationType,
 };
 use crate::strings_type::StringID;
+use crate::table::strings::{
+    STR_ERROR_BUOY_IS_IN_USE, STR_ERROR_FLAT_LAND_REQUIRED,
+    STR_ERROR_MUST_REMOVE_RAILWAYPOINT_FIRST, STR_ERROR_MUST_REMOVE_ROADWAYPOINT_FIRST,
+    STR_ERROR_NAME_MUST_BE_UNIQUE, STR_ERROR_SITE_UNSUITABLE,
+    STR_ERROR_TOO_CLOSE_TO_ANOTHER_WAYPOINT, STR_ERROR_TOO_MANY_STATION_SPECS,
+    STR_ERROR_TOO_MANY_STATIONS_LOADING, STR_ERROR_WAYPOINT_ADJOINS_MORE_THAN_ONE_EXISTING,
+    STR_SV_STNAME_BUOY, STR_SV_STNAME_WAYPOINT,
+};
 use crate::tile_type::{TileIndex, TileType};
 use crate::track_type::TrackBits;
 use crate::witness as w;
@@ -182,7 +190,7 @@ impl Ctx<'_> {
             for index in 0..(self.world().pool_size)() {
                 let candidate = self.waypoint(StationID(index as u16));
                 if !candidate.is_null() && (self.s.name_equals)(candidate, args.text, args.length) {
-                    return out.error(self.s.strings.name_unique);
+                    return out.error(STR_ERROR_NAME_MUST_BE_UNIQUE.0);
                 }
             }
         }
@@ -218,7 +226,7 @@ impl Ctx<'_> {
             }
         }
         if !self.rect_contains(wp, tile) {
-            out.error(self.s.strings.unsuitable);
+            out.error(STR_ERROR_SITE_UNSUITABLE.0);
             return StationID::INVALID;
         }
         /* Check if the tile is the base tile of another station */
@@ -232,7 +240,7 @@ impl Ctx<'_> {
             sign_visit((&raw mut search).cast(), st);
         });
         if search.other {
-            out.error(self.s.strings.unsuitable);
+            out.error(STR_ERROR_SITE_UNSUITABLE.0);
             return StationID::INVALID;
         }
         if flags.test(DoCommandFlag::Execute) {
@@ -383,7 +391,7 @@ impl Ctx<'_> {
             if *waypoint == StationID::INVALID {
                 *waypoint = wp;
             } else if *waypoint != wp {
-                return out.error(self.s.strings.waypoint_adjoins_multiple);
+                return out.error(STR_ERROR_WAYPOINT_ADJOINS_MORE_THAN_ONE_EXISTING.0);
             }
         }
         if self.get_axis_for_new_rail_waypoint(tile) != axis {
@@ -404,7 +412,7 @@ impl Ctx<'_> {
                 || tileh.0 & (0x3 << axis.0) == 0
                 || tileh.0 & !(0x3 << axis.0) == 0)
         {
-            return out.error(self.s.strings.flat_land);
+            return out.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
         }
         out.zero();
     }
@@ -530,7 +538,7 @@ impl Ctx<'_> {
             ta: new_location,
             waypoint: true,
             road: false,
-            error_message: StringID(self.s.strings.remove_rail_waypoint),
+            error_message: STR_ERROR_MUST_REMOVE_RAILWAYPOINT_FIRST,
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -544,7 +552,7 @@ impl Ctx<'_> {
         if wp.is_null() && reuse {
             wp = self.find_deleted_waypoint_close_to(
                 center_tile,
-                StringID(self.s.strings.waypoint_name),
+                STR_SV_STNAME_WAYPOINT,
                 CompanyID((self.shared.current_company)()),
                 false,
             );
@@ -552,7 +560,7 @@ impl Ctx<'_> {
         if !wp.is_null() {
             /* Reuse an existing waypoint. */
             if (self.world().station_owner)(wp) != (self.shared.current_company)() {
-                return cost.error(self.s.strings.waypoint_close);
+                return cost.error(STR_ERROR_TOO_CLOSE_TO_ANOTHER_WAYPOINT.0);
             }
             /* Check if we want to expand an already existing waypoint. */
             if self.s.rail_area(wp).tile != TileIndex::INVALID {
@@ -576,12 +584,12 @@ impl Ctx<'_> {
             }
         } else if !(self.s.waypoint_available)() {
             /* Check if we can create a new waypoint. */
-            return cost.error(self.s.strings.too_many_stations);
+            return cost.error(STR_ERROR_TOO_MANY_STATIONS_LOADING.0);
         }
         /* Check if we can allocate a custom spec to this waypoint. */
         let specindex = crate::station_association::allocate(self.s.rail_association, spec, wp);
         if !specindex.valid {
-            return cost.error(self.s.strings.too_many_specs);
+            return cost.error(STR_ERROR_TOO_MANY_STATION_SPECS.0);
         }
         if !flags.test(DoCommandFlag::Execute) {
             return;
@@ -611,7 +619,7 @@ impl Ctx<'_> {
             StationFacilities::from_element(StationFacility::Train).0,
         );
         (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
-        (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
+        (self.s.set_string_id)(wp, STR_SV_STNAME_WAYPOINT.0);
         (self.s.set_train_area)(wp, new_location);
         if (self.s.station_town)(wp).is_null() {
             (self.s.waypoint_default_name)(wp);
@@ -738,7 +746,7 @@ impl Ctx<'_> {
             ta: roadstop_area,
             waypoint: true,
             road: true,
-            error_message: StringID(self.s.strings.remove_road_waypoint),
+            error_message: STR_ERROR_MUST_REMOVE_ROADWAYPOINT_FIRST,
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -753,7 +761,7 @@ impl Ctx<'_> {
         if wp.is_null() && reuse {
             wp = self.find_deleted_waypoint_close_to(
                 center_tile,
-                StringID(self.s.strings.waypoint_name),
+                STR_SV_STNAME_WAYPOINT,
                 CompanyID((self.shared.current_company)()),
                 true,
             );
@@ -764,7 +772,7 @@ impl Ctx<'_> {
                 return cost.error(StringID::INVALID_STRING_ID.0);
             }
             if (self.world().station_owner)(wp) != (self.shared.current_company)() {
-                return cost.error(self.s.strings.waypoint_close);
+                return cost.error(STR_ERROR_TOO_CLOSE_TO_ANOTHER_WAYPOINT.0);
             }
             self.before_add_rect(ret, wp, roadstop_area, StationRectMode::ADD_TEST);
             if !ret.ok() {
@@ -772,7 +780,7 @@ impl Ctx<'_> {
             }
         } else if !(self.s.waypoint_available)() {
             /* Check if we can create a new waypoint. */
-            return cost.error(self.s.strings.too_many_stations);
+            return cost.error(STR_ERROR_TOO_MANY_STATIONS_LOADING.0);
         }
         /* Check if we can allocate a custom spec to this waypoint. */
         let index = unsafe {
@@ -787,7 +795,7 @@ impl Ctx<'_> {
             valid: index >= 0,
         };
         if !specindex.valid {
-            return cost.error(self.s.strings.too_many_specs);
+            return cost.error(STR_ERROR_TOO_MANY_STATION_SPECS.0);
         }
         if !flags.test(DoCommandFlag::Execute) {
             return;
@@ -820,7 +828,7 @@ impl Ctx<'_> {
             .with(StationFacilities::from_element(StationFacility::TruckStop));
         (self.s.set_facility_bits)(wp, facilities.0);
         (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
-        (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
+        (self.s.set_string_id)(wp, STR_SV_STNAME_WAYPOINT.0);
         if (self.s.station_town)(wp).is_null() {
             (self.s.waypoint_default_name)(wp);
         }
@@ -918,7 +926,7 @@ impl Ctx<'_> {
         w::hit(w::WAYPOINT_BUILD_BUOY);
         let (cost, ret, flags, tile) = (call.cost, call.ret, call.flags, args.tile);
         if tile.0 == 0 || !(self.shared.has_water_ground)(tile.0) {
-            return cost.error(self.s.strings.unsuitable);
+            return cost.error(STR_ERROR_SITE_UNSUITABLE.0);
         }
         // `IsBuoyBridgeAboveOk`.
         self.default_bridge_above_ok(ret, tile, StationType::Buoy, StationGfx(0));
@@ -926,17 +934,13 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         if !(self.s.tile_flat)(tile.0) {
-            return cost.error(self.s.strings.unsuitable);
+            return cost.error(STR_ERROR_SITE_UNSUITABLE.0);
         }
         /* Check if there is an already existing, deleted, waypoint close to us that we can reuse. */
-        let mut wp = self.find_deleted_waypoint_close_to(
-            tile,
-            StringID(self.s.strings.buoy_name),
-            CompanyID::NONE,
-            false,
-        );
+        let mut wp =
+            self.find_deleted_waypoint_close_to(tile, STR_SV_STNAME_BUOY, CompanyID::NONE, false);
         if wp.is_null() && !(self.s.waypoint_available)() {
-            return cost.error(self.s.strings.too_many_stations);
+            return cost.error(STR_ERROR_TOO_MANY_STATIONS_LOADING.0);
         }
         cost.set(crate::company::price(PR_BUILD_WAYPOINT_BUOY));
         if !(self.shared.is_water_tile)(tile.0) {
@@ -962,7 +966,7 @@ impl Ctx<'_> {
             (self.s.waypoint_view_invalidate)(wp);
         }
         self.before_add_tile(ret, wp, tile, StationRectMode::ADD_TRY);
-        (self.s.set_string_id)(wp, self.s.strings.buoy_name);
+        (self.s.set_string_id)(wp, STR_SV_STNAME_BUOY.0);
         (self.s.set_facility_bits)(wp, StationFacilities::from_element(StationFacility::Dock).0);
         (self.s.set_station_owner)(wp, CompanyID::NONE.0);
         (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
@@ -1005,7 +1009,7 @@ impl Ctx<'_> {
             false,
             CompanyID((self.shared.current_company)()),
         ) {
-            return cost.error(self.s.strings.buoy_in_use);
+            return cost.error(STR_ERROR_BUOY_IS_IN_USE.0);
         }
         if flags.test(DoCommandFlag::Bankrupt) {
             w::hit(w::WAYPOINT_BANKRUPT);

@@ -48,18 +48,6 @@ class TileIterator;
 struct OpenTTDAirportSize { uint8_t w, h; };
 struct OpenTTDAirportLayout { size_t size; uint8_t rotation; };
 struct OpenTTDAirportLayoutTile { uint32_t tile; uint8_t gfx; };
-struct OpenTTDStationCommandStrings {
-	uint32_t demolish_bridge, flat_land, spread;
-	uint32_t bridge_too_low[9];
-	uint32_t too_many_stations, adjoins_multiple, remove_station, remove_rail_waypoint, remove_road_waypoint, remove_road_stop;
-	uint32_t name_unique, unsuitable;
-	uint32_t too_many_specs, disallowed_tracks, disallowed_length, remove_signals;
-	uint32_t no_station;
-	uint32_t drive_direction, drive_corner, drive_junction, drive_town, no_road, unsuitable_road, too_many_truck, too_many_bus;
-	uint32_t refuse_noise, refuse_airport, close_airport, aircraft_in_way;
-	uint32_t demolish_railroad, demolish_building, demolish_airport, demolish_cargo_tram, demolish_truck, demolish_passenger_tram, demolish_bus, buoy_in_way, demolish_dock, object_in_way, oilrig_name;
-	uint32_t buoy_in_use, buoy_name, waypoint_adjoins_multiple, waypoint_close, waypoint_name;
-};
 /* Each pointer is borrowed synchronously under the game-state mutex. Specs and
  * bridge tables remain native and immutable during the entry. No reference to
  * station/map storage survives a callback. All leaves are direct noexcept calls;
@@ -71,7 +59,6 @@ struct OpenTTDStationCommandServices {
 	const OpenTTDCommandCostServices *cost;
 	const OpenTTDCommandServices *command;
 	const OpenTTDTownAuthorityServices *authority;
-	OpenTTDStationCommandStrings strings;
 	uint8_t (*spread)() noexcept OPENTTD_SERVICE_DEFAULT(spread);
 	OpenTTDStationBridgeInfo (*default_bridge_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(default_bridge_info);
 	OpenTTDStationBridgeInfo (*rail_bridge_info)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_bridge_info);
