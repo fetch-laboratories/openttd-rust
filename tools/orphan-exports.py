@@ -319,15 +319,20 @@ def kept_fixture_file() -> tuple[KeptFixture, ...]:
 def apply_kept_fixtures(
     result: dict[str, set[str]], files: dict[str, str], kept: tuple[KeptFixture, ...]
 ) -> None:
-    """Clear each listed export whose kept fixture still names it; flag stale rows."""
+    """Clear each listed export whose kept fixture still uses it; flag stale rows.
+
+    A declaration in the fixture is not a use: it is stripped as the production
+    scan strips declarations.
+    """
     for row in kept:
         fixture = without_comments(
             files.get(row.fixture, ""), row.fixture, strings=True
         )
+        fixture = DECLARATION.sub("", re.sub(r"\bextern\s+(?=\w)", "", fixture))
         if not re.search(r"#\d+", row.owner):
             result[f"kept fixture row names no owner issue | {row.export}"] = set()
         elif row.export not in re.findall(NAME, fixture):
-            result[f"kept fixture no longer names its export | {row.export}"] = set()
+            result[f"kept fixture no longer uses its export | {row.export}"] = set()
         else:
             result.pop(f"no production user | {row.export}", None)
 

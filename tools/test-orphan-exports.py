@@ -76,9 +76,19 @@ class OrphanTests(unittest.TestCase):
             {
                 "no production user | openttd_rust_kept",
                 "no production user | openttd_rust_unlisted",
-                "kept fixture no longer names its export | openttd_rust_kept",
+                "kept fixture no longer uses its export | openttd_rust_kept",
             },
         )
+        # A declaration alone is not a use, with or without its linkage.
+        for declaration in (
+            "void openttd_rust_kept();\nvoid Test() {}",
+            'extern "C" void openttd_rust_kept();\nvoid Test() {}',
+        ):
+            files["src/tests/kept.cpp"] = declaration
+            self.assertIn(
+                "kept fixture no longer uses its export | openttd_rust_kept",
+                ORPHANS.violations(files, kept=kept),
+            )
         unowned = ORPHANS.kept_fixtures(
             "openttd_rust_kept | src/tests/kept.cpp | later\n"
         )
