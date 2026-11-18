@@ -428,7 +428,7 @@ pub(crate) fn get_vehicle_pos_on_build(
     hangar_tile: TileIndex,
     s: &crate::newgrf_airport::Services,
 ) -> u8 {
-    let st = crate::station_map::station_get_by_tile(hangar_tile, s);
+    let st = crate::station_map::station_get_by_tile(hangar_tile, s).cast();
     let spec = crate::newgrf_airport::station_spec(st, s);
     let apc = (s.fta)(spec);
     /* When we click on hangar we know the tile it is on. By that we know

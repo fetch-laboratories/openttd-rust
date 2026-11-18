@@ -137,14 +137,15 @@ pub(crate) fn get_airport_gfx_raw(
 }
 
 /// `Station::GetByTile`: get the station belonging to a specific tile,
-/// retaining its valid-station-or-null lookup.
+/// retaining its valid-station-or-null lookup. Callers that need the
+/// `BaseStation` convert the returned `Station *` themselves.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn station_get_by_tile(
     tile: TileIndex,
     s: &crate::newgrf_airport::Services,
-) -> *mut crate::station::BaseStation {
-    (s.by_tile)(tile.0).cast()
+) -> *mut crate::station::Station {
+    (s.by_tile)(tile.0)
 }
 /// Temporary raw adapter for `water.rs`.
 #[inline]
@@ -152,7 +153,7 @@ pub(crate) fn station_by_tile(
     tile: u32,
     s: &crate::newgrf_airport::Services,
 ) -> *mut crate::station::BaseStation {
-    station_get_by_tile(TileIndex(tile), s)
+    station_get_by_tile(TileIndex(tile), s).cast()
 }
 /// Original `IsHangar` (`station_cmd.cpp`): check whether the given tile is a
 /// hangar, retaining its assertion and airport gate before lookup.
@@ -165,7 +166,7 @@ pub(crate) fn is_hangar(tile: TileIndex, s: &crate::newgrf_airport::Services) ->
     if !is_airport(tile, s.shared()) {
         return false;
     }
-    let st = station_get_by_tile(tile, s);
+    let st = station_get_by_tile(tile, s).cast();
     let spec = crate::newgrf_airport::station_spec(st, s);
     for i in 0..(s.depot_count)(spec) {
         let offset = (s.depot_offset)(spec, i);

@@ -475,11 +475,11 @@ impl StationHandle {
     }
 }
 
-/// `Station::GetByTile(tile)`.
+/// `Station::GetByTile(tile)`, through the shared station map accessor.
 #[inline]
 fn station_get_by_tile(tile: TileIndex) -> StationHandle {
     StationHandle {
-        st: (crate::newgrf_airport::runtime().by_tile)(tile.0),
+        st: crate::station_map::station_get_by_tile(tile, crate::newgrf_airport::runtime()),
     }
 }
 
