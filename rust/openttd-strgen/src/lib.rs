@@ -11,3 +11,24 @@
 
 pub mod strgen_base;
 pub mod table_strings;
+
+/// Seeded negative control for #1013 (never merged): two idle threads, then a
+/// real SIGSEGV fault, so CI shows every thread's stack. A signal sent with
+/// `kill` would not do: Rust's handler returns from a SIGSEGV that is no fault.
+#[cfg(test)]
+mod crash_control {
+    #[test]
+    #[allow(unsafe_code)] // The seeded fault itself.
+    fn segfault_with_threads() {
+        let idle = || std::thread::sleep(std::time::Duration::from_secs(60));
+        let _first = std::thread::Builder::new()
+            .name("idle-one".into())
+            .spawn(idle);
+        let _second = std::thread::Builder::new()
+            .name("idle-two".into())
+            .spawn(idle);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        // SAFETY: none; this write faults on purpose.
+        unsafe { std::ptr::null_mut::<u8>().write_volatile(1) };
+    }
+}
