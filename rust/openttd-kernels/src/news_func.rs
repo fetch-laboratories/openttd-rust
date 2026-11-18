@@ -11,7 +11,8 @@
 //! (`news_gui.cpp`), which owns the news list until the GUI is ported. The native table is
 //! bound once for the process, as `debug.rs` binds its table; it also carries the string
 //! services of `strings_func.rs`, `ShowErrorMessage` of `error.rs`, `IConsolePrint` of
-//! `console_func.rs`, `NetworkTextMessage` of `network_internal.rs` and the
+//! `console_func.rs`, `NetworkTextMessage` of `network_internal.rs`, `NetworkServerSendChat` of
+//! `network_server.rs` and the
 //! `CompanyNewsInformation` services of `news_type.rs`. Every service is a synchronous `noexcept` call that holds no Rust borrow.
 
 use crate::encoded::Descriptor;
@@ -61,6 +62,9 @@ pub struct Services {
     ),
     /// `IConsolePrint(colour_code, string)`, with the string's bytes borrowed for the call.
     pub iconsole_print: extern "C" fn(u16, ByteSpan),
+    /// `NetworkServerSendChat(action, type, dest, msg, from_id, data, from_admin)`, with the
+    /// message's bytes borrowed for the call.
+    pub network_server_send_chat: extern "C" fn(u8, u8, i32, ByteSpan, u32, i64, bool),
     /// `NetworkTextMessage(action, colour, self_send, name, str, data)`, with the bytes and
     /// the parameter's descriptor borrowed for the call.
     pub network_text_message: extern "C" fn(u8, u16, bool, ByteSpan, ByteSpan, *const Descriptor),
@@ -83,6 +87,7 @@ crate::abi::layouts! {
         delete_vehicle_news,
         get_string,
         iconsole_print,
+        network_server_send_chat,
         network_text_message,
         show_error_message,
         string_assertions,
@@ -175,6 +180,17 @@ extern "C" fn unbound_get_string(
 extern "C" fn unbound_iconsole_print(_: u16, _: ByteSpan) {
     std::process::abort()
 }
+extern "C" fn unbound_network_server_send_chat(
+    _: u8,
+    _: u8,
+    _: i32,
+    _: ByteSpan,
+    _: u32,
+    _: i64,
+    _: bool,
+) {
+    std::process::abort()
+}
 extern "C" fn unbound_network_text_message(
     _: u8,
     _: u16,
@@ -207,6 +223,7 @@ static UNBOUND: Services = Services {
     delete_vehicle_news: unbound_delete_vehicle_news,
     get_string: unbound_get_string,
     iconsole_print: unbound_iconsole_print,
+    network_server_send_chat: unbound_network_server_send_chat,
     network_text_message: unbound_network_text_message,
     show_error_message: unbound_show_error_message,
     string_assertions: 0,
@@ -367,6 +384,16 @@ pub(crate) mod testing {
         GetString(u32, Vec<u64>),
         /// `IConsolePrint(colour_code, string)`.
         IConsolePrint(u16, Vec<u8>),
+        /// `NetworkServerSendChat(action, type, dest, msg, from_id, data, from_admin)`.
+        NetworkServerSendChat {
+            action: u8,
+            r#type: u8,
+            dest: i32,
+            msg: Vec<u8>,
+            from_id: u32,
+            data: i64,
+            from_admin: bool,
+        },
         /// `NetworkTextMessage(action, colour, self_send, name, str, data)`.
         NetworkTextMessage {
             action: u8,
@@ -547,6 +574,25 @@ pub(crate) mod testing {
     extern "C" fn iconsole_print(colour_code: u16, string: crate::services::ByteSpan) {
         push(Effect::IConsolePrint(colour_code, bytes(string)));
     }
+    extern "C" fn network_server_send_chat(
+        action: u8,
+        r#type: u8,
+        dest: i32,
+        msg: crate::services::ByteSpan,
+        from_id: u32,
+        data: i64,
+        from_admin: bool,
+    ) {
+        push(Effect::NetworkServerSendChat {
+            action,
+            r#type,
+            dest,
+            msg: bytes(msg),
+            from_id,
+            data,
+            from_admin,
+        });
+    }
     extern "C" fn network_text_message(
         action: u8,
         colour: u16,
@@ -595,6 +641,7 @@ pub(crate) mod testing {
         delete_vehicle_news,
         get_string,
         iconsole_print,
+        network_server_send_chat,
         network_text_message,
         show_error_message,
         string_assertions: 1,

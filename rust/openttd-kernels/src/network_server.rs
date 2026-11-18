@@ -1,12 +1,14 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `ServerNetworkGameSocketHandler::ClientStatus` from `network_server.h`, read and written in
-//! place on the server-side game socket shell, `ServerNetworkGameSocketHandler::GetName`, and `NetworkServerNewCompany`.
+//! place on the server-side game socket shell, `ServerNetworkGameSocketHandler::GetName`, `NetworkServerSendChat` and `NetworkServerNewCompany`.
 
 use crate::command_type::Commands;
 use crate::company_type::{CompanyID, OpenTTDCompany};
 use crate::network_frame::Services as FrameServices;
 use crate::network_lifecycle::Services as LifecycleServices;
 use crate::network_socket::{self as socket, GameSocket};
+use crate::network_type::{ClientID, DestType, NetworkAction};
+use crate::services::ByteSpan;
 use crate::table::strings::STR_NULL;
 use std::ffi::c_void;
 
@@ -53,6 +55,32 @@ pub(crate) fn set_status(cs: *mut GameSocket, status: ClientStatus) {
 /// `ServerNetworkGameSocketHandler::GetName`.
 pub(crate) const fn get_name() -> &'static str {
     "server"
+}
+
+/// `NetworkServerSendChat(action, type, dest, msg, from_id, data, from_admin)`: send a chat
+/// message from `from_id` to the destination `dest` of the given type; pass `0` and `false`
+/// for the original's defaults of `data` and `from_admin`.
+pub(crate) fn network_server_send_chat(
+    action: NetworkAction,
+    r#type: DestType,
+    dest: i32,
+    msg: &[u8],
+    from_id: ClientID,
+    data: i64,
+    from_admin: bool,
+) {
+    (crate::news_func::services().network_server_send_chat)(
+        action.0,
+        r#type.0,
+        dest,
+        ByteSpan {
+            data: msg.as_ptr(),
+            size: msg.len(),
+        },
+        from_id.0,
+        data,
+        from_admin,
+    );
 }
 
 /// `NetworkServerNewCompany`: perform all the server specific administration of a new
@@ -104,5 +132,38 @@ pub(crate) fn new_company(
         drop(president);
 
         (s.announce_company)(ci, index.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::network_type::{ClientID, DestType, NetworkAction};
+    use crate::news_func::testing::{Effect, take};
+
+    /// Each of the seven arguments reaches the native call unchanged and in its position.
+    #[test]
+    fn network_server_send_chat_passes_every_argument() {
+        take();
+        super::network_server_send_chat(
+            NetworkAction::NETWORK_ACTION_SERVER_MESSAGE,
+            DestType::DESTTYPE_CLIENT,
+            -7,
+            b"full\xFF",
+            ClientID::CLIENT_ID_SERVER,
+            i64::MIN,
+            true,
+        );
+        assert_eq!(
+            take(),
+            [Effect::NetworkServerSendChat {
+                action: 2,
+                r#type: 2,
+                dest: -7,
+                msg: b"full\xFF".to_vec(),
+                from_id: 1,
+                data: i64::MIN,
+                from_admin: true,
+            }]
+        );
     }
 }

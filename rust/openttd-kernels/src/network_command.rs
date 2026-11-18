@@ -181,7 +181,6 @@ pub struct Services {
     pub next_info: extern "C" fn(*mut u32) -> *mut c_void,
     pub replace_client_id: extern "C" fn(u8, ByteSpan, u32) -> CommandData,
     pub sanitize_strings: extern "C" fn(u8, ByteSpan) -> CommandData,
-    pub server_full: extern "C" fn(u32),
 }
 
 static WAIT: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
@@ -675,7 +674,7 @@ pub(crate) fn receive_client(
     work: crate::network_action::Actions,
 ) -> NetworkRecvStatus {
     use crate::company_type::{CCA_NEW, COMPANY_SPECTATOR};
-    use crate::network_type::ClientID;
+    use crate::network_type::{ClientID, DestType, NetworkAction};
     let send_error = |error| {
         crate::network_connection::send_error(
             f.connection,
@@ -790,7 +789,15 @@ pub(crate) fn receive_client(
 
         /* Check if we are full - else it's possible for spectators to send a CMD_COMPANY_CTRL and the company is created regardless of max_companies! */
         if (s.company.company_count)() >= usize::from((f.connection.max_companies)()) {
-            (s.server_full)(client_id(ci).0);
+            crate::network_server::network_server_send_chat(
+                NetworkAction::NETWORK_ACTION_SERVER_MESSAGE,
+                DestType::DESTTYPE_CLIENT,
+                client_id(ci).0.cast_signed(),
+                b"cannot create new company, server full",
+                ClientID::CLIENT_ID_SERVER,
+                0,
+                false,
+            );
             return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
     }
@@ -877,7 +884,6 @@ crate::abi::layouts! {
         next_info,
         replace_client_id,
         sanitize_strings,
-        server_full,
     };
 }
 

@@ -30,7 +30,6 @@ struct OpenTTDNetworkCommandServices {
 	void *(*next_info)(uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(next_info);
 	OpenTTDCommandData (*replace_client_id)(uint8_t, OpenTTDByteSpan, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(replace_client_id);
 	OpenTTDCommandData (*sanitize_strings)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(sanitize_strings);
-	void (*server_full)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(server_full);
 
 };
 const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept;

@@ -222,7 +222,6 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 		},
 		.replace_client_id = [](uint8_t cmd, OpenTTDByteSpan data, uint32_t client) noexcept { return TakeNetworkCommandData(_cmd_dispatch[cmd].ReplaceClientId(std::span(data.data, data.size), static_cast<ClientID>(client))); },
 		.sanitize_strings = [](uint8_t cmd, OpenTTDByteSpan data) noexcept { return TakeNetworkCommandData(_cmd_dispatch[cmd].Sanitize(std::span(data.data, data.size))); },
-		.server_full = [](uint32_t client) noexcept { NetworkServerSendChat(NETWORK_ACTION_SERVER_MESSAGE, DESTTYPE_CLIENT, static_cast<ClientID>(client), "cannot create new company, server full", CLIENT_ID_SERVER); },
 	};
 	return services;
 }

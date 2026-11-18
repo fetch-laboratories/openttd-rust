@@ -1750,7 +1750,6 @@ pub(crate) const NETWORK_COMMAND: crate::network_command::Services =
         next_info: unreachable1,
         replace_client_id: unreachable3,
         sanitize_strings: unreachable2,
-        server_full: unreachable1,
     };
 
 /// `crate::network_frame::Services` with every entry unreachable.
