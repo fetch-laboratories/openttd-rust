@@ -1367,7 +1367,7 @@ pub(crate) fn get_platform_length(
 }
 
 /// Temporary raw adapter of [`get_platform_length_in_direction`] for `train.rs`
-/// and `native_test_support.rs` until their passes.
+/// until its pass.
 pub(crate) fn get_platform_length_in_direction_raw(
     w: &crate::map_func::World<'_>,
     tile: u32,
@@ -1380,8 +1380,8 @@ pub(crate) fn get_platform_length_in_direction_raw(
     )
 }
 
-/// Temporary raw adapter of [`get_platform_length`] for `train.rs` and
-/// `native_test_support.rs` until their passes.
+/// Temporary raw adapter of [`get_platform_length`] for `train.rs` until its
+/// pass.
 pub(crate) fn get_platform_length_raw(
     w: &crate::map_func::World<'_>,
     station: *mut BaseStation,
