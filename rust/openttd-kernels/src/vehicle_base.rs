@@ -44,7 +44,7 @@ impl VehState {
     /// Vehicle is not clickable by the user (shadow vehicles).
     pub const Unclickable: Self = Self(2);
     /// Use default vehicle palette. See `DoDrawVehicle`.
-    #[allow(dead_code)] // Complete original enumerator vocabulary; drawing remains native.
+    #[allow(dead_code)] // Only native drawing reads it.
     pub const DefaultPalette: Self = Self(3);
     /// Train is slowing down.
     pub const TrainSlowing: Self = Self(4);
@@ -146,22 +146,14 @@ impl GroundVehicleSubtypeFlags {
     pub const GVSF_ARTICULATED_PART: Self = Self(1);
     /// Wagon (not used for road vehicles).
     pub const GVSF_WAGON: Self = Self(2);
-    /// Engine that can be a front engine, but may be behind another engine
+    /// Engine that can be front engine, but might be placed behind another engine
     /// (not used for road vehicles).
     pub const GVSF_ENGINE: Self = Self(3);
-    /// First in a wagon chain in a depot (not used for road vehicles).
+    /// First in a wagon chain (in depot) (not used for road vehicles).
     pub const GVSF_FREE_WAGON: Self = Self(4);
     /// Engine is multiheaded (not used for road vehicles).
     pub const GVSF_MULTIHEADED: Self = Self(5);
 }
-
-/// Raw compatibility bit positions for existing subtype consumers.
-pub const GVSF_FRONT: u8 = GroundVehicleSubtypeFlags::GVSF_FRONT.0;
-/// Raw compatibility bit position.
-#[allow(dead_code)] // Retain the raw compatibility name until cleanup closure.
-pub const GVSF_ARTICULATED_PART: u8 = GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
-/// Raw compatibility bit position.
-pub const GVSF_ENGINE: u8 = GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
 
 /// `Vehicle::IsFrontEngine` over a `subtype`; `ground` is `IsGroundVehicle()`.
 pub(crate) fn is_front_engine(ground: bool, subtype: u8) -> bool {
@@ -177,42 +169,26 @@ pub(crate) fn is_ground_vehicle(kind: VehicleType) -> bool {
     kind == VehicleType::VEH_TRAIN || kind == VehicleType::VEH_ROAD
 }
 
-/// Raw compatibility mask for `VehState::Hidden`.
+/// Raw compatibility names for files no pass has finished; #734's closure removes them.
+pub const GVSF_FRONT: u8 = GroundVehicleSubtypeFlags::GVSF_FRONT.0;
+pub const GVSF_ENGINE: u8 = GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
 pub const VS_HIDDEN: u8 = VehStates::from_element(VehState::Hidden).0;
-/// Raw compatibility mask for `VehState::Stopped`.
 pub const VS_STOPPED: u8 = VehStates::from_element(VehState::Stopped).0;
-/// Raw compatibility mask for `VehState::Unclickable`.
 pub const VS_UNCLICKABLE: u8 = VehStates::from_element(VehState::Unclickable).0;
-/// Raw compatibility mask for `VehState::TrainSlowing`.
 pub const VS_TRAIN_SLOWING: u8 = VehStates::from_element(VehState::TrainSlowing).0;
-/// Raw compatibility mask for `VehState::Shadow`.
 pub const VS_SHADOW: u8 = VehStates::from_element(VehState::Shadow).0;
-/// Raw compatibility mask for `VehState::Crashed`.
 pub const VS_CRASHED: u8 = VehStates::from_element(VehState::Crashed).0;
-
-/// Raw compatibility bit position for `NewGRF` var 40.
 pub const NCVV_POSITION_CONSIST_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_CONSIST_LENGTH.0;
-/// Raw compatibility bit position for `NewGRF` var 41.
 pub const NCVV_POSITION_SAME_ID_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_SAME_ID_LENGTH.0;
-/// Raw compatibility bit position for `NewGRF` var 42.
 pub const NCVV_CONSIST_CARGO_INFORMATION: u8 =
     NewGRFCacheValidValues::NCVV_CONSIST_CARGO_INFORMATION.0;
-/// Raw compatibility bit position for `NewGRF` var 43.
 pub const NCVV_COMPANY_INFORMATION: u8 = NewGRFCacheValidValues::NCVV_COMPANY_INFORMATION.0;
-/// Raw compatibility bit position for `NewGRF` var 4D.
 pub const NCVV_POSITION_IN_VEHICLE: u8 = NewGRFCacheValidValues::NCVV_POSITION_IN_VEHICLE.0;
-/// Raw compatibility end of the cache-valid bits.
 pub const NCVV_END: u8 = NewGRFCacheValidValues::NCVV_END.0;
-
-/// Raw compatibility visual-effect model.
 pub const VESM_NONE: u8 = VisualEffectSpawnModel::VESM_NONE.0;
-/// Raw compatibility visual-effect model.
 pub const VESM_STEAM: u8 = VisualEffectSpawnModel::VESM_STEAM.0;
-/// Raw compatibility visual-effect model.
 pub const VESM_DIESEL: u8 = VisualEffectSpawnModel::VESM_DIESEL.0;
-/// Raw compatibility visual-effect model.
 pub const VESM_ELECTRIC: u8 = VisualEffectSpawnModel::VESM_ELECTRIC.0;
-/// Raw compatibility end of the visual-effect models.
 pub const VESM_END: u8 = VisualEffectSpawnModel::VESM_END.0;
 
 /// Opaque native `Vehicle` shell: pool identity, virtual operations and unmoved fields.

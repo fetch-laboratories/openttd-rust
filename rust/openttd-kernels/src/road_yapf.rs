@@ -1444,7 +1444,8 @@ mod tests {
             (*front).tile = TileIndex(1111);
             (*front).dest_tile = TileIndex(2222);
             (*front).orders = &raw mut orders;
-            (*part).subtype = 1 << crate::vehicle_base::GVSF_ARTICULATED_PART;
+            (*part).subtype =
+                1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
         }
         let v = VehicleRef(NonNull::new(front).unwrap());
         for (bus, articulated, trackdir) in [
