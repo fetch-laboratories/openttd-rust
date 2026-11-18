@@ -174,7 +174,7 @@ impl GroundVehicleSubtypeFlags {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ClosestDepot {
     pub(crate) location: TileIndex,
-    /// The DestinationID as used for orders.
+    /// The `DestinationID` as used for orders.
     pub(crate) destination: crate::order_type::DestinationID,
     pub(crate) reverse: bool,
     pub(crate) found: bool,
