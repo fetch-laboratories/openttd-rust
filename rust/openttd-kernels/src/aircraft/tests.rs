@@ -267,7 +267,7 @@ fn aircraft_handle_dest_too_far_raises_the_original_event_and_advice() {
     take();
     for owner in [3, 4] {
         let v = aircraft();
-        v.base().set_owner_raw(owner);
+        v.base().set_owner(crate::company_type::CompanyID(owner));
         w.aircraft_handle_dest_too_far(v, true);
         // Already reported: nothing more.
         w.aircraft_handle_dest_too_far(v, true);

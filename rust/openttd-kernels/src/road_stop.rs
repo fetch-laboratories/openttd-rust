@@ -12,7 +12,7 @@
 #![allow(unsafe_code, clippy::many_single_char_names)]
 use crate::bitmath_func::{has_bit, sb, set_bit};
 use crate::direction_func::dir_to_diag_dir;
-use crate::direction_type::{Axis, DiagDirection, Direction};
+use crate::direction_type::{Axis, DiagDirection};
 use crate::map_func::World;
 use crate::road::State as RoadState;
 use crate::roadstop_base::{RoadStopStatusFlag as StatusFlag, RoadStopStatusFlags as StatusFlags};
@@ -24,7 +24,7 @@ use crate::station::BaseStation;
 use crate::station_type::{RoadStopID, RoadStopType};
 use crate::tile_type::{MP_STATION, TILE_SIZE, TileIndex};
 use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, VehicleType};
-use crate::vehicle_base::VS_CRASHED;
+use crate::vehicle_base::VehState;
 
 /// `TILE_SIZE` in the `uint16_t` entry arithmetic.
 #[allow(clippy::cast_possible_truncation)] // TILE_SIZE is 16.
@@ -415,7 +415,7 @@ pub(crate) unsafe fn enter(
     // Vehicles entering a drive-through stop from the 'normal' side use first bay (bay 0).
     let e = entry(
         state,
-        dir_to_diag_dir(Direction(v.direction_raw()), |ok| {
+        dir_to_diag_dir(v.direction(), |ok| {
             crate::movement::native_assert(s, ok);
         }),
     );
@@ -461,7 +461,7 @@ pub(crate) unsafe fn leave(
         // Otherwise just leave the drive through's entry cache.
         let e = entry(
             state,
-            dir_to_diag_dir(Direction(v.direction_raw()), |ok| {
+            dir_to_diag_dir(v.direction(), |ok| {
                 crate::movement::native_assert(s, ok);
             }),
         );
@@ -472,7 +472,7 @@ pub(crate) unsafe fn leave(
 /// # Safety
 /// Live serialized road owner of the front vehicle `v`.
 pub(crate) unsafe fn leave_vehicle(s: &Services, v: VehicleRef, road: *mut RoadState) {
-    let tile = TileIndex(v.tile_raw());
+    let tile = v.tile();
     // SAFETY: Caller's contract.
     unsafe { leave(s, at(s, tile), tile, v, road) };
 }
@@ -522,12 +522,12 @@ fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool, thi
         unsafe { (*this).length = (*this).length.wrapping_add(TILE_UNITS) };
         vehicle.for_each_on_tile(tile.0, |v| {
             // Not a RV or not in the right direction or crashed :(
-            if v.vehicle_type_raw() != VehicleType::ROAD.0
-                || dir_to_diag_dir(Direction(v.direction_raw()), |ok| {
+            if v.vehicle_type() != VehicleType::ROAD
+                || dir_to_diag_dir(v.direction(), |ok| {
                     crate::movement::native_assert(s, ok);
                 }) != entry_dir
                 || !v.is_front_engine()
-                || v.vehstatus_raw() & VS_CRASHED != 0
+                || v.vehstatus().test(VehState::Crashed)
             {
                 return;
             }

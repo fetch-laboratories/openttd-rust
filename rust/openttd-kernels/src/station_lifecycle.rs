@@ -598,8 +598,8 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
     while let Some(v) = (s.shared.vehicle_next)(from.0) {
         from = VehicleID(unsafe { (resolver.id)(v.0.as_ptr()) }.wrapping_add(1));
         /* Forget about this station if this station is removed */
-        if v.last_station_visited_raw() == id.0 {
-            v.set_last_station_visited_raw(INVALID_STATION);
+        if v.last_station_visited() == id {
+            v.set_last_station_visited(StationID::INVALID);
         }
         if (s.last_loading)(v) == id {
             (visits.set_last_loading)(v, INVALID_STATION);

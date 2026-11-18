@@ -639,7 +639,7 @@ unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
             let v = record.shell().cast();
             from = unsafe { (w.vehicle_id)(v) } + 1;
             if unsafe { (w.vehicle_group)(v) } == id
-                && (!is_ground_vehicle(record.vehicle_type_raw()) || record.is_front_engine())
+                && (!is_ground_vehicle(record.vehicle_type()) || record.is_front_engine())
             {
                 let mut part = Some(record);
                 while let Some(r) = part {

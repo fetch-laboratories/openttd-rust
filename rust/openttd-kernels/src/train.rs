@@ -97,13 +97,13 @@ impl Handle {
     }
     pub(crate) fn front(self) -> u8 {
         u8::from(crate::vehicle_base::is_front_engine(
-            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type_raw()),
+            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type()),
             self.vehicle().subtype(),
         ))
     }
     pub(crate) fn articulated(self) -> u8 {
         u8::from(crate::vehicle_base::is_articulated_part(
-            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type_raw()),
+            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type()),
             self.vehicle().subtype(),
         ))
     }

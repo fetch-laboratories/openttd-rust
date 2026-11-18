@@ -518,7 +518,7 @@ impl<'a> World<'a> {
                     break;
                 }
                 if crate::vehicle_base::is_front_engine(
-                    crate::vehicle_base::is_ground_vehicle(target.vehicle().vehicle_type_raw()),
+                    crate::vehicle_base::is_ground_vehicle(target.vehicle().vehicle_type()),
                     target.vehicle().subtype(),
                 ) {
                     let old = n;
@@ -681,7 +681,7 @@ impl<'a> World<'a> {
     }
     fn valid_train(&self, v: Vehicle) -> bool {
         crate::vehicle_base::is_front_engine(
-            crate::vehicle_base::is_ground_vehicle(v.vehicle().vehicle_type_raw()),
+            crate::vehicle_base::is_ground_vehicle(v.vehicle().vehicle_type()),
             v.vehicle().subtype(),
         ) && (self.s.human)(v.vehicle().owner_raw())
             && (self.shared.is_plain_rail)(Self::tile(v))
@@ -716,7 +716,7 @@ impl<'a> World<'a> {
                 if target.handle.is_null() {
                     break;
                 }
-                if crate::vehicle_base::is_ground_vehicle(target.vehicle().vehicle_type_raw()) {
+                if crate::vehicle_base::is_ground_vehicle(target.vehicle().vehicle_type()) {
                     let t = (target.vehicle().x_pos(), target.vehicle().y_pos());
                     let p = (v.vehicle().x_pos(), v.vehicle().y_pos());
                     if distance(t.0, t.1, p.0, p.1) <= 12 * TILE_SIZE as i32 {

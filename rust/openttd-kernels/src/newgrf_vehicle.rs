@@ -171,7 +171,7 @@ fn engine(v: V) -> u16 {
     handle(v).engine_type_raw()
 }
 fn ground(v: V) -> bool {
-    crate::vehicle_base::is_ground_vehicle(handle(v).vehicle_type_raw())
+    crate::vehicle_base::is_ground_vehicle(handle(v).vehicle_type())
 }
 // SAFETY throughout: the game-state mutex serializes shell/cache access. The
 // caller retains live shells and immutable services. Raw cache reads/writes are

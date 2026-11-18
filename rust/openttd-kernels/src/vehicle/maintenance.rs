@@ -1101,7 +1101,7 @@ mod scalar_tests {
         unsafe {
             BreakdownProbe {
                 counter: (*rec(v)).breakdown_ctr,
-                status: (*rec(v)).vehstatus,
+                status: (*rec(v)).vehstatus.0,
             }
         }
     }
@@ -1148,7 +1148,7 @@ mod scalar_tests {
         unsafe {
             assert_eq!((*rec(v)).cur_speed, 0);
             assert_eq!((*rec(v)).breakdown_ctr, 1);
-            (*rec(v)).vehstatus |= VS_HIDDEN;
+            (*rec(v)).vehstatus.0 |= VS_HIDDEN;
         }
         assert_eq!(native().since, 255);
         true
@@ -1158,7 +1158,7 @@ mod scalar_tests {
         if REENTER.get() {
             // SAFETY: The test's live record.
             unsafe {
-                assert_ne!((*rec(v)).vehstatus & VS_HIDDEN, 0);
+                assert_ne!((*rec(v)).vehstatus.0 & VS_HIDDEN, 0);
                 (*rec(v)).r#type = VehicleType::VEH_AIRCRAFT;
             }
         }

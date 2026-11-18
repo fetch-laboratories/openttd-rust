@@ -62,7 +62,7 @@ fn part(v: VehicleRef) -> Part {
 }
 /// `v->direction` and the ground part length (`VEHICLE_LENGTH` otherwise).
 fn pose(v: VehicleRef) -> (u8, u8) {
-    let length = if crate::vehicle_base::is_ground_vehicle(v.vehicle_type_raw()) {
+    let length = if crate::vehicle_base::is_ground_vehicle(v.vehicle_type()) {
         crate::raw_field::read_field!(v.ground_cache(), cached_veh_length)
     } else {
         VEHICLE_LENGTH

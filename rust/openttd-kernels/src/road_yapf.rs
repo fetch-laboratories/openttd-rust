@@ -708,7 +708,7 @@ impl<'a> CYapfRoad<'a> {
                 self.station_commands(),
                 &self.world,
                 self.dest_station,
-                TileIndex(self.vehicle.tile_raw()),
+                self.vehicle.tile(),
                 self.station_type,
             );
             self.non_artic = self.settings.articulated == 0;
@@ -721,7 +721,7 @@ impl<'a> CYapfRoad<'a> {
                 self.station_commands(),
                 &self.world,
                 self.dest_station,
-                TileIndex(self.vehicle.tile_raw()),
+                self.vehicle.tile(),
                 self.station_type,
             );
             self.non_artic = self.settings.articulated == 0;
@@ -992,8 +992,8 @@ impl Drop for CYapfRoad<'_> {
 /// belongs to the road vehicle controller, so the caller supplies it.
 fn road_input(s: &Services, v: VehicleRef, trackdir: Trackdir) -> Input {
     let settings = s.settings();
-    let tile = v.tile_raw();
-    let dest_tile = v.dest_tile_raw();
+    let tile = v.tile().0;
+    let dest_tile = v.dest_tile().0;
     // SAFETY: The settings catalog holds canonical process-lifetime addresses.
     let (max_nodes, slope, crossing, stop, occupied, bay, curve) = unsafe {
         (

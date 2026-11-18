@@ -31,8 +31,7 @@ use crate::track_func::{
 use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
 use crate::train::Handle;
 use crate::transport_type::TransportType;
-use crate::vehicle_base::{VehState, VehStates};
-use crate::vehicle_type::VEH_TRAIN;
+use crate::vehicle_base::VehState;
 
 #[repr(C)]
 pub struct PbsServices {
@@ -451,8 +450,8 @@ impl<'a> Pbs<'a> {
         // SAFETY: the serialized query keeps shells and service tables live.
         let vs = unsafe { &*self.train().vehicle };
         vs.any_on_tile(tile.0, |v| {
-            if v.vehicle_type_raw() != VEH_TRAIN
-                || VehStates(v.vehstatus_raw()).test(VehState::Crashed)
+            if v.vehicle_type() != crate::vehicle_type::VehicleType::VEH_TRAIN
+                || v.vehstatus().test(VehState::Crashed)
             {
                 return false;
             }
@@ -488,9 +487,11 @@ impl<'a> Pbs<'a> {
     ) -> PBSTileInfo {
         let s = self.shared();
         let w = World::new(s);
-        self.assert_with(|| v.vehicle().vehicle_type_raw() == VEH_TRAIN);
+        self.assert_with(|| {
+            v.vehicle().vehicle_type() == crate::vehicle_type::VehicleType::VEH_TRAIN
+        });
 
-        let tile = TileIndex(v.vehicle().tile_raw());
+        let tile = v.vehicle().tile();
         let trackdir = crate::train::get_vehicle_trackdir(self.train(), s, v);
 
         if w.rail_depot(tile.0) && (self.0.depot_bits)(tile.0) == TrackBits::TRACK_BIT_NONE {
@@ -503,7 +504,7 @@ impl<'a> Pbs<'a> {
 
         let mut ftoti = FindTrainOnTrackInfo {
             res: self.follow_reservation(
-                crate::company_type::CompanyID(v.vehicle().owner_raw()),
+                v.vehicle().owner(),
                 RailTypes((s.all_compatible_railtypes)(v.get_railtypes())),
                 tile,
                 trackdir,

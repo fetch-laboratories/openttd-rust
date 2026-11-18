@@ -42,8 +42,8 @@ pub struct PostTick {
     pub front_type: *const VehicleType,
     pub subtype: *const u8,
     pub tick: *const u8,
-    pub front_status: *const u8,
-    pub status: *const u8,
+    pub front_status: *const crate::vehicle_base::VehStates,
+    pub status: *const crate::vehicle_base::VehStates,
 }
 #[repr(C)]
 pub struct SchedulerServices {
@@ -304,15 +304,15 @@ unsafe fn post_tick<const COUNTED: bool>(
             unsafe { scalar_write::<_, COUNTED>(cargo.counter, period) };
         }
     }
-    let front_status = unsafe { scalar_read::<_, COUNTED>(cargo.front_status) };
+    let front_status = unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.0;
     if front_status & VS_CRASHED != 0 {
         return;
     }
-    if unsafe { scalar_read::<_, COUNTED>(cargo.status) } & VS_HIDDEN != 0 {
+    if unsafe { scalar_read::<_, COUNTED>(cargo.status) }.0 & VS_HIDDEN != 0 {
         return;
     }
     let motion = cargo;
-    if unsafe { scalar_read::<_, COUNTED>(cargo.front_status) } & VS_STOPPED != 0
+    if unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.0 & VS_STOPPED != 0
         && (unsafe { scalar_read::<_, COUNTED>(motion.front_type) } != TRAIN
             || unsafe { scalar_read::<_, COUNTED>(motion.speed) } == 0)
     {
@@ -347,7 +347,7 @@ unsafe fn post_tick<const COUNTED: bool>(
     // Running sound can change the following observations; load after it returns.
     if unsafe { scalar_read::<_, COUNTED>(motion.tick) } & 15 == 0 {
         let running = unsafe { scalar_read::<_, COUNTED>(motion.speed) } > 0
-            && unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }
+            && unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.0
                 & (VS_STOPPED | VS_TRAIN_SLOWING)
                 == 0;
         post_svc!(
@@ -684,8 +684,8 @@ mod tests {
             } else {
                 &raw const c.tick
             },
-            front_status: &raw const c.front_status,
-            status: &raw const c.status,
+            front_status: (&raw const c.front_status).cast(),
+            status: (&raw const c.status).cast(),
         }
     }
     extern "C" fn cargo_owner(v: VehicleRef) -> *mut cargo_storage::List {

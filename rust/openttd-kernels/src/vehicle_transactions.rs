@@ -75,7 +75,7 @@ unsafe fn owned_primary(
         (s.cost.error)(cost, ERROR);
         return (std::ptr::null_mut(), CompanyID(0));
     }
-    let owner = CompanyID(crate::fleet::record(s.groups, v).owner_raw());
+    let owner = crate::fleet::record(s.groups, v).owner();
     unsafe { s.commands.ownership(cost, owner.0, 0) };
     if !(s.cost.success)(cost) {
         return (std::ptr::null_mut(), CompanyID(0));
@@ -198,10 +198,8 @@ pub(crate) unsafe fn cmd_change_service_int(
             return (s.cost.error)(cost, ERROR);
         }
     } else {
-        serv_int = s.interval_default(
-            owner,
-            VehicleType(crate::fleet::record(s.groups, v).vehicle_type_raw()),
-        ) as u16;
+        serv_int =
+            s.interval_default(owner, crate::fleet::record(s.groups, v).vehicle_type()) as u16;
     }
     if flags.test(DoCommandFlag::Execute) {
         (s.set_interval)(v, serv_int, is_custom, is_percent);
@@ -254,7 +252,7 @@ unsafe fn vehicle_set(
     mut num_vehicles: u8,
     mut emit: impl FnMut(VehicleID),
 ) {
-    if crate::fleet::record(s.groups, v).vehicle_type_raw() != VehicleType::TRAIN.0 {
+    if crate::fleet::record(s.groups, v).vehicle_type() != VehicleType::TRAIN {
         return;
     }
     /* Only include whole vehicles, so start with the first articulated part */
@@ -324,7 +322,7 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
         // Callback runs synchronously; emit mutates only caller-local selection.
         let c = unsafe { &mut *ctx.cast::<Visit<'_, F>>() };
         let v = handle.shell().cast();
-        if VehicleType(crate::fleet::record(c.s.groups, v).vehicle_type_raw()) != c.vehicle_type
+        if crate::fleet::record(c.s.groups, v).vehicle_type() != c.vehicle_type
             || !(c.s.in_depot)(v)
         {
             return;
@@ -425,7 +423,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
     mut emit: F,
 ) -> bool {
     let kind = vli.list_type;
-    let vehicle_type = vli.vtype.0;
+    let vehicle_type = vli.vtype;
     if kind == VehicleListType::VL_STATION_LIST || kind == VehicleListType::VL_DEPOT_LIST {
         let destination = vli.index as u16;
         let ord_pred = |order: &crate::station_service::OrderDestination| {
@@ -442,7 +440,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         };
         crate::vehiclelist_func::find_vehicles_with_order(
             s.links,
-            |v| VehicleType(v.vehicle_type_raw()) == vli.vtype,
+            |v| v.vehicle_type() == vli.vtype,
             ord_pred,
             |v| emit(v.shell().cast()),
         );
@@ -453,7 +451,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         let mut v = unsafe { (s.groups.vehicle)(vli.index) };
         if v.is_null()
             || unsafe {
-                crate::fleet::record(s.groups, v).vehicle_type_raw() != vehicle_type
+                crate::fleet::record(s.groups, v).vehicle_type() != vehicle_type
                     || !(s.groups.primary)(v)
             }
         {
@@ -475,25 +473,24 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
             break;
         }
         // Preserve the distinct predicate order of group and standard lists.
-        if crate::fleet::record(s.groups, v).vehicle_type_raw() == vehicle_type {
-            let selected = if kind == VehicleListType::VL_GROUP_LIST
-                && vli.index as u16 != ALL_GROUP
-            {
-                unsafe {
-                    (s.groups.primary)(v)
-                        && CompanyID(crate::fleet::record(s.groups, v).owner_raw()) == vli.company
-                        && (crate::fleet::openttd_rust_fleet_contains_abi(
-                            s.groups,
-                            (s.groups.vehicle_group)(v),
-                            vli.index as u16,
-                        ) != 0)
-                }
-            } else {
-                unsafe {
-                    CompanyID(crate::fleet::record(s.groups, v).owner_raw()) == vli.company
-                        && (s.groups.primary)(v)
-                }
-            };
+        if crate::fleet::record(s.groups, v).vehicle_type() == vehicle_type {
+            let selected =
+                if kind == VehicleListType::VL_GROUP_LIST && vli.index as u16 != ALL_GROUP {
+                    unsafe {
+                        (s.groups.primary)(v)
+                            && crate::fleet::record(s.groups, v).owner() == vli.company
+                            && (crate::fleet::openttd_rust_fleet_contains_abi(
+                                s.groups,
+                                (s.groups.vehicle_group)(v),
+                                vli.index as u16,
+                            ) != 0)
+                    }
+                } else {
+                    unsafe {
+                        crate::fleet::record(s.groups, v).owner() == vli.company
+                            && (s.groups.primary)(v)
+                    }
+                };
             if selected {
                 emit(v);
             }
@@ -653,14 +650,14 @@ pub(crate) unsafe fn cmd_sell_vehicle(
     let front = crate::fleet::transactions::first(s.transactions, v);
     unsafe {
         b.commands
-            .ownership(cost, crate::fleet::record(b.groups, front).owner_raw(), 0);
+            .ownership(cost, crate::fleet::record(b.groups, front).owner().0, 0);
     };
     if !(b.cost.success)(cost) {
         return;
     }
-    if crate::fleet::transactions::record(s.transactions, front).vehstatus_raw()
-        & crate::vehicle_base::VS_CRASHED
-        != 0
+    if crate::fleet::transactions::record(s.transactions, front)
+        .vehstatus()
+        .test(crate::vehicle_base::VehState::Crashed)
     {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
@@ -668,10 +665,10 @@ pub(crate) unsafe fn cmd_sell_vehicle(
         return (b.cost.error)(
             cost,
             s.strings.stopped_in_depot
-                + u32::from(crate::fleet::record(b.groups, front).vehicle_type_raw()),
+                + u32::from(crate::fleet::record(b.groups, front).vehicle_type().0),
         );
     }
-    if crate::fleet::record(b.groups, v).vehicle_type_raw() == VehicleType::TRAIN.0 {
+    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN {
         // The build root is late-bound through the fleet table, as autoreplace does.
         let root = (s.transactions.build_services)();
         unsafe {
@@ -762,13 +759,13 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         return;
     }
     let handle = unsafe { vehicle_ref(v, s.vehicles) };
-    let status = (handle).vehstatus_raw();
-    if status & crate::vehicle_base::VS_CRASHED != 0 {
+    let status = (handle).vehstatus();
+    if status.test(crate::vehicle_base::VehState::Crashed) {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
-    match VehicleType(crate::fleet::record(b.groups, v).vehicle_type_raw()) {
+    match crate::fleet::record(b.groups, v).vehicle_type() {
         VehicleType::TRAIN => {
-            if status & crate::vehicle_base::VS_STOPPED != 0
+            if status.test(crate::vehicle_base::VehState::Stopped)
                 && crate::raw_field::read_field!(handle.ground_cache(), cached_power) == 0
             {
                 return (b.cost.error)(cost, s.strings.no_power);
@@ -793,7 +790,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             crate::newgrf_vehicle::callback(
                 s.vehicles,
                 Some(vehicle_ref(v, s.vehicles)),
-                (vehicle_ref(v, s.vehicles)).engine_type_raw(),
+                (vehicle_ref(v, s.vehicles)).engine_type().0,
                 crate::newgrf_callbacks::CBID_VEHICLE_START_STOP_CHECK.0,
                 0,
                 std::ptr::null_mut(),
@@ -844,8 +841,12 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             );
         }
         // The stopped bit is read again here, after the news and callback above.
-        handle.set_vehstatus_raw(handle.vehstatus_raw() ^ crate::vehicle_base::VS_STOPPED);
-        if crate::fleet::record(b.groups, v).vehicle_type_raw() != VehicleType::TRAIN.0 {
+        handle.set_vehstatus(
+            handle
+                .vehstatus()
+                .flip(crate::vehicle_base::VehState::Stopped),
+        );
+        if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN {
             (handle).set_cur_speed(0); // trains can stop 'slowly'
         }
         /* Unbunching data is no longer valid. */

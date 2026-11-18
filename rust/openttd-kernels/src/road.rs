@@ -1204,7 +1204,7 @@ impl Game<'_> {
             owner: v.v.owner_raw(),
             articulated: v.v.next().is_some_and(|next| {
                 crate::vehicle_base::is_articulated_part(
-                    crate::vehicle_base::is_ground_vehicle(next.vehicle_type_raw()),
+                    crate::vehicle_base::is_ground_vehicle(next.vehicle_type()),
                     next.subtype(),
                 )
             }),
@@ -1868,7 +1868,7 @@ impl Game<'_> {
                 direction: u.v.direction_raw(),
                 length: crate::raw_field::read_field!(u.v.ground_cache(), cached_veh_length),
                 front: crate::vehicle_base::is_front_engine(
-                    crate::vehicle_base::is_ground_vehicle(u.v.vehicle_type_raw()),
+                    crate::vehicle_base::is_ground_vehicle(u.v.vehicle_type()),
                     u.v.subtype(),
                 ),
                 tram: (crate::movement::table(self.ss).road_kind)(u.v).0,
@@ -1977,7 +1977,7 @@ impl Game<'_> {
                     direction: v.v.direction_raw(),
                     length: crate::raw_field::read_field!(v.v.ground_cache(), cached_veh_length),
                     front: crate::vehicle_base::is_front_engine(
-                        crate::vehicle_base::is_ground_vehicle(v.v.vehicle_type_raw()),
+                        crate::vehicle_base::is_ground_vehicle(v.v.vehicle_type()),
                         v.v.subtype(),
                     ),
                     tram: (crate::movement::table(self.ss).road_kind)(v.v).0,
@@ -2023,7 +2023,7 @@ impl Game<'_> {
     fn tick(&mut self, v: Part, entry: &Entry) -> bool {
         let tick = v.v.tick_counter().wrapping_add(1);
         if !crate::vehicle_base::is_front_engine(
-            crate::vehicle_base::is_ground_vehicle(v.v.vehicle_type_raw()),
+            crate::vehicle_base::is_ground_vehicle(v.v.vehicle_type()),
             v.v.subtype(),
         ) {
             v.v.set_tick_counter(tick);
@@ -2381,7 +2381,7 @@ pub unsafe extern "C" fn openttd_rust_road_individual_abi(
         direction: v.direction_raw(),
         length: crate::raw_field::read_field!(v.ground_cache(), cached_veh_length),
         front: crate::vehicle_base::is_front_engine(
-            crate::vehicle_base::is_ground_vehicle(v.vehicle_type_raw()),
+            crate::vehicle_base::is_ground_vehicle(v.vehicle_type()),
             v.subtype(),
         ),
         tram: (crate::movement::table(g.ss).road_kind)(v).0,

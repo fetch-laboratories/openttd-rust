@@ -113,10 +113,10 @@ pub(crate) struct Ship<'a> {
 /// tile and destination, its current order, its direction, its engine's speed
 /// and speed fractions, the two curve penalties and its unit number.
 fn ship_input(s: &Services, v: &Ship<'_>) -> Input {
-    let tile = v.v.tile_raw();
-    let dest_tile = v.v.dest_tile_raw();
+    let tile = v.v.tile().0;
+    let dest_tile = v.v.dest_tile().0;
     let order = v.v.current_order();
-    let direction = v.v.direction_raw();
+    let direction = v.v.direction().0;
     let svi = (crate::movement::table(s).vehicle().engine)(v.v);
     let settings = s.settings();
     // SAFETY: The settings catalog holds canonical process-lifetime addresses.
@@ -761,8 +761,9 @@ impl<'v> Yapf<'v> for CYapfShip<'v> {
                 .vehicle()
                 .for_each_on_tile(tile.0, |other| {
                     /* Ignore other vehicles (aircraft) and ships inside depot. */
-                    if other.vehicle_type_raw() == VehicleType::VEH_SHIP.0
-                        && !crate::vehicle_base::VehStates(other.vehstatus_raw())
+                    if other.vehicle_type() == VehicleType::VEH_SHIP
+                        && !other
+                            .vehstatus()
                             .test(crate::vehicle_base::VehState::Hidden)
                     {
                         count += 1;
@@ -1733,7 +1734,7 @@ mod tests {
         unsafe {
             (*record).tile = TileIndex(1111);
             (*record).dest_tile = TileIndex(2222);
-            (*record).direction = 5;
+            (*record).direction = crate::direction_type::Direction(5);
             (*record).orders = &raw mut orders;
         }
         let ship = Ship {

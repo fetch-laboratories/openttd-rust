@@ -45,11 +45,11 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
     let r = s.refit;
     let c = r.common;
     let g = c.base.groups;
-    let kind = VehicleType(crate::fleet::record(g, first).vehicle_type_raw());
+    let kind = crate::fleet::record(g, first).vehicle_type();
     if !unsafe {
         crate::engine_capabilities::openttd_rust_articulated_is_abi(
             r.capabilities,
-            crate::fleet::record(g, first).engine_type_raw(),
+            crate::fleet::record(g, first).engine_type().0,
         ) != 0
     } {
         return;
@@ -61,7 +61,7 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
             crate::engine_capabilities::openttd_rust_articulated_next(
                 r.capabilities,
                 index,
-                crate::fleet::record(g, first).engine_type_raw(),
+                crate::fleet::record(g, first).engine_type().0,
                 super::vehicle_ref(first, c.vehicles).0.as_ptr(),
                 flip.as_mut_ptr(),
             )
@@ -158,12 +158,12 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
         if unsafe { flip.assume_init() } {
             (s.flip_image)(v);
         }
-        if crate::fleet::record(g, v).vehicle_type_raw() == VehicleType::TRAIN.0 {
+        if crate::fleet::record(g, v).vehicle_type() == VehicleType::TRAIN {
             let probability = unsafe {
                 crate::newgrf_vehicle::openttd_rust_vehicle_build_probability(
                     &*(r.common.vehicles.newgrf)(),
                     super::vehicle_ref(v, c.vehicles).0.as_ptr(),
-                    crate::fleet::record(g, v).engine_type_raw(),
+                    crate::fleet::record(g, v).engine_type().0,
                     crate::newgrf_vehicle::BUILD_PROBABILITY_REVERSED,
                 )
             };
@@ -202,7 +202,7 @@ pub(crate) unsafe fn check_consistency_of_articulated_vehicle(s: &Services, mut 
     unsafe {
         crate::engine_capabilities::openttd_rust_articulated_refit_masks(
             r.capabilities,
-            crate::fleet::record(c.base.groups, v).engine_type_raw(),
+            crate::fleet::record(c.base.groups, v).engine_type().0,
             true,
             &raw mut purchase_union,
             &raw mut purchase_intersection,
@@ -213,7 +213,7 @@ pub(crate) unsafe fn check_consistency_of_articulated_vehicle(s: &Services, mut 
     unsafe {
         crate::engine_capabilities::openttd_rust_articulated_capacity(
             r.capabilities,
-            crate::fleet::record(c.base.groups, v).engine_type_raw(),
+            crate::fleet::record(c.base.groups, v).engine_type().0,
             purchase_capacity.as_mut_ptr(),
         );
     };
@@ -224,7 +224,7 @@ pub(crate) unsafe fn check_consistency_of_articulated_vehicle(s: &Services, mut 
         let mask = unsafe {
             crate::engine_capabilities::available_cargo(
                 r.capabilities,
-                crate::fleet::record(c.base.groups, v).engine_type_raw(),
+                crate::fleet::record(c.base.groups, v).engine_type().0,
                 true,
             )
         };

@@ -26,7 +26,7 @@ use crate::direction_func::{
     axis_to_diag_dir, diag_dir_to_axis, diag_dir_to_dir, dir_to_diag_dir, reverse_diag_dir,
     reverse_dir,
 };
-use crate::direction_type::{Axis, DiagDirection, Direction};
+use crate::direction_type::{Axis, DiagDirection};
 use crate::map_func::World;
 use crate::math::is_inside_bs;
 use crate::rail_map::{RailGroundType, RailTileType};
@@ -1235,16 +1235,6 @@ const ROADVEH_ENTER_DEPOT_DIR: [u8; 4] = [
     crate::track_type::Trackdir::TRACKDIR_Y_SE.0,
 ];
 impl MovementServices {
-    /// `v->vehstatus.Set(VehState::Hidden)` or `.Reset(VehState::Hidden)`.
-    fn set_hidden(v: VehicleRef, hidden: bool) {
-        let mask = VehStates::from_element(VehState::Hidden).0;
-        let status = v.vehstatus_raw();
-        v.set_vehstatus_raw(if hidden {
-            status | mask
-        } else {
-            status & !mask
-        });
-    }
     /// `VehicleEnter_Track`: tile callback routine when vehicle enters tile.
     // All owner accesses are scalar loads/stores and end before calling native.
     // Depot entry queues autoreplace later in the tick; it preserves this shell
@@ -1274,7 +1264,7 @@ impl MovementServices {
         }
 
         let v = u;
-        let direction = Direction(v.direction_raw());
+        let direction = v.direction();
 
         /* Leaving depot? */
         if direction == diag_dir_to_dir(dir, self.check()) {
@@ -1294,7 +1284,7 @@ impl MovementServices {
                 /* Leave the depot. */
                 w::hit(w::MOVE_TRAIN_DEPOT_LEAVE_0 + usize::from(dir.0));
                 if let Some(next) = v.next() {
-                    Self::set_hidden(next, false);
+                    next.set_hidden(false);
                     let track = if diag_dir_to_axis(dir, self.check()) == Axis::AXIS_X {
                         TrackBits::TRACK_BIT_X
                     } else {
@@ -1310,12 +1300,12 @@ impl MovementServices {
                 diag_dir_to_dir(reverse_diag_dir(dir, self.check()), self.check()) == direction,
             );
             h.train.set_track(u64::from(TrackBits::TRACK_BIT_DEPOT.0));
-            Self::set_hidden(v, true);
-            v.set_direction_raw(reverse_dir(direction, self.check()).0);
+            v.set_hidden(true);
+            v.set_direction(reverse_dir(direction, self.check()));
             if v.next().is_none() {
                 self.vehicle().enter_depot(v.first());
             }
-            v.set_tile_raw(tile.0);
+            v.set_tile(tile);
 
             (self.depot_invalidate)(v);
             return VehicleEnterTileStates::from_element(VehicleEnterTileState::EnteredWormhole);
@@ -1346,12 +1336,12 @@ impl MovementServices {
                     unsafe {
                         crate::road::set_state(rv, RVSB_IN_DEPOT);
                     }
-                    Self::set_hidden(v, true);
-                    v.set_direction_raw(reverse_dir(Direction(v.direction_raw()), self.check()).0);
+                    v.set_hidden(true);
+                    v.set_direction(reverse_dir(v.direction(), self.check()));
                     if v.next().is_none() {
                         self.vehicle().enter_depot(v.first());
                     }
-                    v.set_tile_raw(tile.0);
+                    v.set_tile(tile);
 
                     (self.depot_invalidate)(v);
                     return VehicleEnterTileStates::from_element(
@@ -1400,7 +1390,7 @@ impl MovementServices {
                 return VehicleEnterTileStates(0);
             }
 
-            let dir = dir_to_diag_dir(Direction(v.direction_raw()), self.check());
+            let dir = dir_to_diag_dir(v.direction(), self.check());
 
             x &= 0xF;
             y &= 0xF;
@@ -1421,8 +1411,9 @@ impl MovementServices {
                     ); // enter station
                 } else if x < stop {
                     w::hit(w::MOVE_STATION_SLOW);
-                    v.set_vehstatus_raw(
-                        v.vehstatus_raw() | VehStates::from_element(VehState::TrainSlowing).0,
+                    v.set_vehstatus(
+                        v.vehstatus()
+                            .with(VehStates::from_element(VehState::TrainSlowing)),
                     );
                     let spd = ((stop - x) * 20 - 15).max(0) as u16;
                     if spd < v.cur_speed() {
@@ -1485,7 +1476,7 @@ impl MovementServices {
         /* Direction into the wormhole */
         let dir = DiagDirection(world.tunnel_bridge_dir(tile.0));
         /* Direction of the vehicle */
-        let vdir = dir_to_diag_dir(Direction(v.direction_raw()), self.check());
+        let vdir = dir_to_diag_dir(v.direction(), self.check());
         /* New position of the vehicle on the tile */
         let pos = (if diag_dir_to_axis(vdir, self.check()) == Axis::AXIS_X {
             x
@@ -1523,9 +1514,9 @@ impl MovementServices {
                     if frame == visibility_frame {
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER);
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER_0 + usize::from(dir.0));
-                        v.set_tile_raw(tile.0);
+                        v.set_tile(tile);
                         t.set_track(u64::from(TrackBits::TRACK_BIT_WORMHOLE.0));
-                        Self::set_hidden(v, true);
+                        v.set_hidden(true);
                         return VehicleEnterTileStates::from_element(
                             VehicleEnterTileState::EnteredWormhole,
                         );
@@ -1537,12 +1528,12 @@ impl MovementServices {
                     && z == 0
                 {
                     /* We're at the tunnel exit ?? */
-                    v.set_tile_raw(tile.0);
+                    v.set_tile(tile);
                     t.set_track(u64::from(diag_dir_to_diag_track_bits(vdir.0, self.check())));
                     self.native_assert_call(TrackBits(t.track()) != TrackBits::TRACK_BIT_NONE);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT_0 + usize::from(dir.0));
-                    Self::set_hidden(v, false);
+                    v.set_hidden(false);
                     return VehicleEnterTileStates::from_element(
                         VehicleEnterTileState::EnteredWormhole,
                     );
@@ -1559,11 +1550,11 @@ impl MovementServices {
                             i32::from(frame)
                                 == i32::from(unsafe { crate::road::get_frame(rv) }) + 1,
                         );
-                        v.set_tile_raw(tile.0);
+                        v.set_tile(tile);
                         unsafe {
                             crate::road::set_state(rv, RVSB_WORMHOLE);
                         }
-                        Self::set_hidden(v, true);
+                        v.set_hidden(true);
                         return VehicleEnterTileStates::from_element(
                             VehicleEnterTileState::EnteredWormhole,
                         );
@@ -1576,13 +1567,13 @@ impl MovementServices {
                     && frame == TILE_SIZE as u8 - visibility_frame
                     && z == 0
                 {
-                    v.set_tile_raw(tile.0);
+                    v.set_tile(tile);
                     unsafe {
                         crate::road::set_state(rv, diag_dir_to_diag_trackdir(vdir.0, self.check()));
                         crate::road::set_frame(rv, frame);
                     }
                     w::hit(w::MOVE_ROAD_TUNNEL_EXIT);
-                    Self::set_hidden(v, false);
+                    v.set_hidden(false);
                     return VehicleEnterTileStates::from_element(
                         VehicleEnterTileState::EnteredWormhole,
                     );
@@ -1636,7 +1627,7 @@ impl MovementServices {
                     VehicleEnterTileState::EnteredWormhole,
                 );
             } else if vdir == reverse_diag_dir(dir, self.check()) {
-                v.set_tile_raw(tile.0);
+                v.set_tile(tile);
                 match h.kind {
                     VehicleType::VEH_TRAIN => {
                         if TrackBits(h.train.track()) == TrackBits::TRACK_BIT_WORMHOLE {
@@ -1728,7 +1719,7 @@ impl MovementServices {
     /// depot. Negative means next wagon should have left depot n ticks before.
     pub(crate) fn ticks_to_leave_depot(&self, v: crate::train::Handle) -> i32 {
         w::hit(w::MOVE_DEPOT_TICKS);
-        let dir = DiagDirection(World::new(self.shared()).rail_depot_dir(v.vehicle().tile_raw()));
+        let dir = DiagDirection(World::new(self.shared()).rail_depot_dir(v.vehicle().tile().0));
         let length = crate::train::calc_next_vehicle_offset(v);
         let enter = FRACTCOORDS_ENTER[usize::from(dir.0)];
         let x_pos = v.vehicle().x_pos();
@@ -1870,7 +1861,7 @@ pub extern "C" fn openttd_rust_movement_tunnel_visibility(direction: u8) -> u8 {
 /// either native leaf.
 pub(crate) fn should_stop_at_station(shared: &Services, v: VehicleRef, station: StationID) -> bool {
     let s = table(shared);
-    let last_station_visited = StationID(v.last_station_visited_raw());
+    let last_station_visited = v.last_station_visited();
     // SAFETY: Both native leaves resolve the same serialized surviving shell.
     // The Order is owned by Rust and its facade aliases this stable allocation.
     unsafe {

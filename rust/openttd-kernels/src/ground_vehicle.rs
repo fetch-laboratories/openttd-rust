@@ -19,7 +19,7 @@
 use crate::bitmath_func::{clr_bit8, clr_bit16, has_bit, set_bit8, set_bit16};
 use crate::cargo_type::CargoType;
 use crate::direction_func::{diag_dir_to_axis, dir_to_diag_dir};
-use crate::direction_type::{Axis, DiagDirection, Direction};
+use crate::direction_type::{Axis, DiagDirection};
 use crate::engine_type::{EngineID, VehicleAccelerationModel};
 use crate::map_func::World;
 use crate::newgrf_properties::{
@@ -28,7 +28,7 @@ use crate::newgrf_properties::{
 };
 use crate::raw_field::{read_field, write_field};
 use crate::services::{RailType, RoadType};
-use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK, TileIndex};
+use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK};
 use crate::track_func::track_status_to_track_bits;
 use crate::track_type::TrackBits;
 use crate::train::{VehicleRailFlag, VehicleRailFlags};
@@ -200,7 +200,7 @@ impl Owner {
     /// its train or road vehicle owner by type.
     #[inline]
     pub(crate) fn of(v: VehicleRef) -> Self {
-        let kind = VehicleType(v.vehicle_type_raw());
+        let kind = v.vehicle_type();
         let record = v.0.as_ptr();
         if kind == VehicleType::VEH_TRAIN {
             Self {
@@ -363,7 +363,7 @@ impl GroundVehicleType for Train {
     fn get_power(s: &Services, w: &World<'_>, v: VehicleRef, o: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part()
-            && (s.powered)(o.train.get_railtypes(), RailType(w.rail_type(v.tile_raw())))
+            && (s.powered)(o.train.get_railtypes(), RailType(w.rail_type(v.tile().0)))
         {
             let engine = (s.vehicle.engine)(v);
             let mut power = s.property(
@@ -393,7 +393,7 @@ impl GroundVehicleType for Train {
         if o.train.flags().test(VehicleRailFlag::PoweredWagon)
             && (s.powered)(
                 head.train.get_railtypes(),
-                RailType(w.rail_type(v.tile_raw())),
+                RailType(w.rail_type(v.tile().0)),
             )
         {
             return s.first_engine(o).wagon_power();
@@ -474,7 +474,7 @@ impl GroundVehicleType for Train {
     fn get_air_drag_area(v: VehicleRef, o: Owner) -> u8 {
         /* Air drag is higher in tunnels due to the limited cross-section. */
         if TrackBits(o.train.track()) == TrackBits::TRACK_BIT_WORMHOLE
-            && VehStates(v.vehstatus_raw()).test(VehState::Hidden)
+            && v.vehstatus().test(VehState::Hidden)
         {
             28
         } else {
@@ -484,7 +484,7 @@ impl GroundVehicleType for Train {
     /// Checks the current acceleration status of this vehicle.
     #[inline]
     fn get_acceleration_status(v: VehicleRef, o: Owner) -> AccelStatus {
-        if VehStates(v.vehstatus_raw()).test(VehState::Stopped)
+        if v.vehstatus().test(VehState::Stopped)
             || o.train.flags().any(
                 VehicleRailFlags::from_element(VehicleRailFlag::Reversing)
                     .with(VehicleRailFlags::from_element(VehicleRailFlag::Stuck)),
@@ -515,7 +515,7 @@ impl GroundVehicleType for Train {
         w: &World<'_>,
         v: VehicleRef,
     ) -> VehicleAccelerationModel {
-        VehicleAccelerationModel((s.rail_acceleration)(RailType(w.rail_type(v.tile_raw()))))
+        VehicleAccelerationModel((s.rail_acceleration)(RailType(w.rail_type(v.tile().0))))
     }
     /// Returns the slope steepness used by this vehicle.
     #[inline]
@@ -530,7 +530,7 @@ impl GroundVehicleType for Train {
     /// Gets the maximum speed allowed by the track for this vehicle.
     #[inline]
     fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
-        (s.rail_speed)(RailType(w.rail_type(v.tile_raw())))
+        (s.rail_speed)(RailType(w.rail_type(v.tile().0)))
     }
     /// Checks if the vehicle is at a tile that can be sloped.
     #[inline]
@@ -676,7 +676,7 @@ impl GroundVehicleType for RoadVehicle {
     /// Checks the current acceleration status of this vehicle.
     #[inline]
     fn get_acceleration_status(v: VehicleRef, _: Owner) -> AccelStatus {
-        if VehStates(v.vehstatus_raw()).test(VehState::Stopped) {
+        if v.vehstatus().test(VehState::Stopped) {
             AccelStatus::AS_BRAKE
         } else {
             AccelStatus::AS_ACCEL
@@ -724,7 +724,7 @@ impl GroundVehicleType for RoadVehicle {
     #[inline]
     fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
         let rtt = crate::road::availability::get_road_tram_type(Self::roadtype(s, v));
-        let tile = v.tile_raw();
+        let tile = v.tile().0;
         let roadtype = w.asserted(|m| crate::road_map::get_road_type(m, tile, rtt));
         (crate::movement::table(s.shared()).road_type_speed)(roadtype)
     }
@@ -735,7 +735,7 @@ impl GroundVehicleType for RoadVehicle {
         v: VehicleRef,
         _: Owner,
     ) -> bool {
-        let ts = movement.get_road_vehicle_track_status(v, TileIndex(v.tile_raw()));
+        let ts = movement.get_road_vehicle_track_status(v, v.tile());
         let trackbits = TrackBits(track_status_to_track_bits(ts));
         trackbits == TrackBits::TRACK_BIT_X || trackbits == TrackBits::TRACK_BIT_Y
     }
@@ -747,7 +747,7 @@ impl GroundVehicleType for RoadVehicle {
         let rv = v.first();
         let first = Owner::of(rv);
         // SAFETY: the shared slope predicate gets live owners and immutable services.
-        unsafe { crate::road::slope_pixel(v, rv, first.road, v.direction_raw()) }
+        unsafe { crate::road::slope_pixel(v, rv, first.road, v.direction().0) }
     }
     #[inline]
     fn is_in_depot(o: Owner) -> bool {
@@ -844,10 +844,9 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         {
             /* Stop the vehicle if it has no power. */
             if total_power == 0 {
-                v.set_vehstatus_raw(
-                    VehStates(v.vehstatus_raw())
-                        .with(VehStates::from_element(VehState::Stopped))
-                        .0,
+                v.set_vehstatus(
+                    v.vehstatus()
+                        .with(VehStates::from_element(VehState::Stopped)),
                 );
             }
 
@@ -1016,7 +1015,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
     fn is_chain_in_depot(s: &Services, this: VehicleRef, o: Owner) -> bool {
         let v = this.first();
         /* Is the front engine stationary in the depot? */
-        if !World::new(s.shared()).depot(v.tile_raw(), T::TRANSPORT.0) || v.cur_speed() != 0 {
+        if !World::new(s.shared()).depot(v.tile().0, T::TRANSPORT.0) || v.cur_speed() != 0 {
             return false;
         }
 
@@ -1024,7 +1023,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
         let mut part = Some(v);
         while let Some(u) = part {
             let uo = if u == this { o } else { Owner::of(u) };
-            if !T::is_in_depot(uo) || u.tile_raw() != this.tile_raw() {
+            if !T::is_in_depot(uo) || u.tile() != this.tile() {
                 return false;
             }
             part = u.next();
@@ -1124,7 +1123,7 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
             }
             let check = |ok| crate::movement::native_assert(s.shared(), ok);
             /* DirToDiagDir() is a simple right shift */
-            let dir = dir_to_diag_dir(Direction(v.direction_raw()), check);
+            let dir = dir_to_diag_dir(v.direction(), check);
             /* Read variables, so the compiler knows the access doesn't trap */
             let x_pos = v.x_pos() as i8;
             let y_pos = v.y_pos() as i8;
