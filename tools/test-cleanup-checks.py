@@ -1945,6 +1945,29 @@ class TrackedRecordTests(unittest.TestCase):
             text=True,
         )
         self.assertNotIn(done.returncode, (0, POLICY.ITEM_DIFFERS), done.stderr)
+        # A read that fails after an earlier one succeeded is still an error.
+        real = subprocess.check_output(["which", "git"], text=True).strip()
+        with tempfile.TemporaryDirectory() as directory:
+            shim = Path(directory) / "git"
+            count = Path(directory) / "shows"
+            shim.write_text(
+                "#!/bin/sh\n"
+                f'if [ "$1" = show ]; then echo x >> {count}; '
+                f'[ "$(wc -l < {count})" -ge 2 ] && exit 1; fi\n'
+                f'exec {real} "$@"\n'
+            )
+            shim.chmod(0o755)
+            present = "rust/openttd-kernels/src/lib.rs | fn x | allow unsafe_code"
+            done = subprocess.run(
+                [sys.executable, str(script), "--same-item", present, "HEAD", "HEAD"],
+                capture_output=True,
+                text=True,
+                env={
+                    **os.environ,
+                    "PATH": f"{directory}{os.pathsep}{os.environ['PATH']}",
+                },
+            )
+        self.assertNotIn(done.returncode, (0, POLICY.ITEM_DIFFERS), done.stderr)
 
     def test_a_committed_record_file_with_a_non_ascii_name_is_read(self) -> None:
         record = {"kind": "carry", "tool": "rust", "from": "a", "to": "b"}

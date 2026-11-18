@@ -460,10 +460,12 @@ def main() -> int:
         # file, a crash or a failed start exits otherwise, so a caller never
         # reads it as a change.
         site, accepted, head = args.same_item
-        path = site.rsplit(" | ", 2)[0]
-        for revision in (accepted, head):
-            git("show", f"{revision}:{path}")  # Raises, exiting 1, when unreadable.
-        return 0 if unchanged_scope(site, accepted, head) else ITEM_DIFFERS
+        path, scope, _ = site.rsplit(" | ", 2)
+        # Each blob is read once; a failed read raises, exiting 1, never 3.
+        old, new = (git("show", f"{revision}:{path}") for revision in (accepted, head))
+        before = scope_text(path, old, scope)
+        same = before is not None and before == scope_text(path, new, scope)
+        return 0 if same else ITEM_DIFFERS
     args.base_ref = merge_base(args.base_ref, run=git, announce=True)
     # Quick runs lint policy on every change, so every record file is validated
     # here even when no gate needs its records.

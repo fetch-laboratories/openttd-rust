@@ -1887,13 +1887,15 @@ def macos_fallback(args: argparse.Namespace) -> None:
     owned = left = False
     previous = signal.signal(signal.SIGTERM, terminate)
     try:
-        # A SIGTERM during the create waits until the create's outcome is known,
-        # so a variable this invocation set is always owned, and so deleted.
-        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        # A SIGTERM or Ctrl-C during the create waits until the create's outcome
+        # is known, so a variable this invocation set is always owned, and so
+        # deleted.
+        held = {signal.SIGTERM, signal.SIGINT}
+        signal.pthread_sigmask(signal.SIG_BLOCK, held)
         try:
             owned = acquire_fallback(repository, lines)
         finally:
-            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, held)
         gh("run", "rerun", str(run_id), "--failed", "--repo", repository)
         lines.append(
             f"{stamp_now()} reran the failed jobs of {url} after attempt {before}"

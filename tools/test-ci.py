@@ -5012,9 +5012,10 @@ class FallbackGitHub:
         if self.variable is not None:
             raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 409: Conflict")
         self.variable = args[-1].removeprefix("value=")
-        if self.create == "terminated":
-            # SIGTERM lands while the create's answer is still on its way.
-            os.kill(os.getpid(), signal.SIGTERM)
+        if self.create in ("terminated", "interrupted"):
+            # The signal lands while the create's answer is still on its way.
+            held = signal.SIGTERM if self.create == "terminated" else signal.SIGINT
+            os.kill(os.getpid(), held)
         if self.create in ("lost", "lost unread"):
             raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502: Bad Gateway")
         return ""
@@ -5160,6 +5161,20 @@ class MacosFallbackTests(unittest.TestCase):
         )
         self.assertIn("stopped: SIGTERM", output)
         self.assertIsNone(self.left)
+
+    def test_ctrl_c_during_the_create_still_deletes_what_it_created(self) -> None:
+        seen: list[FallbackGitHub] = []
+
+        def setup(fake: FallbackGitHub) -> None:
+            fake.preset(None, "interrupted")
+            seen.append(fake)
+
+        with self.assertRaises(KeyboardInterrupt):
+            self.fallback(self.TWO, setup=setup)
+        (fake,) = seen
+        writes = [c[:2] for c in fake.calls if c[0] != "api" or c[1] == "-X"]
+        self.assertEqual(writes, [("api", "-X"), ("variable", "delete")])
+        self.assertIsNone(fake.variable)
 
     def test_a_failed_rerun_a_timeout_or_sigterm_still_deletes_and_records(
         self,
