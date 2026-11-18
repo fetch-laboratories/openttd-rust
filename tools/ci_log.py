@@ -62,6 +62,7 @@ class Job(TypedDict):
     html_url: str
     run_attempt: NotRequired[int]
     steps: NotRequired[list[Step]]
+    runner_id: NotRequired[int | None]
 
 
 class Run(TypedDict):

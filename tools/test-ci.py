@@ -7,6 +7,7 @@ import itertools
 import json
 import os
 import re
+import signal
 import subprocess
 import tempfile
 import threading
@@ -2865,6 +2866,17 @@ class RetryTests(unittest.TestCase):
                 self.assertEqual(len(calls), ci.READ_ATTEMPTS)
                 self.assertIsNotNone(error)
 
+    def test_an_ordinary_number_is_no_gateway_error(self) -> None:
+        for text, expected in (
+            ("gh: HTTP 502: Bad Gateway (https://api.github.com/graphql)", True),
+            ("HTTP 504: Gateway Timeout", True),
+            ("error: 503 Service Unavailable", True),
+            ("gh: Pull request #502 is already merged", False),
+            ("run 503 not found (HTTP 404)", False),
+        ):
+            error = subprocess.CalledProcessError(1, "gh", stderr=text)
+            self.assertEqual(ci.transient(error), expected, text)
+
     def test_writes_and_other_errors_are_not_repeated(self) -> None:
         for write in (
             ("workflow", "run", "ci-request.yml", "-f", "pr=1"),
@@ -2976,7 +2988,7 @@ class RunWaitTests(unittest.TestCase):
         with (
             patch.object(ci, "api", side_effect=api),
             patch.object(ci, "run_jobs", side_effect=jobs),
-            patch.object(ci, "failure_logs"),
+            patch.object(ci, "failure_logs") as self.logs,
             patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
             patch.object(ci.time, "sleep"),
             patch("sys.argv", ["ci.py", "wait", *argv, "--repo", "example/fork"]),
@@ -3033,6 +3045,19 @@ class RunWaitTests(unittest.TestCase):
         self.assertIn("jobs of attempt 2", paths)
         self.assertIn(f"wait --run {RUN}/attempts/2 --complete", output)
 
+    def test_a_pinned_attempts_failure_summary_reads_that_attempt(self) -> None:
+        failed: list[tuple[str, str | None, list[dict[str, object]]]] = [
+            ("completed", "failure", [self.FAILED])
+        ]
+        code, output, _ = self.wait_run(["--run", RUN + "/attempts/1"], failed, 2)
+        self.assertEqual(code, 1)
+        self.assertEqual(self.logs.call_args.args, ("example/fork", 123, 1))
+        code, output, _ = self.wait_run(
+            ["--run", RUN + "/attempts/1", "--complete"], failed, 2
+        )
+        self.assertEqual(self.logs.call_args.args, ("example/fork", 123, 1))
+        self.assertIn("reruns attempt 2's failed jobs, not attempt 1's", output)
+
     def test_a_bare_number_is_still_a_pr(self) -> None:
         with (
             patch.object(ci, "resolve_request", return_value=Path("r.json")) as found,
@@ -3044,16 +3069,23 @@ class RunWaitTests(unittest.TestCase):
         self.assertEqual(waited.call_args.args[0], Path("r.json"))
 
     def quick(
-        self, argv: list[str], checks: list[dict[str, object] | None]
+        self,
+        argv: list[str],
+        checks: list[dict[str, object] | None],
+        draft: bool = True,
+        heads: list[str] | None = None,
     ) -> tuple[int, str, list[tuple[str, ...]]]:
-        """Run argv against successive Quick check runs of the PR's head."""
+        """Run argv against successive Quick check runs of the PR's head; the PR
+        is a draft until marked ready, and its head follows `heads`."""
         reads = iter(checks)
+        moves = iter(heads or [])
         calls: list[tuple[str, ...]] = []
-        pull = dict(PULL, draft=True)
 
         def api(_repository: str, path: str) -> dict[str, Any]:
             if path == "pulls/170":
-                return pull
+                marked = any(call[:2] == ("pr", "ready") for call in calls)
+                head = next(moves, (heads or [HEAD])[-1])
+                return dict(PULL, draft=draft and not marked, head={"sha": head})
             check = next(reads, checks[-1])
             return {"check_runs": [check] if check else []}
 
@@ -3108,10 +3140,30 @@ class RunWaitTests(unittest.TestCase):
             ["ready", "170", "--wait", "--timeout", "30"], [skipped]
         )
         self.assertEqual(status, 2)
-        # A skip alone is no verdict: wait --quick says to mark the PR ready.
+        # A skip alone is no verdict: on a draft wait --quick says to mark the
+        # PR ready at once; on a ready PR it waits a while for the run first.
         status, output, _ = self.quick(["wait", "170", "--quick"], [skipped])
         self.assertEqual(status, 1)
         self.assertIn("ready 170 --wait", output)
+        done = self.check("completed", "success")
+        status, _, _ = self.quick(
+            ["wait", "170", "--quick"], [skipped, skipped, done], draft=False
+        )
+        self.assertEqual(status, 0)
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick"], [skipped], draft=False
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("ready 170 --wait", output)
+
+    def test_ready_wait_follows_the_head_it_marked(self) -> None:
+        # A push lands between the ready mark and the wait: the wait stops.
+        done = self.check("completed", "success")
+        status, output, _ = self.quick(
+            ["ready", "170", "--wait"], [done], heads=[HEAD, PREVIOUS]
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("PR head changed", output)
 
 
 class QueueWaitTests(unittest.TestCase):
@@ -4822,40 +4874,55 @@ class CommentTests(unittest.TestCase):
 
 def mac_job(
     job_id: int, conclusion: str | None, runner: bool, name: str = "Release"
-) -> dict[str, object]:
-    return {
+) -> ci_log.Job:
+    job: ci_log.Job = {
         "id": job_id,
+        "run_id": 2,
         "name": f"platform / Mac OS (arm64 - {name}) / CI",
         "status": "completed" if conclusion else "in_progress",
         "conclusion": conclusion,
-        "runner_id": 1000 + job_id if runner else 0,
-        "runner_name": f"GitHub Actions {job_id}" if runner else "",
-        "steps": [{}] * 28 if runner else [],
         "html_url": f"https://github.com/example/fork/actions/runs/2/job/{job_id}",
+        "runner_id": 1000 + job_id if runner else 0,
+        "steps": [{"name": "Run", "number": 1, "conclusion": conclusion}] * 28
+        if runner
+        else [],
     }
+    return job
+
+
+# Each job's failure annotation: the hosted pool never took 1, 2, 8 and 9; job
+# 10 was cancelled by hand. The others ran.
+UNACQUIRED = (
+    "The job was not acquired by Runner of type hosted even after multiple attempts"
+)
+ANNOTATIONS = {1: UNACQUIRED, 2: UNACQUIRED, 8: UNACQUIRED, 9: UNACQUIRED}
+ANNOTATIONS[10] = "The run was canceled by @someone."
 
 
 class FallbackGitHub:
     """Runs, their attempts' jobs and the variable, as macos-fallback reads them.
     A rerun of the last run adds an attempt that shows only on the third read
-    after it, so the wait must outlast reads of the old attempt."""
+    after it, so the wait must outlast reads of the old attempt. Each read of
+    the new attempt shows one more of `rerun_jobs`."""
 
     APPEARS_AFTER = 2
 
     def __init__(
         self,
-        attempts: dict[int, dict[int, list[dict[str, object]]]],
-        rerun_jobs: list[dict[str, object]],
+        attempts: dict[int, dict[int, list[ci_log.Job]]],
+        rerun_jobs: list[ci_log.Job],
         variable: str | None,
-        rerun_fails: bool,
+        create: str = "",
     ) -> None:
         self.attempts = attempts
         self.rerun_jobs = rerun_jobs
         self.variable = variable
-        self.rerun_fails = rerun_fails
+        self.create = create  # "", "taken" (someone creates it first) or "lost"
         self.rerun = False
         self.reads = 0
+        self.shown = 0
         self.calls: list[tuple[str, ...]] = []
+        self.on_wait: Callable[[], None] = lambda: None
 
     def latest(self, run_id: int) -> int:
         count = max(self.attempts[run_id])
@@ -4867,21 +4934,37 @@ class FallbackGitHub:
     def api(self, _repository: str, path: str) -> dict[str, object]:
         return {"run_attempt": self.latest(int(path.rsplit("/", 1)[1]))}
 
-    def jobs(self, _repository: str, run_id: int, attempt: int) -> list[object]:
+    def jobs(self, _repository: str, run_id: int, attempt: int) -> list[ci_log.Job]:
         if attempt > max(self.attempts[run_id]):
-            return list(self.rerun_jobs)
+            self.on_wait()
+            self.shown = min(self.shown + 1, len(self.rerun_jobs))
+            return list(self.rerun_jobs[: self.shown])
         return list(self.attempts[run_id][attempt])
 
     def gh(self, *args: str) -> str:
         self.calls.append(args)
-        if args[:2] == ("variable", "set"):
-            self.variable = args[4]
-        elif args[:2] == ("variable", "delete"):
+        if args[0] == "api" and args[-1].endswith("/annotations"):
+            job = int(args[-1].split("/")[-2])
+            note = ANNOTATIONS.get(job)
+            return json.dumps([{"message": note}] if note else [])
+        if args[:3] == ("api", "-X", "POST"):
+            return self.created(args)
+        if args[:2] == ("variable", "delete"):
             self.variable = None
-        elif args[:2] == ("run", "rerun") and self.rerun_fails:
+        elif args[:2] == ("run", "rerun") and self.create == "rerun fails":
             raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 403")
         elif args[:2] == ("run", "rerun"):
             self.rerun = True
+        return ""
+
+    def created(self, args: tuple[str, ...]) -> str:
+        if self.create == "taken":
+            self.variable = "someone else's"
+        if self.variable is not None:
+            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 409: Conflict")
+        self.variable = args[-1].removeprefix("value=")
+        if self.create == "lost":
+            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502: Bad Gateway")
         return ""
 
 
@@ -4889,23 +4972,34 @@ class MacosFallbackTests(unittest.TestCase):
     """ci.py macos-fallback against stubbed gh, never the live repository."""
 
     CAPACITY = [mac_job(1, "cancelled", False), mac_job(2, "cancelled", False, "Debug")]
+    AGAIN = [mac_job(8, "cancelled", False), mac_job(9, "cancelled", False, "Debug")]
     STARTED = [mac_job(3, "cancelled", True)]
+    BY_HAND = [mac_job(10, "cancelled", False)]
     PASSED = [mac_job(4, "success", True), mac_job(5, "success", True, "Debug")]
+    TWO = {1: {1: CAPACITY}, 2: {1: AGAIN}}
 
     def fallback(
         self,
-        attempts: dict[int, dict[int, list[dict[str, object]]]],
+        attempts: dict[int, dict[int, list[ci_log.Job]]],
         *extra: str,
         variable: str | None = None,
-        rerun_fails: bool = False,
-        rerun_jobs: list[dict[str, object]] | None = None,
+        create: str = "",
+        rerun_jobs: list[ci_log.Job] | None = None,
+        names: list[str] | None = None,
+        on_wait: Callable[[], None] | None = None,
     ) -> tuple[int, list[tuple[str, ...]], str]:
-        """Run macos-fallback on the named runs against a FallbackGitHub."""
+        """Run macos-fallback on the runs (or `names`) against a FallbackGitHub."""
         github = FallbackGitHub(
-            attempts, rerun_jobs or self.PASSED, variable, rerun_fails
+            attempts,
+            self.PASSED if rerun_jobs is None else rerun_jobs,
+            variable,
+            create,
         )
+        if on_wait:
+            github.on_wait = on_wait
         clock = itertools.count(0, 10)
-        argv = ["ci.py", "macos-fallback", *map(str, attempts), "--repo", "x/y"]
+        runs = names or [str(run) for run in attempts]
+        argv = ["ci.py", "macos-fallback", *runs, "--repo", "x/y"]
         with (
             patch.object(ci, "api", side_effect=github.api),
             patch.object(ci, "run_jobs", side_effect=github.jobs),
@@ -4922,71 +5016,112 @@ class MacosFallbackTests(unittest.TestCase):
         output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
         output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
         self.left = github.variable
-        return code, github.calls, output
+        writes = [c for c in github.calls if c[0] != "api" or c[1] == "-X"]
+        return code, writes, output
 
-    def test_one_capacity_cancellation_or_a_started_job_changes_nothing(self) -> None:
-        for label, attempts in (
-            ("one attempt", {2: {1: self.CAPACITY}}),
-            ("started job", {1: {1: self.STARTED}, 2: {1: self.CAPACITY}}),
+    def test_one_capacity_cancellation_changes_nothing(self) -> None:
+        for label, attempts, names in (
+            ("one attempt", {2: {1: self.CAPACITY}}, None),
+            ("started job", {1: {1: self.STARTED}, 2: {1: self.CAPACITY}}, None),
+            ("cancelled by hand", {1: {1: self.BY_HAND}, 2: {1: self.CAPACITY}}, None),
+            (
+                "one run named twice",
+                {2: {1: self.CAPACITY}},
+                ["2", "https://github.com/x/y/actions/runs/2"],
+            ),
         ):
             with self.subTest(label):
-                code, calls, output = self.fallback(attempts)
-                self.assertEqual((code, calls), (1, []))
+                code, writes, output = self.fallback(attempts, names=names)
+                self.assertEqual((code, writes), (1, []))
                 self.assertIn("Counted 1 hosted-capacity cancellation", output)
 
     def test_two_cancellations_set_rerun_wait_and_delete_in_order(self) -> None:
-        attempts = {1: {1: self.CAPACITY}, 2: {1: self.CAPACITY}}
-        code, calls, output = self.fallback(
-            attempts, "--pr", "995", "--agent", "/root", "--model", "m", "--effort", "e"
+        code, writes, output = self.fallback(
+            self.TWO, "--pr", "995", "--agent", "/root", "--model", "m", "--effort", "e"
         )
         self.assertEqual(code, 0)
         self.assertEqual(
-            [call[:2] for call in calls],
+            [call[:3] for call in writes],
             [
-                ("variable", "set"),
-                ("run", "rerun"),
-                ("variable", "delete"),
-                ("pr", "comment"),
+                ("api", "-X", "POST"),
+                ("run", "rerun", "2"),
+                ("variable", "delete", ci.MACOS_VARIABLE),
+                ("pr", "comment", "995"),
             ],
         )
-        self.assertEqual(calls[0][4], ci.MACOS_RUNNER)
-        self.assertEqual(calls[1][2], "2")
-        record = calls[3][calls[3].index("--body") + 1]
+        self.assertIn(f"value={ci.MACOS_RUNNER}", writes[0])
+        record = writes[3][writes[3].index("--body") + 1]
         self.assertIn("set CI_MACOS_HEAVY=blacksmith-6vcpu-macos-26", record)
         self.assertIn("deleted CI_MACOS_HEAVY", record)
         self.assertIn("Agent: /root | Model: m | Reasoning effort: e", record)
         self.assertIsNone(self.left)
         # Two attempts of one run count as two cancellations too.
-        code, _, _ = self.fallback({2: {1: self.CAPACITY, 2: self.CAPACITY}})
+        code, _, _ = self.fallback({2: {1: self.CAPACITY, 2: self.AGAIN}})
         self.assertEqual(code, 0)
 
-    def test_an_existing_variable_is_left_alone(self) -> None:
-        attempts = {1: {1: self.CAPACITY}, 2: {1: self.CAPACITY}}
-        code, calls, output = self.fallback(attempts, variable="someone's")
-        self.assertEqual((code, calls), (1, []))
-        self.assertIn("already set", output)
-        self.assertEqual(self.left, "someone's")
+    def test_the_wait_lasts_until_every_rerun_macos_job_completes(self) -> None:
+        # The new attempt lists Release done, and Debug only on the next read.
+        github_jobs = [mac_job(4, "success", True), mac_job(5, None, True, "Debug")]
+        code, writes, _ = self.fallback(
+            self.TWO, "--timeout", "100", rerun_jobs=github_jobs
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(writes[-1][:2], ("variable", "delete"))
 
-    def test_a_failed_rerun_or_a_timeout_still_deletes_and_records(self) -> None:
-        attempts = {1: {1: self.CAPACITY}, 2: {1: self.CAPACITY}}
-        code, calls, output = self.fallback(attempts, rerun_fails=True)
+    def test_an_existing_or_racing_variable_is_left_alone(self) -> None:
+        for label, variable, create in (
+            ("already set", "someone's", ""),
+            ("created first by another", None, "taken"),
+        ):
+            with self.subTest(label):
+                code, writes, output = self.fallback(
+                    self.TWO, variable=variable, create=create
+                )
+                self.assertEqual(code, 1)
+                self.assertEqual([c[:3] for c in writes], [("api", "-X", "POST")])
+                self.assertIn("already exists", output)
+                self.assertNotEqual(self.left, None)
+        # A create whose answer was lost: reported, not deleted, not rerun.
+        code, writes, output = self.fallback(self.TWO, create="lost")
         self.assertEqual(code, 1)
-        self.assertEqual(calls[-1][:2], ("variable", "delete"))
+        self.assertEqual([c[:2] for c in writes], [("api", "-X")])
+        self.assertIn("owner unknown", output)
+        self.assertEqual(self.left, ci.MACOS_RUNNER)
+
+    def test_a_failed_rerun_a_timeout_or_sigterm_still_deletes_and_records(
+        self,
+    ) -> None:
+        code, writes, output = self.fallback(self.TWO, create="rerun fails")
+        self.assertEqual(code, 1)
+        self.assertEqual(writes[-1][:2], ("variable", "delete"))
         self.assertIn("stopped:", output)
         self.assertIn("deleted CI_MACOS_HEAVY", output)
         self.assertIsNone(self.left)
-        code, calls, output = self.fallback(
-            attempts, "--timeout", "60", rerun_jobs=[mac_job(6, None, True)]
+        code, writes, output = self.fallback(
+            self.TWO, "--timeout", "60", rerun_jobs=[mac_job(6, None, True)]
         )
         self.assertEqual(code, 2)
-        self.assertEqual(calls[-1][:2], ("variable", "delete"))
+        self.assertEqual(writes[-1][:2], ("variable", "delete"))
         self.assertIn("deleted CI_MACOS_HEAVY", output)
-        # A macOS job that fails on the paid runner fails the command, deleted.
-        code, _, output = self.fallback(
-            attempts, rerun_jobs=[mac_job(7, "failure", True)]
+        # signal-witness.py forwards SIGTERM to a background job.
+        code, writes, output = self.fallback(
+            self.TWO, on_wait=lambda: os.kill(os.getpid(), signal.SIGTERM)
         )
+        self.assertEqual(code, 128 + signal.SIGTERM)
+        self.assertEqual(writes[-1][:2], ("variable", "delete"))
+        self.assertIn("stopped: SIGTERM", output)
+        self.assertIsNone(self.left)
+        # A macOS job that fails on the paid runner fails the command, deleted.
+        failing = [mac_job(7, "failure", True), mac_job(5, "success", True, "Debug")]
+        code, _, output = self.fallback(self.TWO, rerun_jobs=failing)
         self.assertEqual(code, 1)
         self.assertIsNone(self.left)
+
+    def test_a_run_with_no_failed_macos_job_is_refused(self) -> None:
+        passed = {1: {1: self.CAPACITY}, 2: {1: self.AGAIN, 2: self.PASSED}}
+        code, writes, output = self.fallback(passed)
+        self.assertEqual((code, writes), (1, []))
+        self.assertIn("no failed macOS job", output)
 
 
 class FailureCountTests(unittest.TestCase):
