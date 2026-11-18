@@ -35,17 +35,9 @@ use std::ptr;
 /// A nullable canonical record; native shell leaves receive `Ctx::sh`.
 type R = *mut OpenTTDVehicle;
 
-/// Original error strings of this component not already in a shared table.
-#[repr(C)]
-pub struct Strings {
-    pub rear_follow: u32,
-    pub depot_only: u32,
-    pub no_orders: u32,
-}
 #[repr(C)]
 pub struct Services {
     pub cargo_capacity: &'static crate::cargo_storage::CapacityServices,
-    pub strings: Strings,
     pub train_if_valid: extern "C" fn(u32) -> *mut (),
     pub new_wagon: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
     pub new_engine: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
@@ -60,7 +52,11 @@ pub struct Services {
 }
 
 use crate::economy_type::ExpensesType;
-use crate::table::strings::{STR_ERROR_INCOMPATIBLE_RAIL_TYPES, STR_NULL};
+use crate::table::strings::{
+    STR_ERROR_INCOMPATIBLE_RAIL_TYPES, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS,
+    STR_ERROR_REAR_ENGINE_FOLLOW_FRONT, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT,
+    STR_NULL,
+};
 use crate::train::CCF_ARRANGE;
 
 /// Resolved immutable service tables; holds no world or owner borrow.
@@ -986,7 +982,7 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
         dst = x.last_engine_part(dst);
     }
     if x.is_rear(src) {
-        return (cost.error)(out, s.strings.rear_follow);
+        return (cost.error)(out, STR_ERROR_REAR_ENGINE_FOLLOW_FRONT.0);
     }
     /* When moving all wagons, we can't have the same src_head and dst_head */
     if move_chain && src_head == dst_head {
@@ -998,11 +994,11 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
     }
     /* Check if all vehicles in the source train are stopped inside a depot. */
     if !unsafe { (x.w.stopped_in_depot)(Ctx::sh(src_head)) } {
-        return (cost.error)(out, s.strings.depot_only);
+        return (cost.error)(out, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT.0);
     }
     /* Check if all vehicles in the destination train are stopped inside a depot. */
     if !dst_head.is_null() && !unsafe { (x.w.stopped_in_depot)(Ctx::sh(dst_head)) } {
-        return (cost.error)(out, s.strings.depot_only);
+        return (cost.error)(out, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT.0);
     }
     /* First make a backup of the order of the trains. That way we can do
      * whatever we want with the order and later on easily revert. */
@@ -1200,7 +1196,7 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
     let v = x.first_engine_part(x.rec(t));
     let first = x.first(v);
     if x.is_rear(v) {
-        return (cost.error)(out, s.strings.rear_follow);
+        return (cost.error)(out, STR_ERROR_REAR_ENGINE_FOLLOW_FRONT.0);
     }
     /* First make a backup of the order of the train. That way we can do
      * whatever we want with the order and later on easily revert. */
@@ -1234,7 +1230,7 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
     if crate::vehicle_base::order_list(first).is_null() && (x.c.orders.list_capacity)() == 0 {
         /* Restore the train we had. */
         restore_train_backup(x, &original);
-        return (cost.error)(out, s.strings.no_orders);
+        return (cost.error)(out, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS.0);
     }
     (cost.expense_money)(out, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
     let mut part = sell_head;
@@ -1305,8 +1301,7 @@ pub unsafe extern "C" fn openttd_rust_train_move(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
-        cargo_capacity, strings, train_if_valid, new_wagon, new_engine, engine_dates, new_rear,
+        cargo_capacity, train_if_valid, new_wagon, new_engine, engine_dates, new_rear,
         invalidate_grf, unit, use_unit, release_unit, company_dirty, depot_changed,
     };
-    "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };
 }
