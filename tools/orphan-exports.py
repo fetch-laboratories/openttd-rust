@@ -55,6 +55,12 @@ DECLARATION = re.compile(
     rf'(?m)^[ \t]*(?:extern\s+"C"\s+)?(?!return\b|else\b)'
     rf"[\w:<>]+[\w:<> \t*&]*[\s*&]({NAME})\s*\([^;{{}}]*\)\s*(?:noexcept\s*)?;"
 )
+# A declaration anywhere a statement may start, including after `{` or `;` on one
+# line and with its return type on the line before the name.
+FIXTURE_DECLARATION = re.compile(
+    rf'(?m)(?:^|(?<=[;{{}}]))[ \t]*(?:extern\s+"C"\s+)?(?!return\b|else\b)'
+    rf"[\w:<>]+[\w:<> \t*&]*?[\s*&]+({NAME})\s*\([^;{{}}]*\)\s*(?:noexcept\s*)?;"
+)
 # `Class::Member(` heading a definition; the body's braces are matched below.
 MEMBER_HEAD = re.compile(r"\b(\w+)::(\w+)\s*(?:<[^;(){}]*>\s*)?\(")
 QUALIFIERS = re.compile(r"\s*(?:(?:const|noexcept|override|final)\b\s*)*")
@@ -328,7 +334,8 @@ def apply_kept_fixtures(
         fixture = without_comments(
             files.get(row.fixture, ""), row.fixture, strings=True
         )
-        fixture = DECLARATION.sub("", re.sub(r"\bextern\s+(?=\w)", "", fixture))
+        fixture = re.sub(r'\bextern\s+"C"\s*\{', ";", fixture)
+        fixture = FIXTURE_DECLARATION.sub("", re.sub(r"\bextern\s+(?=\w)", "", fixture))
         if not re.search(r"#\d+", row.owner):
             result[f"kept fixture row names no owner issue | {row.export}"] = set()
         elif row.export not in re.findall(NAME, fixture):

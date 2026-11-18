@@ -83,9 +83,23 @@ class OrphanTests(unittest.TestCase):
         for declaration in (
             "void openttd_rust_kept();\nvoid Test() {}",
             'extern "C" void openttd_rust_kept();\nvoid Test() {}',
+            'extern "C" { void openttd_rust_kept(); }\nvoid Test() {}',
+            "  void\n  openttd_rust_kept();\nvoid Test() {}",
+            "const Foo *\nopenttd_rust_kept(int a,\n    int b) noexcept;\nvoid Test() {}",
         ):
             files["src/tests/kept.cpp"] = declaration
             self.assertIn(
+                "kept fixture no longer uses its export | openttd_rust_kept",
+                ORPHANS.violations(files, kept=kept),
+            )
+        # A real call still counts, after a declaration on the same line.
+        for call in (
+            "void Test() { openttd_rust_kept(); }",
+            "void Test() { int x = openttd_rust_kept(1);\n(void)x; }",
+            'extern "C" { void openttd_rust_kept(); }\nvoid Test() { openttd_rust_kept(); }',
+        ):
+            files["src/tests/kept.cpp"] = call
+            self.assertNotIn(
                 "kept fixture no longer uses its export | openttd_rust_kept",
                 ORPHANS.violations(files, kept=kept),
             )
