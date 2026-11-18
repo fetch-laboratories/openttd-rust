@@ -2455,7 +2455,6 @@ pub(crate) const ORDERS: crate::orders::Leaves = crate::orders::Leaves {
     no_jet_crash: unreachable0,
     append_station: unreachable2,
     station_commands: ptr::null(),
-    command_error: unreachable3,
     timetable_dirty: unreachable1,
     invalidate_order: unreachable2,
     delete_order_news: unreachable1,
