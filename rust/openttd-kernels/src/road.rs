@@ -562,9 +562,9 @@ impl<'a> Game<'a> {
         DiagDirection(self.world().tunnel_bridge_dir(tile.0))
     }
     /// The `RoadDriveEntry` row `_road_drive_data[GetRoadTramType(v->roadtype)][index]`,
-    /// at `frame`.
-    fn road_drive_entry(&self, v: VehicleRef, index: usize, frame: usize) -> (u8, u8) {
-        let rtt = get_road_tram_type(self.roadtype(v));
+    /// at `frame`. The arguments are evaluated in the subscripts' order: callers read and
+    /// classify `v->roadtype` before computing the row index and the frame.
+    fn road_drive_entry(rtt: RoadTramType, index: usize, frame: usize) -> (u8, u8) {
         crate::road_data::entry(rtt == RoadTramType::RTT_TRAM, index, frame)
     }
     /// `_settings_game.vehicle.road_side << RVS_DRIVE_SIDE`.
@@ -1571,8 +1571,8 @@ impl<'a> Game<'a> {
         v.v.set_direction(diag_dir_to_dir(dir, self.check()));
 
         let tdir = Trackdir(diag_dir_to_diag_trackdir(dir.0, self.check()));
-        let rdp = self.road_drive_entry(
-            v.v,
+        let rdp = Self::road_drive_entry(
+            get_road_tram_type(self.roadtype(v.v)),
             self.drive_side() + usize::from(tdir.0),
             usize::from(RVC_DEPOT_START_FRAME),
         );
@@ -1835,8 +1835,8 @@ impl<'a> Game<'a> {
         /* Get move position data for next frame.
          * For a drive-through road stop use 'straight road' move data.
          * In this case v->state is masked to give the road stop entry direction. */
-        let rd = self.road_drive_entry(
-            v.v,
+        let rd = Self::road_drive_entry(
+            get_road_tram_type(self.roadtype(v.v)),
             (usize::from(
                 if crate::bitmath_func::has_bit(v.state(), RVS_IN_DT_ROAD_STOP) {
                     v.state() & RVSB_ROAD_STOP_TRACKDIR_MASK
@@ -1969,8 +1969,8 @@ impl<'a> Game<'a> {
                 }
 
                 /* Get position data for first frame on the new tile */
-                let rdp = self.road_drive_entry(
-                    v.v,
+                let rdp = Self::road_drive_entry(
+                    get_road_tram_type(self.roadtype(v.v)),
                     (usize::from(dir.0) + self.drive_side()) ^ usize::from(v.overtaking()),
                     usize::from(start_frame),
                 );
@@ -2126,8 +2126,8 @@ impl<'a> Game<'a> {
                 return false;
             }
 
-            let rdp = self.road_drive_entry(
-                v.v,
+            let rdp = Self::road_drive_entry(
+                get_road_tram_type(self.roadtype(v.v)),
                 self.drive_side() + usize::from(dir.0),
                 usize::from(turn_around_start_frame),
             );
