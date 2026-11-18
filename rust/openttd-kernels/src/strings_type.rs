@@ -9,11 +9,25 @@
 
 /// `INVALID_STRING_ID`; `CMD_ERROR` is `CommandCost(INVALID_STRING_ID)`.
 pub const INVALID_STRING_ID: u32 = StringID::INVALID_STRING_ID.0;
-/// `SPECSTR_TOWNNAME_START`, the first built-in town-name generator string.
-pub const SPECSTR_TOWNNAME_START: u32 = 0x20C0;
 
-/// `BUILTIN_TOWNNAME_GENERATOR_COUNT`.
+/// `BUILTIN_TOWNNAME_GENERATOR_COUNT`: the number of builtin generators for town names.
 pub const BUILTIN_TOWNNAME_GENERATOR_COUNT: u32 = 21;
+
+/// `SPECSTR_TOWNNAME_START`: special strings for town names. The town name is generated
+/// dynamically on request.
+pub const SPECSTR_TOWNNAME_START: StringID = StringID(0x20C0);
+/// `SPECSTR_TOWNNAME_END`.
+pub const SPECSTR_TOWNNAME_END: StringID =
+    StringID(SPECSTR_TOWNNAME_START.0 + BUILTIN_TOWNNAME_GENERATOR_COUNT);
+
+/// `SPECSTR_COMPANY_NAME_START`: special strings for company names on the form "TownName
+/// transport".
+pub const SPECSTR_COMPANY_NAME_START: StringID = StringID(0x70EA);
+
+/// `SPECSTR_ANDCO_NAME`: special string for Surname & Co company names.
+pub const SPECSTR_ANDCO_NAME: StringID = StringID(0x70E6);
+/// `SPECSTR_PRESIDENT_NAME`: special string for the president's name.
+pub const SPECSTR_PRESIDENT_NAME: StringID = StringID(0x70E7);
 
 /// Bits per string tab (`TAB_SIZE_BITS`).
 pub const TAB_SIZE_BITS: u32 = 11;
