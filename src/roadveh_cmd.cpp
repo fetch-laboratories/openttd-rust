@@ -44,17 +44,10 @@
 
 #include "rust/vehicle_services.h"
 #include "rust/road_command_services.h"
-#include "rust/settings_services.h"
+#include "rust/orders_ffi.h"
 
 static const OpenTTDRoadLeaves &GetRoadLeaves();
 const OpenTTDRoadLeaves &GetRustRoadLeaves() noexcept { return GetRoadLeaves(); }
-
-/** Settings and map size a road entry may consult, read once per entry. */
-static OpenTTDRoadEntry GetRoadEntry(const RoadVehicle *v) noexcept
-{
-	return {.ground = v->rust_ground.state, .acceleration_model = RustRoadAccelerationModel(),
-		.road_side = RustRoadSide(), .queue = RustRoadQueue(), .map_log_x = static_cast<uint8_t>(Map::LogX())};
-}
 
 static const uint16_t _roadveh_images[] = {
 	0xCD4, 0xCDC, 0xCE4, 0xCEC, 0xCF4, 0xCFC, 0xD0C, 0xD14,
@@ -213,19 +206,16 @@ void RoadVehUpdateCache(RoadVehicle *v, bool same_length)
 }
 
 
-static FindDepotData FindClosestRoadDepot(const RoadVehicle *v, int max_distance)
-{
-	if (IsRoadDepotTile(v->GetTile())) return FindDepotData(v->GetTile(), 0);
-
-	return YapfRoadVehicleFindNearestDepot(v, max_distance);
-}
-
 ClosestDepot RoadVehicle::FindClosestDepot()
 {
-	FindDepotData rfdd = FindClosestRoadDepot(this, 0);
-	if (rfdd.best_length == UINT_MAX) return ClosestDepot();
-
-	return ClosestDepot(rfdd.tile, GetDepotIndex(rfdd.tile));
+	OpenTTDOrdersClosest closest;
+	openttd_rust_road_find_closest_depot(RustVehicle(this), this->GetRustState(), &GetRoadLeaves(), &closest);
+	ClosestDepot result;
+	result.location = TileIndex{closest.tile};
+	result.destination = DestinationID(closest.destination);
+	result.reverse = closest.reverse != 0;
+	result.found = closest.found != 0;
+	return result;
 }
 
 /**
@@ -244,7 +234,7 @@ CommandCost CmdTurnRoadVeh(DoCommandFlags flags, VehicleID veh_id)
 	CommandCost ret = CheckOwnership(v->GetOwner());
 	if (ret.Failed()) return ret;
 
-	if (!openttd_rust_road_turn(RustVehicle(v), v->GetRustState(), flags.Test(DoCommandFlag::Execute), &GetRoadLeaves())) return CMD_ERROR;
+	if (!openttd_rust_road_turn(RustVehicle(v), v->GetRustState(), flags.base(), &GetRoadLeaves())) return CMD_ERROR;
 
 	return CommandCost();
 }
@@ -319,7 +309,7 @@ void RoadVehicle::UpdateDeltaXY()
  */
 int RoadVehicle::GetCurrentMaxSpeed() const
 {
-	return openttd_rust_road_max_speed(RustVehicle(this), this->GetRustState(), RustRoadAccelerationModel(), &GetRoadLeaves());
+	return openttd_rust_road_max_speed(RustVehicle(this), this->GetRustState(), &GetRoadLeaves());
 }
 
 /**
@@ -406,8 +396,7 @@ TileIndex RoadVehicle::GetOrderStationLocation(StationID station)
 
 bool RoadVehLeaveDepot(RoadVehicle *v, bool first)
 {
-	OpenTTDRoadEntry entry = GetRoadEntry(v);
-	return openttd_rust_road_leave_depot(RustVehicle(v), v->GetRustState(), first, &entry, &GetRoadLeaves());
+	return openttd_rust_road_leave_depot(RustVehicle(v), v->GetRustState(), first, &GetRoadLeaves());
 }
 
 
@@ -424,9 +413,8 @@ bool RoadVehLeaveDepot(RoadVehicle *v, bool first)
 
 bool IndividualRoadVehicleController(RoadVehicle *v, const RoadVehicle *prev)
 {
-	OpenTTDRoadEntry entry = GetRoadEntry(v);
 	OpenTTDRoadCommandSlot road;
-	return openttd_rust_road_individual(RustVehicle(v), v->GetRustState(), RustVehicle(prev), prev == nullptr ? nullptr : prev->GetRustState(), &entry, &GetRoadLeaves(), &road);
+	return openttd_rust_road_individual(RustVehicle(v), v->GetRustState(), RustVehicle(prev), prev == nullptr ? nullptr : prev->GetRustState(), &GetRoadLeaves(), &road);
 }
 
 
@@ -439,9 +427,8 @@ Money RoadVehicle::GetRunningCost() const
 bool RoadVehicle::Tick()
 {
 	PerformanceAccumulator framerate(PFE_GL_ROADVEHS);
-	const auto entry = this->IsFrontEngine() ? GetRoadEntry(this) : OpenTTDRoadEntry{};
 	OpenTTDRoadCommandSlot road;
-	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &entry, &GetRoadLeaves(), &road);
+	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &GetRoadLeaves(), &road);
 }
 
 void RoadVehicle::SetDestTile(TileIndex tile)
@@ -454,13 +441,13 @@ void RoadVehicle::SetDestTile(TileIndex tile)
 /** Calander day handler */
 void RoadVehicle::OnNewCalendarDay()
 {
-	openttd_rust_road_calendar_day(RustVehicle(this), RustVehicleFront(this), &GetRoadLeaves());
+	openttd_rust_road_calendar_day(RustVehicle(this), this->GetRustState(), &GetRoadLeaves());
 }
 
 /** Economy day handler. */
 void RoadVehicle::OnNewEconomyDay()
 {
-	openttd_rust_road_economy_day(RustVehicle(this), this->GetRustState(), RustVehicleFront(this), &GetRoadLeaves());
+	openttd_rust_road_economy_day(RustVehicle(this), this->GetRustState(), &GetRoadLeaves());
 }
 
 Trackdir RoadVehicle::GetVehicleTrackdir() const

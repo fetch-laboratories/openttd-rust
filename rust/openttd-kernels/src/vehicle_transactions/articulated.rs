@@ -111,9 +111,10 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
                 // Callback is called when the consist is finished.
                 (s.road_length)(cache);
                 unsafe {
-                    crate::road::set_depot_state((r.road_state)(
-                        super::vehicle_ref(v, r.common.vehicles).0.as_ptr(),
-                    ));
+                    crate::road::set_state(
+                        super::vehicle_ref(v, r.common.vehicles).road(),
+                        crate::roadveh::RVSB_IN_DEPOT,
+                    );
                 };
                 (s.copy_roadtype)(v, first);
                 v

@@ -56,6 +56,61 @@ class OrphanTests(unittest.TestCase):
             },
         )
 
+    def test_kept_fixture_exports_leave_with_their_fixture(self) -> None:
+        files = {
+            "rust/lib.rs": export("kept") + export("unlisted"),
+            "src/rust/ffi.h": "void openttd_rust_kept();\nvoid openttd_rust_unlisted();\n",
+            "src/tests/kept.cpp": "void Test() { openttd_rust_kept(); }",
+            "src/tests/other.cpp": "void Test() { openttd_rust_unlisted(); }",
+        }
+        kept = ORPHANS.kept_fixtures(
+            "# comment\nopenttd_rust_kept | src/tests/kept.cpp | #725\n"
+        )
+        self.assertEqual(
+            ORPHANS.violations(files, kept=kept),
+            {"no production user | openttd_rust_unlisted"},
+        )
+        files["src/tests/kept.cpp"] = "// openttd_rust_kept();\nvoid Test() {}"
+        self.assertEqual(
+            ORPHANS.violations(files, kept=kept),
+            {
+                "no production user | openttd_rust_kept",
+                "no production user | openttd_rust_unlisted",
+                "kept fixture no longer uses its export | openttd_rust_kept",
+            },
+        )
+        # A declaration alone is not a use, with or without its linkage.
+        for declaration in (
+            "void openttd_rust_kept();\nvoid Test() {}",
+            'extern "C" void openttd_rust_kept();\nvoid Test() {}',
+            'extern "C" { void openttd_rust_kept(); }\nvoid Test() {}',
+            "  void\n  openttd_rust_kept();\nvoid Test() {}",
+            "const Foo *\nopenttd_rust_kept(int a,\n    int b) noexcept;\nvoid Test() {}",
+        ):
+            files["src/tests/kept.cpp"] = declaration
+            self.assertIn(
+                "kept fixture no longer uses its export | openttd_rust_kept",
+                ORPHANS.violations(files, kept=kept),
+            )
+        # A real call still counts, after a declaration on the same line.
+        for call in (
+            "void Test() { openttd_rust_kept(); }",
+            "void Test() { int x = openttd_rust_kept(1);\n(void)x; }",
+            'extern "C" { void openttd_rust_kept(); }\nvoid Test() { openttd_rust_kept(); }',
+        ):
+            files["src/tests/kept.cpp"] = call
+            self.assertNotIn(
+                "kept fixture no longer uses its export | openttd_rust_kept",
+                ORPHANS.violations(files, kept=kept),
+            )
+        unowned = ORPHANS.kept_fixtures(
+            "openttd_rust_kept | src/tests/kept.cpp | later\n"
+        )
+        self.assertIn(
+            "kept fixture row names no owner issue | openttd_rust_kept",
+            ORPHANS.violations(files, kept=unowned),
+        )
+
     def test_uncalled_free_functions_and_the_exports_they_hold(self) -> None:
         files = {
             "src/rust/ffi.h": "uint8_t openttd_rust_dead(uint32_t);\n"

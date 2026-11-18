@@ -213,8 +213,7 @@ impl Owner {
             Self {
                 state: v.ground(),
                 train: crate::train::Handle::NONE,
-                // `OpenTTDRoadState` is the first field of the `#[repr(C)]` road owner.
-                road: read_field!(record, road).cast(),
+                road: v.road(),
                 kind,
             }
         }
@@ -744,14 +743,40 @@ impl GroundVehicleType for RoadVehicle {
     /// safe to return true even if it is not reversing.
     #[inline]
     fn has_to_use_get_slope_pixel_z(v: VehicleRef) -> bool {
-        let rv = v.first();
-        let first = Owner::of(rv);
-        // SAFETY: the shared slope predicate gets live owners and immutable services.
-        unsafe { crate::road::slope_pixel(v, rv, first.road, v.direction().0) }
+        let mut rv = v.first();
+        // SAFETY: a live serialized road owner; one scalar read.
+        let rv_state = unsafe { crate::road::state(Owner::of(rv).road) };
+
+        /* Check if this vehicle is in the same direction as the road under.
+         * We already know it has either GVF_GOINGUP_BIT or GVF_GOINGDOWN_BIT set. */
+
+        if rv_state <= crate::roadveh::RVSB_TRACKDIR_MASK
+            && crate::track_func::is_reversing_road_trackdir(rv_state, |ok| {
+                crate::services_assert::check(ok);
+            })
+        {
+            /* If the first vehicle is reversing, this vehicle may be reversing too
+             * (especially if this is the first, and maybe the only, vehicle).*/
+            return true;
+        }
+
+        while rv != v {
+            /* If any previous vehicle has different direction,
+             * we may be in the middle of reversing. */
+            if v.direction() != rv.direction() {
+                return true;
+            }
+            // SAFETY: `rv` starts at `v`'s front and stops at `v`, so while `rv != v` a part
+            // of the live chain follows it; the original dereferences `Next()` unchecked.
+            rv = unsafe { rv.next_unchecked() };
+        }
+
+        false
     }
     #[inline]
     fn is_in_depot(o: Owner) -> bool {
-        crate::road::is_in_depot(o.road)
+        // SAFETY: a live serialized road owner; one scalar read.
+        unsafe { crate::road::is_in_depot(o.road) }
     }
 }
 
@@ -1203,6 +1228,15 @@ pub(crate) fn get_acceleration(s: &Services, v: VehicleRef) -> i32 {
 #[inline]
 pub(crate) fn get_acceleration_owned(s: &Services, v: VehicleRef, o: Owner) -> i32 {
     dispatch!(o, get_acceleration(s, v, o))
+}
+/// `GetAccelerationStatus` of a train or road vehicle, with the owner the caller resolved.
+#[inline]
+pub(crate) fn get_acceleration_status_owned(v: VehicleRef, o: Owner) -> AccelStatus {
+    if o.kind == VehicleType::VEH_TRAIN {
+        Train::get_acceleration_status(v, o)
+    } else {
+        RoadVehicle::get_acceleration_status(v, o)
+    }
 }
 /// `GroundVehicle::IsChainInDepot`.
 pub(crate) fn is_chain_in_depot(s: &Services, v: VehicleRef) -> bool {

@@ -19,9 +19,9 @@ use crate::tile_type::TropicZone;
 pub(crate) fn is_tile_type(s: &crate::services::Services, tile: TileIndex, kind: TileType) -> bool {
     crate::map_func::World::new(s).is_tile_type(tile, kind)
 }
-
 impl crate::map_func::World<'_> {
-    /// `IsTileType`: whether `GetTileType` of the tile is `kind`.
+    /// `IsTileType`: whether `GetTileType` of the tile is `kind`, through this entry's
+    /// descriptor.
     #[inline]
     pub(crate) fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
         self.kind(tile) == kind
@@ -582,6 +582,14 @@ mod tests {
             |w, t| [w.road_type(t, true).into(), 0],
             [[37, 0]; 2],
             [1, 1, 2],
+        ),
+        // `assert(IsRoadDepot(t))` fails after `GetRoadTileType`'s own assertions, and only
+        // where the native build asserts; the direction bits are read either way.
+        (
+            "GetRoadDepotDirection",
+            |w, t| [w.road_depot_dir(t).into(), 0],
+            [[3, 0]; 2],
+            [2, 2, 3],
         ),
         (
             "HasRoadWorks",

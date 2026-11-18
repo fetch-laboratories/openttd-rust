@@ -355,6 +355,7 @@ const OpenTTDCompanyFinanceServices &GetRustCompanyFinanceServices() noexcept
 	static const OpenTTDCompanyFinanceServices services{
 		.current_company = RustCurrentCompanyID, .set_current_company = RustSetCurrentCompanyID,
 		.networking = RustNetworking, .company_finances = Fin_company_finances,
+		.company_get_finances = RustCompanyGetFinances,
 		.invalidate_company_windows = Fin_invalidate_company_windows,
 		.give_money_message = Fin_give_money_message, .money_animation = Fin_money_animation,
 	};

@@ -203,6 +203,9 @@ pub struct FinanceServices {
     pub set_current_company: extern "C" fn(u8),
     pub networking: extern "C" fn() -> bool,
     pub company_finances: extern "C" fn(u8) -> *mut Finances,
+    /// `&Company::Get(id)->Finances()`: the pool's checked `Get`, asserting
+    /// `id < first_unused`.
+    pub company_get_finances: extern "C" fn(u8) -> *mut Finances,
     pub invalidate_company_windows: extern "C" fn(u8),
     pub give_money_message: extern "C" fn(u8, i64),
     pub money_animation: extern "C" fn(u32, i64),
@@ -714,6 +717,18 @@ fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i6
     if cost != 0 {
         subtract(f, p, id, cost, expense);
     }
+}
+/// `SubtractMoneyFromCompanyFract`: subtract money from a company, including the money
+/// fraction.
+pub(crate) fn subtract_money_from_company_fract(
+    f: &FinanceServices,
+    company: crate::company_type::CompanyID,
+    cost: i64,
+    expense: crate::economy_type::ExpensesType,
+) {
+    // `Company::Get(company)`: the pool's checked lookup, as in the native entry.
+    let p = (f.company_get_finances)(company.0);
+    subtract_fraction(f, p, company.0, cost, usize::from(expense.0));
 }
 /// The `StationID` of a station pool index that `NextOwned<Station>` yields.
 #[allow(
@@ -2223,6 +2238,7 @@ crate::abi::layouts! {
         set_current_company,
         networking,
         company_finances,
+        company_get_finances,
         invalidate_company_windows,
         give_money_message,
         money_animation,
@@ -2489,6 +2505,7 @@ mod financial_command_tests {
         set_current_company,
         networking,
         company_finances,
+        company_get_finances: company_finances,
         invalidate_company_windows: invalidate,
         give_money_message: message,
         money_animation: animation,
@@ -2678,6 +2695,33 @@ mod financial_command_tests {
         for (stream, &(name, _, _)) in actual.into_iter().zip(&SECTIONS) {
             assert_eq!(crate::oracle::check(&oracle, name, stream), 40_320);
         }
+    }
+
+    /// `SubtractMoneyFromCompanyFract` resolves the payer with the checked `Company::Get`
+    /// (`company_cmd.cpp:326`), never the `GetIfValid` finance lookup.
+    #[test]
+    fn fract_charge_uses_checked_company_get() {
+        let _guard = ECONOMY_LOCK.lock().unwrap();
+        let _run = Run::start();
+        let finance = FinanceServices {
+            company_finances: crate::test_tables::FINANCE.company_finances,
+            ..FINANCE
+        };
+        let owner = FIXTURE.with_borrow(|f| f.owners[1]);
+        // SAFETY: The fixture owner is exclusive to this test; no callback holds it.
+        unsafe {
+            owner.write(std::mem::zeroed());
+            (*owner).money = 100;
+        }
+        subtract_money_from_company_fract(
+            &finance,
+            crate::company_type::CompanyID(1),
+            0x240,
+            crate::economy_type::ExpensesType::EXPENSES_ROADVEH_RUN,
+        );
+        assert_eq!(read_field!(owner, fraction), 0xC0);
+        assert_eq!(read_field!(owner, money), 97);
+        FIXTURE.with_borrow(|f| assert_eq!(f.trace, [[3, 1, 0]]));
     }
 }
 

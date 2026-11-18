@@ -89,7 +89,7 @@ pub struct CargoInfo {
 pub struct Services {
     pub(crate) vehicle: &'static VehicleServices,
     pub(crate) shared: &'static crate::services::Services,
-    cache: unsafe extern "C" fn(V) -> *mut Cache,
+    pub(crate) cache: unsafe extern "C" fn(V) -> *mut Cache,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub(crate) cargo_classes: unsafe extern "C" fn(u8) -> u16,
     cargo_bitnum: unsafe extern "C" fn(u8) -> u8,
@@ -161,6 +161,76 @@ pub struct Services {
     ground: unsafe extern "C" fn() -> *const crate::ground_vehicle::Services,
     cargo_services: unsafe extern "C" fn() -> *const crate::cargo_storage::Services,
 }
+/// Test-only table with every leaf unreachable; its private fields keep it in this module.
+#[cfg(test)]
+pub(crate) const TEST_TABLE: Services = Services {
+    vehicle: &crate::test_tables::VEHICLE,
+    shared: &crate::test_tables::SHARED,
+    cache: crate::test_tables::unreachable1,
+    capabilities: &crate::engine_capabilities::TEST_TABLE,
+    cargo_classes: crate::test_tables::unreachable1,
+    cargo_bitnum: crate::test_tables::unreachable1,
+    livery: crate::test_tables::unreachable4,
+    company_info: crate::test_tables::unreachable2,
+    cached_override: crate::test_tables::unreachable1,
+    write_override: crate::test_tables::unreachable2,
+    random_bits: crate::test_tables::unreachable1,
+    waiting: crate::test_tables::unreachable1,
+    write_random: crate::test_tables::unreachable2,
+    write_waiting: crate::test_tables::unreachable2,
+    resolve_callback: crate::test_tables::unreachable7,
+    resolve_random: crate::test_tables::unreachable3,
+    order: crate::test_tables::unreachable1,
+    cargo_owner: crate::test_tables::unreachable1,
+    real_count: crate::test_tables::unreachable2,
+    real_at: crate::test_tables::unreachable3,
+    engine_by_id: crate::test_tables::unreachable1,
+    cargo_info: crate::test_tables::unreachable1,
+    build_year: crate::test_tables::unreachable1,
+    last_service: crate::test_tables::unreachable1,
+    primary: crate::test_tables::unreachable1,
+    train_services: crate::test_tables::unreachable0,
+    order_max_speed: crate::test_tables::unreachable1,
+    id: crate::test_tables::unreachable1,
+    old_order: crate::test_tables::unreachable1,
+    num_orders: crate::test_tables::unreachable1,
+    real_order: crate::test_tables::unreachable1,
+    load_ticks: crate::test_tables::unreachable1,
+    service_interval: crate::test_tables::unreachable1,
+    cargo_type: crate::test_tables::unreachable1,
+    cargo_subtype: crate::test_tables::unreachable1,
+    age: crate::test_tables::unreachable1,
+    max_age: crate::test_tables::unreachable1,
+    unit: crate::test_tables::unreachable1,
+    sprite: crate::test_tables::unreachable1,
+    breakdowns: crate::test_tables::unreachable1,
+    breakdown_delay: crate::test_tables::unreachable1,
+    breakdown_chance: crate::test_tables::unreachable1,
+    reliability: crate::test_tables::unreachable1,
+    reliability_decay: crate::test_tables::unreachable1,
+    value: crate::test_tables::unreachable1,
+    profit_this: crate::test_tables::unreachable1,
+    profit_last: crate::test_tables::unreachable1,
+    vehicle_flags: crate::test_tables::unreachable1,
+    target_airport: crate::test_tables::unreachable1,
+    airport_ttd_type: crate::test_tables::unreachable1,
+    moving_flags: crate::test_tables::unreachable2,
+    roadtype: crate::test_tables::unreachable1,
+    tile_roadtype: crate::test_tables::unreachable2,
+    rail_catenary: crate::test_tables::unreachable1,
+    road_catenary: crate::test_tables::unreachable1,
+    compatible_rail: crate::test_tables::unreachable2,
+    powered_rail: crate::test_tables::unreachable2,
+    powered_single_rail: crate::test_tables::unreachable2,
+    badge_count: crate::test_tables::unreachable1,
+    badge_at: crate::test_tables::unreachable2,
+    rail_badge: crate::test_tables::unreachable1,
+    road_badge: crate::test_tables::unreachable1,
+    ship_owner: crate::test_tables::unreachable1,
+    aircraft_leaves: crate::test_tables::unreachable0,
+    ground: crate::test_tables::unreachable0,
+    cargo_services: crate::test_tables::unreachable0,
+};
 fn handle(v: V) -> VehicleRef {
     VehicleRef(std::ptr::NonNull::new(v).unwrap())
 }
@@ -358,18 +428,35 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_cache_delete(cache: *mut Cache
         drop(Box::from_raw(cache.cast::<VehicleCacheOwner>()));
     }
 }
+/// `Vehicle::InvalidateNewGRFCache`: invalidates cached `NewGRF` variables.
+///
+/// # Safety
+/// `v` is a live serialized record.
+pub(crate) unsafe fn invalidate_newgrf_cache(s: &Services, v: VehicleRef) {
+    // SAFETY: As this function's contract; the cache belongs to `v`.
+    unsafe { (*(s.cache)(v.0.as_ptr())).cache_valid = 0 };
+}
+/// `Vehicle::InvalidateNewGRFCacheOfChain`: invalidates cached `NewGRF` variables of all
+/// vehicles in the chain (after the current vehicle).
+///
+/// # Safety
+/// `v` and its chain are live serialized records.
+pub(crate) unsafe fn invalidate_newgrf_cache_of_chain(s: &Services, v: VehicleRef) {
+    let mut u = Some(v);
+    while let Some(part) = u {
+        // SAFETY: As this function's contract.
+        unsafe { invalidate_newgrf_cache(s, part) };
+        u = part.next();
+    }
+}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_grf_invalidate(s: &Services, mut v: V, chain: bool) {
+pub unsafe extern "C" fn openttd_rust_vehicle_grf_invalidate(s: &Services, v: V, chain: bool) {
+    // SAFETY: The native `this` is a live serialized record.
     unsafe {
-        loop {
-            (*(s.cache)(v)).cache_valid = 0;
-            if !chain {
-                break;
-            }
-            v = next(v);
-            if v.is_null() {
-                break;
-            }
+        if chain {
+            invalidate_newgrf_cache_of_chain(s, handle(v));
+        } else {
+            invalidate_newgrf_cache(s, handle(v));
         }
     }
 }
@@ -694,9 +781,9 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_randomise(s: &Services, v: V, trigger: u8) {
     unsafe {
-        openttd_rust_vehicle_grf_invalidate(s, v, true);
+        invalidate_newgrf_cache_of_chain(s, handle(v));
         randomise(s, v, trigger, 0, true);
-        openttd_rust_vehicle_grf_invalidate(s, v, true);
+        invalidate_newgrf_cache_of_chain(s, handle(v));
     }
 }
 // Vehicle property/callback table entries point directly to Rust. The caller
@@ -741,17 +828,7 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
                 (s.train_services)(),
                 s.shared,
             ),
-            1 => {
-                let ground = &*(s.ground)();
-                let owner = crate::ground_vehicle::Owner::of(handle(v));
-                crate::road::current_max_speed(
-                    handle(v),
-                    owner.road,
-                    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-                    s.shared.settings().roadveh_acceleration_model.read(),
-                    ground.road,
-                )
-            }
+            1 => crate::road::current_max_speed(s.shared, handle(v)),
             2 => crate::ship_control::current_max_speed(
                 (handle(v)).cached_max_speed(),
                 (s.order_max_speed)(v),
@@ -1484,11 +1561,11 @@ unsafe fn variable(
                 0xe2 | 0xe4..=0xe9 => {
                     let owner = crate::ground_vehicle::Owner::of(handle(v));
                     return match variable {
-                        0xe2 => u32::from(crate::road::get_state(owner.road)),
-                        0xe4 | 0xe5 => high(u32::from(crate::road::blocked_counter(owner.road))),
+                        0xe2 => u32::from(crate::road::state(owner.road)),
+                        0xe4 | 0xe5 => high(u32::from(crate::road::blocked_ctr(owner.road))),
                         0xe6 => u32::from(crate::road::overtaking(owner.road)),
-                        0xe7 => u32::from(crate::road::overtaking_counter(owner.road)),
-                        _ => high(u32::from(crate::road::crashed_counter(owner.road))),
+                        0xe7 => u32::from(crate::road::overtaking_ctr(owner.road)),
+                        _ => high(u32::from(crate::road::crashed_ctr(owner.road))),
                     };
                 }
                 _ => {}

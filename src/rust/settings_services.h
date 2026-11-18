@@ -16,9 +16,6 @@
 #include "../openttd.h"
 
 inline bool RustDynamicEngines() noexcept { return _settings_game.vehicle.dynamic_engines; }
-inline uint8_t RustRoadAccelerationModel() noexcept { return _settings_game.vehicle.roadveh_acceleration_model; }
-inline uint8_t RustRoadSide() noexcept { return _settings_game.vehicle.road_side; }
-inline bool RustRoadQueue() noexcept { return _settings_game.pf.roadveh_queue; }
 inline uint8_t RustPlaneSpeed() noexcept { return _settings_game.vehicle.plane_speed; }
 inline uint8_t RustPlaneCrashes() noexcept { return _settings_game.vehicle.plane_crashes; }
 inline bool RustServiceAtHelipad() noexcept { return _settings_game.order.serviceathelipad; }

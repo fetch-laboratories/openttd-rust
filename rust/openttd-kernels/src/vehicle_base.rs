@@ -169,6 +169,43 @@ impl GroundVehicleSubtypeFlags {
     pub const GVSF_MULTIHEADED: Self = Self(5);
 }
 
+/// Structure to return information about the closest depot location,
+/// and whether it could be found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ClosestDepot {
+    pub(crate) location: TileIndex,
+    /// The `DestinationID` as used for orders.
+    pub(crate) destination: crate::order_type::DestinationID,
+    pub(crate) reverse: bool,
+    pub(crate) found: bool,
+}
+impl Default for ClosestDepot {
+    /// `ClosestDepot()`: not found.
+    fn default() -> Self {
+        Self {
+            location: TileIndex::INVALID,
+            destination: crate::order_type::DestinationID(0),
+            reverse: false,
+            found: false,
+        }
+    }
+}
+impl ClosestDepot {
+    /// `ClosestDepot(location, destination, reverse)`: found.
+    pub(crate) fn new(
+        location: TileIndex,
+        destination: crate::order_type::DestinationID,
+        reverse: bool,
+    ) -> Self {
+        Self {
+            location,
+            destination,
+            reverse,
+            found: true,
+        }
+    }
+}
+
 /// `Vehicle::IsFrontEngine` over a `subtype`; `ground` is `IsGroundVehicle()`.
 pub(crate) fn is_front_engine(ground: bool, subtype: u8) -> bool {
     ground && has_bit(subtype, GroundVehicleSubtypeFlags::GVSF_FRONT.0)
@@ -189,7 +226,6 @@ pub const GVSF_ENGINE: u8 = GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
 pub const VS_HIDDEN: u8 = VehStates::from_element(VehState::Hidden).0;
 pub const VS_STOPPED: u8 = VehStates::from_element(VehState::Stopped).0;
 pub const VS_UNCLICKABLE: u8 = VehStates::from_element(VehState::Unclickable).0;
-pub const VS_TRAIN_SLOWING: u8 = VehStates::from_element(VehState::TrainSlowing).0;
 pub const VS_SHADOW: u8 = VehStates::from_element(VehState::Shadow).0;
 pub const VS_CRASHED: u8 = VehStates::from_element(VehState::Crashed).0;
 pub const NCVV_POSITION_CONSIST_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_CONSIST_LENGTH.0;
@@ -436,7 +472,11 @@ impl crate::vehicle::VehicleRef {
     /// `Vehicle::First`: get the first vehicle of this vehicle chain.
     pub(crate) fn first(self) -> Self {
         // The original dereferences `this->first` unchecked; every live record has one.
-        Self(std::ptr::NonNull::new(read_field!(self.0.as_ptr(), first)).unwrap())
+        self.first_link().unwrap()
+    }
+    /// `Vehicle::First` as stored: the `first` link, `None` where a broken cache holds null.
+    pub(crate) fn first_link(self) -> Option<Self> {
+        std::ptr::NonNull::new(read_field!(self.0.as_ptr(), first)).map(Self)
     }
     /// `Vehicle::Last`: get the last vehicle of this vehicle chain.
     pub(crate) fn last(self) -> Self {
@@ -450,6 +490,13 @@ impl crate::vehicle::VehicleRef {
     /// are also counted as vehicles.
     pub(crate) fn next(self) -> Option<Self> {
         std::ptr::NonNull::new(read_field!(self.0.as_ptr(), next)).map(Self)
+    }
+    /// `Vehicle::Next` where the original dereferences the result without a test.
+    /// # Safety
+    /// The caller's chain invariant guarantees that a part follows this one.
+    pub(crate) unsafe fn next_unchecked(self) -> Self {
+        // SAFETY: The caller guarantees the link `next` loads is non-null.
+        unsafe { self.next().unwrap_unchecked() }
     }
     /// `Vehicle::Previous`: get the previous vehicle of this vehicle; articulated
     /// parts are also counted as vehicles.
@@ -620,6 +667,11 @@ impl crate::vehicle::VehicleRef {
         });
     }
 
+    /// The road vehicle owner link; the record is a live road vehicle.
+    pub(crate) fn road(self) -> *mut crate::road::State {
+        // `OpenTTDRoadState` is the first field of the `#[repr(C)]` road owner.
+        read_field!(self.0.as_ptr(), road).cast()
+    }
     /// The ground vehicle owner link; the record is a live train or road vehicle.
     pub(crate) fn ground(self) -> *mut crate::ground_vehicle::GroundState {
         read_field!(self.0.as_ptr(), ground)

@@ -14,7 +14,6 @@ static OpenTTDRefitCargoKind VehicleRefitCargoKind(OpenTTDVehicle *handle) noexc
 	const Vehicle *v = VehicleOf(handle);
 	return {.cargo = RustVehicleCargoType(handle), .subtype = RustVehicleCargoSubtype(v)};
 }
-static OpenTTDRoadState *VehicleRefitRoadState(OpenTTDVehicle *v) noexcept { return RoadStateOf(RoadVehicle::From(VehicleOf(v))); }
 const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 {
 	static const OpenTTDVehicleRefitServices services{
@@ -40,8 +39,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.set_cargo_kind = RustVehicleSetCargoKind,
 		.expense = RustVehicleExpense,
 		.invalidate_chain = RustVehicleInvalidateChain,
-
-		.road_state = VehicleRefitRoadState,
 		.aircraft_handle = GetRustAircraftVehicle,
 	};
 	return services;

@@ -35,17 +35,6 @@ Track YapfShipChooseTrack(const Ship *v, TileIndex tile, bool &path_found, ShipP
 bool YapfShipCheckReverse(const Ship *v, Trackdir *trackdir);
 
 /**
- * Finds the best path for given road vehicle using YAPF.
- * @param v         the RV that needs to find a path
- * @param tile      the tile to find the path from (should be next tile the RV is about to enter)
- * @param enterdir  diagonal direction which the RV will enter this new tile from
- * @param trackdirs available trackdirs on the new tile (to choose from)
- * @param path_found [out] Whether a path has been found (true) or has been guessed (false)
- * @return          the best trackdir for next turn or INVALID_TRACKDIR if the path could not be found
- */
-Trackdir YapfRoadVehicleChooseTrack(const RoadVehicle *v, TileIndex tile, DiagDirection enterdir, TrackdirBits trackdirs, bool &path_found);
-
-/**
  * Finds the best path for given train using YAPF.
  * @param v        the train that needs to find a path
  * @param tile     the tile to find the path from (should be next tile the train is about to enter)
@@ -58,16 +47,6 @@ Trackdir YapfRoadVehicleChooseTrack(const RoadVehicle *v, TileIndex tile, DiagDi
  * @return         the best track for next turn
  */
 Track YapfTrainChooseTrack(const Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool &path_found, bool reserve_track, struct PBSTileInfo *target, TileIndex *dest);
-
-/**
- * Used when user sends road vehicle to the nearest depot or if road vehicle needs servicing using YAPF.
- * @param v            vehicle that needs to go to some depot
- * @param max_penalty  max distance (in pathfinder penalty) from the current vehicle position
- *                     (used also as optimization - the pathfinder can stop path finding if max_penalty
- *                     was reached and no depot was seen)
- * @return             the data about the depot
- */
-FindDepotData YapfRoadVehicleFindNearestDepot(const RoadVehicle *v, int max_penalty);
 
 /**
  * Used when user sends train to the nearest depot or if train needs servicing using YAPF.

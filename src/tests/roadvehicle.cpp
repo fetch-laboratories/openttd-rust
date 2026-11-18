@@ -13,7 +13,10 @@
 #include "../settings_type.h"
 #include "../rust/services_road.h"
 #include "../rust/vehicle_services.h"
+#include "../rust/movement_ffi.h"
+#include "../rust/tunnelbridge_command_ffi.h"
 #include "abi_layout.hpp"
+#include "fixture_map.hpp"
 #include "../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDVehicleResolverServices.hpp"
 #include "../safeguards.h"
@@ -102,7 +105,8 @@ TEST_CASE("Road vehicles - canonical path, nested save staging and indexed pool 
 
 namespace {
 int bridge_reads;
-uint16_t BridgeSpeed(uint32_t) noexcept { ++bridge_reads; return 37; }
+/* GetBridgeSpec(GetBridgeType(u->tile))->speed: the bridge tile below holds bridge type 9. */
+uint16_t BridgeSpeed(BridgeType type) noexcept { ++bridge_reads; CHECK(type == 9); return 37; }
 }
 TEST_CASE("Road max speed - front reversal, later curve assignment and hidden bridges")
 {
@@ -113,11 +117,17 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 	record.ground = &ground; record.orders = &orders; record.road = front;
 	tail_record.road = tail;
 	auto *v = &record;
-	auto shared = OpenTTDSharedServices{};
-	shared.bridge_speed = BridgeSpeed;
-	auto leaves = OpenTTDRoadLeaves{};
-	leaves.shared = &shared;
-	for (uint16_t model = 0; model < 2; ++model) for (uint16_t state = 0; state < 256; ++state) for (uint16_t tail_state = 0; tail_state < 256; ++tail_state) {
+	uint8_t model = 0;
+	OpenTTDSettingAddresses settings{}; settings.roadveh_acceleration_model = &model;
+	/* One bridge tile (MP_TUNNELBRIDGE, bridge bit, type 9 in m6 bits 2..5) under both parts. */
+	OpenTTDFixtureMap map{0, 1};
+	map.base[0].type = MP_TUNNELBRIDGE << 4; map.base[0].m5 = 1 << 7; map.extended[0].m6 = 9 << 2;
+	OpenTTDTunnelBridgeServices tunnel_bridge{}; tunnel_bridge.speed = BridgeSpeed;
+	OpenTTDMovementServices movement{}; movement.tunnel_bridge = &tunnel_bridge;
+	movement.native_assert = [](bool okay) noexcept { if (!okay) std::abort(); };
+	OpenTTDSharedServices shared{}; shared.map = &map.statics; shared.movement = &movement; shared.settings = &settings;
+	OpenTTDRoadLeaves leaves{}; leaves.shared = &shared;
+	for (model = 0; model < 2; ++model) for (uint16_t state = 0; state < 256; ++state) for (uint16_t tail_state = 0; tail_state < 256; ++tail_state) {
 		for (uint8_t hidden : {0, 1, 2, 3}) for (uint8_t direction : {0, 1}) {
 			front->state = static_cast<uint8_t>(state); tail->state = static_cast<uint8_t>(tail_state);
 			struct { uint16_t max_track_speed, order_max_speed; } r{};
@@ -142,7 +152,7 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 				part_hidden = hidden >> 1;
 			}
 			bridge_reads = 0;
-			CHECK(openttd_rust_road_max_speed(v, front, model, &leaves) == std::min(expected, r.order_max_speed * 2));
+			CHECK(openttd_rust_road_max_speed(v, front, &leaves) == std::min(expected, r.order_max_speed * 2));
 			CHECK(bridge_reads == reads);
 		}
 	}

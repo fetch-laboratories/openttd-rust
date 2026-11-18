@@ -94,6 +94,64 @@ pub struct Services {
     ) -> u16,
 }
 static REGISTRY: GameState<*const Services> = GameState::new(ptr::null());
+#[cfg(test)]
+impl Services {
+    /// A table whose only reachable entry is `st->index`.
+    pub(crate) const fn with_station_id(
+        station_id: extern "C" fn(*const BaseStation) -> u16,
+    ) -> Self {
+        use crate::test_tables::{unreachable1, unreachable2, unreachable3};
+        extern "C" fn evaluate_tile(
+            _: u16,
+            _: u32,
+            _: u32,
+            _: *const TileSpec,
+            _: *mut BaseStation,
+            _: u32,
+            _: *mut i32,
+            _: usize,
+        ) -> u16 {
+            unreachable!("unexpected airport tile evaluation")
+        }
+        Self {
+            shared: ptr::null(),
+            storage: ptr::null(),
+            vehicles: ptr::null(),
+            by_tile: unreachable1,
+            station_id,
+            facilities: unreachable1,
+            get_station: unreachable1,
+            check: unreachable1,
+            engine_if_valid: unreachable1,
+            engine_id: unreachable1,
+            fta_flags: unreachable1,
+            has_hangar: unreachable2,
+            hangar_tile: unreachable3,
+            depot_count: unreachable1,
+            depot_offset: unreachable2,
+            rotated_offset: unreachable3,
+            fta_heading: unreachable2,
+            fta_position: unreachable2,
+            dummy_spec: ptr::null(),
+            dummy_fta: ptr::null(),
+            fta: unreachable1,
+            catchment: unreachable1,
+            base_spec: unreachable1,
+            min_year: unreachable1,
+            max_year: unreachable1,
+            station_layout: unreachable1,
+            random: unreachable1,
+            build_date: unreachable1,
+            tile_spec: unreachable1,
+            belongs: unreachable2,
+            tile_random: unreachable1,
+            frame: unreachable1,
+            base_scope: unreachable3,
+            town_scope: unreachable3,
+            evaluate_tile,
+        }
+    }
+}
 /// Install the immutable process-lifetime services before game/runtime queries.
 /// SAFETY: Serialized initialization; tables outlive every synchronous call.
 #[unsafe(no_mangle)]
@@ -106,6 +164,10 @@ pub(crate) fn runtime() -> &'static Services {
     unsafe { REGISTRY.table() }
 }
 impl Services {
+    /// `st->index`.
+    pub(crate) fn station_index(&self, st: *const BaseStation) -> crate::station_type::StationID {
+        crate::station_type::StationID((self.station_id)(st))
+    }
     pub(crate) fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
     }

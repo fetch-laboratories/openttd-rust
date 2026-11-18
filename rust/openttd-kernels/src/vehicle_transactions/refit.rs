@@ -72,7 +72,6 @@ pub struct Services {
     pub set_cargo_kind: extern "C" fn(*mut OpenTTDVehicle, u8, u8),
     pub expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> ExpenseType,
     pub invalidate_chain: extern "C" fn(*mut OpenTTDVehicle),
-    pub road_state: extern "C" fn(*mut OpenTTDVehicle) -> *mut crate::road::State,
     pub aircraft_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::aircraft::Vehicle,
 }
 // Canonical vehicle-table slots for refit callers; no refit copy is bound.
@@ -81,18 +80,6 @@ impl Services {
     fn not_reached(&self) -> ! {
         (self.common.base.shared.not_reached)();
         std::process::abort()
-    }
-    /// `_settings_game.vehicle.roadveh_acceleration_model`, from the settings catalog.
-    pub(crate) fn road_acceleration_model(&self) -> crate::vehicle_type::AccelerationModel {
-        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        crate::vehicle_type::AccelerationModel(unsafe {
-            self.common
-                .base
-                .shared
-                .settings()
-                .roadveh_acceleration_model
-                .read()
-        })
     }
     /// `v->GetEngine()`.
     pub(crate) fn vehicle_engine(&self, v: *mut OpenTTDVehicle) -> *const OpenTTDEngine {
@@ -720,14 +707,13 @@ pub(crate) unsafe fn cmd_refit_vehicle(
             },
             VehicleType::ROAD => {
                 unsafe {
-                    crate::road::openttd_rust_road_update_cache(
-                        vehicle_ref(front, s.common.vehicles),
-                        (s.road_state)(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
-                        auto_refit,
+                    crate::road::road_veh_update_cache(
                         s.road,
+                        vehicle_ref(front, s.common.vehicles),
+                        auto_refit,
                     );
                 }
-                if s.road_acceleration_model()
+                if s.common.base.shared.settings().roadveh_acceleration_model()
                     != crate::vehicle_type::AccelerationModel::AM_ORIGINAL
                 {
                     crate::ground_vehicle::cargo_changed(
@@ -841,6 +827,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, road_state, aircraft_handle,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, aircraft_handle,
     };
 }

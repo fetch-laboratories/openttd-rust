@@ -64,6 +64,7 @@ struct OpenTTDCompanyFinanceServices {
 	void (OPENTTD_RUST_CALL *set_current_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_current_company);
 	bool (OPENTTD_RUST_CALL *networking)() noexcept OPENTTD_SERVICE_DEFAULT(networking);
 	CompanyFinances * (OPENTTD_RUST_CALL *company_finances)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_finances); ///< Null for an invalid ID.
+	CompanyFinances * (OPENTTD_RUST_CALL *company_get_finances)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_get_finances); ///< Company::Get: asserts the ID is below the pool's first unused index.
 	void (OPENTTD_RUST_CALL *invalidate_company_windows)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_company_windows);
 	void (OPENTTD_RUST_CALL *give_money_message)(uint8_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(give_money_message);
 	void (OPENTTD_RUST_CALL *money_animation)(uint32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_animation);

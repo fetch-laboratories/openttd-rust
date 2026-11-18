@@ -256,11 +256,14 @@ impl crate::map_func::World<'_> {
         self.kind(TileIndex(t)) == TileType::MP_ROAD
             && get_road_tile_type(&self.types, t).is_some_and(|kind| kind.0 == ROAD_TILE_DEPOT)
     }
+    /// `GetRoadDepotDirection`: get the direction of the exit of a road depot. `IsRoadDepot`
+    /// and its nested `GetRoadTileType` assertion are evaluated only where the native build
+    /// asserts.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn road_depot_dir(&self, t: u32) -> u8 {
-        self.check(self.road_depot(t));
-        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m5(TileIndex(t)))), 0, 2) as u8
+        self.assert_with(|| self.is_road_depot(TileIndex(t)));
+        crate::bitmath_func::gb(u32::from(self.asserted(|m| m.m5(TileIndex(t)))), 0, 2) as u8
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]

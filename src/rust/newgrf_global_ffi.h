@@ -12,7 +12,6 @@ struct OpenTTDGlobalVariableServices {
 	uint8_t (*palette)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(palette);
 	int32_t (*pitch)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(pitch);
 	uint16_t (*rail_cost)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_cost);
-	uint8_t (*road_side)() noexcept OPENTTD_SERVICE_DEFAULT(road_side);
 	const OpenTTDSharedServices *shared;
 	uint32_t (*width)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(width);
 };

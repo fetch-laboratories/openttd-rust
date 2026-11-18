@@ -16,7 +16,6 @@ src/order_cmd.cpp | openttd_orders_timetable_dirty(void *ctx) noexcept | 46e7dd5
 src/order_cmd.cpp | openttd_orders_vehicle_group(void *ctx) noexcept | d932fd412582f2de | 1
 src/order_cmd.cpp | openttd_orders_vehicle_id(void *ctx) noexcept | 8a72932b898fb672 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_airport_blocks(const OpenTTDStation *s) noexcept | 97ae30fe84ad813b | 1
-src/rust/aircraft_adapter.hpp | Aircraft_had_vehicle(const OpenTTDStation *s) noexcept | 20ea2629b76c3ff3 | 1
 src/rust/company_adapter.cpp | Co_vehicle_service_interval_is_custom(uint32_t id) noexcept | df7f6be000c1cef1 | 1
 src/rust/company_adapter.cpp | [](const Station *st) | 7599e8780f547b28 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_head(uint8_t company) noexcept | f3fae9779eabda33 | 1

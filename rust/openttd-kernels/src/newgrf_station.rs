@@ -587,9 +587,10 @@ pub(crate) unsafe fn station_base_variable(
             };
         }
         0x8a => {
+            // SAFETY: The resolver's live station; one byte-sized load.
             return u32::from(unsafe {
-                ((*native.commands().aircraft).had_vehicle)(
-                    (crate::animated_tile::services().as_station)(st)
+                *(native.shared().station_had_vehicle_of_type_field)(
+                    (crate::animated_tile::services().as_station)(st),
                 )
             });
         }

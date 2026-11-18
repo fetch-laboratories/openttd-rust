@@ -51,7 +51,6 @@ struct OpenTTDAircraftLeaves {
 	const void *(OPENTTD_RUST_CALL *fta_next)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_next);
 	uint8_t (OPENTTD_RUST_CALL *fta_next_position)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_next_position);
 	uint8_t (OPENTTD_RUST_CALL *fta_position)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_position);
-	uint8_t (OPENTTD_RUST_CALL *had_vehicle)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(had_vehicle);
 	uint8_t (OPENTTD_RUST_CALL *hangar_exit)(const OpenTTDStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
 	uint8_t (OPENTTD_RUST_CALL *helipads)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(helipads);
 	void (OPENTTD_RUST_CALL *landing_rating)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(landing_rating);

@@ -48,6 +48,8 @@ inline Company *RustCompanyNext(uint32_t from) noexcept
 	for (Company *c : Company::Iterate(from)) return c;
 	return nullptr;
 }
+/** `&Company::Get(id)->Finances()`: the pool asserts the ID is below its first unused index. */
+inline CompanyFinances *RustCompanyGetFinances(uint8_t id) noexcept { return &Company::Get(id)->Finances(); }
 inline OpenTTDCompanyRef RustCompanyRefNext(uint32_t from) noexcept
 {
 	Company *c = RustCompanyNext(from);

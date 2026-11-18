@@ -231,8 +231,6 @@ public:
 	 */
 	inline void SetMaxSpeed(uint16_t speed) { this->max_speed = speed; }
 
-	bool ShouldStopAtStation(const Vehicle *v, StationID station) const;
-
 	TileIndex GetLocation(const Vehicle *v, bool airport = false) const;
 
 	/** Checks if travel_time and wait_time apply to this order and if they are timetabled. */

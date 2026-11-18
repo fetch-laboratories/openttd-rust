@@ -1653,7 +1653,9 @@ fn iterate_vehicle_parts(v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bo
     }
     if v.vehicle_type() == VehicleType::AIRCRAFT && crate::aircraft::is_normal_aircraft(v.subtype())
     {
-        return action(unsafe { v.next().unwrap_unchecked() });
+        // SAFETY: A normal aircraft always has its shadow as the next part; the original
+        // dereferences `Next()` unchecked.
+        return action(unsafe { v.next_unchecked() });
     }
     true
 }

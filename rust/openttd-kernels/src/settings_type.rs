@@ -88,11 +88,13 @@ crate::abi::shared_records! {
         pub reverse_at_signals: *const bool,
         pub road_crossing_penalty: *const u32,
         pub road_curve_penalty: *const u32,
+        pub road_side: *const u8,
         pub road_slope_penalty: *const u32,
         pub road_stop_bay_occupied_penalty: *const u32,
         pub road_stop_occupied_penalty: *const u32,
         pub road_stop_penalty: *const u32,
         pub roadveh_acceleration_model: *const u8,
+        pub roadveh_queue: *const bool,
         pub se_flat_world_height: *const u8,
         pub secondary_colour: *const u8,
         pub select_goods: *const bool,
@@ -110,6 +112,21 @@ crate::abi::shared_records! {
         pub wait_twoway_signal: *const u8,
     }
 
+}
+
+impl SettingAddresses {
+    /// `_settings_game.vehicle.roadveh_acceleration_model`; one field-sized load.
+    pub(crate) fn roadveh_acceleration_model(&self) -> crate::vehicle_type::AccelerationModel {
+        // SAFETY: The catalog addresses the process-wide setting, serialized by the
+        // game-state mutex.
+        crate::vehicle_type::AccelerationModel(unsafe { self.roadveh_acceleration_model.read() })
+    }
+    /// `_settings_game.vehicle.road_side`; one field-sized load.
+    pub(crate) fn road_side(&self) -> u8 {
+        // SAFETY: The catalog addresses the process-wide setting, serialized by the
+        // game-state mutex.
+        unsafe { self.road_side.read() }
+    }
 }
 
 #[cfg(test)]
@@ -183,11 +200,13 @@ impl SettingAddresses {
         reverse_at_signals: std::ptr::null(),
         road_crossing_penalty: std::ptr::null(),
         road_curve_penalty: std::ptr::null(),
+        road_side: std::ptr::null(),
         road_slope_penalty: std::ptr::null(),
         road_stop_bay_occupied_penalty: std::ptr::null(),
         road_stop_occupied_penalty: std::ptr::null(),
         road_stop_penalty: std::ptr::null(),
         roadveh_acceleration_model: std::ptr::null(),
+        roadveh_queue: std::ptr::null(),
         se_flat_world_height: std::ptr::null(),
         secondary_colour: std::ptr::null(),
         select_goods: std::ptr::null(),

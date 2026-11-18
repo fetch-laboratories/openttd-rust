@@ -2123,16 +2123,26 @@ pub unsafe extern "C" fn openttd_rust_wait_unbunching(
     }
 }
 
+/// `Order::Free`: 'Free' the order.
+/// @note ONLY use on "`current_order`" vehicle orders!
+pub(crate) fn free(v: VehicleRef) {
+    // SAFETY: The live vehicle's current order.
+    unsafe { free_order(v.current_order_pointer()) };
+}
+/// `Order::Free` on `p`.
+///
+/// # Safety
+/// `p` is a live, properly constructed vehicle's `current_order` of the serialized game state.
+unsafe fn free_order(p: *mut Order) {
+    write_field!(p, kind, OT_NOTHING);
+    write_field!(p, flags, 0);
+    write_field!(p, destination, 0);
+}
 /// All fields belong to a live, properly constructed C++ Order, accessed raw.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_free(p: *mut Order) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_NOTHING;
-        order.flags = 0;
-        order.destination = 0;
-    };
-    store(p, order);
+    // SAFETY: As `free_order`; the native caller keeps the current-order note.
+    unsafe { free_order(p) };
     0
 }
 
@@ -2148,6 +2158,50 @@ pub unsafe extern "C" fn openttd_rust_order_station(p: *mut Order, destination: 
     0
 }
 
+/// `Order::MakeGoToDepot`: makes this order a Go To Depot order.
+///
+/// # Safety
+/// `p` is a live, properly constructed order of the serialized game state.
+pub(crate) unsafe fn make_go_to_depot(
+    p: *mut Order,
+    destination: crate::order_type::DestinationID,
+    order: crate::order_type::OrderDepotTypeFlags,
+    non_stop_type: crate::order_type::OrderNonStopFlags,
+    action: crate::order_type::OrderDepotActionFlags,
+    cargo: crate::cargo_type::CargoType,
+) {
+    write_field!(p, kind, OT_GOTO_DEPOT);
+    set_depot_order_type(p, order);
+    set_depot_action_type(p, action);
+    set_non_stop_type(p, non_stop_type);
+    write_field!(p, destination, destination.0);
+    set_refit(p, cargo);
+}
+/// `Order::SetDepotOrderType`: set the cause to go to the depot.
+fn set_depot_order_type(p: *mut Order, depot_order_type: crate::order_type::OrderDepotTypeFlags) {
+    let mut flags = u32::from(read_field!(p, flags));
+    crate::bitmath_func::sb(&mut flags, 0, 3, u32::from(depot_order_type.0));
+    write_field!(p, flags, flags as u8);
+}
+/// `Order::SetDepotActionType`: set what we are going to do in the depot.
+fn set_depot_action_type(
+    p: *mut Order,
+    depot_service_type: crate::order_type::OrderDepotActionFlags,
+) {
+    let mut flags = u32::from(read_field!(p, flags));
+    crate::bitmath_func::sb(&mut flags, 3, 4, u32::from(depot_service_type.0));
+    write_field!(p, flags, flags as u8);
+}
+/// `Order::SetNonStopType`: set whether we must stop at stations or not.
+fn set_non_stop_type(p: *mut Order, non_stop_type: crate::order_type::OrderNonStopFlags) {
+    let mut kind = u32::from(read_field!(p, kind));
+    crate::bitmath_func::sb(&mut kind, 6, 2, u32::from(non_stop_type.0));
+    write_field!(p, kind, kind as u8);
+}
+/// `Order::SetRefit`: make this depot/station order also a refit order.
+fn set_refit(p: *mut Order, cargo: crate::cargo_type::CargoType) {
+    write_field!(p, refit, cargo.0);
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_depot(
     p: *mut Order,
@@ -2157,16 +2211,17 @@ pub unsafe extern "C" fn openttd_rust_order_depot(
     action: u8,
     cargo: u8,
 ) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_GOTO_DEPOT;
-        order.flags = (order.flags & !7) | (depot_type & 7);
-        order.flags = (order.flags & !0x78) | ((action & 15) << 3);
-        order.kind = (order.kind & !0xc0) | ((nonstop & 3) << 6);
-        order.destination = destination;
-        order.refit = cargo;
-    };
-    store(p, order);
+    // SAFETY: As `make_go_to_depot`.
+    unsafe {
+        make_go_to_depot(
+            p,
+            crate::order_type::DestinationID(destination),
+            crate::order_type::OrderDepotTypeFlags(depot_type),
+            crate::order_type::OrderNonStopFlags(nonstop),
+            crate::order_type::OrderDepotActionFlags(action),
+            crate::cargo_type::CargoType(cargo),
+        );
+    }
     0
 }
 
@@ -2206,14 +2261,18 @@ pub unsafe extern "C" fn openttd_rust_order_leave(p: *mut Order) -> u32 {
     0
 }
 
+/// `Order::MakeDummy`: makes this order a Dummy order.
+///
+/// # Safety
+/// `p` is a live, properly constructed order of the serialized game state.
+pub(crate) unsafe fn make_dummy(p: *mut Order) {
+    write_field!(p, kind, OT_DUMMY);
+    write_field!(p, flags, 0);
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_dummy(p: *mut Order) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_DUMMY;
-        order.flags = 0;
-    };
-    store(p, order);
+    // SAFETY: As `make_dummy`.
+    unsafe { make_dummy(p) };
     0
 }
 
@@ -2325,18 +2384,6 @@ pub(crate) fn should_stop_at_station(
         } else {
             OrderNonStopFlag::NoIntermediate
         })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_should_stop(
-    p: *mut Order,
-    last_station: u16,
-    station: u16,
-) -> u32 {
-    u32::from(should_stop_at_station(
-        p,
-        StationID(last_station),
-        StationID(station),
-    ))
 }
 
 struct Control {
@@ -3072,10 +3119,16 @@ pub unsafe extern "C" fn openttd_rust_remove_destination(
     0
 }
 
+/// `CheckOrders`: check the orders of a vehicle, to see if there are invalid orders and stuff.
+pub(crate) fn check_orders(v: VehicleRef, leaves: &'static Leaves) {
+    let control = Control { g: Game(leaves) };
+    control.check_orders(|| v);
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_check_orders(v: *mut c_void, leaves: &'static Leaves) -> u64 {
     let control = Control { g: Game(leaves) };
-    control.check_orders(v);
+    control.check_orders(|| native_vehicle(v, leaves.base));
     0
 }
 
@@ -4543,7 +4596,9 @@ impl Control {
         }
         self.backup_destination_clear(u64::from(kind), u64::from(destination), u64::from(hangar));
     }
-    fn check_orders(&self, v: *mut c_void) {
+    /// `CheckOrders`. `vehicle` yields the typed record of `v`; the native entry resolves
+    /// its pointer only once the review setting is enabled.
+    fn check_orders(&self, vehicle: impl FnOnce() -> VehicleRef) {
         let g = self.g;
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
         let review = unsafe { g.shared().settings().order_review_system.read() };
@@ -4551,13 +4606,21 @@ impl Control {
         if review == 0 {
             return;
         }
-        let status = native_vehicle(v, g.0.base).vehstatus_raw();
+        let record = vehicle();
+        let v = record.shell();
         // Do nothing for crashed vehicles
-        if status & VS_CRASHED != 0 {
+        if record
+            .vehstatus()
+            .test(crate::vehicle_base::VehState::Crashed)
+        {
             return;
         }
         // Do nothing for stopped vehicles if setting is '1'
-        if review == 1 && status & VS_STOPPED != 0 {
+        if review == 1
+            && record
+                .vehstatus()
+                .test(crate::vehicle_base::VehState::Stopped)
+        {
             return;
         }
         // do nothing we we're not the first vehicle in a share-chain
@@ -4565,11 +4628,7 @@ impl Control {
             return;
         }
         // Only check every 20 days, so that we don't flood the message log
-        if g.local_owner(v) == 0
-            || !(native_vehicle(v, g.0.base))
-                .day_counter()
-                .is_multiple_of(20)
-        {
+        if g.local_owner(v) == 0 || !record.day_counter().is_multiple_of(20) {
             return;
         }
         let mut message = 0u32;
@@ -4586,8 +4645,9 @@ impl Control {
                     stations = stations.wrapping_add(1);
                     if order_can_use_station(v, order.destination) == 0 {
                         message = 2;
-                    } else if g.vehicle_type(v) == u64::from(VEH_AIRCRAFT)
-                        && (g.0.base.engine)(native_vehicle(v, g.0.base)).aircraft_subtype()
+                    } else if record.vehicle_type()
+                        == crate::vehicle_type::VehicleType::VEH_AIRCRAFT
+                        && (g.0.base.engine)(record).aircraft_subtype()
                             & crate::engine_type::AIR_FAST
                             != 0
                         && u64::from(

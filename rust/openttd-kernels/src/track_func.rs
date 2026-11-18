@@ -119,12 +119,43 @@ pub fn diag_dir_to_diag_trackdir(dir: u8, check: impl Fn(bool) + Copy) -> u8 {
     [TRACKDIR_X_NE, TRACKDIR_Y_SE, TRACKDIR_X_SW, TRACKDIR_Y_NW][dir as usize]
 }
 
+/// `IsValidTrackdirForRoadVehicle`: checks if a Trackdir is valid for road vehicles.
+/// Use this in an `assert()`.
+#[must_use]
+pub const fn is_valid_trackdir_for_road_vehicle(trackdir: crate::track_type::Trackdir) -> bool {
+    trackdir.0 < crate::track_type::Trackdir::TRACKDIR_END.0
+}
+
 /// `IsReversingRoadTrackdir`, under its native valid-road-trackdir precondition.
 pub fn is_reversing_road_trackdir(dir: u8, check: impl Fn(bool) + Copy) -> bool {
-    if dir >= 16 {
+    if !is_valid_trackdir_for_road_vehicle(crate::track_type::Trackdir(dir)) {
         check(false);
     }
     (dir & 7) >= 6
+}
+
+/// `IsStraightRoadTrackdir`: checks whether the given trackdir is a straight road.
+pub fn is_straight_road_trackdir(
+    dir: crate::track_type::Trackdir,
+    check: impl Fn(bool) + Copy,
+) -> bool {
+    if !is_valid_trackdir_for_road_vehicle(dir) {
+        check(false);
+    }
+    (dir.0 & 0x06) == 0
+}
+
+/// `TrackStatusToRedSignals`: returns the red-signal-information of a `TrackStatus`.
+///
+/// Note: The result may contain red signals for non-present tracks.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "TrackStatusToRedSignals' (TrackdirBits) cast of the masked status"
+)]
+pub const fn track_status_to_red_signals(
+    ts: crate::track_type::TrackStatus,
+) -> crate::track_type::TrackdirBits {
+    crate::track_type::TrackdirBits(((ts >> 16) & crate::track_type::TRACKDIR_BIT_MASK) as u16)
 }
 
 /// `TrackStatusToTrackBits`.
@@ -302,8 +333,7 @@ pub fn is_uphill_trackdir(slope: crate::slope_type::Slope, dir: u8, check: impl 
         B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_NW.0, // 29 SLOPE_STEEP_N -> inclined for diagonal track
         B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_SE.0, // 30 SLOPE_STEEP_E -> inclined for diagonal track
     ];
-    // `IsValidTrackdirForRoadVehicle`.
-    if dir >= crate::track_type::Trackdir::TRACKDIR_END.0 {
+    if !is_valid_trackdir_for_road_vehicle(crate::track_type::Trackdir(dir)) {
         check(false);
     }
     crate::bitmath_func::has_bit(

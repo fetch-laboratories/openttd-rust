@@ -17,11 +17,18 @@ Python file, which may embed a console's C++. --report-uncalled lists
 those, and those that only tests and tools call. An export whose only production
 references sit in uncalled free functions is a row in
 tools/uncalled-function-baseline.txt, which follows the member baseline's rules.
+
+An export whose only C++ user is a native fixture that #736's classification keeps
+is not an orphan; it leaves with that fixture (docs/porting.md, callees and shared
+accessors). tools/kept-fixture-exports.txt lists each such export with its fixture
+and the issue that retires the fixture. A listed export counts as used only while
+its fixture still names it.
 """
 
 import argparse
 import re
 import subprocess
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
@@ -33,6 +40,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "tools/orphan-export-baseline.txt"
 UNCALLED = "tools/uncalled-export-baseline.txt"
 UNCALLED_FUNCTIONS = "tools/uncalled-function-baseline.txt"
+KEPT_FIXTURES = "tools/kept-fixture-exports.txt"
 # Neither defines functions this fork calls by name: vendored code, and the
 # script API, whose Squirrel bindings are generated.
 NO_FREE_DEFINITIONS = ("src/3rdparty/", "src/script/api/", "src/tests/")
@@ -46,6 +54,12 @@ NAME = r"openttd_rust_\w+"
 DECLARATION = re.compile(
     rf'(?m)^[ \t]*(?:extern\s+"C"\s+)?(?!return\b|else\b)'
     rf"[\w:<>]+[\w:<> \t*&]*[\s*&]({NAME})\s*\([^;{{}}]*\)\s*(?:noexcept\s*)?;"
+)
+# A declaration anywhere a statement may start, including after `{` or `;` on one
+# line and with its return type on the line before the name.
+FIXTURE_DECLARATION = re.compile(
+    rf'(?m)(?:^|(?<=[;{{}}]))[ \t]*(?:extern\s+"C"\s+)?(?!return\b|else\b)'
+    rf"[\w:<>]+[\w:<> \t*&]*?[\s*&]+({NAME})\s*\([^;{{}}]*\)\s*(?:noexcept\s*)?;"
 )
 # `Class::Member(` heading a definition; the body's braces are matched below.
 MEMBER_HEAD = re.compile(r"\b(\w+)::(\w+)\s*(?:<[^;(){}]*>\s*)?\(")
@@ -284,11 +298,61 @@ def without_uncalled_members(
     return source
 
 
-def violations(files: dict[str, str], broad: bool = False) -> set[str]:
-    return set(scan(files, broad))
+@dataclass(frozen=True)
+class KeptFixture:
+    """An export whose only user is a kept native fixture, and the issue retiring it."""
+
+    export: str
+    fixture: str
+    owner: str
 
 
-def scan(files: dict[str, str], broad: bool = False) -> dict[str, set[str]]:
+def kept_fixtures(text: str) -> tuple[KeptFixture, ...]:
+    """Rows of `export | fixture | owner issue`; `#` starts a comment line."""
+    rows = []
+    for line in text.splitlines():
+        if line.strip() and not line.startswith("#"):
+            export, fixture, owner = (part.strip() for part in line.split(" | "))
+            rows.append(KeptFixture(export, fixture, owner))
+    return tuple(rows)
+
+
+def kept_fixture_file() -> tuple[KeptFixture, ...]:
+    path = ROOT / KEPT_FIXTURES
+    return kept_fixtures(path.read_text()) if path.exists() else ()
+
+
+def apply_kept_fixtures(
+    result: dict[str, set[str]], files: dict[str, str], kept: tuple[KeptFixture, ...]
+) -> None:
+    """Clear each listed export whose kept fixture still uses it; flag stale rows.
+
+    A declaration in the fixture is not a use: it is stripped as the production
+    scan strips declarations.
+    """
+    for row in kept:
+        fixture = without_comments(
+            files.get(row.fixture, ""), row.fixture, strings=True
+        )
+        fixture = re.sub(r'\bextern\s+"C"\s*\{', ";", fixture)
+        fixture = FIXTURE_DECLARATION.sub("", re.sub(r"\bextern\s+(?=\w)", "", fixture))
+        if not re.search(r"#\d+", row.owner):
+            result[f"kept fixture row names no owner issue | {row.export}"] = set()
+        elif row.export not in re.findall(NAME, fixture):
+            result[f"kept fixture no longer uses its export | {row.export}"] = set()
+        else:
+            result.pop(f"no production user | {row.export}", None)
+
+
+def violations(
+    files: dict[str, str], broad: bool = False, kept: tuple[KeptFixture, ...] = ()
+) -> set[str]:
+    return set(scan(files, broad, kept))
+
+
+def scan(
+    files: dict[str, str], broad: bool = False, kept: tuple[KeptFixture, ...] = ()
+) -> dict[str, set[str]]:
     """Each violation, with the uncalled members that hold its only references."""
     exports, declarations, boundary_declarations, references = (
         set(),
@@ -331,6 +395,7 @@ def scan(files: dict[str, str], broad: bool = False) -> dict[str, set[str]]:
     for name in exports | boundary_declarations:
         if name not in references:
             result[f"no production user | {name}"] = owners.get(name, set())
+    apply_kept_fixtures(result, files, kept)
     return result
 
 
@@ -485,7 +550,7 @@ def main() -> int:
         BASELINE,
         ("src", "rust"),
         {".cpp", ".h", ".hpp", ".inc", ".rs"},
-        violations,
+        partial(violations, kept=kept_fixture_file()),
         new_label="new orphan",
         summary="Orphan exports: {count} baselined violations",
     )

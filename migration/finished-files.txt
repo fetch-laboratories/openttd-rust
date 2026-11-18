@@ -82,6 +82,7 @@ rust/openttd-kernels/src/rail_yapf.rs
 rust/openttd-kernels/src/random_func.rs
 rust/openttd-kernels/src/raw_field.rs
 rust/openttd-kernels/src/road/availability.rs
+rust/openttd-kernels/src/road.rs
 rust/openttd-kernels/src/road_stop.rs
 rust/openttd-kernels/src/road_yapf.rs
 rust/openttd-kernels/src/roadveh.rs
