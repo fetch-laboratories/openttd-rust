@@ -1297,15 +1297,10 @@ impl<'a> Game<'a> {
             return;
         }
 
-        let mut od = OvertakeData {
-            u: u.v,
-            v,
-            tile: v.v.tile(),
-            trackdir: Trackdir(diag_dir_to_diag_trackdir(
-                dir_to_diag_dir(v.v.direction(), self.check()).0,
-                self.check(),
-            )),
-        };
+        let trackdir = Trackdir(diag_dir_to_diag_trackdir(
+            dir_to_diag_dir(v.v.direction(), self.check()).0,
+            self.check(),
+        ));
 
         /* Are the current and the next tile suitable for overtaking?
          *  - Does the track continue along od.trackdir
@@ -1313,7 +1308,12 @@ impl<'a> Game<'a> {
          *  - No barred levelcrossing
          *  - No other vehicles in the way
          */
-        od.tile = v.v.tile();
+        let mut od = OvertakeData {
+            u: u.v,
+            v,
+            tile: v.v.tile(),
+            trackdir,
+        };
         if self.check_road_blocked_for_overtaking(&od) {
             return;
         }
