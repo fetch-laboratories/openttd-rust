@@ -6,6 +6,7 @@ import importlib
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -87,6 +88,9 @@ def load(name: str) -> ModuleType:
     spec.loader.exec_module(module)
     return module
 
+
+# Quick runs this file in the merge group too; each case states its own event.
+os.environ.pop("GITHUB_EVENT_NAME", None)
 
 LINT = load("lint-ratchet")
 POLICY = load("lint-policy")

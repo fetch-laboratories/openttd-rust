@@ -33,6 +33,24 @@ def workflow(*steps: dict[str, Any]) -> dict[str, Any]:
     return {"jobs": {preflight.JOB: {"steps": list(steps)}}}
 
 
+def fixture_commit(root: Path, title: str) -> str:
+    """Commit everything in a scratch repository, creating it if needed."""
+    if not (root / ".git").exists():
+        vcs.git("init", "-q", cwd=root)
+    vcs.git("add", "-A", cwd=root)
+    vcs.git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.invalid",
+        "commit",
+        "-qm",
+        title,
+        cwd=root,
+    )
+    return vcs.git("rev-parse", "HEAD", cwd=root).strip()
+
+
 class WorkflowTests(unittest.TestCase):
     def test_every_quick_run_step_is_run_or_skipped(self) -> None:
         quick = yaml.safe_load(preflight.WORKFLOW.read_text())
@@ -47,42 +65,80 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertIn("Python complexity debt and lint policy", ran)
 
-    def test_cleanup_gates_see_a_pending_event_locally_and_merge_group_queued(
-        self,
-    ) -> None:
-        """A record awaiting review passes preflight, so it stamps (#1013)."""
+    def test_a_pending_suppression_passes_quicks_lint_policy_step(self) -> None:
+        """Preflight runs Quick's lint-policy line with no event set, so a
+        suppression awaiting its acceptance passes and the tree can stamp; the
+        merge group's event fails it (#1013)."""
         quick = yaml.safe_load(preflight.WORKFLOW.read_text())
-        gates = ("lint-ratchet.py", "lint-policy.py", "growth-ratchet.py")
-        steps = [
+        (step,) = [
             step
             for step in preflight.workflow_steps(quick, "base")
-            if any(gate in step.command[-1] for gate in gates)
+            if "tools/lint-policy.py" in step.command[-1]
         ]
-        # Each gate's command, with the event it would read from its environment.
-        shim = 'python3() { echo "$* | event=${GITHUB_EVENT_NAME:-}"; }\n'
-        for runner_event, pending_fails in (("", False), ("merge_group", True)):
-            env = {k: v for k, v in os.environ.items() if k != "GITHUB_EVENT_NAME"}
-            if runner_event:
-                env["GITHUB_EVENT_NAME"] = runner_event
-            seen = []
-            for step in steps:
-                output = subprocess.run(
-                    ["bash", "-c", shim + step.command[-1]],
-                    env=env | step.env,
+        (line,) = [
+            line for line in step.command[-1].splitlines() if "lint-policy.py" in line
+        ]
+        source = "pub struct Native;\n"
+        allowed = (
+            "#[allow(non_upper_case_globals)]\nimpl Native { pub const N: u8 = 1; }\n"
+        )
+        site = "rust/x.rs | impl Native | allow non_upper_case_globals"
+        record = {
+            "kind": "suppression",
+            "tool": "rust",
+            "site": site,
+            "before": 0,
+            "after": 1,
+            "operation": "Native::N",
+            "source_contract": "original spelling",
+            "reason": "keep the original's name",
+            "retiring_owner": "owner",
+            "retirement_condition": "when the API goes",
+        }
+        modules = (
+            "lint-policy",
+            "cleanup_contract",
+            "code_lines",
+            "rust_syntax",
+            "vcs",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tools").mkdir()
+            for name in modules:
+                shutil.copy(REPO / "tools" / f"{name}.py", root / "tools")
+            (root / "rust").mkdir()
+            (root / "rust/x.rs").write_text(source)
+            commit = partial(fixture_commit, root)
+            base = commit("Add: fixture")
+            (root / "rust/x.rs").write_text(source + allowed)
+            records = root / "migration/cleanup-records/t3-x.json"
+            records.parent.mkdir(parents=True)
+            records.write_text(json.dumps([record]))
+            commit("Add: pending suppression")
+            # No GitHub: an unreadable discussion leaves the acceptance unchecked.
+            stubs = root / "stubs"
+            stubs.mkdir()
+            (stubs / "gh").write_text("#!/bin/sh\nexit 1\n")
+            (stubs / "gh").chmod(0o755)
+            env = preflight.environment() | step.env | {"BASE_REF": base}
+            env.pop("GITHUB_EVENT_NAME", None)
+            env.pop("GITHUB_EVENT_PATH", None)
+            env["PATH"] = f"{stubs}{os.pathsep}{env['PATH']}"
+            for event, code in ((None, 0), ("merge_group", 1)):
+                if event:
+                    env["GITHUB_EVENT_NAME"] = event
+                done = subprocess.run(
+                    [*preflight.SHELL, line],
+                    cwd=root,
+                    env=env,
                     capture_output=True,
                     text=True,
-                    check=True,
-                ).stdout
-                seen += [line for line in output.splitlines() if "tools/" in line]
-            self.assertEqual(
-                sorted(gate for line in seen for gate in gates if gate in line),
-                sorted(["lint-ratchet.py", "lint-ratchet.py", *gates[1:]]),
-            )
-            for line in seen:
-                arguments, _, environment = line.partition(" | event=")
-                given = re.search(r"--event (\S+)", arguments)
-                event = given[1] if given else environment or "pull_request"
-                self.assertEqual(event == "merge_group", pending_fails, line)
+                )
+                with self.subTest(event=event):
+                    self.assertEqual(done.returncode, code, done.stdout + done.stderr)
+                    shown = "pending review" if code == 0 else "lacks its reviewer"
+                    self.assertIn(shown, done.stdout)
 
     def test_a_new_run_step_runs_without_a_list_entry(self) -> None:
         steps = preflight.workflow_steps(
