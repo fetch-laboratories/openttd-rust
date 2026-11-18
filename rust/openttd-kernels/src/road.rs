@@ -79,7 +79,8 @@ use crate::track_func::{
     is_straight_road_trackdir, track_status_to_red_signals, track_status_to_trackdir_bits,
     trackdir_bits_to_track_bits,
 };
-use crate::track_type::{TrackBits, Trackdir, TrackdirBits};
+use crate::track_type::{TrackBits, TrackStatus, Trackdir, TrackdirBits};
+use crate::transport_type::TransportType;
 use crate::vehicle::maintenance;
 use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, YEAR_TICKS};
 use crate::vehicle_base::{VehState, VehStates};
@@ -532,6 +533,17 @@ impl<'a> Game<'a> {
     /// `HasTileAnyRoadType(tile, types)`.
     fn has_tile_any_road_type(&self, tile: TileIndex, types: u64) -> bool {
         crate::road_map::has_tile_any_road_type(self.world(), tile.0, types)
+    }
+    /// `GetTileTrackStatus(tile, TRANSPORT_ROAD, GetRoadTramType(v->roadtype))`.
+    fn get_road_vehicle_track_status(&self, v: VehicleRef, tile: TileIndex) -> TrackStatus {
+        let rtt = get_road_tram_type(self.roadtype(v));
+        self.movement.get().get_tile_track_status_in_world(
+            self.world(),
+            tile,
+            TransportType::TRANSPORT_ROAD,
+            u32::from(rtt.0),
+            DiagDirection::INVALID_DIAGDIR,
+        )
     }
     /// `IsTileType(tile, type)`.
     fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
@@ -1228,7 +1240,7 @@ impl<'a> Game<'a> {
         if !self.has_tile_any_road_type(od.tile, self.compatible_roadtypes(od.v.v)) {
             return true;
         }
-        let ts = self.movement.get_road_vehicle_track_status(od.v.v, od.tile);
+        let ts = self.get_road_vehicle_track_status(od.v.v, od.tile);
         let trackdirbits = TrackdirBits(track_status_to_trackdir_bits(ts));
         let red_signals = TrackdirBits(track_status_to_red_signals(ts)); // barred level crossing
         let trackbits = TrackBits(trackdir_bits_to_track_bits(trackdirbits.0));
@@ -1386,7 +1398,7 @@ impl<'a> Game<'a> {
     ) -> Trackdir {
         let mut path_found = true;
 
-        let ts = self.movement.get_road_vehicle_track_status(v.v, tile);
+        let ts = self.get_road_vehicle_track_status(v.v, tile);
         let red_signals = TrackdirBits(track_status_to_red_signals(ts)); // crossing
         let mut trackdirs = TrackdirBits(track_status_to_trackdir_bits(ts));
 
