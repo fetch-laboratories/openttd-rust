@@ -220,8 +220,6 @@ impl VehicleServices {
 #[repr(C)]
 pub struct GroundServices {
     pub physics: &'static crate::ground_vehicle::Services,
-    /// `UpdateViewport(false, false)`.
-    pub update_viewport: extern "C" fn(VehicleRef),
     pub has_articulated: extern "C" fn(VehicleRef) -> bool,
 }
 
@@ -304,7 +302,6 @@ crate::abi::layouts! {
 
 
     "OpenTTDGroundServices" ["probe"] => GroundServices {
-        update_viewport,
         has_articulated,
         physics,
     };

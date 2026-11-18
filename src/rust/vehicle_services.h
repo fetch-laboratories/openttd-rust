@@ -231,11 +231,6 @@ inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleO
 
 
 template <class T>
-inline void OPENTTD_RUST_CALL GroundSvcUpdateViewport(OpenTTDVehicle *part) noexcept
-{
-	RustVehicleUpdateViewport(T::From(VehicleOf(part)), false, false);
-}
-template <class T>
 inline bool OPENTTD_RUST_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcept
 {
 	return RustGroundHasArticulated(T::From(VehicleOf(v)));
@@ -245,7 +240,6 @@ inline bool OPENTTD_RUST_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcep
 template <class T>
 inline const OpenTTDGroundServices _rust_ground_services{
 	.physics = &GetRustGroundPhysicsServices(),
-	.update_viewport = GroundSvcUpdateViewport<T>,
 	.has_articulated = GroundSvcHasArticulated<T>,
 };
 

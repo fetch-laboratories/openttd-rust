@@ -485,6 +485,12 @@ impl<'a> Game<'a> {
     fn check(&self) -> impl Fn(bool) + Copy + '_ {
         |ok| crate::movement::native_assert(self.ss, ok)
     }
+    /// `assert(condition)`: evaluated only where the native build asserts.
+    fn assert(&self, condition: impl FnOnce() -> bool) {
+        if self.vs.assertions {
+            crate::movement::native_assert(self.ss, condition());
+        }
+    }
     fn map(&self) -> Map {
         *self.map.get_or_init(|| self.ss.map())
     }
@@ -640,8 +646,8 @@ impl<'a> Game<'a> {
     /// `same_length` says whether the length of the vehicles should stay the same.
     #[inline]
     fn road_veh_update_cache(&self, v: Part, same_length: bool) {
-        crate::movement::native_assert(self.ss, v.v.vehicle_type() == VehicleType::VEH_ROAD);
-        crate::movement::native_assert(self.ss, v.v.is_front_engine());
+        self.assert(|| v.v.vehicle_type() == VehicleType::VEH_ROAD);
+        self.assert(|| v.v.is_front_engine());
 
         // SAFETY: Serialized live records; the invalidation ends before the length reset.
         unsafe {
@@ -653,7 +659,7 @@ impl<'a> Game<'a> {
         let mut part = Some(v.v);
         while let Some(u) = part {
             /* Check the v->first cache. */
-            crate::movement::native_assert(self.ss, u.first() == v.v);
+            self.assert(|| u.first() == v.v);
 
             /* Update the 'first engine' */
             let first_engine = if v.v == u {
@@ -2569,12 +2575,12 @@ impl<'a> Game<'a> {
             return;
         }
 
-        let mut gv_flags = v.v.ground_vehicle_flags();
+        let mut gv_flags = read_field!(v.v.ground(), flags);
         crate::bitmath_func::set_bit16(
             &mut gv_flags,
             GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
         );
-        v.v.set_ground_vehicle_flags(gv_flags);
+        write_field!(v.v.ground(), flags, gv_flags);
         // SAFETY: The current order belongs to this live serialized record.
         unsafe {
             crate::orders::make_go_to_depot(
@@ -2981,7 +2987,6 @@ mod map_context_tests {
         let vehicle = VEHICLE;
         let ground = GroundServices {
             physics: &GROUND_VEHICLE,
-            update_viewport: unreachable1,
             has_articulated: unreachable1,
         };
         let mut leaves = ROAD_LEAVES;
