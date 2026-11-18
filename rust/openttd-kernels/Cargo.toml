@@ -27,3 +27,6 @@ zeroize = { version = "=1.9.1", default-features = false }
 
 [build-dependencies]
 openttd-strgen = { path = "../openttd-strgen" }
+
+[dev-dependencies]
+openttd-strgen = { path = "../openttd-strgen" }

@@ -17,8 +17,16 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
-/// `StringData::max_strings` of the language files: `TEXT_TAB_END * TAB_SIZE`.
-const MAX_STRINGS: u32 = 32 << 11;
+/// `TAB_SIZE_BITS` (`strings_type.h`). A copy of `openttd-kernels`' `strings_type::TAB_SIZE_BITS`
+/// until #998's shared crate; a kernels test holds the two equal.
+pub const TAB_SIZE_BITS: u32 = 11;
+/// `TEXT_TAB_END` (`strings_type.h`), the end of the language files' tabs. A copy of
+/// `openttd-kernels`' `strings_type::StringTab::TEXT_TAB_END` until #998's shared crate; a kernels
+/// test holds the two equal.
+pub const TEXT_TAB_END: u32 = 32;
+/// `StringData::max_strings` of the language files: `StringData(TEXT_TAB_END)` holds
+/// `tabs * TAB_SIZE`.
+const MAX_STRINGS: u32 = TEXT_TAB_END * (1 << TAB_SIZE_BITS);
 /// `StringConsumer::WHITESPACE_NO_NEWLINE`.
 const WHITESPACE_NO_NEWLINE: &[u8] = b"\t\x0B\x0C\r ";
 /// `StringConsumer::WHITESPACE_OR_NEWLINE`.
@@ -104,14 +112,18 @@ fn trim<'a>(src: &'a [u8], characters_to_trim: &[u8]) -> &'a [u8] {
     &src[first..=last]
 }
 
-/// `IsUtf8Part`.
+/// `IsUtf8Part` (`core/utf8.hpp`). A copy of `openttd-kernels`' `utf8::is_utf8_part` until #998's
+/// shared crate.
 const fn is_utf8_part(c: u8) -> bool {
     c & 0xC0 == 0x80
 }
 
-/// `DecodeUtf8`: the length and character at the start of `buf`, or `None` for invalid data. It
-/// accepts encoded surrogates, as the original does.
-fn decode_utf8(buf: &[u8]) -> Option<(usize, u32)> {
+/// `DecodeUtf8` (`core/utf8.cpp`): the length and character at the start of `buf`, or `None` for
+/// invalid data. It accepts encoded surrogates, as the original does. A copy of `openttd-kernels`'
+/// `utf8::decode` until #998's shared crate; a kernels test holds the two equal on the UTF-8
+/// oracle's inputs.
+#[must_use]
+pub fn decode_utf8(buf: &[u8]) -> Option<(usize, u32)> {
     match *buf {
         [b0, ..] if b0 & 0x80 == 0 => Some((1, u32::from(b0))),
         [b0, b1, ..] if b0 >> 5 == 6 => {
@@ -245,25 +257,51 @@ fn handle_pragma(data: &mut StringData, src: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// `StringConsumer::ReadIntegerBase<uint32_t>(0)`: a `0x` or `0X` prefix selects hexadecimal,
-/// otherwise decimal, and the longest digit prefix is parsed. No digits, or a value out of range,
-/// is an error strgen reports through `StringConsumer::LogError` as fatal.
-fn read_integer_base_0(src: &[u8]) -> Result<u32, String> {
-    let (digits, radix) = match src.strip_prefix(b"0x").or_else(|| src.strip_prefix(b"0X")) {
-        Some(hex) => (hex, 16),
-        None => (src, 10),
+/// Why `StringConsumer::ParseIntegerBase` gives no value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntegerError {
+    /// No digits: "Cannot parse integer".
+    Invalid,
+    /// Digits beyond `uint32_t`: "Integer out of range".
+    OutOfRange,
+}
+
+/// `StringConsumer::ParseIntegerBase<uint32_t>(src, 0, false, ...)` (`core/string_consumer.hpp`):
+/// a `0x` or `0X` prefix selects hexadecimal, otherwise decimal, and the longest digit prefix is
+/// parsed; the consumed length and the value. A copy of `openttd-kernels`'
+/// `integer::parse(src, 0, 32, false, false)` until #998's shared crate; a kernels test holds the
+/// two equal on the integer oracle's inputs.
+///
+/// # Errors
+/// No digits, or a value out of range.
+pub fn parse_integer_base(src: &[u8]) -> Result<(usize, u32), IntegerError> {
+    let (prefix, digits, radix) = match src.strip_prefix(b"0x").or_else(|| src.strip_prefix(b"0X"))
+    {
+        Some(hex) => (2, hex, 16),
+        None => (0, src, 10),
     };
     let end = digits
         .iter()
         .position(|&b| !char::from(b).is_digit(radix))
         .unwrap_or(digits.len());
-    let text = String::from_utf8_lossy(src);
     if end == 0 {
-        return Err(format!("Cannot parse integer: '{text}'"));
+        return Err(IntegerError::Invalid);
     }
     // The digits are ASCII.
-    let digits = std::str::from_utf8(&digits[..end]).unwrap_or_default();
-    u32::from_str_radix(digits, radix).map_err(|_| format!("Integer out of range: '{text}'"))
+    let text = std::str::from_utf8(&digits[..end]).unwrap_or_default();
+    let value = u32::from_str_radix(text, radix).map_err(|_| IntegerError::OutOfRange)?;
+    Ok((prefix + end, value))
+}
+
+/// `StringConsumer::ReadIntegerBase<uint32_t>(0)`: the value of [`parse_integer_base`]. Its
+/// failure is an error strgen reports through `StringConsumer::LogError` as fatal.
+fn read_integer_base_0(src: &[u8]) -> Result<u32, String> {
+    let text = String::from_utf8_lossy(src);
+    match parse_integer_base(src) {
+        Ok((_, value)) => Ok(value),
+        Err(IntegerError::Invalid) => Err(format!("Cannot parse integer: '{text}'")),
+        Err(IntegerError::OutOfRange) => Err(format!("Integer out of range: '{text}'")),
+    }
 }
 
 #[cfg(test)]
