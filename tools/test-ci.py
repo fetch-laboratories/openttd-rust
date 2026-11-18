@@ -9,8 +9,10 @@ import os
 import re
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 import unittest
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
@@ -5057,6 +5059,7 @@ class MacosFallbackTests(unittest.TestCase):
             patch.object(ci, "api", side_effect=github.api),
             patch.object(ci, "run_jobs", side_effect=github.jobs),
             patch.object(ci, "gh", side_effect=github.gh),
+            patch.object(ci, "detached_gh", side_effect=github.gh),
             patch.object(ci, "variable", side_effect=github.read_variable),
             patch.object(ci, "failure_logs"),
             patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
@@ -5212,6 +5215,75 @@ class MacosFallbackTests(unittest.TestCase):
         code, writes, output = self.fallback(passed)
         self.assertEqual((code, writes), (1, []))
         self.assertIn("no failed macOS job", output)
+
+
+# A gh for macos-fallback's whole command, state kept in files beside it: two
+# runs whose macOS jobs no hosted runner took, and a create that holds its
+# answer back long enough for a signal to reach the command's process group.
+FAKE_GH = """
+import json, pathlib, signal, sys, time
+# The real gh, a Go program, unblocks these signals whatever mask it inherits.
+signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGINT})
+state = pathlib.Path(sys.argv[0]).parent
+args = sys.argv[1:]
+job = {"id": 1, "run_id": 2, "name": "platform / Mac OS (arm64 - Release) / CI",
+       "status": "completed", "conclusion": "cancelled", "html_url": "u",
+       "runner_id": 0, "steps": []}
+note = "The job was not acquired by Runner of type hosted even after multiple attempts"
+if args[:3] == ["api", "-X", "POST"]:
+    (state / "variable").write_text("blacksmith")
+    (state / "posting").touch()
+    time.sleep(3)
+elif args[:2] == ["variable", "list"]:
+    held = state / "variable"
+    print(json.dumps([{"name": "CI_MACOS_HEAVY", "value": held.read_text()}]
+                     if held.exists() else []))
+elif args[:2] == ["variable", "delete"]:
+    (state / "variable").unlink(missing_ok=True)
+elif args[:2] == ["run", "rerun"]:
+    (state / "rerun").touch()
+elif args[-1].endswith("/annotations"):
+    print(json.dumps([{"message": note}]))
+elif "/jobs" in args[-1]:
+    print(json.dumps([{"jobs": [job]}]))
+elif args[0] == "api":
+    print(json.dumps({"run_attempt": 1}))
+"""
+
+
+class MacosFallbackGroupSignalTests(unittest.TestCase):
+    def test_a_group_sigterm_during_the_create_still_deletes_the_variable(
+        self,
+    ) -> None:
+        """signal-witness.py and Ctrl-C signal the whole process group; the
+        create's gh runs in its own session, so its outcome is known and the
+        variable it set is deleted (#1013)."""
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "gh").write_text(f"#!{sys.executable}\n{FAKE_GH}")
+            (folder / "gh").chmod(0o755)
+            environment = {
+                **os.environ,
+                "PATH": f"{folder}{os.pathsep}{os.environ['PATH']}",
+            }
+            command = [sys.executable, str(ROOT / "tools/ci.py"), "macos-fallback"]
+            process = subprocess.Popen(
+                [*command, "1", "2", "--repo", "x/y", "--interval", "1"],
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                start_new_session=True,
+            )
+            deadline = time.monotonic() + 30
+            while not (folder / "posting").exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertTrue((folder / "posting").exists(), "the create never started")
+            os.killpg(process.pid, signal.SIGTERM)
+            output, _ = process.communicate(timeout=60)
+            self.assertEqual(process.returncode, 128 + signal.SIGTERM, output)
+            self.assertFalse((folder / "variable").exists(), output)
+            self.assertIn("deleted CI_MACOS_HEAVY", output)
 
 
 class FailureCountTests(unittest.TestCase):

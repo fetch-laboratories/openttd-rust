@@ -90,6 +90,8 @@ def load(name: str) -> ModuleType:
     return module
 
 
+REPO = Path(__file__).resolve().parents[1]
+
 # Quick runs this file in the merge group too; each case states its own event.
 os.environ.pop("GITHUB_EVENT_NAME", None)
 
@@ -1950,24 +1952,43 @@ class TrackedRecordTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             shim = Path(directory) / "git"
             count = Path(directory) / "shows"
-            shim.write_text(
-                "#!/bin/sh\n"
-                f'if [ "$1" = show ]; then echo x >> {count}; '
-                f'[ "$(wc -l < {count})" -ge 2 ] && exit 1; fi\n'
-                f'exec {real} "$@"\n'
+            env = {**os.environ, "PATH": f"{directory}{os.pathsep}{os.environ['PATH']}"}
+            path = "rust/openttd-kernels/src/lib.rs"
+            present = next(
+                site
+                for site in POLICY.rust_suppressions(path, (REPO / path).read_text())
+                if POLICY.rule_name(site) == "unsafe_code" and POLICY.item_scoped(site)
             )
-            shim.chmod(0o755)
-            present = "rust/openttd-kernels/src/lib.rs | fn x | allow unsafe_code"
-            done = subprocess.run(
-                [sys.executable, str(script), "--same-item", present, "HEAD", "HEAD"],
-                capture_output=True,
-                text=True,
-                env={
-                    **os.environ,
-                    "PATH": f"{directory}{os.pathsep}{os.environ['PATH']}",
-                },
-            )
-        self.assertNotIn(done.returncode, (0, POLICY.ITEM_DIFFERS), done.stderr)
+
+            def same_item(failing_read: int) -> subprocess.CompletedProcess[str]:
+                count.unlink(missing_ok=True)
+                shim.write_text(
+                    "#!/bin/sh\n"
+                    f'if [ "$1" = show ]; then echo x >> {count}; '
+                    f'[ "$(wc -l < {count})" -ge {failing_read} ] && exit 1; fi\n'
+                    f'exec {real} "$@"\n'
+                )
+                shim.chmod(0o755)
+                return subprocess.run(
+                    [
+                        sys.executable,
+                        str(script),
+                        "--same-item",
+                        present,
+                        "HEAD",
+                        "HEAD",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                )
+
+            second = same_item(2)
+            # Two reads answer the comparison: a third, failing read is never made,
+            # so the equal item is equal (a reader that reads again would say 3).
+            third = same_item(3)
+        self.assertNotIn(second.returncode, (0, POLICY.ITEM_DIFFERS), second.stderr)
+        self.assertEqual(third.returncode, 0, third.stderr)
 
     def test_a_committed_record_file_with_a_non_ascii_name_is_read(self) -> None:
         record = {"kind": "carry", "tool": "rust", "from": "a", "to": "b"}
