@@ -204,6 +204,7 @@ class ResidueGateTests(unittest.TestCase):
         source = """
 static POOL: GameState<Vec<u32>> = GameState::new(Vec::new());
 fn set_flags(tile: TileIndex, execute: bool) { helper_raw(tile); openttd_rust_x(); s.get_raw(); }
+fn alloc(b: Box<u8>) { let p = Box::into_raw(b); drop(unsafe { std::boxed::Box::from_raw(p) }); }
 fn cmd_long(flags: u16, a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8) {}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_shim(tile: u32) { typed_raw(tile); openttd_rust_y(); }

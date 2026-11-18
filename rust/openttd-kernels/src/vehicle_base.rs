@@ -256,7 +256,7 @@ crate::abi::shared_records! {
         /// `EffectVehicleType` or `GroundVehicleSubtypeFlags`).
         pub subtype: u8,
         /// Which company owns the vehicle?
-        pub owner: Owner,
+        pub owner: CompanyID,
         /// Facing.
         pub direction: Direction,
         /// Status.
