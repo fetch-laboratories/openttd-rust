@@ -126,7 +126,7 @@ pub(crate) fn set_window_classes_dirty(cls: WindowClass) {
 
 /// `InvalidateWindowData`: mark the window of the given class and number as invalid. The
 /// window's `OnInvalidateData(data, gui_scope)` runs synchronously during the call; when
-/// `gui_scope` is false it is also scheduled to run again with `gui_scope` at the next redraw.
+/// `gui_scope` is false, `OnInvalidateData(data, true)` is also scheduled for the next redraw.
 /// The synchronous call can reenter game state, so no Rust borrow spans this call.
 pub(crate) fn invalidate_window_data(
     cls: WindowClass,
