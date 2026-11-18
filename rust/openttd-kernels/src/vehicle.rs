@@ -354,6 +354,24 @@ impl VehicleServices {
 
 #[allow(unsafe_code)]
 impl VehicleServices {
+    /// Visit every vehicle near `(x, y)` in hash order, as a `VehiclesNearTileXY` range loop.
+    /// The callback may reenter owners but cannot delete the current shell.
+    pub(crate) fn for_each_near<F: FnMut(VehicleRef)>(
+        &self,
+        x: i32,
+        y: i32,
+        distance: u32,
+        mut visit: F,
+    ) {
+        // SAFETY: Caller preserves the current shell; no index borrow spans visit.
+        unsafe {
+            let mut it = occupancy::Near::new(self, x, y, distance);
+            while let Some(v) = it.get() {
+                visit(v);
+                it.advance(self);
+            }
+        }
+    }
     pub(crate) fn unknown_callback_result(
         &self,
         engine: EngineRef,

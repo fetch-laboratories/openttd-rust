@@ -1045,19 +1045,16 @@ impl<'a> Game<'a> {
         };
 
         if front.state() == RVSB_WORMHOLE {
-            self.vs.any_on_tile(v.v.tile().0, |u| {
+            self.vs.for_each_on_tile(v.v.tile().0, |u| {
                 self.find_closest_blocking_road_veh(u, &mut rvf);
-                false
             });
             self.vs
-                .any_on_tile(service!(self.ss.other_tunnel_end)(v.v.tile().0), |u| {
+                .for_each_on_tile(service!(self.ss.other_tunnel_end)(v.v.tile().0), |u| {
                     self.find_closest_blocking_road_veh(u, &mut rvf);
-                    false
                 });
         } else {
-            self.vs.any_near(x, y, 8, |u| {
+            self.vs.for_each_near(x, y, 8, |u| {
                 self.find_closest_blocking_road_veh(u, &mut rvf);
-                false
             });
         }
 
@@ -1077,7 +1074,10 @@ impl<'a> Game<'a> {
             }
         }
 
-        rvf.best
+        /* RoadVehicle::From */
+        let best = rvf.best;
+        self.assert(|| best.is_some_and(|best| best.vehicle_type() == VehicleType::VEH_ROAD));
+        best
     }
 
     /// A road vehicle arrives at a station. If it is the first time, create a news item.
