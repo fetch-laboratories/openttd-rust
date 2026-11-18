@@ -187,13 +187,12 @@ set(RUST_MASTER_LANG_FILE "${CMAKE_SOURCE_DIR}/src/lang/english.txt")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${RUST_INPUTS} "${RUST_MASTER_LANG_FILE}"
     "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
     "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake")
-# The build script copies the table::strings it compiles here for the string-ID check.
+# Each archive command copies the table::strings source it compiled here, for the string-ID check.
 set(RUST_TABLE_STRINGS "${CMAKE_BINARY_DIR}/rust-table-strings.rs")
-list(APPEND RUST_BUILD_ENV "OPENTTD_RUST_TABLE_STRINGS=${RUST_TABLE_STRINGS}")
 # Build the real crate once so dependency-added native libraries participate in linkage.
 execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${RUST_BUILD_ENV} "${CMAKE_COMMAND}"
     "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
-    "-DLOG=${CMAKE_BINARY_DIR}/rust-build.log"
+    "-DLOG=${CMAKE_BINARY_DIR}/rust-build.log" "-DTABLE_STRINGS=${RUST_TABLE_STRINGS}"
     "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-build-configuration.txt" "-DFEATURES=${RUST_FEATURES}"
     -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" RESULT_VARIABLE RUST_RESULT)
@@ -214,11 +213,10 @@ else()
     separate_arguments(RUST_NATIVE_LIBS UNIX_COMMAND "${CMAKE_MATCH_1}")
 endif()
 set(RUST_NATIVE_LIBS "${RUST_NATIVE_LIBS}" CACHE INTERNAL "Pinned Rust native link flags" FORCE)
-add_custom_command(OUTPUT "${RUST_ARCHIVE}"
-    BYPRODUCTS "${RUST_TABLE_STRINGS}"
+add_custom_command(OUTPUT "${RUST_ARCHIVE}" "${RUST_TABLE_STRINGS}"
     COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "${CMAKE_COMMAND}"
         "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
-        "-DLOG=${CMAKE_BINARY_DIR}/rust-build.log"
+        "-DLOG=${CMAKE_BINARY_DIR}/rust-build.log" "-DTABLE_STRINGS=${RUST_TABLE_STRINGS}"
         "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-build-configuration.txt" "-DFEATURES=${RUST_FEATURES}"
         -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -277,12 +275,11 @@ if(NOT OPTION_TOOLS_ONLY)
     file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
         CONTENT "${RUST_CONFIGURATION}features=${RUST_TEST_FEATURES}\n")
     set(RUST_TEST_TABLE_STRINGS "${CMAKE_BINARY_DIR}/rust-native-test-table-strings.rs")
-    add_custom_command(OUTPUT "${RUST_TEST_ARCHIVE}"
-        BYPRODUCTS "${RUST_TEST_TABLE_STRINGS}"
-        COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "CARGO_TARGET_DIR=${RUST_TEST_TARGET_DIR}"
-            "OPENTTD_RUST_TABLE_STRINGS=${RUST_TEST_TABLE_STRINGS}" "${CMAKE_COMMAND}"
+    add_custom_command(OUTPUT "${RUST_TEST_ARCHIVE}" "${RUST_TEST_TABLE_STRINGS}"
+        COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "CARGO_TARGET_DIR=${RUST_TEST_TARGET_DIR}" "${CMAKE_COMMAND}"
             "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
             "-DFEATURES=${RUST_TEST_FEATURES}" "-DLOG=${CMAKE_BINARY_DIR}/rust-native-test-build.log"
+            "-DTABLE_STRINGS=${RUST_TEST_TABLE_STRINGS}"
             "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
             -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -322,6 +319,8 @@ if(NOT OPTION_TOOLS_ONLY)
             "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/Rust.cmake"
         COMMENT "Checking Rust string IDs against table/strings.h" VERBATIM)
     add_custom_target(openttd_rust_strings_check DEPENDS "${RUST_STRINGS_CHECK_STAMP}")
+    # Each copy has one producer: its archive target runs first.
+    add_dependencies(openttd_rust_strings_check openttd_rust_build openttd_rust_native_test_support_build)
 endif()
 
 # Derive native ABI checks from the same declarations compiled by Rust.

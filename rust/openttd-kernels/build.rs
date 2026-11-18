@@ -41,23 +41,19 @@ fn collect(dir: &Path, module: &str, found: &mut Vec<String>) -> io::Result<()> 
     Ok(())
 }
 
-/// One `StringID` constant per name of `table/strings.h`, in `openttd-strgen`'s text. When the
-/// `CMake` build names a path in `OPENTTD_RUST_TABLE_STRINGS`, the compiled file is copied there for
-/// its check against the build's `table/strings.h`.
+/// One `StringID` constant per name of `table/strings.h`, in `openttd-strgen`'s text. The `CMake`
+/// archive command copies this `strings.rs` out of `OUT_DIR` for its check against the build's
+/// `table/strings.h`.
 fn write_strings(out_dir: &Path) -> io::Result<()> {
     const MASTER_LANG_FILE: &str = "../../src/lang/english.txt";
-    const CHECKED_COPY: &str = "OPENTTD_RUST_TABLE_STRINGS";
     println!("cargo:rerun-if-changed={MASTER_LANG_FILE}");
     println!("cargo:rerun-if-changed=../openttd-strgen/src");
-    println!("cargo:rerun-if-env-changed={CHECKED_COPY}");
     let ids = openttd_strgen::strgen_base::master_string_ids(&fs::read(MASTER_LANG_FILE)?)
         .map_err(|error| io::Error::other(format!("{MASTER_LANG_FILE}: {error}")))?;
-    let compiled = out_dir.join("strings.rs");
-    fs::write(&compiled, openttd_strgen::table_strings::write(&ids))?;
-    if let Some(copy) = env::var_os(CHECKED_COPY) {
-        fs::copy(&compiled, copy)?;
-    }
-    Ok(())
+    fs::write(
+        out_dir.join("strings.rs"),
+        openttd_strgen::table_strings::write(&ids),
+    )
 }
 
 fn main() -> io::Result<()> {
