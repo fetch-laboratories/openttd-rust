@@ -130,10 +130,6 @@ static void HeightmapFinish(void *ctx) noexcept { static_cast<RustHeightmapInput
 RustHeightmapInput::RustHeightmapInput(DetailedFileType type, std::string_view filename) : saveload(false), type(type), filename(filename), view{
 	.shared = &GetRustSharedServices(),
 	.context = this,
-	.strings = {
-		.png = STR_ERROR_PNGMAP, .bmp = STR_ERROR_BMPMAP, .not_found = STR_ERROR_PNGMAP_FILE_NOT_FOUND, .png_misc = STR_ERROR_PNGMAP_MISC,
-		.png_image_type = STR_ERROR_PNGMAP_IMAGE_TYPE, .bmp_image_type = STR_ERROR_BMPMAP_IMAGE_TYPE, .too_large = STR_ERROR_HEIGHTMAP_TOO_LARGE,
-	},
 	.source = HeightmapSource,
 	.png = HeightmapPng,
 	.bmp_header = HeightmapBmpHeader,

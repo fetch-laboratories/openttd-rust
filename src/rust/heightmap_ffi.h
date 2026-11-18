@@ -7,7 +7,6 @@
 #include <cstdint>
 #include "../gfx_type.h"
 enum OpenTTDHeightmapDecode : uint8_t { OPENTTD_HEIGHTMAP_OK, OPENTTD_HEIGHTMAP_NOT_FOUND, OPENTTD_HEIGHTMAP_FAILED };
-struct OpenTTDHeightmapStrings { uint32_t png, bmp, not_found, png_misc, png_image_type, bmp_image_type, too_large; };
 /* libpng results after png_read_png; rows and RGB palette triples live until finish. */
 struct OpenTTDHeightmapPng {
 	uint32_t width, height;
@@ -31,7 +30,6 @@ struct OpenTTDHeightmapBmp {
 struct OpenTTDHeightmapInput {
 	const OpenTTDSharedServices *shared;
 	void *context;
-	OpenTTDHeightmapStrings strings;
 	uint8_t (*source)(void *) noexcept OPENTTD_SERVICE_DEFAULT(source);
 	uint8_t (*png)(void *, OpenTTDHeightmapPng *) noexcept OPENTTD_SERVICE_DEFAULT(png);
 	uint8_t (*bmp_header)(void *, OpenTTDHeightmapBmp *) noexcept OPENTTD_SERVICE_DEFAULT(bmp_header);
