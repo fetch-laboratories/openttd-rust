@@ -134,8 +134,7 @@ pub(crate) fn modify_station_rating_around(
         }
     });
 }
-/// Temporary raw adapter of [`modify_station_rating_around`] for `road.rs` and
-/// `train.rs` until their passes.
+/// Temporary raw adapter of [`modify_station_rating_around`] for `train.rs` until its pass.
 pub(crate) fn modify_rating_around(s: &Services, tile: u32, owner: u8, amount: i32, distance: u32) {
     modify_station_rating_around(s, TileIndex(tile), CompanyID(owner), amount, distance);
 }
