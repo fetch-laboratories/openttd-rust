@@ -353,7 +353,7 @@ impl<'a> Ctx<'a> {
         }
         present
     }
-    fn no_road(&self, c: Cost<'_>, rtt: u8) {
+    fn no_road(c: Cost<'_>, rtt: u8) {
         c.error(if rtt == 1 {
             STR_ERROR_THERE_IS_NO_TRAMWAY.0
         } else {
@@ -508,7 +508,7 @@ impl<'a> Ctx<'a> {
             INVALID
         };
         if rt == INVALID {
-            self.no_road(cost, rtt);
+            Self::no_road(cost, rtt);
             return;
         }
         match self.tile_type(tile) {
@@ -560,7 +560,7 @@ impl<'a> Ctx<'a> {
             if self.tile_type(tile) == MP_TUNNELBRIDGE {
                 w::hit(w::ROAD_COMMANDS_REMOVE_WORMHOLE);
                 if axis_bits((self.shared.tunnel_bridge_direction)(tile) & 1) & pieces == 0 {
-                    self.no_road(cost, rtt);
+                    Self::no_road(cost, rtt);
                     return;
                 }
                 let end = (self.rail.other_tunnel_bridge_end)(tile);
@@ -623,7 +623,7 @@ impl<'a> Ctx<'a> {
                 }
                 pieces &= present;
                 if pieces == 0 {
-                    self.no_road(cost, rtt);
+                    Self::no_road(cost, rtt);
                     return;
                 }
                 present ^= pieces;

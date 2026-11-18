@@ -20,7 +20,7 @@ pub const SPECSTR_TOWNNAME_START: StringID = StringID(0x20C0);
 pub const SPECSTR_TOWNNAME_END: StringID =
     StringID(SPECSTR_TOWNNAME_START.0 + BUILTIN_TOWNNAME_GENERATOR_COUNT);
 
-/// `SPECSTR_COMPANY_NAME_START`: special strings for company names on the form "TownName
+/// `SPECSTR_COMPANY_NAME_START`: special strings for company names on the form "`TownName`
 /// transport".
 pub const SPECSTR_COMPANY_NAME_START: StringID = StringID(0x70EA);
 
