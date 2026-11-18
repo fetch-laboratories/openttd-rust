@@ -495,9 +495,8 @@ impl crate::vehicle::VehicleRef {
     /// # Safety
     /// The caller's chain invariant guarantees that a part follows this one.
     pub(crate) unsafe fn next_unchecked(self) -> Self {
-        let next = read_field!(self.0.as_ptr(), next);
-        // SAFETY: The caller guarantees the link is non-null.
-        Self(unsafe { std::ptr::NonNull::new_unchecked(next) })
+        // SAFETY: The caller guarantees the link `next` loads is non-null.
+        unsafe { self.next().unwrap_unchecked() }
     }
     /// `Vehicle::Previous`: get the previous vehicle of this vehicle; articulated
     /// parts are also counted as vehicles.
