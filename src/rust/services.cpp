@@ -444,7 +444,7 @@ static_assert(to_underlying(CommandFlag::Server) == 0 && to_underlying(CommandFl
 static_assert(to_underlying(CommandType::ServerSetting) == 7 && to_underlying(CommandType::End) == 9);
 static_assert(to_underlying(CommandPauseLevel::NoActions) == 0 && to_underlying(CommandPauseLevel::NoConstruction) == 1 && to_underlying(CommandPauseLevel::NoLandscaping) == 2 && to_underlying(CommandPauseLevel::AllActions) == 3);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
-static_assert(OT_NOTHING == 0 && OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
+static_assert(OT_NOTHING == 0 && OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8 && CO_SHARE == 0 && CO_COPY == 1 && CO_UNSHARE == 2);
 static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2 && to_underlying(OrderUnloadType::NoUnload) == 4);
 static_assert(to_underlying(StationType::Truck) == 2 && to_underlying(StationType::Bus) == 3);
 static_assert(to_underlying(StationType::Rail) == 0 && to_underlying(StationType::Airport) == 1 && to_underlying(StationType::Oilrig) == 4 && to_underlying(StationType::Dock) == 5);

@@ -30,9 +30,9 @@ use crate::company_type::OWNER_NONE;
 use crate::depot_type::DepotID;
 use crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
 use crate::order_type::{
-    OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT,
-    OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OUFB_TRANSFER, OUFB_UNLOAD, OrderType,
-    VehicleOrderID,
+    CloneOptions, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION,
+    OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OUFB_TRANSFER,
+    OUFB_UNLOAD, OrderType, VehicleOrderID,
 };
 use crate::raw_field::{read_field, write_field};
 use crate::station_type::StationID;
@@ -2875,7 +2875,7 @@ pub unsafe extern "C" fn openttd_rust_command_clone(
     leaves: &'static Leaves,
 ) -> u64 {
     let control = Control { g: Game(leaves) };
-    control.clone_command(v, source, action, execute != 0, output)
+    control.clone_command(v, source, CloneOptions(action), execute != 0, output)
 }
 
 #[unsafe(no_mangle)]
@@ -4053,7 +4053,7 @@ impl Control {
         &self,
         dst: *mut c_void,
         src: *mut c_void,
-        action: u8,
+        action: CloneOptions,
         execute: bool,
         output: *mut c_void,
     ) -> u64 {
@@ -4064,10 +4064,10 @@ impl Control {
         if !self.g.owner_check(dst, output) {
             return 0;
         }
-        if action == 2 {
+        if action == CloneOptions::CO_UNSHARE {
             return self.declone(dst, execute);
         }
-        if action != 0 && action != 1 {
+        if action != CloneOptions::CO_SHARE && action != CloneOptions::CO_COPY {
             return self.g.error(output, 0);
         }
         if !self.g.primary(src) || g.vehicle_type(dst) != g.vehicle_type(src) || dst == src {
@@ -4077,7 +4077,7 @@ impl Control {
             return 0;
         }
         let kind = g.vehicle_type(src);
-        if action == 0 {
+        if action == CloneOptions::CO_SHARE {
             if kind == u64::from(VEH_ROAD) && g.bus(src) != g.bus(dst) {
                 return self.g.error(output, 0);
             }
@@ -4097,7 +4097,8 @@ impl Control {
                     continue;
                 }
                 let destination = u64::from(order.destination);
-                if (action == 1 || order_can_use_station(src, destination as u16) != 0)
+                if (action == CloneOptions::CO_COPY
+                    || order_can_use_station(src, destination as u16) != 0)
                     && order_can_use_station(dst, destination as u16) == 0
                 {
                     return self
@@ -4109,12 +4110,16 @@ impl Control {
         if kind == u64::from(VEH_AIRCRAFT) && !g.aircraft_range(dst, src) {
             return self.g.error(output, 18);
         }
-        if (action == 1 || list.is_null()) && (g.0.list_capacity)() == 0 {
+        if (action == CloneOptions::CO_COPY || list.is_null()) && (g.0.list_capacity)() == 0 {
             return self.g.error(output, 16);
         }
         if execute {
-            self.delete_vehicle_orders(dst, action == 1, g.count(dst) != g.count(src));
-            if action == 0 {
+            self.delete_vehicle_orders(
+                dst,
+                action == CloneOptions::CO_COPY,
+                g.count(dst) != g.count(src),
+            );
+            if action == CloneOptions::CO_SHARE {
                 write_field!(g.vehicle(dst), orders, g.orders(src));
                 self.add_shared(dst, src);
                 g.invalidate_order(dst, ((-1i64) as u64) as i32);
