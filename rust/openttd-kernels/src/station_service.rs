@@ -49,7 +49,7 @@ use crate::vehicle::VehicleRef;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
 use crate::vehicle_base::{OpenTTDVehicleShell, VehState, VehStates};
 use crate::vehicle_gui::get_window_class_for_vehicle_type;
-use crate::vehicle_type::VehicleType;
+use crate::vehicle_type::{VehicleID, VehicleType};
 use crate::window_func::set_window_dirty;
 use crate::window_type::{WindowClass, WindowNumber};
 use std::ffi::c_void;
@@ -2429,9 +2429,12 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
                 get_window_class_for_vehicle_type(front.vehicle_type()),
                 WindowNumber::from(front.owner()),
             );
-            let maintenance = unsafe { &*(*l.vehicle).maintenance };
-            (maintenance.details_dirty)(front);
-            (maintenance.mark_dirty)(front);
+            let vehicles = unsafe { &*l.vehicle };
+            // SAFETY: The vehicle table's NewGRF table is immutable and process-wide; the
+            // front record is live.
+            let index = VehicleID(unsafe { ((*(vehicles.newgrf)()).id)(front.0.as_ptr()) });
+            set_window_dirty(WindowClass::WC_VEHICLE_DETAILS, WindowNumber::from(index));
+            (unsafe { &*vehicles.maintenance }.mark_dirty)(front);
         }
         if dirty_station {
             (w.mark_tiles)(st.base, true);

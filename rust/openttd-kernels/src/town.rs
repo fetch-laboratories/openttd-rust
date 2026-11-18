@@ -4786,6 +4786,8 @@ mod protocol_tests {
     thread_local! {
         static WORLD: RefCell<World> = RefCell::new(World::default());
         static OWNER: Cell<*mut State> = const { Cell::new(ptr::null_mut()) };
+        /// `_settings_client.gui.population_in_label`.
+        static LABEL: Cell<bool> = const { Cell::new(true) };
     }
     fn with<R>(f: impl FnOnce(&mut World) -> R) -> R {
         WORLD.with(|world| f(&mut world.borrow_mut()))
@@ -4859,24 +4861,26 @@ mod protocol_tests {
     extern "C" fn make_house(tile: u32, town: u32, house: u32, construction: u32) {
         with(|w| w.writes.push([tile, town, house, construction]));
     }
-    extern "C" fn update_virt(_: *mut TownHandle) {
+    extern "C" fn update_virt(town: *mut TownHandle) {
         // SAFETY: The fixture's live owner; no other borrow spans this leaf.
         let population = unsafe { (*owner()).simulation.population };
         with(|w| w.population = population);
-        presentation_flush();
-        with(|w| w.presentation.push(Presentation::UpdateVirtCoord));
+        with(|w| w.presentation.push(Presentation::UpdateVirtCoord(town)));
     }
-    /// A native presentation call, in the order the code under test made it.
-    #[derive(Debug, PartialEq, Eq)]
+    /// The fixture town's native shell, which `Town::Get` returns for every ID.
+    fn town_shell() -> *mut TownHandle {
+        ptr::without_provenance_mut(0x7A0)
+    }
+    /// A native presentation call or a square clear, in the order the code under test made
+    /// it.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum Presentation {
         Window(crate::window_func::testing::Effect),
-        UpdateVirtCoord,
+        UpdateVirtCoord(*mut TownHandle),
+        ClearSquare,
     }
-    /// Append the window calls recorded since the last flush.
-    fn presentation_flush() {
-        for effect in crate::window_func::testing::take() {
-            with(|w| w.presentation.push(Presentation::Window(effect)));
-        }
+    fn window_call(effect: &crate::window_func::testing::Effect) {
+        with(|w| w.presentation.push(Presentation::Window(*effect)));
     }
     extern "C" fn house_count() -> u32 {
         with(|w| w.house_count)
@@ -5050,7 +5054,7 @@ mod protocol_tests {
         true
     }
     extern "C" fn no_town_shell(_: u32) -> *mut TownHandle {
-        ptr::null_mut()
+        town_shell()
     }
     extern "C" fn no_road_bits(_: u32, _: u8, _: bool) -> u8 {
         0
@@ -5122,6 +5126,7 @@ mod protocol_tests {
     /// The synthetic map has no docking tiles and no water neighbours.
     extern "C" fn make_clear(_: u32, _: crate::services::ClearGroundType, _: u32) {
         with(|w| w.square_clears += 1);
+        with(|w| w.presentation.push(Presentation::ClearSquare));
     }
     extern "C" fn water_services() -> *const crate::water::WaterServices {
         WATER_TABLE.get()
@@ -5230,7 +5235,7 @@ mod protocol_tests {
             allow_town_roads: leak(false),
             town_growth_rate: leak(2),
             allow_town_level_crossings: leak(false),
-            population_in_label: leak(true),
+            population_in_label: LABEL.with(Cell::as_ptr),
             ..crate::settings_type::SettingAddresses::NULL
         });
         services.town_by_id = no_town_shell;
@@ -5301,6 +5306,7 @@ mod protocol_tests {
         landscape.tile_procs = leak(tiles);
         LANDSCAPE_TABLE.set(leak(landscape));
         crate::window_func::testing::take();
+        crate::window_func::testing::observe(Some(window_call));
         let mut houses = HOUSES;
         houses.cost = costs;
         houses.commands = commands;
@@ -5423,6 +5429,8 @@ mod protocol_tests {
     /// A growing town rebuilds the expired house: one draw, clear, then `TryBuildTownHouse`
     /// (`town_protocol.hpp` lines 311 to 327).
     fn check_rebuilds(owner: *mut State, leaves: &Leaves, services: *const Services) {
+        with(|w| w.presentation.clear());
+        LABEL.set(false);
         let rebuild = move || {
             // SAFETY: The fixture's live owner; no borrow spans these writes.
             unsafe {
@@ -5477,13 +5485,39 @@ mod protocol_tests {
             "rebuilt: houses, (writes, animations), growth flags"
         );
         assert_eq!(with(|w| w.square_clears), 3, "rebuilds: square clears");
+        // Each rebuild clears the old house: `ChangePopulation` without `population_in_label`,
+        // then `DoClearTownHouseHelper`'s square clear and inspect window deletion.
+        let removal = [
+            Presentation::Window(Effect::InvalidateWindowData(
+                WindowClass::WC_TOWN_VIEW,
+                WindowNumber(0),
+                0,
+                false,
+            )),
+            Presentation::Window(Effect::InvalidateWindowData(
+                WindowClass::WC_TOWN_DIRECTORY,
+                WindowNumber(0),
+                1,
+                false,
+            )),
+            Presentation::ClearSquare,
+            Presentation::Window(Effect::DeleteNewGRFInspectWindow(
+                crate::newgrf::GrfSpecFeature::GSF_HOUSES,
+                2080,
+            )),
+        ];
+        assert_eq!(
+            with(|w| std::mem::take(&mut w.presentation)),
+            [&removal[..], &removal[..], &removal[..]].concat(),
+            "rebuilds: removal presentation"
+        );
     }
 
     /// `CmdPlaceHouse` executes a completed, protected 2x2 house through `BuildTownHouse`
     /// (`town_protocol.hpp` lines 328 to 346).
     fn check_placement(owner: *mut State, leaves: &Leaves, services: *mut Services) {
-        presentation_flush();
         with(|w| w.presentation.clear());
+        LABEL.set(true);
         with(|w| {
             w.placing = true;
             w.writes.clear();
@@ -5539,7 +5573,6 @@ mod protocol_tests {
             "placement: population, houses"
         );
         // `ChangePopulation`'s presentation, with `population_in_label` set.
-        presentation_flush();
         assert_eq!(
             with(|w| std::mem::take(&mut w.presentation)),
             [
@@ -5549,7 +5582,7 @@ mod protocol_tests {
                     0,
                     false
                 )),
-                Presentation::UpdateVirtCoord,
+                Presentation::UpdateVirtCoord(town_shell()),
                 Presentation::Window(Effect::InvalidateWindowData(
                     WindowClass::WC_TOWN_DIRECTORY,
                     WindowNumber(0),
