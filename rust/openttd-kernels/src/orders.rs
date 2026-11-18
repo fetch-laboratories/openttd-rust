@@ -2874,8 +2874,27 @@ pub unsafe extern "C" fn openttd_rust_command_clone(
     output: *mut c_void,
     leaves: &'static Leaves,
 ) -> u64 {
+    clone_order(
+        v,
+        source,
+        CloneOptions(action),
+        execute != 0,
+        output,
+        leaves,
+    )
+}
+
+/// `CmdCloneOrder` on the destination and source vehicle shells, for Rust callers.
+pub(crate) fn clone_order(
+    v: *mut c_void,
+    source: *mut c_void,
+    action: CloneOptions,
+    execute: bool,
+    output: *mut c_void,
+    leaves: &'static Leaves,
+) -> u64 {
     let control = Control { g: Game(leaves) };
-    control.clone_command(v, source, CloneOptions(action), execute != 0, output)
+    control.clone_command(v, source, action, execute, output)
 }
 
 #[unsafe(no_mangle)]

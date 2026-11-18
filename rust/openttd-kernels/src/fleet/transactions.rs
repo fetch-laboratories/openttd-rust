@@ -306,12 +306,12 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
         crate::services::Cost(out.cast(), b.cost),
         0,
         DoCommandFlag::EXECUTE,
-        |flags| unsafe {
-            crate::orders::openttd_rust_command_clone(
+        |flags| {
+            crate::orders::clone_order(
                 new.cast(),
                 old.cast(),
-                CloneOptions::CO_SHARE.0,
-                u8::from(flags & DoCommandFlag::EXECUTE != 0),
+                CloneOptions::CO_SHARE,
+                flags & DoCommandFlag::EXECUTE != 0,
                 out.cast(),
                 s.orders,
             );

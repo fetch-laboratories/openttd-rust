@@ -102,16 +102,16 @@ unsafe fn orders(
         Cost(out, b.cost),
         0,
         flags.0,
-        |flags| unsafe {
-            crate::orders::openttd_rust_command_clone(
+        |flags| {
+            crate::orders::clone_order(
                 new.cast(),
                 old.cast(),
                 if share {
-                    CloneOptions::CO_SHARE.0
+                    CloneOptions::CO_SHARE
                 } else {
-                    CloneOptions::CO_COPY.0
+                    CloneOptions::CO_COPY
                 },
-                u8::from(flags & DoCommandFlag::EXECUTE != 0),
+                flags & DoCommandFlag::EXECUTE != 0,
                 out.cast(),
                 c.orders,
             );
