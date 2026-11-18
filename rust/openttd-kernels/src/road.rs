@@ -506,11 +506,6 @@ impl<'a> Game<'a> {
     fn map(&self) -> Map {
         self.world().dimensions
     }
-    /// `_settings_game.vehicle.roadveh_acceleration_model`.
-    fn roadveh_acceleration_model(&self) -> AccelerationModel {
-        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        AccelerationModel(unsafe { self.ss.settings().roadveh_acceleration_model.read() })
-    }
     /// `_settings_game.vehicle.road_side`.
     fn road_side(&self) -> u8 {
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
@@ -1167,7 +1162,7 @@ impl<'a> Game<'a> {
     /// moving a step on the map.
     #[inline]
     fn update_speed(&self, v: Part) -> i32 {
-        match self.roadveh_acceleration_model() {
+        match self.ss.settings().roadveh_acceleration_model() {
             AccelerationModel::AM_ORIGINAL => crate::ground_vehicle::do_update_speed(
                 v.v,
                 if v.overtaking() != 0 { 512 } else { 256 },
@@ -1302,7 +1297,8 @@ impl<'a> Game<'a> {
         /* Can't overtake a vehicle that is moving faster than us. If the vehicle in front is
          * accelerating, take the maximum speed for the comparison, else the current speed.
          * Original acceleration always accelerates, so always use the maximum speed. */
-        let u_speed = if self.roadveh_acceleration_model() == AccelerationModel::AM_ORIGINAL
+        let u_speed = if self.ss.settings().roadveh_acceleration_model()
+            == AccelerationModel::AM_ORIGINAL
             || self.get_acceleration(u) > 0
         {
             get_current_max_speed(self.ss, || self.world(), u)
@@ -1362,7 +1358,7 @@ impl<'a> Game<'a> {
     #[inline]
     fn road_z_pos_affect_speed(&self, v: Part, old_z: i32) {
         if old_z == v.v.z_pos()
-            || self.roadveh_acceleration_model() != AccelerationModel::AM_ORIGINAL
+            || self.ss.settings().roadveh_acceleration_model() != AccelerationModel::AM_ORIGINAL
         {
             return;
         }
@@ -2065,7 +2061,9 @@ impl<'a> Game<'a> {
                 }
                 if new_dir != v.v.direction() {
                     v.v.set_direction(new_dir);
-                    if self.roadveh_acceleration_model() == AccelerationModel::AM_ORIGINAL {
+                    if self.ss.settings().roadveh_acceleration_model()
+                        == AccelerationModel::AM_ORIGINAL
+                    {
                         v.v.set_cur_speed(v.v.cur_speed() - (v.v.cur_speed() >> 2));
                     }
                 }
@@ -2161,7 +2159,8 @@ impl<'a> Game<'a> {
 
             if new_dir != v.v.direction() {
                 v.v.set_direction(new_dir);
-                if self.roadveh_acceleration_model() == AccelerationModel::AM_ORIGINAL {
+                if self.ss.settings().roadveh_acceleration_model() == AccelerationModel::AM_ORIGINAL
+                {
                     v.v.set_cur_speed(v.v.cur_speed() - (v.v.cur_speed() >> 2));
                 }
             }
@@ -2251,7 +2250,7 @@ impl<'a> Game<'a> {
         let old_dir = v.v.direction();
         if new_dir != old_dir {
             v.v.set_direction(new_dir);
-            if self.roadveh_acceleration_model() == AccelerationModel::AM_ORIGINAL {
+            if self.ss.settings().roadveh_acceleration_model() == AccelerationModel::AM_ORIGINAL {
                 v.v.set_cur_speed(v.v.cur_speed() - (v.v.cur_speed() >> 2));
             }
 
@@ -2728,10 +2727,7 @@ fn get_current_max_speed<'w, 'a: 'w>(
     /* Limit speed to 50% while reversing, 75% in curves. */
     let mut part = Some(v);
     while let Some(u) = part {
-        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        if AccelerationModel(unsafe { ss.settings().roadveh_acceleration_model.read() })
-            == AccelerationModel::AM_REALISTIC
-        {
+        if ss.settings().roadveh_acceleration_model() == AccelerationModel::AM_REALISTIC {
             if v.state() <= RVSB_TRACKDIR_MASK
                 && is_reversing_road_trackdir(v.state(), |ok| {
                     crate::movement::native_assert(ss, ok);

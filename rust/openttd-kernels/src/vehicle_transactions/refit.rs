@@ -78,18 +78,6 @@ impl Services {
         (self.common.base.shared.not_reached)();
         std::process::abort()
     }
-    /// `_settings_game.vehicle.roadveh_acceleration_model`, from the settings catalog.
-    pub(crate) fn road_acceleration_model(&self) -> crate::vehicle_type::AccelerationModel {
-        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        crate::vehicle_type::AccelerationModel(unsafe {
-            self.common
-                .base
-                .shared
-                .settings()
-                .roadveh_acceleration_model
-                .read()
-        })
-    }
     /// `v->GetEngine()`.
     pub(crate) fn vehicle_engine(&self, v: *mut OpenTTDVehicle) -> *const OpenTTDEngine {
         (self.common.vehicles.engine)(crate::vehicle::VehicleRef::of(v))
@@ -722,7 +710,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
                         auto_refit,
                     );
                 }
-                if s.road_acceleration_model()
+                if s.common.base.shared.settings().roadveh_acceleration_model()
                     != crate::vehicle_type::AccelerationModel::AM_ORIGINAL
                 {
                     crate::ground_vehicle::cargo_changed(

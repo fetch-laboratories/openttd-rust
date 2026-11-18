@@ -113,6 +113,15 @@ crate::abi::shared_records! {
 
 }
 
+impl SettingAddresses {
+    /// `_settings_game.vehicle.roadveh_acceleration_model`; one field-sized load.
+    pub(crate) fn roadveh_acceleration_model(&self) -> crate::vehicle_type::AccelerationModel {
+        // SAFETY: The catalog addresses the process-wide setting, serialized by the
+        // game-state mutex.
+        crate::vehicle_type::AccelerationModel(unsafe { self.roadveh_acceleration_model.read() })
+    }
+}
+
 #[cfg(test)]
 impl SettingAddresses {
     /// A catalog with every address null; tests fill the fields their entry reads.
