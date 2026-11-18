@@ -107,7 +107,7 @@ pub(crate) fn map_read_probe(
         }
         let station = crate::station_map::get_station_type(&world.types, tile);
         if kind == TileType::MP_STATION {
-            if station.map(|kind| kind.0) != Some((shared.station_type)(tile.0).0) {
+            if station != Some((shared.station_type)(tile.0)) {
                 return false;
             }
         } else if world.types.assertions() == station.is_some() {
