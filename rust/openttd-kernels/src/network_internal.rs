@@ -70,7 +70,7 @@ pub(crate) fn show_network_error(error_string: StringID) {
 }
 
 /// List of possible network errors, used by `PACKET_SERVER_ERROR` and `PACKET_CLIENT_ERROR`.
-const NETWORK_ERROR_STRINGS: [StringID; 23] = [
+const NETWORK_ERROR_STRINGS: &[StringID] = &[
     STR_NETWORK_ERROR_CLIENT_GENERAL,
     STR_NETWORK_ERROR_CLIENT_DESYNC,
     STR_NETWORK_ERROR_CLIENT_SAVEGAME,

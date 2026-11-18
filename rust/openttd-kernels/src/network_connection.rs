@@ -1454,7 +1454,7 @@ pub(crate) fn close_tail(
         net,
         3,
         "[{}] Client #{} closed connection",
-        "server",
+        server::get_name(),
         (f.dispatch.client_id)(socket)
     );
 

@@ -1079,19 +1079,6 @@ bool NetworkCompanyHasClients(CompanyID company)
 }
 
 /**
- * Get the name of the client, if the user did not send it yet, Client ID is used.
- * @param client_name The variable to write the name to.
- * @param last        The pointer to the last element of the destination buffer
- */
-std::string ServerNetworkGameSocketHandler::GetClientName() const
-{
-	const NetworkClientInfo *ci = this->GetInfo();
-	if (ci != nullptr && !ci->client_name.empty()) return ci->client_name;
-
-	return fmt::format("Client #{}", this->client_id);
-}
-
-/**
  * Print all the clients to the console
  */
 void NetworkPrintClients()
