@@ -33,10 +33,6 @@ fn original_movement_and_stop_tables() {
 
 /// The controller bodies against `src/roadveh_cmd.cpp`, through recording tables.
 mod controller {
-    #![allow(
-        unsafe_code,
-        reason = "the tests own the records they hand the controller"
-    )]
     use super::super::*;
     use crate::news_func::testing::{Effect, Param, encoded, take};
     use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle};
