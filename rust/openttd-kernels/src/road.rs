@@ -2634,7 +2634,7 @@ impl<'a> Game<'a> {
 
         self.check_if_road_veh_needs_service(v);
 
-        service!(self.vs.check_orders_only)(v.v);
+        crate::orders::check_orders(v.v, self.vs.orders());
 
         if v.v.running_ticks() == 0 {
             return;

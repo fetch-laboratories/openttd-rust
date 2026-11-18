@@ -3024,6 +3024,12 @@ pub unsafe extern "C" fn openttd_rust_remove_destination(
     0
 }
 
+/// `CheckOrders`: check the orders of a vehicle, to see if there are invalid orders and stuff.
+pub(crate) fn check_orders(v: VehicleRef, leaves: &'static Leaves) {
+    let control = Control { g: Game(leaves) };
+    control.check_orders(v.shell());
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_check_orders(v: *mut c_void, leaves: &'static Leaves) -> u64 {
     let control = Control { g: Game(leaves) };

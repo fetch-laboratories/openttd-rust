@@ -612,7 +612,14 @@ static void RoadServiceBoundary()
 		CHECK((v->orders->current.type & 15) == OT_GOTO_DEPOT && v->orders->current.destination == 55 && v->orders->current.refit_cargo == CARGO_NO_REFIT);
 		++road_service_probe->depot_orders;
 	};
-	t.vehicle.check_orders_only = [](OpenTTDVehicle *) noexcept {};
+	/* CheckOrders runs through the production orders owner; the default review
+	 * setting (off) returns before any order or owner read. */
+	static const uint8_t order_review = 0;
+	catalog.order_review_system = &order_review;
+	_vehicle_maintenance_probe.shared = &t.shared;
+	static std::unique_ptr<ControllerOrders> check_orders;
+	check_orders = std::make_unique<ControllerOrders>(&t.vehicle);
+	t.vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &check_orders->services; };
 	auto day = [&]() {
 		for (int i : {0, 1}) { auto *record = RoadServiceHandle(i); record->ground = &road_service_ground[i]; record->orders = &road_service_orders[i]; record->type = VEH_ROAD; record->subtype = i == 0 ? 1 << GVSF_FRONT : 0; record->first = RoadServiceHandle(0); record->tile = probe.tile; record->cur_speed = probe.speed; record->road = i == 0 ? probe.head : probe.tail; record->next = i == 0 ? RoadServiceHandle(1) : nullptr; }
 		road_service_orders[0].current = {};
