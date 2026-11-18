@@ -4564,13 +4564,19 @@ impl Control {
         }
         let record = vehicle();
         let v = record.shell();
-        let status = record.vehstatus_raw();
         // Do nothing for crashed vehicles
-        if status & VS_CRASHED != 0 {
+        if record
+            .vehstatus()
+            .test(crate::vehicle_base::VehState::Crashed)
+        {
             return;
         }
         // Do nothing for stopped vehicles if setting is '1'
-        if review == 1 && status & VS_STOPPED != 0 {
+        if review == 1
+            && record
+                .vehstatus()
+                .test(crate::vehicle_base::VehState::Stopped)
+        {
             return;
         }
         // do nothing we we're not the first vehicle in a share-chain
@@ -4595,7 +4601,8 @@ impl Control {
                     stations = stations.wrapping_add(1);
                     if order_can_use_station(v, order.destination) == 0 {
                         message = 2;
-                    } else if g.vehicle_type(v) == u64::from(VEH_AIRCRAFT)
+                    } else if record.vehicle_type()
+                        == crate::vehicle_type::VehicleType::VEH_AIRCRAFT
                         && (g.0.base.engine)(record).aircraft_subtype()
                             & crate::engine_type::AIR_FAST
                             != 0
