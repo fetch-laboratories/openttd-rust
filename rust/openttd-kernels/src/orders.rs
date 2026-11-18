@@ -2931,8 +2931,20 @@ pub unsafe extern "C" fn openttd_rust_backup_tile_clear(
     from_gui: u8,
     leaves: &'static Leaves,
 ) -> u64 {
+    order_backup_reset(leaves, crate::tile_type::TileIndex(tile), from_gui != 0);
+    0
+}
+
+/// `OrderBackup::Reset(t, from_gui)`: reset the order backups of the tile from GUI/game
+/// logic; `from_gui` says whether the call came from the GUI, i.e. whether it must be
+/// synced over the network.
+pub(crate) fn order_backup_reset(
+    leaves: &'static Leaves,
+    t: crate::tile_type::TileIndex,
+    from_gui: bool,
+) {
     let control = Control { g: Game(leaves) };
-    control.backup_tile_clear(u64::from(tile), u64::from(from_gui))
+    control.backup_tile_clear(t, from_gui);
 }
 
 #[unsafe(no_mangle)]
@@ -4235,8 +4247,13 @@ impl Control {
         }
         0
     }
-    fn backup_tile_clear(&self, a: u64, b: u64) -> u64 {
+    /// `OrderBackup::Reset(t, from_gui)`.
+    fn backup_tile_clear(&self, t: crate::tile_type::TileIndex, from_gui: bool) {
         let g = self.g;
+        /* The user has CLIENT_ID_SERVER as default when network play is not active,
+         * but compiled it. A network client has its own variable for the unique
+         * client/user identifier. Finally if networking isn't compiled in the
+         * default is just plain and simple: 0. */
         let user = if (g.0.networking)() != 0 && !(g.0.network_server)() {
             (g.0.network_client)() as u32
         } else {
@@ -4246,20 +4263,25 @@ impl Control {
         let mut ob = self.g.next_backup(&mut cursor);
         while !ob.is_null() {
             let state = g.backup(ob);
+            let tile = || crate::tile_type::TileIndex(read_field!(state, tile));
+            /* If this is a GUI action, and it's not a backup of us, ignore it.
+             * If it's not for our chosen tile either, ignore it. */
+            if (!from_gui || read_field!(state, user) == user)
+                && (t == crate::tile_type::TileIndex::INVALID || t == tile())
             {
-                if (b == 0 || read_field!(state, user) == user)
-                    && (a as u32 == u32::MAX || a as u32 == read_field!(state, tile))
-                {
-                    if b != 0 {
-                        (g.0.clear_backup_gui)(read_field!(state, tile), user);
-                    } else {
-                        g.delete_backup(ob);
-                    }
+                if from_gui {
+                    /* We need to circumvent the "prevention" from this command being executed
+                     * while the game is paused, so use the internal method. Nor do we want
+                     * this command to get its cost estimated when shift is pressed. */
+                    (g.0.clear_backup_gui)(tile().0, user);
+                } else {
+                    /* The command came from the game logic, i.e. the clearing of a tile.
+                     * In that case we have no need to actually sync this, just do it. */
+                    g.delete_backup(ob);
                 }
             }
             ob = self.g.next_backup(&mut cursor);
         }
-        0
     }
     fn backup_group_clear(&self, a: u64) -> u64 {
         let g = self.g;

@@ -51,9 +51,7 @@ struct OpenTTDTownFoundingServices {
 	uint8_t (*name_style)() noexcept OPENTTD_SERVICE_DEFAULT(name_style);
 	void (*prepare_rename)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_rename);
 	void (*name_changed)(Town *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(name_changed);
-	void (*update_virt)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(update_virt);
 	void (*directory_rebuild)() noexcept OPENTTD_SERVICE_DEFAULT(directory_rebuild);
-	void (*directory_resort)() noexcept OPENTTD_SERVICE_DEFAULT(directory_resort);
 	void (*update_noise)() noexcept OPENTTD_SERVICE_DEFAULT(update_noise);
 	void (*delete_town)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_town);
 	void (*assert_random_context)() noexcept OPENTTD_SERVICE_DEFAULT(assert_random_context);

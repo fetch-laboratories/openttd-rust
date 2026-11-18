@@ -607,7 +607,6 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 		},
 		.client_name = RustNetworkClientName,
 		.delete_info = [](void *info) noexcept { delete static_cast<NetworkClientInfo *>(info); },
-		.dirty_join = []() noexcept { SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN); },
 		.emergency_save = []() noexcept { ClientNetworkEmergencySave(); },
 		.enable_encryption = [](void *game, OpenTTDAuthStream *receive, OpenTTDAuthStream *send) noexcept {
 			auto *cs = ClientFromGame(game);

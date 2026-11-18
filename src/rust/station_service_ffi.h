@@ -111,7 +111,7 @@ struct OpenTTDStationServices {
 	void (*append_packet)(OpenTTDBaseStation *, uint8_t, uint32_t, OpenTTDCargoSource) noexcept OPENTTD_SERVICE_DEFAULT(append_packet);
 	void (*station_list_invalidation)(OpenTTDBaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_list_invalidation);
 
-	void (*waiting_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_redraw);
+	void (*mark_tiles)(OpenTTDBaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(mark_tiles);
 	const OpenTTDCargoRegistryServices *cargo_registry;
 	void (*with_truncation)(OpenTTDBaseStation *, uint8_t, uint32_t, void *, OpenTTDStationScope) noexcept OPENTTD_SERVICE_DEFAULT(with_truncation);
 	OpenTTDTruncatedSource (*truncate_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(truncate_next);
@@ -164,7 +164,6 @@ struct OpenTTDStationLoading {
 	void (*set_stop)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_stop);
 	void (*set_load_ticks)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_load_ticks);
 	void (*subtract_profit)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_profit);
-	void (*vehicle_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_dirty);
 	bool (*indicator)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(indicator);
 	void (*show_indicator)(OpenTTDVehicle *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_indicator);
 	void (*set_current_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_current_company);
@@ -180,7 +179,6 @@ struct OpenTTDStationLoading {
 	OpenTTDNativeCargoPayment * (*create_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(create_payment);
 	void (*delete_payment)(OpenTTDNativeCargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(delete_payment);
 	void (*flush_delivery)() noexcept OPENTTD_SERVICE_DEFAULT(flush_delivery);
-	void (*station_dirty)(OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_dirty);
 };
 
 const OpenTTDStationServices &GetRustStationServices() noexcept;

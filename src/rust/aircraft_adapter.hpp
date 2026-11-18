@@ -117,11 +117,6 @@ static void OPENTTD_RUST_CALL Aircraft_landing_rating(uint16_t station_id, uint8
 	GoodsEntry &ge = Station::Get(station_id)->goods[cargo]; ge.rating = 1; if (ge.HasData()) ge.GetData().cargo.Truncate();
 }
 
-static void OPENTTD_RUST_CALL Aircraft_dirty_depot(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	RustVehicleInvalidateDepot(VehicleOf(vehicle.handle)); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
-}
-
 static void OPENTTD_RUST_CALL Aircraft_service_order(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
 {
 	Aircraft::From(VehicleOf(vehicle.handle))->current_order.MakeGoToDepot(StationID{static_cast<uint16_t>(station)}, OrderDepotTypeFlag::Service);
@@ -130,11 +125,6 @@ static void OPENTTD_RUST_CALL Aircraft_service_order(OpenTTDAircraftVehicle vehi
 static void OPENTTD_RUST_CALL Aircraft_subtract_cost(OpenTTDAircraftVehicle vehicle, int64_t cost) noexcept
 {
 	SubtractMoneyFromCompanyFract(VehicleOf(vehicle.handle)->GetOwner(), CommandCost(EXPENSES_AIRCRAFT_RUN, Money{cost}));
-}
-
-static void OPENTTD_RUST_CALL Aircraft_dirty_lists(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	RustVehicleDetailsDirty(vehicle.handle); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
 }
 
 static bool OPENTTD_RUST_CALL Aircraft_rotor_image_if_changed(OpenTTDAircraftVehicle vehicle) noexcept
@@ -161,8 +151,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.airport_width = Aircraft_airport_width,
 	.copy_sprite = Aircraft_copy_sprite,
 	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
-	.dirty_depot = Aircraft_dirty_depot,
-	.dirty_lists = Aircraft_dirty_lists,
 	.fta_blocks = Aircraft_fta_blocks,
 	.fta_heading = Aircraft_fta_heading,
 	.fta_next = Aircraft_fta_next,

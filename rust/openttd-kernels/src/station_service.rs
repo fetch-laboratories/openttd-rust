@@ -48,7 +48,10 @@ use crate::timer_game_tick::{
 use crate::vehicle::VehicleRef;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
 use crate::vehicle_base::{OpenTTDVehicleShell, VehState, VehStates};
-use crate::vehicle_type::VehicleType;
+use crate::vehicle_gui::get_window_class_for_vehicle_type;
+use crate::vehicle_type::{VehicleID, VehicleType};
+use crate::window_func::set_window_dirty;
+use crate::window_type::{WindowClass, WindowNumber};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 /// `GoodsEntry::ConvertState`.
@@ -462,7 +465,8 @@ pub struct World {
         extern "C" fn(*mut BaseStation, u8, u32, crate::cargo_storage::Source),
     pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation, i32),
 
-    pub(crate) waiting_redraw: extern "C" fn(*mut BaseStation),
+    /// `Station::MarkTilesDirty(cargo_change)`.
+    pub(crate) mark_tiles: extern "C" fn(*mut BaseStation, bool),
     pub(crate) cargo_registry: *const crate::cargo_registry::Services,
     pub(crate) with_truncation: extern "C" fn(*mut BaseStation, u8, u32, *mut c_void, Scope),
     pub(crate) truncate_next: extern "C" fn(*mut c_void) -> TruncatedSource,
@@ -1026,7 +1030,11 @@ unsafe fn update_station_waiting(
         crate::station_type::AAT_NEW_CARGO,
         crate::station_type::SRT_NEW_CARGO,
     );
-    (w.waiting_redraw)(st);
+    set_window_dirty(
+        WindowClass::WC_STATION_VIEW,
+        WindowNumber::from(StationID((w.graphs.station_id)(st))),
+    );
+    (w.mark_tiles)(st, true);
     amount
 }
 /// `CanMoveGoodsToStation`, after the caller's observation of the station's owner and
@@ -1545,7 +1553,6 @@ pub struct Loading {
     pub(crate) set_stop: extern "C" fn(VehicleRef, bool),
     pub(crate) set_load_ticks: extern "C" fn(VehicleRef, u16),
     pub(crate) subtract_profit: extern "C" fn(VehicleRef, i64),
-    pub(crate) vehicle_dirty: extern "C" fn(VehicleRef),
     pub(crate) indicator: extern "C" fn(VehicleRef) -> bool,
     pub(crate) show_indicator: extern "C" fn(VehicleRef, u8, u32),
     pub(crate) set_current_company: extern "C" fn(u8),
@@ -1562,7 +1569,6 @@ pub struct Loading {
     pub(crate) create_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
     pub(crate) delete_payment: extern "C" fn(*mut NativePayment),
     pub(crate) flush_delivery: extern "C" fn(),
-    pub(crate) station_dirty: extern "C" fn(*mut Station),
 }
 
 /// `v->cargo`: the vehicle's Rust-owned cargo list, resolved once per vehicle entry. Its
@@ -2419,10 +2425,27 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
             };
         }
         if dirty_vehicle {
-            (l.vehicle_dirty)(front);
+            set_window_dirty(
+                get_window_class_for_vehicle_type(front.vehicle_type()),
+                WindowNumber::from(front.owner()),
+            );
+            let vehicles = unsafe { &*l.vehicle };
+            // SAFETY: The vehicle table's NewGRF table is immutable and process-wide; the
+            // front record is live.
+            let index = VehicleID(unsafe { ((*(vehicles.newgrf)()).id)(front.0.as_ptr()) });
+            set_window_dirty(WindowClass::WC_VEHICLE_DETAILS, WindowNumber::from(index));
+            (unsafe { &*vehicles.maintenance }.mark_dirty)(front);
         }
         if dirty_station {
-            (l.station_dirty)(st.native);
+            (w.mark_tiles)(st.base, true);
+            set_window_dirty(
+                WindowClass::WC_STATION_VIEW,
+                WindowNumber::from(StationID((w.graphs.station_id)(st.base))),
+            );
+            set_window_dirty(
+                WindowClass::WC_STATION_LIST,
+                WindowNumber::from(CompanyID((w.station_owner)(st.base))),
+            );
         }
     };
     let (context, callback) = scope_context(&mut body);
@@ -2637,7 +2660,7 @@ crate::abi::layouts! {
         append_packet,
         station_list_invalidation,
 
-        waiting_redraw,
+        mark_tiles,
         cargo_registry,
         with_truncation,
         truncate_next,
@@ -2682,7 +2705,6 @@ crate::abi::layouts! {
         set_stop,
         set_load_ticks,
         subtract_profit,
-        vehicle_dirty,
         indicator,
         show_indicator,
         set_current_company,
@@ -2698,7 +2720,6 @@ crate::abi::layouts! {
         create_payment,
         delete_payment,
         flush_delivery,
-        station_dirty,
     };
 }
 

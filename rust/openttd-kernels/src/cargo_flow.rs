@@ -1028,7 +1028,7 @@ mod tests {
                 crate::cargo_storage::Source
             )),
             station_list_invalidation: unused!((*mut crate::station::BaseStation, i32)),
-            waiting_redraw: unused!((*mut crate::station::BaseStation)),
+            mark_tiles: unused!((*mut crate::station::BaseStation, bool)),
             cargo_registry: std::ptr::null(),
             with_truncation: unused!((
                 *mut crate::station::BaseStation,

@@ -64,7 +64,6 @@ inline uint16_t RustObjectives_entry_allocate(uint8_t table, int64_t rating, uin
 inline bool RustObjectives_vehicle_valid(uint32_t id) noexcept { return Vehicle::IsValidID(VehicleID(id)); }
 inline bool RustObjectives_text_empty(const EncodedString * text) noexcept { return text->empty(); }
 inline void RustObjectives_text_assign(EncodedString * to, const EncodedString * text) noexcept { *to = *text; }
-inline void RustObjectives_window_close(uint16_t cls, uint32_t number) noexcept { CloseWindowById(WindowClass(cls), number); }
 inline void RustObjectives_question_show(uint16_t id, uint8_t type, uint32_t buttons, const EncodedString * text) noexcept { ShowGoalQuestion(id, GoalQuestionType(type), buttons, *text); }
 inline void RustObjectives_story_show(uint8_t company, uint16_t page) noexcept { ShowStoryBook(CompanyID(company), StoryPageID(page), true); }
 inline void RustObjectives_question_event(uint16_t id, uint8_t company, uint32_t button) noexcept { Game::NewEvent(new ScriptEventGoalQuestionAnswer(id, CompanyID(company), ScriptGoal::QuestionButton(button))); }
@@ -123,9 +122,6 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.vehicle_valid = RustObjectives_vehicle_valid,
 		.text_empty = RustObjectives_text_empty,
 		.text_assign = RustObjectives_text_assign,
-		.window_data = RustInvalidateWindowData,
-		.window_classes = RustInvalidateWindowClassesData,
-		.window_close = RustObjectives_window_close,
 		.question_show = RustObjectives_question_show,
 		.story_show = RustObjectives_story_show,
 		.question_event = RustObjectives_question_event,
@@ -144,8 +140,3 @@ static_assert(SPBF_FLOAT_LEFT == 1 && SPBF_FLOAT_RIGHT == 2 && GOAL_QUESTION_BUT
 static_assert(sizeof(GoalID) == sizeof(uint16_t) && sizeof(StoryPageID) == sizeof(uint16_t) && sizeof(StoryPageElementID) == sizeof(uint16_t));
 static_assert(sizeof(LeagueTableID) == sizeof(uint8_t) && sizeof(LeagueTableElementID) == sizeof(uint16_t));
 #endif /* RUST_OBJECTIVES_SERVICES_H */
-static_assert(WC_MAIN_TOOLBAR == 1);
-static_assert(WC_GOALS_LIST == 38);
-static_assert(WC_GOAL_QUESTION == 13);
-static_assert(WC_STORY_BOOK == 39);
-static_assert(WC_COMPANY_LEAGUE == 81);

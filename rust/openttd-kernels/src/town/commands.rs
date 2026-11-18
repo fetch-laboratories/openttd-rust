@@ -7,6 +7,8 @@ use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, OWNER_NONE};
 use crate::economy_type::PR_TOWN_ACTION;
 use crate::movement::native_assert;
+use crate::newgrf::GrfSpecFeature;
+use crate::newgrf_debug::delete_newgrf_inspect_window;
 use crate::news_func::{AddNewsItemArgs, add_news_item};
 use crate::news_type::{CompanyNewsInformation, NewsFlags, NewsReference, NewsStyle, NewsType};
 use crate::objects::{Object, ObjectServices, QueryServices};
@@ -28,6 +30,8 @@ use crate::town_type::{
     RATING_BRIBE_DOWN_TO, RATING_BRIBE_MAXIMUM, RATING_BRIBE_UP_STEP, RATING_MAXIMUM,
     RATING_MINIMUM,
 };
+use crate::window_func::{close_window_by_id, invalidate_window_data, set_window_classes_dirty};
+use crate::window_type::{WindowClass, WindowNumber};
 use crate::witness as w;
 use std::cell::OnceCell;
 #[repr(C)]
@@ -52,9 +56,7 @@ pub struct CommandServices {
     pub exclusive_rights: extern "C" fn() -> bool,
     pub bribe: extern "C" fn() -> bool,
     pub invalidate_view: extern "C" fn(u16),
-    pub invalidate_authority: extern "C" fn(u16),
     pub clock: *const crate::timer_game_common::ClockServices,
-    pub station_views_dirty: extern "C" fn(),
     pub next_station: extern "C" fn(u32) -> StationCursor,
     pub station_town: extern "C" fn(*mut BaseStation) -> *const TownHandle,
     pub station_owner: extern "C" fn(*const BaseStation) -> u8,
@@ -73,12 +75,9 @@ pub struct CommandServices {
     pub remove_town_sign: extern "C" fn(*mut TownHandle),
     pub delete_town: extern "C" fn(*mut TownHandle),
     pub cleaning_pool: extern "C" fn() -> bool,
-    pub close_view: extern "C" fn(u16),
-    pub close_graph: extern "C" fn(u16),
     pub storage_count: extern "C" fn(*mut TownHandle) -> usize,
     pub delete_storage: extern "C" fn(*mut TownHandle, usize),
     pub clear_storage: extern "C" fn(*mut TownHandle),
-    pub delete_inspect: extern "C" fn(u16),
     pub assertions: bool,
     pub too_many_objects: u32,
     pub no_statue_place: u32,
@@ -913,7 +912,12 @@ pub(crate) unsafe fn cmd_town_rating(
         unsafe {
             (*t.state).simulation.ratings[usize::from(company)] = rating;
         }
-        (s.invalidate_authority)(id);
+        invalidate_window_data(
+            WindowClass::WC_TOWN_AUTHORITY,
+            WindowNumber::from(town_id),
+            0,
+            false,
+        );
         w::hit(w::TOWN_COMMAND_RATING);
     }
     (c.cost.zero)(out);
@@ -1156,7 +1160,7 @@ impl Commands<'_> {
                         130,
                         17,
                     );
-                    (self.s.station_views_dirty)();
+                    set_window_classes_dirty(WindowClass::WC_STATION_VIEW);
                     /* Spawn news message */
                     town_action_buy_rights_news(
                         self.using_wallclock_units(),
@@ -1188,8 +1192,13 @@ unsafe fn town_destruct(s: &CommandServices, t: TownRef) {
     }
     let c = unsafe { Commands::new(s) };
     // Delete town authority window and remove from list of sorted towns.
-    (s.close_view)(t.id.0);
-    (s.close_graph)(t.id.0);
+    close_window_by_id(WindowClass::WC_TOWN_VIEW, WindowNumber::from(t.id), true, 0);
+    close_window_by_id(
+        WindowClass::WC_TOWN_CARGO_GRAPH,
+        WindowNumber::from(t.id),
+        true,
+        0,
+    );
     if s.assertions {
         // Check no industry is related to us.
         let mut from = 0;
@@ -1239,7 +1248,7 @@ unsafe fn town_destruct(s: &CommandServices, t: TownRef) {
     (s.clear_storage)(t.shell);
     // SAFETY: The canonical subsidy owner table outlives the synchronous call.
     unsafe { &*s.subsidies }.delete_with(crate::source_type::Source::town(t.id.0));
-    (s.delete_inspect)(t.id.0);
+    delete_newgrf_inspect_window(GrfSpecFeature::GSF_FAKE_TOWNS, u32::from(t.id.0));
     // SAFETY: Cargo's canonical process owner and native pool remain live; town ID is copied before shell removal.
     unsafe {
         crate::cargo_storage::openttd_rust_cargo_invalidate(
@@ -1308,9 +1317,7 @@ crate::abi::layouts! {
         exclusive_rights,
         bribe,
         invalidate_view,
-        invalidate_authority,
         clock,
-        station_views_dirty,
         next_station,
         station_town,
         station_owner,
@@ -1328,12 +1335,9 @@ crate::abi::layouts! {
         remove_town_sign,
         delete_town,
         cleaning_pool,
-        close_view,
-        close_graph,
         storage_count,
         delete_storage,
         clear_storage,
-        delete_inspect,
         assertions,
         too_many_objects,
         no_statue_place,

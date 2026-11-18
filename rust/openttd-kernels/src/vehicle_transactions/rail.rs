@@ -11,6 +11,8 @@ use crate::engine_type::EngineID;
 use crate::fleet::{DEFAULT_GROUP, GroupServices, INVALID_VEHICLE};
 use crate::ground_vehicle as gv;
 use crate::network_type::ClientID;
+use crate::newgrf::GrfSpecFeature;
+use crate::newgrf_debug::delete_newgrf_inspect_window;
 use crate::newgrf_text_type::GRFStringID;
 use crate::raw_field::{read_field, write_field};
 use crate::services::{CommandCost, Cost};
@@ -20,7 +22,13 @@ use crate::tile_type::TileIndex;
 use crate::vehicle::OpenTTDVehicle;
 use crate::vehicle::{CALLBACK_FAILED, OpenTTDEngine, RailVehicleTypes, VehicleRef};
 use crate::vehicle_base::{is_articulated_part, is_front_engine};
+use crate::vehicle_gui::VehicleInvalidateWindowData;
 use crate::vehicle_type::VehicleID;
+use crate::widgets::vehicle_widget::VehicleViewWidgets;
+use crate::window_func::{
+    close_window_by_id, invalidate_window_data, set_window_dirty, set_window_widget_dirty,
+};
+use crate::window_type::{WindowClass, WindowNumber};
 use std::mem::MaybeUninit;
 use std::ptr;
 
@@ -47,8 +55,6 @@ pub struct Services {
     pub unit: extern "C" fn(*mut ()) -> u16,
     pub use_unit: extern "C" fn(*mut (), u16),
     pub release_unit: extern "C" fn(*mut ()),
-    pub head_windows: extern "C" fn(*mut ()),
-    pub front_windows: extern "C" fn(*mut ()),
     pub company_dirty: extern "C" fn(),
     pub depot_changed: extern "C" fn(u32),
 }
@@ -843,7 +849,18 @@ fn normalise_train_head(x: Ctx, head: R) {
         return;
     }
     /* Update the refit button and window */
-    (x.s.head_windows)(Ctx::sh(head));
+    let id = WindowNumber::from(x.id(head));
+    invalidate_window_data(
+        WindowClass::WC_VEHICLE_REFIT,
+        id,
+        VehicleInvalidateWindowData::VIWD_CONSIST_CHANGED.0,
+        false,
+    );
+    set_window_widget_dirty(
+        WindowClass::WC_VEHICLE_VIEW,
+        id,
+        VehicleViewWidgets::WID_VV_REFIT.0,
+    );
     /* If we don't have a unit number yet, set one. */
     if (x.s.unit)(Ctx::sh(head)) != 0 {
         return;
@@ -1067,7 +1084,18 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
     if src == original_src_head && x.is_engine(src) && !x.is_front(src) {
         /* Cases #2 and #3: the front engine gets trashed. */
         crate::witness::hit(crate::witness::VT_RAIL_FRONT_TRASHED);
-        (s.front_windows)(Ctx::sh(src));
+        let id = x.id(src);
+        let number = WindowNumber::from(id);
+        close_window_by_id(WindowClass::WC_VEHICLE_VIEW, number, true, 0);
+        close_window_by_id(WindowClass::WC_VEHICLE_ORDERS, number, true, 0);
+        close_window_by_id(WindowClass::WC_VEHICLE_REFIT, number, true, 0);
+        close_window_by_id(WindowClass::WC_VEHICLE_DETAILS, number, true, 0);
+        close_window_by_id(WindowClass::WC_VEHICLE_TIMETABLE, number, true, 0);
+        delete_newgrf_inspect_window(GrfSpecFeature::GSF_TRAINS, id.0);
+        set_window_dirty(
+            WindowClass::WC_COMPANY,
+            WindowNumber::from(CompanyID((x.t.shared.current_company)())),
+        );
         if !src_head.is_null() && x.is_front(src_head) {
             /* Cases #?b: Transfer order, unit number and other stuff
              * to the new front engine. */
@@ -1278,7 +1306,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
         cargo_capacity, strings, train_if_valid, new_wagon, new_engine, engine_dates, new_rear,
-        invalidate_grf, unit, use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
+        invalidate_grf, unit, use_unit, release_unit, company_dirty, depot_changed,
     };
     "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };
 }

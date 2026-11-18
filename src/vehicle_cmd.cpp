@@ -65,11 +65,6 @@
 
 /* Synchronous native storage/presentation leaves only. No Rust borrow crosses
  * these calls; allocation or formatting failures terminate in noexcept leaves. */
-static void VehicleTransactionNameDirty(void *shell) noexcept
-{
-	InvalidateWindowClassesData(GetWindowClassForVehicleType(RustVehicleVehicleType(static_cast<Vehicle *>(shell))), 1);
-	RustScreenDirty();
-}
 static uint16_t VehicleTransactionClampInterval(int32_t interval, bool percent) noexcept { return GetServiceIntervalClamped(interval, percent); }
 static void VehicleTransactionSetInterval(void *shell, uint16_t interval, bool custom, bool percent) noexcept
 {
@@ -89,7 +84,6 @@ const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noe
 		.name = RustVehicleName,
 		.clear_name = RustVehicleClearName,
 		.set_name = RustVehicleSetName,
-		.name_dirty = VehicleTransactionNameDirty,
 		.interval_clamp = VehicleTransactionClampInterval,
 		.set_interval = VehicleTransactionSetInterval,
 		.unique_name = STR_ERROR_NAME_MUST_BE_UNIQUE,
@@ -101,14 +95,6 @@ static OpenTTDAircraftStartState VehicleTransactionAircraftStart(void *shell) no
 {
 	const Aircraft *v = Aircraft::From(static_cast<Vehicle *>(shell));
 	return {.state = v->state, .flags = v->flags};
-}
-static void VehicleTransactionStartstopUI(void *shell) noexcept
-{
-	const Vehicle *v = static_cast<Vehicle *>(shell);
-	GetRustVehicleServices().start_stop_dirty(RustVehicle(v));
-	FleetGroupServices().depot_dirty(shell);
-	openttd_orders_dirty_vehicle_windows(shell);
-	RustVehicleInvalidateView(v->index);
 }
 const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 {
@@ -134,7 +120,6 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 		},
 		.aircraft_start = VehicleTransactionAircraftStart,
 		.grf_string = RustGRFString,
-		.startstop_ui = VehicleTransactionStartstopUI,
 		.value = RustOpaqueVehicleRead<int64_t, RustVehicleValue>,
 		.valid_cargo = OpenTTDIsValidCargo,
 	};

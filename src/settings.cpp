@@ -65,10 +65,8 @@
 #include "rust/company_adapter.h"
 #include "rust/vehicle_transaction_ffi.h"
 #include "rust/vehicle_refit_ffi.h"
-#include "rust/services_objectives.h"
 #include "rust/engine_loading_ffi.h"
 #include "rust/command_cost_services.h"
-#include "rust/presentation_services.h"
 #include "rust/settings_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
@@ -1794,7 +1792,6 @@ const OpenTTDSettingServices &GetRustSettingServices() noexcept
 		.company = &GetRustCompanyServices(),
 		.transactions = &GetRustVehicleTransactionServices(),
 		.refit = &GetRustVehicleRefitServices(),
-		.objectives = &GetRustObjectivesServices(),
 		.schedule = &LinkGraphSchedule::services,
 		.engines = &GetRustEngineLoadingServices(),
 		.environment = GetRustEnvironmentServices(),
@@ -1812,7 +1809,6 @@ const OpenTTDSettingServices &GetRustSettingServices() noexcept
 		.setting_editable = [](const SettingDesc *sd) noexcept { return sd->IsEditable(true); },
 		.change_game_setting = [](const SettingDesc *sd, int32_t value) noexcept { sd->AsIntSetting()->ChangeValue(&GetGameSettings(), value); },
 		.change_company_setting = [](const SettingDesc *sd, uint8_t company, int32_t value) noexcept { sd->AsIntSetting()->ChangeValue(RustCompanySettings(company), value); },
-		.window_classes_dirty = RustSetWindowClassesDirty,
 		.error_message = [](uint32_t message) noexcept { ShowErrorMessage(GetEncodedString(message), {}, WL_ERROR); },
 		.edges_not_empty = STR_CONFIG_SETTING_EDGES_NOT_EMPTY,
 		.edges_not_water = STR_CONFIG_SETTING_EDGES_NOT_WATER,
@@ -1822,7 +1818,6 @@ const OpenTTDSettingServices &GetRustSettingServices() noexcept
 	return services;
 }
 bool CheckAbi_settings() { return AbiServicesComplete(GetRustSettingServices()); }
-static_assert(WC_TOWN_VIEW == 45 && WC_VEHICLE_DETAILS == 23 && WC_BUILD_VEHICLE == 54 && WC_ENGINE_PREVIEW == 88 && WC_GAME_OPTIONS == 91);
 static_assert(DEF_SERVINT_DAYS_TRAINS == 150 && DEF_SERVINT_DAYS_ROADVEH == 150 && DEF_SERVINT_DAYS_AIRCRAFT == 100 && DEF_SERVINT_DAYS_SHIPS == 360 && MIN_SERVINT_DAYS == 30 && MAX_SERVINT_DAYS == 800);
 static_assert(DEF_SERVINT_MINUTES_TRAINS == 5 && DEF_SERVINT_MINUTES_ROADVEH == 5 && DEF_SERVINT_MINUTES_AIRCRAFT == 3 && DEF_SERVINT_MINUTES_SHIPS == 12 && MIN_SERVINT_MINUTES == 1 && MAX_SERVINT_MINUTES == 30);
 static_assert(DEF_SERVINT_PERCENT == 50 && MIN_SERVINT_PERCENT == 5 && MAX_SERVINT_PERCENT == 90 && AM_ORIGINAL == 0 && CCF_TRACK.base() == 0);

@@ -32,7 +32,9 @@ use crate::direction_type::Direction;
 use crate::direction_type::{Axis, DiagDirection, DiagDirections};
 use crate::economy_type::Price;
 use crate::economy_type::ROAD_STOP_TRACKBIT_FACTOR;
+use crate::newgrf::GrfSpecFeature;
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
+use crate::newgrf_debug::delete_newgrf_inspect_window;
 use crate::newgrf_roadstop::RoadStopClassID;
 use crate::newgrf_station::StationClassID;
 use crate::order_type::OrderType;
@@ -52,6 +54,9 @@ use crate::track_type::{Track, TrackBits, Trackdir};
 use crate::vehicle_type::VehicleType;
 use crate::viewport_func::TILE_HEIGHT_STEP;
 use crate::water_map::WaterClass;
+use crate::widgets::station_widget::StationViewWidgets;
+use crate::window_func::{close_window_by_id, invalidate_window_data, set_window_widget_dirty};
+use crate::window_type::{WindowClass, WindowNumber};
 mod waypoint;
 use crate::newgrf_roadstop::RoadStopAvailabilityType;
 use crate::newgrf_station::station_spec::{TileFlag, TileFlags};
@@ -244,7 +249,6 @@ pub struct CommandServicesTable {
     pub virtual_coord: extern "C" fn(*mut BaseStation),
     pub catchment_dirty: extern "C" fn(),
     pub facility_widget: extern "C" fn(*mut BaseStation, u8),
-    pub select_invalidate: extern "C" fn(),
     pub station_available: extern "C" fn() -> bool,
     pub new_station: extern "C" fn(u32) -> *mut BaseStation,
     pub set_town: extern "C" fn(*mut BaseStation, *const crate::services::TownHandle),
@@ -254,7 +258,6 @@ pub struct CommandServicesTable {
     pub name_equals: extern "C" fn(*mut BaseStation, *const u8, usize) -> bool,
     pub set_name: extern "C" fn(*mut BaseStation, *const u8, usize),
     pub flip_airport_closed: extern "C" fn(*mut BaseStation),
-    pub closed_widget: extern "C" fn(*mut BaseStation),
     pub distant_join: extern "C" fn() -> bool,
     pub rail_association: *const crate::station_association::Services,
     pub rail_spec_info: extern "C" fn(*const RailSpec) -> RailSpecInfo,
@@ -276,7 +279,6 @@ pub struct CommandServicesTable {
     pub tile_flag_count: extern "C" fn(*const RailSpec) -> usize,
     pub tile_flags: extern "C" fn(*const RailSpec, u8) -> u8,
     pub set_tile_flags: extern "C" fn(u32, bool, bool, bool),
-    pub mark_tiles: extern "C" fn(*mut BaseStation, bool),
     pub reset_facilities: extern "C" fn(*mut BaseStation, u8),
     pub orders_dirty: extern "C" fn(),
     pub vehicle: *const crate::vehicle::VehicleServices,
@@ -333,11 +335,8 @@ pub struct CommandServicesTable {
     pub aircraft_vehicle: extern "C" fn(crate::vehicle::VehicleRef) -> crate::aircraft::Vehicle,
     pub hangar_count: extern "C" fn(*mut BaseStation, *const AirportSpec) -> u32,
     pub hangar_tile: extern "C" fn(*const BaseStation, u32, *const AirportSpec) -> u32,
-    pub close_hangar: extern "C" fn(u32),
-    pub close_airport_tile_inspect: extern "C" fn(u32),
     pub delete_airport_storage: extern "C" fn(*mut BaseStation),
     pub clear_airport: extern "C" fn(*mut BaseStation),
-    pub close_airport_inspect: extern "C" fn(*mut BaseStation),
     pub ship: *const crate::ship_control::Leaves,
     pub clear: *const crate::ground::ClearServices,
     pub restoration: *const crate::water::RestorationServices,
@@ -974,7 +973,7 @@ impl Ctx<'_> {
             unsafe {
                 crate::station_service::update_station_acceptance(st, false, &*self.s.station);
             };
-            (self.s.select_invalidate)();
+            invalidate_window_data(WindowClass::WC_SELECT_STATION, WindowNumber(0), 0, false);
         } else {
             self.delete_station_if_empty(st);
             self.recompute_catchment(st, false);
@@ -1299,7 +1298,11 @@ impl Ctx<'_> {
         }
         if flags.test(DoCommandFlag::Execute) {
             (self.s.flip_airport_closed)(st);
-            (self.s.closed_widget)(st);
+            set_window_widget_dirty(
+                WindowClass::WC_STATION_VIEW,
+                WindowNumber::from(args.station_id),
+                StationViewWidgets::WID_SV_CLOSE_AIRPORT.0,
+            );
         }
         out.zero();
     }
@@ -2360,7 +2363,7 @@ impl Ctx<'_> {
             self.restore_train_reservation(v);
         }
         self.expand_platform_reservations(tile_org, axis, numtracks);
-        (self.s.mark_tiles)(st, false);
+        (self.world().mark_tiles)(st, false);
         self.after_station_tile_set_change(st, true, StationType::Rail);
     }
 }
@@ -2687,7 +2690,7 @@ impl Ctx<'_> {
             if self.s.rail_area(st).tile == TileIndex::INVALID {
                 (self.s.facility_widget)(st, StationType::Rail.0);
             }
-            (self.s.mark_tiles)(st, false);
+            (self.world().mark_tiles)(st, false);
             (self.s.catchment_dirty)();
             self.recompute_catchment(st, false);
         }
@@ -4653,8 +4656,18 @@ impl Ctx<'_> {
             let spec =
                 || crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime });
             for i in 0..(self.s.hangar_count)(st, spec()) {
-                let tile_cur = (self.s.hangar_tile)(st, i, spec());
-                (self.s.close_hangar)(tile_cur);
+                let tile_cur = TileIndex((self.s.hangar_tile)(st, i, spec()));
+                crate::orders::order_backup_reset(
+                    unsafe { &*self.s.vehicle }.orders(),
+                    tile_cur,
+                    false,
+                );
+                close_window_by_id(
+                    WindowClass::WC_VEHICLE_DEPOT,
+                    WindowNumber::from(tile_cur),
+                    true,
+                    0,
+                );
             }
             /* The noise level is the noise from the airport and reduce it to account for the distance to the town center.
              * And as for construction, always remove it, even if the setting is not set, in order to avoid the
@@ -4689,7 +4702,7 @@ impl Ctx<'_> {
             )));
             if flags.test(DoCommandFlag::Execute) {
                 crate::ground::do_clear_square(tile_cur, self.shared);
-                (self.s.close_airport_tile_inspect)(tile_cur.0);
+                delete_newgrf_inspect_window(GrfSpecFeature::GSF_AIRPORTTILES, tile_cur.0);
             }
         }
         if flags.test(DoCommandFlag::Execute) {
@@ -4713,7 +4726,7 @@ impl Ctx<'_> {
                 );
             };
             self.after_station_tile_set_change(st, false, StationType::Airport);
-            (self.s.close_airport_inspect)(st);
+            delete_newgrf_inspect_window(GrfSpecFeature::GSF_AIRPORTS, u32::from(index));
         }
     }
 }
@@ -6098,7 +6111,6 @@ crate::abi::layouts! {
         virtual_coord,
         catchment_dirty,
         facility_widget,
-        select_invalidate,
         station_available,
         new_station,
         set_town,
@@ -6108,7 +6120,6 @@ crate::abi::layouts! {
         name_equals,
         set_name,
         flip_airport_closed,
-        closed_widget,
         distant_join,
         rail_association,
         rail_spec_info,
@@ -6129,7 +6140,6 @@ crate::abi::layouts! {
         tile_flag_count,
         tile_flags,
         set_tile_flags,
-        mark_tiles,
         reset_facilities,
         orders_dirty,
         vehicle,
@@ -6183,11 +6193,8 @@ crate::abi::layouts! {
         aircraft_vehicle,
         hangar_count,
         hangar_tile,
-        close_hangar,
-        close_airport_tile_inspect,
         delete_airport_storage,
         clear_airport,
-        close_airport_inspect,
         ship,
         clear,
         restoration,
