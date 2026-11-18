@@ -25,7 +25,6 @@ pub struct Services {
     palette: unsafe extern "C" fn(*const c_void) -> u8,
     pitch: unsafe extern "C" fn(*const c_void) -> i32,
     rail_cost: unsafe extern "C" fn(u8) -> u16,
-    road_side: unsafe extern "C" fn() -> u8,
     pub(crate) shared: *const Shared,
     width: unsafe extern "C" fn(*const c_void) -> u32,
 }
@@ -63,7 +62,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
                         << 16
             }
             0x03 => u32::from(shared.settings().climate.read()),
-            0x06 => u32::from((s.road_side)()) << 4,
+            0x06 => u32::from(shared.settings().road_side.read()) << 4,
             0x09 => u32::from(crate::timer_game_common::calendar_fraction()) * 885,
             0x0A => gb((shared.tick_counter)() as u32, 0, 16),
             0x0B => (2 << 24) | (6 << 20) | (1 << 16) | 1382,
@@ -121,7 +120,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGlobalVariableServices" ["storage"] => Services { misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width };
+    "OpenTTDGlobalVariableServices" ["storage"] => Services { misc_bits, newgrf_version, palette, pitch, rail_cost, shared, width };
 }
 
 /// Native `newgrf.h::GrfSpecFeature`, retaining every underlying `u8` value.
@@ -303,7 +302,6 @@ pub(crate) const TEST_TABLE: Services = Services {
     palette: crate::test_tables::unreachable1,
     pitch: crate::test_tables::unreachable1,
     rail_cost: crate::test_tables::unreachable1,
-    road_side: crate::test_tables::unreachable0,
     shared: std::ptr::null(),
     width: crate::test_tables::unreachable1,
 };
