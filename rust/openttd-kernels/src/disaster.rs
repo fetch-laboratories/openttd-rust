@@ -524,7 +524,7 @@ impl<'a> World<'a> {
                     let old = n;
                     n = n.wrapping_sub(1);
                     if old == 0 {
-                        if unsafe { crate::road::crashed_counter(target.state) } != 0
+                        if unsafe { crate::road::crashed_ctr(target.state) } != 0
                             || (self.s.road_disaster)(target.vehicle()) != INVALID_VEHICLE
                         {
                             return self.delete(v);
@@ -561,7 +561,7 @@ impl<'a> World<'a> {
         if z <= (target.vehicle()).z_pos() {
             self.increment_age(v);
             if (target.vehicle()).vehstatus_raw() & VS_HIDDEN == 0
-                && unsafe { crate::road::crashed_counter(target.state) } == 0
+                && unsafe { crate::road::crashed_ctr(target.state) } == 0
             {
                 let victims = unsafe {
                     crate::road::openttd_rust_road_crash(

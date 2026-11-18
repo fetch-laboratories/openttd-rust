@@ -358,6 +358,15 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_cache_delete(cache: *mut Cache
         drop(Box::from_raw(cache.cast::<VehicleCacheOwner>()));
     }
 }
+/// `Vehicle::InvalidateNewGRFCacheOfChain`: invalidates cached NewGRF variables of all
+/// vehicles in the chain (after the current vehicle).
+///
+/// # Safety
+/// `v` and its chain are live serialized records.
+pub(crate) unsafe fn invalidate_newgrf_cache_of_chain(s: &Services, v: crate::vehicle::VehicleRef) {
+    // SAFETY: As this function's contract.
+    unsafe { openttd_rust_vehicle_grf_invalidate(s, v.0.as_ptr(), true) };
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_grf_invalidate(s: &Services, mut v: V, chain: bool) {
     unsafe {
@@ -741,17 +750,7 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
                 (s.train_services)(),
                 s.shared,
             ),
-            1 => {
-                let ground = &*(s.ground)();
-                let owner = crate::ground_vehicle::Owner::of(handle(v));
-                crate::road::current_max_speed(
-                    handle(v),
-                    owner.road,
-                    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-                    s.shared.settings().roadveh_acceleration_model.read(),
-                    ground.road,
-                )
-            }
+            1 => crate::road::get_current_max_speed(s.shared, handle(v)),
             2 => crate::ship_control::current_max_speed(
                 (handle(v)).cached_max_speed(),
                 (s.order_max_speed)(v),
@@ -1484,11 +1483,11 @@ unsafe fn variable(
                 0xe2 | 0xe4..=0xe9 => {
                     let owner = crate::ground_vehicle::Owner::of(handle(v));
                     return match variable {
-                        0xe2 => u32::from(crate::road::get_state(owner.road)),
-                        0xe4 | 0xe5 => high(u32::from(crate::road::blocked_counter(owner.road))),
+                        0xe2 => u32::from(crate::road::state(owner.road)),
+                        0xe4 | 0xe5 => high(u32::from(crate::road::blocked_ctr(owner.road))),
                         0xe6 => u32::from(crate::road::overtaking(owner.road)),
-                        0xe7 => u32::from(crate::road::overtaking_counter(owner.road)),
-                        _ => high(u32::from(crate::road::crashed_counter(owner.road))),
+                        0xe7 => u32::from(crate::road::overtaking_ctr(owner.road)),
+                        _ => high(u32::from(crate::road::crashed_ctr(owner.road))),
                     };
                 }
                 _ => {}

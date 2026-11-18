@@ -91,6 +91,10 @@ fn services() -> &'static Services {
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: bool) {
+    update_visual_effect(v, allow_power_change);
+}
+/// `Vehicle::UpdateVisualEffect`: update the cached visual effect.
+pub(crate) fn update_visual_effect(v: VehicleRef, allow_power_change: bool) {
     let s = services();
     let engine = (s.vehicle.engine)(v);
     let cache = crate::raw_field::read_field!(v.0.as_ptr(), visual);
@@ -159,16 +163,19 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_eligible_abi(v: VehicleRef) -> u8 {
+    u8::from(show_visual_effect_allowed(v))
+}
+/// The start of `Vehicle::ShowVisualEffect`, before its `GetCurrentMaxSpeed`: whether any
+/// smoke may be shown.
+pub(crate) fn show_visual_effect_allowed(v: VehicleRef) -> bool {
     let s = services();
     if s.vehicle.assertions {
         // SAFETY: The shared orders table and live shell obey the vehicle entry contract.
         assert!(unsafe { (s.vehicle.orders().primary_vehicle)(v.shell()) } != 0);
     }
-    u8::from(
-        (s.smoke)() != 0
-            && v.vehstatus_raw() & (VS_TRAIN_SLOWING | VS_STOPPED) == 0
-            && v.cur_speed() >= 2,
-    )
+    (s.smoke)() != 0
+        && v.vehstatus_raw() & (VS_TRAIN_SLOWING | VS_STOPPED) == 0
+        && v.cur_speed() >= 2
 }
 const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate::train::Handle>) {

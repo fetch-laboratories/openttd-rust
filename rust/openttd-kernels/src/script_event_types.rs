@@ -25,6 +25,8 @@ use crate::vehicle_type::VehicleID;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CrashReason(pub i32);
 impl CrashReason {
+    /// Road vehicle got under a train
+    pub const CRASH_RV_LEVEL_CROSSING: Self = Self(1);
     /// Plane crashed on landing
     pub const CRASH_PLANE_LANDING: Self = Self(3);
     /// Aircraft crashed after it found not a single airport for landing

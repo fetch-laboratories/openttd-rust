@@ -176,7 +176,6 @@ template <class T>
 inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticulatedPart(); }
 
 inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return v->Record().subtype; }
-inline bool RustVehicleFront(const Vehicle *v) noexcept { return v->IsFrontEngine(); }
 inline int32_t RustVehicleX(const Vehicle *v) noexcept { return v->Record().x_pos; }
 inline int32_t RustVehicleY(const Vehicle *v) noexcept { return v->Record().y_pos; }
 inline void RustWriteVehicleX(Vehicle *v, int32_t x) noexcept { v->Record().x_pos = x; }

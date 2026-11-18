@@ -127,6 +127,21 @@ pub fn is_reversing_road_trackdir(dir: u8, check: impl Fn(bool) + Copy) -> bool 
     (dir & 7) >= 6
 }
 
+/// `IsStraightRoadTrackdir`: checks whether the given trackdir is a straight road, under
+/// its native valid-road-trackdir precondition.
+pub fn is_straight_road_trackdir(dir: u8, check: impl Fn(bool) + Copy) -> bool {
+    if dir >= 16 {
+        check(false);
+    }
+    (dir & 0x06) == 0
+}
+
+/// `TrackStatusToRedSignals`: returns the red-signal-information of a `TrackStatus`.
+#[allow(clippy::cast_possible_truncation)] // Native mask and narrowing to TrackdirBits.
+pub const fn track_status_to_red_signals(ts: u32) -> u16 {
+    ((ts >> 16) & crate::track_type::TRACKDIR_BIT_MASK) as u16
+}
+
 /// `TrackStatusToTrackBits`.
 pub const fn track_status_to_track_bits(status: u32) -> u8 {
     trackdir_bits_to_track_bits(track_status_to_trackdir_bits(status))

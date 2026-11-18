@@ -75,26 +75,13 @@ pub use crate::engine_type::OpenTTDEngine;
 pub struct EngineRef(pub NonNull<OpenTTDEngine>);
 
 pub use crate::newgrf_callbacks::CALLBACK_FAILED;
-pub use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING};
-pub use crate::tile_cmd::CANNOT_ENTER as VETS_CANNOT_ENTER;
-/// `VehicleEnterTileState` bits.
-pub use crate::tile_cmd::ENTERED_WORMHOLE as VETS_ENTERED_WORMHOLE;
-pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
-/// `AM_REALISTIC`.
-pub const AM_REALISTIC: u8 = crate::vehicle_type::AccelerationModel::AM_REALISTIC.0;
-/// `INVALID_PRICE`.
-pub use crate::economy_type::INVALID_PRICE;
+pub use crate::order_type::{OT_GOTO_DEPOT, OT_LOADING};
+pub use crate::tile_type::MP_STATION;
 /// `VEHICLE_LENGTH`.
 #[allow(clippy::cast_possible_truncation)] // Native uint constant is 8; retain the u8 compatibility surface.
 pub const VEHICLE_LENGTH: u8 = crate::vehicle_type::VEHICLE_LENGTH as u8;
 /// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.
 pub const YEAR_TICKS: i64 = DAYS_IN_YEAR as i64 * DAY_TICKS as i64;
-/// `SND_19_DEPARTURE_OLD_RV_1` and `SND_1A_DEPARTURE_OLD_RV_2`.
-pub const SND_DEPARTURE_OLD_RV_1: u16 = 23;
-pub const SND_DEPARTURE_OLD_RV_2: u16 = 24;
-/// `HVOT_BUS` and `HVOT_TRUCK`.
-pub const HVOT_BUS: u8 = crate::station_type::StationHadVehicleOfType::HVOT_BUS.0;
-pub const HVOT_TRUCK: u8 = crate::station_type::StationHadVehicleOfType::HVOT_TRUCK.0;
 
 /// `GetNewVehiclePos` result.
 #[repr(C)]

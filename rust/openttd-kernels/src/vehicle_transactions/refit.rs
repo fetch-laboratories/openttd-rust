@@ -715,11 +715,11 @@ pub(crate) unsafe fn cmd_refit_vehicle(
             },
             VehicleType::ROAD => {
                 unsafe {
-                    crate::road::openttd_rust_road_update_cache(
+                    crate::road::road_veh_update_cache(
+                        s.road,
                         vehicle_ref(front, s.common.vehicles),
                         (s.road_state)(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
                         auto_refit,
-                        s.road,
                     );
                 }
                 if s.road_acceleration_model()

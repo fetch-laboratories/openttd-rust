@@ -80,9 +80,10 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
     // The native allocation clears gcache.first_engine: needs to be set before first callback.
     let v = (k.new_road)(tile);
     unsafe {
-        crate::road::set_depot_state((r.road_state)(
-            super::vehicle_ref(v, r.common.vehicles).0.as_ptr(),
-        ));
+        crate::road::set_state(
+            (r.road_state)(super::vehicle_ref(v, r.common.vehicles).0.as_ptr()),
+            crate::roadveh::RVSB_IN_DEPOT,
+        );
     };
     let engine = crate::vehicle::EngineRef::of(e);
     (a.set_part)(
@@ -135,11 +136,11 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
         u = unsafe { super::refit::next(r, u) };
     }
     unsafe {
-        crate::road::openttd_rust_road_update_cache(
+        crate::road::road_veh_update_cache(
+            r.road,
             vehicle_ref(v, r.common.vehicles),
             (r.road_state)(super::vehicle_ref(v, r.common.vehicles).0.as_ptr()),
             false,
-            r.road,
         );
     }
     /* Initialize cached values for realistic acceleration. */

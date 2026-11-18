@@ -243,10 +243,6 @@ pub(crate) fn is_drive_through_road_stop_continuation(
         && crate::map_func::World::new(s).get_drive_through_stop_axis(next)
             == crate::map_func::World::new(s).get_drive_through_stop_axis(rs)
 }
-/// Temporary raw adapter for `road.rs`.
-pub(crate) fn continuation(s: &Services, rs: u32, next: u32) -> bool {
-    is_drive_through_road_stop_continuation(s, TileIndex(rs), TileIndex(next))
-}
 
 /// `RoadStop::GetByTile`: find a roadstop at given tile, returning the shell
 /// and its owner.
@@ -266,10 +262,6 @@ pub(crate) fn get_by_tile(
         rs = next;
     }
 }
-/// Temporary raw adapter for `road.rs`.
-pub(crate) fn by_tile_raw(s: &Services, tile: u32, kind: RoadStopType) -> (*mut Stop, *mut State) {
-    get_by_tile(s, TileIndex(tile), kind)
-}
 /// `RoadStop::GetByTile(tile, GetRoadStopType(tile))`.
 pub(crate) fn at(s: &Services, tile: TileIndex) -> *mut State {
     get_by_tile(
@@ -278,10 +270,6 @@ pub(crate) fn at(s: &Services, tile: TileIndex) -> *mut State {
         crate::map_func::World::new(s).get_road_stop_type(tile),
     )
     .1
-}
-/// Temporary raw adapter for `road.rs`.
-pub(crate) fn at_raw(s: &Services, tile: u32) -> *mut State {
-    at(s, TileIndex(tile))
 }
 
 /// `rs->GetEntry(dir)`, copied for a native-equivalent read.
@@ -393,7 +381,7 @@ pub(crate) unsafe fn enter(
         }
         // SAFETY: Caller's live road owner; no service runs during these stores.
         unsafe {
-            let mut rv_state = u32::from(crate::road::get_state(road));
+            let mut rv_state = u32::from(crate::road::state(road));
             set_bit(&mut rv_state, RVS_IN_ROAD_STOP);
             crate::road::set_state(road, state_byte(rv_state));
             // Allocate a bay and update the road state
@@ -403,7 +391,7 @@ pub(crate) unsafe fn enter(
             } else {
                 crate::witness::ROAD_STOP_ENTER_BAY1
             });
-            let mut rv_state = u32::from(crate::road::get_state(road));
+            let mut rv_state = u32::from(crate::road::state(road));
             sb(&mut rv_state, RVS_USING_SECOND_BAY, 1, u32::from(bay_nr));
             crate::road::set_state(road, state_byte(rv_state));
         }
@@ -423,7 +411,7 @@ pub(crate) unsafe fn enter(
     // Indicate a drive-through stop
     // SAFETY: Caller's live road owner; no service runs during the store.
     unsafe {
-        let mut rv_state = u32::from(crate::road::get_state(road));
+        let mut rv_state = u32::from(crate::road::state(road));
         set_bit(&mut rv_state, RVS_IN_DT_ROAD_STOP);
         crate::road::set_state(road, state_byte(rv_state));
     }
@@ -452,7 +440,7 @@ pub(crate) unsafe fn leave(
     if crate::map_func::World::new(s).is_bay_road_stop_tile(tile) {
         crate::witness::hit(crate::witness::ROAD_STOP_LEAVE_BAY);
         // SAFETY: Caller's live road owner, read before any store.
-        let rv_state = unsafe { crate::road::get_state(road) };
+        let rv_state = unsafe { crate::road::state(road) };
         // Vehicle is leaving a road stop tile, mark bay as free
         free_bay(state, u8::from(has_bit(rv_state, RVS_USING_SECOND_BAY)));
         set_entrance_busy(state, false);
@@ -534,7 +522,7 @@ fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool, thi
             // Don't add ones not in a road stop
             // SAFETY: Live road owner of this road vehicle shell.
             let road = crate::raw_field::read_field!(v.0.as_ptr(), road).cast();
-            if unsafe { crate::road::get_state(road) } < RVSB_IN_ROAD_STOP {
+            if unsafe { crate::road::state(road) } < RVSB_IN_ROAD_STOP {
                 return;
             }
             crate::witness::hit(crate::witness::ROAD_STOP_REBUILD_VEHICLE);

@@ -2098,9 +2098,11 @@ pub unsafe extern "C" fn openttd_rust_wait_unbunching(
     }
 }
 
-/// All fields belong to a live, properly constructed C++ Order, accessed raw.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_free(p: *mut Order) -> u32 {
+/// `Order::Free`: 'Free' the order.
+///
+/// # Safety
+/// `p` is a live, properly constructed order of the serialized game state.
+pub(crate) unsafe fn free(p: *mut Order) {
     let mut order = load(p);
     {
         order.kind = OT_NOTHING;
@@ -2108,6 +2110,12 @@ pub unsafe extern "C" fn openttd_rust_order_free(p: *mut Order) -> u32 {
         order.destination = 0;
     };
     store(p, order);
+}
+/// All fields belong to a live, properly constructed C++ Order, accessed raw.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_order_free(p: *mut Order) -> u32 {
+    // SAFETY: As `free`.
+    unsafe { free(p) };
     0
 }
 
@@ -2123,6 +2131,29 @@ pub unsafe extern "C" fn openttd_rust_order_station(p: *mut Order, destination: 
     0
 }
 
+/// `Order::MakeGoToDepot`: makes this order a Go To Depot order.
+///
+/// # Safety
+/// `p` is a live, properly constructed order of the serialized game state.
+pub(crate) unsafe fn make_go_to_depot(
+    p: *mut Order,
+    destination: crate::order_type::DestinationID,
+    order: crate::order_type::OrderDepotTypeFlags,
+    non_stop_type: crate::order_type::OrderNonStopFlags,
+    action: crate::order_type::OrderDepotActionFlags,
+    cargo: crate::cargo_type::CargoType,
+) {
+    let mut o = load(p);
+    {
+        o.kind = OT_GOTO_DEPOT;
+        o.flags = (o.flags & !7) | (order.0 & 7);
+        o.flags = (o.flags & !0x78) | ((action.0 & 15) << 3);
+        o.kind = (o.kind & !0xc0) | ((non_stop_type.0 & 3) << 6);
+        o.destination = destination.0;
+        o.refit = cargo.0;
+    };
+    store(p, o);
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_depot(
     p: *mut Order,
@@ -2132,16 +2163,17 @@ pub unsafe extern "C" fn openttd_rust_order_depot(
     action: u8,
     cargo: u8,
 ) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_GOTO_DEPOT;
-        order.flags = (order.flags & !7) | (depot_type & 7);
-        order.flags = (order.flags & !0x78) | ((action & 15) << 3);
-        order.kind = (order.kind & !0xc0) | ((nonstop & 3) << 6);
-        order.destination = destination;
-        order.refit = cargo;
-    };
-    store(p, order);
+    // SAFETY: As `make_go_to_depot`.
+    unsafe {
+        make_go_to_depot(
+            p,
+            crate::order_type::DestinationID(destination),
+            crate::order_type::OrderDepotTypeFlags(depot_type),
+            crate::order_type::OrderNonStopFlags(nonstop),
+            crate::order_type::OrderDepotActionFlags(action),
+            crate::cargo_type::CargoType(cargo),
+        );
+    }
     0
 }
 
@@ -2181,14 +2213,22 @@ pub unsafe extern "C" fn openttd_rust_order_leave(p: *mut Order) -> u32 {
     0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_dummy(p: *mut Order) -> u32 {
+/// `Order::MakeDummy`: makes this order a Dummy order.
+///
+/// # Safety
+/// `p` is a live, properly constructed order of the serialized game state.
+pub(crate) unsafe fn make_dummy(p: *mut Order) {
     let mut order = load(p);
     {
         order.kind = OT_DUMMY;
         order.flags = 0;
     };
     store(p, order);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_order_dummy(p: *mut Order) -> u32 {
+    // SAFETY: As `make_dummy`.
+    unsafe { make_dummy(p) };
     0
 }
 

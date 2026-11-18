@@ -706,6 +706,22 @@ fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i6
         subtract(f, p, id, cost, expense);
     }
 }
+/// `SubtractMoneyFromCompanyFract`: subtract money from a company, including the money
+/// fraction.
+pub(crate) fn subtract_money_from_company_fract(
+    f: &FinanceServices,
+    company: crate::company_type::CompanyID,
+    cost: i64,
+    expense: crate::economy_type::ExpensesType,
+) {
+    subtract_fraction(
+        f,
+        (f.company_finances)(company.0),
+        company.0,
+        cost,
+        usize::from(expense.0),
+    );
+}
 /// The `StationID` of a station pool index that `NextOwned<Station>` yields.
 #[allow(
     clippy::cast_possible_truncation,

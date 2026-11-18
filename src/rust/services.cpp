@@ -311,11 +311,13 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.reverse_at_signals = &_settings_game.pf.reverse_at_signals,
 	.road_crossing_penalty = &_settings_game.pf.yapf.road_crossing_penalty,
 	.road_curve_penalty = &_settings_game.pf.yapf.road_curve_penalty,
+	.road_side = &_settings_game.vehicle.road_side,
 	.road_slope_penalty = &_settings_game.pf.yapf.road_slope_penalty,
 	.road_stop_bay_occupied_penalty = &_settings_game.pf.yapf.road_stop_bay_occupied_penalty,
 	.road_stop_occupied_penalty = &_settings_game.pf.yapf.road_stop_occupied_penalty,
 	.road_stop_penalty = &_settings_game.pf.yapf.road_stop_penalty,
 	.roadveh_acceleration_model = &_settings_game.vehicle.roadveh_acceleration_model,
+	.roadveh_queue = &_settings_game.pf.roadveh_queue,
 	.se_flat_world_height = &_settings_game.game_creation.se_flat_world_height,
 	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
 	.select_goods = &_settings_game.order.selectgoods,
@@ -916,7 +918,7 @@ static const OpenTTDNewsServices _rust_news_services{
 static_assert(ScriptEvent::ET_SUBSIDY_OFFER == 2 && ScriptEvent::ET_SUBSIDY_OFFER_EXPIRED == 3 && ScriptEvent::ET_SUBSIDY_AWARDED == 4 && ScriptEvent::ET_SUBSIDY_EXPIRED == 5);
 static_assert(ScriptEvent::ET_VEHICLE_CRASHED == 12 && ScriptEvent::ET_INDUSTRY_OPEN == 16 && ScriptEvent::ET_INDUSTRY_CLOSE == 17 && ScriptEvent::ET_STATION_FIRST_VEHICLE == 19);
 static_assert(ScriptEvent::ET_TOWN_FOUNDED == 22 && ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR == 23 && ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS == 27 && ScriptEvent::ET_ROAD_RECONSTRUCTION == 28);
-static_assert(ScriptEventVehicleCrashed::CRASH_PLANE_LANDING == 3 && ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT == 4);
+static_assert(ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING == 1 && ScriptEventVehicleCrashed::CRASH_PLANE_LANDING == 3 && ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT == 4);
 
 /** Construct the native event a Rust record names: each case only constructs its class. */
 static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept

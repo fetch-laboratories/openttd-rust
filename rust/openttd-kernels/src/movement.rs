@@ -128,11 +128,6 @@ impl<'a> CachedTable<'a> {
             )
         }
     }
-    /// Temporary raw adapter of [`Self::get_road_vehicle_track_status`] for
-    /// `road.rs` and `ground_vehicle.rs` until their passes.
-    pub(crate) fn road_tracks(&self, v: VehicleRef, tile: u32) -> u32 {
-        self.get_road_vehicle_track_status(v, TileIndex(tile))
-    }
     pub(crate) fn get(&self) -> &'a MovementServices {
         // Copy before the getter: no Cell borrow spans a callback/reentry.
         if let Some(table) = self.resolved.get() {
@@ -1327,11 +1322,9 @@ impl MovementServices {
             }
 
             let rv = h.road;
-            if unsafe { crate::road::get_frame(rv) } == RVC_DEPOT_STOP_FRAME {
+            if unsafe { crate::road::frame(rv) } == RVC_DEPOT_STOP_FRAME {
                 let dir = world.road_depot_dir(tile.0);
-                if ROADVEH_ENTER_DEPOT_DIR[usize::from(dir)]
-                    == unsafe { crate::road::get_state(rv) }
-                {
+                if ROADVEH_ENTER_DEPOT_DIR[usize::from(dir)] == unsafe { crate::road::state(rv) } {
                     w::hit(w::MOVE_ROAD_DEPOT_ENTER_0 + usize::from(dir));
                     unsafe {
                         crate::road::set_state(rv, RVSB_IN_DEPOT);
@@ -1423,10 +1416,10 @@ impl MovementServices {
             }
         } else if h.kind == VehicleType::VEH_ROAD {
             let rv = h.road;
-            let state = unsafe { crate::road::get_state(rv) };
+            let state = unsafe { crate::road::state(rv) };
             if state < RVSB_IN_ROAD_STOP
                 && !is_reversing_road_trackdir(state, self.check())
-                && unsafe { crate::road::get_frame(rv) } == 0
+                && unsafe { crate::road::frame(rv) } == 0
                 && World::new(self.shared())
                     .asserted(|m| crate::station_map::is_station_road_stop(m, tile))
                 && v.is_front_engine()
@@ -1542,13 +1535,12 @@ impl MovementServices {
                 let rv = h.road;
 
                 /* Enter tunnel? */
-                if unsafe { crate::road::get_state(rv) } != RVSB_WORMHOLE && dir == vdir {
+                if unsafe { crate::road::state(rv) } != RVSB_WORMHOLE && dir == vdir {
                     if frame == visibility_frame {
                         w::hit(w::MOVE_ROAD_TUNNEL_ENTER);
                         /* Frame should be equal to the next frame number in the RV's movement */
                         self.native_assert_call(
-                            i32::from(frame)
-                                == i32::from(unsafe { crate::road::get_frame(rv) }) + 1,
+                            i32::from(frame) == i32::from(unsafe { crate::road::frame(rv) }) + 1,
                         );
                         v.set_tile(tile);
                         unsafe {
@@ -1643,7 +1635,7 @@ impl MovementServices {
                     }
 
                     VehicleType::VEH_ROAD => {
-                        if unsafe { crate::road::get_state(h.road) } == RVSB_WORMHOLE {
+                        if unsafe { crate::road::state(h.road) } == RVSB_WORMHOLE {
                             unsafe {
                                 crate::road::set_state(
                                     h.road,

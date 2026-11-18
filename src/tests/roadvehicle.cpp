@@ -113,11 +113,15 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 	record.ground = &ground; record.orders = &orders; record.road = front;
 	tail_record.road = tail;
 	auto *v = &record;
+	uint8_t model = 0;
+	OpenTTDSettingAddresses settings{};
+	settings.roadveh_acceleration_model = &model;
 	auto shared = OpenTTDSharedServices{};
 	shared.bridge_speed = BridgeSpeed;
+	shared.settings = &settings;
 	auto leaves = OpenTTDRoadLeaves{};
 	leaves.shared = &shared;
-	for (uint16_t model = 0; model < 2; ++model) for (uint16_t state = 0; state < 256; ++state) for (uint16_t tail_state = 0; tail_state < 256; ++tail_state) {
+	for (model = 0; model < 2; ++model) for (uint16_t state = 0; state < 256; ++state) for (uint16_t tail_state = 0; tail_state < 256; ++tail_state) {
 		for (uint8_t hidden : {0, 1, 2, 3}) for (uint8_t direction : {0, 1}) {
 			front->state = static_cast<uint8_t>(state); tail->state = static_cast<uint8_t>(tail_state);
 			struct { uint16_t max_track_speed, order_max_speed; } r{};
@@ -142,7 +146,7 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 				part_hidden = hidden >> 1;
 			}
 			bridge_reads = 0;
-			CHECK(openttd_rust_road_max_speed(v, front, model, &leaves) == std::min(expected, r.order_max_speed * 2));
+			CHECK(openttd_rust_road_max_speed(v, front, &leaves) == std::min(expected, r.order_max_speed * 2));
 			CHECK(bridge_reads == reads);
 		}
 	}

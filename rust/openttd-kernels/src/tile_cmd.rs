@@ -37,14 +37,12 @@ impl VehicleEnterTileStates {
     pub const fn from_element(element: VehicleEnterTileState) -> Self {
         Self(1 << element.0)
     }
+    /// Native `BaseBitSet::Test` of one element.
+    #[must_use]
+    pub const fn test(self, element: VehicleEnterTileState) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
 }
-/// Raw adapter: `VehicleEnterTileState::EnteredWormhole` in `VehicleEnterTileStates`, read by
-/// `road.rs` until its pass.
-pub const ENTERED_WORMHOLE: u8 =
-    VehicleEnterTileStates::from_element(VehicleEnterTileState::EnteredWormhole).0;
-/// Raw adapter: `VehicleEnterTileState::CannotEnter` in `VehicleEnterTileStates`.
-pub const CANNOT_ENTER: u8 =
-    VehicleEnterTileStates::from_element(VehicleEnterTileState::CannotEnter).0;
 
 /// `AddAcceptedCargo`: the tile type's `add_accepted_cargo_proc`, with a fresh
 /// dummy mask when the caller passes none. Only houses, industries and objects
