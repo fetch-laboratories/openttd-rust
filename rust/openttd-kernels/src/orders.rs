@@ -3083,13 +3083,13 @@ pub unsafe extern "C" fn openttd_rust_remove_destination(
 /// `CheckOrders`: check the orders of a vehicle, to see if there are invalid orders and stuff.
 pub(crate) fn check_orders(v: VehicleRef, leaves: &'static Leaves) {
     let control = Control { g: Game(leaves) };
-    control.check_orders(v.shell());
+    control.check_orders(|| v);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_check_orders(v: *mut c_void, leaves: &'static Leaves) -> u64 {
     let control = Control { g: Game(leaves) };
-    control.check_orders(v);
+    control.check_orders(|| native_vehicle(v, leaves.base));
     0
 }
 
@@ -4552,7 +4552,9 @@ impl Control {
         }
         self.backup_destination_clear(u64::from(kind), u64::from(destination), u64::from(hangar));
     }
-    fn check_orders(&self, v: *mut c_void) {
+    /// `CheckOrders`. `vehicle` yields the typed record of `v`; the native entry resolves
+    /// its pointer only once the review setting is enabled.
+    fn check_orders(&self, vehicle: impl FnOnce() -> VehicleRef) {
         let g = self.g;
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
         let review = unsafe { g.shared().settings().order_review_system.read() };
@@ -4560,7 +4562,9 @@ impl Control {
         if review == 0 {
             return;
         }
-        let status = native_vehicle(v, g.0.base).vehstatus_raw();
+        let record = vehicle();
+        let v = record.shell();
+        let status = record.vehstatus_raw();
         // Do nothing for crashed vehicles
         if status & VS_CRASHED != 0 {
             return;
@@ -4574,11 +4578,7 @@ impl Control {
             return;
         }
         // Only check every 20 days, so that we don't flood the message log
-        if g.local_owner(v) == 0
-            || !(native_vehicle(v, g.0.base))
-                .day_counter()
-                .is_multiple_of(20)
-        {
+        if g.local_owner(v) == 0 || !record.day_counter().is_multiple_of(20) {
             return;
         }
         let mut message = 0u32;
@@ -4596,7 +4596,7 @@ impl Control {
                     if order_can_use_station(v, order.destination) == 0 {
                         message = 2;
                     } else if g.vehicle_type(v) == u64::from(VEH_AIRCRAFT)
-                        && (g.0.base.engine)(native_vehicle(v, g.0.base)).aircraft_subtype()
+                        && (g.0.base.engine)(record).aircraft_subtype()
                             & crate::engine_type::AIR_FAST
                             != 0
                         && u64::from(
