@@ -44,9 +44,9 @@
     "counter": "tools_cpp",
     "added": {
       "tools/migration/windows-abi.cpp": 3,
-      "tools/migration/windows-abi/road.inc": 122
+      "tools/migration/windows-abi/road.inc": 130
     },
-    "reason": "Review of #1000 (group 3 behaviour 5, group 4 behaviour 3-4, group 4 porting 3, 6-7, group 1 porting 10): the road probe regains two observations the leaf removal had lost, the entrance clear of a scheduled destination-bay arrival before BeginLoading and the economy-day depot search with the configured penalty on a small road map (99 orders nothing, 100 orders the depot), supplies the orders owner the controller's typed CheckOrders now reads, and reads path elements through the new out-pointer getter.",
+    "reason": "Review of #1000 (group 3 behaviour 5, group 4 behaviour 3-4, group 4 porting 3, 6-7, group 1 porting 10): the road probe regains two observations the leaf removal had lost, the entrance clear of a scheduled destination-bay arrival before BeginLoading and the economy-day depot search with the configured penalty on a small road map (99 orders nothing, 100 orders the depot, and with the depot three tiles on a penalty of 150 cuts the search off after one followed tile, counted through the road speed read), supplies the orders owner the controller's typed CheckOrders now reads, and reads path elements through the new out-pointer getter.",
     "existing_alternatives": "No scenario or Rust test drives these controller paths; the standalone YAPF tests call the pathfinder without CheckIfRoadVehNeedsService.",
     "retiring_owner": "#736",
     "retirement_condition": "Retires with the road ABI probe cases when #736 moves the road vehicle evidence off C++."

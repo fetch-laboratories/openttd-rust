@@ -527,7 +527,7 @@ struct RoadServiceProbe {
 	OpenTTDRoadState *tail = openttd_rust_road_new();
 	uint32_t tile = 3091, depot = 3091;
 	uint16_t speed = 5;
-	uint32_t depot_orders = 0, services = 0;
+	uint32_t depot_orders = 0, services = 0, followed = 0;
 };
 static RoadServiceProbe *road_service_probe;
 static OpenTTDVehicle road_service_vehicles[2]{};
@@ -671,7 +671,8 @@ static void RoadServiceBoundary()
 	service_movement.native_assert = [](bool okay) noexcept { CHECK(okay); };
 	service_movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 	service_movement.road_compatible = [](OpenTTDVehicle *) noexcept -> uint64_t { return 1; };
-	service_movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 0; };
+	/* The search reads a followed tile's road speed only after its cost passed the limit. */
+	service_movement.road_type_speed = [](RoadType) noexcept -> uint16_t { ++road_service_probe->followed; return 0; };
 	t.shared.movement = &service_movement;
 	probe.speed = 0;
 	for (uint32_t penalty : {99U, 100U}) {
@@ -682,8 +683,18 @@ static void RoadServiceBoundary()
 		const bool ordered = penalty >= 100;
 		CHECK(probe.depot_orders == (ordered ? 3U : 2U));
 		CHECK(RoadServiceHandle(0)->dest_tile == (ordered ? probe.depot : 42U));
-		CHECK(probe.services == 1);
+		CHECK(probe.services == 1 && probe.followed == 0);
 	}
+	/* With the depot three tiles on, a penalty of 150 ends the search on the
+	 * second road tile (cost 200), before following it towards the depot. */
+	for (uint32_t i : {1U, 2U}) service_map.base[probe.tile - i].m5 = ROAD_X;
+	probe.depot = probe.tile - 3;
+	service_map.base[probe.depot].type = MP_ROAD << 4;
+	service_map.base[probe.depot].m5 = (2 << 6) | DIAGDIR_SW;
+	depot_penalty = 150;
+	RoadServiceHandle(0)->dest_tile = 42; probe.head->state = probe.tail->state = TRACKDIR_X_NE;
+	day();
+	CHECK(probe.followed == 1 && probe.depot_orders == 3 && RoadServiceHandle(0)->dest_tile == 42U);
 	openttd_rust_road_destroy(probe.head);
 	openttd_rust_road_destroy(probe.tail);
 	t.vehicle.engine = nullptr;
