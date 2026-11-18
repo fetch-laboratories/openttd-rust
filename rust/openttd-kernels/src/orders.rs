@@ -5043,20 +5043,27 @@ mod order_view_tests {
 
 #[cfg(test)]
 mod command_cost_tests {
-    use super::{Game, Leaves, openttd_rust_timetable_validate_bulk};
+    use super::{
+        Consist, Leaves, Order, VehicleOrders, openttd_rust_command_insert,
+        openttd_rust_timetable_on_time, openttd_rust_timetable_validate_bulk,
+    };
     use crate::services::{CommandCost, CommandCostServices};
     use crate::station_cmd::CommandServicesTable;
     use crate::strings_type::StringID;
     use crate::table::strings::{
-        STR_ERROR_CAN_T_COPY_SHARE_ORDER, STR_ERROR_NO_RAIL_WAYPOINT, STR_ERROR_TOO_MANY_ORDERS,
+        STR_ERROR_CAN_T_ADD_ORDER, STR_ERROR_NO_BUOY, STR_ERROR_NO_RAIL_WAYPOINT,
+        STR_ERROR_NO_ROAD_WAYPOINT, STR_ERROR_TIMETABLE_NOT_STARTED,
     };
     use crate::test_tables::{
         unreachable0, unreachable1, unreachable2, unreachable3, unreachable4,
     };
-    use std::cell::RefCell;
+    use crate::vehicle_type::VehicleType;
+    use std::cell::{Cell, RefCell};
+    use std::ffi::c_void;
+    use std::mem::MaybeUninit;
     use std::ptr;
 
-    /// One native `CommandCost` constructor call.
+    /// One native `CommandCost` error constructor call.
     #[derive(Debug, PartialEq, Eq)]
     enum Constructed {
         /// `CommandCost(msg)`.
@@ -5064,8 +5071,15 @@ mod command_cost_tests {
         /// `CommandCost(msg, extra_msg)`.
         ErrorExtra(u32, u32),
     }
+    /// The fixture vehicle: its order owner, consist and record, reached through its shell.
+    struct Fixture {
+        orders: VehicleOrders,
+        consist: Consist,
+        record: *mut crate::vehicle_base::VehicleRecord,
+    }
     thread_local! {
         static CONSTRUCTED: RefCell<Vec<Constructed>> = const { RefCell::new(Vec::new()) };
+        static KIND: Cell<VehicleType> = const { Cell::new(VehicleType::TRAIN) };
     }
     extern "C" fn error(_: *mut CommandCost, msg: u32) {
         CONSTRUCTED.with(|c| c.borrow_mut().push(Constructed::Error(msg)));
@@ -5073,31 +5087,86 @@ mod command_cost_tests {
     extern "C" fn error_extra(_: *mut CommandCost, msg: u32, extra_msg: u32) {
         CONSTRUCTED.with(|c| c.borrow_mut().push(Constructed::ErrorExtra(msg, extra_msg)));
     }
+    extern "C" fn zero(_: *mut CommandCost) {}
+    extern "C" fn success(_: *const CommandCost) -> bool {
+        true
+    }
+    extern "C" fn current_company() -> u8 {
+        1
+    }
+    extern "C" fn company() -> *const crate::company::Services {
+        const FINANCE: crate::company::FinanceServices = crate::company::FinanceServices {
+            current_company,
+            ..crate::test_tables::FINANCE
+        };
+        const COMPANY: crate::company::Services = crate::company::Services {
+            finance: &FINANCE,
+            ..crate::test_tables::COMPANY
+        };
+        &COMPANY
+    }
+    unsafe extern "C" fn primary_vehicle(_: *mut c_void) -> u64 {
+        1
+    }
+    unsafe extern "C" fn vehicle_type(_: *mut c_void) -> u64 {
+        u64::from(KIND.get().0)
+    }
+    unsafe extern "C" fn vehicle(v: *mut c_void) -> *mut VehicleOrders {
+        // SAFETY: Every shell this test passes is its live `Fixture`.
+        unsafe { &raw mut (*v.cast::<Fixture>()).orders }
+    }
+    unsafe extern "C" fn consist(v: *mut c_void) -> *mut Consist {
+        // SAFETY: As `vehicle`.
+        unsafe { &raw mut (*v.cast::<Fixture>()).consist }
+    }
+    extern "C" fn record(v: *mut c_void) -> *mut crate::vehicle_base::VehicleRecord {
+        // SAFETY: As `vehicle`.
+        unsafe { (*v.cast::<Fixture>()).record }
+    }
+    extern "C" fn valid_waypoint(_: u16) -> u64 {
+        1
+    }
+    unsafe extern "C" fn waypoint_facilities(_: u16) -> u64 {
+        0
+    }
 
-    /// Order leaves whose only reachable service is the recording cost table.
+    /// Order leaves over the fixture vehicle and a recording cost table.
     fn leaves() -> &'static Leaves {
         let cost: &'static CommandCostServices = Box::leak(Box::new(CommandCostServices {
+            zero,
             error,
             error_extra,
+            success,
             ..crate::test_tables::COMMAND_COSTS
         }));
+        let command: &'static crate::services::CommandServices =
+            Box::leak(Box::new(crate::services::CommandServices {
+                company,
+                ..crate::test_tables::COMMANDS
+            }));
         let station_commands: *const CommandServicesTable =
             Box::leak(Box::new(CommandServicesTable {
                 cost,
+                command,
                 ..crate::test_tables::STATION_COMMANDS
             }));
+        let base: &'static crate::vehicle::VehicleServices =
+            Box::leak(Box::new(crate::vehicle::VehicleServices {
+                record_from_shell: record,
+                ..crate::test_tables::VEHICLE
+            }));
         Box::leak(Box::new(Leaves {
-            vehicle: unreachable1,
-            consist: unreachable1,
+            vehicle,
+            consist,
             list: unreachable1,
             vector: unreachable1,
             backup: unreachable1,
             backup_vector: unreachable1,
             backup_consist: unreachable1,
             ownerless_station: unreachable2,
-            vehicle_type: unreachable1,
+            vehicle_type,
             tick_counter: unreachable0,
-            primary_vehicle: unreachable1,
+            primary_vehicle,
             ticks_per_second: unreachable0,
             unit_number: unreachable1,
             maximum_date: unreachable0,
@@ -5128,8 +5197,8 @@ mod command_cost_tests {
             rail_depot: unreachable1,
             road_depot: unreachable1,
             ship_depot: unreachable1,
-            valid_waypoint: unreachable1,
-            waypoint_facilities: unreachable1,
+            valid_waypoint,
+            waypoint_facilities,
             waypoint_owner: unreachable1,
             list_capacity: unreachable0,
             next_backup: unreachable1,
@@ -5174,38 +5243,80 @@ mod command_cost_tests {
             clear_backup_post: unreachable1,
             missing_aircraft_orders: unreachable1,
             change_timetable_command: unreachable4,
-            base: &crate::test_tables::VEHICLE,
+            base,
         }))
     }
 
-    /// An order entry's `return CMD_ERROR;` writes `CommandCost(INVALID_STRING_ID)`, and the
-    /// one- and two-string returns pass the message and extra message in the original's
-    /// positions.
+    /// Order entries write the original's `CommandCost` at their returns: `CMD_ERROR` as
+    /// `CommandCost(INVALID_STRING_ID)` (`CmdBulkChangeTimetable`), a single string
+    /// (`CmdSetVehicleOnTime`) and `CmdInsertOrder`'s three waypoint returns, whose message
+    /// and extra message take the original's positions.
     #[test]
     fn order_errors_construct_the_original_command_costs() {
         let leaves = leaves();
-        let output = ptr::NonNull::<u8>::dangling().as_ptr().cast();
-        CONSTRUCTED.with(|c| c.borrow_mut().clear());
-        // `CmdBulkChangeTimetable`: `if (v == nullptr || !v->IsPrimaryVehicle()) return CMD_ERROR;`
-        // SAFETY: The null vehicle fails the first check; the output is never dereferenced.
-        let valid =
-            unsafe { openttd_rust_timetable_validate_bulk(ptr::null_mut(), 0, output, leaves) };
-        Game(leaves).command_cost(output, STR_ERROR_TOO_MANY_ORDERS);
-        Game(leaves).command_cost_extra(
-            output,
-            STR_ERROR_CAN_T_COPY_SHARE_ORDER,
-            STR_ERROR_NO_RAIL_WAYPOINT,
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            ptr::null_mut(),
+            VehicleType::TRAIN,
         );
-        assert_eq!(valid, 0);
+        // SAFETY: The fresh record is live and exclusively this test's.
+        crate::vehicle::VehicleRef(unsafe { ptr::NonNull::new_unchecked(record) })
+            .set_owner(crate::company_type::CompanyID(1));
+        let mut fixture = Fixture {
+            orders: VehicleOrders {
+                current: MaybeUninit::zeroed(),
+                orders: ptr::NonNull::<u8>::dangling().as_ptr().cast(),
+                next: ptr::null_mut(),
+                previous: ptr::null_mut(),
+            },
+            consist: Consist {
+                time: 0,
+                lateness: 0,
+                start: 0,
+                last_departure: 0,
+                next_departure: 0,
+                round_trip: 0,
+                real: 0,
+                implicit: 0,
+                flags: 0,
+            },
+            record,
+        };
+        let v = (&raw mut fixture).cast::<c_void>();
+        let output = ptr::NonNull::<u8>::dangling().as_ptr().cast();
+        let waypoint = Order {
+            kind: crate::order_type::OT_GOTO_WAYPOINT,
+            flags: 0,
+            destination: 0,
+            refit: 0xfe,
+            wait: 0,
+            travel: 0,
+            speed: u16::MAX,
+        };
+        CONSTRUCTED.with(|c| c.borrow_mut().clear());
+        // SAFETY: The null vehicle fails the first check; the output is never dereferenced.
+        let bulk =
+            unsafe { openttd_rust_timetable_validate_bulk(ptr::null_mut(), 0, output, leaves) };
+        // SAFETY: The fixture vehicle has orders and a consist whose timetable has not started.
+        let on_time = unsafe { openttd_rust_timetable_on_time(v, 0, 0, output, leaves) };
+        let mut inserted = Vec::new();
+        for kind in [VehicleType::TRAIN, VehicleType::ROAD, VehicleType::SHIP] {
+            KIND.set(kind);
+            // SAFETY: The fixture vehicle, its record and the order live through the call.
+            inserted.push(unsafe {
+                openttd_rust_command_insert(v, 0, 0, &raw const waypoint, output, leaves)
+            });
+        }
+        // SAFETY: The test allocated the record and nothing else retains it.
+        drop(unsafe { Box::from_raw(record) });
+        assert_eq!((bulk, on_time, inserted), (0, 0, vec![0, 0, 0]));
         assert_eq!(
             CONSTRUCTED.with(RefCell::take),
             [
                 Constructed::Error(StringID::INVALID_STRING_ID.0),
-                Constructed::Error(STR_ERROR_TOO_MANY_ORDERS.0),
-                Constructed::ErrorExtra(
-                    STR_ERROR_CAN_T_COPY_SHARE_ORDER.0,
-                    STR_ERROR_NO_RAIL_WAYPOINT.0
-                ),
+                Constructed::Error(STR_ERROR_TIMETABLE_NOT_STARTED.0),
+                Constructed::ErrorExtra(STR_ERROR_CAN_T_ADD_ORDER.0, STR_ERROR_NO_RAIL_WAYPOINT.0),
+                Constructed::ErrorExtra(STR_ERROR_CAN_T_ADD_ORDER.0, STR_ERROR_NO_ROAD_WAYPOINT.0),
+                Constructed::ErrorExtra(STR_ERROR_CAN_T_ADD_ORDER.0, STR_ERROR_NO_BUOY.0),
             ]
         );
     }
