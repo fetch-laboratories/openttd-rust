@@ -135,6 +135,14 @@ impl crate::map_func::World<'_> {
     pub(crate) fn is_sea(&self, t: u32) -> bool {
         self.asserted(|m| is_sea(m, t))
     }
+    /// `IsCanal`.
+    pub(crate) fn is_canal(&self, t: u32) -> bool {
+        self.asserted(|m| is_canal(m, t))
+    }
+    /// `IsWaterTile`: is it a water tile with plain water?
+    pub(crate) fn is_water_tile(&self, t: u32) -> bool {
+        self.kind(TileIndex(t)) == TileType::MP_WATER && self.asserted(|m| is_water(m, t))
+    }
     /// `IsDockingTile`: checks whether the tile is marked as a destination tile
     /// for ships. Always inlined: the ship search's cost callback reads it per
     /// node, and an outlined call costs 13.2M instructions under the 1996 Padhattan

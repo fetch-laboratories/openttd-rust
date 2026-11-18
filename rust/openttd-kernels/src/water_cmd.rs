@@ -865,7 +865,8 @@ entry!(openttd_rust_water_make_river(tile:u32) |world:&World<'_>| {
 entry!(openttd_rust_water_clear(out:*mut CommandCost,ret:*mut CommandCost,flags:u16,tile:u32)
     |world:&World<'_>| world.clear(out,ret,flags,tile));
 entry!(openttd_rust_water_terraform(out:*mut CommandCost,flags:u16,tile:u32) |world:&World<'_>| {
-    if (world.s.is_water_tile)(tile) && world.canal(tile) { world.error(out,STR_ERROR_MUST_DEMOLISH_CANAL_FIRST.0); }
+    let map = crate::map_func::World::new(world.s);
+    if map.is_water_tile(tile) && map.is_canal(tile) { world.error(out,STR_ERROR_MUST_DEMOLISH_CANAL_FIRST.0); }
     else { world.clear_command(out,tile,flags); }
 });
 entry!(openttd_rust_water_build_above(out:*mut CommandCost,flags:u16,tile:u32,height:i32) |world:&World<'_>| {
