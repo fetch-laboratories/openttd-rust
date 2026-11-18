@@ -228,7 +228,7 @@ void SubtractMoneyFromCompany(const CommandCost &cost)
  */
 void SubtractMoneyFromCompanyFract(CompanyID company, const CommandCost &cst)
 {
-	openttd_rust_company_subtract_fraction(&GetRustCompanyFinanceServices(), &Company::Get(company)->Finances(), company.base(), cst.GetCost().base(), cst.GetExpensesType());
+	openttd_rust_company_subtract_fraction(&GetRustCompanyFinanceServices(), RustCompanyGetFinances(company.base()), company.base(), cst.GetCost().base(), cst.GetExpensesType());
 }
 
 
