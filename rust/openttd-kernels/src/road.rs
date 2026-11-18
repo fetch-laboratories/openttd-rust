@@ -331,6 +331,15 @@ struct Part {
     v: VehicleRef,
     s: NonNull<State>,
 }
+/// `prev` for a part after the front, which `IndividualRoadVehicleController` dereferences
+/// without a test (`roadveh_cmd.cpp:1217,1392`). Its callers, `RoadVehController`'s chain walk
+/// and `AfterLoadGame`'s frame replay, pass null only with the front engine; every later part
+/// receives the part before it.
+fn previous_part(prev: Option<Part>) -> Part {
+    // SAFETY: Only the non-front branches call this, and the callers above pass each non-front
+    // part its predecessor, as the original's unchecked dereference requires.
+    unsafe { prev.unwrap_unchecked() }
+}
 impl Part {
     fn new(v: VehicleRef, s: *mut State) -> Self {
         // SAFETY: Every road vehicle shell owns a non-null road owner.
@@ -1922,11 +1931,9 @@ impl<'a> Game<'a> {
                     dir = ROAD_REVERSE_TABLE[usize::from(rd.0 & 3)];
                 }
             } else {
-                // The original dereferences `prev` unchecked: under the consist invariant
-                // every part after the front has its previous part.
                 dir = self.follow_previous_road_vehicle(
                     v,
-                    prev.unwrap(),
+                    previous_part(prev),
                     tile,
                     DiagDirection(rd.0 & 3),
                     false,
@@ -2157,11 +2164,9 @@ impl<'a> Game<'a> {
                 /* If this is the front engine, look for the right path. */
                 dir = self.road_find_path_to_dest(v, v.v.tile(), DiagDirection(rd.0 & 3));
             } else {
-                // The original dereferences `prev` unchecked: under the consist invariant
-                // every part after the front has its previous part.
                 dir = self.follow_previous_road_vehicle(
                     v,
-                    prev.unwrap(),
+                    previous_part(prev),
                     v.v.tile(),
                     DiagDirection(rd.0 & 3),
                     true,
@@ -2859,7 +2864,8 @@ pub unsafe extern "C" fn openttd_rust_road_tick_abi(
 }
 /// `IndividualRoadVehicleController`.
 /// # Safety
-/// As [`openttd_rust_road_tick_abi`]; `prev` is null or a live pair.
+/// As [`openttd_rust_road_tick_abi`]; `prev` is null for the front engine and otherwise the
+/// live pair of the part before `v`, which the non-front controller path dereferences.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_individual_abi(
     v: VehicleRef,

@@ -766,9 +766,9 @@ impl GroundVehicleType for RoadVehicle {
             if v.direction() != rv.direction() {
                 return true;
             }
-            // The original dereferences `Next()` unchecked; on its chain the walk reaches
-            // `v` first.
-            rv = rv.next().unwrap();
+            // SAFETY: `rv` starts at `v`'s front and stops at `v`, so while `rv != v` a part
+            // of the live chain follows it; the original dereferences `Next()` unchecked.
+            rv = unsafe { rv.next_unchecked() };
         }
 
         false

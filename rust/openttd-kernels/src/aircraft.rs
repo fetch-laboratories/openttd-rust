@@ -287,7 +287,7 @@ impl Vehicle {
 /// aircraft, and the rotor of a helicopter's shadow.
 fn next_part(v: VehicleRef) -> VehicleRef {
     // SAFETY: The original unconditionally dereferences the live shadow and rotor.
-    unsafe { v.next().unwrap_unchecked() }
+    unsafe { v.next_unchecked() }
 }
 /// `v->vehstatus.Test(state)`.
 fn vehstatus_test(v: VehicleRef, state: VehState) -> bool {
