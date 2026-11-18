@@ -72,6 +72,8 @@ use crate::town_type::{
     TownExpandMode, TownExpandModes, TownID, TownLayout,
 };
 use crate::transport_type::TransportType;
+use crate::window_func::invalidate_window_data;
+use crate::window_type::{WindowClass, WindowNumber};
 
 /// `NUM_TAE`, as the length of the per-effect town arrays.
 const NUM_TAE: usize = TownAcceptanceEffect::NUM_TAE.0 as usize;
@@ -492,7 +494,18 @@ pub unsafe extern "C" fn openttd_rust_town_update_radius(state: *mut State) {
         update_town_radius(state);
     }
 }
-/// `ChangePopulation`.
+/// Special values for town list window for the data parameter of `InvalidateWindowData`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TownDirectoryInvalidateWindowData(pub i32);
+impl TownDirectoryInvalidateWindowData {
+    /// The population of a town changed.
+    pub const TDIWD_POPULATION_CHANGE: Self = Self(1);
+    /// The town directory is resorted.
+    pub const TDIWD_FORCE_RESORT: Self = Self(2);
+}
+/// `ChangePopulation`: change the town's population as recorded in the town cache, town
+/// label, and town directory.
 unsafe fn change_population(leaves: &Leaves, state: *mut State, t: TownID, amount: i32) {
     // SAFETY: Field mutation ends before the presentation service can reenter.
     unsafe {
@@ -503,7 +516,17 @@ unsafe fn change_population(leaves: &Leaves, state: *mut State, t: TownID, amoun
         return;
     }
     // Cargo requirements may appear/vanish for small populations.
-    (leaves.population_changed)(u32::from(t.0));
+    invalidate_window_data(WindowClass::WC_TOWN_VIEW, WindowNumber::from(t), 0, false);
+    // SAFETY: Canonical client setting; the immediate load ends before the service.
+    if unsafe { leaves.shared().settings().population_in_label.read() } {
+        (leaves.update_virt)((leaves.shared().town_by_id)(u32::from(t.0)));
+    }
+    invalidate_window_data(
+        WindowClass::WC_TOWN_DIRECTORY,
+        WindowNumber(0),
+        TownDirectoryInvalidateWindowData::TDIWD_POPULATION_CHANGE.0,
+        false,
+    );
 }
 /// `Town::Iterate()`: the valid towns in pool order from `TownID::BEGIN`. `next(from)`
 /// is the pool's next valid index at or after `from`, or `u32::MAX` past the end; it is
@@ -1000,7 +1023,8 @@ pub struct Leaves {
     pub house_class: extern "C" fn(u16) -> u16,
     pub make_house: extern "C" fn(u32, u32, u32, u32),
 
-    pub population_changed: extern "C" fn(u32),
+    /// `Town::UpdateVirtCoord`: resize the sign (label) of the town after it changes.
+    pub update_virt: extern "C" fn(*mut crate::services::TownHandle),
     pub house_count: extern "C" fn() -> u32,
     pub road_type_error: extern "C" fn(i32),
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
@@ -3571,7 +3595,7 @@ crate::abi::layouts! {
         house_class,
         make_house,
 
-        population_changed,
+        update_virt,
         house_count,
         road_type_error,
         build_bridge,
@@ -3838,8 +3862,8 @@ mod policy_tests {
     extern "C" fn unexpected_make_house(_: u32, _: u32, _: u32, _: u32) {
         unreachable!("unexpected Leaves::make_house")
     }
-    extern "C" fn unexpected_population_changed(_: u32) {
-        unreachable!("unexpected Leaves::population_changed")
+    extern "C" fn unexpected_update_virt(_: *mut crate::services::TownHandle) {
+        unreachable!("unexpected Leaves::update_virt")
     }
     extern "C" fn unexpected_house_count() -> u32 {
         unreachable!("unexpected Leaves::house_count")
@@ -3881,7 +3905,7 @@ mod policy_tests {
             exchange_company: unexpected_exchange_company,
             house_class: unexpected_house_class,
             make_house: unexpected_make_house,
-            population_changed: unexpected_population_changed,
+            update_virt: unexpected_update_virt,
             house_count: unexpected_house_count,
             road_type_error: unexpected_road_type_error,
             build_bridge: unexpected_build_bridge,
@@ -4734,6 +4758,7 @@ mod protocol_tests {
         LANDSCAPE, LANDSCAPE_TILES, MOVEMENT, RAIL_COMMANDS, ROAD_COMMANDS, SHARED, TILE_OWNERS,
         TOWN_LEAVES, unreachable0,
     };
+    use crate::window_func::testing::Effect;
     use std::cell::{Cell, RefCell};
     use std::ptr;
 
@@ -4756,6 +4781,7 @@ mod protocol_tests {
         landscape_clears: u32,
         house_count: u32,
         writes: Vec<[u32; 4]>,
+        presentation: Vec<Presentation>,
     }
     thread_local! {
         static WORLD: RefCell<World> = RefCell::new(World::default());
@@ -4833,10 +4859,24 @@ mod protocol_tests {
     extern "C" fn make_house(tile: u32, town: u32, house: u32, construction: u32) {
         with(|w| w.writes.push([tile, town, house, construction]));
     }
-    extern "C" fn population_changed(_: u32) {
+    extern "C" fn update_virt(_: *mut TownHandle) {
         // SAFETY: The fixture's live owner; no other borrow spans this leaf.
         let population = unsafe { (*owner()).simulation.population };
         with(|w| w.population = population);
+        presentation_flush();
+        with(|w| w.presentation.push(Presentation::UpdateVirtCoord));
+    }
+    /// A native presentation call, in the order the code under test made it.
+    #[derive(Debug, PartialEq, Eq)]
+    enum Presentation {
+        Window(crate::window_func::testing::Effect),
+        UpdateVirtCoord,
+    }
+    /// Append the window calls recorded since the last flush.
+    fn presentation_flush() {
+        for effect in crate::window_func::testing::take() {
+            with(|w| w.presentation.push(Presentation::Window(effect)));
+        }
     }
     extern "C" fn house_count() -> u32 {
         with(|w| w.house_count)
@@ -4966,7 +5006,6 @@ mod protocol_tests {
             minimum_life: 0,
         }
     }
-    extern "C" fn delete_inspect(_: u32) {}
     extern "C" fn cargogen_mode() -> u8 {
         0
     }
@@ -5191,6 +5230,7 @@ mod protocol_tests {
             allow_town_roads: leak(false),
             town_growth_rate: leak(2),
             allow_town_level_crossings: leak(false),
+            population_in_label: leak(true),
             ..crate::settings_type::SettingAddresses::NULL
         });
         services.town_by_id = no_town_shell;
@@ -5260,6 +5300,7 @@ mod protocol_tests {
         landscape.commands = commands;
         landscape.tile_procs = leak(tiles);
         LANDSCAPE_TABLE.set(leak(landscape));
+        crate::window_func::testing::take();
         let mut houses = HOUSES;
         houses.cost = costs;
         houses.commands = commands;
@@ -5274,7 +5315,6 @@ mod protocol_tests {
         houses.completed = completed;
         houses.town = house_town;
         houses.loop_spec = loop_spec;
-        houses.delete_inspect = delete_inspect;
         houses.cargogen_mode = cargogen_mode;
         houses.place_houses = place_houses;
         let mut leaves = TOWN_LEAVES;
@@ -5299,7 +5339,7 @@ mod protocol_tests {
         leaves.exchange_company = exchange_company;
         leaves.house_class = house_class;
         leaves.make_house = make_house;
-        leaves.population_changed = population_changed;
+        leaves.update_virt = update_virt;
         leaves.house_count = house_count;
         leaves.build_bridge = no_bridge;
         leaves.build_tunnel = no_tunnel;
@@ -5442,6 +5482,8 @@ mod protocol_tests {
     /// `CmdPlaceHouse` executes a completed, protected 2x2 house through `BuildTownHouse`
     /// (`town_protocol.hpp` lines 328 to 346).
     fn check_placement(owner: *mut State, leaves: &Leaves, services: *mut Services) {
+        presentation_flush();
+        with(|w| w.presentation.clear());
         with(|w| {
             w.placing = true;
             w.writes.clear();
@@ -5495,6 +5537,27 @@ mod protocol_tests {
             (with(|w| w.population), houses),
             (10, 2),
             "placement: population, houses"
+        );
+        // `ChangePopulation`'s presentation, with `population_in_label` set.
+        presentation_flush();
+        assert_eq!(
+            with(|w| std::mem::take(&mut w.presentation)),
+            [
+                Presentation::Window(Effect::InvalidateWindowData(
+                    WindowClass::WC_TOWN_VIEW,
+                    WindowNumber(0),
+                    0,
+                    false
+                )),
+                Presentation::UpdateVirtCoord,
+                Presentation::Window(Effect::InvalidateWindowData(
+                    WindowClass::WC_TOWN_DIRECTORY,
+                    WindowNumber(0),
+                    1,
+                    false
+                )),
+            ],
+            "placement: ChangePopulation presentation"
         );
         assert_eq!(ids, [1; 5], "placement: house id counts");
     }

@@ -62,9 +62,6 @@ struct OpenTTDObjectivesServices {
 	bool (*vehicle_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_valid);
 	bool (*text_empty)(const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(text_empty);
 	void (*text_assign)(EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(text_assign);
-	void (*window_data)(uint16_t, uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(window_data);
-	void (*window_classes)(uint16_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(window_classes);
-	void (*window_close)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(window_close);
 	void (*question_show)(uint16_t, uint8_t, uint32_t, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(question_show);
 	void (*story_show)(uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(story_show);
 	void (*question_event)(uint16_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(question_event);

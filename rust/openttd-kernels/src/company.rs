@@ -318,9 +318,9 @@ pub struct Services {
 /// `SetLocalCompany`: team chat observes the old context before the assertion and assignment.
 pub(crate) fn set_local_company(s: &Services, company: crate::company_type::CompanyID) {
     use crate::company_type::CompanyID;
-    use crate::window_type::{
-        WC_COMPANY, WC_COMPANY_COLOUR, WC_GOALS_LIST, WC_SEND_NETWORK_MSG, WC_SIGN_LIST,
-    };
+    use crate::network_type::DestType;
+    use crate::window_func::{invalidate_window_classes_data, invalidate_window_data};
+    use crate::window_type::{WindowClass, WindowNumber};
     crate::movement::native_assert(
         s.shared,
         (s.shared.company_valid)(company.0)
@@ -328,12 +328,13 @@ pub(crate) fn set_local_company(s: &Services, company: crate::company_type::Comp
             || company == CompanyID::NONE,
     );
     let switching = (s.shared.local_company)() != company.0;
-    let windows = (s.objectives)();
+    /* Delete the chat window, if you were team chatting. */
     if switching {
-        (windows.window_data)(
-            WC_SEND_NETWORK_MSG,
-            crate::network_type::DESTTYPE_TEAM,
+        invalidate_window_data(
+            WindowClass::WC_SEND_NETWORK_MSG,
+            WindowNumber::from(DestType::DESTTYPE_TEAM),
             i32::from((s.shared.local_company)()),
+            false,
         );
     }
     crate::movement::native_assert(
@@ -342,13 +343,13 @@ pub(crate) fn set_local_company(s: &Services, company: crate::company_type::Comp
     );
     (s.assign_company_context)(company);
     if switching {
-        (windows.window_classes)(WC_COMPANY, 0);
+        invalidate_window_classes_data(WindowClass::WC_COMPANY, 0, false);
         (s.close_construction_windows)();
     }
     (s.identity.shared.screen_dirty)();
-    (windows.window_classes)(WC_SIGN_LIST, -1);
-    (windows.window_classes)(WC_GOALS_LIST, 0);
-    (windows.window_classes)(WC_COMPANY_COLOUR, -1);
+    invalidate_window_classes_data(WindowClass::WC_SIGN_LIST, -1, false);
+    invalidate_window_classes_data(WindowClass::WC_GOALS_LIST, 0, false);
+    invalidate_window_classes_data(WindowClass::WC_COMPANY_COLOUR, -1, false);
     (s.identity.reset_colourmap)();
 }
 
@@ -419,7 +420,12 @@ fn allow_list(
     if flags & crate::command_type::DoCommandFlag::EXECUTE != 0
         && execute_allow_list_action(s, action, company, key)
     {
-        ((s.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
+        crate::window_func::invalidate_window_data(
+            crate::window_type::WindowClass::WC_CLIENT_LIST,
+            crate::window_type::WindowNumber(0),
+            0,
+            false,
+        );
         let transactions = (s.settings)().refit.common.transactions;
         ((transactions.build_services)().rail.company_dirty)();
     }
@@ -3221,11 +3227,37 @@ mod startup_tests {
         static FRAME: Cell<*const crate::network_frame::Services> = const { Cell::new(std::ptr::null()) };
         static WINDOWS: Cell<*const crate::objectives::Services> = const { Cell::new(std::ptr::null()) };
     }
+    /// Append the native window calls made since the last entry, then `entry`.
     fn trace(entry: &'static str) {
+        windows();
         TRACE.with(|t| t.borrow_mut().push(entry));
     }
     fn traced() -> Vec<&'static str> {
+        windows();
         TRACE.with(|t| t.borrow().clone())
+    }
+    /// Trace the recorded window calls: `chat` for `SetLocalCompany`'s team chat
+    /// invalidation, `classes` for a class invalidation.
+    fn windows() {
+        use crate::window_func::testing::{Effect, take};
+        use crate::window_type::{WindowClass, WindowNumber};
+        for effect in take() {
+            let entry = match effect {
+                Effect::InvalidateWindowData(
+                    WindowClass::WC_SEND_NETWORK_MSG,
+                    number,
+                    data,
+                    false,
+                ) if number == WindowNumber::from(crate::network_type::DestType::DESTTYPE_TEAM)
+                    && data == i32::from(COMPANY_SPECTATOR) =>
+                {
+                    "chat"
+                }
+                Effect::InvalidateWindowClassesData(..) => "classes",
+                effect => panic!("unexpected window call {effect:?}"),
+            };
+            TRACE.with(|t| t.borrow_mut().push(entry));
+        }
     }
     fn handle() -> *mut OpenTTDCompany {
         std::ptr::without_provenance_mut(usize::from(ID) + 1)
@@ -3405,24 +3437,6 @@ mod startup_tests {
         assert_eq!((LOCAL.get(), CURRENT.get()), (ID, ID));
         trace("settings");
     }
-    extern "C" fn window_data(class: u16, number: u32, data: i32) {
-        assert_eq!(
-            (class, number, data),
-            (
-                crate::window_type::WC_SEND_NETWORK_MSG,
-                crate::network_type::DESTTYPE_TEAM,
-                i32::from(COMPANY_SPECTATOR)
-            )
-        );
-        assert_eq!(
-            (LOCAL.get(), CURRENT.get()),
-            (COMPANY_SPECTATOR, COMPANY_SPECTATOR)
-        );
-        trace("chat");
-    }
-    extern "C" fn window_classes(_: u16, _: i32) {
-        trace("classes");
-    }
     extern "C" fn assign(company: CompanyID) {
         LOCAL.set(company.0);
         CURRENT.set(company.0);
@@ -3496,10 +3510,7 @@ mod startup_tests {
         finance.current_company = current;
         finance.set_current_company = set_current;
         finance.company_finances = finances;
-        let mut windows = OBJECTIVES;
-        windows.window_data = window_data;
-        windows.window_classes = window_classes;
-        WINDOWS.set(leak(windows));
+        WINDOWS.set(leak(OBJECTIVES));
         let mut s = COMPANY;
         s.identity = identity(shared);
         s.shared = leak(crate::services::Services {
@@ -3545,6 +3556,7 @@ mod startup_tests {
         s
     }
     fn reset() {
+        crate::window_func::testing::take();
         TRACE.with(|t| t.borrow_mut().clear());
         CURRENT.set(18);
         LOCAL.set(0);

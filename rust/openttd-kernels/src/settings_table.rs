@@ -27,9 +27,8 @@ use crate::timer_game_calendar::{
 };
 use crate::vehicle::VehicleRef;
 use crate::vehicle_type::{AM_ORIGINAL, VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN, VehicleID};
-use crate::window_type::{
-    WC_BUILD_VEHICLE, WC_ENGINE_PREVIEW, WC_GAME_OPTIONS, WC_TOWN_VIEW, WC_VEHICLE_DETAILS,
-};
+use crate::window_func::{invalidate_window_classes_data, set_window_classes_dirty};
+use crate::window_type::WindowClass;
 use crate::witness::{self, hit};
 
 /// Opaque native `SettingDesc`.
@@ -64,7 +63,6 @@ pub struct Services {
     pub company: &'static crate::company::Services,
     pub transactions: &'static crate::vehicle_transactions::TransactionServices,
     pub refit: &'static crate::vehicle_transactions::refit::Services,
-    pub objectives: &'static crate::objectives::Services,
     pub(crate) schedule: &'static crate::linkgraph_schedule::Services,
     pub engines: &'static crate::engine_loading::Services,
     pub environment: EnvironmentServices,
@@ -93,7 +91,6 @@ pub struct Services {
     pub change_game_setting: extern "C" fn(*const SettingDesc, i32),
     /// `ChangeValue(&Company::Get(c)->settings, value)`.
     pub change_company_setting: extern "C" fn(*const SettingDesc, CompanyID, i32),
-    pub window_classes_dirty: extern "C" fn(u16),
     /// `ShowErrorMessage(GetEncodedString(id), {}, WL_ERROR)`.
     pub error_message: extern "C" fn(u32),
     pub edges_not_empty: u32,
@@ -200,7 +197,7 @@ fn update_all_service_interval(s: &Services, new_value: i32) {
             }
         });
     }
-    (s.window_classes_dirty)(WC_VEHICLE_DETAILS);
+    set_window_classes_dirty(WindowClass::WC_VEHICLE_DETAILS);
 }
 
 fn can_update_service_interval(s: &Services, new_value: i32) -> bool {
@@ -226,7 +223,7 @@ fn update_service_interval(s: &Services, kind: u8, new_value: i32) {
             });
         }
     }
-    (s.window_classes_dirty)(WC_VEHICLE_DETAILS);
+    set_window_classes_dirty(WindowClass::WC_VEHICLE_DETAILS);
 }
 
 fn default_service_interval(s: &Services, def: i32, kind: u8) -> i32 {
@@ -279,13 +276,13 @@ fn update_consists(s: &Services) {
             }
         }
     });
-    (s.objectives.window_classes)(WC_BUILD_VEHICLE, 0);
+    invalidate_window_classes_data(WindowClass::WC_BUILD_VEHICLE, 0, false);
 }
 
-fn acceleration_windows(s: &Services) {
-    (s.window_classes_dirty)(WC_ENGINE_PREVIEW);
-    (s.objectives.window_classes)(WC_BUILD_VEHICLE, 0);
-    (s.window_classes_dirty)(WC_VEHICLE_DETAILS);
+fn acceleration_windows() {
+    set_window_classes_dirty(WindowClass::WC_ENGINE_PREVIEW);
+    invalidate_window_classes_data(WindowClass::WC_BUILD_VEHICLE, 0, false);
+    set_window_classes_dirty(WindowClass::WC_VEHICLE_DETAILS);
 }
 
 fn train_acceleration_model_changed(s: &Services) {
@@ -300,7 +297,7 @@ fn train_acceleration_model_changed(s: &Services) {
             crate::train::update_acceleration(id);
         }
     });
-    acceleration_windows(s);
+    acceleration_windows();
 }
 
 fn physics(s: &Services) -> &crate::ground_vehicle::Services {
@@ -335,7 +332,7 @@ fn road_acceleration_model_changed(s: &Services) {
             crate::ground_vehicle::cargo_changed(physics(s), v);
         });
     }
-    acceleration_windows(s);
+    acceleration_windows();
 }
 
 fn road_slope_steepness_changed(s: &Services) {
@@ -353,7 +350,7 @@ fn difficulty_noise_change(s: &Services) {
         unsafe { crate::station_cmd::openttd_rust_station_update_airport_noise(commands) };
         // SAFETY: As above.
         if unsafe { s.shared.settings().station_noise.read() } {
-            (s.objectives.window_classes)(WC_TOWN_VIEW, 0);
+            invalidate_window_classes_data(WindowClass::WC_TOWN_VIEW, 0, false);
         }
     }
 }
@@ -514,7 +511,7 @@ fn change_timekeeping_units(s: &Services) {
         #[allow(clippy::cast_possible_truncation)]
         (s.set_minutes_per_year)(true, DEF_MINUTES_PER_YEAR as u16);
     }
-    (s.objectives.window_classes)(WC_GAME_OPTIONS, 0);
+    invalidate_window_classes_data(WindowClass::WC_GAME_OPTIONS, 0, false);
 
     if crate::session::mode() == GameMode::EDITOR {
         hit(witness::SETTINGS_TIMEKEEPING_EDITOR);
@@ -700,12 +697,12 @@ crate::abi::layouts! {
     };
     "OpenTTDSettingRange" ["settings"] => Range { min, max, };
     "OpenTTDSettingServices" ["settings"] => Services {
-        shared, clock, company, transactions, refit, objectives, schedule, engines, environment,
+        shared, clock, company, transactions, refit, schedule, engines, environment,
         client_vehicle_defaults, company_vehicle_defaults, set_service_interval,
         set_service_interval_percent, newgame_minutes_per_year,
         set_minutes_per_year, set_newgame_wallclock, setting, company_setting, setting_current,
         setting_int, setting_editable, change_game_setting, change_company_setting,
-        window_classes_dirty, error_message, edges_not_empty,
+        error_message, edges_not_empty,
         edges_not_water, dynamic_engines_existing_vehicles, too_high_mountain,
     };
 }

@@ -12,6 +12,8 @@ use super::{IndustryControlFlag, IndustryControlFlags, PRODLEVEL_MAXIMUM, PRODLE
 use crate::company_type::{CompanyID, Owner};
 use crate::industry_type::IndustryID;
 use crate::services::ByteSpan;
+use crate::window_func::invalidate_window_data;
+use crate::window_type::{WindowClass, WindowNumber};
 
 #[repr(C)]
 pub struct IndustryCommandServices {
@@ -19,7 +21,6 @@ pub struct IndustryCommandServices {
     pub get: unsafe extern "C" fn(u16) -> *mut ShellHandle,
     pub owner: unsafe extern "C" fn(*mut ShellHandle) -> *mut Industry,
     pub valid_company: unsafe extern "C" fn(u8) -> bool,
-    pub invalidate_view: unsafe extern "C" fn(u16),
 }
 /// `_current_company == OWNER_DEITY`.
 fn deity(s: &IndustryCommandServices) -> bool {
@@ -232,7 +233,12 @@ pub(crate) fn cmd_industry_set_text(
         let owner = unsafe { (s.owner)(ind) };
         unsafe {
             super::set_text(owner, args.text);
-            (s.invalidate_view)(args.ind_id.0);
+            invalidate_window_data(
+                WindowClass::WC_INDUSTRY_VIEW,
+                WindowNumber::from(args.ind_id),
+                0,
+                false,
+            );
         }
     }
     true

@@ -124,23 +124,6 @@ static void *RailNewRear(void *front) noexcept
 	RustWriteVehicleSpriteSequence(u, SPR_IMG_QUERY);
 	return u;
 }
-static void RailHeadWindows(void *shell) noexcept
-{
-	const Vehicle *head = static_cast<Vehicle *>(shell);
-	InvalidateWindowData(WC_VEHICLE_REFIT, head->index, VIWD_CONSIST_CHANGED);
-	SetWindowWidgetDirty(WC_VEHICLE_VIEW, head->index, WID_VV_REFIT);
-}
-static void RailFrontWindows(void *shell) noexcept
-{
-	const Vehicle *src = static_cast<Vehicle *>(shell);
-	CloseWindowById(WC_VEHICLE_VIEW, src->index);
-	CloseWindowById(WC_VEHICLE_ORDERS, src->index);
-	CloseWindowById(WC_VEHICLE_REFIT, src->index);
-	CloseWindowById(WC_VEHICLE_DETAILS, src->index);
-	CloseWindowById(WC_VEHICLE_TIMETABLE, src->index);
-	DeleteNewGRFInspectWindow(GSF_TRAINS, src->index);
-	SetWindowDirty(WC_COMPANY, _current_company);
-}
 static void RailCompanyDirty() noexcept { SetWindowDirty(WC_COMPANY, OpenTTDCurrentCompany()); }
 static void RailDepotChanged(uint32_t tile) noexcept
 {
@@ -161,8 +144,6 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.unit = RustOpaqueVehicleRead<uint16_t, RustVehicleUnitNumber>,
 		.use_unit = RustOpaqueVehicleInvoke<RustVehicleUseUnitNumber, uint16_t>,
 		.release_unit = RustOpaqueVehicleInvoke<RustVehicleReleaseUnitNumber>,
-		.head_windows = RailHeadWindows,
-		.front_windows = RailFrontWindows,
 		.company_dirty = RailCompanyDirty,
 		.depot_changed = RailDepotChanged,
 	};

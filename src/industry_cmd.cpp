@@ -700,10 +700,6 @@ static const OpenTTDIndustryServices _industry_services = {
 		if (i == nullptr) return {};
 		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)};
 	},
-	.industry_sound = [](void *handle, uint32_t index) noexcept {
-		Industry *i = RustIndustry(handle);
-		RustPlayTileSound(RustIndustryTile(handle), GetIndustrySpec(i->type)->random_sounds[index]);
-	},
 	.play_sound = RustPlayTileSoundBySound,
 	.special_effect = [](void *handle, uint32_t random, uint32_t parameter) noexcept -> uint16_t {
 		Industry *i = RustIndustry(handle);
@@ -786,7 +782,6 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 		auto type = SharedTileType(index);
 		return {type == MP_INDUSTRY ? RustIndustryTileIndex(index) : uint16_t{0xFFFF}, static_cast<uint8_t>(type), type == MP_STATION && IsOilRig(tile)};
 	},
-	.delete_tile_inspect = OpenTTDDeleteIndustryTileInspect,
 	.restoration = &GetRustWaterRestorationServices(),
 	.delete_oilrig = [](uint32_t tile) noexcept { DeleteOilRig(TileIndex(tile)); },
 	.clear_docking = [](uint32_t tile) noexcept { ClearDockingTilesCheckingNeighbours(TileIndex(tile)); },
@@ -794,9 +789,6 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.disassociate_field = [](uint32_t tile) noexcept { SetIndustryIndexOfField(TileIndex(tile), IndustryID::Invalid()); },
 	.release_disasters = [](uint16_t industry) noexcept { ReleaseDisastersTargetingIndustry(IndustryID(industry)); },
 	.delete_storage = [](void *shell) noexcept { delete static_cast<Industry *>(shell)->psa; },
-	.close_view = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_VIEW, industry); },
-	.close_production = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_PRODUCTION, industry); },
-	.delete_inspect = OpenTTDDeleteIndustryInspect,
 	.subsidies = RustSubsidyServices,
 	.invalidate_cargo = [](uint16_t industry) noexcept { CargoPacket::InvalidateAllFrom({IndustryID(industry), SourceType::Industry}); },
 	.belongs = [](uint32_t tile, uint16_t industry) noexcept -> bool { return IsTileType(TileIndex(tile), MP_INDUSTRY) && RustIndustryTileIndex(tile) == industry; },
@@ -849,7 +841,6 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 		.set_construction_counter = [](uint32_t tile, uint8_t counter) noexcept { SetIndustryConstructionCounter(TileIndex(tile), counter); },
 		.set_construction_stage = [](uint32_t tile, uint8_t stage) noexcept { SetIndustryConstructionStage(TileIndex(tile), stage); },
 		.translated_gfx = [](uint16_t gfx) noexcept -> uint16_t { return GetTranslatedIndustryTileID(gfx); },
-		.build_window_dirty = []() noexcept { SetWindowDirty(WC_BUILD_INDUSTRY, 0); },
 	};
 	return services;
 }
@@ -888,7 +879,6 @@ static const OpenTTDIndustryCommandServices &GetIndustryCommandServices()
 		.get = IndustryIfValid,
 		.owner = RustIndustryCanonicalOwner<Industry *>,
 		.valid_company = [](uint8_t company) noexcept -> bool { return Company::IsValidID(CompanyID(company)); },
-		.invalidate_view = [](uint16_t id) noexcept { InvalidateWindowData(WC_INDUSTRY_VIEW, IndustryID(id)); },
 	};
 	return services;
 }

@@ -15,6 +15,8 @@ use crate::bitmath_func::gb;
 use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::command_type::DoCommandFlag;
 use crate::company_type::Owner;
+use crate::window_func::set_window_dirty;
+use crate::window_type::{WindowClass, WindowNumber};
 
 use crate::history::update_valid_history_year;
 use crate::history_type::LAST_MONTH;
@@ -82,7 +84,6 @@ pub struct ConstructionServices {
     pub set_construction_counter: unsafe extern "C" fn(u32, u8),
     pub set_construction_stage: unsafe extern "C" fn(u32, u8),
     pub translated_gfx: unsafe extern "C" fn(u16) -> u16,
-    pub build_window_dirty: unsafe extern "C" fn(),
 }
 /// `PopulateStationsNearby`: populate an industry's list of nearby stations, and the
 /// stations' lists of nearby industries.
@@ -521,7 +522,7 @@ pub(crate) unsafe fn do_create_new_industry(
     }
     unsafe {
         (prod.directory_dirty)(super::IndustryDirectoryInvalidateWindowData::IDIWD_FORCE_REBUILD.0);
-        (cons.build_window_dirty)();
+        set_window_dirty(WindowClass::WC_BUILD_INDUSTRY, WindowNumber(0));
     }
     if !(prod.shared().clear_square_services.generating_world)() {
         populate(industry, id, owner, prod, life);

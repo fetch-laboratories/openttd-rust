@@ -388,12 +388,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *front = VehicleOf(handle);
 		front->profit_this_year -= value;
 	},
-	.vehicle_dirty = [](OpenTTDVehicle *handle) noexcept -> void {
-		Vehicle *front = VehicleOf(handle);
-		SetWindowDirty(GetWindowClassForVehicleType(front->GetType()), front->GetOwner());
-		SetWindowDirty(WC_VEHICLE_DETAILS, front->index);
-		front->MarkDirty();
-	},
 	.indicator = [](OpenTTDVehicle *handle) noexcept -> bool {
 		const Vehicle *front = VehicleOf(handle);
 		return _game_mode != GM_MENU && (_settings_client.gui.loading_indicators > (uint)(front->GetOwner() != _local_company && _local_company != COMPANY_SPECTATOR));
@@ -470,12 +464,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.flush_delivery = []() noexcept -> void {
 		openttd_rust_cargo_delivery_flush(GetCargoDeliveryState(), &_cargo_services);
-	},
-	.station_dirty = [](OpenTTDStation *station) noexcept -> void {
-		Station *st = static_cast<Station *>(station);
-		st->MarkTilesDirty(true);
-		SetWindowDirty(WC_STATION_VIEW, st->index);
-		SetWindowDirty(WC_STATION_LIST, st->owner);
 	},
 };
 

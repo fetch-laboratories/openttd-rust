@@ -54,6 +54,8 @@ use crate::vehicle::maintenance;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices, YEAR_TICKS};
 use crate::vehicle_base::VehState;
 use crate::vehicle_type::{DepotCommandFlag, DepotCommandFlags, VehicleID, VehicleType};
+use crate::window_func::{invalidate_window_data, set_window_classes_dirty};
+use crate::window_type::{WindowClass, WindowNumber};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
@@ -334,10 +336,6 @@ pub struct Leaves {
     pub copy_sprite: unsafe extern "C" fn(VehicleRef, VehicleRef),
     /// `GetDirectionTowards`.
     pub direction_towards: unsafe extern "C" fn(Vehicle, i32, i32) -> u8,
-    /// `AircraftLeaveHangar`'s depot and aircraft list windows.
-    pub dirty_depot: unsafe extern "C" fn(Vehicle),
-    /// `OnNewEconomyDay`'s details and aircraft list windows.
-    pub dirty_lists: unsafe extern "C" fn(Vehicle),
     /// `AirportFTA::blocks`.
     pub fta_blocks: unsafe extern "C" fn(*const c_void) -> AirportBlocks,
     /// `AirportFTA::heading`.
@@ -943,7 +941,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
         Self::call(|| unsafe { (self.leaves.subtract_cost)(v, cost) });
 
-        Self::call(|| unsafe { (self.leaves.dirty_lists)(v) });
+        // SAFETY: The base vehicle table names its immutable maintenance table.
+        Self::call(|| (unsafe { &*self.vs.maintenance }.details_dirty)(b));
+        Self::call(|| set_window_classes_dirty(WindowClass::WC_AIRCRAFT_LIST));
     }
 
     /// Original `HelicopterTickHandler`.
@@ -2220,7 +2220,15 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.service_in_depot(v);
         Self::call(|| (self.vs.leave_unbunching_depot)(b));
         self.set_aircraft_position(v, b.x_pos(), b.y_pos(), b.z_pos());
-        Self::call(|| unsafe { (self.leaves.dirty_depot)(v) });
+        Self::call(|| {
+            invalidate_window_data(
+                WindowClass::WC_VEHICLE_DEPOT,
+                WindowNumber::from(b.tile()),
+                0,
+                false,
+            );
+        });
+        Self::call(|| set_window_classes_dirty(WindowClass::WC_AIRCRAFT_LIST));
     }
 
     /* AIRCRAFT MOVEMENT SCHEME */
@@ -3421,8 +3429,6 @@ crate::abi::layouts! {
         airport_width,
         copy_sprite,
         direction_towards,
-        dirty_depot,
-        dirty_lists,
         fta_blocks,
         fta_heading,
         fta_next,

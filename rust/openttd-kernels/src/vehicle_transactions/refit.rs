@@ -10,7 +10,10 @@ use crate::engine_type::EngineID;
 use crate::game_state::GameState;
 use crate::services::{CommandCost, ExpenseType};
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
+use crate::vehicle_gui::get_window_class_for_vehicle_type;
 use crate::vehicle_type::VehicleID;
+use crate::window_func::{invalidate_window_classes_data, invalidate_window_data};
+use crate::window_type::{WindowClass, WindowNumber};
 use std::ptr;
 
 #[repr(C)]
@@ -68,8 +71,6 @@ pub struct Services {
     pub invalidate_chain: extern "C" fn(*mut OpenTTDVehicle),
     pub road_state: extern "C" fn(*mut OpenTTDVehicle) -> *mut crate::road::State,
     pub aircraft_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::aircraft::Vehicle,
-    pub details_ui: extern "C" fn(*mut OpenTTDVehicle),
-    pub lists_ui: extern "C" fn(u8),
 }
 // Canonical vehicle-table slots for refit callers; no refit copy is bound.
 impl Services {
@@ -766,12 +767,17 @@ pub(crate) unsafe fn cmd_refit_vehicle(
             vehicle_ref(front, s.common.vehicles)
         });
         if !free_wagon {
-            (s.details_ui)(
-                unsafe { super::vehicle_ref(front, s.common.vehicles) }
-                    .0
-                    .as_ptr(),
+            invalidate_window_data(
+                WindowClass::WC_VEHICLE_DETAILS,
+                WindowNumber::from(VehicleID(unsafe { (b.groups.vehicle_id)(front) })),
+                0,
+                false,
             );
-            (s.lists_ui)(crate::fleet::record(b.groups, v).vehicle_type().0);
+            invalidate_window_classes_data(
+                get_window_class_for_vehicle_type(crate::fleet::record(b.groups, v).vehicle_type()),
+                0,
+                false,
+            );
         }
         unsafe {
             (b.groups.depot_dirty)(front);
@@ -831,6 +837,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, road_state, aircraft_handle, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, road_state, aircraft_handle,
     };
 }

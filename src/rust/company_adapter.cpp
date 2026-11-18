@@ -93,7 +93,6 @@ static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63 && MAX_HISTORY_QUARTERS =
 static_assert(CompanyID::Invalid().base() == 255 && OWNER_NONE.base() == 16 && OWNER_DEITY.base() == 18 && CRR_END == 3);
 static_assert(CalendarTime::ORIGINAL_BASE_YEAR.base() == 1920 && CalendarTime::ORIGINAL_MAX_YEAR.base() == 2090);
 static_assert(DESTTYPE_TEAM == 1 && OWNER_END.base() == 19 && NETWORK_PUBLIC_KEY_LENGTH == 65 && CALCA_ADD == 0 && CALCA_REMOVE == 1);
-static_assert(WC_COMPANY == 51 && WC_SIGN_LIST == 36 && WC_COMPANY_COLOUR == 28 && WC_SEND_NETWORK_MSG == 72 && WC_CLIENT_LIST == 68);
 static_assert(RATING_INITIAL == 500 && VEH_TRAIN == 0 && VEH_ROAD == 1 && VEH_SHIP == 2 && VEH_AIRCRAFT == 3);
 
 /** Next pool item at or after @p from whose owner field is @p owner. */

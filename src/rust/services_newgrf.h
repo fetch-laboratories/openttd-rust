@@ -177,10 +177,6 @@ inline bool RustHouseConvert8bitBoolean(uint16_t house, uint16_t callback, uint1
 inline void RustCloseNewGRFInspect(GrfSpecFeature feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(feature, index); }
 /* Typed adapters retain the existing per-component table signatures. */
 inline void OpenTTDDeleteRailInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_RAILTYPES, tile); }
-inline void OpenTTDDeleteHouseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_HOUSES, tile); }
-inline void OpenTTDDeleteIndustryTileInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_INDUSTRYTILES, tile); }
-inline void OpenTTDDeleteTownInspect(uint16_t town) noexcept { RustCloseNewGRFInspect(GSF_FAKE_TOWNS, town); }
-inline void OpenTTDDeleteIndustryInspect(uint16_t industry) noexcept { RustCloseNewGRFInspect(GSF_INDUSTRIES, industry); }
 inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
 template <typename Spec, typename Handle>
 inline void RustSpecCallbackError(const Handle *handle, uint16_t callback, uint16_t result) noexcept

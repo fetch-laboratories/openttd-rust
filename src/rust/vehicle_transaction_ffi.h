@@ -26,7 +26,6 @@ struct OpenTTDVehicleTransactionServices {
 	OpenTTDByteSpan (*name)(void *) noexcept OPENTTD_SERVICE_DEFAULT(name);
 	void (*clear_name)(void *) noexcept OPENTTD_SERVICE_DEFAULT(clear_name);
 	void (*set_name)(void *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
-	void (*name_dirty)(void *) noexcept OPENTTD_SERVICE_DEFAULT(name_dirty);
 	uint16_t (*interval_clamp)(int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(interval_clamp);
 	void (*set_interval)(void *, uint16_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_interval);
 	uint32_t unique_name;
@@ -58,7 +57,6 @@ struct OpenTTDVehicleCommonServices {
 	OpenTTDVehicleTransactionStrings strings;
 	OpenTTDAircraftStartState (*aircraft_start)(void *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_start);
 	uint32_t (*grf_string)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_string);
-	void (*startstop_ui)(void *) noexcept OPENTTD_SERVICE_DEFAULT(startstop_ui);
 	int64_t (*value)(void *) noexcept OPENTTD_SERVICE_DEFAULT(value);
 	bool (*valid_cargo)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_cargo);
 };

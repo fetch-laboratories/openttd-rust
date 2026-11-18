@@ -86,7 +86,6 @@ struct OpenTTDStationCommandServices {
 	void (*virtual_coord)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(virtual_coord);
 	void (*catchment_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(catchment_dirty);
 	void (*facility_widget)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(facility_widget);
-	void (*select_invalidate)() noexcept OPENTTD_SERVICE_DEFAULT(select_invalidate);
 	bool (*station_available)() noexcept OPENTTD_SERVICE_DEFAULT(station_available);
 	BaseStation *(*new_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_station);
 	void (*set_town)(BaseStation *, const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
@@ -96,7 +95,6 @@ struct OpenTTDStationCommandServices {
 	bool (*name_equals)(BaseStation *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(name_equals);
 	void (*set_name)(BaseStation *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
 	void (*flip_airport_closed)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(flip_airport_closed);
-	void (*closed_widget)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(closed_widget);
 	bool (*distant_join)() noexcept OPENTTD_SERVICE_DEFAULT(distant_join);
 	const OpenTTDStationAssociationServices *rail_association;
 	OpenTTDRailStationSpecInfo (*rail_spec_info)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_info);
@@ -117,7 +115,6 @@ struct OpenTTDStationCommandServices {
 	size_t (*tile_flag_count)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_flag_count);
 	uint8_t (*tile_flags)(const StationSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_flags);
 	void (*set_tile_flags)(uint32_t, bool, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_flags);
-	void (*mark_tiles)(BaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(mark_tiles);
 	void (*reset_facilities)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_facilities);
 	void (*orders_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(orders_dirty);
 	const OpenTTDVehicleServices *vehicle;
@@ -171,11 +168,8 @@ struct OpenTTDStationCommandServices {
 	OpenTTDAircraftVehicle (*aircraft_vehicle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_vehicle);
 	uint32_t (*hangar_count)(BaseStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_count);
 	uint32_t (*hangar_tile)(const BaseStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);
-	void (*close_hangar)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_hangar);
-	void (*close_airport_tile_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_airport_tile_inspect);
 	void (*delete_airport_storage)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_airport_storage);
 	void (*clear_airport)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear_airport);
-	void (*close_airport_inspect)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(close_airport_inspect);
 	const OpenTTDShipLeaves *ship;
 	const OpenTTDClearServices *clear;
 	const OpenTTDWaterRestorationServices *restoration;

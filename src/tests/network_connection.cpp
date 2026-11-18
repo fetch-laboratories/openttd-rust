@@ -60,7 +60,6 @@ TEST_CASE("Network map load - recorded exception stops cleanup and reaches nativ
 	client.map_exists = [](void *) noexcept { return true; };
 	uint8_t join_status = 0;
 	client.join_status = &join_status;
-	client.dirty_join = []() noexcept {};
 	client.map_load_prepare = [](void *, OpenTTDSessionLoad *) noexcept {};
 	auto session = GetRustSessionServices();
 	session.load = [](OpenTTDSessionFrame *frame, OpenTTDSessionLoad *) noexcept {
@@ -329,7 +328,6 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		dispatch.server_rcon = [](OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *frame) noexcept -> uint8_t { SessionException(frame, [] { throw 574; }); return NETWORK_RECV_STATUS_OKAY; };
 		dispatch.packet_end = [](OpenTTDSessionFrame *frame) noexcept { frame->packet_load.reset(); frame->packet_text.reset(); dispatch_ended = true; };
 		OpenTTDNetworkClientServices client{};
-		client.dirty_join = []() noexcept {};
 		uint8_t join_status = 0, waiting = 17;
 		client.join_status = &join_status;
 		client.join_waiting = &waiting;

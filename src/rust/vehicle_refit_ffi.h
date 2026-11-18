@@ -41,8 +41,6 @@ struct OpenTTDVehicleRefitServices {
 	void (*invalidate_chain)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_chain);
 	OpenTTDRoadState *(*road_state)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_state);
 	OpenTTDAircraftVehicle (*aircraft_handle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_handle);
-	void (*details_ui)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(details_ui);
-	void (*lists_ui)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(lists_ui);
 };
 struct OpenTTDVehicleArticulatedServices {
 	const OpenTTDVehicleRefitServices *refit;
@@ -95,8 +93,6 @@ struct OpenTTDRailConstructionServices {
 	uint16_t (*unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unit);
 	void (*use_unit)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(use_unit);
 	void (*release_unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(release_unit);
-	void (*head_windows)(void *) noexcept OPENTTD_SERVICE_DEFAULT(head_windows);
-	void (*front_windows)(void *) noexcept OPENTTD_SERVICE_DEFAULT(front_windows);
 	void (*company_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_dirty);
 	void (*depot_changed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_changed);
 };

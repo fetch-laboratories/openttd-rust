@@ -2931,8 +2931,20 @@ pub unsafe extern "C" fn openttd_rust_backup_tile_clear(
     from_gui: u8,
     leaves: &'static Leaves,
 ) -> u64 {
+    order_backup_reset(leaves, crate::tile_type::TileIndex(tile), from_gui != 0);
+    0
+}
+
+/// `OrderBackup::Reset(t, from_gui)`: reset the order backups of the tile from GUI/game
+/// logic; `from_gui` says whether the call came from the GUI, i.e. whether it must be
+/// synced over the network.
+pub(crate) fn order_backup_reset(
+    leaves: &'static Leaves,
+    t: crate::tile_type::TileIndex,
+    from_gui: bool,
+) {
     let control = Control { g: Game(leaves) };
-    control.backup_tile_clear(u64::from(tile), u64::from(from_gui))
+    control.backup_tile_clear(u64::from(t.0), u64::from(from_gui));
 }
 
 #[unsafe(no_mangle)]

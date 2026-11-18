@@ -20,7 +20,6 @@
 #include "signs_cmd.h"
 #include "rust/command_cost_services.h"
 #include "rust/services_ffi.h"
-#include "rust/services_objectives.h"
 #include "rust/signs_ffi.h"
 
 #include "table/strings.h"
@@ -36,7 +35,7 @@ static uint16_t RustSignPlace(uint8_t owner, int32_t x, int32_t y, int32_t z, Op
 	Sign *si = new Sign(CompanyID(owner), x, y, z, RustText(text));
 
 	si->UpdateVirtCoord();
-	GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, 0);
+	InvalidateWindowData(WC_SIGN_LIST, 0, 0);
 	return si->index.base();
 }
 
@@ -46,7 +45,7 @@ static void RustSignRename(Sign *si, uint8_t owner, OpenTTDByteSpan text) noexce
 	si->owner = CompanyID(owner);
 
 	si->UpdateVirtCoord();
-	GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, 1);
+	InvalidateWindowData(WC_SIGN_LIST, 0, 1);
 }
 
 static void RustSignRelocate(Sign *si, uint8_t owner, int32_t x, int32_t y, int32_t z) noexcept
@@ -65,7 +64,7 @@ static void RustSignRemove(Sign *si) noexcept
 	if (si->sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeSign(si->index));
 	delete si;
 
-	GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, 0);
+	InvalidateWindowData(WC_SIGN_LIST, 0, 0);
 }
 
 const OpenTTDSignServices &GetRustSignServices() noexcept

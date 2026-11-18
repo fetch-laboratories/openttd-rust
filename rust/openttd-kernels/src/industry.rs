@@ -490,7 +490,6 @@ pub struct Change {
 pub struct Services {
     pub shared: *const crate::services::Services,
     pub next_tick: unsafe extern "C" fn(u32) -> Entry,
-    pub industry_sound: unsafe extern "C" fn(*mut c_void, u32),
     pub play_sound: unsafe extern "C" fn(u16, u32),
     pub special_effect: unsafe extern "C" fn(*mut c_void, u32, u32) -> u16,
     pub tick_trigger: unsafe extern "C" fn(*mut c_void),
@@ -777,7 +776,9 @@ fn produce_industry_goods(entry: Entry, svc: &Services, builder: *mut Builder) {
                 })
             {
                 // Play sound since last month had production
-                unsafe { (svc.industry_sound)(i, ((r >> 16) * u32::from(sounds)) >> 16) };
+                let index = (((r >> 16) * u32::from(sounds)) >> 16) as usize;
+                let sound = SoundFx(unsafe { (&(*spec_of(owner)).random_sounds)[index] });
+                unsafe { (svc.play_sound)(u16::from(sound.0), (*owner).metadata.tile) };
             }
         }
     }
@@ -2688,7 +2689,6 @@ crate::abi::layouts! {
         get,
         owner,
         valid_company,
-        invalidate_view,
     };
     "OpenTTDIndustryTileAcceptance" ["industry"] => crate::industry::TileAcceptance {
         cargo,
@@ -2756,7 +2756,6 @@ crate::abi::layouts! {
         set_construction_counter,
         set_construction_stage,
         translated_gfx,
-        build_window_dirty,
     };
     "OpenTTDIndustryGenerationServices" ["industry"] => crate::industry::GenerationServices {
         environment,
@@ -2802,7 +2801,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryLifecycleServices" ["industry"] => crate::industry::LifecycleServices {
         neutral_station,
         cleanup_tile,
-        delete_tile_inspect,
         restoration,
         delete_oilrig,
         clear_docking,
@@ -2810,9 +2808,6 @@ crate::abi::layouts! {
         disassociate_field,
         release_disasters,
         delete_storage,
-        close_view,
-        close_production,
-        delete_inspect,
         subsidies,
         invalidate_cargo,
         belongs,
@@ -2868,7 +2863,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryServices" ["industry"] => Services {
         shared,
         next_tick,
-        industry_sound,
         play_sound,
         special_effect,
         tick_trigger,
@@ -3110,9 +3104,6 @@ mod production_policy_tests {
     extern "C" fn unexpected_next_tick(_: u32) -> Entry {
         unreachable!("unexpected Services::next_tick")
     }
-    extern "C" fn unexpected_industry_sound(_: *mut c_void, _: u32) {
-        unreachable!("unexpected Services::industry_sound")
-    }
     extern "C" fn unexpected_play_sound(_: u16, _: u32) {
         unreachable!("unexpected Services::play_sound")
     }
@@ -3171,7 +3162,6 @@ mod production_policy_tests {
         Services {
             shared,
             next_tick: unexpected_next_tick,
-            industry_sound: unexpected_industry_sound,
             play_sound: unexpected_play_sound,
             special_effect: unexpected_special_effect,
             tick_trigger: unexpected_tick_trigger,

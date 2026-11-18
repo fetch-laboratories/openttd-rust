@@ -13,7 +13,6 @@ struct OpenTTDNetworkClientServices {
 	bool (*check_grf)(uint32_t, const uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(check_grf);
 	OpenTTDByteSpan (*client_name)() noexcept OPENTTD_SERVICE_DEFAULT(client_name);
 	void (*delete_info)(void *) noexcept OPENTTD_SERVICE_DEFAULT(delete_info);
-	void (*dirty_join)() noexcept OPENTTD_SERVICE_DEFAULT(dirty_join);
 	void (*emergency_save)() noexcept OPENTTD_SERVICE_DEFAULT(emergency_save);
 	void (*enable_encryption)(void *, OpenTTDAuthStream *, OpenTTDAuthStream *) noexcept OPENTTD_SERVICE_DEFAULT(enable_encryption);
 	void (*enter_multiplayer)() noexcept OPENTTD_SERVICE_DEFAULT(enter_multiplayer);

@@ -73,7 +73,6 @@ struct OpenTTDHouseServices {
 	void (*set_random_triggers)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_random_triggers);
 	void (*set_type)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_type);
 
-	void (*delete_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_inspect);
 	const GRFFile *(*cargo_file)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_file);
 	bool (*convert_8bit)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_8bit);
 

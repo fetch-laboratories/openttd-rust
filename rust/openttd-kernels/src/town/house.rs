@@ -27,9 +27,11 @@ use crate::house::{
 use crate::house_type::{HouseID, HouseRandomTrigger, HouseRandomTriggers};
 use crate::landscape_type::LandscapeType;
 use crate::map_type::TileIndexDiff;
+use crate::newgrf::GrfSpecFeature;
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CALLBACK_HOUSEPRODCARGO_END, CallbackID, HouseCallbackMask, HouseCallbackMasks,
 };
+use crate::newgrf_debug::delete_newgrf_inspect_window;
 use crate::random_func::chance16_i;
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle,
@@ -212,7 +214,6 @@ pub struct HouseServices {
     pub set_random_triggers: extern "C" fn(u32, u8),
     pub set_type: extern "C" fn(u32, u16),
 
-    pub delete_inspect: extern "C" fn(u32),
     pub cargo_file: extern "C" fn(u16) -> *const std::ffi::c_void,
     pub convert_8bit: extern "C" fn(u16, u16, u16) -> bool,
 
@@ -468,7 +469,7 @@ impl<'a> House<'a> {
         // SAFETY: Live owner; count access ends before the map services below.
         unsafe { super::decrease_building(town.state, house, class) };
         crate::ground::do_clear_square(tile, self.s);
-        (self.h.delete_inspect)(tile.0);
+        delete_newgrf_inspect_window(GrfSpecFeature::GSF_HOUSES, tile.0);
     }
     /// `ClearTownHouse`: population, counts and flags precede the footprint.
     fn clear_town_house(&self, town: TownRef, tile: TileIndex, mut house: HouseID) {
@@ -1914,8 +1915,6 @@ crate::abi::layouts! {
         set_random_bits,
         set_random_triggers,
         set_type,
-
-        delete_inspect,
         cargo_file,
         convert_8bit,
 

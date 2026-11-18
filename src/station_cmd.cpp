@@ -305,10 +305,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.station_list_invalidation = RustStationListInvalidation,
 
 
-	.waiting_redraw = [](OpenTTDBaseStation *handle) noexcept -> void {
-		SetWindowDirty(WC_STATION_VIEW, static_cast<BaseStation *>(handle)->index);
-		RustStationMarkTilesDirty(static_cast<BaseStation *>(handle), true);
-	},
+	.mark_tiles = [](OpenTTDBaseStation *handle, bool cargo_change) noexcept { RustStationMarkTilesDirty(static_cast<BaseStation *>(handle), cargo_change); },
 	.cargo_registry = &GetRustCargoRegistryServices(),
 	.with_truncation = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount, void *context, OpenTTDStationScope body) noexcept {
 		RustStationTruncation result;

@@ -28,9 +28,7 @@ struct OpenTTDTownCommandServices {
 	bool (*exclusive_rights)() noexcept OPENTTD_SERVICE_DEFAULT(exclusive_rights);
 	bool (*bribe)() noexcept OPENTTD_SERVICE_DEFAULT(bribe);
 	void (*invalidate_view)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_view);
-	void (*invalidate_authority)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_authority);
 	const OpenTTDClockServices *clock;
-	void (*station_views_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(station_views_dirty);
 	OpenTTDTownStationCursor (*next_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
 	const OpenTTDTownHandle *(*station_town)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
 	uint8_t (*station_owner)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
@@ -48,12 +46,9 @@ struct OpenTTDTownCommandServices {
 	void (*remove_town_sign)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(remove_town_sign);
 	void (*delete_town)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(delete_town);
 	bool (*cleaning_pool)() noexcept OPENTTD_SERVICE_DEFAULT(cleaning_pool);
-	void (*close_view)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(close_view);
-	void (*close_graph)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(close_graph);
 	size_t (*storage_count)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(storage_count);
 	void (*delete_storage)(Town *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_storage);
 	void (*clear_storage)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(clear_storage);
-	void (*delete_inspect)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_inspect);
 	bool assertions;
 	uint32_t too_many_objects, no_statue_place;
 };

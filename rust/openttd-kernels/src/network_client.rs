@@ -14,6 +14,8 @@ use crate::network_type::{ClientID, NetworkErrorCode, NetworkRecvStatus};
 use crate::openttd::{GameMode, SwitchMode};
 use crate::packet::{self, State as PacketState};
 use crate::tcp_game::PacketGameType;
+use crate::window_func::{invalidate_window_data, set_window_dirty};
+use crate::window_type::{WN_NETWORK_STATUS_WINDOW_JOIN, WindowClass, WindowNumber};
 use std::ffi::c_void;
 #[repr(C)]
 pub struct Services {
@@ -23,7 +25,6 @@ pub struct Services {
     pub check_grf: extern "C" fn(u32, *const u8) -> bool,
     pub client_name: extern "C" fn() -> crate::services::ByteSpan,
     pub delete_info: extern "C" fn(*mut c_void),
-    pub dirty_join: extern "C" fn(),
     pub emergency_save: extern "C" fn(),
     pub enable_encryption:
         extern "C" fn(*mut c_void, *mut crate::auth::Stream, *mut crate::auth::Stream),
@@ -64,7 +65,6 @@ crate::abi::layouts! {
         check_grf,
         client_name,
         delete_info,
-        dirty_join,
         emergency_save,
         enable_encryption,
         enter_multiplayer,
@@ -148,10 +148,6 @@ fn own_client_id(s: &Services) -> ClientID {
 fn set_own_client_id(s: &Services, client_id: ClientID) {
     unsafe { s.own_client_id.write(client_id.0) };
 }
-/// Native `SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN)`.
-fn set_join_window_dirty(s: &Services) {
-    (s.dirty_join)();
-}
 /// A packet of `kind` with no payload, sent to the server.
 fn send_empty(f: &FrameServices, kind: PacketGameType) -> NetworkRecvStatus {
     let my_client = (f.client_game)();
@@ -169,7 +165,10 @@ pub(crate) fn send_join(s: &Services, f: &FrameServices) -> NetworkRecvStatus {
     set_status(my_client, ServerStatus::STATUS_JOIN);
     debug!(net, 9, "Client::join_status = AUTHORIZING");
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_AUTHORIZING);
-    set_join_window_dirty(s);
+    set_window_dirty(
+        WindowClass::WC_NETWORK_STATUS_WINDOW,
+        WN_NETWORK_STATUS_WINDOW_JOIN,
+    );
 
     let mut p = packet_new(f, my_client, PacketGameType::PACKET_CLIENT_JOIN);
     packet_send_string(f, &mut p, (s.revision)());
@@ -371,7 +370,10 @@ pub(crate) fn receive_server_wait(
     debug!(net, 9, "Client::join_status = WAITING");
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_WAITING);
     unsafe { s.join_waiting.write(packet::recv_uint8(p, f.packet)) };
-    set_join_window_dirty(s);
+    set_window_dirty(
+        WindowClass::WC_NETWORK_STATUS_WINDOW,
+        WN_NETWORK_STATUS_WINDOW_JOIN,
+    );
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
@@ -412,7 +414,10 @@ pub(crate) fn receive_server_map_begin(
 
     debug!(net, 9, "Client::join_status = DOWNLOADING");
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_DOWNLOADING);
-    set_join_window_dirty(s);
+    set_window_dirty(
+        WindowClass::WC_NETWORK_STATUS_WINDOW,
+        WN_NETWORK_STATUS_WINDOW_JOIN,
+    );
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
@@ -432,7 +437,10 @@ pub(crate) fn receive_server_map_size(
     }
 
     unsafe { s.join_bytes_total.write(packet::recv_uint32(p, f.packet)) };
-    set_join_window_dirty(s);
+    set_window_dirty(
+        WindowClass::WC_NETWORK_STATUS_WINDOW,
+        WN_NETWORK_STATUS_WINDOW_JOIN,
+    );
 
     debug!(
         net,
@@ -469,7 +477,10 @@ pub(crate) fn receive_server_map_data(
         (*p).transfer_commit(size as isize);
         s.join_bytes.write(total);
     }
-    set_join_window_dirty(s);
+    set_window_dirty(
+        WindowClass::WC_NETWORK_STATUS_WINDOW,
+        WN_NETWORK_STATUS_WINDOW_JOIN,
+    );
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
@@ -495,7 +506,10 @@ pub(crate) fn receive_server_map_done(
 
     debug!(net, 9, "Client::join_status = PROCESSING");
     set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_PROCESSING);
-    set_join_window_dirty(s);
+    set_window_dirty(
+        WindowClass::WC_NETWORK_STATUS_WINDOW,
+        WN_NETWORK_STATUS_WINDOW_JOIN,
+    );
 
     /* The map is done downloading, load it */
     /* Set the abstract filetype. This is read during savegame load. */
@@ -594,7 +608,7 @@ pub(crate) fn receive_server_error_quit(
         (s.delete_info)(ci);
     }
 
-    ((f.command.company.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
+    invalidate_window_data(WindowClass::WC_CLIENT_LIST, WindowNumber(0), 0, false);
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
@@ -628,7 +642,7 @@ pub(crate) fn receive_server_quit(
         (s.delete_info)(ci);
     }
 
-    ((f.command.company.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
+    invalidate_window_data(WindowClass::WC_CLIENT_LIST, WindowNumber(0), 0, false);
 
     /* If we come here it means we could not locate the client.. strange :s */
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
@@ -657,7 +671,7 @@ pub(crate) fn receive_server_join(
         (s.join)(ci);
     }
 
-    ((f.command.company.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
+    invalidate_window_data(WindowClass::WC_CLIENT_LIST, WindowNumber(0), 0, false);
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
