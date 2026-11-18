@@ -1033,18 +1033,6 @@ bool ProcessOrders(Vehicle *v)
 	return openttd_rust_process_orders(v, &GetRustOrdersLeaves()) != 0;
 }
 
-/**
- * Check whether the given vehicle should stop at the given station
- * based on this order and the non-stop settings.
- * @param v       the vehicle that might be stopping.
- * @param station the station to stop at.
- * @return true if the vehicle should stop.
- */
-bool Order::ShouldStopAtStation(const Vehicle *v, StationID station) const
-{
-	return openttd_rust_order_should_stop(const_cast<Order *>(this), v->GetLastStationVisited().base(), station.base()) != 0;
-}
-
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDOrdersLeaves.hpp"
 bool CheckAbi_order_cmd() { return AbiServicesComplete(_rust_orders_leaves); }

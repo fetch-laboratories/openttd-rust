@@ -56,6 +56,35 @@ class OrphanTests(unittest.TestCase):
             },
         )
 
+    def test_kept_fixture_exports_leave_with_their_fixture(self) -> None:
+        files = {
+            "rust/lib.rs": export("kept") + export("unlisted"),
+            "src/rust/ffi.h": "void openttd_rust_kept();\nvoid openttd_rust_unlisted();\n",
+            "src/tests/kept.cpp": "void Test() { openttd_rust_kept(); }",
+            "src/tests/other.cpp": "void Test() { openttd_rust_unlisted(); }",
+        }
+        kept = ORPHANS.kept_fixtures(
+            "# comment\nopenttd_rust_kept | src/tests/kept.cpp | #725\n"
+        )
+        self.assertEqual(
+            ORPHANS.violations(files, kept=kept),
+            {"no production user | openttd_rust_unlisted"},
+        )
+        files["src/tests/kept.cpp"] = "// openttd_rust_kept();\nvoid Test() {}"
+        self.assertEqual(
+            ORPHANS.violations(files, kept=kept),
+            {
+                "no production user | openttd_rust_kept",
+                "no production user | openttd_rust_unlisted",
+                "kept fixture no longer names its export | openttd_rust_kept",
+            },
+        )
+        unowned = ORPHANS.kept_fixtures("openttd_rust_kept | src/tests/kept.cpp | later\n")
+        self.assertIn(
+            "kept fixture row names no owner issue | openttd_rust_kept",
+            ORPHANS.violations(files, kept=unowned),
+        )
+
     def test_uncalled_free_functions_and_the_exports_they_hold(self) -> None:
         files = {
             "src/rust/ffi.h": "uint8_t openttd_rust_dead(uint32_t);\n"

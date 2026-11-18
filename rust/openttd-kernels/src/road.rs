@@ -530,19 +530,6 @@ impl<'a> Game<'a> {
     fn has_tile_any_road_type(&self, tile: TileIndex, types: u64) -> bool {
         crate::road_map::has_tile_any_road_type(&self.world(), tile.0, types)
     }
-    /// `GetAnyRoadBits(tile, rtt, straight_tunnel_bridge_entrance)`.
-    fn get_any_road_bits(
-        &self,
-        tile: TileIndex,
-        rtt: RoadTramType,
-        straight_tunnel_bridge_entrance: bool,
-    ) -> RoadBits {
-        RoadBits((self.ss.road_bits)(
-            tile.0,
-            u8::from(rtt.0),
-            straight_tunnel_bridge_entrance,
-        ))
-    }
     /// `IsTileType(tile, type)`.
     fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
         self.world().kind(tile) == kind
@@ -580,10 +567,6 @@ impl<'a> Game<'a> {
             new_tile,
             update_delta,
         )
-    }
-    /// `v->UpdateViewport(force_update, update_delta)`.
-    fn update_viewport(&self, v: VehicleRef, force_update: bool, update_delta: bool) {
-        (self.gs.physics.viewport)(v, force_update, update_delta);
     }
     /// `VehicleEnterTile(v, tile, x, y)`.
     fn vehicle_enter_tile(
@@ -840,7 +823,7 @@ impl<'a> Game<'a> {
                 DELTA[(r & 3) as usize],
                 self.check(),
             ));
-            self.update_viewport(v, true, true);
+            (self.gs.physics.viewport)(v, true, true);
             part = v.next();
         }
     }
@@ -1474,7 +1457,11 @@ impl<'a> Game<'a> {
                 if road_type_is_tram(self.roadtype(v.v)) {
                     /* Trams may only reverse on a tile if it contains at least the straight
                      * trackbits or when it is a valid turning tile (i.e. one roadbit) */
-                    let rb = self.get_any_road_bits(tile, RoadTramType::RTT_TRAM, false);
+                    let rb = RoadBits((self.ss.road_bits)(
+                        tile.0,
+                        u8::from(RoadTramType::RTT_TRAM.0),
+                        false,
+                    ));
                     let straight = crate::road_func::axis_to_road_bits(
                         diag_dir_to_axis(enterdir, self.check()),
                         self.check(),
@@ -1717,9 +1704,12 @@ impl<'a> Game<'a> {
         let required = REQUIRED_ROADBITS[usize::from(dir.0 & 0x07)];
 
         if (required.0
-            & self
-                .get_any_road_bits(tile, get_road_tram_type(self.roadtype(v.v)), true)
-                .0)
+            & RoadBits((self.ss.road_bits)(
+                tile.0,
+                u8::from(get_road_tram_type(self.roadtype(v.v)).0),
+                true,
+            ))
+            .0)
             == RoadBits::ROAD_NONE.0
         {
             dir = Trackdir::INVALID_TRACKDIR;
@@ -1929,9 +1919,12 @@ impl<'a> Game<'a> {
                                 needed,
                             )
                             || ((!needed.0
-                                & self
-                                    .get_any_road_bits(v.v.tile(), RoadTramType::RTT_TRAM, false)
-                                    .0)
+                                & RoadBits((self.ss.road_bits)(
+                                    v.v.tile().0,
+                                    u8::from(RoadTramType::RTT_TRAM.0),
+                                    false,
+                                ))
+                                .0)
                                 == RoadBits::ROAD_NONE.0)
                         {
                             /*
@@ -2075,8 +2068,12 @@ impl<'a> Game<'a> {
             if road_type_is_tram(self.roadtype(v.v))
                 && !self.is_road_depot_tile(v.v.tile())
                 && crate::bitmath_func::has_exactly_one_bit(
-                    self.get_any_road_bits(v.v.tile(), RoadTramType::RTT_TRAM, true)
-                        .0,
+                    RoadBits((self.ss.road_bits)(
+                        v.v.tile().0,
+                        u8::from(RoadTramType::RTT_TRAM.0),
+                        true,
+                    ))
+                    .0,
                 )
             {
                 /*
@@ -2245,7 +2242,7 @@ impl<'a> Game<'a> {
              * A vehicle has to spend at least 9 frames on a tile, so the following articulated part can follow.
              * (The following part may only be one tile behind, and the front part is moved before the following ones.)
              * The short (inner) curve has 8 frames, this elongates it to 10. */
-            self.update_viewport(v.v, true, true);
+            (self.gs.physics.viewport)(v.v, true, true);
             return true;
         }
 
@@ -2468,7 +2465,7 @@ impl<'a> Game<'a> {
         let mut part = Some(v.v);
         while let Some(u) = part {
             if !u.vehstatus().test(VehState::Hidden) {
-                self.update_viewport(u, false, false);
+                (self.gs.physics.viewport)(u, false, false);
             }
             part = u.next();
         }

@@ -167,7 +167,6 @@ uint32_t openttd_rust_order_refit(void *, uint8_t);
 uint32_t openttd_rust_order_equals(void *, const void *);
 uint32_t openttd_rust_order_assign(void *, const void *);
 uint32_t openttd_rust_order_convert(void *);
-uint32_t openttd_rust_order_should_stop(void *, uint16_t, uint16_t);
 uint32_t openttd_rust_timetable_change(void *, uint8_t, uint8_t, uint8_t, uint16_t, void *, const OpenTTDOrdersLeaves *);
 uint32_t openttd_rust_timetable_on_time(void *, uint8_t, uint8_t, void *, const OpenTTDOrdersLeaves *);
 uint32_t openttd_rust_timetable_start(void *, uint8_t, uint8_t, uint64_t, void *, const OpenTTDOrdersLeaves *);

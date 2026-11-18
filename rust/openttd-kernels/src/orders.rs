@@ -2341,18 +2341,6 @@ pub(crate) fn should_stop_at_station(
             OrderNonStopFlag::NoIntermediate
         })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_should_stop(
-    p: *mut Order,
-    last_station: u16,
-    station: u16,
-) -> u32 {
-    u32::from(should_stop_at_station(
-        p,
-        StationID(last_station),
-        StationID(station),
-    ))
-}
 
 struct Control {
     g: Game,
