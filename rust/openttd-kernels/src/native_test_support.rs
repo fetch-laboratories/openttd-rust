@@ -28,6 +28,7 @@ use crate::map_func::{MapStatics, TileTypeAccess, World};
 use crate::movement::native_test_support::{MapLeafOracle, map_read_probe};
 use crate::pbs::Pbs;
 use crate::rail_type::RailTypes;
+use crate::road_type::RoadBits;
 use crate::services::Services;
 use crate::station::{BaseStation, get_platform_length, get_platform_length_in_direction};
 use crate::tile_map::{get_tile_z, get_tropic_zone};
@@ -58,10 +59,16 @@ pub unsafe extern "C" fn openttd_test_linkgraph_edge_update(
     capacity: u32,
     usage: u32,
     time: u32,
-    modes: crate::linkgraph_type::EdgeUpdateModes,
+    modes: u8,
 ) {
     let date = crate::timer_game_common::economy_date().0;
-    unsafe { &mut *edge }.update(capacity, usage, time, modes, date);
+    unsafe { &mut *edge }.update(
+        capacity,
+        usage,
+        time,
+        crate::linkgraph_type::EdgeUpdateModes(modes),
+        date,
+    );
 }
 /// `Edge::Restrict`.
 #[unsafe(no_mangle)]
@@ -413,19 +420,17 @@ pub extern "C" fn openttd_test_snow_line_highest(s: &Services) -> u8 {
 
 /// `CleanUpRoadBits` over a town's planned road bits.
 #[unsafe(no_mangle)]
-#[allow(clippy::cast_possible_truncation)] // Native uint32 town plans narrow to RoadBits.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the roads console's static_cast<RoadBits>(bits)"
+)]
 pub unsafe extern "C" fn openttd_test_clean_up_road_bits(
     shared: *const Services,
     tile: u32,
     bits: u32,
 ) -> u32 {
     u32::from(
-        crate::road_cleanup::clean_up_road_bits(
-            unsafe { &*shared },
-            tile,
-            crate::services::RoadBits(bits as u8),
-        )
-        .0,
+        crate::road_cleanup::clean_up_road_bits(unsafe { &*shared }, tile, RoadBits(bits as u8)).0,
     )
 }
 
