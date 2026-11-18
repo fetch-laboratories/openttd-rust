@@ -4,6 +4,7 @@
 #![allow(unsafe_code, missing_docs)]
 use crate::company_type::CompanyID;
 use crate::debug::debug;
+use crate::error::{WarningLevel, show_error_message};
 use crate::network_frame::Services as FrameServices;
 use crate::network_frame::{
     packet_check, packet_new, packet_recv_string, packet_send, packet_send_string,
@@ -13,6 +14,15 @@ use crate::network_socket as socket;
 use crate::network_type::{ClientID, NetworkErrorCode, NetworkRecvStatus};
 use crate::openttd::{GameMode, SwitchMode};
 use crate::packet::{self, State as PacketState};
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::{EncodedString, StringParameterData};
+use crate::table::strings::{
+    STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION,
+    STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION_CAPTION, STR_NETWORK_ERROR_NEWGRF_MISMATCH,
+    STR_NETWORK_ERROR_SAVEGAMEERROR, STR_NETWORK_ERROR_SERVER_BANNED,
+    STR_NETWORK_ERROR_SERVER_FULL, STR_NETWORK_MESSAGE_SERVER_REBOOT,
+    STR_NETWORK_MESSAGE_SERVER_SHUTDOWN,
+};
 use crate::tcp_game::PacketGameType;
 use crate::window_func::{invalidate_window_data, set_window_dirty};
 use crate::window_type::{WindowClass, WindowNumber, WindowNumberEnum};
@@ -45,16 +55,9 @@ pub struct Services {
     pub own_client_id: *mut u32,
     pub reconnect: *mut u8,
     pub revision: extern "C" fn() -> crate::services::ByteSpan,
-    pub show_banned: extern "C" fn(),
     pub show_client_list: extern "C" fn(),
-    pub show_full: extern "C" fn(),
     pub show_join_window: extern "C" fn(),
-    pub show_lag: extern "C" fn(i64),
-    pub show_newgrf_mismatch: extern "C" fn(),
-    pub show_reboot: extern "C" fn(),
-    pub show_savegame_error: extern "C" fn(),
     pub show_server_error: extern "C" fn(u8, *mut c_void),
-    pub show_shutdown: extern "C" fn(),
     pub wait_for_quit_packets: extern "C" fn(),
 }
 crate::abi::layouts! {
@@ -84,16 +87,9 @@ crate::abi::layouts! {
         own_client_id,
         reconnect,
         revision,
-        show_banned,
         show_client_list,
-        show_full,
         show_join_window,
-        show_lag,
-        show_newgrf_mismatch,
-        show_reboot,
-        show_savegame_error,
         show_server_error,
-        show_shutdown,
         wait_for_quit_packets,
     };
 }
@@ -244,21 +240,37 @@ pub(crate) fn is_connected(f: &FrameServices) -> bool {
 }
 
 /// `ClientNetworkGameSocketHandler::Receive_SERVER_FULL`.
-pub(crate) fn receive_server_full(s: &Services) -> NetworkRecvStatus {
+pub(crate) fn receive_server_full() -> NetworkRecvStatus {
     debug!(net, 9, "Client::Receive_SERVER_FULL()");
 
     /* We try to join a server which is full */
-    (s.show_full)();
+    show_error_message(
+        &get_encoded_string(STR_NETWORK_ERROR_SERVER_FULL, &[]),
+        &EncodedString::default(),
+        WarningLevel::WL_CRITICAL,
+        0,
+        0,
+        &EncodedString::default(),
+        CompanyID::INVALID,
+    );
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_FULL
 }
 
 /// `ClientNetworkGameSocketHandler::Receive_SERVER_BANNED`.
-pub(crate) fn receive_server_banned(s: &Services) -> NetworkRecvStatus {
+pub(crate) fn receive_server_banned() -> NetworkRecvStatus {
     debug!(net, 9, "Client::Receive_SERVER_BANNED()");
 
     /* We try to join a server where we are banned */
-    (s.show_banned)();
+    show_error_message(
+        &get_encoded_string(STR_NETWORK_ERROR_SERVER_BANNED, &[]),
+        &EncodedString::default(),
+        WarningLevel::WL_CRITICAL,
+        0,
+        0,
+        &EncodedString::default(),
+        CompanyID::INVALID,
+    );
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_BANNED
 }
@@ -320,7 +332,15 @@ pub(crate) fn receive_server_check_newgrfs(
     }
 
     /* NewGRF mismatch, bail out */
-    (s.show_newgrf_mismatch)();
+    show_error_message(
+        &get_encoded_string(STR_NETWORK_ERROR_NEWGRF_MISMATCH, &[]),
+        &EncodedString::default(),
+        WarningLevel::WL_CRITICAL,
+        0,
+        0,
+        &EncodedString::default(),
+        CompanyID::INVALID,
+    );
     ret
 }
 
@@ -545,7 +565,15 @@ pub(crate) fn map_loaded(
     socket::set_last_packet(game, (f.tcp.now)());
 
     if !load_success {
-        (s.show_savegame_error)();
+        show_error_message(
+            &get_encoded_string(STR_NETWORK_ERROR_SAVEGAMEERROR, &[]),
+            &EncodedString::default(),
+            WarningLevel::WL_CRITICAL,
+            0,
+            0,
+            &EncodedString::default(),
+            CompanyID::INVALID,
+        );
         return NetworkRecvStatus::NETWORK_RECV_STATUS_SAVEGAME;
     }
     /* If the savegame has successfully loaded, ALL windows have been removed,
@@ -686,7 +714,15 @@ pub(crate) fn receive_server_shutdown(
     /* Only when we're trying to join we really
      * care about the server shutting down. */
     if status(game) >= ServerStatus::STATUS_JOIN {
-        (s.show_shutdown)();
+        show_error_message(
+            &get_encoded_string(STR_NETWORK_MESSAGE_SERVER_SHUTDOWN, &[]),
+            &EncodedString::default(),
+            WarningLevel::WL_CRITICAL,
+            0,
+            0,
+            &EncodedString::default(),
+            CompanyID::INVALID,
+        );
     }
 
     if status(game) == ServerStatus::STATUS_ACTIVE {
@@ -713,7 +749,15 @@ pub(crate) fn receive_server_newgame(
         unsafe {
             s.reconnect.write((own_client_id(s).0 % 16 + 1) as u8);
         };
-        (s.show_reboot)();
+        show_error_message(
+            &get_encoded_string(STR_NETWORK_MESSAGE_SERVER_REBOOT, &[]),
+            &EncodedString::default(),
+            WarningLevel::WL_CRITICAL,
+            0,
+            0,
+            &EncodedString::default(),
+            CompanyID::INVALID,
+        );
     }
 
     if status(game) == ServerStatus::STATUS_ACTIVE {
@@ -837,7 +881,6 @@ pub(crate) fn client_error(
 /// `ClientNetworkGameSocketHandler::CheckConnection`: check the connection's state, i.e. is
 /// the connection still up? Durations are `steady_clock` nanoseconds.
 pub(crate) fn check_connection(
-    s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     work: crate::network_action::Actions,
@@ -869,7 +912,21 @@ pub(crate) fn check_connection(
     }
 
     unsafe { LAST_LAG.get().write(lag) };
-    (s.show_lag)(lag / SECONDS);
+    show_error_message(
+        &get_encoded_string(STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION_CAPTION, &[]),
+        &get_encoded_string(
+            STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION,
+            // `StringParameter` stores the `int64_t` count as `uint64_t`.
+            &[StringParameterData::Integer(
+                (lag / SECONDS).cast_unsigned(),
+            )],
+        ),
+        WarningLevel::WL_INFO,
+        0,
+        0,
+        &EncodedString::default(),
+        CompanyID::INVALID,
+    );
 }
 
 /// `CheckConnection`'s function-local `static last_lag`.

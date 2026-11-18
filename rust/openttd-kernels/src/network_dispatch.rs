@@ -160,7 +160,7 @@ fn handle_packet(
             _ => receive_invalid_packet(s, game, packet_type),
         },
         PacketGameType::PACKET_SERVER_BANNED => match read_field!(game, role) {
-            role::CLIENT => crate::network_client::receive_server_banned(s.client),
+            role::CLIENT => crate::network_client::receive_server_banned(),
             role::QUERY => NetworkRecvStatus((s.dispatch.server_banned)(game, shell, frame)),
             _ => receive_invalid_packet(s, game, packet_type),
         },
@@ -225,7 +225,7 @@ fn handle_packet(
             _ => receive_invalid_packet(s, game, packet_type),
         },
         PacketGameType::PACKET_SERVER_FULL => match read_field!(game, role) {
-            role::CLIENT => crate::network_client::receive_server_full(s.client),
+            role::CLIENT => crate::network_client::receive_server_full(),
             role::QUERY => NetworkRecvStatus((s.dispatch.server_full)(game, shell, frame)),
             _ => receive_invalid_packet(s, game, packet_type),
         },

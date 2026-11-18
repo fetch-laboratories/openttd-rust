@@ -79,7 +79,6 @@ TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 	AutoRestoreBackup<CompanyID> actor(_current_company, CompanyID(0));
 	leaves.tick_counter = []() noexcept -> uint64_t { return UINT64_MAX; };
 	leaves.maximum_date = []() noexcept -> uint64_t { return INT32_MAX; };
-	leaves.command_error = [](void *out, uint32_t error, uint32_t detail) noexcept { CHECK(error == 0); CHECK(detail == 0); *static_cast<CommandCost *>(out) = CMD_ERROR; };
 	struct Case { int32_t date; uint64_t tick; bool valid; };
 	for (const Case test : {Case{INT32_MIN, UINT64_MAX, false}, Case{-1, 73, true}, Case{0, UINT64_MAX, true}, Case{INT32_MAX, UINT64_MAX, true}, Case{INT32_MAX, 73, false}}) {
 		CAPTURE(test.date, test.tick);
@@ -87,6 +86,7 @@ TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 		CommandCost result;
 		CHECK(openttd_rust_timetable_start(&fixture, 0, 0, test.tick, &result, &leaves) == uint32_t(test.valid));
 		CHECK(result.Failed() == !test.valid);
+		if (!test.valid) CHECK(result.GetErrorMessage() == INVALID_STRING_ID);
 	}
 	TimerGameEconomy::date = saved_date;
 	TimerGameEconomy::date_fract = saved_fraction;
@@ -97,7 +97,6 @@ TEST_CASE("Orders ownership - early validation and complete native error storage
 	OpenTTDOrdersLeaves leaves{};
 	leaves.vehicle = [](void *v) noexcept { return &static_cast<TimetableDateFixture *>(v)->vehicle; };
 	leaves.primary_vehicle = [](void *v) noexcept -> uint64_t { return static_cast<TimetableDateFixture *>(v)->primary; };
-	leaves.command_error = [](void *out, uint32_t error, uint32_t detail) noexcept { CHECK(error == 0); CHECK(detail == 0); *static_cast<CommandCost *>(out) = CMD_ERROR; };
 	auto base = GetRustVehicleServices();
 	base.record_from_shell = [](void *shell) noexcept { return &static_cast<TimetableDateFixture *>(shell)->record; };
 

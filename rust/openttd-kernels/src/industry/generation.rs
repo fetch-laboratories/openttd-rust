@@ -9,10 +9,18 @@
 //! on the invocation stack. Only progress cancellation returns early, to a native stack
 //! exception frame.
 use super::{Builder, Services, TYPES, place_industry};
+use crate::company_type::CompanyID;
+use crate::error::{WarningLevel, show_error_message};
 use crate::industry_type::{IndustryID, IndustryType};
 use crate::industrytype::{self, CheckProc, IndustryBehaviour, IndustryBehaviours};
 use crate::newgrf_industries::IndustryAvailabilityCallType;
 use crate::settings_type::IndustryDensity;
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::{EncodedString, StringParameterData};
+use crate::table::strings::{
+    STR_ERROR_NO_SUITABLE_PLACES_FOR_INDUSTRIES,
+    STR_ERROR_NO_SUITABLE_PLACES_FOR_INDUSTRIES_EXPLANATION,
+};
 
 pub use crate::industrytype::IndustrySpec as SpecHandle;
 #[repr(C)]
@@ -26,7 +34,6 @@ pub struct GenerationServices {
     pub scale_by_land_proportion: unsafe extern "C" fn(u32) -> u32,
     pub set_progress: unsafe extern "C" fn(*mut GenerationContext, bool, u32) -> bool,
     pub increase_progress: unsafe extern "C" fn(*mut GenerationContext, bool) -> bool,
-    pub missing_warning: unsafe extern "C" fn(*const SpecHandle),
 }
 /// Original `GetScaledIndustryGenerationProbability`: compute the appearance probability for
 /// an industry during map creation. `water` selects land-based or water-based industry
@@ -285,7 +292,22 @@ pub(crate) fn check_industries(
         if chance == 0 || !force_at_least_one {
             continue; // Types that are not available can be skipped.
         }
-        unsafe { (g.missing_warning)(industrytype::get_industry_spec(IndustryType(it))) };
+        let is = industrytype::get_industry_spec(IndustryType(it));
+        show_error_message(
+            &get_encoded_string(
+                STR_ERROR_NO_SUITABLE_PLACES_FOR_INDUSTRIES,
+                // SAFETY: `GetIndustrySpec` returns a live spec of the process-lifetime table.
+                &[StringParameterData::Integer(u64::from(unsafe {
+                    (*is).name
+                }))],
+            ),
+            &get_encoded_string(STR_ERROR_NO_SUITABLE_PLACES_FOR_INDUSTRIES_EXPLANATION, &[]),
+            WarningLevel::WL_WARNING,
+            0,
+            0,
+            &EncodedString::default(),
+            CompanyID::INVALID,
+        );
         count += 1;
         if count >= 3 {
             break; // Don't swamp the user with errors.

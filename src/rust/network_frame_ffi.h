@@ -24,7 +24,6 @@ struct OpenTTDNetworkFrameServices {
 	uint16_t (*bytes_per_frame)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame);
 	uint16_t (*bytes_per_frame_burst)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame_burst);
 	const OpenTTDNetworkClientServices *client;
-	void (*client_desync)() noexcept OPENTTD_SERVICE_DEFAULT(client_desync);
 	OpenTTDNetworkGameSocket *(*client_game)() noexcept OPENTTD_SERVICE_DEFAULT(client_game);
 	const OpenTTDNetworkCommandServices *command;
 	const OpenTTDNetworkConnectionServices *connection;
@@ -54,7 +53,6 @@ struct OpenTTDNetworkFrameServices {
 	OpenTTDNetworkPoll (*server_poll)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll);
 	bool (*server_poll_client)(OpenTTDSessionFrame *, OpenTTDNetworkGameSocket *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll_client);
 	void (*server_poll_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll_end);
-	void (*show_lost_connection)() noexcept OPENTTD_SERVICE_DEFAULT(show_lost_connection);
 	void (*socket_delete)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_delete);
 	uint16_t (*sync_freq)() noexcept OPENTTD_SERVICE_DEFAULT(sync_freq);
 	void (*sync_log)() noexcept OPENTTD_SERVICE_DEFAULT(sync_log);

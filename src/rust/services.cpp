@@ -154,6 +154,7 @@ static void CostZero(OpenTTDCommandCost *out) noexcept { OpenTTDCommandCostZero(
 static void CostError(OpenTTDCommandCost *out, uint32_t message) noexcept { OpenTTDCommandCostError(NativeCost(out), message); }
 static void CostExpenseMoney(OpenTTDCommandCost *out, uint8_t expense, int64_t amount) noexcept { OpenTTDCommandCostExpenseMoney(NativeCost(out), static_cast<ExpensesType>(expense), Money(amount)); }
 static void CostErrorParam(OpenTTDCommandCost *out, uint32_t message, uint64_t parameter) noexcept { *NativeCost(out) = CommandCostWithParam(message, parameter); }
+static void CostErrorExtra(OpenTTDCommandCost *out, uint32_t message, uint32_t extra_message) noexcept { *NativeCost(out) = CommandCost(message, extra_message); }
 static void CostAdd(OpenTTDCommandCost *out, OpenTTDCommandCost *item) noexcept { NativeCost(out)->AddCost(std::move(*NativeCost(item))); }
 static void CostMove(OpenTTDCommandCost *out, OpenTTDCommandCost *item) noexcept { *NativeCost(out) = std::move(*NativeCost(item)); }
 static void CostAmount(OpenTTDCommandCost *out, int64_t amount) noexcept { NativeCost(out)->AddCost(Money(amount)); }
@@ -169,7 +170,10 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 	static const OpenTTDCommandCostServices services{
 		.construct = CostConstruct, .destroy = CostDestroy,
 		.zero = CostZero, .error = CostError, .expense_money = CostExpenseMoney,
-		.error_param = CostErrorParam, .add = CostAdd, .move = CostMove,
+		.error_extra = CostErrorExtra,
+		.error_param = CostErrorParam,
+		.add = CostAdd,
+		.move = CostMove,
 		.amount = CostAmount, .success = CostSuccess, .error_message = CostErrorMessage, .money = CostMoney,
 		.expense = CostExpense, .make_error = CostMakeError,
 		.encode_owned_by = CostEncodeOwnedBy, .error_owner = CostErrorOwner,
@@ -658,7 +662,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.resolver_badges = [](const ResolverObject *resolver, const BadgeID *badges, size_t count, uint32_t parameter) noexcept { return GetBadgeVariableResult(*RustResolverGRFFile(resolver), std::span{badges, count}, parameter); },
 	.resolver_grf_file_id = RustResolverGRFFileID,
 	.resolver_grf_version = RustResolverGRFVersion,
-	.show_error = RustShowErrorMessage,
 	.yapf_rail_dump_state = YapfRailDumpState,
 	.not_reached = RustNotReached,
 	.fatal_error = RustFatalError,
@@ -899,6 +902,13 @@ static void RustSinkString(OpenTTDRustStringSink sink, void *target, std::string
 	sink(target, reinterpret_cast<const uint8_t *>(string.data()), string.size());
 }
 
+/** The EncodedString whose bytes a Rust span borrows. */
+static EncodedString RustEncodedString(OpenTTDByteSpan bytes) noexcept
+{
+	return RustEncodedString({reinterpret_cast<const char *>(bytes.data), bytes.size});
+}
+
+static_assert(WL_INFO == 0 && WL_WARNING == 1 && WL_ERROR == 2 && WL_CRITICAL == 3);
 static const OpenTTDNewsServices _rust_news_services{
 	.add_news_item = [](const OpenTTDAddNewsItemArgs *args) noexcept {
 		AddNewsItem(RustEncodedString({reinterpret_cast<const char *>(args->headline), args->headline_length}), static_cast<NewsType>(args->type), static_cast<NewsStyle>(args->style),
@@ -920,6 +930,9 @@ static const OpenTTDNewsServices _rust_news_services{
 		for (size_t i = 0; i < count; ++i) params[i] = RustStringParameter(args[i]);
 		RustSinkString(sink, target, GetStringWithArgs(StringID{string}, params));
 		std::destroy_n(params.data(), count);
+	},
+	.show_error_message = [](OpenTTDByteSpan summary_msg, OpenTTDByteSpan detailed_msg, uint8_t wl, int32_t x, int32_t y, OpenTTDByteSpan extra_msg, uint8_t company) noexcept {
+		ShowErrorMessage(RustEncodedString(summary_msg), RustEncodedString(detailed_msg), static_cast<WarningLevel>(wl), x, y, RustEncodedString(extra_msg), CompanyID{company});
 	},
 	.string_assertions = RUST_ENCODED_STRING_ASSERTIONS,
 };

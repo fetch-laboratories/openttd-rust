@@ -302,7 +302,6 @@ const OpenTTDContentServices &GetRustContentServices() noexcept
 		.dependencies = [](const OpenTTDContentInfo *ci) noexcept { auto &d = static_cast<const ContentInfo *>(ci)->dependencies; return OpenTTDContentIdSpan{d.data(), d.size()}; },
 		.dependency_push = [](OpenTTDContentInfo *ci, ContentID id) noexcept { Info(ci).dependencies.push_back(id); },
 		.description = [](OpenTTDContentInfo *ci) noexcept -> void * { return &Info(ci).description; },
-		.error_extract = []() noexcept { ShowErrorMessage(GetEncodedString(STR_CONTENT_ERROR_COULD_NOT_EXTRACT), {}, WL_ERROR); },
 		.error_not_writable = ShowNotWritable,
 		.extract = [](const OpenTTDContentInfo *ci) noexcept { return ExtractDownload(static_cast<const ContentInfo &>(*ci)); },
 		.file_close = []() noexcept { c.cur_file.reset(); },

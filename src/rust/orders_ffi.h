@@ -112,7 +112,6 @@ struct OpenTTDOrdersLeaves {
 	uint64_t (*no_jet_crash)() noexcept OPENTTD_SERVICE_DEFAULT(no_jet_crash);
 	void (*append_station)(void *ctx, uint16_t station) noexcept OPENTTD_SERVICE_DEFAULT(append_station);
 	const OpenTTDStationCommandServices *station_commands;
-	void (*command_error)(void *ctx, uint32_t error, uint32_t detail) noexcept OPENTTD_SERVICE_DEFAULT(command_error);
 	void (*timetable_dirty)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(timetable_dirty);
 	void (*invalidate_order)(void *ctx, int32_t data) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_order);
 	void (*delete_order_news)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(delete_order_news);
@@ -247,7 +246,6 @@ uint64_t openttd_orders_unique_backup_name(void *ctx) noexcept;
 uint64_t openttd_orders_local_owner(void *ctx) noexcept;
 uint64_t openttd_orders_no_jet_crash() noexcept;
 void openttd_orders_append_station(void *ctx, uint16_t station) noexcept;
-void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept;
 void openttd_orders_timetable_dirty(void *ctx) noexcept;
 void openttd_orders_invalidate_order(void *ctx, int32_t data) noexcept;
 void openttd_orders_delete_order_news(void *ctx) noexcept;

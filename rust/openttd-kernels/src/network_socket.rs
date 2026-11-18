@@ -3,11 +3,16 @@
 //! links at construction. They live until deferred destruction; raw field access ends before
 //! callbacks or deletion. The game-state mutex serializes visits and pool mutation.
 #![allow(unsafe_code, missing_docs)]
+use crate::company_type::CompanyID;
+use crate::error::{WarningLevel, show_error_message};
 use crate::network_command::CommandQueue;
 use crate::network_frame::SocketSync;
 use crate::network_tcp::NetworkTCPSocketHandler;
 use crate::packet::NetworkSocketHandler;
 use crate::raw_field::{read_field, write_field};
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::EncodedString;
+use crate::table::strings::STR_NETWORK_ERROR_LOSTCONNECTION;
 use std::ffi::c_void;
 crate::abi::shared_records! {
     fn abi_record;
@@ -145,7 +150,15 @@ pub(crate) fn close_connection(
         (s.client.emergency_save)();
         crate::session::set_pending(crate::openttd::SwitchMode::MENU);
         (s.lifecycle.set_networking)(false);
-        (s.show_lost_connection)();
+        show_error_message(
+            &get_encoded_string(STR_NETWORK_ERROR_LOSTCONNECTION, &[]),
+            &EncodedString::default(),
+            WarningLevel::WL_CRITICAL,
+            0,
+            0,
+            &EncodedString::default(),
+            CompanyID::INVALID,
+        );
 
         return specialized_close(
             s,
@@ -236,7 +249,7 @@ pub(crate) fn send_all(
         send(s, (s.client_game)(), work);
         let client = (s.client_game)();
         if !client.is_null() {
-            crate::network_client::check_connection(s.client, s, client, work);
+            crate::network_client::check_connection(s, client, work);
         }
         process_deferred(s);
     }

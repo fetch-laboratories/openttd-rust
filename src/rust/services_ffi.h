@@ -241,7 +241,6 @@ struct OpenTTDSharedServices {
 	uint32_t (*resolver_badges)(const ResolverObject *, const BadgeID *, size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(resolver_badges);
 	uint32_t (*resolver_grf_file_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file_id);
 	uint8_t (*resolver_grf_version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_version);
-	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);
 	void (*yapf_rail_dump_state)(const uint32_t *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(yapf_rail_dump_state);
 	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
 	void (*fatal_error)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(fatal_error);
