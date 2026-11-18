@@ -49,6 +49,8 @@ mod controller {
         static BUS: Cell<bool> = const { Cell::new(true) };
         static ROADTYPE: Cell<u8> = const { Cell::new(0) };
         static HAD: Cell<u8> = const { Cell::new(0) };
+        /// The `had_vehicle_of_type` stores since the last reset.
+        static STORES: Cell<u32> = const { Cell::new(0) };
         static VICTIMS: Cell<u32> = const { Cell::new(0) };
         static EXPECTED: Cell<*const Vec<Effect>> = const { Cell::new(std::ptr::null()) };
     }
@@ -56,13 +58,38 @@ mod controller {
     const STATION: StationID = StationID(55);
     const LOCAL: u8 = 3;
     const TILE: TileIndex = TileIndex(100);
-    /// The default road type table's classification: `ROADTYPE_ROAD` is a road type and
-    /// `ROADTYPE_TRAM` a tram type.
-    fn default_road_types() {
-        // SAFETY: Process-wide masks; every test that classifies writes these values.
-        unsafe {
-            *crate::type_registry::openttd_rust_road_mask() = 1 << RoadType::ROADTYPE_ROAD.0;
-            *crate::type_registry::openttd_rust_tram_mask() = 1 << RoadType::ROADTYPE_TRAM.0;
+    /// The default road type table's classification, `ROADTYPE_ROAD` a road type and
+    /// `ROADTYPE_TRAM` a tram type, held under the game-state test lock until dropped,
+    /// which restores the previous masks.
+    struct DefaultRoadTypes {
+        saved: (u64, u64),
+        _guard: std::sync::MutexGuard<'static, ()>,
+    }
+    impl DefaultRoadTypes {
+        fn new() -> Self {
+            let guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+            // SAFETY: Process-wide masks, serialized by the lock and restored on drop.
+            let saved = unsafe {
+                (
+                    crate::type_registry::openttd_rust_road_mask()
+                        .replace(1 << RoadType::ROADTYPE_ROAD.0),
+                    crate::type_registry::openttd_rust_tram_mask()
+                        .replace(1 << RoadType::ROADTYPE_TRAM.0),
+                )
+            };
+            Self {
+                saved,
+                _guard: guard,
+            }
+        }
+    }
+    impl Drop for DefaultRoadTypes {
+        fn drop(&mut self) {
+            // SAFETY: The lock is still held.
+            unsafe {
+                *crate::type_registry::openttd_rust_road_mask() = self.saved.0;
+                *crate::type_registry::openttd_rust_tram_mask() = self.saved.1;
+            }
         }
     }
 
@@ -119,6 +146,7 @@ mod controller {
         assert_eq!(station, STATION.0);
         assert_eq!(take(), Vec::new(), "the station bit is stored first");
         HAD.set(HAD.get() | bit);
+        STORES.set(STORES.get() + 1);
     }
 
     /// A road vehicle record of `owner`, its road owner and the tables of one entry.
@@ -220,7 +248,7 @@ mod controller {
                 STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL,
             ),
         ];
-        default_road_types();
+        let _types = DefaultRoadTypes::new();
         take();
         for (bus, road_type, bit, headline) in cases {
             ROADTYPE.set(road_type);
@@ -228,8 +256,10 @@ mod controller {
             for owner in [LOCAL, LOCAL + 1] {
                 let mut f = Fixture::new(owner, &SHARED);
                 HAD.set(0);
+                STORES.set(0);
                 f.game().road_veh_arrives_at(f.part(), STATION);
                 assert_eq!(HAD.get(), bit.0, "bus {bus}, road type {road_type}");
+                assert_eq!(STORES.get(), 1, "one store on the first arrival");
                 let expected = vec![
                     Effect::News {
                         headline: encoded(headline.0, &[Param::N(u64::from(STATION.0))]),
@@ -261,8 +291,10 @@ mod controller {
                 );
 
                 // Visited before: no store, news or event.
+                STORES.set(0);
                 f.game().road_veh_arrives_at(f.part(), STATION);
                 assert_eq!(HAD.get(), bit.0);
+                assert_eq!(STORES.get(), 0, "no store on a repeat visit");
                 assert_eq!(take(), Vec::new());
             }
         }
