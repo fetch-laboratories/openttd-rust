@@ -584,6 +584,14 @@ mod tests {
             [[37, 0]; 2],
             [1, 1, 2],
         ),
+        // `assert(IsRoadDepot(t))` fails after `GetRoadTileType`'s own assertions, and only
+        // where the native build asserts; the direction bits are read either way.
+        (
+            "GetRoadDepotDirection",
+            |w, t| [w.road_depot_dir(t).into(), 0],
+            [[3, 0]; 2],
+            [2, 2, 3],
+        ),
         (
             "HasRoadWorks",
             |w, t| [w.has_road_works(t).into(), 0],
