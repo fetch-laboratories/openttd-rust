@@ -47,6 +47,8 @@
 
 Fix these before integration; root grants no exceptions. A file pass fixes every one in the files it finishes and cannot leave one as residue. The rule's one exception is a carrier whose replacement is a shared service that several files need: that service has its own work order ([integration](root-workflow.md#integration)), and until it merges a pass keeps the carrier and names the work order in its PR body.
 
+A pass owns the faults in the files it finishes, and every call those files make: a finished file calls each callee through its one shared binding, even while a duplicate binding stays for other files. A fault in a file the pass does not finish, at operations the pass left as they were, is residue: that file's own pass fixes it, or #734's closure sweep where the file is already finished. The pass records it on #734 and in its PR body, and it needs no work order.
+
 - A reader or carrier written for one call site, including a service per `Debug` or `GrfMsg` message.
 - A Rust-to-C++-to-Rust bounce into code Rust owns: a C++ body that only forwards to Rust, where Rust could call its own code directly. A call to an unported original body that reaches Rust-owned storage further down is a call to that body's C++ owner, and stays until its port.
 - A moved field behind a service, or a Rust-called service routed through `Record()`.
