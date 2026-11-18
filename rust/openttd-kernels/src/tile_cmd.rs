@@ -40,7 +40,7 @@ impl VehicleEnterTileStates {
     /// Native `BaseBitSet::Test` of one element.
     #[must_use]
     pub const fn test(self, element: VehicleEnterTileState) -> bool {
-        self.0 & Self::from_element(element).0 != 0
+        crate::base_bitset_type::test(self.0 as u64, element.0)
     }
 }
 

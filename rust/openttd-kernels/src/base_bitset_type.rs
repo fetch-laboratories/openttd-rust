@@ -15,6 +15,13 @@ pub fn get_nth_set_bit(mut bits: u64, mut n: u32) -> Option<u8> {
     None
 }
 
+/// `BaseBitSet::Test`: `(data & (1ULL << value)) != 0`, shifting at the original 64-bit
+/// width so that an element beyond a narrower storage tests false.
+#[must_use]
+pub const fn test(data: u64, value: u8) -> bool {
+    data & (1_u64 << value) != 0
+}
+
 /// Bitwise operators shared by native bit-mask enums and unmasked `EnumBitSet`s.
 /// Each wrapper keeps its original storage width, including unnamed high bits.
 macro_rules! impl_bitset_ops {
@@ -61,3 +68,28 @@ macro_rules! impl_bitset_ops {
     };
 }
 pub(crate) use impl_bitset_ops;
+
+#[cfg(test)]
+mod tests {
+    /// Pinned `core/base_bitset_type.hpp:141-144` shifts `1ULL`: a byte set with every
+    /// storage bit set tests its eight elements true and elements 8 to 63 false.
+    #[test]
+    fn byte_sets_test_at_the_original_width() {
+        use crate::road::{RoadTypeFlag, RoadTypeFlags};
+        use crate::tile_cmd::{VehicleEnterTileState, VehicleEnterTileStates};
+        for element in 0..64_u8 {
+            let expected = element < 8;
+            assert_eq!(super::test(0xff, element), expected, "element {element}");
+            assert_eq!(
+                RoadTypeFlags(0xff).test(RoadTypeFlag(element)),
+                expected,
+                "RoadTypeFlags element {element}"
+            );
+            assert_eq!(
+                VehicleEnterTileStates(0xff).test(VehicleEnterTileState(element)),
+                expected,
+                "VehicleEnterTileStates element {element}"
+            );
+        }
+    }
+}
