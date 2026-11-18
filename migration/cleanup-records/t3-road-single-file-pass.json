@@ -1,0 +1,13 @@
+[
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-settings.h": 2
+    },
+    "existing_alternatives": "The road controller read _settings_game.vehicle.road_side and _settings_game.pf.roadveh_queue through OpenTTDRoadEntry, a per-call record the C++ facade filled with RustRoadSide() and RustRoadQueue(); that record is a snapshot carrier the pass deletes. The settings catalog is the shared typed address table every other Rust owner reads settings through, and it had no field for either setting.",
+    "reason": "#964 decision 4: RoadVehLeaveDepot, IndividualRoadVehicleController and RoadFindPathToDest read these two settings at their observation points with one field-sized load each. Two catalog fields against the deleted OpenTTDRoadEntry record (5 fields), GetRoadEntry and RustRoadQueue.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The fields leave the catalog when Rust owns the game settings storage."
+  }
+]
