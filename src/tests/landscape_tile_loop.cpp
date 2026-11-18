@@ -127,7 +127,7 @@ TEST_CASE("Session tile fixtures restore storage mode across nested entries")
 	CHECK(nested);
 	CHECK(fixture.Run());
 }
-extern "C" uint8_t openttd_rust_shared_tile_type(const OpenTTDMapStatics *, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
+extern "C" uint8_t openttd_test_shared_tile_type(const OpenTTDMapStatics *, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
 struct MapLeafOracle {
 	uint32_t slope;
 	int32_t z;
@@ -174,7 +174,7 @@ static void ObserveMapLeaves(uint32_t index, MapLeafOracle *out) noexcept
 		}
 	}
 }
-extern "C" uint8_t openttd_rust_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, uint32_t, void (*)(uint32_t) noexcept, void (*)(uint32_t, MapLeafOracle *) noexcept);
+extern "C" uint8_t openttd_test_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, uint32_t, void (*)(uint32_t) noexcept, void (*)(uint32_t, MapLeafOracle *) noexcept);
 TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 {
 	for (const uint size : {64U, 128U}) {
@@ -190,10 +190,10 @@ TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 					t.m4() = value; t.m5() = kind == MP_ROAD ? value & 63 : value; t.m6() = value;
 					t.m8() = value * 257;
 					SetTileHeight(tile, value);
-					CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
+					CHECK(openttd_test_map_read_probe(&statics, &GetRustSharedServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
 					auto unchecked = statics;
 					unchecked.assertions = false;
-					CHECK(openttd_rust_map_read_probe(&unchecked, &GetRustSharedServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
+					CHECK(openttd_test_map_read_probe(&unchecked, &GetRustSharedServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
 				}
 			}
 		}
@@ -225,7 +225,7 @@ TEST_CASE("Rust movement map context rereads native mutations within an entry")
 							Tile t{TileIndex{index}};
 							t.type() = MP_CLEAR << 4;
 						};
-						CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), tile.base(), change_type ? +mutate_type : +mutate_fields, ObserveMapLeaves));
+						CHECK(openttd_test_map_read_probe(&statics, &GetRustSharedServices(), tile.base(), change_type ? +mutate_type : +mutate_fields, ObserveMapLeaves));
 					}
 				}
 			}
@@ -316,24 +316,24 @@ TEST_CASE("Rust shared tile-type allocation and all native byte values")
 	for (const TileIndex tile : {TileIndex{0}, TileIndex{Map::Size() - 1}}) {
 		for (uint byte = 0; byte < 256; byte++) {
 			Tile(tile).type() = byte;
-			CHECK(openttd_rust_shared_tile_type(statics, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
-			CHECK(openttd_rust_shared_tile_type(&empty.statics, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
+			CHECK(openttd_test_shared_tile_type(statics, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
+			CHECK(openttd_test_shared_tile_type(&empty.statics, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
 		}
 	}
 	/* Real native writes between accesses must be observed without a new snapshot.
 	 * Use an interior tile so these setters are valid with either edge setting. */
 	const TileIndex live_tile = TileXY(1, 1);
 	SetTileType(live_tile, MP_ROAD);
-	CHECK(openttd_rust_shared_tile_type(statics, shared.tile_type, live_tile.base()) == MP_ROAD);
+	CHECK(openttd_test_shared_tile_type(statics, shared.tile_type, live_tile.base()) == MP_ROAD);
 	SetTileType(live_tile, MP_CLEAR);
-	CHECK(openttd_rust_shared_tile_type(statics, shared.tile_type, live_tile.base()) == MP_CLEAR);
+	CHECK(openttd_test_shared_tile_type(statics, shared.tile_type, live_tile.base()) == MP_CLEAR);
 	/* Reset between reader entries; the next entry loads the live allocation. */
 	Map::Allocate(64, 64);
 	CHECK(*statics->size == Map::Size());
 	CHECK(*statics->size != count);
 	const TileIndex next_tile = TileXY(Map::MaxX() - 1, Map::MaxY() - 1);
 	SetTileType(next_tile, MP_INDUSTRY);
-	CHECK(openttd_rust_shared_tile_type(statics, shared.tile_type, next_tile.base()) == MP_INDUSTRY);
+	CHECK(openttd_test_shared_tile_type(statics, shared.tile_type, next_tile.base()) == MP_INDUSTRY);
 	Map::Allocate(64, 64);
 }
 

@@ -171,38 +171,6 @@ impl CFollowTrackT {
             Self::new(s, RAIL, None, o, types, true)
         }
     }
-    /// Temporary raw adapter of [`Self::new`] for `native_test_support.rs` until
-    /// its pass.
-    #[cfg(feature = "native-test-support")]
-    pub(crate) fn new_raw(
-        s: &Services,
-        mode: u8,
-        v: Option<VehicleRef>,
-        owner: u8,
-        types: u64,
-        allow90: bool,
-    ) -> Self {
-        Self::new(
-            s,
-            TransportType(mode),
-            v,
-            crate::company_type::CompanyID(owner),
-            RailTypes(types),
-            allow90,
-        )
-    }
-    /// Temporary raw adapter of [`Self::vehicle`] for
-    /// `native_test_support.rs` until its pass.
-    #[cfg(feature = "native-test-support")]
-    pub(crate) fn vehicle_raw(
-        s: &Services,
-        mode: u8,
-        v: Option<VehicleRef>,
-        types: u64,
-        allow90: bool,
-    ) -> Self {
-        Self::vehicle(s, TransportType(mode), v, RailTypes(types), allow90)
-    }
     /// Temporary raw adapter of [`Self::rail`] for `train_reservation.rs` until
     /// its pass.
     pub(crate) fn rail_raw(s: &Services, v: crate::train::Handle, owner: u8, types: u64) -> Self {
@@ -250,8 +218,8 @@ impl CFollowTrackT {
     pub(crate) fn follow(&mut self, s: &Services, old_tile: TileIndex, old_td: Trackdir) -> bool {
         self.follow_with_road(s, old_tile, old_td, None)
     }
-    /// Temporary raw adapter of [`Self::follow`] for `train_reservation.rs` and
-    /// `native_test_support.rs` until their passes.
+    /// Temporary raw adapter of [`Self::follow`] for `train_reservation.rs`
+    /// until its pass.
     pub(crate) fn follow_raw(&mut self, s: &Services, tile: u32, td: u8) -> bool {
         self.follow(s, TileIndex(tile), Trackdir(td))
     }
@@ -757,15 +725,4 @@ pub(crate) fn get_speed_limit_with_road(
 
     /* if min speed was requested, return it: no caller requests it */
     max_speed
-}
-/// Temporary raw adapter of [`get_speed_limit`] for `native_test_support.rs`
-/// until its pass.
-#[cfg(feature = "native-test-support")]
-pub(crate) fn get_speed_limit_raw(
-    s: &Services,
-    mode: u8,
-    veh: Option<VehicleRef>,
-    tile: u32,
-) -> i32 {
-    get_speed_limit(s, TransportType(mode), veh, TileIndex(tile), None)
 }
