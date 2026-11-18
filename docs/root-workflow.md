@@ -49,7 +49,7 @@ Implementers queue nothing until root lifts the stop. A confirmed regression als
   4. reruns any "Invalidate previous validation" run skipped for a PR push inside that window.
 
   Record both variable changes in the PR. Root decides whether the result lets the PR queue. The implementer queues it when the run passes and pushes nothing in between.
-- After two hosted-capacity cancellations of a macOS run, run `gh variable set CI_MACOS_HEAVY --body blacksmith-6vcpu-macos-26`, rerun, then `gh variable delete CI_MACOS_HEAVY` when it finishes. Which jobs run on paid runners is the user's decision ([ADR 0009](adr/0009-paid-runner-assignment.md)); this fallback is part of it.
+- After two hosted-capacity cancellations of macOS jobs (cancelled with no runner assigned), run `python3 tools/ci.py macos-fallback RUN [RUN ...] [--pr N --agent PATH --model MODEL --effort EFFORT]` as a background job. It sets `CI_MACOS_HEAVY` to the paid runner, reruns the last run's failed jobs, deletes the variable when the rerun's macOS jobs finish or the command stops, and records both changes on the PR (or prints them for the cadence). It refuses under two cancellations or while the variable is already set. Which jobs run on paid runners is the user's decision ([ADR 0009](adr/0009-paid-runner-assignment.md)); this fallback is part of it.
 
 ## Cleanup
 

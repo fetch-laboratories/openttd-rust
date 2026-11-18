@@ -42,14 +42,20 @@ Full is the merge gate; its builds are set by [ADR 0018](adr/0018-builds-before-
 
 | Command | Purpose |
 | --- | --- |
-| `python3 tools/ci.py request PR --profile native --wait` | Request a run for the PR's current head and wait for it, started as one background job; also `rust`, `platform` or `full`, and `--head SHA` to refuse another head. |
-| `python3 tools/ci.py wait PR` | Resume waiting on the newest request at the PR's head (or a request file). Exit 2 means still running at the timeout (default 5,400 seconds), not failed; it prints the command to resume. |
+| `python3 tools/ci.py request PR --profile native --wait` | Request a run for the PR's current head and wait for it, started as one background job; also `rust`, `platform` or `full`. `--head SHA` refuses another head, after waiting up to 300 seconds for a push to show. The request waits up to 300 seconds for GitHub's mergeability. |
+| `python3 tools/ci.py wait PR` | Resume waiting on the newest request at the PR's head (or a request file); with requests for several profiles it follows the newest and prints `--profile` for the others. Exit 2 means still running at the timeout (default 5,400 seconds), not failed; it prints the command to resume. |
+| `python3 tools/ci.py wait --run RUN [--complete]` | Wait on any run with no request record, such as a cadence run or a rerun. An `/attempts/N` URL pins that attempt; otherwise the latest attempt at the start is pinned. A bare number after `wait` is still a PR. |
+| `--complete` (with `wait` or `request --wait`) | Report failed jobs as they appear and exit only when the run completes, 1 with every failed job and the `gh run rerun --failed` command. Without it a wait exits on the first failed job. |
+| `python3 tools/ci.py ready PR --wait` | Mark a draft PR ready, then wait for `Quick validation` at its head: exit 0 passed, 1 failed with the log summary, 2 at the timeout. `wait PR --quick` resumes it, or waits for an already ready PR's Quick; a skipped Quick alone is no verdict. |
 | `python3 tools/ci.py log RUN` | Read a failed run: each failed job's failing step, error lines and tail, while other jobs still run. Takes a run or job URL, a request file or `--pr N`; `--grep RE`, `--job NAME`, `--full`. Logs are cached under `.local/ci-logs/`; `wait` and `queue-wait` print the same summary on failure. |
 | `python3 tools/ci.py state PR` | Read a PR's state in one call: head, mergeability, Quick and the newest requested run per profile at head, queue position, review reports (agent, disposition, reviewed SHA) and what `enqueue`'s current checks say; `--json` for scripts. `status PR` is the same; `status REQUEST.json` prints a request's state once. |
 | `python3 tools/ci.py ready PR` | Mark a draft PR ready once a preflight stamp covers its head. |
-| `python3 tools/ci.py enqueue PR` | Queue a PR ([integration](workflow.md#integration)). |
+| `python3 tools/ci.py enqueue PR` | Queue a PR ([integration](workflow.md#integration)). It refuses, naming each one, while a cleanup record lacks its acceptance. |
 | `python3 tools/ci.py queue-wait PR` | Wait, as a background job, until a queued PR merges or leaves the queue. |
 | `python3 tools/ci.py failures --since DATE` | Count failed runs. |
+| `python3 tools/ci.py macos-fallback RUN [RUN ...] [--pr N]` | Root's macOS fallback ([CI administration](root-workflow.md#ci-administration)). |
+
+- Reads through `ci.py` (REST GETs, variable lists, the queue-state query) are tried three times on HTTP 502, 503 or 504. A dispatch, rerun, variable change or comment is not repeated; `enqueue` reads the queue after a failed merge call and tries once more only when the PR is not queued.
 
 - Which profile to request, and when, is in [checks](workflow.md#checks).
 - `request --profile full` is an optional pre-check; the queue's Full is the merge gate. A failing pre-check holds the PR out of the queue until its next push.
