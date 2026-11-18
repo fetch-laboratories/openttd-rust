@@ -3410,7 +3410,7 @@ mod production_policy_tests {
         }));
         s
     }
-    /// A NewGRF text ID (`TEXT_TAB_NEWGRF_START`), above `STR_LAST_STRINGID`: a custom news text.
+    /// A `NewGRF` text ID (`TEXT_TAB_NEWGRF_START`), above `STR_LAST_STRINGID`: a custom news text.
     const CUSTOM_TEXT: u32 = 0xD401;
     /// An industry of type `kind`, which no other test uses, at tile 0x500 whose spec has
     /// `name` 0x77 and the given `new_industry_text`; the caller restores the spec.

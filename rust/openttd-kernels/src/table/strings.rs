@@ -8,7 +8,7 @@
 //! `table/strings.h`: every string ID of the master language file and `STR_LAST_STRINGID`.
 //!
 //! The build script derives them from `src/lang/english.txt` with `openttd-strgen`, as strgen
-//! assigns them, and every CMake build checks them against the `table/strings.h` its strgen wrote.
+//! assigns them, and every `CMake` build checks them against the `table/strings.h` its strgen wrote.
 //! Import each constant by name.
 
 use crate::strings_type::StringID;

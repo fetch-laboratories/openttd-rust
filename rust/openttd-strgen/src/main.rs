@@ -8,7 +8,7 @@
 //! `openttd-strgen ENGLISH_TXT STRINGS_H`: fails unless the string IDs `master_string_ids` derives
 //! from the master language file, which `openttd-kernels` compiles as `table::strings`, are the
 //! `StringID` constants of the `table/strings.h` C++ strgen wrote from it, name for name and
-//! value for value. The CMake build runs it before linking either Rust archive.
+//! value for value. Each `CMake` build runs it before linking the game and its native tests.
 
 use std::collections::BTreeMap;
 use std::process::ExitCode;
