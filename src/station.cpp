@@ -254,7 +254,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 		.set_industry_type = RustStationSetIndustryType,
 		.roadstop = &GetRoadStopResolverServices(),
 		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
-		.close_view = [](uint16_t id) noexcept { CloseWindowById(WC_STATION_VIEW, StationID{id}); },
 		.sign_valid = RustStationSignValid,
 		.remove_sign = [](uint16_t id) noexcept { _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(StationID{id})); },
 		.last_loading = RustVehicleLastLoadingStation,

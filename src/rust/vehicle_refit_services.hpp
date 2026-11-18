@@ -14,8 +14,6 @@ static OpenTTDRefitCargoKind VehicleRefitCargoKind(OpenTTDVehicle *handle) noexc
 	const Vehicle *v = VehicleOf(handle);
 	return {.cargo = RustVehicleCargoType(handle), .subtype = RustVehicleCargoSubtype(v)};
 }
-static void VehicleRefitDetailsUI(OpenTTDVehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleOf(v)->index); }
-static void VehicleRefitListsUI(uint8_t type) noexcept { InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<VehicleType>(type)), 0); }
 const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 {
 	static const OpenTTDVehicleRefitServices services{
@@ -42,8 +40,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.expense = RustVehicleExpense,
 		.invalidate_chain = RustVehicleInvalidateChain,
 		.aircraft_handle = GetRustAircraftVehicle,
-		.details_ui = VehicleRefitDetailsUI,
-		.lists_ui = VehicleRefitListsUI,
 	};
 	return services;
 }

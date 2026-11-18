@@ -46,8 +46,6 @@ struct OpenTTDAircraftLeaves {
 	uint8_t (OPENTTD_RUST_CALL *airport_width)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_width);
 	void (OPENTTD_RUST_CALL *copy_sprite)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(copy_sprite);
 	uint8_t (OPENTTD_RUST_CALL *direction_towards)(OpenTTDAircraftVehicle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(direction_towards);
-	void (OPENTTD_RUST_CALL *dirty_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_depot);
-	void (OPENTTD_RUST_CALL *dirty_lists)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_lists);
 	uint64_t (OPENTTD_RUST_CALL *fta_blocks)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_blocks);
 	uint8_t (OPENTTD_RUST_CALL *fta_heading)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_heading);
 	const void *(OPENTTD_RUST_CALL *fta_next)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_next);

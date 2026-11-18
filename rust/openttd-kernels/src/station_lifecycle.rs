@@ -24,6 +24,8 @@ use crate::strings_type::StringID;
 use crate::tile_type::{MP_STATION, TileIndex, TileType};
 use crate::vehicle::VehicleRef;
 use crate::vehicle_type::VehicleID;
+use crate::window_func::close_window_by_id;
+use crate::window_type::{WindowClass, WindowNumber};
 
 use crate::industrytype::{self, IndustrySpec};
 /// Process-lifetime string constants from `table/strings.h`.
@@ -66,7 +68,6 @@ pub struct Services {
     pub set_industry_type: extern "C" fn(*mut BaseStation, u8),
     pub roadstop: *const crate::newgrf_roadstop::Services,
     pub cleaning_pool: extern "C" fn() -> bool,
-    pub close_view: extern "C" fn(StationID),
     pub sign_valid: extern "C" fn(*mut BaseStation) -> bool,
     pub remove_sign: extern "C" fn(StationID),
     pub last_loading: extern "C" fn(VehicleRef) -> StationID,
@@ -616,7 +617,12 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
     } else {
         (w.station_list_invalidation)(st, 0);
     }
-    (s.close_view)(id);
+    close_window_by_id(
+        WindowClass::WC_STATION_VIEW,
+        WindowNumber::from(id),
+        true,
+        0,
+    );
     /* Now delete all orders that go to the station */
     unsafe {
         crate::orders::openttd_rust_remove_destination(
@@ -695,7 +701,7 @@ pub(crate) fn airport_maintenance_cost(s: &Services, owner: CompanyID) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, roadstop, cleaning_pool, close_view, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, roadstop, cleaning_pool, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }
 
 /// Test-only table for `crate::test_tables`; its private fields keep it in this module.
@@ -737,7 +743,6 @@ pub(crate) const TEST_TABLE: crate::station_lifecycle::Services =
         set_industry_type: crate::test_tables::unreachable2,
         roadstop: std::ptr::null(),
         cleaning_pool: crate::test_tables::unreachable0,
-        close_view: crate::test_tables::unreachable1,
         sign_valid: crate::test_tables::unreachable1,
         remove_sign: crate::test_tables::unreachable1,
         last_loading: crate::test_tables::unreachable1,

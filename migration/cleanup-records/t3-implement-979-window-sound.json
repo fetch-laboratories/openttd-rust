@@ -1,0 +1,48 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/window_func.rs | fn openttd_rust_window_bind | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "window_func::openttd_rust_window_bind",
+    "source_contract": "SetWindowDirty, SetWindowWidgetDirty, SetWindowClassesDirty, InvalidateWindowData, InvalidateWindowClassesData, CloseWindowById (window.cpp) and DeleteNewGRFInspectWindow (newgrf_debug_gui.cpp) stay native until the GUI is ported; services.cpp binds their table once before main, as it binds the news table.",
+    "reason": "`#[unsafe(no_mangle)]` on the export and the dereference of the process-lifetime table pointer are unsafe code; the crate denies it outside item-scoped allows.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native window bodies this table calls are ported (phase 5) and the table is removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/vehicle_transactions.rs | fn cmd_start_stop_vehicle | allow clippy::too_many_lines",
+    "before": 0,
+    "after": 1,
+    "operation": "vehicle_transactions::cmd_start_stop_vehicle",
+    "source_contract": "`CmdStartStopVehicle` (src/vehicle_cmd.cpp) is one body: its NewGRF start/stop callback checks and its execution, which ends with four window calls.",
+    "reason": "#979 writes the original's four window calls at the site in place of the one-site startstop_ui leaf, taking the ported body from 100 to 115 lines; splitting it would add a function the original does not have.",
+    "retiring_owner": "#734",
+    "retirement_condition": "None while the body follows the original; a later port that shares part of it with another command removes the allow."
+  },
+  {
+    "kind": "growth",
+    "counter": "exports",
+    "added": {
+      "rust/expanded.rs | openttd_rust_window_bind": 1
+    },
+    "reason": "The process-wide binding entry of the shared window table, called once from services.cpp. It replaces 33 one-site window and sound leaves and the 4 integrated window copies of the objectives and settings tables; each later conversion of a window leaf is a net deletion.",
+    "existing_alternatives": "A pointer to the window table in every component table, two C++ lines per table, as #974's plan decision 9 rejected for the news table.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When the native window bodies are ported and the table is removed."
+  },
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-settings.h": 1
+    },
+    "reason": "`_settings_client.gui.population_in_label` joins the settings address catalog so ChangePopulation's port reads it at its original observation point; the deleted RustTown_population_changed leaf read it in C++. One generated field per original setting, as #965 and #970 did.",
+    "existing_alternatives": "No Rust reader of the setting existed; a per-setting service would be a callback slot.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The field stays while the settings table is native; it retires when Rust owns _settings_client."
+  }
+]

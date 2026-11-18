@@ -41,7 +41,10 @@ use crate::strings_func::{get_encoded_string, get_string};
 use crate::strings_type::StringParameterData::{self, Integer};
 use crate::table::strings::{STR_COMPANY_NAME, STR_NEWS_NEW_TOWN, STR_NEWS_NEW_TOWN_UNSPONSORED};
 pub use crate::tile_type::TileIndex as Tile;
+use crate::town::TownDirectoryInvalidateWindowData;
 pub use crate::town_type::{TownFounding, TownLayout, TownSize};
+use crate::window_func::invalidate_window_data;
+use crate::window_type::{WindowClass, WindowNumber};
 #[repr(C)]
 pub struct Frame {
     _private: [u8; 0],
@@ -68,9 +71,7 @@ pub struct FoundingServices {
     pub name_style: extern "C" fn() -> u8,
     pub prepare_rename: extern "C" fn(*mut TownHandle),
     pub name_changed: extern "C" fn(*mut TownHandle, ByteSpan),
-    pub update_virt: extern "C" fn(*mut TownHandle),
     pub directory_rebuild: extern "C" fn(),
-    pub directory_resort: extern "C" fn(),
     pub update_noise: extern "C" fn(),
     pub delete_town: extern "C" fn(TownId),
     pub assert_random_context: extern "C" fn(),
@@ -397,7 +398,7 @@ impl<'a> Founding<'a> {
                 break;
             }
         }
-        observed!((self.s.update_virt)(town.shell));
+        observed!((unsafe { &*self.s.growth }.update_virt)(town.shell));
         observed!((self.s.directory_rebuild)());
         engine.set_num_houses(engine.num_houses().wrapping_sub(x as u32));
         unsafe {
@@ -744,7 +745,7 @@ pub(crate) unsafe fn cmd_found_town(
             observed!((f.s.name_changed)(town.shell, unsafe {
                 names::town_name(town.state)
             }));
-            observed!((f.s.update_virt)(town.shell));
+            observed!((unsafe { &*f.s.growth }.update_virt)(town.shell));
         }
         if !observed!((f.leaves.environment.editor)()) {
             // 't' can't be nullptr since 'random' is false outside scenedit
@@ -987,8 +988,13 @@ pub(crate) unsafe fn cmd_rename_town(
         observed!((f.s.name_changed)(town.shell, unsafe {
             names::town_name(town.state)
         }));
-        observed!((f.s.update_virt)(town.shell));
-        observed!((f.s.directory_resort)());
+        observed!((unsafe { &*f.s.growth }.update_virt)(town.shell));
+        observed!(invalidate_window_data(
+            WindowClass::WC_TOWN_DIRECTORY,
+            WindowNumber(0),
+            TownDirectoryInvalidateWindowData::TDIWD_FORCE_RESORT.0,
+            false
+        ));
         observed!((f.s.clear_station_names)());
         observed!((f.s.clear_industry_names)());
         observed!((f.s.update_station_coords)());
@@ -1019,9 +1025,7 @@ crate::abi::layouts! {
         name_style,
         prepare_rename,
         name_changed,
-        update_virt,
         directory_rebuild,
-        directory_resort,
         update_noise,
         delete_town,
         assert_random_context,

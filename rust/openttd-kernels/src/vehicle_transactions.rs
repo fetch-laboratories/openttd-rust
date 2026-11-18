@@ -27,8 +27,15 @@ use crate::strings_type::StringID;
 use crate::tile_type::TileIndex;
 use crate::vehicle::{VehicleRef, VehicleType};
 use crate::vehicle_base::VehState;
+use crate::vehicle_gui::get_window_class_for_vehicle_type;
 use crate::vehicle_type::VehicleID;
 use crate::vehiclelist::{VehicleListIdentifier, VehicleListType};
+use crate::widgets::vehicle_widget::VehicleViewWidgets;
+use crate::window_func::{
+    invalidate_window_classes_data, invalidate_window_data, set_window_classes_dirty,
+    set_window_dirty, set_window_widget_dirty,
+};
+use crate::window_type::{WindowClass, WindowNumber};
 
 #[repr(C)]
 pub struct TransactionServices {
@@ -39,7 +46,6 @@ pub struct TransactionServices {
     pub name: extern "C" fn(*mut ()) -> ByteSpan,
     pub clear_name: extern "C" fn(*mut ()),
     pub set_name: extern "C" fn(*mut (), ByteSpan),
-    pub name_dirty: extern "C" fn(*mut ()),
     pub interval_clamp: extern "C" fn(i32, bool) -> u16,
     pub set_interval: extern "C" fn(*mut (), u16, bool, bool),
     pub unique_name: u32,
@@ -113,10 +119,10 @@ pub(crate) unsafe fn cmd_rename_vehicle(
     flags: DoCommandFlags,
     cmd: CmdRenameVehicle,
 ) {
-    let (v, _, _) = unsafe { owned_primary(s, cost, cmd.veh_id) };
-    if v.is_null() {
+    // `owned_primary` returns the record exactly when the vehicle is owned and primary.
+    let (v, _, Some(handle)) = (unsafe { owned_primary(s, cost, cmd.veh_id) }) else {
         return;
-    }
+    };
     let text = cmd.text;
     let reset = text.size == 0;
     if !reset {
@@ -133,7 +139,12 @@ pub(crate) unsafe fn cmd_rename_vehicle(
         } else {
             (s.set_name)(v, text);
         }
-        (s.name_dirty)(v);
+        invalidate_window_classes_data(
+            get_window_class_for_vehicle_type(handle.vehicle_type()),
+            1,
+            false,
+        );
+        (s.shared.screen_dirty)();
     }
     (s.cost.zero)(cost);
 }
@@ -574,7 +585,6 @@ pub struct CommonServices {
     pub strings: TransactionStrings,
     pub aircraft_start: extern "C" fn(*mut ()) -> AircraftStartState,
     pub grf_string: extern "C" fn(u32, u32) -> u32,
-    pub startstop_ui: extern "C" fn(*mut ()),
     pub value: extern "C" fn(*mut ()) -> i64,
     pub valid_cargo: extern "C" fn(u8) -> bool,
 }
@@ -740,6 +750,7 @@ pub(crate) unsafe fn startstop(
 /// # Safety
 /// Immutable service tables and stack cost remain live for this synchronous entry.
 /// Register 100 follows the original successful `NewGRF` callback preconditions.
+#[allow(clippy::too_many_lines)] // The complete CmdStartStopVehicle body.
 pub(crate) unsafe fn cmd_start_stop_vehicle(
     s: &CommonServices,
     cost: *mut CommandCost,
@@ -851,7 +862,22 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         (s.vehicles.reset_depot_unbunching)(handle);
         // Native presentation may reenter owners; no Rust owner borrow spans it.
         (unsafe { &*s.vehicles.maintenance }.mark_dirty)(handle);
-        (s.startstop_ui)(v);
+        set_window_widget_dirty(
+            WindowClass::WC_VEHICLE_VIEW,
+            WindowNumber::from(veh_id),
+            VehicleViewWidgets::WID_VV_START_STOP.0,
+        );
+        set_window_dirty(
+            WindowClass::WC_VEHICLE_DEPOT,
+            WindowNumber::from(handle.tile()),
+        );
+        set_window_classes_dirty(get_window_class_for_vehicle_type(handle.vehicle_type()));
+        invalidate_window_data(
+            WindowClass::WC_VEHICLE_VIEW,
+            WindowNumber::from(veh_id),
+            0,
+            false,
+        );
     }
     (b.cost.zero)(cost);
 }
@@ -918,13 +944,13 @@ crate::abi::layouts! {
     "OpenTTDVehicleCommonServices" ["probe"] => CommonServices {
         base, transactions, vehicles, orders, strings, aircraft_start,
         grf_string,
-        startstop_ui, value, valid_cargo,
+        value, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => SelectionServices {
         groups, transactions, vehicles, links, in_depot, list_clear, list_push,
     };
     "OpenTTDVehicleTransactionServices" ["probe"] => TransactionServices {
-        shared, commands, cost, groups, name, clear_name, set_name, name_dirty,
+        shared, commands, cost, groups, name, clear_name, set_name,
         interval_clamp, set_interval, unique_name, max_name,
     };
 }

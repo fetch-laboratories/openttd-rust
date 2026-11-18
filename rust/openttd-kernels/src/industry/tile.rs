@@ -114,7 +114,7 @@ fn ambient(s: &Services) -> bool {
     unsafe { s.shared().settings().ambient.read() }
 }
 fn snd_play_tile_fx(sound: SoundID, tile: TileIndex, s: &Services) {
-    unsafe { (s.play_sound)(sound.0, tile.0) };
+    (s.shared().play_sound)(tile.0, sound.0);
 }
 /// `if (_settings_client.sound.ambient) SndPlayTileFx(sound, tile)`.
 fn ambient_sound(tile: TileIndex, sound: SoundFx, s: &Services) {

@@ -105,6 +105,7 @@ pub mod newgrf_bytereader;
 pub mod newgrf_callbacks;
 pub mod newgrf_commons;
 mod newgrf_config;
+mod newgrf_debug;
 mod newgrf_engine;
 mod newgrf_generic;
 mod newgrf_loading;
@@ -229,6 +230,8 @@ mod water_cmd;
 mod water_type;
 mod widget_parser;
 mod widget_type;
+mod widgets;
+mod window_func;
 mod witness;
 mod yapf_common;
 mod yapf_costbase;
@@ -1156,6 +1159,7 @@ pub mod landscape_cmd;
 mod newgrf_vehicle;
 
 pub mod vehicle_func;
+mod vehicle_gui;
 
 pub mod rail_type;
 

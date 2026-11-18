@@ -342,13 +342,6 @@ static void RustTown_make_house(uint32_t tile, uint32_t town, uint32_t house, ui
 {
 	MakeHouseTile(TileIndex{tile}, TownID(town), construction & 0xFF, (construction >> 8) & 0xFF, house, (construction >> 16) & 0xFF, construction >> 24);
 }
-static void RustTown_population_changed(uint32_t town) noexcept
-{
-	Town *t = Town::Get(TownID(town));
-	OpenTTDInvalidateTownView(t->index.base());
-	if (_settings_client.gui.population_in_label) t->UpdateVirtCoord();
-	InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_POPULATION_CHANGE);
-}
 
 uint32_t OpenTTDNextTownID(uint32_t from) noexcept
 {
@@ -481,7 +474,6 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.set_random_triggers = [](uint32_t tile, uint8_t triggers) noexcept { SetHouseRandomTriggers(TileIndex{tile}, HouseRandomTriggers{triggers}); },
 		.set_type = [](uint32_t tile, uint16_t house) noexcept { SetHouseType(TileIndex{tile}, house); },
 
-		.delete_inspect = OpenTTDDeleteHouseInspect,
 		.cargo_file = RustHouseGrf,
 		.convert_8bit = RustHouseConvert8bitBoolean,
 
@@ -518,7 +510,7 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.house_class = RustTownHouseClass,
 		.make_house = RustTown_make_house,
 
-		.population_changed = RustTown_population_changed,
+		.update_virt = [](Town *town) noexcept { town->UpdateVirtCoord(); },
 		.house_count = RustHouseSpecCount32,
 		.road_type_error = [](int32_t date) noexcept {
 			if (date < INT32_MAX) {
@@ -596,9 +588,7 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.name_style = OpenTTDTownNameStyle,
 		.prepare_rename = [](Town *town) noexcept { town->cached_name.clear(); },
 		.name_changed = [](Town *town, OpenTTDByteSpan name) noexcept { town->custom_name_cache.assign(reinterpret_cast<const char *>(name.data), name.size); },
-		.update_virt = [](Town *town) noexcept { town->UpdateVirtCoord(); },
 		.directory_rebuild = []() noexcept { InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_FORCE_REBUILD); },
-		.directory_resort = []() noexcept { InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_FORCE_RESORT); },
 		.update_noise = []() noexcept { UpdateAirportsNoise(); },
 		.delete_town = [](uint16_t id) noexcept { [[maybe_unused]] CommandCost rc = Command<CMD_DELETE_TOWN>::Do(DoCommandFlag::Execute, TownID(id)); assert(rc.Succeeded()); },
 		.assert_random_context = OpenTTDAssertTownGenerationContext,
@@ -728,9 +718,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.exclusive_rights = OpenTTDExclusiveRights,
 		.bribe = OpenTTDBribe,
 		.invalidate_view = OpenTTDInvalidateTownView,
-		.invalidate_authority = [](uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_AUTHORITY, TownID(town)); },
 		.clock = &GetRustClockServices(),
-		.station_views_dirty = []() noexcept { SetWindowClassesDirty(WC_STATION_VIEW); },
 		.next_station = [](uint32_t from) noexcept -> OpenTTDTownStationCursor { if (Station *st = OpenTTDNextStation(from)) return {.shell = st, .next = RustBaseStationID(st) + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
 		.station_town = RustStationStationTown,
 		.station_owner = RustStationOwnerByte<const BaseStation>,
@@ -748,12 +736,9 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.remove_town_sign = [](Town *t) noexcept { if (t->cache.sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeTown(t->index)); },
 		.delete_town = [](Town *town) noexcept { delete town; },
 		.cleaning_pool = []() noexcept { return Town::CleaningPool(); },
-		.close_view = [](uint16_t town) noexcept { CloseWindowById(WC_TOWN_VIEW, TownID(town)); },
-		.close_graph = [](uint16_t town) noexcept { CloseWindowById(WC_TOWN_CARGO_GRAPH, TownID(town)); },
 		.storage_count = RustTownStorageCount<Town>,
 		.delete_storage = [](Town *town, size_t index) noexcept { delete town->psa_list[index]; },
 		.clear_storage = [](Town *town) noexcept { town->psa_list.clear(); },
-		.delete_inspect = OpenTTDDeleteTownInspect,
 #ifdef WITH_ASSERT
 		.assertions = true,
 #else

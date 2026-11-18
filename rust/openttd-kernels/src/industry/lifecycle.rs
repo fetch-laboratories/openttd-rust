@@ -15,7 +15,11 @@ use crate::industry_type::{
     IndustryRandomTriggers,
 };
 use crate::industrytype::{IndustryBehaviour, IndustryBehaviours};
+use crate::newgrf::GrfSpecFeature;
+use crate::newgrf_debug::delete_newgrf_inspect_window;
 use crate::tile_type::{TileIndex, TileType};
+use crate::window_func::close_window_by_id;
+use crate::window_type::{WindowClass, WindowNumber};
 use std::{ffi::c_void, ptr};
 
 #[repr(C)]
@@ -44,7 +48,6 @@ pub struct AnimationSpec {
 pub struct LifecycleServices {
     pub neutral_station: unsafe extern "C" fn(*mut c_void) -> *mut super::StationHandle,
     pub cleanup_tile: unsafe extern "C" fn(u32) -> CleanupTile,
-    pub delete_tile_inspect: unsafe extern "C" fn(u32),
     pub restoration: *const crate::water::RestorationServices,
     pub delete_oilrig: unsafe extern "C" fn(u32),
     pub clear_docking: unsafe extern "C" fn(u32),
@@ -52,9 +55,6 @@ pub struct LifecycleServices {
     pub disassociate_field: unsafe extern "C" fn(u32),
     pub release_disasters: unsafe extern "C" fn(u16),
     pub delete_storage: unsafe extern "C" fn(*mut c_void),
-    pub close_view: unsafe extern "C" fn(u16),
-    pub close_production: unsafe extern "C" fn(u16),
-    pub delete_inspect: unsafe extern "C" fn(u16),
     pub subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub invalidate_cargo: unsafe extern "C" fn(u16),
     pub belongs: unsafe extern "C" fn(u32, u16) -> bool,
@@ -156,7 +156,7 @@ pub(crate) unsafe fn industry_destruct(d: IndustryDestruct, s: &Services, w: &Li
         let observation = (w.cleanup_tile)(tile_cur.0);
         if TileType(observation.kind) == TileType::MP_INDUSTRY {
             if IndustryID(observation.industry) == id {
-                (w.delete_tile_inspect)(tile_cur.0);
+                delete_newgrf_inspect_window(GrfSpecFeature::GSF_INDUSTRYTILES, tile_cur.0);
                 let shared = s.shared();
                 // MakeWaterKeepingClass() can also handle 'land'
                 crate::water::restore(
@@ -206,9 +206,19 @@ pub(crate) unsafe fn industry_destruct(d: IndustryDestruct, s: &Services, w: &Li
         let kind = ptr::read(ptr::addr_of!((*owner).metadata.kind));
         super::industry_registry_erase(builder, crate::industry_type::IndustryType(kind), id);
         crate::news_func::delete_industry_news(id);
-        (w.close_view)(id.0);
-        (w.close_production)(id.0);
-        (w.delete_inspect)(id.0);
+        close_window_by_id(
+            WindowClass::WC_INDUSTRY_VIEW,
+            WindowNumber::from(id),
+            true,
+            0,
+        );
+        close_window_by_id(
+            WindowClass::WC_INDUSTRY_PRODUCTION,
+            WindowNumber::from(id),
+            true,
+            0,
+        );
+        delete_newgrf_inspect_window(GrfSpecFeature::GSF_INDUSTRIES, u32::from(id.0));
         (&*(w.subsidies)()).delete_with(crate::subsidy::Source::industry(id.0));
         (w.invalidate_cargo)(id.0);
     }

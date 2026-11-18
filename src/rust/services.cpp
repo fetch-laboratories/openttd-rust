@@ -90,6 +90,12 @@
 #include "debug_ffi.h"
 #include "encoded_adapter.hpp"
 #include "news_ffi.h"
+#include "window_ffi.h"
+#include "../newgrf_debug.h"
+#include "../vehicle_gui.h"
+#include "../widgets/station_widget.h"
+#include "../widgets/vehicle_widget.h"
+#include "../window_func.h"
 #include "services_cargo.h"
 #include "../ai/ai.hpp"
 #include "../game/game.hpp"
@@ -282,6 +288,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.order_review_system = &_settings_client.gui.order_review_system,
 	.participate_survey = reinterpret_cast<const uint8_t *>(&_settings_client.network.participate_survey),
 	.pause_on_newgame = &_settings_client.gui.pause_on_newgame,
+	.population_in_label = &_settings_client.gui.population_in_label,
 	.rail_crossing_penalty = &_settings_game.pf.yapf.rail_crossing_penalty,
 	.rail_curve45_penalty = &_settings_game.pf.yapf.rail_curve45_penalty,
 	.rail_curve90_penalty = &_settings_game.pf.yapf.rail_curve90_penalty,
@@ -948,5 +955,29 @@ static const OpenTTDScriptEventServices _rust_script_event_services{
 };
 [[maybe_unused]] static const bool _rust_script_event_bound = (openttd_rust_script_event_bind(&_rust_script_event_services), true);
 #include "abi-visit-OpenTTDScriptEventServices.hpp"
+
+static_assert(WC_GOAL_QUESTION == 13 && WC_TOWN_AUTHORITY == 22 && WC_VEHICLE_DETAILS == 23 && WC_VEHICLE_REFIT == 24 && WC_VEHICLE_ORDERS == 25 && WC_VEHICLE_TIMETABLE == 27);
+static_assert(WC_COMPANY_COLOUR == 28 && WC_SELECT_STATION == 30 && WC_TOWN_DIRECTORY == 32 && WC_SIGN_LIST == 36 && WC_GOALS_LIST == 38 && WC_STORY_BOOK == 39);
+static_assert(WC_STATION_LIST == 40 && WC_TRAINS_LIST == 41 && WC_ROADVEH_LIST == 42 && WC_SHIPS_LIST == 43 && WC_AIRCRAFT_LIST == 44 && WC_TOWN_VIEW == 45);
+static_assert(WC_VEHICLE_VIEW == 46 && WC_STATION_VIEW == 47 && WC_VEHICLE_DEPOT == 48 && WC_INDUSTRY_VIEW == 50 && WC_COMPANY == 51 && WC_BUILD_VEHICLE == 54);
+static_assert(WC_MAIN_TOOLBAR == 1 && WC_BUILD_INDUSTRY == 62 && WC_CLIENT_LIST == 68 && WC_NETWORK_STATUS_WINDOW == 69 && WC_SEND_NETWORK_MSG == 72 && WC_COMPANY_LEAGUE == 81);
+static_assert(WC_INDUSTRY_PRODUCTION == 84 && WC_TOWN_CARGO_GRAPH == 85 && WC_ENGINE_PREVIEW == 88 && WC_GAME_OPTIONS == 91 && WN_NETWORK_STATUS_WINDOW_JOIN == 0);
+static_assert(std::is_same_v<WidgetID, int32_t> && std::is_same_v<std::underlying_type_t<WindowClass>, uint16_t> && std::is_same_v<std::underlying_type_t<WindowNumberEnum>, uint8_t>);
+static_assert(TDIWD_POPULATION_CHANGE == 1 && TDIWD_FORCE_RESORT == 2);
+static_assert(VIWD_CONSIST_CHANGED == -3);
+static_assert(WID_SV_CLOSE_AIRPORT == 11);
+static_assert(WID_VV_START_STOP == 2 && WID_VV_REFIT == 7);
+
+static const OpenTTDWindowServices _rust_window_services{
+	.close_window_by_id = [](uint16_t cls, int32_t number, bool force, int32_t data) noexcept { CloseWindowById(static_cast<WindowClass>(cls), number, force, data); },
+	.delete_newgrf_inspect_window = [](uint8_t feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(static_cast<GrfSpecFeature>(feature), index); },
+	.invalidate_window_classes_data = [](uint16_t cls, int32_t data, bool gui_scope) noexcept { InvalidateWindowClassesData(static_cast<WindowClass>(cls), data, gui_scope); },
+	.invalidate_window_data = [](uint16_t cls, int32_t number, int32_t data, bool gui_scope) noexcept { InvalidateWindowData(static_cast<WindowClass>(cls), number, data, gui_scope); },
+	.set_window_classes_dirty = [](uint16_t cls) noexcept { SetWindowClassesDirty(static_cast<WindowClass>(cls)); },
+	.set_window_dirty = [](uint16_t cls, int32_t number) noexcept { SetWindowDirty(static_cast<WindowClass>(cls), number); },
+	.set_window_widget_dirty = [](uint16_t cls, int32_t number, int32_t widget_index) noexcept { SetWindowWidgetDirty(static_cast<WindowClass>(cls), number, widget_index); },
+};
+[[maybe_unused]] static const bool _rust_window_bound = (openttd_rust_window_bind(&_rust_window_services), true);
+#include "abi-visit-OpenTTDWindowServices.hpp"
 /** The tables bound once for the process. */
-bool CheckAbi_debug() { return AbiServicesComplete(_rust_debug_services) && AbiServicesComplete(_rust_news_services) && AbiServicesComplete(_rust_script_event_services); }
+bool CheckAbi_debug() { return AbiServicesComplete(_rust_debug_services) && AbiServicesComplete(_rust_news_services) && AbiServicesComplete(_rust_script_event_services) && AbiServicesComplete(_rust_window_services); }

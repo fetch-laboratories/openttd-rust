@@ -10,7 +10,6 @@ struct OpenTTDClockServices;
 struct OpenTTDCompanyServices;
 struct OpenTTDVehicleTransactionServices;
 struct OpenTTDVehicleRefitServices;
-struct OpenTTDObjectivesServices;
 struct OpenTTDScheduleServices;
 struct OpenTTDEngineLoadingServices;
 struct VehicleDefaultSettings;
@@ -23,7 +22,6 @@ struct OpenTTDSettingServices {
 	const OpenTTDCompanyServices *company;
 	const OpenTTDVehicleTransactionServices *transactions;
 	const OpenTTDVehicleRefitServices *refit;
-	const OpenTTDObjectivesServices *objectives;
 	const OpenTTDScheduleServices *schedule;
 	const OpenTTDEngineLoadingServices *engines;
 	OpenTTDEnvironmentServices environment;
@@ -41,7 +39,6 @@ struct OpenTTDSettingServices {
 	bool (*setting_editable)(const SettingDesc *) noexcept OPENTTD_SERVICE_DEFAULT(setting_editable);
 	void (*change_game_setting)(const SettingDesc *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(change_game_setting);
 	void (*change_company_setting)(const SettingDesc *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(change_company_setting);
-	void (*window_classes_dirty)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(window_classes_dirty);
 	void (*error_message)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
 	uint32_t edges_not_empty;
 	uint32_t edges_not_water;

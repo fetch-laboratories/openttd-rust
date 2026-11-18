@@ -1186,7 +1186,7 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			auto *cs = static_cast<NetworkClientSocket *>(socket);
 			std::string client_name = cs->GetClientName();
 			NetworkTextMessage(NETWORK_ACTION_JOIN, CC_DEFAULT, false, client_name, "", cs->client_id);
-			RustInvalidateWindowData(WC_CLIENT_LIST, 0, 0);
+			InvalidateWindowData(WC_CLIENT_LIST, 0, 0);
 			Debug(net, 3, "[{}] Client #{} ({}) joined as {}", ServerNetworkGameSocketHandler::GetName(), cs->client_id, cs->GetClientIP(), client_name);
 		},
 		.lost_connection_announcement = [](void *socket) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName(); NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", STR_NETWORK_ERROR_CLIENT_CONNECTION_LOST); },
