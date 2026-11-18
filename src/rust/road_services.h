@@ -30,11 +30,11 @@ static const OpenTTDRoadCommandContext *OPENTTD_RUST_CALL RoadSvcBuildRoadContex
 static void OPENTTD_RUST_CALL RoadSvcRoadVehListDirty() noexcept { SetWindowClassesDirty(WC_ROADVEH_LIST); }
 
 static constinit const OpenTTDRoadLeaves _rust_road_leaves{
-	.vehicle = &_rust_vehicle_services,
-	.ground = &_rust_ground_services<RoadVehicle>,
-	.shared = &_rust_shared_services,
 	.build_road_context = RoadSvcBuildRoadContext,
+	.ground = &_rust_ground_services<RoadVehicle>,
 	.roadveh_list_dirty = RoadSvcRoadVehListDirty,
+	.shared = &_rust_shared_services,
+	.vehicle = &_rust_vehicle_services,
 };
 
 static const OpenTTDRoadLeaves &GetRoadLeaves()

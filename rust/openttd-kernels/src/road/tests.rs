@@ -188,9 +188,9 @@ mod controller {
                 ..*shared
             }));
             let leaves = Box::leak(Box::new(Leaves {
-                vehicle,
                 ground,
                 shared,
+                vehicle,
                 ..ROAD_LEAVES
             }));
             let record = crate::vehicle_base::openttd_rust_vehicle_record_new(

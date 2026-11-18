@@ -67,9 +67,9 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, build_road_context);
 		VEHICLE_UNUSED(leaves, roadveh_list_dirty);
 		VEHICLE_UNUSED(vehicle, engine);
-		leaves.vehicle = &vehicle;
 		leaves.ground = &ground;
 		leaves.shared = &shared;
+		leaves.vehicle = &vehicle;
 	}
 	RoadTestTables(const RoadTestTables &) = delete;
 	RoadTestTables &operator=(const RoadTestTables &) = delete;

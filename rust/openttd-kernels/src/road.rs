@@ -300,15 +300,15 @@ pub(crate) unsafe fn crashed_ctr(s: *const State) -> u16 {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub vehicle: *const VehicleServices,
-    pub ground: *const GroundServices,
-    pub shared: *const Services,
     /// Construct, in the controller's native stack slot, the road command context that
     /// `CanBuildTramTrackOnTile` runs `CmdBuildRoad` in.
     pub build_road_context:
         extern "C" fn(*mut crate::road_cmd::CommandSlot) -> *const crate::road_cmd::CommandContext,
+    pub ground: *const GroundServices,
     /// `SetWindowClassesDirty(WC_ROADVEH_LIST)`.
     pub roadveh_list_dirty: extern "C" fn(),
+    pub shared: *const Services,
+    pub vehicle: *const VehicleServices,
 }
 
 /// Count one C++ service call for the road witness; returns the unchanged function pointer.
@@ -2976,11 +2976,11 @@ crate::abi::layouts! {
         tile,
     };
     "OpenTTDRoadLeaves" ["probe"] => Leaves {
-        vehicle,
-        ground,
-        shared,
         build_road_context,
+        ground,
         roadveh_list_dirty,
+        shared,
+        vehicle,
     };
 }
 
@@ -3004,9 +3004,9 @@ mod map_context_tests {
             has_articulated: unreachable1,
         };
         let mut leaves = ROAD_LEAVES;
+        leaves.ground = &raw const ground;
         leaves.shared = &raw const shared;
         leaves.vehicle = &raw const vehicle;
-        leaves.ground = &raw const ground;
         let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
             std::ptr::null_mut(),
             crate::vehicle_type::VehicleType::VEH_ROAD,

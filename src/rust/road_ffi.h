@@ -22,11 +22,11 @@ struct OpenTTDRoadCommandContext;
 struct OpenTTDRoadCommandSlot;
 struct OpenTTDRoadPathElement { uint8_t trackdir; uint32_t tile; };
 struct OpenTTDRoadLeaves {
-	const OpenTTDVehicleServices *vehicle;
-	const OpenTTDGroundServices *ground;
-	const OpenTTDSharedServices *shared;
 	const OpenTTDRoadCommandContext *(OPENTTD_RUST_CALL *build_road_context)(OpenTTDRoadCommandSlot *) noexcept OPENTTD_SERVICE_DEFAULT(build_road_context);
+	const OpenTTDGroundServices *ground;
 	void (OPENTTD_RUST_CALL *roadveh_list_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(roadveh_list_dirty);
+	const OpenTTDSharedServices *shared;
+	const OpenTTDVehicleServices *vehicle;
 };
 const OpenTTDRoadLeaves &GetRustRoadLeaves() noexcept;
 extern "C" {

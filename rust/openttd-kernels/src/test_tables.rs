@@ -225,11 +225,11 @@ pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::Vehi
 
 /// `crate::road::Leaves` with every entry unreachable.
 pub(crate) const ROAD_LEAVES: crate::road::Leaves = crate::road::Leaves {
-    vehicle: ptr::null(),
-    ground: ptr::null(),
-    shared: ptr::null(),
     build_road_context: unreachable1,
+    ground: ptr::null(),
     roadveh_list_dirty: unreachable0,
+    shared: ptr::null(),
+    vehicle: ptr::null(),
 };
 
 /// `crate::train::Leaves` with every entry unreachable.
