@@ -569,7 +569,7 @@ pub unsafe extern "C" fn openttd_rust_can_engine_use_station_abi(
     s: *const Services,
 ) -> u8 {
     u8::from(crate::vehicle_func::can_engine_use_station(
-        engine,
+        crate::engine_type::EngineID(engine),
         station,
         unsafe { &*s },
     ))

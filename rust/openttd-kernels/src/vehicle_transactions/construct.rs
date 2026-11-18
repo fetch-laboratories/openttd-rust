@@ -186,7 +186,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
     let st = (k.station)(tile);
     /* Prevent building aircraft types at places which can't handle them */
     if !crate::vehicle_func::can_engine_use_station(
-        (crate::newgrf_airport::runtime().engine_id)(e),
+        crate::engine_type::EngineID((crate::newgrf_airport::runtime().engine_id)(e)),
         st.cast(),
         crate::newgrf_airport::runtime(),
     ) {

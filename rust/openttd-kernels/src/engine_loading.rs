@@ -1024,7 +1024,9 @@ pub extern "C" fn openttd_rust_engine_reset_config_abi(s: &Services) -> u8 {
             break;
         }
         from = vehicle.id + 1;
-        if crate::vehicle_func::is_company_buildable_vehicle_type(vehicle.kind) {
+        if crate::vehicle_func::is_company_buildable_vehicle_type(crate::vehicle_type::VehicleType(
+            vehicle.kind,
+        )) {
             return u8::from(false);
         }
     }

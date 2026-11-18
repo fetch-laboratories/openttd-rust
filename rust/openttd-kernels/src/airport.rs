@@ -393,10 +393,6 @@ impl AirportFTAClassFlag {
     pub const SHORT_STRIP: Self = Self(2);
 }
 
-/// `AirportFTAClass::Flags` mask of `Flag::Airplanes`.
-pub const FTA_AIRPLANES: u8 = 1 << AirportFTAClassFlag::AIRPLANES.0;
-/// `AirportFTAClass::Flags` mask of `Flag::Helicopters`.
-pub const FTA_HELICOPTERS: u8 = 1 << AirportFTAClassFlag::HELICOPTERS.0;
 /// `AirportFTAClass::Flags` mask of `Flag::ShortStrip`.
 pub const FTA_SHORT_STRIP: u8 = 1 << AirportFTAClassFlag::SHORT_STRIP.0;
 
