@@ -1746,18 +1746,19 @@ impl<'a> Game<'a> {
             /* The 'current' company is not necessarily the owner of the vehicle. */
             let cur_company = (town.exchange_company)(u32::from(c.0));
 
-            let succeeded = context.build(
+            context.do_build(
                 crate::command_type::DoCommandFlags::from_element(
                     crate::command_type::DoCommandFlag::NoWater,
-                )
-                .0,
-                t.0,
-                r.0,
-                rt.0,
-                crate::town_type::TownID::INVALID.0,
+                ),
+                t,
+                r,
+                rt,
+                crate::road_type::DisallowedRoadDirections::DRD_NONE,
+                crate::town_type::TownID::INVALID,
             );
 
             (town.exchange_company)(cur_company);
+            let succeeded = context.succeeded();
             crate::witness::hit(if succeeded {
                 crate::witness::ROAD_TRAM_BUILD
             } else {

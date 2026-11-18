@@ -81,8 +81,44 @@ impl CommandContext {
                 0,
                 town,
             );
+            self.succeeded()
         }
-        let costs = unsafe { &*(*s.rail_commands).cost };
+    }
+    /// `Command<CMD_BUILD_ROAD>::Do` through the Rust owner, into this context's native
+    /// stack results.
+    ///
+    /// # Safety
+    /// All context pointers denote live exclusive caller-owned stack storage.
+    pub(crate) unsafe fn do_build(
+        &self,
+        flags: crate::command_type::DoCommandFlags,
+        tile: TileIndex,
+        rb: crate::road_type::RoadBits,
+        rt: crate::road_type::RoadType,
+        drd: crate::road_type::DisallowedRoadDirections,
+        town_id: crate::town_type::TownID,
+    ) {
+        // SAFETY: immutable native tables and exclusive stack slots outlive the call.
+        let c = unsafe { Ctx::new(self.services) };
+        c.do_build(
+            self.scratch,
+            c.c(self.cost),
+            c.c(self.ret),
+            flags.0,
+            tile.0,
+            rb.0,
+            rt.0,
+            drd.0,
+            town_id.0,
+        );
+    }
+    /// `CommandCost::Succeeded` of the cost `do_build` returned.
+    ///
+    /// # Safety
+    /// As `do_build`.
+    pub(crate) unsafe fn succeeded(&self) -> bool {
+        // SAFETY: As this function's contract.
+        let costs = unsafe { &*(*(*self.services).rail_commands).cost };
         (costs.success)(self.cost)
     }
 }
