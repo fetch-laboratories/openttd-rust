@@ -423,11 +423,12 @@ static void RoadBoundary()
 
 /* Moving and partly entered consists cannot use IsChainInDepot's service path,
  * but FindClosestRoadDepot still selects their current depot at distance zero.
- * Tile 3091 is a road depot in the fixture map. */
+ * Tile 3091 is a road depot in the fixture map. From a plain road tile the
+ * economy-day handler searches with the configured penalty. */
 struct RoadServiceProbe {
 	OpenTTDRoadState *head = openttd_rust_road_new();
 	OpenTTDRoadState *tail = openttd_rust_road_new();
-	uint32_t tile = 3091;
+	uint32_t tile = 3091, depot = 3091;
 	uint16_t speed = 5;
 	uint32_t depot_orders = 0, services = 0;
 };
@@ -450,9 +451,18 @@ static void RoadServiceBoundary()
 	openttd_rust_engine_construct(service_engine, &engine_defaults, VEH_ROAD, UINT16_MAX);
 	service_engine->reliability = 0x9876;
 	t.vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return service_engine; };
-	static const uint32_t depot_penalty = 300;
+	static uint32_t depot_penalty = 300;
+	/* The pf.yapf road settings the depot search reads: their defaults. */
+	static const uint32_t max_search_nodes = 10000, road_slope = 200, road_crossing = 300, road_stop = 800, road_stop_occupied = 800, road_stop_bay_occupied = 1500, road_curve = 100;
 	static OpenTTDSettingAddresses catalog{};
 	catalog.maximum_go_to_depot_penalty = &depot_penalty;
+	catalog.max_search_nodes = &max_search_nodes;
+	catalog.road_slope_penalty = &road_slope;
+	catalog.road_crossing_penalty = &road_crossing;
+	catalog.road_stop_penalty = &road_stop;
+	catalog.road_stop_occupied_penalty = &road_stop_occupied;
+	catalog.road_stop_bay_occupied_penalty = &road_stop_bay_occupied;
+	catalog.road_curve_penalty = &road_curve;
 	t.shared.settings = &catalog;
 	static VehicleDefaultSettings defaults{}; defaults.servint_roadveh = 1;
 	static OpenTTDSettingServices settings{};
@@ -505,7 +515,7 @@ static void RoadServiceBoundary()
 	static OpenTTDEngineCapabilitiesServices service_capabilities{};
 	service_capabilities.shared = &t.shared;
 	t.physics.capabilities = &service_capabilities;
-	t.shared.depot_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == road_service_probe->tile); return 55; };
+	t.shared.depot_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == road_service_probe->depot); return 55; };
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *v) noexcept {
 		CHECK((v->ground->flags & (1 << GVF_SUPPRESS_IMPLICIT_ORDERS)) != 0);
@@ -530,11 +540,51 @@ static void RoadServiceBoundary()
 	probe.tail->state = 254;
 	day();
 	CHECK(probe.services == 1 && probe.depot_orders == 2);
+
+	/* A stopped vehicle on a two-way X road at tile 2080 faces north-east
+	 * (TRACKDIR_X_NE) towards the depot on tile 2079, whose south-west entrance
+	 * faces it one tile, cost 100, on. The handler reads the configured penalty
+	 * and searches: a penalty below the depot's cost orders nothing, and one that
+	 * covers it orders the depot. */
+	probe.tile = 32 + 32 * 64; probe.depot = probe.tile - 1;
+	service_map.base[probe.tile].type = MP_ROAD << 4;
+	service_map.base[probe.tile].m5 = ROAD_X;
+	service_map.base[probe.depot].type = MP_ROAD << 4;
+	service_map.base[probe.depot].m5 = (2 << 6) | DIAGDIR_SW; // ROAD_TILE_DEPOT
+	t.shared.tile_type = [](uint32_t tile) noexcept -> uint8_t { return service_map.base[tile].type >> 4; };
+	t.shared.may_have_road = [](uint32_t) noexcept { return true; };
+	static const OpenTTDRoadStopServices service_stops{
+		.vehicle = nullptr, .ground = nullptr,
+		.is_bus = [](OpenTTDVehicle *) noexcept { return true; },
+	};
+	t.shared.road_stops = []() noexcept { return &service_stops; };
+	static OpenTTDOrdersLeaves service_order_leaves{};
+	service_order_leaves.vehicle = [](void *shell) noexcept { return &road_service_orders[shell == RoadServiceHandle(0)->shell ? 0 : 1]; };
+	static OpenTTDMovementServices service_movement{};
+	service_movement.shared = &t.shared;
+	service_movement.vehicle = &t.vehicle;
+	service_movement.orders = &service_order_leaves;
+	service_movement.native_assert = [](bool okay) noexcept { CHECK(okay); };
+	service_movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
+	service_movement.road_compatible = [](OpenTTDVehicle *) noexcept -> uint64_t { return 1; };
+	service_movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 0; };
+	t.shared.movement = &service_movement;
+	probe.speed = 0;
+	for (uint32_t penalty : {99U, 100U}) {
+		depot_penalty = penalty;
+		RoadServiceHandle(0)->dest_tile = 42;
+		probe.head->state = probe.tail->state = TRACKDIR_X_NE;
+		day();
+		const bool ordered = penalty >= 100;
+		CHECK(probe.depot_orders == (ordered ? 3U : 2U));
+		CHECK(RoadServiceHandle(0)->dest_tile == (ordered ? probe.depot : 42U));
+		CHECK(probe.services == 1);
+	}
 	openttd_rust_road_destroy(probe.head);
 	openttd_rust_road_destroy(probe.tail);
 	t.vehicle.engine = nullptr;
 	openttd_rust_engine_destroy(std::exchange(service_engine, nullptr));
-	std::printf("road_service_moving_partial_and_parked_branches passed\n");
+	std::printf("road_service_moving_partial_parked_and_search_branches passed\n");
 }
 ABI_PROBE(RoadBoundary);
 ABI_PROBE(RoadServiceBoundary);
