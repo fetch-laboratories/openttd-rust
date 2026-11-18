@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `ServerNetworkGameSocketHandler::ClientStatus` from `network_server.h`, read and written in
-//! place on the server-side game socket shell, and `NetworkServerNewCompany`.
+//! place on the server-side game socket shell, `ServerNetworkGameSocketHandler::GetName` and
+//! `GetClientName`, and `NetworkServerNewCompany`.
 
 use crate::command_type::Commands;
 use crate::company_type::{CompanyID, OpenTTDCompany};
@@ -48,6 +49,25 @@ pub(crate) fn status(cs: *mut GameSocket) -> ClientStatus {
 /// Stores `ServerNetworkGameSocketHandler::status` of a live server-side socket.
 pub(crate) fn set_status(cs: *mut GameSocket, status: ClientStatus) {
     socket::set_status(cs, status.0);
+}
+
+/// `ServerNetworkGameSocketHandler::GetName`.
+pub(crate) const fn get_name() -> &'static str {
+    "server"
+}
+
+/// `ServerNetworkGameSocketHandler::GetClientName`: get the name of the client, if the user
+/// did not send it yet, Client ID is used.
+pub(crate) fn get_client_name(f: &FrameServices, cs: *mut GameSocket) -> Vec<u8> {
+    let ci = (f.connection.info)(socket::server(cs));
+    if !ci.is_null() {
+        let name = crate::network_connection::client_name(f.connection, ci);
+        if !name.is_empty() {
+            return name.to_vec();
+        }
+    }
+
+    format!("Client #{}", (f.dispatch.client_id)(cs)).into_bytes()
 }
 
 /// `NetworkServerNewCompany`: perform all the server specific administration of a new
@@ -99,5 +119,74 @@ pub(crate) fn new_company(
         drop(president);
 
         (s.announce_company)(ci, index.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::network_socket::GameSocket;
+    use crate::services::ByteSpan;
+    use std::ffi::c_void;
+
+    /// A named client's name, else `Client #<socket client_id>` for an empty name or a null
+    /// info.
+    #[test]
+    fn get_client_name_falls_back_to_the_socket_client_id() {
+        // The test sockets are tags: 1 has a named info, 2 an unnamed one and 3 none.
+        extern "C" fn info(socket: *mut c_void) -> *mut c_void {
+            match socket.addr() {
+                1 => b"n\xE4me".as_ptr().cast_mut().cast(),
+                2 => b"".as_ptr().cast_mut().cast(),
+                _ => std::ptr::null_mut(),
+            }
+        }
+        extern "C" fn client_name(ci: *const c_void) -> ByteSpan {
+            let name: &[u8] = if ci == b"n\xE4me".as_ptr().cast() {
+                b"n\xE4me"
+            } else {
+                b""
+            };
+            ByteSpan {
+                data: name.as_ptr(),
+                size: name.len(),
+            }
+        }
+        extern "C" fn client_id(socket: *mut GameSocket) -> u32 {
+            u32::try_from(crate::network_socket::server(socket).addr()).unwrap() + 40
+        }
+        const CONNECTION: crate::network_connection::Services =
+            crate::network_connection::Services {
+                client_name,
+                info,
+                ..crate::test_tables::NETWORK_CONNECTION
+            };
+        const DISPATCH: crate::network_dispatch::Services = crate::network_dispatch::Services {
+            client_id,
+            ..crate::test_tables::NETWORK_DISPATCH
+        };
+        let f = crate::network_frame::Services {
+            connection: &CONNECTION,
+            dispatch: &DISPATCH,
+            ..crate::test_tables::NETWORK_FRAME
+        };
+        let name = |tag: usize| {
+            let mut socket = GameSocket {
+                base: std::ptr::null_mut(),
+                game: std::ptr::null_mut(),
+                incoming: std::ptr::null_mut(),
+                last_packet_ns: 0,
+                outgoing: std::ptr::null_mut(),
+                pending: false,
+                role: 0,
+                server: std::ptr::without_provenance_mut(tag),
+                status: 0,
+                sync: std::ptr::null_mut(),
+                tcp: std::ptr::null_mut(),
+            };
+            super::get_client_name(&f, &raw mut socket)
+        };
+        assert_eq!(name(1), b"n\xE4me");
+        assert_eq!(name(2), b"Client #42");
+        assert_eq!(name(3), b"Client #43");
     }
 }

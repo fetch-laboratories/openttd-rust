@@ -335,7 +335,6 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		company.network_server = []() noexcept { return false; };
 		auto command = GetRustNetworkCommandServices();
 		command.company = &company;
-		command.console_bad_server = [](OpenTTDNetworkCommandDecodeError) noexcept {};
 		OpenTTDNetworkConnectionServices connection{};
 		auto network = GetRustNetworkFrameServices();
 		network.client = &client;

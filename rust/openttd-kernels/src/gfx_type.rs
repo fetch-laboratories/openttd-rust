@@ -99,6 +99,19 @@ impl Colours {
     pub const INVALID_COLOUR: Self = Self(0xFF);
 }
 
+/// Colour of the strings, see `_string_colourmap` in `table/string_colours.h` or
+/// `docs/ottd-colourtext-palette.png`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TextColour(pub u16);
+
+impl TextColour {
+    /// `TC_SILVER`.
+    pub const TC_SILVER: Self = Self(0x01);
+    /// `TC_LIGHT_BLUE`.
+    pub const TC_LIGHT_BLUE: Self = Self(0x0D);
+}
+
 /// `Colour` channels: `ColourRGBA` under Emscripten, otherwise `ColourBGRA` on
 /// little-endian and `ColourARGB` on big-endian hosts.
 #[cfg(target_os = "emscripten")]

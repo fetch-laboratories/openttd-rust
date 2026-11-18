@@ -8,7 +8,9 @@
 
 use crate::command_type::{CommandFlag, CommandFlags, Commands};
 use crate::company_type::CompanyID;
-use crate::debug::debug;
+use crate::console_func::iconsole_print;
+use crate::console_type::CC_WARNING;
+use crate::debug::{Bytes, debug};
 use crate::game_state::GameState;
 use crate::network_server::{self as server, ClientStatus};
 use crate::network_socket as socket;
@@ -159,14 +161,6 @@ impl CommandQueue {
 }
 
 /// Native leaves for `network_command.cpp`; see `network_command_ffi.h`.
-#[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum DecodeError {
-    None,
-    InvalidCommand,
-    Offline,
-    InvalidCallback,
-}
 #[repr(C)]
 pub struct Services {
     pub admin_log: extern "C" fn(*const c_void, *const CommandPacket),
@@ -176,11 +170,6 @@ pub struct Services {
     pub commands_per_frame: extern "C" fn() -> u16,
     pub commands_per_frame_server: extern "C" fn() -> u16,
     pub company: &'static crate::company::Services,
-    pub console_bad_client: extern "C" fn(*mut c_void, DecodeError),
-    pub console_bad_server: extern "C" fn(DecodeError),
-    pub console_company_mismatch: extern "C" fn(*mut c_void, u8),
-    pub console_server_only: extern "C" fn(*mut c_void, u8),
-    pub console_spectator: extern "C" fn(*mut c_void, u8),
     pub control_action: extern "C" fn(ByteSpan) -> u8,
     pub execute: extern "C" fn(*const CommandPacket, usize),
     pub execute_past: extern "C" fn(),
@@ -586,13 +575,14 @@ fn client_send_command(
 
 /// `NetworkGameSocketHandler::ReceiveCommand`: receives a command from the network.
 /// `p` is the packet to read from and `cp` the struct to write the data to; the wire's u16
-/// command narrows to the native enum's u8 first.
+/// command narrows to the native enum's u8 first. Returns an error message, or `None` when
+/// there has been no error.
 #[allow(clippy::cast_possible_truncation)] // Native Commands narrows the wire u16 to u8.
 fn receive_command(
     f: &crate::network_frame::Services,
     p: *mut crate::packet::State,
     cp: &mut CommandPacket,
-) -> DecodeError {
+) -> Option<&'static str> {
     use crate::packet;
     let s = f.command;
     let commands = commands(s);
@@ -600,10 +590,10 @@ fn receive_command(
         cp.company = packet::recv_uint8(p, f.packet);
         cp.cmd = packet::recv_uint16(p, f.packet) as u8;
         if !(commands.command_valid)(cp.cmd) {
-            return DecodeError::InvalidCommand;
+            return Some("invalid command");
         }
         if CommandFlags((commands.command_flags)(cp.cmd)).test(CommandFlag::Offline) {
-            return DecodeError::Offline;
+            return Some("single-player only command");
         }
         cp.err_msg = u32::from(packet::recv_uint16(p, f.packet));
         let size = packet::recv_buffer_size(p, f.packet);
@@ -620,12 +610,12 @@ fn receive_command(
 
         let callback = usize::from(packet::recv_uint8(p, f.packet));
         if callback >= s.callback_count || !(s.has_unpack)(cp.cmd, callback) {
-            return DecodeError::InvalidCallback;
+            return Some("invalid callback");
         }
 
         cp.callback = (s.callback)(callback);
     }
-    DecodeError::None
+    None
 }
 
 /// A default-constructed `CommandPacket`.
@@ -662,8 +652,8 @@ pub(crate) fn receive_server(
         9, "Client::Receive_SERVER_COMMAND(): cmd={}, frame={}", cp.cmd, cp.frame
     );
 
-    if err != DecodeError::None {
-        (f.command.console_bad_server)(err);
+    if let Some(err) = err {
+        iconsole_print!(CC_WARNING, "Dropping server connection due to {}.", err);
         return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
 
@@ -724,24 +714,46 @@ pub(crate) fn receive_client(
         return NetworkRecvStatus::NETWORK_RECV_STATUS_CLIENT_QUIT;
     }
 
-    if err != DecodeError::None {
-        (s.console_bad_client)(shell, err);
+    let ci = (f.connection.info)(shell);
+    let client_id = |ci| (f.connection.client_id)(ci);
+    let client_playas = |ci| (f.connection.client_playas)(ci);
+
+    if let Some(err) = err {
+        iconsole_print!(
+            CC_WARNING,
+            "Dropping client #{} (IP: {}) due to {}.",
+            client_id(ci),
+            Bytes(crate::network_connection::get_client_ip(f, game)),
+            err
+        );
         return send_error(NetworkErrorCode::NETWORK_ERROR_NOT_EXPECTED);
     }
 
     let commands = commands(s);
     if CommandFlags((commands.command_flags)(cp.cmd)).test(CommandFlag::Server)
-        && (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
+        && client_id(ci) != CLIENT_ID_SERVER
     {
-        (s.console_server_only)(shell, cp.cmd);
+        iconsole_print!(
+            CC_WARNING,
+            "Kicking client #{} (IP: {}) due to calling a server only command {}.",
+            client_id(ci),
+            Bytes(crate::network_connection::get_client_ip(f, game)),
+            cp.cmd
+        );
         return send_error(NetworkErrorCode::NETWORK_ERROR_KICKED);
     }
 
     if !CommandFlags((commands.command_flags)(cp.cmd)).test(CommandFlag::Spectator)
         && !(s.company.shared.company_valid)(cp.company)
-        && (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
+        && client_id(ci) != CLIENT_ID_SERVER
     {
-        (s.console_spectator)(shell, cp.cmd);
+        iconsole_print!(
+            CC_WARNING,
+            "Kicking client #{} (IP: {}) due to calling a non-spectator command {}.",
+            client_id(ci),
+            Bytes(crate::network_connection::get_client_ip(f, game)),
+            cp.cmd
+        );
         return send_error(NetworkErrorCode::NETWORK_ERROR_KICKED);
     }
 
@@ -757,10 +769,17 @@ pub(crate) fn receive_client(
     };
     if !(Commands(cp.cmd) == Commands::CMD_COMPANY_CTRL
         && cca == CCA_NEW
-        && (f.connection.client_company)(shell) == COMPANY_NEW_COMPANY)
-        && (f.connection.client_company)(shell) != cp.company
+        && client_playas(ci) == COMPANY_NEW_COMPANY)
+        && client_playas(ci) != cp.company
     {
-        (s.console_company_mismatch)(shell, cp.company);
+        // `PoolID::operator+` promotes to `int`, so a spectator prints as 256.
+        iconsole_print!(
+            CC_WARNING,
+            "Kicking client #{} (IP: {}) due to calling a command as another company {}.",
+            i32::from(client_playas(ci)) + 1,
+            Bytes(crate::network_connection::get_client_ip(f, game)),
+            i32::from(cp.company) + 1
+        );
         return send_error(NetworkErrorCode::NETWORK_ERROR_COMPANY_MISMATCH);
     }
 
@@ -771,16 +790,14 @@ pub(crate) fn receive_client(
 
         /* Check if we are full - else it's possible for spectators to send a CMD_COMPANY_CTRL and the company is created regardless of max_companies! */
         if (s.company.company_count)() >= usize::from((f.connection.max_companies)()) {
-            (s.server_full)((f.dispatch.client_id)(game));
+            (s.server_full)(client_id(ci));
             return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
     }
 
     if Commands(cp.cmd) == Commands::CMD_COMPANY_ALLOW_LIST_CTRL {
         /* Maybe the client just got moved before allowing? */
-        if (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
-            && (f.connection.client_company)(shell) != cp.company
-        {
+        if client_id(ci) != CLIENT_ID_SERVER && client_playas(ci) != cp.company {
             return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
 
@@ -848,11 +865,6 @@ crate::abi::layouts! {
         commands_per_frame,
         commands_per_frame_server,
         company,
-        console_bad_client,
-        console_bad_server,
-        console_company_mismatch,
-        console_server_only,
-        console_spectator,
         control_action,
         execute,
         execute_past,
@@ -871,6 +883,61 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `ReceiveCommand` returns the original's literal for a single-player-only command, after
+    /// reading the company and the command and before reading anything else.
+    #[test]
+    fn receive_command_reports_a_single_player_only_command() {
+        extern "C" fn command_valid(cmd: u8) -> bool {
+            assert_eq!(cmd, 0x34, "the wire's u16 narrows to the native command");
+            true
+        }
+        extern "C" fn command_flags(_: u8) -> u16 {
+            CommandFlag::OFFLINE
+        }
+        const COMMANDS: crate::services::CommandServices = crate::services::CommandServices {
+            command_flags,
+            command_valid,
+            ..crate::test_tables::COMMANDS
+        };
+        extern "C" fn command() -> &'static crate::services::CommandServices {
+            &COMMANDS
+        }
+        const POST: crate::command_post::Services = crate::command_post::Services {
+            command,
+            ..crate::test_tables::COMMAND_POST
+        };
+        extern "C" fn command_post() -> &'static crate::command_post::Services {
+            &POST
+        }
+        const SHARED: crate::services::Services = crate::services::Services {
+            command_post,
+            ..crate::test_tables::SHARED
+        };
+        const COMPANY: crate::company::Services = crate::company::Services {
+            shared: &SHARED,
+            ..crate::test_tables::COMPANY
+        };
+        const NETWORK_COMMAND: Services = Services {
+            company: &COMPANY,
+            ..crate::test_tables::NETWORK_COMMAND
+        };
+        let f = crate::network_frame::Services {
+            command: &NETWORK_COMMAND,
+            packet: crate::packet::test_services(),
+            ..crate::test_tables::NETWORK_FRAME
+        };
+        let mut p = crate::packet::State::new(100, std::ptr::null_mut());
+        p.send_bytes(&[3]);
+        p.send_bytes(&0x1234_u16.to_le_bytes());
+        p.send_bytes(&[0xAA; 8]);
+        let mut cp = empty_packet();
+        assert_eq!(
+            receive_command(&f, &raw mut p, &mut cp),
+            Some("single-player only command")
+        );
+        assert_eq!((cp.company, cp.cmd, p.position), (3, 0x34, 3));
+    }
 
     fn packet(frame: u32, bytes: &[u8]) -> CommandPacket {
         CommandPacket {

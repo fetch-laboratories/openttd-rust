@@ -3,15 +3,17 @@
 //! socket transport stay native. Raw field accesses end before callbacks, including map loads.
 #![allow(unsafe_code, missing_docs)]
 use crate::company_type::CompanyID;
+use crate::console_type::CC_DEFAULT;
 use crate::debug::debug;
 use crate::error::{WarningLevel, show_error_message};
+use crate::network_connection::client_name;
 use crate::network_frame::Services as FrameServices;
 use crate::network_frame::{
     packet_check, packet_new, packet_recv_string, packet_send, packet_send_string,
 };
-use crate::network_internal::NetworkJoinStatus;
+use crate::network_internal::{NetworkJoinStatus, get_network_error_msg, network_text_message};
 use crate::network_socket as socket;
-use crate::network_type::{ClientID, NetworkErrorCode, NetworkRecvStatus};
+use crate::network_type::{ClientID, NetworkAction, NetworkErrorCode, NetworkRecvStatus};
 use crate::openttd::{GameMode, SwitchMode};
 use crate::packet::{self, State as PacketState};
 use crate::strings_func::get_encoded_string;
@@ -20,8 +22,8 @@ use crate::table::strings::{
     STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION,
     STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION_CAPTION, STR_NETWORK_ERROR_NEWGRF_MISMATCH,
     STR_NETWORK_ERROR_SAVEGAMEERROR, STR_NETWORK_ERROR_SERVER_BANNED,
-    STR_NETWORK_ERROR_SERVER_FULL, STR_NETWORK_MESSAGE_SERVER_REBOOT,
-    STR_NETWORK_MESSAGE_SERVER_SHUTDOWN,
+    STR_NETWORK_ERROR_SERVER_FULL, STR_NETWORK_MESSAGE_CLIENT_LEAVING,
+    STR_NETWORK_MESSAGE_SERVER_REBOOT, STR_NETWORK_MESSAGE_SERVER_SHUTDOWN,
 };
 use crate::tcp_game::PacketGameType;
 use crate::window_func::{invalidate_window_data, set_window_dirty};
@@ -39,14 +41,11 @@ pub struct Services {
     pub enable_encryption:
         extern "C" fn(*mut c_void, *mut crate::auth::Stream, *mut crate::auth::Stream),
     pub enter_multiplayer: extern "C" fn(),
-    pub join: extern "C" fn(*mut c_void),
     pub join_bytes: *mut u32,
     pub join_bytes_total: *mut u32,
     pub join_company: *const u8,
     pub join_status: *mut u8,
     pub join_waiting: *mut u8,
-    pub leave: extern "C" fn(*mut c_void),
-    pub leave_error: extern "C" fn(*mut c_void, u8),
     pub map_append_data: extern "C" fn(*mut c_void, crate::services::ByteSpan) -> u32,
     pub map_create: extern "C" fn(*mut c_void),
     pub map_exists: extern "C" fn(*mut c_void) -> bool,
@@ -71,14 +70,11 @@ crate::abi::layouts! {
         emergency_save,
         enable_encryption,
         enter_multiplayer,
-        join,
         join_bytes,
         join_bytes_total,
         join_company,
         join_status,
         join_waiting,
-        leave,
-        leave_error,
         map_append_data,
         map_create,
         map_exists,
@@ -632,7 +628,17 @@ pub(crate) fn receive_server_error_quit(
 
     let ci = (f.command.company.shared.network_client_info)(client_id.0);
     if !ci.is_null() {
-        (s.leave_error)(ci, unsafe { packet::recv_uint8(p, f.packet) });
+        network_text_message(
+            NetworkAction::NETWORK_ACTION_LEAVE,
+            CC_DEFAULT,
+            false,
+            client_name(f.connection, ci),
+            b"",
+            StringParameterData::Integer(u64::from(
+                get_network_error_msg(NetworkErrorCode(unsafe { packet::recv_uint8(p, f.packet) }))
+                    .0,
+            )),
+        );
         (s.delete_info)(ci);
     }
 
@@ -666,7 +672,14 @@ pub(crate) fn receive_server_quit(
             1, "Unknown client ({}) is leaving the game", client_id.0
         );
     } else {
-        (s.leave)(ci);
+        network_text_message(
+            NetworkAction::NETWORK_ACTION_LEAVE,
+            CC_DEFAULT,
+            false,
+            client_name(f.connection, ci),
+            b"",
+            StringParameterData::Integer(u64::from(STR_NETWORK_MESSAGE_CLIENT_LEAVING.0)),
+        );
         (s.delete_info)(ci);
     }
 
@@ -678,7 +691,6 @@ pub(crate) fn receive_server_quit(
 
 /// `ClientNetworkGameSocketHandler::Receive_SERVER_JOIN`.
 pub(crate) fn receive_server_join(
-    s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
@@ -696,7 +708,14 @@ pub(crate) fn receive_server_join(
 
     let ci = (f.command.company.shared.network_client_info)(client_id.0);
     if !ci.is_null() {
-        (s.join)(ci);
+        network_text_message(
+            NetworkAction::NETWORK_ACTION_JOIN,
+            CC_DEFAULT,
+            false,
+            client_name(f.connection, ci),
+            b"",
+            StringParameterData::Empty,
+        );
     }
 
     invalidate_window_data(WindowClass::WC_CLIENT_LIST, WindowNumber(0), 0, false);
@@ -984,6 +1003,164 @@ fn check_newgrfs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One call the client-quit and join receivers make, across the news, client and window
+    /// recorders, in the order made.
+    #[derive(Debug, PartialEq, Eq)]
+    enum Call {
+        News(Vec<crate::news_func::testing::Effect>),
+        DeleteInfo(usize),
+        Window(crate::window_func::testing::Effect),
+    }
+    thread_local! {
+        static CALLS: std::cell::RefCell<Vec<Call>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+    /// Close the news effects made so far, then record `call`.
+    fn record(call: Call) {
+        let news = crate::news_func::testing::take();
+        CALLS.with(|c| {
+            let mut c = c.borrow_mut();
+            if !news.is_empty() {
+                c.push(Call::News(news));
+            }
+            c.push(call);
+        });
+    }
+
+    /// `Receive_SERVER_ERROR_QUIT`, `Receive_SERVER_QUIT` and `Receive_SERVER_JOIN` announce a
+    /// known client by its name before deleting its info and invalidating the client list, read
+    /// the error code only for a known client, and skip the message for an unknown one.
+    #[test]
+    fn quit_and_join_receivers_announce_known_clients() {
+        use crate::news_func::testing::{Effect as News, Parameter};
+        use crate::table::strings::STR_NETWORK_ERROR_CLIENT_KICKED;
+        use crate::window_func::testing::Effect as Window;
+        // Client 5 is known by the tag 0x50 and named; every other client is unknown.
+        extern "C" fn network_client_info(client_id: u32) -> *mut c_void {
+            if client_id == 5 {
+                std::ptr::without_provenance_mut(0x50)
+            } else {
+                std::ptr::null_mut()
+            }
+        }
+        extern "C" fn client_name(ci: *const c_void) -> crate::services::ByteSpan {
+            assert_eq!(ci.addr(), 0x50);
+            crate::services::ByteSpan {
+                data: b"n\xE4me".as_ptr(),
+                size: 4,
+            }
+        }
+        extern "C" fn delete_info(ci: *mut c_void) {
+            record(Call::DeleteInfo(ci.addr()));
+        }
+        fn window(effect: &Window) {
+            record(Call::Window(*effect));
+        }
+        const SHARED: crate::services::Services = crate::services::Services {
+            network_client_info,
+            ..crate::test_tables::SHARED
+        };
+        const COMPANY: crate::company::Services = crate::company::Services {
+            shared: &SHARED,
+            ..crate::test_tables::COMPANY
+        };
+        const COMMAND: crate::network_command::Services = crate::network_command::Services {
+            company: &COMPANY,
+            ..crate::test_tables::NETWORK_COMMAND
+        };
+        const CONNECTION: crate::network_connection::Services =
+            crate::network_connection::Services {
+                client_name,
+                ..crate::test_tables::NETWORK_CONNECTION
+            };
+        const CLIENT: Services = Services {
+            delete_info,
+            ..crate::test_tables::NETWORK_CLIENT
+        };
+        let f = FrameServices {
+            command: &COMMAND,
+            connection: &CONNECTION,
+            packet: packet::test_services(),
+            ..crate::test_tables::NETWORK_FRAME
+        };
+        let mut game = socket::GameSocket {
+            base: std::ptr::null_mut(),
+            game: std::ptr::null_mut(),
+            incoming: std::ptr::null_mut(),
+            last_packet_ns: 0,
+            outgoing: std::ptr::null_mut(),
+            pending: false,
+            role: 0,
+            server: std::ptr::null_mut(),
+            status: ServerStatus::STATUS_AUTHORIZED.0,
+            sync: std::ptr::null_mut(),
+            tcp: std::ptr::null_mut(),
+        };
+        let game = &raw mut game;
+        let packet = |client_id: u32, error: u8| {
+            let mut p = PacketState::new(100, std::ptr::null_mut());
+            p.send_bytes(&client_id.to_le_bytes());
+            p.send_bytes(&[error]);
+            p
+        };
+        let leave = |data| News::NetworkTextMessage {
+            action: 1,
+            colour: 0x01,
+            self_send: false,
+            name: b"n\xE4me".to_vec(),
+            str: Vec::new(),
+            data,
+        };
+        let client_list =
+            Window::InvalidateWindowData(WindowClass::WC_CLIENT_LIST, WindowNumber(0), 0, false);
+        crate::news_func::testing::take();
+        crate::window_func::testing::take();
+        crate::window_func::testing::observe(Some(window));
+
+        let mut p = packet(5, NetworkErrorCode::NETWORK_ERROR_KICKED.0);
+        receive_server_error_quit(&CLIENT, &f, game, &raw mut p);
+        assert_eq!(p.position, 5);
+        let mut p = packet(6, NetworkErrorCode::NETWORK_ERROR_KICKED.0);
+        receive_server_error_quit(&CLIENT, &f, game, &raw mut p);
+        assert_eq!(p.position, 4);
+        receive_server_quit(&CLIENT, &f, game, &mut packet(5, 0));
+        receive_server_quit(&CLIENT, &f, game, &mut packet(6, 0));
+        receive_server_join(&f, game, &mut packet(5, 0));
+        receive_server_join(&f, game, &mut packet(6, 0));
+        record(Call::DeleteInfo(0));
+
+        crate::window_func::testing::observe(None);
+        crate::window_func::testing::take();
+        let calls = CALLS.with(|c| std::mem::take(&mut *c.borrow_mut()));
+        assert_eq!(
+            calls,
+            [
+                Call::News(vec![leave(Parameter::Integer(u64::from(
+                    STR_NETWORK_ERROR_CLIENT_KICKED.0
+                )))]),
+                Call::DeleteInfo(0x50),
+                Call::Window(client_list),
+                Call::Window(client_list),
+                Call::News(vec![leave(Parameter::Integer(u64::from(
+                    STR_NETWORK_MESSAGE_CLIENT_LEAVING.0
+                )))]),
+                Call::DeleteInfo(0x50),
+                Call::Window(client_list),
+                Call::Window(client_list),
+                Call::News(vec![News::NetworkTextMessage {
+                    action: 0,
+                    colour: 0x01,
+                    self_send: false,
+                    name: b"n\xE4me".to_vec(),
+                    str: Vec::new(),
+                    data: Parameter::Empty,
+                }]),
+                Call::Window(client_list),
+                Call::Window(client_list),
+                Call::DeleteInfo(0),
+            ]
+        );
+    }
     #[test]
     fn each_newgrf_checksum_starts_empty() {
         extern "C" fn assert_condition(condition: bool) {

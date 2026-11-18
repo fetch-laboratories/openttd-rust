@@ -10,7 +10,8 @@
 //! The inline wrappers of `news_func.h` are ported here; they call the native `AddNewsItem`
 //! (`news_gui.cpp`), which owns the news list until the GUI is ported. The native table is
 //! bound once for the process, as `debug.rs` binds its table; it also carries the string
-//! services of `strings_func.rs`, `ShowErrorMessage` of `error.rs` and the
+//! services of `strings_func.rs`, `ShowErrorMessage` of `error.rs`, `IConsolePrint` of
+//! `console_func.rs`, `NetworkTextMessage` of `network_internal.rs` and the
 //! `CompanyNewsInformation` services of `news_type.rs`. Every service is a synchronous `noexcept` call that holds no Rust borrow.
 
 use crate::encoded::Descriptor;
@@ -58,6 +59,11 @@ pub struct Services {
         Sink,
         *mut c_void,
     ),
+    /// `IConsolePrint(colour_code, string)`, with the string's bytes borrowed for the call.
+    pub iconsole_print: extern "C" fn(u16, ByteSpan),
+    /// `NetworkTextMessage(action, colour, self_send, name, str, data)`, with the bytes and
+    /// the parameter's descriptor borrowed for the call.
+    pub network_text_message: extern "C" fn(u8, u16, bool, ByteSpan, ByteSpan, *const Descriptor),
     /// `ShowErrorMessage(summary_msg, detailed_msg, wl, x, y, extra_msg, company)`, with the
     /// encoded strings' bytes borrowed for the call.
     pub show_error_message: extern "C" fn(ByteSpan, ByteSpan, u8, i32, i32, ByteSpan, u8),
@@ -76,6 +82,8 @@ crate::abi::layouts! {
         delete_station_news,
         delete_vehicle_news,
         get_string,
+        iconsole_print,
+        network_text_message,
         show_error_message,
         string_assertions,
     };
@@ -164,6 +172,19 @@ extern "C" fn unbound_get_string(
 ) {
     std::process::abort()
 }
+extern "C" fn unbound_iconsole_print(_: u16, _: ByteSpan) {
+    std::process::abort()
+}
+extern "C" fn unbound_network_text_message(
+    _: u8,
+    _: u16,
+    _: bool,
+    _: ByteSpan,
+    _: ByteSpan,
+    _: *const Descriptor,
+) {
+    std::process::abort()
+}
 extern "C" fn unbound_show_error_message(
     _: ByteSpan,
     _: ByteSpan,
@@ -185,6 +206,8 @@ static UNBOUND: Services = Services {
     delete_station_news: unbound_delete_id,
     delete_vehicle_news: unbound_delete_vehicle_news,
     get_string: unbound_get_string,
+    iconsole_print: unbound_iconsole_print,
+    network_text_message: unbound_network_text_message,
     show_error_message: unbound_show_error_message,
     string_assertions: 0,
 };
@@ -342,6 +365,17 @@ pub(crate) mod testing {
         DeleteIndustryNews(u16),
         /// `GetString(string, args...)`: the string and its numeric parameters.
         GetString(u32, Vec<u64>),
+        /// `IConsolePrint(colour_code, string)`.
+        IConsolePrint(u16, Vec<u8>),
+        /// `NetworkTextMessage(action, colour, self_send, name, str, data)`.
+        NetworkTextMessage {
+            action: u8,
+            colour: u16,
+            self_send: bool,
+            name: Vec<u8>,
+            str: Vec<u8>,
+            data: Parameter,
+        },
         /// `ShowErrorMessage(summary_msg, detailed_msg, wl, x, y, extra_msg, company)`, with
         /// the encoded strings' bytes.
         ShowErrorMessage {
@@ -503,6 +537,41 @@ pub(crate) mod testing {
             company,
         });
     }
+    /// A `StringParameter` as the native service receives it.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub(crate) enum Parameter {
+        Empty,
+        Integer(u64),
+        String(Vec<u8>),
+    }
+    extern "C" fn iconsole_print(colour_code: u16, string: crate::services::ByteSpan) {
+        push(Effect::IConsolePrint(colour_code, bytes(string)));
+    }
+    extern "C" fn network_text_message(
+        action: u8,
+        colour: u16,
+        self_send: bool,
+        name: crate::services::ByteSpan,
+        str: crate::services::ByteSpan,
+        data: *const Descriptor,
+    ) {
+        let d = copied(data, 1).remove(0);
+        let data = match d.kind {
+            0 => Parameter::Empty,
+            1 => Parameter::Integer(d.value),
+            2 if d.length == 0 => Parameter::String(Vec::new()),
+            2 => Parameter::String(copied(d.bytes, d.length)),
+            _ => unreachable!(),
+        };
+        push(Effect::NetworkTextMessage {
+            action,
+            colour,
+            self_send,
+            name: bytes(name),
+            str: bytes(str),
+            data,
+        });
+    }
     /// The recorded `ShowErrorMessage(summary_msg, detailed_msg, wl)` with the original's
     /// defaults for the other arguments.
     pub(crate) fn error_message(summary_msg: Vec<u8>, detailed_msg: Vec<u8>, wl: u8) -> Effect {
@@ -525,6 +594,8 @@ pub(crate) mod testing {
         delete_station_news,
         delete_vehicle_news,
         get_string,
+        iconsole_print,
+        network_text_message,
         show_error_message,
         string_assertions: 1,
     };

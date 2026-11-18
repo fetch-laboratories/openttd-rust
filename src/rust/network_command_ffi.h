@@ -7,7 +7,6 @@
 struct OpenTTDCompanyServices;
 struct OpenTTDCommandServices;
 struct OpenTTDNetworkFrameServices;
-enum class OpenTTDNetworkCommandDecodeError : uint8_t { None, InvalidCommand, Offline, InvalidCallback };
 struct OpenTTDNetworkSocketSync;
 #include "../newgrf_badge_type.h"
 #include "abi-record-probe.h"
@@ -20,11 +19,6 @@ struct OpenTTDNetworkCommandServices {
 	uint16_t (*commands_per_frame)() noexcept OPENTTD_SERVICE_DEFAULT(commands_per_frame);
 	uint16_t (*commands_per_frame_server)() noexcept OPENTTD_SERVICE_DEFAULT(commands_per_frame_server);
 	const OpenTTDCompanyServices *company;
-	void (*console_bad_client)(void *, OpenTTDNetworkCommandDecodeError) noexcept OPENTTD_SERVICE_DEFAULT(console_bad_client);
-	void (*console_bad_server)(OpenTTDNetworkCommandDecodeError) noexcept OPENTTD_SERVICE_DEFAULT(console_bad_server);
-	void (*console_company_mismatch)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(console_company_mismatch);
-	void (*console_server_only)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(console_server_only);
-	void (*console_spectator)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(console_spectator);
 	uint8_t (*control_action)(OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(control_action);
 	void (*execute)(const OpenTTDCommandPacket *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(execute);
 	void (*execute_past)() noexcept OPENTTD_SERVICE_DEFAULT(execute_past);

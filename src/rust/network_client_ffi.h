@@ -16,14 +16,11 @@ struct OpenTTDNetworkClientServices {
 	void (*emergency_save)() noexcept OPENTTD_SERVICE_DEFAULT(emergency_save);
 	void (*enable_encryption)(void *, OpenTTDAuthStream *, OpenTTDAuthStream *) noexcept OPENTTD_SERVICE_DEFAULT(enable_encryption);
 	void (*enter_multiplayer)() noexcept OPENTTD_SERVICE_DEFAULT(enter_multiplayer);
-	void (*join)(void *) noexcept OPENTTD_SERVICE_DEFAULT(join);
 	uint32_t *join_bytes;
 	uint32_t *join_bytes_total;
 	const uint8_t *join_company;
 	uint8_t *join_status;
 	uint8_t *join_waiting;
-	void (*leave)(void *) noexcept OPENTTD_SERVICE_DEFAULT(leave);
-	void (*leave_error)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(leave_error);
 	uint32_t (*map_append_data)(void *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(map_append_data);
 	void (*map_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_create);
 	bool (*map_exists)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_exists);

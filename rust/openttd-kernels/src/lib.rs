@@ -40,6 +40,8 @@ mod company_cmd;
 mod company_identity;
 mod company_manager_face;
 pub mod company_type;
+mod console_func;
+mod console_type;
 mod consumer;
 mod control_codes;
 mod debug;

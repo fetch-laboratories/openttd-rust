@@ -922,33 +922,6 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.client_game = []() noexcept -> OpenTTDNetworkGameSocket * { return ClientNetworkGameSocketHandler::my_client; },
 		.command = &GetRustNetworkCommandServices(),
 		.connection = &GetRustNetworkConnectionServices(),
-		.console_bad_acks = [](void *cs) noexcept {
-			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it fails to send valid acks.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP());
-		},
-		.console_download_timeout = [](void *cs) noexcept {
-			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to download the map.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), RustNetworkMaxDownloadTime());
-		},
-		.console_init_timeout = [](void *cs) noexcept {
-			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to start the joining process.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), RustNetworkMaxInitTime());
-		},
-		.console_join_timeout = [](void *cs) noexcept {
-			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to join.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), RustNetworkMaxJoinTime());
-		},
-		.console_lagging = [](void *cs, uint32_t lag, bool recent) noexcept {
-			if (recent) {
-				/* A packet was received in the last three game days, so the client is likely lagging behind. */
-				IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because the client's game state is more than {} ticks behind.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), lag);
-			} else {
-				/* No packet was received in the last three game days; sounds like a lost connection. */
-				IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because the client did not respond for more than {} ticks.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), lag);
-			}
-		},
-		.console_password_timeout = [](void *cs) noexcept {
-			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to enter the password.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), RustNetworkMaxPasswordTime());
-		},
-		.console_slow = [](void *cs, uint32_t frame) noexcept {
-			IConsolePrint(CC_WARNING, "[{}] Client #{} is slow, try increasing [network.]frame_freq to a higher value!", frame, static_cast<NetworkClientSocket *>(cs)->client_id);
-		},
 		.dispatch = &GetRustNetworkDispatchServices(),
 		.frame_freq = RustNetworkFrameFreq,
 		.interactive_random_range = [](uint32_t limit) noexcept { return InteractiveRandomRange(limit); },
