@@ -15,7 +15,8 @@
 //! defaults or behaviour. A later item adds only the tables it needs.
 //! `crate::engine_capabilities::TEST_TABLE`, `crate::station_lifecycle::TEST_TABLE`,
 //! `crate::town::resolver::TEST_TABLE` and `crate::cargo_registry::TEST_TABLE` stay in
-//! their modules for their private fields, as does `crate::newgrf_loading::TEST_TABLE`.
+//! their modules for their private fields, as do `crate::newgrf_loading::TEST_TABLE` and
+//! `crate::newgrf_vehicle::TEST_TABLE`.
 
 use std::ptr;
 

@@ -116,19 +116,15 @@ mod controller {
     }
     extern "C" fn newgrf() -> *const crate::newgrf_vehicle::Services {
         thread_local! {
-            static TABLE: *const crate::newgrf_vehicle::Services = {
-                let table = Box::leak(Box::new(std::mem::MaybeUninit::<
-                    crate::newgrf_vehicle::Services,
-                >::uninit()));
-                // SAFETY: Only `id` and `roadtype` are read from this table.
-                unsafe {
-                    (&raw mut (*table.as_mut_ptr()).id).write(id);
-                    (&raw mut (*table.as_mut_ptr()).roadtype).write(roadtype);
-                }
-                table.as_ptr()
+            static TABLE: &'static crate::newgrf_vehicle::Services = {
+                // The other fields are private, so the two live entries are set in place.
+                let mut table = crate::newgrf_vehicle::TEST_TABLE;
+                table.id = id;
+                table.roadtype = roadtype;
+                Box::leak(Box::new(table))
             };
         }
-        TABLE.with(|t| *t)
+        TABLE.with(|t| std::ptr::from_ref(*t))
     }
     extern "C" fn is_bus(_: VehicleRef) -> bool {
         BUS.get()
