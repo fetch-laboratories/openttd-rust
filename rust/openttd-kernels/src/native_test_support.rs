@@ -16,7 +16,7 @@
 #![allow(unsafe_code)]
 use crate::clear_map::{
     ClearGround, get_clear_counter, get_clear_density, get_clear_ground, get_fence, get_field_type,
-    get_industry_index_of_field, is_snow_tile, require_field,
+    get_industry_index_of_field, is_clear_ground, is_snow_tile, require_field,
 };
 use crate::company_type::CompanyID;
 use crate::direction_type::DiagDirection;
@@ -115,15 +115,20 @@ pub unsafe extern "C" fn openttd_test_map_read_probe(
     observe: extern "C" fn(u32, *mut MapLeafOracle),
 ) -> u8 {
     let s = unsafe { &*shared };
-    let allocation = unsafe { (*statics).load().0 };
-    let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
-    let x = (s.map_max_x)() + 1;
-    let y = (s.map_max_y)() + 1;
+    let (allocation, dimensions) = unsafe { (*statics).load() };
+    let world = World {
+        types: unsafe { TileTypeAccess::raw(allocation, s.tile_type) },
+        shared: s,
+        dimensions,
+    };
+    let map = &world.types;
+    let x = world.dimensions.size_x();
+    let y = world.size_y();
     let index = TileIndex(tile);
-    if crate::tile_map::is_tile_flat(&map, index, x, y)
+    if crate::tile_map::is_tile_flat(map, index, x, y)
         != Some((unsafe { &*(s.station_commands)() }.tile_flat)(tile))
-        || get_tile_z(&map, index, x, y) != Some((s.tile_z)(tile))
-        || get_tropic_zone(&map, index) != Some(crate::tile_type::TropicZone((s.tropic_zone)(tile)))
+        || get_tile_z(map, index, x, y) != Some((s.tile_z)(tile))
+        || get_tropic_zone(map, index) != Some(crate::tile_type::TropicZone((s.tropic_zone)(tile)))
     {
         return u8::from(false);
     }
@@ -131,14 +136,14 @@ pub unsafe extern "C" fn openttd_test_map_read_probe(
         TileType::MP_CLEAR => {
             let mut clear = MapLeafOracle::default();
             observe(tile, &raw mut clear);
-            if is_snow_tile(&map, index).map(u32::from) != Some(clear.clear_snow)
-                || get_clear_ground(&map, index) != Some((s.clear_ground)(tile))
-                || get_clear_density(&map, index).map(u32::from) != Some(clear.clear_density)
-                || get_clear_counter(&map, index).map(u32::from) != Some(clear.clear_counter)
+            if is_snow_tile(map, index).map(u32::from) != Some(clear.clear_snow)
+                || get_clear_ground(map, index) != Some((s.clear_ground)(tile))
+                || get_clear_density(map, index).map(u32::from) != Some(clear.clear_density)
+                || get_clear_counter(map, index).map(u32::from) != Some(clear.clear_counter)
             {
                 return u8::from(false);
             }
-            if get_clear_ground(&map, index) == Some(ClearGround::CLEAR_FIELDS) {
+            if is_clear_ground(map, index, ClearGround::CLEAR_FIELDS) == Some(true) {
                 if [
                     (clear.fence_ne, DiagDirection::DIAGDIR_NE),
                     (clear.fence_se, DiagDirection::DIAGDIR_SE),
@@ -147,19 +152,19 @@ pub unsafe extern "C" fn openttd_test_map_read_probe(
                 ]
                 .into_iter()
                 .any(|(expected, dir)| {
-                    require_field(&map, index).map(|fields| {
+                    require_field(map, index).map(|fields| {
                         get_fence(&fields, dir, || crate::services_assert::not_reached())
                     }) != Some(expected)
-                }) || require_field(&map, index).map(|fields| get_field_type(&fields))
+                }) || require_field(map, index).map(|fields| get_field_type(&fields))
                     != Some(clear.field_type)
-                    || require_field(&map, index)
+                    || require_field(map, index)
                         .map(|fields| u32::from(get_industry_index_of_field(&fields).0))
                         != Some(clear.field_industry)
                 {
                     return u8::from(false);
                 }
             } else if allocation.assertions
-                && require_field(&map, index)
+                && require_field(map, index)
                     .map(|fields| get_field_type(&fields))
                     .is_some()
             {
@@ -169,11 +174,11 @@ pub unsafe extern "C" fn openttd_test_map_read_probe(
         TileType::MP_TREES => {
             let mut tree = MapLeafOracle::default();
             observe(tile, &raw mut tree);
-            if get_tree_ground(&map, index).map(|g| u32::from(g.0)) != Some(tree.tree_ground)
-                || get_tree_density(&map, index).map(u32::from) != Some(tree.tree_density)
-                || get_tree_type(&map, index).map(|t| u32::from(t.0)) != Some(tree.tree_type)
-                || get_tree_count(&map, index).map(u32::from) != Some(tree.tree_count)
-                || get_tree_growth(&map, index).map(|g| u32::from(g.0)) != Some(tree.tree_growth)
+            if get_tree_ground(map, index).map(|g| u32::from(g.0)) != Some(tree.tree_ground)
+                || get_tree_density(map, index).map(u32::from) != Some(tree.tree_density)
+                || get_tree_type(map, index).map(|t| u32::from(t.0)) != Some(tree.tree_type)
+                || get_tree_count(map, index).map(u32::from) != Some(tree.tree_count)
+                || get_tree_growth(map, index).map(|g| u32::from(g.0)) != Some(tree.tree_growth)
             {
                 return u8::from(false);
             }
@@ -184,15 +189,15 @@ pub unsafe extern "C" fn openttd_test_map_read_probe(
     u8::from(
         (!allocation.assertions
             || kind == TileType::MP_CLEAR
-            || is_snow_tile(&map, index).is_none())
+            || is_snow_tile(map, index).is_none())
             && (!allocation.assertions
                 || kind == TileType::MP_TREES
-                || get_tree_type(&map, index).is_none())
+                || get_tree_type(map, index).is_none())
             && (!allocation.assertions
                 || kind == TileType::MP_WATER
-                || crate::water_map::is_coast(&map, tile).is_none())
-            && (allocation.assertions || is_snow_tile(&map, index).is_some())
-            && map_read_probe(allocation, s, index, mutate, observe),
+                || crate::water_map::is_coast(map, tile).is_none())
+            && (allocation.assertions || is_snow_tile(map, index).is_some())
+            && map_read_probe(&world, index, mutate, observe),
     )
 }
 

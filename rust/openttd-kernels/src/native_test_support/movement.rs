@@ -6,10 +6,9 @@
  */
 
 //! Native oracle for the private production movement context.
-use crate::map_func::{TileTypeAccess, TileTypeAllocation, World};
+use crate::map_func::World;
 use crate::road_map::{get_disallowed_road_directions, get_road_bits, has_tile_road_type};
 use crate::road_type::{RTT_ROAD, RTT_TRAM};
-use crate::services::Services;
 use crate::tile_type::{TileIndex, TileType};
 
 /// The native header accessors' results that the map-read fixture records.
@@ -48,18 +47,12 @@ pub(crate) struct MapLeafOracle {
 /// accessors that `observe` runs, before and after one `mutate`.
 /// `mutate` preserves the map allocation and dimensions.
 pub(crate) fn map_read_probe(
-    allocation: TileTypeAllocation,
-    shared: &Services,
+    world: &World<'_>,
     tile: TileIndex,
     mutate: extern "C" fn(u32),
     observe: extern "C" fn(u32, *mut MapLeafOracle),
 ) -> bool {
-    // SAFETY: The native probe supplies the same no-reset interval as its entry.
-    let world = World {
-        types: unsafe { TileTypeAccess::raw(allocation, shared.tile_type) },
-        shared,
-        dimensions: shared.map(),
-    };
+    let shared = world.shared;
     for pass in 0..2 {
         let mut expected = MapLeafOracle::default();
         observe(tile.0, &raw mut expected);
