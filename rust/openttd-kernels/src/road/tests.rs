@@ -32,6 +32,7 @@ fn original_movement_and_stop_tables() {
 }
 
 /// The controller bodies against `src/roadveh_cmd.cpp`, through recording tables.
+#[cfg(test)]
 mod controller {
     use super::super::*;
     use crate::news_func::testing::{Effect, Param, encoded, take};

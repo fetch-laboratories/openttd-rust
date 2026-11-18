@@ -6,6 +6,18 @@
     "to": "rust/openttd-kernels/src/vehicle_effect.rs | fn show_visual_effect_allowed | disallowed_macros | 4a33eacd5fa65f2b2e28"
   },
   {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/road.rs | fn max_speed | expect clippy::inline_always",
+    "to": "rust/openttd-kernels/src/road.rs | fn get_current_max_speed | expect clippy::inline_always"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/road.rs | impl Game<'_> > fn train_crash | expect clippy::inline_always",
+    "to": "rust/openttd-kernels/src/road.rs | impl<'a> Game<'a> > fn road_veh_check_train_crash | expect clippy::inline_always"
+  },
+  {
     "kind": "growth",
     "counter": "generated_records",
     "added": {

@@ -750,7 +750,7 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
                 (s.train_services)(),
                 s.shared,
             ),
-            1 => crate::road::get_current_max_speed(s.shared, handle(v)),
+            1 => crate::road::current_max_speed(s.shared, handle(v)),
             2 => crate::ship_control::current_max_speed(
                 (handle(v)).cached_max_speed(),
                 (s.order_max_speed)(v),

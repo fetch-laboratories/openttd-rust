@@ -137,7 +137,10 @@ pub fn is_straight_road_trackdir(dir: u8, check: impl Fn(bool) + Copy) -> bool {
 }
 
 /// `TrackStatusToRedSignals`: returns the red-signal-information of a `TrackStatus`.
-#[allow(clippy::cast_possible_truncation)] // Native mask and narrowing to TrackdirBits.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "TrackStatusToRedSignals' (TrackdirBits) cast of the masked status"
+)]
 pub const fn track_status_to_red_signals(ts: u32) -> u16 {
     ((ts >> 16) & crate::track_type::TRACKDIR_BIT_MASK) as u16
 }

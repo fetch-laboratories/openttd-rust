@@ -780,16 +780,6 @@ impl<'a> Game<'a> {
         true
     }
 
-    /// Calculates the maximum speed of the vehicle under its current conditions.
-    #[expect(
-        clippy::inline_always,
-        reason = "Specialize the existing loop at each speed observation."
-    )]
-    #[inline(always)]
-    fn get_current_max_speed(&self, v: Part) -> i32 {
-        get_current_max_speed(self.ss, v.v)
-    }
-
     /// Delete last vehicle of a chain road vehicles. `v` is the first road vehicle.
     #[inline]
     fn delete_last_road_veh(&self, mut v: Part) {
@@ -1165,7 +1155,7 @@ impl<'a> Game<'a> {
                 v.v,
                 if v.overtaking() != 0 { 512 } else { 256 },
                 0,
-                self.get_current_max_speed(v),
+                get_current_max_speed(self.ss, v),
             ) as i32,
 
             AccelerationModel::AM_REALISTIC => {
@@ -1184,7 +1174,7 @@ impl<'a> Game<'a> {
                     v.v,
                     accel as u32,
                     min_speed,
-                    self.get_current_max_speed(v),
+                    get_current_max_speed(self.ss, v),
                 ) as i32
             }
             _ => crate::services_assert::not_reached(),
@@ -1298,11 +1288,11 @@ impl<'a> Game<'a> {
         let u_speed = if self.roadveh_acceleration_model() == AccelerationModel::AM_ORIGINAL
             || self.get_acceleration(u) > 0
         {
-            self.get_current_max_speed(u)
+            get_current_max_speed(self.ss, u)
         } else {
             i32::from(u.v.cur_speed())
         };
-        if u_speed >= self.get_current_max_speed(v)
+        if u_speed >= get_current_max_speed(self.ss, v)
             && !u.v.vehstatus().test(VehState::Stopped)
             && u.v.cur_speed() != 0
         {
@@ -2435,7 +2425,7 @@ impl<'a> Game<'a> {
         /* Vehicle::ShowVisualEffect */
         if crate::vehicle_effect::show_visual_effect_allowed(v.v) {
             /* Use the speed as limited by underground and orders. */
-            let max_speed = self.get_current_max_speed(v) as u32;
+            let max_speed = get_current_max_speed(self.ss, v) as u32;
             crate::vehicle_effect::show_visual_effect(v.v, max_speed);
         }
 
@@ -2709,8 +2699,7 @@ impl<'a> Game<'a> {
     reason = "Specialize the existing loop at each speed observation."
 )]
 #[inline(always)]
-pub(crate) fn get_current_max_speed(ss: &Services, v: VehicleRef) -> i32 {
-    let v = Part::of(v);
+fn get_current_max_speed(ss: &Services, v: Part) -> i32 {
     let cached_max_track_speed =
         || i32::from(read_field!(v.v.ground_cache(), cached_max_track_speed));
     let mut max_speed = cached_max_track_speed();
@@ -2742,6 +2731,11 @@ pub(crate) fn get_current_max_speed(ss: &Services, v: VehicleRef) -> i32 {
     }
 
     max_speed.min(i32::from(v.v.current_order().max_speed()) * 2)
+}
+
+/// `RoadVehicle::GetCurrentMaxSpeed` of the road vehicle record `v`.
+pub(crate) fn current_max_speed(ss: &Services, v: VehicleRef) -> i32 {
+    get_current_max_speed(ss, Part::of(v))
 }
 
 /// `RoadVehicle::SetDestTile`.
@@ -2897,7 +2891,7 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
     state: *mut State,
     leaves: *const Leaves,
 ) -> i32 {
-    entry!(leaves).get_current_max_speed(Part::new(v, state))
+    get_current_max_speed(entry!(leaves).ss, Part::new(v, state))
 }
 /// `RoadVehicle::SetDestTile`.
 /// # Safety
