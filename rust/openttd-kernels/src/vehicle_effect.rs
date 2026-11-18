@@ -57,7 +57,7 @@ fn part(v: VehicleRef) -> Part {
         kind: VehicleType(v.vehicle_type_raw()),
         status: v.vehstatus_raw(),
         tick: v.tick_counter(),
-        cache: v.visual_effect(),
+        cache: v.cached_vis_effect(),
     }
 }
 /// `v->direction` and the ground part length (`VEHICLE_LENGTH` otherwise).

@@ -627,16 +627,17 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
 
     /* Vehicle services. */
+    /// `v->current_order.GetType()`.
     fn order_type(&self, v: Vehicle) -> OrderType {
-        OrderType(Self::call(|| (self.vs.order_type)(v.base())))
+        v.base().current_order().kind()
     }
     /// `v->current_order.IsType(order_type)`.
     fn current_order_is_type(&self, v: Vehicle, order_type: OrderType) -> bool {
-        self.order_type(v) == order_type
+        v.base().current_order().is_type(order_type)
     }
-    /// `v->current_order.GetDestination()`.
+    /// `v->current_order.GetDestination().ToStationID()`.
     fn order_destination(&self, v: Vehicle) -> StationID {
-        StationID(Self::call(|| (self.vs.order_destination)(v.base())))
+        v.base().current_order().destination().to_station_id()
     }
     fn plane_speed(&self) -> u8 {
         Self::call(|| (self.ss.plane_speed)())
@@ -2317,7 +2318,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             });
         }
         let tile = v.base().tile();
-        let st = Self::station_get(StationID(Self::call(|| (self.ss.station_index)(tile.0))));
+        let st = Self::station_get(self.map.get_station_index(tile));
         let exit_dir = Direction(Self::station_call(|| unsafe {
             (self.leaves.hangar_exit)(st, tile.0, Self::airport_spec(st))
         }));

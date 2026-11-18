@@ -469,17 +469,18 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
     }
     let mut from = 0;
     loop {
-        let v = crate::vehicle::VehicleRef::shell_from_record(s.groups.next_vehicle(from));
-        if v.is_null() {
+        let record = s.groups.next_vehicle(from);
+        let Some(handle) = std::ptr::NonNull::new(record).map(crate::vehicle::VehicleRef) else {
             break;
-        }
+        };
+        let v = crate::vehicle::VehicleRef::shell_from_record(record);
         // Preserve the distinct predicate order of group and standard lists.
-        if crate::fleet::record(s.groups, v).vehicle_type() == vehicle_type {
+        if handle.vehicle_type() == vehicle_type {
             let selected =
                 if kind == VehicleListType::VL_GROUP_LIST && vli.index as u16 != ALL_GROUP {
                     unsafe {
                         (s.groups.primary)(v)
-                            && crate::fleet::record(s.groups, v).owner() == vli.company
+                            && handle.owner() == vli.company
                             && (crate::fleet::openttd_rust_fleet_contains_abi(
                                 s.groups,
                                 (s.groups.vehicle_group)(v),
@@ -487,10 +488,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
                             ) != 0)
                     }
                 } else {
-                    unsafe {
-                        crate::fleet::record(s.groups, v).owner() == vli.company
-                            && (s.groups.primary)(v)
-                    }
+                    unsafe { handle.owner() == vli.company && (s.groups.primary)(v) }
                 };
             if selected {
                 emit(v);
@@ -764,7 +762,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
     if status.test(VehState::Crashed) {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
-    match crate::fleet::record(b.groups, v).vehicle_type() {
+    match handle.vehicle_type() {
         VehicleType::TRAIN => {
             if status.test(VehState::Stopped)
                 && crate::raw_field::read_field!(handle.ground_cache(), cached_power) == 0
@@ -790,8 +788,8 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         let callback = unsafe {
             crate::newgrf_vehicle::callback(
                 s.vehicles,
-                Some(vehicle_ref(v, s.vehicles)),
-                (vehicle_ref(v, s.vehicles)).engine_type().0,
+                Some(handle),
+                handle.engine_type().0,
                 crate::newgrf_callbacks::CBID_VEHICLE_START_STOP_CHECK.0,
                 0,
                 std::ptr::null_mut(),
@@ -803,7 +801,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         let null_string = StringID(s.strings.null_string);
         let mut error = null_string;
         if callback != crate::vehicle::CALLBACK_FAILED {
-            if s.engine_grf_version(unsafe { vehicle_ref(v, s.vehicles) }) < 8 {
+            if s.engine_grf_version(handle) < 8 {
                 /* 8 bit result 0xFF means 'allow' */
                 if callback < 0x400 && callback & 0xff != 0xff {
                     error = s.grf_text(
@@ -843,7 +841,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         }
         // The stopped bit is read again here, after the news and callback above.
         handle.set_vehstatus(handle.vehstatus().flip(VehState::Stopped));
-        if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN {
+        if handle.vehicle_type() != VehicleType::TRAIN {
             (handle).set_cur_speed(0); // trains can stop 'slowly'
         }
         /* Unbunching data is no longer valid. */

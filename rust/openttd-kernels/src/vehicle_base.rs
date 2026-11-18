@@ -657,14 +657,14 @@ impl crate::vehicle::VehicleRef {
         write_field!(consist, time, value);
     }
     /// `Vehicle::vcache.cached_vis_effect`: the visual effect to show.
-    pub(crate) fn visual_effect(self) -> u8 {
+    pub(crate) fn cached_vis_effect(self) -> u8 {
         let visual = read_field!(self.0.as_ptr(), visual);
         // SAFETY: The bound visual owner lives throughout the source access interval.
         unsafe { visual.read() }
     }
     /// `Vehicle::unitnumber`, a field still stored in the C++ shell, read
     /// through the vehicle resolver's field service.
-    pub(crate) fn unit_number(self, shared: &crate::services::Services) -> u16 {
+    pub(crate) fn unitnumber(self, shared: &crate::services::Services) -> u16 {
         let vehicles = crate::movement::table(shared).vehicle();
         // SAFETY: The vehicle table returns the static resolver service table.
         unsafe { ((*(vehicles.newgrf)()).unit)(self.0.as_ptr()) }

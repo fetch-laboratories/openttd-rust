@@ -13,9 +13,7 @@ use crate::aircraft::AIR_AIRCRAFT;
 use crate::newgrf_callbacks::CBID_VEHICLE_32DAY_CALLBACK;
 use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16, VehicleSoundEvent};
 use crate::timer_game_tick::DAY_TICKS;
-use crate::vehicle_base::{
-    GVSF_ENGINE, GVSF_FRONT, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VS_TRAIN_SLOWING,
-};
+use crate::vehicle_base::{GVSF_ENGINE, GVSF_FRONT, VehState, VehStates};
 use crate::{cargo_storage, fleet, services, station_service};
 
 use super::VehicleType;
@@ -304,15 +302,15 @@ unsafe fn post_tick<const COUNTED: bool>(
             unsafe { scalar_write::<_, COUNTED>(cargo.counter, period) };
         }
     }
-    let front_status = unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.0;
-    if front_status & VS_CRASHED != 0 {
+    let front_status = unsafe { scalar_read::<_, COUNTED>(cargo.front_status) };
+    if front_status.test(VehState::Crashed) {
         return;
     }
-    if unsafe { scalar_read::<_, COUNTED>(cargo.status) }.0 & VS_HIDDEN != 0 {
+    if unsafe { scalar_read::<_, COUNTED>(cargo.status) }.test(VehState::Hidden) {
         return;
     }
     let motion = cargo;
-    if unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.0 & VS_STOPPED != 0
+    if unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.test(VehState::Stopped)
         && (unsafe { scalar_read::<_, COUNTED>(motion.front_type) } != TRAIN
             || unsafe { scalar_read::<_, COUNTED>(motion.speed) } == 0)
     {
@@ -347,9 +345,10 @@ unsafe fn post_tick<const COUNTED: bool>(
     // Running sound can change the following observations; load after it returns.
     if unsafe { scalar_read::<_, COUNTED>(motion.tick) } & 15 == 0 {
         let running = unsafe { scalar_read::<_, COUNTED>(motion.speed) } > 0
-            && unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.0
-                & (VS_STOPPED | VS_TRAIN_SLOWING)
-                == 0;
+            && !unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.any(
+                VehStates::from_element(VehState::Stopped)
+                    .with(VehStates::from_element(VehState::TrainSlowing)),
+            );
         post_svc!(
             COUNTED,
             crate::witness::VEHICLE_PERIODIC_SOUND,
@@ -518,6 +517,7 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
     use std::ffi::c_void;
 
     /// The survivor's own fields and its front's speed, type and status are the

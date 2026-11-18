@@ -872,7 +872,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         let destination_found = self.best_dest_node.is_some();
 
         if crate::debug::level(|d| d.yapf) >= 3 {
-            let veh_idx = self.v.vehicle().unit_number(self.s);
+            let veh_idx = self.v.vehicle().unitnumber(self.s);
             // `TransportTypeChar`
             let ttc = 't';
             #[allow(

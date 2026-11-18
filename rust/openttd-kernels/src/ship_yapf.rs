@@ -138,7 +138,7 @@ fn ship_input(s: &Services, v: &Ship<'_>) -> Input {
         canal_speed_frac: svi.ship_speed_fraction(false),
         ship_curve45_penalty,
         ship_curve90_penalty,
-        unit_number: v.v.unit_number(s),
+        unit_number: v.v.unitnumber(s),
     }
 }
 

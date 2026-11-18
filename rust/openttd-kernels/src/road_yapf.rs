@@ -449,7 +449,7 @@ impl<'a> CYapfRoad<'a> {
             // `TransportTypeChar`
             'r',
             if destination_found { '-' } else { '!' },
-            self.vehicle.unit_number(self.s),
+            self.vehicle.unitnumber(self.s),
             self.num_steps,
             self.open_count(),
             self.closed_count(),

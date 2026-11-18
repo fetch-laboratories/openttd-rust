@@ -657,7 +657,7 @@ impl Game<'_> {
             let powered = self.engine(id).wagon_power() != 0
                 && self.engine(u).rail_kind() == crate::vehicle::RailVehicleTypes::WAGON
                 && (self.leaves.wagon_override)(u) != 0
-                && (u).vehicle().visual_effect() & 0x80 == 0;
+                && (u).vehicle().cached_vis_effect() & 0x80 == 0;
             u.set_flag(3, powered);
             if (u).articulated() == 0 {
                 if u64::from(
