@@ -882,8 +882,8 @@ impl Game<'_> {
             .wrapping_mul(TILE_SIZE as i32);
         let v_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));
         let v_total_length: u16 = read_field!(id.vehicle().ground_cache(), cached_total_length);
-        let v_order_destination = StationID(id.vehicle().current_order().destination);
-        let v_order = OrderType(id.vehicle().current_order().kind());
+        let v_order_destination = StationID(id.vehicle().current_order().destination());
+        let v_order = OrderType(id.vehicle().current_order().kind_raw());
         // Default to the middle of the station for stations stops that are not in
         // the order list like intermediate stations when non-stop is disabled.
         let mut osl = u64::from(OrderStopLocation::Middle.0);
@@ -1587,7 +1587,7 @@ impl Game<'_> {
             }
             if self.try_path_reserve(id, false, okay) {
                 (self.leaves.check_next)(id);
-            } else if (id).vehicle().current_order().kind() != OT_LOADING {
+            } else if (id).vehicle().current_order().kind_raw() != OT_LOADING {
                 self.mark_stuck(id);
             }
         } else if id.flag(8) {
@@ -2430,7 +2430,7 @@ impl Game<'_> {
             (self.leaves.train_list)(id);
             return true;
         }
-        if (id).vehicle().current_order().kind() == OT_GOTO_DEPOT
+        if (id).vehicle().current_order().kind_raw() == OT_GOTO_DEPOT
             && (id).vehicle().tile_raw() == (id).vehicle().dest_tile_raw()
         {
             if (self.leaves.has_depot_res)(Handle::NONE, (id).vehicle().tile_raw()) == 0 {
@@ -2491,7 +2491,7 @@ impl Game<'_> {
         }
         let v_speed: u16 = id.vehicle().cur_speed();
         let v_status: u8 = id.vehicle().vehstatus_raw();
-        let v_order: u8 = id.vehicle().current_order().kind();
+        let v_order: u8 = id.vehicle().current_order().kind_raw();
         if v_status & 2 != 0 && v_speed == 0 {
             return true;
         }
@@ -2529,7 +2529,7 @@ impl Game<'_> {
             id.set_flag(9, false);
         }
         self.vs().handle_loading(id.vehicle(), mode, orders);
-        if (id).vehicle().current_order().kind() == OT_LOADING || self.stay_depot(id) {
+        if (id).vehicle().current_order().kind_raw() == OT_LOADING || self.stay_depot(id) {
             return true;
         }
         if !mode {
@@ -2540,7 +2540,7 @@ impl Game<'_> {
                 );
             }
         }
-        if !valid_order && (id).vehicle().current_order().kind() != OT_NOTHING {
+        if !valid_order && (id).vehicle().current_order().kind_raw() != OT_NOTHING {
             (self.leaves.check_next)(id);
         }
         if !mode && id.flag(8) {
@@ -2577,7 +2577,7 @@ impl Game<'_> {
                 (self.leaves.start_stop_dirty)(id);
             }
         }
-        if (id).vehicle().current_order().kind() == OT_LEAVESTATION {
+        if (id).vehicle().current_order().kind_raw() == OT_LEAVESTATION {
             (self.leaves.order_free)(id);
             (self.leaves.start_stop_dirty)(id);
             return true;
@@ -2605,9 +2605,9 @@ impl Game<'_> {
                     break;
                 }
                 let v_tile: u32 = id.vehicle().tile_raw();
-                let v_order_destination: u16 = id.vehicle().current_order().destination;
-                let v_order: u8 = id.vehicle().current_order().kind();
-                let v_nonstop: u8 = id.vehicle().current_order().non_stop();
+                let v_order_destination: u16 = id.vehicle().current_order().destination();
+                let v_order: u8 = id.vehicle().current_order().kind_raw();
+                let v_nonstop: u8 = id.vehicle().current_order().non_stop_raw();
                 if (v_order == OT_GOTO_WAYPOINT || v_order == OT_GOTO_STATION)
                     && v_nonstop & 2 != 0
                     && (self.leaves.is_station_any)(Handle::NONE, v_tile) != 0
@@ -2685,7 +2685,7 @@ impl Game<'_> {
         let depot = (self.leaves.find_depot)(id, max as i32);
         let length = depot.length;
         if length == u32::MAX || length > max {
-            if (id).vehicle().current_order().kind() == OT_GOTO_DEPOT {
+            if (id).vehicle().current_order().kind_raw() == OT_GOTO_DEPOT {
                 (self.leaves.order_dummy)(id);
                 (self.leaves.start_stop_dirty)(id);
             }
@@ -2693,8 +2693,8 @@ impl Game<'_> {
         }
         let tile = depot.tile;
         let depot_id = (self.services.depot_index)(tile);
-        let v_order_destination: u16 = id.vehicle().current_order().destination;
-        let v_order: u8 = id.vehicle().current_order().kind();
+        let v_order_destination: u16 = id.vehicle().current_order().destination();
+        let v_order: u8 = id.vehicle().current_order().kind_raw();
         if v_order == OT_GOTO_DEPOT
             && v_order_destination != depot_id
             && !crate::random_func::chance16_i(3, 16, self.services.random())
@@ -2720,7 +2720,7 @@ impl Game<'_> {
             unsafe { self.maintain(id, maintenance::check_vehicle_breakdown) };
             self.needs_service(id);
             (self.leaves.check_orders)(id);
-            if (id).vehicle().current_order().kind() == OT_GOTO_STATION {
+            if (id).vehicle().current_order().kind_raw() == OT_GOTO_STATION {
                 let tile = (self.leaves.station_dest)(id) as u32;
                 if tile != INVALID_TILE {
                     (id).vehicle().set_dest_tile_raw((u64::from(tile)) as u32);
@@ -2808,7 +2808,7 @@ impl Game<'_> {
                 return 3;
             }
             if execute {
-                if (id).vehicle().current_order().kind() == OT_LOADING {
+                if (id).vehicle().current_order().kind_raw() == OT_LOADING {
                     let last = ((id).last()).vehicle().tile_raw();
                     if (self.leaves.is_station_any)(Handle::NONE, last) == 0
                         || self.world().get_station_index(TileIndex(last))

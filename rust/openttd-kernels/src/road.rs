@@ -647,7 +647,7 @@ impl Game<'_> {
                     v.v.ground_cache(),
                     cached_max_track_speed
                 ),
-                order_max_speed: v.v.current_order().speed,
+                order_max_speed: v.v.current_order().max_speed(),
                 direction: v.v.direction_raw(),
                 status: v.v.vehstatus_raw(),
             };
@@ -665,7 +665,7 @@ impl Game<'_> {
                     v.v.ground_cache(),
                     cached_max_track_speed
                 ),
-                order_max_speed: v.v.current_order().speed,
+                order_max_speed: v.v.current_order().max_speed(),
                 direction: v.v.direction_raw(),
                 status: v.v.vehstatus_raw(),
             },
@@ -846,7 +846,7 @@ impl Game<'_> {
                         u.v.ground_cache(),
                         cached_max_track_speed
                     ),
-                    order_max_speed: u.v.current_order().speed,
+                    order_max_speed: u.v.current_order().max_speed(),
                     direction: u.v.direction_raw(),
                     status: u.v.vehstatus_raw(),
                 },
@@ -869,7 +869,7 @@ impl Game<'_> {
                         v.v.ground_cache(),
                         cached_max_track_speed
                     ),
-                    order_max_speed: v.v.current_order().speed,
+                    order_max_speed: v.v.current_order().max_speed(),
                     direction: v.v.direction_raw(),
                     status: v.v.vehstatus_raw(),
                 },
@@ -2211,7 +2211,7 @@ impl Game<'_> {
             tile: v.v.tile_raw(),
             breakdown_ctr: crate::raw_field::read_field!(v.v.0.as_ptr(), breakdown_ctr),
             direction: v.v.direction_raw(),
-            order_type: v.v.current_order().kind(),
+            order_type: v.v.current_order().kind_raw(),
             status: v.v.vehstatus_raw(),
         };
         if r.status & (VS_STOPPED | VS_CRASHED) != 0
@@ -2482,7 +2482,7 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
         }),
         tile: v.tile_raw(),
         max_track_speed: crate::raw_field::read_field!(v.ground_cache(), cached_max_track_speed),
-        order_max_speed: v.current_order().speed,
+        order_max_speed: v.current_order().max_speed(),
         direction: v.direction_raw(),
         status: v.vehstatus_raw(),
     };
@@ -2621,7 +2621,7 @@ impl Game<'_> {
             cur_speed: v.cur_speed(),
             flags,
             direction: v.direction_raw(),
-            order_type: v.current_order().kind(),
+            order_type: v.current_order().kind_raw(),
         }
     }
 }
@@ -2664,7 +2664,7 @@ pub(crate) unsafe fn current_max_speed(
                 v.ground_cache(),
                 cached_max_track_speed
             ),
-            order_max_speed: v.current_order().speed,
+            order_max_speed: v.current_order().max_speed(),
             direction: v.direction_raw(),
             status: v.vehstatus_raw(),
         },

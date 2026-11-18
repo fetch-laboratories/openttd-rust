@@ -2037,7 +2037,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
     let (w, l) = (c.w, c.l);
     let map = crate::map_func::World::new(unsafe { &*w.shared });
     if map.types.assertions() {
-        map.check(front.current_order().kind() == crate::order_type::OrderType::OT_LOADING.0);
+        map.check(front.current_order().kind() == crate::order_type::OrderType::OT_LOADING);
     }
 
     // SAFETY: The immutable shared vehicle table outlives this entry.

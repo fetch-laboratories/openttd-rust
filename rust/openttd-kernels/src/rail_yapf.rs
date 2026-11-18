@@ -29,7 +29,7 @@ use crate::follow_track::{CFollowTrackT, ErrorCode, get_speed_limit};
 use crate::game_state::GameState;
 use crate::map_func::World;
 use crate::node_hash::NodeMap;
-use crate::order_type::{ODATF_NEAREST_DEPOT, OrderType};
+use crate::order_type::{OrderDepotActionFlag, OrderType};
 use crate::pathfinder_func::calc_closest_station_tile;
 use crate::pathfinder_type::{
     FindDepotData, FindDepotDataRecord, YAPF_INFINITE_PENALTY, YAPF_TILE_CORNER_LENGTH,
@@ -471,10 +471,10 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
         let v = pf.v.vehicle();
         pf.dest.any_depot = false;
         let order = v.current_order();
-        let order_type = OrderType(order.kind());
+        let order_type = order.kind();
         if order_type == OrderType::OT_GOTO_WAYPOINT || order_type == OrderType::OT_GOTO_STATION {
             if order_type == OrderType::OT_GOTO_WAYPOINT
-                && !(pf.s.waypoint_is_single_tile)(order.destination)
+                && !(pf.s.waypoint_is_single_tile)(order.destination())
             {
                 /* In case of 'complex' waypoints we need to do a look
                  * ahead. This look ahead messes a bit about, which
@@ -488,19 +488,21 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
                 // SAFETY: The shared table returns the static station command table.
                 unsafe { &*(pf.s.station_commands)() },
                 &pf.world,
-                StationID(order.destination),
+                StationID(order.destination()),
                 v.tile(),
-                if OrderType(v.current_order().kind()) == OrderType::OT_GOTO_STATION {
+                if v.current_order().kind() == OrderType::OT_GOTO_STATION {
                     StationType::Rail
                 } else {
                     StationType::RailWaypoint
                 },
             );
-            pf.dest.dest_station_id = StationID(order.destination);
+            pf.dest.dest_station_id = StationID(order.destination());
             pf.dest.dest_trackdirs = TrackdirBits::INVALID_TRACKDIR_BIT;
         } else {
             if order_type == OrderType::OT_GOTO_DEPOT
-                && order.depot_action_flags() & ODATF_NEAREST_DEPOT != 0
+                && order
+                    .depot_action_flags()
+                    .test(OrderDepotActionFlag::NearestDepot)
             {
                 pf.dest.any_depot = true;
             }
@@ -1564,9 +1566,9 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
             } else if cur.tile_type == TileType::MP_STATION && self.world.is_rail_waypoint(cur.tile)
             {
                 let order = v.current_order();
-                if OrderType(order.kind()) == OrderType::OT_GOTO_WAYPOINT
-                    && self.world.get_station_index(cur.tile) == StationID(order.destination)
-                    && !(self.s.waypoint_is_single_tile)(order.destination)
+                if order.kind() == OrderType::OT_GOTO_WAYPOINT
+                    && self.world.get_station_index(cur.tile) == StationID(order.destination())
+                    && !(self.s.waypoint_is_single_tile)(order.destination())
                 {
                     /* This waypoint is our destination; maybe this isn't an unreserved
                      * one, so check that and if so see that as the last signal being

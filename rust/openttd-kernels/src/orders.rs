@@ -877,16 +877,87 @@ impl Game {
         }
     }
 }
-impl Order {
+/// A live `Order` read in place, such as `Vehicle::current_order`: each getter
+/// loads only the fields its `order_base.h` getter reads, when it is called.
+#[derive(Clone, Copy)]
+pub(crate) struct OrderView(*const Order);
+
+// An `OrderView` names a live order of the serialized game state at every read.
+impl OrderView {
+    /// View the live order at `order`.
+    pub(crate) fn of(order: *const Order) -> Self {
+        Self(order)
+    }
+    /// `Order::GetType`: get the type of order of this order.
+    #[inline]
+    pub(crate) fn kind(self) -> crate::order_type::OrderType {
+        crate::order_type::OrderType(read_field!(self.0, kind) & 15)
+    }
+    #[inline]
+    pub(crate) fn kind_raw(self) -> u8 {
+        self.kind().0
+    }
+    /// `Order::GetNonStopType`.
+    #[inline]
+    pub(crate) fn non_stop(self) -> crate::order_type::OrderNonStopFlags {
+        crate::order_type::OrderNonStopFlags(read_field!(self.0, kind) >> 6)
+    }
+    #[inline]
+    pub(crate) fn non_stop_raw(self) -> u8 {
+        self.non_stop().0
+    }
+    /// `Order::GetDepotOrderType`.
+    #[inline]
+    pub(crate) fn depot_type(self) -> crate::order_type::OrderDepotTypeFlags {
+        crate::order_type::OrderDepotTypeFlags(read_field!(self.0, flags) & 7)
+    }
+    #[inline]
+    pub(crate) fn depot_type_raw(self) -> u8 {
+        self.depot_type().0
+    }
     /// `Order::GetDepotActionType`.
-    pub(crate) fn depot_action_flags(self) -> u8 {
-        (self.flags >> 3) & 15
+    #[inline]
+    pub(crate) fn depot_action_flags(self) -> crate::order_type::OrderDepotActionFlags {
+        crate::order_type::OrderDepotActionFlags((read_field!(self.0, flags) >> 3) & 15)
     }
+    #[inline]
+    pub(crate) fn depot_action_flags_raw(self) -> u8 {
+        self.depot_action_flags().0
+    }
+    /// `Order::GetDestination`: the destination of the order. `DestinationID`
+    /// has no Rust wrapper; this is its base integer.
+    #[inline]
+    pub(crate) fn destination(self) -> u16 {
+        read_field!(self.0, destination)
+    }
+    /// `Order::GetMaxSpeed`: the maximum speed in the vehicle's units.
+    #[inline]
+    pub(crate) fn max_speed(self) -> u16 {
+        read_field!(self.0, speed)
+    }
+    /// `Order::IsFullLoadOrder`: is this order a full load or full load any order?
+    #[inline]
+    pub(crate) fn is_full_load(self) -> bool {
+        matches!(
+            (read_field!(self.0, flags) >> 4) & 7,
+            OLFB_FULL_LOAD | OLFB_FULL_LOAD_ANY
+        )
+    }
+    /// A copy of the whole order, where the original copies it.
+    pub(crate) fn copied(self) -> Order {
+        // SAFETY: The view names a live order; the copy creates no reference.
+        unsafe { self.0.read() }
+    }
+}
+
+impl Order {
+    /// `Order::GetType`.
     pub(crate) fn kind(&self) -> u8 {
-        self.kind & 15
+        OrderView::of(ptr::from_ref(self)).kind_raw()
     }
+    /// `Order::GetNonStopType`.
     pub(crate) fn non_stop(self) -> u8 {
-        self.kind >> 6
+        OrderView::of(ptr::from_ref(&self)).non_stop_raw()
     }
     pub(crate) fn load(self) -> u8 {
         (self.flags >> 4) & 7
@@ -897,8 +968,9 @@ impl Order {
     pub(crate) fn action(&self) -> u8 {
         (self.flags >> 3) & 15
     }
+    /// `Order::GetDepotOrderType`.
     pub(crate) fn depot_type(&self) -> u8 {
-        self.flags & 7
+        OrderView::of(ptr::from_ref(self)).depot_type_raw()
     }
     fn variable(self) -> u8 {
         (self.destination >> 11) as u8
@@ -914,7 +986,7 @@ impl Order {
     }
     /// `Order::GetMaxSpeed`.
     pub(crate) fn max_speed(self) -> u16 {
-        self.speed
+        OrderView::of(ptr::from_ref(&self)).max_speed()
     }
     /// `Order::GetConditionSkipToOrder`.
     pub(crate) fn condition_skip_to(self) -> u8 {
@@ -927,7 +999,7 @@ impl Order {
     }
     /// `Order::IsFullLoadOrder`.
     pub(crate) fn is_full_load(self) -> bool {
-        matches!(self.load(), OLFB_FULL_LOAD | OLFB_FULL_LOAD_ANY)
+        OrderView::of(ptr::from_ref(&self)).is_full_load()
     }
     fn wait_timetabled(self) -> bool {
         if self.kind() == OT_CONDITIONAL {
@@ -4777,4 +4849,82 @@ fn order_can_use_station(vehicle: *mut std::ffi::c_void, destination: u16) -> u6
             crate::newgrf_airport::runtime(),
         )
     })
+}
+
+#[cfg(test)]
+mod order_view_tests {
+    use super::{Order, OrderView};
+    use crate::order_type::{
+        OrderDepotActionFlags, OrderDepotTypeFlags, OrderNonStopFlags, OrderType,
+    };
+
+    /// `order_base.h` packs `type` as type (bits 0-3), stop location (4-5) and
+    /// non-stop flags (6-7), and `flags` as depot order type or unload type
+    /// (0-2), depot action type (3-6) and load type (4-6). The expectations are
+    /// those fields of distinct stored values, so a getter reading the wrong
+    /// field or bits fails.
+    #[test]
+    fn view_getters_decode_the_original_bit_layout() {
+        let order = Order {
+            kind: 0b1011_0110,
+            flags: 0b1101_1010,
+            destination: 0x1234,
+            refit: 7,
+            wait: 0x2345,
+            travel: 0x3456,
+            speed: 0x4567,
+        };
+        let view = OrderView::of(&raw const order);
+        assert_eq!(view.kind(), OrderType(6));
+        assert_eq!(view.kind_raw(), 6);
+        assert_eq!(view.non_stop(), OrderNonStopFlags(2));
+        assert_eq!(view.non_stop_raw(), 2);
+        assert_eq!(view.depot_type(), OrderDepotTypeFlags(2));
+        assert_eq!(view.depot_type_raw(), 2);
+        assert_eq!(view.depot_action_flags(), OrderDepotActionFlags(11));
+        assert_eq!(view.depot_action_flags_raw(), 11);
+        assert_eq!(view.destination(), 0x1234);
+        assert_eq!(view.max_speed(), 0x4567);
+        // Load type 5 is neither `FullLoad` (2) nor `FullLoadAny` (3).
+        assert!(!view.is_full_load());
+        let copy = view.copied();
+        assert_eq!(
+            (
+                copy.kind,
+                copy.flags,
+                copy.destination,
+                copy.refit,
+                copy.wait,
+                copy.travel,
+                copy.speed
+            ),
+            (0b1011_0110, 0b1101_1010, 0x1234, 7, 0x2345, 0x3456, 0x4567)
+        );
+    }
+
+    #[test]
+    fn view_full_load_is_load_type_two_or_three() {
+        for (flags, full) in [
+            (0x20, true),
+            (0x30, true),
+            (0x40, false),
+            (0x10, false),
+            (0x0f, false),
+        ] {
+            let order = Order {
+                kind: 0,
+                flags,
+                destination: 0,
+                refit: 0,
+                wait: 0,
+                travel: 0,
+                speed: 0,
+            };
+            assert_eq!(
+                OrderView::of(&raw const order).is_full_load(),
+                full,
+                "flags {flags:#x}"
+            );
+        }
+    }
 }

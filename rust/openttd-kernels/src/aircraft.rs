@@ -36,7 +36,7 @@ use crate::news_func::{
     add_tile_news_item, add_vehicle_advice_news_item, add_vehicle_news_item, delete_vehicle_news,
 };
 use crate::news_type::{AdviceType, NewsType};
-use crate::order_type::{ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OrderType};
+use crate::order_type::{OrderDepotActionFlag, OrderDepotTypeFlag, OrderType};
 use crate::script_event_types::{CrashReason, ScriptEvent};
 use crate::services::Services;
 use crate::sound_type::{ORIGINAL_SAMPLE_COUNT, SoundFx, SoundID};
@@ -785,7 +785,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if max_range != 0 {
             if self.current_order_is_type(v, OrderType::OT_GOTO_STATION)
                 || (self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
-                    && b.current_order().depot_action_flags() & ODATF_NEAREST_DEPOT == 0)
+                    && !b
+                        .current_order()
+                        .depot_action_flags()
+                        .test(OrderDepotActionFlag::NearestDepot))
             {
                 last_dest = self.station_get_if_valid(b.last_station_visited());
                 next_dest = self.station_get_if_valid(self.order_destination(v));
@@ -3058,7 +3061,11 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             /* The aircraft is heading to a hangar, but the new station doesn't have one,
              * or the aircraft can't land on the new station. Cancel current order. */
             if self.current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
-                && v.base().current_order().depot_type() & ODTF_PART_OF_ORDERS == 0
+                && !v
+                    .base()
+                    .current_order()
+                    .depot_type()
+                    .test(OrderDepotTypeFlag::PartOfOrders)
                 && self.order_destination(v) == index
                 && (!Self::airport_has_hangar(st) || !Self::can_vehicle_use_station(v, st))
             {

@@ -129,8 +129,8 @@ fn ship_input(s: &Services, v: &Ship<'_>) -> Input {
     Input {
         tile,
         dest_tile,
-        order_type: order.kind(),
-        order_destination: order.destination,
+        order_type: order.kind().0,
+        order_destination: order.destination(),
         direction,
         max_speed: svi.ship_speed(),
         ocean_speed_frac: svi.ship_speed_fraction(true),

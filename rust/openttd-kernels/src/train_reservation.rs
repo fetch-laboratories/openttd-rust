@@ -578,7 +578,7 @@ impl<'a> Orders<'a> {
                 & (1 << crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS)
                 != 0,
         );
-        let saved_order = id.vehicle().current_order();
+        let saved_order = id.vehicle().current_order().copied();
         Self {
             g: *g,
             id,
@@ -736,7 +736,7 @@ fn choose(
         }
         (g.leaves.service)(g.context, id);
         if matches!(
-            id.vehicle().current_order().kind(),
+            id.vehicle().current_order().kind_raw(),
             OT_GOTO_DEPOT | OT_DUMMY | OT_CONDITIONAL
         ) {
             (g.leaves.process_orders)(id);
@@ -745,8 +745,8 @@ fn choose(
     let mut orders = Orders::new(g, id);
     let v_tile: u32 = id.vehicle().tile_raw();
     let v_dest: u32 = id.vehicle().dest_tile_raw();
-    let v_destination: u16 = id.vehicle().current_order().destination;
-    let v_order: u8 = id.vehicle().current_order().kind();
+    let v_destination: u16 = id.vehicle().current_order().destination();
+    let v_order: u8 = id.vehicle().current_order().kind_raw();
     if v_order == OT_LEAVESTATION {
         orders.next(false);
     } else if v_order == OT_LOADING
@@ -850,9 +850,10 @@ fn choose(
         (g.shared().mark_dirty)(tile);
     }
     orders.restore();
-    let v_order: u8 = id.vehicle().current_order().kind();
+    let v_order: u8 = id.vehicle().current_order().kind_raw();
     let v_nearest: u8 = u8::from(
-        id.vehicle().current_order().depot_action_flags() & crate::order_type::ODATF_NEAREST_DEPOT
+        id.vehicle().current_order().depot_action_flags_raw()
+            & crate::order_type::ODATF_NEAREST_DEPOT
             != 0,
     );
     if v_order == OT_GOTO_DEPOT
@@ -946,8 +947,8 @@ fn check_next(g: &Game, id: Handle) {
     }
     let v_tile: u32 = id.vehicle().tile_raw();
     let v_dest: u32 = id.vehicle().dest_tile_raw();
-    let v_destination: u16 = id.vehicle().current_order().destination;
-    let v_order: u8 = id.vehicle().current_order().kind();
+    let v_destination: u16 = id.vehicle().current_order().destination();
+    let v_order: u8 = id.vehicle().current_order().kind_raw();
     let v_num_orders: u8 = g.read_num_orders(id);
     match v_order {
         OT_GOTO_DEPOT => {
