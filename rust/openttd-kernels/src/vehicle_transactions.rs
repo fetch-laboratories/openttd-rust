@@ -119,10 +119,10 @@ pub(crate) unsafe fn cmd_rename_vehicle(
     flags: DoCommandFlags,
     cmd: CmdRenameVehicle,
 ) {
-    let (v, _, _) = unsafe { owned_primary(s, cost, cmd.veh_id) };
-    if v.is_null() {
+    // `owned_primary` returns the record exactly when the vehicle is owned and primary.
+    let (v, _, Some(handle)) = (unsafe { owned_primary(s, cost, cmd.veh_id) }) else {
         return;
-    }
+    };
     let text = cmd.text;
     let reset = text.size == 0;
     if !reset {
@@ -140,7 +140,7 @@ pub(crate) unsafe fn cmd_rename_vehicle(
             (s.set_name)(v, text);
         }
         invalidate_window_classes_data(
-            get_window_class_for_vehicle_type(crate::fleet::record(s.groups, v).vehicle_type()),
+            get_window_class_for_vehicle_type(handle.vehicle_type()),
             1,
             false,
         );

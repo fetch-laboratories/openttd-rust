@@ -54,7 +54,7 @@ use crate::vehicle::maintenance;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices, YEAR_TICKS};
 use crate::vehicle_base::VehState;
 use crate::vehicle_type::{DepotCommandFlag, DepotCommandFlags, VehicleID, VehicleType};
-use crate::window_func::{invalidate_window_data, set_window_classes_dirty};
+use crate::window_func::{invalidate_window_data, set_window_classes_dirty, set_window_dirty};
 use crate::window_type::{WindowClass, WindowNumber};
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -941,8 +941,12 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
         Self::call(|| unsafe { (self.leaves.subtract_cost)(v, cost) });
 
-        // SAFETY: The base vehicle table names its immutable maintenance table.
-        Self::call(|| (unsafe { &*self.vs.maintenance }.details_dirty)(b));
+        Self::call(|| {
+            set_window_dirty(
+                WindowClass::WC_VEHICLE_DETAILS,
+                WindowNumber::from(v.index()),
+            );
+        });
         Self::call(|| set_window_classes_dirty(WindowClass::WC_AIRCRAFT_LIST));
     }
 

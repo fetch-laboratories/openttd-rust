@@ -622,7 +622,8 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     }
     /* Don't allow disasters and sparks and such to be refitted.
      * We cannot check for IsPrimaryVehicle as autoreplace also refits in free wagon chains. */
-    let kind = crate::fleet::record(b.groups, v).vehicle_type();
+    let record = crate::fleet::record(b.groups, v);
+    let kind = record.vehicle_type();
     if !crate::vehicle_func::is_company_buildable_vehicle_type(kind) {
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
@@ -774,7 +775,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
                 false,
             );
             invalidate_window_classes_data(
-                get_window_class_for_vehicle_type(crate::fleet::record(b.groups, v).vehicle_type()),
+                get_window_class_for_vehicle_type(record.vehicle_type()),
                 0,
                 false,
             );
