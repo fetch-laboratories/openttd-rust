@@ -637,14 +637,8 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 		.own_client_id = reinterpret_cast<uint32_t *>(&_network_own_client_id),
 		.reconnect = &_network_reconnect,
 		.revision = []() noexcept -> OpenTTDByteSpan { auto value = GetNetworkRevisionString(); return {reinterpret_cast<const uint8_t *>(value.data()), value.size()}; },
-		.show_banned = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_SERVER_BANNED), {}, WL_CRITICAL); },
 		.show_client_list = []() noexcept { ShowClientList(); },
-		.show_full = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_SERVER_FULL), {}, WL_CRITICAL); },
 		.show_join_window = []() noexcept { ShowJoinStatusWindow(); },
-		.show_lag = [](int64_t seconds) noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION_CAPTION), GetEncodedString(STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION, seconds), WL_INFO); },
-		.show_newgrf_mismatch = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_NEWGRF_MISMATCH), {}, WL_CRITICAL); },
-		.show_reboot = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_MESSAGE_SERVER_REBOOT), {}, WL_CRITICAL); },
-		.show_savegame_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_SAVEGAMEERROR), {}, WL_CRITICAL); },
 		.show_server_error = [](uint8_t error, void *reason) noexcept {
 			static const StringID network_error_strings[] = {
 				STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_GENERAL
@@ -681,7 +675,6 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 				ShowErrorMessage(GetEncodedString(err), {}, WL_CRITICAL);
 			}
 		},
-		.show_shutdown = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_MESSAGE_SERVER_SHUTDOWN), {}, WL_CRITICAL); },
 		.wait_for_quit_packets = []() noexcept { CSleep(3 * MILLISECONDS_PER_TICK); },
 	};
 	return services;

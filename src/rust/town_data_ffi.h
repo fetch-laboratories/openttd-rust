@@ -15,7 +15,6 @@ struct OpenTTDTownDataServices {
 	bool (*load)(OpenTTDTownDataFrame *) noexcept OPENTTD_SERVICE_DEFAULT(load);
 	uint8_t (*feature)(OpenTTDTownDataFrame *, size_t, OpenTTDTownDataFeature *) noexcept OPENTTD_SERVICE_DEFAULT(feature);
 	void (*named_error)(uint32_t, uint32_t, const OpenTTDTownDataFrame *) noexcept OPENTTD_SERVICE_DEFAULT(named_error);
-	void (*failed_warning)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(failed_warning);
 	uint16_t (*found)(const OpenTTDTownDataFrame *, uint32_t, TownSize, bool, TownLayout, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(found);
 	void (*place_sign)(uint32_t, const OpenTTDTownDataFrame *) noexcept OPENTTD_SERVICE_DEFAULT(place_sign);
 	void (*expand)(uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(expand);

@@ -33,13 +33,18 @@ macro_rules! observed {
 }
 pub(super) use observed;
 
+use crate::error::{WarningLevel, show_error_message};
 use crate::news_func::add_tile_news_item;
 use crate::news_type::NewsType;
 use crate::script_event_types::ScriptEvent;
 use crate::station_type::StationID;
 use crate::strings_func::{get_encoded_string, get_string};
+use crate::strings_type::EncodedString;
 use crate::strings_type::StringParameterData::{self, Integer};
-use crate::table::strings::{STR_COMPANY_NAME, STR_NEWS_NEW_TOWN, STR_NEWS_NEW_TOWN_UNSPONSORED};
+use crate::table::strings::{
+    STR_COMPANY_NAME, STR_ERROR_COULD_NOT_CREATE_TOWN, STR_NEWS_NEW_TOWN,
+    STR_NEWS_NEW_TOWN_UNSPONSORED,
+};
 pub use crate::tile_type::TileIndex as Tile;
 use crate::town::TownDirectoryInvalidateWindowData;
 pub use crate::town_type::{TownFounding, TownLayout, TownSize};
@@ -87,7 +92,6 @@ pub struct FoundingServices {
     pub cached_name: extern "C" fn(*const TownHandle) -> ByteSpan,
     pub set_progress: extern "C" fn(*mut Frame, u32) -> bool,
     pub increase_progress: extern "C" fn(*mut Frame) -> bool,
-    pub no_town_error: extern "C" fn(),
     pub random: *mut names::Randomizer,
     pub edge_error: u32,
     pub close_error: u32,
@@ -922,7 +926,15 @@ pub(crate) unsafe fn generate_towns(
         && observed!((f.shared.town_count)()) == 0
         && !observed!((f.leaves.environment.editor)())
     {
-        observed!((f.s.no_town_error)());
+        show_error_message(
+            &get_encoded_string(STR_ERROR_COULD_NOT_CREATE_TOWN, &[]),
+            &EncodedString::default(),
+            WarningLevel::WL_CRITICAL,
+            0,
+            0,
+            &EncodedString::default(),
+            CompanyID::INVALID,
+        );
     }
     // we are still without a town? we failed, simply
     *result = success;
@@ -1041,7 +1053,6 @@ crate::abi::layouts! {
         cached_name,
         set_progress,
         increase_progress,
-        no_town_error,
         random,
         edge_error,
         close_error,

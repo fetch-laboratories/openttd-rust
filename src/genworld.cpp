@@ -261,7 +261,6 @@ static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept
 		.load = TownDataLoad,
 		.feature = TownDataFeature,
 		.named_error = [](uint32_t summary, uint32_t detail, const OpenTTDTownDataFrame *frame) noexcept { ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail, frame->name), WL_ERROR); },
-		.failed_warning = [](uint32_t detail, uint32_t count) noexcept { ShowErrorMessage(GetEncodedString(detail, count), {}, WL_WARNING); },
 		.found = [](const OpenTTDTownDataFrame *frame, uint32_t tile, TownSize size, bool city, TownLayout layout, bool random, uint32_t parts) noexcept {
 			return std::get<TownID>(Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, TileIndex(tile), size, city, layout, random, parts, frame->name)).base();
 		},

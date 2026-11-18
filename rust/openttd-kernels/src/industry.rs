@@ -2661,8 +2661,6 @@ crate::abi::layouts! {
         can_allocate,
         allocate,
         local_company,
-        prospect_no_place,
-        prospect_unlucky,
     };
     "OpenTTDIndustryTransactionContext" ["industry"] => crate::industry::TransactionContext {
         map,
@@ -2769,7 +2767,6 @@ crate::abi::layouts! {
         scale_by_land_proportion,
         set_progress,
         increase_progress,
-        missing_warning,
     };
     "OpenTTDIndustryMetadata" ["industry"] => Metadata {
         tile,
@@ -3396,8 +3393,6 @@ mod production_policy_tests {
             can_allocate: crate::test_tables::unreachable0,
             allocate: unreachable1,
             local_company: crate::test_tables::unreachable0,
-            prospect_no_place: crate::test_tables::unreachable0,
-            prospect_unlucky: crate::test_tables::unreachable0,
         }));
         s
     }
@@ -3624,7 +3619,6 @@ mod production_policy_tests {
             scale_by_land_proportion: unreachable1,
             set_progress: crate::test_tables::unreachable3,
             increase_progress: unreachable2,
-            missing_warning: unreachable1,
         };
         take();
         unsafe {

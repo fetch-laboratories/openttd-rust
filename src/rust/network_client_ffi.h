@@ -32,16 +32,9 @@ struct OpenTTDNetworkClientServices {
 	uint32_t *own_client_id;
 	uint8_t *reconnect;
 	OpenTTDByteSpan (*revision)() noexcept OPENTTD_SERVICE_DEFAULT(revision);
-	void (*show_banned)() noexcept OPENTTD_SERVICE_DEFAULT(show_banned);
 	void (*show_client_list)() noexcept OPENTTD_SERVICE_DEFAULT(show_client_list);
-	void (*show_full)() noexcept OPENTTD_SERVICE_DEFAULT(show_full);
 	void (*show_join_window)() noexcept OPENTTD_SERVICE_DEFAULT(show_join_window);
-	void (*show_lag)(int64_t) noexcept OPENTTD_SERVICE_DEFAULT(show_lag);
-	void (*show_newgrf_mismatch)() noexcept OPENTTD_SERVICE_DEFAULT(show_newgrf_mismatch);
-	void (*show_reboot)() noexcept OPENTTD_SERVICE_DEFAULT(show_reboot);
-	void (*show_savegame_error)() noexcept OPENTTD_SERVICE_DEFAULT(show_savegame_error);
 	void (*show_server_error)(uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(show_server_error);
-	void (*show_shutdown)() noexcept OPENTTD_SERVICE_DEFAULT(show_shutdown);
 	void (*wait_for_quit_packets)() noexcept OPENTTD_SERVICE_DEFAULT(wait_for_quit_packets);
 };
 const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept;

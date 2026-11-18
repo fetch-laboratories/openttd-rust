@@ -3,9 +3,13 @@
 //! libpng (with its setjmp frame), the BMP codec and file objects stay native; each
 //! decode is one call whose output stays valid until `finish`.
 #![allow(unsafe_code)]
+use crate::company_type::CompanyID;
+use crate::error::{WarningLevel, show_error_message};
 use crate::fileio_type::{DFT_HEIGHTMAP_BMP, DFT_HEIGHTMAP_PNG};
 use crate::gfx_type::Colour;
 use crate::map_type::MAX_MAP_SIZE;
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::{EncodedString, StringID};
 use crate::table::strings::{
     STR_ERROR_BMPMAP, STR_ERROR_BMPMAP_IMAGE_TYPE, STR_ERROR_HEIGHTMAP_TOO_LARGE, STR_ERROR_PNGMAP,
     STR_ERROR_PNGMAP_FILE_NOT_FOUND, STR_ERROR_PNGMAP_IMAGE_TYPE, STR_ERROR_PNGMAP_MISC,
@@ -106,9 +110,22 @@ fn ordered_palette(gray: &mut [u8; 256], size: usize) {
     }
 }
 
+/// `ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail), WL_ERROR)`.
+fn show_error(summary: StringID, detail: StringID) {
+    show_error_message(
+        &get_encoded_string(summary, &[]),
+        &get_encoded_string(detail, &[]),
+        WarningLevel::WL_ERROR,
+        0,
+        0,
+        &EncodedString::default(),
+        CompanyID::INVALID,
+    );
+}
+
 impl Input {
-    fn fail(&self, summary: u32, detail: u32) -> Option<Image> {
-        (unsafe { &*self.shared }.show_error)(summary, detail);
+    fn fail(&self, summary: StringID, detail: StringID) -> Option<Image> {
+        show_error(summary, detail);
         (self.finish)(self.context);
         None
     }
@@ -128,16 +145,16 @@ impl Input {
         match (self.png)(self.context, &raw mut png) {
             DECODE_OK => {}
             DECODE_NOT_FOUND => {
-                return self.fail(STR_ERROR_PNGMAP.0, STR_ERROR_PNGMAP_FILE_NOT_FOUND.0);
+                return self.fail(STR_ERROR_PNGMAP, STR_ERROR_PNGMAP_FILE_NOT_FOUND);
             }
-            _ => return self.fail(STR_ERROR_PNGMAP.0, STR_ERROR_PNGMAP_MISC.0),
+            _ => return self.fail(STR_ERROR_PNGMAP, STR_ERROR_PNGMAP_MISC),
         }
         // Unreachable after the strip transforms, kept with the original's && chain.
         if png.channels != 1 && png.channels != 3 && png.bit_depth != 8 {
-            return self.fail(STR_ERROR_PNGMAP.0, STR_ERROR_PNGMAP_IMAGE_TYPE.0);
+            return self.fail(STR_ERROR_PNGMAP, STR_ERROR_PNGMAP_IMAGE_TYPE);
         }
         if !is_valid_heightmap_dimension(png.width, png.height) {
-            return self.fail(STR_ERROR_PNGMAP.0, STR_ERROR_HEIGHTMAP_TOO_LARGE.0);
+            return self.fail(STR_ERROR_PNGMAP, STR_ERROR_HEIGHTMAP_TOO_LARGE);
         }
         let mut map = Vec::new();
         if want_map {
@@ -167,21 +184,18 @@ impl Input {
         match (self.bmp_header)(self.context, &raw mut bmp) {
             DECODE_OK => {}
             DECODE_NOT_FOUND => {
-                (unsafe { &*self.shared }.show_error)(
-                    STR_ERROR_BMPMAP.0,
-                    STR_ERROR_PNGMAP_FILE_NOT_FOUND.0,
-                );
+                show_error(STR_ERROR_BMPMAP, STR_ERROR_PNGMAP_FILE_NOT_FOUND);
                 return None;
             }
-            _ => return self.fail(STR_ERROR_BMPMAP.0, STR_ERROR_BMPMAP_IMAGE_TYPE.0),
+            _ => return self.fail(STR_ERROR_BMPMAP, STR_ERROR_BMPMAP_IMAGE_TYPE),
         }
         if !is_valid_heightmap_dimension(bmp.width, bmp.height) {
-            return self.fail(STR_ERROR_BMPMAP.0, STR_ERROR_HEIGHTMAP_TOO_LARGE.0);
+            return self.fail(STR_ERROR_BMPMAP, STR_ERROR_HEIGHTMAP_TOO_LARGE);
         }
         let mut map = Vec::new();
         if want_map {
             if !(self.bmp_bitmap)(self.context, &raw mut bmp) {
-                return self.fail(STR_ERROR_BMPMAP.0, STR_ERROR_BMPMAP_IMAGE_TYPE.0);
+                return self.fail(STR_ERROR_BMPMAP, STR_ERROR_BMPMAP_IMAGE_TYPE);
             }
             map.resize(bmp.width as usize * bmp.height as usize, 0);
             // SAFETY: BmpData stays alive until finish below.

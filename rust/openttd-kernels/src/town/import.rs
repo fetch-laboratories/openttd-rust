@@ -5,8 +5,12 @@
 //! time, so a malformed later feature leaves earlier towns founded and unexpanded.
 use super::State;
 use super::founding::{FoundingServices, Tile, TownLayout, TownSize};
+use crate::company_type::CompanyID;
+use crate::error::{WarningLevel, show_error_message};
 use crate::heightmap::HeightmapRotation;
 use crate::services::Services;
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::{EncodedString, StringParameterData};
 use crate::table::strings::{
     STR_TOWN_DATA_ERROR_BAD_COORDINATE, STR_TOWN_DATA_ERROR_FAILED_TO_FOUND_TOWN,
     STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY, STR_TOWN_DATA_ERROR_LOAD_FAILED,
@@ -49,7 +53,6 @@ pub struct ImportServices {
     pub load: extern "C" fn(*mut Frame) -> bool,
     pub feature: extern "C" fn(*mut Frame, usize, *mut Feature) -> u8,
     pub named_error: extern "C" fn(u32, u32, *const Frame),
-    pub failed_warning: extern "C" fn(u32, u32),
     /// `Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, ...)`, returning the town ID.
     pub found: extern "C" fn(*const Frame, Tile, TownSize, bool, TownLayout, bool, u32) -> TownID,
     /// `Command<CMD_PLACE_SIGN>::Post`.
@@ -59,10 +62,15 @@ pub struct ImportServices {
 }
 
 impl ImportServices {
-    fn format_error(&self) {
-        (unsafe { &*self.shared }.show_error)(
-            STR_TOWN_DATA_ERROR_LOAD_FAILED.0,
-            STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY.0,
+    fn format_error() {
+        show_error_message(
+            &get_encoded_string(STR_TOWN_DATA_ERROR_LOAD_FAILED, &[]),
+            &get_encoded_string(STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY, &[]),
+            WarningLevel::WL_ERROR,
+            0,
+            0,
+            &EncodedString::default(),
+            CompanyID::INVALID,
         );
     }
 
@@ -153,7 +161,7 @@ impl ImportServices {
         // Now parse the JSON.
         // Check for JSON formatting errors with the array of towns.
         if !(self.load)(frame) {
-            self.format_error();
+            Self::format_error();
             return;
         }
         let shared = unsafe { &*self.shared };
@@ -184,7 +192,7 @@ impl ImportServices {
                 }
                 _ => {
                     // If the town name is formatted wrong, all we can do is give a general warning.
-                    self.format_error();
+                    Self::format_error();
                     return;
                 }
             }
@@ -216,7 +224,18 @@ impl ImportServices {
         }
         // If we couldn't found a town (or multiple), display a message to the player with the number of failed towns.
         if failed_towns > 0 {
-            (self.failed_warning)(STR_TOWN_DATA_ERROR_FAILED_TO_FOUND_TOWN.0, failed_towns);
+            show_error_message(
+                &get_encoded_string(
+                    STR_TOWN_DATA_ERROR_FAILED_TO_FOUND_TOWN,
+                    &[StringParameterData::Integer(u64::from(failed_towns))],
+                ),
+                &EncodedString::default(),
+                WarningLevel::WL_WARNING,
+                0,
+                0,
+                &EncodedString::default(),
+                CompanyID::INVALID,
+            );
         }
         // Now that we've created the towns, let's grow them to their target populations.
         for (town_id, state, population) in towns {
@@ -268,5 +287,5 @@ pub unsafe extern "C" fn openttd_rust_load_town_data(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDTownDataFeature" ["genworld"] => Feature { population, x, y, city, };
-    "OpenTTDTownDataServices" ["genworld"] => ImportServices { shared, founding, load, feature, named_error, failed_warning, found, place_sign, expand, };
+    "OpenTTDTownDataServices" ["genworld"] => ImportServices { shared, founding, load, feature, named_error, found, place_sign, expand, };
 }

@@ -14,3 +14,9 @@ pub(crate) fn command_flags_to_dc_flags(flags: u16) -> u16 {
     }
     result
 }
+
+/// Assign `CMD_ERROR`, the "generic" error that the original defines as
+/// `CommandCost(INVALID_STRING_ID)`, to the live native cost.
+pub(crate) fn cmd_error(cost: crate::services::Cost<'_>) {
+    cost.error(crate::strings_type::StringID::INVALID_STRING_ID.0);
+}
