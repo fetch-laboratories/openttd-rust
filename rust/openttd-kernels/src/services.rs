@@ -390,6 +390,9 @@ pub struct Services {
     pub station_had_vehicle_of_type: extern "C" fn(u16) -> u8,
     /// `Station::Get(station)->had_vehicle_of_type |= type`.
     pub station_add_vehicle_of_type: extern "C" fn(u16, u8),
+    /// `&st->had_vehicle_of_type` of a resolved `Station *`, as its base byte's address.
+    pub station_had_vehicle_of_type_field:
+        extern "C" fn(*mut crate::station::BaseStation) -> *mut u8,
     /// `Station::Get(station)->xy`.
     pub station_xy: extern "C" fn(u16) -> u32,
     /// `BaseStation::Get(station)`.
@@ -813,6 +816,7 @@ crate::abi::layouts! {
         station_index,
         station_had_vehicle_of_type,
         station_add_vehicle_of_type,
+        station_had_vehicle_of_type_field,
         station_xy,
         base_station,
         base_station_xy,
@@ -905,6 +909,10 @@ crate::abi::layouts! {
 
 #[cfg(test)]
 extern "C" fn unexpected_station_visits(_: u16) -> u8 {
+    unreachable!()
+}
+#[cfg(test)]
+extern "C" fn unexpected_station_field_address(_: *mut crate::station::BaseStation) -> *mut u8 {
     unreachable!()
 }
 #[cfg(test)]
@@ -1168,6 +1176,7 @@ pub fn fixture(
         station_index: short,
         station_had_vehicle_of_type: unexpected_station_visits,
         station_add_vehicle_of_type: unexpected_station_visit,
+        station_had_vehicle_of_type_field: unexpected_station_field_address,
         station_xy: unexpected_station_field,
         base_station: unexpected_base_station,
         base_station_xy: unexpected_station_field,

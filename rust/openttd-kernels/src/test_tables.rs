@@ -491,6 +491,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     station_index: unreachable1,
     station_had_vehicle_of_type: unreachable1,
     station_add_vehicle_of_type: unreachable2,
+    station_had_vehicle_of_type_field: unreachable1,
     station_xy: unreachable1,
     base_station: unreachable1,
     base_station_xy: unreachable1,

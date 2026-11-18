@@ -570,6 +570,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.station_index = MapSvcStationIndex,
 	.station_had_vehicle_of_type = [](uint16_t station) noexcept -> uint8_t { return Station::Get(StationID(station))->had_vehicle_of_type; },
 	.station_add_vehicle_of_type = [](uint16_t station, uint8_t type) noexcept { Station::Get(StationID(station))->had_vehicle_of_type |= static_cast<StationHadVehicleOfType>(type); },
+	.station_had_vehicle_of_type_field = [](BaseStation *st) noexcept { return reinterpret_cast<uint8_t *>(&Station::From(st)->had_vehicle_of_type); },
 	.station_xy = [](uint16_t station) noexcept { return Station::Get(StationID(station))->xy.base(); },
 	.base_station = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station)); },
 	.base_station_xy = [](uint16_t station) noexcept { return BaseStation::Get(StationID(station))->xy.base(); },

@@ -79,13 +79,18 @@ mod controller {
         static BUS: Cell<bool> = const { Cell::new(true) };
         static ROADTYPE: Cell<u8> = const { Cell::new(0) };
         static HAD: Cell<u8> = const { Cell::new(0) };
-        /// The `had_vehicle_of_type` stores since the last reset.
-        static STORES: Cell<u32> = const { Cell::new(0) };
+        /// The `had_vehicle_of_type` field accesses since the last reset.
+        static ACCESSES: Cell<u32> = const { Cell::new(0) };
         static VICTIMS: Cell<u32> = const { Cell::new(0) };
         static EXPECTED: Cell<*const Vec<Effect>> = const { Cell::new(std::ptr::null()) };
     }
     const VEHICLE_ID: u32 = 17;
     const STATION: StationID = StationID(55);
+    /// The arrival's `Station *`, never dereferenced by the controller.
+    const STATION_HANDLE: StationHandle = StationHandle {
+        st: std::ptr::dangling_mut(),
+        index: STATION,
+    };
     const LOCAL: u8 = 3;
     const TILE: TileIndex = TileIndex(100);
     /// `new ScriptEventStationFirstVehicle(st->index, v->index)`, field by field,
@@ -177,16 +182,17 @@ mod controller {
     extern "C" fn local_company() -> u8 {
         LOCAL
     }
-    extern "C" fn had_vehicle_of_type(station: u16) -> u8 {
-        assert_eq!(station, STATION.0);
-        HAD.get()
-    }
-    /// `st->had_vehicle_of_type |= bit`, before any news or event.
-    extern "C" fn add_vehicle_of_type(station: u16, bit: u8) {
-        assert_eq!(station, STATION.0);
-        assert_eq!(take(), Vec::new(), "the station bit is stored first");
-        HAD.set(HAD.get() | bit);
-        STORES.set(STORES.get() + 1);
+    /// `&st->had_vehicle_of_type` of the arrival's station, at each access: the read,
+    /// then on a first arrival the store, both before any news or event.
+    extern "C" fn had_vehicle_of_type_field(st: *mut crate::station::BaseStation) -> *mut u8 {
+        assert_eq!(st, STATION_HANDLE.st);
+        assert_eq!(
+            take(),
+            Vec::new(),
+            "the station bit is read and stored first"
+        );
+        ACCESSES.set(ACCESSES.get() + 1);
+        HAD.with(Cell::as_ptr)
     }
 
     /// A road vehicle record of `owner`, its road owner and the tables of one entry.
@@ -208,8 +214,7 @@ mod controller {
             let shared = Box::leak(Box::new(crate::services::Services {
                 road_stops,
                 local_company,
-                station_had_vehicle_of_type: had_vehicle_of_type,
-                station_add_vehicle_of_type: add_vehicle_of_type,
+                station_had_vehicle_of_type_field: had_vehicle_of_type_field,
                 ..*shared
             }));
             let leaves = Box::leak(Box::new(Leaves {
@@ -296,10 +301,10 @@ mod controller {
             for owner in [LOCAL, LOCAL + 1] {
                 let mut f = Fixture::new(owner, &SHARED);
                 HAD.set(0);
-                STORES.set(0);
-                f.game().road_veh_arrives_at(f.part(), STATION);
+                ACCESSES.set(0);
+                f.game().road_veh_arrives_at(f.part(), STATION_HANDLE);
                 assert_eq!(HAD.get(), bit.0, "bus {bus}, road type {road_type}");
-                assert_eq!(STORES.get(), 1, "one store on the first arrival");
+                assert_eq!(ACCESSES.get(), 2, "a read and a store on the first arrival");
                 let expected = vec![
                     Effect::News {
                         headline: encoded(headline.0, &[Param::N(u64::from(STATION.0))]),
@@ -325,10 +330,10 @@ mod controller {
                 );
 
                 // Visited before: no store, news or event.
-                STORES.set(0);
-                f.game().road_veh_arrives_at(f.part(), STATION);
+                ACCESSES.set(0);
+                f.game().road_veh_arrives_at(f.part(), STATION_HANDLE);
                 assert_eq!(HAD.get(), bit.0);
-                assert_eq!(STORES.get(), 0, "no store on a repeat visit");
+                assert_eq!(ACCESSES.get(), 1, "only the read on a repeat visit");
                 assert_eq!(take(), Vec::new());
             }
         }

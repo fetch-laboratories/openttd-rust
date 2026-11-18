@@ -106,6 +106,10 @@ pub(crate) fn runtime() -> &'static Services {
     unsafe { REGISTRY.table() }
 }
 impl Services {
+    /// `st->index`.
+    pub(crate) fn station_index(&self, st: *const BaseStation) -> crate::station_type::StationID {
+        crate::station_type::StationID((self.station_id)(st))
+    }
     pub(crate) fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
     }

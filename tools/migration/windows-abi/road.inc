@@ -18,6 +18,7 @@
 #include "rust/station_service_ffi.h"
 #include "rust/animation_ffi.h"
 #include "rust/roadstop_resolver_ffi.h"
+#include "rust/airport_resolver_ffi.h"
 #include "rust/services_assert.h"
 
 #include "vehicle_tables.inc"
@@ -248,7 +249,11 @@ static void RoadBoundary()
 	road_abi_vehicle.z_pos = 10; road_abi_vehicle.direction = 1;
 	t.shared.movement = &movement;
 	t.shared.map = &map.statics;
-
+	/* At the stopping frame Station::GetByTile resolves the bay's station 55 once. */
+	static OpenTTDAirportResolverServices bay_stations{};
+	bay_stations.by_tile = [](uint32_t tile) noexcept { CHECK(tile == 100); return reinterpret_cast<Station *>(&road_abi_stop); };
+	bay_stations.station_id = [](const BaseStation *st) noexcept { CHECK(st == reinterpret_cast<BaseStation *>(&road_abi_stop)); return uint16_t{55}; };
+	auto previous_stations = openttd_rust_airport_exchange(&bay_stations);
 
 	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &t.leaves, nullptr));
 	CHECK(probe.state->state == 36 && probe.stop->status == 0xFF);
@@ -270,7 +275,8 @@ static void RoadBoundary()
 	road_abi_vehicle.z_pos = 10; road_abi_vehicle.direction = 1;
 	road_abi_vehicle.last_station_visited = 0;
 	/* The station has had a bus: no first-arrival news. */
-	t.shared.station_had_vehicle_of_type = [](uint16_t station) noexcept -> uint8_t { CHECK(station == 55); return HVOT_BUS; };
+	static uint8_t bay_had_vehicle_of_type = HVOT_BUS;
+	t.shared.station_had_vehicle_of_type_field = [](BaseStation *st) noexcept { CHECK(st == reinterpret_cast<BaseStation *>(&road_abi_stop)); return &bay_had_vehicle_of_type; };
 	static uint32_t bay_arrivals = 0;
 	static OpenTTDFleetTransactionServices bay_transactions{};
 	bay_transactions.assertions = false;
@@ -313,7 +319,6 @@ static void RoadBoundary()
 	bay_resolver.cached_cargo = [](const BaseStation *) noexcept -> CargoTypes { return 0; };
 	static OpenTTDAnimationServices bay_animation{};
 	bay_animation.shared = &t.shared;
-	bay_animation.station_base = [](uint16_t id) noexcept { CHECK(id == 55); return reinterpret_cast<BaseStation *>(&road_abi_stop); };
 	bay_animation.roadstop_resolver = &bay_resolver;
 	bay_animation.road_triggers = [](BaseStation *, uint8_t) noexcept { return false; };
 	auto previous_animation = openttd_rust_animation_exchange(&bay_animation);
@@ -323,6 +328,8 @@ static void RoadBoundary()
 	CHECK(probe.state->state == 36 && probe.stop->status == 0x7F && bay_arrivals == 1);
 	CHECK(road_abi_vehicle.last_station_visited == 55 && (bay_orders->vehicle->current.type & 15) == OT_LOADING);
 	openttd_rust_animation_exchange(previous_animation);
+	openttd_rust_airport_exchange(previous_stations);
+	CHECK(bay_had_vehicle_of_type == HVOT_BUS);
 	/* PrepareUnload queued the vehicle at the station. */
 	CHECK(openttd_rust_station_queue_size(bay_station) == 1 && openttd_rust_station_queue_value(openttd_rust_station_queue_first(bay_station)) == RoadAbiHandle()->shell);
 	openttd_rust_station_queue_clear(bay_station);
