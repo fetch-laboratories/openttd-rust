@@ -2346,8 +2346,7 @@ impl<'a> Game<'a> {
                     return false;
                 }
                 if v.v.current_order().is_type(OrderType::OT_LEAVESTATION) {
-                    // SAFETY: The current order belongs to this live serialized record.
-                    unsafe { crate::orders::free(v.v.current_order_pointer()) };
+                    crate::orders::free(v.v);
                 }
             }
 
@@ -2370,8 +2369,7 @@ impl<'a> Game<'a> {
         if v.v.current_order().is_type(OrderType::OT_LEAVESTATION)
             && self.world().is_drive_through_stop_tile(v.v.tile())
         {
-            // SAFETY: The current order belongs to this live serialized record.
-            unsafe { crate::orders::free(v.v.current_order_pointer()) };
+            crate::orders::free(v.v);
         }
 
         /* Move to next frame unless vehicle arrived at a stop position
