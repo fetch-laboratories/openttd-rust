@@ -44,24 +44,22 @@ pub(crate) fn can_engine_use_station(
     crate::services_assert::assert_with(|| !e.is_null());
 
     match EngineRef::of(e).kind() {
-        VehicleType::VEH_TRAIN => {
-            StationFacilities((s.facilities)(st)).test(StationFacility::Train)
-        }
+        VehicleType::VEH_TRAIN => s.commands().facilities(st).test(StationFacility::Train),
 
         VehicleType::VEH_ROAD => {
             // For road vehicles we need the vehicle to know whether it can actually
             // use the station, but if it doesn't have facilities for RVs it is
             // certainly not possible that the station can be used.
-            StationFacilities((s.facilities)(st)).any(
+            s.commands().facilities(st).any(
                 StationFacilities::from_element(StationFacility::BusStop)
                     .with(StationFacilities::from_element(StationFacility::TruckStop)),
             )
         }
 
-        VehicleType::VEH_SHIP => StationFacilities((s.facilities)(st)).test(StationFacility::Dock),
+        VehicleType::VEH_SHIP => s.commands().facilities(st).test(StationFacility::Dock),
 
         VehicleType::VEH_AIRCRAFT => {
-            StationFacilities((s.facilities)(st)).test(StationFacility::Airport) && {
+            s.commands().facilities(st).test(StationFacility::Airport) && {
                 // `GetFTA()`, then the flag the engine selects, then its test.
                 let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
                 let flag = if EngineRef::of(e).aircraft_subtype() & AIR_CTOL != 0 {

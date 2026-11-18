@@ -47,7 +47,7 @@ pub struct Services {
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
     pub(crate) by_tile: extern "C" fn(u32) -> *mut crate::station::Station,
     station_id: extern "C" fn(*const BaseStation) -> u16,
-    pub(crate) facilities: extern "C" fn(*const BaseStation) -> u8,
+    facilities: extern "C" fn(*const BaseStation) -> u8,
     pub(crate) get_station: extern "C" fn(u16) -> *mut BaseStation,
     pub(crate) check: extern "C" fn(bool),
     pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,

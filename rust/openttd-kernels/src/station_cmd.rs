@@ -82,6 +82,11 @@ impl StationNaming {
 }
 
 impl CommandServicesTable {
+    /// `BaseStation::facilities`, through the station table's binding.
+    pub(crate) fn facilities(&self, st: *const BaseStation) -> StationFacilities {
+        // SAFETY: The command table names the static station services.
+        StationFacilities((unsafe { &*self.station }.facilities)(st.cast_mut()))
+    }
     /// `BaseStation::GetTileArea(StationType::Rail)`: a station's
     /// `train_station`, or a waypoint's rail area.
     pub(crate) fn rail_area(&self, st: *const BaseStation) -> TileArea {
