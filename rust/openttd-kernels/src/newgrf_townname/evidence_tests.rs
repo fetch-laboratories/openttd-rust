@@ -249,7 +249,7 @@ fn action_0f_parsing_and_generation_match_the_original() {
     }
     assert_eq!(unsafe { get_type(1) }, 1);
     assert_eq!(unsafe { get_id(4) }, 0);
-    assert_eq!(unsafe { get_type(4) }, SPECSTR_TOWNNAME_START as u16);
+    assert_eq!(unsafe { get_type(4) }, SPECSTR_TOWNNAME_START.0 as u16);
 
     let (tna, tnb, tns, tnx) = (
         grfid(*b"TNA5"),

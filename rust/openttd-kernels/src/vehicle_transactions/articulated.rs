@@ -2,6 +2,7 @@
 //! Articulated allocation, assembly and purchase-list consistency control.
 #![allow(clippy::many_single_char_names)]
 use super::refit;
+use crate::cargo_type::CargoType;
 use crate::vehicle::{OpenTTDEngine, VehicleType};
 use std::mem::MaybeUninit;
 #[repr(C)]
@@ -234,7 +235,7 @@ pub(crate) unsafe fn check_consistency_of_articulated_vehicle(s: &Services, mut 
         }
         let cargo = unsafe { (c.transactions.cargo_type)(v) };
         if c.transactions.assertions {
-            c.transactions.check(cargo < c.strings.cargo_count);
+            c.transactions.check(cargo < CargoType::NUM_CARGO.0);
         }
         if unsafe { super::vehicle_ref(v, r.common.vehicles) }.cargo_cap() > 0 {
             crate::bitmath_func::set_bit64(&mut real_cargo, cargo);

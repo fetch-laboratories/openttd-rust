@@ -260,22 +260,6 @@ pub struct SlopeResult {
     pub version: u8,
 }
 #[repr(C)]
-pub struct Strings {
-    pub too_many: u32,
-    pub no_town: u32,
-    pub edge_sub: u32,
-    pub water: u32,
-    pub edge: u32,
-    pub on_water: u32,
-    pub bridge: u32,
-    pub flat: u32,
-    pub own: u32,
-    pub built: u32,
-    pub limit: u32,
-    pub hq: u32,
-    pub object: u32,
-}
-#[repr(C)]
 pub struct ObjectServices {
     pub shared: *const Services,
     pub cost: *const CommandCostServices,
@@ -285,7 +269,6 @@ pub struct ObjectServices {
     pub town: *const crate::town::Leaves,
     pub founding: *const crate::town::founding::FoundingServices,
     pub industry: *const crate::tile_loop::IndustryServices,
-    pub strings: Strings,
     pub spec_count: unsafe extern "C" fn() -> usize,
     pub spec: unsafe extern "C" fn(u16) -> *const Spec,
     pub callbacks: unsafe extern "C" fn(*const Spec) -> u8,
@@ -326,6 +309,14 @@ pub struct ObjectServices {
 const HQ: u16 = crate::object_type::ObjectType::OBJECT_HQ.0;
 const OWNED: u16 = crate::object_type::ObjectType::OBJECT_OWNED_LAND.0;
 use crate::object_type::OBJECT_STATUE as STATUE;
+use crate::table::strings::{
+    STR_ERROR_ALREADY_BUILT, STR_ERROR_BUILD_OBJECT_LIMIT_REACHED, STR_ERROR_CAN_T_BUILD_ON_WATER,
+    STR_ERROR_COMPANY_HEADQUARTERS_IN, STR_ERROR_FLAT_LAND_REQUIRED,
+    STR_ERROR_MUST_BE_BUILT_ON_WATER, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
+    STR_ERROR_MUST_FOUND_TOWN_FIRST, STR_ERROR_OBJECT_IN_THE_WAY,
+    STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP, STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB,
+    STR_ERROR_TOO_MANY_OBJECTS, STR_ERROR_YOU_ALREADY_OWN_IT,
+};
 const LIGHTHOUSE: u16 = crate::object_type::ObjectType::OBJECT_LIGHTHOUSE.0;
 const TRANSMITTER: u16 = crate::object_type::ObjectType::OBJECT_TRANSMITTER.0;
 const NEW_OBJECT_OFFSET: u16 = crate::object_type::ObjectType::NEW_OBJECT_OFFSET.0;
@@ -880,14 +871,14 @@ impl<'a> World<'a> {
                 if flags & DoCommandFlag::NO_WATER != 0
                     && ((*(*self.s.industry).tiles).on_water)(tile)
                 {
-                    out.error(self.s.strings.water);
+                    out.error(STR_ERROR_CAN_T_BUILD_ON_WATER.0);
                     return;
                 }
                 if flags_spec & AUTOREMOVE == 0 && flags & DoCommandFlag::AUTO != 0 {
                     out.error(if object.kind == HQ {
-                        self.s.strings.hq
+                        STR_ERROR_COMPANY_HEADQUARTERS_IN.0
                     } else {
-                        self.s.strings.object
+                        STR_ERROR_OBJECT_IN_THE_WAY.0
                     });
                     return;
                 }
@@ -917,7 +908,7 @@ impl<'a> World<'a> {
                             .bulldozer)()
                         {
                             if object.kind == HQ {
-                                out.error(self.s.strings.hq);
+                                out.error(STR_ERROR_COMPANY_HEADQUARTERS_IN.0);
                             } else {
                                 out.error(INVALID_STRING_ID);
                             }
@@ -1015,17 +1006,17 @@ impl<'a> World<'a> {
                 return;
             }
             if !(self.s.can_allocate)() {
-                out.error(self.s.strings.too_many);
+                out.error(STR_ERROR_TOO_MANY_OBJECTS.0);
                 return;
             }
             if (self.shared.town_count)() == 0 {
-                out.error(self.s.strings.no_town);
+                out.error(STR_ERROR_MUST_FOUND_TOWN_FIRST.0);
                 return;
             }
             let area = Self::footprint(tile, shape, view);
             for t in self.tiles(area) {
                 if !(self.shared.tile_valid)(t) {
-                    out.error(self.s.strings.edge_sub);
+                    out.error(STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB.0);
                     return;
                 }
             }
@@ -1038,7 +1029,7 @@ impl<'a> World<'a> {
                 for t in self.tiles(area) {
                     if (self.shared.has_water_ground)(t) {
                         if !water {
-                            out.error(self.s.strings.water);
+                            out.error(STR_ERROR_CAN_T_BUILD_ON_WATER.0);
                             return;
                         }
                         if !(self.shared.is_water_tile)(t) {
@@ -1066,7 +1057,7 @@ impl<'a> World<'a> {
                                     ((self.shared.map_max_y)() - 1) as usize,
                                 ))
                             {
-                                out.error(self.s.strings.edge);
+                                out.error(STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP.0);
                                 return;
                             }
                             self.commands().no_vehicle(tmp.0, t);
@@ -1074,7 +1065,7 @@ impl<'a> World<'a> {
                         }
                     } else {
                         if !ground {
-                            out.error(self.s.strings.on_water);
+                            out.error(STR_ERROR_MUST_BE_BUILT_ON_WATER.0);
                             return;
                         }
                         if !(kind == HQ
@@ -1187,7 +1178,7 @@ impl<'a> World<'a> {
                             )
                         })
                 {
-                    out.error(self.s.strings.bridge);
+                    out.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                     return;
                 }
             }
@@ -1196,7 +1187,7 @@ impl<'a> World<'a> {
             match kind {
                 TRANSMITTER | LIGHTHOUSE => {
                     if !((*self.s.founding).flat)(crate::town::founding::Tile(tile)) {
-                        out.error(self.s.strings.flat);
+                        out.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
                         return;
                     }
                 }
@@ -1209,7 +1200,7 @@ impl<'a> World<'a> {
                         )
                         && self.object_type_is(tile, OWNED)
                     {
-                        out.error(self.s.strings.own);
+                        out.error(STR_ERROR_YOU_ALREADY_OWN_IT.0);
                         return;
                     }
                 }
@@ -1218,7 +1209,7 @@ impl<'a> World<'a> {
                     let old = (self.company().hq_location)(company);
                     if old != INVALID_TILE {
                         if old == tile {
-                            out.error(self.s.strings.built);
+                            out.error(STR_ERROR_ALREADY_BUILT.0);
                             return;
                         }
                         (self.company().finance.set_current_company)(OWNER_WATER);
@@ -1247,7 +1238,7 @@ impl<'a> World<'a> {
             }
             let finance = self.finance(self.current());
             if !finance.is_null() && Self::object_limit(finance) < size {
-                out.error(self.s.strings.limit);
+                out.error(STR_ERROR_BUILD_OBJECT_LIMIT_REACHED.0);
                 return;
             }
             if flags & DoCommandFlag::EXECUTE != 0 {
@@ -2540,21 +2531,6 @@ crate::abi::layouts! {
         registers,
         version,
     };
-    "OpenTTDObjectStrings" ["landscape"] => Strings {
-        too_many,
-        no_town,
-        edge_sub,
-        water,
-        edge,
-        on_water,
-        bridge,
-        flat,
-        own,
-        built,
-        limit,
-        hq,
-        object,
-    };
     "OpenTTDObjectDefinition" ["landscape"] => Definition {
         grfid,
         local_id,
@@ -2594,7 +2570,6 @@ crate::abi::layouts! {
         town,
         founding,
         industry,
-        strings,
         spec_count,
         spec,
         callbacks,

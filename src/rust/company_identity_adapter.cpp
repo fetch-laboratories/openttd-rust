@@ -74,7 +74,6 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 {
 	static const OpenTTDCompanyIdentityServices services{
 	.shared = &GetRustSharedServices(), .randomizer = &_random, .faces = &GetRustFaceServices(), .groups = &FleetGroupServices(),
-	.strings = {.unnamed = STR_SV_UNNAMED, .president = STR_PRESIDENT_NAME, .company = STR_COMPANY_NAME, .president_generated = SPECSTR_PRESIDENT_NAME, .andco = SPECSTR_ANDCO_NAME, .town_begin = SPECSTR_TOWNNAME_START, .town_end = SPECSTR_TOWNNAME_END, .company_begin = SPECSTR_COMPANY_NAME_START},
 	.company = Identity_company,
 	.next_company = RustCompanyNext,
 	.company_id = Identity_company_id,

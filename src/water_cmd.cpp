@@ -124,19 +124,6 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 		.environment = GetRustEnvironmentServices(),
 		.make_depot = [](uint32_t t, uint8_t o, uint16_t id, DepotPart part, Axis axis, WaterClass wc) noexcept { MakeShipDepot(TileIndex{t}, Owner{o}, DepotID{id}, part, axis, wc); },
 		.make_lock_tile = [](uint32_t t, uint8_t o, LockPart part, DiagDirection dir, WaterClass wc) noexcept { MakeLockTile(TileIndex{t}, Owner{o}, part, dir, wc); },
-		.strings = {
-			.built_on_water = STR_ERROR_MUST_BE_BUILT_ON_WATER,
-			.demolish_bridge = STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
-			.unsuitable = STR_ERROR_SITE_UNSUITABLE,
-			.sloped_wrong = STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
-			.edge = STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP,
-			.low_bridge = STR_ERROR_BRIDGE_TOO_LOW_FOR_LOCK,
-			.flat = STR_ERROR_FLAT_LAND_REQUIRED,
-			.already_built = STR_ERROR_ALREADY_BUILT,
-			.build_on_water = STR_ERROR_CAN_T_BUILD_ON_WATER,
-			.demolish_building = STR_ERROR_BUILDING_MUST_BE_DEMOLISHED,
-			.demolish_canal = STR_ERROR_MUST_DEMOLISH_CANAL_FIRST,
-		},
 	};
 	return services;
 }

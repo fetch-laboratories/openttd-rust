@@ -90,13 +90,6 @@ static const OpenTTDTreeServices &TreeServices() noexcept
 		.set_ground_density = RustSetTreeGroundDensityValue,
 		.set_growth = [](uint32_t tile, uint8_t growth) noexcept { SetTreeGrowth(TileIndex{tile}, static_cast<TreeGrowthStage>(growth)); },
 		.sin = [](float v) noexcept { return sinf(v); },
-		.strings = {
-			.already_here = STR_ERROR_TREE_ALREADY_HERE,
-			.on_water = STR_ERROR_CAN_T_BUILD_ON_WATER,
-			.plant_limit = STR_ERROR_TREE_PLANT_LIMIT_REACHED,
-			.site_unsuitable = STR_ERROR_SITE_UNSUITABLE,
-			.wrong_terrain = STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE,
-		},
 		.town = &GetRustTownServices(),
 	};
 	return services;

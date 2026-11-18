@@ -43,10 +43,6 @@ struct OpenTTDObjectAdmission { uint8_t views, height; };
 struct OpenTTDObjectAreaShape { uint8_t views, size; };
 struct OpenTTDObjectGeneration { uint16_t flags; uint8_t amount, views; };
 struct OpenTTDObjectSlopeResult { uint16_t callback; std::array<int32_t, 16> registers; uint8_t version; };
-struct OpenTTDObjectStrings {
-	uint32_t too_many, no_town, edge_sub, water, edge, on_water, bridge, flat;
-	uint32_t own, built, limit, hq, object;
-};
 enum class HouseZone : uint8_t;
 struct ResolverObject;
 struct OpenTTDObjectDefinition { uint32_t grfid; uint16_t local_id; uint8_t view; bool has_file; };
@@ -80,7 +76,6 @@ struct OpenTTDObjectServices {
 	const OpenTTDTownLeaves *town;
 	const OpenTTDTownFoundingServices *founding;
 	const OpenTTDIndustryLoopServices *industry;
-	OpenTTDObjectStrings strings;
 	size_t (*spec_count)() noexcept OPENTTD_SERVICE_DEFAULT(spec_count);
 	const ObjectSpec * (*spec)(uint16_t type) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	uint8_t (*callbacks)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(callbacks);

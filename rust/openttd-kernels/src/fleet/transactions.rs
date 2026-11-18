@@ -10,9 +10,11 @@ use super::{
     ALL_GROUP, DEFAULT_GROUP, ERROR, GroupServices, add_engine_replacement, add_profit,
     engine_replacement, group, remove_engine_replacement, update_autoreplace,
 };
-use crate::cargo_type::INVALID_CARGO;
+use crate::cargo_type::{CargoType, INVALID_CARGO};
 use crate::command_type::DoCommandFlag;
 use crate::engine_type::INVALID_ENGINE;
+use crate::network_type::ClientID;
+use crate::order_type::CloneOptions;
 use crate::raw_field::read_field;
 use crate::tile_type::TILE_SIZE;
 use std::ptr;
@@ -206,8 +208,8 @@ unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) ->
                 tile,
                 engine,
                 true,
-                s.refit.common.strings.invalid_cargo,
-                s.refit.common.strings.invalid_client,
+                CargoType::INVALID_CARGO.0,
+                ClientID::INVALID_CLIENT_ID.0,
             )
         },
     );
@@ -257,7 +259,7 @@ unsafe fn direct_sell(w: &Services, out: *mut (), v: *mut (), flags: u32) {
                 id,
                 false,
                 false,
-                s.strings.invalid_client,
+                ClientID::INVALID_CLIENT_ID.0,
             );
         },
     );
@@ -304,15 +306,21 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
         crate::services::Cost(out.cast(), b.cost),
         0,
         DoCommandFlag::EXECUTE,
-        |flags| unsafe {
-            crate::orders::openttd_rust_command_clone(
-                new.cast(),
-                old.cast(),
-                s.strings.share_orders,
-                u8::from(flags & DoCommandFlag::EXECUTE != 0),
-                out.cast(),
-                s.orders,
-            );
+        |flags| {
+            // SAFETY: `out` is the caller's live native cost, and `new` and `old` are live
+            // vehicle shells.
+            unsafe {
+                crate::orders::cmd_clone_order(
+                    s.orders,
+                    out.cast(),
+                    flags & DoCommandFlag::EXECUTE != 0,
+                    crate::orders::CmdCloneOrder {
+                        action: CloneOptions::CO_SHARE,
+                        veh_dst: new.cast(),
+                        veh_src: old.cast(),
+                    },
+                )
+            };
         },
     );
 }

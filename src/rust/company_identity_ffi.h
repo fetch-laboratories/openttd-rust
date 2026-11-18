@@ -11,15 +11,11 @@ struct Company;
 struct OpenTTDEngineCapabilitiesServices;
 struct Town;
 struct alignas(16) OpenTTDCompanyNameStorage { std::byte bytes[128]; };
-struct OpenTTDCompanyIdentityStrings {
-	uint32_t unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin;
-};
 struct OpenTTDCompanyIdentityServices {
 	const OpenTTDSharedServices *shared;
 	Randomizer *randomizer;
 	const OpenTTDFaceServices *faces;
 	const OpenTTDFleetGroupServices *groups;
-	OpenTTDCompanyIdentityStrings strings;
 	Company * (OPENTTD_RUST_CALL *company)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company);
 	Company * (OPENTTD_RUST_CALL *next_company)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_company);
 	uint8_t (OPENTTD_RUST_CALL *company_id)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(company_id);

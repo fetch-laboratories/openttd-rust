@@ -35,17 +35,9 @@ use std::ptr;
 /// A nullable canonical record; native shell leaves receive `Ctx::sh`.
 type R = *mut OpenTTDVehicle;
 
-/// Original error strings of this component not already in a shared table.
-#[repr(C)]
-pub struct Strings {
-    pub rear_follow: u32,
-    pub depot_only: u32,
-    pub no_orders: u32,
-}
 #[repr(C)]
 pub struct Services {
     pub cargo_capacity: &'static crate::cargo_storage::CapacityServices,
-    pub strings: Strings,
     pub train_if_valid: extern "C" fn(u32) -> *mut (),
     pub new_wagon: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
     pub new_engine: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
@@ -59,6 +51,12 @@ pub struct Services {
     pub depot_changed: extern "C" fn(u32),
 }
 
+use crate::economy_type::ExpensesType;
+use crate::table::strings::{
+    STR_ERROR_INCOMPATIBLE_RAIL_TYPES, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS,
+    STR_ERROR_REAR_ENGINE_FOLLOW_FRONT, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT,
+    STR_NULL,
+};
 use crate::train::CCF_ARRANGE;
 
 /// Resolved immutable service tables; holds no world or owner borrow.
@@ -676,7 +674,6 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
     x.set_next(prev, ptr::null_mut());
     /* Make sure the cache is cleared. */
     (x.s.invalidate_grf)(Ctx::sh(head));
-    let strings = &x.c.strings;
     while !t.is_null() {
         allowed_len -= i32::from(x.length(t));
         let next = x.next(t);
@@ -713,17 +710,16 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
             (x.s.invalidate_grf)(Ctx::sh(head));
             if callback != CALLBACK_FAILED {
                 /* A failing callback means everything is okay */
-                let null_string = StringID(strings.null_string);
-                let mut error = null_string;
+                let mut error = STR_NULL;
                 let grf_text = |n: u32| {
                     x.c.grf_text(
                         Ctx::vref(head),
-                        GRFStringID(strings.grf_text.0.wrapping_add(n)),
+                        GRFStringID(GRFStringID::GRFSTR_MISC_GRF_TEXT.0.wrapping_add(n)),
                     )
                 };
                 if x.c.engine_grf_version(Ctx::vref(head)) < 8 {
                     if callback == 0xFD {
-                        error = StringID(strings.incompatible_rail);
+                        error = STR_ERROR_INCOMPATIBLE_RAIL_TYPES;
                     }
                     if callback < 0xFD {
                         error = grf_text(u32::from(callback));
@@ -749,10 +745,10 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
                             );
                         }
                         // unknown reason, or 0x402: disallow attaching
-                        _ => error = StringID(strings.incompatible_rail),
+                        _ => error = STR_ERROR_INCOMPATIBLE_RAIL_TYPES,
                     }
                 }
-                if error != null_string {
+                if error != STR_NULL {
                     return Some(error);
                 }
             }
@@ -986,7 +982,7 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
         dst = x.last_engine_part(dst);
     }
     if x.is_rear(src) {
-        return (cost.error)(out, s.strings.rear_follow);
+        return (cost.error)(out, STR_ERROR_REAR_ENGINE_FOLLOW_FRONT.0);
     }
     /* When moving all wagons, we can't have the same src_head and dst_head */
     if move_chain && src_head == dst_head {
@@ -998,11 +994,11 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
     }
     /* Check if all vehicles in the source train are stopped inside a depot. */
     if !unsafe { (x.w.stopped_in_depot)(Ctx::sh(src_head)) } {
-        return (cost.error)(out, s.strings.depot_only);
+        return (cost.error)(out, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT.0);
     }
     /* Check if all vehicles in the destination train are stopped inside a depot. */
     if !dst_head.is_null() && !unsafe { (x.w.stopped_in_depot)(Ctx::sh(dst_head)) } {
-        return (cost.error)(out, s.strings.depot_only);
+        return (cost.error)(out, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT.0);
     }
     /* First make a backup of the order of the trains. That way we can do
      * whatever we want with the order and later on easily revert. */
@@ -1200,7 +1196,7 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
     let v = x.first_engine_part(x.rec(t));
     let first = x.first(v);
     if x.is_rear(v) {
-        return (cost.error)(out, s.strings.rear_follow);
+        return (cost.error)(out, STR_ERROR_REAR_ENGINE_FOLLOW_FRONT.0);
     }
     /* First make a backup of the order of the train. That way we can do
      * whatever we want with the order and later on easily revert. */
@@ -1234,9 +1230,9 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
     if crate::vehicle_base::order_list(first).is_null() && (x.c.orders.list_capacity)() == 0 {
         /* Restore the train we had. */
         restore_train_backup(x, &original);
-        return (cost.error)(out, s.strings.no_orders);
+        return (cost.error)(out, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS.0);
     }
-    (cost.expense_money)(out, x.c.strings.new_vehicle_expense, 0);
+    (cost.expense_money)(out, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
     let mut part = sell_head;
     while !part.is_null() {
         (cost.amount)(out, (x.c.value)(Ctx::sh(part)).saturating_neg());
@@ -1305,8 +1301,7 @@ pub unsafe extern "C" fn openttd_rust_train_move(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
-        cargo_capacity, strings, train_if_valid, new_wagon, new_engine, engine_dates, new_rear,
+        cargo_capacity, train_if_valid, new_wagon, new_engine, engine_dates, new_rear,
         invalidate_grf, unit, use_unit, release_unit, company_dirty, depot_changed,
     };
-    "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };
 }

@@ -10,6 +10,10 @@ use crate::gfx_type::Colour;
 use crate::map_type::MAX_MAP_SIZE;
 use crate::strings_func::get_encoded_string;
 use crate::strings_type::{EncodedString, StringID};
+use crate::table::strings::{
+    STR_ERROR_BMPMAP, STR_ERROR_BMPMAP_IMAGE_TYPE, STR_ERROR_HEIGHTMAP_TOO_LARGE, STR_ERROR_PNGMAP,
+    STR_ERROR_PNGMAP_FILE_NOT_FOUND, STR_ERROR_PNGMAP_IMAGE_TYPE, STR_ERROR_PNGMAP_MISC,
+};
 use std::ffi::c_void;
 
 /// Order of these enums has to be the same as in `lang/english.txt`.
@@ -38,17 +42,6 @@ const _: () = assert!(MAX_HEIGHTMAP_SIZE_PIXELS < u32::MAX / 8);
 pub const DECODE_OK: u8 = 0;
 /// `FioFOpenFile` found no file; any other status is a libpng or `BmpReadHeader` failure.
 pub const DECODE_NOT_FOUND: u8 = 1;
-
-#[repr(C)]
-pub struct Strings {
-    pub png: u32,
-    pub bmp: u32,
-    pub not_found: u32,
-    pub png_misc: u32,
-    pub png_image_type: u32,
-    pub bmp_image_type: u32,
-    pub too_large: u32,
-}
 
 /// libpng results after `png_read_png`; rows and RGB palette triples live until `finish`.
 #[repr(C)]
@@ -80,7 +73,6 @@ pub struct Bmp {
 pub struct Input {
     pub shared: *const crate::services::Services,
     pub context: *mut c_void,
-    pub strings: Strings,
     pub source: extern "C" fn(*mut c_void) -> u8,
     pub png: extern "C" fn(*mut c_void, *mut Png) -> u8,
     pub bmp_header: extern "C" fn(*mut c_void, *mut Bmp) -> u8,
@@ -140,7 +132,6 @@ impl Input {
 
     /// `ReadHeightmapPNG` and `ReadHeightmapPNGImageData`.
     fn read_png(&self, want_map: bool) -> Option<Image> {
-        let s = &self.strings;
         let mut png = Png {
             width: 0,
             height: 0,
@@ -153,15 +144,17 @@ impl Input {
         };
         match (self.png)(self.context, &raw mut png) {
             DECODE_OK => {}
-            DECODE_NOT_FOUND => return self.fail(StringID(s.png), StringID(s.not_found)),
-            _ => return self.fail(StringID(s.png), StringID(s.png_misc)),
+            DECODE_NOT_FOUND => {
+                return self.fail(STR_ERROR_PNGMAP, STR_ERROR_PNGMAP_FILE_NOT_FOUND);
+            }
+            _ => return self.fail(STR_ERROR_PNGMAP, STR_ERROR_PNGMAP_MISC),
         }
         // Unreachable after the strip transforms, kept with the original's && chain.
         if png.channels != 1 && png.channels != 3 && png.bit_depth != 8 {
-            return self.fail(StringID(s.png), StringID(s.png_image_type));
+            return self.fail(STR_ERROR_PNGMAP, STR_ERROR_PNGMAP_IMAGE_TYPE);
         }
         if !is_valid_heightmap_dimension(png.width, png.height) {
-            return self.fail(StringID(s.png), StringID(s.too_large));
+            return self.fail(STR_ERROR_PNGMAP, STR_ERROR_HEIGHTMAP_TOO_LARGE);
         }
         let mut map = Vec::new();
         if want_map {
@@ -179,7 +172,6 @@ impl Input {
 
     /// `ReadHeightmapBMP` and `ReadHeightmapBMPImageData`.
     fn read_bmp(&self, want_map: bool) -> Option<Image> {
-        let s = &self.strings;
         let mut bmp = Bmp {
             width: 0,
             height: 0,
@@ -192,18 +184,18 @@ impl Input {
         match (self.bmp_header)(self.context, &raw mut bmp) {
             DECODE_OK => {}
             DECODE_NOT_FOUND => {
-                show_error(StringID(s.bmp), StringID(s.not_found));
+                show_error(STR_ERROR_BMPMAP, STR_ERROR_PNGMAP_FILE_NOT_FOUND);
                 return None;
             }
-            _ => return self.fail(StringID(s.bmp), StringID(s.bmp_image_type)),
+            _ => return self.fail(STR_ERROR_BMPMAP, STR_ERROR_BMPMAP_IMAGE_TYPE),
         }
         if !is_valid_heightmap_dimension(bmp.width, bmp.height) {
-            return self.fail(StringID(s.bmp), StringID(s.too_large));
+            return self.fail(STR_ERROR_BMPMAP, STR_ERROR_HEIGHTMAP_TOO_LARGE);
         }
         let mut map = Vec::new();
         if want_map {
             if !(self.bmp_bitmap)(self.context, &raw mut bmp) {
-                return self.fail(StringID(s.bmp), StringID(s.bmp_image_type));
+                return self.fail(STR_ERROR_BMPMAP, STR_ERROR_BMPMAP_IMAGE_TYPE);
             }
             map.resize(bmp.width as usize * bmp.height as usize, 0);
             // SAFETY: BmpData stays alive until finish below.
@@ -332,10 +324,9 @@ pub unsafe extern "C" fn openttd_rust_heightmap_dimensions_abi(
 crate::abi::layouts! {
     fn abi_layout;
     "Colour" ["landscape"] => crate::gfx_type::Colour { r, g, b, a, };
-    "OpenTTDHeightmapStrings" ["landscape"] => Strings { png, bmp, not_found, png_misc, png_image_type, bmp_image_type, too_large, };
     "OpenTTDHeightmapPng" ["landscape"] => Png { width, height, rows, palette, palette_size, channels, bit_depth, has_palette, };
     "OpenTTDHeightmapBmp" ["landscape"] => Bmp { width, height, palette_size, palette, palette_len, bitmap, bpp, };
-    "OpenTTDHeightmapInput" ["landscape"] => Input { shared, context, strings, source, png, bmp_header, bmp_bitmap, finish, };
+    "OpenTTDHeightmapInput" ["landscape"] => Input { shared, context, source, png, bmp_header, bmp_bitmap, finish, };
 }
 
 #[cfg(test)]

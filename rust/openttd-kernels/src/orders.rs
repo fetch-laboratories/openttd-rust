@@ -30,9 +30,9 @@ use crate::company_type::OWNER_NONE;
 use crate::depot_type::DepotID;
 use crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
 use crate::order_type::{
-    OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT,
-    OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OUFB_TRANSFER, OUFB_UNLOAD, OrderType,
-    VehicleOrderID,
+    CloneOptions, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION,
+    OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OUFB_TRANSFER,
+    OUFB_UNLOAD, OrderType, VehicleOrderID,
 };
 use crate::raw_field::{read_field, write_field};
 use crate::station_type::StationID;
@@ -2899,8 +2899,47 @@ pub unsafe extern "C" fn openttd_rust_command_clone(
     output: *mut c_void,
     leaves: &'static Leaves,
 ) -> u64 {
+    // SAFETY: the native command passes its live CommandCost slot and the vehicle
+    // shells `Vehicle::GetIfValid` returned.
+    unsafe {
+        cmd_clone_order(
+            leaves,
+            output,
+            execute != 0,
+            CmdCloneOrder {
+                action: CloneOptions(action),
+                veh_dst: v,
+                veh_src: source,
+            },
+        )
+    }
+}
+
+/// `CmdCloneOrder`'s arguments, with each vehicle as its shell.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdCloneOrder {
+    /// Action to perform.
+    pub(crate) action: CloneOptions,
+    /// Destination vehicle to clone orders to.
+    pub(crate) veh_dst: *mut c_void,
+    /// Source vehicle to clone orders from, if any (none for `CO_UNSHARE`).
+    pub(crate) veh_src: *mut c_void,
+}
+
+/// `CmdCloneOrder`: clone, share or copy an order list of another vehicle. The cost or
+/// error is in `output`.
+///
+/// # Safety
+/// `output` is a live native `CommandCost`, and each vehicle is null or a live vehicle
+/// shell, for the whole synchronous call.
+pub(crate) unsafe fn cmd_clone_order(
+    leaves: &'static Leaves,
+    output: *mut c_void,
+    execute: bool,
+    args: CmdCloneOrder,
+) -> u64 {
     let control = Control { g: Game(leaves) };
-    control.clone_command(v, source, action, execute != 0, output)
+    control.clone_command(args.veh_dst, args.veh_src, args.action, execute, output)
 }
 
 #[unsafe(no_mangle)]
@@ -4116,7 +4155,7 @@ impl Control {
         &self,
         dst: *mut c_void,
         src: *mut c_void,
-        action: u8,
+        action: CloneOptions,
         execute: bool,
         output: *mut c_void,
     ) -> u64 {
@@ -4127,10 +4166,10 @@ impl Control {
         if !self.g.owner_check(dst, output) {
             return 0;
         }
-        if action == 2 {
+        if action == CloneOptions::CO_UNSHARE {
             return self.declone(dst, execute);
         }
-        if action != 0 && action != 1 {
+        if action != CloneOptions::CO_SHARE && action != CloneOptions::CO_COPY {
             return u64::from(self.g.cmd_error(output));
         }
         if !self.g.primary(src) || g.vehicle_type(dst) != g.vehicle_type(src) || dst == src {
@@ -4140,7 +4179,7 @@ impl Control {
             return 0;
         }
         let kind = g.vehicle_type(src);
-        if action == 0 {
+        if action == CloneOptions::CO_SHARE {
             if kind == u64::from(VEH_ROAD) && g.bus(src) != g.bus(dst) {
                 return u64::from(self.g.cmd_error(output));
             }
@@ -4160,7 +4199,8 @@ impl Control {
                     continue;
                 }
                 let destination = u64::from(order.destination);
-                if (action == 1 || order_can_use_station(src, destination as u16) != 0)
+                if (action == CloneOptions::CO_COPY
+                    || order_can_use_station(src, destination as u16) != 0)
                     && order_can_use_station(dst, destination as u16) == 0
                 {
                     // Both the share and the copy branch of `CmdCloneOrder` return this.
@@ -4178,15 +4218,19 @@ impl Control {
                     .command_cost(output, STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE),
             );
         }
-        if (action == 1 || list.is_null()) && (g.0.list_capacity)() == 0 {
+        if (action == CloneOptions::CO_COPY || list.is_null()) && (g.0.list_capacity)() == 0 {
             return u64::from(
                 self.g
                     .command_cost(output, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS),
             );
         }
         if execute {
-            self.delete_vehicle_orders(dst, action == 1, g.count(dst) != g.count(src));
-            if action == 0 {
+            self.delete_vehicle_orders(
+                dst,
+                action == CloneOptions::CO_COPY,
+                g.count(dst) != g.count(src),
+            );
+            if action == CloneOptions::CO_SHARE {
                 write_field!(g.vehicle(dst), orders, g.orders(src));
                 self.add_shared(dst, src);
                 g.invalidate_order(dst, ((-1i64) as u64) as i32);

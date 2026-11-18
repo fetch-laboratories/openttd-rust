@@ -3,6 +3,7 @@
 use super::{CommonServices, ERROR, SelectionServices, depot_list, generate_list};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
+use crate::economy_type::ExpensesType;
 use crate::game_state::GameState;
 use crate::network_type::ClientID;
 use crate::services::{CommandCost, Cost};
@@ -241,7 +242,7 @@ pub(crate) unsafe fn cmd_depot_sell_all_vehicles(
 ) {
     let b = s.common.base;
     let mut list = List::new();
-    (b.cost.expense_money)(cost, s.common.strings.new_vehicle_expense, 0);
+    (b.cost.expense_money)(cost, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
     if !unsafe { (b.groups.buildable_type)(cmd.vehicle_type.0) } || !depot(s, cmd.tile) {
         (b.cost.error)(cost, ERROR);
         return;
@@ -316,7 +317,7 @@ pub(crate) unsafe fn cmd_depot_mass_auto_replace(
 ) {
     let b = s.common.base;
     let mut list = List::new();
-    (b.cost.expense_money)(cost, s.common.strings.new_vehicle_expense, 0);
+    (b.cost.expense_money)(cost, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
     if !unsafe { (b.groups.buildable_type)(cmd.vehicle_type.0) } || !depot(s, cmd.tile) {
         (b.cost.error)(cost, ERROR);
         return;

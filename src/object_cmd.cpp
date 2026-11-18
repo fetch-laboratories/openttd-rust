@@ -328,7 +328,6 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.town = &GetRustTownServices(),
 		.founding = &GetRustTownFoundingServices(),
 		.industry = &GetRustIndustryLoopServices(),
-		.strings = {STR_ERROR_TOO_MANY_OBJECTS,STR_ERROR_MUST_FOUND_TOWN_FIRST,STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB,STR_ERROR_CAN_T_BUILD_ON_WATER,STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP,STR_ERROR_MUST_BE_BUILT_ON_WATER,STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,STR_ERROR_FLAT_LAND_REQUIRED,STR_ERROR_YOU_ALREADY_OWN_IT,STR_ERROR_ALREADY_BUILT,STR_ERROR_BUILD_OBJECT_LIMIT_REACHED,STR_ERROR_COMPANY_HEADQUARTERS_IN,STR_ERROR_OBJECT_IN_THE_WAY},
 		.spec_count = []() noexcept -> size_t { return ObjectSpec::Count(); },
 		.spec = [](uint16_t type) noexcept -> const ObjectSpec * { return ObjectSpec::Get(type); },
 		.callbacks = RustObjectSpecCallbacks,

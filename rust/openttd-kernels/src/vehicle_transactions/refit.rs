@@ -9,6 +9,9 @@ use crate::economy_func::get_price;
 use crate::engine_type::EngineID;
 use crate::game_state::GameState;
 use crate::services::{CommandCost, ExpenseType};
+use crate::table::strings::{
+    STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT, STR_ERROR_VEHICLE_IS_DESTROYED,
+};
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
 use crate::vehicle_gui::get_window_class_for_vehicle_type;
 use crate::vehicle_type::VehicleID;
@@ -662,7 +665,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     {
         (b.cost.error)(
             cost,
-            c.strings.stopped_in_depot
+            STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT.0
                 + u32::from(crate::fleet::record(b.groups, front).vehicle_type().0),
         );
         return Capacity::default();
@@ -671,11 +674,11 @@ pub(crate) unsafe fn cmd_refit_vehicle(
         .vehstatus()
         .test(crate::vehicle_base::VehState::Crashed)
     {
-        (b.cost.error)(cost, c.strings.destroyed);
+        (b.cost.error)(cost, STR_ERROR_VEHICLE_IS_DESTROYED.0);
         return Capacity::default();
     }
     /* Check cargo */
-    if new_cargo_type.0 >= c.strings.cargo_count {
+    if new_cargo_type >= CargoType::NUM_CARGO {
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
     }
