@@ -14,21 +14,25 @@ import re
 import subprocess
 from collections import defaultdict
 from collections.abc import Callable
-from functools import lru_cache, partial
+from functools import lru_cache
 from pathlib import Path
 
 import vcs
 from baseline_ratchet import debt_errors, exceeds
 from cleanup_contract import (
+    ACCEPTED,
+    PENDING,
     Ledger,
     carry_hints,
     checked_carries,
     context,
-    reviewed,
+    default_event,
+    pending_fails,
+    review_state,
     run,
 )
 from code_lines import without_comments
-from rust_syntax import Node, item_source, nodes, syntax_trees
+from rust_syntax import Node, syntax_trees
 from vcs import git
 
 import migration
@@ -259,62 +263,6 @@ def fits(values: list[int], limit: list[int]) -> bool:
     return not exceeds(values, limit)
 
 
-def item_text(kind: str, path: str, text: str, item: str) -> str | None:
-    """Source text of every item with this key identity, or None for modules."""
-    if kind == "clippy":
-        _, items = rust_items(path, text)
-        tree = list(nodes(syntax_trees({path: text})[path]))
-        parts = []
-        for start, end, name in items:
-            if name != item:
-                continue
-            a, b = len(text[:start].encode()), len(text[:end].encode())
-            targets = [
-                node
-                for node in tree
-                if node.type.endswith("_item")
-                and node.start_byte <= a < node.end_byte == b
-            ]
-            if not targets:
-                return None
-            target = max(targets, key=lambda node: node.start_byte)
-            parts.append(item_source(target, text))
-    else:
-        tree = ast.parse(text)
-        parts = [
-            "".join(
-                text.splitlines(keepends=True)[
-                    min(
-                        (decorator.lineno for decorator in node.decorator_list),
-                        default=node.lineno,
-                    )
-                    - 1 : node.lineno - 1
-                ]
-            )
-            + (ast.get_source_segment(text, node) or "")
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
-            and python_item(tree, node.lineno) == item
-        ]
-    return "\n".join(parts) if parts and item not in ("module", "") else None
-
-
-def unchanged_item(kind: str, site: str, revision: str) -> bool:
-    """Whether the site's item text at the reviewed revision equals head's."""
-    path, item = site.split(" | ")[:2]
-    try:
-        old = git("show", f"{revision}:{path}")
-    except subprocess.CalledProcessError:
-        return False
-    current = ROOT / path
-    before = item_text(kind, path, old, item)
-    return (
-        before is not None
-        and current.is_file()
-        and before == item_text(kind, path, current.read_text(), item)
-    )
-
-
 @lru_cache(maxsize=4096)
 def item_names(kind: str, path: str, revision: str | None) -> frozenset[str]:
     """Named items in a file at a revision, or in the working tree for None."""
@@ -397,11 +345,14 @@ def reviewed_debt(
     previous: dict[str, list[int]],
     rows: dict[str, list[int]] | None = None,
     base: str | None = None,
+    event: str = "pull_request",
 ) -> dict[str, list[int]]:
     """Allowed head debt: base rows, renamed rows and reviewed lint contracts.
 
     A renamed row's allowance moves to its new key; the old key loses it, so
-    one diagnostic never holds two allowances.
+    one diagnostic never holds two allowances. A proposed lint exception
+    awaiting its acceptance is allowed as pending review, except on an event
+    where pending fails.
     """
     measured = baseline if rows is None else rows
 
@@ -426,26 +377,32 @@ def reviewed_debt(
     for old in {**carried, **renamed}.values():
         allowed.pop(old, None)
     for site, values in grown(allowed).items():
-        for proposal in proposals:
-            expected = {
-                "kind": "lint",
-                "tool": kind,
-                "site": site,
-                "before": previous.get(site, []),
-                "after": values,
-            }
-            if any(proposal.get(key) != value for key, value in expected.items()):
-                continue
-            if reviewed(
-                proposal, comments, author, head, partial(unchanged_item, kind, site)
-            ):
-                allowed[site] = values
-                print(
-                    json.dumps(
-                        {"accepted_at": head, "lint_exception": proposal},
-                        sort_keys=True,
-                    )
+        expected = {
+            "kind": "lint",
+            "tool": kind,
+            "site": site,
+            "before": previous.get(site, []),
+            "after": values,
+        }
+        matching = [
+            proposal
+            for proposal in proposals
+            if all(proposal.get(key) == value for key, value in expected.items())
+        ]
+        state = review_state(matching, comments, author, head)
+        if state == ACCEPTED:
+            allowed[site] = values
+            print(
+                json.dumps(
+                    {"accepted_at": head, "lint_exception": matching[0]},
+                    sort_keys=True,
                 )
+            )
+        elif state == PENDING and pending_fails(event):
+            print(f"lint exception {site} lacks its reviewer's acceptance")
+        elif state == PENDING:
+            allowed[site] = values
+            print(f"pending review: lint {site} awaits its reviewer's acceptance")
     paired = {**carried, **renamed}
     carry_hints(
         ledger,
@@ -476,6 +433,7 @@ def check(
     recorded: dict[str, list[int]],
     previous: dict[str, list[int]],
     base: str | None,
+    event: str = "pull_request",
 ) -> tuple[list[str], list[str]]:
     """Return growth errors in the measured and in the recorded debt.
 
@@ -489,7 +447,7 @@ def check(
         else {key: v for key, v in previous.items() if item_exists(kind, key, base)}
     )
     changed = {key: v for key, v in recorded.items() if previous.get(key) != v}
-    allowed = reviewed_debt(kind, changed, live, rows, base)
+    allowed = reviewed_debt(kind, changed, live, rows, base, event)
     renamed_from = live.keys() - allowed.keys()
     kept = {key: v for key, v in previous.items() if key not in renamed_from}
     measured = debt_errors(rows, {}, allowed)
@@ -515,6 +473,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--input", type=Path, help="replay compiler JSON for diagnostic investigation"
+    )
+    parser.add_argument(
+        "--event",
+        default=default_event(),
+        help="the CI event (default: GITHUB_EVENT_NAME, else pull_request);"
+        " a lint exception pending review fails only in merge_group",
     )
     args = parser.parse_args()
     kind = args.kind
@@ -565,7 +529,12 @@ def main() -> int:
         }
         previous = {**previous, "sites": {**previous["sites"], **first}}
     measured, stored = check(
-        kind, rows, collected(recorded["sites"]), collected(previous["sites"]), base
+        kind,
+        rows,
+        collected(recorded["sites"]),
+        collected(previous["sites"]),
+        base,
+        args.event,
     )
     if args.write and not measured:
         recorded["sites"] = rows

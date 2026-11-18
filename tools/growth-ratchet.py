@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """Reject independent C++/boundary growth; require reviewed exceptions.
 
-An acceptance binds to the PR's own growth: the counter and its added keys and
+A proposal binds to the PR's own growth: the counter and its added keys and
 counts, not the counter's base and head totals, so another PR's merge does not
-void it (#904). It names the reviewed head, and also holds at a later head while
-the source of every added key is byte-identical, so a base update or an
-unrelated push keeps it. For the identity counters that source is the key's
-declaration in the expanded crate: the whole function item for an export, the
-field declaration for a callback slot.
+void it (#904). An acceptance binds to the record: it names the head its
+reviewer read, and holds at any later head whose record is unchanged, so a base
+update, a review fix or an edit to the excepted file keeps it.
 
 A proposal lives in the change's tracked cleanup records; the acceptance is a
 reviewer's attributed PR comment. Growth whose proposal awaits that acceptance
@@ -21,12 +19,18 @@ import argparse
 import importlib
 import importlib.util
 import json
-import subprocess
-from functools import partial
 from pathlib import Path
 from typing import Any
 
-from cleanup_contract import context, reviewed, run
+from cleanup_contract import (
+    ACCEPTED,
+    MISSING,
+    context,
+    default_event,
+    pending_fails,
+    review_state,
+    run,
+)
 from vcs import merge_base
 
 importlib.import_module("rust_syntax")
@@ -63,36 +67,6 @@ def increases(
 
 
 BOUND = ("counter", "added")
-FILE_KEYED = {"tools_cpp", "tests_cpp", "outside_cpp"}
-IDENTITY = {"exports", "callback_slots"}
-
-
-def known(revision: str) -> bool:
-    """A shallow checkout may lack the accepted commit; then only the head counts."""
-    check = ["git", "cat-file", "-e", f"{revision}^{{commit}}"]
-    return subprocess.run(check, cwd=METRICS.ROOT, capture_output=True).returncode == 0
-
-
-def same_source(growth: dict[str, Any], current: str, accepted_at: str) -> bool:
-    """Whether every added key's source is identical at the accepted commit."""
-    counter, keys = growth["counter"], growth["added"]
-    if not known(accepted_at):
-        return False
-    if counter == "generated_records":
-        before = METRICS.generated_records(accepted_at)
-        after = METRICS.generated_records(current)
-        return all(key in before and before[key] == after.get(key) for key in keys)
-    if counter in FILE_KEYED:
-        return all(
-            (text := METRICS.show(current, key)) != ""
-            and METRICS.show(accepted_at, key) == text
-            for key in keys
-        )
-    if counter in IDENTITY:
-        before = METRICS.boundary_texts(accepted_at)
-        after = METRICS.boundary_texts(current)
-        return all(key in before and before[key] == after.get(key) for key in keys)
-    return False
 
 
 def proposed(growth: dict[str, Any], proposal: dict[str, Any]) -> bool:
@@ -102,49 +76,33 @@ def proposed(growth: dict[str, Any], proposal: dict[str, Any]) -> bool:
     )
 
 
-def accepted(
-    growth: dict[str, Any],
-    contract: tuple[str, list[dict[str, Any]], list[str], str],
-    current: str = "HEAD",
-) -> bool:
-    """`contract` is `cleanup_contract.context()`: author, proposals, comments, head."""
-    author, proposals, comments, head = contract
-    for proposal in proposals:
-        if not proposed(growth, proposal):
-            continue
-        unchanged = partial(same_source, growth, current)
-        if reviewed(proposal, comments, author, head, unchanged):
-            return True
-    return False
-
-
 def unaccepted(
     growth: list[dict[str, Any]],
     contract: tuple[str, list[dict[str, Any]], list[str], str],
-    current: str,
     event: str,
 ) -> bool:
-    """Report each delta; whether any fails on this event."""
+    """Report each delta; whether any fails on this event.
+
+    `contract` is `cleanup_contract.context()`: author, proposals, comments, head.
+    """
+    author, proposals, comments, head = contract
     failed = False
     for delta in growth:
         counter = delta["counter"]
-        if accepted(delta, contract, current):
-            accepted_at = contract[3]
-            print(
-                json.dumps(
-                    {"accepted_at": accepted_at, "growth": delta}, sort_keys=True
-                )
-            )
-        elif not any(proposed(delta, proposal) for proposal in contract[1]):
+        matching = [proposal for proposal in proposals if proposed(delta, proposal)]
+        state = review_state(matching, comments, author, head)
+        if state == ACCEPTED:
+            print(json.dumps({"accepted_at": head, "growth": delta}, sort_keys=True))
+        elif state == MISSING:
             print(
                 f"unreviewed growth: {counter} has no proposal in the cleanup records"
             )
             failed = True
-        elif event == "merge_group":
+        elif pending_fails(event):
             print(f"unreviewed growth: {counter} lacks its reviewer's acceptance")
             failed = True
         else:
-            print(f"pending review: {counter} awaits its reviewer's acceptance")
+            print(f"pending review: growth {counter} awaits its reviewer's acceptance")
     return failed
 
 
@@ -154,8 +112,9 @@ def main() -> int:
     parser.add_argument("--head", default="HEAD")
     parser.add_argument(
         "--event",
-        default="pull_request",
-        help="the CI event; growth pending review fails only in merge_group",
+        default=default_event(),
+        help="the CI event (default: GITHUB_EVENT_NAME, else pull_request);"
+        " growth pending review fails only in merge_group",
     )
     args = parser.parse_args()
     args.base_ref = merge_base(args.base_ref, args.head, run=METRICS.git, announce=True)
@@ -182,7 +141,7 @@ def main() -> int:
     )
     if not growth:
         return 0
-    return int(unaccepted(growth, context(args.base_ref), args.head, args.event))
+    return int(unaccepted(growth, context(args.base_ref), args.event))
 
 
 if __name__ == "__main__":

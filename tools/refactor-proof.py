@@ -250,7 +250,8 @@ def main() -> int:
         raise ContractError("require one archive proof contract")
     claim = claims[0]
     renames = claim["renames"]
-    if renames and not reviewed(claim, comments, author, head):
+    # A rename claim is accepted at this exact head only, unlike cleanup records.
+    if renames and not reviewed(claim, comments, author, head, lambda _: False):
         raise ContractError(
             "symbol renames need independent attributed acceptance at this head"
         )

@@ -109,16 +109,34 @@ def at_base(base: str, path: str) -> str | None:
 
 
 def tracked(base_ref: str) -> list[dict[str, Any]]:
-    """The records this change adds, from the working tree.
+    """The records this change adds, from the working tree."""
+    return records_between(merge_base(base_ref))
+
+
+def record_files(revision: str | None) -> dict[str, str]:
+    """Each record file's text at a revision, or in the working tree for None."""
+    if revision is None:
+        return {
+            str(path.relative_to(ROOT)): path.read_text()
+            for path in sorted((ROOT / RECORDS).glob("*.json"))
+        }
+    paths = git("ls-tree", "--name-only", revision, "--", RECORDS + "/").split()
+    return {
+        path: git("show", f"{revision}:{path}")
+        for path in sorted(paths)
+        if path.endswith(".json")
+    }
+
+
+def records_between(base: str, revision: str | None = None) -> list[dict[str, Any]]:
+    """The records a revision, or the working tree, adds against `base`.
 
     A file unchanged since the merge base is a merged PR's and inert. A new or
     changed file counts each record that file lacked at the merge base, so a
     later branch may repeat a merged record, such as an archive-proof claim.
     """
-    base = merge_base(base_ref)
     found = []
-    for path in sorted((ROOT / RECORDS).glob("*.json")):
-        relative, text = str(path.relative_to(ROOT)), path.read_text()
+    for relative, text in record_files(revision).items():
         old = at_base(base, relative)
         if text == old:
             continue
@@ -150,18 +168,32 @@ def write(base_ref: str, added: Iterable[dict[str, Any]]) -> None:
     print(f"recorded {len(records)} records in {name}")
 
 
+SHA = re.compile(r"[0-9a-f]{40}")
+UNSAFE = "unsafe_code"
+# The review states of a growth, suppression or lint exception that needs one.
+ACCEPTED, PENDING, MISSING = "accepted", "pending", "missing"
+NEEDS_REVIEW = ("growth", "suppression", "lint")
+
+
 def acceptances(body: str, where: str) -> list[dict[str, Any]]:
-    """A comment's acceptance blocks: objects with `head` and `accept`."""
+    """A comment's acceptance blocks: objects with `head` and `accept`.
+
+    `head` names the commit the reviewer read. It is not compared with the
+    checked head, except for an `unsafe_code` suppression, but it must be a
+    full SHA whatever the payload.
+    """
     found = []
     for n, text in enumerate(BLOCK.findall(body), 1):
         block = parsed(text, f"{where} block {n}")
         if not isinstance(block, dict) or "accept" not in block:
             continue
-        if not isinstance(block["accept"], list) or not isinstance(
-            block.get("head"), str
+        head = block.get("head")
+        if not isinstance(block["accept"], list) or not (
+            isinstance(head, str) and SHA.fullmatch(head)
         ):
             raise ContractError(
-                f"{where} block {n}: field accept must be a list and head a SHA"
+                f"{where} block {n}: field accept must be a list"
+                " and head a full 40-digit SHA"
             )
         found.append(block)
     return found
@@ -172,6 +204,14 @@ def bound(record: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in record.items() if key not in WORDING}
 
 
+def unsafe_site(record: dict[str, Any]) -> bool:
+    """An `unsafe_code` suppression, whose acceptance holds only for its item text."""
+    if record.get("kind") != "suppression" or not isinstance(record.get("site"), str):
+        return False
+    rule = record["site"].rsplit(" | ", 1)[-1].split(" ", 1)[-1]
+    return re.sub(r"\s+|r#", "", rule) == UNSAFE
+
+
 def reviewed(
     proposal: dict[str, Any],
     comments: list[str],
@@ -179,12 +219,13 @@ def reviewed(
     head: str,
     unchanged: Callable[[str], bool] | None = None,
 ) -> bool:
-    """Require another attributed agent to accept the payload at the head.
+    """Require another attributed agent to accept the record's bound fields.
 
     An accepted entry matches the proposal on every field but the WORDING ones,
-    so rewording a reason keeps the acceptance. With `unchanged`, an acceptance
-    at an earlier full SHA also holds while the site's item text there equals
-    the item text at the checked head.
+    so rewording a reason keeps the acceptance, and an edit elsewhere in the
+    excepted file or item keeps it too. With `unchanged`, used only for an
+    `unsafe_code` suppression, the acceptance holds at its own head, or at a
+    later head while `unchanged(accepted_head)` says the item text is the same.
     """
     if not author:
         return False
@@ -197,14 +238,44 @@ def reviewed(
             if any(
                 isinstance(entry, dict) and bound(entry) == bound(proposal)
                 for entry in record["accept"]
-            ) and (
-                accepted == head
-                or unchanged is not None
-                and re.fullmatch(r"[0-9a-f]{40}", accepted) is not None
-                and unchanged(accepted)
-            ):
+            ) and (unchanged is None or accepted == head or unchanged(accepted)):
                 return True
     return False
+
+
+def review_state(
+    proposals: Iterable[dict[str, Any]],
+    comments: list[str],
+    author: str,
+    head: str,
+    unchanged: Callable[[str], bool] | None = None,
+) -> str:
+    """ACCEPTED, PENDING while a matching proposal awaits it, or MISSING."""
+    matching = list(proposals)
+    if not matching:
+        return MISSING
+    if any(reviewed(p, comments, author, head, unchanged) for p in matching):
+        return ACCEPTED
+    return PENDING
+
+
+def pending_fails(event: str) -> bool:
+    """A record awaiting its acceptance fails only in the merge group."""
+    return event == "merge_group"
+
+
+def default_event() -> str:
+    """The CI event a gate checks for: the runner's, or a pull request's."""
+    return os.getenv("GITHUB_EVENT_NAME") or "pull_request"
+
+
+def record_name(record: dict[str, Any]) -> str:
+    """A record's kind and site or counter, for a message."""
+    if record["kind"] == "growth":
+        return f"growth {record['counter']} {json.dumps(record['added'])}"
+    return (
+        f"{record['kind']} {record['site']} ({record['before']} -> {record['after']})"
+    )
 
 
 class Ledger(NamedTuple):
