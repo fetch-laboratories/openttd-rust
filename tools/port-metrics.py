@@ -475,32 +475,18 @@ def keep_code_lines() -> None:
     persist(migration.COMMON_LOCAL / "growth-inputs")
 
 
-def boundary_identities(
-    head: str, texts: dict[str, str] | None = None
-) -> dict[str, set[str]]:
-    """Exports and callback slots at head, from the expanded crate when it has one.
-
-    With texts, each key's declaration text is recorded there too.
-    """
+def boundary_identities(head: str) -> dict[str, set[str]]:
+    """Exports and callback slots at head, from the expanded crate when it has one."""
     from rust_syntax import boundary_ids
 
     if show(head, "rust/openttd-kernels/Cargo.toml"):
-        return boundary_ids(
-            {"rust/expanded.rs": expanded_rust(head)}, expanded=True, texts=texts
-        )
+        return boundary_ids({"rust/expanded.rs": expanded_rust(head)}, expanded=True)
     files = {
         path: show(head, path)
         for path in git("ls-tree", "-r", "--name-only", head, "rust/").splitlines()
         if path.endswith(".rs")
     }
-    return boundary_ids(files, texts=texts)
-
-
-def boundary_texts(head: str) -> dict[str, str]:
-    """Each export's and callback slot's declaration text at head."""
-    texts: dict[str, str] = {}
-    boundary_identities(head, texts)
-    return texts
+    return boundary_ids(files)
 
 
 def growth_inventory(head: str) -> dict[str, dict[str, int]]:

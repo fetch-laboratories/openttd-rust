@@ -6,7 +6,9 @@ import importlib
 import importlib.util
 import io
 import json
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from collections import Counter
@@ -88,6 +90,11 @@ def load(name: str) -> ModuleType:
     return module
 
 
+REPO = Path(__file__).resolve().parents[1]
+
+# Quick runs this file in the merge group too; each case states its own event.
+os.environ.pop("GITHUB_EVENT_NAME", None)
+
 LINT = load("lint-ratchet")
 POLICY = load("lint-policy")
 GROWTH = load("growth-ratchet")
@@ -131,25 +138,55 @@ class DebtTests(unittest.TestCase):
             "retiring_owner": "owner",
             "retirement_condition": "native boundary retires",
         }
+        accepted, later = "a" * 40, "b" * 40
         body = (
             "Agent: /review | Model: gpt-6.1-sol | Reasoning effort: high\n```cleanup-acceptance\n"
-            + json.dumps({"head": "head", "accept": [proposal]})
+            + json.dumps({"head": accepted, "accept": [proposal]})
             + "\n```"
         )
-        with patch.object(
-            LINT,
-            "context",
-            return_value=("/implementation", [proposal], [body], "head"),
+        # The acceptance binds to the record, so it holds at a later head too.
+        for head, comments, event, expected, shown in (
+            (accepted, [body], "merge_group", {"operation": [1]}, "accepted_at"),
+            (later, [body], "merge_group", {"operation": [1]}, "accepted_at"),
+            (later, [], "pull_request", {"operation": [1]}, "pending review: lint"),
+            (later, [], "workflow_dispatch", {"operation": [1]}, "pending review"),
+            (later, [], "merge_group", {}, "lacks its reviewer's acceptance"),
+        ):
+            output = io.StringIO()
+            with (
+                self.subTest(head=head, event=event),
+                patch.object(LINT, "EVENT", event),
+                patch.object(
+                    LINT,
+                    "context",
+                    return_value=("/implementation", [proposal], comments, head),
+                ),
+                contextlib.redirect_stdout(output),
+            ):
+                self.assertEqual(
+                    LINT.reviewed_debt("clippy", {"operation": [1]}, {}),
+                    expected,
+                )
+                self.assertIn(shown, output.getvalue())
+        # A changed `after` is a different record; its old acceptance is void.
+        with (
+            patch.object(
+                LINT,
+                "context",
+                return_value=(
+                    "/implementation",
+                    [dict(proposal, after=[2])],
+                    [body],
+                    later,
+                ),
+            ),
+            patch.object(LINT, "EVENT", "merge_group"),
+            contextlib.redirect_stdout(io.StringIO()),
         ):
             self.assertEqual(
-                LINT.reviewed_debt("clippy", {"operation": [1]}, {}), {"operation": [1]}
+                LINT.reviewed_debt("clippy", {"operation": [2]}, {}),
+                {},
             )
-        with patch.object(
-            LINT,
-            "context",
-            return_value=("/implementation", [proposal], [body], "stale"),
-        ):
-            self.assertEqual(LINT.reviewed_debt("clippy", {"operation": [1]}, {}), {})
 
     def test_rust_identity_survives_lines_and_qualifies_impl(self) -> None:
         text = "impl A { unsafe fn run() { use_it(); } }\nimpl B { fn run() {} }"
@@ -368,18 +405,27 @@ class PolicyTests(unittest.TestCase):
                 capture_output=True,
                 env=migration.environment(),
             )
-            for comments, proposals, expected in (
-                ([], [proposal], 1),
-                ([acceptance()], [proposal], 0),
-                ([acceptance("/impl")], [proposal], 1),
-                ([acceptance(sha="b" * 40)], [proposal], 1),
+            merged = ["--event", "merge_group"]
+            for comments, proposals, flags, expected in (
+                ([], [proposal], merged, 1),
+                # A proposal awaiting its acceptance is pending review: it
+                # passes with no event, a PR's events and a requested run.
+                ([], [proposal], [], 0),
+                ([], [proposal], ["--event", "workflow_dispatch"], 0),
+                ([], [], [], 1),
+                ([acceptance()], [proposal], merged, 0),
+                ([acceptance("/impl")], [proposal], merged, 1),
+                # An acceptance names the head it read and holds at later heads.
+                ([acceptance(sha="b" * 40)], [proposal], merged, 0),
                 (
                     [acceptance(payload=dict(proposal, after=2))],
                     [dict(proposal, after=2)],
+                    merged,
                     1,
                 ),
             ):
                 with (
+                    self.subTest(comments=len(comments), flags=flags),
                     patch.object(POLICY, "ROOT", root),
                     patch.object(POLICY, "git", partial(git, cwd=root)),
                     patch.object(cleanup_contract, "ROOT", root),
@@ -389,7 +435,23 @@ class PolicyTests(unittest.TestCase):
                         "context",
                         return_value=("/impl", proposals, comments, head),
                     ),
+                    patch("sys.argv", ["lint-policy.py", "--base-ref", "HEAD", *flags]),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    self.assertEqual(POLICY.main(), expected)
+            # Quick's steps pass no --event: the runner's event decides.
+            for event, expected in (("merge_group", 1), ("pull_request", 0)):
+                with (
+                    patch.dict("os.environ", {"GITHUB_EVENT_NAME": event}),
+                    patch.object(POLICY, "ROOT", root),
+                    patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(cleanup_contract, "ROOT", root),
+                    patch.object(cleanup_contract, "git", partial(git, cwd=root)),
+                    patch.object(
+                        POLICY, "context", return_value=("/impl", [proposal], [], head)
+                    ),
                     patch("sys.argv", ["lint-policy.py", "--base-ref", "HEAD"]),
+                    contextlib.redirect_stdout(io.StringIO()),
                 ):
                     self.assertEqual(POLICY.main(), expected)
         # An incomplete or mistyped proposal is a malformed record.
@@ -828,23 +890,29 @@ class GrowthTests(unittest.TestCase):
                 + "\n```"
             )
 
-        for comments in (
-            [],
-            [report("/implementation", "head")],
-            [report("/review", "stale")],
-            [report("/review", "a" * 40)],
-        ):
+        head, earlier = "a" * 40, "b" * 40
+        for comments in ([], [report("/implementation", head)]):
             self.assertFalse(
-                GROWTH.accepted(
-                    delta, ("/implementation", [proposal], comments, "head")
+                growth_accepted(delta, ("/implementation", [proposal], comments, head))
+            )
+        for accepted_at in (head, earlier):
+            self.assertTrue(
+                growth_accepted(
+                    delta,
+                    (
+                        "/implementation",
+                        [proposal],
+                        [report("/review", accepted_at)],
+                        head,
+                    ),
                 )
             )
-        self.assertTrue(
-            GROWTH.accepted(
-                delta,
-                ("/implementation", [proposal], [report("/review", "head")], "head"),
-            )
-        )
+        # The block must name the commit its reviewer read, whatever it accepts.
+        for malformed in ("", "stale", "a" * 39, "A" * 40):
+            with self.assertRaisesRegex(
+                cleanup_contract.ContractError, "head a full 40-digit SHA"
+            ):
+                reviewed(proposal, [report("/review", malformed)], "/impl", head)
         # Rewording why or until when keeps the acceptance; what is excepted
         # does not change without a new one.
         for field in (
@@ -856,7 +924,7 @@ class GrowthTests(unittest.TestCase):
             reworded = dict(proposal, **{field: "reworded"})
             self.assertTrue(
                 reviewed(
-                    reworded, [report("/review", "head")], "/implementation", "head"
+                    reworded, [report("/review", "a" * 40)], "/implementation", "head"
                 )
             )
         for changed in (
@@ -867,7 +935,7 @@ class GrowthTests(unittest.TestCase):
         ):
             self.assertFalse(
                 reviewed(
-                    changed, [report("/review", "head")], "/implementation", "head"
+                    changed, [report("/review", "a" * 40)], "/implementation", "head"
                 )
             )
         lint = Suppression(
@@ -882,7 +950,7 @@ class GrowthTests(unittest.TestCase):
             retiring_owner="owner",
             retirement_condition="when the API goes",
         )
-        comment = acceptance_comment("head", lint)
+        comment = acceptance_comment("a" * 40, lint)
         self.assertTrue(
             reviewed(
                 dict(lint, source_contract="the original header's spelling"),
@@ -918,12 +986,12 @@ class GrowthTests(unittest.TestCase):
         def accepted(
             delta: Mapping[str, object], offered: Mapping[str, object]
         ) -> bool:
-            return GROWTH.accepted(
+            return growth_accepted(
                 dict(delta),
                 (
                     "/implementation",
                     [dict(offered)],
-                    [acceptance_comment("head", offered)],
+                    [acceptance_comment("a" * 40, offered)],
                     "head",
                 ),
             )
@@ -939,84 +1007,18 @@ class GrowthTests(unittest.TestCase):
         ):
             self.assertFalse(accepted(changed, proposal))
 
-    def test_growth_acceptance_holds_while_its_source_is_unchanged(self) -> None:
-        earlier, missing = "a" * 40, "b" * 40
-        records = {
-            earlier: {"abi-record-x.h": "struct X { int a; };"},
-            "HEAD": {"abi-record-x.h": "struct X { int a; };", "abi-record-y.h": ""},
-        }
-        files = {(earlier, "tools/x.cpp"): "int x;", ("HEAD", "tools/x.cpp"): "int x;"}
-
-        def check(counter: str, key: str, edits: Mapping[str, str]) -> bool:
-            delta = {"counter": counter, "old": 1, "new": 2, "added": {key: 1}}
-            proposal = dict(
-                delta,
-                kind="growth",
-                reason="source contract",
-                existing_alternatives="none available",
-                retiring_owner="owner",
-                retirement_condition="native shell removed",
-            )
-            comment = (
-                "Agent: /review | Model: gpt-6.1-sol | Reasoning effort: high\n"
-                "```cleanup-acceptance\n"
-                + json.dumps({"head": edits.get("at", earlier), "accept": [proposal]})
-                + "\n```"
-            )
-            current = {rev: dict(rows) for rev, rows in records.items()}
-            current["HEAD"].update({k: v for k, v in edits.items() if k != "at"})
-            text = dict(files)
-            text.update({("HEAD", k): v for k, v in edits.items() if k != "at"})
-            with (
-                patch.object(GROWTH, "known", lambda rev: rev != missing),
-                patch.object(GROWTH.METRICS, "generated_records", current.__getitem__),
-                patch.object(GROWTH.METRICS, "show", lambda r, p: text.get((r, p), "")),
-            ):
-                return GROWTH.accepted(
-                    delta, ("/implementation", [proposal], [comment], "new-head")
-                )
-
-        self.assertTrue(check("generated_records", "abi-record-x.h", {}))
-        self.assertFalse(
-            check(
-                "generated_records",
-                "abi-record-x.h",
-                {"abi-record-x.h": "struct X { int b; };"},
-            )
-        )
-        self.assertFalse(check("generated_records", "abi-record-y.h", {}))
-        self.assertFalse(check("generated_records", "abi-record-x.h", {"at": missing}))
-        self.assertFalse(check("generated_records", "abi-record-x.h", {"at": "short"}))
-        self.assertTrue(check("tools_cpp", "tools/x.cpp", {}))
-        self.assertFalse(check("tools_cpp", "tools/x.cpp", {"tools/x.cpp": "int y;"}))
-
-    def test_boundary_ids_record_each_declaration_text(self) -> None:
-        texts: dict[str, str] = {}
-        source = (
-            'pub struct S { pub cb: extern "C" fn(u32), pub n: u8 }\n'
-            'pub struct T(u8, extern "C" fn());\n'
-            '#[unsafe(no_mangle)]\npub extern "C" fn openttd_rust_x() {}\n'
-        )
-        ids = boundary_ids({"rust/x.rs": source}, texts=texts)
-        self.assertEqual(set(texts), ids["exports"] | ids["callback_slots"])
-        self.assertEqual(texts["rust/x.rs | S.cb"], 'pub cb: extern "C" fn(u32)')
-        self.assertEqual(texts["rust/x.rs | T.1"], 'extern "C" fn()')
-        self.assertEqual(
-            texts["rust/x.rs | openttd_rust_x"], 'pub extern "C" fn openttd_rust_x() {}'
-        )
-
-    def test_identity_acceptance_holds_while_its_declaration_is_unchanged(self) -> None:
-        earlier = "a" * 40
-        slot = "rust/expanded.rs | Services.callback"
-        export = "rust/expanded.rs | openttd_rust_x"
-        texts = {
-            earlier: {
-                slot: 'callback: extern "C" fn(u32)',
-                export: 'pub extern "C" fn openttd_rust_x() { a() }',
-            }
-        }
-
-        def check(counter: str, key: str, now: str) -> bool:
+    def test_growth_acceptance_holds_at_a_later_head_for_every_counter(self) -> None:
+        # No source is read: an edit to the excepted file or declaration that
+        # leaves the record equal keeps the acceptance, for every counter.
+        earlier, later = "a" * 40, "b" * 40
+        for counter, key in (
+            ("tools_cpp", "tools/x.cpp"),
+            ("tests_cpp", "src/tests/x.cpp"),
+            ("outside_cpp", "build/generated/x.cpp"),
+            ("generated_records", "abi-record-x.h"),
+            ("exports", "rust/expanded.rs | openttd_rust_x"),
+            ("callback_slots", "rust/expanded.rs | Services.callback"),
+        ):
             delta = GrowthDelta(counter=counter, old=1, new=2, added={key: 1})
             proposal = GrowthProposal(
                 **delta,
@@ -1026,28 +1028,34 @@ class GrowthTests(unittest.TestCase):
                 retiring_owner="owner",
                 retirement_condition="native shell removed",
             )
-            current = dict(texts, HEAD={**texts[earlier], key: now})
-            with (
-                patch.object(GROWTH, "known", lambda rev: True),
-                patch.object(GROWTH.METRICS, "boundary_texts", current.__getitem__),
-            ):
-                return GROWTH.accepted(
-                    delta,
-                    (
-                        "/implementation",
-                        [proposal],
-                        [acceptance_comment(earlier, proposal)],
-                        "new-head",
-                    ),
+            comment = acceptance_comment(earlier, proposal)
+            with self.subTest(counter=counter):
+                self.assertTrue(
+                    growth_accepted(
+                        delta, ("/implementation", [proposal], [comment], later)
+                    )
+                )
+                grown = GrowthDelta(counter=counter, old=1, new=3, added={key: 2})
+                self.assertFalse(
+                    growth_accepted(
+                        grown,
+                        (
+                            "/implementation",
+                            [dict(proposal, **grown)],
+                            [comment],
+                            later,
+                        ),
+                    )
                 )
 
-        self.assertTrue(check("callback_slots", slot, texts[earlier][slot]))
-        self.assertFalse(check("callback_slots", slot, 'callback: extern "C" fn(u8)'))
-        self.assertTrue(check("exports", export, texts[earlier][export]))
-        self.assertFalse(
-            check("exports", export, 'pub extern "C" fn openttd_rust_x() { b() }')
-        )
-        self.assertFalse(check("exports", "rust/expanded.rs | openttd_rust_new", "fn"))
+
+def growth_accepted(
+    delta: Mapping[str, object],
+    contract: tuple[str, list[Mapping[str, object]], list[str], str],
+) -> bool:
+    """Whether the growth gate passes `delta` in the merge group."""
+    with contextlib.redirect_stdout(io.StringIO()):
+        return not GROWTH.unaccepted([dict(delta)], contract, "merge_group")
 
 
 def acceptance_comment(head: str, proposal: Mapping[str, object]) -> str:
@@ -1358,7 +1366,6 @@ class CarryTests(unittest.TestCase):
             initialize(root, {"rust/x.rs": original})
             accepted = git("rev-parse", "HEAD", cwd=root).strip()
             site = "rust/x.rs | fn work | allow dead_code"
-            row = "rust/x.rs | fn work | too_many_arguments | item"
             proposal = {"kind": "suppression"}
             comment = acceptance_comment(accepted, proposal)
             for changed in (
@@ -1370,27 +1377,14 @@ class CarryTests(unittest.TestCase):
                 original.replace("pub fn", "/// changed contract\npub fn"),
             ):
                 (root / "rust/x.rs").write_text(changed)
-                for module, predicate in (
-                    (POLICY, partial(POLICY.unchanged_scope, site)),
-                    (LINT, partial(LINT.unchanged_item, "clippy", row)),
+                predicate = partial(POLICY.unchanged_scope, site)
+                with (
+                    patch.object(POLICY, "ROOT", root),
+                    patch.object(POLICY, "git", partial(git, cwd=root)),
                 ):
-                    with (
-                        patch.object(module, "ROOT", root),
-                        patch.object(module, "git", partial(git, cwd=root)),
-                    ):
-                        self.assertFalse(
-                            reviewed(
-                                proposal, [comment], "/impl", "new-head", predicate
-                            )
-                        )
-
-    def test_python_decorator_is_part_of_reviewed_item(self) -> None:
-        before = "@original\ndef work():\n    return 1\n"
-        after = before.replace("@original", "@changed")
-        self.assertNotEqual(
-            LINT.item_text("ruff", "tools/x.py", before, "work"),
-            LINT.item_text("ruff", "tools/x.py", after, "work"),
-        )
+                    self.assertFalse(
+                        reviewed(proposal, [comment], "/impl", "new-head", predicate)
+                    )
 
     def test_suppression_carry_and_fidelity_reasons(self) -> None:
         old = "rust/a.rs | impl Flag > const ReplaceProtection | allow non_upper_case_globals"
@@ -1488,20 +1482,26 @@ class CarryTests(unittest.TestCase):
                 ):
                     self.assertEqual(POLICY.main(), 0)
 
-    def test_accepted_contract_binds_to_unchanged_item_text(self) -> None:
+    def test_acceptance_binds_to_the_record_and_unsafe_code_to_its_item(
+        self,
+    ) -> None:
+        for rule, kept in (("non_upper_case_globals", True), ("unsafe_code", False)):
+            with self.subTest(rule=rule):
+                self.check_item_binding(rule, kept)
+
+    def check_item_binding(self, rule: str, kept_when_item_changes: bool) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialize(root, {"rust/x.rs": "pub struct Native;\npub fn other() {}\n"})
             base = git("rev-parse", "HEAD", cwd=root).strip()
             allowed = (
-                "#[allow(non_upper_case_globals)]\n"
-                "impl Native { pub const OriginalName: u8 = 1; }\n"
+                f"#[allow({rule})]\nimpl Native {{ pub const OriginalName: u8 = 1; }}\n"
             )
             (root / "rust/x.rs").write_text(
                 "pub struct Native;\npub fn other() {}\n" + allowed
             )
             reviewed_head = commit(root)
-            site = "rust/x.rs | impl Native | allow non_upper_case_globals"
+            site = f"rust/x.rs | impl Native | allow {rule}"
             proposal = {
                 "kind": "suppression",
                 "tool": "rust",
@@ -1524,7 +1524,10 @@ class CarryTests(unittest.TestCase):
                 + allowed.replace("= 1", "= 2")
             )
             changed = commit(root)
-            for head, expected in ((unchanged, 0), (changed, 1)):
+            for head, expected in (
+                (unchanged, 0),
+                (changed, 0 if kept_when_item_changes else 1),
+            ):
                 git("checkout", "-q", head, cwd=root)
                 with (
                     patch.object(POLICY, "ROOT", root),
@@ -1536,18 +1539,30 @@ class CarryTests(unittest.TestCase):
                         "context",
                         return_value=("/impl", [proposal], [comment], head),
                     ),
-                    patch("sys.argv", ["lint-policy.py", "--base-ref", base]),
+                    patch(
+                        "sys.argv",
+                        [
+                            "lint-policy.py",
+                            "--base-ref",
+                            base,
+                            "--event",
+                            "merge_group",
+                        ],
+                    ),
                     contextlib.redirect_stdout(io.StringIO()),
                 ):
                     self.assertEqual(POLICY.main(), expected)
-            # The same binding holds for a reviewed lint row: `fn other` differs
-            # from the reviewed head at `unchanged` and matches it at `changed`.
+            # Two commits compare without a checkout, as `ci.py enqueue` does.
+            with patch.object(POLICY, "git", partial(git, cwd=root)):
+                self.assertTrue(POLICY.unchanged_scope(site, reviewed_head, unchanged))
+                self.assertFalse(POLICY.unchanged_scope(site, reviewed_head, changed))
+            # A lint exception binds to its record, whatever its item's text.
             row = "rust/x.rs | fn other | too_many_arguments | 4a33eacd5fa65f2b2e28"
             lint = dict(
                 proposal, kind="lint", tool="clippy", site=row, before=[], after=[9]
             )
             comment = acceptance_comment(reviewed_head, lint)
-            for head, expected in ((unchanged, {}), (changed, {row: [9]})):
+            for head in (unchanged, changed):
                 git("checkout", "-q", head, cwd=root)
                 with (
                     patch.object(LINT, "ROOT", root),
@@ -1555,10 +1570,12 @@ class CarryTests(unittest.TestCase):
                     patch.object(
                         LINT, "context", return_value=("/impl", [lint], [comment], head)
                     ),
+                    patch.object(LINT, "EVENT", "merge_group"),
                     contextlib.redirect_stdout(io.StringIO()),
                 ):
                     self.assertEqual(
-                        LINT.reviewed_debt("clippy", {row: [9]}, {}), expected
+                        LINT.reviewed_debt("clippy", {row: [9]}, {}),
+                        {row: [9]},
                     )
 
 
@@ -1921,6 +1938,76 @@ class TrackedRecordTests(unittest.TestCase):
                 cleanup_contract.tracked(base), [self.MERGED, carry, other]
             )
 
+    def test_same_item_never_reports_an_unreadable_file_as_changed(self) -> None:
+        script = Path(__file__).with_name("lint-policy.py")
+        site = "rust/absent.rs | impl Native | allow unsafe_code"
+        done = subprocess.run(
+            [sys.executable, str(script), "--same-item", site, "HEAD", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotIn(done.returncode, (0, POLICY.ITEM_DIFFERS), done.stderr)
+        # A read that fails after an earlier one succeeded is still an error.
+        real = subprocess.check_output(["which", "git"], text=True).strip()
+        with tempfile.TemporaryDirectory() as directory:
+            shim = Path(directory) / "git"
+            count = Path(directory) / "shows"
+            env = {**os.environ, "PATH": f"{directory}{os.pathsep}{os.environ['PATH']}"}
+            path = "rust/openttd-kernels/src/lib.rs"
+            present = next(
+                site
+                for site in POLICY.rust_suppressions(path, (REPO / path).read_text())
+                if POLICY.rule_name(site) == "unsafe_code" and POLICY.item_scoped(site)
+            )
+
+            def same_item(failing_read: int) -> subprocess.CompletedProcess[str]:
+                count.unlink(missing_ok=True)
+                shim.write_text(
+                    "#!/bin/sh\n"
+                    f'if [ "$1" = show ]; then echo x >> {count}; '
+                    f'[ "$(wc -l < {count})" -ge {failing_read} ] && exit 1; fi\n'
+                    f'exec {real} "$@"\n'
+                )
+                shim.chmod(0o755)
+                return subprocess.run(
+                    [
+                        sys.executable,
+                        str(script),
+                        "--same-item",
+                        present,
+                        "HEAD",
+                        "HEAD",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                )
+
+            second = same_item(2)
+            # Two reads answer the comparison: a third, failing read is never made,
+            # so the equal item is equal (a reader that reads again would say 3).
+            third = same_item(3)
+        self.assertNotIn(second.returncode, (0, POLICY.ITEM_DIFFERS), second.stderr)
+        self.assertEqual(third.returncode, 0, third.stderr)
+
+    def test_a_committed_record_file_with_a_non_ascii_name_is_read(self) -> None:
+        record = {"kind": "carry", "tool": "rust", "from": "a", "to": "b"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"README": "x\n"})
+            base = git("rev-parse", "HEAD", cwd=root).strip()
+            path = root / "migration/cleanup-records/t3-cleanup-café.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps([record]))
+            git("add", "-A", cwd=root)
+            head = commit(root)
+            with (
+                patch.object(cleanup_contract, "ROOT", root),
+                patch.object(cleanup_contract, "git", partial(git, cwd=root)),
+            ):
+                self.assertEqual(cleanup_contract.records_between(base, head), [record])
+                self.assertEqual(cleanup_contract.records_between(base), [record])
+
     def test_lint_policy_rejects_a_malformed_file_with_no_delta(self) -> None:
         path = "migration/cleanup-records/tools-921-x.json"
         with self.branch({path: "[[]]"}) as (root, base):
@@ -1980,8 +2067,10 @@ class TrackedRecordTests(unittest.TestCase):
         signed = "Agent: /review | Model: test | Reasoning effort: high\n"
         for block, message in (
             ('{"head": "h"} {}', "comment 1 by /review block 1: invalid JSON"),
-            ('{"head": "h", "accept": {}}', "comment 1 by /review block 1: field"),
+            ('{"head": "' + "a" * 40 + '", "accept": {}}', "block 1: field accept"),
             ('{"head": 1, "accept": []}', "comment 1 by /review block 1: field"),
+            ('{"head": "h", "accept": []}', "head a full 40-digit SHA"),
+            ('{"head": "", "accept": [{"kind": "carry"}]}', "40-digit SHA"),
         ):
             comment = signed + "```cleanup-acceptance\n" + block + "\n```"
             with (
@@ -2045,12 +2134,13 @@ class TrackedRecordTests(unittest.TestCase):
             retirement_condition="c",
         )
         for proposals, comments, event, failed, shown in (
-            ([proposal], [], "pull_request", False, "pending review: tools_cpp"),
+            ([proposal], [], "pull_request", False, "pending review: growth tools_cpp"),
+            ([proposal], [], "workflow_dispatch", False, "pending review: growth"),
             ([proposal], [], "merge_group", True, "lacks its reviewer's acceptance"),
             ([], [], "pull_request", True, "has no proposal in the cleanup records"),
             (
                 [proposal],
-                [acceptance_comment("h", proposal)],
+                [acceptance_comment("a" * 40, proposal)],
                 "merge_group",
                 False,
                 '"accepted_at": "h"',
@@ -2059,9 +2149,7 @@ class TrackedRecordTests(unittest.TestCase):
             output = io.StringIO()
             with self.subTest(event=event), contextlib.redirect_stdout(output):
                 contract = ("/impl", proposals, comments, "h")
-                self.assertEqual(
-                    GROWTH.unaccepted([delta], contract, "HEAD", event), failed
-                )
+                self.assertEqual(GROWTH.unaccepted([delta], contract, event), failed)
                 self.assertIn(shown, output.getvalue())
 
 

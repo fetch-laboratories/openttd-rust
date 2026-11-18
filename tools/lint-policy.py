@@ -16,11 +16,18 @@ from pathlib import Path
 from typing import Any
 
 from cleanup_contract import (
+    ACCEPTED,
+    MISSING,
+    UNSAFE,
+    Excepted,
     Ledger,
     carry_hints,
     checked_carries,
     context,
-    reviewed,
+    default_event,
+    pending_fails,
+    review_state,
+    rule_name,
     run,
     tracked,
     write,
@@ -30,6 +37,8 @@ from rust_syntax import Node, item_source, nodes, syntax_trees
 from vcs import git, merge_base
 
 ROOT = Path(__file__).resolve().parents[1]
+# --same-item's status for an item whose text differs between the two commits.
+ITEM_DIFFERS = 3
 RANK = {"allow": 0, "warn": 1, "deny": 2, "forbid": 3}
 LINT_GROUPS = {
     "all",
@@ -287,10 +296,6 @@ def inventory(revision: str | None) -> dict[str, str]:
     }
 
 
-def rule_name(site: str) -> str:
-    return re.sub(r"\s+|r#", "", site.rsplit(" | ", 1)[1].split(" ", 1)[1])
-
-
 def item_scoped(site: str) -> bool:
     """A named Rust item below module level, suppressing one lint, not a group."""
     path, scope, _ = site.rsplit(" | ", 2)
@@ -317,19 +322,48 @@ def scope_text(path: str, text: str, scope: str) -> str | None:
     return "\n".join(parts) if parts and scope != "module" else None
 
 
-def unchanged_scope(site: str, revision: str) -> bool:
+def unchanged_scope(site: str, revision: str, current: str | None = None) -> bool:
+    """Whether the site's item text at `revision` equals `current`'s.
+
+    `current` is a commit, or None for the working tree.
+    """
     path, scope, _ = site.rsplit(" | ", 2)
     try:
         old = git("show", f"{revision}:{path}")
+        if current is None:
+            new = (ROOT / path).read_text() if (ROOT / path).is_file() else None
+        else:
+            new = git("show", f"{current}:{path}")
     except subprocess.CalledProcessError:
         return False
-    current = ROOT / path
     before = scope_text(path, old, scope)
     return (
         before is not None
-        and current.is_file()
-        and before == scope_text(path, current.read_text(), scope)
+        and new is not None
+        and before == scope_text(path, new, scope)
     )
+
+
+def suppression_state(
+    site: str,
+    before: int,
+    after: int,
+    contract: tuple[str, list[dict[str, Any]], list[str], str],
+) -> str:
+    """Review state of a Rust item operation; never a module or lint group.
+
+    An `unsafe_code` acceptance holds only while the item's text is unchanged.
+    """
+    if not item_scoped(site):
+        return MISSING
+    author, proposals, comments, head = contract
+    matching = Excepted("suppression", "rust", site, before, after).proposals(proposals)
+    unsafe = rule_name(site) == UNSAFE
+    unchanged = partial(unchanged_scope, site) if unsafe else None
+    state, _ = review_state(matching, comments, author, head, unchanged)
+    if state == ACCEPTED:
+        print(f"reviewed suppression at {head}: {site} ({before} -> {after})")
+    return state
 
 
 def accepted_suppression(
@@ -338,24 +372,8 @@ def accepted_suppression(
     after: int,
     contract: tuple[str, list[dict[str, Any]], list[str], str],
 ) -> bool:
-    """Permit a reviewed Rust item operation, never a module or lint group."""
-    if not item_scoped(site):
-        return False
-    author, proposals, comments, head = contract
-    expected = {
-        "kind": "suppression",
-        "tool": "rust",
-        "site": site,
-        "before": before,
-        "after": after,
-    }
-    for proposal in proposals:
-        if any(proposal.get(key) != value for key, value in expected.items()):
-            continue
-        if reviewed(proposal, comments, author, head, partial(unchanged_scope, site)):
-            print(f"reviewed suppression at {head}: {site} ({before} -> {after})")
-            return True
-    return False
+    """Whether a reviewer accepted this Rust item operation."""
+    return suppression_state(site, before, after, contract) == ACCEPTED
 
 
 def suppression_errors(
@@ -363,8 +381,13 @@ def suppression_errors(
     after: Counter[str],
     reasoned: Container[str] = frozenset(),
     base_ref: str = "origin/rust-migration",
+    event: str = "pull_request",
 ) -> tuple[list[str], list[dict[str, str]]]:
-    """New suppressions no record explains, and the ready carries for them."""
+    """New suppressions no record explains, and the ready carries for them.
+
+    A proposed suppression awaiting its acceptance is pending review: it is
+    printed, and is an error only on an event where pending fails.
+    """
     added = {site: n for site, n in (after - before).items() if site not in reasoned}
     if not added:
         return [], []
@@ -382,16 +405,26 @@ def suppression_errors(
         )
         ledger = Ledger(tool, old, new, carry_rule, operator.le)
         valid = checked_carries(contract[1], ledger)
-        unexplained = [
-            site
-            for site in sorted(added)
-            if site.split(" | ")[0].endswith(suffix)
-            and site not in valid
-            and not accepted_suppression(site, before[site], after[site], contract)
-        ]
-        errors.extend(
-            f"new suppression: {site} ({added[site]})" for site in unexplained
-        )
+        unexplained = []
+        for site in sorted(added):
+            if not site.split(" | ")[0].endswith(suffix) or site in valid:
+                continue
+            state = suppression_state(site, before[site], after[site], contract)
+            if state == ACCEPTED:
+                continue
+            unexplained.append(site)
+            if state == MISSING:
+                errors.append(f"new suppression: {site} ({added[site]})")
+            elif pending_fails(event):
+                errors.append(
+                    f"new suppression: {site} ({added[site]})"
+                    " lacks its reviewer's acceptance"
+                )
+            else:
+                print(
+                    f"pending review: suppression {site}"
+                    " awaits its reviewer's acceptance"
+                )
         ready += carry_hints(
             ledger,
             old.keys() - new.keys() - set(valid.values()),
@@ -408,7 +441,31 @@ def main() -> int:
         action="store_true",
         help="record each ready carry in this branch's cleanup records file",
     )
+    parser.add_argument(
+        "--event",
+        default=default_event(),
+        help="the CI event (default: GITHUB_EVENT_NAME, else pull_request);"
+        " a suppression pending review fails only in merge_group",
+    )
+    parser.add_argument(
+        "--same-item",
+        nargs=3,
+        metavar=("SITE", "ACCEPTED", "HEAD"),
+        help="exit 0 when the suppressed item's text is equal at both commits, "
+        "3 when it differs",
+    )
     args = parser.parse_args()
+    if args.same_item:
+        # 0: the item's text is equal; ITEM_DIFFERS: it differs. An unreadable
+        # file, a crash or a failed start exits otherwise, so a caller never
+        # reads it as a change.
+        site, accepted, head = args.same_item
+        path, scope, _ = site.rsplit(" | ", 2)
+        # Each blob is read once; a failed read raises, exiting 1, never 3.
+        old, new = (git("show", f"{revision}:{path}") for revision in (accepted, head))
+        before = scope_text(path, old, scope)
+        same = before is not None and before == scope_text(path, new, scope)
+        return 0 if same else ITEM_DIFFERS
     args.base_ref = merge_base(args.base_ref, run=git, announce=True)
     # Quick runs lint policy on every change, so every record file is validated
     # here even when no gate needs its records.
@@ -442,6 +499,7 @@ def main() -> int:
         suppressions(head),
         fidelity_sites(head),
         args.base_ref,
+        args.event,
     )
     found, ready = check()
     if args.write and ready:

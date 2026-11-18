@@ -175,14 +175,8 @@ def boundary_ids(
     files: dict[str, str],
     *,
     expanded: bool = False,
-    texts: dict[str, str] | None = None,
 ) -> dict[str, set[str]]:
-    """Exports and callback slots, each keyed `path | identity`.
-
-    With texts, also record each key's declaration: the whole function item
-    for an export, the field declaration (name and type) for a named callback
-    slot, and the field's type for a tuple slot.
-    """
+    """Exports and callback slots, each keyed `path | identity`."""
     trees = syntax_trees(files)
     aliases: dict[str, list[Node]] = {}
     for tree in trees.values():
@@ -196,36 +190,32 @@ def boundary_ids(
     result: dict[str, set[str]] = {"exports": set(), "callback_slots": set()}
     for path, tree in trees.items():
         for node in nodes(tree):
-            for counter, key, text in collect_node(
-                path, node, aliases, expanded=expanded
-            ):
+            for counter, key in collect_node(path, node, aliases, expanded=expanded):
                 result[counter].add(key)
-                if texts is not None:
-                    texts[key] = text
     return result
 
 
-def tuple_callbacks(node: Node, aliases: dict[str, list[Node]]) -> dict[str, str]:
-    """Each tuple callback slot, `Owner.index`, with its field's type text."""
-    slots = {
-        index: field.text.decode()
+def tuple_callbacks(node: Node, aliases: dict[str, list[Node]]) -> list[str]:
+    """Each tuple callback slot, `Owner.index`."""
+    slots = [
+        index
         for index, field in enumerate(node.children_by_field_name("type"))
         if callback(field, aliases)
-    }
+    ]
     owner = qualified(node)
     if slots and not owner:
         raise ValueError("unclassified tuple callback owner")
-    return {f"{owner}.{index}": text for index, text in slots.items()}
+    return [f"{owner}.{index}" for index in slots]
 
 
 def collect_node(
     path: str, node: Node, aliases: dict[str, list[Node]], *, expanded: bool
-) -> list[tuple[str, str, str]]:
-    """The node's boundary identities: (counter, `path | identity`, declaration)."""
+) -> list[tuple[str, str]]:
+    """The node's boundary identities: (counter, `path | identity`)."""
     refuse_unclassified(path, node, expanded=expanded)
     if node.type == "function_item":
         name = export_name(node)
-        return [("exports", f"{path} | {name}", node.text.decode())] if name else []
+        return [("exports", f"{path} | {name}")] if name else []
     if node.type == "field_declaration" and callback(
         node.child_by_field_name("type"), aliases
     ):
@@ -233,11 +223,11 @@ def collect_node(
         if not owner:
             raise ValueError(f"unclassified callback field in {path}")
         field = node.child_by_field_name("name").text.decode()
-        return [("callback_slots", f"{path} | {owner}.{field}", node.text.decode())]
+        return [("callback_slots", f"{path} | {owner}.{field}")]
     if node.type == "ordered_field_declaration_list":
         return [
-            ("callback_slots", f"{path} | {slot}", text)
-            for slot, text in tuple_callbacks(node, aliases).items()
+            ("callback_slots", f"{path} | {slot}")
+            for slot in tuple_callbacks(node, aliases)
         ]
     return []
 

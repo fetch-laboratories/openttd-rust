@@ -647,8 +647,37 @@ def build_games(execution: Execution) -> None:
                 record_build(build, source, name, env)
 
 
+# Where crash_stacks.py writes a crashed test binary's full stacks.
+CRASH_STACKS = "crash-stacks"
+
+
+def crash_runner(stacks: Path) -> list[str]:
+    """Cargo's runner for Linux test binaries: crash_stacks.py prints every
+    thread's stack when one dies by a signal (#1012)."""
+    runner = json.dumps([sys.executable, str(ROOT / "tools/crash_stacks.py")])
+    return [
+        "env",
+        f"CRASH_STACKS_DIR={stacks}",
+        "cargo",
+        "--config",
+        f"target.'cfg(target_os = \"linux\")'.runner = {runner}",
+    ]
+
+
+def with_crash_stacks(name: str, text: str, evidence: Path) -> str:
+    """A failed step's tail, then each crash trace in full: the tail alone
+    would cut the first threads of a long trace."""
+    shown = failure_output(name, text)
+    for trace in sorted((evidence / CRASH_STACKS).glob("*.txt")):
+        shown += f"\n--- full stacks: {trace.name} ---\n" + trace.read_text(
+            errors="replace"
+        )
+    return shown
+
+
 def command_rust_checks(execution: Execution) -> None:
     run = execution.run
+    tests = [*crash_runner(execution.evidence / CRASH_STACKS), "test"]
     for name, command in (
         ("rust-fmt", ["cargo", "fmt", "--all", "--", "--check"]),
         (
@@ -656,7 +685,7 @@ def command_rust_checks(execution: Execution) -> None:
             ["cargo", "check", "--workspace", "--all-targets", "--locked"],
         ),
         ("rust-clippy", clippy_command()),
-        ("rust-tests", ["cargo", "test", "--workspace", "--locked"]),
+        ("rust-tests", [*tests, "--workspace", "--locked"]),
     ):
         run(name, command)
 
@@ -1365,7 +1394,8 @@ def main() -> None:
         )
         if code:
             print(
-                failure_output(name, log.read_text(errors="replace")), file=sys.stderr
+                with_crash_stacks(name, log.read_text(errors="replace"), evidence),
+                file=sys.stderr,
             )
             raise RuntimeError(f"{name} failed; see {log}")
         return log

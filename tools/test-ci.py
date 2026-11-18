@@ -7,12 +7,16 @@ import itertools
 import json
 import os
 import re
+import signal
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 import unittest
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
+from functools import partial
 from pathlib import Path
 from typing import Any, TypedDict, cast
 from unittest.mock import patch
@@ -20,7 +24,9 @@ from unittest.mock import patch
 import ci
 import ci_log
 import review_report
+import source_fixture
 import status_comment
+import vcs
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -2525,7 +2531,7 @@ class RequestTests(unittest.TestCase):
                     patch("builtins.print") as printed,
                 ):
                     self.assertEqual(ci.main(), 2)
-                self.assertEqual(waited.call_args.args[1:], (timeout, 15))
+                self.assertEqual(waited.call_args.args[1:], (timeout, 15, False))
                 printed.assert_called_once()
 
     def test_successful_run_without_full_status_is_rejected(self) -> None:
@@ -2621,7 +2627,7 @@ class RequestPathTests(unittest.TestCase):
     def test_pending_then_mergeable_dispatches_the_pinned_head(self) -> None:
         path, calls, output, sleeps = self.request(self.PENDING, self.PENDING, PULL)
         self.assertEqual(sleeps, 2)
-        self.assertEqual(output.count("Waiting up to 60 seconds"), 1)
+        self.assertEqual(output.count(f"Waiting up to {ci.MERGEABLE_WAIT} seconds"), 1)
         ((dispatch),) = calls
         self.assertEqual(dispatch[:2], ("workflow", "run"))
         self.assertIn(f"head={HEAD}", dispatch)
@@ -2667,13 +2673,22 @@ class RequestPathTests(unittest.TestCase):
         self.assertNotIn("Waiting", self.output)
         # Pending past the bound stops without dispatching, and says so.
         with self.assertRaisesRegex(ci.MergeabilityPending, "still computing"):
-            self.request(*[self.PENDING] * 40)
+            self.request(*[self.PENDING] * (ci.MERGEABLE_WAIT // 3 + 2))
         self.assertNotIn("Requested", self.output)
 
     def test_head_option_refuses_another_remote_head(self) -> None:
+        # GitHub keeps answering with another head: refused at the bound.
+        reads = [PULL] * (ci.MERGEABLE_WAIT // 3 + 2)
         with self.assertRaisesRegex(ValueError, f"head on GitHub is {HEAD}, not"):
-            self.request(PULL, head=PREVIOUS)
+            self.request(*reads, head=PREVIOUS)
+        self.assertEqual(self.output.count("waiting up to"), 1)
         self.stamp.assert_not_called()
+        # Just after a push the first read shows the old head, then the pushed one.
+        stale = dict(PULL, head={"sha": PREVIOUS})
+        path, calls, output, sleeps = self.request(stale, PULL, PULL, head=HEAD)
+        self.assertIsNotNone(path)
+        self.assertEqual(sleeps, 1)
+        self.assertIn(f"head={HEAD}", calls[0])
         path, calls, _, _ = self.request(PULL, head=HEAD[:12])
         self.assertIsNotNone(path)
         self.assertEqual(calls[0][:2], ("workflow", "run"))
@@ -2770,22 +2785,24 @@ class RequestPathTests(unittest.TestCase):
         code, path, output, _ = self.wait_pr(runs=[[listed, remote]])
         self.assertEqual((code, path), (0, newest))
         self.assertIn("(from local record)", output)
-        # A remote request of another profile is a choice to name.
+        # With a newer remote request of another profile, that one is followed
+        # and the other is named with the command that waits on it.
         rust = requested("rust", "a" * 32, "2026-11-12T04:00:00Z")
         code, path, output, _ = self.wait_pr(runs=[[listed, rust]])
-        self.assertEqual((code, path), (1, None))
-        self.assertIn("for native, rust; name one", output)
+        self.assertEqual((code, path), (0, ci.REQUESTS / f"{'a' * 32}-{HEAD}.json"))
+        self.assertIn("also has a native request", output)
+        self.assertIn("wait 170 --profile native", output)
         self.assertTrue(local.exists())
 
-    def test_wait_on_a_pr_with_several_profiles_needs_one_named(self) -> None:
-        self.record("native")
+    def test_wait_on_a_pr_with_several_profiles_follows_the_newest(self) -> None:
+        native = self.record("native")
         rust = self.record("rust", profile="rust", created_at="2026-11-12T05:00:00Z")
         code, path, output, _ = self.wait_pr()
-        self.assertEqual((code, path), (1, None))
-        self.assertIn("for native, rust; name one", output)
-        self.assertIn("wait 170 --profile PROFILE", output)
-        code, path, _, _ = self.wait_pr("--profile", "rust")
         self.assertEqual((code, path), (0, rust))
+        self.assertIn("also has a native request", output)
+        self.assertIn("wait 170 --profile native", output)
+        code, path, _, _ = self.wait_pr("--profile", "native")
+        self.assertEqual((code, path), (0, native))
 
     def test_wait_on_a_pr_without_a_request_names_the_request_command(self) -> None:
         self.record("native")
@@ -2803,6 +2820,372 @@ class RequestPathTests(unittest.TestCase):
         ):
             self.assertEqual(ci.main(), 1)
         waited.assert_not_called()
+
+
+def gateway_error(*args: str) -> subprocess.CalledProcessError:
+    return subprocess.CalledProcessError(
+        1, ["gh", *args], stderr="gh: HTTP 502: Bad Gateway (https://api.github.com/)"
+    )
+
+
+class RetryTests(unittest.TestCase):
+    """Reads survive a gateway error; nothing that writes is repeated (#1013)."""
+
+    def run_gh(
+        self, failures: int, *args: str
+    ) -> tuple[str | None, list[tuple[str, ...]], Exception | None]:
+        calls: list[tuple[str, ...]] = []
+
+        def flaky(*arguments: str, **_: object) -> str:
+            calls.append(arguments)
+            if len(calls) <= failures:
+                raise gateway_error(*arguments)
+            return "answer\n"
+
+        with (
+            patch.object(ci.vcs, "gh", side_effect=flaky),
+            patch.object(ci.time, "sleep"),
+            patch("sys.stderr"),
+        ):
+            try:
+                return ci.gh(*args), calls, None
+            except subprocess.CalledProcessError as error:
+                return None, calls, error
+
+    def test_a_read_that_fails_once_with_a_502_succeeds(self) -> None:
+        queue = ("api", "graphql", "-f", f"query={ci.QUEUE_STATE}", "-F", "n=1")
+        for read in (
+            ("api", "repos/x/y/pulls/1"),
+            ("api", "--paginate", "--slurp", "repos/x/y/actions/runs"),
+            ("variable", "list", "--repo", "x/y"),
+            ("repo", "view", "--json", "nameWithOwner"),
+            queue,
+        ):
+            with self.subTest(read=read[:2]):
+                answer, calls, _ = self.run_gh(1, *read)
+                self.assertEqual((answer, len(calls)), ("answer", 2))
+                _, calls, error = self.run_gh(5, *read)
+                self.assertEqual(len(calls), ci.READ_ATTEMPTS)
+                self.assertIsNotNone(error)
+
+    def test_an_ordinary_number_is_no_gateway_error(self) -> None:
+        for text, expected in (
+            ("gh: HTTP 502: Bad Gateway (https://api.github.com/graphql)", True),
+            ("HTTP 504: Gateway Timeout", True),
+            ("error: 503 Service Unavailable", True),
+            ("gh: Pull request #502 is already merged", False),
+            ("run 503 not found (HTTP 404)", False),
+        ):
+            error = subprocess.CalledProcessError(1, "gh", stderr=text)
+            self.assertEqual(ci.transient(error), expected, text)
+
+    def test_writes_and_other_errors_are_not_repeated(self) -> None:
+        for write in (
+            ("workflow", "run", "ci-request.yml", "-f", "pr=1"),
+            ("pr", "merge", "1", "--merge"),
+            ("run", "rerun", "1", "--failed"),
+            ("variable", "set", "CI_MACOS_HEAVY", "--body", "x"),
+            ("api", "-X", "PATCH", "repos/x/y/issues/comments/1"),
+            ("api", "repos/x/y/issues/1/comments", "-f", "body=x"),
+            ("api", "graphql", "-f", "query=mutation { x }"),
+        ):
+            with self.subTest(write=write[:2]):
+                _, calls, error = self.run_gh(1, *write)
+                self.assertEqual(len(calls), 1)
+                self.assertIsNotNone(error)
+        with (
+            patch.object(
+                ci.vcs,
+                "gh",
+                side_effect=subprocess.CalledProcessError(1, "gh", stderr="HTTP 404"),
+            ) as called,
+            self.assertRaises(subprocess.CalledProcessError),
+        ):
+            ci.gh("api", "repos/x/y/pulls/1")
+        self.assertEqual(called.call_count, 1)
+
+    def enqueue_after(
+        self, merge_failures: int, queued_after_failure: bool, state_failures: int
+    ) -> tuple[str, int]:
+        """enqueue with gh's merge and queue-state calls failing as given."""
+        merges = 0
+        states = 0
+        entry = {"state": "QUEUED", "position": 1}
+
+        def fake(*args: str, **_: object) -> str:
+            nonlocal merges, states
+            if args[:2] == ("pr", "merge"):
+                merges += 1
+                if merges <= merge_failures:
+                    raise gateway_error(*args)
+                return ""
+            states += 1
+            if states <= state_failures:
+                raise gateway_error(*args)
+            queued = merges > merge_failures or queued_after_failure
+            pull = {
+                "mergeQueueEntry": entry if queued else None,
+                "autoMergeRequest": None,
+            }
+            return json.dumps({"data": {"repository": {"pullRequest": pull}}})
+
+        args = argparse.Namespace(repo="example/fork", pr=170, retry=None)
+        with (
+            patch.object(ci.vcs, "gh", side_effect=fake),
+            patch.object(ci, "api", return_value=PULL),
+            patch.object(ci, "enqueue_checks", return_value=HEAD),
+            patch.object(ci, "requeue_gate"),
+            patch.object(ci.time, "sleep"),
+            patch("sys.stderr"),
+            patch("builtins.print"),
+        ):
+            return ci.enqueue(args), merges
+
+    def test_enqueue_survives_a_502_on_the_merge_or_the_queue_read(self) -> None:
+        # The merge took effect though its answer was lost: no second merge.
+        self.assertEqual(self.enqueue_after(1, True, 0), ("queued at position 1", 1))
+        # It did not: one more merge.
+        self.assertEqual(self.enqueue_after(1, False, 0), ("queued at position 1", 2))
+        # The merge answered; the queue-state read after it is retried.
+        self.assertEqual(self.enqueue_after(0, False, 1), ("queued at position 1", 1))
+
+
+def job_row(job_id: int, name: str, conclusion: str | None) -> ci_log.Job:
+    return {
+        "id": job_id,
+        "run_id": 123,
+        "name": name,
+        "status": "completed" if conclusion else "in_progress",
+        "conclusion": conclusion,
+        "html_url": f"https://github.com/example/fork/actions/runs/123/job/{job_id}",
+    }
+
+
+class RunWaitTests(unittest.TestCase):
+    """wait --run, --complete and the Quick waits, on a fake clock (#1013)."""
+
+    def wait_run(
+        self,
+        argv: list[str],
+        reads: list[tuple[str, str | None, list[ci_log.Job]]],
+        latest: int | None = 1,
+    ) -> tuple[int, str, list[str]]:
+        """`reads` are successive (status, conclusion, jobs) of the attempt."""
+        steps = iter(reads)
+        paths: list[str] = []
+        current: dict[str, Any] = {}
+
+        def api(_repository: str, path: str) -> dict[str, Any]:
+            paths.append(path)
+            if path == "actions/runs/123":
+                if latest is None:  # The latest-attempt lookup fails.
+                    raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502")
+                return {"run_attempt": latest}
+            status, conclusion, jobs = next(steps, reads[-1])
+            current["jobs"] = jobs
+            return {"status": status, "conclusion": conclusion}
+
+        def jobs(_repository: str, _run: int, attempt: int | None) -> list[object]:
+            paths.append(f"jobs of attempt {attempt}")
+            return current["jobs"]
+
+        clock = itertools.count(0, 10)
+        with (
+            patch.object(ci, "api", side_effect=api),
+            patch.object(ci, "run_jobs", side_effect=jobs),
+            patch.object(ci, "failure_logs") as self.logs,
+            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+            patch.object(ci.time, "sleep"),
+            patch("sys.argv", ["ci.py", "wait", *argv, "--repo", "example/fork"]),
+            patch("builtins.print") as printed,
+            patch("sys.stderr") as stderr,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
+        return code, output, paths
+
+    FAILED = job_row(1, "native / build", "failure")
+    RUNNING = job_row(2, "platform / Windows", None)
+    PASSED = job_row(2, "platform / Windows", "success")
+
+    def test_complete_outlives_a_failed_job_and_exits_1_at_completion(self) -> None:
+        reads: list[tuple[str, str | None, list[ci_log.Job]]] = [
+            ("in_progress", None, [self.FAILED, self.RUNNING]),
+            ("in_progress", None, [self.FAILED, self.RUNNING]),
+            ("completed", "failure", [self.FAILED, self.PASSED]),
+        ]
+        code, output, paths = self.wait_run(["--run", "123", "--complete"], reads)
+        self.assertEqual(code, 1)
+        self.assertEqual(output.count("failed job: native / build"), 1)
+        self.assertIn("gh run rerun 123 --failed", output)
+        self.assertEqual(paths.count("actions/runs/123/attempts/1"), 3)
+        # Without --complete the first failed job ends the wait.
+        code, output, paths = self.wait_run(["--run", "123"], reads)
+        self.assertEqual(code, 1)
+        self.assertEqual(paths.count("actions/runs/123/attempts/1"), 1)
+        self.assertIn("wait with --complete", output)
+        # A passing run exits 0.
+        code, _, _ = self.wait_run(["--run", RUN], [("completed", "success", [])])
+        self.assertEqual(code, 0)
+
+    def test_an_attempt_url_pins_that_attempt_and_resumes_on_it(self) -> None:
+        url = RUN + "/attempts/1"
+        code, output, paths = self.wait_run(
+            ["--run", url, "--timeout", "30"],
+            [("in_progress", None, [self.RUNNING])],
+            latest=2,
+        )
+        self.assertEqual(code, 2)
+        self.assertNotIn("actions/runs/123", paths)
+        self.assertTrue(all("attempts/2" not in p for p in paths))
+        self.assertIn(f"wait --run {url}", output)
+        # Without one, the latest attempt read at the start is pinned.
+        code, output, paths = self.wait_run(
+            ["--run", "123", "--complete", "--timeout", "30"],
+            [("in_progress", None, [self.RUNNING])],
+            latest=2,
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("jobs of attempt 2", paths)
+        self.assertIn(f"wait --run {RUN}/attempts/2 --complete", output)
+
+    def test_a_pinned_attempts_failure_summary_reads_that_attempt(self) -> None:
+        failed: list[tuple[str, str | None, list[ci_log.Job]]] = [
+            ("completed", "failure", [self.FAILED])
+        ]
+        code, output, _ = self.wait_run(["--run", RUN + "/attempts/1"], failed, 2)
+        self.assertEqual(code, 1)
+        self.assertEqual(self.logs.call_args.args, ("example/fork", 123, 1))
+        code, output, _ = self.wait_run(
+            ["--run", RUN + "/attempts/1", "--complete"], failed, 2
+        )
+        self.assertEqual(self.logs.call_args.args, ("example/fork", 123, 1))
+        self.assertIn("reruns attempt 2's failed jobs, not attempt 1's", output)
+
+    def test_a_failed_attempt_lookup_keeps_the_pinned_summary(self) -> None:
+        failed: list[tuple[str, str | None, list[ci_log.Job]]] = [
+            ("completed", "failure", [self.FAILED])
+        ]
+        code, output, _ = self.wait_run(
+            ["--run", RUN + "/attempts/1", "--complete"], failed, None
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("gh run rerun 123 --failed", output)
+        self.assertEqual(self.logs.call_args.args, ("example/fork", 123, 1))
+
+    def test_a_bare_number_is_still_a_pr(self) -> None:
+        with (
+            patch.object(ci, "resolve_request", return_value=Path("r.json")) as found,
+            patch.object(ci, "wait") as waited,
+            patch("sys.argv", ["ci.py", "wait", "123", "--repo", "example/fork"]),
+        ):
+            self.assertEqual(ci.main(), 0)
+        self.assertEqual(found.call_args.args[1:], (123, None))
+        self.assertEqual(waited.call_args.args[0], Path("r.json"))
+
+    def quick(
+        self,
+        argv: list[str],
+        checks: list[dict[str, object] | None],
+        draft: bool = True,
+        heads: list[str] | None = None,
+    ) -> tuple[int, str, list[tuple[str, ...]]]:
+        """Run argv against successive Quick check runs of the PR's head; the PR
+        is a draft until marked ready, and its head follows `heads`."""
+        reads = iter(checks)
+        moves = iter(heads or [])
+        calls: list[tuple[str, ...]] = []
+
+        def api(_repository: str, path: str) -> dict[str, Any]:
+            if path == "pulls/170":
+                marked = any(call[:2] == ("pr", "ready") for call in calls)
+                head = next(moves, (heads or [HEAD])[-1])
+                return dict(PULL, draft=draft and not marked, head={"sha": head})
+            check = next(reads, checks[-1])
+            return {"check_runs": [check] if check else []}
+
+        clock = itertools.count(0, 10)
+        with (
+            patch.object(ci, "api", side_effect=api),
+            patch.object(ci, "gh", side_effect=lambda *a: calls.append(a) or ""),
+            patch.object(ci, "require_stamp"),
+            patch.object(ci, "failure_logs"),
+            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+            patch.object(ci.time, "sleep"),
+            patch("sys.argv", ["ci.py", *argv, "--repo", "example/fork"]),
+            patch("builtins.print") as printed,
+            patch("sys.stderr") as stderr,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
+        return code, output, calls
+
+    def check(self, status: str, conclusion: str | None) -> dict[str, object]:
+        return {
+            "status": status,
+            "conclusion": conclusion,
+            "started_at": "2026-11-12T01:00:00Z",
+            "html_url": "https://github.com/example/fork/runs/7",
+            "details_url": RUN + "/job/7",
+        }
+
+    def test_ready_wait_and_wait_quick_return_0_1_and_2(self) -> None:
+        skipped = dict(self.check("completed", "skipped"), started_at="")
+        running = self.check("in_progress", None)
+        for outcome, code in (("success", 0), ("failure", 1)):
+            done = self.check("completed", outcome)
+            with self.subTest(outcome=outcome):
+                # Just after the ready mark only the draft's skip exists.
+                status, _, calls = self.quick(
+                    ["ready", "170", "--wait"], [skipped, None, running, done]
+                )
+                self.assertEqual(status, code)
+                self.assertEqual(
+                    calls, [("pr", "ready", "170", "--repo", "example/fork")]
+                )
+                status, _, _ = self.quick(["wait", "170", "--quick"], [running, done])
+                self.assertEqual(status, code)
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick", "--timeout", "30"], [running]
+        )
+        self.assertEqual(status, 2)
+        self.assertIn("resume with: python3 tools/ci.py wait 170 --quick", output)
+        status, output, _ = self.quick(
+            ["ready", "170", "--wait", "--timeout", "30"], [skipped]
+        )
+        self.assertEqual(status, 2)
+        # A skip alone is no verdict: on a draft wait --quick says to mark the
+        # PR ready at once; on a ready PR it waits a while for the run first.
+        status, output, _ = self.quick(["wait", "170", "--quick"], [skipped])
+        self.assertEqual(status, 1)
+        self.assertIn("ready 170 --wait", output)
+        done = self.check("completed", "success")
+        status, _, _ = self.quick(
+            ["wait", "170", "--quick"], [skipped, skipped, done], draft=False
+        )
+        self.assertEqual(status, 0)
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick"], [skipped], draft=False
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("ready 170 --wait", output)
+        # A caller's timeout shorter than the grace is a timeout, exit 2.
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick", "--timeout", "5"], [skipped], draft=False
+        )
+        self.assertEqual(status, 2)
+        self.assertIn("wait 170 --quick", output)
+
+    def test_ready_wait_follows_the_head_it_marked(self) -> None:
+        # A push lands between the ready mark and the wait: the wait stops.
+        done = self.check("completed", "success")
+        status, output, _ = self.quick(
+            ["ready", "170", "--wait"], [done], heads=[HEAD, PREVIOUS]
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("PR head changed", output)
 
 
 class QueueWaitTests(unittest.TestCase):
@@ -3053,10 +3436,17 @@ class EnqueueTests(unittest.TestCase):
 
         retry = world.get("retry")
         args = argparse.Namespace(repo="example/fork", pr=170, retry=retry)
+        discussion = cast(list[dict[str, str]], world.get("comments", []))
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(ci, "api", side_effect=api),
             patch.object(ci, "gh", side_effect=gh),
+            patch.object(ci, "added_records", return_value=world.get("records", [])),
+            patch.object(
+                ci.cleanup_contract,
+                "discussion",
+                return_value=[row["body"] for row in discussion],
+            ),
             patch.object(ci, "require_stamp") as stamp,
             patch.object(
                 ci.preflight_stamp, "common_local", return_value=Path(directory)
@@ -3218,6 +3608,207 @@ class EnqueueTests(unittest.TestCase):
             ):
                 self.enqueue()
         self.assertEqual(self.calls, [])
+
+    def test_enqueue_names_every_missing_acceptance(self) -> None:
+        growth = {"kind": "growth", "counter": "tools_cpp", "added": {"t.cpp": 3}}
+        lint = {
+            "kind": "lint",
+            "tool": "clippy",
+            "site": "rust/x.rs | fn f | too_many_lines | item",
+            "before": [],
+            "after": [120],
+        }
+        carry = {"kind": "carry", "tool": "clippy", "from": "a", "to": "b"}
+        records = [growth, lint, carry]
+
+        def accepting(*accepted: Mapping[str, object]) -> dict[str, str]:
+            return {
+                "body": "Agent: /review | Model: m | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": PREVIOUS, "accept": list(accepted)})
+                + "\n```"
+            }
+
+        entry = {"state": "QUEUED", "position": 1}
+        for comments, missing in (
+            ([], 2),
+            ([accepting(growth)], 1),
+            # The implementer's own block accepts nothing.
+            (
+                [
+                    dict(
+                        accepting(growth, lint),
+                        body=accepting(growth, lint)["body"].replace(
+                            "/review", "/implementation"
+                        ),
+                    )
+                ],
+                2,
+            ),
+        ):
+            with (
+                self.subTest(comments=len(comments), missing=missing),
+                self.assertRaisesRegex(
+                    ValueError, f"lacks {missing} cleanup"
+                ) as raised,
+            ):
+                self.enqueue(records=records, comments=comments, entry=entry)
+            self.assertEqual(self.calls, [])
+            text = str(raised.exception)
+            self.assertIn("too_many_lines", text)
+            self.assertNotIn("carry", text)
+        # An acceptance read at an earlier head holds at this one.
+        reported, calls = self.enqueue(
+            records=records, comments=[accepting(growth, lint)], entry=entry
+        )
+        self.assertTrue(reported.startswith("queued"))
+        self.assertEqual(calls[0][:2], ("pr", "merge"))
+
+    def test_records_and_an_unsafe_item_are_read_from_commits(self) -> None:
+        site = "rust/x.rs | impl Native | allow unsafe_code"
+        record = {
+            "kind": "suppression",
+            "tool": "rust",
+            "site": site,
+            "before": 0,
+            "after": 1,
+            "operation": "o",
+            "source_contract": "s",
+            "reason": "r",
+            "retiring_owner": "w",
+            "retirement_condition": "c",
+        }
+        item = "#[allow(unsafe_code)]\nimpl Native { pub const N: u8 = 1; }\n"
+        records = "migration/cleanup-records/t3-x.json"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_fixture.initialize(root, {"rust/x.rs": "pub struct Native;\n"})
+            base = vcs.git("rev-parse", "HEAD", cwd=root).strip()
+
+            def commit(files: Mapping[str, str]) -> str:
+                for path, text in files.items():
+                    (root / path).parent.mkdir(parents=True, exist_ok=True)
+                    (root / path).write_text(text)
+                vcs.git("add", "-A", cwd=root)
+                vcs.git(
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@example.invalid",
+                    "commit",
+                    "-qm",
+                    "Change: x",
+                    cwd=root,
+                )
+                return vcs.git("rev-parse", "HEAD", cwd=root).strip()
+
+            reviewed = commit(
+                {
+                    "rust/x.rs": "pub struct Native;\n" + item,
+                    records: json.dumps([record]),
+                }
+            )
+            other = commit({"rust/x.rs": "pub struct Native;\nfn g() {}\n" + item})
+            changed = commit(
+                {"rust/x.rs": "pub struct Native;\n" + item.replace("1", "2")}
+            )
+            # The checkout stays at the base: records come from the commits.
+            vcs.git("checkout", "-q", base, cwd=root)
+            body = (
+                "Agent: /review | Model: m | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": reviewed, "accept": [record]})
+                + "\n```"
+            )
+            rooted = partial(vcs.git, cwd=root)
+            for head, refused in (
+                (reviewed, ""),
+                (other, ""),
+                (changed, "item changed"),
+            ):
+                with (
+                    self.subTest(head=head),
+                    patch.object(ci.cleanup_contract, "git", rooted),
+                    patch.object(ci.cleanup_contract, "ROOT", root),
+                    # lint-policy.py runs as a process in this repository.
+                    patch.dict(os.environ, {"GIT_DIR": str(root / ".git")}),
+                    patch.object(
+                        ci,
+                        "api",
+                        return_value={"merge_base_commit": {"sha": base}},
+                    ),
+                    patch.object(
+                        ci.cleanup_contract, "discussion", return_value=[body]
+                    ),
+                ):
+                    self.assertEqual(ci.added_records("example/fork", head), [record])
+                    check = partial(
+                        ci.missing_acceptances, "example/fork", 170, PULL, head
+                    )
+                    if refused:
+                        with self.assertRaisesRegex(ValueError, refused):
+                            check()
+                    else:
+                        check()
+            with (
+                patch.object(ci.cleanup_contract, "git", rooted),
+                patch.object(
+                    ci, "api", return_value={"merge_base_commit": {"sha": base}}
+                ),
+                self.assertRaisesRegex(ValueError, f"{PREVIOUS} is not in this clone"),
+            ):
+                ci.added_records("example/fork", PREVIOUS)
+
+    def test_a_comparator_that_fails_is_an_error_not_a_changed_item(self) -> None:
+        site = "rust/x.rs | impl Native | allow unsafe_code"
+        unsafe = {"kind": "suppression", "site": site, "before": 0, "after": 1}
+        comment = (
+            "Agent: /review | Model: m | Reasoning effort: high\n"
+            "```cleanup-acceptance\n"
+            + json.dumps({"head": PREVIOUS, "accept": [unsafe]})
+            + "\n```"
+        )
+        crashed = subprocess.CompletedProcess([], 2, "", "ModuleNotFoundError: x")
+        with (
+            patch.object(ci, "added_records", return_value=[unsafe]),
+            patch.object(ci.cleanup_contract, "discussion", return_value=[comment]),
+            patch.object(ci.cleanup_contract, "has_commit", return_value=True),
+            patch.object(ci.subprocess, "run", return_value=crashed),
+            self.assertRaisesRegex(ValueError, "failed \\(exit 2\\): ModuleNotFound"),
+        ):
+            ci.missing_acceptances("example/fork", 170, PULL, HEAD)
+
+    def test_an_unreadable_accepted_commit_does_not_hide_other_records(
+        self,
+    ) -> None:
+        site = "rust/x.rs | impl Native | allow unsafe_code"
+        unsafe = {"kind": "suppression", "site": site, "before": 0, "after": 1}
+        growth = {"kind": "growth", "counter": "tools_cpp", "added": {"t.cpp": 1}}
+
+        def block(at: str) -> str:
+            return (
+                "Agent: /review | Model: m | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": at, "accept": [unsafe]})
+                + "\n```"
+            )
+
+        for comments, expected in (
+            # An older acceptance at a commit this clone lacks, then one at head.
+            ([block(PREVIOUS), block(HEAD)], ["growth tools_cpp"]),
+            ([block(PREVIOUS)], ["growth tools_cpp", f"fetch the accepted {PREVIOUS}"]),
+        ):
+            with (
+                self.subTest(comments=len(comments)),
+                patch.object(ci, "added_records", return_value=[unsafe, growth]),
+                patch.object(ci.cleanup_contract, "discussion", return_value=comments),
+                self.assertRaises(ValueError) as raised,
+            ):
+                ci.missing_acceptances("example/fork", 170, PULL, HEAD)
+            text = str(raised.exception)
+            for part in expected:
+                self.assertIn(part, text)
+            self.assertIn(f"lacks {len(expected)} cleanup", text)
 
     def test_a_skipped_quick_counts_only_when_alone(self) -> None:
         skipped = dict(
@@ -3386,6 +3977,7 @@ class World:
     heads: list[str] = field(default_factory=lambda: [HEAD, HEAD])
     comments: list[list[review_report.Comment]] = field(default_factory=lambda: [[]])
     group: list[ci.QueueRun] = field(default_factory=list)
+    records: list[dict[str, Any]] = field(default_factory=list)
 
 
 class FakeGitHub:
@@ -3466,6 +4058,7 @@ class StateTests(unittest.TestCase):
             patch.object(ci, "REQUESTS", Path(directory)),
             patch.object(ci, "api", side_effect=github.api),
             patch.object(ci, "gh", side_effect=github.gh),
+            patch.object(ci, "added_records", return_value=github.world.records),
             patch(
                 "sys.argv",
                 ["ci.py", *(argv or ("state", "170")), "--repo", "example/fork"],
@@ -3592,6 +4185,10 @@ class StateTests(unittest.TestCase):
         red = replace(green, quick=quick_run("failure"))
         _, output, _ = self.state(world=red)
         self.assertIn("enqueue checks: blocked: Quick validation at", output)
+        growth = {"kind": "growth", "counter": "tools_cpp", "added": {"t.cpp": 1}}
+        _, output, _ = self.state(world=replace(green, records=[growth]))
+        self.assertIn("enqueue checks: blocked: PR #170 at", output)
+        self.assertIn("growth tools_cpp", output)
 
     def test_moved_head_prints_no_mixed_view(self) -> None:
         code, output, _ = self.state(
@@ -4314,6 +4911,379 @@ class CommentTests(unittest.TestCase):
             github, "--issue", "171", "--agent", "/root/a", "--show"
         )
         self.assertIn("on issue #171", out)
+
+
+def mac_job(
+    job_id: int, conclusion: str | None, runner: bool, name: str = "Release"
+) -> ci_log.Job:
+    job: ci_log.Job = {
+        "id": job_id,
+        "run_id": 2,
+        "name": f"platform / Mac OS (arm64 - {name}) / CI",
+        "status": "completed" if conclusion else "in_progress",
+        "conclusion": conclusion,
+        "html_url": f"https://github.com/example/fork/actions/runs/2/job/{job_id}",
+        "runner_id": 1000 + job_id if runner else 0,
+        "steps": [{"name": "Run", "number": 1, "conclusion": conclusion}] * 28
+        if runner
+        else [],
+    }
+    return job
+
+
+# Each job's failure annotation: the hosted pool never took 1, 2, 8 and 9; job
+# 10 was cancelled by hand. The others ran.
+UNACQUIRED = (
+    "The job was not acquired by Runner of type hosted even after multiple attempts"
+)
+ANNOTATIONS = {1: UNACQUIRED, 2: UNACQUIRED, 8: UNACQUIRED, 9: UNACQUIRED}
+ANNOTATIONS[10] = "The run was canceled by @someone."
+
+
+class FallbackGitHub:
+    """Runs, their attempts' jobs and the variable, as macos-fallback reads them.
+    A rerun of the last run adds an attempt that shows only on the third read
+    after it, so the wait must outlast reads of the old attempt. Each read of
+    the new attempt shows one more of `rerun_jobs`."""
+
+    APPEARS_AFTER = 2
+
+    def __init__(
+        self,
+        attempts: dict[int, dict[int, list[ci_log.Job]]],
+        rerun_jobs: list[ci_log.Job],
+        variable: str | None,
+        create: str = "",
+    ) -> None:
+        self.attempts = attempts
+        self.rerun_jobs = rerun_jobs
+        self.variable = variable
+        self.create = create  # "", "taken" (someone creates it first) or "lost"
+        self.rerun = False
+        self.reads = 0
+        self.shown = 0
+        self.calls: list[tuple[str, ...]] = []
+        self.on_wait: Callable[[], None] = lambda: None
+
+    def read_variable(self, _repository: str, _name: str) -> str | None:
+        if self.create == "lost unread":
+            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502")
+        return self.variable
+
+    def preset(self, variable: str | None, create: str) -> None:
+        """The variable before the command runs, and how its create goes."""
+        self.variable = variable
+        self.create = create
+
+    def latest(self, run_id: int) -> int:
+        count = max(self.attempts[run_id])
+        if run_id != max(self.attempts) or not self.rerun:
+            return count
+        self.reads += 1
+        return count + (self.reads > self.APPEARS_AFTER)
+
+    def api(self, _repository: str, path: str) -> dict[str, object]:
+        return {"run_attempt": self.latest(int(path.rsplit("/", 1)[1]))}
+
+    def jobs(self, _repository: str, run_id: int, attempt: int) -> list[ci_log.Job]:
+        if attempt > max(self.attempts[run_id]):
+            self.on_wait()
+            self.shown = min(self.shown + 1, len(self.rerun_jobs))
+            return list(self.rerun_jobs[: self.shown])
+        return list(self.attempts[run_id][attempt])
+
+    def gh(self, *args: str) -> str:
+        self.calls.append(args)
+        if args[0] == "api" and args[-1].endswith("/annotations"):
+            job = int(args[-1].split("/")[-2])
+            note = ANNOTATIONS.get(job)
+            return json.dumps([{"message": note}] if note else [])
+        if args[:3] == ("api", "-X", "POST"):
+            return self.created(args)
+        if args[:2] == ("variable", "delete"):
+            self.variable = None
+        elif args[:2] == ("run", "rerun") and self.create == "rerun fails":
+            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 403")
+        elif args[:2] == ("run", "rerun"):
+            self.rerun = True
+        return ""
+
+    def created(self, args: tuple[str, ...]) -> str:
+        if self.create == "taken":
+            self.variable = "someone else's"
+        if self.variable is not None:
+            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 409: Conflict")
+        self.variable = args[-1].removeprefix("value=")
+        if self.create in ("terminated", "interrupted"):
+            # The signal lands while the create's answer is still on its way.
+            held = signal.SIGTERM if self.create == "terminated" else signal.SIGINT
+            os.kill(os.getpid(), held)
+        if self.create in ("lost", "lost unread"):
+            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502: Bad Gateway")
+        return ""
+
+
+def terminate() -> None:
+    """SIGTERM to this process, as signal-witness.py forwards it."""
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
+class MacosFallbackTests(unittest.TestCase):
+    """ci.py macos-fallback against stubbed gh, never the live repository."""
+
+    CAPACITY = [mac_job(1, "cancelled", False), mac_job(2, "cancelled", False, "Debug")]
+    AGAIN = [mac_job(8, "cancelled", False), mac_job(9, "cancelled", False, "Debug")]
+    STARTED = [mac_job(3, "cancelled", True)]
+    BY_HAND = [mac_job(10, "cancelled", False)]
+    PASSED = [mac_job(4, "success", True), mac_job(5, "success", True, "Debug")]
+    TWO = {1: {1: CAPACITY}, 2: {1: AGAIN}}
+
+    def fallback(
+        self,
+        attempts: dict[int, dict[int, list[ci_log.Job]]],
+        *extra: str,
+        rerun_jobs: list[ci_log.Job] | None = None,
+        names: list[str] | None = None,
+        setup: Callable[[FallbackGitHub], None] = lambda _: None,
+    ) -> tuple[int, list[tuple[str, ...]], str]:
+        """Run macos-fallback on the runs (or `names`) against a FallbackGitHub
+        that `setup` adjusts."""
+        github = FallbackGitHub(
+            attempts, self.PASSED if rerun_jobs is None else rerun_jobs, None
+        )
+        setup(github)
+        clock = itertools.count(0, 10)
+        runs = names or [str(run) for run in attempts]
+        argv = ["ci.py", "macos-fallback", *runs, "--repo", "x/y"]
+        with (
+            patch.object(ci, "api", side_effect=github.api),
+            patch.object(ci, "run_jobs", side_effect=github.jobs),
+            patch.object(ci, "gh", side_effect=github.gh),
+            patch.object(ci, "detached_gh", side_effect=github.gh),
+            patch.object(ci, "variable", side_effect=github.read_variable),
+            patch.object(ci, "failure_logs"),
+            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+            patch.object(ci.time, "sleep"),
+            patch("sys.argv", [*argv, *extra]),
+            patch("builtins.print") as printed,
+            patch("sys.stderr") as stderr,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
+        self.left = github.variable
+        writes = [c for c in github.calls if c[0] != "api" or c[1] == "-X"]
+        return code, writes, output
+
+    def test_one_capacity_cancellation_changes_nothing(self) -> None:
+        for label, attempts, names in (
+            ("one attempt", {2: {1: self.CAPACITY}}, None),
+            ("started job", {1: {1: self.STARTED}, 2: {1: self.CAPACITY}}, None),
+            ("cancelled by hand", {1: {1: self.BY_HAND}, 2: {1: self.CAPACITY}}, None),
+            (
+                "one run named twice",
+                {2: {1: self.CAPACITY}},
+                ["2", "https://github.com/x/y/actions/runs/2"],
+            ),
+        ):
+            with self.subTest(label):
+                code, writes, output = self.fallback(attempts, names=names)
+                self.assertEqual((code, writes), (1, []))
+                self.assertIn("Counted 1 hosted-capacity cancellation", output)
+
+    def test_two_cancellations_set_rerun_wait_and_delete_in_order(self) -> None:
+        code, writes, output = self.fallback(
+            self.TWO, "--pr", "995", "--agent", "/root", "--model", "m", "--effort", "e"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            [call[:3] for call in writes],
+            [
+                ("api", "-X", "POST"),
+                ("run", "rerun", "2"),
+                ("variable", "delete", ci.MACOS_VARIABLE),
+                ("pr", "comment", "995"),
+            ],
+        )
+        self.assertIn(f"value={ci.MACOS_RUNNER}", writes[0])
+        record = writes[3][writes[3].index("--body") + 1]
+        self.assertIn("set CI_MACOS_HEAVY=blacksmith-6vcpu-macos-26", record)
+        self.assertIn("deleted CI_MACOS_HEAVY", record)
+        self.assertIn("Agent: /root | Model: m | Reasoning effort: e", record)
+        self.assertIsNone(self.left)
+        # Two attempts of one run count as two cancellations too.
+        code, _, _ = self.fallback({2: {1: self.CAPACITY, 2: self.AGAIN}})
+        self.assertEqual(code, 0)
+
+    def test_the_wait_lasts_until_every_rerun_macos_job_completes(self) -> None:
+        # The new attempt lists Release done, and Debug only on the next read.
+        github_jobs = [mac_job(4, "success", True), mac_job(5, None, True, "Debug")]
+        code, writes, _ = self.fallback(
+            self.TWO, "--timeout", "100", rerun_jobs=github_jobs
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(writes[-1][:2], ("variable", "delete"))
+
+    def test_an_existing_or_racing_variable_is_left_alone(self) -> None:
+        for label, variable, create in (
+            ("already set", "someone's", ""),
+            ("created first by another", None, "taken"),
+        ):
+            with self.subTest(label):
+                code, writes, output = self.fallback(
+                    self.TWO,
+                    setup=lambda fake, v=variable, c=create: fake.preset(v, c),
+                )
+                self.assertEqual(code, 1)
+                self.assertEqual([c[:3] for c in writes], [("api", "-X", "POST")])
+                self.assertIn("already exists", output)
+                self.assertNotEqual(self.left, None)
+        # A create whose answer was lost: reported, not deleted, not rerun.
+        code, writes, output = self.fallback(
+            self.TWO, setup=lambda fake: fake.preset(None, "lost")
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual([c[:2] for c in writes], [("api", "-X")])
+        self.assertIn("owner unknown", output)
+        self.assertEqual(self.left, ci.MACOS_RUNNER)
+        # The read-back fails too: both are reported and the change recorded.
+        code, writes, output = self.fallback(
+            self.TWO, setup=lambda fake: fake.preset(None, "lost unread")
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("reading it back failed too", output)
+        self.assertIn("**macOS fallback**", output)
+
+    def test_sigterm_during_the_create_still_deletes_what_it_created(self) -> None:
+        code, writes, output = self.fallback(
+            self.TWO, setup=lambda fake: fake.preset(None, "terminated")
+        )
+        self.assertEqual(code, 128 + signal.SIGTERM)
+        self.assertEqual(
+            [c[:2] for c in writes], [("api", "-X"), ("variable", "delete")]
+        )
+        self.assertIn("stopped: SIGTERM", output)
+        self.assertIsNone(self.left)
+
+    def test_ctrl_c_during_the_create_still_deletes_what_it_created(self) -> None:
+        seen: list[FallbackGitHub] = []
+
+        def setup(fake: FallbackGitHub) -> None:
+            fake.preset(None, "interrupted")
+            seen.append(fake)
+
+        with self.assertRaises(KeyboardInterrupt):
+            self.fallback(self.TWO, setup=setup)
+        (fake,) = seen
+        writes = [c[:2] for c in fake.calls if c[0] != "api" or c[1] == "-X"]
+        self.assertEqual(writes, [("api", "-X"), ("variable", "delete")])
+        self.assertIsNone(fake.variable)
+
+    def test_a_failed_rerun_a_timeout_or_sigterm_still_deletes_and_records(
+        self,
+    ) -> None:
+        code, writes, output = self.fallback(
+            self.TWO, setup=lambda fake: fake.preset(None, "rerun fails")
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(writes[-1][:2], ("variable", "delete"))
+        self.assertIn("stopped:", output)
+        self.assertIn("deleted CI_MACOS_HEAVY", output)
+        self.assertIsNone(self.left)
+        code, writes, output = self.fallback(
+            self.TWO, "--timeout", "60", rerun_jobs=[mac_job(6, None, True)]
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(writes[-1][:2], ("variable", "delete"))
+        self.assertIn("deleted CI_MACOS_HEAVY", output)
+        # signal-witness.py forwards SIGTERM to a background job.
+        code, writes, output = self.fallback(
+            self.TWO, setup=lambda fake: setattr(fake, "on_wait", terminate)
+        )
+        self.assertEqual(code, 128 + signal.SIGTERM)
+        self.assertEqual(writes[-1][:2], ("variable", "delete"))
+        self.assertIn("stopped: SIGTERM", output)
+        self.assertIsNone(self.left)
+        # A macOS job that fails on the paid runner fails the command, deleted.
+        failing = [mac_job(7, "failure", True), mac_job(5, "success", True, "Debug")]
+        code, _, output = self.fallback(self.TWO, rerun_jobs=failing)
+        self.assertEqual(code, 1)
+        self.assertIsNone(self.left)
+
+    def test_a_run_with_no_failed_macos_job_is_refused(self) -> None:
+        passed = {1: {1: self.CAPACITY}, 2: {1: self.AGAIN, 2: self.PASSED}}
+        code, writes, output = self.fallback(passed)
+        self.assertEqual((code, writes), (1, []))
+        self.assertIn("no failed macOS job", output)
+
+
+# A gh for macos-fallback's whole command, state kept in files beside it: two
+# runs whose macOS jobs no hosted runner took, and a create that holds its
+# answer back long enough for a signal to reach the command's process group.
+FAKE_GH = """
+import json, pathlib, signal, sys, time
+# The real gh, a Go program, unblocks these signals whatever mask it inherits.
+signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGINT})
+state = pathlib.Path(sys.argv[0]).parent
+args = sys.argv[1:]
+job = {"id": 1, "run_id": 2, "name": "platform / Mac OS (arm64 - Release) / CI",
+       "status": "completed", "conclusion": "cancelled", "html_url": "u",
+       "runner_id": 0, "steps": []}
+note = "The job was not acquired by Runner of type hosted even after multiple attempts"
+if args[:3] == ["api", "-X", "POST"]:
+    (state / "variable").write_text("blacksmith")
+    (state / "posting").touch()
+    time.sleep(3)
+elif args[:2] == ["variable", "list"]:
+    held = state / "variable"
+    print(json.dumps([{"name": "CI_MACOS_HEAVY", "value": held.read_text()}]
+                     if held.exists() else []))
+elif args[:2] == ["variable", "delete"]:
+    (state / "variable").unlink(missing_ok=True)
+elif args[:2] == ["run", "rerun"]:
+    (state / "rerun").touch()
+elif args[-1].endswith("/annotations"):
+    print(json.dumps([{"message": note}]))
+elif "/jobs" in args[-1]:
+    print(json.dumps([{"jobs": [job]}]))
+elif args[0] == "api":
+    print(json.dumps({"run_attempt": 1}))
+"""
+
+
+class MacosFallbackGroupSignalTests(unittest.TestCase):
+    def test_a_group_sigterm_during_the_create_still_deletes_the_variable(
+        self,
+    ) -> None:
+        """signal-witness.py and Ctrl-C signal the whole process group; the
+        create's gh runs in its own session, so its outcome is known and the
+        variable it set is deleted (#1013)."""
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "gh").write_text(f"#!{sys.executable}\n{FAKE_GH}")
+            (folder / "gh").chmod(0o755)
+            environment = {
+                **os.environ,
+                "PATH": f"{folder}{os.pathsep}{os.environ['PATH']}",
+            }
+            command = [sys.executable, str(ROOT / "tools/ci.py"), "macos-fallback"]
+            process = subprocess.Popen(
+                [*command, "1", "2", "--repo", "x/y", "--interval", "1"],
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                start_new_session=True,
+            )
+            deadline = time.monotonic() + 30
+            while not (folder / "posting").exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertTrue((folder / "posting").exists(), "the create never started")
+            os.killpg(process.pid, signal.SIGTERM)
+            output, _ = process.communicate(timeout=60)
+            self.assertEqual(process.returncode, 128 + signal.SIGTERM, output)
+            self.assertFalse((folder / "variable").exists(), output)
+            self.assertIn("deleted CI_MACOS_HEAVY", output)
 
 
 class FailureCountTests(unittest.TestCase):

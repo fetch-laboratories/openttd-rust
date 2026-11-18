@@ -6,11 +6,12 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import signal
 import subprocess
 import sys
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,8 +35,9 @@ QUEUED = "Full runs in the merge queue"
 WAIT_TIMEOUT = 5400
 # A queue-wait runs as a background job; the queue's Full takes about an hour.
 QUEUE_TIMEOUT = 5400
-# GitHub computes mergeability for a few seconds after a push; a request waits.
-MERGEABLE_WAIT = 60
+# GitHub computes mergeability for a few seconds after a push, and for minutes
+# after a base push on a busy day; a request runs as a background job and waits.
+MERGEABLE_WAIT = 300
 MERGEABLE_INTERVAL = 3
 # Quick's required check on a PR head, from its pull_request run.
 QUICK = "Quick validation"
@@ -61,12 +63,69 @@ RUN_URL = re.compile(
 )
 
 
+# A read that GitHub answers with a gateway error is tried this many times.
+READ_ATTEMPTS = 3
+RETRY_PAUSE = 2
+# gh reports a gateway error as `HTTP 502: Bad Gateway (URL)`.
+TRANSIENT = re.compile(
+    r"\bHTTP 50[234]\b|\b50[234] (?:Bad Gateway|Service Unavailable|Gateway Time-?out)"
+)
+# gh api flags that make a request other than a GET.
+WRITES = ("-X", "--method", "-f", "--raw-field", "-F", "--field", "--input")
+
+
+def read_only(args: tuple[str, ...]) -> bool:
+    """Whether a gh call only reads: a REST GET, a variable list, a repo view or
+    the fixed QUEUE_STATE query (a POST that changes nothing). No mutation and no
+    pr, workflow or run subcommand is a read here."""
+    if args[:2] in (("variable", "list"), ("repo", "view")):
+        return True
+    if args[:1] != ("api",):
+        return False
+    if args[1:2] == ("graphql",):
+        return f"query={QUEUE_STATE}" in args
+    return not any(arg.split("=", 1)[0] in WRITES for arg in args[1:])
+
+
+def transient(error: subprocess.CalledProcessError) -> bool:
+    """A gateway error, which GitHub returns now and then under load."""
+    return bool(TRANSIENT.search(f"{error.stderr or ''} {error.output or ''}"))
+
+
 def gh(*args: str) -> str:
-    return vcs.gh(*args, capture_stderr=True).strip()
+    """Run gh; a read that fails with HTTP 502, 503 or 504 is tried again."""
+    attempts = READ_ATTEMPTS if read_only(args) else 1
+    for attempt in range(1, attempts + 1):
+        try:
+            return vcs.gh(*args, capture_stderr=True).strip()
+        except subprocess.CalledProcessError as error:
+            if attempt == attempts or not transient(error):
+                raise
+            print(
+                f"gh {' '.join(args[:2])}: transient GitHub error, attempt "
+                f"{attempt} of {attempts}; trying again",
+                file=sys.stderr,
+                flush=True,
+            )
+            time.sleep(RETRY_PAUSE * attempt)
+    raise AssertionError("unreachable")
 
 
 def api(repository: str, path: str) -> dict:
     return json.loads(gh("api", f"repos/{repository}/{path}"))
+
+
+def detached_gh(*args: str) -> str:
+    """gh in its own session, so a signal to this command's process group,
+    such as Ctrl-C or signal-witness.py's SIGTERM, cannot end it mid-request:
+    its outcome is always known. Not retried: callers use it for writes."""
+    return subprocess.run(
+        ["gh", *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        start_new_session=True,
+    ).stdout.strip()
 
 
 def repository_of(repo: str | None) -> str:
@@ -142,10 +201,28 @@ def expected_head(pull: dict, expected: str | None) -> str:
     if expected and not head.startswith(expected):
         raise ValueError(
             f"PR head on GitHub is {head}, not the expected {expected}; push that "
-            "commit (just pushed: rerun in a few seconds), or pass the head you "
-            "mean to test"
+            "commit, or pass the head you mean to test"
         )
     return head
+
+
+def pushed_head(repository: str, pr: int, pull: dict, expected: str) -> dict:
+    """The PR once GitHub shows the expected head, re-read for up to
+    MERGEABLE_WAIT seconds: just after a push it can still answer with the
+    previous head."""
+    deadline = time.monotonic() + MERGEABLE_WAIT
+    announced = False
+    while not current_head(pull).startswith(expected) and time.monotonic() < deadline:
+        if not announced:
+            print(
+                f"PR #{pr}'s head on GitHub is {current_head(pull)}, not {expected}; "
+                f"waiting up to {MERGEABLE_WAIT} seconds for the push to show",
+                flush=True,
+            )
+            announced = True
+        time.sleep(MERGEABLE_INTERVAL)
+        pull = api(repository, f"pulls/{pr}")
+    return pull
 
 
 def passed_run(repository: str, head: str) -> str | None:
@@ -261,7 +338,7 @@ def require_attribution(pr: int, body: str | None) -> None:
         )
 
 
-def ready(args: argparse.Namespace) -> None:
+def ready(args: argparse.Namespace) -> str:
     repository = repository_of(args.repo)
     pull = api(repository, f"pulls/{args.pr}")
     head = current_head(pull)
@@ -277,9 +354,16 @@ def ready(args: argparse.Namespace) -> None:
             f"PR #{args.pr} at {head} had only a skipped {QUICK}; returned it to "
             "draft and marked it ready again to start one"
         )
-        return
+        return head
     gh("pr", "ready", str(args.pr), "--repo", repository)
     print(f"PR #{args.pr} at {head} marked ready")
+    return head
+
+
+def ready_command(args: argparse.Namespace) -> None:
+    head = ready(args)
+    if args.wait:
+        quick_wait(repository_of(args.repo), args.pr, args.timeout, args.interval, head)
 
 
 def full_already_passed(repository: str, pr: int, head: str) -> bool:
@@ -319,6 +403,8 @@ def label_request(repository: str, pr: int, pull: dict, head: str) -> None:
 def requestable(repository: str, args: argparse.Namespace) -> tuple[dict, str] | None:
     """The PR and the head to request for, or None when Full already passed it."""
     pull = api(repository, f"pulls/{args.pr}")
+    if args.head:
+        pull = pushed_head(repository, args.pr, pull, args.head)
     head = expected_head(pull, args.head)
     require_stamp(args.pr, head, args.unstamped)
     if (
@@ -453,10 +539,17 @@ def failed_jobs(repository: str, run_id: int) -> list[ci_log.Job]:
 class RunFailed(ValueError):
     """A requested run failed; `run_id` names it for the log summary."""
 
-    def __init__(self, message: str, repository: str, run_id: int | None) -> None:
+    def __init__(
+        self,
+        message: str,
+        repository: str,
+        run_id: int | None,
+        attempt: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.repository = repository
         self.run_id = run_id
+        self.attempt = attempt
 
 
 def verify_children(record: dict, run: dict) -> None:
@@ -498,25 +591,191 @@ class WaitTimeout(Exception):
     """The run is still going when the wait ends; resuming is not a failure."""
 
 
-def wait(path: Path, timeout: int, interval: int) -> None:
+def report_failed(jobs: list[ci_log.Job], shown: set[int]) -> None:
+    """Print each failed job once, as it appears."""
+    for job in jobs:
+        if job["id"] not in shown:
+            shown.add(job["id"])
+            print(f"failed job: {job['name']} ({job['html_url']})", flush=True)
+
+
+def rerun_hint(
+    repository: str, run_id: int, failed: list[ci_log.Job], attempt: int | None = None
+) -> str:
+    """The failed jobs and the rerun command; a rerun follows the run's latest
+    attempt, so a pinned earlier attempt says so."""
+    names = ", ".join(job["name"] for job in failed) or "none listed"
+    hint = (
+        f"failed jobs: {names}; rerun them with: "
+        f"gh run rerun {run_id} --failed --repo {repository}"
+    )
+    if attempt is not None:
+        try:
+            latest = api(repository, f"actions/runs/{run_id}").get(
+                "run_attempt", attempt
+            )
+        except subprocess.CalledProcessError:
+            return hint  # Best effort: the failure itself is already known.
+        if latest != attempt:
+            hint += (
+                f" (it reruns attempt {latest}'s failed jobs, not attempt {attempt}'s)"
+            )
+    return hint
+
+
+def wait(path: Path, timeout: int, interval: int, complete: bool = False) -> None:
+    """Wait on a request's run. With `complete`, a failed job is reported and
+    the wait goes on until the run completes, so it can be rerun."""
     deadline = time.monotonic() + timeout
     previous = None
+    shown: set[int] = set()
     while True:
         record, run = status(path)
         state = "awaiting workflow run" if run is None else run["status"]
         if state != previous:
             print(state + (f": {run['html_url']}" if run else ""), flush=True)
             previous = state
-        if run:
+        if run and complete:
+            report_failed(run.get("failed_jobs") or [], shown)
+        elif run:
             verify_children(record, run)
         if run and run["status"] == "completed":
+            if complete and run["conclusion"] != "success":
+                failed = failed_jobs(record["repository"], run["id"])
+                raise RunFailed(
+                    f"Requested CI concluded {run['conclusion']}: {run['html_url']}; "
+                    + rerun_hint(record["repository"], run["id"], failed),
+                    record["repository"],
+                    run["id"],
+                )
             verify_completion(record, run)
             print(f"{record['profile']} CI passed for {record['head']}")
             return
         if time.monotonic() >= deadline:
+            flag = " --complete" if complete else ""
             raise WaitTimeout(
                 f"CI still running after {timeout} seconds; "
-                f"resume with: python3 tools/ci.py wait {path}"
+                f"resume with: python3 tools/ci.py wait {path}{flag}"
+            )
+        time.sleep(min(interval, max(0, deadline - time.monotonic())))
+
+
+@dataclass(frozen=True)
+class RunTarget:
+    """A run and the attempt a wait follows."""
+
+    repository: str
+    run_id: int
+    attempt: int
+
+    @property
+    def url(self) -> str:
+        return (
+            f"https://github.com/{self.repository}/actions/runs/{self.run_id}"
+            f"/attempts/{self.attempt}"
+        )
+
+
+def run_target(text: str, repo: str | None) -> RunTarget:
+    """A run ID or URL; a URL with /attempts/N pins that attempt, and otherwise
+    the run's latest attempt, read now, is pinned."""
+    if match := RUN_URL.fullmatch(text):
+        repository, run_id, attempt = match[1], int(match[2]), match[3]
+    elif text.isdigit():
+        repository, run_id, attempt = repository_of(repo), int(text), None
+    else:
+        raise ValueError(f"--run takes a run ID or URL, not {text!r}")
+    if attempt is None:
+        attempt = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
+    return RunTarget(repository, run_id, int(attempt))
+
+
+def wait_run(target: RunTarget, timeout: int, interval: int, complete: bool) -> None:
+    """Wait on one attempt of any run, with no request record: a cadence run, a
+    rerun or a merge-group run."""
+    deadline = time.monotonic() + timeout
+    previous = None
+    shown: set[int] = set()
+    path = f"actions/runs/{target.run_id}/attempts/{target.attempt}"
+    while True:
+        run = api(target.repository, path)
+        jobs = run_jobs(target.repository, target.run_id, target.attempt)
+        failed = [job for job in jobs if job["conclusion"] in JOB_FAILED]
+        if run["status"] != previous:
+            print(f"{run['status']}: {target.url}", flush=True)
+            previous = run["status"]
+        if failed and not complete:
+            raise RunFailed(
+                f"Failed jobs in {target.url}: "
+                + ", ".join(f"{job['name']} ({job['html_url']})" for job in failed)
+                + ". Other jobs continue; wait with --complete to see the run end.",
+                target.repository,
+                target.run_id,
+                target.attempt,
+            )
+        report_failed(failed, shown)
+        if run["status"] == "completed":
+            if run["conclusion"] == "success":
+                print(f"Run {target.run_id} attempt {target.attempt} passed")
+                return
+            raise RunFailed(
+                f"Run {target.url} concluded {run['conclusion']}; "
+                + rerun_hint(target.repository, target.run_id, failed, target.attempt),
+                target.repository,
+                target.run_id,
+                target.attempt,
+            )
+        if time.monotonic() >= deadline:
+            flag = " --complete" if complete else ""
+            raise WaitTimeout(
+                f"Run still going after {timeout} seconds; resume with: "
+                f"python3 tools/ci.py wait --run {target.url}{flag}"
+            )
+        time.sleep(min(interval, max(0, deadline - time.monotonic())))
+
+
+def quick_wait(
+    repository: str, pr: int, timeout: int, interval: int, head: str | None = None
+) -> None:
+    """Wait for Quick validation at `head` (the PR's head when None); a push
+    ends the wait. A skipped run is no verdict: on a draft the wait says to run
+    `ready`; on a ready PR it waits up to MERGEABLE_WAIT seconds for the run the
+    ready mark starts, then says the same."""
+    head = current_head(api(repository, f"pulls/{pr}"), head)
+    deadline = time.monotonic() + timeout
+    grace = time.monotonic() + min(timeout, MERGEABLE_WAIT)
+    previous = None
+    while True:
+        pull = api(repository, f"pulls/{pr}")
+        current_head(pull, head)
+        quick = latest_quick(repository, head)
+        skipped = quick is not None and quick["conclusion"] == "skipped"
+        now = time.monotonic()
+        if skipped and now < deadline and (pull.get("draft") or now >= grace):
+            raise ValueError(
+                f"{QUICK} at {head} only skipped, as it does for a draft; start it "
+                f"with: python3 tools/ci.py ready {pr} --wait"
+            )
+        state = "awaiting Quick" if quick is None or skipped else quick["status"]
+        if state != previous:
+            where = "" if quick is None or skipped else f": {quick['html_url']}"
+            print(f"{QUICK} at {head}: {state}{where}", flush=True)
+            previous = state
+        if quick and not skipped and quick["status"] == "completed":
+            if quick["conclusion"] == "success":
+                print(f"{QUICK} passed at {head}")
+                return
+            found = RUN_URL.search(quick.get("details_url") or "")
+            raise RunFailed(
+                f"{QUICK} at {head} concluded {quick['conclusion']}: "
+                f"{quick['html_url']}",
+                repository,
+                int(found[2]) if found else None,
+            )
+        if time.monotonic() >= deadline:
+            raise WaitTimeout(
+                f"{QUICK} still running after {timeout} seconds; resume with: "
+                f"python3 tools/ci.py wait {pr} --quick"
             )
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
 
@@ -633,7 +892,7 @@ def remote_requests(
 def newest_request(
     candidates: list[Candidate], pr: int, head: str, profile: str | None
 ) -> Candidate:
-    """The newest candidate, refusing a choice between profiles nobody named."""
+    """The newest candidate; the newest of each other profile is named."""
     newest: dict[str, Candidate] = {}
     for candidate in sorted(
         candidates, key=lambda c: (c.record["created_at"], c.record["request"])
@@ -645,12 +904,16 @@ def newest_request(
             f"No {named}request for PR #{pr} at its head {head}; request one with: "
             f"python3 tools/ci.py request {pr} --profile {profile or 'native'} --wait"
         )
-    if len(newest) > 1:
-        raise ValueError(
-            f"PR #{pr} has requests at {head} for {', '.join(sorted(newest))}; "
-            f"name one: python3 tools/ci.py wait {pr} --profile PROFILE"
+    chosen = max(
+        newest.values(), key=lambda c: (c.record["created_at"], c.record["request"])
+    )
+    for other in sorted(set(newest) - {chosen.record["profile"]}):
+        print(
+            f"PR #{pr} also has a {other} request at {head}; wait on it with: "
+            f"python3 tools/ci.py wait {pr} --profile {other}",
+            flush=True,
         )
-    return next(iter(newest.values()))
+    return chosen
 
 
 def resolve_request(repository: str, pr: int, profile: str | None) -> Path:
@@ -834,7 +1097,17 @@ def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
 
 
-def latest_quick(repository: str, head: str) -> dict | None:
+class CheckRun(TypedDict):
+    """A check run as the check-runs API lists it, with the fields read here."""
+
+    status: str
+    conclusion: str | None
+    started_at: str | None
+    html_url: str
+    details_url: NotRequired[str]
+
+
+def latest_quick(repository: str, head: str) -> CheckRun | None:
     """The head's latest Quick validation check run, from its pull_request run.
 
     A skipped run carries no verdict: one left from the PR's draft can be stamped
@@ -844,7 +1117,7 @@ def latest_quick(repository: str, head: str) -> dict | None:
     checks = api(
         repository, f"commits/{head}/check-runs?check_name={quote(QUICK)}&filter=latest"
     )
-    runs = sorted(
+    runs: list[CheckRun] = sorted(
         checks["check_runs"],
         key=lambda run: (run["conclusion"] != "skipped", run["started_at"] or ""),
     )
@@ -982,7 +1255,93 @@ def enqueue_checks(repository: str, pr: int, pull: dict) -> str:
             f"The latest requested run at {head} is not green: {state or 'none; '}"
             + ("" if run else f"run ci.py request {pr} --profile native")
         )
+    missing_acceptances(repository, pr, pull, head)
     return head
+
+
+def added_records(repository: str, head: str) -> list[dict[str, Any]]:
+    """The cleanup records the PR adds at its head.
+
+    They are read from the commit, not the working tree, against the merge base
+    GitHub reports, so neither this checkout nor a stale local base matters.
+    """
+    found = api(repository, f"compare/{PROTECTED_REF}...{head}")
+    base = found["merge_base_commit"]["sha"]
+    for commit in (head, base):
+        if not cleanup_contract.has_commit(commit):
+            raise ValueError(f"Commit {commit} is not in this clone; fetch it")
+    return cleanup_contract.records_between(base, head)
+
+
+# lint-policy.py --same-item's status for a changed item.
+ITEM_DIFFERS = 3
+
+
+def unsafe_item_unchanged(
+    site: str, head: str, unreadable: set[str]
+) -> Callable[[str], bool]:
+    """Whether an unsafe_code item's text at an accepted commit equals head's.
+    An accepted commit this clone lacks counts as changed and is noted in
+    `unreadable`, so the search goes on through later acceptances.
+
+    lint-policy.py runs as its own process: its parser dependencies re-execute
+    the importing process under uv.
+    """
+
+    def unchanged(accepted: str) -> bool:
+        if not cleanup_contract.has_commit(accepted):
+            unreadable.add(accepted)
+            return False
+        script = Path(__file__).with_name("lint-policy.py")
+        command = [sys.executable, str(script), "--same-item", site, accepted, head]
+        done = subprocess.run(command, capture_output=True, text=True)
+        if done.returncode not in (0, ITEM_DIFFERS):
+            raise ValueError(
+                f"Comparing {site} at {accepted} and {head} failed (exit "
+                f"{done.returncode}): {(done.stderr or done.stdout).strip()[-2000:]}"
+            )
+        return done.returncode == 0
+
+    return unchanged
+
+
+def missing_acceptances(repository: str, pr: int, pull: dict, head: str) -> None:
+    """Refuse, naming each record the PR adds that no reviewer has accepted.
+
+    With Quick green at the head every growth, suppression and exception has a
+    record, so every record accepted is what the merge group's gates will read.
+    """
+    records = [
+        record
+        for record in added_records(repository, head)
+        if record["kind"] in cleanup_contract.NEEDS_REVIEW
+    ]
+    if not records:
+        return
+    attribution = cleanup_contract.ATTRIBUTION.search(pull.get("body") or "")
+    author = attribution[1] if attribution else ""
+    comments = cleanup_contract.discussion(f"repos/{repository}", pr, run=gh)
+    missing = []
+    for record in records:
+        name = cleanup_contract.record_name(record)
+        if not cleanup_contract.reviewed(record, comments, author, head):
+            missing.append(name)
+            continue
+        if not cleanup_contract.unsafe_site(record):
+            continue
+        unreadable: set[str] = set()
+        unchanged = unsafe_item_unchanged(record["site"], head, unreadable)
+        if not cleanup_contract.reviewed(record, comments, author, head, unchanged):
+            why = "item changed since the accepted head"
+            if unreadable:
+                why += f", or fetch the accepted {', '.join(sorted(unreadable))}"
+            missing.append(f"{name}: {why}")
+    if missing:
+        raise ValueError(
+            f"PR #{pr} at {head} lacks {len(missing)} cleanup acceptance(s); have "
+            "each accepted, or delete a record nothing uses:\n"
+            + "\n".join(f"  {line}" for line in missing)
+        )
 
 
 def enqueue(args: argparse.Namespace) -> str:
@@ -991,16 +1350,17 @@ def enqueue(args: argparse.Namespace) -> str:
     pull = api(repository, f"pulls/{args.pr}")
     head = enqueue_checks(repository, args.pr, pull)
     requeue_gate(repository, args.pr, head, args.retry)
-    gh(
-        "pr",
-        "merge",
-        str(args.pr),
-        "--repo",
-        repository,
-        "--merge",
-        "--match-head-commit",
-        head,
-    )
+    merge = ("pr", "merge", str(args.pr), "--repo", repository, "--merge")
+    try:
+        gh(*merge, "--match-head-commit", head)
+    except subprocess.CalledProcessError as error:
+        # The first call may have taken effect before its answer was lost.
+        if not transient(error):
+            raise
+        state = queue_state(repository, args.pr)
+        if not (state["mergeQueueEntry"] or state["autoMergeRequest"]):
+            print("gh pr merge: transient GitHub error; trying once more", flush=True)
+            gh(*merge, "--match-head-commit", head)
     state = queue_state(repository, args.pr)
     if entry := state["mergeQueueEntry"]:
         return entry_text(entry)
@@ -1337,21 +1697,267 @@ def show_log(args: argparse.Namespace) -> None:
     print("\n".join(log_lines(log_target(args), args)))
 
 
-def failure_logs(repository: str, run_id: int | None) -> None:
-    """Best effort: the failed jobs' summary after a failed wait. A failure to
-    read them prints one line and changes no exit status."""
+def failure_logs(
+    repository: str, run_id: int | None, attempt: int | None = None
+) -> None:
+    """Best effort: the failed jobs' summary after a failed wait, of the attempt
+    the wait pinned. A failure to read them prints one line and changes no exit
+    status."""
     if run_id is None:
         return
     summary = argparse.Namespace(job=None, grep=None, full=False)
     try:
-        lines = log_lines(LogTarget(repository, run_id), summary)
+        lines = log_lines(LogTarget(repository, run_id, attempt), summary)
         print("\n".join(lines), flush=True)
     except Exception as error:  # Any failure here must keep the wait's status.
+        target = (
+            f"https://github.com/{repository}/actions/runs/{run_id}/attempts/{attempt}"
+            if attempt
+            else f"{run_id} --repo {repository}"
+        )
         print(
             f"Could not read the failed jobs' logs ({error}); read them with: "
-            f"python3 tools/ci.py log {run_id} --repo {repository}",
+            f"python3 tools/ci.py log {target}",
             flush=True,
         )
+
+
+# CI administration's macOS fallback: the paid runner, set by hand before.
+MACOS_VARIABLE = "CI_MACOS_HEAVY"
+MACOS_RUNNER = "blacksmith-6vcpu-macos-26"
+MACOS_JOB = "Mac OS"
+# GitHub's failure annotation on a job no hosted runner ever took; a cancel by
+# hand also leaves no runner and no step, but says who cancelled.
+UNACQUIRED = "was not acquired by Runner of type hosted"
+
+
+class Terminated(BaseException):
+    """SIGTERM, as signal-witness.py forwards it to a background job."""
+
+
+def capacity_cancelled(repository: str, job: ci_log.Job) -> bool:
+    """A macOS job GitHub cancelled because no hosted runner took it. A job
+    cancelled after a runner started it, or cancelled by hand, does not count."""
+    if not (
+        MACOS_JOB in job["name"]
+        and job["conclusion"] == "cancelled"
+        and not job.get("runner_id")
+        and not job.get("steps")
+    ):
+        return False
+    notes = json.loads(
+        gh("api", f"repos/{repository}/check-runs/{job['id']}/annotations")
+    )
+    return any(UNACQUIRED in (note.get("message") or "") for note in notes)
+
+
+def run_id_of(text: str) -> int:
+    if match := RUN_URL.fullmatch(text):
+        return int(match[2])
+    if text.isdigit():
+        return int(text)
+    raise ValueError(f"a run is an ID or URL, not {text!r}")
+
+
+def capacity_cancellations(repository: str, runs: list[int]) -> list[str]:
+    """Each distinct run attempt whose macOS jobs no hosted runner took; the
+    jobs of one attempt are one cancellation, and a run named twice is one run."""
+    found = []
+    for run_id in dict.fromkeys(runs):
+        latest = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
+        for attempt in range(1, latest + 1):
+            jobs = run_jobs(repository, run_id, attempt)
+            if any(capacity_cancelled(repository, job) for job in jobs):
+                found.append(f"run {run_id} attempt {attempt}")
+    return found
+
+
+def macos_attempt(
+    rerun: RunTarget, expected: set[str], deadline: float, interval: int
+) -> list[ci_log.Job]:
+    """Wait for an attempt after `rerun`'s to appear, then for every expected
+    macOS job, by name, to complete in it; return them. Other jobs are not
+    waited on."""
+    repository, run_id, after = rerun.repository, rerun.run_id, rerun.attempt
+    attempt = None
+    while True:
+        if attempt is None:
+            latest = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
+            if latest > after:
+                attempt = latest
+                print(f"Rerun is attempt {attempt} of run {run_id}", flush=True)
+        if attempt is not None:
+            jobs = {
+                job["name"]: job
+                for job in run_jobs(repository, run_id, attempt)
+                if job["name"] in expected
+            }
+            if len(jobs) == len(expected) and all(
+                job["status"] == "completed" for job in jobs.values()
+            ):
+                return list(jobs.values())
+        if time.monotonic() >= deadline:
+            raise WaitTimeout(
+                f"The macOS jobs of run {run_id} were still running at the timeout"
+            )
+        time.sleep(min(interval, max(0, deadline - time.monotonic())))
+
+
+def stamp_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def record_fallback(
+    args: argparse.Namespace, repository: str, lines: list[str]
+) -> None:
+    """Record the variable's changes on the PR, or print them for the cadence."""
+    body = (
+        "**macOS fallback** "
+        "([CI administration](docs/root-workflow.md#ci-administration))\n\n"
+        + "\n".join(f"- {line}" for line in lines)
+    )
+    if args.pr is None:
+        print(body)
+        return
+    body += (
+        f"\n\nAgent: {args.agent} | Model: {args.model} | "
+        f"Reasoning effort: {args.effort}"
+    )
+    try:
+        gh("pr", "comment", str(args.pr), "--repo", repository, "--body", body)
+    except subprocess.CalledProcessError as error:
+        print(f"Could not comment on PR #{args.pr} ({error}); the record:\n{body}")
+
+
+def acquire_fallback(repository: str, lines: list[str]) -> bool:
+    """Create the variable, failing when it exists, so two invocations cannot
+    both own it. Whether this invocation owns it; an unanswered create that
+    left the variable set is reported and not owned."""
+    try:
+        detached_gh(
+            "api",
+            "-X",
+            "POST",
+            f"repos/{repository}/actions/variables",
+            "-f",
+            f"name={MACOS_VARIABLE}",
+            "-f",
+            f"value={MACOS_RUNNER}",
+        )
+    except subprocess.CalledProcessError as error:
+        if "HTTP 409" in f"{error.stderr or ''}":
+            raise ValueError(
+                f"{MACOS_VARIABLE} already exists; another invocation or a person "
+                "owns it. Nothing changed."
+            ) from error
+        try:
+            observed = repr(variable(repository, MACOS_VARIABLE))
+        except subprocess.CalledProcessError as unread:
+            observed = f"unknown (reading it back failed too: {unread})"
+        lines.append(
+            f"{stamp_now()} creating {MACOS_VARIABLE} failed ({error}); it may be "
+            f"set (it reads {observed}), owner unknown, so it was left for root "
+            "to check"
+        )
+        raise ValueError(lines[-1]) from error
+    lines.append(f"{stamp_now()} set {MACOS_VARIABLE}={MACOS_RUNNER}")
+    return True
+
+
+def terminate(_number: int, _frame: object) -> None:
+    raise Terminated("SIGTERM")
+
+
+def macos_fallback(args: argparse.Namespace) -> None:
+    """Set the paid macOS runner, rerun the failed jobs, and delete the variable
+    once the rerun's macOS jobs finish, after two hosted-capacity cancellations."""
+    if args.pr is not None and not (args.agent and args.model and args.effort):
+        raise ValueError("--pr records on the PR: pass --agent, --model and --effort")
+    repository = repository_of(args.repo)
+    runs = [run_id_of(text) for text in args.runs]
+    counted = capacity_cancellations(repository, runs)
+    if len(counted) < 2:
+        raise ValueError(
+            f"Counted {len(counted)} hosted-capacity cancellation(s) of macOS jobs "
+            f"({', '.join(counted) or 'none'}); the fallback needs two. A job "
+            "cancelled by hand or after a runner took it does not count. "
+            "Nothing changed."
+        )
+    run_id = runs[-1]
+    before = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
+    expected = {
+        job["name"]
+        for job in run_jobs(repository, run_id, before)
+        if MACOS_JOB in job["name"] and job["conclusion"] in JOB_FAILED
+    }
+    if not expected:
+        raise ValueError(
+            f"Run {run_id} attempt {before} has no failed macOS job to rerun. "
+            "Nothing changed."
+        )
+    url = f"https://github.com/{repository}/actions/runs/{run_id}"
+    lines = [f"capacity cancellations: {', '.join(counted)}"]
+    owned = left = False
+    previous = signal.signal(signal.SIGTERM, terminate)
+    try:
+        # A SIGTERM or Ctrl-C during the create waits until the create's outcome
+        # is known, so a variable this invocation set is always owned, and so
+        # deleted.
+        held = {signal.SIGTERM, signal.SIGINT}
+        signal.pthread_sigmask(signal.SIG_BLOCK, held)
+        try:
+            owned = acquire_fallback(repository, lines)
+        finally:
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, held)
+        gh("run", "rerun", str(run_id), "--failed", "--repo", repository)
+        lines.append(
+            f"{stamp_now()} reran the failed jobs of {url} after attempt {before}"
+        )
+        deadline = time.monotonic() + args.timeout
+        jobs = macos_attempt(
+            RunTarget(repository, run_id, before), expected, deadline, args.interval
+        )
+        lines += [
+            f"{job['name']}: {job['conclusion']} {job['html_url']}" for job in jobs
+        ]
+        if failed := [job["name"] for job in jobs if job["conclusion"] != "success"]:
+            raise RunFailed(
+                f"macOS jobs did not pass: {', '.join(failed)}", repository, run_id
+            )
+    except BaseException as error:
+        if owned:
+            lines.append(f"{stamp_now()} stopped: {str(error) or type(error).__name__}")
+        raise
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        if owned:
+            left = delete_fallback(repository, lines)
+        if owned or len(lines) > 1:
+            record_fallback(args, repository, lines)
+    if left:
+        raise ValueError(f"{MACOS_VARIABLE} is still set; delete it by hand")
+    print(f"macOS jobs of {url} passed on {MACOS_RUNNER}; {MACOS_VARIABLE} deleted")
+
+
+def delete_fallback(repository: str, lines: list[str]) -> bool:
+    """Delete the variable this invocation set and read it back; whether it is
+    still set."""
+    try:
+        gh("variable", "delete", MACOS_VARIABLE, "--repo", repository)
+    except subprocess.CalledProcessError as error:
+        lines.append(f"{stamp_now()} deleting {MACOS_VARIABLE} failed: {error}")
+    try:
+        left = variable(repository, MACOS_VARIABLE) is not None
+    except subprocess.CalledProcessError:
+        left = True
+    if left:
+        lines.append(f"{stamp_now()} {MACOS_VARIABLE} is still set: delete it by hand")
+        print(f"{MACOS_VARIABLE} is still set; delete it by hand", file=sys.stderr)
+    else:
+        lines.append(
+            f"{stamp_now()} deleted {MACOS_VARIABLE}; the variable list no longer has it"
+        )
+    return left
 
 
 def control(repository: str, run: dict, branches: dict[int, str]) -> bool:
@@ -1418,6 +2024,15 @@ def sha(text: str) -> str:
     return text
 
 
+def complete_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--complete",
+        action="store_true",
+        help="report failed jobs as they appear but exit only when the run "
+        "completes, so gh run rerun --failed can follow",
+    )
+
+
 def timing(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--timeout",
@@ -1426,6 +2041,25 @@ def timing(parser: argparse.ArgumentParser) -> None:
         help=f"seconds to wait before exit 2 (default {WAIT_TIMEOUT})",
     )
     parser.add_argument("--interval", type=positive, default=15)
+
+
+def wait_command(args: argparse.Namespace) -> None:
+    """`wait PR|REQUEST_FILE`, `wait PR --quick` or `wait --run RUN`."""
+    if args.run is not None:
+        if args.target or args.profile or args.quick:
+            raise ValueError("--run names the run; give no PR, request or --profile")
+        target = run_target(args.run, args.repo)
+        wait_run(target, args.timeout, args.interval, args.complete)
+    elif args.target is None:
+        raise ValueError("name a PR, a request file or --run RUN")
+    elif args.quick:
+        if not args.target.isdigit() or args.profile or args.complete:
+            raise ValueError("--quick takes a PR number and no other option")
+        quick_wait(
+            repository_of(args.repo), int(args.target), args.timeout, args.interval
+        )
+    else:
+        wait(wait_target(args), args.timeout, args.interval, args.complete)
 
 
 def wait_target(args: argparse.Namespace) -> Path:
@@ -1447,7 +2081,7 @@ def queue_wait_command(args: argparse.Namespace) -> None:
 def request_command(args: argparse.Namespace) -> None:
     path = request(args)
     if path and args.wait:
-        wait(path, args.timeout, args.interval)
+        wait(path, args.timeout, args.interval, args.complete)
 
 
 HANDLERS = {
@@ -1455,14 +2089,15 @@ HANDLERS = {
     "logs": show_log,
     "comment": lambda args: status_comment.run(args, repository_of(args.repo)),
     "queue-wait": queue_wait_command,
-    "ready": ready,
+    "ready": ready_command,
     "enqueue": lambda args: print(f"PR #{args.pr}: {enqueue(args)}"),
     "failures": failures,
     "request": request_command,
-    "wait": lambda args: wait(wait_target(args), args.timeout, args.interval),
+    "wait": lambda args: wait_command(args),
+    "macos-fallback": macos_fallback,
 }
 # The commands whose failure prints the failed jobs' log summary.
-WAITS = ("wait", "request", "queue-wait")
+WAITS = ("wait", "request", "queue-wait", "ready")
 
 
 def dispatch(args: argparse.Namespace) -> None:
@@ -1526,6 +2161,7 @@ def request_parser(commands: argparse._SubParsersAction) -> None:
     submit.add_argument(
         "--wait", action="store_true", help="then wait for the run, like wait"
     )
+    complete_option(submit)
     submit.add_argument(
         "--head",
         metavar="SHA",
@@ -1546,6 +2182,13 @@ def pr_parsers(commands: argparse._SubParsersAction) -> None:
     )
     marked.add_argument("pr", type=int)
     marked.add_argument("--repo")
+    marked.add_argument(
+        "--wait",
+        action="store_true",
+        help="then wait for Quick at the head: exit 0 passed, 1 failed, 2 still "
+        "running at the timeout",
+    )
+    timing(marked)
     for command in ("state", "status"):
         shown = commands.add_parser(
             command,
@@ -1567,11 +2210,22 @@ def pr_parsers(commands: argparse._SubParsersAction) -> None:
     )
     waited.add_argument(
         "target",
+        nargs="?",
         metavar="PR|REQUEST_FILE",
         help="a request file, or a PR number for the newest request at its head",
     )
     waited.add_argument("--profile", choices=PROFILES, help="with a PR number")
-    waited.add_argument("--repo", help="with a PR number")
+    waited.add_argument("--repo", help="with a PR number or run ID")
+    waited.add_argument(
+        "--quick", action="store_true", help="with a PR number: wait for its Quick"
+    )
+    waited.add_argument(
+        "--run",
+        metavar="RUN_ID|RUN_URL",
+        help="wait on any run with no request record; an /attempts/N URL pins "
+        "that attempt, otherwise the latest attempt is pinned at the start",
+    )
+    complete_option(waited)
     timing(waited)
     entered = commands.add_parser(
         "enqueue", help="queue a PR whose head has green Quick and requested runs"
@@ -1589,6 +2243,23 @@ def pr_parsers(commands: argparse._SubParsersAction) -> None:
     counted.add_argument("--since", required=True, help="date, such as 2026-11-10")
     counted.add_argument("--controls", action="store_true", help="count them too")
     counted.add_argument("--repo")
+    fallback_text = (
+        f"after two hosted-capacity cancellations of macOS jobs: set "
+        f"{MACOS_VARIABLE}, rerun the last run's failed jobs, delete the variable "
+        "when its macOS jobs finish, and record both changes. A SIGKILL cannot be "
+        f"caught and can leave {MACOS_VARIABLE} set; the command refuses to start "
+        f"while it is set, and `gh variable list` shows it"
+    )
+    fallback = commands.add_parser(
+        "macos-fallback", help=fallback_text, description=fallback_text
+    )
+    fallback.add_argument("runs", nargs="+", metavar="RUN", help="run IDs or URLs")
+    fallback.add_argument("--pr", type=int, help="record the changes on this PR")
+    fallback.add_argument("--agent", help="with --pr: your agent path")
+    fallback.add_argument("--model", help="with --pr")
+    fallback.add_argument("--effort", help="with --pr")
+    fallback.add_argument("--repo")
+    timing(fallback)
     queued = commands.add_parser(
         "queue-wait",
         help="wait until a queued PR merges (exit 0) or leaves the queue (exit 3)",
@@ -1610,6 +2281,9 @@ def main() -> int:
     try:
         dispatch(args)
         return 0
+    except Terminated:
+        print(f"ci.py {args.command} stopped by SIGTERM", file=sys.stderr)
+        return 128 + signal.SIGTERM
     except WaitTimeout as timeout:
         print(timeout)
         return 2
@@ -1620,7 +2294,7 @@ def main() -> int:
     except RunFailed as failed:
         print(f"ci.py {args.command} failed: {failed}", file=sys.stderr)
         if args.command in WAITS:
-            failure_logs(failed.repository, failed.run_id)
+            failure_logs(failed.repository, failed.run_id, failed.attempt)
         return 1
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"ci.py {args.command} failed: {error}", file=sys.stderr)

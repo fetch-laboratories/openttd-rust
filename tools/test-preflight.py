@@ -33,6 +33,24 @@ def workflow(*steps: dict[str, Any]) -> dict[str, Any]:
     return {"jobs": {preflight.JOB: {"steps": list(steps)}}}
 
 
+def fixture_commit(root: Path, title: str) -> str:
+    """Commit everything in a scratch repository, creating it if needed."""
+    if not (root / ".git").exists():
+        vcs.git("init", "-q", cwd=root)
+    vcs.git("add", "-A", cwd=root)
+    vcs.git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.invalid",
+        "commit",
+        "-qm",
+        title,
+        cwd=root,
+    )
+    return vcs.git("rev-parse", "HEAD", cwd=root).strip()
+
+
 class WorkflowTests(unittest.TestCase):
     def test_every_quick_run_step_is_run_or_skipped(self) -> None:
         quick = yaml.safe_load(preflight.WORKFLOW.read_text())
@@ -46,6 +64,81 @@ class WorkflowTests(unittest.TestCase):
             sorted(ran + list(preflight.SKIPPED)), sorted(names), "unlisted step"
         )
         self.assertIn("Python complexity debt and lint policy", ran)
+
+    def test_a_pending_suppression_passes_quicks_lint_policy_step(self) -> None:
+        """Preflight runs Quick's lint-policy line with no event set, so a
+        suppression awaiting its acceptance passes and the tree can stamp; the
+        merge group's event fails it (#1013)."""
+        quick = yaml.safe_load(preflight.WORKFLOW.read_text())
+        (step,) = [
+            step
+            for step in preflight.workflow_steps(quick, "base")
+            if "tools/lint-policy.py" in step.command[-1]
+        ]
+        (line,) = [
+            line for line in step.command[-1].splitlines() if "lint-policy.py" in line
+        ]
+        source = "pub struct Native;\n"
+        allowed = (
+            "#[allow(non_upper_case_globals)]\nimpl Native { pub const N: u8 = 1; }\n"
+        )
+        site = "rust/x.rs | impl Native | allow non_upper_case_globals"
+        record = {
+            "kind": "suppression",
+            "tool": "rust",
+            "site": site,
+            "before": 0,
+            "after": 1,
+            "operation": "Native::N",
+            "source_contract": "original spelling",
+            "reason": "keep the original's name",
+            "retiring_owner": "owner",
+            "retirement_condition": "when the API goes",
+        }
+        modules = (
+            "lint-policy",
+            "cleanup_contract",
+            "code_lines",
+            "rust_syntax",
+            "vcs",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tools").mkdir()
+            for name in modules:
+                shutil.copy(REPO / "tools" / f"{name}.py", root / "tools")
+            (root / "rust").mkdir()
+            (root / "rust/x.rs").write_text(source)
+            commit = partial(fixture_commit, root)
+            base = commit("Add: fixture")
+            (root / "rust/x.rs").write_text(source + allowed)
+            records = root / "migration/cleanup-records/t3-x.json"
+            records.parent.mkdir(parents=True)
+            records.write_text(json.dumps([record]))
+            commit("Add: pending suppression")
+            # No GitHub: an unreadable discussion leaves the acceptance unchecked.
+            stubs = root / "stubs"
+            stubs.mkdir()
+            (stubs / "gh").write_text("#!/bin/sh\nexit 1\n")
+            (stubs / "gh").chmod(0o755)
+            env = preflight.environment() | step.env | {"BASE_REF": base}
+            env.pop("GITHUB_EVENT_NAME", None)
+            env.pop("GITHUB_EVENT_PATH", None)
+            env["PATH"] = f"{stubs}{os.pathsep}{env['PATH']}"
+            for event, code in ((None, 0), ("merge_group", 1)):
+                if event:
+                    env["GITHUB_EVENT_NAME"] = event
+                done = subprocess.run(
+                    [*preflight.SHELL, line],
+                    cwd=root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                with self.subTest(event=event):
+                    self.assertEqual(done.returncode, code, done.stdout + done.stderr)
+                    shown = "pending review" if code == 0 else "lacks its reviewer"
+                    self.assertIn(shown, done.stdout)
 
     def test_a_new_run_step_runs_without_a_list_entry(self) -> None:
         steps = preflight.workflow_steps(
@@ -302,6 +395,91 @@ class StampTests(unittest.TestCase):
                     message = preflight.stamp(options, against, checked, warning)
                     self.assertIn(expected, message)
             self.assertEqual((preflight_stamp.stamp_for(head) or {}).get("base"), base)
+
+    def test_a_tree_whose_only_open_item_is_a_pending_suppression_stamps(
+        self,
+    ) -> None:
+        """preflight.main runs Quick's real lint-policy line, with the commit
+        checker and compile probes stubbed: a suppression awaiting its
+        acceptance passes and the tree stamps; the merge group's event fails it
+        and records no stamp (#1013)."""
+        for event, code in (("", 0), ("merge_group", 1)):
+            with self.subTest(event=event), scratch_repo() as repo:
+                head = pending_suppression(repo)
+                self.assertEqual(self.preflight(repo, event), code)
+                stamped = preflight_stamp.stamp_for(head)
+                self.assertEqual(stamped is not None, code == 0)
+
+    def preflight(self, repo: Path, event: str) -> int:
+        quick = yaml.safe_load(preflight.WORKFLOW.read_text())
+        (entry,) = [
+            dict(step)
+            for step in quick["jobs"][preflight.JOB]["steps"]
+            if "tools/lint-policy.py" in step.get("run", "")
+        ]
+        entry["run"] = next(
+            line for line in entry["run"].splitlines() if "lint-policy.py" in line
+        )
+        stubs = repo / ".local/stubs"
+        stubs.mkdir(parents=True)
+        (stubs / "gh").write_text("#!/bin/sh\nexit 1\n")
+        (stubs / "gh").chmod(0o755)
+        env = {
+            key: value
+            for key, value in preflight.environment().items()
+            if key not in ("GITHUB_EVENT_NAME", "GITHUB_EVENT_PATH")
+        }
+        env["PATH"] = f"{stubs}{os.pathsep}{env['PATH']}"
+        if event:
+            env["GITHUB_EVENT_NAME"] = event
+        passing = preflight.Step(preflight.COMMITS, ["true"])
+        with (
+            patch.object(preflight.yaml, "safe_load", return_value=workflow(entry)),
+            patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
+            patch.object(preflight, "commit_step", return_value=passing),
+            patch.object(preflight, "environment", return_value=env),
+            patch.object(preflight.migration, "link_local"),
+            patch.object(preflight.migration, "LOCAL", repo / ".local"),
+            patch.object(sys, "argv", ["preflight.py"]),
+            patch("builtins.print"),
+        ):
+            return preflight.main()
+
+
+def pending_suppression(repo: Path) -> str:
+    """Commit the gate's modules as the protected base, then a Rust item
+    suppression and its unaccepted record as the head."""
+    modules = ("lint-policy", "cleanup_contract", "code_lines", "rust_syntax", "vcs")
+    files = {
+        f"tools/{name}.py": (REPO / "tools" / f"{name}.py").read_text()
+        for name in modules
+    }
+    files["tools/compile-check.py"] = "pass\n"
+    files["rust/x.rs"] = "pub struct Native;\n"
+    base = commit(repo, "Add: Gate", files)
+    preflight_stamp.git("update-ref", "refs/remotes/origin/rust-migration", base)
+    site = "rust/x.rs | impl Native | allow non_upper_case_globals"
+    record = {
+        "kind": "suppression",
+        "tool": "rust",
+        "site": site,
+        "before": 0,
+        "after": 1,
+        "operation": "Native::N",
+        "source_contract": "original spelling",
+        "reason": "keep the original's name",
+        "retiring_owner": "owner",
+        "retirement_condition": "when the API goes",
+    }
+    return commit(
+        repo,
+        "Add: Pending suppression",
+        {
+            "rust/x.rs": "pub struct Native;\n#[allow(non_upper_case_globals)]\n"
+            "impl Native { pub const N: u8 = 1; }\n",
+            "migration/cleanup-records/work.json": json.dumps([record]),
+        },
+    )
 
 
 class BaseTests(unittest.TestCase):

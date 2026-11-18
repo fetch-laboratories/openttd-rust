@@ -14,7 +14,7 @@ A merge is one merged PR, counted from the first-parent history of `origin/rust-
 
   A checkpoint that increases fork C++ does not merge; take the [cost decision](planning.md#cost-decisions) first.
 - Cleanup-stage PRs instead pass their stream's proof in the roadmap, grow neither fork C++ nor the boundary, and merge on review and the queue's Full. A #734/#735 PR finishes every file it touches ([work order](roadmap.md#cleanup-work-order)).
-  - Callback slots may grow where a pass replaces a carrier written for one call site with shared typed accessors, and fork C++ does not grow with them. The porting reviewer accepts the growth record at the PR's head, and the record names the pass or owner that retires the slots.
+  - Callback slots may grow where a pass replaces a carrier written for one call site with shared typed accessors, and fork C++ does not grow with them. The porting reviewer accepts the growth record, and the record names the pass or owner that retires the slots.
 - A completion claim, in a PR or the roadmap, names only the scope delivered.
 - A work order may batch small maintenance items in one PR reviewed as one group: cleanups, coverage, speed, tooling and fidelity fixes.
 - Keep at most six unmerged component branches, drafts and WIP included. Queue reviewed work before starting a component. Start from current `rust-migration` unless the roadmap names a dependency.
@@ -49,7 +49,7 @@ Implementers queue nothing until root lifts the stop. A confirmed regression als
   4. reruns any "Invalidate previous validation" run skipped for a PR push inside that window.
 
   Record both variable changes in the PR. Root decides whether the result lets the PR queue. The implementer queues it when the run passes and pushes nothing in between.
-- After two hosted-capacity cancellations of a macOS run, run `gh variable set CI_MACOS_HEAVY --body blacksmith-6vcpu-macos-26`, rerun, then `gh variable delete CI_MACOS_HEAVY` when it finishes. Which jobs run on paid runners is the user's decision ([ADR 0009](adr/0009-paid-runner-assignment.md)); this fallback is part of it.
+- After two hosted-capacity cancellations of macOS jobs (distinct run attempts whose macOS jobs GitHub cancelled with the annotation that no hosted runner acquired them), run `python3 tools/ci.py macos-fallback RUN [RUN ...] [--pr N --agent PATH --model MODEL --effort EFFORT]` as a background job. It sets `CI_MACOS_HEAVY` to the paid runner, reruns the last run's failed jobs, deletes the variable when the rerun's macOS jobs finish or the command stops, and records both changes on the PR (or prints them for the cadence). It creates the variable only if absent, so two invocations cannot share it; it refuses under two cancellations, when the variable exists, or when the run has no failed macOS job, and a SIGTERM still deletes the variable it created. Which jobs run on paid runners is the user's decision ([ADR 0009](adr/0009-paid-runner-assignment.md)); this fallback is part of it.
 
 ## Cleanup
 
