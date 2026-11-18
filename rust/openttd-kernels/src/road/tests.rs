@@ -631,4 +631,379 @@ mod controller {
         });
         assert!(failed.get());
     }
+
+    /// The owners a scheduled bay arrival reaches: the bay's road stop, the station's
+    /// loading queue, and the vehicle's orders and consist.
+    struct Bay {
+        stop: *mut crate::road_stop::State,
+        station: *mut crate::station_service::Service,
+        orders: *mut crate::orders::VehicleOrders,
+        consist: *mut crate::orders::Consist,
+    }
+    thread_local! {
+        static BAY: Cell<*const Bay> = const { Cell::new(std::ptr::null()) };
+        static RECORD: Cell<*mut crate::vehicle_base::VehicleRecord> =
+            const { Cell::new(std::ptr::null_mut()) };
+        /// The bay's status when `BeginLoading` marks the arrival dirty.
+        static LOADING_STATUS: Cell<Option<u8>> = const { Cell::new(None) };
+        static ROAD_SIDE: Cell<u8> = const { Cell::new(0) };
+    }
+    /// The opaque native shells of the vehicle and the bay's `RoadStop`.
+    static SHELL: u8 = 0;
+    static STOP_SHELL: u8 = 0;
+    fn bay() -> &'static Bay {
+        // SAFETY: Set for the test's duration, before any entry.
+        unsafe { &*BAY.get() }
+    }
+    fn shell() -> *mut std::ffi::c_void {
+        (&raw const SHELL).cast_mut().cast()
+    }
+    extern "C" fn record_from_shell(
+        shell_ptr: *mut std::ffi::c_void,
+    ) -> *mut crate::vehicle::OpenTTDVehicle {
+        assert_eq!(shell_ptr, shell());
+        RECORD.get().cast()
+    }
+    unsafe extern "C" fn order_vehicle(
+        shell_ptr: *mut std::ffi::c_void,
+    ) -> *mut crate::orders::VehicleOrders {
+        assert_eq!(shell_ptr, shell());
+        bay().orders
+    }
+    unsafe extern "C" fn order_consist(
+        shell_ptr: *mut std::ffi::c_void,
+    ) -> *mut crate::orders::Consist {
+        assert_eq!(shell_ptr, shell());
+        bay().consist
+    }
+    unsafe extern "C" fn road_vehicle_type(_: *mut std::ffi::c_void) -> u64 {
+        u64::from(crate::vehicle_type::VehicleType::VEH_ROAD.0)
+    }
+    extern "C" fn bay_primary(tile: u32, kind: RoadStopType) -> *mut crate::road_stop::Stop {
+        assert_eq!((tile, kind), (TILE.0, RoadStopType::Bus));
+        (&raw const STOP_SHELL).cast_mut().cast()
+    }
+    extern "C" fn bay_tile(_: *const crate::road_stop::Stop) -> u32 {
+        TILE.0
+    }
+    extern "C" fn bay_state(rs: *const crate::road_stop::Stop) -> *mut crate::road_stop::State {
+        assert_eq!(rs, (&raw const STOP_SHELL).cast());
+        bay().stop
+    }
+    extern "C" fn bay_stops() -> *const crate::road_stop::RoadStopServices {
+        thread_local! {
+            static STOPS: crate::road_stop::RoadStopServices = crate::road_stop::RoadStopServices {
+                vehicle: std::ptr::null(),
+                ground: std::ptr::null(),
+                primary: bay_primary,
+                head: crate::test_tables::unreachable2,
+                is_bus,
+                next: crate::test_tables::unreachable1,
+                tile: bay_tile,
+                state: bay_state,
+                pool_next: crate::test_tables::unreachable1,
+            };
+        }
+        STOPS.with(std::ptr::from_ref)
+    }
+    extern "C" fn by_tile(tile: u32) -> *mut crate::station::Station {
+        assert_eq!(tile, TILE.0);
+        STATION_HANDLE.st
+    }
+    extern "C" fn tick_counter() -> u64 {
+        0
+    }
+    extern "C" fn loading_station(id: u16) -> crate::station_service::LoadingStation {
+        assert_eq!(id, STATION.0);
+        crate::station_service::LoadingStation {
+            native: STATION_HANDLE.st,
+            base: STATION_HANDLE.base(),
+            state: bay().station,
+        }
+    }
+    extern "C" fn set_loading_finished(v: VehicleRef, finished: bool) {
+        assert_eq!((v.0.as_ptr(), finished), (RECORD.get().cast(), false));
+    }
+    extern "C" fn set_load_ticks(v: VehicleRef, ticks: u16) {
+        assert_eq!((v.0.as_ptr(), ticks), (RECORD.get().cast(), 1));
+    }
+    extern "C" fn create_payment(_: VehicleRef) -> *mut crate::cargo_payment::NativePayment {
+        std::ptr::dangling_mut()
+    }
+    extern "C" fn with_next_stations(
+        _: VehicleRef,
+        _: *mut std::ffi::c_void,
+        _: crate::station_service::Scope,
+    ) {
+    }
+    /// No last loading station (`INVALID_STATION`): no link statistics.
+    extern "C" fn prediction(_: VehicleRef) -> crate::vehicle::visits::Prediction {
+        crate::vehicle::visits::Prediction {
+            loading_tick: 0,
+            last_loading: u16::MAX,
+            last_station: STATION.0,
+            ticks: 0,
+        }
+    }
+    /// `BeginLoading`'s arrival invalidation, after its orders and unload preparation.
+    extern "C" fn arrival_dirty(v: VehicleRef) {
+        assert_eq!(v.0.as_ptr(), RECORD.get().cast());
+        // SAFETY: The bay's live road stop owner; one byte read.
+        LOADING_STATUS.set(Some(unsafe { (*bay().stop).status }));
+    }
+    extern "C" fn mark_dirty(_: VehicleRef) {}
+    /// Failed native assertions in the isolated child.
+    static FAILED_CHECKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    extern "C" fn record_check(condition: bool) {
+        if !condition {
+            FAILED_CHECKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+    unsafe extern "C" fn no_cargo(_: *const crate::station::BaseStation) -> u64 {
+        0
+    }
+    extern "C" fn no_road_triggers(_: *mut crate::station::BaseStation, _: u8) -> bool {
+        false
+    }
+
+    /// `IndividualRoadVehicleController` at the stopping frame of a bus bay
+    /// (`roadveh_cmd.cpp:1520-1540`) on a scheduled arrival at the bay's station: it frees
+    /// the bay's entrance, sets the entered-stop bit and the last visited station, and
+    /// `BeginLoading` runs with the entrance free. The controller returns before the bay
+    /// tile marks the entrance busy again.
+    #[test]
+    fn scheduled_bay_arrival_frees_the_entrance_before_loading_begins() {
+        /* The ground vehicle flag accessors check the vehicle type through the
+         * process-wide native policy, bound in a child process. */
+        if crate::services_assert::isolate_test_check(
+            "road::tests::controller::scheduled_bay_arrival_frees_the_entrance_before_loading_begins",
+            record_check,
+        ) {
+            return;
+        }
+        let _types = DefaultRoadTypes::new();
+        let _map = {
+            let mut base: Vec<_> = (0..4096)
+                .map(|_| crate::map_func::BaseTileLayout {
+                    kind: 0,
+                    height: 0,
+                    m2: 0,
+                    m1: 0,
+                    m3: 0,
+                    m4: 0,
+                    m5: 0,
+                })
+                .collect();
+            let mut extended: Vec<_> = (0..4096)
+                .map(|_| crate::map_func::ExtendedTileLayout {
+                    m6: 0,
+                    m7: 0,
+                    m8: 0,
+                })
+                .collect();
+            /* The bus bay of station 55: GFX 0 is a bay, not a drive-through stop. */
+            let bay_tile = &mut base[TILE.0 as usize];
+            bay_tile.kind = crate::tile_type::TileType::MP_STATION.0 << 4;
+            bay_tile.m2 = STATION.0;
+            extended[TILE.0 as usize].m6 = crate::station_type::StationType::Bus.0 << 3;
+            crate::map_func::fixture::set(
+                crate::map_func::TileTypeAllocation {
+                    base: base.as_ptr(),
+                    extended: extended.as_ptr(),
+                    count: 4096,
+                    assertions: false,
+                },
+                6,
+            );
+            (base, extended)
+        };
+        let mut stations = crate::newgrf_airport::Services::with_station_id(station_id);
+        stations.by_tile = by_tile;
+        let stations = Box::leak(Box::new(stations));
+        // SAFETY: Serialized by the game-state test lock; restored below.
+        let previous_stations =
+            unsafe { crate::newgrf_airport::openttd_rust_airport_exchange(stations) };
+        let resolver = Box::leak(Box::new(crate::newgrf_roadstop::Services {
+            cached_cargo: no_cargo,
+            ..crate::test_tables::ROAD_STOPS
+        }));
+        let animation = Box::leak(Box::new(crate::animated_tile::Services {
+            roadstop_resolver: resolver,
+            road_triggers: no_road_triggers,
+            ..crate::test_tables::ANIMATION
+        }));
+        // SAFETY: As above.
+        let previous_animation =
+            unsafe { crate::animated_tile::openttd_rust_animation_exchange(animation) };
+
+        let stop = crate::road_stop::openttd_rust_road_stop_new();
+        // SAFETY: The fresh owner.
+        unsafe { (*stop).status = 0xFF };
+        let bay_owners = Bay {
+            stop,
+            station: crate::station_service::openttd_rust_station_service_new(),
+            orders: crate::orders::openttd_rust_vehicle_orders_new(),
+            consist: crate::orders::openttd_rust_consist_new(),
+        };
+        BAY.set(&raw const bay_owners);
+        // SAFETY: The fresh order owner; its current order starts here.
+        unsafe {
+            (*bay_owners.orders).current.write(crate::orders::Order {
+                kind: OrderType::OT_GOTO_STATION.0,
+                flags: 0,
+                destination: STATION.0,
+                refit: 254,
+                wait: 0,
+                travel: 0,
+                speed: u16::MAX,
+            });
+        }
+
+        let settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
+            road_side: ROAD_SIDE.with(Cell::as_ptr).cast_const(),
+            ..crate::settings_type::SettingAddresses::NULL
+        }));
+        let shared = Box::leak(Box::new(crate::services::Services {
+            map: crate::map_func::fixture::statics(),
+            settings,
+            tick_counter,
+            ..SHARED
+        }));
+        let mut f = Fixture::new(LOCAL, shared);
+        let vehicles: &'static crate::vehicle::VehicleServices =
+            Box::leak(Box::new(crate::vehicle::VehicleServices {
+                record_from_shell,
+                maintenance: Box::leak(Box::new(crate::vehicle::maintenance::Services {
+                    mark_dirty,
+                    ..crate::test_tables::MAINTENANCE
+                })),
+                ..*f.game().vs
+            }));
+        let orders = Box::leak(Box::new(crate::orders::Leaves {
+            vehicle: order_vehicle,
+            consist: order_consist,
+            vehicle_type: road_vehicle_type,
+            base: vehicles,
+            ..crate::test_tables::ORDERS
+        }));
+        let common = Box::leak(Box::new(crate::vehicle_transactions::CommonServices {
+            vehicles,
+            orders,
+            ..crate::test_tables::VEHICLE_COMMON
+        }));
+        let refit = Box::leak(Box::new(crate::vehicle_transactions::refit::Services {
+            common,
+            ..crate::test_tables::REFIT
+        }));
+        let station = Box::leak(Box::new(crate::station_service::World {
+            station: loading_station,
+            ..crate::test_tables::STATION_WORLD
+        }));
+        let loading = Box::leak(Box::new(crate::station_service::Loading {
+            set_loading_finished,
+            set_load_ticks,
+            with_next_stations,
+            create_payment,
+            ..crate::test_tables::STATION_LOADING
+        }));
+        thread_local! {
+            static VISITS: Cell<*const crate::vehicle::visits::Services> =
+                const { Cell::new(std::ptr::null()) };
+        }
+        VISITS.set(Box::leak(Box::new(crate::vehicle::visits::Services {
+            shared: f.game().ss,
+            station,
+            loading,
+            refit,
+            prediction,
+            arrival_dirty,
+            ..crate::test_tables::VISITS
+        })));
+        extern "C" fn visits() -> *const crate::vehicle::visits::Services {
+            VISITS.get()
+        }
+        f.leaves = Box::leak(Box::new(Leaves {
+            vehicle: Box::leak(Box::new(crate::vehicle::VehicleServices {
+                visits,
+                ..*vehicles
+            })),
+            shared: Box::leak(Box::new(crate::services::Services {
+                road_stops: bay_stops,
+                ..*f.game().ss
+            })),
+            ..*f.leaves
+        }));
+
+        /* A bus at the bay's stopping frame (state 32, frame 20), heading NE onto the
+         * pinned drive data of frame 21, (5, 7). The station had a bus before: no news. */
+        RECORD.set(f.record);
+        // SAFETY: The fixture's live record.
+        unsafe {
+            let r = &mut *f.record;
+            r.shell = (&raw const SHELL).cast_mut().cast();
+            r.orders = bay_owners.orders;
+            r.x_pos = 6;
+            r.y_pos = 7;
+            r.direction = crate::direction_type::Direction::DIR_NE;
+        }
+        f.state.fields.state = RVSB_IN_ROAD_STOP;
+        f.state.fields.frame = 20;
+        BUS.set(true);
+        ROADTYPE.set(RoadType::ROADTYPE_ROAD.0);
+        HAD.set(StationHadVehicleOfType::HVOT_BUS.0);
+        LOADING_STATUS.set(None);
+        take();
+
+        let part = f.part();
+        let moved = f.game().individual_road_vehicle_controller(part, None);
+        assert_eq!(FAILED_CHECKS.load(std::sync::atomic::Ordering::Relaxed), 0);
+
+        assert!(!moved, "the arrival returns false");
+        assert_eq!(
+            LOADING_STATUS.get(),
+            Some(0x7F),
+            "BeginLoading runs with the entrance freed"
+        );
+        // SAFETY: The live owners.
+        unsafe {
+            assert_eq!(
+                (*stop).status,
+                0x7F,
+                "the bay tile does not mark it busy again"
+            );
+            assert_eq!(
+                f.state.fields.state,
+                RVSB_IN_ROAD_STOP | (1 << RVS_ENTERED_STOP)
+            );
+            assert_eq!((*f.record).last_station_visited, STATION);
+            assert_eq!(
+                (*bay_owners.orders).current.assume_init_ref().kind & 0x0F,
+                OrderType::OT_LOADING.0
+            );
+            assert_eq!(
+                crate::station_service::openttd_rust_station_queue_size(bay_owners.station),
+                1,
+                "PrepareUnload queued the vehicle at the station"
+            );
+            assert_eq!(
+                crate::station_service::openttd_rust_station_queue_value(
+                    crate::station_service::openttd_rust_station_queue_first(bay_owners.station)
+                ),
+                shell()
+            );
+        }
+        assert_eq!(take(), Vec::new());
+
+        // SAFETY: The owners created above, each released once; the tables restored.
+        unsafe {
+            crate::station_service::openttd_rust_station_queue_clear(bay_owners.station);
+            crate::station_service::openttd_rust_station_service_destroy(bay_owners.station);
+            crate::road_stop::openttd_rust_road_stop_destroy(stop);
+            crate::orders::openttd_rust_vehicle_orders_delete(bay_owners.orders);
+            crate::orders::openttd_rust_consist_delete(bay_owners.consist);
+            crate::animated_tile::openttd_rust_animation_exchange(previous_animation);
+            crate::newgrf_airport::openttd_rust_airport_exchange(previous_stations);
+        }
+        BAY.set(std::ptr::null());
+    }
 }

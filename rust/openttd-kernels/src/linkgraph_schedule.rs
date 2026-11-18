@@ -34,6 +34,22 @@ pub(crate) struct Services {
     start_thread: extern "C" fn(*mut Job) -> bool,
     vehicle: *const crate::vehicle::VehicleServices,
 }
+/// Test-only table for `crate::test_tables`; its private fields keep it in this module.
+#[cfg(test)]
+pub(crate) const TEST_TABLE: Services = Services {
+    allocation_failure: crate::test_tables::unreachable0,
+    assert_graph: crate::test_tables::unreachable1,
+    begin_measurement: crate::test_tables::unreachable1,
+    can_allocate: crate::test_tables::unreachable0,
+    destroy_job: crate::test_tables::unreachable1,
+    end_measurement: crate::test_tables::unreachable0,
+    graph_pool: std::ptr::null(),
+    job_pool: std::ptr::null(),
+    new_job: crate::test_tables::unreachable1,
+    shared: &crate::test_tables::SHARED,
+    start_thread: crate::test_tables::unreachable1,
+    vehicle: std::ptr::null(),
+};
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, begin_measurement, can_allocate, destroy_job, end_measurement, graph_pool, job_pool, new_job, shared, start_thread, vehicle };
