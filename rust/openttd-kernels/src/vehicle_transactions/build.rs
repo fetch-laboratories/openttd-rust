@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Common build transaction, including speculative construction and RNG rollback.
 use super::{ERROR, construct, mass, rail, refit};
-use crate::cargo_type::CargoType;
+use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::economy_type::ExpensesType;
 use crate::engine_type::EngineID;
@@ -133,7 +133,7 @@ pub(crate) unsafe fn cmd_build_vehicle(
         return Result::default();
     }
     /* Validate the cargo type. */
-    if cargo >= CargoType::NUM_CARGO.0 && (c.valid_cargo)(cargo) {
+    if cargo >= CargoType::NUM_CARGO.0 && is_valid_cargo_type(cargo) {
         value.error(ERROR);
         return Result::default();
     }
