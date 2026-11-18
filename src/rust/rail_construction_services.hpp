@@ -134,7 +134,6 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 {
 	static const OpenTTDRailConstructionServices services{
 		.cargo_capacity = &GetRustCargoCapacityServices(),
-		.strings = {.rear_follow = STR_ERROR_REAR_ENGINE_FOLLOW_FRONT, .depot_only = STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT, .no_orders = STR_ERROR_NO_MORE_SPACE_FOR_ORDERS},
 		.train_if_valid = RustTrainGetIfValid,
 		.new_wagon = RailNewWagon,
 		.new_engine = RailNewEngine,

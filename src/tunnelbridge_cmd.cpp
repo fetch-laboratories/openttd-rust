@@ -96,28 +96,6 @@ const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept
 		.mark_dirty_height = RustMarkTileDirtyHeight,
 		.terraform = [](OpenTTDCommandCost *out, uint16_t flags, uint32_t t, Slope slope) noexcept -> void { *reinterpret_cast<CommandCost *>(out) = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlags{flags}, TileIndex{t}, slope, false)); },
 		.objects = &GetRustObjectServices(),
-		.strings = {
-			.bridge_border = STR_ERROR_BRIDGE_THROUGH_MAP_BORDER,
-			.map_edge = STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP,
-			.same_end = STR_ERROR_CAN_T_START_AND_END_ON,
-			.straight = STR_ERROR_START_AND_END_MUST_BE_IN,
-			.too_long = STR_ERROR_BRIDGE_TOO_LONG,
-			.wrong_slope = STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
-			.unequal_height = STR_ERROR_BRIDGEHEADS_NOT_SAME_HEIGHT,
-			.demolish_bridge = STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
-			.already_built = STR_ERROR_ALREADY_BUILT,
-			.authority = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
-			.other_owner = STR_ERROR_AREA_IS_OWNED_BY_ANOTHER,
-			.too_low = STR_ERROR_BRIDGE_TOO_LOW_FOR_TERRAIN,
-			.too_high = STR_ERROR_BRIDGE_TOO_HIGH_FOR_TERRAIN,
-			.tunnel_site = STR_ERROR_SITE_UNSUITABLE_FOR_TUNNEL,
-			.water = STR_ERROR_CAN_T_BUILD_ON_WATER,
-			.tunnel_border = STR_ERROR_TUNNEL_THROUGH_MAP_BORDER,
-			.tunnel_way = STR_ERROR_ANOTHER_TUNNEL_IN_THE_WAY,
-			.tunnel_long = STR_ERROR_TUNNEL_TOO_LONG,
-			.excavate = STR_ERROR_UNABLE_TO_EXCAVATE_LAND,
-			.demolish_tunnel = STR_ERROR_MUST_DEMOLISH_TUNNEL_FIRST,
-		},
 	};
 	return services;
 }

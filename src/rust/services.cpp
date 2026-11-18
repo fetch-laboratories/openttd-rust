@@ -423,7 +423,7 @@ static_assert(TILE_HEIGHT == 8 && TILE_SIZE == 16);
 /* Values of the shared Rust header modules (tile_type.rs, slope_func.rs and the like). */
 static_assert(PR_CLEAR_HOUSE == 40);
 static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
-static_assert(INVALID_TILE.base() == UINT32_MAX && TILE_HEIGHT_STEP == 50 && CALLBACK_FAILED == 0xFFFF && INVALID_STRING_ID == 0xFFFF && SPECSTR_TOWNNAME_START == 0x20C0 && BUILTIN_TOWNNAME_GENERATOR_COUNT == 21);
+static_assert(INVALID_TILE.base() == UINT32_MAX && TILE_HEIGHT_STEP == 50 && CALLBACK_FAILED == 0xFFFF && INVALID_STRING_ID == 0xFFFF && SPECSTR_TOWNNAME_START == 0x20C0 && BUILTIN_TOWNNAME_GENERATOR_COUNT == 21 && SPECSTR_COMPANY_NAME_START == 0x70EA && SPECSTR_ANDCO_NAME == 0x70E6 && SPECSTR_PRESIDENT_NAME == 0x70E7);
 static_assert(SLOPE_FLAT == 0 && SLOPE_W == 1 && SLOPE_S == 2 && SLOPE_E == 4 && SLOPE_N == 8 && SLOPE_STEEP == 0x10 && SLOPE_HALFTILE == 0x20 && SLOPE_HALFTILE_MASK == 0xE0);
 static_assert(DIR_END == 8 && AXIS_Y == 1 && DIAGDIR_BEGIN == 0 && DIAGDIR_END == 4 && DIAGDIR_NE == 0 && DIAGDIR_SE == 1 && DIAGDIR_SW == 2 && DIAGDIR_NW == 3 && INVALID_DIAGDIR == 0xFF);
 static_assert(DIR_N == 0 && DIR_NE == 1 && DIR_E == 2 && DIR_SE == 3 && DIR_S == 4 && DIR_SW == 5 && DIR_W == 6 && DIR_NW == 7);
@@ -450,7 +450,7 @@ static_assert(to_underlying(CommandFlag::Server) == 0 && to_underlying(CommandFl
 static_assert(to_underlying(CommandType::ServerSetting) == 7 && to_underlying(CommandType::End) == 9);
 static_assert(to_underlying(CommandPauseLevel::NoActions) == 0 && to_underlying(CommandPauseLevel::NoConstruction) == 1 && to_underlying(CommandPauseLevel::NoLandscaping) == 2 && to_underlying(CommandPauseLevel::AllActions) == 3);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
-static_assert(OT_NOTHING == 0 && OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
+static_assert(OT_NOTHING == 0 && OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8 && CO_SHARE == 0 && CO_COPY == 1 && CO_UNSHARE == 2);
 static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2 && to_underlying(OrderUnloadType::NoUnload) == 4);
 static_assert(to_underlying(StationType::Truck) == 2 && to_underlying(StationType::Bus) == 3);
 static_assert(to_underlying(StationType::Rail) == 0 && to_underlying(StationType::Airport) == 1 && to_underlying(StationType::Oilrig) == 4 && to_underlying(StationType::Dock) == 5);

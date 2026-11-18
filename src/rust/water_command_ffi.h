@@ -19,9 +19,6 @@ enum Axis : uint8_t;
  * survives a callback. Nested landscape commands retain Command::Do lifecycle;
  * ordinary play calls no throwing script VM/save service. Environmental errors
  * terminate, and Rust panics abort. The area is native stack storage, no heap. */
-struct OpenTTDWaterCommandStrings {
-	uint32_t built_on_water, demolish_bridge, unsuitable, sloped_wrong, edge, low_bridge, flat, already_built, build_on_water, demolish_building, demolish_canal;
-};
 struct OpenTTDWaterCommandServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCommandCostServices *cost;
@@ -36,7 +33,6 @@ struct OpenTTDWaterCommandServices {
 	OpenTTDEnvironmentServices environment;
 	void (*make_depot)(uint32_t, uint8_t, uint16_t, DepotPart, Axis, WaterClass) noexcept OPENTTD_SERVICE_DEFAULT(make_depot);
 	void (*make_lock_tile)(uint32_t, uint8_t, LockPart, DiagDirection, WaterClass) noexcept OPENTTD_SERVICE_DEFAULT(make_lock_tile);
-	OpenTTDWaterCommandStrings strings;
 };
 const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept;
 extern "C" {

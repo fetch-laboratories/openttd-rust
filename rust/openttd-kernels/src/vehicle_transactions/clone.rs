@@ -3,8 +3,11 @@
 use super::{ERROR, build, refit, vehicle_ref};
 use crate::cargo_type::CargoType;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::economy_type::ExpensesType;
 use crate::network_type::ClientID;
+use crate::order_type::CloneOptions;
 use crate::services::{ByteSpan, CommandCost, Cost};
+use crate::table::strings::STR_ERROR_VEHICLE_IS_DESTROYED;
 use crate::tile_type::TileIndex;
 use crate::vehicle::VehicleType;
 use crate::vehicle_type::VehicleID;
@@ -39,7 +42,7 @@ unsafe fn sell(s: &Services, out: *mut CommandCost, flags: DoCommandFlags, v: *m
                     v_id: VehicleID(id),
                     sell_chain: true,
                     backup_order: false,
-                    client_id: ClientID(c.strings.invalid_client),
+                    client_id: ClientID::INVALID_CLIENT_ID,
                 },
             );
         },
@@ -99,19 +102,25 @@ unsafe fn orders(
         Cost(out, b.cost),
         0,
         flags.0,
-        |flags| unsafe {
-            crate::orders::openttd_rust_command_clone(
-                new.cast(),
-                old.cast(),
-                if share {
-                    c.strings.share_orders
-                } else {
-                    c.strings.copy_orders
-                },
-                u8::from(flags & DoCommandFlag::EXECUTE != 0),
-                out.cast(),
-                c.orders,
-            );
+        |flags| {
+            // SAFETY: `out` is the caller's live native cost, and `new` and `old` are live
+            // vehicle shells.
+            unsafe {
+                crate::orders::cmd_clone_order(
+                    c.orders,
+                    out.cast(),
+                    flags & DoCommandFlag::EXECUTE != 0,
+                    crate::orders::CmdCloneOrder {
+                        action: if share {
+                            CloneOptions::CO_SHARE
+                        } else {
+                            CloneOptions::CO_COPY
+                        },
+                        veh_dst: new.cast(),
+                        veh_src: old.cast(),
+                    },
+                )
+            };
         },
     );
 }
@@ -152,7 +161,7 @@ unsafe fn cmd_clone_vehicle(
     let b = c.base;
     let total = Cost(out, b.cost);
     let invalid = crate::fleet::INVALID_VEHICLE;
-    (b.cost.expense_money)(out, c.strings.new_vehicle_expense, 0);
+    (b.cost.expense_money)(out, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
     let mut v = unsafe { (b.groups.vehicle)(veh_id.0) };
     if v.is_null() || !unsafe { (b.groups.primary)(v) } {
         total.error(ERROR);
@@ -181,7 +190,7 @@ unsafe fn cmd_clone_vehicle(
                 .get_crash_anim_pos()
                 >= 4400)
     {
-        total.error(c.strings.destroyed);
+        total.error(STR_ERROR_VEHICLE_IS_DESTROYED.0);
         return invalid;
     }
     /* check that we can allocate enough vehicles */
@@ -243,8 +252,8 @@ unsafe fn cmd_clone_vehicle(
                             tile,
                             eid: engine,
                             use_free_vehicles: false,
-                            cargo: CargoType(c.strings.invalid_cargo),
-                            client_id: ClientID(c.strings.invalid_client),
+                            cargo: CargoType::INVALID_CARGO,
+                            client_id: ClientID::INVALID_CLIENT_ID,
                         },
                     )
                 },
@@ -408,7 +417,7 @@ unsafe fn cmd_clone_vehicle(
                 } {
                     crate::vehicle::EngineRef::of(e).default_cargo()
                 } else {
-                    c.strings.invalid_cargo
+                    CargoType::INVALID_CARGO.0
                 };
                 let old_cargo =
                     (r.cargo_kind)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());

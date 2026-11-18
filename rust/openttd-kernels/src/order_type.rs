@@ -131,6 +131,20 @@ impl OrderNonStopFlag {
     pub const NoDestination: Self = Self(1);
 }
 
+/// `CloneOptions`: the action `CmdCloneOrder` performs, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CloneOptions(pub u8);
+
+impl CloneOptions {
+    /// Share the source's order list.
+    pub const CO_SHARE: Self = Self(0);
+    /// Copy the source's order list.
+    pub const CO_COPY: Self = Self(1);
+    /// Stop sharing the order list.
+    pub const CO_UNSHARE: Self = Self(2);
+}
+
 /// Native `OrderStopLocation`, retaining every underlying `u8` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

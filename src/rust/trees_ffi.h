@@ -19,14 +19,6 @@ struct OpenTTDTreeLoopSettings {
 	uint8_t climate, extra;
 	bool ambient, ambient_callback;
 };
-/* CmdPlantTree's error messages. */
-struct OpenTTDTreeStrings {
-	uint32_t already_here;
-	uint32_t on_water;
-	uint32_t plant_limit;
-	uint32_t site_unsuitable;
-	uint32_t wrong_terrain;
-};
 /* The same-named tree_map.h/clear_map.h writers, the native sinf/cosf, and the generation
  * progress updates. progress/progress_total return true when world generation was aborted: the
  * C++ wrapper keeps the exception, Rust returns without another draw or write, and the entry's
@@ -47,7 +39,6 @@ struct OpenTTDTreeServices {
 	void (*set_ground_density)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(set_ground_density);
 	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept OPENTTD_SERVICE_DEFAULT(set_growth);
 	float (*sin)(float) noexcept OPENTTD_SERVICE_DEFAULT(sin);
-	OpenTTDTreeStrings strings;
 	const OpenTTDTownLeaves *town;
 };
 

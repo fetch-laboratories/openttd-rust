@@ -9,7 +9,6 @@
 #ifndef RUST_VEHICLE_TRANSACTION_FFI_H
 #define RUST_VEHICLE_TRANSACTION_FFI_H
 #include "byte_span_ffi.h"
-#include "../newgrf_text_type.h"
 #include "command_services_ffi.h"
 #include "fleet_ffi.h"
 #include "services_ffi.h"
@@ -42,19 +41,11 @@ struct OpenTTDVehicleSelectionServices {
 };
 struct OpenTTDOrdersLeaves;
 struct OpenTTDAircraftStartState { uint8_t state, flags; };
-struct OpenTTDVehicleTransactionStrings {
-	uint32_t destroyed, stopped_in_depot, no_power, in_flight, incompatible_rail, null_string;
-	GRFStringID grf_text;
-	uint8_t takeoff, terminal7, direct_descent, new_vehicle_expense;
-	uint32_t invalid_client;
-	uint8_t share_orders, copy_orders, cargo_count, invalid_cargo;
-};
 struct OpenTTDVehicleCommonServices {
 	const OpenTTDVehicleTransactionServices *base;
 	const OpenTTDFleetTransactionServices *transactions;
 	const OpenTTDVehicleServices *vehicles;
 	const OpenTTDOrdersLeaves *orders;
-	OpenTTDVehicleTransactionStrings strings;
 	OpenTTDAircraftStartState (*aircraft_start)(void *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_start);
 	uint32_t (*grf_string)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_string);
 	int64_t (*value)(void *) noexcept OPENTTD_SERVICE_DEFAULT(value);

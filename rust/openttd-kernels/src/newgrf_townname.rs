@@ -188,7 +188,7 @@ pub(crate) unsafe fn get_type(mut gen_: u16) -> u16 {
         gen_ = gen_.wrapping_sub(t.styles.len() as u16);
     }
     // Fallback to the first built in town name (English).
-    SPECSTR_TOWNNAME_START as u16
+    SPECSTR_TOWNNAME_START.0 as u16
 }
 unsafe fn translate(s: &Services, grfid: u32, lang: u8, text: (*const u8, usize)) -> Vec<u8> {
     crate::newgrf_text::translate(

@@ -45,7 +45,29 @@ use crate::slope_type::Slope;
 use crate::station_type::StationFacilities;
 use crate::station_type::{StationID, StationType};
 use crate::strings_type::StringID;
-use crate::table::strings::STR_NULL;
+use crate::table::strings::{
+    STR_ERROR_ADJOINS_MORE_THAN_ONE_EXISTING, STR_ERROR_AIRCRAFT_IN_THE_WAY,
+    STR_ERROR_BRIDGE_TOO_LOW_FOR_BUOY, STR_ERROR_BRIDGE_TOO_LOW_FOR_DOCK,
+    STR_ERROR_BRIDGE_TOO_LOW_FOR_RAIL_WAYPOINT, STR_ERROR_BRIDGE_TOO_LOW_FOR_ROAD_WAYPOINT,
+    STR_ERROR_BRIDGE_TOO_LOW_FOR_ROADSTOP, STR_ERROR_BRIDGE_TOO_LOW_FOR_STATION,
+    STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_BUOY_IN_THE_WAY,
+    STR_ERROR_DRIVE_THROUGH_CORNER, STR_ERROR_DRIVE_THROUGH_DIRECTION,
+    STR_ERROR_DRIVE_THROUGH_JUNCTION, STR_ERROR_DRIVE_THROUGH_ON_TOWN_ROAD,
+    STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_GENERIC_OBJECT_IN_THE_WAY,
+    STR_ERROR_LOCAL_AUTHORITY_REFUSES_AIRPORT, STR_ERROR_LOCAL_AUTHORITY_REFUSES_NOISE,
+    STR_ERROR_MUST_DEMOLISH_AIRPORT_FIRST, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
+    STR_ERROR_MUST_DEMOLISH_BUS_STATION_FIRST, STR_ERROR_MUST_DEMOLISH_CARGO_TRAM_STATION_FIRST,
+    STR_ERROR_MUST_DEMOLISH_DOCK_FIRST, STR_ERROR_MUST_DEMOLISH_PASSENGER_TRAM_STATION_FIRST,
+    STR_ERROR_MUST_DEMOLISH_RAILROAD, STR_ERROR_MUST_DEMOLISH_TRUCK_STATION_FIRST,
+    STR_ERROR_MUST_REMOVE_RAILWAY_STATION_FIRST, STR_ERROR_MUST_REMOVE_ROAD_STOP_FIRST,
+    STR_ERROR_MUST_REMOVE_SIGNALS_FIRST, STR_ERROR_NAME_MUST_BE_UNIQUE, STR_ERROR_NO_SUITABLE_ROAD,
+    STR_ERROR_SITE_UNSUITABLE, STR_ERROR_STATION_DISALLOWED_LENGTH,
+    STR_ERROR_STATION_DISALLOWED_NUMBER_TRACKS, STR_ERROR_STATION_TOO_SPREAD_OUT,
+    STR_ERROR_THERE_IS_NO_ROAD, STR_ERROR_THERE_IS_NO_STATION,
+    STR_ERROR_TOO_CLOSE_TO_ANOTHER_AIRPORT, STR_ERROR_TOO_MANY_BUS_STOPS,
+    STR_ERROR_TOO_MANY_STATION_SPECS, STR_ERROR_TOO_MANY_STATIONS_LOADING,
+    STR_ERROR_TOO_MANY_TRUCK_STOPS, STR_INDUSTRY_NAME_OIL_RIG, STR_NULL,
+};
 use crate::tile_type::{TileIndex, TileType};
 use crate::tilearea::TileArea;
 use crate::town::TownCouncilAttitudes;
@@ -179,54 +201,6 @@ pub struct AirportTile {
     pub gfx: u8,
 }
 #[repr(C)]
-pub struct Strings {
-    pub demolish_bridge: u32,
-    pub flat_land: u32,
-    pub spread: u32,
-    pub bridge_too_low: [u32; 9],
-    pub too_many_stations: u32,
-    pub adjoins_multiple: u32,
-    pub remove_station: u32,
-    pub remove_rail_waypoint: u32,
-    pub remove_road_waypoint: u32,
-    pub remove_road_stop: u32,
-    pub name_unique: u32,
-    pub unsuitable: u32,
-    pub too_many_specs: u32,
-    pub disallowed_tracks: u32,
-    pub disallowed_length: u32,
-    pub remove_signals: u32,
-    pub no_station: u32,
-    pub drive_direction: u32,
-    pub drive_corner: u32,
-    pub drive_junction: u32,
-    pub drive_town: u32,
-    pub no_road: u32,
-    pub unsuitable_road: u32,
-    pub too_many_truck: u32,
-    pub too_many_bus: u32,
-    pub refuse_noise: u32,
-    pub refuse_airport: u32,
-    pub close_airport: u32,
-    pub aircraft_in_way: u32,
-    pub demolish_railroad: u32,
-    pub demolish_building: u32,
-    pub demolish_airport: u32,
-    pub demolish_cargo_tram: u32,
-    pub demolish_truck: u32,
-    pub demolish_passenger_tram: u32,
-    pub demolish_bus: u32,
-    pub buoy_in_way: u32,
-    pub demolish_dock: u32,
-    pub object_in_way: u32,
-    pub oilrig_name: u32,
-    pub buoy_in_use: u32,
-    pub buoy_name: u32,
-    pub waypoint_adjoins_multiple: u32,
-    pub waypoint_close: u32,
-    pub waypoint_name: u32,
-}
-#[repr(C)]
 pub struct CommandServicesTable {
     pub shared: *const Services,
     pub station: *const World,
@@ -234,7 +208,6 @@ pub struct CommandServicesTable {
     pub cost: *const CommandCostServices,
     pub command: *const CommandServices,
     pub authority: *const AuthorityServices,
-    pub strings: Strings,
     pub spread: extern "C" fn() -> u8,
     pub default_bridge_info: extern "C" fn(u8) -> BridgeSpan,
     pub rail_bridge_info: unsafe extern "C" fn(*const RailSpec) -> BridgeSpan,
@@ -576,6 +549,23 @@ struct StationOwnerChange<'a> {
     new_owner: CompanyID,
 }
 
+/// `GetBridgeTooLowMessageForStationType`: get the error message for a bridge that is
+/// too low for a station type.
+fn get_bridge_too_low_message_for_station_type(station_type: StationType) -> StringID {
+    const TOO_LOW_MSGS: [StringID; StationType::End.0 as usize] = [
+        STR_ERROR_BRIDGE_TOO_LOW_FOR_STATION,       // Rail
+        StringID::INVALID_STRING_ID,                // Airport
+        STR_ERROR_BRIDGE_TOO_LOW_FOR_ROADSTOP,      // Truck
+        STR_ERROR_BRIDGE_TOO_LOW_FOR_ROADSTOP,      // Bus
+        StringID::INVALID_STRING_ID,                // Oilrig
+        STR_ERROR_BRIDGE_TOO_LOW_FOR_DOCK,          // Dock
+        STR_ERROR_BRIDGE_TOO_LOW_FOR_BUOY,          // Buoy
+        STR_ERROR_BRIDGE_TOO_LOW_FOR_RAIL_WAYPOINT, // RailWaypoint
+        STR_ERROR_BRIDGE_TOO_LOW_FOR_ROAD_WAYPOINT, // RoadWaypoint
+    ];
+    TOO_LOW_MSGS[usize::from(station_type.0)]
+}
+
 struct Ctx<'a> {
     s: &'a CommandServicesTable,
     shared: &'a Services,
@@ -627,7 +617,7 @@ impl<'a> Ctx<'a> {
         if ok {
             out.zero();
         } else {
-            out.error(self.s.strings.spread);
+            out.error(STR_ERROR_STATION_TOO_SPREAD_OUT.0);
         }
     }
     /// `*out = st->rect.BeforeAddTile(tile, mode)`.
@@ -644,7 +634,7 @@ impl<'a> Ctx<'a> {
         if ok {
             out.zero();
         } else {
-            out.error(self.s.strings.spread);
+            out.error(STR_ERROR_STATION_TOO_SPREAD_OUT.0);
         }
     }
     /// `st->rect.AfterRemoveTile(st, tile)`.
@@ -708,7 +698,7 @@ impl<'a> Ctx<'a> {
         check_bridge: bool,
     ) {
         if check_bridge && crate::map_func::World::new(self.shared).bridge_above(tile.0) {
-            return out.error(self.s.strings.demolish_bridge);
+            return out.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
         }
         // SAFETY: the native output is a live command slot for this entry.
         unsafe { self.command.no_vehicle(out.0, tile.0) };
@@ -724,7 +714,7 @@ impl<'a> Ctx<'a> {
         if (!allow_steep && is_steep_slope(tileh))
             || (!(self.shared.build_on_slopes)() && tileh != Slope::SLOPE_FLAT)
         {
-            return out.error(self.s.strings.flat_land);
+            return out.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
         }
         out.set(0);
         let flat_z = z + get_slope_max_z(tileh);
@@ -733,7 +723,7 @@ impl<'a> Ctx<'a> {
             for dir in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
                 let dir = DiagDirection(dir);
                 if invalid_dirs.test(dir) && !can_build_depot_by_tileh(dir, tileh) {
-                    return out.error(self.s.strings.flat_land);
+                    return out.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
                 }
             }
             out.add_money(crate::company::price(usize::from(
@@ -745,7 +735,7 @@ impl<'a> Ctx<'a> {
             /* First tile. */
             *allowed_z = flat_z;
         } else if *allowed_z != flat_z {
-            out.error(self.s.strings.flat_land);
+            out.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
         }
     }
     /// `GetBridgeHeight`.
@@ -786,10 +776,9 @@ impl<'a> Ctx<'a> {
             let height_diff = ((self.shared.tile_max_z)(tile.0) + i32::from(height)
                 - bridge_height)
                 * TILE_HEIGHT_STEP;
-            // `GetBridgeTooLowMessageForStationType`.
             (self.cost.error_param)(
                 out.0,
-                self.s.strings.bridge_too_low[usize::from(station_type.0)],
+                get_bridge_too_low_message_for_station_type(station_type).0,
                 height_diff as u64,
             );
             return;
@@ -817,7 +806,7 @@ impl<'a> Ctx<'a> {
             station_type,
             layout,
             bridge_height: self.bridge_height(rampsouth),
-            disallowed_msg: StringID(self.s.strings.demolish_bridge),
+            disallowed_msg: STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
         });
     }
 }
@@ -1050,7 +1039,7 @@ impl Ctx<'_> {
                 if closest_station == StationID::INVALID {
                     closest_station = t;
                 } else if closest_station != t {
-                    out.error(self.s.strings.adjoins_multiple);
+                    out.error(STR_ERROR_ADJOINS_MORE_THAN_ONE_EXISTING.0);
                     return std::ptr::null_mut();
                 }
             }
@@ -1128,7 +1117,7 @@ impl Ctx<'_> {
         } else {
             /* allocate and initialize new station */
             if !(self.s.station_available)() {
-                out.error(self.s.strings.too_many_stations);
+                out.error(STR_ERROR_TOO_MANY_STATIONS_LOADING.0);
                 return st;
             }
             if flags.test(DoCommandFlag::Execute) {
@@ -1209,7 +1198,7 @@ impl Ctx<'_> {
             for index in 0..(self.world().pool_size)() {
                 let candidate = self.full_station(StationID(index as u16));
                 if !candidate.is_null() && (self.s.name_equals)(candidate, args.text, args.length) {
-                    return out.error(self.s.strings.name_unique);
+                    return out.error(STR_ERROR_NAME_MUST_BE_UNIQUE.0);
                 }
             }
         }
@@ -1249,7 +1238,7 @@ impl Ctx<'_> {
             }
         }
         if !self.rect_contains(st, tile) {
-            out.error(self.s.strings.unsuitable);
+            out.error(STR_ERROR_SITE_UNSUITABLE.0);
             return StationID::INVALID;
         }
         let mut search = SignSearch {
@@ -1263,7 +1252,7 @@ impl Ctx<'_> {
             sign_visit((&raw mut search).cast(), st);
         });
         if search.other {
-            out.error(self.s.strings.unsuitable);
+            out.error(STR_ERROR_SITE_UNSUITABLE.0);
             return StationID::INVALID;
         }
         if flags.test(DoCommandFlag::Execute) {
@@ -1617,7 +1606,7 @@ impl Ctx<'_> {
         {
             /* Don't overbuild signals. */
             if crate::map_func::World::new(self.shared).has_signals(tile_cur.0) {
-                cost.error(self.s.strings.remove_signals);
+                cost.error(STR_ERROR_MUST_REMOVE_SIGNALS_FIRST.0);
                 return true;
             }
             /* The current rail type must have power on the to-be-built type (e.g. convert normal rail to electrified rail). */
@@ -1747,7 +1736,7 @@ impl Ctx<'_> {
             if *station == StationID::INVALID {
                 *station = st;
             } else if *station != st {
-                cost.error(self.s.strings.adjoins_multiple);
+                cost.error(STR_ERROR_ADJOINS_MORE_THAN_ONE_EXISTING.0);
             }
         } else {
             /* If we are building a station with a valid railtype, we may be able to overbuild an existing rail tile. */
@@ -1926,7 +1915,7 @@ impl Ctx<'_> {
             station_type,
             layout,
             bridge_height: self.bridge_height(rampsouth),
-            disallowed_msg: StringID(self.s.strings.demolish_bridge),
+            disallowed_msg: STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
         });
     }
     /// `CmdBuildRailStation`'s final step: check whether we need to expand the
@@ -2084,7 +2073,7 @@ impl Ctx<'_> {
             ta: new_location,
             waypoint: false,
             road: false,
-            error_message: StringID(self.s.strings.remove_station),
+            error_message: STR_ERROR_MUST_REMOVE_RAILWAY_STATION_FIRST,
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -2171,17 +2160,17 @@ impl Ctx<'_> {
         /* Check if we can allocate a custom stationspec to this station */
         let specindex = crate::station_association::allocate(self.s.rail_association, statspec, st);
         if !specindex.valid {
-            return cost.error(self.s.strings.too_many_specs);
+            return cost.error(STR_ERROR_TOO_MANY_STATION_SPECS.0);
         }
         if !statspec.is_null() {
             /* Perform NewStation checks */
             let info = (self.s.rail_spec_info)(statspec);
             /* Check if the station size is permitted */
             if has_bit(info.platforms, (numtracks - 1).min(7)) {
-                return cost.error(self.s.strings.disallowed_tracks);
+                return cost.error(STR_ERROR_STATION_DISALLOWED_NUMBER_TRACKS.0);
             }
             if has_bit(info.lengths, (plat_len - 1).min(7)) {
-                return cost.error(self.s.strings.disallowed_length);
+                return cost.error(STR_ERROR_STATION_DISALLOWED_LENGTH.0);
             }
             /* Check if the station is buildable */
             if info.availability_callback {
@@ -2611,7 +2600,7 @@ impl Ctx<'_> {
         }
         if quantity == 0 {
             if error.ok() {
-                total_cost.error(self.s.strings.no_station);
+                total_cost.error(STR_ERROR_THERE_IS_NO_STATION.0);
             } else {
                 total_cost.take(error);
             }
@@ -2916,7 +2905,7 @@ impl Ctx<'_> {
             station_type,
             layout,
             bridge_height: self.bridge_height(rampsouth),
-            disallowed_msg: StringID(self.s.strings.demolish_bridge),
+            disallowed_msg: STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
         });
     }
     /// `CheckBuildAbove_Station`.
@@ -2968,7 +2957,7 @@ impl Ctx<'_> {
             let road_owner = self.get_road_owner(cur_tile, RoadTramType::RTT_ROAD);
             if road_owner == CompanyID::TOWN {
                 if !(self.s.stop_on_town_road)() {
-                    return cost.error(self.s.strings.drive_town);
+                    return cost.error(STR_ERROR_DRIVE_THROUGH_ON_TOWN_ROAD.0);
                 }
             } else if !(self.s.stop_on_competitor_road)() && road_owner != CompanyID::NONE {
                 unsafe {
@@ -2986,7 +2975,7 @@ impl Ctx<'_> {
                 && road_type_is_road(rt)
                 && !(self.shared.road_powered)(rt.0, road_rt.0)
             {
-                return cost.error(self.s.strings.unsuitable_road);
+                return cost.error(STR_ERROR_NO_SUITABLE_ROAD.0);
             }
             if crate::map_func::World::new(self.shared).disallowed_road_directions(cur_tile.0)
                 != DisallowedRoadDirections::DRD_NONE.0
@@ -3035,7 +3024,7 @@ impl Ctx<'_> {
                 && road_type_is_tram(rt)
                 && !(self.shared.road_powered)(rt.0, tram_rt.0)
             {
-                return cost.error(self.s.strings.unsuitable_road);
+                return cost.error(STR_ERROR_NO_SUITABLE_ROAD.0);
             }
             cost.add_money(
                 crate::road_cost::build_cost(self.shared, tram_rt.0)
@@ -3107,13 +3096,13 @@ impl Ctx<'_> {
                 && world.drive_through_stop_tile(cur_tile.0)
                 && world.get_drive_through_stop_axis(cur_tile) != axis
             {
-                return cost.error(self.s.strings.drive_direction);
+                return cost.error(STR_ERROR_DRIVE_THROUGH_DIRECTION.0);
             }
             let st = StationID((self.shared.station_index)(cur_tile.0));
             if *station == StationID::INVALID {
                 *station = st;
             } else if *station != st {
-                cost.error(self.s.strings.adjoins_multiple);
+                cost.error(STR_ERROR_ADJOINS_MORE_THAN_ONE_EXISTING.0);
             }
             return;
         }
@@ -3132,18 +3121,18 @@ impl Ctx<'_> {
         if build_over_road && rb & wrong != RoadBits::ROAD_NONE {
             /* Someone was pedantic and *NEEDED* three fracking different error messages. */
             return cost.error(match rb.0.count_ones() {
-                1 => self.s.strings.drive_direction,
+                1 => STR_ERROR_DRIVE_THROUGH_DIRECTION.0,
                 2 if rb == RoadBits::ROAD_X || rb == RoadBits::ROAD_Y => {
-                    self.s.strings.drive_direction
+                    STR_ERROR_DRIVE_THROUGH_DIRECTION.0
                 }
-                2 => self.s.strings.drive_corner,
-                _ => self.s.strings.drive_junction, // 3 or 4
+                2 => STR_ERROR_DRIVE_THROUGH_CORNER.0,
+                _ => STR_ERROR_DRIVE_THROUGH_JUNCTION.0, // 3 or 4
             });
         }
         if build_over_road {
             self.check_build_over_road(cost, ret, cur_tile, rt);
         } else if rt == RoadType::INVALID_ROADTYPE {
-            cost.error(self.s.strings.no_road);
+            cost.error(STR_ERROR_THERE_IS_NO_ROAD.0);
         } else {
             crate::landscape_cmd::clear_command(self.command, ret.0, cur_tile.0, flags.0);
             if !ret.ok() {
@@ -3370,7 +3359,7 @@ impl Ctx<'_> {
         /* Check if the requested road stop is too big */
         let station_spread = (self.s.spread)();
         if width > station_spread || length > station_spread {
-            return cost.error(self.s.strings.spread);
+            return cost.error(STR_ERROR_STATION_TOO_SPREAD_OUT.0);
         }
         /* Check for incorrect width / length. */
         if width == 0 || length == 0 {
@@ -3445,7 +3434,7 @@ impl Ctx<'_> {
             ta: roadstop_area,
             waypoint: false,
             road: false,
-            error_message: StringID(self.s.strings.remove_road_stop),
+            error_message: STR_ERROR_MUST_REMOVE_ROAD_STOP_FIRST,
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -3453,9 +3442,9 @@ impl Ctx<'_> {
         /* Check if this number of road stops can be allocated. */
         if !(self.s.stops_available)(usize::from(roadstop_area.w) * usize::from(roadstop_area.h)) {
             return cost.error(if is_truck_stop {
-                self.s.strings.too_many_truck
+                STR_ERROR_TOO_MANY_TRUCK_STOPS.0
             } else {
-                self.s.strings.too_many_bus
+                STR_ERROR_TOO_MANY_BUS_STOPS.0
             });
         }
         let st = self.build_station_part(
@@ -3482,7 +3471,7 @@ impl Ctx<'_> {
             valid: index >= 0,
         };
         if !specindex.valid {
-            return cost.error(self.s.strings.too_many_specs);
+            return cost.error(STR_ERROR_TOO_MANY_STATION_SPECS.0);
         }
         /* Perform NewGRF checks */
         /* Check if the road stop is buildable */
@@ -3926,7 +3915,7 @@ impl Ctx<'_> {
         } = context;
         let world = crate::map_func::World::new(self.shared);
         cost.set(0);
-        last_error.error(self.s.strings.no_station);
+        last_error.error(STR_ERROR_THERE_IS_NO_STATION.0);
         let mut had_success = false;
         for cur_tile in roadstop_area.tiles(self.map()) {
             /* Make sure the specified tile is a road stop of the correct type */
@@ -4384,7 +4373,7 @@ impl Ctx<'_> {
             if u32::from(unsafe { noise_reached.read() }) + newnoise_level
                 > u32::from((self.s.town_max_noise)(nearest))
             {
-                authority_refuse_message = StringID(self.s.strings.refuse_noise);
+                authority_refuse_message = STR_ERROR_LOCAL_AUTHORITY_REFUSES_NOISE;
                 authority_refuse_town = nearest;
             }
         } else if TownCouncilAttitudes(crate::town::council_tolerance(unsafe { &*self.s.shared }))
@@ -4406,7 +4395,7 @@ impl Ctx<'_> {
                 }
             }
             if num >= 2 {
-                authority_refuse_message = StringID(self.s.strings.refuse_airport);
+                authority_refuse_message = STR_ERROR_LOCAL_AUTHORITY_REFUSES_AIRPORT;
                 authority_refuse_town = t;
             }
         }
@@ -4503,7 +4492,7 @@ impl Ctx<'_> {
         };
         let station_spread = (self.s.spread)();
         if w > station_spread || h > station_spread {
-            return cost.error(self.s.strings.spread);
+            return cost.error(STR_ERROR_STATION_TOO_SPREAD_OUT.0);
         }
         // `CheckFlatLandAirport`: checks if an airport can be built at the
         // given location and clear the area.
@@ -4557,7 +4546,7 @@ impl Ctx<'_> {
             ta: airport_area,
             waypoint: false,
             road: false,
-            error_message: StringID(self.s.strings.remove_station),
+            error_message: STR_ERROR_MUST_REMOVE_RAILWAY_STATION_FIRST,
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -4579,7 +4568,7 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         if !st.is_null() && (self.s.airport_tile)(st) != TileIndex::INVALID.0 {
-            return cost.error(self.s.strings.close_airport);
+            return cost.error(STR_ERROR_TOO_CLOSE_TO_ANOTHER_AIRPORT.0);
         }
         for _ in self.airport_tiles(spec, layout, tile) {
             cost.add_money(crate::company::price(usize::from(
@@ -4649,7 +4638,7 @@ impl Ctx<'_> {
             let targetairport = unsafe { (&raw const (*a.state).targetairport).read() };
             let state = unsafe { (&raw const (*a.state).state).read() };
             if targetairport == index && state != FLYING {
-                return cost.error(self.s.strings.aircraft_in_way);
+                return cost.error(STR_ERROR_AIRCRAFT_IN_THE_WAY.0);
             }
         }
         if flags.test(DoCommandFlag::Execute) {
@@ -5046,14 +5035,14 @@ impl Ctx<'_> {
         }
         let direction = get_inclined_slope_direction(world.tile_slope(tile));
         if direction == DiagDirection::INVALID_DIAGDIR {
-            return cost.error(self.s.strings.unsuitable);
+            return cost.error(STR_ERROR_SITE_UNSUITABLE.0);
         }
         let direction = reverse_diag_dir(direction, |ok| {
             crate::movement::native_assert(self.shared, ok);
         });
         /* Docks cannot be placed on rapids */
         if (self.shared.has_water_ground)(tile.0) {
-            return cost.error(self.s.strings.unsuitable);
+            return cost.error(STR_ERROR_SITE_UNSUITABLE.0);
         }
         self.check_if_authority_allows_new_station(cost, tile, flags);
         if !cost.ok() {
@@ -5077,7 +5066,7 @@ impl Ctx<'_> {
                 crate::movement::native_assert(self.shared, ok);
             });
         if !(self.shared.has_water_ground)(tile_cur.0) || !world.tile_flat(tile_cur) {
-            return cost.error(self.s.strings.unsuitable);
+            return cost.error(STR_ERROR_SITE_UNSUITABLE.0);
         }
         self.default_bridge_above_ok(
             ret,
@@ -5111,7 +5100,7 @@ impl Ctx<'_> {
         if TileType((self.shared.tile_type)(tile_cur.0)) != TileType::MP_WATER
             || !world.tile_flat(tile_cur)
         {
-            return cost.error(self.s.strings.unsuitable);
+            return cost.error(STR_ERROR_SITE_UNSUITABLE.0);
         }
         let (dx, dy) = DOCK_TILEOFFS_CHKAROUND[usize::from(direction.0)];
         let dock_area = TileArea {
@@ -5128,7 +5117,7 @@ impl Ctx<'_> {
             ta: dock_area,
             waypoint: false,
             road: false,
-            error_message: StringID(self.s.strings.remove_station),
+            error_message: STR_ERROR_MUST_REMOVE_RAILWAY_STATION_FIRST,
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -5601,32 +5590,32 @@ impl Ctx<'_> {
             })
         };
         let error = match StationType((self.shared.station_type)(tile.0).0) {
-            StationType::Rail => self.s.strings.demolish_railroad,
+            StationType::Rail => STR_ERROR_MUST_DEMOLISH_RAILROAD.0,
             StationType::RailWaypoint | StationType::RoadWaypoint => {
-                self.s.strings.demolish_building
+                STR_ERROR_BUILDING_MUST_BE_DEMOLISHED.0
             }
-            StationType::Airport => self.s.strings.demolish_airport,
+            StationType::Airport => STR_ERROR_MUST_DEMOLISH_AIRPORT_FIRST.0,
             StationType::Truck => {
                 if has_tram() {
-                    self.s.strings.demolish_cargo_tram
+                    STR_ERROR_MUST_DEMOLISH_CARGO_TRAM_STATION_FIRST.0
                 } else {
-                    self.s.strings.demolish_truck
+                    STR_ERROR_MUST_DEMOLISH_TRUCK_STATION_FIRST.0
                 }
             }
             StationType::Bus => {
                 if has_tram() {
-                    self.s.strings.demolish_passenger_tram
+                    STR_ERROR_MUST_DEMOLISH_PASSENGER_TRAM_STATION_FIRST.0
                 } else {
-                    self.s.strings.demolish_bus
+                    STR_ERROR_MUST_DEMOLISH_BUS_STATION_FIRST.0
                 }
             }
-            StationType::Buoy => self.s.strings.buoy_in_way,
-            StationType::Dock => self.s.strings.demolish_dock,
+            StationType::Buoy => STR_ERROR_BUOY_IN_THE_WAY.0,
+            StationType::Dock => STR_ERROR_MUST_DEMOLISH_DOCK_FIRST.0,
             StationType::Oilrig => {
                 (self.cost.error_param)(
                     cost.0,
-                    self.s.strings.object_in_way,
-                    u64::from(self.s.strings.oilrig_name),
+                    STR_ERROR_GENERIC_OBJECT_IN_THE_WAY.0,
+                    u64::from(STR_INDUSTRY_NAME_OIL_RIG.0),
                 );
                 return;
             }
@@ -6079,7 +6068,7 @@ impl Ctx<'_> {
         /* make sure the final size is not too big. */
         let station_spread = (self.s.spread)();
         if new_ta.w > u16::from(station_spread) || new_ta.h > u16::from(station_spread) {
-            out.error(self.s.strings.spread);
+            out.error(STR_ERROR_STATION_TOO_SPREAD_OUT.0);
         } else {
             out.zero();
         }
@@ -6096,7 +6085,6 @@ crate::abi::layouts! {
         cost,
         command,
         authority,
-        strings,
         spread,
         default_bridge_info,
         rail_bridge_info,
@@ -6236,53 +6224,6 @@ crate::abi::layouts! {
         waypoint_layout_gfx,
         waypoint_layout_init,
         waypoint_view_invalidate,
-    };
-    "OpenTTDStationCommandStrings" ["probe"] => Strings {
-        demolish_bridge,
-        flat_land,
-        spread,
-        bridge_too_low,
-        too_many_stations,
-        adjoins_multiple,
-        remove_station,
-        remove_rail_waypoint,
-        remove_road_waypoint,
-        remove_road_stop,
-        name_unique,
-        unsuitable,
-        too_many_specs,
-        disallowed_tracks,
-        disallowed_length,
-        remove_signals,
-        no_station,
-        drive_direction,
-        drive_corner,
-        drive_junction,
-        drive_town,
-        no_road,
-        unsuitable_road,
-        too_many_truck,
-        too_many_bus,
-        refuse_noise,
-        refuse_airport,
-        close_airport,
-        aircraft_in_way,
-        demolish_railroad,
-        demolish_building,
-        demolish_airport,
-        demolish_cargo_tram,
-        demolish_truck,
-        demolish_passenger_tram,
-        demolish_bus,
-        buoy_in_way,
-        demolish_dock,
-        object_in_way,
-        oilrig_name,
-        buoy_in_use,
-        buoy_name,
-        waypoint_adjoins_multiple,
-        waypoint_close,
-        waypoint_name,
     };
     "OpenTTDStationArea" ["probe"] => TileArea {
         tile,

@@ -1010,10 +1010,6 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 		.physics = &GetRustGroundPhysicsServices(),
 		.do_build = openttd_rust_road_do_build,
 		.rail_commands = &GetRustRailCommandServices(), .town = &GetRustTownServices(), .authority = &GetRustTownAuthorityServices(),
-		.strings = { .no_road = STR_ERROR_THERE_IS_NO_ROAD, .no_tram = STR_ERROR_THERE_IS_NO_TRAMWAY,
-			.junction = STR_ERROR_ONEWAY_ROADS_CAN_T_HAVE_JUNCTION, .remove_road = STR_ERROR_MUST_REMOVE_ROAD_FIRST,
-			.no_suitable_road = STR_ERROR_NO_SUITABLE_ROAD, .no_suitable_tram = STR_ERROR_NO_SUITABLE_TRAMWAY,
-			.authority = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS },
 		.nearest_tile = [](uint32_t index) noexcept -> OpenTTDRoadNearestTownTile {
 			TileIndex tile{index};
 			bool road = IsTileType(tile, MP_ROAD);

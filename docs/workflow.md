@@ -42,6 +42,7 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 - Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
 - A PR has at most two review stages ([ADR 0025](adr/0025-two-review-stages.md)): the source review, and one re-check of the fixing commits only when a fix changed behaviour, test evidence or a body's operations. Fixes limited to names, comments, types or argument structs with unchanged operations need none; the implementer says so in the status comment.
 - A substantive rewrite gets fresh behaviour and porting reviewers scoped to it; a simulation behaviour fix that CI found (arithmetic and assertion fixes included) gets a fresh behaviour reviewer. That is a review of new work, not a third stage.
+  - A fix made after the last stage counts as such a rewrite when it changes a production body's operations, a native fixture's input or what a check accepts: it gets one fresh behaviour reviewer scoped to its commits, and the implementer starts it without asking root (provisional). If that reviewer finds something, the implementer fixes it, says in the status comment what the fix changes, and queues; a behaviour difference on reachable input goes to root first. A growth or lint acceptance that a moved head voided comes from a porting reviewer scoped to that record.
 - The implementer or root may commit fixes for CI warnings or platform errors, or record speed medians, without a new review.
 - A review that stops before recording findings and disposition counts as no review.
 

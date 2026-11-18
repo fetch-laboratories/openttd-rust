@@ -7,13 +7,11 @@ struct OpenTTDTownDataFrame;
 enum OpenTTDTownDataFeatureStatus : uint8_t { OPENTTD_TOWN_DATA_OK, OPENTTD_TOWN_DATA_END, OPENTTD_TOWN_DATA_MALFORMED, OPENTTD_TOWN_DATA_NAMED_MALFORMED };
 /* One validated feature; the native frame keeps its name until the next feature call. */
 struct OpenTTDTownDataFeature { uint32_t population; float x, y; bool city; };
-struct OpenTTDTownDataStrings { uint32_t load_failed, town_format, bad_coordinate; };
 /* Every JSON operation, including parse exceptions, completes inside load or
  * feature; the commands raise no ordinary exception. */
 struct OpenTTDTownDataServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDTownFoundingServices *founding;
-	OpenTTDTownDataStrings strings;
 	bool (*load)(OpenTTDTownDataFrame *) noexcept OPENTTD_SERVICE_DEFAULT(load);
 	uint8_t (*feature)(OpenTTDTownDataFrame *, size_t, OpenTTDTownDataFeature *) noexcept OPENTTD_SERVICE_DEFAULT(feature);
 	void (*named_error)(uint32_t, uint32_t, const OpenTTDTownDataFrame *) noexcept OPENTTD_SERVICE_DEFAULT(named_error);

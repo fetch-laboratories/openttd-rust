@@ -12,8 +12,9 @@ use crate::services::Services;
 use crate::strings_func::get_encoded_string;
 use crate::strings_type::{EncodedString, StringParameterData};
 use crate::table::strings::{
-    STR_TOWN_DATA_ERROR_FAILED_TO_FOUND_TOWN, STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY,
-    STR_TOWN_DATA_ERROR_LOAD_FAILED,
+    STR_TOWN_DATA_ERROR_BAD_COORDINATE, STR_TOWN_DATA_ERROR_FAILED_TO_FOUND_TOWN,
+    STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY, STR_TOWN_DATA_ERROR_LOAD_FAILED,
+    STR_TOWN_DATA_ERROR_TOWN_FORMATTED_INCORRECTLY,
 };
 use crate::tile_type::TileIndex;
 use crate::town_type::TownExpandMode;
@@ -45,17 +46,9 @@ pub const FEATURE_END: u8 = 1;
 pub const FEATURE_NAMED_MALFORMED: u8 = 3;
 
 #[repr(C)]
-pub struct Strings {
-    pub load_failed: u32,
-    pub town_format: u32,
-    pub bad_coordinate: u32,
-}
-
-#[repr(C)]
 pub struct ImportServices {
     pub shared: *const Services,
     pub founding: *const FoundingServices,
-    pub strings: Strings,
     /// Read and parse `_file_to_saveload`; false for any file, parse or non-array failure.
     pub load: extern "C" fn(*mut Frame) -> bool,
     pub feature: extern "C" fn(*mut Frame, usize, *mut Feature) -> u8,
@@ -190,7 +183,11 @@ impl ImportServices {
                 FEATURE_END => break,
                 FEATURE_NAMED_MALFORMED => {
                     // If other fields are formatted wrong, we can actually inform the player which town is the problem.
-                    (self.named_error)(self.strings.load_failed, self.strings.town_format, frame);
+                    (self.named_error)(
+                        STR_TOWN_DATA_ERROR_LOAD_FAILED.0,
+                        STR_TOWN_DATA_ERROR_TOWN_FORMATTED_INCORRECTLY.0,
+                        frame,
+                    );
                     return;
                 }
                 _ => {
@@ -202,7 +199,11 @@ impl ImportServices {
             index += 1;
             // Check for improper coordinates and warn the player.
             if feature.x <= 0.0 || feature.y <= 0.0 || feature.x >= 1.0 || feature.y >= 1.0 {
-                (self.named_error)(self.strings.load_failed, self.strings.bad_coordinate, frame);
+                (self.named_error)(
+                    STR_TOWN_DATA_ERROR_LOAD_FAILED.0,
+                    STR_TOWN_DATA_ERROR_BAD_COORDINATE.0,
+                    frame,
+                );
                 return;
             }
             // Find the target tile for the town.
@@ -286,6 +287,5 @@ pub unsafe extern "C" fn openttd_rust_load_town_data(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDTownDataFeature" ["genworld"] => Feature { population, x, y, city, };
-    "OpenTTDTownDataStrings" ["genworld"] => Strings { load_failed, town_format, bad_coordinate, };
-    "OpenTTDTownDataServices" ["genworld"] => ImportServices { shared, founding, strings, load, feature, named_error, found, place_sign, expand, };
+    "OpenTTDTownDataServices" ["genworld"] => ImportServices { shared, founding, load, feature, named_error, found, place_sign, expand, };
 }

@@ -49,6 +49,18 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::road_map::{ROADSIDE_PAVED, ROADSIDE_TREES};
 use crate::road_type::INVALID_ROADTYPE;
+use crate::table::strings::{
+    STR_ERROR_ALREADY_BUILT, STR_ERROR_ANOTHER_TUNNEL_IN_THE_WAY,
+    STR_ERROR_AREA_IS_OWNED_BY_ANOTHER, STR_ERROR_BRIDGE_THROUGH_MAP_BORDER,
+    STR_ERROR_BRIDGE_TOO_HIGH_FOR_TERRAIN, STR_ERROR_BRIDGE_TOO_LONG,
+    STR_ERROR_BRIDGE_TOO_LOW_FOR_TERRAIN, STR_ERROR_BRIDGEHEADS_NOT_SAME_HEIGHT,
+    STR_ERROR_CAN_T_BUILD_ON_WATER, STR_ERROR_CAN_T_START_AND_END_ON,
+    STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION, STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
+    STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_MUST_DEMOLISH_TUNNEL_FIRST,
+    STR_ERROR_SITE_UNSUITABLE_FOR_TUNNEL, STR_ERROR_START_AND_END_MUST_BE_IN,
+    STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP, STR_ERROR_TUNNEL_THROUGH_MAP_BORDER,
+    STR_ERROR_TUNNEL_TOO_LONG, STR_ERROR_UNABLE_TO_EXCAVATE_LAND,
+};
 use crate::town_type::{
     RATING_MAXIMUM, RATING_TUNNEL_BRIDGE_DOWN_STEP, RATING_TUNNEL_BRIDGE_MINIMUM,
     RATING_TUNNEL_BRIDGE_UP_STEP,
@@ -65,29 +77,6 @@ pub struct Availability {
     pub year: i32,
     pub min: u8,
     pub max: u16,
-}
-#[repr(C)]
-pub struct Strings {
-    pub bridge_border: u32,
-    pub map_edge: u32,
-    pub same_end: u32,
-    pub straight: u32,
-    pub too_long: u32,
-    pub wrong_slope: u32,
-    pub unequal_height: u32,
-    pub demolish_bridge: u32,
-    pub already_built: u32,
-    pub authority: u32,
-    pub other_owner: u32,
-    pub too_low: u32,
-    pub too_high: u32,
-    pub tunnel_site: u32,
-    pub water: u32,
-    pub tunnel_border: u32,
-    pub tunnel_way: u32,
-    pub tunnel_long: u32,
-    pub excavate: u32,
-    pub demolish_tunnel: u32,
 }
 #[repr(C)]
 pub struct TunnelBridgeServices {
@@ -136,7 +125,6 @@ pub struct TunnelBridgeServices {
     pub mark_dirty_height: extern "C" fn(u32, i32),
     pub terraform: extern "C" fn(*mut CommandCost, u16, u32, u8),
     pub objects: *const crate::objects::ObjectServices,
-    pub strings: Strings,
 }
 struct World<'a> {
     a: &'a TunnelBridgeServices,
@@ -278,7 +266,7 @@ impl<'a> World<'a> {
         out.zero();
         if flags & DoCommandFlag::QUERY_COST != 0 {
             if length > u32::from(unsafe { (*self.r.shared).settings().max_bridge_length.read() }) {
-                out.error(self.a.strings.too_long);
+                out.error(STR_ERROR_BRIDGE_TOO_LONG.0);
             }
             return;
         }
@@ -296,7 +284,7 @@ impl<'a> World<'a> {
             return Self::error(out);
         }
         if length > u32::from(maximum) {
-            out.error(self.a.strings.too_long);
+            out.error(STR_ERROR_BRIDGE_TOO_LONG.0);
         }
     }
     fn slope(&self, out: Cost<'_>, north: bool, axis: u8, slope: &mut u8, z: &mut i32) {
@@ -403,13 +391,13 @@ impl<'a> World<'a> {
         let mut roadtype = INVALID_ROADTYPE;
         for tile in [start, end] {
             if !(self.s.tile_valid)(tile) {
-                return cost.error(self.a.strings.bridge_border);
+                return cost.error(STR_ERROR_BRIDGE_THROUGH_MAP_BORDER.0);
             }
             if self.map.tile_x(TileIndex(tile)) == 0 || self.map.tile_y(TileIndex(tile)) == 0 {
                 return cost.error(if transport == WATER {
-                    self.a.strings.bridge_border
+                    STR_ERROR_BRIDGE_THROUGH_MAP_BORDER.0
                 } else {
-                    self.a.strings.map_edge
+                    STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP.0
                 });
             }
         }
@@ -436,14 +424,14 @@ impl<'a> World<'a> {
             company = self.deity_owner(start);
         }
         if start == end {
-            return cost.error(self.a.strings.same_end);
+            return cost.error(STR_ERROR_CAN_T_START_AND_END_ON.0);
         }
         let axis = if self.map.tile_x(TileIndex(start)) == self.map.tile_x(TileIndex(end)) {
             1
         } else if self.map.tile_y(TileIndex(start)) == self.map.tile_y(TileIndex(end)) {
             0
         } else {
-            return cost.error(self.a.strings.straight);
+            return cost.error(STR_ERROR_START_AND_END_MUST_BE_IN.0);
         };
         if end < start {
             std::mem::swap(&mut start, &mut end);
@@ -457,7 +445,7 @@ impl<'a> World<'a> {
         } else if length
             > u32::from(unsafe { (*self.r.shared).settings().max_bridge_length.read() })
         {
-            return cost.error(self.a.strings.too_long);
+            return cost.error(STR_ERROR_BRIDGE_TOO_LONG.0);
         }
         length = length.wrapping_add(2);
         let (mut start_slope, mut start_z) = self.slope_z(start);
@@ -466,10 +454,10 @@ impl<'a> World<'a> {
         self.slope(north, true, axis, &mut start_slope, &mut start_z);
         self.slope(south, false, axis, &mut end_slope, &mut end_z);
         if transport == WATER && (start_slope == SLOPE_FLAT || end_slope == SLOPE_FLAT) {
-            return cost.error(self.a.strings.wrong_slope);
+            return cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
         }
         if start_z != end_z {
-            return cost.error(self.a.strings.unequal_height);
+            return cost.error(STR_ERROR_BRIDGEHEADS_NOT_SAME_HEIGHT.0);
         }
         cost.set(0);
         let mut owner;
@@ -494,7 +482,7 @@ impl<'a> World<'a> {
                 && crate::services::RailType(crate::map_func::World::new(self.s).rail_type(start)).0
                     != railtype
             {
-                return cost.error(self.a.strings.demolish_bridge);
+                return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
             }
             if transport == ROAD {
                 let existing = if crate::road::road_type_is_road_raw(roadtype) {
@@ -503,14 +491,14 @@ impl<'a> World<'a> {
                     tram
                 };
                 if existing != roadtype && existing != INVALID_ROADTYPE {
-                    return cost.error(self.a.strings.demolish_bridge);
+                    return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                 }
             }
             if flags & DoCommandFlag::QUERY_COST == 0 {
                 if bridge_type == (self.a.bridge_type)(start)
                     && (transport != ROAD || road == roadtype || tram == roadtype)
                 {
-                    return cost.error(self.a.strings.already_built);
+                    return cost.error(STR_ERROR_ALREADY_BUILT.0);
                 }
                 if (self.s.tile_owner)(start) == OWNER_TOWN && !self.editor() {
                     let town = crate::town::spatial::closest(self.s, start, u32::MAX);
@@ -520,7 +508,7 @@ impl<'a> World<'a> {
                     if (self.a.speed)(bridge_type) < (self.a.speed)((self.a.bridge_type)(start)) {
                         return (self.c.error_param)(
                             cost.0,
-                            self.a.strings.authority,
+                            STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS.0,
                             u64::from((self.authority.town_index)(town)),
                         );
                     }
@@ -531,7 +519,7 @@ impl<'a> World<'a> {
                 && (self.s.tile_owner)(start) != OWNER_TOWN
                 && (self.s.tile_owner)(start) != OWNER_NONE
             {
-                return cost.error(self.a.strings.other_owner);
+                return cost.error(STR_ERROR_AREA_IS_OWNED_BY_ANOTHER.0);
             }
             cost.add_money(
                 self.clear_cost(start, PR_CLEAR_BRIDGE)
@@ -565,7 +553,7 @@ impl<'a> World<'a> {
             }
             cost.take(ret);
             if !north.ok() || (north.money() != 0 && !allow_slopes) {
-                return cost.error(self.a.strings.wrong_slope);
+                return cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
             }
             cost.add_money(north.money());
             self.clear_command(ret, end, flags);
@@ -574,7 +562,7 @@ impl<'a> World<'a> {
             }
             cost.add_money(ret.money());
             if !south.ok() || (south.money() != 0 && !allow_slopes) {
-                return cost.error(self.a.strings.wrong_slope);
+                return cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
             }
             cost.add_money(south.money());
             for tile in [start, end] {
@@ -582,11 +570,11 @@ impl<'a> World<'a> {
                     continue;
                 }
                 if axis == (self.s.bridge_axis)(tile) {
-                    return cost.error(self.a.strings.demolish_bridge);
+                    return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                 }
                 if start_z.wrapping_add(1) == self.bridge_height((self.a.northern_bridge_end)(tile))
                 {
-                    return cost.error(self.a.strings.demolish_bridge);
+                    return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                 }
             }
             let delta = self
@@ -598,15 +586,15 @@ impl<'a> World<'a> {
             let mut tile = start.wrapping_add(delta);
             while tile != end {
                 if (self.s.tile_max_z)(tile) > start_z {
-                    return cost.error(self.a.strings.too_low);
+                    return cost.error(STR_ERROR_BRIDGE_TOO_LOW_FOR_TERRAIN.0);
                 }
                 if start_z
                     >= (self.s.tile_z)(tile).wrapping_add(i32::from((self.a.max_bridge_height)()))
                 {
-                    return cost.error(self.a.strings.too_high);
+                    return cost.error(STR_ERROR_BRIDGE_TOO_HIGH_FOR_TERRAIN.0);
                 }
                 if crate::map_func::World::new(self.s).bridge_above(tile) {
-                    return cost.error(self.a.strings.demolish_bridge);
+                    return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                 }
                 self.build_above_tile(ret, tile, flags, axis, start_z.wrapping_add(1));
                 if !ret.ok() {
@@ -867,10 +855,10 @@ impl<'a> World<'a> {
         let (start_slope, start_z) = self.slope_z(start);
         let direction = get_inclined_slope_direction_raw(start_slope);
         if direction == INVALID_DIAGDIR {
-            return cost.error(self.a.strings.tunnel_site);
+            return cost.error(STR_ERROR_SITE_UNSUITABLE_FOR_TUNNEL.0);
         }
         if (self.s.has_water_ground)(start) {
-            return cost.error(self.a.strings.water);
+            return cost.error(STR_ERROR_CAN_T_BUILD_ON_WATER.0);
         }
         self.clear_command(ret, start, flags);
         if !ret.ok() {
@@ -904,7 +892,7 @@ impl<'a> World<'a> {
         loop {
             end = end.wrapping_add(delta);
             if !(self.s.tile_valid)(end) {
-                return cost.error(self.a.strings.tunnel_border);
+                return cost.error(STR_ERROR_TUNNEL_THROUGH_MAP_BORDER.0);
             }
             let (slope, z) = self.slope_z(end);
             if start_z == z {
@@ -914,7 +902,7 @@ impl<'a> World<'a> {
             if !(self.a.crossing_tunnels)()
                 && (self.a.tunnel_in_way)(end, start_z, DiagDirection(in_way))
             {
-                return cost.error(self.a.strings.tunnel_way);
+                return cost.error(STR_ERROR_ANOTHER_TUNNEL_IN_THE_WAY.0);
             }
             tiles = tiles.wrapping_add(1);
             if tiles == bump {
@@ -928,14 +916,14 @@ impl<'a> World<'a> {
         cost.add_money(ret.money());
         END_TILE.store(end, Ordering::Relaxed);
         if tiles > i32::from((self.a.max_tunnel_length)()) {
-            return cost.error(self.a.strings.tunnel_long);
+            return cost.error(STR_ERROR_TUNNEL_TOO_LONG.0);
         }
         if (self.s.has_water_ground)(end) {
-            return cost.error(self.a.strings.water);
+            return cost.error(STR_ERROR_CAN_T_BUILD_ON_WATER.0);
         }
         self.clear_command(ret, end, flags);
         if !ret.ok() {
-            return cost.error(self.a.strings.excavate);
+            return cost.error(STR_ERROR_UNABLE_TO_EXCAVATE_LAND.0);
         }
         cost.add_money(ret.money());
         if end_slope
@@ -948,7 +936,7 @@ impl<'a> World<'a> {
             (self.a.terraform)(ret.0, flags, end, end_slope & start_slope);
             crate::objects::openttd_rust_object_restore_first(hidden);
             if !ret.ok() {
-                return cost.error(self.a.strings.excavate);
+                return cost.error(STR_ERROR_UNABLE_TO_EXCAVATE_LAND.0);
             }
             cost.add_money(ret.money());
         }
@@ -1099,12 +1087,12 @@ impl<'a> World<'a> {
     fn clear(&self, cost: Cost<'_>, ret: Cost<'_>, tile: u32, flags: u16) {
         if (self.a.is_tunnel)(tile) {
             if flags & DoCommandFlag::AUTO != 0 {
-                return cost.error(self.a.strings.demolish_tunnel);
+                return cost.error(STR_ERROR_MUST_DEMOLISH_TUNNEL_FIRST.0);
             }
             self.do_clear_tunnel(cost, ret, tile, flags);
         } else {
             if flags & DoCommandFlag::AUTO != 0 {
-                return cost.error(self.a.strings.demolish_bridge);
+                return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
             }
             self.do_clear_bridge(cost, ret, tile, flags);
         }
@@ -1616,28 +1604,6 @@ pub(crate) unsafe fn change_owner(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDBridgeAvailability" ["probe"] => Availability { year, min, max, };
-    "OpenTTDTunnelBridgeStrings" ["probe"] => Strings {
-        bridge_border,
-        map_edge,
-        same_end,
-        straight,
-        too_long,
-        wrong_slope,
-        unequal_height,
-        demolish_bridge,
-        already_built,
-        authority,
-        other_owner,
-        too_low,
-        too_high,
-        tunnel_site,
-        water,
-        tunnel_border,
-        tunnel_way,
-        tunnel_long,
-        excavate,
-        demolish_tunnel,
-    };
     "OpenTTDTunnelBridgeServices" ["probe"] => TunnelBridgeServices {
         rail,
         road,
@@ -1667,7 +1633,6 @@ crate::abi::layouts! {
         mark_dirty_height,
         terraform,
         objects,
-        strings,
     };
 }
 

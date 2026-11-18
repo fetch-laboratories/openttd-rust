@@ -106,30 +106,6 @@ pub struct CrossingRoad {
     /// `GetRoadOwner(RTT_TRAM)`.
     pub tram_owner: u8,
 }
-/// Generated native `StringID` values used as command errors.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Strings {
-    pub impossible_combination: u32,
-    pub already_built: u32,
-    pub build_on_water: u32,
-    pub sloped_wrong: u32,
-    pub remove_signals_first: u32,
-    pub road_works: u32,
-    pub oneway_road: u32,
-    pub crossing_rail: u32,
-    pub crossing_road: u32,
-    pub no_track: u32,
-    pub owned_by: u32,
-    pub flat_land: u32,
-    pub demolish_bridge: u32,
-    pub no_suitable_track: u32,
-    pub no_signals: u32,
-    pub owned_by_another: u32,
-    pub remove_track: u32,
-    pub demolish_building: u32,
-    pub ship_in_way: u32,
-}
 
 /// Immutable native service table. Pointer-taking leaves require live native cost slots,
 /// trains and conversion frames under the entry contract, so their function-pointer types
@@ -142,7 +118,6 @@ pub struct RailCommandServices {
     pub command: *const CommandServices,
     /// Signal-buffer occupancy and assertion services (`_signal_services`).
     pub signal: *const crate::signal::SignalServices,
-    pub strings: Strings,
     /// `IsCompatibleRail`.
     pub compatible_rail: extern "C" fn(u8, u8) -> bool,
     /// `HasPowerOnRail(RailType, RailType)`.
@@ -258,6 +233,17 @@ const SIG_SEMAPHORE: u8 = 1;
 use crate::rail_type::{RAILTYPE_ELECTRIC, RAILTYPE_RAIL};
 use crate::road_type::INVALID_ROADTYPE;
 use crate::road_type::{ROAD_X, ROAD_Y};
+use crate::table::strings::{
+    STR_ERROR_ALREADY_BUILT, STR_ERROR_AREA_IS_OWNED_BY_ANOTHER,
+    STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_CAN_T_BUILD_ON_WATER,
+    STR_ERROR_CROSSING_DISALLOWED_RAIL, STR_ERROR_CROSSING_DISALLOWED_ROAD,
+    STR_ERROR_CROSSING_ON_ONEWAY_ROAD, STR_ERROR_FLAT_LAND_REQUIRED,
+    STR_ERROR_IMPOSSIBLE_TRACK_COMBINATION, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
+    STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_MUST_REMOVE_RAILROAD_TRACK,
+    STR_ERROR_MUST_REMOVE_SIGNALS_FIRST, STR_ERROR_NO_SUITABLE_RAILROAD_TRACK, STR_ERROR_OWNED_BY,
+    STR_ERROR_ROAD_WORKS_IN_PROGRESS, STR_ERROR_SHIP_IN_THE_WAY, STR_ERROR_THERE_ARE_NO_SIGNALS,
+    STR_ERROR_THERE_IS_NO_RAILROAD_TRACK,
+};
 use crate::vehicle_base::{TILE_AXIAL_DISTANCE, TILE_CORNER_DISTANCE, VS_STOPPED};
 
 pub(crate) const LEVELCROSSING_TRACKBIT_FACTOR: u32 = 2;
@@ -446,7 +432,7 @@ impl<'a> Ctx<'a> {
             && !is_steep_slope_raw(tileh)
             && !LEVELED_TRACKS[usize::from(tileh)] & (bits | existing) != 0
         {
-            out.error(self.s.strings.build_on_water);
+            out.error(STR_ERROR_CAN_T_BUILD_ON_WATER.0);
             return;
         }
         let f_new = crate::movement::rail_foundation(tileh, bits | existing, |ok| {
@@ -455,7 +441,7 @@ impl<'a> Ctx<'a> {
         if f_new == FOUNDATION_INVALID
             || (f_new != FOUNDATION_NONE && !(self.shared.build_on_slopes)())
         {
-            out.error(self.s.strings.sloped_wrong);
+            out.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
             return;
         }
         let f_old = crate::movement::rail_foundation(tileh, existing, |ok| {
@@ -489,7 +475,6 @@ impl<'a> Ctx<'a> {
         }
         let tileh = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
         let trackbit = 1_u8 << track;
-        let strings = &self.s.strings;
         let mut fall_through = false;
         match self.tile_type(tile) {
             MP_RAILWAY => {
@@ -508,11 +493,11 @@ impl<'a> Ctx<'a> {
                     .0,
                     railtype,
                 ) {
-                    return cost.error(strings.impossible_combination);
+                    return cost.error(STR_ERROR_IMPOSSIBLE_TRACK_COMBINATION.0);
                 }
                 // CheckTrackCombination, then EnsureNoTrainOnTrack.
                 if self.tracks(tile) | trackbit == self.tracks(tile) {
-                    ret.error(strings.already_built);
+                    ret.error(STR_ERROR_ALREADY_BUILT.0);
                 } else {
                     ret.zero();
                 }
@@ -531,7 +516,7 @@ impl<'a> Ctx<'a> {
                     && tracks_overlap(self.tracks(tile) | trackbit)
                 {
                     if !auto_remove_signals {
-                        return cost.error(strings.remove_signals_first);
+                        return cost.error(STR_ERROR_MUST_REMOVE_SIGNALS_FIRST.0);
                     }
                     w::hit(w::RAIL_CMD_BUILD_REMOVE_SIGNALS);
                     for track_it in 0..6 {
@@ -610,7 +595,7 @@ impl<'a> Ctx<'a> {
             }
             MP_ROAD => {
                 if CROSSING_SLOPES >> tileh.0 & 1 == 0 {
-                    return cost.error(strings.sloped_wrong);
+                    return cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
                 }
                 if !(self.s.crossing_with_competitor)() && self.current() != OWNER_DEITY {
                     ret.tile_ownership(self.command, tile);
@@ -625,23 +610,23 @@ impl<'a> Ctx<'a> {
                 let mut built = false;
                 if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
                     if crate::map_func::World::new(self.shared).has_road_works(tile) {
-                        return cost.error(strings.road_works);
+                        return cost.error(STR_ERROR_ROAD_WORKS_IN_PROGRESS.0);
                     }
                     if crate::map_func::World::new(self.shared).disallowed_road_directions(tile)
                         != 0
                     {
-                        return cost.error(strings.oneway_road);
+                        return cost.error(STR_ERROR_CROSSING_ON_ONEWAY_ROAD.0);
                     }
                     if (self.s.rail_no_crossings)(railtype) {
-                        return cost.error(strings.crossing_rail);
+                        return cost.error(STR_ERROR_CROSSING_DISALLOWED_RAIL.0);
                     }
                     let road_type = (self.shared.road_type)(tile);
                     let tram_type = (self.shared.tram_type)(tile).0;
                     if road_type != INVALID_ROADTYPE && (self.s.road_no_crossing)(road_type) {
-                        return cost.error(strings.crossing_road);
+                        return cost.error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
                     }
                     if tram_type != INVALID_ROADTYPE && (self.s.road_no_crossing)(tram_type) {
-                        return cost.error(strings.crossing_road);
+                        return cost.error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
                     }
                     let road = NormalRoad {
                         road_type,
@@ -669,7 +654,7 @@ impl<'a> Ctx<'a> {
                         )
                         .0 == trackbit
                     {
-                        return cost.error(strings.already_built);
+                        return cost.error(STR_ERROR_ALREADY_BUILT.0);
                     }
                     fall_through = true;
                 }
@@ -835,7 +820,6 @@ impl<'a> Ctx<'a> {
         let trackbit = 1_u8 << track;
         let mut owner = INVALID_OWNER;
         let mut v: *mut Train = std::ptr::null_mut();
-        let no_track = self.s.strings.no_track;
         match self.tile_type(tile) {
             MP_ROAD => {
                 if !crate::map_func::World::new(self.shared).level_crossing_tile(tile)
@@ -844,7 +828,7 @@ impl<'a> Ctx<'a> {
                     )
                     .0 != trackbit
                 {
-                    return cost.error(no_track);
+                    return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
                 }
                 if self.current() != OWNER_WATER {
                     ret.tile_ownership(self.command, tile);
@@ -917,7 +901,7 @@ impl<'a> Ctx<'a> {
             }
             MP_RAILWAY => {
                 if !(self.shared.is_plain_rail)(tile) {
-                    return cost.error(no_track);
+                    return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
                 }
                 if self.current() != OWNER_WATER {
                     ret.tile_ownership(self.command, tile);
@@ -931,7 +915,7 @@ impl<'a> Ctx<'a> {
                 }
                 let mut present = self.tracks(tile);
                 if present & trackbit == 0 {
-                    return cost.error(no_track);
+                    return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
                 }
                 if present == BIT_X | BIT_Y {
                     crossing = true;
@@ -1018,7 +1002,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
             }
-            _ => return cost.error(no_track),
+            _ => return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0),
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
             (self.shared.mark_dirty)(tile);
@@ -1109,7 +1093,6 @@ impl<'a> Ctx<'a> {
         } else {
             w::RAIL_CMD_DRAG_BUILD
         });
-        let already = self.s.strings.already_built;
         let mut had_success = false;
         last_error.error(INVALID_STRING_ID);
         loop {
@@ -1127,7 +1110,7 @@ impl<'a> Ctx<'a> {
                     );
                 };
             }
-            if !remove && !fail_on_obstacle && last_error.message() == already {
+            if !remove && !fail_on_obstacle && last_error.message() == STR_ERROR_ALREADY_BUILT.0 {
                 had_success = true;
             }
             if ret.ok() {
@@ -1135,7 +1118,7 @@ impl<'a> Ctx<'a> {
                 total.add_money(ret.money());
             } else {
                 last_error.take(ret);
-                if last_error.message() != already && !remove {
+                if last_error.message() != STR_ERROR_ALREADY_BUILT.0 && !remove {
                     if fail_on_obstacle {
                         return total.take(last_error);
                     }
@@ -1144,7 +1127,7 @@ impl<'a> Ctx<'a> {
                         break;
                     }
                 }
-                if last_error.message() == self.s.strings.owned_by && remove {
+                if last_error.message() == STR_ERROR_OWNED_BY.0 && remove {
                     break;
                 }
             }
@@ -1185,7 +1168,7 @@ impl<'a> Ctx<'a> {
                 tileh & crate::slope_type::Slope(entrance) != crate::slope_type::Slope::SLOPE_FLAT
             };
             if !(self.shared.build_on_slopes)() || !fits {
-                return cost.error(self.s.strings.flat_land);
+                return cost.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
             }
             cost.add_money(price(PR_BUILD_FOUNDATION));
         }
@@ -1223,7 +1206,7 @@ impl<'a> Ctx<'a> {
                 return;
             }
             if crate::map_func::World::new(self.shared).bridge_above(tile) {
-                return cost.error(self.s.strings.demolish_bridge);
+                return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
             }
             if !(self.s.depot_available)() {
                 return cost.error(INVALID_STRING_ID);
@@ -1285,7 +1268,7 @@ impl<'a> Ctx<'a> {
             sigvar ^= SIG_SEMAPHORE;
         }
         if track >= 6 || !(self.shared.is_plain_rail)(tile) || !self.has_track(tile, track) {
-            return cost.error(self.s.strings.no_track);
+            return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
         }
         let on_track = crate::signal_func::signal_on_track_raw(track);
         if signals_copy != 0 && signals_copy & on_track == 0 {
@@ -1296,13 +1279,13 @@ impl<'a> Ctx<'a> {
             return;
         }
         if tracks_overlap(self.tracks(tile)) {
-            return cost.error(self.s.strings.no_suitable_track);
+            return cost.error(STR_ERROR_NO_SUITABLE_RAILROAD_TRACK.0);
         }
         if skip_existing_signals && self.has_signal(tile, track) {
             return cost.zero();
         }
         if convert_signal && !self.has_signal(tile, track) {
-            return cost.error(self.s.strings.no_signals);
+            return cost.error(STR_ERROR_THERE_ARE_NO_SIGNALS.0);
         }
         if !self.has_signal(tile, track) {
             cost.set(price(PR_BUILD_SIGNALS));
@@ -1558,7 +1541,7 @@ impl<'a> Ctx<'a> {
             return total.error(INVALID_STRING_ID);
         }
         if !(self.shared.is_plain_rail)(tile) {
-            return total.error(self.s.strings.no_track);
+            return total.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
         }
         let start_tile = tile;
         signal_density = signal_density.wrapping_mul(TILE_AXIAL_DISTANCE.cast_signed());
@@ -1604,7 +1587,6 @@ impl<'a> Ctx<'a> {
         let mut last_suitable_trackdir = INVALID_TRACKDIR;
         last_error.error(INVALID_STRING_ID);
         let mut had_success = false;
-        let no_track = self.s.strings.no_track;
         let mut build_signal = |tile: u32, trackdir: u8, test_only: bool, signal_ctr: i32| {
             let mut signals = 0_u8;
             if signal_dir & 1 != 0 {
@@ -1646,7 +1628,9 @@ impl<'a> Ctx<'a> {
             if succeeded {
                 had_success = true;
                 total.add_money(ret.money());
-            } else if ret.message() != no_track || last_error.message() == INVALID_STRING_ID {
+            } else if ret.message() != STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0
+                || last_error.message() == INVALID_STRING_ID
+            {
                 last_error.take(ret);
             }
             succeeded
@@ -1765,10 +1749,10 @@ impl<'a> Ctx<'a> {
         // Resolve at the first original access; the raw pointer retains no Rust borrow.
         let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         if track >= 6 || !(self.shared.is_plain_rail)(tile) || !self.has_track(tile, track) {
-            return cost.error(self.s.strings.no_track);
+            return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
         }
         if !self.has_signal(tile, track) {
-            return cost.error(self.s.strings.no_signals);
+            return cost.error(STR_ERROR_THERE_ARE_NO_SIGNALS.0);
         }
         if self.current() != OWNER_WATER {
             cost.tile_ownership(self.command, tile);
@@ -1883,7 +1867,7 @@ impl<'a> Ctx<'a> {
         }
         let execute = flags & DoCommandFlag::EXECUTE != 0;
         cost.set(0);
-        error.error(self.s.strings.no_suitable_track);
+        error.error(STR_ERROR_NO_SUITABLE_RAILROAD_TRACK.0);
         let mut found = false;
         let check = |ok| crate::movement::native_assert(self.shared, ok);
         let mut iter = crate::tilearea::TileIterator::create(
@@ -1950,7 +1934,7 @@ impl<'a> Ctx<'a> {
                     return false;
                 }
                 if (self.s.rail_no_crossings)(totype) {
-                    error.make_error(self.s.strings.crossing_rail);
+                    error.make_error(STR_ERROR_CROSSING_DISALLOWED_RAIL.0);
                     return false;
                 }
             }
@@ -2264,12 +2248,12 @@ impl<'a> Ctx<'a> {
         cost.set(0);
         if flags & DoCommandFlag::AUTO != 0 {
             if (self.shared.tile_owner)(tile) != self.current() {
-                return cost.error(self.s.strings.owned_by_another);
+                return cost.error(STR_ERROR_AREA_IS_OWNED_BY_ANOTHER.0);
             }
             return cost.error(if (self.shared.is_plain_rail)(tile) {
-                self.s.strings.remove_track
+                STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0
             } else {
-                self.s.strings.demolish_building
+                STR_ERROR_BUILDING_MUST_BE_DEMOLISHED.0
             });
         }
         match crate::services::RailTileType(
@@ -2375,13 +2359,12 @@ impl<'a> Ctx<'a> {
         mut tileh_new: u8,
         bits: u8,
     ) {
-        let remove_track = self.s.strings.remove_track;
         if !(self.shared.build_on_slopes)() || !(self.shared.autoslope)() {
-            return cost.error(remove_track);
+            return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
         }
         self.check_rail_slope(cost, tileh_new, bits, 0, tile);
         if !cost.ok() {
-            return cost.error(remove_track);
+            return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
         }
         // ApplyFoundationToSlope also rewrites the slope in place.
         let top = (self.shared.apply_foundation)(
@@ -2407,7 +2390,7 @@ impl<'a> Ctx<'a> {
             BIT_UPPER => 3,
             _ => {
                 if z_old != z_new || tileh_old != tileh_new {
-                    return cost.error(remove_track);
+                    return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
                 }
                 return cost.set(price(PR_BUILD_FOUNDATION));
             }
@@ -2415,7 +2398,7 @@ impl<'a> Ctx<'a> {
         z_old += self.slope_z_in_corner(tileh_old & !SLOPE_HALFTILE_MASK, corner);
         z_new += self.slope_z_in_corner(tileh_new & !SLOPE_HALFTILE_MASK, corner);
         if z_old != z_new {
-            return cost.error(remove_track);
+            return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
         }
         cost.set(price(PR_BUILD_FOUNDATION));
         if tileh_old != tileh_new {
@@ -2443,7 +2426,7 @@ impl<'a> Ctx<'a> {
                     v.vehicle_type_raw() == crate::vehicle::VehicleType::SHIP.0
                 })
             {
-                return cost.error(self.s.strings.ship_in_way);
+                return cost.error(STR_ERROR_SHIP_IN_THE_WAY.0);
             }
             self.test_autoslope(
                 cost,
@@ -2789,7 +2772,6 @@ crate::abi::layouts! {
         cost,
         command,
         signal,
-        strings,
         compatible_rail,
         powered_rail,
         train_powered,
@@ -2821,27 +2803,6 @@ crate::abi::layouts! {
         make_shore,
         include_train,
         consist_changed,
-    };
-    "OpenTTDRailCommandStrings" ["probe"] => Strings {
-        impossible_combination,
-        already_built,
-        build_on_water,
-        sloped_wrong,
-        remove_signals_first,
-        road_works,
-        oneway_road,
-        crossing_rail,
-        crossing_road,
-        no_track,
-        owned_by,
-        flat_land,
-        demolish_bridge,
-        no_suitable_track,
-        no_signals,
-        owned_by_another,
-        remove_track,
-        demolish_building,
-        ship_in_way,
     };
     "OpenTTDRailTrainParking" ["probe"] => TrainParking {
         track,

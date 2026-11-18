@@ -20,7 +20,7 @@ pub(crate) unsafe fn from_style(style: u8) -> NameParams {
     } else {
         NameParams {
             grfid: 0,
-            kind: SPECSTR_TOWNNAME_START as u16 + u16::from(style),
+            kind: SPECSTR_TOWNNAME_START.0 as u16 + u16::from(style),
         }
     }
 }
@@ -34,7 +34,7 @@ pub(crate) unsafe fn from_town(town: &crate::town::State) -> NameParams {
     };
     if params.grfid != 0 && !unsafe { crate::newgrf_townname::exists(params.grfid) } {
         params.grfid = 0;
-        params.kind = SPECSTR_TOWNNAME_START as u16;
+        params.kind = SPECSTR_TOWNNAME_START.0 as u16;
     }
     params
 }
