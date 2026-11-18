@@ -165,6 +165,7 @@ pub struct RoadCommandServices {
     pub affected_at: unsafe extern "C" fn(*mut ConvertFrame, usize) -> crate::vehicle::VehicleRef,
 }
 use crate::road_type::INVALID_ROADTYPE as INVALID;
+use crate::road_type::RoadTramType;
 use crate::services::Cost;
 const INVALID_TOWN: u16 = u16::MAX;
 const RATING_ROAD_DOWN_STEP_EDGE: i32 = -18;
@@ -353,8 +354,8 @@ impl<'a> Ctx<'a> {
         }
         present
     }
-    fn no_road(c: Cost<'_>, rtt: u8) {
-        c.error(if rtt == 1 {
+    fn no_road(c: Cost<'_>, rtt: RoadTramType) {
+        c.error(if rtt == RoadTramType::RTT_TRAM {
             STR_ERROR_THERE_IS_NO_TRAMWAY.0
         } else {
             STR_ERROR_THERE_IS_NO_ROAD.0
@@ -508,7 +509,7 @@ impl<'a> Ctx<'a> {
             INVALID
         };
         if rt == INVALID {
-            Self::no_road(cost, rtt);
+            Self::no_road(cost, RoadTramType(rtt != 0));
             return;
         }
         match self.tile_type(tile) {
@@ -560,7 +561,7 @@ impl<'a> Ctx<'a> {
             if self.tile_type(tile) == MP_TUNNELBRIDGE {
                 w::hit(w::ROAD_COMMANDS_REMOVE_WORMHOLE);
                 if axis_bits((self.shared.tunnel_bridge_direction)(tile) & 1) & pieces == 0 {
-                    Self::no_road(cost, rtt);
+                    Self::no_road(cost, RoadTramType(rtt != 0));
                     return;
                 }
                 let end = (self.rail.other_tunnel_bridge_end)(tile);
@@ -623,7 +624,7 @@ impl<'a> Ctx<'a> {
                 }
                 pieces &= present;
                 if pieces == 0 {
-                    Self::no_road(cost, rtt);
+                    Self::no_road(cost, RoadTramType(rtt != 0));
                     return;
                 }
                 present ^= pieces;
