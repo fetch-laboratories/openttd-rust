@@ -23,7 +23,6 @@ static struct AircraftBoundaryProbe {
 	uint64_t blocks = UINT64_MAX;
 	unsigned orders = 0, deleted = 0, moves = 0;
 	OpenTTDConsistState consist{};
-	uint8_t order_kind = 0;
 
 
 	bool live = true;
@@ -45,7 +44,6 @@ static void AircraftDirectBoundary()
 	/* Every entry loads the map descriptor, including the disaster flight helpers below. */
 	static OpenTTDFixtureMap disaster_map{6, 4096};
 	shared.map = &disaster_map.statics;
-	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return aircraft_probe.order_owner->vehicle->current.type; };
 	vehicle.maintenance = &_vehicle_maintenance_probe;
 	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * {
@@ -55,6 +53,7 @@ static void AircraftDirectBoundary()
 		return &aircraft_probe.visits;
 	};
 	p.order_owner = std::make_unique<ControllerOrders>(&vehicle);
+	p.record.orders = p.order_owner->vehicle.get();
 	p.common.orders = &p.order_owner->services;
 	p.refit.common = &p.common;
 	p.visits.refit = &p.refit;
@@ -174,13 +173,13 @@ static void AircraftPhaseBoundary()
 	v.maintenance = &_vehicle_maintenance_probe;
 	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	p.order_owner = std::make_unique<ControllerOrders>(&v);
+	p.record.orders = p.order_owner->vehicle.get();
 	v.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &aircraft_probe.order_owner->services; };
 	p.order_owner->services.vehicle_type = [](void *) noexcept { return uint64_t{3}; };
 	p.order_owner->services.vehicle = [](void *shell) noexcept { CHECK(shell == aircraft_probe.vehicle.handle); return aircraft_probe.order_owner->vehicle.get(); };
 	p.order_owner->services.consist = [](void *) noexcept { return &aircraft_probe.order_owner->consist; };
-	p.order_owner->services.invalidate_order = [](void *, int32_t reason) noexcept { CHECK(reason == -2); aircraft_probe.orders++; aircraft_probe.order_kind = 4; aircraft_probe.order_owner->vehicle->current.type = 4; };
+	p.order_owner->services.invalidate_order = [](void *, int32_t reason) noexcept { CHECK(reason == -2); aircraft_probe.orders++; aircraft_probe.order_owner->vehicle->current.type = 4; };
 	v.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
-	v.order_type = [](OpenTTDVehicle *) noexcept { return aircraft_probe.order_kind; };
 	CHECK(openttd_rust_aircraft_tick(&leaves, p.vehicle));
 	CHECK(p.record.tick_counter == 8 && p.record.running_ticks == 1 && p.orders == 2 && p.consist.current_order_time == 41);
 
@@ -189,7 +188,6 @@ static void AircraftPhaseBoundary()
 
 	p.record.subtype = 2;
 	p.order_owner->vehicle->current = openttd_rust_order_vector_data(p.order_owner->vector.get())[0];
-	v.order_type = [](OpenTTDVehicle *) noexcept { return uint8_t{1}; };
 	p.vehicle.state->state = 14; p.vehicle.state->targetairport = 7;
 	leaves.station = [](uint16_t station) noexcept { CHECK(station == 7); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
 	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{0}; }; leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; }; leaves.airport_width = leaves.airport_height = [](const OpenTTDStation *) noexcept { return uint8_t{8}; };
