@@ -1858,6 +1858,7 @@ mod tests {
             let status = std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["--exact", NAME])
                 .env(CHILD, "1")
+                .env(crate::services_assert::ISOLATED_CHILD, "1")
                 .status()
                 .unwrap();
             assert_eq!(status.code(), Some(NOT_REACHED_EXIT));
@@ -1868,7 +1869,7 @@ mod tests {
             ..shared(&crate::test_tables::VEHICLE)
         };
         // SAFETY: `s` outlives the child process's only search.
-        unsafe { crate::services_assert::openttd_rust_assert_bind(no_assertion, &raw const s) };
+        unsafe { crate::services_assert::bind_test_policy(no_assertion, &raw const s) };
         let v = vehicle(&s);
         let mut pf = CYapfShip::new(&v, 0);
         let destination = TileIndex(10 + 10 * 64);

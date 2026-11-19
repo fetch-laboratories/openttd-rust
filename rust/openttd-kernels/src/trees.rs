@@ -2750,13 +2750,14 @@ mod tests {
                 ..*shared()
             }));
             // SAFETY: The leaked table lives for the child process.
-            unsafe { crate::services_assert::openttd_rust_assert_bind(record_assert, shared) };
+            unsafe { crate::services_assert::bind_test_policy(record_assert, shared) };
             body();
             std::process::exit(0);
         }
         let status = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", name])
             .env(CHILD, name)
+            .env(crate::services_assert::ISOLATED_CHILD, "1")
             .status()
             .unwrap();
         assert_eq!(status.code(), Some(73), "{name}");
