@@ -72,6 +72,7 @@ A pass owns the faults in the files it finishes, and every call those files make
 - Simulation Rust reads and writes map arrays in place through the [shared map descriptor](design/world-state.md); `map_func::World` is its single type.
 - Prove the descriptor's interval once, not per entry: `Map::Allocate` in new games and loaders, and game-state mutex yields for generation progress and GRF scanning, run outside the game loop and command execution. Re-prove it if a change adds a reset or yield there. Raw field loads use no Rust references and end before a callback that can load, reset or yield.
 - Shared header helpers preserve native assertions: on a failed precondition call the native assertion as the original accessor does, not the C++ accessor. Retire existing typed map services hottest first (#565), otherwise when an ownership port touches them. A file pass calls the in-place Rust accessor wherever one exists, and leaves a map service that has no Rust port to #565.
+- Where one body reads a tile several times under one precondition, it may check the precondition once without the native assertion and take the later reads from that proof, each still a field-sized load at its observation point. The proof ends at any write to what the precondition reads (the tile's type; the ground bits for a field) and at any call not shown to leave them, and its comment names the calls in its window. A failed check proves nothing: every read then goes through the asserting accessor.
 
 ## Evidence
 
@@ -98,7 +99,7 @@ A pass owns the faults in the files it finishes, and every call those files make
 
 ## Code standards
 
-- A file pass applies these standards to every line left in its files; every other PR to every line it changes or adds. Later PRs touch a finished file only for a mechanical shared-file edit or for a caller adopting a changed signature.
+- A file pass applies these standards to every line left in its files; every other PR to every line it changes or adds. Later PRs touch a finished file only for a mechanical shared-file edit, for a caller adopting a changed signature, or for a repair the roadmap selects, which applies these standards to every line it changes.
 - Python tools use typed records (`dataclass`, `TypedDict`) for fixed-shape data, not bare dicts.
 - Group shared append lists by component and sort entries by name: includes after stdafx and before safeguards, ABI probe calls, and shared table fields, mirrors, initializers and layouts (one field per line). Alphabetize witness blocks.
 
