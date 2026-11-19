@@ -274,8 +274,8 @@ extern "C" fn assert_graph(graph: *const Graph) {
 }
 /// `PerformanceMeasurer::SetInactive` (0) or the construction (1) and destruction (2) of the
 /// client's `PerformanceMeasurer` around the join.
-fn linkgraph_framerate(effect: &Effect) {
-    match *effect {
+fn linkgraph_framerate(effect: Effect) {
+    match effect {
         Effect::MeasurerSetInactive(PerformanceElement::PFE_GL_LINKGRAPH) => observe([9, 0, 0]),
         Effect::MeasurerBegin(PerformanceElement::PFE_GL_LINKGRAPH) => observe([9, 1, 0]),
         Effect::MeasurerEnd(PerformanceElement::PFE_GL_LINKGRAPH) => observe([9, 2, 0]),

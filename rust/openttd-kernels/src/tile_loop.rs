@@ -657,8 +657,8 @@ mod comparison_tests {
         Visits,
         End,
     }
-    fn record_framerate(effect: &Effect) {
-        let step = match *effect {
+    fn record_framerate(effect: Effect) {
+        let step = match effect {
             Effect::AccumulatorBegin(PerformanceElement::PFE_GL_LANDSCAPE) => Step::Begin,
             Effect::AccumulatorEnd(PerformanceElement::PFE_GL_LANDSCAPE) => Step::End,
             _ => return,

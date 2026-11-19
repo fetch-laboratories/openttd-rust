@@ -957,8 +957,8 @@ mod pool_tests {
         Stations,
         Tick(usize),
     }
-    fn record_framerate(effect: &Effect) {
-        STEPS.with(|s| s.borrow_mut().push(Step::Framerate(*effect)));
+    fn record_framerate(effect: Effect) {
+        STEPS.with(|s| s.borrow_mut().push(Step::Framerate(effect)));
     }
     fn pool() -> *mut PoolCore {
         POOL.get()

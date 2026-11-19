@@ -1019,13 +1019,13 @@ static_assert(sizeof(PerformanceMeasurer) == sizeof(OpenTTDPerformanceMeasurer) 
 static_assert(sizeof(PerformanceAccumulator) == sizeof(OpenTTDPerformanceAccumulator) && alignof(PerformanceAccumulator) == alignof(OpenTTDPerformanceAccumulator));
 
 static const OpenTTDFramerateServices _rust_framerate_services{
-	.performance_accumulator_begin = [](OpenTTDPerformanceAccumulator *storage, uint8_t elem) noexcept { new (storage) PerformanceAccumulator(static_cast<PerformanceElement>(elem)); },
-	.performance_accumulator_end = [](OpenTTDPerformanceAccumulator *storage) noexcept { std::destroy_at(reinterpret_cast<PerformanceAccumulator *>(storage)); },
-	.performance_accumulator_reset = [](uint8_t elem) noexcept { PerformanceAccumulator::Reset(static_cast<PerformanceElement>(elem)); },
-	.performance_measurer_begin = [](OpenTTDPerformanceMeasurer *storage, uint8_t elem) noexcept { new (storage) PerformanceMeasurer(static_cast<PerformanceElement>(elem)); },
-	.performance_measurer_end = [](OpenTTDPerformanceMeasurer *storage) noexcept { std::destroy_at(reinterpret_cast<PerformanceMeasurer *>(storage)); },
-	.performance_measurer_paused = [](uint8_t elem) noexcept { PerformanceMeasurer::Paused(static_cast<PerformanceElement>(elem)); },
-	.performance_measurer_set_inactive = [](uint8_t elem) noexcept { PerformanceMeasurer::SetInactive(static_cast<PerformanceElement>(elem)); },
+	.accumulator_begin = [](OpenTTDPerformanceAccumulator *storage, uint8_t elem) noexcept { new (storage) PerformanceAccumulator(static_cast<PerformanceElement>(elem)); },
+	.accumulator_end = [](OpenTTDPerformanceAccumulator *storage) noexcept { std::destroy_at(reinterpret_cast<PerformanceAccumulator *>(storage)); },
+	.accumulator_reset = [](uint8_t elem) noexcept { PerformanceAccumulator::Reset(static_cast<PerformanceElement>(elem)); },
+	.measurer_begin = [](OpenTTDPerformanceMeasurer *storage, uint8_t elem) noexcept { new (storage) PerformanceMeasurer(static_cast<PerformanceElement>(elem)); },
+	.measurer_end = [](OpenTTDPerformanceMeasurer *storage) noexcept { std::destroy_at(reinterpret_cast<PerformanceMeasurer *>(storage)); },
+	.measurer_paused = [](uint8_t elem) noexcept { PerformanceMeasurer::Paused(static_cast<PerformanceElement>(elem)); },
+	.measurer_set_inactive = [](uint8_t elem) noexcept { PerformanceMeasurer::SetInactive(static_cast<PerformanceElement>(elem)); },
 };
 const OpenTTDFramerateServices &GetRustFramerateServices() noexcept { return _rust_framerate_services; }
 [[maybe_unused]] static const bool _rust_framerate_bound = (openttd_rust_framerate_bind(&_rust_framerate_services), true);

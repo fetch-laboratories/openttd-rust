@@ -63,31 +63,31 @@ pub struct PerformanceAccumulatorStorage {
 #[repr(C)]
 pub struct Services {
     /// `new (storage) PerformanceAccumulator(elem)`.
-    pub performance_accumulator_begin: extern "C" fn(*mut PerformanceAccumulatorStorage, u8),
+    pub accumulator_begin: extern "C" fn(*mut PerformanceAccumulatorStorage, u8),
     /// `~PerformanceAccumulator()` on the object in `storage`.
-    pub performance_accumulator_end: extern "C" fn(*mut PerformanceAccumulatorStorage),
+    pub accumulator_end: extern "C" fn(*mut PerformanceAccumulatorStorage),
     /// `PerformanceAccumulator::Reset(elem)`.
-    pub performance_accumulator_reset: extern "C" fn(u8),
+    pub accumulator_reset: extern "C" fn(u8),
     /// `new (storage) PerformanceMeasurer(elem)`.
-    pub performance_measurer_begin: extern "C" fn(*mut PerformanceMeasurerStorage, u8),
+    pub measurer_begin: extern "C" fn(*mut PerformanceMeasurerStorage, u8),
     /// `~PerformanceMeasurer()` on the object in `storage`.
-    pub performance_measurer_end: extern "C" fn(*mut PerformanceMeasurerStorage),
+    pub measurer_end: extern "C" fn(*mut PerformanceMeasurerStorage),
     /// `PerformanceMeasurer::Paused(elem)`.
-    pub performance_measurer_paused: extern "C" fn(u8),
+    pub measurer_paused: extern "C" fn(u8),
     /// `PerformanceMeasurer::SetInactive(elem)`.
-    pub performance_measurer_set_inactive: extern "C" fn(u8),
+    pub measurer_set_inactive: extern "C" fn(u8),
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDFramerateServices" ["framerate"] => Services {
-        performance_accumulator_begin,
-        performance_accumulator_end,
-        performance_accumulator_reset,
-        performance_measurer_begin,
-        performance_measurer_end,
-        performance_measurer_paused,
-        performance_measurer_set_inactive,
+        accumulator_begin,
+        accumulator_end,
+        accumulator_reset,
+        measurer_begin,
+        measurer_end,
+        measurer_paused,
+        measurer_set_inactive,
     };
     "OpenTTDPerformanceAccumulator" ["framerate"] => PerformanceAccumulatorStorage { storage, };
     "OpenTTDPerformanceMeasurer" ["framerate"] => PerformanceMeasurerStorage { storage, };
@@ -98,13 +98,13 @@ extern "C" fn discard_begin<T>(_: *mut T, _: u8) {}
 extern "C" fn discard_element(_: u8) {}
 /// Services before the native table binds: each measurement is discarded.
 static DISCARD: Services = Services {
-    performance_accumulator_begin: discard_begin,
-    performance_accumulator_end: discard_storage,
-    performance_accumulator_reset: discard_element,
-    performance_measurer_begin: discard_begin,
-    performance_measurer_end: discard_storage,
-    performance_measurer_paused: discard_element,
-    performance_measurer_set_inactive: discard_element,
+    accumulator_begin: discard_begin,
+    accumulator_end: discard_storage,
+    accumulator_reset: discard_element,
+    measurer_begin: discard_begin,
+    measurer_end: discard_storage,
+    measurer_paused: discard_element,
+    measurer_set_inactive: discard_element,
 };
 static SERVICES: AtomicPtr<Services> = AtomicPtr::new((&raw const DISCARD).cast_mut());
 
@@ -158,7 +158,7 @@ impl<'a> PerformanceMeasurer<'a> {
         elem: PerformanceElement,
     ) -> Self {
         let services = services();
-        (services.performance_measurer_begin)(storage.as_mut_ptr(), elem.0);
+        (services.measurer_begin)(storage.as_mut_ptr(), elem.0);
         Self {
             storage,
             services,
@@ -167,17 +167,17 @@ impl<'a> PerformanceMeasurer<'a> {
     }
     /// Mark a performance element as not currently in use.
     pub(crate) fn set_inactive(elem: PerformanceElement) {
-        (services().performance_measurer_set_inactive)(elem.0);
+        (services().measurer_set_inactive)(elem.0);
     }
     /// Indicate that a cycle of "pause" where no processing occurs.
     pub(crate) fn paused(elem: PerformanceElement) {
-        (services().performance_measurer_paused)(elem.0);
+        (services().measurer_paused)(elem.0);
     }
 }
 impl Drop for PerformanceMeasurer<'_> {
     /// Finish a cycle of a measured element and store the measurement taken.
     fn drop(&mut self) {
-        (self.services.performance_measurer_end)(self.storage.as_mut_ptr());
+        (self.services.measurer_end)(self.storage.as_mut_ptr());
     }
 }
 
@@ -205,7 +205,7 @@ impl<'a> PerformanceAccumulator<'a> {
         elem: PerformanceElement,
     ) -> Self {
         let services = services();
-        (services.performance_accumulator_begin)(storage.as_mut_ptr(), elem.0);
+        (services.accumulator_begin)(storage.as_mut_ptr(), elem.0);
         Self {
             storage,
             services,
@@ -216,13 +216,13 @@ impl<'a> PerformanceAccumulator<'a> {
     /// measurements. This function must be called once per frame, otherwise measurements
     /// are not collected.
     pub(crate) fn reset(elem: PerformanceElement) {
-        (services().performance_accumulator_reset)(elem.0);
+        (services().accumulator_reset)(elem.0);
     }
 }
 impl Drop for PerformanceAccumulator<'_> {
     /// Finish and add one block of the accumulating value.
     fn drop(&mut self) {
-        (self.services.performance_accumulator_end)(self.storage.as_mut_ptr());
+        (self.services.accumulator_end)(self.storage.as_mut_ptr());
     }
 }
 
@@ -249,17 +249,17 @@ pub(crate) mod testing {
 
     thread_local! {
         static EFFECTS: RefCell<Vec<Effect>> = const { RefCell::new(Vec::new()) };
-        static OBSERVER: Cell<Option<fn(&Effect)>> = const { Cell::new(None) };
+        static OBSERVER: Cell<Option<fn(Effect)>> = const { Cell::new(None) };
     }
     fn push(effect: Effect) {
         if let Some(observe) = OBSERVER.get() {
-            observe(&effect);
+            observe(effect);
         }
         EFFECTS.with(|e| e.borrow_mut().push(effect));
     }
     /// Call `observe` with each of this thread's framerate calls as it is made, so a test can
     /// place it among its own observations.
-    pub(crate) fn observe(observe: Option<fn(&Effect)>) {
+    pub(crate) fn observe(observe: Option<fn(Effect)>) {
         OBSERVER.set(observe);
     }
 
@@ -303,13 +303,13 @@ pub(crate) mod testing {
         push(Effect::MeasurerSetInactive(PerformanceElement(elem)));
     }
     static RECORDING: Services = Services {
-        performance_accumulator_begin: accumulator_begin,
-        performance_accumulator_end: accumulator_end,
-        performance_accumulator_reset: accumulator_reset,
-        performance_measurer_begin: measurer_begin,
-        performance_measurer_end: measurer_end,
-        performance_measurer_paused: measurer_paused,
-        performance_measurer_set_inactive: measurer_set_inactive,
+        accumulator_begin,
+        accumulator_end,
+        accumulator_reset,
+        measurer_begin,
+        measurer_end,
+        measurer_paused,
+        measurer_set_inactive,
     };
 
     /// Bind the recording table for the process; return and clear this thread's recorded

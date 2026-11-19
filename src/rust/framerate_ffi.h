@@ -16,13 +16,13 @@
 struct alignas(8) OpenTTDPerformanceMeasurer { std::byte storage[16]; };
 struct alignas(8) OpenTTDPerformanceAccumulator { std::byte storage[16]; };
 struct OpenTTDFramerateServices {
-	void (*performance_accumulator_begin)(OpenTTDPerformanceAccumulator *storage, uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(performance_accumulator_begin);
-	void (*performance_accumulator_end)(OpenTTDPerformanceAccumulator *storage) noexcept OPENTTD_SERVICE_DEFAULT(performance_accumulator_end);
-	void (*performance_accumulator_reset)(uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(performance_accumulator_reset);
-	void (*performance_measurer_begin)(OpenTTDPerformanceMeasurer *storage, uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(performance_measurer_begin);
-	void (*performance_measurer_end)(OpenTTDPerformanceMeasurer *storage) noexcept OPENTTD_SERVICE_DEFAULT(performance_measurer_end);
-	void (*performance_measurer_paused)(uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(performance_measurer_paused);
-	void (*performance_measurer_set_inactive)(uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(performance_measurer_set_inactive);
+	void (*accumulator_begin)(OpenTTDPerformanceAccumulator *storage, uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(accumulator_begin);
+	void (*accumulator_end)(OpenTTDPerformanceAccumulator *storage) noexcept OPENTTD_SERVICE_DEFAULT(accumulator_end);
+	void (*accumulator_reset)(uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(accumulator_reset);
+	void (*measurer_begin)(OpenTTDPerformanceMeasurer *storage, uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(measurer_begin);
+	void (*measurer_end)(OpenTTDPerformanceMeasurer *storage) noexcept OPENTTD_SERVICE_DEFAULT(measurer_end);
+	void (*measurer_paused)(uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(measurer_paused);
+	void (*measurer_set_inactive)(uint8_t elem) noexcept OPENTTD_SERVICE_DEFAULT(measurer_set_inactive);
 };
 const OpenTTDFramerateServices &GetRustFramerateServices() noexcept;
 extern "C" const OpenTTDFramerateServices *openttd_rust_framerate_bind(const OpenTTDFramerateServices *services);
