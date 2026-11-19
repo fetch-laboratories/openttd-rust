@@ -198,8 +198,10 @@ pub(crate) unsafe fn run(
     services: *const Services,
 ) {
     let mut storage = MaybeUninit::uninit();
+    // SAFETY: `RunTileLoop` runs in the game loop or world generation, serialized by the
+    // game-state mutex; the guard drops at the end of this body.
     let _framerate =
-        PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE);
+        unsafe { PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE) };
 
     // SAFETY: Same contract; the gate was read once for the batch.
     unsafe {

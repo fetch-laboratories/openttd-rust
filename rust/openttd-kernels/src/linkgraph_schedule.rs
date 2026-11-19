@@ -49,7 +49,18 @@ pub(crate) const TEST_TABLE: Services = Services {
 };
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, can_allocate, destroy_job, graph_pool, job_pool, new_job, shared, start_thread, vehicle };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services {
+        allocation_failure,
+        assert_graph,
+        can_allocate,
+        destroy_job,
+        graph_pool,
+        job_pool,
+        new_job,
+        shared,
+        start_thread,
+        vehicle,
+    };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
 }
@@ -217,12 +228,15 @@ pub(crate) fn tick(
         spawn_next(s);
     } else if offset == interval / 2 {
         if !(company.finance.networking)() || (company.network_server)() {
-            PerformanceMeasurer::set_inactive(PerformanceElement::PFE_GL_LINKGRAPH);
+            // SAFETY: The game loop's statement, serialized by the game-state mutex.
+            unsafe { PerformanceMeasurer::set_inactive(PerformanceElement::PFE_GL_LINKGRAPH) };
             join_next(s);
         } else {
             let mut storage = MaybeUninit::uninit();
-            let _framerate =
-                PerformanceMeasurer::new(&mut storage, PerformanceElement::PFE_GL_LINKGRAPH);
+            // SAFETY: As above; the guard drops at the end of this block.
+            let _framerate = unsafe {
+                PerformanceMeasurer::new(&mut storage, PerformanceElement::PFE_GL_LINKGRAPH)
+            };
             join_next(s);
         }
     }

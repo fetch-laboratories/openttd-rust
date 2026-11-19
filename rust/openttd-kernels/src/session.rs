@@ -711,8 +711,11 @@ impl<'a> Session<'a> {
         let s = self.s;
         {
             let mut storage = MaybeUninit::uninit();
-            let _framerate =
-                PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE);
+            // SAFETY: `CallLandscapeTick` runs in the game loop, serialized by the game-state
+            // mutex; the guard drops at the end of this block.
+            let _framerate = unsafe {
+                PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE)
+            };
 
             let road = (s.road_begin)(self.frame);
             unsafe {
@@ -756,13 +759,17 @@ impl<'a> Session<'a> {
             }
         }
         if pause() != 0 || (self.world().modal)() {
-            PerformanceMeasurer::paused(PerformanceElement::PFE_GAMELOOP);
-            PerformanceMeasurer::paused(PerformanceElement::PFE_GL_ECONOMY);
-            PerformanceMeasurer::paused(PerformanceElement::PFE_GL_TRAINS);
-            PerformanceMeasurer::paused(PerformanceElement::PFE_GL_ROADVEHS);
-            PerformanceMeasurer::paused(PerformanceElement::PFE_GL_SHIPS);
-            PerformanceMeasurer::paused(PerformanceElement::PFE_GL_AIRCRAFT);
-            PerformanceMeasurer::paused(PerformanceElement::PFE_GL_LANDSCAPE);
+            // SAFETY: `StateGameLoop` runs serialized by the game-state mutex on the game
+            // loop's thread, as do the measurements below.
+            unsafe {
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GAMELOOP);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_ECONOMY);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_TRAINS);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_ROADVEHS);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_SHIPS);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_AIRCRAFT);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_LANDSCAPE);
+            }
 
             if !(self.world().modal)() {
                 self.landscaping();
@@ -772,11 +779,14 @@ impl<'a> Session<'a> {
             }
             return Ok(());
         }
-        *framerate = Some(PerformanceMeasurer::new(
-            storage,
-            PerformanceElement::PFE_GAMELOOP,
-        ));
-        PerformanceAccumulator::reset(PerformanceElement::PFE_GL_LANDSCAPE);
+        // SAFETY: As above; the state loop's entry drops the guard on this thread.
+        unsafe {
+            *framerate = Some(PerformanceMeasurer::new(
+                storage,
+                PerformanceElement::PFE_GAMELOOP,
+            ));
+            PerformanceAccumulator::reset(PerformanceElement::PFE_GL_LANDSCAPE);
+        }
 
         if mode() == GameMode::EDITOR {
             self.storage(crate::newgrf_storage::PSM_ENTER_GAMELOOP);
@@ -815,8 +825,10 @@ impl<'a> Session<'a> {
             self.storage(crate::newgrf_storage::PSM_LEAVE_GAMELOOP);
             if (s.scripts_enabled)() {
                 let mut storage = MaybeUninit::uninit();
-                let _script_framerate =
-                    PerformanceMeasurer::new(&mut storage, PerformanceElement::PFE_ALLSCRIPTS);
+                // SAFETY: As above; the guard drops at the end of this block.
+                let _script_framerate = unsafe {
+                    PerformanceMeasurer::new(&mut storage, PerformanceElement::PFE_ALLSCRIPTS)
+                };
                 complete((s.ai_script)(self.frame))?;
                 complete((s.game_script)(self.frame))?;
             }

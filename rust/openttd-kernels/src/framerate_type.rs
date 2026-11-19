@@ -12,9 +12,11 @@
 //! is bound once for the process; before it binds, every measurement is discarded, as a
 //! measurement changes no game state.
 //!
-//! `_pf_data` is unsynchronised, as in the original: each call runs on the thread that runs
-//! the original's statement, the game loop's for every Rust caller. A guard ends on the thread
-//! that began it, so neither guard is `Send` or `Sync`. A guard's native object is constructed
+//! `_pf_data` is unsynchronised, as in the original, so each entry point is `unsafe`: its
+//! caller runs on the thread that runs the original's statement (the game loop's, or world
+//! generation's for the tile loop), serialized with every other framerate call by the
+//! game-state mutex. A guard ends on the thread that
+//! began it, so neither guard is `Send` or `Sync`; its contract covers its drop. A guard's native object is constructed
 //! in, and destroyed from, storage that the caller keeps at one address until the guard drops;
 //! the guard itself holds only references and may move.
 
@@ -26,8 +28,12 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 /// are those Rust measures; the others arrive with their first Rust user.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PerformanceElement(pub u8);
+pub struct PerformanceElement(u8);
 impl PerformanceElement {
+    /// The `uint8_t` the native entry points take.
+    pub(crate) const fn base(self) -> u8 {
+        self.0
+    }
     /// Speed of gameloop processing.
     pub const PFE_GAMELOOP: Self = Self(0);
     /// Time spent processing cargo movement
@@ -151,14 +157,22 @@ pub(crate) struct PerformanceMeasurer<'a> {
     services: &'static Services,
     thread: PhantomData<*const ()>,
 }
+#[allow(
+    unsafe_code,
+    reason = "the entry points' serialized-access contract on unsynchronised `_pf_data`"
+)]
 impl<'a> PerformanceMeasurer<'a> {
     /// Begin a cycle of a measured element.
-    pub(crate) fn new(
+    ///
+    /// # Safety
+    /// Called on the thread that runs the original's statement, serialized with every other
+    /// framerate call by the game-state mutex, which also drops the guard.
+    pub(crate) unsafe fn new(
         storage: &'a mut MaybeUninit<PerformanceMeasurerStorage>,
         elem: PerformanceElement,
     ) -> Self {
         let services = services();
-        (services.measurer_begin)(storage.as_mut_ptr(), elem.0);
+        (services.measurer_begin)(storage.as_mut_ptr(), elem.base());
         Self {
             storage,
             services,
@@ -166,12 +180,20 @@ impl<'a> PerformanceMeasurer<'a> {
         }
     }
     /// Mark a performance element as not currently in use.
-    pub(crate) fn set_inactive(elem: PerformanceElement) {
-        (services().measurer_set_inactive)(elem.0);
+    ///
+    /// # Safety
+    /// Called on the thread that runs the original's statement, serialized with every other
+    /// framerate call by the game-state mutex.
+    pub(crate) unsafe fn set_inactive(elem: PerformanceElement) {
+        (services().measurer_set_inactive)(elem.base());
     }
     /// Indicate that a cycle of "pause" where no processing occurs.
-    pub(crate) fn paused(elem: PerformanceElement) {
-        (services().measurer_paused)(elem.0);
+    ///
+    /// # Safety
+    /// Called on the thread that runs the original's statement, serialized with every other
+    /// framerate call by the game-state mutex.
+    pub(crate) unsafe fn paused(elem: PerformanceElement) {
+        (services().measurer_paused)(elem.base());
     }
 }
 impl Drop for PerformanceMeasurer<'_> {
@@ -198,14 +220,22 @@ pub(crate) struct PerformanceAccumulator<'a> {
     services: &'static Services,
     thread: PhantomData<*const ()>,
 }
+#[allow(
+    unsafe_code,
+    reason = "the entry points' serialized-access contract on unsynchronised `_pf_data`"
+)]
 impl<'a> PerformanceAccumulator<'a> {
     /// Begin measuring one block of the accumulating value.
-    pub(crate) fn new(
+    ///
+    /// # Safety
+    /// Called on the thread that runs the original's statement, serialized with every other
+    /// framerate call by the game-state mutex, which also drops the guard.
+    pub(crate) unsafe fn new(
         storage: &'a mut MaybeUninit<PerformanceAccumulatorStorage>,
         elem: PerformanceElement,
     ) -> Self {
         let services = services();
-        (services.accumulator_begin)(storage.as_mut_ptr(), elem.0);
+        (services.accumulator_begin)(storage.as_mut_ptr(), elem.base());
         Self {
             storage,
             services,
@@ -215,8 +245,12 @@ impl<'a> PerformanceAccumulator<'a> {
     /// Store the previous accumulator value and reset for a new cycle of accumulating
     /// measurements. This function must be called once per frame, otherwise measurements
     /// are not collected.
-    pub(crate) fn reset(elem: PerformanceElement) {
-        (services().accumulator_reset)(elem.0);
+    ///
+    /// # Safety
+    /// Called on the thread that runs the original's statement, serialized with every other
+    /// framerate call by the game-state mutex.
+    pub(crate) unsafe fn reset(elem: PerformanceElement) {
+        (services().accumulator_reset)(elem.base());
     }
 }
 impl Drop for PerformanceAccumulator<'_> {
@@ -235,7 +269,8 @@ pub(crate) mod testing {
     use std::cell::{Cell, RefCell};
 
     /// One native framerate call, in the order the code under test made it. An end carries
-    /// the element its begin wrote into the storage.
+    /// the element its begin wrote into the storage, and must end the innermost live scope at
+    /// the address that scope began at.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub(crate) enum Effect {
         AccumulatorBegin(PerformanceElement),
@@ -250,6 +285,16 @@ pub(crate) mod testing {
     thread_local! {
         static EFFECTS: RefCell<Vec<Effect>> = const { RefCell::new(Vec::new()) };
         static OBSERVER: Cell<Option<fn(Effect)>> = const { Cell::new(None) };
+        static LIVE: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
+    }
+    fn begin(storage: *mut [std::mem::MaybeUninit<u8>; 16], elem: u8) {
+        write(storage, elem);
+        LIVE.with(|l| l.borrow_mut().push(storage.addr()));
+    }
+    fn end(storage: *mut [std::mem::MaybeUninit<u8>; 16]) -> PerformanceElement {
+        let began = LIVE.with(|l| l.borrow_mut().pop());
+        assert_eq!(began, Some(storage.addr()), "a scope ends where it began");
+        read(storage)
     }
     fn push(effect: Effect) {
         if let Some(observe) = OBSERVER.get() {
@@ -280,21 +325,21 @@ pub(crate) mod testing {
         PerformanceElement(unsafe { (*storage)[0].assume_init() })
     }
     extern "C" fn accumulator_begin(storage: *mut PerformanceAccumulatorStorage, elem: u8) {
-        write(storage.cast(), elem);
+        begin(storage.cast(), elem);
         push(Effect::AccumulatorBegin(PerformanceElement(elem)));
     }
     extern "C" fn accumulator_end(storage: *mut PerformanceAccumulatorStorage) {
-        push(Effect::AccumulatorEnd(read(storage.cast())));
+        push(Effect::AccumulatorEnd(end(storage.cast())));
     }
     extern "C" fn accumulator_reset(elem: u8) {
         push(Effect::AccumulatorReset(PerformanceElement(elem)));
     }
     extern "C" fn measurer_begin(storage: *mut PerformanceMeasurerStorage, elem: u8) {
-        write(storage.cast(), elem);
+        begin(storage.cast(), elem);
         push(Effect::MeasurerBegin(PerformanceElement(elem)));
     }
     extern "C" fn measurer_end(storage: *mut PerformanceMeasurerStorage) {
-        push(Effect::MeasurerEnd(read(storage.cast())));
+        push(Effect::MeasurerEnd(end(storage.cast())));
     }
     extern "C" fn measurer_paused(elem: u8) {
         push(Effect::MeasurerPaused(PerformanceElement(elem)));
@@ -330,11 +375,18 @@ mod tests {
     use std::mem::MaybeUninit;
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the test calls the entry points under their serialized-access contract"
+    )]
     fn each_function_passes_its_element_to_its_entry_point() {
         take();
-        PerformanceMeasurer::paused(E::PFE_GL_SHIPS);
-        PerformanceMeasurer::set_inactive(E::PFE_GL_LINKGRAPH);
-        PerformanceAccumulator::reset(E::PFE_GL_AIRCRAFT);
+        // SAFETY: Each test thread makes only its own framerate calls, on the recording table.
+        unsafe {
+            PerformanceMeasurer::paused(E::PFE_GL_SHIPS);
+            PerformanceMeasurer::set_inactive(E::PFE_GL_LINKGRAPH);
+            PerformanceAccumulator::reset(E::PFE_GL_AIRCRAFT);
+        }
         assert_eq!(
             take(),
             [
@@ -346,28 +398,39 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the test calls the entry points under their serialized-access contract"
+    )]
     fn a_guard_begins_at_new_and_ends_at_drop() {
         take();
         let mut storage = MaybeUninit::uninit();
-        let measurer = PerformanceMeasurer::new(&mut storage, E::PFE_ALLSCRIPTS);
+        // SAFETY: As above; the guard drops on this thread.
+        let measurer = unsafe { PerformanceMeasurer::new(&mut storage, E::PFE_ALLSCRIPTS) };
         assert_eq!(take(), [Effect::MeasurerBegin(E::PFE_ALLSCRIPTS)]);
         drop(measurer);
         assert_eq!(take(), [Effect::MeasurerEnd(E::PFE_ALLSCRIPTS)]);
         let mut storage = MaybeUninit::uninit();
-        let accumulator = PerformanceAccumulator::new(&mut storage, E::PFE_GL_LANDSCAPE);
+        // SAFETY: As above.
+        let accumulator = unsafe { PerformanceAccumulator::new(&mut storage, E::PFE_GL_LANDSCAPE) };
         assert_eq!(take(), [Effect::AccumulatorBegin(E::PFE_GL_LANDSCAPE)]);
         drop(accumulator);
         assert_eq!(take(), [Effect::AccumulatorEnd(E::PFE_GL_LANDSCAPE)]);
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the test calls the entry points under their serialized-access contract"
+    )]
     fn nested_guards_end_in_reverse_order() {
         take();
         {
             let mut outer = MaybeUninit::uninit();
-            let _outer = PerformanceMeasurer::new(&mut outer, E::PFE_GAMELOOP);
+            // SAFETY: As above; both guards drop on this thread.
+            let _outer = unsafe { PerformanceMeasurer::new(&mut outer, E::PFE_GAMELOOP) };
             let mut inner = MaybeUninit::uninit();
-            let _inner = PerformanceAccumulator::new(&mut inner, E::PFE_GL_LANDSCAPE);
+            let _inner = unsafe { PerformanceAccumulator::new(&mut inner, E::PFE_GL_LANDSCAPE) };
         }
         assert_eq!(
             take(),
@@ -381,12 +444,18 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the test calls the entry points under their serialized-access contract"
+    )]
     fn a_guard_ends_when_its_function_returns_early() {
         fn measured(fail: bool) -> Result<(), ()> {
             let mut storage = MaybeUninit::uninit();
-            let _framerate = PerformanceMeasurer::new(&mut storage, E::PFE_GL_ECONOMY);
+            // SAFETY: As above; the guard drops on this thread.
+            let _framerate = unsafe { PerformanceMeasurer::new(&mut storage, E::PFE_GL_ECONOMY) };
             if fail { Err(()) } else { Ok(()) }?;
-            PerformanceAccumulator::reset(E::PFE_GL_TRAINS);
+            // SAFETY: As above.
+            unsafe { PerformanceAccumulator::reset(E::PFE_GL_TRAINS) };
             Ok(())
         }
         take();

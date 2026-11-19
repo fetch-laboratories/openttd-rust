@@ -425,7 +425,10 @@ unsafe fn run_ticks<const COUNTED: bool>(
     {
         let mut storage = MaybeUninit::uninit();
         // The measurer's begin and end are two counted crossings.
-        let _framerate = PerformanceMeasurer::new(&mut storage, PerformanceElement::PFE_GL_ECONOMY);
+        // SAFETY: `CallVehicleTicks` runs in the game loop, serialized by the game-state
+        // mutex; the guard drops at the end of this block, as do the resets below.
+        let _framerate =
+            unsafe { PerformanceMeasurer::new(&mut storage, PerformanceElement::PFE_GL_ECONOMY) };
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
             crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
@@ -433,26 +436,29 @@ unsafe fn run_ticks<const COUNTED: bool>(
         // SAFETY: The caller's live tables.
         unsafe { load_stations::<COUNTED>(tables) };
     }
-    svc!(
-        COUNTED,
-        PerformanceAccumulator::reset,
-        PerformanceElement::PFE_GL_TRAINS
-    );
-    svc!(
-        COUNTED,
-        PerformanceAccumulator::reset,
-        PerformanceElement::PFE_GL_ROADVEHS
-    );
-    svc!(
-        COUNTED,
-        PerformanceAccumulator::reset,
-        PerformanceElement::PFE_GL_SHIPS
-    );
-    svc!(
-        COUNTED,
-        PerformanceAccumulator::reset,
-        PerformanceElement::PFE_GL_AIRCRAFT
-    );
+    // SAFETY: As the measurer's.
+    unsafe {
+        svc!(
+            COUNTED,
+            PerformanceAccumulator::reset,
+            PerformanceElement::PFE_GL_TRAINS
+        );
+        svc!(
+            COUNTED,
+            PerformanceAccumulator::reset,
+            PerformanceElement::PFE_GL_ROADVEHS
+        );
+        svc!(
+            COUNTED,
+            PerformanceAccumulator::reset,
+            PerformanceElement::PFE_GL_SHIPS
+        );
+        svc!(
+            COUNTED,
+            PerformanceAccumulator::reset,
+            PerformanceElement::PFE_GL_AIRCRAFT
+        );
+    }
     let post = PostTickServices {
         cargo_owner: s.cargo_owner,
         sound: unsafe { &*s.vehicle }.play_vehicle_sound,

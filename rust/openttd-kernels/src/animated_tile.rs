@@ -157,8 +157,10 @@ pub extern "C" fn openttd_rust_animation_delete(tile: u32, immediate: bool) {
 /// `AnimateTile` on them.
 pub(crate) fn run() {
     let mut storage = MaybeUninit::uninit();
+    // SAFETY: `AnimateAnimatedTiles` runs in the game loop, serialized by the game-state
+    // mutex; the guard drops at the end of this body.
     let _landscape_framerate =
-        PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE);
+        unsafe { PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE) };
 
     let a = services();
     let mut i = 0;
