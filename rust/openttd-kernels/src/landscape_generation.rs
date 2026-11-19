@@ -453,12 +453,7 @@ impl World<'_> {
         // The scheduler acquires its own audited descriptor at this original
         // entry. Generation itself neither reads nor retains that descriptor.
         unsafe {
-            crate::tile_loop::run(
-                self.map.log_x,
-                self.size_y.ilog2(),
-                input.settings,
-                input.services,
-            );
+            crate::tile_loop::run(input.settings, input.services);
         }
         (self.a.end_loop)(frame);
     }

@@ -76,7 +76,8 @@ template<typename Check> void Run(Check check)
 		.station = &station,
 		.objects = &objects,
 	};
-	const OpenTTDTreeLoopSettings settings{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false};
+	shared.tick_counter = []() noexcept -> uint64_t { return 1; };
+	const OpenTTDTreeLoopSettings settings{.size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false};
 	const auto saved_cursor = *openttd_rust_tile_loop_cursor();
 	*openttd_rust_tile_loop_cursor() = 1;
 	SessionFixture fixture;

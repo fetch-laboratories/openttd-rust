@@ -673,14 +673,8 @@ impl<'a> Session<'a> {
     fn tile_loop(&self) {
         let s = self.s;
         let call = unsafe { &*(s.tile_loop_begin)(self.frame) };
-        let shared = unsafe { &*s.shared };
         unsafe {
-            crate::tile_loop::run(
-                shared.map().log_x,
-                shared.map_log_y(),
-                call.settings,
-                call.services,
-            );
+            crate::tile_loop::run(call.settings, call.services);
         }
         (s.tile_loop_end)(self.frame);
     }

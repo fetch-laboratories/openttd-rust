@@ -179,18 +179,23 @@ unsafe fn dispatch<const AMBIENT: bool>(
 /// reached pointers/tables are immutable and live; each native entry owns its lazy
 /// result context independently. Calls are serialized with reset and
 /// save/load. Callbacks are noexcept; reentry sees the cursor before this batch.
-pub(crate) unsafe fn run(
-    log_x: c_uint,
-    log_y: c_uint,
-    settings: trees::LoopSettings,
-    services: *const Services,
-) {
+pub(crate) unsafe fn run(settings: trees::LoopSettings, services: *const Services) {
     let mut storage = MaybeUninit::uninit();
     // SAFETY: `RunTileLoop` runs in the game loop or world generation, serialized by the
     // game-state mutex; the guard drops at the end of this body.
     let _framerate =
         unsafe { PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE) };
 
+    // The map's log sizes and `TimerGameTick::counter` are the original's reads inside the
+    // accumulator's scope, each read once for the batch.
+    // SAFETY: The caller's live immutable table.
+    let shared = unsafe { &*(*services).shared };
+    let log_x = shared.map().log_x;
+    let log_y = shared.map_log_y();
+    let settings = trees::LoopSettings {
+        tick_counter: (shared.tick_counter)(),
+        ..settings
+    };
     // SAFETY: Same contract; the gate was read once for the batch.
     unsafe {
         if settings.ambient_callback {
@@ -333,8 +338,14 @@ mod comparison_tests {
         static RUN: RefCell<Run> = RefCell::new(Run::default());
         static TILES: Cell<*mut BaseTileLayout> = const { Cell::new(ptr::null_mut()) };
         static EXTENDED: Cell<*const ExtendedTileLayout> = const { Cell::new(ptr::null()) };
-        static ENTRY: Cell<Option<(c_uint, c_uint, trees::LoopSettings, *const Services)>> =
+        static ENTRY: Cell<Option<(trees::LoopSettings, *const Services)>> =
             const { Cell::new(None) };
+        static TICK: Cell<u64> = const { Cell::new(0) };
+    }
+    /// `TimerGameTick::counter` of the batch under test.
+    extern "C" fn tick_counter() -> u64 {
+        STEPS.with(|steps| steps.borrow_mut().push(Step::Tick));
+        TICK.get()
     }
 
     extern "C" fn shared_tile_type(tile: u32) -> u8 {
@@ -377,9 +388,9 @@ mod comparison_tests {
             // Both entries must retain the pre-batch canonical cursor until return.
             // SAFETY: Serialized test access to the scheduler's cursor.
             assert_eq!(unsafe { *openttd_rust_tile_loop_cursor() }, start);
-            let (log_x, log_y, settings, services) = ENTRY.get().expect("live entry");
+            let (settings, services) = ENTRY.get().expect("live entry");
             // SAFETY: The same live tables as the outer entry.
-            unsafe { run(log_x, log_y, settings, services) };
+            unsafe { run(settings, services) };
         }
     }
     unsafe extern "C" fn station_by_tile(tile: u32) -> *mut crate::station::BaseStation {
@@ -412,8 +423,11 @@ mod comparison_tests {
             },
             log_x,
         );
+        crate::map_func::fixture::set_log_y(log_y);
+        TICK.set(tick);
         let mut shared = SHARED;
         shared.tile_type = shared_tile_type;
+        shared.tick_counter = tick_counter;
         shared.station_type = station_type;
         shared.map = crate::map_func::fixture::statics();
         let movement = crate::movement::MovementServices {
@@ -469,14 +483,15 @@ mod comparison_tests {
             objects: &raw const objects,
         };
         let settings = trees::LoopSettings {
-            tick_counter: tick,
+            // `run` reads the counter through the shared table.
+            tick_counter: 0,
             size_x: 1 << log_x,
             climate: crate::landscape_type::LandscapeType::Temperate,
             extra: trees::ExtraTreePlacement::ETP_NO_SPREAD,
             ambient: false,
             ambient_callback: false,
         };
-        ENTRY.set(Some((log_x, log_y, settings, &raw const services)));
+        ENTRY.set(Some((settings, &raw const services)));
         RUN.with(|run| {
             let mut run = run.borrow_mut();
             (run.hash, run.count, run.nested, run.start) = (0, 0, false, start);
@@ -484,7 +499,7 @@ mod comparison_tests {
         // SAFETY: Serialized test access to the scheduler's cursor and live tables.
         let cursor = unsafe {
             *openttd_rust_tile_loop_cursor() = start;
-            run(log_x, log_y, settings, &raw const services);
+            run(settings, &raw const services);
             *openttd_rust_tile_loop_cursor()
         };
         ENTRY.set(None);
@@ -618,14 +633,17 @@ mod comparison_tests {
             let output = batch(6, 6, 1, 1, raw);
             framerate::observe(None);
             RUN.with(|run| *run.borrow_mut() = Run::default());
-            // `RunTileLoop`'s accumulator is its first statement and ends with its body, in
-            // the nested entry that the first visit makes as in the outer one.
+            // `RunTileLoop`'s accumulator is its first statement, before its read of
+            // `TimerGameTick::counter`, and ends with its body, in the nested entry that the
+            // first visit makes as in the outer one.
             assert_eq!(
                 STEPS.with(|steps| std::mem::take(&mut *steps.borrow_mut())),
                 [
                     Step::Begin,
+                    Step::Tick,
                     Step::Visits,
                     Step::Begin,
+                    Step::Tick,
                     Step::Visits,
                     Step::End,
                     Step::Visits,
@@ -646,10 +664,12 @@ mod comparison_tests {
         static FAILED_AT: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
         static STEPS: RefCell<Vec<Step>> = const { RefCell::new(Vec::new()) };
     }
-    /// The `PFE_GL_LANDSCAPE` accumulator's begin and end, and each run of tile visits.
+    /// The `PFE_GL_LANDSCAPE` accumulator's begin and end, the batch's tick-counter read and
+    /// each run of tile visits.
     #[derive(Debug, PartialEq, Eq)]
     enum Step {
         Begin,
+        Tick,
         Visits,
         End,
     }
