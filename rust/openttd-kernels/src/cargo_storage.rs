@@ -1949,7 +1949,11 @@ mod tests {
     /// Failed native checks while running `operation`. None may fail between two
     /// operations: the count is zero on entry, and taking it resets it.
     fn failed_checks(operation: impl FnOnce()) -> u32 {
-        assert_eq!(FAILED_CHECKS.get(), 0, "a native check failed outside an operation");
+        assert_eq!(
+            FAILED_CHECKS.get(),
+            0,
+            "a native check failed outside an operation"
+        );
         operation();
         FAILED_CHECKS.replace(0)
     }
@@ -1991,7 +1995,11 @@ mod tests {
             let distance = Cell::new(u32::MAX);
             assert_eq!(
                 failed_checks(|| {
-                    distance.set(openttd_rust_cargo_packet_distance(p, &raw const service, at));
+                    distance.set(openttd_rust_cargo_packet_distance(
+                        p,
+                        &raw const service,
+                        at,
+                    ));
                 }),
                 0
             );
