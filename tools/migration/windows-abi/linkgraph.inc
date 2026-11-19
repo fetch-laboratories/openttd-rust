@@ -25,10 +25,8 @@ static void LinkGraphJob()
 	static const OpenTTDScheduleServices services{
 		.allocation_failure = nullptr,
 		.assert_graph = nullptr,
-		.begin_measurement = nullptr,
 		.can_allocate = nullptr,
 		.destroy_job = nullptr,
-		.end_measurement = nullptr,
 		.graph_pool = nullptr,
 		.job_pool = nullptr,
 		.new_job = nullptr,

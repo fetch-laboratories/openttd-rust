@@ -508,14 +508,8 @@ impl World<'_> {
     fn tile_loop(&self) {
         let s = self.s;
         let call = unsafe { &*(s.loop_begin)(self.frame) };
-        let shared = unsafe { &*(*s.landscape).shared };
         unsafe {
-            crate::tile_loop::run(
-                shared.map().log_x,
-                ((shared.map_max_y)() + 1).ilog2(),
-                call.settings,
-                call.services,
-            );
+            crate::tile_loop::run(call.settings, call.services);
         }
         (s.loop_end)(self.frame);
     }

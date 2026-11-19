@@ -12,6 +12,7 @@
 #![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
 use crate::animated_tile_map::AnimatedTileState;
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO};
+use crate::framerate_type::{PerformanceAccumulator, PerformanceElement};
 use crate::game_state::GameState;
 use crate::industry::{ShellHandle as IndustryShell, TileSpec as IndustrySpec};
 use crate::newgrf_animation_base::{Binding, Entry};
@@ -32,6 +33,7 @@ use crate::{
     tile_type::{INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_STATION},
     town::Leaves,
 };
+use std::mem::MaybeUninit;
 #[repr(C)]
 pub struct HouseSpec {
     _private: [u8; 0],
@@ -151,7 +153,15 @@ pub extern "C" fn openttd_rust_animation_delete(tile: u32, immediate: bool) {
         (a.set_state)(tile, AnimatedTileState::DELETED);
     }
 }
+/// `AnimateAnimatedTiles`: animate all tiles in the animated tile list, i.e. call
+/// `AnimateTile` on them.
 pub(crate) fn run() {
+    let mut storage = MaybeUninit::uninit();
+    // SAFETY: `AnimateAnimatedTiles` runs in the game loop, serialized by the game-state
+    // mutex; the guard drops at the end of this body.
+    let _landscape_framerate =
+        unsafe { PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE) };
+
     let a = services();
     let mut i = 0;
     while i < openttd_rust_animation_count() {

@@ -11,11 +11,13 @@
 //! map view") gives the interval that permits both.
 #![allow(unsafe_code)]
 
+use crate::framerate_type::{PerformanceAccumulator, PerformanceElement};
 use crate::landscape::{TILE_UPDATE_FREQUENCY, TILE_UPDATE_FREQUENCY_LOG};
 use crate::map_type::{MAX_MAP_SIZE_BITS, MIN_MAP_SIZE_BITS};
 use crate::tile_type::{TileIndex, TileType};
 use crate::{ground, industry, services, town, trees, water};
 use std::ffi::c_uint;
+use std::mem::MaybeUninit;
 
 /// `feedbacks`: maximal length LFSR feedback terms, from 12-bit (for 64x64 maps) to 24-bit
 /// (for 4096x4096 maps). Extracted from <http://www.ece.cmu.edu/~koopman/lfsr/>. The length
@@ -177,12 +179,23 @@ unsafe fn dispatch<const AMBIENT: bool>(
 /// reached pointers/tables are immutable and live; each native entry owns its lazy
 /// result context independently. Calls are serialized with reset and
 /// save/load. Callbacks are noexcept; reentry sees the cursor before this batch.
-pub(crate) unsafe fn run(
-    log_x: c_uint,
-    log_y: c_uint,
-    settings: trees::LoopSettings,
-    services: *const Services,
-) {
+pub(crate) unsafe fn run(settings: trees::LoopSettings, services: *const Services) {
+    let mut storage = MaybeUninit::uninit();
+    // SAFETY: `RunTileLoop` runs in the game loop or world generation, serialized by the
+    // game-state mutex; the guard drops at the end of this body.
+    let _framerate =
+        unsafe { PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE) };
+
+    // The map's log sizes and `TimerGameTick::counter` are the original's reads inside the
+    // accumulator's scope, each read once for the batch.
+    // SAFETY: The caller's live immutable table.
+    let shared = unsafe { &*(*services).shared };
+    let log_x = shared.map().log_x;
+    let log_y = shared.map_log_y();
+    let settings = trees::LoopSettings {
+        tick_counter: (shared.tick_counter)(),
+        ..settings
+    };
     // SAFETY: Same contract; the gate was read once for the batch.
     unsafe {
         if settings.ambient_callback {
@@ -299,6 +312,7 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod comparison_tests {
     use super::*;
+    use crate::framerate_type::testing::{self as framerate, Effect};
     use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
     use crate::oracle;
     use crate::test_tables::{INDUSTRY_TILES, OBJECTS, ROAD_STOPS, SHARED};
@@ -324,8 +338,14 @@ mod comparison_tests {
         static RUN: RefCell<Run> = RefCell::new(Run::default());
         static TILES: Cell<*mut BaseTileLayout> = const { Cell::new(ptr::null_mut()) };
         static EXTENDED: Cell<*const ExtendedTileLayout> = const { Cell::new(ptr::null()) };
-        static ENTRY: Cell<Option<(c_uint, c_uint, trees::LoopSettings, *const Services)>> =
+        static ENTRY: Cell<Option<(trees::LoopSettings, *const Services)>> =
             const { Cell::new(None) };
+        static TICK: Cell<u64> = const { Cell::new(0) };
+    }
+    /// `TimerGameTick::counter` of the batch under test.
+    extern "C" fn tick_counter() -> u64 {
+        STEPS.with(|steps| steps.borrow_mut().push(Step::Tick));
+        TICK.get()
     }
 
     extern "C" fn shared_tile_type(tile: u32) -> u8 {
@@ -343,6 +363,12 @@ mod comparison_tests {
                 .wrapping_mul(1_099_511_628_211);
             run.count += 1;
             (run.mutate, run.feedback)
+        });
+        STEPS.with(|steps| {
+            let mut steps = steps.borrow_mut();
+            if steps.last() != Some(&Step::Visits) {
+                steps.push(Step::Visits);
+            }
         });
         if mutate && tile != 0 {
             let next = (tile >> 1) ^ (0_u32.wrapping_sub(tile & 1) & feedback);
@@ -362,9 +388,9 @@ mod comparison_tests {
             // Both entries must retain the pre-batch canonical cursor until return.
             // SAFETY: Serialized test access to the scheduler's cursor.
             assert_eq!(unsafe { *openttd_rust_tile_loop_cursor() }, start);
-            let (log_x, log_y, settings, services) = ENTRY.get().expect("live entry");
+            let (settings, services) = ENTRY.get().expect("live entry");
             // SAFETY: The same live tables as the outer entry.
-            unsafe { run(log_x, log_y, settings, services) };
+            unsafe { run(settings, services) };
         }
     }
     unsafe extern "C" fn station_by_tile(tile: u32) -> *mut crate::station::BaseStation {
@@ -397,8 +423,11 @@ mod comparison_tests {
             },
             log_x,
         );
+        crate::map_func::fixture::set_log_y(log_y);
+        TICK.set(tick);
         let mut shared = SHARED;
         shared.tile_type = shared_tile_type;
+        shared.tick_counter = tick_counter;
         shared.station_type = station_type;
         shared.map = crate::map_func::fixture::statics();
         let movement = crate::movement::MovementServices {
@@ -454,14 +483,15 @@ mod comparison_tests {
             objects: &raw const objects,
         };
         let settings = trees::LoopSettings {
-            tick_counter: tick,
+            // `run` reads the counter through the shared table.
+            tick_counter: 0,
             size_x: 1 << log_x,
             climate: crate::landscape_type::LandscapeType::Temperate,
             extra: trees::ExtraTreePlacement::ETP_NO_SPREAD,
             ambient: false,
             ambient_callback: false,
         };
-        ENTRY.set(Some((log_x, log_y, settings, &raw const services)));
+        ENTRY.set(Some((settings, &raw const services)));
         RUN.with(|run| {
             let mut run = run.borrow_mut();
             (run.hash, run.count, run.nested, run.start) = (0, 0, false, start);
@@ -469,7 +499,7 @@ mod comparison_tests {
         // SAFETY: Serialized test access to the scheduler's cursor and live tables.
         let cursor = unsafe {
             *openttd_rust_tile_loop_cursor() = start;
-            run(log_x, log_y, settings, &raw const services);
+            run(settings, &raw const services);
             *openttd_rust_tile_loop_cursor()
         };
         ENTRY.set(None);
@@ -597,8 +627,29 @@ mod comparison_tests {
                 let mut run = run.borrow_mut();
                 (run.reenter, run.mutate, run.feedback) = (true, true, 0xD8F);
             });
+            STEPS.with(|steps| steps.borrow_mut().clear());
+            framerate::take();
+            framerate::observe(Some(record_framerate));
             let output = batch(6, 6, 1, 1, raw);
+            framerate::observe(None);
             RUN.with(|run| *run.borrow_mut() = Run::default());
+            // `RunTileLoop`'s accumulator is its first statement, before its read of
+            // `TimerGameTick::counter`, and ends with its body, in the nested entry that the
+            // first visit makes as in the outer one.
+            assert_eq!(
+                STEPS.with(|steps| std::mem::take(&mut *steps.borrow_mut())),
+                [
+                    Step::Begin,
+                    Step::Tick,
+                    Step::Visits,
+                    Step::Begin,
+                    Step::Tick,
+                    Step::Visits,
+                    Step::End,
+                    Step::Visits,
+                    Step::End
+                ]
+            );
             TILES.set(ptr::null_mut());
             assert_eq!(
                 oracle::check(&oracle, "mutation", [(format!("raw={raw}"), output)]),
@@ -611,6 +662,24 @@ mod comparison_tests {
 
     thread_local! {
         static FAILED_AT: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+        static STEPS: RefCell<Vec<Step>> = const { RefCell::new(Vec::new()) };
+    }
+    /// The `PFE_GL_LANDSCAPE` accumulator's begin and end, the batch's tick-counter read and
+    /// each run of tile visits.
+    #[derive(Debug, PartialEq, Eq)]
+    enum Step {
+        Begin,
+        Tick,
+        Visits,
+        End,
+    }
+    fn record_framerate(effect: Effect) {
+        let step = match effect {
+            Effect::AccumulatorBegin(PerformanceElement::PFE_GL_LANDSCAPE) => Step::Begin,
+            Effect::AccumulatorEnd(PerformanceElement::PFE_GL_LANDSCAPE) => Step::End,
+            _ => return,
+        };
+        STEPS.with(|steps| steps.borrow_mut().push(step));
     }
     /// The native assertion service, recording the visit count at each failure.
     extern "C" fn record_failed_check(condition: bool) {

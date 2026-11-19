@@ -49,8 +49,9 @@ template<typename Check> void Run(Check check)
 	calls = reads = seen = 0;
 	expected_tile = 1;
 	passed = true;
-	/* A zero-size map selects the callback backend for every tile read. */
-	const OpenTTDFixtureMap callbacks{0};
+	/* A zero-size 64x64 map selects the callback backend for every tile read; the tile loop
+	 * reads its dimensions from this table. */
+	const OpenTTDFixtureMap callbacks{6};
 	auto shared = OpenTTDSharedServices{};
 	shared.map = &callbacks.statics;
 	shared.tile_type = Type;
@@ -76,7 +77,8 @@ template<typename Check> void Run(Check check)
 		.station = &station,
 		.objects = &objects,
 	};
-	const OpenTTDTreeLoopSettings settings{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false};
+	shared.tick_counter = []() noexcept -> uint64_t { return 1; };
+	const OpenTTDTreeLoopSettings settings{.size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false};
 	const auto saved_cursor = *openttd_rust_tile_loop_cursor();
 	*openttd_rust_tile_loop_cursor() = 1;
 	SessionFixture fixture;

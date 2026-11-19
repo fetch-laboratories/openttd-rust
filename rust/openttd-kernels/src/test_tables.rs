@@ -1098,8 +1098,6 @@ pub(crate) const SCHEDULER: crate::vehicle::scheduler::SchedulerServices =
         cargo_owner: unreachable1,
         vehicle: ptr::null(),
         shared: ptr::null(),
-        with_loading_timer: unreachable2,
-        reset_accumulators: unreachable0,
     };
 
 /// `crate::fleet::pending::Services` with every entry unreachable.
@@ -1926,12 +1924,8 @@ pub(crate) const SESSION: crate::session::Services = crate::session::Services {
     network_actions: unreachable1,
     failed: unreachable1,
     console_exception: unreachable1,
-    state_begin: unreachable1,
     company_begin: unreachable1,
     company_restore: unreachable1,
-    scripts_begin: unreachable1,
-    scripts_end: unreachable1,
-    paused_measurements: unreachable0,
     scripts_enabled: unreachable0,
     assert_local_company: unreachable0,
     tick_timer: unreachable1,
@@ -1949,8 +1943,6 @@ pub(crate) const SESSION: crate::session::Services = crate::session::Services {
     post_ai: unreachable1,
     road_begin: unreachable1,
     road_end: unreachable1,
-    landscape_begin: unreachable1,
-    landscape_end: unreachable1,
 };
 
 /// `crate::genworld::WorldServices` with every entry unreachable.

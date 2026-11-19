@@ -18,6 +18,8 @@
 //! command reports the pause change, as the session pause state it leaves.
 use super::*;
 use crate::company_type::CompanyID;
+use crate::framerate_type::PerformanceElement;
+use crate::framerate_type::testing::{self as framerate, Effect};
 use crate::industrytype::NativeVec;
 use crate::linkgraph::{
     NativeGraph,
@@ -270,13 +272,15 @@ extern "C" fn assert_graph(graph: *const Graph) {
     let index = unsafe { (*shell).index };
     assert_eq!(slot(graphs(), index).shell, shell.cast::<c_void>());
 }
-/// `PerformanceMeasurer::SetInactive` (0) or its construction (1) around the join.
-extern "C" fn begin_measurement(client: bool) {
-    observe([9, client.into(), 0]);
-}
-/// The client's `PerformanceMeasurer` destruction.
-extern "C" fn end_measurement() {
-    observe([9, 2, 0]);
+/// `PerformanceMeasurer::SetInactive` (0) or the construction (1) and destruction (2) of the
+/// client's `PerformanceMeasurer` around the join.
+fn linkgraph_framerate(effect: Effect) {
+    match effect {
+        Effect::MeasurerSetInactive(PerformanceElement::PFE_GL_LINKGRAPH) => observe([9, 0, 0]),
+        Effect::MeasurerBegin(PerformanceElement::PFE_GL_LINKGRAPH) => observe([9, 1, 0]),
+        Effect::MeasurerEnd(PerformanceElement::PFE_GL_LINKGRAPH) => observe([9, 2, 0]),
+        _ => {}
+    }
 }
 extern "C" fn can_allocate() -> bool {
     true
@@ -490,10 +494,26 @@ fn pause(bits: u8, load: bool) {
             observe([8, 1, 0]);
         }
     } else {
+        framerate::take();
         // SAFETY: The test's session table and its leaves outlive the frame.
         let completed =
             unsafe { crate::session::openttd_rust_session_state_loop_abi(session(), null_mut()) };
         assert_eq!(completed, 1, "the modal frame completes");
+        // `StateGameLoop`'s paused measurements (`openttd.cpp:1218-1224`).
+        assert_eq!(
+            framerate::take(),
+            [
+                PerformanceElement::PFE_GAMELOOP,
+                PerformanceElement::PFE_GL_ECONOMY,
+                PerformanceElement::PFE_GL_TRAINS,
+                PerformanceElement::PFE_GL_ROADVEHS,
+                PerformanceElement::PFE_GL_SHIPS,
+                PerformanceElement::PFE_GL_AIRCRAFT,
+                PerformanceElement::PFE_GL_LANDSCAPE,
+            ]
+            .map(Effect::MeasurerPaused),
+            "the paused frame's measurements"
+        );
     }
 }
 
@@ -514,10 +534,8 @@ fn install() -> &'static Services {
     let schedule: &'static Services = Box::leak(Box::new(Services {
         allocation_failure,
         assert_graph,
-        begin_measurement,
         can_allocate,
         destroy_job,
-        end_measurement,
         graph_pool: Box::leak(Box::new(graph_pool.cast_const())),
         job_pool: Box::leak(Box::new(job_pool.cast_const())),
         new_job: new_job_record,
@@ -590,7 +608,6 @@ fn install_session(shared: &'static crate::services::Services, schedule: &'stati
         world,
         state_frame_begin: frame_begin,
         state_frame_end: frame_end,
-        paused_measurements: nothing,
         scripts_enabled: no,
         pause_change,
         pause_dirty: nothing,
@@ -719,7 +736,10 @@ fn schedule_trace_matches_original() {
         crate::session::pause(),
     );
     let schedule = install();
+    framerate::take();
+    framerate::observe(Some(linkgraph_framerate));
     let (trace, graphs) = run(schedule);
+    framerate::observe(None);
     for job in shells::<JobShell>(jobs()) {
         delete_job(job);
     }

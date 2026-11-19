@@ -20,6 +20,7 @@ template <typename Clock> static bool FixtureClockElapsed()
 	fixture.clock = GetRustClockServices();
 	fixture.skip_animation = true;
 	fixture.services.console_exception = [](OpenTTDSessionFrame *) noexcept {
+		ClockFixture::Current().EndAnimation();
 		return reinterpret_cast<OpenTTDConsoleException *>(&ClockFixture::Current().exception);
 	};
 	fixture.services.failed = [](OpenTTDSessionFrame *) noexcept {

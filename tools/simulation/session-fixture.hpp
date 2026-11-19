@@ -79,12 +79,12 @@ struct SessionFixture {
 		tiles.station = &station_tiles;
 		group.shared = &shared; shared.current_company = []() noexcept -> uint8_t { return 0; };
 		finance.set_current_company = [](uint8_t) noexcept {}; commands.finance = &finance; transaction.commands = &commands;
-		loop = {{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
+		shared.tick_counter = []() noexcept -> uint64_t { return 1; };
+		loop = {{.size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
 		scheduler.pool = []() noexcept { return OpenTTDVehiclePoolCursor{nullptr, 0, &empty_extent}; };
 		scheduler.vehicle = &vehicles;
 		scheduler.shared = &shared;
-		scheduler.with_loading_timer = [](const OpenTTDVehicleSchedulerTables *, void (*)(const OpenTTDVehicleSchedulerTables *)) noexcept {};
-		scheduler.reset_accumulators = Nothing;
+		shared.for_each_station = [](void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept {};
 		tables = {};
 		tables.scheduler = &scheduler;
 		tables.pending = &pending;
@@ -105,9 +105,9 @@ struct SessionFixture {
 		clock.using_wallclock_units = [](bool) noexcept { return true; };
 		services.clock = &clock;
 		services.check_caches = Nothing;
-		services.company_begin = FrameNothing;
+		services.company_begin = [](OpenTTDSessionFrame *) noexcept { active->BeginAnimation(); };
 		services.company_restore = FrameNothing;
-		services.console_exception = [](OpenTTDSessionFrame *) noexcept -> OpenTTDConsoleException * { return nullptr; };
+		services.console_exception = [](OpenTTDSessionFrame *) noexcept -> OpenTTDConsoleException * { active->EndAnimation(); return nullptr; };
 		services.failed = [] (OpenTTDSessionFrame *) noexcept { return false; };
 		services.tick_timer = [] (OpenTTDSessionFrame *) noexcept { return true; };
 		services.scripts_enabled = []() noexcept { return false; };
@@ -120,25 +120,11 @@ struct SessionFixture {
 		world.modal = []() noexcept { return false; };
 		services.state_frame_begin = [](OpenTTDSessionFrameStorage *p) noexcept { return reinterpret_cast<OpenTTDSessionFrame *>(p); };
 		services.state_frame_end = [](OpenTTDSessionFrame *, OpenTTDSessionFrame *) noexcept { return true; };
-		services.state_begin = FrameNothing;
 		services.tile_loop_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDGenerationLoop * { active->in_loop = true; return &active->loop; };
 		services.tile_loop_end = FrameNothing;
 		services.vehicle_tables = [](OpenTTDSessionFrame *, bool) noexcept { return active->tables; };
 		services.vehicle_cost = [](OpenTTDSessionFrame *) noexcept -> OpenTTDCommandCost * { return nullptr; };
 		services.vehicle_end = FrameNothing;
-		services.landscape_begin = [](OpenTTDSessionFrame *) noexcept {
-			active->in_loop = true;
-			if (active->skip_animation) {
-				active->animation_queue.emplace(true);
-				openttd_rust_animation_initialize();
-				active->animation_scope.emplace(active->animation);
-			}
-		};
-		services.landscape_end = [](OpenTTDSessionFrame *) noexcept {
-			active->animation_scope.reset();
-			active->animation_queue.reset();
-			active->skip_animation = false;
-		};
 		services.road_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDRoadCommandContext * { return nullptr; };
 		services.road_end = FrameNothing;
 		services.town = &towns;
@@ -156,6 +142,24 @@ struct SessionFixture {
 		shared.storage_discard = [](void *) noexcept {};
 	}
 	OpenTTDLandscapeGenerationServices storage{};
+	/* Around the production animated tiles: the calls before and after them, company_begin
+	 * and console_exception, enter the loop and install an empty animation queue for the
+	 * fixture when animation is skipped, then restore the queue before the clocks. */
+	void BeginAnimation() noexcept
+	{
+		this->in_loop = true;
+		if (this->skip_animation) {
+			this->animation_queue.emplace(true);
+			openttd_rust_animation_initialize();
+			this->animation_scope.emplace(this->animation);
+		}
+	}
+	void EndAnimation() noexcept
+	{
+		this->animation_scope.reset();
+		this->animation_queue.reset();
+		this->skip_animation = false;
+	}
 	~SessionFixture() { openttd_rust_industry_builder_destroy(builder); active = previous; }
 	bool Run(GameMode mode = GM_EDITOR, PauseModes paused = {})
 	{

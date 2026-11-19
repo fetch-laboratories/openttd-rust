@@ -101,12 +101,8 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.network_actions = [](OpenTTDSessionFrame *f) noexcept { return &f->network_actions; },
 		.failed = [](OpenTTDSessionFrame *f) noexcept { return f->exception != nullptr; },
 		.console_exception = [](OpenTTDSessionFrame *f) noexcept { return reinterpret_cast<OpenTTDConsoleException *>(&f->exception); },
-		.state_begin = [](OpenTTDSessionFrame *f) noexcept { f->framerate.emplace(PFE_GAMELOOP); PerformanceAccumulator::Reset(PFE_GL_LANDSCAPE); },
 		.company_begin = [](OpenTTDSessionFrame *f) noexcept { f->company.emplace(_current_company, OWNER_NONE); },
 		.company_restore = [](OpenTTDSessionFrame *f) noexcept { f->company->Restore(); },
-		.scripts_begin = [](OpenTTDSessionFrame *f) noexcept { f->scripts.emplace(PFE_ALLSCRIPTS); },
-		.scripts_end = [](OpenTTDSessionFrame *f) noexcept { f->scripts.reset(); },
-		.paused_measurements = []() noexcept { for (auto p : {PFE_GAMELOOP, PFE_GL_ECONOMY, PFE_GL_TRAINS, PFE_GL_ROADVEHS, PFE_GL_SHIPS, PFE_GL_AIRCRAFT, PFE_GL_LANDSCAPE}) PerformanceMeasurer::Paused(p); },
 		.scripts_enabled = []() noexcept {
 #ifdef DEBUG_DUMP_COMMANDS
 			return false;
@@ -130,8 +126,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.post_ai = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { Command<CMD_COMPANY_CTRL>::Post(CCA_NEW_AI, CompanyID::Invalid(), CRR_NONE, INVALID_CLIENT_ID); }); },
 		.road_begin = [](OpenTTDSessionFrame *f) noexcept -> const OpenTTDRoadCommandContext * { return &f->road.emplace().view; },
 		.road_end = [](OpenTTDSessionFrame *f) noexcept { f->road.reset(); },
-		.landscape_begin = [](OpenTTDSessionFrame *f) noexcept { f->landscape.emplace(PFE_GL_LANDSCAPE); },
-		.landscape_end = [](OpenTTDSessionFrame *f) noexcept { f->landscape.reset(); },
 	};
 	return services;
 }
