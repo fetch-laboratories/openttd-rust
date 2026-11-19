@@ -5393,6 +5393,50 @@ mod protocol_tests {
         }
     }
 
+    /// Holds the tables `install_callbacks` replaced and restores them when dropped, so
+    /// neither registry names a fixture table, whose shared table holds the test thread's
+    /// map statics, once the test ends by return or by panic.
+    struct RestoreCallbacks(
+        *const resolver::ResolverServices,
+        *const crate::animated_tile::Services,
+    );
+    impl Drop for RestoreCallbacks {
+        fn drop(&mut self) {
+            // SAFETY: The tables `install_callbacks` replaced, installed again.
+            unsafe {
+                resolver::openttd_rust_house_resolver_exchange(self.0);
+                crate::animated_tile::openttd_rust_animation_exchange(self.1);
+            }
+        }
+    }
+
+    /// A test that panics after `install_callbacks` leaves the registries' previous tables.
+    #[test]
+    fn a_panic_after_install_callbacks_restores_the_registries() {
+        let _guard = super::tests::GLOBAL_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let installed = || {
+            // SAFETY: Serialized by the lock; each table is put back as it was read.
+            unsafe {
+                let r = resolver::openttd_rust_house_resolver_exchange(ptr::null());
+                resolver::openttd_rust_house_resolver_exchange(r);
+                let a = crate::animated_tile::openttd_rust_animation_exchange(ptr::null());
+                crate::animated_tile::openttd_rust_animation_exchange(a);
+                (r, a)
+            }
+        };
+        let before = installed();
+        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let (r, a) = install_callbacks(ptr::null());
+            let _restore = RestoreCallbacks(r, a);
+            assert_ne!(installed(), before);
+            panic!("a failed check after install_callbacks");
+        }));
+        assert!(unwound.is_err());
+        assert_eq!(installed(), before);
+    }
+
     /// The fixture's road command context: tests succeed, executions fail.
     fn fixture_road() -> &'static crate::road_cmd::CommandContext {
         let mut costs = COMMAND_COSTS;
@@ -5676,6 +5720,7 @@ mod protocol_tests {
         let services = fixture_services();
         let leaves = fixture_leaves(services);
         let (resolver, animation) = install_callbacks(services);
+        let restore = RestoreCallbacks(resolver, animation);
         let road = fixture_road();
         let expand = |modes: u8| {
             let mut engine = engine(leaves, services);
@@ -5690,6 +5735,7 @@ mod protocol_tests {
         check_skipped_lift(leaves, services);
         check_bound_growth(services, expand);
 
+        drop(restore);
         // SAFETY: Serialized by the lock; the fixture's tables are restored or unused hereafter.
         unsafe {
             let counts = &mut *BUILDING_COUNTS.get();
@@ -5697,8 +5743,6 @@ mod protocol_tests {
             (*services).town_count = no_towns;
             (*services).town_next_id = no_next_town;
             spatial::openttd_rust_town_rebuild_index(services);
-            resolver::openttd_rust_house_resolver_exchange(resolver);
-            crate::animated_tile::openttd_rust_animation_exchange(animation);
             mask.write(saved_mask);
             drop(Box::from_raw(regions));
         }
