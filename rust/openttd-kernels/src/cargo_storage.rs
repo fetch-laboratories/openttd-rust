@@ -1946,23 +1946,23 @@ mod tests {
             FAILED_CHECKS.with(|failed| failed.set(failed.get() + 1));
         }
     }
-    extern "C" fn abort_failed_check(condition: bool) {
-        if !condition {
-            std::process::abort();
-        }
-    }
-    /// Failed native checks on this thread while running `operation`. Other tests
-    /// keep failing fast afterwards.
+    /// Failed native checks while running `operation`. None may fail between two
+    /// operations: the count is zero on entry, and taking it resets it.
     fn failed_checks(operation: impl FnOnce()) -> u32 {
-        crate::services_assert::bind_test_check(record_failed_check);
-        FAILED_CHECKS.with(|failed| failed.set(0));
+        assert_eq!(FAILED_CHECKS.get(), 0, "a native check failed outside an operation");
         operation();
-        crate::services_assert::bind_test_check(abort_failed_check);
-        FAILED_CHECKS.with(Cell::get)
+        FAILED_CHECKS.replace(0)
     }
 
+    /// Runs in an isolated child, the only process whose policy counts failed checks.
     #[test]
     fn cargo_packet_preconditions_call_the_native_check_once() {
+        if crate::services_assert::isolate_test_check(
+            "cargo_storage::tests::cargo_packet_preconditions_call_the_native_check_once",
+            record_failed_check,
+        ) {
+            return;
+        }
         let service = services();
         let mut packet = Packet {
             count: 4,
@@ -1988,9 +1988,15 @@ mod tests {
             // `UpdateLoadingTile`: not yet in a vehicle; it sets the missing source.
             assert_eq!(failed_checks(|| tile(p, service, at, true)), 0);
             assert_eq!(((*p).source_xy, (*p).in_vehicle), (at, 1));
-            let distance = openttd_rust_cargo_packet_distance(p, &raw const service, at);
+            let distance = Cell::new(u32::MAX);
+            assert_eq!(
+                failed_checks(|| {
+                    distance.set(openttd_rust_cargo_packet_distance(p, &raw const service, at));
+                }),
+                0
+            );
             assert_eq!(failed_checks(|| tile(p, service, at, true)), 1);
-            assert_eq!(distance, 0);
+            assert_eq!(distance.get(), 0);
             // The split constructor: count != 0.
             (*p).count = 0;
             let copy = Cell::new(std::ptr::null_mut());
@@ -2000,6 +2006,7 @@ mod tests {
             );
             openttd_rust_cargo_packet_destroy(copy.get());
         }
+        assert_eq!(FAILED_CHECKS.get(), 0);
     }
 
     #[test]
