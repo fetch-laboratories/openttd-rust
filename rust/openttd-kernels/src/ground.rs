@@ -335,7 +335,7 @@ fn update_fences(c: &TileLoop<'_>, clear: ClearTile<'_>) {
     // A present field proof is this assertion holding.
     if !field.is_proven() {
         w.assert_with(|| {
-            w.kind(tile) == TileType::MP_CLEAR
+            w.is_tile_type(tile, TileType::MP_CLEAR)
                 && w.asserted(|m| is_clear_ground(m, tile, ClearGround::CLEAR_FIELDS))
         });
     }
@@ -367,7 +367,7 @@ fn update_fence(c: &TileLoop<'_>, field: FieldTile<'_>, dir: DiagDirection) -> b
         return false;
     }
     let neighbour = c.neighbour(tile, dir);
-    if w.kind(neighbour) == TileType::MP_CLEAR
+    if w.is_tile_type(neighbour, TileType::MP_CLEAR)
         && w.asserted(|m| is_clear_ground(m, neighbour, ClearGround::CLEAR_FIELDS))
     {
         return false;

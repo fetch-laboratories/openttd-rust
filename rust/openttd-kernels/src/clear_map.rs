@@ -47,7 +47,15 @@ pub(crate) fn get_clear_ground(m: &TileTypeAccess, t: TileIndex) -> Option<Clear
 /// `IsClearGround`: whether the clear tile has the given ground type.
 #[inline]
 pub(crate) fn is_clear_ground(m: &TileTypeAccess, t: TileIndex, ct: ClearGround) -> Option<bool> {
-    Some(get_clear_ground(m, t)? == ct)
+    Some(is_clear_ground_from_fields(
+        &m.require_type(t, TileType::MP_CLEAR)?,
+        ct,
+    ))
+}
+/// `IsClearGround` over fields already checked as `MP_CLEAR`.
+#[inline]
+pub(crate) fn is_clear_ground_from_fields(fields: &TileFields<'_>, ct: ClearGround) -> bool {
+    get_clear_ground_from_fields(fields) == ct
 }
 /// `GetClearGround` over fields already checked as `MP_CLEAR`.
 #[allow(clippy::inline_always)]
@@ -80,7 +88,7 @@ pub(crate) fn get_clear_counter(m: &TileTypeAccess, t: TileIndex) -> Option<u8> 
 /// `GetClearCounter` over fields already checked as `MP_CLEAR`.
 #[inline]
 pub(crate) fn get_clear_counter_from_fields(fields: &TileFields<'_>) -> u8 {
-    fields.m5() >> 5
+    crate::bitmath_func::gb_u8(fields.m5(), 5, 3)
 }
 /// `AddClearDensity`: increment the density of a non-field clear tile.
 pub(crate) fn add_clear_density(m: &TileTypeAccess, t: TileIndex, d: i32) -> Option<()> {
@@ -205,11 +213,14 @@ pub(crate) fn get_fence(
 /// method then calls the asserting accessor, so the native handler sees every assertion the
 /// original makes, in its order.
 ///
-/// Nothing in `TileLoop_Clear` changes the tile's type, so the proof holds for the whole body:
-/// `TileLoopClearDesert`, `TileLoopClearAlps`, `UpdateFences`, `MakeSnow`, `ClearSnow`,
-/// `AddClearDensity`, `AddClearCounter`, `SetClearCounter`, `SetClearGroundDensity`,
-/// `SetFence`, `SetFieldType`, `Random`, `MarkTileDirtyByTile` and the neighbour reads write
-/// no type byte, and `MakeClear` stores `MP_CLEAR` again with no read of the tile after it.
+/// The window runs from the probe, taken after `AmbientSoundEffect`, to the body's last read
+/// through the proof. Inside it no call writes the tile's type: `TileLoopClearDesert`'s
+/// `GetTropicZone` and neighbour reads, `TileLoopClearAlps`'s `GetTileZ` and `GetSnowLine`, and
+/// `Random` only read; `MakeSnow`, `ClearSnow`, `AddClearDensity`, `AddClearCounter`,
+/// `SetClearCounter`, `SetClearGroundDensity`, `SetFence` and `SetFieldType` write only `m3`,
+/// `m4`, `m5` or `m6`; `MarkTileDirtyByTile` writes no map field. `MakeClear` on the orphaned
+/// field path stores the type again and ends the window: no read goes through the proof after
+/// it, and the `MarkTileDirtyByTile` that follows reads `TileHeight` natively, not through it.
 #[derive(Clone, Copy)]
 pub(crate) struct ClearTile<'w> {
     world: &'w World<'w>,
@@ -260,7 +271,15 @@ impl<'w> ClearTile<'w> {
     /// `IsClearGround`.
     #[inline]
     pub(crate) fn is_clear_ground(self, ct: ClearGround) -> bool {
-        self.get_clear_ground() == ct
+        let Self {
+            world,
+            tile,
+            fields,
+        } = self;
+        match fields {
+            Some(fields) => is_clear_ground_from_fields(&fields, ct),
+            None => asserted(world, move |m| is_clear_ground(m, tile, ct)),
+        }
     }
     /// `GetClearDensity`.
     #[inline]
@@ -351,7 +370,7 @@ impl<'w> ClearTile<'w> {
             tile,
             fields: fields.filter(|fields| {
                 !world.types.assertions()
-                    || get_clear_ground_from_fields(fields) == ClearGround::CLEAR_FIELDS
+                    || is_clear_ground_from_fields(fields, ClearGround::CLEAR_FIELDS)
             }),
         }
     }
