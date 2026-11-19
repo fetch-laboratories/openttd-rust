@@ -12,7 +12,6 @@
 #![allow(unsafe_code)]
 
 use crate::landscape::{TILE_UPDATE_FREQUENCY, TILE_UPDATE_FREQUENCY_LOG};
-use crate::map_func::Map;
 use crate::map_type::{MAX_MAP_SIZE_BITS, MIN_MAP_SIZE_BITS};
 use crate::tile_type::{TileIndex, TileType};
 use crate::{ground, industry, services, town, trees, water};
@@ -95,38 +94,27 @@ pub struct Services {
 // The measured scheduler budget requires dispatch inside the LFSR loop; an
 // uninlined closure cost 47 instructions per visit versus the native 18.
 // `AMBIENT` is the batch's `AmbientSoundEffect` feature gate, so a disabled gate costs
-// nothing per clear, tree or water tile.
+// nothing per clear, tree or water tile. `ground` is the batch's context, built once per
+// call to `run`; its silent reader serves every arm.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 unsafe fn dispatch<const AMBIENT: bool>(
     tile: TileIndex,
-    map: Map,
-    size_y: c_uint,
     settings: trees::LoopSettings,
     s: &Services,
-    types: &services::TileTypeAccess,
+    ground: &ground::TileLoop<'_>,
 ) {
     // SAFETY: Reached tables are immutable and live for the synchronous batch. Owner
     // entries end their accesses before callbacks; only scalar cursor is local.
+    let types = &ground.world.types;
+    let map = ground.world.dimensions;
+    let size_y = ground.size_y;
     let tile_type = types.read(tile);
     let g = &s.ground;
-    let ground = || ground::TileLoop {
-        world: crate::map_func::World {
-            types: types.without_native_assert(),
-            shared: unsafe { &*s.shared },
-            dimensions: map,
-        },
-        size_y,
-        ground: g,
-        settings: trees::LoopSettings {
-            ambient_callback: AMBIENT,
-            ..settings
-        },
-    };
     match tile_type {
-        TileType::MP_CLEAR => ground::tile_loop_clear(&ground(), tile),
-        TileType::MP_RAILWAY => ground::tile_loop_track(&ground(), tile),
-        TileType::MP_ROAD => ground::tile_loop_road(&ground(), tile),
+        TileType::MP_CLEAR => ground::tile_loop_clear::<AMBIENT>(ground, tile),
+        TileType::MP_RAILWAY => ground::tile_loop_track(ground, tile),
+        TileType::MP_ROAD => ground::tile_loop_road(ground, tile),
         TileType::MP_HOUSE => unsafe { town::house::tile_loop(s.town, s.shared, tile) },
         TileType::MP_TREES => unsafe {
             let settings = trees::LoopSettings {
@@ -171,7 +159,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
             let industry_services = s.industry;
             industry::tile_loop(tile, map, g.call, &industry_services);
         },
-        TileType::MP_TUNNELBRIDGE => ground::tile_loop_tunnel_bridge(&ground(), tile),
+        TileType::MP_TUNNELBRIDGE => ground::tile_loop_tunnel_bridge(ground, tile),
         TileType::MP_OBJECT => unsafe {
             crate::objects::tile_loop(s.objects, g.call, tile);
         },
@@ -225,10 +213,16 @@ unsafe fn run_batch<const AMBIENT: bool>(
     // The batch loads the descriptor once. Its serialized no-reset/no-yield call
     // graph keeps it live; only descriptor metadata, never a map access, spans dispatch.
     let shared = unsafe { &*s.shared };
-    let world = crate::map_func::World::new(shared);
-    let types = world.types.without_native_assert();
-    let map = world.dimensions;
     let size_y: c_uint = 1 << log_y;
+    let ground = ground::TileLoop::new(
+        &crate::map_func::World::new(shared),
+        size_y,
+        &s.ground,
+        trees::LoopSettings {
+            ambient_callback: AMBIENT,
+            ..settings
+        },
+    );
 
     // The pseudorandom sequence of tiles is generated using a Galois linear feedback
     // shift register (LFSR). This allows a deterministic pseudorandom ordering, but
@@ -249,13 +243,13 @@ unsafe fn run_batch<const AMBIENT: bool>(
         .tick_counter
         .is_multiple_of(u64::from(TILE_UPDATE_FREQUENCY))
     {
-        unsafe { dispatch::<AMBIENT>(TileIndex(0), map, size_y, settings, s, &types) };
+        unsafe { dispatch::<AMBIENT>(TileIndex(0), settings, s, &ground) };
         count -= 1;
     }
 
     while count != 0 {
         count -= 1;
-        unsafe { dispatch::<AMBIENT>(tile, map, size_y, settings, s, &types) };
+        unsafe { dispatch::<AMBIENT>(tile, settings, s, &ground) };
 
         // Get the next tile in sequence using a Galois LFSR.
         tile = TileIndex(

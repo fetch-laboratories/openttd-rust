@@ -17,9 +17,8 @@
 //! process; no Rust borrow of map or owner state spans a leaf call, and leaves do not unwind.
 #![allow(unsafe_code)]
 use crate::clear_map::{
-    ClearGround, add_clear_counter, add_clear_density, get_clear_counter, get_clear_density,
-    get_clear_ground, get_fence, get_field_type, get_industry_index_of_field, is_clear_ground,
-    is_snow_tile, require_field, set_clear_ground_density,
+    ClearGround, ClearTile, FieldTile, get_clear_density, get_clear_ground, is_clear_ground,
+    is_snow_tile,
 };
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::direction_type::{DiagDirection, DiagDirections};
@@ -244,7 +243,8 @@ pub struct RoadServices {
     pub town: *const crate::town::Leaves,
 }
 
-/// The tile loop batch's inputs for the ground tile types, built by `tile_loop`'s dispatch.
+/// The tile loop batch's inputs for the ground tile types, built once per batch by
+/// `tile_loop::run`.
 pub(crate) struct TileLoop<'a> {
     /// The batch's map descriptor.
     pub world: World<'a>,
@@ -255,7 +255,28 @@ pub(crate) struct TileLoop<'a> {
     /// The batch's client settings, with its `AmbientSoundEffect` callback gate.
     pub settings: crate::trees::LoopSettings,
 }
-impl TileLoop<'_> {
+impl<'a> TileLoop<'a> {
+    /// The batch's context over `world`, whose reader is stripped of its native handler: the
+    /// bodies probe preconditions without assertions ([`ClearTile`]) and report a failed one
+    /// through `World::asserted`, which retries with the shared table's handler.
+    #[inline]
+    pub(crate) fn new(
+        world: &World<'a>,
+        size_y: u32,
+        ground: &'a crate::tile_loop::GroundServices,
+        settings: crate::trees::LoopSettings,
+    ) -> Self {
+        Self {
+            world: World {
+                types: world.types.without_native_assert(),
+                shared: world.shared,
+                dimensions: world.dimensions,
+            },
+            size_y,
+            ground,
+            settings,
+        }
+    }
     /// `_settings_game.game_creation.landscape`.
     fn landscape(&self) -> LandscapeType {
         self.ground.climate
@@ -307,33 +328,25 @@ impl TileLoop<'_> {
     reason = "the clear tile loop's measured hot path"
 )]
 #[inline(always)]
-fn update_fences(c: &TileLoop<'_>, tile: TileIndex) {
+fn update_fences(c: &TileLoop<'_>, clear: ClearTile<'_>) {
     let w = &c.world;
-    w.assert_with(|| {
-        w.kind(tile) == TileType::MP_CLEAR
-            && w.asserted(|m| is_clear_ground(m, tile, ClearGround::CLEAR_FIELDS))
-    });
+    let tile = clear.tile();
+    let field = clear.field();
+    // A present field proof is this assertion holding.
+    if !field.is_proven() {
+        w.assert_with(|| {
+            w.is_tile_type(tile, TileType::MP_CLEAR)
+                && w.asserted(|m| is_clear_ground(m, tile, ClearGround::CLEAR_FIELDS))
+        });
+    }
     let mut dirty = false;
 
-    for dir in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-        let dir = DiagDirection(dir);
-        if w.asserted(|m| {
-            Some(get_fence(&require_field(m, tile)?, dir, || {
-                crate::services_assert::not_reached()
-            }))
-        }) != 0
-        {
-            continue;
-        }
-        let neighbour = c.neighbour(tile, dir);
-        if w.kind(neighbour) == TileType::MP_CLEAR
-            && w.asserted(|m| is_clear_ground(m, neighbour, ClearGround::CLEAR_FIELDS))
-        {
-            continue;
-        }
-        (c.s().set_fence)(tile.0, dir, 3);
-        dirty = true;
-    }
+    // `for (DiagDirection dir = DIAGDIR_BEGIN; dir < DIAGDIR_END; dir++)`, one call per
+    // direction in order, so that each direction's offset and fence bits are constants.
+    dirty |= update_fence(c, field, DiagDirection::DIAGDIR_NE);
+    dirty |= update_fence(c, field, DiagDirection::DIAGDIR_SE);
+    dirty |= update_fence(c, field, DiagDirection::DIAGDIR_SW);
+    dirty |= update_fence(c, field, DiagDirection::DIAGDIR_NW);
 
     if dirty {
         c.mark_tile_dirty_by_tile(tile);
@@ -341,13 +354,36 @@ fn update_fences(c: &TileLoop<'_>, tile: TileIndex) {
     }
 }
 
+/// One direction of `UpdateFences`'s loop; whether it set the fence.
+#[allow(
+    clippy::inline_always,
+    reason = "the clear tile loop's measured hot path"
+)]
+#[inline(always)]
+fn update_fence(c: &TileLoop<'_>, field: FieldTile<'_>, dir: DiagDirection) -> bool {
+    let w = &c.world;
+    let tile = field.tile();
+    if field.get_fence(dir) != 0 {
+        return false;
+    }
+    let neighbour = c.neighbour(tile, dir);
+    if w.is_tile_type(neighbour, TileType::MP_CLEAR)
+        && w.asserted(|m| is_clear_ground(m, neighbour, ClearGround::CLEAR_FIELDS))
+    {
+        return false;
+    }
+    (c.s().set_fence)(tile.0, dir, 3);
+    true
+}
+
 /// `TileLoopClearAlps`: convert to or from snowy tiles.
 #[inline]
-fn tile_loop_clear_alps(c: &TileLoop<'_>, tile: TileIndex) {
+fn tile_loop_clear_alps(c: &TileLoop<'_>, clear: ClearTile<'_>) {
     let w = &c.world;
+    let tile = clear.tile();
     let k = w.tile_z(tile) - c.get_snow_line() + 1;
 
-    if !w.asserted(|m| is_snow_tile(m, tile)) {
+    if !clear.is_snow_tile() {
         /* Below the snow line, do nothing if no snow. */
         /* At or above the snow line, make snow tile if needed. */
         if k >= 0 {
@@ -360,7 +396,7 @@ fn tile_loop_clear_alps(c: &TileLoop<'_>, tile: TileIndex) {
     }
 
     /* Update snow density. */
-    let current_density = u32::from(w.asserted(|m| get_clear_density(m, tile)));
+    let current_density = u32::from(clear.get_clear_density());
     let req_density = if k < 0 { 0 } else { k.cast_unsigned().min(3) };
 
     if current_density == req_density {
@@ -372,7 +408,7 @@ fn tile_loop_clear_alps(c: &TileLoop<'_>, tile: TileIndex) {
         hit(Witness::SnowClear);
     } else {
         let d = if current_density < req_density { 1 } else { -1 };
-        w.asserted(|m| add_clear_density(m, tile, d));
+        clear.add_clear_density(d);
         hit(Witness::SnowChange);
     }
 
@@ -403,12 +439,12 @@ fn neighbour_is_normal(c: &TileLoop<'_>, tile: TileIndex) -> bool {
 
 /// `TileLoopClearDesert`.
 #[inline]
-fn tile_loop_clear_desert(c: &TileLoop<'_>, tile: TileIndex) {
-    let w = &c.world;
+fn tile_loop_clear_desert(c: &TileLoop<'_>, clear: ClearTile<'_>) {
+    let tile = clear.tile();
     /* Current desert level - 0 if it is not desert */
     let mut current = 0;
-    if w.asserted(|m| is_clear_ground(m, tile, ClearGround::CLEAR_DESERT)) {
-        current = u32::from(w.asserted(|m| get_clear_density(m, tile)));
+    if clear.is_clear_ground(ClearGround::CLEAR_DESERT) {
+        current = u32::from(clear.get_clear_density());
     }
 
     /* Expected desert level - 0 if it shouldn't be desert */
@@ -422,88 +458,86 @@ fn tile_loop_clear_desert(c: &TileLoop<'_>, tile: TileIndex) {
     }
 
     if expected == 0 {
-        w.asserted(|m| set_clear_ground_density(m, tile, ClearGround::CLEAR_GRASS, 3));
+        clear.set_clear_ground_density(ClearGround::CLEAR_GRASS, 3);
     } else {
         /* Transition from clear to desert is not smooth (after clearing desert tile) */
-        w.asserted(|m| set_clear_ground_density(m, tile, ClearGround::CLEAR_DESERT, expected));
+        clear.set_clear_ground_density(ClearGround::CLEAR_DESERT, expected);
     }
 
     c.mark_tile_dirty_by_tile(tile);
     hit(Witness::Desert);
 }
 
-/// `TileLoop_Clear`.
+/// `TileLoop_Clear`. `AMBIENT` is `c.settings.ambient_callback` as the batch's constant, so a
+/// disabled `AmbientSoundEffect` gate costs nothing per visit.
 #[allow(
     clippy::inline_always,
     reason = "the clear tile loop's measured hot path"
 )]
 #[inline(always)]
-pub(crate) fn tile_loop_clear(c: &TileLoop<'_>, tile: TileIndex) {
-    let w = &c.world;
-    crate::newgrf_generic::ambient(c.settings.ambient_callback, tile.0);
+pub(crate) fn tile_loop_clear<const AMBIENT: bool>(c: &TileLoop<'_>, tile: TileIndex) {
+    crate::newgrf_generic::ambient(AMBIENT, tile.0);
+    let clear = ClearTile::new(&c.world, tile);
 
     match c.landscape() {
-        LandscapeType::Tropic => tile_loop_clear_desert(c, tile),
-        LandscapeType::Arctic => tile_loop_clear_alps(c, tile),
+        LandscapeType::Tropic => tile_loop_clear_desert(c, clear),
+        LandscapeType::Arctic => tile_loop_clear_alps(c, clear),
         _ => {}
     }
 
-    if w.asserted(|m| is_snow_tile(m, tile)) {
+    if clear.is_snow_tile() {
         return;
     }
 
-    match w.asserted(|m| get_clear_ground(m, tile)) {
+    match clear.get_clear_ground() {
         ClearGround::CLEAR_GRASS => {
-            if w.asserted(|m| get_clear_density(m, tile)) == 3 {
+            if clear.get_clear_density() == 3 {
                 return;
             }
 
             if c.game_mode_editor() {
                 let random = c.s().random();
-                w.asserted(|m| {
-                    set_clear_ground_density(
-                        m,
-                        tile,
-                        if crate::bitmath_func::gb(random, 0, 8) > 21 {
-                            ClearGround::CLEAR_GRASS
-                        } else {
-                            ClearGround::CLEAR_ROUGH
-                        },
-                        3,
-                    )
-                });
+                clear.set_clear_ground_density(
+                    if crate::bitmath_func::gb(random, 0, 8) > 21 {
+                        ClearGround::CLEAR_GRASS
+                    } else {
+                        ClearGround::CLEAR_ROUGH
+                    },
+                    3,
+                );
             } else {
-                if w.asserted(|m| get_clear_counter(m, tile)) < 7 {
-                    w.asserted(|m| add_clear_counter(m, tile, 1));
+                if clear.get_clear_counter() < 7 {
+                    clear.add_clear_counter(1);
                     return;
                 }
                 (c.clear().set_counter)(tile.0, 0);
-                w.asserted(|m| add_clear_density(m, tile, 1));
+                clear.add_clear_density(1);
             }
         }
 
         ClearGround::CLEAR_FIELDS => {
-            update_fences(c, tile);
+            update_fences(c, clear);
 
             if c.game_mode_editor() {
                 return;
             }
 
-            if w.asserted(|m| get_clear_counter(m, tile)) < 7 {
-                w.asserted(|m| add_clear_counter(m, tile, 1));
+            if clear.get_clear_counter() < 7 {
+                clear.add_clear_counter(1);
                 return;
             }
             (c.clear().set_counter)(tile.0, 0);
 
-            if w.asserted(|m| Some(get_industry_index_of_field(&require_field(m, tile)?)))
-                == IndustryID::INVALID
-                && w.asserted(|m| Some(get_field_type(&require_field(m, tile)?))) >= 7
+            // `SetClearCounter` wrote `m5`: the field proof is taken again.
+            let field = clear.field();
+            if field.get_industry_index_of_field() == IndustryID::INVALID
+                && field.get_field_type() >= 7
             {
                 /* This farmfield is no longer farmfield, so make it grass again */
                 (c.clear().make_clear)(tile.0, ClearGround::CLEAR_GRASS, 2);
                 hit(Witness::FieldOrphan);
             } else {
-                let mut field_type = w.asserted(|m| Some(get_field_type(&require_field(m, tile)?)));
+                let mut field_type = field.get_field_type();
                 field_type = if field_type < 8 { field_type + 1 } else { 0 };
                 hit(Witness::FieldCycle);
                 (c.clear().set_field)(tile.0, field_type);
@@ -1137,15 +1171,16 @@ mod tests {
         rebuild: false,
     };
 
+    /// The batch context `tile_loop::run` builds, over this thread's map.
     fn tile_loop(s: &'static Services, landscape: LandscapeType) -> TileLoop<'static> {
-        TileLoop {
-            world: World::new(s),
-            size_y: 64,
-            ground: Box::leak(Box::new(crate::tile_loop::GroundServices {
+        TileLoop::new(
+            &World::new(s),
+            64,
+            Box::leak(Box::new(crate::tile_loop::GroundServices {
                 climate: landscape,
                 ..NO_TABLES
             })),
-            settings: crate::trees::LoopSettings {
+            crate::trees::LoopSettings {
                 tick_counter: 0,
                 size_x: 64,
                 climate: landscape,
@@ -1153,7 +1188,7 @@ mod tests {
                 ambient: false,
                 ambient_callback: false,
             },
-        }
+        )
     }
 
     /// `UpdateFences` asserts that its tile is a field. On a grass tile the native handler
@@ -1169,8 +1204,67 @@ mod tests {
         map.tiles[t].m4 = 1 << 5 | 1 << 2;
         map.extended[t].m6 = 1 << 2;
         let c = tile_loop(shared(), LandscapeType::Temperate);
-        update_fences(&c, tile);
+        update_fences(&c, ClearTile::new(&c.world, tile));
         assert_eq!(FAILED.get(), 5);
+    }
+
+    /// `TileLoop_Clear` on a road tile: `IsSnowTile`, `GetClearGround`, `GetClearDensity`,
+    /// `GetClearCounter` and `AddClearCounter` each fail their `MP_CLEAR` assertion, and the
+    /// body continues as the release build does, reading grass at density 0 and adding one to
+    /// the counter. A failed probe that skipped an assertion or stopped the body fails here.
+    #[test]
+    fn clear_tile_loop_on_another_tile_type_reports_each_failed_assertion() {
+        FAILED.set(0);
+        let map = Map::new(TileType::MP_ROAD);
+        let tile = TileIndex(13 * 64 + 13);
+        let c = tile_loop(shared(), LandscapeType::Temperate);
+        tile_loop_clear::<false>(&c, tile);
+        assert_eq!(FAILED.get(), 5);
+        assert_eq!(map.tiles[tile.0 as usize].m5, 1 << 5);
+    }
+
+    /// `TileLoopClearDesert` turns a grass tile of density 0 in the desert zone, whose four
+    /// neighbours are desert too, into `CLEAR_DESERT` at density 3; `TileLoop_Clear` then reads
+    /// that ground and stops. A read taken before the desert write would see grass and advance
+    /// the counter instead.
+    #[test]
+    fn clear_tile_loop_reads_the_desert_write_it_made() {
+        FAILED.set(0);
+        let mut map = Map::new(TileType::MP_CLEAR);
+        for tile in &mut map.tiles {
+            tile.kind |= TropicZone::TROPICZONE_DESERT.0;
+        }
+        let tile = TileIndex(17 * 64 + 17);
+        let c = tile_loop(shared(), LandscapeType::Tropic);
+        tile_loop_clear::<false>(&c, tile);
+        assert_eq!(FAILED.get(), 0);
+        assert_eq!(
+            map.tiles[tile.0 as usize].m5,
+            ClearGround::CLEAR_DESERT.0 << 2 | 3
+        );
+    }
+
+    /// A field with all four fences set and its counter below 7 gains one on the counter and
+    /// keeps its fences, with no failed assertion.
+    #[test]
+    fn clear_tile_loop_advances_a_fenced_field_counter() {
+        FAILED.set(0);
+        let mut map = Map::new(TileType::MP_CLEAR);
+        let tile = TileIndex(21 * 64 + 21);
+        let t = tile.0 as usize;
+        let fields = ClearGround::CLEAR_FIELDS.0 << 2 | 3;
+        map.tiles[t].m5 = 2 << 5 | fields;
+        map.tiles[t].m3 = 1 << 5;
+        map.tiles[t].m4 = 1 << 5 | 1 << 2;
+        map.extended[t].m6 = 1 << 2;
+        let c = tile_loop(shared(), LandscapeType::Temperate);
+        tile_loop_clear::<false>(&c, tile);
+        assert_eq!(FAILED.get(), 0);
+        assert_eq!(map.tiles[t].m5, 3 << 5 | fields);
+        assert_eq!(
+            (map.tiles[t].m3, map.tiles[t].m4, map.extended[t].m6),
+            (1 << 5, 1 << 5 | 1 << 2, 1 << 2)
+        );
     }
 
     /// `StartRoadWorks` asserts `!HasRoadWorks(t)` and `TerminateRoadWorks` asserts
