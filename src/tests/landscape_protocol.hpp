@@ -49,8 +49,9 @@ template<typename Check> void Run(Check check)
 	calls = reads = seen = 0;
 	expected_tile = 1;
 	passed = true;
-	/* A zero-size map selects the callback backend for every tile read. */
-	const OpenTTDFixtureMap callbacks{0};
+	/* A zero-size 64x64 map selects the callback backend for every tile read; the tile loop
+	 * reads its dimensions from this table. */
+	const OpenTTDFixtureMap callbacks{6};
 	auto shared = OpenTTDSharedServices{};
 	shared.map = &callbacks.statics;
 	shared.tile_type = Type;
