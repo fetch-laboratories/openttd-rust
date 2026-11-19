@@ -215,10 +215,11 @@ pub(crate) fn get_fence(
 ///
 /// The window runs from the probe, taken after `AmbientSoundEffect`, to the body's last read
 /// through the proof. Inside it no call writes the tile's type: `TileLoopClearDesert`'s
-/// `GetTropicZone` and neighbour reads, `TileLoopClearAlps`'s `GetTileZ` and `GetSnowLine`, and
-/// `Random` only read; `MakeSnow`, `ClearSnow`, `AddClearDensity`, `AddClearCounter`,
-/// `SetClearCounter`, `SetClearGroundDensity`, `SetFence` and `SetFieldType` write only `m3`,
-/// `m4`, `m5` or `m6`; `MarkTileDirtyByTile` writes no map field. `MakeClear` on the orphaned
+/// `GetTropicZone` and neighbour reads and `TileLoopClearAlps`'s `GetTileZ` and `GetSnowLine`
+/// only read; `Random` advances the shared random state and touches no map field; `MakeSnow`,
+/// `ClearSnow`, `AddClearDensity`, `AddClearCounter`, `SetClearCounter`,
+/// `SetClearGroundDensity`, `SetFence` and `SetFieldType` write only `m3`, `m4`, `m5` or `m6`;
+/// `MarkTileDirtyByTile` writes no map field. `MakeClear` on the orphaned
 /// field path stores the type again and ends the window: no read goes through the proof after
 /// it, and the `MarkTileDirtyByTile` that follows reads `TileHeight` natively, not through it.
 #[derive(Clone, Copy)]
