@@ -1,0 +1,84 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | fn openttd_rust_framerate_bind | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::openttd_rust_framerate_bind",
+    "source_contract": "PerformanceMeasurer and PerformanceAccumulator (framerate_type.h, framerate_gui.cpp) stay native until the GUI is ported; services.cpp binds their table once before main, as it binds the window table.",
+    "reason": "`#[unsafe(no_mangle)]` on the binding export is unsafe code; the crate denies it outside item-scoped allows.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported (phase 5) and the table is removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | fn services | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::services",
+    "source_contract": "The bound table is either the discarding services or the process-lifetime native table that services.cpp binds before main.",
+    "reason": "The dereference of the table pointer loaded from the process-wide atomic is unsafe code.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported (phase 5) and the table is removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | mod testing > fn read | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::testing::read",
+    "source_contract": "The native destructor runs on the object its constructor placed in the caller's storage; the recording table stands for both in Rust tests.",
+    "reason": "The recording end reads back, through the storage pointer, the element its begin wrote, so a test observes that a guard ends the scope it began at the same address.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and the guards own their state in Rust."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | mod testing > fn write | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::testing::write",
+    "source_contract": "The native constructor places its object in the caller's storage; the recording table stands for it in Rust tests.",
+    "reason": "The recording begin writes its element into the caller's storage through the storage pointer, for the recording end to read back.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and the guards own their state in Rust."
+  },
+  {
+    "kind": "growth",
+    "counter": "exports",
+    "added": {
+      "rust/expanded.rs | openttd_rust_framerate_bind": 1
+    },
+    "reason": "The process-wide binding entry of the shared framerate table, called once from services.cpp. It replaces ten one-site timing slots (session, vehicle scheduler and link graph) and their C++ bodies.",
+    "existing_alternatives": "A pointer to the framerate table in every component table, or the per-site slots it replaces, which design faults forbids in finished files.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and the table is removed."
+  },
+  {
+    "kind": "growth",
+    "counter": "outside_cpp",
+    "added": {
+      "generated/abi-layout-framerate.inc": 3,
+      "generated/abi-visit-OpenTTDFramerateServices.hpp": 11
+    },
+    "reason": "The generated layout checks of the framerate table and its two storage records, and the completeness visitor of the table; the removed slots shrink other generated fragments, so the counter grows by 4 net.",
+    "existing_alternatives": "None: every Rust-declared table and record gets its generated checks.",
+    "retiring_owner": "#734",
+    "retirement_condition": "With the table."
+  },
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/session.cpp": 4
+    },
+    "reason": "The native observation that the game binds the framerate table before main: no Rust test or scenario can see it, since Rust tests bind a recording table and the harness compares game state. It is the boundary exception of porting's tests in Rust and C++.",
+    "existing_alternatives": "None in Rust or the harness; the discarding table makes a missing bind silent.",
+    "retiring_owner": "#734",
+    "retirement_condition": "With framerate_gui.cpp's port, when the table is removed."
+  }
+]
