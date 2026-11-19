@@ -3671,6 +3671,7 @@ mod tests {
             let status = std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["--exact", NAME])
                 .env(CHILD, "1")
+                .env(crate::services_assert::ISOLATED_CHILD, "1")
                 .status()
                 .unwrap();
             assert_eq!(status.code(), Some(NOT_REACHED_EXIT));
@@ -3682,7 +3683,7 @@ mod tests {
             ..*f.s
         }));
         // SAFETY: `s` lives for the child process's only search.
-        unsafe { crate::services_assert::openttd_rust_assert_bind(no_assertion, s) };
+        unsafe { crate::services_assert::bind_test_policy(no_assertion, s) };
         let mut pf = CYapfRailT::<CYapfAnyDepotRail>::new(s, f.v);
         // No look-ahead signals, so that the new node takes its global segment.
         pf.sig_look_ahead_costs.clear();

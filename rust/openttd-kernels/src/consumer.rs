@@ -632,20 +632,12 @@ mod release_search_tests {
     #[test]
     fn empty_pattern_after_disabled_native_assertion() {
         extern "C" fn assertions_disabled(_: bool) {}
-        const CHILD: &str = "OPENTTD_EMPTY_PATTERN_CHILD";
-        if std::env::var_os(CHILD).is_none() {
-            let status = std::process::Command::new(std::env::current_exe().unwrap())
-                .args([
-                    "--exact",
-                    "consumer::release_search_tests::empty_pattern_after_disabled_native_assertion",
-                ])
-                .env(CHILD, "1")
-                .status()
-                .unwrap();
-            assert!(status.success());
+        if crate::services_assert::isolate_test_check(
+            "consumer::release_search_tests::empty_pattern_after_disabled_native_assertion",
+            assertions_disabled,
+        ) {
             return;
         }
-        crate::services_assert::bind_test_check(assertions_disabled);
         assert_eq!(super::find(b"abc", b"", super::FIND_STRING), 0);
         assert_eq!(super::find(b"", b"", super::FIND_STRING), 0);
         for policy in [
