@@ -11,12 +11,14 @@
 //! map view") gives the interval that permits both.
 #![allow(unsafe_code)]
 
+use crate::framerate_type::{PerformanceAccumulator, PerformanceElement};
 use crate::landscape::{TILE_UPDATE_FREQUENCY, TILE_UPDATE_FREQUENCY_LOG};
 use crate::map_func::Map;
 use crate::map_type::{MAX_MAP_SIZE_BITS, MIN_MAP_SIZE_BITS};
 use crate::tile_type::{TileIndex, TileType};
 use crate::{ground, industry, services, town, trees, water};
 use std::ffi::c_uint;
+use std::mem::MaybeUninit;
 
 /// `feedbacks`: maximal length LFSR feedback terms, from 12-bit (for 64x64 maps) to 24-bit
 /// (for 4096x4096 maps). Extracted from <http://www.ece.cmu.edu/~koopman/lfsr/>. The length
@@ -195,6 +197,10 @@ pub(crate) unsafe fn run(
     settings: trees::LoopSettings,
     services: *const Services,
 ) {
+    let mut storage = MaybeUninit::uninit();
+    let _framerate =
+        PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE);
+
     // SAFETY: Same contract; the gate was read once for the batch.
     unsafe {
         if settings.ambient_callback {
@@ -305,6 +311,7 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod comparison_tests {
     use super::*;
+    use crate::framerate_type::testing::{self as framerate, Effect};
     use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
     use crate::oracle;
     use crate::test_tables::{INDUSTRY_TILES, OBJECTS, ROAD_STOPS, SHARED};
@@ -349,6 +356,12 @@ mod comparison_tests {
                 .wrapping_mul(1_099_511_628_211);
             run.count += 1;
             (run.mutate, run.feedback)
+        });
+        STEPS.with(|steps| {
+            let mut steps = steps.borrow_mut();
+            if steps.last() != Some(&Step::Visits) {
+                steps.push(Step::Visits);
+            }
         });
         if mutate && tile != 0 {
             let next = (tile >> 1) ^ (0_u32.wrapping_sub(tile & 1) & feedback);
@@ -603,8 +616,26 @@ mod comparison_tests {
                 let mut run = run.borrow_mut();
                 (run.reenter, run.mutate, run.feedback) = (true, true, 0xD8F);
             });
+            STEPS.with(|steps| steps.borrow_mut().clear());
+            framerate::take();
+            framerate::observe(Some(record_framerate));
             let output = batch(6, 6, 1, 1, raw);
+            framerate::observe(None);
             RUN.with(|run| *run.borrow_mut() = Run::default());
+            // `RunTileLoop`'s accumulator is its first statement and ends with its body, in
+            // the nested entry that the first visit makes as in the outer one.
+            assert_eq!(
+                STEPS.with(|steps| std::mem::take(&mut *steps.borrow_mut())),
+                [
+                    Step::Begin,
+                    Step::Visits,
+                    Step::Begin,
+                    Step::Visits,
+                    Step::End,
+                    Step::Visits,
+                    Step::End
+                ]
+            );
             TILES.set(ptr::null_mut());
             assert_eq!(
                 oracle::check(&oracle, "mutation", [(format!("raw={raw}"), output)]),
@@ -617,6 +648,22 @@ mod comparison_tests {
 
     thread_local! {
         static FAILED_AT: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+        static STEPS: RefCell<Vec<Step>> = const { RefCell::new(Vec::new()) };
+    }
+    /// The `PFE_GL_LANDSCAPE` accumulator's begin and end, and each run of tile visits.
+    #[derive(Debug, PartialEq, Eq)]
+    enum Step {
+        Begin,
+        Visits,
+        End,
+    }
+    fn record_framerate(effect: &Effect) {
+        let step = match *effect {
+            Effect::AccumulatorBegin(PerformanceElement::PFE_GL_LANDSCAPE) => Step::Begin,
+            Effect::AccumulatorEnd(PerformanceElement::PFE_GL_LANDSCAPE) => Step::End,
+            _ => return,
+        };
+        STEPS.with(|steps| steps.borrow_mut().push(step));
     }
     /// The native assertion service, recording the visit count at each failure.
     extern "C" fn record_failed_check(condition: bool) {

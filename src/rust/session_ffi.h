@@ -96,12 +96,8 @@ struct OpenTTDSessionServices {
 	OpenTTDNetworkActionsStorage *(*network_actions)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_actions);
 	bool (*failed)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(failed);
 	OpenTTDConsoleException * (*console_exception)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(console_exception);
-	void (*state_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(state_begin);
 	void (*company_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(company_begin);
 	void (*company_restore)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(company_restore);
-	void (*scripts_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(scripts_begin);
-	void (*scripts_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(scripts_end);
-	void (*paused_measurements)() noexcept OPENTTD_SERVICE_DEFAULT(paused_measurements);
 	bool (*scripts_enabled)() noexcept OPENTTD_SERVICE_DEFAULT(scripts_enabled);
 	void (*assert_local_company)() noexcept OPENTTD_SERVICE_DEFAULT(assert_local_company);
 	bool (*tick_timer)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tick_timer);
@@ -119,8 +115,6 @@ struct OpenTTDSessionServices {
 	bool (*post_ai)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(post_ai);
 	const OpenTTDRoadCommandContext *(*road_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(road_begin);
 	void (*road_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(road_end);
-	void (*landscape_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(landscape_begin);
-	void (*landscape_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(landscape_end);
 
 };
 const OpenTTDSessionServices &GetRustSessionServices() noexcept;

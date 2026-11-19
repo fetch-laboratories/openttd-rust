@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Whole `LinkGraphSchedule` owner. Workers only touch Rust job-private snapshots.
 #![allow(unsafe_code, clippy::cast_possible_truncation)]
+use crate::framerate_type::{PerformanceElement, PerformanceMeasurer};
 use crate::game_state::GameState;
 use crate::{
     linkgraph::{
@@ -10,7 +11,7 @@ use crate::{
     timer_game_common::SECONDS_PER_DAY,
     witness,
 };
-use std::{collections::VecDeque, sync::atomic::Ordering};
+use std::{collections::VecDeque, mem::MaybeUninit, sync::atomic::Ordering};
 
 #[repr(C)]
 struct Queues {
@@ -23,10 +24,8 @@ struct Queues {
 pub(crate) struct Services {
     allocation_failure: extern "C" fn(),
     assert_graph: extern "C" fn(*const Graph),
-    begin_measurement: extern "C" fn(bool),
     can_allocate: extern "C" fn() -> bool,
     destroy_job: extern "C" fn(*mut Job),
-    end_measurement: extern "C" fn(),
     graph_pool: *const *const crate::pool::PoolDescriptor,
     job_pool: *const *const crate::pool::PoolDescriptor,
     new_job: extern "C" fn(*const Graph) -> *mut Job,
@@ -39,10 +38,8 @@ pub(crate) struct Services {
 pub(crate) const TEST_TABLE: Services = Services {
     allocation_failure: crate::test_tables::unreachable0,
     assert_graph: crate::test_tables::unreachable1,
-    begin_measurement: crate::test_tables::unreachable1,
     can_allocate: crate::test_tables::unreachable0,
     destroy_job: crate::test_tables::unreachable1,
-    end_measurement: crate::test_tables::unreachable0,
     graph_pool: std::ptr::null(),
     job_pool: std::ptr::null(),
     new_job: crate::test_tables::unreachable1,
@@ -52,7 +49,7 @@ pub(crate) const TEST_TABLE: Services = Services {
 };
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, begin_measurement, can_allocate, destroy_job, end_measurement, graph_pool, job_pool, new_job, shared, start_thread, vehicle };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, can_allocate, destroy_job, graph_pool, job_pool, new_job, shared, start_thread, vehicle };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
 }
@@ -220,14 +217,13 @@ pub(crate) fn tick(
         spawn_next(s);
     } else if offset == interval / 2 {
         if !(company.finance.networking)() || (company.network_server)() {
-            // `PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH)`.
-            (s.begin_measurement)(false);
+            PerformanceMeasurer::set_inactive(PerformanceElement::PFE_GL_LINKGRAPH);
             join_next(s);
         } else {
-            // `PerformanceMeasurer framerate(PFE_GL_LINKGRAPH)`, ended with its scope.
-            (s.begin_measurement)(true);
+            let mut storage = MaybeUninit::uninit();
+            let _framerate =
+                PerformanceMeasurer::new(&mut storage, PerformanceElement::PFE_GL_LINKGRAPH);
             join_next(s);
-            (s.end_measurement)();
         }
     }
 }
