@@ -3088,6 +3088,14 @@ mod production_policy_tests {
         static RNG: Cell<u32> = const { Cell::new(0) };
         static ERRORS: Cell<u32> = const { Cell::new(0) };
         static DIRTY: Cell<u32> = const { Cell::new(0) };
+        /// The station catchment table this thread's test stored: its shared table names
+        /// this thread's map statics, so another test thread must not read it.
+        static CATCHMENT: Cell<*const crate::station::CatchmentServices> =
+            const { Cell::new(ptr::null()) };
+    }
+    /// `Services::station_catchment`: the calling thread's `CATCHMENT`.
+    extern "C" fn catchment() -> *const crate::station::CatchmentServices {
+        CATCHMENT.get()
     }
     extern "C" fn random(_: *mut c_void) -> u32 {
         let value = RNG.get();
@@ -3248,12 +3256,6 @@ mod production_policy_tests {
     fn report_news_production_change_industry_follows_the_original() {
         use crate::news_func::testing::{Effect, Param, encoded, take};
         use crate::news_type::{AdviceType, NewsFlag, NewsFlags, NewsReference, NewsStyle};
-        use std::sync::atomic::{AtomicPtr, Ordering};
-        static CATCHMENT: AtomicPtr<crate::station::CatchmentServices> =
-            AtomicPtr::new(ptr::null_mut());
-        extern "C" fn catchment() -> *const crate::station::CatchmentServices {
-            CATCHMENT.load(Ordering::Acquire)
-        }
         extern "C" fn cargo_name(cargo: u8) -> u32 {
             0x900 + u32::from(cargo)
         }
@@ -3265,14 +3267,11 @@ mod production_policy_tests {
             station_catchment: catchment,
             ..crate::services::fixture(ptr::null_mut(), random, unused_industry)
         }));
-        CATCHMENT.store(
-            Box::leak(Box::new(crate::station::CatchmentServices {
-                shared,
-                industry_id,
-                ..crate::test_tables::CATCHMENT
-            })),
-            Ordering::Release,
-        );
+        CATCHMENT.set(Box::leak(Box::new(crate::station::CatchmentServices {
+            shared,
+            industry_id,
+            ..crate::test_tables::CATCHMENT
+        })));
         let services = services(shared);
         let owner = Box::into_raw(Box::default());
         take();
@@ -3310,14 +3309,8 @@ mod production_policy_tests {
         use crate::test_tables::{
             unreachable1, unreachable2, unreachable3, unreachable4, unreachable5, unreachable6,
         };
-        use std::sync::atomic::{AtomicPtr, Ordering};
-        static CATCHMENT: AtomicPtr<crate::station::CatchmentServices> =
-            AtomicPtr::new(ptr::null_mut());
         thread_local! {
             static OWNER: std::cell::Cell<*mut Industry> = const { std::cell::Cell::new(ptr::null_mut()) };
-        }
-        extern "C" fn catchment() -> *const crate::station::CatchmentServices {
-            CATCHMENT.load(Ordering::Acquire)
         }
         extern "C" fn industry_id(_: *mut tile::ShellHandle) -> IndustryID {
             IndustryID(12)
@@ -3346,15 +3339,12 @@ mod production_policy_tests {
             map: crate::map_func::fixture::statics(),
             ..crate::services::fixture(ptr::null_mut(), random, unused_industry)
         }));
-        CATCHMENT.store(
-            Box::leak(Box::new(crate::station::CatchmentServices {
-                shared,
-                industry_id,
-                industry_owner,
-                ..crate::test_tables::CATCHMENT
-            })),
-            Ordering::Release,
-        );
+        CATCHMENT.set(Box::leak(Box::new(crate::station::CatchmentServices {
+            shared,
+            industry_id,
+            industry_owner,
+            ..crate::test_tables::CATCHMENT
+        })));
         let mut s = services(shared);
         s.resolver = Box::leak(Box::new(resolver::ResolverServices {
             shared,
@@ -3395,6 +3385,39 @@ mod production_policy_tests {
             local_company: crate::test_tables::unreachable0,
         }));
         s
+    }
+    /// The station catchment table `services`' shared table returns to this thread.
+    fn stored_catchment(services: &Services) -> *const crate::station::CatchmentServices {
+        unsafe { ((*services.shared).station_catchment)() }
+    }
+    /// Each thread's news tables return the catchment table that thread stored, whose map
+    /// statics are its own: another test thread's `news_services` neither replaces it nor
+    /// hands this thread its map statics.
+    #[test]
+    fn news_catchment_is_the_calling_threads_own() {
+        let owner = Box::into_raw(Box::default());
+        let services = news_services(owner);
+        let saved = stored_catchment(&services);
+        let other = std::thread::spawn(|| {
+            let owner = Box::into_raw(Box::default());
+            let services = news_services(owner);
+            let table = stored_catchment(&services);
+            assert_eq!(
+                unsafe { (*(*table).shared).map },
+                crate::map_func::fixture::statics()
+            );
+            drop(unsafe { Box::from_raw(owner) });
+            table as usize
+        })
+        .join()
+        .unwrap();
+        assert_eq!(stored_catchment(&services), saved);
+        assert_ne!(saved as usize, other);
+        assert_eq!(
+            unsafe { (*(*saved).shared).map },
+            crate::map_func::fixture::statics()
+        );
+        drop(unsafe { Box::from_raw(owner) });
     }
     /// A `NewGRF` text as `MapGRFStringID` maps it (`MakeStringID(TEXT_TAB_NEWGRF_START, 1)`),
     /// above `STR_LAST_STRINGID`: a custom news text.
