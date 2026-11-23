@@ -6,11 +6,11 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 ## Where the fork stands
 
-Base is at merge 75 (`00494f6c23`). The census, the inventories and the instruction profile below are the merge-71 measurements (`603724a3fd`), taken on 2026-11-18 by routine agents, and the latest; the other column is merge 59 (`f24c05dbe9`), the stocktake before it. That interval took 36 running hours ([who decides](../AGENTS.md#who-decides)). Nothing has been measured on the merged tip since merge 71: the next stocktake follows merge 83 and the next platform cadence merge 77.
+Base is at merge 75 (`00494f6c23`). The census, the inventories and the instruction profile below are the merge-71 measurements (`603724a3fd`), taken on 2026-11-18 by routine agents, and the latest; the other column is merge 59 (`f24c05dbe9`), the stocktake before it. That interval took 36 running hours ([who decides](../AGENTS.md#who-decides)). Since merge 71 only the census and #734's files have been measured on the merged tip, at merge 75 ([phases](#phases)): the next stocktake follows merge 83 and the next platform cadence merge 77.
 
 - Fork C++ fell by 1,333 lines, 37 a running hour: 709 of source glue, 472 of original C++ retired, 135 generated and 17 under `tools/`. Rust grew by 7,004 lines and tooling by 1,145.
 - **Map generation's instruction count rose 24.6%** between the two profiles, the only scenario that moved, and its projection is 1.775x against the 1.3x ceiling ([speed](#speed)). Every exit save still compares equal. All of it was in the per-tick tile loop, from #988's rewrite of the clear tile loop (merge 62), whose plan measured one play scenario only. #1019 repaired it at merge 75: the scenario is 1.0% below its merge-59 count at that PR's head, a projection of 1.171885x, which the merged tip's next profile has still to confirm; a plan now measures the scenario where its hot body costs most ([planner brief](planner-brief.md#the-plan)).
-- #734 has 141 of 319 files finished, holding 105,163 lines. That is 55.1% of the 190,751-line denominator; the workset's files have grown to 205,453 lines, of which it is 51.2%. Nine more finished files, 876 lines, are in no workset. Eight files finished in twelve merges: six of the twelve were shared services, the string IDs and tools, and the passes that did merge each carried the repair of the design faults in its files. At this interval's 352 finished lines a running hour, the 100,290 lines left are about 285 running hours of passes; steering 37 judges whether that is the course.
+- #734 has 141 of 319 files finished, holding 105,163 lines. That is 55.1% of the 190,751-line denominator; the workset's files have grown to 205,453 lines, of which it is 51.2%. Nine more finished files, 876 lines, are in no workset. Eight files finished in twelve merges: six of the twelve were shared services, the string IDs and tools, and the passes that did merge each carried the repair of the design faults in its files. The lines left in unfinished files fell from 105,623 to 100,290, 148 a running hour; finished lines rose by 352 a running hour only because finished files also grow. At 148 the 100,290 lines left are about 680 running hours of passes, and at the 181 measured through merge 75 the 98,024 then left are about 540 ([phases](#phases)). The navigation at merge 75 judged that cost and put it to the user as #1025.
 - The boundary shrank: 1,467 exports and 3,073 callback slots, 34 and 105 fewer.
 - #735 is at 115 functions over seven parameters; 70 are FFI exports, which keep positional lists while their C++ callers remain.
 - #736 has no transfer left. Fork test glue under `src/tests` grew by 83 lines, from fixture inputs that passes repaired under accepted growth records.
@@ -61,6 +61,7 @@ The comment, integer, wrapper, constant and literal rows are analyzer estimates 
 | --- | --- | ---: | ---: |
 | #734 | Workset files with a finished pass, of 319 | 133 | 141 |
 | #734 | Workset lines in finished files, of 190,751 | 92,475 (48.5%) | 105,163 (55.1%) |
+| #734 | Lines left in unfinished workset files | 105,623 | 100,290 |
 | #734 | Explanatory comment lines missing inside matched ported bodies | 2,057; 217 in finished files | 2,033; 229 |
 | #734 | Bare-integer parameters and fields whose concept has a named type | 1,525; 298 in finished files | 1,442; 339 |
 | #734 | Transparent wrapper types / named constants | 338 / 3,831; 84 / 1,134 in finished files | 362 / 3,937; 97 / 1,267 |
@@ -74,7 +75,7 @@ The comment, integer, wrapper, constant and literal rows are analyzer estimates 
 
 Counting commands:
 
-- **#734:** reconcile the issue workset manifest with merged complete-file pass PRs, then count current files with `wc -l`; a deleted finished entry remains in the denominator, and mechanical caller edits do not finish a file. Run `python3 tools/code-standards-inventory.py [--head REV]` for the tree and with the finished paths for that subset. #892's sites have no tool: the scan covers `git ls-files 'rust/*.rs'` less test files, `cfg(test)` items, comments and literals, and each stocktake reruns it on the previous tip, since two scans' exclusions have differed.
+- **#734:** reconcile the issue workset manifest with merged complete-file pass PRs, then count current files with `wc -l`; a deleted finished entry remains in the denominator, and mechanical caller edits do not finish a file. The lines left are the `wc -l` of the workset files that `migration/finished-files.txt` does not list; their fall per running hour gives the stream's remainder. Run `python3 tools/code-standards-inventory.py [--head REV]` for the tree and with the finished paths for that subset. #892's sites have no tool: the scan covers `git ls-files 'rust/*.rs'` less test files, `cfg(test)` items, comments and literals, and each stocktake reruns it on the previous tip, since two scans' exclusions have differed.
 - **#735:** use the tracked long-signature inventory counter, `migration/clippy-debt.json` (`too_many_arguments` keys) and `git grep 'allow(clippy::too_many_arguments' -- rust/`.
 - **#736, the census baseline rows and the Clippy and Ruff rows:** from `python3 tools/port-metrics.py --whole-fork` (exports and callback slots are its "Boundary" line), `python3 tools/orphan-exports.py --report-uncalled`, `wc -l` of the three baseline files, and the debt files (keys are `sites` entries, diagnostics the sum of their list lengths). Expanded exports: `growth_inventory` in `tools/port-metrics.py`.
 - **#738:** `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`.
@@ -103,73 +104,81 @@ The merge-71 profile on clean `8869d55587` (docs commits over merge `603724a3fd`
 
 ## Phases
 
-Agent: /root (Claude Code navigation) | Model: claude-fable-5-2 | Reasoning effort: 30 (host-reported number)
+Agent: /root (Claude Code navigation) | Model: claude-fable-5-2 | Reasoning effort: 80 (host-reported number)
 
 Phase numbers name content; the execution order sets the sequence. Phase 1 (simulation logic) exited at integration 63.
 
-Position at merge 59 (`f24c05dbe9`), 2026-11-13. Counts are code lines from `python3 tools/port-metrics.py --whole-fork` (metric version 3, recounted at both endpoints after #978 merged): comments, blanks and preprocessor lines are excluded, and the scope is `src/` plus generated records for all platforms, not one executable. Parentheses compare the last navigation, `78553df0a1` (integration 146), recounted with the same metric; the recount matches its published figures. Areas are accounting buckets; the last column names what removes each.
+Position at merge 75 (`00494f6c23`), measured on 2026-11-23. Counts are code lines from `python3 tools/port-metrics.py --whole-fork` (metric version 3): comments, blanks and preprocessor lines are excluded, and the scope is `src/` plus generated records for all platforms, not one executable. Parentheses compare the last navigation, `c80ace14b8` (merge 59, `f24c05dbe9`), recounted with the same metric; the recount matches its published figures. Areas are accounting buckets; the last column names what removes each.
 
 | Area | Original | Retired (change) | Remaining (change) | Fork glue (change) | Compiled C++ (change) | Removed by |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Simulation logic | 47,424 | 37,861 (+123) | 9,563 (−123) | 5,590 (−277) | 15,153 (−400) | Phase 1 has exited; its residue goes with its consumers: drawing functions in phase 5, startup (`openttd.cpp`) in phase 4, facades and other bodies with their phase-2 owners |
-| Simulation storage | 13,724 | 3,242 (+30) | 10,482 (−30) | 1,384 (−3) | 11,866 (−33) | Phase 2 |
-| Save/load | 13,388 | 1,435 (0) | 11,953 (0) | 1,070 (0) | 13,023 (0) | Phase 3, except about 4,300 lines of pool and map chunks and their compat tables, which go with phase 2 |
-| Script API | 14,908 | 2,406 (0) | 12,502 (0) | 750 (0) | 13,252 (0) | Phase 3; VM and binding shims in phase 6 |
-| Network | 12,713 | 3,260 (+7) | 9,453 (−7) | 1,158 (−10) | 10,611 (−17) | Phase 3 |
-| NewGRF | 10,785 | 5,974 (+1) | 4,811 (−1) | 372 (0) | 5,183 (−1) | Phase 3 |
-| Support | 21,617 | 973 (0) | 20,644 (0) | 544 (−3) | 21,188 (−3) | Phase 4 |
-| Graphics and viewport | 10,985 | 7 (0) | 10,978 (0) | 4 (0) | 10,982 (0) | Phase 4 |
+| Simulation logic | 47,424 | 38,015 (+154) | 9,409 (−154) | 5,070 (−520) | 14,479 (−674) | Phase 1 has exited; its residue goes with its consumers: drawing functions in phase 5, startup (`openttd.cpp`) in phase 4, facades and other bodies with their phase-2 owners |
+| Simulation storage | 13,724 | 3,463 (+221) | 10,261 (−221) | 1,380 (−4) | 11,641 (−225) | Phase 2 |
+| Save/load | 13,388 | 1,440 (+5) | 11,948 (−5) | 1,070 (0) | 13,018 (−5) | Phase 3, except about 4,300 lines of pool and map chunks and their compat tables, which go with phase 2 |
+| Script API | 14,908 | 2,399 (−7) | 12,509 (+7) | 750 (0) | 13,259 (+7) | Phase 3; VM and binding shims in phase 6 |
+| Network | 12,713 | 3,272 (+12) | 9,441 (−12) | 1,075 (−83) | 10,516 (−95) | Phase 3 |
+| NewGRF | 10,785 | 5,986 (+12) | 4,799 (−12) | 368 (−4) | 5,167 (−16) | Phase 3 |
+| Support | 21,617 | 1,054 (+81) | 20,563 (−81) | 539 (−5) | 21,102 (−86) | Phase 4 |
+| Graphics and viewport | 10,985 | 19 (+12) | 10,966 (−12) | 4 (0) | 10,970 (−12) | Phase 4 |
 | Data tables | 17,295 | 4,367 (0) | 12,928 (0) | 14 (0) | 12,942 (0) | Each table with its last C++ consumer, in phases 2 to 5 |
 | GUI | 52,179 | 415 (0) | 51,764 (0) | 463 (0) | 52,227 (0) | Phase 5 |
-| Platform | 11,941 | 0 (0) | 11,941 (0) | 2 (0) | 11,943 (0) | Phase 5 |
+| Platform | 11,941 | 8 (+8) | 11,933 (−8) | 2 (0) | 11,935 (−8) | Phase 5 |
 | Vendored | 55,148 | 2,317 (0) | 52,831 (0) | 0 (0) | 52,831 (0) | Phase 6 |
-| Upstream tests and fork test glue | 2,248 | 14 (0) | 2,234 (0) | 4,770 (−509) | 7,004 (−509) | Fork tests with the pools and readers they reach ([ADR 0023](adr/0023-cpp-tests-stay-until-code-is-ported.md)). Upstream tests go with the code they test; Catch2 goes when the last C++ test leaves |
-| Boundary layer | 0 | 0 (0) | 0 (0) | 16,289 (−470) | 16,289 (−470) | Each side's owner; the final exit |
-| **Source total** | **284,355** | **62,271 (21.90%, +161)** | **222,084 (−161)** | **32,410 (−1,272)** | **254,494 (−1,433)** | |
-| C++ under `tools/` | | | | 14,494 (−1,148) | 14,494 (−1,148) | With the pools, readers and boundaries each file reaches (#736's classification) |
-| ABI-generated non-record C++ | | | | 5,303 (−172) | 5,303 (−172) | With the records and layouts it checks |
-| **Fork C++ census** | | | | | **274,291 (−2,753)** | |
+| Upstream tests and fork test glue | 2,248 | 14 (0) | 2,234 (0) | 4,857 (+87) | 7,091 (+87) | Fork tests with the pools and readers they reach ([ADR 0023](adr/0023-cpp-tests-stay-until-code-is-ported.md)). Upstream tests go with the code they test; Catch2 goes when the last C++ test leaves |
+| Boundary layer | 0 | 0 (0) | 0 (0) | 15,919 (−370) | 15,919 (−370) | Each side's owner; the final exit |
+| **Source total** | **284,355** | **62,769 (22.07%, +498)** | **221,586 (−498)** | **31,511 (−899)** | **253,097 (−1,397)** | |
+| C++ under `tools/` | | | | 14,473 (−21) | 14,473 (−21) | With the pools, readers and boundaries each file reaches (#736's classification) |
+| ABI-generated non-record C++ | | | | 5,130 (−173) | 5,130 (−173) | With the records and layouts it checks |
+| **Fork C++ census** | | | | | **272,700 (−1,591)** | |
 
-Inventory correction, apart from retirement: no original C++ came back. Version 2 diffed each file against the pin with git's default algorithm, whose alignment shifts when a heavily edited file changes, so it overstated retired and glue by the same amount: 591 lines at the last navigation and 176 at merge 59, and it showed retirement of −254 over a period in which it was +161. Version 3 uses the minimal diff, and the table above is recounted with it; compiled C++ and the census are the same under both. The rates table below still holds version 2's retired figures at endpoints not recounted, and the next navigation recounts it.
+Inventory correction, apart from retirement: no original C++ came back. The script API row shows 7 lines fewer retired although no file under `src/script`, `src/ai` or `src/game` changed between the endpoints: the metric now counts the constructor of `ScriptRailTypeList`, whose file #666 deleted, as remaining. That is a counting effect, and its cause is not traced. The rates table below is recounted with version 3 at every endpoint.
 
-Of the 19,797 evidence lines, 18,154 are candidate or shared, none is reference-only and 1,643 are unresolved, which the census counts as candidate. Outside the census are 836 raw lines of C++ in `COMMAND_SOURCE` (`tools/simulation/stations.py`) and 302 lines of oracle recipes, which compile only against the pinned original. The boundary has 1,501 exports (−38) and 3,178 callback slots (−154). Rust has 190,296 code lines (−1,603) and tooling 73,533 (+11,637).
+Of the 19,603 evidence lines, 17,976 are candidate or shared, none is reference-only and 1,627 are unresolved, which the census counts as candidate. Outside the census are 836 raw lines of C++ in Python strings and 302 lines of oracle recipes, which compile only against the pinned original. The boundary has 1,467 exports (−34) and 3,039 callback slots (−139). Rust has 200,156 code lines (+9,860) and tooling 77,314 (+3,781).
 
-Rates use commit timestamps between code endpoints, in calendar days. The days include the user's pauses, so these rates do not compare periods; the next navigation recounts them per running hour ([who decides](../AGENTS.md#who-decides)):
+Rates are per running hour ([who decides](../AGENTS.md#who-decides)), counted between code endpoints from `git log --all --format=%at`. An hour on a boundary counts in both periods, so the periods sum to a few hours more than the totals. Every period ran before the [hardware change](rust-migration.md#hardware) of 2026-11-23, since the last code commit is from 2026-11-19; the next navigation's first period spans it. The last column is the lines left in #734's unfinished workset files, with their fall per running hour.
 
-| Period | Days | Original retired | Per day | Fork C++ census change | Per day |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Fork start `6ced7c097e` to the pause before cleanup, `e800717540` | 35.05 | +62,750 | 1,790 | −4,600 | −131 |
-| Cleanup to the last navigation's code, `61c6d2c598` (integration 146) | 2.21 | −49 | −22 | −2,711 | −1,229 |
-| To steering 34, `3a2d52b870` | 2.11 | −303 | −143 | −1,509 | −714 |
-| To steering 35, `5b0b8427b8` (merge 47) | 1.52 | +2 | 1 | −457 | −300 |
-| To merge 59 | 0.40 | +47 | 117 | −787 | −1,967 |
-| **Since the last navigation** | **4.04** | **−254** | **−63** | **−2,753** | **−682** |
-| **Cleanup stage so far** | **6.24** | **−303** | **−49** | **−5,464** | **−876** |
-| **Whole history** | **41.29** | **+62,447** | **1,512** | **−10,064** | **−244** |
+| Period | Running hours | Original retired | Per hour | Fork C++ census change | Per hour | #734 lines left (fall per hour) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Fork start `6ced7c097e` to the stop before cleanup, `e800717540` | 339 | +62,150 | 183 | −4,600 | −14 | |
+| Cleanup to `61c6d2c598` (integration 146) | 32 | −40 | −1 | −2,711 | −85 | |
+| To steering 34, `3a2d52b870` | 39 | +109 | 3 | −1,509 | −39 | |
+| To steering 35, `5b0b8427b8` (merge 47) | 23 | +2 | 0 | −457 | −20 | 116,327 |
+| To merge 59, `f24c05dbe9` (the last navigation; steering 36 followed) | 9 | +50 | 6 | −787 | −87 | 105,623 (1,189) |
+| To merge 71, `603724a3fd` (the stocktake) | 36 | +472 | 13 | −1,333 | −37 | 100,290 (148) |
+| To merge 75, `00494f6c23` | 6 | +26 | 4 | −258 | −43 | 98,024 (378) |
+| **Since the last navigation** | **42** | **+498** | **12** | **−1,591** | **−38** | **−7,599 (181)** |
+| **Cleanup stage so far** | **139** | **+619** | **4** | **−7,055** | **−51** | |
+| **Whole history** | **478** | **+62,769** | **131** | **−11,655** | **−24** | |
 
 What set the rate:
-- The cleanup stage retires no original C++ by design ([ADR 0004](adr/0004-cleanup-before-porting.md)); the movement in that column is the diff noise of #978. Ownership ports retired 1,250 to 2,160 original lines a day before it. At that pace the 222,084 lines left are about 150 days of porting, with no measured pace yet for the GUI, platform or vendored code.
-- #734 finished 92 files and 60,395 lines since the stocktake at integration 143, just before the last navigation: about 15,000 lines a day. 105,623 lines remain at the files' current sizes, about seven more days at that pace, before closure and #893.
-- The census fell at half the previous navigation's pace. Between steerings 34 and 35, 8 of the 17 merges in root's session were tools or CI changes and tooling grew by 8,314 lines; steering 35 moved that work to one batch per stocktake interval, and the 12 merges after it cut the census at 1,967 lines a day.
+- The cleanup stage retires no original C++ by design ([ADR 0004](adr/0004-cleanup-before-porting.md)). It has run 139 of the fork's 478 running hours. The 619 lines retired in it are forwarding bodies that design-fault repairs removed.
+- #734's pace fell to about a sixth after merge 59: the lines left fell by 1,189 a running hour in merges 48 to 59 and by 181 in merges 60 to 75, and changed lines merged fell from about 3,170 to about 1,160 a running hour. Three things changed at that point, and this navigation does not separate them: the strict limit of two implementers ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)); steering 36's plan review and two reviewers for each group; and the mix of work, in which 6 of the 16 merges were file passes and 10 were shared services, string IDs, two tools batches, #994 and the tile-loop repair. Twelve of the 41 distinct running hours had only Markdown commits. Steering 37 measures the causes.
+- At 181 lines a running hour the 98,024 lines left are about 540 running hours of passes, before closure and #893; at the 378 of merges 72 to 75 they are about 260. The fork's whole history is 478 running hours. The last navigation's "about seven more days" used the pace of merges 48 to 59.
+- The merge-71 stocktake projected that remainder from finished lines per running hour, which also count the growth of files already finished: it gave 285 running hours where the lines left gave 680. [Selection](planning.md#selection) now measures the lines left.
+- Ownership ports retired 183 original lines a running hour before the cleanup, at which the 221,586 lines left are about 1,210 running hours. That is not a forecast: it produced the code the cleanup is redoing, no port has been made under the current review rules, and the GUI, platform and vendored code have no measured pace.
+- ADR 0049's compile times predate the hardware change and do not compare with later ones ([hardware](rust-migration.md#hardware)), and its 2.4-hour sample of steady merged lines did not hold over the 42 running hours since. The ADR is the user's: steering 37 measures two against three implementers on the new hardware and brings the user the figures.
 
 | Order | Stage | Size now | Exit (end state) | Status |
 | ---: | --- | --- | --- | --- |
-| 1 | Cleanup | #734: 133 of 319 workset files and 92,475 of 190,751 lines finished; the files now hold 198,098 lines. #735: 118 long functions, 44 debt keys and 9 allows. #736: 14,494 counted tools C++ lines and 4,770 fork test lines, plus separately inventoried embedded C++. #737 and #738 are closed at their end states | #734: all 319 files finished and [closure](#cleanup-work-order) done; #735 closes with it. #736: no file the [classification](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013) calls movable remains, as [steering 35 amended it](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6834080910); each remaining C++ file under `tools/` and `src/tests`, and any embedded C++, either checks the calling boundary itself or reaches a live native pool, reader or production caller, and names the owner or boundary whose retirement removes it ([evidence](porting.md#evidence)). The 65 pool and reader fixtures stay native until their owners retire them. Lint ratchets shrink per PR but set no exit, and the structural Clippy rows are outside it. Read each end state from the code and inventories, not from issue state | Current |
-| 2 | Phase 3: readers (script API, NewGRF, network, content, admin, save/load outside pool chunks) | About 37,800 compiled lines: script API 13,252, network 10,611, NewGRF 5,183, and save/load 13,023 less the pool and map chunks. The [queued owners](#after-cleanup) estimate 4,600 to 7,000 net C++ removed, so about 31,000 to 33,000 lines have no owner yet | Readers run in Rust with evidence for their observable outputs. Every remaining body in these buckets has a named later owner: VM and binding shims phase 6, script and network GUI phase 5, pool chunks phase 2 | Next. Plan it in full before cleanup's last items are dispatched ([goal and phases](planning.md#goal-and-phases)), and no sooner: the user declined planning it during cleanup as far too early |
-| 3 | Phase 2: storage, each pool with its save/load chunks, then the map | 11,866 compiled lines in storage, about 4,300 save/load chunk lines, the logic residue assigned to pool owners, and record field routes in the 16,289-line boundary layer | Rust owns every pool's records, slots, allocation, iteration, lifetime and save/load, then map allocation and remaining map bodies; no Rust-used field behind a native service | Queued; placement in the [reader and pool placement](design/reader-pool-placement.md) design |
-| 4 | Support | About 32,200: support 21,188 and graphics and viewport 10,982, plus their data tables and startup | As in [planning](planning.md#goal-and-phases) | #3; planned when it becomes the next phase ([ADR 0005](adr/0005-plan-only-the-next-phase.md)) |
-| 5 | GUI, drawing and platform | About 64,200: GUI 52,227 and platform 11,943, plus simulation and data-table drawing | As in [planning](planning.md#goal-and-phases) | As phase 4 |
+| 1 | Cleanup | #734: 142 of 319 workset files finished; 176 files and 98,024 lines are left, about 540 running hours at the pace since merge 59. #735: 115 long functions, 42 debt keys and 9 allows at merge 71. #736: 14,473 counted tools C++ lines and 4,857 fork test lines, plus separately inventoried embedded C++. #737 and #738 are closed at their end states | #734: all 319 files finished and [closure](#cleanup-work-order) done; #735 closes with it. #736: no file the [classification](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013) calls movable remains, as [steering 35 amended it](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6834080910); each remaining C++ file under `tools/` and `src/tests`, and any embedded C++, either checks the calling boundary itself or reaches a live native pool, reader or production caller, and names the owner or boundary whose retirement removes it ([evidence](porting.md#evidence)). The 65 pool and reader fixtures stay native until their owners retire them. Lint ratchets shrink per PR but set no exit, and the structural Clippy rows are outside it. Read each end state from the code and inventories, not from issue state | Current. Its cost is with the user as [#1025](https://github.com/fetch-laboratories/openttd-rust/issues/1025) |
+| 2 | Phase 3: readers (script API, NewGRF, network, content, admin, save/load outside pool chunks) | About 37,700 compiled lines: script API 13,259, network 10,516, NewGRF 5,167, and save/load 13,018 less the pool and map chunks. The [queued owners](#after-cleanup) estimate 4,600 to 7,000 net C++ removed, so about 31,000 to 33,000 lines have no owner yet | Readers run in Rust with evidence for their observable outputs. Every remaining body in these buckets has a named later owner: VM and binding shims phase 6, script and network GUI phase 5, pool chunks phase 2 | Next. Plan it in full before cleanup's last items are dispatched ([goal and phases](planning.md#goal-and-phases)), and no sooner: the user declined planning it during cleanup as far too early. #1025 asks the user whether its first reader starts beside the cleanup |
+| 3 | Phase 2: storage, each pool with its save/load chunks, then the map | 11,641 compiled lines in storage, about 4,300 save/load chunk lines, the logic residue assigned to pool owners, and record field routes in the 15,919-line boundary layer | Rust owns every pool's records, slots, allocation, iteration, lifetime and save/load, then map allocation and remaining map bodies; no Rust-used field behind a native service | Queued; placement in the [reader and pool placement](design/reader-pool-placement.md) design |
+| 4 | Support | About 32,100: support 21,102 and graphics and viewport 10,970, plus their data tables and startup | As in [planning](planning.md#goal-and-phases) | #3; planned when it becomes the next phase ([ADR 0005](adr/0005-plan-only-the-next-phase.md)) |
+| 5 | GUI, drawing and platform | About 64,200: GUI 52,227 and platform 11,935, plus simulation and data-table drawing | As in [planning](planning.md#goal-and-phases) | As phase 4 |
 | 6 | Vendored and final retirement | Vendored 52,831, plus whatever boundary, test and evidence C++ remains | Every original and fork-written C++ line retired and candidate native targets removed ([goal and phases](planning.md#goal-and-phases)) | As phase 4 |
 
-Why the course changed at this navigation (cited at `80f50ba64c`):
-1. `/steer` step 2 said "progress counts original C++ retired, not glue removed" (`skills/steer/SKILL.md:38`), against the yardstick of [ADR 0022](adr/0022-progress-is-net-cpp-removed.md). It now reads the fork C++ census.
-2. The retired count moved by hundreds of lines with diff alignment and showed retirement running backwards (#978).
+Verdict at this navigation (cited at `ca752b114a`):
+1. **Goal: holds.** `AGENTS.md:3-4`, [goal and phases](planning.md#goal-and-phases) and `/start-development` name the same end: a Rust-only game with every original and fork-written C++ line retired.
+2. **Plan: holds.** Every remaining line has a phase that removes it, and phase 3 is planned in full before the cleanup's last items are dispatched.
+3. **Rules: one fails on cost, and it is the user's.** ADR 0004 (`docs/adr/0004-cleanup-before-porting.md:9`) keeps original retirement near zero for about 540 more running hours at the measured pace, more than the fork has run. It stands until the user changes it; #1025 gives the user the figures and recommends that one implementer resume porting while the other finishes the files.
+4. **Metrics: one failed and is corrected.** `docs/roadmap.md:13` and `docs/planning.md:27` measured #734 by files and lines finished, which more than halved its projected remainder.
+5. **Rate:** as above. Original retirement has been near zero for 29% of the fork's running hours, and the cleanup's own pace fell to about a sixth after merge 59.
+6. **Autonomy: holds.** `docs/roadmap.md:13` left the cleanup's course to steering 37; this navigation judged it and #1025 carries it to the user. Nothing else waits on a decision.
 
 Root's first actions on resume:
-1. Follow the [latest steering actions](#latest-steering-actions) and the [resume checkpoint](#resume-checkpoint).
-2. Add #978 to the tools batch (#945).
-3. Drive each cleanup stream to its end state above.
-4. Before the cleanup stage's last items are dispatched, plan phase 3 ([start-development](skills/start-development/SKILL.md) step 3).
+1. Follow the [resume checkpoint](#resume-checkpoint) and the [latest steering actions](#latest-steering-actions). ADR 0004 holds until the user answers #1025: continue the cleanup, and plan phase 3 at its recorded trigger.
+2. At each stocktake, record the lines left in #734's unfinished files and their fall per running hour, and project the stage's remainder from that ([selection](planning.md#selection)).
+3. If the user accepts #1025: write the ADR that replaces ADR 0004, plan phase 3 in full ([start-development](skills/start-development/SKILL.md) step 3) and dispatch its first reader to one slot. Report that port's original lines retired and changed lines per running hour at the next stocktake: it is the first pace measured under the current rules.
 
 ## Cleanup work order
 
