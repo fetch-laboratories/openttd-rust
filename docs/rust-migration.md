@@ -32,8 +32,9 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 
 ### Hardware
 
-- Since 2026-11-23 the host has an Intel i7-4790K with four cores and eight threads at up to 4.4 GHz, 32 GB of DDR3-2133, and a 4 TB SSD that holds the system and all output ([output disk](#output-disk)). The GTX 970 graphics card plays no part: games run with the null or SDL dummy video driver and draw in software.
-- From 2026-11-05, when the project moved to this machine, until 2026-11-23, the same processor ran at up to 4.0 GHz with DDR3-1333, on a 220 GB SSD with output on the hard disk. Wall times, compile-step times, speed-pass wall ratios and per-hour pace from before 2026-11-23 do not compare with later ones. Instruction counts do: they do not depend on clock, memory or disk speed.
+- Since 2026-11-23 the host has an Intel i7-4790K with four cores and eight threads at up to 4.4 GHz, 32 GB of DDR3-2133 as the user reports it, and a 4 TB SSD that holds the system and all output ([output disk](#output-disk)). The GTX 970 graphics card plays no part: games run with the null or SDL dummy video driver and draw in software.
+- From 2026-11-05, when the project moved to this machine, until 2026-11-23, the same processor ran without the user's overclock (they report 4.0 GHz and DDR3-1333), on a 220 GB SSD with output on the hard disk. Wall times, compile-step times, speed-pass wall ratios and per-hour pace from before 2026-11-23 do not compare with later ones. Instruction counts do: they do not depend on clock, memory or disk speed.
+- A quiet speed pass on 2026-11-23 timed the unchanged original game within 4% of its 2026-11-05 times, faster or slower by scenario: one game on one thread barely gained. All eight threads now hold 4.4 GHz under load, so parallel builds gain more than single games.
 
 ## Build and verification
 
