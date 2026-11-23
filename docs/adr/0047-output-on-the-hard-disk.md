@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR 0050
 may change: user
 ---
 # This machine's build and test output lives on the hard disk behind symlinks
