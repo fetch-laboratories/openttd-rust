@@ -227,14 +227,14 @@ fn visits(
 }
 
 /// A front vehicle of `kind`, owned by `owner`, at `current`, with no orders list.
-fn vehicle(kind: VehicleType, owner: u8, current: Order) -> VehicleRef {
+fn vehicle(kind: VehicleType, owner: crate::company_type::CompanyID, current: Order) -> VehicleRef {
     let record = crate::vehicle_base::openttd_rust_vehicle_record_new(std::ptr::null_mut(), kind);
     // SAFETY: The fresh record and owners; the test owns them.
     unsafe {
         (*record).shell = record.cast();
         (*record).orders = crate::orders::openttd_rust_vehicle_orders_new();
         (*record).consist = crate::orders::openttd_rust_consist_new();
-        (*record).owner = crate::company_type::CompanyID(owner);
+        (*record).owner = owner;
         (*record).tile = crate::tile_type::TileIndex(0x0123);
         (*record).x_pos = 21;
         (*record).y_pos = 22;
@@ -342,7 +342,7 @@ fn handle_refit_stores_and_restores_type_and_subtype_in_the_original_order() {
     CARGO_SUBTYPE.set(7);
     let v = vehicle(
         VehicleType::VEH_SHIP,
-        LOCAL,
+        crate::company_type::CompanyID(LOCAL),
         order(OrderType::OT_NOTHING, 0, 0xFE),
     );
     let mut refresher = Refresher {
@@ -403,7 +403,7 @@ fn percent_filled_asserts_that_a_colour_needs_a_valid_station() {
     // A part without capacity: the colour loop reads no station.
     let v = vehicle(
         VehicleType::VEH_SHIP,
-        LOCAL,
+        crate::company_type::CompanyID(LOCAL),
         order(OrderType::OT_LOADING, 0, 0xFE),
     );
 
@@ -455,7 +455,7 @@ fn leave_station_stores_the_fill_as_the_signed_trip_occupancy() {
     // No loading and no unloading: no link refresh, no last loading station.
     let v = vehicle(
         VehicleType::VEH_SHIP,
-        LOCAL,
+        crate::company_type::CompanyID(LOCAL),
         order(OrderType::OT_LOADING, 0x44, 0xFE),
     );
     v.set_last_station_visited(StationID(5));
@@ -495,7 +495,7 @@ fn depot_halt_announces_the_wait_to_the_local_company_and_the_owners_ai() {
     for owner in [LOCAL, LOCAL + 1] {
         let v = vehicle(
             VehicleType::VEH_ROAD,
-            owner,
+            crate::company_type::CompanyID(owner),
             order(OrderType::OT_GOTO_DEPOT, 0, 0xFE),
         );
         calls();
@@ -547,7 +547,7 @@ fn depot_refit_result_tells_the_failure_or_shows_the_cost() {
     for owner in [LOCAL, LOCAL + 1] {
         let v = vehicle(
             VehicleType::VEH_ROAD,
-            owner,
+            crate::company_type::CompanyID(owner),
             order(OrderType::OT_GOTO_DEPOT, 0, 5),
         );
         calls();
@@ -636,7 +636,7 @@ fn enter_depot_of_a_road_vehicle_invalidates_its_windows_in_order() {
     let s = visits(|_, _, _| {});
     let v = vehicle(
         VehicleType::VEH_ROAD,
-        LOCAL,
+        crate::company_type::CompanyID(LOCAL),
         order(OrderType::OT_NOTHING, 0, 0xFE),
     );
     v.set_cur_speed(30);
@@ -672,7 +672,7 @@ fn enter_depot_of_an_effect_vehicle_is_not_reached_before_any_window_call() {
     unsafe { crate::services_assert::bind_test_policy(count_failed_check, s.shared) };
     let v = vehicle(
         VehicleType::VEH_EFFECT,
-        LOCAL,
+        crate::company_type::CompanyID(LOCAL),
         order(OrderType::OT_NOTHING, 0, 0xFE),
     );
     crate::window_func::testing::take();
