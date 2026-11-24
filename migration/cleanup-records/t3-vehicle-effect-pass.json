@@ -45,5 +45,16 @@
     "existing_alternatives": "The catalog already holds the other settings the vehicle controllers read. A per-setting service would add a callback slot; the deleted smoke service was one.",
     "retiring_owner": "#734",
     "retirement_condition": "The field stays while the settings table is native. It retires when Rust owns _settings_game."
+  },
+  {
+    "kind": "growth",
+    "counter": "tools_cpp",
+    "added": {
+      "tools/simulation/fleet-console.cpp": 10
+    },
+    "reason": "#1027 part 2 decision 7 deletes Vehicle::UpdateVisualEffect and Vehicle::ShowVisualEffect, so the fleet harness's nine member calls go through FleetUpdateVisualEffect and FleetShowVisualEffect, which call the two kept exports with the process tables and a GetCurrentMaxSpeed thunk under WITH_RUST and the members in the reference build. road.inc's emission block loses its visual tables and binds, and gains the empty airport table that IsDepotTile's Rust hangar arm reads (porting review finding 1). Net 3 lines across both files.",
+    "existing_alternatives": "The fleet harness runs on both builds and must call the same bodies the game does; the deleted members leave only the exports, which #736's classification keeps for this harness. The road probe's hangar arm reads the airport registry, which has no default binding.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool moves to Rust and tools/simulation/fleet-console.cpp, which #736's classification keeps until then, leaves with it."
   }
 ]
