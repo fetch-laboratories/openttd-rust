@@ -359,6 +359,10 @@ pub(crate) unsafe fn object_change(
         0,
     );
 }
+/// Kept out of line: the PBS comparison probe interposes this symbol
+/// (`tools/simulation/rails.py`'s `pbs_interpose`), so a Rust caller such as
+/// `animated_tile::rail_event` must call it, not an inlined copy of its shim.
+#[inline(never)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_trigger_station(
     st: *mut BaseStation,

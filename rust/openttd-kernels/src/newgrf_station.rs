@@ -910,6 +910,10 @@ pub(crate) fn cargo_count(st: *mut BaseStation, cargo: u8) -> u32 {
 pub(crate) fn get_empty_mask(st: *mut BaseStation) -> CargoTypes {
     CargoTypes(services().get_empty_mask(st))
 }
+/// Kept out of line: the PBS comparison probe interposes this symbol
+/// (`tools/simulation/rails.py`'s `pbs_interpose`), so a Rust caller such as
+/// `animated_tile::rail_event` must call it, not an inlined copy of its shim.
+#[inline(never)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_randomisation(
     st: *mut BaseStation,
