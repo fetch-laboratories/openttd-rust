@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import ci_log
 import cleanup_contract
@@ -400,11 +400,29 @@ def label_request(repository: str, pr: int, pull: dict, head: str) -> None:
     gh("pr", "edit", str(pr), "--repo", repository, "--add-label", "ci:full")
 
 
-# An `origin` URL's GitHub repository, as `owner/name`, on github.com itself.
-GITHUB_REMOTE = re.compile(
-    r"^(?:https://(?:[^@/]+@)?github\.com/|(?:ssh://)?git@github\.com[:/])"
-    r"([^/]+/[^/]+?)(?:\.git)?/*$"
-)
+# Git's SCP-like remote syntax, `user@host:path`, where the path is not absolute.
+SCP_REMOTE = re.compile(r"^(?:[^@/:]+@)?([^/:]+):(?!/)(.+)$")
+
+
+def github_repository(url: str) -> str | None:
+    """The `owner/name` of a remote URL on github.com itself, or None."""
+    if "://" in url:
+        parts = urlsplit(url)
+        if parts.query or parts.fragment:
+            return None
+        try:
+            host, path = parts.hostname, parts.path
+        except ValueError:
+            return None
+    elif scp := SCP_REMOTE.match(url):
+        host, path = scp[1].lower(), scp[2]
+    else:
+        return None
+    name = path.strip("/").removesuffix(".git")
+    owner_name = name.split("/")
+    if host != "github.com" or len(owner_name) != 2 or not all(owner_name):
+        return None
+    return name
 
 
 class HeadRepository(TypedDict):
@@ -445,9 +463,9 @@ def checkout_head(pr: int, head: PullHead) -> str | None:
     upstream = checkout_git(
         "rev-parse", "--symbolic-full-name", f"{local}@{{upstream}}"
     )
-    remote = GITHUB_REMOTE.match(checkout_git("remote", "get-url", "origin"))
-    if (branch != local and upstream != tracking_ref) or not (
-        remote and remote[1].lower() == repository.lower()
+    remote = github_repository(checkout_git("remote", "get-url", "origin")) or ""
+    if (branch != local and upstream != tracking_ref) or (
+        remote.lower() != repository.lower()
     ):
         return None
     commit = checkout_git("rev-parse", "HEAD")

@@ -3042,6 +3042,25 @@ class RequestPathTests(unittest.TestCase):
                 self.assertEqual(sleeps, 0)
                 self.assertIn(f"head={previous}", calls[0])
 
+    def test_remote_urls_name_a_github_repository_only_on_github(self) -> None:
+        cases = {
+            "https://github.com/example/fork.git": "example/fork",
+            "https://token@github.com/example/fork": "example/fork",
+            "ssh://git@github.com:22/example/fork.git": "example/fork",
+            "ssh://git@github.com/example/fork.git": "example/fork",
+            "git@github.com:example/fork.git": "example/fork",
+            "github.com:example/fork": "example/fork",
+            "https://mirror-github.com/example/fork.git": None,
+            "https://mirror.example?x@github.com/example/fork.git": None,
+            "https://github.com.example/example/fork.git": None,
+            "git@github.com:/example/fork.git": None,
+            "https://github.com/example/fork/extra": None,
+            "/srv/git/fork.git": None,
+        }
+        for url, expected in cases.items():
+            with self.subTest(url=url):
+                self.assertEqual(ci.github_repository(url), expected)
+
     def test_an_upstream_on_another_remote_does_not_name_the_branch(self) -> None:
         local, previous = self.checkout(branch="work")
         self.git(
