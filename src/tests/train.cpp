@@ -63,7 +63,6 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 	map.order_state.current.max_speed = 160;
 	const OpenTTDTrainHandle handle{map.Vehicle(), map.state.get()};
 	map.state->cached_max_curve_speed = 180;
-	map.train.vehicle = &map.vehicle;
 	uint8_t acceleration = 0;
 	OpenTTDSettingAddresses settings{};
 	settings.train_acceleration_model = &acceleration;
