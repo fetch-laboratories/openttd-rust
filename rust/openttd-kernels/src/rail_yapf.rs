@@ -32,8 +32,7 @@ use crate::node_hash::NodeMap;
 use crate::order_type::{OrderDepotActionFlag, OrderType};
 use crate::pathfinder_func::calc_closest_station_tile;
 use crate::pathfinder_type::{
-    FindDepotData, FindDepotDataRecord, YAPF_INFINITE_PENALTY, YAPF_TILE_CORNER_LENGTH,
-    YAPF_TILE_LENGTH,
+    FindDepotData, YAPF_INFINITE_PENALTY, YAPF_TILE_CORNER_LENGTH, YAPF_TILE_LENGTH,
 };
 use crate::pbs::{PBSTileInfo, Pbs};
 use crate::rail_map::is_pbs_signal;
@@ -1909,11 +1908,11 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
 
     /// `CYapfDestinationRailBase::SetDestination`.
     fn set_destination_base(&mut self, override_rail_type: bool) {
-        self.compatible_railtypes = RailTypes(self.v.get_compatible_railtypes());
+        self.compatible_railtypes = self.v.compatible_railtypes();
         if override_rail_type {
             self.compatible_railtypes = RailTypes(
                 self.compatible_railtypes.0
-                    | (self.s.all_compatible_railtypes)(self.v.get_railtypes()),
+                    | (self.s.all_compatible_railtypes)(self.v.railtypes().0),
             );
         }
     }
@@ -2759,7 +2758,7 @@ pub(crate) fn yapf_train_check_reverse(s: &Services, v: crate::train::Handle) ->
 
     let mut reverse_penalty = 0_i32;
 
-    if TrackBits(v.track()) == TrackBits::TRACK_BIT_WORMHOLE {
+    if v.track() == TrackBits::TRACK_BIT_WORMHOLE {
         /* front in tunnel / on bridge */
         let dir_into_wormhole = World::new(s).tunnel_bridge_dir(tile.0);
 
@@ -2781,7 +2780,7 @@ pub(crate) fn yapf_train_check_reverse(s: &Services, v: crate::train::Handle) ->
         );
     }
 
-    if TrackBits(last_veh.track()) == TrackBits::TRACK_BIT_WORMHOLE {
+    if last_veh.track() == TrackBits::TRACK_BIT_WORMHOLE {
         /* back in tunnel / on bridge */
         let dir_into_wormhole = World::new(s).tunnel_bridge_dir(tile_rev.0);
 
@@ -3007,26 +3006,6 @@ pub unsafe extern "C" fn openttd_rust_yapf_train_check_reverse(
     u8::from(yapf_train_check_reverse(
         s,
         crate::train::Handle::from_record(v.cast_mut()),
-    ))
-}
-
-/// The native train controller's [`yapf_train_find_nearest_depot`].
-///
-/// # Safety
-/// The caller holds the game-state mutex and supplies the live shared table
-/// and a live front train record.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_yapf_train_find_nearest_depot(
-    shared: *const Services,
-    v: *const OpenTTDVehicle,
-    max_penalty: i32,
-) -> FindDepotDataRecord {
-    // SAFETY: As this function's contract.
-    let s = unsafe { &*shared };
-    FindDepotDataRecord::from(yapf_train_find_nearest_depot(
-        s,
-        crate::train::Handle::from_record(v.cast_mut()),
-        max_penalty,
     ))
 }
 

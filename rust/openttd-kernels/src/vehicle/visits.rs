@@ -37,7 +37,6 @@ use crate::{
     station_type::INVALID_STATION,
     tile_type::MP_STATION,
     track_type::TRACK_BIT_DEPOT,
-    train::VRF_LEAVING_STATION,
     vehicle_transactions::refit,
     witness,
 };
@@ -898,7 +897,11 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
             );
         }
         let train = crate::train::Handle::from_vehicle(v);
-        train.set_flags(train.get_flags() | VRF_LEAVING_STATION);
+        train.set_flags(
+            train
+                .flags()
+                .set(crate::train::VehicleRailFlag::LeavingStation),
+        );
     }
     if kind == VehicleType::ROAD && (v).vehstatus_raw() & VS_CRASHED == 0 {
         // Trigger road stop animation.
@@ -978,8 +981,23 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     s.orders().dirty_vehicle_windows(v);
     match kind {
         VehicleType::TRAIN => {
-            let train = crate::train::Handle::from_vehicle(v);
-            crate::train::enter_depot(train, s.refit.train, s.shared);
+            let t = crate::train::Handle::from_vehicle(v);
+            /* Clear path reservation */
+            let pbs = crate::pbs::Pbs::acquire(s.shared);
+            (pbs.0.set_depot)(t.vehicle().tile().0, false);
+            if (pbs.0.show_reservation)() {
+                (s.shared.mark_dirty)(t.vehicle().tile().0);
+            }
+
+            crate::signal::context(s.shared).update_signals_on_segment(
+                t.vehicle().tile(),
+                crate::direction_type::DiagDirection::INVALID_DIAGDIR,
+                t.vehicle().owner(),
+            );
+            t.set_wait_counter(0);
+            t.set_force_proceed(crate::train::TrainForceProceeding::TFP_NONE);
+            t.set_flags(t.flags().reset(crate::train::VehicleRailFlag::Reversed));
+            crate::train::consist_changed(s.refit.train, s.shared, t, crate::train::CCF_ARRANGE);
         }
         VehicleType::ROAD => {}
         VehicleType::SHIP => {

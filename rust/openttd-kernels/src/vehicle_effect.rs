@@ -223,7 +223,7 @@ fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate:
     } else {
         0
     } as i8;
-    let dir = if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
+    let dir = if train.is_some_and(|t| t.flags().test(crate::train::VehicleRailFlag::Flipped)) {
         reverse_dir_raw(direction, |ok| {
             crate::services_assert::assert_with(|| ok);
         })
@@ -331,7 +331,7 @@ fn emit_part(
         let mut x = i32::from(SMOKE_POS[usize::from(direction)]).wrapping_mul(offset);
         let mut y =
             i32::from(SMOKE_POS[usize::from(direction.wrapping_add(2) % 8)]).wrapping_mul(offset);
-        if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
+        if train.is_some_and(|t| t.flags().test(crate::train::VehicleRailFlag::Flipped)) {
             x = x.wrapping_neg();
             y = y.wrapping_neg();
         }
@@ -365,7 +365,9 @@ pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
         // For trains, do not show any smoke when:
         // - the train is reversing
         // - is entering a station with an order to stop there and its speed is equal to maximum station entering speed
-        if handle.get_flags() & crate::train::FLAG_REVERSING != 0
+        if handle
+            .flags()
+            .test(crate::train::VehicleRailFlag::Reversing)
             || (crate::map_func::World::new(s.shared).rail_station(tile)
                 && front.is_front_engine()
                 && crate::movement::should_stop(s.shared, front, (s.shared.station_index)(tile))
@@ -423,7 +425,7 @@ pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
             };
             if train.is_some_and(|t| {
                 !(s.powered)(
-                    t.get_railtypes(),
+                    t.railtypes().0,
                     crate::rail::get_tile_rail_type(s.shared, crate::tile_type::TileIndex(p.tile)),
                 )
             }) {

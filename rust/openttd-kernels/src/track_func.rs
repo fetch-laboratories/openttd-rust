@@ -367,6 +367,110 @@ pub fn remove_first_trackdir(
     Trackdir::INVALID_TRACKDIR
 }
 
+/// `TrackCrossesTracks`: maps a track to all tracks that make 90 deg turns with it. For the
+/// diagonal directions these are the complement of the direction, for the straight
+/// directions these are the two vertical or horizontal tracks, depend on the given direction.
+pub fn track_crosses_tracks(
+    track: crate::track_type::Track,
+    check: impl Fn(bool) + Copy,
+) -> crate::track_type::TrackBits {
+    use crate::track_type::TrackBits;
+    /// `_track_crosses_tracks`.
+    const TRACK_CROSSES_TRACKS: [TrackBits; 6] = [
+        TrackBits::TRACK_BIT_Y,    // TRACK_X
+        TrackBits::TRACK_BIT_X,    // TRACK_Y
+        TrackBits::TRACK_BIT_VERT, // TRACK_UPPER
+        TrackBits::TRACK_BIT_VERT, // TRACK_LOWER
+        TrackBits::TRACK_BIT_HORZ, // TRACK_LEFT
+        TrackBits::TRACK_BIT_HORZ, // TRACK_RIGHT
+    ];
+    if !is_valid_track(track.0) {
+        check(false);
+    }
+    TRACK_CROSSES_TRACKS[usize::from(track.0)]
+}
+
+/// `TrackDirectionToTrackdir`: maps a track and a full (8-way) direction to the trackdir that
+/// represents the track running in the given direction.
+pub fn track_direction_to_trackdir(
+    track: crate::track_type::Track,
+    dir: crate::direction_type::Direction,
+    check: impl Fn(bool) + Copy,
+) -> crate::track_type::Trackdir {
+    use crate::track_type::Trackdir;
+    const I: Trackdir = Trackdir::INVALID_TRACKDIR;
+    /// `_track_direction_to_trackdir`.
+    const TRACK_DIRECTION_TO_TRACKDIR: [[Trackdir; 8]; 6] = [
+        [
+            I,
+            Trackdir::TRACKDIR_X_NE,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_X_SW,
+            I,
+            I,
+        ],
+        [
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_Y_SE,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_Y_NW,
+        ],
+        [
+            I,
+            I,
+            Trackdir::TRACKDIR_UPPER_E,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_UPPER_W,
+            I,
+        ],
+        [
+            I,
+            I,
+            Trackdir::TRACKDIR_LOWER_E,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_LOWER_W,
+            I,
+        ],
+        [
+            Trackdir::TRACKDIR_LEFT_N,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_LEFT_S,
+            I,
+            I,
+            I,
+        ],
+        [
+            Trackdir::TRACKDIR_RIGHT_N,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_RIGHT_S,
+            I,
+            I,
+            I,
+        ],
+    ];
+    if !is_valid_track(track.0) {
+        check(false);
+    }
+    if !crate::direction_func::is_valid_direction(dir) {
+        check(false);
+    }
+    TRACK_DIRECTION_TO_TRACKDIR[usize::from(track.0)][usize::from(dir.0)]
+}
+
 /// `VehicleExitDir`: determine the side in which the vehicle will leave the tile.
 pub fn vehicle_exit_dir(
     direction: crate::direction_type::Direction,

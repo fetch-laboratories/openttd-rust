@@ -22,3 +22,25 @@ pub(crate) struct GRFIdentifier {
     /// MD5 checksum of file to distinguish files with the same GRF ID (eg. newer version of GRF)
     pub md5sum: crate::md5::MD5Hash,
 }
+
+/// `GRFBug`: encountered GRF bugs.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GRFBug(pub u8);
+#[allow(
+    non_upper_case_globals,
+    reason = "the enumerator names of the original GRFBug (newgrf_config.h)"
+)]
+impl GRFBug {
+    /// Length of rail vehicle changes when not inside a depot
+    pub const VehLength: Self = Self(0);
+    /// Articulated vehicles carry different cargoes resp. are differently refittable than
+    /// specified in purchase list
+    pub const VehRefit: Self = Self(1);
+    /// Powered wagon changed poweredness state when not inside a depot
+    pub const VehPoweredWagon: Self = Self(2);
+    /// A callback returned an unknown/invalid result
+    pub const UnknownCbResult: Self = Self(3);
+    /// Capacity of vehicle changes when not refitting or arranging
+    pub const VehCapacity: Self = Self(4);
+}

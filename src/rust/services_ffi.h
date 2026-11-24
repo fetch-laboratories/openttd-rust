@@ -103,6 +103,8 @@ struct OpenTTDCommandPostServices;
 struct CompanyInfrastructure;
 struct OpenTTDSharedServices {
 	uint64_t (*all_compatible_railtypes)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_compatible_railtypes);
+	uint64_t (*all_powered_railtypes)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_powered_railtypes);
+	uint8_t (*rail_type_curve_speed)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_curve_speed);
 	const OpenTTDCommandPostServices &(*command_post)() noexcept OPENTTD_SERVICE_DEFAULT(command_post);
 	const OpenTTDMovementServices *movement = nullptr;
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);

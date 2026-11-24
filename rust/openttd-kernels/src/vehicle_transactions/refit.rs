@@ -54,8 +54,6 @@ pub struct Prices {
     pub road_run: u8,
     pub ship_run: u8,
     pub aircraft_run: u8,
-    pub auto_refit: u8,
-    pub refit: u8,
 }
 #[repr(C)]
 pub struct Services {
@@ -692,21 +690,18 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     if flags.test(DoCommandFlag::Execute) {
         /* Update the cached variables */
         match crate::fleet::record(b.groups, v).vehicle_type() {
-            VehicleType::TRAIN => unsafe {
-                crate::train::openttd_rust_train_consist_changed(
-                    crate::train::Handle::from_vehicle(super::vehicle_ref(
-                        front,
-                        s.common.vehicles,
-                    )),
-                    if auto_refit {
-                        s.prices.auto_refit
-                    } else {
-                        s.prices.refit
-                    },
-                    s.train,
-                    b.shared,
-                );
-            },
+            VehicleType::TRAIN => crate::train::consist_changed(
+                s.train,
+                b.shared,
+                crate::train::Handle::from_vehicle(unsafe {
+                    super::vehicle_ref(front, s.common.vehicles)
+                }),
+                if auto_refit {
+                    crate::train::CCF_AUTOREFIT
+                } else {
+                    crate::train::CCF_REFIT
+                },
+            ),
             VehicleType::ROAD => {
                 unsafe {
                     crate::road::road_veh_update_cache(
@@ -826,7 +821,7 @@ crate::abi::layouts! {
         cargo, subtype,
     };
     "OpenTTDRefitPrices" ["probe"] => Prices {
-        train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
+        train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
         common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, aircraft_handle,

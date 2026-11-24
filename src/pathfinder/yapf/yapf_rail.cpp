@@ -73,12 +73,6 @@ bool YapfTrainCheckReverse(const Train *v)
 	return openttd_rust_yapf_train_check_reverse(&GetRustSharedServices(), RustVehicle(v)) != 0;
 }
 
-FindDepotData YapfTrainFindNearestDepot(const Train *v, int max_penalty)
-{
-	const auto result = openttd_rust_yapf_train_find_nearest_depot(&GetRustSharedServices(), RustVehicle(v), max_penalty);
-	return {TileIndex{result.tile}, result.best_length, result.reverse != 0};
-}
-
 bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, bool override_railtype)
 {
 	return openttd_rust_yapf_train_find_nearest_safe_tile(&GetRustSharedServices(), RustVehicle(v), tile.base(), td, override_railtype) != 0;

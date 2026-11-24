@@ -102,6 +102,17 @@ pub fn is_company_buildable_vehicle_type(kind: VehicleType) -> bool {
     kind < VehicleType::VEH_COMPANY_END
 }
 
+/// `CountVehiclesInChain`: count the number of vehicles in a chain.
+pub(crate) fn count_vehicles_in_chain(v: VehicleRef) -> u32 {
+    let mut count = 0_u32;
+    let mut v = Some(v);
+    while let Some(u) = v {
+        count += 1;
+        v = u.next();
+    }
+    count
+}
+
 /// Position information of a vehicle after it moved.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct GetNewVehiclePosResult {

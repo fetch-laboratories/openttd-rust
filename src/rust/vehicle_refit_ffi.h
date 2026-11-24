@@ -20,7 +20,7 @@ struct OpenTTDVehicleRefitCapacity { uint32_t total; uint16_t mail; uint32_t car
 struct OpenTTDRefitCargoKind { uint8_t cargo, subtype; };
 struct OpenTTDRefitPrices {
 	uint32_t train, wagon, road, ship, aircraft;
-	uint8_t train_run, road_run, ship_run, aircraft_run, auto_refit, refit;
+	uint8_t train_run, road_run, ship_run, aircraft_run;
 };
 struct OpenTTDVehicleRefitServices {
 	const OpenTTDVehicleCommonServices *common;

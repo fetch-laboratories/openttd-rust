@@ -469,17 +469,6 @@ impl MovementServices {
     ) -> TrackStatus {
         Context { s: self, world }.get_tile_track_status(tile, mode, sub_mode, side)
     }
-    /// Temporary raw adapter of [`Self::get_tile_track_status`] for `train.rs`
-    /// until its pass.
-    #[inline]
-    pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
-        self.get_tile_track_status(
-            TileIndex(tile),
-            TransportType(mode),
-            sub,
-            DiagDirection(side),
-        )
-    }
 }
 
 /// # Safety
@@ -1271,7 +1260,7 @@ impl MovementServices {
         /* Leaving depot? */
         if direction == diag_dir_to_dir(dir, self.check()) {
             /* Calculate the point where the following wagon should be activated. */
-            let length = crate::train::calc_next_vehicle_offset(h.train);
+            let length = h.train.calc_next_vehicle_offset();
 
             let enter = FRACTCOORDS_ENTER[usize::from(dir.0)];
             let fract_coord_leave = (i32::from(enter & 0x0F) // x
@@ -1292,7 +1281,7 @@ impl MovementServices {
                     } else {
                         TrackBits::TRACK_BIT_Y
                     };
-                    (self.resolve)(next).train.set_track(u64::from(track.0));
+                    (self.resolve)(next).train.set_track(track);
                 }
             }
         } else if FRACTCOORDS_ENTER[usize::from(dir.0)] == fract_coord {
@@ -1301,7 +1290,7 @@ impl MovementServices {
             self.native_assert_call(
                 diag_dir_to_dir(reverse_diag_dir(dir, self.check()), self.check()) == direction,
             );
-            h.train.set_track(u64::from(TrackBits::TRACK_BIT_DEPOT.0));
+            h.train.set_track(TrackBits::TRACK_BIT_DEPOT);
             v.set_hidden(true);
             v.set_direction(reverse_dir(direction, self.check()));
             if v.next().is_none() {
@@ -1373,9 +1362,9 @@ impl MovementServices {
             let (mut stop, station_ahead, station_length) = crate::train::get_train_stop_location(
                 self.train(),
                 self.shared(),
-                h.train,
                 station_id,
                 tile,
+                h.train,
             );
 
             /* Stop whenever that amount of station ahead + the distance from the
@@ -1496,7 +1485,7 @@ impl MovementServices {
             if h.kind == VehicleType::VEH_TRAIN {
                 let t = h.train;
 
-                if TrackBits(t.track()) != TrackBits::TRACK_BIT_WORMHOLE && dir == vdir {
+                if t.track() != TrackBits::TRACK_BIT_WORMHOLE && dir == vdir {
                     if v.is_front_engine() && frame == TUNNEL_SOUND_FRAME {
                         w::hit(w::MOVE_TRAIN_TUNNEL_SOUND);
                         if !(self.vehicle().play_vehicle_sound)(v, crate::newgrf_sound::VSE_TUNNEL)
@@ -1515,7 +1504,7 @@ impl MovementServices {
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER);
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER_0 + usize::from(dir.0));
                         v.set_tile(tile);
-                        t.set_track(u64::from(TrackBits::TRACK_BIT_WORMHOLE.0));
+                        t.set_track(TrackBits::TRACK_BIT_WORMHOLE);
                         v.set_hidden(true);
                         return VehicleEnterTileStates::from_element(
                             VehicleEnterTileState::EnteredWormhole,
@@ -1529,8 +1518,8 @@ impl MovementServices {
                 {
                     /* We're at the tunnel exit ?? */
                     v.set_tile(tile);
-                    t.set_track(u64::from(diag_dir_to_diag_track_bits(vdir.0, self.check())));
-                    self.native_assert_call(TrackBits(t.track()) != TrackBits::TRACK_BIT_NONE);
+                    t.set_track(TrackBits(diag_dir_to_diag_track_bits(vdir.0, self.check())));
+                    self.native_assert_call(t.track() != TrackBits::TRACK_BIT_NONE);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT_0 + usize::from(dir.0));
                     v.set_hidden(false);
@@ -1602,8 +1591,7 @@ impl MovementServices {
                 match h.kind {
                     VehicleType::VEH_TRAIN => {
                         w::hit(w::MOVE_TRAIN_BRIDGE_ENTER);
-                        h.train
-                            .set_track(u64::from(TrackBits::TRACK_BIT_WORMHOLE.0));
+                        h.train.set_track(TrackBits::TRACK_BIT_WORMHOLE);
                         Self::prepare_to_enter_bridge(v);
                     }
 
@@ -1629,8 +1617,8 @@ impl MovementServices {
                 v.set_tile(tile);
                 match h.kind {
                     VehicleType::VEH_TRAIN => {
-                        if TrackBits(h.train.track()) == TrackBits::TRACK_BIT_WORMHOLE {
-                            h.train.set_track(u64::from(diag_dir_to_diag_track_bits(
+                        if h.train.track() == TrackBits::TRACK_BIT_WORMHOLE {
+                            h.train.set_track(TrackBits(diag_dir_to_diag_track_bits(
                                 vdir.0,
                                 self.check(),
                             )));
@@ -1719,7 +1707,7 @@ impl MovementServices {
     pub(crate) fn ticks_to_leave_depot(&self, v: crate::train::Handle) -> i32 {
         w::hit(w::MOVE_DEPOT_TICKS);
         let dir = DiagDirection(World::new(self.shared()).rail_depot_dir(v.vehicle().tile().0));
-        let length = crate::train::calc_next_vehicle_offset(v);
+        let length = v.calc_next_vehicle_offset();
         let enter = FRACTCOORDS_ENTER[usize::from(dir.0)];
         let x_pos = v.vehicle().x_pos();
         let y_pos = v.vehicle().y_pos();

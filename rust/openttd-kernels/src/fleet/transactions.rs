@@ -135,14 +135,12 @@ unsafe fn transfer_cargo(w: &Services, old: *mut (), new: *mut (), chain: bool) 
     };
     if changed != 0 {
         let refit = (w.refit_services)();
-        unsafe {
-            crate::train::openttd_rust_train_consist_changed(
-                crate::train::Handle::from_record(new.0.as_ptr()),
-                crate::train::CCF_LOADUNLOAD,
-                refit.train,
-                refit.common.base.shared,
-            );
-        }
+        crate::train::consist_changed(
+            refit.train,
+            refit.common.base.shared,
+            crate::train::Handle::from_record(new.0.as_ptr()),
+            crate::train::CCF_LOADUNLOAD,
+        );
     }
 }
 /// `v->First()` of a live shell, as a shell.
@@ -645,9 +643,8 @@ unsafe fn build(
         && crate::train::Handle::from_vehicle(unsafe {
             vehicle_ref_for_build(old, (w.common)().vehicles)
         })
-        .get_flags()
-            & (1 << crate::train::FLIPPED)
-            != 0
+        .flags()
+        .test(crate::train::VehicleRailFlag::Flipped)
         && !unsafe {
             crate::newgrf_vehicle::reverse_probability(
                 (w.common)().vehicles,

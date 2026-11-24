@@ -1383,30 +1383,6 @@ pub(crate) fn get_platform_length(
     len.wrapping_sub(1)
 }
 
-/// Temporary raw adapter of [`get_platform_length_in_direction`] for `train.rs`
-/// until its pass.
-pub(crate) fn get_platform_length_in_direction_raw(
-    w: &crate::map_func::World<'_>,
-    tile: u32,
-    dir: u8,
-) -> u32 {
-    get_platform_length_in_direction(
-        w,
-        TileIndex(tile),
-        crate::direction_type::DiagDirection(dir),
-    )
-}
-
-/// Temporary raw adapter of [`get_platform_length`] for `train.rs` until its
-/// pass.
-pub(crate) fn get_platform_length_raw(
-    w: &crate::map_func::World<'_>,
-    station: *mut BaseStation,
-    tile: u32,
-) -> u32 {
-    get_platform_length(w, station, TileIndex(tile))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -46,7 +46,6 @@ pub struct AirportSpec {
 #[repr(C)]
 pub struct Services {
     pub shared: *const Shared,
-    pub station_base: extern "C" fn(u16) -> *mut BaseStation,
     pub as_station: extern "C" fn(*mut BaseStation) -> *mut Station,
     pub is_station: extern "C" fn(*mut BaseStation) -> bool,
     pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
@@ -531,7 +530,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAnimationServices" ["probe"] => Services {
         shared,
-        station_base,
         as_station,
         is_station,
         roadstop_resolver,
@@ -577,11 +575,6 @@ crate::abi::layouts! {
     "OpenTTDRoadStopAnimationEntry" ["probe"] => Entry<RoadSpec, BaseStation> { spec, object };
 }
 
-/// Native station lookup keeps the source's strict `Station::Get` operation and
-/// performs its `BaseStation` conversion before crossing the boundary.
-pub(crate) fn station_base(id: u16) -> *mut BaseStation {
-    (services().station_base)(id)
-}
 pub(crate) fn rail_event(st: *mut BaseStation, tile: u32, trigger: u8, random_trigger: u8) {
     crate::newgrf_station::openttd_rust_station_randomisation(
         st,

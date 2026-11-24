@@ -43,7 +43,6 @@
     "added": {
       "rust/expanded.rs | openttd_rust_yapf_train_check_reverse": 1,
       "rust/expanded.rs | openttd_rust_yapf_train_choose_track": 1,
-      "rust/expanded.rs | openttd_rust_yapf_train_find_nearest_depot": 1,
       "rust/expanded.rs | openttd_rust_yapf_train_find_nearest_safe_tile": 1
     },
     "reason": "#968's plan, decision 1: the four original entries YapfTrainChooseTrack, YapfTrainCheckReverse, YapfTrainFindNearestDepot and YapfTrainFindNearestSafeTile become one shim each over the Rust-internal entries, replacing the new/step/destroy protocol (openttd_rust_rail_new, _step, _destroy retire, so the historical export count rises by one).",

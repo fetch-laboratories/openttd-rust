@@ -110,6 +110,15 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
     v: V,
     mail: *mut u16,
 ) -> u32 {
+    unsafe { determine_capacity(s, e, v, mail) }
+}
+/// `Engine::DetermineCapacity`: determines capacity of a given vehicle from scratch. For
+/// aircraft the main capacity is determined; mail capacity goes to `mail` when non-null.
+/// A null `v` is the engine's purchase capacity.
+///
+/// # Safety
+/// `e` is a live engine and `v` a live vehicle of it or null; `mail` is writable or null.
+pub(crate) unsafe fn determine_capacity(s: &Services, e: E, v: V, mail: *mut u16) -> u32 {
     unsafe {
         if s.assertions {
             crate::movement::native_assert(

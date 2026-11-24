@@ -457,8 +457,8 @@ impl<'a> Pbs<'a> {
             }
 
             let t = crate::train::Handle::from_vehicle(v);
-            if t.track() == TrackBits::TRACK_BIT_WORMHOLE.0
-                || has_bit(t.track(), trackdir_to_track(info.res.trackdir.0))
+            if t.track() == TrackBits::TRACK_BIT_WORMHOLE
+                || has_bit(t.track().0, trackdir_to_track(info.res.trackdir.0))
             {
                 let t = t.first();
 
@@ -505,7 +505,7 @@ impl<'a> Pbs<'a> {
         let mut ftoti = FindTrainOnTrackInfo {
             res: self.follow_reservation(
                 v.vehicle().owner(),
-                RailTypes((s.all_compatible_railtypes)(v.get_railtypes())),
+                RailTypes((s.all_compatible_railtypes)(v.railtypes().0)),
                 tile,
                 trackdir,
                 false,
@@ -684,7 +684,7 @@ impl<'a> Pbs<'a> {
             s,
             TransportType::TRANSPORT_RAIL,
             Some(v.vehicle()),
-            RailTypes((s.all_compatible_railtypes)(v.get_railtypes())),
+            RailTypes((s.all_compatible_railtypes)(v.railtypes().0)),
             true,
         );
 

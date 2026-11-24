@@ -215,6 +215,21 @@ pub(crate) fn is_articulated_part(ground: bool, subtype: u8) -> bool {
     ground && has_bit(subtype, GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0)
 }
 
+/// `Vehicle::IsStoppedInDepot` of a ground vehicle `v`, whose `IsPrimaryVehicle` is
+/// `IsFrontEngine` and whose `IsChainInDepot` is `GroundVehicle::IsChainInDepot`: check
+/// whether the vehicle is in the depot *and* stopped.
+pub(crate) fn is_stopped_in_depot(
+    v: crate::vehicle::VehicleRef,
+    physics: &crate::ground_vehicle::Services,
+) -> bool {
+    crate::services_assert::assert_with(|| v == v.first());
+    /* Free wagons have no VehState::Stopped state */
+    if v.is_front_engine() && !v.vehstatus().test(VehState::Stopped) {
+        return false;
+    }
+    crate::ground_vehicle::is_chain_in_depot(physics, v)
+}
+
 /// `Vehicle::IsGroundVehicle`: is this a ground vehicle (train or road vehicle)?
 pub(crate) fn is_ground_vehicle(kind: VehicleType) -> bool {
     kind == VehicleType::VEH_TRAIN || kind == VehicleType::VEH_ROAD

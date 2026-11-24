@@ -295,6 +295,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.oil_refinery_limit = &_settings_game.game_creation.oil_refinery_limit,
 	.order_review_system = &_settings_client.gui.order_review_system,
 	.participate_survey = reinterpret_cast<const uint8_t *>(&_settings_client.network.participate_survey),
+	.path_backoff_interval = &_settings_game.pf.path_backoff_interval,
 	.pause_on_newgame = &_settings_client.gui.pause_on_newgame,
 	.population_in_label = &_settings_client.gui.population_in_label,
 	.rail_crossing_penalty = &_settings_game.pf.yapf.rail_crossing_penalty,
@@ -323,6 +324,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.raw_industry_construction = &_settings_game.construction.raw_industry_construction,
 	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
 	.reload_cfg = &_settings_client.network.reload_cfg,
+	.reserve_paths = &_settings_game.pf.reserve_paths,
 	.reverse_at_signals = &_settings_game.pf.reverse_at_signals,
 	.road_crossing_penalty = &_settings_game.pf.yapf.road_crossing_penalty,
 	.road_curve_penalty = &_settings_game.pf.yapf.road_curve_penalty,
@@ -345,6 +347,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.train_acceleration_model = &_settings_game.vehicle.train_acceleration_model,
 	.tree_placer = &_settings_game.game_creation.tree_placer,
 	.used_liveries = &_loaded_newgrf_features.used_liveries,
+	.wagon_speed_limits = &_settings_game.vehicle.wagon_speed_limits,
 	.wait_for_pbs_path = &_settings_game.pf.wait_for_pbs_path,
 	.wait_oneway_signal = &_settings_game.pf.wait_oneway_signal,
 	.wait_twoway_signal = &_settings_game.pf.wait_twoway_signal,
@@ -518,6 +521,8 @@ static uint8_t *StationHadVehicleOfTypeField(Station *st) noexcept { return rein
 
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.all_compatible_railtypes = RustAllCompatibleRailTypes,
+	.all_powered_railtypes = [](uint64_t types) noexcept { return GetAllPoweredRailTypes(RailTypes{types}).base(); },
+	.rail_type_curve_speed = [](RailType rt) noexcept { return GetRailTypeInfo(rt)->curve_speed; },
 	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,
@@ -1005,6 +1010,7 @@ static_assert(WID_VV_START_STOP == 2 && WID_VV_REFIT == 7);
 static const OpenTTDWindowServices _rust_window_services{
 	.close_window_by_id = [](uint16_t cls, int32_t number, bool force, int32_t data) noexcept { CloseWindowById(static_cast<WindowClass>(cls), number, force, data); },
 	.delete_newgrf_inspect_window = [](uint8_t feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(static_cast<GrfSpecFeature>(feature), index); },
+	.invalidate_newgrf_inspect_window = [](uint8_t feature, uint32_t index) noexcept { InvalidateNewGRFInspectWindow(static_cast<GrfSpecFeature>(feature), index); },
 	.invalidate_window_classes_data = [](uint16_t cls, int32_t data, bool gui_scope) noexcept { InvalidateWindowClassesData(static_cast<WindowClass>(cls), data, gui_scope); },
 	.invalidate_window_data = [](uint16_t cls, int32_t number, int32_t data, bool gui_scope) noexcept { InvalidateWindowData(static_cast<WindowClass>(cls), number, data, gui_scope); },
 	.set_window_classes_dirty = [](uint16_t cls) noexcept { SetWindowClassesDirty(static_cast<WindowClass>(cls)); },

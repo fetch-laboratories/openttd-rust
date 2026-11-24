@@ -259,6 +259,10 @@ pub struct ClearSquareServices {
 pub struct Services {
     /// Native `GetAllCompatibleRailTypes`, including empty and all-bit masks.
     pub all_compatible_railtypes: extern "C" fn(u64) -> u64,
+    /// Native `GetAllPoweredRailTypes`.
+    pub all_powered_railtypes: extern "C" fn(u64) -> u64,
+    /// `GetRailTypeInfo(rt)->curve_speed`.
+    pub rail_type_curve_speed: extern "C" fn(RailType) -> u8,
     /// Typed Rust post lifecycles and native argument codecs.
     pub command_post: extern "C" fn() -> &'static crate::command_post::Services,
     /// Complete synchronous movement owner; immutable process-lifetime table.
@@ -749,6 +753,8 @@ crate::abi::layouts! {
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
         all_compatible_railtypes,
+        all_powered_railtypes,
+        rail_type_curve_speed,
         command_post,
         movement,
         set_tile_owner,
@@ -1062,6 +1068,9 @@ pub fn fixture(
     extern "C" fn unexpected_powered(_: RoadType) -> u64 {
         unreachable!()
     }
+    extern "C" fn unexpected_curve_speed(_: RailType) -> u8 {
+        std::process::abort()
+    }
     extern "C" fn unexpected_post() -> &'static crate::command_post::Services {
         std::process::abort()
     }
@@ -1076,6 +1085,8 @@ pub fn fixture(
     Services {
         copyable_badges: unexpected_copyable,
         all_compatible_railtypes: unexpected_compatible,
+        all_powered_railtypes: unexpected_compatible,
+        rail_type_curve_speed: unexpected_curve_speed,
         command_post: unexpected_post,
         grf_file_version: unexpected_version,
         grf_price_shift: unexpected_price_shift,

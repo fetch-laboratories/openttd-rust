@@ -94,8 +94,8 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
                 let train = crate::train::Handle::from_vehicle(unsafe {
                     super::vehicle_ref(v, r.common.vehicles)
                 });
-                train.set_track(u64::from(front.track()));
-                train.set_railtypes(front.get_railtypes());
+                train.set_track(front.track());
+                train.set_railtypes(front.railtypes());
                 v
             }
             VehicleType::ROAD => {
@@ -167,10 +167,14 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
                 )
             };
             if probability >= 0 {
-                crate::train::Handle::from_vehicle(unsafe {
+                let train = crate::train::Handle::from_vehicle(unsafe {
                     super::vehicle_ref(v, r.common.vehicles)
-                })
-                .set_flag(crate::train::FLIPPED, probability != 0);
+                });
+                train.set_flags(if probability != 0 {
+                    train.flags().set(crate::train::VehicleRailFlag::Flipped)
+                } else {
+                    train.flags().reset(crate::train::VehicleRailFlag::Flipped)
+                });
             }
         }
         unsafe {

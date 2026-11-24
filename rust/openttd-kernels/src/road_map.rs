@@ -199,6 +199,13 @@ impl crate::map_func::World<'_> {
         self.check(self.level_crossing(t));
         crate::bitmath_func::has_bit(Self::byte(self.types.m5(TileIndex(t))), 5)
     }
+    /// `SetCrossingBarred`: set the bar state of a level crossing.
+    pub(crate) fn set_crossing_barred(&self, t: TileIndex, barred: bool) {
+        self.check(self.level_crossing(t.0));
+        let mut m5 = u32::from(Self::byte(self.types.m5(t)));
+        crate::bitmath_func::assign_bit(&mut m5, 5, barred);
+        let _ = self.types.set_m5(t, m5 as u8);
+    }
     /// `GetCrossingRailBits`: `AxisToTrackBits(GetCrossingRailAxis(t))`.
     pub(crate) fn crossing_rail_bits(&self, t: u32) -> u8 {
         self.check(self.level_crossing(t));

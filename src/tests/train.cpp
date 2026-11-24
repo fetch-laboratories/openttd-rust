@@ -17,8 +17,6 @@ TEST_CASE("PBS depot early return does not read or write train_on_res")
 	map.Tile(23, MP_RAILWAY, 3 << 6);
 	map.record.tile = 23;
 	map.record.direction = 1;
-	map.train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
-	map.train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
 	map.pbs.depot_bits = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
 	(map.state.get())->track = TRACK_BIT_X;
 	void *other = nullptr;
@@ -56,25 +54,21 @@ TEST_CASE("Train reservation - native front-engine assertion precedes depot retu
 TEST_CASE("Train speed - depot break and wormhole limits")
 {
 	/* Abort defaults stand for every service the original loop must not reach. */
-	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> owner(openttd_rust_train_state_new(), openttd_rust_train_state_destroy);
-	OpenTTDVehicle record{};
+	FollowerFixture map;
 	OpenTTDGroundState ground{};
-	record.ground = &ground;
-	record.train = owner.get();
-	record.tile = 23;
+	map.record.ground = &ground;
+	map.record.tile = 23;
 	ground.cache.cached_max_track_speed = 200;
-	record.cur_speed = 100;
-	const OpenTTDTrainHandle handle{&record, owner.get()};
-	owner->cached_max_curve_speed = 180;
-	auto table = OpenTTDTrainServices{};
+	map.record.cur_speed = 100;
+	map.order_state.current.max_speed = 160;
+	const OpenTTDTrainHandle handle{map.Vehicle(), map.state.get()};
+	map.state->cached_max_curve_speed = 180;
+	map.train.vehicle = &map.vehicle;
 	uint8_t acceleration = 0;
 	OpenTTDSettingAddresses settings{};
 	settings.train_acceleration_model = &acceleration;
-	table.is_station = [](OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 0; };
-	table.order_max_speed = [](OpenTTDTrainHandle) noexcept -> uint64_t { return 160; };
-	OpenTTDSharedServices shared{};
-	shared.settings = &settings;
-	shared.bridge_speed = [](uint32_t tile) noexcept -> uint16_t {
+	map.shared.settings = &settings;
+	map.shared.bridge_speed = [](uint32_t tile) noexcept -> uint16_t {
 		CHECK(tile == 23);
 		return 90;
 	};
@@ -88,9 +82,9 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 			Case{TRACK_BIT_DEPOT, 0, model == 1 ? 61 : 160},
 		}) {
 			CAPTURE(model, test.track, test.status);
-			(owner.get())->track = test.track;
-			record.vehstatus = test.status;
-			CHECK(openttd_rust_train_current_max_speed(handle, &table, &shared) == test.speed);
+			map.state->track = test.track;
+			map.record.vehstatus = test.status;
+			CHECK(openttd_rust_train_current_max_speed(handle, &map.train, &map.shared) == test.speed);
 		}
 	}
 }
