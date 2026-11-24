@@ -169,7 +169,11 @@ mod controller {
     unsafe extern "C" fn id(_: *mut crate::vehicle::OpenTTDVehicle) -> u32 {
         VEHICLE_ID
     }
+    /// Serviced on day 0 with no interval: due from day 1, since the zero interval has passed.
     unsafe extern "C" fn service_interval(_: *mut crate::vehicle::OpenTTDVehicle) -> u16 {
+        0
+    }
+    unsafe extern "C" fn last_service(_: *mut crate::vehicle::OpenTTDVehicle) -> i32 {
         0
     }
     unsafe extern "C" fn roadtype(_: *mut crate::vehicle::OpenTTDVehicle) -> RoadType {
@@ -183,6 +187,7 @@ mod controller {
                 table.id = id;
                 table.roadtype = roadtype;
                 table.service_interval = service_interval;
+                table.date_of_last_service = last_service;
                 Box::leak(Box::new(table))
             };
         }
@@ -1109,11 +1114,6 @@ mod controller {
     ) -> *mut crate::company::OpenTTDCompany {
         std::ptr::null_mut()
     }
-    /// Serviced on day 0 with no interval, now day 1, servicing allowed and breakdowns
-    /// off: due, since the zero interval has passed.
-    extern "C" fn service_last_service(_: VehicleRef) -> i32 {
-        0
-    }
     /// Service intervals in days.
     extern "C" fn service_wallclock(_: bool) -> bool {
         false
@@ -1247,7 +1247,6 @@ mod controller {
                 company: service_owner,
                 ..crate::test_tables::COMPANY_IDENTITY
             })),
-            date_of_last_service: service_last_service,
             shared,
             transaction: transactions,
             ..crate::test_tables::MAINTENANCE

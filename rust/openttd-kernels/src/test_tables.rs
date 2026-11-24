@@ -1181,7 +1181,6 @@ pub(crate) const MAINTENANCE: crate::vehicle::maintenance::Services =
     crate::vehicle::maintenance::Services {
         clock: ptr::null(),
         company: ptr::null(),
-        date_of_last_service: unreachable1,
         economy_age: unreachable1,
         group: ptr::null(),
         mark_dirty: unreachable1,
@@ -2396,7 +2395,6 @@ pub(crate) const STATION_LINKS: crate::station_service::Links = crate::station_s
     order_vehicle: unreachable1,
     next_shared: unreachable1,
     stopped_in_depot: unreachable1,
-    last_service: unreachable1,
     cargo_type: unreachable1,
     goods_entry: unreachable2,
     station_resolver: ptr::null(),

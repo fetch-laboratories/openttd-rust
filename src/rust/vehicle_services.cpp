@@ -232,7 +232,6 @@ static_assert(SND_0F_BREAKDOWN_ROADVEHICLE == 13 && SND_10_BREAKDOWN_TRAIN_SHIP 
 const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.clock = &GetRustClockServices(),
 	.company = &GetRustCompanyIdentityServices(),
-	.date_of_last_service = RustVehicleLastServiceOf,
 	.economy_age = MaintenanceEconomyAge,
 	.group = &FleetGroupServices(),
 	.mark_dirty = MaintenanceMarkDirty,

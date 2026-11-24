@@ -60,6 +60,7 @@ struct OpenTTDVehicleResolverServices {
 	OpenTTDVehicleCargoInfo (*cargo_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_info);
 	int32_t (*build_year)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(build_year);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
+	int32_t (*date_of_last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(date_of_last_service);
 	bool (*primary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	const OpenTTDTrainServices *(*train_services)() noexcept OPENTTD_SERVICE_DEFAULT(train_services);
 	uint16_t (*order_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_max_speed);

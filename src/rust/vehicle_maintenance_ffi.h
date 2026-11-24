@@ -19,7 +19,6 @@ struct OpenTTDSharedServices;
 struct OpenTTDVehicleMaintenanceServices {
 	const OpenTTDClockServices *clock;
 	const OpenTTDCompanyIdentityServices *company;
-	int32_t (OPENTTD_RUST_CALL *date_of_last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(date_of_last_service);
 	int32_t (OPENTTD_RUST_CALL *economy_age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(economy_age);
 	const OpenTTDFleetGroupServices *group;
 	void (OPENTTD_RUST_CALL *mark_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty);

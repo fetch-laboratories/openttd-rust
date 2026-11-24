@@ -114,6 +114,7 @@ pub struct Services {
     cargo_info: unsafe extern "C" fn(u8) -> CargoInfo,
     pub(crate) build_year: unsafe extern "C" fn(V) -> i32,
     last_service: unsafe extern "C" fn(V) -> i32,
+    pub(crate) date_of_last_service: unsafe extern "C" fn(V) -> i32,
     primary: unsafe extern "C" fn(V) -> bool,
     train_services: unsafe extern "C" fn() -> *const crate::train::Leaves,
     order_max_speed: unsafe extern "C" fn(V) -> u16,
@@ -285,6 +286,7 @@ pub(crate) const TEST_TABLE: Services = Services {
     cargo_info: crate::test_tables::unreachable1,
     build_year: crate::test_tables::unreachable1,
     last_service: crate::test_tables::unreachable1,
+    date_of_last_service: crate::test_tables::unreachable1,
     primary: crate::test_tables::unreachable1,
     train_services: crate::test_tables::unreachable0,
     order_max_speed: crate::test_tables::unreachable1,
@@ -1964,7 +1966,7 @@ crate::abi::layouts! {
         cached_override, write_override, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
-        engine_by_id, cargo_info, build_year, last_service, primary, train_services, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
+        engine_by_id, cargo_info, build_year, last_service, date_of_last_service, primary, train_services, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

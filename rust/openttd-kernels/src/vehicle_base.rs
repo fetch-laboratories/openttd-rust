@@ -836,11 +836,9 @@ impl crate::vehicle::VehicleRef {
     }
     /// `Vehicle::date_of_last_service`: last economy date the vehicle had a service at a depot.
     #[inline]
-    pub(crate) fn date_of_last_service(
-        self,
-        m: &crate::vehicle::maintenance::Services,
-    ) -> EconomyDate {
-        EconomyDate((m.date_of_last_service)(self))
+    pub(crate) fn date_of_last_service(self, r: &crate::newgrf_vehicle::Services) -> EconomyDate {
+        // SAFETY: As `age`.
+        EconomyDate(unsafe { (r.date_of_last_service)(self.0.as_ptr()) })
     }
     /// Store `Vehicle::date_of_last_service`.
     #[inline]

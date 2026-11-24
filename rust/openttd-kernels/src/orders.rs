@@ -2102,11 +2102,6 @@ pub unsafe extern "C" fn openttd_rust_increment_real(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_has_depot(v: *mut c_void, leaves: &'static Leaves) -> u32 {
-    u32::from(VisitOrders::new(leaves).has_depot_order(native_vehicle(v, leaves.base)))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_leave_unbunching(
     v: *mut c_void,
     leaves: &'static Leaves,

@@ -514,7 +514,7 @@ static void RoadServiceBoundary()
 	static OpenTTDCompanyIdentityServices companies{};
 	companies.company = [](uint8_t) noexcept -> Company * { return nullptr; };
 	maintenance.company = &companies;
-	maintenance.date_of_last_service = [](OpenTTDVehicle *) noexcept -> int32_t { return 0; };
+	resolver.date_of_last_service = [](OpenTTDVehicle *) noexcept -> int32_t { return 0; };
 	/* The dates the service stores, written in place: the calendar date is before year 0. */
 	GetRustClockState().economy_date = TimerGameEconomy::Date{0x1020304};
 	GetRustClockState().calendar_date = TimerGameCalendar::Date{-0x12345};

@@ -57,7 +57,6 @@ use crate::{fleet, newgrf_vehicle, services};
 pub struct Services {
     pub clock: *const crate::timer_game_common::ClockServices,
     pub company: *const crate::company_identity::Services,
-    pub date_of_last_service: extern "C" fn(VehicleRef) -> i32,
     pub economy_age: extern "C" fn(VehicleRef) -> i32,
     pub group: *const fleet::GroupServices,
     pub mark_dirty: extern "C" fn(VehicleRef),
@@ -279,7 +278,7 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
         // Service interval is in minutes.
         branch!(C, VEHICLE_MAINT_MINUTES);
         let interval = i32::from(svc!(C, VehicleRef::get_service_interval, v, r));
-        if svc!(C, VehicleRef::date_of_last_service, v, m)
+        if svc!(C, VehicleRef::date_of_last_service, v, r)
             .0
             .wrapping_add(interval * DAYS_IN_ECONOMY_MONTH)
             >= economy_date().0
@@ -290,7 +289,7 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
         // Service interval is in days.
         branch!(C, VEHICLE_MAINT_DAYS);
         let interval = i32::from(svc!(C, VehicleRef::get_service_interval, v, r));
-        if svc!(C, VehicleRef::date_of_last_service, v, m)
+        if svc!(C, VehicleRef::date_of_last_service, v, r)
             .0
             .wrapping_add(interval)
             >= economy_date().0
@@ -913,7 +912,6 @@ crate::abi::layouts! {
     "OpenTTDVehicleMaintenanceServices" ["maintenance"] => Services {
         clock,
         company,
-        date_of_last_service,
         economy_age,
         group,
         mark_dirty,
@@ -1041,6 +1039,9 @@ mod tests {
     unsafe extern "C" fn service_interval(_: *mut OpenTTDVehicle) -> u16 {
         native().service_interval
     }
+    unsafe extern "C" fn date_of_last_service(_: *mut OpenTTDVehicle) -> i32 {
+        0
+    }
     unsafe extern "C" fn engine_by_id(_: u16) -> *const Lifecycle {
         ENGINE.get()
     }
@@ -1106,9 +1107,6 @@ mod tests {
     extern "C" fn set_reliability_spd_dec(_: VehicleRef, value: u16) {
         set(|n| n.reliability_spd_dec = value);
     }
-    extern "C" fn date_of_last_service(_: VehicleRef) -> i32 {
-        0
-    }
     /// `Vehicle::MarkDirty`; once `REENTER` is set it sees the hidden flag the breakdown
     /// sound set, then makes the vehicle an aircraft.
     extern "C" fn mark_dirty(v: VehicleRef) {
@@ -1161,6 +1159,7 @@ mod tests {
                 t.value = value;
                 t.id = id;
                 t.service_interval = service_interval;
+                t.date_of_last_service = date_of_last_service;
                 t.vehicle = resolver_vehicles();
                 t.capabilities = capabilities();
                 Box::leak(Box::new(t))
@@ -1268,7 +1267,6 @@ mod tests {
                 ..CLOCK
             }),
             company: companies(),
-            date_of_last_service,
             economy_age,
             group: leak(fleet::GroupServices {
                 group: no_group,

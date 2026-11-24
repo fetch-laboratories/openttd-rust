@@ -1380,15 +1380,6 @@ pub unsafe extern "C" fn openttd_rust_fleet_count_engine(
     let w = unsafe { &*services };
     unsafe { count_engine(w, v, delta) }
 }
-/// Synchronous original fleet `min_age` control.
-/// # Safety
-/// Static typed noexcept services; live native arguments and game-thread owners.
-/// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_min_age(services: *const GroupServices, v: *mut ()) {
-    let w = unsafe { &*services };
-    vehicle_reached_min_age(w, record(w, v));
-}
 /// Synchronous original fleet `update_afterload` control.
 /// # Safety
 /// Static typed noexcept services; live native arguments and game-thread owners.
