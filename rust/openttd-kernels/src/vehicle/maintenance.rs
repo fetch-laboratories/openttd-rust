@@ -1042,20 +1042,22 @@ mod tests {
     unsafe extern "C" fn date_of_last_service(_: *mut OpenTTDVehicle) -> i32 {
         0
     }
-    unsafe extern "C" fn engine_by_id(_: u16) -> *const Lifecycle {
+    unsafe extern "C" fn engine_by_id(id: u16) -> *const Lifecycle {
+        assert_eq!(id, NEW_ID, "the new engine's property");
         ENGINE.get()
     }
     /// The new engine's cost factor callback, answering `PRICE.factor` and then running
     /// `PRICE.then`, as a `NewGRF` callback may change any state before the second budget test.
     unsafe extern "C" fn resolve_callback(
         _: *mut crate::newgrf_vehicle::State,
-        _: u16,
+        id: u16,
         callback: u16,
         property: u32,
         _: u32,
         _: *mut i32,
         _: usize,
     ) -> u16 {
+        assert_eq!(id, NEW_ID, "the new engine's callback");
         assert_eq!(
             callback,
             crate::newgrf_callbacks::CBID_VEHICLE_MODIFY_PROPERTY.0
@@ -1190,7 +1192,7 @@ mod tests {
             ENGINE.get()
         }
         extern "C" fn engine_id(_: *const Lifecycle) -> u16 {
-            123
+            NEW_ID
         }
         let mut c = crate::engine_capabilities::test_table_with_shared(shared());
         c.engine = engine_of;
@@ -1316,6 +1318,8 @@ mod tests {
         rule: Option<bool>,
     }
     const OLD: EngineID = EngineID(5);
+    /// The new engine's pool index, which its property callback is asked for.
+    const NEW_ID: u16 = 123;
     const NEW: EngineID = EngineID(9);
     thread_local! {
         static OWNER: Cell<Owner> = const {
@@ -1337,9 +1341,14 @@ mod tests {
                 replace_when_old: false,
             })
         };
-        /// Zeroed finances: every member is an integer.
-        static FINANCES: *mut crate::company::Finances =
-            Box::into_raw(Box::new(unsafe { std::mem::zeroed() }));
+        /// Two zeroed finance records, every member an integer: the owner's, and the one a
+        /// price callback makes the owner's.
+        static FINANCES: [*mut crate::company::Finances; 2] = [
+            Box::into_raw(Box::new(unsafe { std::mem::zeroed() })),
+            Box::into_raw(Box::new(unsafe { std::mem::zeroed() })),
+        ];
+        /// Which of `FINANCES` the company's finances are.
+        static ACTIVE: Cell<usize> = const { Cell::new(0) };
     }
     fn owner(f: impl FnOnce(&mut Owner)) {
         let mut o = OWNER.get();
@@ -1399,10 +1408,14 @@ mod tests {
         if id == CompanyID::SPECTATOR.0 {
             return ptr::null_mut();
         }
-        let finances = FINANCES.with(|f| *f);
+        FINANCES.with(|f| f[ACTIVE.get()])
+    }
+    /// The price callback's change of the company's finances to the other record, holding
+    /// `money`: a later money read that reused the first record would see its balance.
+    fn swap(money: i64) {
         // SAFETY: This thread's finances.
-        unsafe { (*finances).money = OWNER.get().money };
-        finances
+        FINANCES.with(|f| unsafe { (*f[1]).money = money });
+        ACTIVE.set(1);
     }
     extern "C" fn infinite_money() -> bool {
         read("infinite");
@@ -1649,6 +1662,9 @@ mod tests {
     /// pending autoreplace of `OLD` by `NEW` decides.
     fn servicing(f: &Fixture) -> (bool, Vec<&'static str>) {
         reads();
+        ACTIVE.set(0);
+        // SAFETY: This thread's finances.
+        FINANCES.with(|r| unsafe { (*r[0]).money = OWNER.get().money });
         let due = needs_servicing(f.v(), f.base);
         (due, reads())
     }
@@ -1724,10 +1740,10 @@ mod tests {
                     };
                 });
                 let then: fn() = match (needed, funded) {
-                    (3_500, false) => || owner(|o| o.money = 3_499),
-                    (3_500, true) => || owner(|o| o.money = 3_500),
-                    (_, false) => || owner(|o| o.money = 10_699),
-                    (_, true) => || owner(|o| o.money = 10_700),
+                    (3_500, false) => || swap(3_499),
+                    (3_500, true) => || swap(3_500),
+                    (_, false) => || swap(10_699),
+                    (_, true) => || swap(10_700),
                 };
                 PRICE.set(Price { factor, then });
                 assert_eq!(servicing(&f), (funded, full.to_vec()), "{needed} {funded}");
@@ -1738,7 +1754,7 @@ mod tests {
         // and 100 goes on to the replacement, which the callback then funds.
         PRICE.set(Price {
             factor: 17,
-            then: || owner(|o| o.money = 3_500),
+            then: || swap(3_500),
         });
         for (money, due, seen) in [(99, false, &full[..4]), (100, true, &full[..])] {
             owner(|o| o.money = money);
@@ -1767,10 +1783,8 @@ mod tests {
         PRICE.set(Price {
             factor: 17,
             then: || {
-                owner(|o| {
-                    o.money = -1;
-                    o.infinite = true;
-                });
+                swap(-1);
+                owner(|o| o.infinite = true);
             },
         });
         let (due, seen) = servicing(&f);
