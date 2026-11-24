@@ -4,6 +4,7 @@
 #![allow(unsafe_code)]
 use crate::engine::Lifecycle;
 use crate::raw_field::read_field;
+use crate::table::strings::STR_NEWGRF_INVALID_ENGINE;
 use crate::vehicle::{EngineRef, RailVehicleTypes, VehicleType};
 use std::ptr::NonNull;
 impl EngineRef {
@@ -269,7 +270,7 @@ impl EngineRef {
             misc: read_field!(self.0.as_ptr(), info.misc_flags),
         }
     }
-    pub(crate) fn valid_string(self, invalid: u32) -> bool {
-        read_field!(self.0.as_ptr(), info.string_id) != invalid
+    pub(crate) fn valid_string(self) -> bool {
+        read_field!(self.0.as_ptr(), info.string_id) != STR_NEWGRF_INVALID_ENGINE.0
     }
 }

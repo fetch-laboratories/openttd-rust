@@ -85,7 +85,6 @@ Engine::Engine(VehicleType type, uint16_t local_id)
 		.aircraft = _orig_aircraft_vehicle_info,
 		.counts = {_engine_counts[0], _engine_counts[1], _engine_counts[2], _engine_counts[3]},
 		.offsets = {_engine_offsets[0], _engine_offsets[1], _engine_offsets[2], _engine_offsets[3]},
-		.first_names = {STR_VEHICLE_NAME_TRAIN_ENGINE_RAIL_KIRBY_PAUL_TANK_STEAM, STR_VEHICLE_NAME_ROAD_VEHICLE_MPS_REGAL_BUS, STR_VEHICLE_NAME_SHIP_MPS_OIL_TANKER, STR_VEHICLE_NAME_AIRCRAFT_SAMPSON_U52},
 	};
 	openttd_rust_engine_construct(&this->Record(), &defaults, type, local_id);
 }

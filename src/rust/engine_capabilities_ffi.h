@@ -22,7 +22,6 @@ struct OpenTTDEngineCapabilitiesServices {
 	const OpenTTDSharedServices *shared;
 	bool assertions;
 	int32_t (*life_extension)() noexcept OPENTTD_SERVICE_DEFAULT(life_extension);
-	StringID invalid_string_id;
 };
 const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noexcept;
 extern "C" {

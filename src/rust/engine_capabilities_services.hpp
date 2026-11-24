@@ -26,7 +26,6 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.assertions = false,
 #endif
 		.life_extension = RustVehicleLifeExtension,
-		.invalid_string_id = STR_NEWGRF_INVALID_ENGINE,
 	};
 	return services;
 }
