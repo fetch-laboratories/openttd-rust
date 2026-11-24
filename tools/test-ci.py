@@ -16,10 +16,12 @@ import time
 import unittest
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import Any, TypedDict, cast
 from unittest.mock import patch
+from urllib.parse import unquote
 
 import ci
 import ci_log
@@ -2958,7 +2960,7 @@ class RequestPathTests(unittest.TestCase):
         self.assertIn("(from GitHub)", output)
         ((query),) = calls
         self.assertIn("--paginate", query)
-        self.assertIn("created=%3E%3D2026-11-11T00%3A00%3A00Z", query[-1])
+        self.assertIn("created=2026-11-11T00%3A00%3A00Z..", query[-1])
 
     def test_wait_on_a_pr_chooses_among_local_and_remote_requests(self) -> None:
         local = self.record("c" * 32, created_at="2026-11-12T01:00:00Z")
@@ -3553,6 +3555,43 @@ class QueueWaitTests(unittest.TestCase):
         self.assertIn("name=fork", calls[0])
 
 
+@dataclass
+class EnqueueWorld:
+    """Recorded answers for enqueue on PR 170: quick (its Quick check run),
+    requested (its one dispatched run) or dispatched (several) or pages (pages of
+    them), labeled (label runs), queue (merge-group runs), ejected (the head they
+    tested), behind and base_files (the base's lead), commits and total (the
+    comparison), files (the PR's), recorded and recorded_jobs (the run a request
+    record names), retry, entry and armed (the queue's answer), records and
+    comments (cleanup records and the discussion)."""
+
+    quick: Mapping[str, object] | None = field(
+        default_factory=lambda: EnqueueTests.QUICK
+    )
+    requested: Mapping[str, object] | None = field(
+        default_factory=lambda: EnqueueTests.REQUESTED
+    )
+    dispatched: list[Mapping[str, object]] | None = None
+    pages: list[list[Mapping[str, object]]] | None = None
+    labeled: list[Mapping[str, object]] = field(default_factory=list)
+    queue: list[Mapping[str, object]] = field(default_factory=list)
+    ejected: str = HEAD
+    behind: int = 0
+    base_files: list[dict[str, str]] = field(default_factory=list)
+    commits: list[str] = field(default_factory=list)
+    total: int | None = None
+    files: list[dict[str, str]] = field(
+        default_factory=lambda: [{"filename": "tools/ci.py"}]
+    )
+    recorded: Mapping[str, object] | None = None
+    recorded_jobs: list[dict[str, str]] = field(default_factory=list)
+    retry: str | None = None
+    entry: dict[str, object] | None = None
+    armed: dict[str, object] | None = None
+    records: list[dict[str, Any]] = field(default_factory=list)
+    comments: list[dict[str, str]] = field(default_factory=list)
+
+
 class EnqueueTests(unittest.TestCase):
     """Recorded gh answers for ci.py enqueue's gates (#922)."""
 
@@ -3580,26 +3619,22 @@ class EnqueueTests(unittest.TestCase):
         "html_url": "https://github.com/example/fork/actions/runs/3",
     }
 
-    def enqueue(self, **world: object) -> tuple[str, list[tuple[str, ...]]]:
-        """Run enqueue against `world`: quick, requested, queue (merge-group runs),
-        ejected (the head they tested), behind, retry, entry, armed and recorded
-        (the run a pre-#922 request record names)."""
-        world = {"quick": self.QUICK, "requested": self.REQUESTED, **world}
-        quick, requested = world["quick"], world["requested"]
-        dispatched = cast(
-            list[object],
-            world.get("dispatched", [requested] if requested else []),
-        )
-        commits = cast(list[str], world.get("commits", []))
+    def enqueue(self, **options: object) -> tuple[str, list[tuple[str, ...]]]:
+        """Run enqueue against an EnqueueWorld of `options`."""
+        world = EnqueueWorld(**cast(dict[str, Any], options))
+        requested = world.requested
+        dispatched = world.dispatched
+        if dispatched is None:
+            dispatched = [requested] if requested else []
         compare = {
-            "behind_by": world.get("behind", 0),
-            "commits": [{"sha": sha} for sha in commits],
-            "total_commits": world.get("total", len(commits)),
+            "behind_by": world.behind,
+            "commits": [{"sha": sha} for sha in world.commits],
+            "total_commits": len(world.commits) if world.total is None else world.total,
         }
-        answers = {
+        answers: dict[str, object] = {
             "pulls/170": dict(PULL, created_at="2026-11-11T00:00:00Z"),
             "check-runs?check_name=Quick%20validation": {
-                "check_runs": [quick] if quick else []
+                "check_runs": [world.quick] if world.quick else []
             },
             "actions/runs/4/jobs": {
                 "jobs": [{"name": "plan", "conclusion": "skipped"}]
@@ -3608,30 +3643,28 @@ class EnqueueTests(unittest.TestCase):
                 "jobs": [{"name": "plan", "conclusion": "success"}]
             },
             "actions/runs/6/jobs": {"jobs": []},
-            "event=merge_group": {
-                "workflow_runs": list(cast(Iterable[object], world.get("queue", ())))
-            },
-            f"commits/{MERGE}": {
-                "parents": [{"sha": PARENT}, {"sha": world.get("ejected", HEAD)}]
-            },
+            "actions/runs/9/jobs": {"jobs": world.recorded_jobs},
+            "event=merge_group": {"workflow_runs": world.queue},
+            f"commits/{MERGE}": {"parents": [{"sha": PARENT}, {"sha": world.ejected}]},
             f"compare/rust-migration...{HEAD}": compare,
-            f"compare/{HEAD}...rust-migration": {"files": world.get("base_files", [])},
-            "actions/runs/9": world.get("recorded"),
+            f"compare/{HEAD}...rust-migration": {"files": world.base_files},
+            "actions/runs/9": world.recorded,
         }
-        listings = {
+        listings: dict[str, object] = {
             "event=workflow_dispatch": [
                 {"workflow_runs": page}
-                for page in cast(list[object], world.get("pages", [dispatched]))
+                for page in (world.pages if world.pages is not None else [dispatched])
             ],
-            "event=pull_request": [{"workflow_runs": world.get("labeled", [])}],
-            "pulls/170/files": [world.get("files", [{"filename": "tools/ci.py"}])],
+            "event=pull_request": [{"workflow_runs": world.labeled}],
+            "pulls/170/files": [world.files],
         }
         calls: list[tuple[str, ...]] = []
         self.calls = calls
 
         def api(repository: str, path: str) -> dict:
-            (answer,) = [value for key, value in answers.items() if key in path]
-            return cast(dict, answer)
+            # The longest key a path contains answers it: runs/9/jobs, not runs/9.
+            key = max((key for key in answers if key in path), key=len)
+            return cast(dict, answers[key])
 
         def gh(*args: str) -> str:
             if args[:2] == ("api", "--paginate"):
@@ -3639,23 +3672,21 @@ class EnqueueTests(unittest.TestCase):
                 return json.dumps(pages)
             calls.append(args)
             state = {
-                "mergeQueueEntry": world.get("entry"),
-                "autoMergeRequest": world.get("armed"),
+                "mergeQueueEntry": world.entry,
+                "autoMergeRequest": world.armed,
             }
             return json.dumps({"data": {"repository": {"pullRequest": state}}})
 
-        retry = world.get("retry")
-        args = argparse.Namespace(repo="example/fork", pr=170, retry=retry)
-        discussion = cast(list[dict[str, str]], world.get("comments", []))
+        args = argparse.Namespace(repo="example/fork", pr=170, retry=world.retry)
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(ci, "api", side_effect=api),
             patch.object(ci, "gh", side_effect=gh),
-            patch.object(ci, "added_records", return_value=world.get("records", [])),
+            patch.object(ci, "added_records", return_value=world.records),
             patch.object(
                 ci.cleanup_contract,
                 "discussion",
-                return_value=[row["body"] for row in discussion],
+                return_value=[row["body"] for row in world.comments],
             ),
             patch.object(ci, "require_stamp") as stamp,
             patch.object(
@@ -3664,7 +3695,7 @@ class EnqueueTests(unittest.TestCase):
             patch("builtins.print"),
             patch.object(ci, "REQUESTS", Path(directory)),
         ):
-            if world.get("recorded"):
+            if world.recorded:
                 record = {"pr": 170, "head": HEAD, "run_id": 9}
                 (Path(directory) / "old.json").write_text(json.dumps(record))
             self.stamp = stamp
@@ -3750,16 +3781,16 @@ class EnqueueTests(unittest.TestCase):
             reported, _ = self.enqueue(labeled=[other], entry=entry)
             self.assertTrue(reported.startswith("queued"))
 
-    def at(self, commit: str, run_id: int, created: str, **fields: object) -> dict:
+    def at(
+        self, commit: str, run_id: int, created: str, **fields: object
+    ) -> ci_log.Run:
         """A dispatched native run of PR 170 testing `commit`."""
-        return dict(
-            self.REQUESTED,
-            id=run_id,
-            display_title=f"CI native PR 170 {'c' * 32}-{commit}",
-            created_at=created,
-            html_url=f"https://github.com/example/fork/actions/runs/{run_id}",
-            **fields,
-        )
+        run = cast(ci_log.Run, dict(self.REQUESTED, **fields))
+        run["id"] = run_id
+        run["display_title"] = f"CI native PR 170 {'c' * 32}-{commit}"
+        run["created_at"] = created
+        run["html_url"] = f"https://github.com/example/fork/actions/runs/{run_id}"
+        return run
 
     def test_a_green_run_on_an_earlier_pr_commit_counts(self) -> None:
         # #1026: a fix pushed after the passing run queues on Quick alone.
@@ -3906,6 +3937,67 @@ class EnqueueTests(unittest.TestCase):
             labeled=[bootstrap], commits=[PREVIOUS, HEAD], entry=entry
         )
         self.assertTrue(reported.startswith("queued"))
+
+    def test_a_workflow_change_needs_a_green_bootstrap_at_its_head(self) -> None:
+        # A green native run at the head is not the bootstrap Full CI
+        # administration requires; one on an earlier commit can carry its Full
+        # status across an inert push.
+        bootstrap = {
+            "id": 5,
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-11-12T01:00:00Z",
+            "display_title": "CI full PR 170 bootstrap-5",
+            "head_sha": PREVIOUS,
+            "html_url": "bootstrap",
+        }
+        workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
+        commits = [PREVIOUS, HEAD]
+        for label, labeled, state in (
+            ("ancestor bootstrap", [bootstrap], "none"),
+            ("no bootstrap", [], "none"),
+            (
+                "red bootstrap at head",
+                [dict(bootstrap, head_sha=HEAD, conclusion="failure")],
+                "bootstrap",
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(
+                    ValueError, f"green bootstrap Full at its head {HEAD}: {state}"
+                ):
+                    self.enqueue(labeled=labeled, commits=commits, files=workflow)
+        reported, _ = self.enqueue(
+            labeled=[dict(bootstrap, head_sha=HEAD)],
+            commits=commits,
+            files=workflow,
+            entry={"state": "QUEUED", "position": 1},
+        )
+        self.assertTrue(reported.startswith("queued"))
+
+    def test_a_recorded_label_run_is_judged_as_a_listed_one(self) -> None:
+        # A request record can name a label run the listing excluded; it counts
+        # only if it is a bootstrap.
+        label = dict(
+            self.REQUESTED,
+            id=9,
+            event="pull_request",
+            display_title="CI full PR 170 bootstrap-9",
+            conclusion="failure",
+            created_at="2026-11-12T05:00:00Z",
+            html_url="label",
+        )
+        reported, _ = self.enqueue(
+            recorded=label,
+            recorded_jobs=[{"name": "plan", "conclusion": "skipped"}],
+            entry={"state": "QUEUED", "position": 1},
+        )
+        self.assertTrue(reported.startswith("queued"))
+        with self.assertRaisesRegex(ValueError, "full bootstrap at .*: label"):
+            self.enqueue(
+                recorded=label,
+                recorded_jobs=[{"name": "plan", "conclusion": "success"}],
+            )
 
     def test_ejected_head_queues_again_once_only_with_retry(self) -> None:
         entry = {"state": "QUEUED", "position": 1}
@@ -4346,7 +4438,9 @@ class World:
     """Recorded answers for one PR: quick (its Quick check run), runs (pages of
     dispatched runs), queue (the GraphQL pull request), heads (successive reads
     of the PR's head), comments (pages of comments), group (merge-group runs),
-    commits (the PR's own, oldest first) and labeled (its bootstrap runs)."""
+    commits (the PR's own, oldest first), labeled (its bootstrap runs),
+    later_runs (the dispatched runs any later listing sees) and requests (this
+    checkout's request records, whose runs GitHub no longer has)."""
 
     quick: CheckRun = field(default_factory=quick_run)
     runs: list[list[ci_log.Run]] = field(default_factory=list)
@@ -4357,6 +4451,8 @@ class World:
     records: list[dict[str, Any]] = field(default_factory=list)
     commits: list[str] = field(default_factory=lambda: [HEAD])
     labeled: list[ci_log.Run] = field(default_factory=list)
+    later_runs: list[list[ci_log.Run]] | None = None
+    requests: list[dict[str, object]] = field(default_factory=list)
 
 
 class FakeGitHub:
@@ -4366,6 +4462,7 @@ class FakeGitHub:
         self.world = world
         self.heads = iter(world.heads)
         self.calls: list[tuple[str, ...]] = []
+        self.listed = 0
 
     def api(self, _repository: str, path: str) -> object:
         answers = {
@@ -4386,6 +4483,8 @@ class FakeGitHub:
                 mergeable_state="clean",
                 head={"sha": next(self.heads)},
             )
+        if path.startswith("actions/runs/") and not path.endswith("/jobs"):
+            raise subprocess.CalledProcessError(1, ["gh", "api", path], "HTTP 404")
         (answer,) = [value for key, value in answers.items() if key in path]
         return answer
 
@@ -4394,15 +4493,73 @@ class FakeGitHub:
         if args[:2] == ("api", "graphql"):
             pull = self.world.queue
             return json.dumps({"data": {"repository": {"pullRequest": pull}}})
+        runs = self.world.runs
+        if "event=workflow_dispatch" in args[-1]:
+            self.listed += 1
+            if self.listed > 1 and self.world.later_runs is not None:
+                runs = self.world.later_runs
         answers = {
             "/comments": self.world.comments,
             "/reviews": [[]],
-            "event=workflow_dispatch": [{"workflow_runs": p} for p in self.world.runs],
+            "event=workflow_dispatch": [{"workflow_runs": p} for p in runs],
             "event=pull_request": [{"workflow_runs": self.world.labeled}],
             "pulls/170/files": [[{"filename": "tools/ci.py"}]],
         }
         (answer,) = [value for key, value in answers.items() if key in args[-1]]
         return json.dumps(answer)
+
+
+class RunSearchTests(unittest.TestCase):
+    """workflow_runs reads a PR's runs back to its opening past GitHub's
+    1,000-run search limit."""
+
+    def test_a_saturated_search_is_split_until_each_part_is_whole(self) -> None:
+        opened = datetime(2026, 11, 1, tzinfo=timezone.utc)
+        until = datetime(2026, 11, 3, tzinfo=timezone.utc)
+        middle = datetime(2026, 11, 2, tzinfo=timezone.utc)
+        spans: list[tuple[datetime, datetime]] = []
+
+        def gh(*args: str) -> str:
+            created = unquote(args[-1].split("created=")[1].split("&")[0])
+            start, end = (
+                datetime.fromisoformat(part.replace("Z", "+00:00"))
+                for part in created.split("..")
+            )
+            spans.append((start, end))
+            if (start, end) == (opened, until):
+                # Cut at the limit: only the newest runs come back.
+                runs, total = [{"id": 3}], 1001
+            elif start >= middle:
+                runs, total = [{"id": 3}, {"id": 2}], 2
+            else:
+                # The run at the middle is listed by both halves.
+                runs, total = [{"id": 2}, {"id": 1}], 2
+            return json.dumps([{"total_count": total, "workflow_runs": runs}])
+
+        with patch.object(ci, "gh", side_effect=gh):
+            runs = ci.workflow_runs(
+                "example/fork", "workflow_dispatch", "2026-11-01T00:00:00Z", until
+            )
+        self.assertEqual(sorted(run["id"] for run in runs), [1, 2, 3])
+        self.assertEqual(spans[0], (opened, until))
+        self.assertEqual(min(start for start, _ in spans), opened)
+        self.assertEqual(len(spans), 3)
+
+    def test_a_whole_search_is_read_once(self) -> None:
+        with patch.object(
+            ci,
+            "gh",
+            return_value=json.dumps([{"total_count": 1, "workflow_runs": [{"id": 1}]}]),
+        ) as gh:
+            runs = ci.workflow_runs(
+                "example/fork", "pull_request", "2026-11-01T00:00:00Z"
+            )
+        self.assertEqual([run["id"] for run in runs], [1])
+        self.assertEqual(gh.call_count, 1)
+        self.assertIn(
+            "event=pull_request&created=2026-11-01T00%3A00%3A00Z..",
+            gh.call_args.args[-1],
+        )
 
 
 class StateTests(unittest.TestCase):
@@ -4448,8 +4605,11 @@ class StateTests(unittest.TestCase):
             ),
             patch("builtins.print") as printed,
         ):
+            for number, record in enumerate(github.world.requests):
+                (Path(directory) / f"{number}.json").write_text(json.dumps(record))
             code = ci.main()
         output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        self.listed = github.listed
         return code, output, github.calls
 
     def test_one_screen_with_mixed_profiles_and_bounded_reports(self) -> None:
@@ -4603,6 +4763,34 @@ class StateTests(unittest.TestCase):
         self.assertIn("enqueue checks: blocked: The newest requested run", output)
         _, raw, _ = self.state("state", "170", "--json", world=swapped)
         self.assertEqual(json.loads(raw)["newest_request"]["behind"], 0)
+
+    def test_one_read_of_the_runs_serves_the_view_and_the_checks(self) -> None:
+        # A run requested while state reads must not split its view from its
+        # verdict.
+        green = requested("native", "e" * 32, "2026-11-12T02:00:00Z", "success")
+        green["display_title"] = f"CI native PR 170 {'e' * 32}-{PREVIOUS}"
+        red = requested("native", "f" * 32, "2026-11-12T08:00:00Z", "failure")
+        world = World(
+            runs=[[green]], later_runs=[[red, green]], commits=[PREVIOUS, HEAD]
+        )
+        _, output, _ = self.state(world=world)
+        self.assertEqual(self.listed, 1)
+        self.assertIn(
+            f"Newest requested run, native at {PREVIOUS[:10]}, 1 commit(s) below "
+            f"head: success {green['html_url']}",
+            output,
+        )
+        self.assertEqual(output.splitlines()[-1], "enqueue checks: pass")
+
+    def test_a_vanished_recorded_run_blocks_only_the_checks(self) -> None:
+        record = {"pr": 170, "head": HEAD, "run_id": 77, "profile": "native"}
+        world = replace(self.world(), requests=[record])
+        code, output, _ = self.state(world=world)
+        self.assertEqual(code, 0)
+        lines = output.splitlines()
+        self.assertEqual(lines[0], "PR #170 open, ready: Port the thing")
+        self.assertIn("Requested runs at head: none", lines)
+        self.assertTrue(lines[-1].startswith("enqueue checks: blocked: "), lines[-1])
 
     def test_moved_head_prints_no_mixed_view(self) -> None:
         code, output, _ = self.state(

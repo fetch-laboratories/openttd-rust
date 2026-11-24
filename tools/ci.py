@@ -833,22 +833,51 @@ def local_requests(repository: str, pr: int, head: str) -> list[Candidate]:
     return found
 
 
-def pr_dispatched_runs(repository: str, pr: int, opened: str) -> list[DispatchedRun]:
-    """The PR's requested runs on GitHub, found by their identifier, which ends with
-    the commit they test (#922): every dispatched run since the PR opened at
-    `opened`, paginated."""
-    since = quote(">=" + opened)
+# GitHub's run listing returns at most this many runs of one filtered search.
+SEARCH_LIMIT = 1000
+
+
+def utc_stamp(moment: datetime) -> str:
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def workflow_runs(
+    repository: str, event: str, opened: str, until: datetime | None = None
+) -> list[ci_log.Run]:
+    """Every ci-request.yml run of `event` created from `opened` to `until` (now),
+    paginated. A search GitHub cuts at its limit is split in two, so a PR open
+    across more runs than that is read back to its opening."""
+    start = datetime.fromisoformat(opened.replace("Z", "+00:00"))
+    end = until or datetime.now(timezone.utc)
+    span = quote(f"{utc_stamp(start)}..{utc_stamp(end)}")
     pages = json.loads(
         gh(
             "api",
             "--paginate",
             "--slurp",
             f"repos/{repository}/actions/workflows/{WORKFLOW}/runs"
-            f"?event=workflow_dispatch&created={since}&per_page=100",
+            f"?event={event}&created={span}&per_page=100",
         )
     )
+    runs: list[ci_log.Run] = [run for page in pages for run in page["workflow_runs"]]
+    total = max((page.get("total_count", 0) for page in pages), default=0)
+    if total <= len(runs) or (end - start).total_seconds() < 2:
+        return runs
+    middle = start + (end - start) / 2
+    found = {
+        run["id"]: run
+        for run in workflow_runs(repository, event, utc_stamp(middle), end)
+        + workflow_runs(repository, event, opened, middle)
+    }
+    return list(found.values())
+
+
+def pr_dispatched_runs(repository: str, pr: int, opened: str) -> list[DispatchedRun]:
+    """The PR's requested runs on GitHub, found by their identifier, which ends with
+    the commit they test (#922): every dispatched run since the PR opened at
+    `opened`."""
     found = []
-    for run in (run for page in pages for run in page["workflow_runs"]):
+    for run in workflow_runs(repository, "workflow_dispatch", opened):
         title = (run.get("display_title") or "").split()
         if (
             len(title) == 5
@@ -1142,31 +1171,26 @@ def bootstrap_runs(
     plan has not been decided yet may be a bootstrap, so an unfinished run counts
     until its plan job is skipped.
     """
-    since = quote(">=" + opened)
-    pages = json.loads(
-        gh(
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{repository}/actions/workflows/{WORKFLOW}/runs"
-            f"?event=pull_request&created={since}&per_page=100",
-        )
+    return [
+        run
+        for run in workflow_runs(repository, "pull_request", opened)
+        if (run.get("display_title") or "").split()[2:4] == ["PR", str(pr)]
+        and run.get("head_sha") in commits
+        and is_bootstrap(repository, run)
+    ]
+
+
+def is_bootstrap(repository: str, run: ci_log.Run) -> bool:
+    """Whether a label run of ci-request.yml is, or may yet be, a bootstrap: its
+    plan ran, or it has not finished and its plan is not yet skipped."""
+    plans = [
+        job
+        for job in api(repository, f"actions/runs/{run['id']}/jobs")["jobs"]
+        if job["name"] == "plan"
+    ]
+    return any(job["conclusion"] != "skipped" for job in plans) or (
+        not plans and run["status"] != "completed"
     )
-    found = []
-    for run in (run for page in pages for run in page["workflow_runs"]):
-        title = (run.get("display_title") or "").split()
-        if title[2:4] != ["PR", str(pr)] or run.get("head_sha") not in commits:
-            continue
-        plans = [
-            job
-            for job in api(repository, f"actions/runs/{run['id']}/jobs")["jobs"]
-            if job["name"] == "plan"
-        ]
-        if any(job["conclusion"] != "skipped" for job in plans) or (
-            not plans and run["status"] != "completed"
-        ):
-            found.append(run)
-    return found
 
 
 def pr_commits(repository: str, head: str) -> list[str]:
@@ -1204,16 +1228,19 @@ def pr_requested_runs(
         found[run["id"]] = TestedRun("full bootstrap", run["head_sha"], run)
     # Requests made before #922 carry no commit in their identifier; their records do.
     for record_path in REQUESTS.glob("*.json"):
-        record = json.loads(record_path.read_text())
-        if (
-            record.get("pr") == pr
-            and record.get("head") in commits
-            and record.get("run_id")
-            and record["run_id"] not in found
-        ):
-            run = cast(ci_log.Run, api(repository, f"actions/runs/{record['run_id']}"))
+        record = cast(RequestRecord, json.loads(record_path.read_text()))
+        run_id = record.get("run_id")
+        if record.get("pr") != pr or record.get("head") not in commits or not run_id:
+            continue
+        if run_id in found:
+            continue
+        run = cast(ci_log.Run, api(repository, f"actions/runs/{run_id}"))
+        if run.get("event") == "pull_request":
+            if is_bootstrap(repository, run):
+                found[run_id] = TestedRun("full bootstrap", record["head"], run)
+        else:
             profile = record.get("profile") or "requested"
-            found[run["id"]] = TestedRun(profile, record["head"], run)
+            found[run_id] = TestedRun(profile, record["head"], run)
     return sorted(
         found.values(), key=lambda tested: (tested.run["created_at"], tested.run["id"])
     )
@@ -1285,12 +1312,26 @@ def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None
     print(f"Queueing PR #{pr} again unchanged after {url}; logged in {log}")
 
 
-def gate_run(repository: str, pr: int, pull: dict, head: str) -> TestedRun:
-    """The run `enqueue` reads: the PR's newest requested or bootstrap run on any of
-    its own commits, which must have succeeded. A workflow change needs it at the
-    head itself, as its bootstrap Full must be (root-workflow.md, CI administration)."""
+@dataclass
+class PrRuns:
+    """One read of the PR's commits and of its requested runs on them, which
+    `state` shows and `enqueue`'s checks judge."""
+
+    commits: list[str]
+    runs: list[TestedRun]
+
+
+def read_pr_runs(repository: str, pr: int, opened: str, head: str) -> PrRuns:
     commits = pr_commits(repository, head)
-    runs = pr_requested_runs(repository, pr, pull["created_at"], commits)
+    return PrRuns(commits, pr_requested_runs(repository, pr, opened, commits))
+
+
+def gate_run(repository: str, pr: int, head: str, read: PrRuns) -> TestedRun:
+    """The run `enqueue` reads: the PR's newest requested or bootstrap run on any of
+    its own commits, which must have succeeded. A workflow change also needs a
+    green bootstrap Full at the head itself (root-workflow.md, CI administration),
+    and its newest run there."""
+    runs = read.runs
     if not runs:
         raise ValueError(
             f"PR #{pr} has no requested run on its commits up to {head}; "
@@ -1304,16 +1345,30 @@ def gate_run(repository: str, pr: int, pull: dict, head: str) -> TestedRun:
             f"{newest.commit}, is not green: "
             f"{run['status']}/{run['conclusion']}: {run['html_url']}"
         )
-    if newest.commit != head and changes_definitions(repository, pr):
-        raise ValueError(
-            f"PR #{pr} changes .github/workflows/, so its passing run must be at its "
-            f"head {head}; the newest, {newest.profile} {run['html_url']}, ran at "
-            f"{newest.commit}"
-        )
+    if changes_definitions(repository, pr):
+        if newest.commit != head:
+            raise ValueError(
+                f"PR #{pr} changes .github/workflows/, so its passing run must be at "
+                f"its head {head}; the newest, {newest.profile} {run['html_url']}, "
+                f"ran at {newest.commit}"
+            )
+        bootstraps = [
+            tested.run
+            for tested in runs
+            if tested.profile == "full bootstrap" and tested.commit == head
+        ]
+        if not bootstraps or bootstraps[-1]["conclusion"] != "success":
+            state = bootstraps and bootstraps[-1]["html_url"]
+            raise ValueError(
+                f"PR #{pr} changes .github/workflows/ and needs root's green "
+                f"bootstrap Full at its head {head}: {state or 'none'}"
+            )
     return newest
 
 
-def enqueue_checks(repository: str, pr: int, pull: dict) -> str:
+def enqueue_checks(
+    repository: str, pr: int, pull: dict, read: PrRuns | None = None
+) -> str:
     """enqueue's checks before its requeue gate, read-only: return the head, or
     raise naming the first that fails."""
     head = current_head(pull)
@@ -1331,7 +1386,9 @@ def enqueue_checks(repository: str, pr: int, pull: dict) -> str:
             quick and f"{quick['status']}/{quick['conclusion']}: {quick['html_url']}"
         )
         raise ValueError(f"{QUICK} at {head} is not green: {state or 'no run'}")
-    gate_run(repository, pr, pull, head)
+    if read is None:
+        read = read_pr_runs(repository, pr, pull["created_at"], head)
+    gate_run(repository, pr, head, read)
     missing_acceptances(repository, pr, pull, head)
     return head
 
@@ -1449,11 +1506,15 @@ def enqueue(args: argparse.Namespace) -> str:
     raise ValueError(f"PR #{args.pr} is neither queued nor armed for auto-merge")
 
 
-def enqueue_assessment(repository: str, pr: int, pull: dict) -> str:
+def enqueue_assessment(
+    repository: str, pr: int, pull: dict, read: PrRuns | Exception
+) -> str:
     """What enqueue's current checks say of the PR, without queueing or logging:
     `pass` or `blocked: <reason>`. Passing them is not permission to merge."""
     try:
-        head = enqueue_checks(repository, pr, pull)
+        if isinstance(read, Exception):
+            raise read
+        head = enqueue_checks(repository, pr, pull, read)
         requeue_gate(repository, pr, head, None)
     except (ValueError, subprocess.CalledProcessError) as error:
         return f"blocked: {error}"
@@ -1565,8 +1626,13 @@ def pull_state(repository: str, pr: int) -> PullState:
     reports = review_report.review_reports(comments, reviews, head)
     reports.sort(key=lambda report: report.reported_at, reverse=True)
     quick = latest_quick(repository, head)
-    commits = pr_commits(repository, head)
-    runs = pr_requested_runs(repository, pr, pull["created_at"], commits)
+    # One read for the view and the checks; a failed read blocks only the checks.
+    read: PrRuns | Exception
+    try:
+        read = read_pr_runs(repository, pr, pull["created_at"], head)
+    except (ValueError, subprocess.CalledProcessError) as error:
+        read = error
+    shown = read if isinstance(read, PrRuns) else PrRuns([head], [])
     facts = PullState(
         repository=repository,
         number=pr,
@@ -1576,11 +1642,11 @@ def pull_state(repository: str, pr: int) -> PullState:
         head=head,
         mergeable=mergeable_word(pull),
         quick=run_fact(quick) if quick else None,
-        requests=requests_at_head(runs, head),
-        newest_request=newest_on_commits(runs, commits),
+        requests=requests_at_head(shown.runs, head),
+        newest_request=newest_on_commits(shown.runs, shown.commits),
         queue=queue_fact(repository, pr),
         reports=reports,
-        enqueue_checks=enqueue_assessment(repository, pr, pull),
+        enqueue_checks=enqueue_assessment(repository, pr, pull, read),
     )
     end = api(repository, f"pulls/{pr}")["head"]["sha"]
     if end != head:
