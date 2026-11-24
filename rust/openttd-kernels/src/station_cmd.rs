@@ -73,7 +73,7 @@ use crate::tile_type::{TileIndex, TileType};
 use crate::tilearea::TileArea;
 use crate::town::TownCouncilAttitudes;
 use crate::track_func::reverse_trackdir;
-use crate::track_type::{Track, TrackBits, Trackdir};
+use crate::track_type::{Track, TrackBits};
 use crate::vehicle_type::VehicleType;
 use crate::viewport_func::TILE_HEIGHT_STEP;
 use crate::water_map::WaterClass;
@@ -1582,13 +1582,15 @@ impl Ctx<'_> {
             let td =
                 crate::train::get_vehicle_trackdir(unsafe { &*self.s.train }, self.shared, handle);
             let td = if reverse {
-                Trackdir(reverse_trackdir(td.0))
+                reverse_trackdir(td, |ok| crate::movement::native_assert(self.shared, ok))
             } else {
                 td
             };
             crate::pbs::Pbs::acquire(self.shared).set_rail_station_platform_reservation(
                 tile,
-                DiagDirection(crate::track_func::trackdir_to_exitdir(td.0)),
+                crate::track_func::trackdir_to_exitdir(td, |ok| {
+                    crate::movement::native_assert(self.shared, ok);
+                }),
                 b,
             );
         }
@@ -2498,9 +2500,10 @@ impl Ctx<'_> {
             (self.rail_map().make_rail_normal)(
                 tile.0,
                 owner.0,
-                crate::track_func::track_to_track_bits(track.0, |ok| {
+                crate::track_func::track_to_track_bits(track, |ok| {
                     crate::movement::native_assert(self.shared, ok);
-                }),
+                })
+                .0,
                 rt.0,
             );
         }
@@ -4823,14 +4826,12 @@ impl Ctx<'_> {
             TileType::MP_RAILWAY | TileType::MP_STATION | TileType::MP_TUNNELBRIDGE => (),
             _ => return false,
         }
-        TrackBits(crate::track_func::track_status_to_track_bits(
-            crate::movement::get_tile_track_status(
-                self.shared,
-                t,
-                crate::transport_type::TransportType::TRANSPORT_WATER,
-                0,
-                DiagDirection::INVALID_DIAGDIR,
-            ),
+        crate::track_func::track_status_to_track_bits(crate::movement::get_tile_track_status(
+            self.shared,
+            t,
+            crate::transport_type::TransportType::TRANSPORT_WATER,
+            0,
+            DiagDirection::INVALID_DIAGDIR,
         )) != TrackBits::TRACK_BIT_NONE
     }
     /// `CheckForDockingTile`.

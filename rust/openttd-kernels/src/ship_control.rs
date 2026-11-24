@@ -46,7 +46,7 @@ fn first_bit(bits: u32) -> u32 {
     u32::from(crate::bitmath_func::find_first_bit(u64::from(bits)))
 }
 fn first_track(bits: u32) -> u32 {
-    u32::from(crate::track_func::find_first_track_u32(bits))
+    u32::from(crate::track_func::find_first_track_u32_raw(bits))
 }
 /// One private allocation per shell, including indexed load construction.
 pub struct State {

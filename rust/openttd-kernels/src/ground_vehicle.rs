@@ -27,7 +27,7 @@ use crate::raw_field::{read_field, write_field};
 use crate::services::{RailType, RoadType};
 use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK};
 use crate::track_func::track_status_to_track_bits;
-use crate::track_type::TrackBits;
+use crate::track_type::{TrackBits, Trackdir};
 use crate::train::{VehicleRailFlag, VehicleRailFlags};
 use crate::transport_type::TransportType;
 use crate::vehicle::{VehicleRef, VehicleServices};
@@ -730,7 +730,7 @@ impl GroundVehicleType for RoadVehicle {
         _: Owner,
     ) -> bool {
         let ts = movement.get_road_vehicle_track_status(v, v.tile());
-        let trackbits = TrackBits(track_status_to_track_bits(ts));
+        let trackbits = track_status_to_track_bits(ts);
         trackbits == TrackBits::TRACK_BIT_X || trackbits == TrackBits::TRACK_BIT_Y
     }
     /// Road vehicles have to use `GetSlopePixelZ()` to compute their height if they are
@@ -746,7 +746,7 @@ impl GroundVehicleType for RoadVehicle {
          * We already know it has either GVF_GOINGUP_BIT or GVF_GOINGDOWN_BIT set. */
 
         if rv_state <= crate::roadveh::RVSB_TRACKDIR_MASK
-            && crate::track_func::is_reversing_road_trackdir(rv_state, |ok| {
+            && crate::track_func::is_reversing_road_trackdir(Trackdir(rv_state), |ok| {
                 crate::services_assert::check(ok);
             })
         {

@@ -44,9 +44,9 @@ use crate::station_type::{SAT_PATH_RESERVATION, SRT_PATH_RESERVATION, StationID,
 use crate::tile_type::{TILE_SIZE, TileIndex, TileType};
 use crate::track_func::{
     diagdir_reaches_tracks, find_first_trackdir, has_trackdir, is_diagonal_trackdir,
-    is_valid_trackdir, next_trackdir, reverse_trackdir, track_overlaps_tracks,
-    track_status_to_trackdir_bits, trackdir_crosses_trackdirs, trackdir_to_exitdir,
-    trackdir_to_track,
+    is_valid_trackdir, next_trackdir, remove_first_trackdir, reverse_trackdir,
+    track_overlaps_tracks, track_status_to_trackdir_bits, trackdir_crosses_trackdirs,
+    trackdir_to_exitdir, trackdir_to_track,
 };
 use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
@@ -506,15 +506,14 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
             }
             pf.dest.dest_tile = v.dest_tile();
             pf.dest.dest_station_id = StationID::INVALID;
-            pf.dest.dest_trackdirs = TrackdirBits(track_status_to_trackdir_bits(
-                crate::movement::get_tile_track_status(
+            pf.dest.dest_trackdirs =
+                track_status_to_trackdir_bits(crate::movement::get_tile_track_status(
                     pf.s,
                     v.dest_tile(),
                     TransportType::TRANSPORT_RAIL,
                     0,
                     DiagDirection::INVALID_DIAGDIR,
-                ),
-            ));
+                ));
         }
         pf.set_destination_base(override_rail_type);
     }
@@ -523,15 +522,15 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
         if pf.dest.dest_station_id != StationID::INVALID {
             return pf.world.has_station_tile_rail(tile)
                 && (pf.world.get_station_index(tile) == pf.dest.dest_station_id)
-                && (pf.world.get_rail_station_track(tile) == Track(trackdir_to_track(td.0)));
+                && (pf.world.get_rail_station_track(tile)
+                    == trackdir_to_track(td, |ok| pf.check(ok)));
         }
 
         if pf.dest.any_depot {
             return pf.world.rail_depot(tile.0);
         }
 
-        (tile == pf.dest.dest_tile)
-            && has_trackdir(pf.dest.dest_trackdirs.0, td.0, |ok| pf.check(ok))
+        (tile == pf.dest.dest_tile) && has_trackdir(pf.dest.dest_trackdirs, td, |ok| pf.check(ok))
     }
     #[inline]
     fn pf_calc_estimate(pf: &CYapfRailT<'_, T>, n: &mut CYapfRailNode) -> bool {
@@ -1102,17 +1101,21 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
     /// `CurveCost`.
     #[inline]
     fn curve_cost(&self, td1: Trackdir, td2: Trackdir) -> i32 {
-        self.world.assert_with(|| is_valid_trackdir(td1.0));
-        self.world.assert_with(|| is_valid_trackdir(td2.0));
+        self.world.assert_with(|| is_valid_trackdir(td1));
+        self.world.assert_with(|| is_valid_trackdir(td2));
         let mut cost = 0_i32;
         if T::ALLOW_90DEG_TURNS
-            && has_trackdir(trackdir_crosses_trackdirs(td1.0), td2.0, |ok| {
-                self.check(ok);
-            })
+            && has_trackdir(
+                trackdir_crosses_trackdirs(td1, |ok| self.check(ok)),
+                td2,
+                |ok| {
+                    self.check(ok);
+                },
+            )
         {
             /* 90-deg curve penalty */
             cost = cost.wrapping_add(self.penalty(|s| s.rail_curve90_penalty));
-        } else if td2.0 != next_trackdir(td1.0, |ok| self.check(ok)) {
+        } else if td2 != next_trackdir(td1, |ok| self.check(ok)) {
             /* 45-deg curve penalty */
             cost = cost.wrapping_add(self.penalty(|s| s.rail_curve45_penalty));
         }
@@ -1124,10 +1127,17 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         if self.world.plain_rail(tile1.0) && self.world.plain_rail(tile2.0) {
             let t1 = kill_first_bit(
                 self.world.tracks(tile1.0)
-                    & diagdir_reaches_tracks(reverse_diag_dir(exitdir, |ok| self.check(ok)).0),
+                    & diagdir_reaches_tracks(
+                        reverse_diag_dir(exitdir, |ok| self.check(ok)),
+                        |ok| {
+                            self.check(ok);
+                        },
+                    )
+                    .0,
             ) != TrackBits::TRACK_BIT_NONE.0;
-            let t2 = kill_first_bit(self.world.tracks(tile2.0) & diagdir_reaches_tracks(exitdir.0))
-                != TrackBits::TRACK_BIT_NONE.0;
+            let t2 = kill_first_bit(
+                self.world.tracks(tile2.0) & diagdir_reaches_tracks(exitdir, |ok| self.check(ok)).0,
+            ) != TrackBits::TRACK_BIT_NONE.0;
             if t1 && t2 {
                 return self.penalty(|s| s.rail_doubleslip_penalty);
             }
@@ -1139,7 +1149,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
     fn one_tile_cost(&self, tile: TileIndex, trackdir: Trackdir) -> i32 {
         let mut cost = 0_i32;
         /* set base cost */
-        if is_diagonal_trackdir(trackdir.0) {
+        if is_diagonal_trackdir(trackdir, |ok| self.check(ok)) {
             cost = cost.wrapping_add(YAPF_TILE_LENGTH);
             if self.world.kind(tile) == TileType::MP_ROAD {
                 /* Increase the cost for level crossings */
@@ -1162,7 +1172,9 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         mut skipped: i32,
     ) -> bool {
         let diff = self.world.dimensions.tile_offs_by_diag_dir(
-            DiagDirection(trackdir_to_exitdir(reverse_trackdir(trackdir.0))),
+            trackdir_to_exitdir(reverse_trackdir(trackdir, |ok| self.check(ok)), |ok| {
+                self.check(ok)
+            }),
             |ok| self.check(ok),
         );
         while skipped >= 0 {
@@ -1197,12 +1209,12 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                 .penalty(|s| s.rail_pbs_station_penalty)
                 .wrapping_mul(skipped.wrapping_add(1));
         } else if track_overlaps_tracks(
-            self.pbs.get_reserved_trackbits(tile).0,
-            trackdir_to_track(trackdir.0),
+            self.pbs.get_reserved_trackbits(tile),
+            trackdir_to_track(trackdir, |ok| self.check(ok)),
             |ok| self.check(ok),
         ) {
             let mut cost = self.penalty(|s| s.rail_pbs_cross_penalty);
-            if !is_diagonal_trackdir(trackdir.0) {
+            if !is_diagonal_trackdir(trackdir, |ok| self.check(ok)) {
                 cost = cost.wrapping_mul(YAPF_TILE_CORNER_LENGTH) / YAPF_TILE_LENGTH;
             }
             return cost.wrapping_mul(skipped.wrapping_add(1));
@@ -1220,13 +1232,13 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         if self.world.kind(tile) == TileType::MP_RAILWAY {
             let has_signal_against = self
                 .world
-                .has_signal_on_trackdir(tile.0, reverse_trackdir(trackdir.0));
+                .has_signal_on_trackdir(tile.0, reverse_trackdir(trackdir, |ok| self.check(ok)).0);
             let has_signal_along = self.world.has_signal_on_trackdir(tile.0, trackdir.0);
             if has_signal_against
                 && !has_signal_along
                 && self
                     .world
-                    .oneway_signal(tile.0, trackdir_to_track(trackdir.0))
+                    .oneway_signal(tile.0, trackdir_to_track(trackdir, |ok| self.check(ok)).0)
             {
                 /* one-way signal in opposite direction */
                 let mut segment = self.segment(n.segment);
@@ -1236,10 +1248,11 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                 if has_signal_along {
                     let sig_state =
                         SignalState(self.world.signal_state_by_trackdir(tile.0, trackdir.0));
-                    let sig_type = SignalType(
-                        self.world
-                            .signal_type(tile.0, trackdir_to_track(trackdir.0)),
-                    );
+                    let sig_type =
+                        SignalType(self.world.signal_type(
+                            tile.0,
+                            trackdir_to_track(trackdir, |ok| self.check(ok)).0,
+                        ));
 
                     n.last_signal_type = sig_type;
 
@@ -1311,8 +1324,10 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
 
                 if has_signal_against
                     && is_pbs_signal(
-                        self.world
-                            .signal_type(tile.0, trackdir_to_track(trackdir.0)),
+                        self.world.signal_type(
+                            tile.0,
+                            trackdir_to_track(trackdir, |ok| self.check(ok)).0,
+                        ),
                     )
                 {
                     cost = cost.wrapping_add(
@@ -1380,9 +1395,8 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         self.world
             .assert_with(|| !n.flags_u.get(CYapfRailNodeFlags::TARGET_SEEN));
         self.world.assert_with(|| follower.new_tile == n.key.0.tile);
-        self.world.assert_with(|| {
-            has_trackdir(follower.new_td_bits.0, n.key.0.td.0, |ok| self.check(ok))
-        });
+        self.world
+            .assert_with(|| has_trackdir(follower.new_td_bits, n.key.0.td, |ok| self.check(ok)));
 
         /* Does the node have some parent node? */
         let has_parent = n.parent.is_some();
@@ -1469,7 +1483,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                 transition_cost = transition_cost.wrapping_add(self.switch_cost(
                     prev.tile,
                     cur.tile,
-                    DiagDirection(trackdir_to_exitdir(prev.td.0)),
+                    trackdir_to_exitdir(prev.td, |ok| self.check(ok)),
                 ));
 
                 /* First transition cost counts against segment entry cost, other transitions
@@ -1503,7 +1517,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                             if is_red {
                                 n.last_red_signal_type = SignalType(self.world.signal_type(
                                     cached.last_signal_tile.0,
-                                    trackdir_to_track(cached.last_signal_td.0),
+                                    trackdir_to_track(cached.last_signal_td, |ok| self.check(ok)).0,
                                 ));
                             }
                         }
@@ -1600,9 +1614,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                             td = Trackdir::INVALID_TRACKDIR;
                             break;
                         }
-                        // `RemoveFirstTrackdir(&ft.new_td_bits)`.
-                        td = Trackdir(find_first_bit(u64::from(ft.new_td_bits.0)));
-                        ft.new_td_bits = TrackdirBits(kill_first_bit_u16(ft.new_td_bits.0));
+                        td = remove_first_trackdir(&mut ft.new_td_bits, |ok| self.check(ok));
                         /* If this is a safe waiting position we're done searching for it */
                         if self
                             .pbs
@@ -1645,8 +1657,10 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                 /* Searching for a safe tile? */
                 if self.world.has_signal_on_trackdir(cur.tile.0, cur.td.0)
                     && !is_pbs_signal(
-                        self.world
-                            .signal_type(cur.tile.0, trackdir_to_track(cur.td.0)),
+                        self.world.signal_type(
+                            cur.tile.0,
+                            trackdir_to_track(cur.td, |ok| self.check(ok)).0,
+                        ),
                     )
                 {
                     end_segment_reason.set(EndSegmentReason::SAFE_TILE);
@@ -1741,20 +1755,20 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
 
             if T::DO_TRACK_MASKING && self.world.kind(next.tile) == TileType::MP_RAILWAY {
                 if self.world.has_signal_on_trackdir(next.tile.0, next.td.0)
-                    && is_pbs_signal(
-                        self.world
-                            .signal_type(next.tile.0, trackdir_to_track(next.td.0)),
-                    )
+                    && is_pbs_signal(self.world.signal_type(
+                        next.tile.0,
+                        trackdir_to_track(next.td, |ok| self.check(ok)).0,
+                    ))
                 {
                     /* Possible safe tile. */
                     end_segment_reason.set(EndSegmentReason::SAFE_TILE);
-                } else if self
-                    .world
-                    .has_signal_on_trackdir(next.tile.0, reverse_trackdir(next.td.0))
-                    && SignalType(
-                        self.world
-                            .signal_type(next.tile.0, trackdir_to_track(next.td.0)),
-                    ) == SignalType::SIGTYPE_PBS_ONEWAY
+                } else if self.world.has_signal_on_trackdir(
+                    next.tile.0,
+                    reverse_trackdir(next.td, |ok| self.check(ok)).0,
+                ) && SignalType(self.world.signal_type(
+                    next.tile.0,
+                    trackdir_to_track(next.td, |ok| self.check(ok)).0,
+                )) == SignalType::SIGTYPE_PBS_ONEWAY
                 {
                     /* Possible safe tile, but not so good as it's the back of a signal... */
                     end_segment_reason.set_all(EndSegmentReasons::of(&[
@@ -1853,7 +1867,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                     &self.world,
                     last_tile,
                     reverse_diag_dir(
-                        DiagDirection(trackdir_to_exitdir(self.get_last_trackdir(n).0)),
+                        trackdir_to_exitdir(self.get_last_trackdir(n), |ok| self.check(ok)),
                         |ok| self.check(ok),
                     ),
                 );
@@ -2051,21 +2065,22 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
     }
     /// `ReserveSingleTrack`: try to reserve a single track/platform.
     fn reserve_single_track(&mut self, mut tile: TileIndex, td: Trackdir) -> bool {
-        let rev_td = Trackdir(reverse_trackdir(td.0));
+        let rev_td = reverse_trackdir(td, |ok| self.check(ok));
         if self.world.is_rail_station_tile(tile) {
             if !self.reserve_rail_station_platform(
                 &mut tile,
-                DiagDirection(trackdir_to_exitdir(rev_td.0)),
+                trackdir_to_exitdir(rev_td, |ok| self.check(ok)),
             ) {
                 /* Platform could not be reserved, undo. */
                 self.res_fail_tile = tile;
                 self.res_fail_td = td;
             }
         } else {
-            if !self
-                .pbs
-                .try_reserve_rail_track(tile, Track(trackdir_to_track(td.0)), true)
-            {
+            if !self.pbs.try_reserve_rail_track(
+                tile,
+                trackdir_to_track(td, |ok| self.check(ok)),
+                true,
+            ) {
                 /* Tile couldn't be reserved, undo. */
                 self.res_fail_tile = tile;
                 self.res_fail_td = td;
@@ -2102,7 +2117,9 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         if self.world.is_rail_station_tile(tile) {
             let start = tile;
             let diff = self.world.dimensions.tile_offs_by_diag_dir(
-                DiagDirection(trackdir_to_exitdir(reverse_trackdir(td.0))),
+                trackdir_to_exitdir(reverse_trackdir(td, |ok| self.check(ok)), |ok| {
+                    self.check(ok)
+                }),
                 |ok| self.check(ok),
             );
             while (tile != self.res_fail_tile || td != self.res_fail_td)
@@ -2116,7 +2133,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
             }
         } else if tile != self.res_fail_tile || td != self.res_fail_td {
             self.pbs
-                .unreserve_rail_track(tile, Track(trackdir_to_track(td.0)));
+                .unreserve_rail_track(tile, trackdir_to_track(td, |ok| self.check(ok)));
         }
         (tile != self.res_dest_tile || td != self.res_dest_td)
             && (tile != self.res_fail_tile || td != self.res_fail_td)
@@ -2255,7 +2272,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
             self.world.assert_with(|| {
                 kill_first_bit_u16(follower.new_td_bits.0) == TrackdirBits::TRACKDIR_BIT_NONE.0
             });
-            cur_td = Trackdir(find_first_trackdir(follower.new_td_bits.0));
+            cur_td = find_first_trackdir(follower.new_td_bits, |ok| self.check(ok));
         }
 
         func(self, cur, cur_td)
@@ -2730,9 +2747,9 @@ pub(crate) fn yapf_train_choose_track(
     };
 
     if td_ret == Trackdir::INVALID_TRACKDIR {
-        Track(crate::track_func::find_first_track(tracks.0))
+        crate::track_func::find_first_track(tracks)
     } else {
-        Track(trackdir_to_track(td_ret.0))
+        trackdir_to_track(td_ret, |ok| crate::movement::native_assert(s, ok))
     }
 }
 
@@ -2747,9 +2764,10 @@ pub(crate) fn yapf_train_check_reverse(s: &Services, v: crate::train::Handle) ->
 
     /* get trackdirs of both ends */
     let td = crate::train::get_vehicle_trackdir(leaves, s, v);
-    let td_rev = Trackdir(reverse_trackdir(
-        crate::train::get_vehicle_trackdir(leaves, s, last_veh).0,
-    ));
+    let td_rev = reverse_trackdir(
+        crate::train::get_vehicle_trackdir(leaves, s, last_veh),
+        |ok| crate::movement::native_assert(s, ok),
+    );
 
     /* tiles where front and back are */
     let mut tile = v.vehicle().tile();
@@ -2761,7 +2779,9 @@ pub(crate) fn yapf_train_check_reverse(s: &Services, v: crate::train::Handle) ->
         /* front in tunnel / on bridge */
         let dir_into_wormhole = World::new(s).tunnel_bridge_dir(tile.0);
 
-        if trackdir_to_exitdir(td.0) == dir_into_wormhole {
+        if trackdir_to_exitdir(td, |ok| crate::movement::native_assert(s, ok)).0
+            == dir_into_wormhole
+        {
             // SAFETY: The PBS table names the process-lifetime rail map table.
             tile = TileIndex((unsafe { &*pbs.0.rail }.other_tunnel_bridge_end)(tile.0));
         }
@@ -2783,7 +2803,9 @@ pub(crate) fn yapf_train_check_reverse(s: &Services, v: crate::train::Handle) ->
         /* back in tunnel / on bridge */
         let dir_into_wormhole = World::new(s).tunnel_bridge_dir(tile_rev.0);
 
-        if trackdir_to_exitdir(td_rev.0) == dir_into_wormhole {
+        if trackdir_to_exitdir(td_rev, |ok| crate::movement::native_assert(s, ok)).0
+            == dir_into_wormhole
+        {
             // SAFETY: The PBS table names the process-lifetime rail map table.
             tile_rev = TileIndex((unsafe { &*pbs.0.rail }.other_tunnel_bridge_end)(
                 tile_rev.0,
@@ -2858,9 +2880,10 @@ pub(crate) fn yapf_train_find_nearest_depot(
 
     let origin = pbs.follow_train_reservation(v, None::<&mut crate::train::Handle>);
     let last_tile = last_veh.vehicle().tile();
-    let td_rev = Trackdir(reverse_trackdir(
-        crate::train::get_vehicle_trackdir(leaves, s, last_veh).0,
-    ));
+    let td_rev = reverse_trackdir(
+        crate::train::get_vehicle_trackdir(leaves, s, last_veh),
+        |ok| crate::movement::native_assert(s, ok),
+    );
 
     let two_way = TwoWayOrigin {
         t1: origin.tile,

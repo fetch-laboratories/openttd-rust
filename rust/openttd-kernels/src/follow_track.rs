@@ -23,7 +23,7 @@ use crate::track_func::{
     track_to_trackdir_bits, trackdir_bits_to_track_bits, trackdir_crosses_trackdirs,
     trackdir_to_exitdir, trackdir_to_trackdir_bits, tracks_overlap,
 };
-use crate::track_type::{TrackBits, Trackdir, TrackdirBits};
+use crate::track_type::{Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
 use crate::vehicle::VehicleRef;
 
@@ -235,7 +235,7 @@ impl CFollowTrackT {
                         } else {
                             0
                         };
-                        let old_tile_valid_dirs = TrackdirBits(track_status_to_trackdir_bits(
+                        let old_tile_valid_dirs = track_status_to_trackdir_bits(
                             crate::movement::table(s).get_tile_track_status_in_world(
                                 &w,
                                 self.old_tile,
@@ -243,15 +243,15 @@ impl CFollowTrackT {
                                 sub_mode,
                                 DiagDirection::INVALID_DIAGDIR,
                             ),
-                        ));
+                        );
                         (old_tile_valid_dirs
-                            & TrackdirBits(trackdir_to_trackdir_bits(self.old_td.0)))
+                            & trackdir_to_trackdir_bits(self.old_td, |ok| w.check(ok)))
                             != TrackdirBits::TRACKDIR_BIT_NONE
                     },
             );
         }
 
-        self.exitdir = DiagDirection(trackdir_to_exitdir(self.old_td.0));
+        self.exitdir = trackdir_to_exitdir(self.old_td, |ok| w.check(ok));
         if self.forced_reverse(&w, road) {
             return true;
         }
@@ -262,7 +262,7 @@ impl CFollowTrackT {
         if !self.query_new_tile_track_status(&w, road) {
             return self.try_reverse(&w, road);
         }
-        self.new_td_bits &= TrackdirBits(diagdir_reaches_trackdirs(self.exitdir.0));
+        self.new_td_bits &= diagdir_reaches_trackdirs(self.exitdir, |ok| w.check(ok));
         if self.new_td_bits == TrackdirBits::TRACKDIR_BIT_NONE || !self.can_enter_new_tile(&w, road)
         {
             /* In case we can't enter the next tile, but are
@@ -297,7 +297,7 @@ impl CFollowTrackT {
                     !self.allow90,
                 ))
         {
-            self.new_td_bits &= !TrackdirBits(trackdir_crosses_trackdirs(self.old_td.0));
+            self.new_td_bits &= !trackdir_crosses_trackdirs(self.old_td, |ok| w.check(ok));
             if self.new_td_bits == TrackdirBits::TRACKDIR_BIT_NONE {
                 self.err = ErrorCode::EC_90DEG;
                 return false;
@@ -329,17 +329,12 @@ impl CFollowTrackT {
 
         let reserved = pbs.get_reserved_trackbits(self.new_tile);
         /* Mask already reserved trackdirs. */
-        self.new_td_bits &= !TrackdirBits(track_bits_to_trackdir_bits(reserved.0));
+        self.new_td_bits &= !track_bits_to_trackdir_bits(reserved);
         /* Mask out all trackdirs that conflict with the reservation. */
-        for t in set_track_bit_iterator(TrackBits(trackdir_bits_to_track_bits(self.new_td_bits.0)))
-        {
-            if tracks_overlap(
-                reserved.0
-                    | track_to_track_bits(t.0, |ok| {
-                        crate::movement::native_assert(pbs.shared(), ok);
-                    }),
-            ) {
-                self.new_td_bits &= !TrackdirBits(track_to_trackdir_bits(t.0));
+        let check = |ok| crate::movement::native_assert(pbs.shared(), ok);
+        for t in set_track_bit_iterator(trackdir_bits_to_track_bits(self.new_td_bits)) {
+            if tracks_overlap(reserved | track_to_track_bits(t, check)) {
+                self.new_td_bits &= !track_to_trackdir_bits(t, check);
             }
         }
         if self.new_td_bits == TrackdirBits::TRACKDIR_BIT_NONE {
@@ -416,7 +411,7 @@ impl CFollowTrackT {
                 },
             );
         } else {
-            self.new_td_bits = TrackdirBits(track_status_to_trackdir_bits(
+            self.new_td_bits = track_status_to_trackdir_bits(
                 crate::movement::table(w.shared).get_tile_track_status_in_world(
                     w,
                     self.new_tile,
@@ -424,7 +419,7 @@ impl CFollowTrackT {
                     0,
                     DiagDirection::INVALID_DIAGDIR,
                 ),
-            ));
+            );
         }
         self.new_td_bits != TrackdirBits::TRACKDIR_BIT_NONE
     }
@@ -567,7 +562,7 @@ impl CFollowTrackT {
             let length = crate::station::get_platform_length_by_tile(
                 w,
                 self.new_tile,
-                DiagDirection(trackdir_to_exitdir(self.old_td.0)),
+                trackdir_to_exitdir(self.old_td, |ok| w.check(ok)),
             );
             /* how big step we must do to get to the last platform tile? */
             self.tiles_skipped = length.wrapping_sub(1) as i32;
@@ -587,9 +582,10 @@ impl CFollowTrackT {
 
     /// `ForcedReverse` and `TryReverse`'s shared stores for a reversal on `old_tile`,
     /// in the original's order.
-    fn reverse_state(&mut self, exitdir: DiagDirection) {
+    fn reverse_state(&mut self, w: &World<'_>, exitdir: DiagDirection) {
         self.new_tile = self.old_tile;
-        self.new_td_bits = TrackdirBits(trackdir_to_trackdir_bits(reverse_trackdir(self.old_td.0)));
+        let check = |ok| w.check(ok);
+        self.new_td_bits = trackdir_to_trackdir_bits(reverse_trackdir(self.old_td, check), check);
         self.exitdir = exitdir;
         self.tiles_skipped = 0;
         self.is_tunnel = false;
@@ -608,7 +604,7 @@ impl CFollowTrackT {
             });
             if exitdir != self.exitdir {
                 /* reverse */
-                self.reverse_state(exitdir);
+                self.reverse_state(w, exitdir);
                 return true;
             }
         }
@@ -623,7 +619,7 @@ impl CFollowTrackT {
                         == reverse_diag_dir(self.exitdir, |ok| w.check(ok))))
         {
             /* reverse */
-            self.reverse_state(reverse_diag_dir(self.exitdir, |ok| w.check(ok)));
+            self.reverse_state(w, reverse_diag_dir(self.exitdir, |ok| w.check(ok)));
             return true;
         }
 
@@ -639,7 +635,7 @@ impl CFollowTrackT {
             self.new_tile = self.old_tile;
             /* set new trackdir bits to all reachable trackdirs */
             self.query_new_tile_track_status(w, road);
-            self.new_td_bits &= TrackdirBits(diagdir_reaches_trackdirs(self.exitdir.0));
+            self.new_td_bits &= diagdir_reaches_trackdirs(self.exitdir, |ok| w.check(ok));
             if self.new_td_bits != TrackdirBits::TRACKDIR_BIT_NONE {
                 /* we have some trackdirs reachable after reversal */
                 return true;

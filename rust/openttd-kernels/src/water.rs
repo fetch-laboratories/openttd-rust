@@ -359,7 +359,7 @@ impl<'a> World<'a> {
         let mut tracks = (self.r().tracks)(tile).0;
         if is_slope_with_one_corner_raised_raw(slope.0) {
             let corner = (slope.0.trailing_zeros() ^ 2) as usize;
-            let lower = crate::track_func::corner_to_track_bits(corner as u8, |ok| {
+            let lower = crate::track_func::corner_to_track_bits_raw(corner as u8, |ok| {
                 crate::movement::native_assert(self.s, ok);
             });
             let remove = lower & tracks;

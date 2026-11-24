@@ -121,13 +121,11 @@ impl PartialEq<WaterRegionPatchDesc> for WaterRegionDesc {
 
 /// `GetWaterTracks`.
 fn get_water_tracks(movement: &CachedTable<'_>, tile: TileIndex) -> TrackBits {
-    TrackBits(track_status_to_track_bits(
-        movement.get().get_tile_track_status(
-            tile,
-            TransportType::TRANSPORT_WATER,
-            0,
-            DiagDirection::INVALID_DIAGDIR,
-        ),
+    track_status_to_track_bits(movement.get().get_tile_track_status(
+        tile,
+        TransportType::TRANSPORT_WATER,
+        0,
+        DiagDirection::INVALID_DIAGDIR,
     ))
 }
 
@@ -414,9 +412,7 @@ impl WaterRegion {
             let mut increase_label = false;
             while let Some(tile) = tiles_to_check.pop() {
                 crate::witness::hit(crate::witness::WATER_TRACKS);
-                let valid_dirs = TrackdirBits(track_bits_to_trackdir_bits(
-                    get_water_tracks(&movement, tile).0,
-                ));
+                let valid_dirs = track_bits_to_trackdir_bits(get_water_tracks(&movement, tile));
                 if valid_dirs == TrackdirBits::TRACKDIR_BIT_NONE {
                     continue;
                 }

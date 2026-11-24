@@ -87,8 +87,18 @@ impl crate::map_func::World<'_> {
     }
     /// `GetSignalStateByTrackdir`: 1 is `SIGNAL_STATE_GREEN`.
     pub(crate) fn signal_state_by_trackdir(&self, t: u32, trackdir: u8) -> u8 {
-        self.check(crate::track_func::is_valid_trackdir(trackdir));
-        self.check(self.has_signal_on_track(t, crate::track_func::trackdir_to_track(trackdir)));
+        self.check(crate::track_func::is_valid_trackdir(
+            crate::track_type::Trackdir(trackdir),
+        ));
+        self.check(
+            self.has_signal_on_track(
+                t,
+                crate::track_func::trackdir_to_track(crate::track_type::Trackdir(trackdir), |ok| {
+                    self.check(ok);
+                })
+                .0,
+            ),
+        );
         u8::from(
             self.signal_states(t) & crate::signal_func::signal_along_trackdir_raw(trackdir) != 0,
         )
@@ -109,13 +119,17 @@ impl crate::map_func::World<'_> {
     }
     /// `HasSignalOnTrack`.
     pub(crate) fn has_signal_on_track(&self, t: u32, track: u8) -> bool {
-        self.check(crate::track_func::is_valid_track(track));
+        self.check(crate::track_func::is_valid_track(crate::track_type::Track(
+            track,
+        )));
         self.has_signals(t)
             && self.present_signals(t) & crate::signal_func::signal_on_track_raw(track) != 0
     }
     /// `HasSignalOnTrackdir`.
     pub(crate) fn has_signal_on_trackdir(&self, t: u32, trackdir: u8) -> bool {
-        self.check(crate::track_func::is_valid_trackdir(trackdir));
+        self.check(crate::track_func::is_valid_trackdir(
+            crate::track_type::Trackdir(trackdir),
+        ));
         self.has_signals(t)
             && self.present_signals(t) & crate::signal_func::signal_along_trackdir_raw(trackdir)
                 != 0
@@ -142,10 +156,10 @@ pub(crate) fn get_rail_depot_track(
     world: &crate::map_func::World<'_>,
     t: TileIndex,
 ) -> crate::track_type::Track {
-    crate::track_type::Track(crate::track_func::diag_dir_to_diag_track(
-        world.rail_depot_dir(t.0),
+    crate::track_func::diag_dir_to_diag_track(
+        crate::direction_type::DiagDirection(world.rail_depot_dir(t.0)),
         |ok| world.check(ok),
-    ))
+    )
 }
 
 /// Native `RailTileType` with its unchanged uint8 representation.

@@ -48,7 +48,7 @@ use crate::track_func::{
     axis_to_track_bits, combine_track_status, diag_dir_to_diag_track_bits,
     diag_dir_to_diag_trackdir, is_reversing_road_trackdir, track_bits_to_trackdir_bits,
 };
-use crate::track_type::{Track, TrackBits, TrackStatus, TrackdirBits};
+use crate::track_type::{Track, TrackBits, TrackStatus, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
 use crate::tunnelbridge::{TUNNEL_SOUND_FRAME, TUNNEL_VISIBILITY};
 use crate::vehicle::VehicleRef;
@@ -546,10 +546,7 @@ pub(crate) fn get_rail_foundation(
         /* Get higher track */
         let highest_corner =
             get_highest_slope_corner(tileh, || crate::services_assert::not_reached());
-        let higher_track = TrackBits(crate::track_func::corner_to_track_bits(
-            highest_corner.0,
-            check,
-        ));
+        let higher_track = crate::track_func::corner_to_track_bits(highest_corner, check);
 
         /* Only higher track? */
         if bits == higher_track {
@@ -557,7 +554,7 @@ pub(crate) fn get_rail_foundation(
         }
 
         /* Overlap with higher track? */
-        if crate::track_func::tracks_overlap((bits | higher_track).0) {
+        if crate::track_func::tracks_overlap(bits | higher_track) {
             return Foundation::FOUNDATION_INVALID;
         }
 
@@ -753,11 +750,6 @@ const ROAD_TRACKBITS: [TrackBits; 16] = [
     ), // ROAD_X | ROAD_SE
     TrackBits::TRACK_BIT_ALL,   // ROAD_ALL
 ];
-/// `CombineTrackStatus(TrackBitsToTrackdirBits(bits), red_signals)`.
-#[inline]
-const fn track_bits_status(bits: TrackBits, red_signals: TrackdirBits) -> TrackStatus {
-    combine_track_status(track_bits_to_trackdir_bits(bits.0), red_signals.0)
-}
 impl Context<'_> {
     /// `_tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc(tile,
     /// mode, sub_mode, side)`.
@@ -811,7 +803,10 @@ impl Context<'_> {
                 TrackBits::TRACK_BIT_RIGHT => TrackBits::TRACK_BIT_LEFT,
                 _ => crate::services_assert::not_reached(),
             };
-            return track_bits_status(tb, TrackdirBits::TRACKDIR_BIT_NONE);
+            return combine_track_status(
+                track_bits_to_trackdir_bits(tb),
+                TrackdirBits::TRACKDIR_BIT_NONE,
+            );
         }
 
         if mode != TransportType::TRANSPORT_RAIL {
@@ -872,14 +867,14 @@ impl Context<'_> {
                 let dir = DiagDirection(self.world.rail_depot_dir(tile.0));
 
                 if side == DiagDirection::INVALID_DIAGDIR || side == dir {
-                    trackbits = TrackBits(diag_dir_to_diag_track_bits(dir.0, self.check()));
+                    trackbits = diag_dir_to_diag_track_bits(dir, self.check());
                 }
             }
 
             _ => crate::services_assert::not_reached(),
         }
 
-        track_bits_status(trackbits, red_signals)
+        combine_track_status(track_bits_to_trackdir_bits(trackbits), red_signals)
     }
     /// `GetTileTrackStatus_Road`.
     #[allow(clippy::inline_always)]
@@ -897,7 +892,7 @@ impl Context<'_> {
         match mode {
             TransportType::TRANSPORT_RAIL => {
                 if self.world.level_crossing(tile.0) {
-                    trackdirbits = TrackdirBits(track_bits_to_trackdir_bits(
+                    trackdirbits = track_bits_to_trackdir_bits(TrackBits(
                         self.world.crossing_rail_bits(tile.0),
                     ));
                 }
@@ -946,14 +941,13 @@ impl Context<'_> {
                             return 0;
                         }
 
-                        trackdirbits = TrackdirBits(track_bits_to_trackdir_bits(
-                            axis_to_track_bits(axis.0, self.check()),
-                        ));
+                        trackdirbits =
+                            track_bits_to_trackdir_bits(axis_to_track_bits(axis, self.check()));
                         if self.world.crossing_barred(tile.0) {
                             w::hit(w::MOVE_CROSSING_BARRED);
                             red_signals = trackdirbits;
                             if crate::train::train_on_crossing(self.train(), self.shared(), tile) {
-                                return combine_trackdir_status(trackdirbits, red_signals);
+                                return combine_track_status(trackdirbits, red_signals);
                             }
 
                             let mask_red_signal_bits_if_crossing_barred =
@@ -1000,9 +994,9 @@ impl Context<'_> {
                         let dir = DiagDirection(self.world.road_depot_dir(tile.0));
 
                         if side == DiagDirection::INVALID_DIAGDIR || side == dir {
-                            trackdirbits = TrackdirBits(track_bits_to_trackdir_bits(
-                                diag_dir_to_diag_track_bits(dir.0, self.check()),
-                            ));
+                            trackdirbits = track_bits_to_trackdir_bits(
+                                diag_dir_to_diag_track_bits(dir, self.check()),
+                            );
                         }
                     }
                 }
@@ -1010,7 +1004,7 @@ impl Context<'_> {
 
             _ => {}
         }
-        combine_trackdir_status(trackdirbits, red_signals)
+        combine_track_status(trackdirbits, red_signals)
     }
     /// `GetTileTrackStatus_Station`.
     #[allow(clippy::inline_always)]
@@ -1028,10 +1022,10 @@ impl Context<'_> {
         match mode {
             TransportType::TRANSPORT_RAIL => {
                 if self.world.has_station_rail(tile) && !self.world.is_station_tile_blocked(tile) {
-                    trackbits = TrackBits(crate::track_func::track_to_track_bits(
-                        self.world.get_rail_station_track(tile).0,
+                    trackbits = crate::track_func::track_to_track_bits(
+                        self.world.get_rail_station_track(tile),
                         self.check(),
-                    ));
+                    );
                 }
             }
 
@@ -1070,14 +1064,14 @@ impl Context<'_> {
                     if self.world.is_bay_road_stop_tile(tile) {
                         let dir = self.world.get_bay_road_stop_dir(tile);
                         if side == DiagDirection::INVALID_DIAGDIR || dir == side {
-                            trackbits = TrackBits(diag_dir_to_diag_track_bits(dir.0, self.check()));
+                            trackbits = diag_dir_to_diag_track_bits(dir, self.check());
                         }
                     } else {
                         let axis = self.world.get_drive_through_stop_axis(tile);
                         if side == DiagDirection::INVALID_DIAGDIR
                             || axis == diag_dir_to_axis(side, self.check())
                         {
-                            trackbits = TrackBits(axis_to_track_bits(axis.0, self.check()));
+                            trackbits = axis_to_track_bits(axis, self.check());
                         }
                     }
                 }
@@ -1086,7 +1080,10 @@ impl Context<'_> {
             _ => {}
         }
 
-        track_bits_status(trackbits, TrackdirBits::TRACKDIR_BIT_NONE)
+        combine_track_status(
+            track_bits_to_trackdir_bits(trackbits),
+            TrackdirBits::TRACKDIR_BIT_NONE,
+        )
     }
     /// `GetTileTrackStatus_Water`.
     #[allow(clippy::inline_always)]
@@ -1130,17 +1127,14 @@ impl Context<'_> {
             }
             WaterTileType::Lock => {
                 w::hit(w::MOVE_LOCK);
-                TrackBits(diag_dir_to_diag_track_bits(
-                    self.world.lock_direction(tile.0),
+                diag_dir_to_diag_track_bits(
+                    DiagDirection(self.world.lock_direction(tile.0)),
                     self.check(),
-                ))
+                )
             }
             WaterTileType::Depot => {
                 w::hit(w::MOVE_SHIP_DEPOT);
-                TrackBits(axis_to_track_bits(
-                    self.world.ship_depot_axis(tile.0),
-                    self.check(),
-                ))
+                axis_to_track_bits(Axis(self.world.ship_depot_axis(tile.0)), self.check())
             }
             _ => return 0,
         };
@@ -1157,7 +1151,10 @@ impl Context<'_> {
             ts &=
                 !(TrackBits::TRACK_BIT_Y | TrackBits::TRACK_BIT_LEFT | TrackBits::TRACK_BIT_UPPER);
         }
-        track_bits_status(ts, TrackdirBits::TRACKDIR_BIT_NONE)
+        combine_track_status(
+            track_bits_to_trackdir_bits(ts),
+            TrackdirBits::TRACKDIR_BIT_NONE,
+        )
     }
     /// `GetTileTrackStatus_TunnelBridge`.
     #[allow(clippy::inline_always)]
@@ -1182,19 +1179,11 @@ impl Context<'_> {
         if side != DiagDirection::INVALID_DIAGDIR && side != reverse_diag_dir(dir, self.check()) {
             return 0;
         }
-        track_bits_status(
-            TrackBits(diag_dir_to_diag_track_bits(dir.0, self.check())),
+        combine_track_status(
+            track_bits_to_trackdir_bits(diag_dir_to_diag_track_bits(dir, self.check())),
             TrackdirBits::TRACKDIR_BIT_NONE,
         )
     }
-}
-/// `CombineTrackStatus`.
-#[inline]
-const fn combine_trackdir_status(
-    trackdirbits: TrackdirBits,
-    red_signals: TrackdirBits,
-) -> TrackStatus {
-    combine_track_status(trackdirbits.0, red_signals.0)
 }
 /// # Safety
 /// Native tables and map stay live and serialized for the call. No map reference
@@ -1414,7 +1403,7 @@ impl MovementServices {
             let rv = h.road;
             let state = unsafe { crate::road::state(rv) };
             if state < RVSB_IN_ROAD_STOP
-                && !is_reversing_road_trackdir(state, self.check())
+                && !is_reversing_road_trackdir(Trackdir(state), self.check())
                 && unsafe { crate::road::frame(rv) } == 0
                 && World::new(self.shared())
                     .asserted(|m| crate::station_map::is_station_road_stop(m, tile))
@@ -1518,7 +1507,7 @@ impl MovementServices {
                 {
                     /* We're at the tunnel exit ?? */
                     v.set_tile(tile);
-                    t.set_track(TrackBits(diag_dir_to_diag_track_bits(vdir.0, self.check())));
+                    t.set_track(diag_dir_to_diag_track_bits(vdir, self.check()));
                     self.native_assert_call(t.track() != TrackBits::TRACK_BIT_NONE);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT_0 + usize::from(dir.0));
@@ -1557,7 +1546,7 @@ impl MovementServices {
                 {
                     v.set_tile(tile);
                     unsafe {
-                        crate::road::set_state(rv, diag_dir_to_diag_trackdir(vdir.0, self.check()));
+                        crate::road::set_state(rv, diag_dir_to_diag_trackdir(vdir, self.check()).0);
                         crate::road::set_frame(rv, frame);
                     }
                     w::hit(w::MOVE_ROAD_TUNNEL_EXIT);
@@ -1618,10 +1607,8 @@ impl MovementServices {
                 match h.kind {
                     VehicleType::VEH_TRAIN => {
                         if h.train.track() == TrackBits::TRACK_BIT_WORMHOLE {
-                            h.train.set_track(TrackBits(diag_dir_to_diag_track_bits(
-                                vdir.0,
-                                self.check(),
-                            )));
+                            h.train
+                                .set_track(diag_dir_to_diag_track_bits(vdir, self.check()));
                             w::hit(w::MOVE_TRAIN_BRIDGE_EXIT);
                             return VehicleEnterTileStates::from_element(
                                 VehicleEnterTileState::EnteredWormhole,
@@ -1634,7 +1621,7 @@ impl MovementServices {
                             unsafe {
                                 crate::road::set_state(
                                     h.road,
-                                    diag_dir_to_diag_trackdir(vdir.0, self.check()),
+                                    diag_dir_to_diag_trackdir(vdir, self.check()).0,
                                 );
                                 crate::road::set_frame(h.road, 0);
                             }
@@ -1652,7 +1639,7 @@ impl MovementServices {
                             unsafe {
                                 crate::ship_control::set_state(
                                     h.ship,
-                                    TrackBits(diag_dir_to_diag_track_bits(vdir.0, self.check())),
+                                    diag_dir_to_diag_track_bits(vdir, self.check()),
                                 );
                             }
                             w::hit(w::MOVE_SHIP_BRIDGE_EXIT);
@@ -1821,14 +1808,15 @@ pub(crate) fn water_tracks(shared: &Services, tile: u32, side: u8) -> u32 {
 impl MovementServices {
     /// Temporary raw adapter: see [`water_tracks`].
     pub(crate) fn water_tracks(&self, tile: u32, side: u8) -> u32 {
-        u32::from(crate::track_func::track_status_to_track_bits(
-            self.get_tile_track_status(
+        u32::from(
+            crate::track_func::track_status_to_track_bits(self.get_tile_track_status(
                 TileIndex(tile),
                 TransportType::TRANSPORT_WATER,
                 0,
                 DiagDirection(side),
-            ),
-        ))
+            ))
+            .0,
+        )
     }
 }
 

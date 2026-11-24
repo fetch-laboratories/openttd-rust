@@ -23,8 +23,8 @@ use crate::direction_type::DiagDirection;
 use crate::rail_map::is_pbs_signal as is_pbs;
 use crate::tile_type::TileIndex;
 use crate::track_func::{
-    is_diagonal_trackdir as diagonal, trackdir_bits_to_track_bits as trackdir_tracks,
-    tracks_overlap,
+    is_diagonal_trackdir_raw as diagonal, trackdir_bits_to_track_bits_raw as trackdir_tracks,
+    tracks_overlap_raw as tracks_overlap,
 };
 
 use crate::bitmath_func::kill_first_bit;
@@ -294,7 +294,9 @@ fn pieces(bits: u8) -> u32 {
     if tracks_overlap(bits) { n * n } else { n }
 }
 fn reaches(trackdir: u8) -> u16 {
-    crate::track_func::diagdir_reaches_trackdirs(crate::track_func::trackdir_to_exitdir(trackdir))
+    crate::track_func::diagdir_reaches_trackdirs_raw(crate::track_func::trackdir_to_exitdir_raw(
+        trackdir,
+    ))
 }
 /// Saturating unary minus of `OverflowSafeInt64`.
 fn negate(money: i64) -> i64 {
@@ -370,7 +372,7 @@ impl<'a> Ctx<'a> {
         std::ffi::c_uint::from(crate::map_func::World::new(self.shared).present_signals(tile)) as u8
     }
     fn has_track(&self, tile: u32, track: u8) -> bool {
-        crate::track_func::has_track(self.tracks(tile), track, |ok| {
+        crate::track_func::has_track_raw(self.tracks(tile), track, |ok| {
             crate::movement::native_assert(self.shared, ok);
         })
     }
@@ -1502,7 +1504,7 @@ impl<'a> Ctx<'a> {
                     return false;
                 }
                 if (self.shared.tunnel_bridge_direction)(*tile)
-                    != crate::track_func::trackdir_to_exitdir(*trackdir)
+                    != crate::track_func::trackdir_to_exitdir_raw(*trackdir)
                 {
                     return false;
                 }
@@ -1778,7 +1780,7 @@ impl<'a> Ctx<'a> {
                             .map
                             .tile_add_by_diag_dir(
                                 TileIndex(tile),
-                                DiagDirection(crate::track_func::trackdir_to_exitdir(td)),
+                                DiagDirection(crate::track_func::trackdir_to_exitdir_raw(td)),
                                 crate::map_func::native_check,
                             )
                             .0;

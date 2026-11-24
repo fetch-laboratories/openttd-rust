@@ -113,7 +113,7 @@ fn rail_waypoint_tile(s: &Services, tile: u32) -> bool {
 
 /// `ScriptRail::GetRailTracks`.
 fn rail_tracks(s: &Services, tile: u32) -> u32 {
-    use crate::track_func::{axis_to_track, axis_to_track_bits, track_to_track_bits};
+    use crate::track_func::{axis_to_track, axis_to_track_bits_raw, track_to_track_bits_raw};
     if !rail_tile(s, tile) {
         return RAILTRACK_INVALID;
     }
@@ -121,11 +121,11 @@ fn rail_tracks(s: &Services, tile: u32) -> u32 {
     let c = check(&w);
     if rail_station_tile(s, tile) || rail_waypoint_tile(s, tile) {
         let track = axis_to_track(crate::services::Axis(w.station_axis(tile)), c).0;
-        return u32::from(track_to_track_bits(track, c));
+        return u32::from(track_to_track_bits_raw(track, c));
     }
     if level_crossing_tile(s, tile) {
         let axis = crate::direction_func::other_axis_raw(w.crossing_road_axis(tile), c);
-        return u32::from(axis_to_track_bits(axis, c));
+        return u32::from(axis_to_track_bits_raw(axis, c));
     }
     if rail_depot_tile(s, tile) {
         return 0;
@@ -256,7 +256,7 @@ pub extern "C" fn openttd_rust_script_rail_station_direction(s: &Services, tile:
         return RAILTRACK_INVALID;
     }
     let w = world(s);
-    u32::from(crate::track_func::axis_to_track_bits(
+    u32::from(crate::track_func::axis_to_track_bits_raw(
         w.station_axis(tile),
         check(&w),
     ))
@@ -540,7 +540,7 @@ pub extern "C" fn openttd_rust_script_rail_build_track(
     {
         return REFUSED;
     }
-    crate::track_func::find_first_track(rail_track as u8)
+    crate::track_func::find_first_track_raw(rail_track as u8)
 }
 
 /// `ScriptRail::RemoveRailTrack` preconditions after the native company-mode check;
@@ -566,7 +566,7 @@ pub extern "C" fn openttd_rust_script_rail_remove_track(
     {
         return REFUSED;
     }
-    crate::track_func::find_first_track(rail_track as u8)
+    crate::track_func::find_first_track_raw(rail_track as u8)
 }
 
 /// `ScriptRailSignalData` (`_possible_trackdirs`): track, trackdir and signal cycles
@@ -618,7 +618,7 @@ fn signal_entry(s: &Services, tile: u32, front: u32) -> Option<(u8, u8, u8)> {
     POSSIBLE_TRACKDIRS[data_index(&w, tile, front)]
         .into_iter()
         .find(|&(track, _, _)| {
-            u32::from(crate::track_func::track_to_track_bits(track, check(&w)))
+            u32::from(crate::track_func::track_to_track_bits_raw(track, check(&w)))
                 & rail_tracks(s, tile)
                 != 0
         })
@@ -635,7 +635,7 @@ pub extern "C" fn openttd_rust_script_rail_signal_type(s: &Services, tile: u32, 
         return SIGNALTYPE_NONE;
     }
     for (track, trackdir, _) in POSSIBLE_TRACKDIRS[data_index(&w, tile, front)] {
-        if u32::from(crate::track_func::track_to_track_bits(track, check(&w)))
+        if u32::from(crate::track_func::track_to_track_bits_raw(track, check(&w)))
             & rail_tracks(s, tile)
             == 0
         {
@@ -645,7 +645,7 @@ pub extern "C" fn openttd_rust_script_rail_signal_type(s: &Services, tile: u32, 
             continue;
         }
         let mut signal = u32::from(w.signal_type(tile, track));
-        let reverse = crate::track_func::reverse_trackdir(trackdir);
+        let reverse = crate::track_func::reverse_trackdir_raw(trackdir);
         if w.has_signal_on_trackdir(tile, reverse) {
             signal |= SIGNALTYPE_TWOWAY as u32;
         }
