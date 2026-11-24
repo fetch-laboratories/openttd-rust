@@ -3388,7 +3388,7 @@ mod production_policy_tests {
     }
     /// The station catchment table `services`' shared table returns to this thread.
     fn stored_catchment(services: &Services) -> *const crate::station::CatchmentServices {
-        unsafe { ((*services.shared).station_catchment)() }
+        (services.shared().station_catchment)()
     }
     /// Each thread's news tables return the catchment table that thread stored, whose map
     /// statics are its own: another test thread's `news_services` neither replaces it nor
