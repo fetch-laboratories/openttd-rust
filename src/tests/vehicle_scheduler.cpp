@@ -250,7 +250,7 @@ TEST_CASE("Vehicle maintenance - native scalar reads and stores")
 
 /* The native VehiclesOnTile iterator copies its cursor, and the ground check reads the real map
  * height. Retires with the native iterator and the native map height. */
-TEST_CASE("Vehicle occupancy - copied cursors and the native map height")
+TEST_CASE("Vehicle occupancy - native tile links and copied cursors")
 {
 	Map::Allocate(64, 64);
 	REQUIRE(Vehicle::CanAllocateItem(2));
