@@ -39,7 +39,8 @@ pub struct Services {
     pub engine_renew: extern "C" fn(*const OpenTTDCompany) -> bool,
     pub engine_renew_money: extern "C" fn(*const OpenTTDCompany) -> u32,
     pub engine_renew_months: extern "C" fn(*const OpenTTDCompany) -> i16,
-    pub renewal_head: extern "C" fn(*const OpenTTDCompany) -> *mut (),
+    /// `&c->RenewalList()`: the Rust-owned slot holding the company's `EngineRenewList`.
+    pub renewal_head: extern "C" fn(*const OpenTTDCompany) -> *mut *mut (),
     pub name_id: extern "C" fn(*mut OpenTTDCompany) -> u32,
     pub set_name_id: extern "C" fn(*mut OpenTTDCompany, u32) -> (),
     pub name_parts: extern "C" fn(*mut OpenTTDCompany) -> u32,

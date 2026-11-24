@@ -35,7 +35,7 @@ pub(crate) fn engine_replacement_for_company(
     EngineID(unsafe {
         crate::fleet::engine_replacement(
             companies.groups,
-            head.cast::<*mut ()>().read(),
+            head.read(),
             engine.0,
             group.0,
             replace_when_old,
@@ -127,8 +127,8 @@ mod tests {
         /// The company's renewal owner: the Rust-owned slot holding its list head.
         static HEAD: std::cell::Cell<*mut ()> = std::cell::Cell::new(RULES.with(|r| *r));
     }
-    extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut () {
-        HEAD.with(|h| h.as_ptr().cast())
+    extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut *mut () {
+        HEAD.with(std::cell::Cell::as_ptr)
     }
 
     fn lookup(
