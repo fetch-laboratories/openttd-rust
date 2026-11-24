@@ -396,23 +396,33 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Mutex;
 
-    static FAILED_CHECKS: AtomicU32 = AtomicU32::new(0);
+    /// The native assertion's failures and the face variable's reads, in order.
+    static ORDER: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
+    fn order(event: &'static str) {
+        ORDER.lock().unwrap().push(event);
+    }
+    fn take_order() -> Vec<&'static str> {
+        std::mem::take(&mut *ORDER.lock().unwrap())
+    }
+    /// The bound native check, which `assert_with` calls only on a failure.
     extern "C" fn record_failed_check(condition: bool) {
-        if !condition {
-            FAILED_CHECKS.fetch_add(1, Ordering::Relaxed);
-        }
+        assert!(!condition);
+        order("assert fails");
     }
     extern "C" fn length(_: *const FaceVar) -> u8 {
+        order("length");
         3
     }
     extern "C" fn valid_values(_: *const FaceVar) -> u8 {
+        order("valid_values");
         5
     }
 
-    /// `FaceVar::ScaleBits` asserts `val < (1U << length)` before it scales: a value of
-    /// `1 << length` fails the native assertion once, and valid values none.
+    /// `FaceVar::ScaleBits` reads `length`, asserts `val < (1U << length)`, then reads
+    /// `valid_values` and scales: a value of `1 << length` fails the native assertion between
+    /// the two reads, and valid values fail none.
     #[test]
     fn scale_bits_asserts_the_value_fits_its_length() {
         if crate::services_assert::isolate_test_check(
@@ -427,10 +437,12 @@ mod tests {
         let var = std::ptr::NonNull::<FaceVar>::dangling()
             .as_ptr()
             .cast_const();
+        let valid = ["length", "valid_values"];
         assert_eq!(scale_bits(&faces, var, 7), 4);
+        assert_eq!(take_order(), valid);
         assert_eq!(scale_bits(&faces, var, 0), 0);
-        assert_eq!(FAILED_CHECKS.load(Ordering::Relaxed), 0);
+        assert_eq!(take_order(), valid);
         assert_eq!(scale_bits(&faces, var, 8), 5);
-        assert_eq!(FAILED_CHECKS.load(Ordering::Relaxed), 1);
+        assert_eq!(take_order(), ["length", "assert fails", "valid_values"]);
     }
 }

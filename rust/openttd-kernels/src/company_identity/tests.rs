@@ -469,7 +469,15 @@ fn capabilities(
     leak(capabilities)
 }
 unsafe extern "C" fn no_object(_: u32) -> crate::objects::Next {
-    trace("UpdateObjectColours");
+    // The vehicles' cache bits when object recolouring begins.
+    let valid = CACHES.with(|c| {
+        c.borrow()
+            .iter()
+            .map(|cache| cache.valid().to_string())
+            .collect::<Vec<_>>()
+            .join(" ")
+    });
+    trace(format!("UpdateObjectColours caches {valid}"));
     crate::objects::Next {
         object: std::ptr::null_mut(),
         id: 0,
@@ -482,6 +490,9 @@ extern "C" fn object_services() -> *const crate::objects::ObjectServices {
     objects.next = no_object;
     leak(objects)
 }
+/// Every `NewGRFCache` variable valid: `(1 << NCVV_END) - 1`.
+const ALL_VALID: u8 = (1 << crate::vehicle_base::NCVV_END) - 1;
+/// Fixture vehicles with the given owners, each with a fully valid `NewGRF` cache.
 fn vehicles(owners: &[CompanyID]) {
     let records = owners
         .iter()
@@ -498,7 +509,7 @@ fn vehicles(owners: &[CompanyID]) {
     VEHICLES.with(|v| *v.borrow_mut() = records);
     CACHES.with(|c| {
         *c.borrow_mut() = (0..owners.len())
-            .map(|_| crate::newgrf_vehicle::Cache::default())
+            .map(|_| crate::newgrf_vehicle::Cache::with_valid(ALL_VALID))
             .collect();
     });
 }
@@ -559,7 +570,7 @@ fn set_company_colour_invalidates_in_order() {
             ),
             "InvalidateNewGRFCache 1".to_owned(),
             "InvalidateNewGRFCache 2".to_owned(),
-            "UpdateObjectColours".to_owned(),
+            format!("UpdateObjectColours caches {ALL_VALID} 0 0"),
         ]
     );
     // The default scheme's primary colour; the colour of a scheme without its own follows.
