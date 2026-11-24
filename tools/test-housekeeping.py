@@ -370,7 +370,9 @@ class HousekeepingTests(unittest.TestCase):
         self.assertEqual(item.branch, "closed")
         return tree, item
 
-    def after_checks(self, action: Callable[[], None]) -> object:
+    def after_checks(
+        self, action: Callable[[], object]
+    ) -> contextlib.AbstractContextManager[object]:
         """Run ACTION after removal's last check, before the worktree goes."""
         real = housekeeping.changed_refusal
 
