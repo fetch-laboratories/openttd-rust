@@ -537,7 +537,7 @@ impl CommandServices {
 /// holds, from its setup to the end of its cleanup, since the hash is process-wide.
 #[cfg(test)]
 #[allow(unsafe_code)]
-mod tests {
+mod index_tests {
     use super::*;
     use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
     use crate::services::Services;
@@ -640,7 +640,7 @@ mod tests {
     #[test]
     fn near_advance_on_an_exhausted_cursor_fails_the_native_assertion() {
         if crate::services_assert::isolate_test_exit(
-            "vehicle::occupancy::tests::near_advance_on_an_exhausted_cursor_fails_the_native_assertion",
+            "vehicle::occupancy::index_tests::near_advance_on_an_exhausted_cursor_fails_the_native_assertion",
         ) {
             return;
         }
