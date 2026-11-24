@@ -3,3 +3,4 @@
 # Each leaves with its fixture: export | fixture | issue that retires the fixture.
 openttd_rust_road_yapf_choose | src/tests/road_yapf.cpp | #725
 openttd_rust_road_yapf_depot | src/tests/road_yapf.cpp | #725
+openttd_rust_train_reservation_check_next | src/tests/train.cpp | #725

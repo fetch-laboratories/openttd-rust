@@ -11,6 +11,7 @@
 #include "service_defaults.hpp"
 #include <stdint.h>
 #include "train_ffi.h"
+#include "signal_ffi.h"
 #include "vehicle_ffi.h"
 #include "orders_ffi.h"
 struct OpenTTDTrainReservationLeaves;
