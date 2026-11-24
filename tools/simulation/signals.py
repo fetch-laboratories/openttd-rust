@@ -297,7 +297,7 @@ def boundary_profile(counts: dict[str, int] | None) -> dict[str, Any] | None:
         "returned_bytes_per_update": copied / counts["updates"]
         if counts["updates"]
         else None,
-        "scope": "ordinary facade entries, signal world services, native signal context acquisitions, direct occupancy GetTrack reads; returned typed records/context/scalars include padding; excludes call arguments, diagnostic snapshots/probe and witness reporting; counters disabled during timing",
+        "scope": "ordinary facade entries, signal world services, context acquisitions through the native GetRustSignalContext getter (signal::context reads the command tables uncounted), direct occupancy GetTrack reads; returned typed records/context/scalars include padding; excludes call arguments, diagnostic snapshots/probe and witness reporting; counters disabled during timing",
     }
 
 

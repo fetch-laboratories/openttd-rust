@@ -1647,6 +1647,7 @@ mod tests {
     thread_local! {
         static TRAIN: Cell<Handle> = const { Cell::new(Handle::NONE) };
         static PBS_TABLE: Cell<*const PbsServices> = const { Cell::new(std::ptr::null()) };
+        static TILES: Cell<*const BaseTileLayout> = const { Cell::new(std::ptr::null()) };
     }
     fn current<'a>() -> &'a mut Mock {
         // SAFETY: The installing test keeps this mock live; callbacks end each access.
@@ -1671,8 +1672,24 @@ mod tests {
     extern "C" fn no_signal(_: u32, _: u8) -> bool {
         false
     }
-    extern "C" fn no_reservation(_: u32) -> TrackBits {
-        TrackBits::TRACK_BIT_NONE
+    /// `GetRailReservationTrackBits` over the line's map: `m2` bits 8 to 10 hold the
+    /// reserved track plus one, and bit 11 the opposite track.
+    extern "C" fn rail_reservation(tile: u32) -> TrackBits {
+        // SAFETY: The installing test keeps its line's map live.
+        let m2 = unsafe { (*TILES.get().add(tile as usize)).m2 };
+        let track_b = (m2 >> 8) & 7;
+        if track_b == 0 {
+            return TrackBits::TRACK_BIT_NONE;
+        }
+        let track = track_b - 1;
+        TrackBits(
+            (1 << track)
+                | if m2 & (1 << 11) != 0 {
+                    1 << (track ^ 1)
+                } else {
+                    0
+                },
+        )
     }
     extern "C" fn no_show() -> bool {
         false
@@ -1705,7 +1722,7 @@ mod tests {
 
     /// A straight line of rail north-east of the train: the train's tile is plain rail on
     /// `TRACK_X`, and the four tiles ahead carry a two-way path signal on `TRACK_X` facing
-    /// south-west, green, and no reservation.
+    /// south-west, green. No track is reserved until `reserve` reserves one.
     struct Line {
         shared: Services,
         rail: RailMapServices,
@@ -1726,7 +1743,7 @@ mod tests {
                     ..crate::services::fixture(std::ptr::null_mut(), no_random)
                 },
                 rail: RailMapServices {
-                    rail_reservation: no_reservation,
+                    rail_reservation,
                     set_signal_state: set_signal,
                     ..RAIL_MAP
                 },
@@ -1813,18 +1830,48 @@ mod tests {
             );
             TRAIN.set(train);
             PBS_TABLE.set(&raw const self.pbs);
+            TILES.set(self.base.as_ptr());
+        }
+        /// Reserve `TRACK_X` on the tile `ordinal` steps ahead of the train.
+        fn reserve(&mut self, ordinal: u32) {
+            self.base[index(ordinal).0 as usize].m2 |= u16::from(Track::TRACK_X.0 + 1) << 8;
         }
         fn game(&self) -> Game<'_> {
             Game::new(&self.train, &self.shared)
         }
     }
 
-    /// `ExtendTrainReservation` reserves each tile from the end of the train's reservation,
-    /// turning each opposing green path signal red, until a reservation fails; it then
-    /// unreserves only the tracks it reserved, from the origin, and turns the signals green
-    /// again in the order it turned them red.
+    /// `ExtendTrainReservation` follows the train's reservation to its end, then reserves
+    /// each tile from there, turning each opposing green path signal red, until a
+    /// reservation fails; it then unreserves only the tracks it reserved, from the end of
+    /// the train's reservation, and turns the signals green again in the order it turned
+    /// them red. Without a reservation it starts on the train's own tile.
     #[test]
     fn controller_extension_rolls_back_only_new_tracks_and_restores_signal_order() {
+        /* The train holds its own tile and the next one. */
+        let mut m = Mock::new(0);
+        let h = m.handle();
+        let mut line = Line::new();
+        line.reserve(0);
+        line.reserve(1);
+        line.install(h);
+        let mut tracks = TrackBits::TRACK_BIT_NONE;
+        let mut dir = DiagDirection::INVALID_DIAGDIR;
+        let result = extend_train_reservation(&line.game(), h, &mut tracks, &mut dir);
+        assert_eq!(result.tile, TileIndex::INVALID);
+        assert_eq!(
+            m.log,
+            vec![
+                ("try", 2, 0),
+                ("signal", 2, 0),
+                ("mark", 2, 0),
+                ("try", 3, 0),
+                ("unreserve", 2, 0),
+                ("signal", 2, 1)
+            ]
+        );
+
+        /* No reservation: the extension starts on the train's tile. */
         let mut m = Mock::new(0);
         let h = m.handle();
         let mut line = Line::new();
