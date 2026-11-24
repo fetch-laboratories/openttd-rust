@@ -400,8 +400,23 @@ def label_request(repository: str, pr: int, pull: dict, head: str) -> None:
     gh("pr", "edit", str(pr), "--repo", repository, "--add-label", "ci:full")
 
 
-# An `origin` URL's GitHub repository, as `owner/name`.
-GITHUB_REMOTE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/*$")
+# An `origin` URL's GitHub repository, as `owner/name`, on github.com itself.
+GITHUB_REMOTE = re.compile(
+    r"^(?:https://(?:[^@/]+@)?github\.com/|(?:ssh://)?git@github\.com[:/])"
+    r"([^/]+/[^/]+?)(?:\.git)?/*$"
+)
+
+
+class HeadRepository(TypedDict):
+    full_name: str
+
+
+class PullHead(TypedDict):
+    """The fields of a PR's `head` that name its commit, branch and repository."""
+
+    sha: str
+    ref: NotRequired[str]
+    repo: NotRequired[HeadRepository | None]
 
 
 def checkout_git(*arguments: str) -> str:
@@ -412,28 +427,31 @@ def checkout_git(*arguments: str) -> str:
     return found.stdout.strip() if found.returncode == 0 else ""
 
 
-def checkout_head(pr: int, pull: dict) -> str | None:
+def checkout_head(pr: int, head: PullHead) -> str | None:
     """This checkout's HEAD when the checkout is the PR's own, else None.
 
-    It is the PR's when its `origin` is the PR's head repository and its branch,
-    or that branch's upstream, is the PR's head branch. There a tracking ref that
-    is not at HEAD, ahead or behind, is refused at once rather than waited for.
+    It is the PR's when its `origin` is the PR's head repository on github.com
+    and its branch, or that branch's upstream on origin, is the PR's head
+    branch. There a tracking ref that is not at HEAD, ahead or behind, is
+    refused at once rather than waited for.
     """
-    branch = pull["head"].get("ref")
-    repository = (pull["head"].get("repo") or {}).get("full_name")
+    branch = head.get("ref")
+    repository = (head.get("repo") or {"full_name": ""})["full_name"]
     local = checkout_git("symbolic-ref", "--quiet", "--short", "HEAD")
     if not branch or not repository or not local:
         return None
-    upstream = checkout_git("rev-parse", "--abbrev-ref", f"{local}@{{upstream}}")
-    remote = GITHUB_REMOTE.search(checkout_git("remote", "get-url", "origin"))
-    if branch not in (local, upstream.removeprefix("origin/")) or not (
+    tracking_ref = f"refs/remotes/origin/{branch}"
+    # Fully qualified, so only an upstream on origin can name the PR's branch.
+    upstream = checkout_git(
+        "rev-parse", "--symbolic-full-name", f"{local}@{{upstream}}"
+    )
+    remote = GITHUB_REMOTE.match(checkout_git("remote", "get-url", "origin"))
+    if (branch != local and upstream != tracking_ref) or not (
         remote and remote[1].lower() == repository.lower()
     ):
         return None
     commit = checkout_git("rev-parse", "HEAD")
-    tracking = checkout_git(
-        "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"
-    )
+    tracking = checkout_git("rev-parse", "--verify", "--quiet", tracking_ref)
     if tracking != commit:
         raise ValueError(
             f"This checkout is PR #{pr}'s branch {branch} at {commit}, but "
@@ -455,7 +473,7 @@ def requestable(repository: str, args: argparse.Namespace) -> tuple[dict, str] |
     that still shows the previous head waits for the push to show.
     """
     pull = api(repository, f"pulls/{args.pr}")
-    expected = args.head or checkout_head(args.pr, pull)
+    expected = args.head or checkout_head(args.pr, cast(PullHead, pull["head"]))
     if expected:
         pull = pushed_head(repository, args.pr, pull, expected)
     head = expected_head(pull, expected)
@@ -468,7 +486,15 @@ def requestable(repository: str, args: argparse.Namespace) -> tuple[dict, str] |
         return None
     if args.bootstrap and args.profile != "full":
         raise ValueError("Bootstrap label requests only support --profile full")
-    return await_mergeable(repository, args.pr, pull, head), head
+    try:
+        return await_mergeable(repository, args.pr, pull, head), head
+    except HeadMoved as moved:
+        if expected and not args.head:
+            # The checkout's head pins the request as --head would: no retry.
+            raise ValueError(
+                f"{moved}; this checkout's HEAD {expected} was the head to request"
+            ) from moved
+        raise
 
 
 def request(args: argparse.Namespace) -> Path | None:

@@ -7,6 +7,7 @@ import itertools
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -2980,10 +2981,11 @@ class RequestPathTests(unittest.TestCase):
         self.git = git
         return head, rev(["git", "rev-parse", "HEAD~1"]).strip()
 
-    def pull(self, sha: str, repository: str = "example/fork") -> dict:
-        return dict(
-            PULL, head={"sha": sha, "ref": "feature", "repo": {"full_name": repository}}
-        )
+    def pull(
+        self, sha: str, repository: str = "example/fork", **fields: object
+    ) -> dict:
+        head = ci.PullHead(sha=sha, ref="feature", repo={"full_name": repository})
+        return dict(PULL, head=head, **fields)
 
     def test_the_prs_checkout_waits_for_its_pushed_head(self) -> None:
         # The two cases of 2026-11-24: the first read still shows the old head.
@@ -3029,10 +3031,42 @@ class RequestPathTests(unittest.TestCase):
                 self.assertEqual((self.calls, self.sleeps), ([], 0))
 
     def test_a_same_named_branch_of_another_repository_reads_github(self) -> None:
-        local, previous = self.checkout(url="git@github.com:example/other.git")
-        path, calls, _, sleeps = self.request(self.pull(previous))
+        for url in (
+            "git@github.com:example/other.git",
+            "https://mirror-github.com/example/fork.git",
+        ):
+            with self.subTest(url=url):
+                shutil.rmtree(self.directory / "checkout", ignore_errors=True)
+                local, previous = self.checkout(url=url)
+                path, calls, _, sleeps = self.request(self.pull(previous))
+                self.assertEqual(sleeps, 0)
+                self.assertIn(f"head={previous}", calls[0])
+
+    def test_an_upstream_on_another_remote_does_not_name_the_branch(self) -> None:
+        local, previous = self.checkout(branch="work")
+        self.git(
+            ["git", "remote", "add", "fork", "https://github.com/example/fork.git"]
+        )
+        self.git(["git", "update-ref", "refs/remotes/fork/feature", local])
+        self.git(["git", "config", "branch.work.remote", "fork"])
+        self.git(["git", "config", "branch.work.merge", "refs/heads/feature"])
+        path, calls, output, sleeps = self.request(self.pull(previous))
         self.assertEqual(sleeps, 0)
         self.assertIn(f"head={previous}", calls[0])
+        # On origin the same upstream names the PR's branch.
+        self.git(["git", "config", "branch.work.remote", "origin"])
+        self.git(["git", "update-ref", "refs/remotes/origin/feature", local])
+        path, calls, output, sleeps = self.request(self.pull(local))
+        self.assertIn(f"Requesting for this checkout's HEAD {local}", output)
+
+    def test_the_checkout_pin_is_not_retried_on_another_head(self) -> None:
+        local, previous = self.checkout()
+        pending = self.pull(local, mergeable=None, merge_commit_sha=None)
+        with self.assertRaisesRegex(
+            ValueError, f"checkout's HEAD {local} was the head"
+        ):
+            self.request(pending, self.pull(previous))
+        self.assertEqual(self.calls, [])
 
     def test_an_explicit_head_wins_over_the_checkout(self) -> None:
         local, previous = self.checkout()
