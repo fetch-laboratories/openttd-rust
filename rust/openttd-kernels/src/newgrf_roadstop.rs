@@ -933,7 +933,7 @@ pub(crate) fn get_build_cost(
     category: crate::economy_type::Price,
 ) -> i64 {
     let cost = (s.road_spec_build_cost)(spec, category.0);
-    crate::economy_func::get_price(
+    crate::economy_func::get_price_raw(
         u32::from(category.0),
         u32::from(cost.multiplier),
         cost.shift,
@@ -950,7 +950,7 @@ pub(crate) fn get_clear_cost(
     category: crate::economy_type::Price,
 ) -> i64 {
     let cost = (s.road_spec_clear_cost)(spec, category.0);
-    crate::economy_func::get_price(
+    crate::economy_func::get_price_raw(
         u32::from(category.0),
         u32::from(cost.multiplier),
         cost.shift,

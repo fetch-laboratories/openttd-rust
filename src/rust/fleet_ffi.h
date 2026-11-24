@@ -22,9 +22,11 @@ struct OpenTTDSharedServices;
  * caller-owned stack CommandCost objects with their original move and AddCost behavior. */
 struct OpenTTDVehicle;
 struct OpenTTDVehicleServices;
+/* Group::Iterate(from)'s next step: the group's Rust record and its index; UINT32_MAX and null after the last. */
+struct OpenTTDFleetNextGroup { void *group; uint32_t index; };
 struct OpenTTDFleetGroupServices {
 	void * (*group)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(group);
-	uint32_t (*next_group)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_group);
+	OpenTTDFleetNextGroup (*next_group)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_group);
 	uint32_t (*next_company)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_company);
 	void * (*vehicle)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(vehicle);
 	const OpenTTDVehicleServices *vehicles;

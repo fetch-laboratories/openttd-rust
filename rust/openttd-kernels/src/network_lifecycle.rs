@@ -476,15 +476,12 @@ pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionSe
             ClientID::CLIENT_ID_SERVER,
         );
         if !company.is_null() && !info.is_null() {
-            (s.set_info_company)(
-                info.as_ptr(),
-                (company_services.identity.company_id)(company).0,
-            );
+            (s.set_info_company)(info.as_ptr(), (company_services.identity.index)(company).0);
             /*
              * If the company has not been named yet, the company was just started.
              * Otherwise it would have gotten a name already, so announce it as a new company.
              */
-            if (company_services.identity.name_id)(company) == STR_SV_UNNAMED.0
+            if (company_services.identity.name_1)(company) == STR_SV_UNNAMED
                 && (company_services.identity.name)(company).size == 0
             {
                 // SAFETY: `info` is the server's own non-null pool record.

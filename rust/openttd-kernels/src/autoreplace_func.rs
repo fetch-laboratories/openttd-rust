@@ -77,11 +77,7 @@ mod tests {
             owner: 0,
             vehicle_type: 0,
             flags,
-            livery: Livery {
-                in_use: 0,
-                colour1: 0,
-                colour2: 0,
-            },
+            livery: Livery::default(),
             parent: GroupID::INVALID.0,
             number: 0,
         })))

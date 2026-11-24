@@ -25,12 +25,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.aircraft = &GetRustAircraftLeaves(),
 		.ship = &GetRustShipServices(),
 		.road_ground = &GetRustGroundServices<RoadVehicle>(),
-		.prices = {
-			.train = PR_BUILD_VEHICLE_TRAIN, .wagon = PR_BUILD_VEHICLE_WAGON,
-			.road = PR_BUILD_VEHICLE_ROAD, .ship = PR_BUILD_VEHICLE_SHIP, .aircraft = PR_BUILD_VEHICLE_AIRCRAFT,
-			.train_run = EXPENSES_TRAIN_RUN, .road_run = EXPENSES_ROADVEH_RUN,
-			.ship_run = EXPENSES_SHIP_RUN, .aircraft_run = EXPENSES_AIRCRAFT_RUN,
-		},
 		.engine = RustEngineByID,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.cargo_kind = VehicleRefitCargoKind,

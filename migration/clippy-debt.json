@@ -104,21 +104,6 @@
     "rust/openttd-kernels/src/company.rs | fn service_interval_from | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/company_identity.rs | fn get_engine_livery_scheme | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1,
-      1,
-      1,
-      1,
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/company_manager_face.rs | fn openttd_rust_face_scale_bits | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/company_manager_face.rs | fn set_company_manager_face_style | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
     "rust/openttd-kernels/src/depot_map.rs | impl crate : : map_func : : World < ' _ >::fn depot::mod e | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],

@@ -38,7 +38,9 @@ pub fn chance16r(shared: &crate::services::Services, a: u32, b: u32, r: &mut u32
 }
 
 /// `Randomizer`: a local pseudo random number generator, independent of the shared
-/// random streams.
+/// random streams. It has the native layout, so Rust draws in place from a native
+/// randomizer such as `_random`.
+#[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Randomizer {
     /// The state of the randomizer.
@@ -61,4 +63,9 @@ impl Randomizer {
         self.state[0] = seed;
         self.state[1] = seed;
     }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "Randomizer" ["company_economy"] => Randomizer { state, };
 }

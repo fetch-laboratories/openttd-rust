@@ -347,6 +347,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.smoke_amount = &_settings_game.vehicle.smoke_amount,
 	.starting_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour),
 	.station_noise = &_settings_game.economy.station_noise_level,
+	.town_cargo_scale = &_settings_game.economy.town_cargo_scale,
 	.town_council_tolerance = &_settings_game.difficulty.town_council_tolerance,
 	.town_growth_rate = &_settings_game.economy.town_growth_rate,
 	.train_acceleration_model = &_settings_game.vehicle.train_acceleration_model,
@@ -963,6 +964,7 @@ static const OpenTTDNewsServices _rust_news_services{
 static_assert(ScriptEvent::ET_SUBSIDY_OFFER == 2 && ScriptEvent::ET_SUBSIDY_OFFER_EXPIRED == 3 && ScriptEvent::ET_SUBSIDY_AWARDED == 4 && ScriptEvent::ET_SUBSIDY_EXPIRED == 5);
 static_assert(ScriptEvent::ET_VEHICLE_CRASHED == 12 && ScriptEvent::ET_VEHICLE_WAITING_IN_DEPOT == 14 && ScriptEvent::ET_INDUSTRY_OPEN == 16 && ScriptEvent::ET_INDUSTRY_CLOSE == 17 && ScriptEvent::ET_STATION_FIRST_VEHICLE == 19);
 static_assert(ScriptEvent::ET_TOWN_FOUNDED == 22 && ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR == 23 && ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS == 27 && ScriptEvent::ET_ROAD_RECONSTRUCTION == 28);
+static_assert(ScriptEvent::ET_COMPANY_RENAMED == 33 && ScriptEvent::ET_PRESIDENT_RENAMED == 34);
 static_assert(ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING == 1 && ScriptEventVehicleCrashed::CRASH_PLANE_LANDING == 3 && ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT == 4);
 
 /** Construct the native event a Rust record names: each case only constructs its class. */
@@ -982,6 +984,8 @@ static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept
 		case ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR: return new ScriptEventAircraftDestTooFar(VehicleID{e.vehicle});
 		case ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS: return new ScriptEventExclusiveTransportRights(CompanyID{e.company}, TownID{e.town});
 		case ScriptEvent::ET_ROAD_RECONSTRUCTION: return new ScriptEventRoadReconstruction(CompanyID{e.company}, TownID{e.town});
+		case ScriptEvent::ET_COMPANY_RENAMED: return new ScriptEventCompanyRenamed(CompanyID{e.company}, std::string(reinterpret_cast<const char *>(e.text), e.text_length));
+		case ScriptEvent::ET_PRESIDENT_RENAMED: return new ScriptEventPresidentRenamed(CompanyID{e.company}, std::string(reinterpret_cast<const char *>(e.text), e.text_length));
 		default: NOT_REACHED();
 	}
 }
@@ -1000,6 +1004,7 @@ static_assert(WC_STATION_LIST == 40 && WC_TRAINS_LIST == 41 && WC_ROADVEH_LIST =
 static_assert(WC_VEHICLE_VIEW == 46 && WC_STATION_VIEW == 47 && WC_VEHICLE_DEPOT == 48 && WC_INDUSTRY_VIEW == 50 && WC_COMPANY == 51 && WC_BUILD_VEHICLE == 54);
 static_assert(WC_MAIN_TOOLBAR == 1 && WC_BUILD_INDUSTRY == 62 && WC_CLIENT_LIST == 68 && WC_NETWORK_STATUS_WINDOW == 69 && WC_SEND_NETWORK_MSG == 72 && WC_COMPANY_LEAGUE == 81);
 static_assert(WC_INDUSTRY_PRODUCTION == 84 && WC_TOWN_CARGO_GRAPH == 85 && WC_ENGINE_PREVIEW == 88 && WC_GAME_OPTIONS == 91 && WN_NETWORK_STATUS_WINDOW_JOIN == 0);
+static_assert(WC_SMALLMAP == 8 && WC_INCOME_GRAPH == 76 && WC_OPERATING_PROFIT == 77 && WC_DELIVERED_CARGO == 78 && WC_PERFORMANCE_HISTORY == 79 && WC_COMPANY_VALUE == 80 && WC_LINKGRAPH_LEGEND == 102);
 static_assert(std::is_same_v<WidgetID, int32_t> && std::is_same_v<std::underlying_type_t<WindowClass>, uint16_t> && std::is_same_v<std::underlying_type_t<WindowNumberEnum>, uint8_t>);
 static_assert(TDIWD_POPULATION_CHANGE == 1 && TDIWD_FORCE_RESORT == 2);
 static_assert(VIWD_CONSIST_CHANGED == -3);
