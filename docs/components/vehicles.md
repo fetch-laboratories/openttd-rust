@@ -149,7 +149,7 @@
 - C++ keeps: shell/pool allocation, `vcache` behind the record's `visual` link, parsed specs, `IsDepotTile` (a shared slot, since `IsHangarTile` reads the airport specification), the NewGRF error message, rendering, viewport and sound. `openttd_rust_visual_update` and `openttd_rust_visual_show` remain only for `tools/simulation/fleet-console.cpp` (#656).
 - Checks: `effects-emission`, `effects-emission-reload` and `effects-emission-train` through the fleet harness; the ABI road probe (`road.inc`) for emission's call order inside a road tick; `vehicle_effect::tests` for the gate's single maximum-speed query and the power-change error; `vehicle_base::record_tests` for `IsPrimaryVehicle`.
 - Limits: Gaps remain in external GRFs, pool exhaustion, historical saves, audible output, and GUI scheduling (#156).
-- PRs: #468; file pass #1027 (part 2).
+- PRs: #468; file pass #1051 (#1027 part 2).
 
 ## Tile movement dispatch (#371)
 
