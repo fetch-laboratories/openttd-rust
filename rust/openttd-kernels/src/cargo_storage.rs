@@ -922,7 +922,11 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_keep(l: *mut List) {
 /// `l` is a live list; the write ends before the caller's next callback.
 pub(crate) unsafe fn keep_all(l: *mut List) {
     unsafe {
-        (*l).fields.action_counts = [0, 0, (*l).fields.count, 0];
+        let counts = &raw mut (*l).fields.action_counts;
+        (*counts)[MoveToAction::MTA_DELIVER.0 as usize] = 0;
+        (*counts)[MoveToAction::MTA_TRANSFER.0 as usize] = 0;
+        (*counts)[MoveToAction::MTA_LOAD.0 as usize] = 0;
+        (*counts)[MoveToAction::MTA_KEEP.0 as usize] = (*l).fields.count;
     }
 }
 
@@ -1577,8 +1581,7 @@ pub(crate) unsafe fn vehicle_return(
     next: crate::station_type::StationID,
     current_tile: TileIndex,
 ) -> u32 {
-    let max_move =
-        unsafe { fields(src) }.action_counts[MoveToAction::MTA_LOAD.0 as usize].min(max_move);
+    let max_move = unsafe { action_count(src, MoveToAction::MTA_LOAD) }.min(max_move);
     let mut remaining = max_move;
     unsafe {
         walk(
