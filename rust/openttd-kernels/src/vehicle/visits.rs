@@ -1349,22 +1349,37 @@ fn depot_refit_result(
     }
 }
 
-macro_rules! visit_entry {
-    ($(#[$doc:meta])* $name:ident($($arg:ident: $ty:ty),*) => $body:expr) => {
-        $(#[$doc])*
-        /// # Safety
-        /// `v` is a live front vehicle; `s` is the static production table.
-        #[allow(unsafe_code)]
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $name(v: VehicleRef, $($arg: $ty,)* s: *const Services) {
-            // SAFETY: The caller's contract.
-            $body(v, $($arg,)* unsafe { &*s });
-        }
-    };
+/// # Safety
+/// `v` is a live front vehicle at a station; `s` is the static production table.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_visit_leave_station(v: VehicleRef, s: *const Services) {
+    // SAFETY: The caller's contract.
+    leave_station(v, unsafe { &*s });
 }
-visit_entry!(openttd_rust_visit_leave_station() => leave_station);
-visit_entry!(openttd_rust_visit_enter_depot() => enter_depot);
-visit_entry!(openttd_rust_visit_cancel_reservation(next: u16, st: *mut Station) => |v, next, st, s| cancel_reservation(v, StationID(next), st, s));
+
+/// # Safety
+/// `v` is a live front vehicle in a depot; `s` is the static production table.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_visit_enter_depot(v: VehicleRef, s: *const Services) {
+    // SAFETY: The caller's contract.
+    enter_depot(v, unsafe { &*s });
+}
+
+/// # Safety
+/// `v` is a live front vehicle; `st` is a live station; `s` is the static production table.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_visit_cancel_reservation(
+    v: VehicleRef,
+    next: u16,
+    st: *mut Station,
+    s: *const Services,
+) {
+    // SAFETY: The caller's contract.
+    cancel_reservation(v, StationID(next), st, unsafe { &*s });
+}
 
 crate::abi::layouts! {
     fn abi_layout;
