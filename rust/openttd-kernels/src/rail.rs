@@ -215,23 +215,16 @@ impl World<'_> {
     pub(crate) fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
         match self.kind(tile) {
             TileType::MP_RAILWAY => return self.get_rail_type(tile),
-            TileType::MP_ROAD => {
-                /* rail/road crossing */
-                if self.level_crossing(tile.0) {
-                    return self.get_rail_type(tile);
-                }
+            /* rail/road crossing */
+            TileType::MP_ROAD if self.level_crossing(tile.0) => return self.get_rail_type(tile),
+            TileType::MP_STATION if self.has_station_rail(tile) => {
+                return self.get_rail_type(tile);
             }
-            TileType::MP_STATION => {
-                if self.has_station_rail(tile) {
-                    return self.get_rail_type(tile);
-                }
-            }
-            TileType::MP_TUNNELBRIDGE => {
+            TileType::MP_TUNNELBRIDGE
                 if TransportType(self.tunnel_bridge_transport(tile.0))
-                    == TransportType::TRANSPORT_RAIL
-                {
-                    return self.get_rail_type(tile);
-                }
+                    == TransportType::TRANSPORT_RAIL =>
+            {
+                return self.get_rail_type(tile);
             }
             _ => {}
         }
@@ -345,14 +338,15 @@ pub(crate) fn get_company_rail_types(
         // SAFETY: The availability table names the process-lifetime shared table.
         let climate = unsafe { (&*s.shared).settings().climate.read() };
         // SAFETY: `next` resolved this live engine shell; the reads end before any leaf.
-        if engine.climate(climate) && unsafe { company_available(e, company.0) } {
-            if engine.rail_kind() != RailVehicleTypes::WAGON {
-                rts = rts.with(engine_rail_types(
-                    s,
-                    RailTypes(engine.railtypes()),
-                    introduces,
-                ));
-            }
+        if engine.climate(climate)
+            && unsafe { company_available(e, company.0) }
+            && engine.rail_kind() != RailVehicleTypes::WAGON
+        {
+            rts = rts.with(engine_rail_types(
+                s,
+                RailTypes(engine.railtypes()),
+                introduces,
+            ));
         }
     }
 
@@ -475,7 +469,7 @@ mod tests {
         static TYPES: RefCell<Vec<Info>> = RefCell::new(vec![Info::default(); 64]);
         /// Each `(rail type, member)` read, in order; member 0 is `GetRailTypeInfo`.
         static READS: RefCell<Vec<(u8, char)>> = const { RefCell::new(Vec::new()) };
-        static ENGINES: RefCell<Vec<Box<Lifecycle>>> = const { RefCell::new(Vec::new()) };
+        static ENGINES: RefCell<Vec<Lifecycle>> = const { RefCell::new(Vec::new()) };
     }
 
     /// The fixture record of the rail type the handle encodes as its address.
@@ -512,7 +506,7 @@ mod tests {
             let engines = e.borrow();
             match engines.get(from as usize) {
                 Some(record) => {
-                    let record: *const Lifecycle = &raw const **record;
+                    let record: *const Lifecycle = &raw const *record;
                     EngineRef {
                         shell: record,
                         state: record.cast_mut(),
@@ -536,13 +530,13 @@ mod tests {
     /// The shared table over the fixture rail types, and an availability table over it and
     /// the fixture engines, in the temperate climate.
     fn tables(types: &[(u8, Info)]) -> &'static Services {
+        static TEMPERATE: u8 = 0;
         TYPES.with(|t| {
             let mut t = t.borrow_mut();
             for &(rt, info) in types {
                 t[usize::from(rt)] = info;
             }
         });
-        static TEMPERATE: u8 = 0;
         let settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
             climate: &raw const TEMPERATE,
             ..crate::settings_type::SettingAddresses::NULL
@@ -720,31 +714,17 @@ mod tests {
         reads();
         let rts = add_date_introduced_rail_types(s, RailTypes::EMPTY, CalendarDate(100));
         assert_eq!(rts, set(&[10, 21, 22]));
-        let first: Vec<_> = reads()
+        let first: String = reads()
             .into_iter()
             .filter(|&(rt, m)| rt < 6 && m != 'i')
             .take(15)
-            .collect();
-        assert_eq!(
-            first,
-            [
-                (0, 'l'),
-                (1, 'l'),
-                (1, 'd'),
-                (2, 'l'),
-                (2, 'd'),
-                (3, 'l'),
-                (3, 'd'),
-                (4, 'l'),
-                (4, 'd'),
-                (4, 'r'),
-                (5, 'l'),
-                (5, 'd'),
-                (5, 'r'),
-                (5, 'n'),
-                (0, 'l'),
-            ]
-        );
+            .fold(String::new(), |mut out, (rt, m)| {
+                out.push_str(&rt.to_string());
+                out.push(m);
+                out.push(' ');
+                out
+            });
+        assert_eq!(first, "0l 1l 1d 2l 2d 3l 3d 4l 4d 4r 5l 5d 5r 5n 0l ");
         // A fixed point is returned as it is.
         assert_eq!(
             add_date_introduced_rail_types(s, rts, CalendarDate(100)),
@@ -771,7 +751,7 @@ mod tests {
                     ..crate::engine::records::RailVehicleInfo::default()
                 },
             };
-            Box::new(record)
+            record
         };
         ENGINES.with(|e| {
             *e.borrow_mut() = vec![engine(0, false, 0), engine(2, true, 1), engine(1, false, 1)];

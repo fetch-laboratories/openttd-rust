@@ -323,10 +323,18 @@ impl World<'_> {
         self.get_signal_type(TileIndex(t), Track(track)).0
     }
     /// Raw adapter: `GetSignalStates`.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "GetSignalStates' four-bit field"
+    )]
     pub(crate) fn get_signal_states_raw(&self, t: u32) -> u8 {
         self.get_signal_states(TileIndex(t)) as u8
     }
     /// Raw adapter: `GetPresentSignals`.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "GetPresentSignals' four-bit field"
+    )]
     pub(crate) fn get_present_signals_raw(&self, t: u32) -> u8 {
         self.get_present_signals(TileIndex(t)) as u8
     }

@@ -154,10 +154,10 @@ pub fn remove_first_trackdir(
 /// This function returns the first Track found in the `TrackBits` value as Track-value.
 /// It returns `INVALID_TRACK` if the parameter is `TRACK_BIT_NONE`.
 pub const fn find_first_track(tracks: TrackBits) -> Track {
-    if tracks.0 != TrackBits::TRACK_BIT_NONE.0 {
-        Track(find_first_bit(tracks.0 as u64))
-    } else {
+    if tracks.0 == TrackBits::TRACK_BIT_NONE.0 {
         Track::INVALID_TRACK
+    } else {
+        Track(find_first_bit(tracks.0 as u64))
     }
 }
 
@@ -185,10 +185,10 @@ pub fn find_first_trackdir(trackdirs: TrackdirBits, check: impl Fn(bool) + Copy)
     if trackdirs & !TrackdirBits::TRACKDIR_BIT_MASK != TrackdirBits::TRACKDIR_BIT_NONE {
         check(false);
     }
-    if trackdirs != TrackdirBits::TRACKDIR_BIT_NONE {
-        Trackdir(find_first_bit(u64::from(trackdirs.0)))
-    } else {
+    if trackdirs == TrackdirBits::TRACKDIR_BIT_NONE {
         Trackdir::INVALID_TRACKDIR
+    } else {
+        Trackdir(find_first_bit(u64::from(trackdirs.0)))
     }
 }
 
@@ -916,10 +916,9 @@ mod tests {
     }
 
     /// The twelve helpers whose original asserts, against tables written from
-    /// `track_func.h` and `table/track_data.h` over their whole valid domain, and one failed
-    /// assertion for an invalid input before the helper's lookup.
+    /// `track_func.h` and `table/track_data.h` over their whole valid domain.
     #[test]
-    fn trackdir_conversions_follow_the_original_and_assert_their_input() {
+    fn trackdir_conversions_follow_the_original_over_their_domain() {
         let failures = Cell::new(0);
         for td in valid_trackdirs() {
             // `(Track)(trackdir & 0x7)`.
@@ -975,7 +974,12 @@ mod tests {
             );
         }
         assert_eq!(failures.get(), 0);
+    }
 
+    /// The same twelve helpers on an invalid input: each records one failed assertion
+    /// before its lookup.
+    #[test]
+    fn trackdir_conversions_assert_an_invalid_input_first() {
         // The invalid inputs. Each helper that only computes records one failed check and
         // keeps the original's computation; each that indexes a table, or calls a helper
         // that asserts, stops at its own assertion first.

@@ -1175,7 +1175,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
     ) -> bool {
         let diff = self.world.dimensions.tile_offs_by_diag_dir(
             trackdir_to_exitdir(reverse_trackdir(trackdir, |ok| self.check(ok)), |ok| {
-                self.check(ok)
+                self.check(ok);
             }),
             |ok| self.check(ok),
         );
@@ -1518,12 +1518,9 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                                     self.world
                                         .get_signal_type(
                                             cached.last_signal_tile,
-                                            Track(
-                                                trackdir_to_track(cached.last_signal_td, |ok| {
-                                                    self.check(ok)
-                                                })
-                                                .0,
-                                            ),
+                                            trackdir_to_track(cached.last_signal_td, |ok| {
+                                                self.check(ok);
+                                            }),
                                         )
                                         .0,
                                 );
@@ -2128,7 +2125,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
             let start = tile;
             let diff = self.world.dimensions.tile_offs_by_diag_dir(
                 trackdir_to_exitdir(reverse_trackdir(td, |ok| self.check(ok)), |ok| {
-                    self.check(ok)
+                    self.check(ok);
                 }),
                 |ok| self.check(ok),
             );
