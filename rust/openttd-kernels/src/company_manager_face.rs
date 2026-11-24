@@ -14,7 +14,10 @@ use crate::services_assert::assert_with;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FaceVarType(pub u8);
 
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "The `FaceVarType` enumerators' names."
+)]
 impl FaceVarType {
     /// Native `FaceVarType::Sprite`.
     pub const Sprite: Self = Self(0);
@@ -124,37 +127,23 @@ fn set_bits(s: &Services, var: *const FaceVar, bits: &mut u32, val: u32) {
 
 /// Increase/Decrease the company manager's face variable by the given amount. The value
 /// wraps around to stay in the valid range.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "`FaceVar::ChangeBits` holds the value in an `int8_t`, narrowing each `int` result, and `SetBits` converts it to its `uint` parameter."
+)]
 fn change_bits(s: &Services, var: *const FaceVar, cmf: *mut CompanyManagerFace, amount: i8) {
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap,
-        reason = "`FaceVar::ChangeBits` holds the sum in an `int8_t`."
-    )]
     let mut val = (get_bits(s, var, face_bits(s, cmf)) as i8).wrapping_add(amount); // the new value for the cmfv
 
     // scales the new value to the correct scope
     while val < 0 {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "`val += this->valid_values` narrows the `int` sum to `int8_t`."
-        )]
-        let sum = (i32::from(val) + i32::from((s.valid_values)(var))) as i8;
-        val = sum;
+        val = (i32::from(val) + i32::from((s.valid_values)(var))) as i8;
     }
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "`val %= this->valid_values` narrows the `int` remainder to `int8_t`."
-    )]
-    let remainder = (i32::from(val) % i32::from((s.valid_values)(var))) as i8;
-    val = remainder;
+    val = (i32::from(val) % i32::from((s.valid_values)(var))) as i8;
 
-    #[expect(
-        clippy::cast_sign_loss,
-        reason = "`SetBits(cmf, val)` converts the `int8_t` to its `uint` parameter."
-    )]
-    let val = val as u32;
     let mut bits = face_bits(s, cmf);
-    set_bits(s, var, &mut bits, val); // save the new value
+    set_bits(s, var, &mut bits, val as u32); // save the new value
     set_face_bits(s, cmf, bits);
 }
 
@@ -288,11 +277,7 @@ fn mask_company_manager_face_bits(s: &Services, bits: u32, vars: FaceVars) -> u3
 /// `FaceVar::ScaleBits`.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)] // Export attribute only.
-pub extern "C" fn openttd_rust_face_scale_bits(
-    s: &Services,
-    var: *const FaceVar,
-    val: u32,
-) -> u32 {
+pub extern "C" fn openttd_rust_face_scale_bits(s: &Services, var: *const FaceVar, val: u32) -> u32 {
     scale_bits(s, var, val)
 }
 
@@ -440,7 +425,9 @@ mod tests {
         let mut faces = crate::test_tables::FACES;
         faces.length = length;
         faces.valid_values = valid_values;
-        let var = std::ptr::NonNull::<FaceVar>::dangling().as_ptr().cast_const();
+        let var = std::ptr::NonNull::<FaceVar>::dangling()
+            .as_ptr()
+            .cast_const();
         assert_eq!(scale_bits(&faces, var, 7), 4);
         assert_eq!(scale_bits(&faces, var, 0), 0);
         assert_eq!(FAILED_CHECKS.load(Ordering::Relaxed), 0);

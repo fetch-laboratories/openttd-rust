@@ -175,6 +175,10 @@ unsafe fn get_refit_cost_factor(
 /// `GetRefitCost`: learn the price of refitting a certain engine. `v` can be
 /// null. The price is added to `out`; returns whether the refit is allowed as
 /// an auto-refit.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "The table's prices are `PR_*` values of `Price`, an enum over `uint8_t`."
+)]
 pub(super) unsafe fn get_refit_cost(
     s: &Services,
     out: *mut CommandCost,
@@ -202,10 +206,6 @@ pub(super) unsafe fn get_refit_cost(
         _ => s.not_reached(),
     };
     let negative = factor < 0;
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "The table's prices are `PR_*` values of `Price`, an enum over `uint8_t`."
-    )]
     let price = Price(price as u8);
     let amount = get_price(
         s.capabilities.shared,

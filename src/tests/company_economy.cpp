@@ -175,12 +175,7 @@ static OpenTTDCompanyRef FixtureNext(uint32_t from) noexcept
 	return {nullptr, UINT32_MAX};
 }
 static void FixtureNoop(uint8_t) noexcept {}
-static void FixtureAdminUpdate(const Company *c) noexcept
-{
-	for (size_t id = 0; id < fixture_companies.size(); id++) {
-		if (reinterpret_cast<const Company *>(fixture_companies[id].get()) == c) fixture_trace.push_back(fmt::format("admin {}", id));
-	}
-}
+static void FixtureAdminUpdate(const Company *c) noexcept { for (size_t id = 0; id < fixture_companies.size(); id++) if (reinterpret_cast<const Company *>(fixture_companies[id].get()) == c) fixture_trace.push_back(fmt::format("admin {}", id)); }
 static void FixturePostDelete(uint8_t id) noexcept
 {
 	fixture_trace.push_back(fmt::format("post {}", id));

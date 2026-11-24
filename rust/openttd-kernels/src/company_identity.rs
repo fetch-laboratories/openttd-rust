@@ -203,13 +203,13 @@ const SIMILAR_COLOUR: [[Colours; 2]; Colours::COLOUR_END.0 as usize] = [
 ];
 
 /// Generate a company colour. Returns the generated company colour.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "`static_cast<Colours>(i)` of an index below `COLOUR_END`."
+)]
 pub(crate) fn generate_company_colour(s: &Services) -> Colours {
     const END: usize = Colours::COLOUR_END.0 as usize;
     // Initialize array
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "`static_cast<Colours>(i)` of an index below `COLOUR_END`."
-    )]
     let mut colours = std::array::from_fn::<_, END, _>(|i| Colours(i as u8));
 
     // And randomize it
@@ -392,6 +392,10 @@ pub(crate) fn generate_president_name(s: &Services, c: *mut OpenTTDCompany) {
 /// Reset the livery schemes to the company's primary colour.
 /// This is used on loading games without livery information and on new company start up.
 #[allow(unsafe_code)] // The group table's iteration and the field-sized livery stores.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "The group table's `GroupID` is a `uint16_t` pool index."
+)]
 pub(crate) fn reset_company_livery(s: &Services, c: *mut OpenTTDCompany) {
     let livery = (s.livery)(c);
     for scheme in LiveryScheme::LS_BEGIN.0..LiveryScheme::LS_END.0 {
@@ -410,10 +414,6 @@ pub(crate) fn reset_company_livery(s: &Services, c: *mut OpenTTDCompany) {
             break;
         }
         from = id + 1;
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "`GroupID` is a `uint16_t` pool index."
-        )]
         // SAFETY: The module contract: the group table's records are live.
         let g = unsafe { (s.groups.group)(id as u16) }.cast::<crate::fleet::GroupFields>();
         if read_field!(g, owner) == (s.index)(c).0 {
@@ -859,8 +859,7 @@ pub(crate) fn get_engine_livery_scheme(
                     LiveryScheme::LS_FREIGHT_WAGON
                 }
             } else {
-                let is_mu =
-                    EngineMiscFlags(EngineRef::of(e).misc()).test(EngineMiscFlag::RailIsMU);
+                let is_mu = EngineMiscFlags(EngineRef::of(e).misc()).test(EngineMiscFlag::RailIsMU);
 
                 match EngineClass(EngineRef::of(e).train_class()) {
                     EngineClass::EC_STEAM => LiveryScheme::LS_STEAM,

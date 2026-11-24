@@ -3250,8 +3250,8 @@ mod startup_tests {
     use super::*;
     use crate::company_type::{COMPANY_SPECTATOR, CompanyID, CompanyManagerFace, OpenTTDCompany};
     use crate::gfx_type::Colours;
-    use crate::strings_type::StringID;
     use crate::livery::{Livery, LiveryScheme};
+    use crate::strings_type::StringID;
     use crate::test_tables::{
         COMMAND_COSTS, COMMAND_POST, COMPANY, COMPANY_IDENTITY, FACES, FINANCE, FLEET_GROUPS,
         MOVEMENT, NETWORK_COMMAND, NETWORK_FRAME, OBJECTIVES, SHARED,

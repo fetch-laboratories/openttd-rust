@@ -22,9 +22,9 @@ use crate::command_type::DoCommandFlag;
 use crate::company_type::CompanyID;
 use crate::debug::debug;
 use crate::engine_type::EngineID;
+use crate::gfx_type::Colours;
 use crate::group::{GroupFlag, GroupFlags};
 use crate::group_type::GroupID;
-use crate::gfx_type::Colours;
 use crate::livery::{Livery, LiveryFlags, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::table::strings::STR_ERROR_GROUP_CAN_T_SET_PARENT_RECURSION;
@@ -1154,7 +1154,11 @@ unsafe fn set_livery(w: &GroupServices, flags: u32, id: u16, primary: bool, mut 
     if flags & 1 != 0 {
         let mask = if primary { PRIMARY } else { SECONDARY };
         if colour == 255 {
-            write_field!(g, livery.in_use, LiveryFlags(read_field!(g, livery.in_use).0 & !mask));
+            write_field!(
+                g,
+                livery.in_use,
+                LiveryFlags(read_field!(g, livery.in_use).0 & !mask)
+            );
             let inherited = unsafe { parent_livery(w, g) };
             colour = if primary {
                 read_field!(inherited, colour1).0
@@ -1162,7 +1166,11 @@ unsafe fn set_livery(w: &GroupServices, flags: u32, id: u16, primary: bool, mut 
                 read_field!(inherited, colour2).0
             };
         } else {
-            write_field!(g, livery.in_use, LiveryFlags(read_field!(g, livery.in_use).0 | mask));
+            write_field!(
+                g,
+                livery.in_use,
+                LiveryFlags(read_field!(g, livery.in_use).0 | mask)
+            );
         }
         if primary {
             write_field!(g, livery.colour1, Colours(colour));

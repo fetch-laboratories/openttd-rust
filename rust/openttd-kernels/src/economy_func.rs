@@ -35,25 +35,25 @@ pub(crate) fn get_price(
 
 /// Raw adapter of `get_price` for the unfinished callers that read the file's multiplier
 /// themselves: `grf_shift` is the file's `price_base_multipliers[index]`, zero without one.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "Below `PR_END`, the index is a `Price`, an enum over `uint8_t`."
+)]
 pub(crate) fn get_price_raw(index: u32, cost_factor: u32, grf_shift: i32, shift: i32) -> i64 {
     if index >= u32::from(Price::PR_END.0) {
         return 0;
     }
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "Below `PR_END`, the index is a `Price`, an enum over `uint8_t`."
-    )]
     let cost = multiply_price(Price(index as u8), cost_factor);
     shift_price(cost, shift.wrapping_add(grf_shift))
 }
 
 /// `_price[index] * cost_factor`: `Money` is an `OverflowSafeInt64`, whose `uint` product
 /// saturates.
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "`OverflowSafeInt::operator *(const uint)` passes `(int64_t)factor` to `operator *=(const int)`, which narrows it to `int`."
+)]
 fn multiply_price(index: Price, cost_factor: u32) -> i64 {
-    #[expect(
-        clippy::cast_possible_wrap,
-        reason = "`OverflowSafeInt::operator *(const uint)` passes `(int64_t)factor` to `operator *=(const int)`, which narrows it to `int`."
-    )]
     let factor = cost_factor as i32;
     crate::company::price(usize::from(index.0)).saturating_mul(i64::from(factor))
 }
@@ -84,7 +84,11 @@ pub extern "C" fn openttd_rust_economy_get_price(
 /// the number by 4. `town` says whether town or industry production is scaled. Returns the
 /// number scaled by the inverse of the cargo scale setting, minimum of 1.
 #[allow(unsafe_code)] // The two setting reads.
-pub(crate) fn scale_by_inverse_cargo_scale(settings: &SettingAddresses, num: u32, town: bool) -> u32 {
+pub(crate) fn scale_by_inverse_cargo_scale(
+    settings: &SettingAddresses,
+    num: u32,
+    town: bool,
+) -> u32 {
     // SAFETY: The module contract: both addresses are live native settings.
     let percentage = unsafe {
         if town {
@@ -138,9 +142,14 @@ mod tests {
     #[test]
     fn get_price_end_returns_zero_without_the_file() {
         let shared = shared(no_shift);
-        let file = std::ptr::NonNull::<u8>::dangling().as_ptr().cast::<c_void>();
+        let file = std::ptr::NonNull::<u8>::dangling()
+            .as_ptr()
+            .cast::<c_void>();
         assert_eq!(get_price(&shared, Price::PR_END, 1, file, 0), 0);
-        assert_eq!(get_price(&shared, Price(Price::PR_END.0 + 1), 1, file, 0), 0);
+        assert_eq!(
+            get_price(&shared, Price(Price::PR_END.0 + 1), 1, file, 0),
+            0
+        );
         assert_eq!(get_price_raw(u32::from(Price::PR_END.0), 1, 0, 0), 0);
     }
 
@@ -151,12 +160,23 @@ mod tests {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let earlier = set_price(Price::PR_BUILD_OBJECT, -800);
         let none = shared(no_shift);
-        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), 2), -9600);
-        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), -4), -150);
-        let file = std::ptr::NonNull::<u8>::dangling().as_ptr().cast::<c_void>();
+        assert_eq!(
+            get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), 2),
+            -9600
+        );
+        assert_eq!(
+            get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), -4),
+            -150
+        );
+        let file = std::ptr::NonNull::<u8>::dangling()
+            .as_ptr()
+            .cast::<c_void>();
         let with = shared(file_shift);
         assert_eq!(get_price(&with, Price::PR_BUILD_OBJECT, 3, file, 2), -1200);
-        assert_eq!(get_price_raw(u32::from(Price::PR_BUILD_OBJECT.0), 3, -3, 2), -1200);
+        assert_eq!(
+            get_price_raw(u32::from(Price::PR_BUILD_OBJECT.0), 3, -3, 2),
+            -1200
+        );
         set_price(Price::PR_BUILD_OBJECT, earlier);
     }
 
@@ -166,9 +186,15 @@ mod tests {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let earlier = set_price(Price::PR_BUILD_OBJECT, i64::MAX / 2);
         let none = shared(no_shift);
-        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), 0), i64::MAX);
+        assert_eq!(
+            get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), 0),
+            i64::MAX
+        );
         set_price(Price::PR_BUILD_OBJECT, 5);
-        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, u32::MAX, std::ptr::null(), 0), -5);
+        assert_eq!(
+            get_price(&none, Price::PR_BUILD_OBJECT, u32::MAX, std::ptr::null(), 0),
+            -5
+        );
         set_price(Price::PR_BUILD_OBJECT, earlier);
     }
 
@@ -176,11 +202,11 @@ mod tests {
     /// `num` at 100% and never less than 1.
     #[test]
     fn scale_by_inverse_cargo_scale_reads_the_selected_setting() {
-        let town: u16 = 25;
-        let industry: u16 = 400;
+        let town_scale: u16 = 25;
+        let industry_scale: u16 = 400;
         let mut settings = crate::settings_type::SettingAddresses::NULL;
-        settings.town_cargo_scale = &raw const town;
-        settings.industry_cargo_scale = &raw const industry;
+        settings.town_cargo_scale = &raw const town_scale;
+        settings.industry_cargo_scale = &raw const industry_scale;
         assert_eq!(scale_by_inverse_cargo_scale(&settings, 256, true), 1024);
         assert_eq!(scale_by_inverse_cargo_scale(&settings, 256, false), 64);
         assert_eq!(scale_by_inverse_cargo_scale(&settings, 3, false), 1);

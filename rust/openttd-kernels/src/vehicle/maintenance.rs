@@ -310,8 +310,7 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     // There are a lot more reasons for autoreplace to fail than we can test here reasonably.
     let mut pending_replace = false;
     let mut needed_money = i64::from(svc!(C, companies.engine_renew_money, c));
-    if needed_money > get_available_money(m.commands(), svc!(C, companies.index, c.cast_mut()))
-    {
+    if needed_money > get_available_money(m.commands(), svc!(C, companies.index, c.cast_mut())) {
         return false;
     }
 

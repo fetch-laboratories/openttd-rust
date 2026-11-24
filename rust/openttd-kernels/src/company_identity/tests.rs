@@ -376,7 +376,10 @@ fn rename_president_renames_an_unnamed_company() {
             format!("GetString {company} [0]"),
             format!("AI 33 0 S{company}:0 255"),
             format!("Game 33 0 S{company}:0"),
-            format!("InvalidateWindowClassesData {} 1 false", WindowClass::WC_COMPANY.0),
+            format!(
+                "InvalidateWindowClassesData {} 1 false",
+                WindowClass::WC_COMPANY.0
+            ),
             "MarkWholeScreenDirty".to_owned(),
             "admin 0".to_owned(),
             format!("GetString {president} [0]"),
@@ -404,7 +407,10 @@ fn rename_president_resets_and_refuses_a_taken_name() {
         take_trace(),
         [
             "president_name 0 ".to_owned(),
-            format!("InvalidateWindowClassesData {} 1 false", WindowClass::WC_COMPANY.0),
+            format!(
+                "InvalidateWindowClassesData {} 1 false",
+                WindowClass::WC_COMPANY.0
+            ),
             "MarkWholeScreenDirty".to_owned(),
             "admin 0".to_owned(),
             format!("GetString {president} [0]"),
@@ -429,7 +435,13 @@ extern "C" fn vehicle_next(from: u32) -> Option<VehicleRef> {
 }
 unsafe extern "C" fn vehicle_id(v: *mut OpenTTDVehicle) -> u32 {
     VEHICLES.with(|list| {
-        u32::try_from(list.borrow().iter().position(|r| r.0.as_ptr() == v).unwrap()).unwrap()
+        u32::try_from(
+            list.borrow()
+                .iter()
+                .position(|r| r.0.as_ptr() == v)
+                .unwrap(),
+        )
+        .unwrap()
     })
 }
 unsafe extern "C" fn vehicle_cache(v: *mut OpenTTDVehicle) -> *mut crate::newgrf_vehicle::Cache {
@@ -463,6 +475,7 @@ unsafe extern "C" fn no_object(_: u32) -> crate::objects::Next {
 }
 extern "C" fn object_services() -> *const crate::objects::ObjectServices {
     let mut objects = crate::test_tables::OBJECTS;
+    objects.shared = &SHARED;
     objects.next = no_object;
     leak(objects)
 }
@@ -537,7 +550,10 @@ fn set_company_colour_invalidates_in_order() {
             graph(WindowClass::WC_COMPANY_VALUE),
             graph(WindowClass::WC_LINKGRAPH_LEGEND),
             "BuildOwnerLegend".to_owned(),
-            format!("InvalidateWindowData {} 0 1 false", WindowClass::WC_SMALLMAP.0),
+            format!(
+                "InvalidateWindowData {} 0 1 false",
+                WindowClass::WC_SMALLMAP.0
+            ),
             "InvalidateNewGRFCache 1".to_owned(),
             "InvalidateNewGRFCache 2".to_owned(),
             "UpdateObjectColours".to_owned(),

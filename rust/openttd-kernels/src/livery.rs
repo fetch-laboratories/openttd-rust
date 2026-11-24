@@ -94,7 +94,10 @@ pub const LS_FREIGHT_WAGON: u8 = LiveryScheme::LS_FREIGHT_WAGON.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LiveryFlag(pub u8);
 
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "The `Livery::Flag` enumerators' names."
+)]
 impl LiveryFlag {
     /// Primary colour is set.
     pub const Primary: Self = Self(0);
@@ -112,7 +115,10 @@ impl LiveryFlags {
     pub const EMPTY: Self = Self(0);
     /// Set containing the named element (the element is a bit position).
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "`EnumBitSet<Flag, uint8_t>` stores the element's bit in its `uint8_t`."
+    )]
     pub const fn from_element(element: LiveryFlag) -> Self {
         Self((1_u64 << element.0) as u8)
     }
