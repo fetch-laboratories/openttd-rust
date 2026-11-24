@@ -18,8 +18,8 @@ from simulation import coverage
 class CoverageTests(unittest.TestCase):
     def test_merge_original_functions_and_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            # Reach the root through a symlink, as a worktree's .local is (#867):
-            # gcovr reports resolved paths, which the source filter must match.
+            # Reach the root through a symlink (#867): gcovr reports resolved
+            # paths, which the source filter must match.
             (Path(directory) / "real").mkdir()
             root = Path(directory) / "linked"
             root.symlink_to("real")

@@ -840,7 +840,7 @@ class HousekeepingTests(unittest.TestCase):
         target = write(self.top / "shared-build/CMakeCache.txt").parent
         (linked / "build-rust").symlink_to(target)
         self.age(linked, idle + 60)
-        # Listed by its resolved path, as main-local worktrees are on the HDD.
+        # Listed by its resolved path, outside the main checkout.
         # An idle non-T3 checkout under an open PR keeps its build (ruling B).
         plain = self.build(self.top / "trees/open", idle + 60)
         profile = self.top / "storage/worktrees/root-profile-824"

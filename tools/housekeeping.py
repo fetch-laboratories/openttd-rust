@@ -56,8 +56,7 @@ RUNNING_SECONDS = 12 * 3600
 # A kept worktree's build-rust is reclaimed once its activity is this old (#824).
 IDLE_HOURS = 2.0
 BUILD = "build-rust"
-# Retained profile checkouts; their builds are evidence, not cache. Under the main
-# checkout's .local/worktrees, git lists them by their resolved HDD path.
+# Retained profile checkouts; their builds are evidence, not cache.
 PROFILES = "root-profile-"
 # Session managers hide their cwd from their own user and never run agent work.
 SESSION_MANAGERS = {"systemd", "(sd-pam)"}
@@ -675,7 +674,7 @@ def plan_local(local: Path, now: float, references: str = "") -> list[Item]:
         name = entry.name
         if name in OUTPUT and entry.is_dir():
             for run in sorted(entry.iterdir()):
-                # Bare names cover .local, HDD-target, inner-file and listed forms.
+                # Bare names cover .local, resolved, inner-file and listed forms.
                 if re.search(
                     r"(?<![\w.-])" + re.escape(run.name) + r"(?![\w.-])", references
                 ):
