@@ -237,9 +237,12 @@ pub fn diagdir_reaches_trackdirs(dir: u8) -> u16 {
     [0x1009, 0x16, 0x520, 0x2a00][usize::from(dir)]
 }
 
+/// `_track_crosses_trackdirs`: maps a track to all trackdirs that make 90 deg turns with it.
+const TRACK_CROSSES_TRACKDIRS: [u16; 6] = [0x202, 0x101, 0x3030, 0x3030, 0xc0c, 0xc0c];
+
 /// `TrackdirCrossesTrackdirs`.
 pub fn trackdir_crosses_trackdirs(td: u8) -> u16 {
-    [0x202, 0x101, 0x3030, 0x3030, 0xc0c, 0xc0c][usize::from(trackdir_to_track(td))]
+    TRACK_CROSSES_TRACKDIRS[usize::from(trackdir_to_track(td))]
 }
 
 /// `TrackOverlapsTracks`.
@@ -469,9 +472,9 @@ pub fn trackdir_crosses_trackdirs_asserted(
     check: impl Fn(bool) + Copy,
 ) -> crate::track_type::TrackdirBits {
     check(is_valid_trackdir(trackdir.0));
-    crate::track_type::TrackdirBits(trackdir_crosses_trackdirs(
-        trackdir_to_track_asserted(trackdir, check).0,
-    ))
+    crate::track_type::TrackdirBits(
+        TRACK_CROSSES_TRACKDIRS[usize::from(trackdir_to_track_asserted(trackdir, check).0)],
+    )
 }
 
 /// `TrackEnterdirToTrackdir`: maps a track and an (4-way) dir to the trackdir that represents

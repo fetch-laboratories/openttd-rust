@@ -138,6 +138,15 @@ fn at(orders: *mut Order, index: usize) -> *mut Order {
 fn slot(vector: *const Vector, index: usize) -> *mut Order {
     at(data(vector), index)
 }
+/// `OrderList::GetOrderAt(index)` over the list's vector: the order's address, or `None`
+/// without a vector or beyond its orders. The address must not survive list mutation.
+fn order_at(vector: *mut Vector, index: u8) -> Option<*const Order> {
+    if vector.is_null() || index >= read_field!(vector, length) as u8 {
+        None
+    } else {
+        Some(slot(vector, usize::from(index)).cast_const())
+    }
+}
 /// Call an export of this module from inside an entry with that entry's live shells,
 /// outputs and static table.
 macro_rules! reenter {
@@ -169,12 +178,7 @@ impl OrderAccess {
         }
     }
     fn order_ptr(&self, index: u8) -> Option<*const Order> {
-        if index >= self.count() {
-            None
-        } else {
-            // The handle must not survive list mutation.
-            Some(slot(self.vector, usize::from(index)).cast_const())
-        }
+        order_at(self.vector, index)
     }
     fn kind(&self, index: usize) -> u8 {
         read_field!(slot(self.vector, index), kind) & 15
@@ -795,20 +799,14 @@ impl Game {
             Some(load(slot(self.vector(list), usize::from(index))))
         }
     }
-    /// `v->GetOrder(index)`: the address of the order, null without a list or beyond its
-    /// orders.
-    fn get_order(self, v: *mut c_void, index: u8) -> *const Order {
-        let list = self.orders(v);
-        if list.is_null() || index >= self.size(list) {
-            ptr::null()
-        } else {
-            slot(self.vector(list), usize::from(index)).cast_const()
-        }
-    }
     /// A copy of `v->GetOrder(index)`, or `None` where it is null.
     fn vehicle_order(self, v: *mut c_void, index: u8) -> Option<Order> {
-        let order = self.get_order(v, index);
-        (!order.is_null()).then(|| load(order))
+        let list = self.orders(v);
+        if list.is_null() {
+            None
+        } else {
+            order_at(self.vector(list), index).map(load)
+        }
     }
     fn put_order(self, list: *mut c_void, index: u8, order: Order) {
         store(slot(self.vector(list), usize::from(index)), order);
@@ -2800,29 +2798,28 @@ pub(crate) fn process_orders(v: VehicleRef, leaves: &'static Leaves) -> bool {
 /// `UpdateOrderDest`: update the vehicle's destination tile from an order. `order` is the
 /// order the vehicle currently has; `conditional_depth` the depth (amount of steps) to go
 /// with conditional orders, which prevents infinite loops; `pbs_look_ahead` whether we are
-/// forecasting orders for pbs reservations in advance, in which case the order indices and
-/// the vehicle's `dest_tile` are left alone. Returns true if the order was a new
-/// (non-implicit) order.
+/// forecasting orders for pbs reservations in advance, in which case the order indices must
+/// not be modified. Returns true if the order was a new (non-implicit) order.
 pub(crate) fn update_order_dest(
     v: VehicleRef,
-    order: *const Order,
+    order: OrderView<'_>,
     conditional_depth: i32,
     pbs_look_ahead: bool,
     leaves: &'static Leaves,
 ) -> bool {
     let control = Control { g: Game(leaves) };
-    control.destination(v.shell(), load(order), conditional_depth, pbs_look_ahead)
+    control.destination(v.shell(), order.copied(), conditional_depth, pbs_look_ahead)
 }
 
 /// `ProcessConditionalOrder`: process a conditional order and determine the next order.
 /// Returns the index of the next order to jump to, or `INVALID_VEH_ORDER_ID` to use the
 /// next order.
 pub(crate) fn process_conditional_order(
-    order: *const Order,
+    order: OrderView<'_>,
     v: VehicleRef,
     leaves: &'static Leaves,
 ) -> VehicleOrderID {
-    VehicleOrderID(Game(leaves).conditional(load(order), v.shell()))
+    VehicleOrderID(Game(leaves).conditional(order.copied(), v.shell()))
 }
 
 /// `Vehicle::IncrementRealOrderIndex`: advance `cur_real_order_index` to the next real order,
@@ -4923,12 +4920,17 @@ impl VisitOrders {
     }
     /// `v->GetNumOrders()`: the number of orders, zero for a vehicle without an order list.
     pub(crate) fn get_num_orders(self, v: VehicleRef) -> VehicleOrderID {
-        VehicleOrderID(self.0.count(Self::shell(v)))
+        let list = crate::vehicle_base::order_list(v.0.as_ptr());
+        VehicleOrderID(if list.is_null() { 0 } else { self.0.size(list) })
     }
     /// `v->GetOrder(index)`: the address of the order, null without a list or beyond its
     /// orders. It names a live order until the list changes.
     pub(crate) fn get_order(self, v: VehicleRef, index: VehicleOrderID) -> *const Order {
-        self.0.get_order(Self::shell(v), index.0)
+        let list = crate::vehicle_base::order_list(v.0.as_ptr());
+        if list.is_null() {
+            return ptr::null();
+        }
+        order_at(self.0.vector(list), index.0).unwrap_or(ptr::null())
     }
     /// `v->cur_real_order_index`.
     pub(crate) fn real(self, v: VehicleRef) -> u8 {

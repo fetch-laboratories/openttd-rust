@@ -17,7 +17,7 @@ use crate::bitmath_func::{assign_bit16, has_bit, kill_first_bit, kill_first_bit_
 use crate::direction_func::reverse_diag_dir;
 use crate::direction_type::DiagDirection;
 use crate::follow_track::{CFollowTrackT, ErrorCode};
-use crate::ground_vehicle::GroundVehicleFlags;
+use crate::ground_vehicle::{GroundVehicleFlags, Owner as GroundOwner};
 use crate::map_func::World;
 use crate::order_type::{
     DestinationID, OrderDepotActionFlag, OrderDepotTypeFlag, OrderType, VehicleOrderID,
@@ -25,7 +25,6 @@ use crate::order_type::{
 use crate::orders::{Order, OrderView};
 use crate::pbs::{PBSTileInfo, Pbs};
 use crate::rail_type::{RailType, RailTypes};
-use crate::raw_field::{read_field, write_field};
 use crate::services::Services;
 use crate::services_assert::assert_with;
 use crate::signal_type::{SignalState, SignalType};
@@ -127,7 +126,7 @@ impl<'a> Game<'a> {
     fn update_order_dest(
         &self,
         v: Handle,
-        order: *const Order,
+        order: OrderView<'_>,
         conditional_depth: i32,
         pbs_look_ahead: bool,
     ) -> bool {
@@ -140,7 +139,7 @@ impl<'a> Game<'a> {
         )
     }
     /// `ProcessConditionalOrder(order, v)`.
-    fn process_conditional_order(&self, order: *const Order, v: Handle) -> VehicleOrderID {
+    fn process_conditional_order(&self, order: OrderView<'_>, v: Handle) -> VehicleOrderID {
         crate::orders::process_conditional_order(order, v.vehicle(), self.vs.orders())
     }
     /// `v->IncrementRealOrderIndex()`.
@@ -334,8 +333,8 @@ impl<'a> Game<'a> {
             .is_compatible_train_station_tile(test_tile, station_tile)
     }
     /// `GetDepotIndex(tile)`.
-    fn get_depot_index(&self, tile: TileIndex) -> DestinationID {
-        DestinationID((self.services.depot_index)(tile.0))
+    fn get_depot_index(&self, tile: TileIndex) -> crate::depot_type::DepotID {
+        crate::depot_type::DepotID((self.services.depot_index)(tile.0))
     }
     /// `TileAddByDiagDir(tile, dir)`.
     fn tile_add_by_diag_dir(&self, tile: TileIndex, dir: DiagDirection) -> TileIndex {
@@ -474,8 +473,8 @@ pub(crate) fn check_next_train_tile(g: &Game, v: Handle) {
         OrderType::OT_GOTO_WAYPOINT => {
             /* If we reached our waypoint, make sure we see that. */
             if g.is_rail_waypoint_tile(v.vehicle().tile())
-                && g.get_station_index(v.vehicle().tile()).0
-                    == v.vehicle().current_order().destination().0
+                && g.get_station_index(v.vehicle().tile())
+                    == v.vehicle().current_order().destination().to_station_id()
             {
                 g.process_orders(v);
             }
@@ -876,7 +875,7 @@ impl<'g, 'a> VehicleOrderSaver<'g, 'a> {
             old_last_station_visited: v.vehicle().last_station_visited(),
             index: v.vehicle().cur_real_order_index(),
             suppress_implicit_orders: has_bit(
-                read_field!(v.vehicle().ground(), flags),
+                GroundOwner::of(v.vehicle()).gv_flags(),
                 GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
             ),
             restored: false,
@@ -897,13 +896,14 @@ impl<'g, 'a> VehicleOrderSaver<'g, 'a> {
         self.v
             .vehicle()
             .set_last_station_visited(self.old_last_station_visited);
-        let mut gv_flags = read_field!(self.v.vehicle().ground(), flags);
+        let ground = GroundOwner::of(self.v.vehicle());
+        let mut gv_flags = ground.gv_flags();
         assign_bit16(
             &mut gv_flags,
             GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
             self.suppress_implicit_orders,
         );
-        write_field!(self.v.vehicle().ground(), flags, gv_flags);
+        ground.set_gv_flags(gv_flags);
         self.restored = true;
     }
 
@@ -949,7 +949,7 @@ impl<'g, 'a> VehicleOrderSaver<'g, 'a> {
                 | OrderType::OT_GOTO_STATION
                 | OrderType::OT_GOTO_WAYPOINT => true,
                 OrderType::OT_CONDITIONAL => {
-                    let next = g.process_conditional_order(order, v);
+                    let next = g.process_conditional_order(view, v);
                     if next != VehicleOrderID::INVALID_VEH_ORDER_ID {
                         depth += 1;
                         self.index = next;
@@ -968,7 +968,7 @@ impl<'g, 'a> VehicleOrderSaver<'g, 'a> {
             if goto {
                 // SAFETY: As above; the copy creates no reference.
                 unsafe { v.vehicle().current_order_pointer().write(view.copied()) };
-                return g.update_order_dest(v, order, 0, true);
+                return g.update_order_dest(v, view, 0, true);
             }
             /* Don't increment inside the while because otherwise conditional
              * orders can lead to an infinite loop. */
@@ -1122,8 +1122,8 @@ pub(crate) fn choose_train_track(
                 .is_type(OrderType::OT_GOTO_STATION)
             {
                 g.is_rail_station_tile(v.vehicle().tile())
-                    && v.vehicle().current_order().destination().0
-                        == g.get_station_index(v.vehicle().tile()).0
+                    && v.vehicle().current_order().destination().to_station_id()
+                        == g.get_station_index(v.vehicle().tile())
             } else {
                 v.vehicle().tile() == v.vehicle().dest_tile()
             })
@@ -1288,7 +1288,7 @@ pub(crate) fn choose_train_track(
         unsafe {
             crate::orders::set_destination(
                 v.vehicle().current_order_pointer(),
-                g.get_depot_index(final_dest),
+                DestinationID(g.get_depot_index(final_dest).0),
             );
         };
         v.vehicle().set_dest_tile(final_dest);
@@ -1976,7 +1976,7 @@ mod tests {
         }
     }
 
-    /// `TryReserveRailTrack` reaches a station trigger that can reenter the train's own
+    /// `TryReserveRailTrack`'s plain-rail reservation callback can reenter the train's own
     /// entries: a nested direct entry on the same train sees and makes ordinary writes, and
     /// `ReserveTrackUnderConsist` continues on the state the nested entry left.
     #[test]
