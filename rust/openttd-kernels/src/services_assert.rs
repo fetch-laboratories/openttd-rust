@@ -55,12 +55,53 @@ pub(crate) fn not_reached() -> ! {
     std::process::abort()
 }
 
+/// The environment variable an isolating spawn sets on its child, beside the
+/// `--exact` argument and the one test name it passes. A test binds the
+/// process-wide policy only where it is set: no other test thread exists there,
+/// so no other test reads the tables the binding publishes.
+#[cfg(test)]
+pub(crate) const ISOLATED_CHILD: &str = "OPENTTD_ASSERT_ISOLATED_CHILD";
+
+/// Panic, before any binding, unless this process is an isolating spawn's child.
+#[cfg(test)]
+fn require_isolated_child() {
+    assert!(
+        std::env::var_os(ISOLATED_CHILD).is_some(),
+        "a test binds the native assertion policy outside an isolated child process"
+    );
+}
+
 /// Replace only the assertion callback for a Rust test; retain fatal dispatch.
 #[cfg(test)]
 pub(crate) fn bind_test_check(check: extern "C" fn(bool)) {
+    require_isolated_child();
     // SAFETY: A null table changes no pointer lifetime contract.
     unsafe {
         openttd_rust_assert_bind(check, std::ptr::null());
+    }
+}
+
+/// Bind the assertion callback and the shared table for a Rust test. The binding
+/// retains `shared` for the rest of the process, so it takes a process-lifetime table,
+/// and every later `assert_with` reads `shared.map`, so the binder refuses a null map.
+///
+/// # Safety
+/// `shared.map` points to map statics that live through the child process's last
+/// assertion.
+#[cfg(test)]
+pub(crate) unsafe fn bind_test_policy(
+    check: extern "C" fn(bool),
+    shared: &'static crate::services::Services,
+) {
+    require_isolated_child();
+    assert!(
+        !shared.map.is_null(),
+        "a test binds a shared table with no map statics"
+    );
+    // SAFETY: `shared` lives for the process, as the export requires, and the caller
+    // keeps its map statics live through every assertion.
+    unsafe {
+        openttd_rust_assert_bind(check, shared);
     }
 }
 
@@ -80,6 +121,7 @@ pub(crate) fn isolate_test_check(name: &str, check: extern "C" fn(bool)) -> bool
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", name])
         .env(CHILD, name)
+        .env(ISOLATED_CHILD, "1")
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -123,6 +165,7 @@ pub(crate) fn isolate_test_exit(name: &str) -> bool {
     let mut child = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", name, "--test-threads", "1", "--nocapture"])
         .env(CHILD, name)
+        .env(ISOLATED_CHILD, "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -150,6 +193,25 @@ pub(crate) fn isolate_test_exit(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     extern "C" fn unused_check(_: bool) {}
+
+    /// The parent test process has no marker, so the binder panics before binding.
+    #[test]
+    #[should_panic(expected = "outside an isolated child process")]
+    fn binding_the_check_in_the_parent_process_panics() {
+        super::bind_test_check(unused_check);
+    }
+
+    #[test]
+    #[should_panic(expected = "outside an isolated child process")]
+    fn binding_the_policy_in_the_parent_process_panics() {
+        // SAFETY: The guard panics before anything is bound.
+        unsafe {
+            super::bind_test_policy(
+                unused_check,
+                Box::leak(Box::new(crate::test_tables::SHARED)),
+            );
+        }
+    }
 
     #[test]
     #[should_panic(expected = "did not run and pass exactly one test")]

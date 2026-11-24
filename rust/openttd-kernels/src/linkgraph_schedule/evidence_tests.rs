@@ -708,11 +708,60 @@ fn run(schedule: &'static Services) -> (Vec<[i32; 3]>, [*mut GraphShell; 3]) {
     )
 }
 
+/// Unpublishes the fixture's tables when dropped, so `FIXTURE` names no table, whose
+/// shared table holds the test thread's map statics, once the test ends by return or by
+/// panic. Create it after taking `GLOBAL_LOCK`, before `install`.
+struct Unpublish;
+impl Drop for Unpublish {
+    fn drop(&mut self) {
+        with(|f| {
+            f.services = std::ptr::null();
+            f.post = std::ptr::null();
+            f.command = std::ptr::null();
+            f.session = std::ptr::null();
+            f.world = std::ptr::null();
+        });
+    }
+}
+
+/// A test that panics after `install` leaves no table published.
+#[test]
+fn a_panic_after_install_unpublishes_the_tables() {
+    const AFTER_INSTALL: &str = "a failed check after install";
+    let _lock = crate::town::tests::GLOBAL_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let published = std::cell::Cell::new(false);
+    let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _unpublish = Unpublish;
+        install();
+        published.set(with(|f| {
+            !f.services.is_null()
+                && !f.post.is_null()
+                && !f.command.is_null()
+                && !f.session.is_null()
+                && !f.world.is_null()
+        }));
+        std::panic::panic_any(AFTER_INSTALL);
+    }));
+    assert!(published.get(), "install published all five tables");
+    let payload = unwound.expect_err("the test body unwinds");
+    assert_eq!(payload.downcast_ref::<&str>(), Some(&AFTER_INSTALL));
+    assert!(with(|f| {
+        f.services.is_null()
+            && f.post.is_null()
+            && f.command.is_null()
+            && f.session.is_null()
+            && f.world.is_null()
+    }));
+}
+
 #[test]
 fn schedule_trace_matches_original() {
     let _lock = crate::town::tests::GLOBAL_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _unpublish = Unpublish;
     let saved = (
         crate::timer_game_common::economy_date(),
         crate::timer_game_common::economy_fraction(),

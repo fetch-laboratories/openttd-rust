@@ -500,6 +500,7 @@ mod controller {
             let status = std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["--exact", NAME])
                 .env(CHILD, "1")
+                .env(crate::services_assert::ISOLATED_CHILD, "1")
                 .status()
                 .unwrap();
             assert_eq!(status.code(), Some(NOT_REACHED_EXIT));
@@ -512,11 +513,13 @@ mod controller {
         let shared = crate::services::Services {
             settings,
             not_reached,
+            map: crate::map_func::fixture::statics(),
             ..SHARED
         };
         let mut f = Fixture::new(LOCAL, &shared);
-        // SAFETY: The leaked table outlives the child's only call.
-        unsafe { crate::services_assert::openttd_rust_assert_bind(no_assertion, f.leaves.shared) };
+        // SAFETY: `Fixture::new` leaks the shared table, so it lives for the process, and
+        // its map statics belong to this thread, which runs every assertion in the child.
+        unsafe { crate::services_assert::bind_test_policy(no_assertion, &*f.leaves.shared) };
         let part = f.part();
         f.game().update_speed(part);
     }
