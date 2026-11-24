@@ -4160,12 +4160,11 @@ mod policy_tests {
         }
     }
     extern "C" fn error(out: *mut crate::services::CommandCost, error: u32, parameter: u64) {
-        /* The policy oracle records the authority refusal as its reference fixture's token 19. */
-        let error = if error == STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS.0 {
-            19
-        } else {
-            error
-        };
+        /* Both authority entries fail only with the local authority's refusal. The policy
+         * oracle records it as its reference fixture's token 19, so the raw ID is checked
+         * before it is written as that token. */
+        assert_eq!(error, STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS.0);
+        let error = 19;
         // SAFETY: Same typed result lifetime as zero.
         unsafe {
             *out.cast::<Cost>() = Cost {
