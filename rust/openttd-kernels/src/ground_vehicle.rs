@@ -22,10 +22,7 @@ use crate::direction_func::{diag_dir_to_axis, dir_to_diag_dir};
 use crate::direction_type::{Axis, DiagDirection};
 use crate::engine_type::{EngineID, VehicleAccelerationModel};
 use crate::map_func::World;
-use crate::newgrf_properties::{
-    PROP_ROADVEH_POWER, PROP_ROADVEH_TRACTIVE_EFFORT, PROP_ROADVEH_WEIGHT, PROP_TRAIN_POWER,
-    PROP_TRAIN_TRACTIVE_EFFORT, PROP_TRAIN_WEIGHT,
-};
+use crate::newgrf_properties::PropertyID;
 use crate::raw_field::{read_field, write_field};
 use crate::services::{RailType, RoadType};
 use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK};
@@ -271,8 +268,13 @@ impl Services {
         unsafe { &*(self.vehicle.newgrf)() }
     }
     /// `GetVehicleProperty(v, property, orig_value)`.
-    fn property(&self, v: VehicleRef, property: u8, orig_value: u16) -> i32 {
-        (self.vehicle.property)((self.vehicle.newgrf)(), v, property, i32::from(orig_value))
+    fn property(&self, v: VehicleRef, property: PropertyID, orig_value: u16) -> i32 {
+        crate::newgrf_vehicle::get_vehicle_property(
+            self.vehicle.newgrf(),
+            v,
+            property,
+            i32::from(orig_value),
+        )
     }
     /// `v->cargo_type`.
     fn cargo_type(&self, v: VehicleRef) -> CargoType {
@@ -367,7 +369,7 @@ impl GroundVehicleType for Train {
             let engine = (s.vehicle.engine)(v);
             let mut power = s.property(
                 v,
-                PROP_TRAIN_POWER,
+                PropertyID::PROP_TRAIN_POWER,
                 engine.ground_power(VehicleType::VEH_TRAIN),
             ) as u16;
             /* Halve power for multiheaded parts */
@@ -413,7 +415,7 @@ impl GroundVehicleType for Train {
             let engine = (s.vehicle.engine)(v);
             weight = weight.wrapping_add(s.property(
                 v,
-                PROP_TRAIN_WEIGHT,
+                PropertyID::PROP_TRAIN_WEIGHT,
                 engine.ground_weight(VehicleType::VEH_TRAIN),
             ) as u16);
         }
@@ -438,7 +440,7 @@ impl GroundVehicleType for Train {
             let engine = (s.vehicle.engine)(v);
             weight = weight.wrapping_add(s.property(
                 v,
-                PROP_TRAIN_WEIGHT,
+                PropertyID::PROP_TRAIN_WEIGHT,
                 engine.ground_weight(VehicleType::VEH_TRAIN),
             ) as u16);
         }
@@ -459,7 +461,7 @@ impl GroundVehicleType for Train {
         let engine = (s.vehicle.engine)(v);
         s.property(
             v,
-            PROP_TRAIN_TRACTIVE_EFFORT,
+            PropertyID::PROP_TRAIN_TRACTIVE_EFFORT,
             u16::from(engine.ground_te(VehicleType::VEH_TRAIN)),
         ) as u8
     }
@@ -581,7 +583,7 @@ impl GroundVehicleType for RoadVehicle {
             return s
                 .property(
                     v,
-                    PROP_ROADVEH_POWER,
+                    PropertyID::PROP_ROADVEH_POWER,
                     engine.ground_power(VehicleType::VEH_ROAD),
                 )
                 .wrapping_mul(10) as u16;
@@ -615,7 +617,7 @@ impl GroundVehicleType for RoadVehicle {
             weight = weight.wrapping_add(
                 (s.property(
                     v,
-                    PROP_ROADVEH_WEIGHT,
+                    PropertyID::PROP_ROADVEH_WEIGHT,
                     engine.ground_weight(VehicleType::VEH_ROAD),
                 ) / 4) as u16,
             );
@@ -639,7 +641,7 @@ impl GroundVehicleType for RoadVehicle {
             weight = weight.wrapping_add(
                 (s.property(
                     v,
-                    PROP_ROADVEH_WEIGHT,
+                    PropertyID::PROP_ROADVEH_WEIGHT,
                     engine.ground_weight(VehicleType::VEH_ROAD),
                 ) / 4) as u16,
             );
@@ -658,7 +660,7 @@ impl GroundVehicleType for RoadVehicle {
         /* The tractive effort coefficient is in units of 1/256.  */
         s.property(
             v,
-            PROP_ROADVEH_TRACTIVE_EFFORT,
+            PropertyID::PROP_ROADVEH_TRACTIVE_EFFORT,
             u16::from(engine.ground_te(VehicleType::VEH_ROAD)),
         ) as u8
     }

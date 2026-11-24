@@ -101,8 +101,14 @@ pub(crate) fn update_visual_effect(v: VehicleRef, allow_power_change: bool) {
     let powered_before = has_bit(unsafe { *cache }, VE_DISABLE_WAGON_POWER);
     let mut visual = u32::from(engine.visual_effect());
     if engine.callbacks() & crate::newgrf_callbacks::VEHICLE_VISUAL_EFFECT != 0 {
-        let mut callback =
-            (s.vehicle.callback)((s.vehicle.newgrf)(), v, CBID_VEHICLE_VISUAL_EFFECT);
+        let mut callback = crate::newgrf_vehicle::get_vehicle_callback(
+            s.vehicle.newgrf(),
+            CBID_VEHICLE_VISUAL_EFFECT,
+            0,
+            0,
+            v.engine_type(),
+            Some(v),
+        );
         if callback != CALLBACK_FAILED {
             if callback >= 0x100 && engine.grf_version(s.shared) >= 8 {
                 s.vehicle

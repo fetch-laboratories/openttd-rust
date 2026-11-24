@@ -118,7 +118,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	static OpenTTDVehicleResolverServices resolver{};
 	resolver.id = [](OpenTTDVehicle *v) noexcept -> uint32_t { return v == &fixture->record ? 17 : 18; };
 	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
-	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if ((property != 0x0C && property != 0x1C) || fallback != 0) std::abort(); return int32_t{0}; };
 	static std::unique_ptr<OpenTTDEngine, decltype(&openttd_rust_engine_destroy)> engine{
 		[] {
 			auto *record = openttd_rust_engine_new();
@@ -129,6 +128,14 @@ static OpenTTDAircraftLeaves RangeLeaves()
 			return record;
 		}(), openttd_rust_engine_destroy};
 	vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine.get(); };
+	/* GetVehicleProperty runs the production resolver; the speed (0x0C) and cargo age (0x1C)
+	 * callbacks fail, so both properties take their fallback, which is 0 here. */
+	resolver.engine_by_id = [](uint16_t) noexcept -> const OpenTTDEngine * { return engine.get(); };
+	resolver.cargo_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
+		if (callback != 0x36 /* CBID_VEHICLE_MODIFY_PROPERTY */ || (property != 0x0C && property != 0x1C)) std::abort();
+		return 0xFFFF; // CALLBACK_FAILED
+	};
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 	shared.plane_speed = []() noexcept { return uint8_t{1}; };
 	shared.local_company = []() noexcept { return _local_company; };
@@ -161,6 +168,7 @@ int main()
 		fixture = &f;
 		f.record.type = 3; f.record.subtype = 2; f.record.z_pos = 1; f.record.cached_max_speed = 100; f.record.vehstatus = f.aircraft.vehstatus.value;
 		f.shadow.type = 3; f.shadow.subtype = 4; f.record.next = &f.shadow;
+		f.record.first = f.shadow.first = &f.record;
 		f.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f);
 		f.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.shadow);
 		const auto leaves = RangeLeaves();

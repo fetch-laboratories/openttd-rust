@@ -1380,8 +1380,6 @@ pub(crate) mod tests {
             new_position: unused(),
             base_viewport: unused(),
             newgrf: unused(),
-            property: unused(),
-            callback: unused(),
             set_max_age: unused(),
             length_changed: unused(),
             play_vehicle_sound: unused(),

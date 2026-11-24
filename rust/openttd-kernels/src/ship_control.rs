@@ -508,8 +508,8 @@ impl Game<'_> {
         let observed_tile = self.vehicle().tile_raw();
         let sea = (self.leaves.water_class)(observed_tile) == 0;
         let speed = u32::from((self.vs().engine)(v).ship_speed());
-        let raw = (self.vs().property)(
-            (self.vs().newgrf)(),
+        let raw = crate::newgrf_vehicle::get_vehicle_property_raw(
+            self.vs().newgrf(),
             v,
             crate::newgrf_properties::PROP_SHIP_SPEED,
             speed as i32,
@@ -518,8 +518,8 @@ impl Game<'_> {
         self.vehicle()
             .set_cached_max_speed((raw.wrapping_mul(256 - frac) / 256) as u16);
         let period = u32::from((self.vs().engine)(v).cargo_age());
-        let age = (self.vs().property)(
-            (self.vs().newgrf)(),
+        let age = crate::newgrf_vehicle::get_vehicle_property_raw(
+            self.vs().newgrf(),
             v,
             crate::newgrf_properties::PROP_SHIP_CARGO_AGE_PERIOD,
             period as i32,

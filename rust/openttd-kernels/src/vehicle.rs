@@ -112,11 +112,6 @@ pub struct VehicleServices {
     pub base_viewport: extern "C" fn(VehicleRef),
     /// Immutable process-wide vehicle resolver services.
     pub newgrf: extern "C" fn() -> *const crate::newgrf_vehicle::Services,
-    /// Direct Rust `GetVehicleProperty(v, property, fallback)` entry.
-    pub property: extern "C" fn(*const crate::newgrf_vehicle::Services, VehicleRef, u8, i32) -> i32,
-    /// `GetVehicleCallback(callback, 0, 0, v->engine_type, v)`.
-    pub callback:
-        extern "C" fn(*const crate::newgrf_vehicle::Services, VehicleRef, CallbackID) -> u16,
     /// Native `max_age` store after the Rust engine lifetime decision.
     pub set_max_age: extern "C" fn(VehicleRef, i32),
     pub length_changed: extern "C" fn(VehicleRef),
@@ -165,6 +160,11 @@ impl VehicleServices {
         unsafe { crate::vehicle_base::set_next(record, next) };
     }
 
+    /// The immutable process-wide vehicle resolver services.
+    pub(crate) fn newgrf(&self) -> &'static crate::newgrf_vehicle::Services {
+        // SAFETY: the getter returns the immutable process-wide resolver table.
+        unsafe { &*(self.newgrf)() }
+    }
     /// The static station/depot visit table.
     pub(crate) fn visits(&self) -> &'static visits::Services {
         // SAFETY: the getter returns the immutable process-wide visit table.
@@ -254,8 +254,6 @@ crate::abi::layouts! {
         new_position,
         base_viewport,
         newgrf,
-        property,
-        callback,
         set_max_age,
         length_changed,
         play_vehicle_sound,

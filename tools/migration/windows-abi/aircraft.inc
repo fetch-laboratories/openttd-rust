@@ -81,7 +81,17 @@ static void AircraftDirectBoundary()
 	engine_record->vehicle_info.aircraft.max_range = 41;
 	engine_record->info.cargo_age_period = 71;
 	vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine_record; };
-	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if (property == 0x0C) { CHECK(fallback == 0); return int32_t{200}; } CHECK((property == 0x1C && fallback == 71) || (property == 0x1F && fallback == 41)); return fallback; };
+	/* GetVehicleProperty runs the production resolver: its speed callback answers 200, and
+	 * the cargo age and range callbacks fail, so the caches take the fallbacks 71 and 41. */
+	p.record.first = p.shadow.first = &p.record;
+	resolver.engine_by_id = [](uint16_t) noexcept -> const OpenTTDEngine * { return engine_record; };
+	resolver.cargo_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
+		CHECK(callback == CBID_VEHICLE_MODIFY_PROPERTY);
+		if (property == 0x0C) return 200;
+		CHECK(property == 0x1C || property == 0x1F);
+		return CALLBACK_FAILED;
+	};
 	p.record.subtype = 2;
 	p.vehicle = {&p.record, openttd_rust_aircraft_state_new(), 17};
 	p.record.aircraft = p.shadow.aircraft = p.vehicle.state;

@@ -597,8 +597,8 @@ impl<'a> Game<'a> {
 }
 impl Game<'_> {
     fn property(&self, id: Handle, prop: u32, default: u64) -> u64 {
-        (self.vs().property)(
-            (self.vs().newgrf)(),
+        crate::newgrf_vehicle::get_vehicle_property_raw(
+            self.vs().newgrf(),
             id.vehicle(),
             prop as u8,
             default as i32,
@@ -747,10 +747,13 @@ impl Game<'_> {
                     );
                 }
             } else if self.engine(u).callbacks() & crate::newgrf_callbacks::VEHICLE_LENGTH != 0 {
-                length = (self.vs().callback)(
-                    (self.vs().newgrf)(),
-                    u.vehicle(),
+                length = crate::newgrf_vehicle::get_vehicle_callback(
+                    self.vs().newgrf(),
                     crate::newgrf_callbacks::CBID_VEHICLE_LENGTH,
+                    0,
+                    0,
+                    u.vehicle().engine_type(),
+                    Some(u.vehicle()),
                 );
             }
             if length == u16::MAX {

@@ -12,7 +12,6 @@
 #include <cstdint>
 #include <cstddef>
 enum VehicleType : uint8_t;
-enum CallbackID : uint16_t;
 enum VehicleSoundEvent : uint8_t;
 enum Direction : uint8_t;
 #include "call_ffi.h"
@@ -54,8 +53,6 @@ struct OpenTTDVehicleServices {
 	OpenTTDVehicleNewPosition (OPENTTD_RUST_CALL *new_position)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(new_position);
 	void (OPENTTD_RUST_CALL *base_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	const OpenTTDVehicleResolverServices *(*newgrf)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf);
-	int32_t (OPENTTD_RUST_CALL *property)(const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(property);
-	uint16_t (OPENTTD_RUST_CALL *callback)(const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, CallbackID) noexcept OPENTTD_SERVICE_DEFAULT(callback);
 	void (*set_max_age)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_max_age);
 	void (OPENTTD_RUST_CALL *length_changed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(length_changed);
 	bool (OPENTTD_RUST_CALL *play_vehicle_sound)(OpenTTDVehicle *, VehicleSoundEvent) noexcept OPENTTD_SERVICE_DEFAULT(play_vehicle_sound);

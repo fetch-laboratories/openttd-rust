@@ -17,9 +17,11 @@
 )]
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO};
 use crate::debug::debug;
+use crate::engine_type::EngineID;
 use crate::newgrf_callbacks::{
-    CALLBACK_FAILED, CBID_VEHICLE_BUILD_PROBABILITY, CBID_VEHICLE_MODIFY_PROPERTY,
+    CALLBACK_FAILED, CBID_VEHICLE_BUILD_PROBABILITY, CBID_VEHICLE_MODIFY_PROPERTY, CallbackID,
 };
+use crate::newgrf_properties::PropertyID;
 use crate::order_type::OrderType;
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleRef, VehicleServices};
 use crate::vehicle_base::{
@@ -675,6 +677,81 @@ pub unsafe extern "C" fn openttd_rust_vehicle_callback(
         (s.resolve_callback)(&raw mut state, id, callback, p1, p2, regs, count)
     }
 }
+/// `GetVehicleCallback`: evaluate a newgrf callback for vehicles. `v` is the vehicle to
+/// evaluate the callback for, or `None` if it doesn't exist yet. Returns the value the
+/// callback returned, or `CALLBACK_FAILED` if it failed.
+pub(crate) fn get_vehicle_callback(
+    s: &Services,
+    callback: CallbackID,
+    param1: u32,
+    param2: u32,
+    engine: EngineID,
+    v: Option<VehicleRef>,
+) -> u16 {
+    let v = v.map_or(null_mut(), |v| v.0.as_ptr());
+    // SAFETY: A handle names a live record of the serialized game state.
+    unsafe {
+        // `VehicleResolverObject::WO_UNCACHED`.
+        let mut state = init(s, engine.0, v, 1, false);
+        // No Rust reference into state is retained while generic Action2 reenters.
+        (s.resolve_callback)(
+            &raw mut state,
+            engine.0,
+            callback.0,
+            param1,
+            param2,
+            null_mut(),
+            0,
+        )
+    }
+}
+/// `GetEngineProperty`: callback 0x36 for `property` of `engine`, or `orig_value` if the
+/// callback fails. `v` is `None` for an engine without a vehicle.
+pub(crate) fn get_engine_property(
+    s: &Services,
+    engine: EngineID,
+    property: PropertyID,
+    orig_value: i32,
+    v: Option<VehicleRef>,
+    is_signed: bool,
+) -> i32 {
+    let callback = get_vehicle_callback(
+        s,
+        CBID_VEHICLE_MODIFY_PROPERTY,
+        u32::from(property.0),
+        0,
+        engine,
+        v,
+    );
+    if callback != CALLBACK_FAILED {
+        if is_signed {
+            /* Sign extend 15 bit integer */
+            i32::from((callback << 1) as i16) / 2
+        } else {
+            i32::from(callback)
+        }
+    } else {
+        orig_value
+    }
+}
+/// `GetVehicleProperty(v, property, orig_value)`, the unsigned form.
+pub(crate) fn get_vehicle_property(
+    s: &Services,
+    v: VehicleRef,
+    property: PropertyID,
+    orig_value: i32,
+) -> i32 {
+    get_engine_property(s, v.engine_type(), property, orig_value, Some(v), false)
+}
+/// [`get_vehicle_property`] for callers in files no pass has finished.
+pub(crate) fn get_vehicle_property_raw(
+    s: &Services,
+    v: VehicleRef,
+    property: u8,
+    orig_value: i32,
+) -> i32 {
+    get_vehicle_property(s, v, PropertyID(property), orig_value)
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_property(
     s: &Services,
@@ -684,27 +761,8 @@ pub unsafe extern "C" fn openttd_rust_vehicle_property(
     v: V,
     signed: bool,
 ) -> i32 {
-    unsafe {
-        let result = openttd_rust_vehicle_callback(
-            s,
-            CBID_VEHICLE_MODIFY_PROPERTY.0,
-            u32::from(property),
-            0,
-            id,
-            v,
-            null_mut(),
-            false,
-            null_mut(),
-            0,
-        );
-        if result == CALLBACK_FAILED {
-            fallback
-        } else if signed {
-            i32::from((result << 1) as i16) / 2
-        } else {
-            i32::from(result)
-        }
-    }
+    let v = std::ptr::NonNull::new(v).map(VehicleRef);
+    get_engine_property(s, EngineID(id), PropertyID(property), fallback, v, signed)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_build_probability(
@@ -788,38 +846,6 @@ pub unsafe extern "C" fn openttd_rust_vehicle_randomise(s: &Services, v: V, trig
         invalidate_newgrf_cache_of_chain(s, handle(v));
         randomise(s, v, trigger, 0, true);
         invalidate_newgrf_cache_of_chain(s, handle(v));
-    }
-}
-// Vehicle property/callback table entries point directly to Rust. The caller
-// obtains the immutable resolver table once through the native getter.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_shell_property(
-    s: &Services,
-    v: V,
-    property: u8,
-    fallback: i32,
-) -> i32 {
-    unsafe { openttd_rust_vehicle_property(s, engine(v), property, fallback, v, false) }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_shell_callback(
-    s: &Services,
-    v: V,
-    callback: crate::newgrf_callbacks::CallbackID,
-) -> u16 {
-    unsafe {
-        openttd_rust_vehicle_callback(
-            s,
-            callback.0,
-            0,
-            0,
-            engine(v),
-            v,
-            null_mut(),
-            false,
-            null_mut(),
-            0,
-        )
     }
 }
 // Named source compatibility helpers. Opaque shells remain native; these helpers
@@ -1745,16 +1771,14 @@ pub(crate) unsafe fn signed_property(
     property: u8,
     fallback: i32,
 ) -> i32 {
-    unsafe {
-        openttd_rust_vehicle_property(
-            &*(vs.newgrf)(),
-            v.engine_type_raw(),
-            property,
-            fallback,
-            v.0.as_ptr(),
-            true,
-        )
-    }
+    get_engine_property(
+        vs.newgrf(),
+        v.engine_type(),
+        PropertyID(property),
+        fallback,
+        Some(v),
+        true,
+    )
 }
 /// `TestVehicleBuildProbability(..., Reversed).has_value()` still consumes its RNG.
 pub(crate) unsafe fn reverse_probability(vs: &VehicleServices, v: VehicleRef) -> bool {

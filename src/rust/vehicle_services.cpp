@@ -169,8 +169,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.new_position = VehicleSvcNewPosition,
 	.base_viewport = VehicleSvcBaseViewport,
 	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },
-	.property = openttd_rust_vehicle_shell_property,
-	.callback = openttd_rust_vehicle_shell_callback,
 	.set_max_age = RustVehicleSetMaxAge,
 	.length_changed = VehicleSvcLengthChanged,
 	.play_vehicle_sound = VehicleSvcPlayVehicleSound,

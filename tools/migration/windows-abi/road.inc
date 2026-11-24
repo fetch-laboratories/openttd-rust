@@ -144,9 +144,16 @@ static void RoadBoundary()
 	capabilities.loading = []() noexcept -> const OpenTTDEngineLoadingServices * { return &loading; };
 	loading.unknown_refit = [](uint32_t grfid, uint16_t callback, uint16_t result) noexcept { CHECK(grfid == 0 && callback == 0x11 && result == 9); };
 	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
-	t.vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *u, uint8_t property, int32_t fallback) noexcept -> int32_t {
+	/* GetVehicleProperty runs the production resolver, which reads the parts' engines and
+	 * cargo before its callback service. A failed callback takes the property's fallback. */
+	resolver.shared = &t.shared;
+	resolver.engine_by_id = [](uint16_t id) noexcept -> const OpenTTDEngine * { return id == 9 ? road_abi_new_engine : road_abi_engine; };
+	resolver.cargo_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *state, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
+		CHECK(callback == CBID_VEHICLE_MODIFY_PROPERTY);
+		auto *u = const_cast<OpenTTDVehicle *>(state->self_.v);
 		auto &p = *road_abi_probe;
-		if (property == 0x22) { CHECK(fallback == 0); ++p.cargo_ages; return fallback; }
+		if (property == 0x22) { ++p.cargo_ages; return CALLBACK_FAILED; }
 		if (property == 0x23) CHECK(p.cache_properties == p.cargo_ages);
 		++p.cache_properties;
 		if (p.fallback_cache) {
@@ -155,7 +162,7 @@ static void RoadBoundary()
 			if (property == 0x15) { CHECK(p.cache_properties == 3); road_abi_new_engine->vehicle_info.road.max_speed = 99; }
 			p.engine_replaced = true;
 			RoadAbiHandle()->engine_type = 9;
-			return property == 0x23 ? (u == RoadAbiHandle() ? 0xFFFF : 9) : 0;
+			return property == 0x23 ? (u == RoadAbiHandle() ? CALLBACK_FAILED : 9) : 0;
 		}
 		CHECK(openttd_rust_road_max_speed(u, p.state, p.leaves) == 80);
 		CHECK(openttd_rust_road_trackdir(u, p.state, p.leaves) == 0);
@@ -163,7 +170,7 @@ static void RoadBoundary()
 		openttd_rust_road_set_dest(u, p.state, 142 + p.nested);
 		CHECK(openttd_rust_road_path_size(p.state) == 0);
 		openttd_rust_road_path_push(p.state, {10, 10815});
-		return property == 0x23 ? 0 : property == 0x15 ? 20 : fallback;
+		return property == 0x23 ? 0 : property == 0x15 ? 20 : CALLBACK_FAILED;
 	};
 	openttd_rust_road_update_cache(v, probe.state, false, &t.leaves);
 	CHECK(road_abi_vehicle.cached_max_speed == 80);
@@ -191,8 +198,8 @@ static void RoadBoundary()
 		return road_abi_engine;
 	};
 	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
-	t.vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *u, uint8_t property, int32_t value) noexcept -> int32_t {
-		CHECK(u == RoadAbiHandle() && property == 9 && value == 3);
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *state, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
+		CHECK(callback == CBID_VEHICLE_MODIFY_PROPERTY && state->self_.v == RoadAbiHandle() && property == 9);
 		road_abi_probe->engine_replaced = true;
 		return 4;
 	};

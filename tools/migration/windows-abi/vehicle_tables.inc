@@ -38,8 +38,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, pathfinding_result);
 		VEHICLE_UNUSED(vehicle, new_position);
 		VEHICLE_UNUSED(vehicle, base_viewport);
-		VEHICLE_UNUSED(vehicle, property);
-		VEHICLE_UNUSED(vehicle, callback);
 		VEHICLE_UNUSED(vehicle, set_max_age);
 		VEHICLE_UNUSED(vehicle, length_changed);
 		VEHICLE_UNUSED(vehicle, play_vehicle_sound);

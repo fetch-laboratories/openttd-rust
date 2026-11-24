@@ -1755,18 +1755,21 @@ fn get_load_amount(
         let mut cb_load_amount = crate::newgrf_callbacks::CALLBACK_FAILED;
         if e.grf_version(shared) >= 8 {
             /* Use callback 36 */
-            cb_load_amount = (vehicle.property)(
-                (vehicle.newgrf)(),
+            cb_load_amount = crate::newgrf_vehicle::get_vehicle_property(
+                vehicle.newgrf(),
                 v,
-                crate::newgrf_properties::PROP_VEHICLE_LOAD_AMOUNT,
+                crate::newgrf_properties::PropertyID::PROP_VEHICLE_LOAD_AMOUNT,
                 i32::from(crate::newgrf_callbacks::CALLBACK_FAILED),
             ) as u16;
         } else if e.callbacks() & crate::newgrf_callbacks::VEHICLE_LOAD_AMOUNT != 0 {
             /* Use callback 12 */
-            cb_load_amount = (vehicle.callback)(
-                (vehicle.newgrf)(),
-                v,
+            cb_load_amount = crate::newgrf_vehicle::get_vehicle_callback(
+                vehicle.newgrf(),
                 crate::newgrf_callbacks::CBID_VEHICLE_LOAD_AMOUNT,
+                0,
+                0,
+                v.engine_type(),
+                Some(v),
             );
         }
         if cb_load_amount != crate::newgrf_callbacks::CALLBACK_FAILED {

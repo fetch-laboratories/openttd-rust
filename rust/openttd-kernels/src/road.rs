@@ -36,10 +36,7 @@ use crate::map_func::{Map, World};
 use crate::math::is_inside_mm;
 use crate::movement::CachedTable;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
-use crate::newgrf_properties::{
-    PROP_ROADVEH_CARGO_AGE_PERIOD, PROP_ROADVEH_RUNNING_COST_FACTOR, PROP_ROADVEH_SHORTEN_FACTOR,
-    PROP_ROADVEH_SPEED,
-};
+use crate::newgrf_properties::PropertyID;
 use crate::newgrf_sound::VSE_START;
 use crate::news_func::{add_tile_news_item, add_vehicle_news_item};
 use crate::news_type::NewsType;
@@ -679,10 +676,10 @@ impl<'a> Game<'a> {
         let mut veh_len;
         if e.grf_version(self.ss) >= 8 {
             /* Use callback 36 */
-            veh_len = service!(self.vs.property)(
-                (self.vs.newgrf)(),
+            veh_len = crate::newgrf_vehicle::get_vehicle_property(
+                self.vs.newgrf(),
                 v,
-                PROP_ROADVEH_SHORTEN_FACTOR,
+                PropertyID::PROP_ROADVEH_SHORTEN_FACTOR,
                 i32::from(crate::newgrf_callbacks::CALLBACK_FAILED),
             ) as u16;
             if veh_len != crate::newgrf_callbacks::CALLBACK_FAILED
@@ -693,7 +690,14 @@ impl<'a> Game<'a> {
             }
         } else {
             /* Use callback 11 */
-            veh_len = service!(self.vs.callback)((self.vs.newgrf)(), v, CBID_VEHICLE_LENGTH);
+            veh_len = crate::newgrf_vehicle::get_vehicle_callback(
+                self.vs.newgrf(),
+                CBID_VEHICLE_LENGTH,
+                0,
+                0,
+                v.engine_type(),
+                Some(v),
+            );
         }
         if veh_len == crate::newgrf_callbacks::CALLBACK_FAILED {
             veh_len = u16::from(e.road_shorten());
@@ -755,18 +759,22 @@ impl<'a> Game<'a> {
 
             /* Update cargo aging period. */
             let cargo_age_period = service!(self.vs.engine)(u).cargo_age();
-            let period = service!(self.vs.property)(
-                (self.vs.newgrf)(),
+            let period = crate::newgrf_vehicle::get_vehicle_property(
+                self.vs.newgrf(),
                 u,
-                PROP_ROADVEH_CARGO_AGE_PERIOD,
+                PropertyID::PROP_ROADVEH_CARGO_AGE_PERIOD,
                 i32::from(cargo_age_period),
             );
             u.set_cached_cargo_age_period(period as u16);
             part = u.next();
         }
 
-        let max_speed =
-            service!(self.vs.property)((self.vs.newgrf)(), v.v, PROP_ROADVEH_SPEED, 0) as u32;
+        let max_speed = crate::newgrf_vehicle::get_vehicle_property(
+            self.vs.newgrf(),
+            v.v,
+            PropertyID::PROP_ROADVEH_SPEED,
+            0,
+        ) as u32;
         v.v.set_cached_max_speed(if max_speed != 0 {
             max_speed.wrapping_mul(4) as u16
         } else {
@@ -2560,10 +2568,10 @@ impl<'a> Game<'a> {
             return 0;
         }
 
-        let cost_factor = service!(self.vs.property)(
-            (self.vs.newgrf)(),
+        let cost_factor = crate::newgrf_vehicle::get_vehicle_property(
+            self.vs.newgrf(),
             v.v,
-            PROP_ROADVEH_RUNNING_COST_FACTOR,
+            PropertyID::PROP_ROADVEH_RUNNING_COST_FACTOR,
             i32::from(e.road_running()),
         ) as u32;
         if cost_factor == 0 {

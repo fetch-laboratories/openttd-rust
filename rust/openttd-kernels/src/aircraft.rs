@@ -29,9 +29,7 @@ use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::effectvehicle_func::EffectVehicleType;
 use crate::engine_type::{AIR_CTOL, AIR_FAST};
 use crate::map_func::Map;
-use crate::newgrf_properties::{
-    PROP_AIRCRAFT_CARGO_AGE_PERIOD, PROP_AIRCRAFT_RANGE, PROP_AIRCRAFT_SPEED,
-};
+use crate::newgrf_properties::PropertyID;
 use crate::newgrf_sound::{VSE_START, VSE_TOUCHDOWN};
 use crate::news_func::{
     add_tile_news_item, add_vehicle_advice_news_item, add_vehicle_news_item, delete_vehicle_news,
@@ -653,8 +651,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         Self::call(|| (self.vs.engine)(v.base())).aircraft_subtype()
     }
     /// `GetVehicleProperty(v, property, fallback)`.
-    fn get_vehicle_property(&self, v: VehicleRef, property: u8, fallback: i32) -> i32 {
-        Self::call(|| (self.vs.property)((self.vs.newgrf)(), v, property, fallback))
+    fn get_vehicle_property(&self, v: VehicleRef, property: PropertyID, fallback: i32) -> i32 {
+        crate::newgrf_vehicle::get_vehicle_property(self.vs.newgrf(), v, property, fallback)
     }
     /// `GetNewVehiclePos(v)`.
     fn new_vehicle_pos(&self, v: Vehicle) -> crate::vehicle::NewPosition {
@@ -1079,7 +1077,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn update_aircraft_cache(&self, v: Vehicle, update_range: bool) {
         let b = v.base();
         let mut max_speed = self
-            .get_vehicle_property(b, PROP_AIRCRAFT_SPEED, 0)
+            .get_vehicle_property(b, PropertyID::PROP_AIRCRAFT_SPEED, 0)
             .cast_unsigned();
         if max_speed != 0 {
             /* Convert from original units to km-ish/h */
@@ -1095,14 +1093,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let cargo_age = Self::call(|| (self.vs.engine)(b)).cargo_age();
         b.set_cached_cargo_age_period(self.get_vehicle_property(
             b,
-            PROP_AIRCRAFT_CARGO_AGE_PERIOD,
+            PropertyID::PROP_AIRCRAFT_CARGO_AGE_PERIOD,
             i32::from(cargo_age),
         ) as u16);
         let u = next_part(b); // Shadow for mail
         let cargo_age = Self::call(|| (self.vs.engine)(u)).cargo_age();
         u.set_cached_cargo_age_period(self.get_vehicle_property(
             u,
-            PROP_AIRCRAFT_CARGO_AGE_PERIOD,
+            PropertyID::PROP_AIRCRAFT_CARGO_AGE_PERIOD,
             i32::from(cargo_age),
         ) as u16);
 
@@ -1111,7 +1109,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             let max_range = Self::call(|| (self.vs.engine)(b)).aircraft_range();
             v.set_cached_max_range(self.get_vehicle_property(
                 b,
-                PROP_AIRCRAFT_RANGE,
+                PropertyID::PROP_AIRCRAFT_RANGE,
                 i32::from(max_range),
             ) as u16);
             /* Squared it now so we don't have to do it later all the time. */

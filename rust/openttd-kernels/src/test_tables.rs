@@ -178,8 +178,6 @@ pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::Vehi
     new_position: unreachable1,
     base_viewport: unreachable1,
     newgrf: unreachable0,
-    property: unreachable4,
-    callback: unreachable3,
     set_max_age: unreachable2,
     length_changed: unreachable1,
     play_vehicle_sound: unreachable2,
