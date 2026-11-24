@@ -16,9 +16,6 @@ use crate::newgrf_loading::{TEST_TABLE as LOADING_TEST_TABLE, openttd_rust_grf_e
 use crate::test_tables::{SHARED, unreachable1, unreachable2, unreachable3};
 use std::sync::atomic::{AtomicU8, Ordering};
 
-const INVALID_LAYOUT: u32 = 1001;
-const INVALID_PRODUCTION: u32 = 1002;
-
 #[derive(Default)]
 struct Adjust {
     operation: u8,
@@ -205,8 +202,6 @@ extern "C" fn grf_file_version(_: *const c_void) -> u8 {
 
 const SERVICES: Services = Services {
     pal_sprite_storage,
-    invalid_layout: INVALID_LAYOUT,
-    invalid_production: INVALID_PRODUCTION,
     callback_new,
     group_index,
     group_get,
@@ -394,7 +389,10 @@ fn partial_reads_publication_and_interner() {
         world().error_data.last().unwrap(),
         b"too many inputs (max 16)"
     );
-    assert_eq!(world().errors.last(), Some(&INVALID_PRODUCTION));
+    assert_eq!(
+        world().errors.last(),
+        Some(&STR_NEWGRF_ERROR_INDPROD_CALLBACK.0)
+    );
     assert_eq!(world().statuses.last(), Some(&GCS_DISABLED));
     assert!(slot(206).is_null());
     assert_eq!(unsafe { (*openttd_rust_grf_execution()).skip_sprites }, -1);
@@ -402,7 +400,10 @@ fn partial_reads_publication_and_interner() {
     // A ground sprite with an invalid flag disables the file as an invalid layout.
     unsafe { (*openttd_rust_grf_execution()).skip_sprites = 0 };
     assert!(f.parse(&[9, 209, 0x41, 1, 0, 0, 0, 16, 0]).0);
-    assert_eq!(world().errors.last(), Some(&INVALID_LAYOUT));
+    assert_eq!(
+        world().errors.last(),
+        Some(&STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT.0)
+    );
     assert_eq!(world().statuses.last(), Some(&GCS_DISABLED));
     assert!(slot(209).is_null());
 }
@@ -424,7 +425,10 @@ fn production_duplicate_and_invalid_cargo() {
     // A repeated input cargo disables the file; the group is never published.
     assert!(f.parse(&[10, 207, 2, 2, 0, 9, 0]).0);
     assert_eq!(world().error_data.last().unwrap(), b"duplicate input cargo");
-    assert_eq!(world().errors.last(), Some(&INVALID_PRODUCTION));
+    assert_eq!(
+        world().errors.last(),
+        Some(&STR_NEWGRF_ERROR_INDPROD_CALLBACK.0)
+    );
     assert_eq!(world().statuses.last(), Some(&GCS_DISABLED));
     assert!(slot(207).is_null());
     assert_eq!(unsafe { (*openttd_rust_grf_execution()).skip_sprites }, -1);

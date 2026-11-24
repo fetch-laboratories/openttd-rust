@@ -18,8 +18,6 @@ const OpenTTDAction2Services &GetRustAction2Services() noexcept
 {
 	static const OpenTTDAction2Services services{
 		.pal_sprite_storage = [](PalSpriteID *image) noexcept { return OpenTTDPalSpriteStorage{&image->sprite, &image->pal}; },
-		.invalid_layout = STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT,
-		.invalid_production = STR_NEWGRF_ERROR_INDPROD_CALLBACK,
 		.callback_new = [](uint16_t value) noexcept -> const SpriteGroup * { assert(CallbackResultSpriteGroup::CanAllocateItem()); return new CallbackResultSpriteGroup(value); },
 		.group_index = [](const SpriteGroup *group) noexcept { return group->index.base(); },
 		.group_get = [](uint32_t index) noexcept -> const SpriteGroup * { return SpriteGroup::Get(SpriteGroupID(index)); },

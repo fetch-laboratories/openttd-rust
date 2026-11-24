@@ -148,8 +148,6 @@ pub struct CommandServices {
     pub pause_level: extern "C" fn() -> u8,
     /// `Company::GetIfValid(company)->last_build_coordinate = tile`.
     pub last_build_coordinate: extern "C" fn(u8, u32),
-    /// `STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY`.
-    pub not_enough_cash: u32,
     /// `ShowErrorMessage` with `STR_ERROR_NOT_ALLOWED_WHILE_PAUSED` at pixel coordinates.
     pub paused_error: extern "C" fn(u32, i32, i32),
     /// `ShowErrorMessage` for a failed result at pixel coordinates.
@@ -715,7 +713,6 @@ crate::abi::layouts! {
         shift_pressed,
         pause_level,
         last_build_coordinate,
-        not_enough_cash,
         paused_error,
         error_message,
         estimate,

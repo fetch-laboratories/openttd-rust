@@ -90,7 +90,6 @@ struct OpenTTDCompanyServices {
 	void (*close_construction_windows)() noexcept OPENTTD_SERVICE_DEFAULT(close_construction_windows);
 	const OpenTTDCommandCostServices *cost;
 	const OpenTTDObjectivesServices &(*objectives)() noexcept OPENTTD_SERVICE_DEFAULT(objectives);
-	uint32_t owned_by;
 	const OpenTTDSettingServices &(*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
 	OpenTTDCompanyRef (OPENTTD_RUST_CALL *company_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(company_next);
 	size_t (OPENTTD_RUST_CALL *company_count)() noexcept OPENTTD_SERVICE_DEFAULT(company_count);

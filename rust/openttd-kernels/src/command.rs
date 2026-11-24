@@ -28,6 +28,7 @@ use crate::services::{CommandCost, CommandCostServices, CommandServices};
 use crate::tile_type::TileIndex;
 
 use crate::strings_type::INVALID_STRING_ID;
+use crate::table::strings::STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY;
 use crate::tile_type::TILE_SIZE;
 
 pub(crate) fn before(s: &CommandServices, top_level: bool, test: bool) {
@@ -473,7 +474,11 @@ pub unsafe extern "C" fn openttd_rust_command_finish(
     if extra_cash != 0 && (c.money)(exec) == 0 {
         /* Removed rail can refund money and leave queued signals. */
         flush_signals(s);
-        (c.error_param)(exec, s.not_enough_cash, extra_cash as u64);
+        (c.error_param)(
+            exec,
+            STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY.0,
+            extra_cash as u64,
+        );
         return;
     }
     if tile != 0 {

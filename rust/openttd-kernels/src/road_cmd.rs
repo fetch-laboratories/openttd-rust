@@ -296,7 +296,7 @@ impl<'a> Ctx<'a> {
     fn owned_by_town(&self, error: Cost<'_>, tile: u32) {
         // SAFETY: The context's canonical command table owns the company service.
         let company = unsafe { &*(self.commands.company)() };
-        error.make_error(company.owned_by);
+        error.make_error(STR_ERROR_OWNED_BY.0);
         if (company.shared.local_company)() == (company.finance.current_company)() {
             (error.1.encode_owned_by)(error.0, crate::company_type::Owner::TOWN, TileIndex(tile));
         }

@@ -26,6 +26,7 @@ use crate::group::{GroupFlag, GroupFlags};
 use crate::group_type::GroupID;
 use crate::livery::{Livery, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
+use crate::table::strings::STR_ERROR_GROUP_CAN_T_SET_PARENT_RECURSION;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef};
 use crate::vehicle_base::is_ground_vehicle;
 use crate::vehicle_type::{VehicleID, VehicleType};
@@ -318,7 +319,6 @@ pub struct GroupServices {
     pub(crate) renew_allocate: unsafe extern "C" fn() -> *mut (),
     pub(crate) renew_can_allocate: unsafe extern "C" fn() -> bool,
     pub(crate) renew_delete: unsafe extern "C" fn(*mut ()),
-    pub(crate) recursion_error: u32,
 }
 
 // The shared table's canonical vehicle iteration, company and UTF-8 services.
@@ -778,7 +778,7 @@ unsafe fn alter_group(
                 return ERROR;
             }
             if unsafe { contains(w, parent, id) } {
-                return w.recursion_error;
+                return STR_ERROR_GROUP_CAN_T_SET_PARENT_RECURSION.0;
             }
         }
         if flags & 1 != 0 {
@@ -1761,6 +1761,5 @@ crate::abi::layouts! {
         renew_allocate,
         renew_can_allocate,
         renew_delete,
-        recursion_error,
     };
 }

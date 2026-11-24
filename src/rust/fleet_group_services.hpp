@@ -109,7 +109,6 @@ const OpenTTDFleetGroupServices &FleetGroupServices()
 		.renew_allocate = FleetGroup_renew_allocate,
 		.renew_can_allocate = FleetGroup_renew_can_allocate,
 		.renew_delete = FleetGroup_renew_delete,
-		.recursion_error = STR_ERROR_GROUP_CAN_T_SET_PARENT_RECURSION,
 	};
 	return services;
 }

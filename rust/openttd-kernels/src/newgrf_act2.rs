@@ -46,6 +46,9 @@ use crate::sprites::{
     PAL_NONE, PALETTE_MODIFIER_COLOUR, PALETTE_MODIFIER_TRANSPARENT, SPR_IMG_QUERY,
     SPRITE_MODIFIER_CUSTOM_SPRITE, SPRITE_MODIFIER_OPAQUE, SPRITE_WIDTH,
 };
+use crate::table::strings::{
+    STR_NEWGRF_ERROR_INDPROD_CALLBACK, STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT,
+};
 use std::{ffi::c_void, ptr};
 #[repr(C)]
 pub struct PalSpriteStorage {
@@ -113,8 +116,6 @@ pub struct SequenceStorage {
 #[repr(C)]
 pub struct Services {
     pal_sprite_storage: unsafe extern "C" fn(*mut PalSprite) -> PalSpriteStorage,
-    invalid_layout: u32,
-    invalid_production: u32,
     callback_new: unsafe extern "C" fn(u16) -> Handle,
     group_index: unsafe extern "C" fn(Handle) -> u32,
     group_get: unsafe extern "C" fn(u32) -> Handle,
@@ -158,7 +159,7 @@ crate::abi::layouts! {
     "OpenTTDSequenceStorage" ["act2"] => SequenceStorage { image, x, y, z, extent_x, extent_y, extent_z };
     "OpenTTDPalSpriteStorage" ["act2"] => PalSpriteStorage { sprite, pal };
     "OpenTTDLayoutRegisters" ["act2"] => LayoutRegisters { flags, dodraw, sprite, palette, max_sprite_offset, max_palette_offset, delta, sprite_var10, palette_var10 };
-    "OpenTTDAction2Services" ["act2"] => Services { pal_sprite_storage, invalid_layout, invalid_production, callback_new, group_index, group_get, result_new, assert_loaded, deterministic_new, random_new, real_new, layout_new, production_new, adjust_begin, deterministic_default, deterministic_error, range_append, random_storage, random_reserve, random_append, loaded_reserve, loaded_append, loading_reserve, loading_append, production_storage, group_layout, layout_allocate, layout_storage, layout_sequence, sequence_storage, is_parent, has_registers, allocate_registers, registers, assert_offsets, error_data };
+    "OpenTTDAction2Services" ["act2"] => Services { pal_sprite_storage, callback_new, group_index, group_get, result_new, assert_loaded, deterministic_new, random_new, real_new, layout_new, production_new, adjust_begin, deterministic_default, deterministic_error, range_append, random_storage, random_reserve, random_append, loaded_reserve, loaded_append, loading_reserve, loading_append, production_storage, group_layout, layout_allocate, layout_storage, layout_sequence, sequence_storage, is_parent, has_registers, allocate_registers, registers, assert_offsets, error_data };
 }
 
 const GROUPID_CALLBACK_FAILED: u16 = 0x7FFF;
@@ -590,7 +591,12 @@ unsafe fn production<R: Read>(
             let count = b.byte()?;
             *f.num_input = count;
             if usize::from(count) > INDUSTRY_NUM_INPUTS {
-                disable(s, l, s.invalid_production, b"too many inputs (max 16)");
+                disable(
+                    s,
+                    l,
+                    STR_NEWGRF_ERROR_INDPROD_CALLBACK.0,
+                    b"too many inputs (max 16)",
+                );
                 return Ok(None);
             }
             for i in 0..usize::from(count) {
@@ -602,7 +608,12 @@ unsafe fn production<R: Read>(
                 if !crate::cargo_type::is_valid_cargo_type(cargo) {
                     *f.version = 0xFF;
                 } else if (0..i).any(|j| *f.cargo_input.add(j) == cargo) {
-                    disable(s, l, s.invalid_production, b"duplicate input cargo");
+                    disable(
+                        s,
+                        l,
+                        STR_NEWGRF_ERROR_INDPROD_CALLBACK.0,
+                        b"duplicate input cargo",
+                    );
                     return Ok(None);
                 }
                 *f.cargo_input.add(i) = cargo;
@@ -611,7 +622,12 @@ unsafe fn production<R: Read>(
             let count = b.byte()?;
             *f.num_output = count;
             if usize::from(count) > INDUSTRY_NUM_OUTPUTS {
-                disable(s, l, s.invalid_production, b"too many outputs (max 16)");
+                disable(
+                    s,
+                    l,
+                    STR_NEWGRF_ERROR_INDPROD_CALLBACK.0,
+                    b"too many outputs (max 16)",
+                );
                 return Ok(None);
             }
             for i in 0..usize::from(count) {
@@ -623,7 +639,12 @@ unsafe fn production<R: Read>(
                 if !crate::cargo_type::is_valid_cargo_type(cargo) {
                     *f.version = 0xFF;
                 } else if (0..i).any(|j| *f.cargo_output.add(j) == cargo) {
-                    disable(s, l, s.invalid_production, b"duplicate output cargo");
+                    disable(
+                        s,
+                        l,
+                        STR_NEWGRF_ERROR_INDPROD_CALLBACK.0,
+                        b"duplicate output cargo",
+                    );
                     return Ok(None);
                 }
                 *f.cargo_output.add(i) = cargo;
@@ -714,7 +735,7 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                 1,
                 "ReadSpriteLayoutSprite: Spritelayout specifies var10 value for non-action-1 sprite"
             );
-            disable(s, l, s.invalid_layout, b"");
+            disable(s, l, STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT.0, b"");
             return Ok(flags);
         }
         if flags & TLF_CUSTOM_PALETTE != 0 {
@@ -750,7 +771,7 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                 1,
                 "ReadSpriteLayoutRegisters: Spritelayout specifies var10 value for non-action-1 palette"
             );
-            disable(s, l, s.invalid_layout, b"");
+            disable(s, l, STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT.0, b"");
         }
         Ok(flags)
     }
@@ -808,7 +829,7 @@ unsafe fn layout_registers<R: Read>(
                     value,
                     TLR_MAX_VAR10
                 );
-                disable(s, l, s.invalid_layout, b"");
+                disable(s, l, STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT.0, b"");
                 return Ok(());
             }
         }
@@ -822,7 +843,7 @@ unsafe fn layout_registers<R: Read>(
                     value,
                     TLR_MAX_VAR10
                 );
-                disable(s, l, s.invalid_layout, b"");
+                disable(s, l, STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT.0, b"");
             }
         }
         Ok(())
@@ -876,7 +897,7 @@ pub(crate) unsafe fn read_layout<R: Read>(
                 "ReadSpriteLayout: Spritelayout uses invalid flag 0x{:X} for ground sprite",
                 invalid
             );
-            disable(s, l, s.invalid_layout, b"");
+            disable(s, l, STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT.0, b"");
             return Ok(true);
         }
         layout_registers(s, l, b, flags, false, layout, 0)?;
@@ -907,7 +928,7 @@ pub(crate) unsafe fn read_layout<R: Read>(
                     "ReadSpriteLayout: Spritelayout uses unknown flag 0x{:X}",
                     flags & !valid
                 );
-                disable(s, l, s.invalid_layout, b"");
+                disable(s, l, STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT.0, b"");
                 return Ok(true);
             }
             *f.x = b.byte()? as i8;

@@ -73,7 +73,6 @@ struct OpenTTDFleetGroupServices {
 	void * (*renew_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(renew_allocate);
 	bool (*renew_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(renew_can_allocate);
 	void (*renew_delete)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(renew_delete);
-	uint32_t recursion_error;
 };
 struct OpenTTDFleetCosts { void *result; void *replace; void *build; void *copy; void *temporary; void *seeds; };
 struct OpenTTDVehicleCommonServices;

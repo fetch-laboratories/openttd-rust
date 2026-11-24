@@ -716,7 +716,6 @@ pub(crate) const COMMANDS: crate::services::CommandServices = crate::services::C
     shift_pressed: unreachable0,
     pause_level: unreachable0,
     last_build_coordinate: unreachable2,
-    not_enough_cash: 0,
     paused_error: unreachable3,
     error_message: unreachable4,
     estimate: unreachable3,
@@ -1200,7 +1199,6 @@ pub(crate) const FLEET_GROUPS: crate::fleet::GroupServices = crate::fleet::Group
     renew_allocate: unreachable0,
     renew_can_allocate: unreachable0,
     renew_delete: unreachable1,
-    recursion_error: 0,
 };
 
 /// `crate::vehicle::maintenance::Services` with every entry unreachable.
@@ -1336,7 +1334,6 @@ pub(crate) const COMPANY: crate::company::Services = crate::company::Services {
     close_construction_windows: unreachable0,
     cost: &COMMAND_COSTS,
     objectives: unreachable0,
-    owned_by: 0,
     settings: unreachable0,
     company_next: unreachable1,
     company_count: unreachable0,
