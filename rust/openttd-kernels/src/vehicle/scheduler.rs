@@ -202,9 +202,13 @@ fn run_vehicle_calendar_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
 
 /// `RunEconomyVehicleDayProc`: increases the day counter for all vehicles and calls 1-day and
 /// 32-day handlers. Each tick, it processes vehicles with
-/// "index % DAY_TICKS == `TimerGameEconomy::date_fract`", so each day, all vehicles are
+/// "`index % DAY_TICKS == TimerGameEconomy::date_fract`", so each day, all vehicles are
 /// processes in `DAY_TICKS` steps.
 #[allow(unsafe_code)]
+#[allow(
+    clippy::verbose_bit_mask,
+    reason = "RunEconomyVehicleDayProc's (v->day_counter & 0x1F) == 0"
+)]
 fn run_economy_vehicle_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
     if session::mode() != GameMode::GM_NORMAL {
         return;
@@ -228,8 +232,10 @@ fn run_economy_vehicle_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
                 if COUNTED {
                     crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
                 }
+                // SAFETY: The getter returns the process-lifetime resolver table.
+                let newgrf = unsafe { &*svc!(COUNTED, vs.newgrf) };
                 let callback = newgrf_vehicle::get_vehicle_callback(
-                    svc!(COUNTED, VehicleServices::newgrf, vs),
+                    newgrf,
                     CBID_VEHICLE_32DAY_CALLBACK,
                     0,
                     0,
@@ -296,9 +302,40 @@ fn load_stations<const COUNTED: bool>(tables: &Tables) {
     });
 }
 
-/// `CallVehicleTicks`'s loop body after `v->Tick()` returned true: its `switch (v->type)`.
-/// `newgrf` is the vehicle resolver, whose slot reads a vehicle's cargo list.
+/// The cargo ageing of a transport vehicle that survived its `Tick`. `newgrf` is the vehicle
+/// resolver, whose slot reads the vehicle's cargo list.
 #[allow(unsafe_code)]
+fn age_cargo<const COUNTED: bool>(
+    tables: &Tables,
+    newgrf: &newgrf_vehicle::Services,
+    v: VehicleRef,
+) {
+    if load!(COUNTED, v.cached_cargo_age_period()) != 0 {
+        let counter =
+            load!(COUNTED, v.cargo_age_counter()).min(load!(COUNTED, v.cached_cargo_age_period()));
+        store!(COUNTED, v.set_cargo_age_counter(counter));
+        let counter = counter.wrapping_sub(1);
+        store!(COUNTED, v.set_cargo_age_counter(counter));
+        if counter == 0 {
+            if COUNTED {
+                crate::witness::hit(crate::witness::VEHICLE_CARGO_OWNER);
+            }
+            let cargo = svc!(COUNTED, VehicleRef::cargo, v, newgrf);
+            if COUNTED {
+                crate::witness::hit(crate::witness::VEHICLE_CARGO_AGES);
+            }
+            // SAFETY: The surviving vehicle's live list and the process-lifetime cargo table.
+            unsafe { cargo_storage::age::<COUNTED>(cargo, tables.cargo) };
+            store!(
+                COUNTED,
+                v.set_cargo_age_counter(load!(COUNTED, v.cached_cargo_age_period()))
+            );
+        }
+    }
+}
+
+/// The loop body of [`call_vehicle_ticks`] after `v->Tick()` returned true: its
+/// `switch (v->type)`.
 fn after_tick<const COUNTED: bool>(
     tables: &Tables,
     vs: &VehicleServices,
@@ -327,28 +364,7 @@ fn after_tick<const COUNTED: bool>(
     }
     let front = load!(COUNTED, v.first());
 
-    if load!(COUNTED, v.cached_cargo_age_period()) != 0 {
-        let counter =
-            load!(COUNTED, v.cargo_age_counter()).min(load!(COUNTED, v.cached_cargo_age_period()));
-        store!(COUNTED, v.set_cargo_age_counter(counter));
-        let counter = counter.wrapping_sub(1);
-        store!(COUNTED, v.set_cargo_age_counter(counter));
-        if counter == 0 {
-            if COUNTED {
-                crate::witness::hit(crate::witness::VEHICLE_CARGO_OWNER);
-            }
-            let cargo = svc!(COUNTED, VehicleRef::cargo, v, newgrf);
-            if COUNTED {
-                crate::witness::hit(crate::witness::VEHICLE_CARGO_AGES);
-            }
-            // SAFETY: The surviving vehicle's live list and the process-lifetime cargo table.
-            unsafe { cargo_storage::age::<COUNTED>(cargo, tables.cargo) };
-            store!(
-                COUNTED,
-                v.set_cargo_age_counter(load!(COUNTED, v.cached_cargo_age_period()))
-            );
-        }
-    }
+    age_cargo::<COUNTED>(tables, newgrf, v);
 
     // Do not play any sound when crashed
     if load!(COUNTED, front.vehstatus()).test(VehState::Crashed) {
@@ -486,7 +502,8 @@ fn call_vehicle_ticks<const COUNTED: bool>(tables: &Tables, cost: *mut ()) {
     }
 
     let vs = s.vehicle();
-    let newgrf = svc!(COUNTED, VehicleServices::newgrf, vs);
+    // SAFETY: The getter returns the process-lifetime resolver table.
+    let newgrf = unsafe { &*svc!(COUNTED, vs.newgrf) };
     let pool = s.pool();
     // `Vehicle::Iterate()`: each step rereads the pool's extent and slot, so a vehicle that
     // `Tick` allocates ahead of the walk, past the old extent included, is visited this tick.
@@ -673,11 +690,11 @@ mod tests {
             });
             Self { part, front }
         }
-        fn part(&self) -> &mut VehicleRecord {
+        fn part(&mut self) -> &mut VehicleRecord {
             // SAFETY: The pair's live record; no other reference to it is live.
             unsafe { &mut *self.part }
         }
-        fn front(&self) -> &mut VehicleRecord {
+        fn front(&mut self) -> &mut VehicleRecord {
             // SAFETY: As `part`.
             unsafe { &mut *self.front }
         }
@@ -807,13 +824,13 @@ mod tests {
 
     #[test]
     fn cargo_short_circuit_wrap_clamp_and_period_reload() {
-        let pair = Pair::new(ROAD, ROAD);
+        let mut pair = Pair::new(ROAD, ROAD);
         pair.front().vehstatus = CRASHED;
         pair.run();
         assert_eq!(pair.part().cargo_age_counter, 9);
         assert_eq!(events(), [] as [&str; 0]);
         for (counter, expected) in [(0, u16::MAX), (9, 3)] {
-            let pair = Pair::new(ROAD, ROAD);
+            let mut pair = Pair::new(ROAD, ROAD);
             pair.part().cached_cargo_age_period = 4;
             pair.part().cargo_age_counter = counter;
             pair.front().vehstatus = CRASHED;
@@ -821,7 +838,7 @@ mod tests {
             assert_eq!(pair.part().cargo_age_counter, expected);
             assert_eq!(events(), [] as [&str; 0]);
         }
-        let pair = Pair::new(ROAD, ROAD);
+        let mut pair = Pair::new(ROAD, ROAD);
         pair.part().cached_cargo_age_period = 4;
         pair.part().cargo_age_counter = 1;
         pair.front().vehstatus = CRASHED;
@@ -851,7 +868,7 @@ mod tests {
     #[test]
     fn non_transport_type_bytes_skip_all_transport_state() {
         for byte in 4..=u8::MAX {
-            let pair = Pair::new(VehicleType(byte), ROAD);
+            let mut pair = Pair::new(VehicleType(byte), ROAD);
             pair.part().cached_cargo_age_period = 7;
             pair.part().cargo_age_counter = 3;
             pair.part().motion_counter = u32::MAX;
@@ -865,13 +882,13 @@ mod tests {
 
     #[test]
     fn hidden_stopped_and_type_gates() {
-        let pair = Pair::new(ROAD, ROAD);
+        let mut pair = Pair::new(ROAD, ROAD);
         pair.part().vehstatus = HIDDEN;
         pair.run();
         assert_eq!(pair.part().motion_counter, 0);
         assert_eq!(events(), [] as [&str; 0]);
         for (kind, speed) in [(ROAD, 23), (TRAIN, 0)] {
-            let pair = Pair::new(kind, kind);
+            let mut pair = Pair::new(kind, kind);
             pair.front().cur_speed = speed;
             pair.front().vehstatus = STOPPED;
             pair.run();
@@ -879,7 +896,7 @@ mod tests {
             assert_eq!(events(), [] as [&str; 0]);
         }
         for (kind, subtype) in [(ROAD, 0), (TRAIN, 0), (AIRCRAFT, 3)] {
-            let pair = Pair::new(kind, kind);
+            let mut pair = Pair::new(kind, kind);
             pair.front().cur_speed = 5;
             pair.part().motion_counter = u32::MAX;
             pair.part().subtype = subtype;
@@ -891,7 +908,7 @@ mod tests {
 
     #[test]
     fn fresh_sound_observations_and_ship_subtype_short_circuit() {
-        let pair = Pair::new(ROAD, ROAD);
+        let mut pair = Pair::new(ROAD, ROAD);
         pair.front().cur_speed = 8;
         pair.part().motion_counter = 252;
         observed(|o| o.sound_changes = 1);
@@ -900,7 +917,7 @@ mod tests {
         assert_eq!(observed(|o| o.running), Some(false));
         assert_eq!(events(), ["running-sound", "periodic-sound"]);
         for change in [2, 3] {
-            let pair = Pair::new(ROAD, ROAD);
+            let mut pair = Pair::new(ROAD, ROAD);
             pair.front().cur_speed = 8;
             pair.part().motion_counter = 252;
             pair.part().tick_counter = 0;
@@ -910,14 +927,14 @@ mod tests {
             let expected = if change == 2 { Some(false) } else { None };
             assert_eq!(observed(|o| o.running), expected);
         }
-        let pair = Pair::new(SHIP, SHIP);
+        let mut pair = Pair::new(SHIP, SHIP);
         pair.front().cur_speed = 5;
         pair.part().motion_counter = 17;
         pair.part().tick_counter = 0;
         pair.part().subtype = 0; // A ship has no subtype gate.
         pair.run();
         assert_eq!(observed(|o| o.running), Some(true));
-        let pair = Pair::new(TRAIN, TRAIN);
+        let mut pair = Pair::new(TRAIN, TRAIN);
         pair.front().vehstatus = STOPPED;
         pair.front().cur_speed = 5;
         pair.part().subtype = ENGINE;
@@ -946,7 +963,7 @@ mod tests {
             return;
         }
         for (kind, subtype) in [(TRAIN, ENGINE), (ROAD, FRONT), (AIRCRAFT, 2)] {
-            let pair = Pair::new(kind, kind);
+            let mut pair = Pair::new(kind, kind);
             pair.front().cur_speed = 5;
             pair.part().motion_counter = 254; // 259 passes 256: GB(259, 0, 8) < 5.
             pair.part().subtype = subtype;
