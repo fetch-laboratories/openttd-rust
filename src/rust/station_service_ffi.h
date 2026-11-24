@@ -118,17 +118,12 @@ struct OpenTTDStationServices {
 	const OpenTTDSharedServices *shared;
 };
 
-struct OpenTTDStationEdge {
-	OpenTTDBaseStation *destination;
-	uint32_t distance;
-};
 struct GoodsEntry;
 struct OpenTTDStationResolverServices;
 struct OpenTTDVehicleResolverServices;
 struct OpenTTDStationLinks {
 	const OpenTTDLiveGraphServices *graphs;
 	bool (*automatic_distribution)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(automatic_distribution);
-	OpenTTDStationEdge (*edge)(OpenTTDBaseStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(edge);
 	void (*delete_flows)(OpenTTDBaseStation *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_flows);
 	void (*restrict_flows)(OpenTTDBaseStation *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(restrict_flows);
 	OpenTTDOrderList * (*order_list)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(order_list);

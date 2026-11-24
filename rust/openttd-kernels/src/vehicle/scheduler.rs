@@ -10,11 +10,13 @@
 #![allow(unsafe_code, clippy::verbose_bit_mask)]
 use super::{CALLBACK_FAILED, VehicleRef, VehicleServices};
 use crate::aircraft::AIR_AIRCRAFT;
+use crate::framerate_type::{PerformanceAccumulator, PerformanceElement, PerformanceMeasurer};
 use crate::newgrf_callbacks::CBID_VEHICLE_32DAY_CALLBACK;
 use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16, VehicleSoundEvent};
 use crate::timer_game_tick::DAY_TICKS;
 use crate::vehicle_base::{GVSF_ENGINE, GVSF_FRONT, VehState, VehStates};
 use crate::{cargo_storage, fleet, services, station_service};
+use std::mem::MaybeUninit;
 
 use super::VehicleType;
 const TRAIN: VehicleType = VehicleType::TRAIN;
@@ -55,10 +57,6 @@ pub struct SchedulerServices {
     /// Base vehicle and shared tables, immutable for the process.
     pub vehicle: *const VehicleServices,
     pub shared: *const services::Services,
-    /// Tables remain live through the synchronous loading callback.
-    pub with_loading_timer:
-        unsafe extern "C" fn(*const Tables, unsafe extern "C" fn(*const Tables)),
-    pub reset_accumulators: extern "C" fn(),
 }
 #[repr(C)]
 pub struct Tables {
@@ -387,13 +385,14 @@ pub(crate) unsafe fn ticks(tables: *const Tables, normal: bool, date_fract: usiz
         unsafe { run_ticks::<false>(&*tables, normal, date_fract, cost) };
     }
 }
-// The native RAII scope invokes this synchronous callback without retaining it.
-// No world/owner borrow spans any station loading service.
-// SAFETY: the caller supplies immutable live tables for this call.
-unsafe extern "C" fn load_stations<const COUNTED: bool>(tables: *const Tables) {
-    let tables = unsafe { &*tables };
+/// `for (Station *st : Station::Iterate()) LoadUnloadStation(st);`. No world/owner borrow
+/// spans any station loading service.
+/// # Safety
+/// The caller supplies immutable live tables for this call.
+unsafe fn load_stations<const COUNTED: bool>(tables: &Tables) {
     let s = unsafe { &*tables.scheduler };
     let shared = unsafe { &*s.shared };
+    // The station iterator's crossing.
     if COUNTED {
         crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
     }
@@ -424,16 +423,43 @@ unsafe fn run_ticks<const COUNTED: bool>(
     if normal {
         unsafe { day::<COUNTED>(tables, s, false, date_fract) };
     }
-    // SAFETY: tables and their services outlive the synchronous callback.
+    {
+        let mut storage = MaybeUninit::uninit();
+        // The measurer's begin and end are two counted crossings.
+        // SAFETY: `CallVehicleTicks` runs in the game loop, serialized by the game-state
+        // mutex; the guard drops at the end of this block, as do the resets below.
+        let _framerate =
+            unsafe { PerformanceMeasurer::new(&mut storage, PerformanceElement::PFE_GL_ECONOMY) };
+        if COUNTED {
+            crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
+            crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
+        }
+        // SAFETY: The caller's live tables.
+        unsafe { load_stations::<COUNTED>(tables) };
+    }
+    // SAFETY: As the measurer's.
     unsafe {
         svc!(
             COUNTED,
-            s.with_loading_timer,
-            std::ptr::from_ref(tables),
-            load_stations::<COUNTED>
+            PerformanceAccumulator::reset,
+            PerformanceElement::PFE_GL_TRAINS
+        );
+        svc!(
+            COUNTED,
+            PerformanceAccumulator::reset,
+            PerformanceElement::PFE_GL_ROADVEHS
+        );
+        svc!(
+            COUNTED,
+            PerformanceAccumulator::reset,
+            PerformanceElement::PFE_GL_SHIPS
+        );
+        svc!(
+            COUNTED,
+            PerformanceAccumulator::reset,
+            PerformanceElement::PFE_GL_AIRCRAFT
         );
     }
-    svc!(COUNTED, s.reset_accumulators);
     let post = PostTickServices {
         cargo_owner: s.cargo_owner,
         sound: unsafe { &*s.vehicle }.play_vehicle_sound,
@@ -498,8 +524,6 @@ crate::abi::layouts! {
         cargo_owner,
         vehicle,
         shared,
-        with_loading_timer,
-        reset_accumulators,
     };
     "OpenTTDVehicleSchedulerTables" ["scheduler"] => Tables {
         scheduler,
@@ -906,6 +930,7 @@ mod tests {
 #[cfg(test)]
 mod pool_tests {
     use super::*;
+    use crate::framerate_type::testing::{self as framerate, Effect};
     use crate::oracle;
     use crate::pool::{NativeOps, PoolConfig, PoolCore};
     use crate::test_tables::{FLEET_GROUPS, FLEET_PENDING, FLEET_TRANSACTIONS, SCHEDULER, VEHICLE};
@@ -930,6 +955,17 @@ mod pool_tests {
         static SURVIVORS: Cell<u32> = const { Cell::new(0) };
         static MUTATE: Cell<bool> = const { Cell::new(false) };
         static GROWTH: Cell<usize> = const { Cell::new(usize::MAX) };
+        static STEPS: RefCell<Vec<Step>> = const { RefCell::new(Vec::new()) };
+    }
+    /// `CallVehicleTicks`'s observable steps before its vehicle loop ends.
+    #[derive(Debug, PartialEq, Eq)]
+    enum Step {
+        Framerate(Effect),
+        Stations,
+        Tick(usize),
+    }
+    fn record_framerate(effect: Effect) {
+        STEPS.with(|s| s.borrow_mut().push(Step::Framerate(effect)));
     }
     fn pool() -> *mut PoolCore {
         POOL.get()
@@ -1142,14 +1178,10 @@ mod pool_tests {
         }
         true
     }
-    extern "C" fn no_station_loading(
-        tables: *const Tables,
-        load: unsafe extern "C" fn(*const Tables),
-    ) {
-        // SAFETY: The caller's live tables.
-        unsafe { load(tables) };
+    /// `Station::Iterate()` over no stations, marking the iteration.
+    extern "C" fn mark_stations(_: *mut c_void, _: crate::services::StationVisitor) {
+        STEPS.with(|s| s.borrow_mut().push(Step::Stations));
     }
-    extern "C" fn no_accumulators() {}
     extern "C" fn keep_company(_: u8) {}
 
     /// Run `CallVehicleTicks` (outside normal play: no day work) with `tick`. It clears and
@@ -1160,15 +1192,14 @@ mod pool_tests {
             ..crate::test_tables::FINANCE
         };
         let _guard = crate::fleet::pending::TEST_LOCK.lock().unwrap();
-        let shared = crate::services::fixture(null_mut(), draw, no_industry);
+        let mut shared = crate::services::fixture(null_mut(), draw, no_industry);
+        shared.for_each_station = mark_stations;
         let mut scheduler = SCHEDULER;
         scheduler.pool = cursor;
         scheduler.assertions = true;
         scheduler.tick = tick;
         scheduler.vehicle = &VEHICLE;
         scheduler.shared = &raw const shared;
-        scheduler.with_loading_timer = no_station_loading;
-        scheduler.reset_accumulators = no_accumulators;
         let pending = FLEET_PENDING;
         let mut commands = crate::test_tables::COMMANDS;
         commands.finance = &FINANCE;
@@ -1276,6 +1307,42 @@ mod pool_tests {
             inputs,
             format!("{first_unused} | {} | {}", trace(&visits), u8::from(empty)),
         )
+    }
+
+    extern "C" fn ordered_tick(vehicle: VehicleRef) -> bool {
+        STEPS.with(|s| s.borrow_mut().push(Step::Tick(index_of(vehicle))));
+        true
+    }
+
+    /// `CallVehicleTicks` (`vehicle.cpp:961-969`): the economy measurer spans the station
+    /// iteration, then the four vehicle accumulators reset, all before the first `Tick`.
+    #[test]
+    fn station_loading_is_timed_and_accumulators_reset_before_ticks() {
+        use PerformanceElement as E;
+        let _pool = new_pool();
+        GROWTH.set(usize::MAX);
+        MUTATE.set(false);
+        new_vehicle(0);
+        STEPS.with(|s| s.borrow_mut().clear());
+        framerate::take();
+        framerate::observe(Some(record_framerate));
+        run_ticks(ordered_tick);
+        framerate::observe(None);
+        clean();
+        let steps = STEPS.with(|s| std::mem::take(&mut *s.borrow_mut()));
+        assert_eq!(
+            steps,
+            [
+                Step::Framerate(Effect::MeasurerBegin(E::PFE_GL_ECONOMY)),
+                Step::Stations,
+                Step::Framerate(Effect::MeasurerEnd(E::PFE_GL_ECONOMY)),
+                Step::Framerate(Effect::AccumulatorReset(E::PFE_GL_TRAINS)),
+                Step::Framerate(Effect::AccumulatorReset(E::PFE_GL_ROADVEHS)),
+                Step::Framerate(Effect::AccumulatorReset(E::PFE_GL_SHIPS)),
+                Step::Framerate(Effect::AccumulatorReset(E::PFE_GL_AIRCRAFT)),
+                Step::Tick(0),
+            ]
+        );
     }
 
     #[test]

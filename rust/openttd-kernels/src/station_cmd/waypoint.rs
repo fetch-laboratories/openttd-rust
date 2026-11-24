@@ -9,9 +9,9 @@
 //! Native pointers are opaque, synchronous and serialized by the game-state mutex.
 use super::{
     BaseStation, CommandCost, CommandServicesTable, Cost, Ctx, JoiningStation, RoadStopCost,
-    SignSearch, TileArea, sign_visit,
+    SignSearch, TileArea,
 };
-use crate::base_station_base::StationRectMode;
+use crate::base_station_base::{self, StationRectMode};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
@@ -231,13 +231,12 @@ impl Ctx<'_> {
         }
         /* Check if the tile is the base tile of another station */
         let mut search = SignSearch {
-            c: self,
             station: wp,
             tile,
             other: false,
         };
-        crate::station::spatial::for_all_stations_radius(self.shared, tile, 0, |st| unsafe {
-            sign_visit((&raw mut search).cast(), st);
+        crate::station::spatial::for_all_stations_radius(self.shared, tile, 0, |st| {
+            search.visit(st);
         });
         if search.other {
             out.error(STR_ERROR_SITE_UNSUITABLE.0);
@@ -354,7 +353,7 @@ impl Ctx<'_> {
             {
                 continue;
             }
-            let xy = TileIndex((self.s.location)(wp));
+            let xy = base_station_base::xy(wp);
             let cur_dist = self.map().distance_manhattan(tile, xy);
             if cur_dist == thres && !best.is_null() {
                 w::hit(w::WAYPOINT_TIE);

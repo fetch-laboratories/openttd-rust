@@ -149,7 +149,6 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.schedule = &LinkGraphSchedule::services,
 		.prediction = VehicleVisitPrediction,
 		.display_speed = RustVehicleDisplaySpeed,
-		.location = RustStationLocation,
 		.percent = {.up = STR_PERCENT_UP, .down = STR_PERCENT_DOWN, .up_down = STR_PERCENT_UP_DOWN, .none = STR_PERCENT_NONE},
 		.set_last_loading = RustVehicleSetLastLoadingStation,
 		.set_loading_tick = RustVehicleSetLastLoadingTick,

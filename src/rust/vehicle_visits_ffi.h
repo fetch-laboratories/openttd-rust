@@ -42,7 +42,6 @@ struct OpenTTDVehicleVisits {
 	const OpenTTDScheduleServices *schedule;
 	OpenTTDVisitPrediction (*prediction)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(prediction);
 	int32_t (*display_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(display_speed);
-	uint32_t (*location)(const OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	OpenTTDVisitPercentStrings percent;
 	void (*set_last_loading)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_last_loading);
 	void (*set_loading_tick)(OpenTTDVehicle *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_tick);

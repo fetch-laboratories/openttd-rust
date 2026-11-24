@@ -205,7 +205,6 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.owner = RustStationServiceOwner,
 		.station_owner = RustStationServiceByID,
 		.id = RustBaseStationID<BaseStation>,
-		.location = RustStationLocation,
 		.associated_industry = RustStationAssociatedIndustry,
 		.radius_facilities = [](BaseStation *handle) noexcept -> OpenTTDStationRadiusFacilities {
 			const Station *st = Station::From(handle);

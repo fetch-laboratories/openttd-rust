@@ -103,7 +103,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	openttd_rust_news_bind(&news);
 	openttd_rust_script_event_bind(&events);
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&fixture->blocks); };
-	leaves.station_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
 	leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 	leaves.airport_width = leaves.airport_height = [](const OpenTTDStation *) noexcept { return uint8_t{7}; };
 	AircraftTestAirportServices().dummy_fta = reinterpret_cast<const AirportFTAClass *>(&fixture->blocks);

@@ -885,6 +885,15 @@ pub(crate) mod fixture {
             unsafe { (*s.as_ptr()).assertions = allocation.assertions };
         });
     }
+    /// Replace `Map::LogX()` and `Map::LogY()`, keeping the installed allocation.
+    pub(crate) fn set_dimensions(log_x: u32, log_y: u32) {
+        LOG_X.set(log_x);
+        LOG_Y.set(log_y);
+    }
+    /// Install `Map::LogY()` for a map whose tile types come from the callback alone.
+    pub(crate) fn set_log_y(log_y: u32) {
+        LOG_Y.set(log_y);
+    }
 }
 
 #[cfg(test)]

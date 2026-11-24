@@ -14,6 +14,7 @@
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss
 )]
+use crate::base_station_base::xy;
 use crate::bitmath_func::{clr_bit64, gb, has_bit, has_bit64, set_bit64};
 use crate::cargo_payment::NativePayment;
 use crate::cargo_type::{CargoArray, CargoType, CargoTypes, NUM_CARGO};
@@ -1186,16 +1187,9 @@ pub(crate) unsafe fn move_goods_to_station(
 }
 
 #[repr(C)]
-#[derive(Default)]
-pub struct Edge {
-    pub(crate) destination: *mut BaseStation,
-    pub(crate) distance: u32,
-}
-#[repr(C)]
 pub struct Links {
     pub(crate) graphs: &'static live::Services,
     pub(crate) automatic_distribution: extern "C" fn(u8) -> bool,
-    pub(crate) edge: extern "C" fn(*mut BaseStation, u16) -> Edge,
     pub(crate) delete_flows: extern "C" fn(*mut BaseStation, u8, u16),
     pub(crate) restrict_flows: extern "C" fn(*mut BaseStation, u8, u16),
     pub(crate) order_list: extern "C" fn(u16) -> *mut NativeOrderList,
@@ -1316,14 +1310,15 @@ unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visit
                     e.last_update(),
                 )
             };
-            let edge = (l.edge)(from, destination);
-            let to = edge.destination;
+            let to = (map.shared.base_station)(destination);
             let date = crate::timer_game_common::economy_date().0;
             if map.types.assertions() {
                 map.check((l.graphs.node)(to, cargo.0) == dest_node);
                 map.check(date >= last_update);
             }
-            let timeout = live::MIN_TIMEOUT_DISTANCE.wrapping_add(edge.distance >> 3) as i32;
+            let timeout = live::MIN_TIMEOUT_DISTANCE
+                .wrapping_add(map.dimensions.distance_manhattan(xy(from), xy(to)) >> 3)
+                as i32;
             if date.wrapping_sub(last_update) > timeout {
                 let mut updated = false;
                 if auto_distributed {
@@ -2671,14 +2666,9 @@ crate::abi::layouts! {
         truncate_next,
         shared,
     };
-    "OpenTTDStationEdge" ["station_service"] => Edge {
-        destination,
-        distance,
-    };
     "OpenTTDStationLinks" ["probe"] => Links {
         graphs,
         automatic_distribution,
-        edge,
         delete_flows,
         restrict_flows,
         order_list,

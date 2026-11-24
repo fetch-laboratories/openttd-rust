@@ -5,6 +5,7 @@
 #include "../rust/session_ffi.h"
 #include "../core/backup_type.hpp"
 #include "../rust/session_native.hpp"
+#include "../rust/framerate_ffi.h"
 #include <thread>
 static uint session_queries;
 TEST_CASE("Session pause - native aliases and serialized commands")
@@ -80,4 +81,11 @@ TEST_CASE("Session load - original restoration and callback partial effects")
 	_game_mode = GM_MENU; session_dedicated = true; session_load_result = SL_ERROR;
 	CHECK_FALSE(openttd_rust_session_safe_load(&services, &frame, nullptr, GM_EDITOR));
 	CHECK(_game_mode == GM_BOOTSTRAP); CHECK(_exit_game.load());
+}
+
+/* The game's framerate table is bound before main: binding it again returns it, where an
+ * unbound game returns null for the discarding table. Retires with framerate_gui.cpp's port. */
+TEST_CASE("Session framerate - the game binds the native table")
+{
+	CHECK(openttd_rust_framerate_bind(&GetRustFramerateServices()) == &GetRustFramerateServices());
 }

@@ -170,10 +170,6 @@ rebound | RustStationGet | src/subsidy.cpp | station
 rebound | RustStationIsExpected | src/animated_tile.cpp | is_station
 rebound | RustStationIsExpected | src/newgrf_roadstop.cpp | is_station
 rebound | RustStationIsExpected | src/station_cmd.cpp | is_station
-rebound | RustStationLocation | src/animated_tile.cpp | location
-rebound | RustStationLocation | src/rust/station_command_services.hpp | location
-rebound | RustStationLocation | src/station.cpp | location
-rebound | RustStationLocation | src/vehicle.cpp | location
 rebound | RustStationOwnerByte | src/economy.cpp | station_company
 rebound | RustStationOwnerByte | src/newgrf_roadstop.cpp | owner
 rebound | RustStationOwnerByte | src/station_cmd.cpp | station_owner

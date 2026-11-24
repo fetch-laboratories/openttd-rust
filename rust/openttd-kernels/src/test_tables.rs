@@ -827,7 +827,6 @@ pub(crate) const CATCHMENT: crate::station::CatchmentServices = crate::station::
     owner: unreachable1,
     station_owner: unreachable1,
     id: unreachable1,
-    location: unreachable1,
     associated_industry: unreachable1,
     radius_facilities: unreachable1,
     modified_catchment: unreachable0,
@@ -988,7 +987,6 @@ pub(crate) const AIRCRAFT_LEAVES: crate::aircraft::Leaves = crate::aircraft::Lea
     shared: ptr::null(),
     station: unreachable1,
     station_owner: unreachable1,
-    station_tile: unreachable1,
     subtract_cost: unreachable2,
     terminal_count: unreachable2,
     truncate_cargo: unreachable1,
@@ -1021,7 +1019,6 @@ pub(crate) const ANIMATION: crate::animated_tile::Services = crate::animated_til
     shared: ptr::null(),
     station_base: unreachable1,
     as_station: unreachable1,
-    location: unreachable1,
     is_station: unreachable1,
     roadstop_resolver: ptr::null(),
     town: ptr::null(),
@@ -1079,8 +1076,6 @@ pub(crate) const SCHEDULER: crate::vehicle::scheduler::SchedulerServices =
         cargo_owner: unreachable1,
         vehicle: ptr::null(),
         shared: ptr::null(),
-        with_loading_timer: unreachable2,
-        reset_accumulators: unreachable0,
     };
 
 /// `crate::fleet::pending::Services` with every entry unreachable.
@@ -1907,12 +1902,8 @@ pub(crate) const SESSION: crate::session::Services = crate::session::Services {
     network_actions: unreachable1,
     failed: unreachable1,
     console_exception: unreachable1,
-    state_begin: unreachable1,
     company_begin: unreachable1,
     company_restore: unreachable1,
-    scripts_begin: unreachable1,
-    scripts_end: unreachable1,
-    paused_measurements: unreachable0,
     scripts_enabled: unreachable0,
     assert_local_company: unreachable0,
     tick_timer: unreachable1,
@@ -1930,8 +1921,6 @@ pub(crate) const SESSION: crate::session::Services = crate::session::Services {
     post_ai: unreachable1,
     road_begin: unreachable1,
     road_end: unreachable1,
-    landscape_begin: unreachable1,
-    landscape_end: unreachable1,
 };
 
 /// `crate::genworld::WorldServices` with every entry unreachable.
@@ -2021,7 +2010,6 @@ pub(crate) const STATION_COMMANDS: crate::station_cmd::CommandServicesTable =
         tile_area: unreachable2,
         rail_spec: unreachable1,
         links: ptr::null(),
-        location: unreachable1,
         base_move_sign: unreachable2,
         waypoint_move_sign: unreachable2,
         virtual_coord: unreachable1,
@@ -2452,7 +2440,6 @@ pub(crate) const STATION_LOADING: crate::station_service::Loading =
 pub(crate) const STATION_LINKS: crate::station_service::Links = crate::station_service::Links {
     graphs: &LINK_GRAPHS,
     automatic_distribution: unreachable1,
-    edge: unreachable2,
     delete_flows: unreachable3,
     restrict_flows: unreachable3,
     order_list: unreachable1,
@@ -2560,7 +2547,6 @@ pub(crate) const VISITS: crate::vehicle::visits::Services = crate::vehicle::visi
     schedule: &crate::linkgraph_schedule::TEST_TABLE,
     prediction: unreachable1,
     display_speed: unreachable1,
-    location: unreachable1,
     percent: crate::vehicle::visits::PercentStrings {
         up: 0,
         down: 0,

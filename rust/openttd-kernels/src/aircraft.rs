@@ -20,6 +20,7 @@ use crate::airport::{
     LANDING, MAX_TERMINALS, STARTTAKEOFF, TAKEOFF, TERM1, TERM2, TERM3, TERM4, TERM5, TERM6, TERM7,
     TERM8,
 };
+use crate::base_station_base;
 use crate::bitmath_func::{clr_bit8, gb, has_bit, set_bit8};
 use crate::company_type::Owner;
 use crate::direction_func::{
@@ -375,8 +376,6 @@ pub struct Leaves {
     pub station: unsafe extern "C" fn(u16) -> *const Station,
     /// `st->owner`.
     pub station_owner: unsafe extern "C" fn(*const Station) -> u8,
-    /// `st->xy`.
-    pub station_tile: unsafe extern "C" fn(*const Station) -> u32,
     /// `SubtractMoneyFromCompanyFract(v->owner, cost)`.
     pub subtract_cost: unsafe extern "C" fn(Vehicle, i64),
     /// `AirportFTAClass::terminals[index]`.
@@ -483,9 +482,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     fn airport_tile(&self, st: *const Station) -> TileIndex {
         TileIndex(Self::call(|| unsafe { (self.leaves.airport_tile)(st) }))
-    }
-    fn station_xy(&self, st: *const Station) -> TileIndex {
-        TileIndex(Self::call(|| unsafe { (self.leaves.station_tile)(st) }))
     }
     fn airport_rotation(&self, st: *const Station) -> Direction {
         Direction(Self::call(|| unsafe { (self.leaves.rotation)(st) }))
@@ -1344,7 +1340,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             /* Make sure we don't go to INVALID_TILE if the airport has been removed. */
             let airport_tile = self.airport_tile(st);
             tile = if airport_tile == TileIndex::INVALID {
-                self.station_xy(st)
+                Self::call(|| base_station_base::xy(st.cast()))
             } else {
                 airport_tile
             };
@@ -1424,7 +1420,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 size_x = u32::from(self.airport_w(st));
                 size_y = u32::from(self.airport_h(st));
             } else {
-                tile = self.station_xy(st);
+                tile = Self::call(|| base_station_base::xy(st.cast()));
             }
         }
         /* DUMMY if there is no station or no airport */
@@ -3455,7 +3451,6 @@ crate::abi::layouts! {
         shared,
         station,
         station_owner,
-        station_tile,
         subtract_cost,
         terminal_count,
         truncate_cargo,

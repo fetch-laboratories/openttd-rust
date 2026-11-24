@@ -1245,8 +1245,8 @@ mod tests {
     extern "C" fn some_station(_: u16) -> *mut crate::station::BaseStation {
         NonNull::dangling().as_ptr()
     }
-    extern "C" fn station_sign(_: u16) -> u32 {
-        7
+    fn station_sign(_: *const crate::station::BaseStation) -> TileIndex {
+        TileIndex(7)
     }
     extern "C" fn station_commands() -> *const crate::station_cmd::CommandServicesTable {
         STATION_COMMANDS.with(ptr::from_ref)
@@ -1269,6 +1269,7 @@ mod tests {
             6,
         );
         FAILED_ASSERTIONS.set(0);
+        crate::base_station_base::testing::set_xy(station_sign);
         let movement = Box::leak(Box::new(crate::movement::MovementServices {
             native_assert: record_assertion,
             road_kind,
@@ -1277,7 +1278,6 @@ mod tests {
         let s = Services {
             movement,
             base_station: some_station,
-            base_station_xy: station_sign,
             station_commands,
             station_catchment: catchment,
             ..crate::services::fixture(ptr::null_mut(), unexpected_random, unexpected_industry)
