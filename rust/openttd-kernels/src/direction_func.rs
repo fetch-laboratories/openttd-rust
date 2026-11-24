@@ -23,6 +23,13 @@ pub const fn is_valid_direction(d: Direction) -> bool {
 pub const fn is_valid_axis(d: Axis) -> bool {
     d.0 < Axis::AXIS_END.0
 }
+/// `IsDiagonalDirection`: checks if a given `Direction` is diagonal.
+pub fn is_diagonal_direction(dir: Direction, check: impl Fn(bool)) -> bool {
+    if !is_valid_direction(dir) {
+        check(false);
+    }
+    (dir.0 & 1) != 0
+}
 /// `ReverseDir`: return the reverse of a direction.
 pub fn reverse_dir(d: Direction, check: impl Fn(bool)) -> Direction {
     if !is_valid_direction(d) {
@@ -179,10 +186,6 @@ pub fn diag_dir_to_axis_raw(direction: u8, check: impl Fn(bool)) -> u8 {
 /// Raw adapter: `AxisToDiagDir` over base values.
 pub fn axis_to_diag_dir_raw(axis: u8, check: impl Fn(bool)) -> u8 {
     axis_to_diag_dir(Axis(axis), check).0
-}
-/// Raw adapter: `DirToDiagDir` over base values.
-pub fn dir_to_diag_dir_raw(direction: u8, check: impl Fn(bool)) -> u8 {
-    dir_to_diag_dir(Direction(direction), check).0
 }
 /// Raw adapter: `ReverseDiagDir` over base values.
 pub fn reverse_diag_dir_raw(direction: u8, check: impl Fn(bool)) -> u8 {

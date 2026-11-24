@@ -361,7 +361,7 @@ impl GroundVehicleType for Train {
     fn get_power(s: &Services, w: &World<'_>, v: VehicleRef, o: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part()
-            && (s.powered)(o.train.get_railtypes(), RailType(w.rail_type(v.tile().0)))
+            && (s.powered)(o.train.railtypes().0, RailType(w.rail_type(v.tile().0)))
         {
             let engine = (s.vehicle.engine)(v);
             let mut power = s.property(
@@ -389,10 +389,7 @@ impl GroundVehicleType for Train {
     ) -> u16 {
         /* For powered wagons the engine defines the type of engine (i.e. railtype) */
         if o.train.flags().test(VehicleRailFlag::PoweredWagon)
-            && (s.powered)(
-                head.train.get_railtypes(),
-                RailType(w.rail_type(v.tile().0)),
-            )
+            && (s.powered)(head.train.railtypes().0, RailType(w.rail_type(v.tile().0)))
         {
             return s.first_engine(o).wagon_power();
         }
@@ -471,8 +468,7 @@ impl GroundVehicleType for Train {
     #[inline]
     fn get_air_drag_area(v: VehicleRef, o: Owner) -> u8 {
         /* Air drag is higher in tunnels due to the limited cross-section. */
-        if TrackBits(o.train.track()) == TrackBits::TRACK_BIT_WORMHOLE
-            && v.vehstatus().test(VehState::Hidden)
+        if o.train.track() == TrackBits::TRACK_BIT_WORMHOLE && v.vehstatus().test(VehState::Hidden)
         {
             28
         } else {
@@ -538,7 +534,7 @@ impl GroundVehicleType for Train {
         o: Owner,
     ) -> bool {
         /* Any track that isn't TRACK_BIT_X or TRACK_BIT_Y cannot be sloped. */
-        let track = TrackBits(o.train.track());
+        let track = o.train.track();
         track == TrackBits::TRACK_BIT_X || track == TrackBits::TRACK_BIT_Y
     }
     /// Trains can always use the faster algorithm because they have always the same direction
@@ -549,7 +545,7 @@ impl GroundVehicleType for Train {
     }
     #[inline]
     fn is_in_depot(o: Owner) -> bool {
-        TrackBits(o.train.track()) == TrackBits::TRACK_BIT_DEPOT
+        o.train.track() == TrackBits::TRACK_BIT_DEPOT
     }
 }
 

@@ -957,6 +957,11 @@ impl OrderView<'_> {
     pub(crate) fn depot_action_flags_raw(self) -> u8 {
         self.depot_action_flags().0
     }
+    /// `Order::GetStopLocation`: where must we stop at the platform?
+    #[inline]
+    pub(crate) fn stop_location(self) -> crate::order_type::OrderStopLocation {
+        crate::order_type::OrderStopLocation(gb_u8(read_field!(self.0, kind), 4, 2))
+    }
     /// `Order::GetDestination`: gets the destination of this order.
     ///
     /// Precondition: `IsType(OT_GOTO_WAYPOINT) || IsType(OT_GOTO_DEPOT) ||

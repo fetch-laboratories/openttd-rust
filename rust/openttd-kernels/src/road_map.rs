@@ -199,6 +199,13 @@ impl crate::map_func::World<'_> {
         self.check(self.level_crossing(t));
         crate::bitmath_func::has_bit(Self::byte(self.types.m5(TileIndex(t))), 5)
     }
+    /// `SetCrossingBarred`: set the bar state of a level crossing.
+    pub(crate) fn set_crossing_barred(&self, t: TileIndex, barred: bool) {
+        self.check(self.level_crossing(t.0));
+        let mut m5 = u32::from(Self::byte(self.types.m5(t)));
+        crate::bitmath_func::assign_bit(&mut m5, 5, barred);
+        let _ = self.types.set_m5(t, m5 as u8);
+    }
     /// `GetCrossingRailBits`: `AxisToTrackBits(GetCrossingRailAxis(t))`.
     pub(crate) fn crossing_rail_bits(&self, t: u32) -> u8 {
         self.check(self.level_crossing(t));
@@ -439,4 +446,98 @@ impl Roadside {
     pub const GrassRoadWorks: Self = Self(6);
     /// Road with sidewalks and road works
     pub const PavedRoadWorks: Self = Self(7);
+}
+
+#[cfg(test)]
+mod crossing_tests {
+    use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, World};
+    use crate::tile_type::TileIndex;
+    use std::cell::RefCell;
+
+    thread_local! {
+        static CHECKS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+    }
+    extern "C" fn record_check(condition: bool) {
+        CHECKS.with(|c| c.borrow_mut().push(condition));
+    }
+    fn take_checks() -> Vec<bool> {
+        CHECKS.with(|c| std::mem::take(&mut *c.borrow_mut()))
+    }
+
+    /// A shared table over a four-tile map whose native assertion records: tile 0 a level
+    /// crossing (`MP_ROAD`, `ROAD_TILE_CROSSING` in m5 bits 6..7) with every other m5 bit
+    /// set, tile 1 a rail depot facing each direction in turn, the rest clear.
+    fn map(m5: [u8; 4], kinds: [u8; 4]) -> &'static crate::services::Services {
+        let base: Box<[BaseTileLayout]> = (0..4)
+            .map(|i| BaseTileLayout {
+                kind: kinds[i] << 4,
+                height: 0,
+                m2: 0,
+                m1: 0,
+                m3: 0,
+                m4: 0,
+                m5: m5[i],
+            })
+            .collect();
+        let extended: Box<[ExtendedTileLayout]> = (0..4)
+            .map(|_| ExtendedTileLayout {
+                m6: 0,
+                m7: 0,
+                m8: 0,
+            })
+            .collect();
+        crate::map_func::fixture::set(
+            TileTypeAllocation {
+                base: Box::into_raw(base).cast::<BaseTileLayout>(),
+                extended: Box::into_raw(extended).cast::<ExtendedTileLayout>(),
+                count: 4,
+                assertions: true,
+            },
+            1,
+        );
+        Box::leak(Box::new(crate::services::Services {
+            map: crate::map_func::fixture::statics(),
+            movement: Box::leak(Box::new(crate::movement::MovementServices {
+                native_assert: record_check,
+                ..crate::test_tables::MOVEMENT
+            })),
+            ..crate::test_tables::SHARED
+        }))
+    }
+
+    /// `SetCrossingBarred` stores the bar bit (m5 bit 5) in place, leaves the tile's other
+    /// bits, agrees with `IsCrossingBarred`, and asserts `IsLevelCrossing(t)`.
+    #[test]
+    fn set_crossing_barred_stores_bit_5_and_asserts_a_level_crossing() {
+        let road = crate::tile_type::TileType::MP_ROAD.0;
+        let shared = map([0x40 | 0x1F, 0, 0, 0], [road, road, 0, 0]);
+        let world = World::new(shared);
+        world.set_crossing_barred(TileIndex(0), true);
+        assert!(world.crossing_barred(0));
+        assert_eq!(world.types.m5(TileIndex(0)), Some(0x40 | 0x20 | 0x1F));
+        world.set_crossing_barred(TileIndex(0), false);
+        assert!(!world.crossing_barred(0));
+        assert_eq!(world.types.m5(TileIndex(0)), Some(0x40 | 0x1F));
+        assert!(take_checks().iter().all(|&ok| ok));
+        // Tile 1 is a normal road: the precondition fails once.
+        world.set_crossing_barred(TileIndex(1), true);
+        assert_eq!(take_checks().iter().filter(|&&ok| !ok).count(), 1);
+    }
+
+    /// `GetRailDepotTrack` is `DiagDirToDiagTrack(GetRailDepotDirection(t))`: `TRACK_X` for
+    /// the north-east and south-west depots, `TRACK_Y` for the others.
+    #[test]
+    fn get_rail_depot_track_follows_the_depot_direction() {
+        let rail = crate::tile_type::TileType::MP_RAILWAY.0;
+        for (dir, track) in [(0, 0), (1, 1), (2, 0), (3, 1)] {
+            let shared = map([0, 0xC0 | dir, 0, 0], [0, rail, 0, 0]);
+            let world = World::new(shared);
+            assert_eq!(
+                crate::rail_map::get_rail_depot_track(&world, TileIndex(1)),
+                crate::track_type::Track(track),
+                "direction {dir}"
+            );
+        }
+        assert!(take_checks().iter().all(|&ok| ok));
+    }
 }

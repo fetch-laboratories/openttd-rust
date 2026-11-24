@@ -10,8 +10,17 @@
 #include "command_services.h"
 #include "services_rail.h"
 #include "services_station.h"
+#include "vehicle_services.h"
+#include "services_map.h"
+#include "settings_services.h"
 
 /** @file train_reservation_services.h Direct map/PBS/follower services. */
+
+template <typename Result, auto Read>
+static Result TrainVehicleRead(OpenTTDTrainHandle id) noexcept
+{
+	return Read(static_cast<const Train *>(VehicleFromRecord(id.record)));
+}
 
 static uint64_t TrainReservationBitsTrack(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {

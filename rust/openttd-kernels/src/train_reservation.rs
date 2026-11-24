@@ -64,12 +64,6 @@ pub struct Search {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Choice {
-    pub track: u8,
-    pub reserved: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct Leaves {
     pub read_num_orders: extern "C" fn(Handle) -> u8,
 
@@ -125,11 +119,23 @@ pub struct Leaves {
     pub process_orders: extern "C" fn(Handle) -> u8,
     pub update_order_dest: extern "C" fn(Handle, u8) -> u8,
 }
+/// The tables of one reservation entry, for the train part's record.
 #[derive(Clone, Copy)]
-struct Game<'a> {
+pub(crate) struct Game<'a> {
     vehicle: *mut crate::vehicle::OpenTTDVehicle,
     leaves: &'a Leaves,
     context: *mut std::ffi::c_void,
+}
+impl<'a> Game<'a> {
+    /// The context of a Rust caller: the table and the train's record, with a null
+    /// callback context, as every C++ facade passes.
+    pub(crate) fn new(leaves: &'a Leaves, vehicle: crate::vehicle::VehicleRef) -> Self {
+        Self {
+            vehicle: vehicle.0.as_ptr(),
+            leaves,
+            context: std::ptr::null_mut(),
+        }
+    }
 }
 impl Game<'_> {
     /// # Safety
@@ -271,11 +277,11 @@ impl Game<'_> {
     }
 }
 /// `Train::ReserveTrackUnderConsist`: tries to reserve track under whole train consist.
-fn reserve_track_under_consist(g: &Game, id: Handle) {
+pub(crate) fn reserve_track_under_consist(g: &Game, id: Handle) {
     let mut part = id;
     while part != Handle::NONE {
         let v_tile: u32 = part.vehicle().tile_raw();
-        let track = part.get_track() as u8;
+        let track = part.track().0;
         match track {
             WORMHOLE => {
                 g.reserve_track(
@@ -349,7 +355,7 @@ fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
 fn free(g: &Game, id: Handle) {
     crate::witness::hit(crate::witness::TRAIN_FREE_PATH);
     if g.pbs().0.assertions {
-        crate::movement::native_assert(g.shared(), id.front() != 0);
+        crate::movement::native_assert(g.shared(), id.is_front_engine());
     }
     let v_tile: u32 = id.vehicle().tile_raw();
     let mut tile = v_tile;
@@ -372,12 +378,12 @@ fn free(g: &Game, id: Handle) {
     {
         return;
     }
-    if id.get_track() == u64::from(DEPOT) {
+    if id.track().0 == DEPOT {
         let mut u = id;
         while u != Handle::NONE {
             let part_tile: u32 = u.vehicle().tile_raw();
             let part_next: Handle = u.next();
-            if u.get_track() != u64::from(DEPOT) || part_tile != v_tile {
+            if u.track().0 != DEPOT || part_tile != v_tile {
                 return;
             }
             u = part_next;
@@ -387,7 +393,7 @@ fn free(g: &Game, id: Handle) {
     if (g.leaves.overlap)(g.context, id, reserved | (1 << (td & 7))) != 0 {
         return;
     }
-    let types = (g.shared().all_compatible_railtypes)(id.get_railtypes());
+    let types = (g.shared().all_compatible_railtypes)(id.railtypes().0);
     let mut ft = g.follower(id, types);
     while ft.follow_raw(g.shared(), tile, td) {
         tile = ft.new_tile.0;
@@ -443,7 +449,7 @@ fn extend(g: &Game, id: Handle, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
 }
 /// `ExtendTrainReservation` after its `FollowTrainReservation`.
 fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
-    let types = id.get_compatible_railtypes();
+    let types = id.compatible_railtypes().0;
     let mut ft = g.follower(id, types);
     let mut red = Vec::new();
     let mut tile = origin.tile;
@@ -600,7 +606,13 @@ impl<'a> Orders<'a> {
         };
         self.id.vehicle().set_dest_tile_raw(self.dest);
         self.id.vehicle().set_last_station_visited_raw(self.last);
-        self.id.set_suppress_implicit(self.suppress != 0);
+        let mut gv_flags = read_field!(self.id.vehicle().ground(), flags);
+        crate::bitmath_func::assign_bit16(
+            &mut gv_flags,
+            crate::ground_vehicle::GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
+            self.suppress != 0,
+        );
+        crate::raw_field::write_field!(self.id.vehicle().ground(), flags, gv_flags);
         self.restored = true;
     }
     fn next(&mut self, skip: bool) -> bool {
@@ -871,7 +883,7 @@ fn choose(
 }
 fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
     let v_tile: u32 = id.vehicle().tile_raw();
-    if id.get_track() == u64::from(DEPOT) {
+    if id.track().0 == DEPOT {
         if (g.leaves.depot_reserved)(g.context, id, v_tile) != 0 {
             if mark {
                 (g.leaves.stuck)(g.context, id);
@@ -900,13 +912,13 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
         return false;
     }
     if origin.okay != 0 && (v_tile != origin.tile || first_okay) {
-        if id.stuck() {
+        if id.flags().test(crate::train::VehicleRailFlag::Stuck) {
             (g.leaves.start_stop)(g.context, id);
         }
-        id.clear_stuck();
+        id.set_flags(id.flags().reset(crate::train::VehicleRailFlag::Stuck));
         return true;
     }
-    if id.get_track() == u64::from(DEPOT) {
+    if id.track().0 == DEPOT {
         (g.leaves.set_depot)(g.context, id, v_tile, 1);
         if (g.leaves.show_res)(g.context, id) != 0 {
             (g.shared().mark_dirty)(v_tile);
@@ -929,20 +941,20 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
     }
     let (_, made) = choose(g, id, new_tile, exit, reachable, true, mark);
     if !made {
-        if id.get_track() == u64::from(DEPOT) {
+        if id.track().0 == DEPOT {
             (g.leaves.set_depot)(g.context, id, id.vehicle().tile_raw(), 0);
         }
         return false;
     }
-    if id.stuck() {
+    if id.flags().test(crate::train::VehicleRailFlag::Stuck) {
         id.set_wait_counter(0);
         (g.leaves.start_stop)(g.context, id);
     }
-    id.clear_stuck();
+    id.set_flags(id.flags().reset(crate::train::VehicleRailFlag::Stuck));
     true
 }
 fn check_next(g: &Game, id: Handle) {
-    if (g.leaves.backoff)() == 255 || id.get_track() == u64::from(DEPOT) {
+    if (g.leaves.backoff)() == 255 || id.track().0 == DEPOT {
         return;
     }
     let v_tile: u32 = id.vehicle().tile_raw();
@@ -991,7 +1003,7 @@ fn check_next(g: &Game, id: Handle) {
     {
         return;
     }
-    let mut ft = g.follower(id, id.get_compatible_railtypes());
+    let mut ft = g.follower(id, id.compatible_railtypes().0);
     if !ft.follow_raw(g.shared(), tile, td) {
         return;
     }
@@ -1025,22 +1037,6 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_check_next(
 /// # Safety
 /// Leaves, context and shell are live for this call. No state borrow spans a callback.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_reservation_clear(
-    id: Handle,
-    vehicle: crate::vehicle::VehicleRef,
-    tile: u32,
-    td: u8,
-    leaves: *const Leaves,
-    context: *mut std::ffi::c_void,
-) {
-    let g = unsafe { Game::entry(vehicle, leaves, context) };
-    clear(&g, id, tile, td);
-}
-
-/// Synchronous reservation policy; order snapshots live on the Rust stack.
-/// # Safety
-/// Leaves, context and shell are live for this call. No state borrow spans a callback.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_reservation_free(
     id: Handle,
     vehicle: crate::vehicle::VehicleRef,
@@ -1049,29 +1045,6 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_free(
 ) {
     let g = unsafe { Game::entry(vehicle, leaves, context) };
     free(&g, id);
-}
-
-/// Synchronous reservation policy; order snapshots live on the Rust stack.
-/// # Safety
-/// Leaves, context and shell are live for this call. No state borrow spans a callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_reservation_choose(
-    id: Handle,
-    vehicle: crate::vehicle::VehicleRef,
-    tile: u32,
-    dir: u8,
-    tracks: u8,
-    force: u8,
-    mark: u8,
-    leaves: *const Leaves,
-    context: *mut std::ffi::c_void,
-) -> Choice {
-    let g = unsafe { Game::entry(vehicle, leaves, context) };
-    let (track, got) = choose(&g, id, tile, dir, tracks, force != 0, mark != 0);
-    Choice {
-        track,
-        reserved: u8::from(got),
-    }
 }
 
 /// Synchronous reservation policy; order snapshots live on the Rust stack.
@@ -1090,26 +1063,57 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_try_path(
     u8::from(try_path(&g, id, mark != 0, first_okay != 0))
 }
 
-/// Synchronous reservation policy; order snapshots live on the Rust stack.
-/// # Safety
-/// Leaves, context and shell are live for this call. No state borrow spans a callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_reservation_check_reverse(
-    id: Handle,
-    vehicle: crate::vehicle::VehicleRef,
-    leaves: *const Leaves,
-    context: *mut std::ffi::c_void,
-) -> u8 {
-    let g = unsafe { Game::entry(vehicle, leaves, context) };
-    u8::from(check_reverse_train(&g, id))
+/// `CheckNextTrainTile`: check if the train is on the last reserved tile and try to extend
+/// the path then.
+pub(crate) fn check_next_train_tile(g: &Game, v: Handle) {
+    check_next(g, v);
 }
-
+/// `ClearPathReservation`: clear the reservation of `tile` that was just left by a wagon on
+/// `track_dir`.
+pub(crate) fn clear_path_reservation(
+    g: &Game,
+    v: Handle,
+    tile: TileIndex,
+    track_dir: crate::track_type::Trackdir,
+) {
+    clear(g, v, tile.0, track_dir.0);
+}
+/// `FreeTrainTrackReservation`: free the reserved path in front of a vehicle.
+pub(crate) fn free_train_track_reservation(g: &Game, v: Handle) {
+    free(g, v);
+}
+/// `ChooseTrainTrack`: choose a track. Returns the track and whether a reservation was
+/// made, in place of the original's `got_reservation` output.
+pub(crate) fn choose_train_track(
+    g: &Game,
+    v: Handle,
+    tile: TileIndex,
+    enterdir: DiagDirection,
+    tracks: crate::track_type::TrackBits,
+    force_res: bool,
+    mark_stuck: bool,
+) -> (crate::track_type::Track, bool) {
+    let (track, got_reservation) =
+        choose(g, v, tile.0, enterdir.0, tracks.0, force_res, mark_stuck);
+    (crate::track_type::Track(track), got_reservation)
+}
+/// `TryPathReserve`: try to reserve a path to a safe position. `mark_as_stuck` says whether
+/// the train should be marked as stuck on a failed reservation; `first_tile_okay` that no
+/// path should be reserved if the current tile is a safe position.
+pub(crate) fn try_path_reserve(
+    g: &Game,
+    v: Handle,
+    mark_as_stuck: bool,
+    first_tile_okay: bool,
+) -> bool {
+    try_path(g, v, mark_as_stuck, first_tile_okay)
+}
 /// `CheckReverseTrain`.
-fn check_reverse_train(g: &Game, id: Handle) -> bool {
+pub(crate) fn check_reverse_train(g: &Game, id: Handle) -> bool {
     // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
     if unsafe { g.shared().settings().line_reverse_mode.read() }
-        || id.get_track() == u64::from(DEPOT)
-        || id.get_track() == u64::from(WORMHOLE)
+        || id.track().0 == DEPOT
+        || id.track().0 == WORMHOLE
         || id.vehicle().direction_raw() & 1 == 0
     {
         return false;
@@ -1223,10 +1227,6 @@ crate::abi::layouts! {
         process_orders,
         update_order_dest,
     };
-    "OpenTTDTrainReservationChoice" ["probe"] => Choice {
-        track,
-        reserved,
-    };
 }
 
 #[cfg(test)]
@@ -1275,7 +1275,7 @@ pub(crate) mod tests {
         T::unused()
     }
 
-    fn leaves() -> Leaves {
+    pub(crate) fn leaves() -> Leaves {
         Leaves {
             read_num_orders: unused(),
             backoff: unused(),
@@ -1386,8 +1386,10 @@ pub(crate) mod tests {
             play_vehicle_sound: unused(),
             profit: unused(),
             record_from_shell: resolve_record,
+            set_colourmap: unused(),
             set_max_age: unused(),
             ship_get: unused(),
+            show_newgrf_vehicle_error: unused(),
             start_stop_dirty: unused(),
             tile_links: unused(),
             update_delta: unused(),
@@ -1839,23 +1841,19 @@ pub(crate) mod tests {
                 ..leaves()
             };
             let h = TRAIN.get();
-            h.set_track(u64::from(DEPOT));
+            h.set_track(crate::track_type::TrackBits::TRACK_BIT_DEPOT);
             // SAFETY: Nested direct entry receives the same live owner and its own native stack context.
-            assert_eq!(
-                unsafe {
-                    openttd_rust_train_reservation_check_reverse(
-                        h,
-                        crate::vehicle::VehicleRef(std::ptr::NonNull::dangling()),
-                        &raw const ls,
-                        std::ptr::null_mut(),
-                    )
-                },
-                0
-            );
-            h.set_flags(1 << 8);
-            h.clear_stuck();
-            h.set_wait_counter(0x1_0000);
-            h.set_flags(7);
+            assert!(!check_reverse_train(
+                &Game::new(
+                    &ls,
+                    crate::vehicle::VehicleRef(std::ptr::NonNull::dangling())
+                ),
+                h,
+            ));
+            h.set_flags(crate::train::VehicleRailFlags(1 << 8));
+            h.set_flags(h.flags().reset(crate::train::VehicleRailFlag::Stuck));
+            h.set_wait_counter(0);
+            h.set_flags(crate::train::VehicleRailFlags(7));
             true
         }
         let mut m = Mock::new(0);
@@ -1876,7 +1874,7 @@ pub(crate) mod tests {
             context: std::ptr::null_mut(),
         };
         assert!(g.reserve_track(7, 2));
-        assert_eq!(h.get_flags(), 7);
+        assert_eq!(h.flags().0, 7);
         assert_eq!(m.state.wait_counter, 0);
     }
 }

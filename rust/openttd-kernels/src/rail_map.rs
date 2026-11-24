@@ -137,6 +137,17 @@ impl crate::map_func::World<'_> {
     }
 }
 
+/// `GetRailDepotTrack`: returns the track of a depot, ignoring direction.
+pub(crate) fn get_rail_depot_track(
+    world: &crate::map_func::World<'_>,
+    t: TileIndex,
+) -> crate::track_type::Track {
+    crate::track_type::Track(crate::track_func::diag_dir_to_diag_track(
+        world.rail_depot_dir(t.0),
+        |ok| world.check(ok),
+    ))
+}
+
 /// Native `RailTileType` with its unchanged uint8 representation.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

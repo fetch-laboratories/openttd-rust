@@ -221,6 +221,17 @@ pub fn trackdir_to_exitdir(td: u8) -> u8 {
     [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0, 0, 0][usize::from(td)]
 }
 
+/// `TrackdirToExitdir` with the original's `assert(IsValidTrackdirForRoadVehicle(trackdir))`
+/// through the native assertion policy `check`: maps a trackdir to the direction in which
+/// the train leaves the tile.
+pub fn trackdir_to_exitdir_asserted(
+    trackdir: crate::track_type::Trackdir,
+    check: impl Fn(bool),
+) -> crate::direction_type::DiagDirection {
+    check(is_valid_trackdir_for_road_vehicle(trackdir));
+    crate::direction_type::DiagDirection(trackdir_to_exitdir(trackdir.0))
+}
+
 /// `DiagdirReachesTrackdirs`.
 pub fn diagdir_reaches_trackdirs(dir: u8) -> u16 {
     [0x1009, 0x16, 0x520, 0x2a00][usize::from(dir)]
@@ -367,6 +378,112 @@ pub fn remove_first_trackdir(
     Trackdir::INVALID_TRACKDIR
 }
 
+/// `TrackCrossesTracks`: maps a track to all tracks that make 90 deg turns with it. For the
+/// diagonal directions these are the complement of the direction, for the straight
+/// directions these are the two vertical or horizontal tracks, depend on the given direction.
+pub fn track_crosses_tracks(
+    track: crate::track_type::Track,
+    check: impl Fn(bool) + Copy,
+) -> crate::track_type::TrackBits {
+    use crate::track_type::TrackBits;
+    /// `_track_crosses_tracks`.
+    const TRACK_CROSSES_TRACKS: [TrackBits; crate::track_type::Track::TRACK_END.0 as usize] = [
+        TrackBits::TRACK_BIT_Y,    // TRACK_X
+        TrackBits::TRACK_BIT_X,    // TRACK_Y
+        TrackBits::TRACK_BIT_VERT, // TRACK_UPPER
+        TrackBits::TRACK_BIT_VERT, // TRACK_LOWER
+        TrackBits::TRACK_BIT_HORZ, // TRACK_LEFT
+        TrackBits::TRACK_BIT_HORZ, // TRACK_RIGHT
+    ];
+    if !is_valid_track(track.0) {
+        check(false);
+    }
+    TRACK_CROSSES_TRACKS[usize::from(track.0)]
+}
+
+/// `TrackDirectionToTrackdir`: maps a track and a full (8-way) direction to the trackdir that
+/// represents the track running in the given direction.
+pub fn track_direction_to_trackdir(
+    track: crate::track_type::Track,
+    dir: crate::direction_type::Direction,
+    check: impl Fn(bool) + Copy,
+) -> crate::track_type::Trackdir {
+    use crate::track_type::Trackdir;
+    const I: Trackdir = Trackdir::INVALID_TRACKDIR;
+    /// `_track_direction_to_trackdir`.
+    const TRACK_DIRECTION_TO_TRACKDIR: [[Trackdir;
+        crate::direction_type::Direction::DIR_END.0 as usize];
+        crate::track_type::Track::TRACK_END.0 as usize] = [
+        [
+            I,
+            Trackdir::TRACKDIR_X_NE,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_X_SW,
+            I,
+            I,
+        ],
+        [
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_Y_SE,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_Y_NW,
+        ],
+        [
+            I,
+            I,
+            Trackdir::TRACKDIR_UPPER_E,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_UPPER_W,
+            I,
+        ],
+        [
+            I,
+            I,
+            Trackdir::TRACKDIR_LOWER_E,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_LOWER_W,
+            I,
+        ],
+        [
+            Trackdir::TRACKDIR_LEFT_N,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_LEFT_S,
+            I,
+            I,
+            I,
+        ],
+        [
+            Trackdir::TRACKDIR_RIGHT_N,
+            I,
+            I,
+            I,
+            Trackdir::TRACKDIR_RIGHT_S,
+            I,
+            I,
+            I,
+        ],
+    ];
+    if !is_valid_track(track.0) {
+        check(false);
+    }
+    if !crate::direction_func::is_valid_direction(dir) {
+        check(false);
+    }
+    TRACK_DIRECTION_TO_TRACKDIR[usize::from(track.0)][usize::from(dir.0)]
+}
+
 /// `VehicleExitDir`: determine the side in which the vehicle will leave the tile.
 pub fn vehicle_exit_dir(
     direction: crate::direction_type::Direction,
@@ -456,4 +573,107 @@ pub fn set_trackdir_bit_iterator(
     bits: crate::track_type::TrackdirBits,
 ) -> impl Iterator<Item = crate::track_type::Trackdir> {
     crate::bitmath_func::SetBitIterator::new(u64::from(bits.0)).map(crate::track_type::Trackdir)
+}
+
+/// `TrackCrossesTracks` and `TrackDirectionToTrackdir` against `table/track_data.h`, with the
+/// native assertion recorded for an invalid track or direction.
+#[cfg(test)]
+mod track_table_tests {
+    use crate::direction_type::Direction;
+    use crate::track_type::{Track, TrackBits, Trackdir};
+    use std::cell::Cell;
+
+    /// `TrackdirToExitdir` reads `_trackdir_to_exitdir` (`table/track_data.h`) for every
+    /// trackdir below `TRACKDIR_END`, and asserts `IsValidTrackdirForRoadVehicle` first:
+    /// `INVALID_TRACKDIR` fails the assertion before the table read.
+    #[test]
+    fn trackdir_to_exitdir_asserted_follows_the_table_and_asserts_a_valid_trackdir() {
+        use crate::direction_type::DiagDirection;
+        // DIAGDIR_NE, SE, NE, SE, SW, SE, NE, NE, SW, NW, NW, SW, NW, NE, and the two
+        // zero-filled entries.
+        let expected: [u8; 16] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0, 0, 0];
+        let failures = Cell::new(0);
+        let check = |ok: bool| failures.set(failures.get() + u32::from(!ok));
+        for (td, dir) in (0u8..).zip(expected) {
+            assert_eq!(
+                super::trackdir_to_exitdir_asserted(Trackdir(td), check),
+                DiagDirection(dir)
+            );
+        }
+        assert_eq!(failures.get(), 0);
+        let failed = Cell::new(false);
+        let record = |ok: bool| failed.set(failed.get() || !ok);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            super::trackdir_to_exitdir_asserted(Trackdir::INVALID_TRACKDIR, |ok| {
+                record(ok);
+                assert!(ok);
+            })
+        }));
+        assert!(failed.get());
+    }
+
+    #[test]
+    fn track_crosses_tracks_follows_the_original_table() {
+        let expected = [
+            TrackBits(2),  // TRACK_X: TRACK_BIT_Y
+            TrackBits(1),  // TRACK_Y: TRACK_BIT_X
+            TrackBits(48), // TRACK_UPPER: TRACK_BIT_VERT
+            TrackBits(48), // TRACK_LOWER: TRACK_BIT_VERT
+            TrackBits(12), // TRACK_LEFT: TRACK_BIT_HORZ
+            TrackBits(12), // TRACK_RIGHT: TRACK_BIT_HORZ
+        ];
+        let failures = Cell::new(0);
+        let check = |ok: bool| failures.set(failures.get() + u32::from(!ok));
+        for (track, bits) in (0u8..).zip(expected) {
+            assert_eq!(super::track_crosses_tracks(Track(track), check), bits);
+        }
+        assert_eq!(failures.get(), 0);
+        let failed = Cell::new(false);
+        let record = |ok: bool| failed.set(failed.get() || !ok);
+        // The assertion is reported before the table read, which the invalid index would
+        // overrun; the recording check stops there.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            super::track_crosses_tracks(Track(6), |ok| {
+                record(ok);
+                assert!(ok);
+            })
+        }));
+        assert!(failed.get());
+    }
+
+    #[test]
+    fn track_direction_to_trackdir_follows_the_original_table() {
+        const I: u8 = 0xFF;
+        // `_track_direction_to_trackdir[TRACK_END][DIR_END]`, rows by track, columns
+        // DIR_N, DIR_NE, DIR_E, DIR_SE, DIR_S, DIR_SW, DIR_W, DIR_NW.
+        let expected: [[u8; 8]; 6] = [
+            [I, 0, I, I, I, 8, I, I],
+            [I, I, I, 1, I, I, I, 9],
+            [I, I, 2, I, I, I, 10, I],
+            [I, I, 3, I, I, I, 11, I],
+            [12, I, I, I, 4, I, I, I],
+            [13, I, I, I, 5, I, I, I],
+        ];
+        let failures = Cell::new(0);
+        let check = |ok: bool| failures.set(failures.get() + u32::from(!ok));
+        for (track, row) in (0u8..).zip(expected.iter()) {
+            for (dir, &td) in (0u8..).zip(row.iter()) {
+                assert_eq!(
+                    super::track_direction_to_trackdir(Track(track), Direction(dir), check),
+                    Trackdir(td),
+                    "track {track}, direction {dir}"
+                );
+            }
+        }
+        assert_eq!(failures.get(), 0);
+        let failed = Cell::new(0);
+        let record = |ok: bool| {
+            failed.set(failed.get() + u32::from(!ok));
+            assert!(ok);
+        };
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            super::track_direction_to_trackdir(Track(0), Direction(8), record)
+        }));
+        assert_eq!(failed.get(), 1, "the direction assertion");
+    }
 }

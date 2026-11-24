@@ -29,7 +29,6 @@ using OpenTTDRoadStopAnimationEntry = OpenTTDAnimationEntry<RoadStopSpec, BaseSt
 struct OpenTTDAnimationArea { uint32_t tile; uint16_t width, height; };
 struct OpenTTDAnimationServices {
 	const OpenTTDSharedServices *shared;
-	BaseStation *(*station_base)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_base);
 	Station *(*as_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(as_station);
 	bool (*is_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
 	const OpenTTDRoadStopResolverServices *roadstop_resolver;

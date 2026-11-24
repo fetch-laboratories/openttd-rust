@@ -470,7 +470,7 @@ pub(crate) fn ensure_no_train_on_track_bits(
         let mut it = OnTile::new(s, map, tile.0);
         while let Some(v) = it.get() {
             if VehicleType(v.vehicle_type_raw()) == VehicleType::TRAIN {
-                let track = TrackBits(crate::train::Handle::from_vehicle(v).track());
+                let track = crate::train::Handle::from_vehicle(v).track();
                 if track == track_bits || crate::track_func::tracks_overlap(track.0 | track_bits.0)
                 {
                     return Some(VehicleType(v.vehicle_type_raw()));

@@ -62,7 +62,7 @@ struct FollowerFixture {
 		ground.tracks = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m5 & 63); };
 		rail.rail_reservation = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m2 & 63); };
 		physics.rail_speed = [](RailType) noexcept -> uint16_t { return 0; };
-		train.physics = &physics;
+		train.physics = &physics; train.vehicle = &vehicle;
 		pbs.shared = &shared; pbs.rail = &rail; pbs.train = &train;
 		pbs.handle = [](const ::Train *) noexcept -> OpenTTDTrainHandle { return {&active->record, active->state.get()}; };
 		pbs.rail90 = [](uint8_t, uint8_t, bool def) noexcept { return def; };

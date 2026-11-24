@@ -1,0 +1,19 @@
+[
+  {
+    "kind": "carry",
+    "tool": "clippy",
+    "from": "rust/openttd-kernels/src/engine_capabilities.rs | fn openttd_rust_engine_capacity | disallowed_macros | 4a33eacd5fa65f2b2e28",
+    "to": "rust/openttd-kernels/src/engine_capabilities.rs | fn determine_capacity | disallowed_macros | 4a33eacd5fa65f2b2e28"
+  },
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-settings.h": 3
+    },
+    "reason": "#1009: the train bodies read _settings_game.pf.path_backoff_interval, pf.reserve_paths and vehicle.wagon_speed_limits in place, as train_cmd.cpp does. The three settings join the settings catalog and replace the train table's RustTrainPathBackoffInterval and RustTrainReservePaths callees and its wagon speed limit read. One generated field per original setting.",
+    "existing_alternatives": "The catalog already holds the other settings that train.rs reads. A per-setting service would add a callback slot for each setting, and the rebound-callee check retires the old train table bindings.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The fields stay while the settings table is native. They retire when Rust owns _settings_game."
+  }
+]

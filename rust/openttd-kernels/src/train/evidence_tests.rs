@@ -9,7 +9,7 @@
 //! line format. This test regenerates the probe's 20,000 trials from its generator, builds
 //! the 16 vehicle records the probe linked, and calls:
 //!
-//! - `curve_speed_limit`, the crate function `settings_table.rs` calls, for the curve
+//! - `get_curve_speed_limit`, the crate function `settings_table.rs` calls, for the curve
 //!   limit. The probe called the export it replaced, which had no other caller.
 //! - The export `openttd_rust_train_reverse_swap`, as the probe did, for the reversal.
 //!
@@ -22,7 +22,7 @@
 //! the expected entry tiles are decoded from the expected line. As in the probe, the map is
 //! plain rail on the next expected entry tile only and clear elsewhere: an entry on any other
 //! tile skips the vehicle resolution and changes the recorded events.
-use super::{Handle, Leaves, curve_speed_limit, openttd_rust_train_reverse_swap};
+use super::{Handle, Leaves, get_curve_speed_limit, openttd_rust_train_reverse_swap};
 use crate::game_state::GameState;
 use crate::ground_vehicle::GroundState;
 use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
@@ -147,16 +147,13 @@ fn set_kind(tile: TileIndex, kind: u8) {
     });
 }
 
-extern "C" fn curve_advantage(_: Handle) -> u64 {
-    u64::from(with(|w| w.curve_speed))
+extern "C" fn curve_speed(_: crate::rail_type::RailType) -> u8 {
+    with(|w| w.curve_speed)
 }
-extern "C" fn viewport(h: Handle, a: u8, b: u8) {
-    assert!(a != 0 && b != 0, "UpdateViewport(true, true)");
-    let i = index(h.record);
+extern "C" fn viewport(v: VehicleRef, force_update: bool, update_delta: bool) {
+    assert!(force_update && update_delta, "UpdateViewport(true, true)");
+    let i = index(v.0.as_ptr());
     with(|w| w.events.push((2, i)));
-}
-extern "C" fn tile_virt(x: i32, y: i32) -> u32 {
-    ((y >> 4) * 256 + (x >> 4)) as u32
 }
 extern "C" fn tile_links(v: VehicleRef) -> *mut Links {
     let i = index(v.0.as_ptr());
@@ -249,10 +246,12 @@ impl Fixture {
             tile_links,
             ..VEHICLE
         }));
-        let leaves = Box::into_raw(Box::new(Leaves {
-            curve_advantage,
-            tile_virt,
+        let physics = Box::leak(Box::new(crate::ground_vehicle::Services {
             viewport,
+            ..crate::test_tables::GROUND_VEHICLE
+        }));
+        let leaves = Box::into_raw(Box::new(Leaves {
+            physics,
             vehicle,
             ..TRAIN_LEAVES
         }));
@@ -268,6 +267,7 @@ impl Fixture {
             movement,
             map: crate::map_func::fixture::statics(),
             settings,
+            rail_type_curve_speed: curve_speed,
             ..SHARED
         }));
         // SAFETY: Both tables were just allocated and nothing else refers to them yet.
@@ -295,7 +295,7 @@ impl Fixture {
     /// Write the trial's vehicles into the records, linked as the probe's `Sync` links them.
     fn sync(&self, t: &Trial) {
         for i in 0..VEHICLES {
-            let [track, direction, x, y, z, tile, flags, status] = t.before[i];
+            let [track, direction, x_pos, y_pos, z_pos, tile, flags, status] = t.before[i];
             // SAFETY: The fixture owns these allocations; no reference to them is live.
             unsafe {
                 let v = &mut *self.records[i];
@@ -308,19 +308,19 @@ impl Fixture {
                 };
                 v.first = self.records[0];
                 v.tile = TileIndex(tile);
-                v.x_pos = x as i32;
-                v.y_pos = y as i32;
-                v.z_pos = z as i32;
+                v.x_pos = x_pos as i32;
+                v.y_pos = y_pos as i32;
+                v.z_pos = z_pos as i32;
                 v.direction = crate::direction_type::Direction(direction as u8);
                 v.vehstatus = crate::vehicle_base::VehStates(status as u8);
                 v.subtype = ((i % 2) << 2) as u8;
-                let g = &mut *self.grounds[i];
-                g.cache.cached_veh_length = t.lengths[i] as u8;
-                g.flags = flags as u16;
-                let s = &mut *self.states[i];
-                s.track = TrackBits(track as u8);
-                s.cached_tilt = t.tilts[i];
-                s.cached_curve_speed_mod = t.curve_mods[i];
+                let ground = &mut *self.grounds[i];
+                ground.cache.cached_veh_length = t.lengths[i] as u8;
+                ground.flags = flags as u16;
+                let state = &mut *self.states[i];
+                state.track = TrackBits(track as u8);
+                state.cached_tilt = t.tilts[i];
+                state.cached_curve_speed_mod = t.curve_mods[i];
             }
         }
     }
@@ -452,7 +452,7 @@ fn run() -> (Cases, Cases) {
         let inputs = format!("trial {trial} count {} model {}", t.count, t.model);
         // SAFETY: The fixture's tables and records are live for the call.
         let limit =
-            unsafe { curve_speed_limit(fixture.head(), &*fixture.leaves, &*fixture.shared) };
+            unsafe { get_curve_speed_limit(&*fixture.leaves, &*fixture.shared, fixture.head()) };
         curves.push((inputs.clone(), limit.to_string()));
 
         t.l = (draws.next() as usize) % t.count;

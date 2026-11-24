@@ -53,34 +53,3 @@ impl Default for FindDepotData {
         Self::new(TileIndex::INVALID, u32::MAX, false)
     }
 }
-
-/// [`FindDepotData`] as it crosses to the native train controller: the tile as
-/// its base integer and `reverse` as a 0-or-1 byte.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct FindDepotDataRecord {
-    /// [`FindDepotData::tile`].
-    pub tile: u32,
-    /// [`FindDepotData::best_length`].
-    pub best_length: u32,
-    /// [`FindDepotData::reverse`].
-    pub reverse: u8,
-}
-impl From<FindDepotData> for FindDepotDataRecord {
-    fn from(data: FindDepotData) -> Self {
-        Self {
-            tile: data.tile.0,
-            best_length: data.best_length,
-            reverse: u8::from(data.reverse),
-        }
-    }
-}
-
-crate::abi::layouts! {
-    fn abi_layout;
-    "OpenTTDFindDepotData" ["probe"] => FindDepotDataRecord {
-        tile,
-        best_length,
-        reverse,
-    };
-}

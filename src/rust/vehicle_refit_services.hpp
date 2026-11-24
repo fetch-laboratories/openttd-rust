@@ -30,7 +30,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 			.road = PR_BUILD_VEHICLE_ROAD, .ship = PR_BUILD_VEHICLE_SHIP, .aircraft = PR_BUILD_VEHICLE_AIRCRAFT,
 			.train_run = EXPENSES_TRAIN_RUN, .road_run = EXPENSES_ROADVEH_RUN,
 			.ship_run = EXPENSES_SHIP_RUN, .aircraft_run = EXPENSES_AIRCRAFT_RUN,
-			.auto_refit = CCF_AUTOREFIT.base(), .refit = CCF_REFIT.base(),
 		},
 		.engine = RustEngineByID,
 		.capabilities = &GetRustEngineCapabilitiesServices(),

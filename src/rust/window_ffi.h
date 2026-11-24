@@ -14,6 +14,7 @@
 struct OpenTTDWindowServices {
 	void (*close_window_by_id)(uint16_t cls, int32_t number, bool force, int32_t data) noexcept OPENTTD_SERVICE_DEFAULT(close_window_by_id);
 	void (*delete_newgrf_inspect_window)(uint8_t feature, uint32_t index) noexcept OPENTTD_SERVICE_DEFAULT(delete_newgrf_inspect_window);
+	void (*invalidate_newgrf_inspect_window)(uint8_t feature, uint32_t index) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_newgrf_inspect_window);
 	void (*invalidate_window_classes_data)(uint16_t cls, int32_t data, bool gui_scope) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_window_classes_data);
 	void (*invalidate_window_data)(uint16_t cls, int32_t number, int32_t data, bool gui_scope) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_window_data);
 	void (*set_window_classes_dirty)(uint16_t cls) noexcept OPENTTD_SERVICE_DEFAULT(set_window_classes_dirty);

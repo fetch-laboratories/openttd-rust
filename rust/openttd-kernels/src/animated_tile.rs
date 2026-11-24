@@ -46,7 +46,6 @@ pub struct AirportSpec {
 #[repr(C)]
 pub struct Services {
     pub shared: *const Shared,
-    pub station_base: extern "C" fn(u16) -> *mut BaseStation,
     pub as_station: extern "C" fn(*mut BaseStation) -> *mut Station,
     pub is_station: extern "C" fn(*mut BaseStation) -> bool,
     pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
@@ -372,6 +371,10 @@ pub(crate) unsafe fn object_change(
         0,
     );
 }
+/// Kept out of line: the PBS comparison probe interposes this symbol
+/// (`tools/simulation/rails.py`'s `pbs_interpose`), so a Rust caller such as
+/// `animated_tile::rail_event` must call it, not an inlined copy of its shim.
+#[inline(never)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_trigger_station(
     st: *mut BaseStation,
@@ -379,6 +382,22 @@ pub extern "C" fn openttd_rust_trigger_station(
     trigger: u8,
     cargo: u8,
 ) {
+    trigger_station_animation(
+        st,
+        crate::tile_type::TileIndex(tile),
+        crate::station_type::StationAnimationTrigger(trigger),
+        crate::cargo_type::CargoType(cargo),
+    );
+}
+/// `TriggerStationAnimation`: trigger station animation of station `st` at `tile` for
+/// `trigger`, limited to `cargo` unless it is `INVALID_CARGO`.
+pub(crate) fn trigger_station_animation(
+    st: *mut BaseStation,
+    tile: crate::tile_type::TileIndex,
+    trigger: crate::station_type::StationAnimationTrigger,
+    cargo: crate::cargo_type::CargoType,
+) {
+    let (tile, trigger, cargo) = (tile.0, trigger.0, cargo.0);
     let a = services();
     if !(a.station_triggers)(st, trigger) {
         return;
@@ -543,7 +562,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAnimationServices" ["probe"] => Services {
         shared,
-        station_base,
         as_station,
         is_station,
         roadstop_resolver,
@@ -589,11 +607,6 @@ crate::abi::layouts! {
     "OpenTTDRoadStopAnimationEntry" ["probe"] => Entry<RoadSpec, BaseStation> { spec, object };
 }
 
-/// Native station lookup keeps the source's strict `Station::Get` operation and
-/// performs its `BaseStation` conversion before crossing the boundary.
-pub(crate) fn station_base(id: u16) -> *mut BaseStation {
-    (services().station_base)(id)
-}
 pub(crate) fn rail_event(st: *mut BaseStation, tile: u32, trigger: u8, random_trigger: u8) {
     crate::newgrf_station::openttd_rust_station_randomisation(
         st,

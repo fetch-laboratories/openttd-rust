@@ -947,7 +947,7 @@ impl<'a> Signals<'a> {
 fn is_train_and_not_in_depot(v: VehicleRef) -> bool {
     v.vehicle_type() == VehicleType::TRAIN && {
         crate::witness::hit(crate::witness::SIGNAL_OCCUPANCY_ACCESSORS);
-        TrackBits(crate::train::Handle::from_vehicle(v).track()) != TrackBits::TRACK_BIT_DEPOT
+        crate::train::Handle::from_vehicle(v).track() != TrackBits::TRACK_BIT_DEPOT
     }
 }
 
@@ -1233,15 +1233,6 @@ impl Context {
     pub(crate) fn set_signals_on_both_dir(self, tile: TileIndex, track: Track, owner: Owner) {
         self.signals().set_signals_on_both_dir(tile, track, owner);
     }
-    /// Temporary raw adapter of [`Self::update_signals_on_segment`] for `train.rs` until its pass.
-    pub(crate) fn segment(self, tile: u32, side: u8, owner: u8) -> u8 {
-        self.update_signals_on_segment(TileIndex(tile), DiagDirection(side), CompanyID(owner))
-            .0
-    }
-    /// Temporary raw adapter of [`Self::set_signals_on_both_dir`] for `train.rs` until its pass.
-    pub(crate) fn both(self, tile: u32, track: u8, owner: u8) {
-        self.set_signals_on_both_dir(TileIndex(tile), Track(track), CompanyID(owner));
-    }
     /// Temporary raw adapter of [`Self::add_track_to_signal_buffer`] for `rail_cmd.rs` until
     /// its pass.
     pub(crate) fn add_track(self, tile: u32, track: u8, owner: u8) {
@@ -1256,6 +1247,16 @@ impl Context {
     /// and `water.rs` until their passes.
     pub(crate) fn flush(self) {
         self.update_signals_in_buffer();
+    }
+}
+/// The signal update context of the shared table: the rail map and signal tables the
+/// command services name, as `GetRustSignalContext` assembles them.
+pub(crate) fn context(shared: &Services) -> Context {
+    let command = ((shared.command_post)().command)();
+    Context {
+        shared,
+        rail: command.rail_map,
+        native: command.signals,
     }
 }
 /// Acquire call-scoped context while counting its real Rust-to-native crossing.
@@ -1390,6 +1391,44 @@ mod tests {
     use super::*;
     use std::cell::{Cell, RefCell};
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// `GetRustSignalContext` is `{&GetRustSharedServices(), &GetRustRailMapServices(),
+    /// &GetRustSignalServices()}`; the Rust context takes the caller's shared table and the
+    /// rail map and signal tables the command services name, each from its own source.
+    #[test]
+    fn context_takes_each_table_from_its_source() {
+        thread_local! {
+            static RAIL_MAP: &'static RailMapServices =
+                Box::leak(Box::new(crate::test_tables::RAIL_MAP));
+            static SIGNALS: &'static SignalServices =
+                Box::leak(Box::new(crate::test_tables::SIGNALS));
+            static POST: &'static crate::command_post::Services =
+                Box::leak(Box::new(crate::command_post::Services {
+                    command,
+                    ..crate::test_tables::COMMAND_POST
+                }));
+            static COMMANDS: &'static crate::services::CommandServices =
+                Box::leak(Box::new(crate::services::CommandServices {
+                    rail_map: RAIL_MAP.with(|t| *t),
+                    signals: SIGNALS.with(|t| *t),
+                    ..crate::test_tables::COMMANDS
+                }));
+        }
+        extern "C" fn command() -> &'static crate::services::CommandServices {
+            COMMANDS.with(|t| *t)
+        }
+        extern "C" fn command_post() -> &'static crate::command_post::Services {
+            POST.with(|t| *t)
+        }
+        let shared = Services {
+            command_post,
+            ..crate::test_tables::SHARED
+        };
+        let context = context(&shared);
+        assert_eq!(context.shared, &raw const shared);
+        assert_eq!(context.rail, std::ptr::from_ref(RAIL_MAP.with(|t| *t)));
+        assert_eq!(context.native, std::ptr::from_ref(SIGNALS.with(|t| *t)));
+    }
 
     thread_local! {
         static ASSERTIONS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
