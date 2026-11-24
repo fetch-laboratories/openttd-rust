@@ -366,6 +366,22 @@ pub extern "C" fn openttd_rust_trigger_station(
     trigger: u8,
     cargo: u8,
 ) {
+    trigger_station_animation(
+        st,
+        crate::tile_type::TileIndex(tile),
+        crate::station_type::StationAnimationTrigger(trigger),
+        crate::cargo_type::CargoType(cargo),
+    );
+}
+/// `TriggerStationAnimation`: trigger station animation of station `st` at `tile` for
+/// `trigger`, limited to `cargo` unless it is `INVALID_CARGO`.
+pub(crate) fn trigger_station_animation(
+    st: *mut BaseStation,
+    tile: crate::tile_type::TileIndex,
+    trigger: crate::station_type::StationAnimationTrigger,
+    cargo: crate::cargo_type::CargoType,
+) {
+    let (tile, trigger, cargo) = (tile.0, trigger.0, cargo.0);
     let a = services();
     if !(a.station_triggers)(st, trigger) {
         return;

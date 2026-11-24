@@ -59,7 +59,7 @@ use crate::table::strings::{
 };
 use crate::tile_cmd::{VehicleEnterTileState, VehicleEnterTileStates};
 use crate::tile_type::{INVALID_TILE, TILE_SIZE, TileIndex, TileType};
-use crate::track_type::{Track, TrackBits, TrackStatus, Trackdir};
+use crate::track_type::{Track, TrackBits, TrackStatus, Trackdir, TrackdirBits};
 use crate::train_reservation as reservation;
 use crate::train_state::State;
 use crate::transport_type::TransportType;
@@ -495,12 +495,13 @@ const ACCEL_SLOWDOWN: [AccelerationSlowdownParams; 3] = [
 ];
 
 /// The tables of one synchronous train entry. It holds no vehicle field.
-#[derive(Clone)]
 struct Game<'a> {
     leaves: &'a Leaves,
     services: &'a Services,
     vs: &'a VehicleServices,
     movement: CachedTable<'a>,
+    /// The canonical map descriptor, loaded once at the entry.
+    world: World<'a>,
 }
 
 impl<'a> Game<'a> {
@@ -511,11 +512,12 @@ impl<'a> Game<'a> {
             // SAFETY: The native table names the immutable process-wide base table.
             vs: unsafe { &*leaves.vehicle },
             movement: CachedTable::new(services),
+            world: World::new(services),
         }
     }
-    /// The canonical map descriptor, loaded at each use.
-    fn world(&self) -> World<'a> {
-        World::new(self.services)
+    /// The canonical map descriptor of the entry.
+    fn world(&self) -> &World<'a> {
+        &self.world
     }
     /// The map dimensions.
     fn map(&self) -> Map {
@@ -566,9 +568,9 @@ impl<'a> Game<'a> {
         // SAFETY: The live shell survives the synchronous index update.
         unsafe { crate::vehicle::occupancy::update_position(self.vs, v.vehicle(), self.map()) };
     }
-    /// `v->UpdateViewport(update_delta, force)` of a train.
-    fn viewport(&self, v: Handle, update_delta: bool, force: bool) {
-        (self.leaves.physics.viewport)(v.vehicle(), update_delta, force);
+    /// `v->UpdateViewport(force_update, update_delta)` of a train.
+    fn viewport(&self, v: Handle, force_update: bool, update_delta: bool) {
+        (self.leaves.physics.viewport)(v.vehicle(), force_update, update_delta);
     }
     /// `v->UpdateInclination(new_tile, update_delta)`.
     fn update_inclination(&self, v: Handle, new_tile: bool, update_delta: bool) -> i32 {
@@ -597,7 +599,7 @@ impl<'a> Game<'a> {
         usize::from(
             <crate::ground_vehicle::Train as crate::ground_vehicle::GroundVehicleType>::get_acceleration_type(
                 self.leaves.physics,
-                &self.world(),
+                self.world(),
                 v.vehicle(),
             )
             .0,
@@ -790,8 +792,10 @@ impl<'a> Game<'a> {
     }
     /// `SetWindowDirty(WC_VEHICLE_DETAILS, v->index)`.
     fn set_details_dirty(&self, v: Handle) {
-        // SAFETY: The base table names its immutable maintenance table.
-        (unsafe { &*self.vs.maintenance }.details_dirty)(v.vehicle());
+        set_window_dirty(
+            WindowClass::WC_VEHICLE_DETAILS,
+            WindowNumber::from(self.index(v)),
+        );
     }
     /// `InvalidateWindowData(WC_VEHICLE_DEPOT, tile)`.
     fn invalidate_depot_window(tile: TileIndex) {
@@ -1116,12 +1120,12 @@ impl Game<'_> {
         let world = self.world();
         let st = self.station_get(station_id);
         let station_ahead = (crate::station::get_platform_length_in_direction(
-            &world,
+            world,
             tile,
             dir_to_diag_dir(v.vehicle().direction(), self.check()),
         ) as i32)
             .wrapping_mul(TILE_SIZE as i32);
-        let station_length = (crate::station::get_platform_length(&world, st, tile) as i32)
+        let station_length = (crate::station::get_platform_length(world, st, tile) as i32)
             .wrapping_mul(TILE_SIZE as i32);
 
         /* Default to the middle of the station for stations stops that are not in
@@ -1189,10 +1193,11 @@ impl Game<'_> {
         let mut pos = 0_i32;
         let mut lastpos = -1_i32;
         let mut u = this;
-        while u.next() != Handle::NONE {
+        let mut next = u.next();
+        while next != Handle::NONE {
             'part: {
                 let this_dir = u.vehicle().direction();
-                let next_dir = u.next().vehicle().direction();
+                let next_dir = next.vehicle().direction();
 
                 let dirdiff = dir_difference(this_dir, next_dir, self.check());
                 if dirdiff == DirDiff::DIRDIFF_SAME {
@@ -1221,8 +1226,9 @@ impl Game<'_> {
                     max_speed = 61;
                 }
             }
-            u = u.next();
+            u = next;
             pos = pos.wrapping_add(i32::from(u.cached_veh_length()));
+            next = u.next();
         }
 
         if numcurve > 0 && max_speed > 88 {
@@ -1476,7 +1482,7 @@ impl Game<'_> {
         crate::services_assert::assert_with(|| self.is_level_crossing_tile(tile));
 
         let mut dir = axis_to_diag_dir(
-            crate::road_map::get_crossing_rail_axis(&self.world(), tile),
+            crate::road_map::get_crossing_rail_axis(self.world(), tile),
             self.check(),
         );
         let mut tile_from = tile + self.tile_offs_by_diag_dir(dir);
@@ -1700,7 +1706,7 @@ impl Game<'_> {
             if d <= 0 {
                 leave.vehicle().set_hidden(false); // move it out of the depot
                 leave.set_track(TrackBits(crate::track_func::track_to_track_bits(
-                    crate::rail_map::get_rail_depot_track(&self.world(), leave.vehicle().tile()).0,
+                    crate::rail_map::get_rail_depot_track(self.world(), leave.vehicle().tile()).0,
                     self.check(),
                 )));
                 let mut i = 0;
@@ -1968,7 +1974,12 @@ pub(crate) fn update_acceleration(this: Handle) {
     let weight: u32 = read_field!(this.vehicle().ground_cache(), cached_weight);
     crate::services_assert::assert_with(|| weight != 0);
     // Clamp(int, int, int): the uint product converts to int first.
-    let acceleration = ((power / weight).wrapping_mul(4) as i32).clamp(1, 255);
+    let acceleration = crate::math::clamp(
+        (power / weight).wrapping_mul(4) as i32,
+        1,
+        255,
+        crate::map_func::native_check,
+    );
     write_field!(this.record, acceleration, acceleration as u8);
 }
 
@@ -2010,7 +2021,7 @@ impl CommandContext<'_> {
     }
     /// `return CMD_ERROR`.
     fn cmd_error(&self) {
-        (self.common.base.cost.error)(self.out, crate::strings_type::INVALID_STRING_ID);
+        crate::command_func::cmd_error(crate::services::Cost(self.out, self.common.base.cost));
     }
     /// `return CommandCost(msg)`.
     fn error(&self, msg: crate::strings_type::StringID) {
@@ -2441,11 +2452,17 @@ impl Game<'_> {
 
         crate::vehicle::visits::begin_loading(v.vehicle(), self.vs.visits());
 
-        crate::animated_tile::rail_event(
+        crate::newgrf_station::trigger_station_randomisation(
             st.base,
-            v.vehicle().tile().0,
-            crate::station_type::SAT_VEHICLE_ARRIVES,
-            crate::station_type::SRT_VEHICLE_ARRIVES,
+            v.vehicle().tile(),
+            crate::station_type::StationRandomTrigger::VehicleArrives,
+            crate::cargo_type::CargoType::INVALID_CARGO,
+        );
+        crate::animated_tile::trigger_station_animation(
+            st.base,
+            v.vehicle().tile(),
+            crate::station_type::StationAnimationTrigger::VehicleArrives,
+            crate::cargo_type::CargoType::INVALID_CARGO,
         );
     }
 
@@ -2484,7 +2501,9 @@ impl Game<'_> {
 
     /// `TrainMovedChangeSignals`.
     fn train_moved_change_signals(&self, tile: TileIndex, dir: DiagDirection) -> bool {
-        if self.is_tile_type(tile, TileType::MP_RAILWAY) && self.world().has_signals(tile.0) {
+        if self.is_tile_type(tile, TileType::MP_RAILWAY)
+            && self.world().rail_tile_type(tile.0) == crate::rail_map::RailTileType::Signals.0
+        {
             let tracks =
                 crate::track_func::track_bits_to_trackdir_bits(self.world().tracks(tile.0))
                     & crate::track_func::diagdir_reaches_trackdirs(dir.0);
@@ -2598,9 +2617,11 @@ impl Game<'_> {
     /// of vehicle `v` with train `t`. Returns the number of victims.
     fn check_train_collision_with(&self, v: VehicleRef, t: Handle) -> u32 {
         /* not a train or in depot */
-        if v.vehicle_type() != VehicleType::VEH_TRAIN
-            || Handle::from_vehicle(v).track() == TrackBits::TRACK_BIT_DEPOT
-        {
+        if v.vehicle_type() != VehicleType::VEH_TRAIN {
+            return 0;
+        }
+        let u = Handle::from_vehicle(v);
+        if u.track() == TrackBits::TRACK_BIT_DEPOT {
             return 0;
         }
 
@@ -2610,7 +2631,7 @@ impl Game<'_> {
         }
 
         /* get first vehicle now to make most usual checks faster */
-        let coll = Handle::from_vehicle(v).first();
+        let coll = u.first();
 
         /* can't collide with own wagons */
         if coll == t {
@@ -2630,7 +2651,7 @@ impl Game<'_> {
         }
 
         /* Slower check using multiplication */
-        let min_diff = (i32::from(Handle::from_vehicle(v).cached_veh_length()) + 1) / 2
+        let min_diff = (i32::from(u.cached_veh_length()) + 1) / 2
             + (i32::from(t.cached_veh_length()) + 1) / 2
             - 1;
         if x_diff
@@ -2789,19 +2810,22 @@ impl Game<'_> {
                                 gp.new_tile,
                                 reverse_diag_dir(enterdir, self.check()),
                             );
-                            let reachable_trackdirs =
-                                crate::track_func::diagdir_reaches_trackdirs(enterdir.0);
+                            let reachable_trackdirs = TrackdirBits(
+                                crate::track_func::diagdir_reaches_trackdirs(enterdir.0),
+                            );
 
-                            let trackdirbits = crate::track_func::track_status_to_trackdir_bits(ts)
-                                & reachable_trackdirs;
+                            let trackdirbits = TrackdirBits(
+                                crate::track_func::track_status_to_trackdir_bits(ts)
+                                    & reachable_trackdirs.0,
+                            );
                             let red_signals =
                                 TrackBits(crate::track_func::trackdir_bits_to_track_bits(
                                     crate::track_func::track_status_to_red_signals(ts).0
-                                        & reachable_trackdirs,
+                                        & reachable_trackdirs.0,
                                 ));
 
                             let mut bits = TrackBits(
-                                crate::track_func::trackdir_bits_to_track_bits(trackdirbits),
+                                crate::track_func::trackdir_bits_to_track_bits(trackdirbits.0),
                             );
                             if self.rail_90_deg_turn_disallowed(
                                 self.get_tile_rail_type(gp.old_tile),
@@ -2860,7 +2884,7 @@ impl Game<'_> {
                                      * this to one, then if we reach the next signal it is
                                      * decreased to zero and we won't pass that new signal. */
                                     let dir = Trackdir(crate::track_func::find_first_trackdir(
-                                        trackdirbits,
+                                        trackdirbits.0,
                                     ));
                                     if self.has_signal_on_trackdir(gp.new_tile, dir)
                                         || (self.has_signal_on_trackdir(
@@ -2892,7 +2916,7 @@ impl Game<'_> {
                                 {
                                     /* In front of a red signal */
                                     let i = Trackdir(crate::track_func::find_first_trackdir(
-                                        trackdirbits,
+                                        trackdirbits.0,
                                     ));
 
                                     /* Don't handle stuck trains here. */
@@ -3025,7 +3049,9 @@ impl Game<'_> {
                                      *  2) some orientations of tunnel entries, where the vehicle is already inside the wormhole at 8/16 from the tile edge.
                                      *     Is also the train just reversing, the wagon inside the tunnel is 'on' the tile of the opposite tunnel entry.
                                      */
-                                    const CONNECTING_TRACK: [[TrackBits; 4]; 4] = [
+                                    const CONNECTING_TRACK: [[TrackBits;
+                                        DiagDirection::DIAGDIR_END.0 as usize];
+                                        DiagDirection::DIAGDIR_END.0 as usize] = [
                                         [
                                             TrackBits::TRACK_BIT_X,
                                             TrackBits::TRACK_BIT_LOWER,
@@ -3422,6 +3448,9 @@ impl Game<'_> {
             });
 
             /* It is important that these two are the first in the loop, as reservation cannot deal with every trackbit combination */
+            crate::services_assert::assert_with(|| {
+                Track::TRACK_BEGIN == Track::TRACK_X && Track::TRACK_Y.0 == Track::TRACK_BEGIN.0 + 1
+            });
             for t in crate::track_func::set_track_bit_iterator(remaining_trackbits) {
                 self.try_reserve_rail_track(tile, t, true);
             }
@@ -3504,8 +3533,8 @@ impl Game<'_> {
         }
 
         if state <= 200 {
-            let mut r = self.services.random();
-            if crate::random_func::chance16_i(1, 7, r) {
+            let mut r = 0;
+            if crate::random_func::chance16r(self.services, 1, 7, &mut r) {
                 let mut index = (r.wrapping_mul(10) >> 16) as i32;
 
                 let mut u = v.vehicle();
@@ -3694,17 +3723,21 @@ impl Game<'_> {
 
         /* Determine the track status on the next tile */
         let ts = self.get_tile_track_status(tile, reverse_diag_dir(dir, self.check()));
-        let reachable_trackdirs = crate::track_func::diagdir_reaches_trackdirs(dir.0);
+        let reachable_trackdirs = TrackdirBits(crate::track_func::diagdir_reaches_trackdirs(dir.0));
 
-        let trackdirbits =
-            crate::track_func::track_status_to_trackdir_bits(ts) & reachable_trackdirs;
-        let red_signals =
-            crate::track_func::track_status_to_red_signals(ts).0 & reachable_trackdirs;
+        let trackdirbits = TrackdirBits(
+            crate::track_func::track_status_to_trackdir_bits(ts) & reachable_trackdirs.0,
+        );
+        let red_signals = TrackdirBits(
+            crate::track_func::track_status_to_red_signals(ts).0 & reachable_trackdirs.0,
+        );
 
         /* We are sure the train is not entering a depot, it is detected above */
 
         /* mask unreachable track bits if we are forbidden to do 90deg turns */
-        let mut bits = TrackBits(crate::track_func::trackdir_bits_to_track_bits(trackdirbits));
+        let mut bits = TrackBits(crate::track_func::trackdir_bits_to_track_bits(
+            trackdirbits.0,
+        ));
         if self.rail_90_deg_turn_disallowed(
             self.get_tile_rail_type(v.vehicle().tile()),
             self.get_tile_rail_type(tile),
@@ -3722,7 +3755,7 @@ impl Game<'_> {
         }
 
         /* approaching red signal */
-        if trackdirbits & red_signals != 0 {
+        if trackdirbits.0 & red_signals.0 != 0 {
             return self.train_approaching_line_end(v, true, reverse);
         }
 
@@ -4104,6 +4137,11 @@ impl Game<'_> {
         self.set_start_stop_dirty(v);
     }
 
+    /// `Train::OnNewCalendarDay`: calendar day handler.
+    fn on_new_calendar_day(&self, this: Handle) {
+        self.maintain(this, maintenance::age_vehicle);
+    }
+
     /// `Train::OnNewEconomyDay`: economy day handler.
     fn on_new_economy_day(&self, this: Handle) {
         self.maintain(this, maintenance::economy_age_vehicle);
@@ -4315,7 +4353,7 @@ pub unsafe extern "C" fn openttd_rust_train_calendar_day(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    entry_game!(leaves, services).maintain(v, maintenance::age_vehicle);
+    entry_game!(leaves, services).on_new_calendar_day(v);
 }
 /// `Train::OnNewEconomyDay`.
 /// # Safety

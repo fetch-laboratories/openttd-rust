@@ -150,8 +150,8 @@ fn set_kind(tile: TileIndex, kind: u8) {
 extern "C" fn curve_speed(_: crate::rail_type::RailType) -> u8 {
     with(|w| w.curve_speed)
 }
-extern "C" fn viewport(v: VehicleRef, update_delta: bool, force: bool) {
-    assert!(update_delta && force, "UpdateViewport(true, true)");
+extern "C" fn viewport(v: VehicleRef, force_update: bool, update_delta: bool) {
+    assert!(force_update && update_delta, "UpdateViewport(true, true)");
     let i = index(v.0.as_ptr());
     with(|w| w.events.push((2, i)));
 }

@@ -9,7 +9,6 @@ struct OpenTTDVisualServices {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDSharedServices *shared;
 	uint8_t (*smoke)() noexcept OPENTTD_SERVICE_DEFAULT(smoke);
-	void (*power_error)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(power_error);
 	bool (*depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot);
 	bool (*tunnel)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel);
 	bool (*powered)(uint64_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered);

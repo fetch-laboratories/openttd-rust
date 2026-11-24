@@ -3,7 +3,6 @@
 #![allow(clippy::many_single_char_names)]
 use super::refit;
 use crate::cargo_type::CargoType;
-use crate::engine_type::OpenTTDEngine;
 use crate::vehicle_type::VehicleType;
 use std::mem::MaybeUninit;
 #[repr(C)]
@@ -20,7 +19,6 @@ pub struct Services {
     pub copy_common: extern "C" fn(*mut (), *mut (), u16),
     pub random_bits: extern "C" fn(*mut (), u16),
     pub flip_image: extern "C" fn(*mut ()),
-    pub warning: extern "C" fn(*const OpenTTDEngine),
     pub has_articulated: extern "C" fn(*mut ()) -> bool,
     pub next_articulated: extern "C" fn(*mut ()) -> *mut (),
 }
@@ -262,7 +260,13 @@ pub(crate) unsafe fn check_consistency_of_articulated_vehicle(s: &Services, mut 
     }
     if real_union != purchase_union || real_intersection != purchase_intersection || more {
         /* show a warning once for each GRF after each game load */
-        (s.warning)(e);
+        (c.vehicles.show_newgrf_vehicle_error)(
+            (r.capabilities.id)(e),
+            crate::table::strings::STR_NEWGRF_BUGGY.0,
+            crate::table::strings::STR_NEWGRF_BUGGY_ARTICULATED_CARGO.0,
+            crate::newgrf_config::GRFBug::VehRefit,
+            false,
+        );
     }
 }
 
@@ -271,7 +275,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleArticulatedServices" ["probe"] => Services {
         refit, prepare_previous,
         new_train, new_road, road_length, copy_roadtype, set_part, mark_train,
-        mark_road, copy_common, random_bits, flip_image, warning,
+        mark_road, copy_common, random_bits, flip_image,
         has_articulated, next_articulated,
     };
 }

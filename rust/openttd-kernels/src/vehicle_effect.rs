@@ -75,7 +75,6 @@ pub struct Services {
     shared: &'static Shared,
     /// `_settings_client.gui.smoke_amount`.
     smoke: extern "C" fn() -> u8,
-    power_error: extern "C" fn(u16),
     depot: extern "C" fn(u32) -> bool,
     tunnel: extern "C" fn(u32) -> bool,
     powered: extern "C" fn(u64, crate::services::RailType) -> bool,
@@ -163,7 +162,13 @@ pub(crate) fn update_visual_effect(v: VehicleRef, allow_power_change: bool) {
             toggle_bit(&mut cached, VE_DISABLE_WAGON_POWER);
             *cache = cached as u8;
         }
-        (s.power_error)(id);
+        (s.vehicle.show_newgrf_vehicle_error)(
+            id,
+            crate::table::strings::STR_NEWGRF_BROKEN.0,
+            crate::table::strings::STR_NEWGRF_BROKEN_POWERED_WAGON.0,
+            crate::newgrf_config::GRFBug::VehPoweredWagon,
+            false,
+        );
     }
 }
 #[unsafe(no_mangle)]
@@ -443,5 +448,5 @@ pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, smoke, power_error, depot, tunnel, powered, };
+    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, smoke, depot, tunnel, powered, };
 }

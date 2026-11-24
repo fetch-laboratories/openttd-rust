@@ -387,7 +387,7 @@ pub fn track_crosses_tracks(
 ) -> crate::track_type::TrackBits {
     use crate::track_type::TrackBits;
     /// `_track_crosses_tracks`.
-    const TRACK_CROSSES_TRACKS: [TrackBits; 6] = [
+    const TRACK_CROSSES_TRACKS: [TrackBits; crate::track_type::Track::TRACK_END.0 as usize] = [
         TrackBits::TRACK_BIT_Y,    // TRACK_X
         TrackBits::TRACK_BIT_X,    // TRACK_Y
         TrackBits::TRACK_BIT_VERT, // TRACK_UPPER
@@ -411,7 +411,9 @@ pub fn track_direction_to_trackdir(
     use crate::track_type::Trackdir;
     const I: Trackdir = Trackdir::INVALID_TRACKDIR;
     /// `_track_direction_to_trackdir`.
-    const TRACK_DIRECTION_TO_TRACKDIR: [[Trackdir; 8]; 6] = [
+    const TRACK_DIRECTION_TO_TRACKDIR: [[Trackdir;
+        crate::direction_type::Direction::DIR_END.0 as usize];
+        crate::track_type::Track::TRACK_END.0 as usize] = [
         [
             I,
             Trackdir::TRACKDIR_X_NE,

@@ -22,6 +22,7 @@
 #include "snow_line_ffi.h"
 
 enum class LandscapeType : uint8_t;
+enum RailType : uint8_t;
 enum GrfSpecFeature : uint8_t;
 enum class StationType : uint8_t;
 struct BaseStation;
@@ -104,7 +105,7 @@ struct CompanyInfrastructure;
 struct OpenTTDSharedServices {
 	uint64_t (*all_compatible_railtypes)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_compatible_railtypes);
 	uint64_t (*all_powered_railtypes)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_powered_railtypes);
-	uint8_t (*rail_type_curve_speed)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_curve_speed);
+	uint8_t (*rail_type_curve_speed)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_curve_speed);
 	const OpenTTDCommandPostServices &(*command_post)() noexcept OPENTTD_SERVICE_DEFAULT(command_post);
 	const OpenTTDMovementServices *movement = nullptr;
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
@@ -269,7 +270,6 @@ enum SignalState : uint8_t;
 enum Axis : uint8_t;
 enum TransportType : uint8_t;
 enum Track : uint8_t;
-enum RailType : uint8_t;
 enum class RailTileType : uint8_t;
 enum class RailGroundType : uint8_t;
 enum SignalVariant : uint8_t;
