@@ -37,6 +37,8 @@ enum Call {
     CostAnimation(i32, i32, i32, i64),
 }
 
+#[cfg(test)]
+
 thread_local! {
     static CALLS: RefCell<Vec<Call>> = const { RefCell::new(Vec::new()) };
     static CARGO_LIST: Cell<*const List> = const { Cell::new(std::ptr::null()) };
@@ -429,6 +431,7 @@ fn leave_station_stores_the_fill_as_the_signed_trip_occupancy() {
     extern "C" fn no_station(_: u16) -> *mut BaseStation {
         std::ptr::null_mut()
     }
+    #[cfg(test)]
     thread_local! {
         static STATE: Cell<*mut crate::station_service::Service> =
             const { Cell::new(std::ptr::null_mut()) };
@@ -605,6 +608,7 @@ fn enter_depot_of_a_road_vehicle_invalidates_its_windows_in_order() {
     ) {
         return;
     }
+    #[cfg(test)]
     thread_local! {
         static VEHICLE: Cell<Option<VehicleRef>> = const { Cell::new(None) };
     }
