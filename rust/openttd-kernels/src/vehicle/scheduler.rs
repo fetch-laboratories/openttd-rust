@@ -710,10 +710,7 @@ mod tests {
                     play_vehicle_sound: sound,
                     ..crate::test_tables::VEHICLE
                 };
-                let newgrf = newgrf_vehicle::test_table_with(newgrf_vehicle::TestLeaves {
-                    cargo_owner,
-                    ..newgrf_vehicle::TestLeaves::UNREACHABLE
-                });
+                let newgrf = newgrf_vehicle::TEST_TABLE.with_cargo_owner(cargo_owner);
                 after_tick::<false>(&tables, &vs, &newgrf, VehicleRef::of(self.part));
             }
         }
@@ -1592,16 +1589,17 @@ mod tests {
                 crate::engine_capabilities::test_table_with_loading(engine_loading);
             thread_local! {
                 static RESOLVER: &'static newgrf_vehicle::Services =
-                    Box::leak(Box::new(newgrf_vehicle::test_table_with(newgrf_vehicle::TestLeaves {
-                        cache,
-                        capabilities: &CAPABILITIES,
-                        cargo_type,
-                        engine_by_id,
-                        resolve_callback,
-                        shared: day_shared(),
-                        write_waiting,
-                        ..newgrf_vehicle::TestLeaves::UNREACHABLE
-                    })));
+                    Box::leak(Box::new(
+                        newgrf_vehicle::TEST_TABLE
+                            .with_cache(cache)
+                            .with_capabilities(&CAPABILITIES)
+                            .with_cargo_type(cargo_type)
+                            .with_engine_by_id(engine_by_id)
+                            .with_resolve_callback(resolve_callback)
+                            .with_shared(day_shared())
+                            .with_write_waiting(write_waiting)
+                            .with_inert_randomisation(),
+                    ));
             }
             RESOLVER.with(|r| *r)
         }
@@ -1845,11 +1843,7 @@ mod tests {
             unsafe extern "C" fn age(v: *mut VehicleRecord) -> i32 {
                 reached(v)
             }
-            const RESOLVER: newgrf_vehicle::Services =
-                newgrf_vehicle::test_table_with(newgrf_vehicle::TestLeaves {
-                    age,
-                    ..newgrf_vehicle::TestLeaves::UNREACHABLE
-                });
+            const RESOLVER: newgrf_vehicle::Services = newgrf_vehicle::TEST_TABLE.with_age(age);
             &RESOLVER
         }
         /// `EconomyAgeVehicle`'s first read, `v->economy_age`.

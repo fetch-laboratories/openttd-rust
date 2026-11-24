@@ -426,6 +426,9 @@ impl<I: PoolId, R, S> TypedPool<I, R, S> {
     }
     /// `Pool::GetPoolSize`: returns first unused index. Useful when iterating over all pool
     /// items.
+    ///
+    /// # Safety
+    /// The view's descriptor is live.
     #[must_use]
     pub unsafe fn pool_size(&self) -> usize {
         // SAFETY: The view's live descriptor.
