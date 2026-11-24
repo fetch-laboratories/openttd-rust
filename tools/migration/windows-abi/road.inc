@@ -6,6 +6,9 @@
 #include "rust/engine_capabilities_ffi.h"
 #include "rust/engine_loading_ffi.h"
 #include "rust/clock_ffi.h"
+#include "rust/clock_state.h"
+#include "timer/timer_game_calendar.h"
+#include "timer/timer_game_economy.h"
 #include "rust/company_ffi.h"
 #include "rust/company_identity_ffi.h"
 #include "rust/fleet_ffi.h"
@@ -512,8 +515,9 @@ static void RoadServiceBoundary()
 	companies.company = [](uint8_t) noexcept -> Company * { return nullptr; };
 	maintenance.company = &companies;
 	maintenance.date_of_last_service = [](OpenTTDVehicle *) noexcept -> int32_t { return 0; };
-	openttd_rust_economy_set_date(0x1020304, 0, false);
-	openttd_rust_calendar_set_date(-0x12345, 0);
+	/* The dates the service stores, written in place: the calendar date is before year 0. */
+	GetRustClockState().economy_date = TimerGameEconomy::Date{0x1020304};
+	GetRustClockState().calendar_date = TimerGameCalendar::Date{-0x12345};
 	/* The tail record's type has no engine type, so only the head is serviced. */
 	t.vehicle.write_economy_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == 0x1020304); };
 	t.vehicle.write_calendar_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == -0x12345); };
