@@ -546,7 +546,13 @@ mod controller {
             native_assert,
             ..crate::test_tables::MOVEMENT
         }));
-        let mut f = Fixture::new(LOCAL, &crate::services::Services { movement, ..SHARED });
+        // The entry's assertions follow the map descriptor's native policy.
+        let shared = crate::services::Services {
+            movement,
+            map: crate::map_func::fixture::statics(),
+            ..SHARED
+        };
+        let mut f = Fixture::new(LOCAL, &shared);
         let vehicle = Box::leak(Box::new(crate::vehicle::VehicleServices {
             newgrf,
             ..VEHICLE
@@ -594,7 +600,13 @@ mod controller {
             native_assert,
             ..crate::test_tables::MOVEMENT
         }));
-        let mut f = Fixture::new(LOCAL, &crate::services::Services { movement, ..SHARED });
+        // The entry's assertions follow the map descriptor's native policy.
+        let shared = crate::services::Services {
+            movement,
+            map: crate::map_func::fixture::statics(),
+            ..SHARED
+        };
+        let mut f = Fixture::new(LOCAL, &shared);
         let vehicle = Box::leak(Box::new(crate::vehicle::VehicleServices {
             newgrf: newgrf_with_cache,
             ..VEHICLE
