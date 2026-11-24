@@ -285,22 +285,6 @@ mod tests {
     use super::*;
     use crate::direction_type::Direction;
     use crate::tile_type::TileIndex;
-    use std::sync::atomic::{AtomicU32, Ordering};
-
-    /// Failed native assertions seen by the isolated child.
-    static FAILED: AtomicU32 = AtomicU32::new(0);
-    extern "C" fn record_failure(condition: bool) {
-        if !condition {
-            FAILED.fetch_add(1, Ordering::Relaxed);
-        }
-    }
-
-    /// The orders owner the unbunching test's orders table resolves every vehicle to.
-    static OWNER: std::sync::atomic::AtomicPtr<crate::orders::VehicleOrders> =
-        std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
-    extern "C" fn vehicle_orders(_: *mut std::ffi::c_void) -> *mut crate::orders::VehicleOrders {
-        OWNER.load(Ordering::Relaxed)
-    }
 
     /// A fresh record the test leaks.
     fn record(kind: VehicleType) -> VehicleRef {
@@ -347,29 +331,6 @@ mod tests {
         v.set_direction(Direction::DIR_NE);
         let gp = get_new_vehicle_pos(v, map);
         assert_eq!((gp.x, gp.new_tile), (-1, TileIndex(0x1000_04ff)));
-    }
-
-    /// `assert(this->IsInDepot())` runs before the unbunching tests: a vehicle outside a
-    /// depot fails it once, one inside none. Without an order list the vehicle never waits.
-    #[test]
-    fn is_waiting_for_unbunching_asserts_that_the_vehicle_is_in_a_depot() {
-        if crate::services_assert::isolate_test_check(
-            "vehicle::tests::is_waiting_for_unbunching_asserts_that_the_vehicle_is_in_a_depot",
-            record_failure,
-        ) {
-            return;
-        }
-        let owner = crate::orders::openttd_rust_vehicle_orders_new();
-        OWNER.store(owner, Ordering::Relaxed);
-        let orders: &'static crate::orders::Leaves = Box::leak(Box::new(crate::orders::Leaves {
-            vehicle: vehicle_orders,
-            ..crate::test_tables::ORDERS
-        }));
-        let v = record(VehicleType::VEH_ROAD);
-        assert!(!is_waiting_for_unbunching(v, orders, || false));
-        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
-        assert!(!is_waiting_for_unbunching(v, orders, || true));
-        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
     }
 
     /// `GetAdvanceDistance`: an odd (axial) direction needs 192 progress, an even (corner)
