@@ -1883,7 +1883,7 @@ mod tests {
         pf.base.nodes.insert_closed_node(&v.world, 0);
         // A node with the same key, whose estimate betters the closed node's.
         let follower = crate::follow_track::CFollowTrackT::vehicle(
-            &s,
+            s,
             crate::transport_type::TransportType::TRANSPORT_WATER,
             None,
             crate::rail_type::RailTypes::INVALID_RAILTYPES,

@@ -5413,6 +5413,7 @@ mod protocol_tests {
     /// A test that panics after `install_callbacks` leaves the registries' previous tables.
     #[test]
     fn a_panic_after_install_callbacks_restores_the_registries() {
+        const AFTER_INSTALL: &str = "a failed check after install_callbacks";
         let _guard = super::tests::GLOBAL_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -5440,7 +5441,6 @@ mod protocol_tests {
             )
         };
         assert_eq!(installed(), seeds);
-        const AFTER_INSTALL: &str = "a failed check after install_callbacks";
         let during = std::cell::Cell::new((ptr::null(), ptr::null()));
         let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let (r, a) = install_callbacks(ptr::null());

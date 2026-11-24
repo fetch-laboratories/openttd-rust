@@ -727,10 +727,10 @@ impl Drop for Unpublish {
 /// A test that panics after `install` leaves no table published.
 #[test]
 fn a_panic_after_install_unpublishes_the_tables() {
+    const AFTER_INSTALL: &str = "a failed check after install";
     let _lock = crate::town::tests::GLOBAL_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    const AFTER_INSTALL: &str = "a failed check after install";
     let published = std::cell::Cell::new(false);
     let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _unpublish = Unpublish;
