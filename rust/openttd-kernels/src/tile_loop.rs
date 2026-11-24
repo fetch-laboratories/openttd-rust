@@ -186,11 +186,11 @@ pub(crate) unsafe fn run(settings: trees::LoopSettings, services: *const Service
     let _framerate =
         unsafe { PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE) };
 
-    // The map's log sizes and `TimerGameTick::counter` are the original's reads inside the
-    // accumulator's scope, each read once for the batch.
+    // `Map::LogY()` and `TimerGameTick::counter` are the original's reads inside the
+    // accumulator's scope, each read once for the batch; `run_batch` takes `Map::LogX()`
+    // from its descriptor.
     // SAFETY: The caller's live immutable table.
     let shared = unsafe { &*(*services).shared };
-    let log_x = shared.map().log_x;
     let log_y = shared.map_log_y();
     let settings = trees::LoopSettings {
         tick_counter: (shared.tick_counter)(),
@@ -199,9 +199,9 @@ pub(crate) unsafe fn run(settings: trees::LoopSettings, services: *const Service
     // SAFETY: Same contract; the gate was read once for the batch.
     unsafe {
         if settings.ambient_callback {
-            run_batch::<true>(log_x, log_y, settings, services);
+            run_batch::<true>(log_y, settings, services);
         } else {
-            run_batch::<false>(log_x, log_y, settings, services);
+            run_batch::<false>(log_y, settings, services);
         }
     }
 }
@@ -212,7 +212,6 @@ pub(crate) unsafe fn run(settings: trees::LoopSettings, services: *const Service
 #[allow(clippy::inline_always)]
 #[inline(always)]
 unsafe fn run_batch<const AMBIENT: bool>(
-    log_x: c_uint,
     log_y: c_uint,
     settings: trees::LoopSettings,
     services: *const Services,
@@ -226,9 +225,12 @@ unsafe fn run_batch<const AMBIENT: bool>(
     // The batch loads the descriptor once. Its serialized no-reset/no-yield call
     // graph keeps it live; only descriptor metadata, never a map access, spans dispatch.
     let shared = unsafe { &*s.shared };
+    // The descriptor's `Map::LogX()` is the batch's one read of the map width.
+    let world = crate::map_func::World::new(shared);
+    let log_x: c_uint = world.dimensions.log_x;
     let size_y: c_uint = 1 << log_y;
     let ground = ground::TileLoop::new(
-        &crate::map_func::World::new(shared),
+        &world,
         size_y,
         &s.ground,
         trees::LoopSettings {
@@ -341,6 +343,8 @@ mod comparison_tests {
         static ENTRY: Cell<Option<(trees::LoopSettings, *const Services)>> =
             const { Cell::new(None) };
         static TICK: Cell<u64> = const { Cell::new(0) };
+        /// Map log sizes withheld from the statics until the accumulator begins.
+        static DEFERRED: Cell<Option<(c_uint, c_uint)>> = const { Cell::new(None) };
     }
     /// `TimerGameTick::counter` of the batch under test.
     extern "C" fn tick_counter() -> u64 {
@@ -496,6 +500,11 @@ mod comparison_tests {
             let mut run = run.borrow_mut();
             (run.hash, run.count, run.nested, run.start) = (0, 0, false, start);
         });
+        if DEFERRED.get().is_some() {
+            // Zero log sizes until the accumulator's begin publishes this batch's.
+            DEFERRED.set(Some((log_x, log_y)));
+            crate::map_func::fixture::set_dimensions(0, 0);
+        }
         // SAFETY: Serialized test access to the scheduler's cursor and live tables.
         let cursor = unsafe {
             *openttd_rust_tile_loop_cursor() = start;
@@ -630,11 +639,15 @@ mod comparison_tests {
             STEPS.with(|steps| steps.borrow_mut().clear());
             framerate::take();
             framerate::observe(Some(record_framerate));
+            // The map's log sizes appear only at the accumulator's begin, so a dimension read
+            // before it would index the feedback table with zero sizes.
+            DEFERRED.set(Some((0, 0)));
             let output = batch(6, 6, 1, 1, raw);
+            DEFERRED.set(None);
             framerate::observe(None);
             RUN.with(|run| *run.borrow_mut() = Run::default());
-            // `RunTileLoop`'s accumulator is its first statement, before its read of
-            // `TimerGameTick::counter`, and ends with its body, in the nested entry that the
+            // `RunTileLoop`'s accumulator is its first statement, before its reads of the map's
+            // log sizes and `TimerGameTick::counter`, and ends with its body, in the nested entry that the
             // first visit makes as in the outer one.
             assert_eq!(
                 STEPS.with(|steps| std::mem::take(&mut *steps.borrow_mut())),
@@ -675,7 +688,12 @@ mod comparison_tests {
     }
     fn record_framerate(effect: Effect) {
         let step = match effect {
-            Effect::AccumulatorBegin(PerformanceElement::PFE_GL_LANDSCAPE) => Step::Begin,
+            Effect::AccumulatorBegin(PerformanceElement::PFE_GL_LANDSCAPE) => {
+                if let Some((log_x, log_y)) = DEFERRED.get() {
+                    crate::map_func::fixture::set_dimensions(log_x, log_y);
+                }
+                Step::Begin
+            }
             Effect::AccumulatorEnd(PerformanceElement::PFE_GL_LANDSCAPE) => Step::End,
             _ => return,
         };
