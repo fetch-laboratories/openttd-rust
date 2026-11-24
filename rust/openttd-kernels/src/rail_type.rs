@@ -73,12 +73,10 @@ impl RailTypes {
     pub const fn any(self) -> bool {
         self.0 != 0
     }
-    /// Native `BaseBitSet::Test`, with an element rather than a set mask. The original's
-    /// `1ULL << value` leaves a count of 64 or more, such as `INVALID_RAILTYPE`'s, to the
-    /// processor, which masks it to six bits; the wrapping shift does the same.
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
     #[must_use]
     pub const fn test(self, element: RailType) -> bool {
-        self.0 & 1_u64.wrapping_shl(element.0 as u32) != 0
+        crate::base_bitset_type::test(self.0, element.0)
     }
     /// Native bit-set union.
     #[must_use]
