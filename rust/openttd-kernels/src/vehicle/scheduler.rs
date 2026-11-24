@@ -864,8 +864,8 @@ mod tests {
             assert_eq!(events(), ["age-owner", "age-packet"]);
             // SAFETY: The test's list, destroyed once.
             unsafe {
-                cargo_storage::openttd_rust_cargo_list_destroy(list, &raw const cargo_services)
-            };
+                cargo_storage::openttd_rust_cargo_list_destroy(list, &raw const cargo_services);
+            }
         }
 
         #[test]
@@ -1798,8 +1798,8 @@ mod tests {
             new_vehicle_of(3 * stride, VehicleType::VEH_AIRCRAFT);
             // SAFETY: The fresh aircraft record.
             unsafe {
-                (*record(3 * stride)).subtype = crate::aircraft::AircraftSubType::AIR_SHADOW.0
-            };
+                (*record(3 * stride)).subtype = crate::aircraft::AircraftSubType::AIR_SHADOW.0;
+            }
             let scheduler = day_scheduler(VEHICLE);
             run_vehicle_calendar_day_proc::<false>(&scheduler);
             run_economy_vehicle_day_proc::<false>(&scheduler);
