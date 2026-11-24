@@ -86,9 +86,11 @@ static void AircraftDirectBoundary()
 	p.record.first = p.shadow.first = &p.record;
 	resolver.engine_by_id = [](uint16_t) noexcept -> const OpenTTDEngine * { return engine_record; };
 	resolver.cargo_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	static uint16_t speed_answer;
+	speed_answer = 200;
 	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
 		CHECK(callback == CBID_VEHICLE_MODIFY_PROPERTY);
-		if (property == 0x0C) return 200;
+		if (property == 0x0C) return speed_answer;
 		CHECK(property == 0x1C || property == 0x1F);
 		return CALLBACK_FAILED;
 	};
@@ -98,7 +100,16 @@ static void AircraftDirectBoundary()
 	resolver.id = [](OpenTTDVehicle *) noexcept -> uint32_t { return 18; };
 	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.orders == 1 && p.vehicle.state->pos == 19 && p.vehicle.state->cached_max_range == 41 && p.vehicle.state->cached_max_range_sqr == 1681);
-	CHECK(p.record.cached_max_speed == 2560 && p.record.cached_cargo_age_period == 71);
+	CHECK(p.record.cached_max_speed == 2560 && p.record.cached_cargo_age_period == 71 && p.shadow.cached_cargo_age_period == 71);
+	/* A failed speed callback takes the fallback 0, so the cache takes the engine's speed;
+	 * a 200 answer restores the cache the rest of this probe expects. */
+	engine_record->vehicle_info.aircraft.max_speed = 37;
+	speed_answer = CALLBACK_FAILED;
+	openttd_rust_aircraft_cache(&leaves, p.vehicle, true);
+	CHECK(p.record.cached_max_speed == 37);
+	speed_answer = 200;
+	openttd_rust_aircraft_cache(&leaves, p.vehicle, true);
+	CHECK(p.record.cached_max_speed == 2560);
 	/* A ProcessOrders callback replaces the order with OT_DUMMY. HandleLoading
 	 * advances both indices even on the second call of a tick. */
 	auto second = openttd_rust_order_vector_data(p.order_owner->vector.get())[0];

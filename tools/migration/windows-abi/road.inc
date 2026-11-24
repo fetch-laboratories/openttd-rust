@@ -172,7 +172,11 @@ static void RoadBoundary()
 		openttd_rust_road_path_push(p.state, {10, 10815});
 		return property == 0x23 ? 0 : property == 0x15 ? 20 : CALLBACK_FAILED;
 	};
+	/* The failed cargo-age callback stores the engine's period, its fallback. */
+	road_abi_engine->info.cargo_age_period = 29;
 	openttd_rust_road_update_cache(v, probe.state, false, &t.leaves);
+	CHECK(road_abi_vehicle.cached_cargo_age_period == 29);
+	road_abi_engine->info.cargo_age_period = 0;
 	CHECK(road_abi_vehicle.cached_max_speed == 80);
 	CHECK(probe.ground.state->cache.cached_veh_length == 8 && probe.ground.state->cache.cached_total_length == 8 && probe.ground.state->cache.first_engine == UINT16_MAX);
 	CHECK(probe.nested == 2 && probe.dest == 144 && openttd_rust_road_path_size(probe.state) != 0);
@@ -198,10 +202,12 @@ static void RoadBoundary()
 		return road_abi_engine;
 	};
 	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	static uint16_t running_answer;
+	running_answer = 4;
 	resolver.resolve_callback = [](OpenTTDVehicleResolverState *state, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
 		CHECK(callback == CBID_VEHICLE_MODIFY_PROPERTY && state->self_.v == RoadAbiHandle() && property == 9);
 		road_abi_probe->engine_replaced = true;
-		return 4;
+		return running_answer;
 	};
 	road_abi_engine->vehicle_info.road.running_cost_class = static_cast<Price>(1);
 	road_abi_engine->vehicle_info.road.running_cost = 3;
@@ -213,6 +219,16 @@ static void RoadBoundary()
 	const int64_t old_price = openttd_rust_economy_prices()[1];
 	openttd_rust_economy_prices()[1] = 123;
 	CHECK(openttd_rust_road_running_cost(v, probe.state, &t.leaves) == 123);
+	/* A failed callback takes the engine's running cost, 3, as the factor: the cost of a
+	 * callback answering 3, which a zero factor would not give. */
+	int64_t answered_three = 0;
+	for (uint16_t answer : {uint16_t{3}, uint16_t{CALLBACK_FAILED}}) {
+		running_answer = answer;
+		probe.engine_replaced = false;
+		const int64_t cost = openttd_rust_road_running_cost(v, probe.state, &t.leaves);
+		if (answer == 3) answered_three = cost;
+		else CHECK(cost == answered_three && cost != 0);
+	}
 	openttd_rust_economy_prices()[1] = old_price;
 
 	/* A non-station order must not read its destination at the bay stopping frame. */
