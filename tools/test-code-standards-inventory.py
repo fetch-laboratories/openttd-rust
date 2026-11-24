@@ -25,6 +25,9 @@ CommandCost CmdBuildThing(DoCommandFlags flags, TileIndex tile)
 	if (!IsValidTile(tile)) return CMD_ERROR;
 	/* Two lines of
 	 * explanation. */
+	/* A closing delimiter alone
+	 * on its own line adds no line.
+	 */
 	return CommandCost();
 }
 """
@@ -49,7 +52,7 @@ class CommentTests(unittest.TestCase):
         self.assertEqual([(f.name, f.comments) for f in rust], [("cmd_build_thing", 1)])
         original = INVENTORY.functions("src/tile_cmd.cpp", ORIGINAL, "cpp")
         self.assertEqual(
-            [(f.name, f.comments) for f in original], [("CmdBuildThing", 3)]
+            [(f.name, f.comments) for f in original], [("CmdBuildThing", 5)]
         )
 
     def test_normalized_name_in_its_module_pairs_once(self) -> None:
@@ -58,7 +61,7 @@ class CommentTests(unittest.TestCase):
         pairs = INVENTORY.Matcher(rust, original, []).pairs()
         self.assertEqual(
             [(r.name, o.name, o.comments - r.comments) for r, o in pairs],
-            [("cmd_build_thing", "CmdBuildThing", 2)],
+            [("cmd_build_thing", "CmdBuildThing", 4)],
         )
 
     def test_facade_export_pairs_the_largest_callee(self) -> None:
