@@ -199,7 +199,6 @@ mod controller {
     extern "C" fn road_stops() -> *const crate::road_stop::RoadStopServices {
         thread_local! {
             static STOPS: crate::road_stop::RoadStopServices = crate::road_stop::RoadStopServices {
-                vehicle: std::ptr::null(),
                 primary: crate::test_tables::unreachable2,
                 head: crate::test_tables::unreachable2,
                 is_bus,
@@ -713,7 +712,6 @@ mod controller {
     extern "C" fn bay_stops() -> *const crate::road_stop::RoadStopServices {
         thread_local! {
             static STOPS: crate::road_stop::RoadStopServices = crate::road_stop::RoadStopServices {
-                vehicle: std::ptr::null(),
                 primary: bay_primary,
                 head: crate::test_tables::unreachable2,
                 is_bus,

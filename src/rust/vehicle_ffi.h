@@ -24,17 +24,11 @@ struct OpenTTDTrainState;
 struct OpenTTDVehicle;
 struct OpenTTDTrainHandle { OpenTTDVehicle *record; OpenTTDTrainState *owner; };
 struct OpenTTDOrdersLeaves;
-/** Canonical stable NOSAVE links; only the Rust occupancy owner mutates them. */
-struct OpenTTDVehicleTileLinks {
-	OpenTTDVehicle *next = nullptr;
-	OpenTTDVehicle **prev = nullptr;
-	OpenTTDVehicle **current = nullptr;
-};
 struct OpenTTDVehicleOnTile { uint32_t tile; OpenTTDVehicle *current; };
 struct OpenTTDVehicleNear {
 	int32_t left, top, right, bottom;
 	uint32_t hxmin, hxmax, hymin, hymax, hx, hy;
-	OpenTTDVehicle *current;
+	OpenTTDVehicle *current_veh;
 };
 struct OpenTTDEngine;
 struct OpenTTDVehicleMaintenanceServices;
@@ -63,7 +57,6 @@ struct OpenTTDVehicleServices {
 	OpenTTDVehicle *(*ship_get)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_get);
 	void (*show_newgrf_vehicle_error)(uint16_t, uint32_t, uint32_t, GRFBug, bool) noexcept OPENTTD_SERVICE_DEFAULT(show_newgrf_vehicle_error);
 	void (OPENTTD_RUST_CALL *start_stop_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(start_stop_dirty);
-	OpenTTDVehicleTileLinks *(OPENTTD_RUST_CALL *tile_links)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tile_links);
 	void (*update_delta)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
 	const OpenTTDVehicleVisits *(*visits)() noexcept OPENTTD_SERVICE_DEFAULT(visits);
 	void (OPENTTD_RUST_CALL *write_breakdowns)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_breakdowns);
@@ -119,24 +112,16 @@ struct OpenTTDVehicleSchedulerTables {
 	const OpenTTDVehicleVisits *visits;
 };
 const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept;
-struct OpenTTDCommandCostServices;
+struct OpenTTDCommandServices;
 struct OpenTTDCommandCost;
-struct OpenTTDOccupancyCommands {
-	const OpenTTDVehicleServices *vehicles;
-	const OpenTTDSharedServices *shared;
-	int32_t (*max_pixel_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(max_pixel_z);
-	const OpenTTDCommandCostServices *costs;
-	uint32_t vehicle_error;
-};
-const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept;
 extern "C" {
-void openttd_rust_occupancy_ground(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t);
-void openttd_rust_occupancy_wormhole(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t, uint32_t, const OpenTTDVehicle *);
-void openttd_rust_occupancy_update(const OpenTTDVehicleServices *, const OpenTTDSharedServices *, OpenTTDVehicle *, bool);
+void openttd_rust_occupancy_ground(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint32_t);
+void openttd_rust_occupancy_wormhole(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint32_t, uint32_t, const OpenTTDVehicle *);
+void openttd_rust_occupancy_update(const OpenTTDSharedServices *, OpenTTDVehicle *, bool);
 void openttd_rust_occupancy_reset(const OpenTTDVehicleSchedulerServices *);
-OpenTTDVehicleOnTile openttd_rust_occupancy_on_tile(const OpenTTDVehicleServices *, const OpenTTDSharedServices *, uint32_t);
-void openttd_rust_occupancy_on_advance(const OpenTTDVehicleServices *, OpenTTDVehicleOnTile *);
-OpenTTDVehicleNear openttd_rust_occupancy_near(const OpenTTDVehicleServices *, int32_t, int32_t, uint32_t);
-void openttd_rust_occupancy_near_advance(const OpenTTDVehicleServices *, OpenTTDVehicleNear *);
+OpenTTDVehicleOnTile openttd_rust_occupancy_on_tile(const OpenTTDSharedServices *, uint32_t);
+void openttd_rust_occupancy_on_advance(OpenTTDVehicleOnTile *);
+OpenTTDVehicleNear openttd_rust_occupancy_near(int32_t, int32_t, uint32_t);
+void openttd_rust_occupancy_near_advance(OpenTTDVehicleNear *);
 }
 #endif /* RUST_VEHICLE_FFI_H */

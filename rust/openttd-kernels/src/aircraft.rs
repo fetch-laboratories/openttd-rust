@@ -677,8 +677,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `v->UpdatePosition()` and `v->UpdateViewport(true, false)`.
     fn update_position_and_full_viewport(&self, v: Vehicle) {
-        // SAFETY: A live vehicle; the tile hash ends before the viewport callback.
-        unsafe { crate::vehicle::occupancy::update_position(self.vs, v.base(), self.dims()) };
+        crate::vehicle::occupancy::update_position(v.base(), self.dims());
         Self::call(|| unsafe { (self.leaves.viewport)(v) });
     }
     /// `u->UpdatePositionAndViewport()`.

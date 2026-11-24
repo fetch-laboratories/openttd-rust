@@ -330,6 +330,12 @@ crate::abi::shared_records! {
         pub previous: *mut VehicleRecord,
         /// NOSAVE `Vehicle::first`: pointer to the first vehicle in the chain.
         pub first: *mut VehicleRecord,
+        /// NOSAVE: Next vehicle in the tile location hash.
+        pub hash_tile_next: *mut VehicleRecord,
+        /// NOSAVE: Previous vehicle in the tile location hash.
+        pub hash_tile_prev: *mut *mut VehicleRecord,
+        /// NOSAVE: Cache of the current hash chain.
+        pub hash_tile_current: *mut *mut VehicleRecord,
         /// Current tile index.
         pub tile: TileIndex,
         /// Heading for this tile. For airports and train stations this tile does
@@ -406,6 +412,9 @@ impl VehicleRecord {
             visual: std::ptr::null_mut(),
             previous: std::ptr::null_mut(),
             first: std::ptr::null_mut(),
+            hash_tile_next: std::ptr::null_mut(),
+            hash_tile_prev: std::ptr::null_mut(),
+            hash_tile_current: std::ptr::null_mut(),
             tile: TileIndex::INVALID,
             dest_tile: TileIndex::INVALID,
             motion_counter: 0,
@@ -564,6 +573,42 @@ impl crate::vehicle::VehicleRef {
     /// parts are also counted as vehicles.
     pub(crate) fn previous(self) -> Option<Self> {
         std::ptr::NonNull::new(read_field!(self.0.as_ptr(), previous)).map(Self)
+    }
+    /// `hash_tile_next`: next vehicle in the tile location hash.
+    #[inline]
+    pub(crate) fn hash_tile_next(self) -> *mut VehicleRecord {
+        read_field!(self.0.as_ptr(), hash_tile_next)
+    }
+    /// `hash_tile_next = value`.
+    #[inline]
+    pub(crate) fn set_hash_tile_next(self, value: *mut VehicleRecord) {
+        write_field!(self.0.as_ptr(), hash_tile_next, value);
+    }
+    /// `&hash_tile_next`, the address the successor's `hash_tile_prev` stores.
+    #[inline]
+    pub(crate) fn hash_tile_next_address(self) -> *mut *mut VehicleRecord {
+        // SAFETY: The module's live record; the address forms no reference.
+        unsafe { std::ptr::addr_of_mut!((*self.0.as_ptr()).hash_tile_next) }
+    }
+    /// `hash_tile_prev`: previous vehicle in the tile location hash.
+    #[inline]
+    pub(crate) fn hash_tile_prev(self) -> *mut *mut VehicleRecord {
+        read_field!(self.0.as_ptr(), hash_tile_prev)
+    }
+    /// `hash_tile_prev = value`.
+    #[inline]
+    pub(crate) fn set_hash_tile_prev(self, value: *mut *mut VehicleRecord) {
+        write_field!(self.0.as_ptr(), hash_tile_prev, value);
+    }
+    /// `hash_tile_current`: cache of the current hash chain.
+    #[inline]
+    pub(crate) fn hash_tile_current(self) -> *mut *mut VehicleRecord {
+        read_field!(self.0.as_ptr(), hash_tile_current)
+    }
+    /// `hash_tile_current = value`.
+    #[inline]
+    pub(crate) fn set_hash_tile_current(self, value: *mut *mut VehicleRecord) {
+        write_field!(self.0.as_ptr(), hash_tile_current, value);
     }
     /// `Vehicle::Move(n)` from a nullable record: get the vehicle at offset `n`
     /// of this vehicle chain, or null if the offset is out of bounds.

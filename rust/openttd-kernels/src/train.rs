@@ -567,8 +567,7 @@ impl<'a> Game<'a> {
     }
     /// `v->UpdatePosition()`.
     fn update_position(&self, v: Handle) {
-        // SAFETY: The live shell survives the synchronous index update.
-        unsafe { crate::vehicle::occupancy::update_position(self.vs, v.vehicle(), self.map()) };
+        crate::vehicle::occupancy::update_position(v.vehicle(), self.map());
     }
     /// `v->UpdateViewport(force_update, update_delta)` of a train.
     fn viewport(&self, v: Handle, force_update: bool, update_delta: bool) {
@@ -1453,7 +1452,7 @@ impl Game<'_> {
     fn train_on_crossing(&self, tile: TileIndex) -> bool {
         crate::services_assert::assert_with(|| self.is_level_crossing_tile(tile));
 
-        crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), tile, is_train)
+        crate::vehicle_func::has_vehicle_on_tile(self.map(), tile, is_train)
     }
 
     /// `TrainApproachingCrossingEnum`: checks if a train is approaching a rail-road crossing.
@@ -1484,7 +1483,7 @@ impl Game<'_> {
         );
         let mut tile_from = tile + self.tile_offs_by_diag_dir(dir);
 
-        if crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), tile_from, |v| {
+        if crate::vehicle_func::has_vehicle_on_tile(self.map(), tile_from, |v| {
             self.train_approaching_crossing_enum(v, tile)
         }) {
             return true;
@@ -1493,7 +1492,7 @@ impl Game<'_> {
         dir = reverse_diag_dir(dir, self.check());
         tile_from = tile + self.tile_offs_by_diag_dir(dir);
 
-        crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), tile_from, |v| {
+        crate::vehicle_func::has_vehicle_on_tile(self.map(), tile_from, |v| {
             self.train_approaching_crossing_enum(v, tile)
         })
     }
@@ -2689,11 +2688,10 @@ impl Game<'_> {
 
         /* find colliding vehicles */
         if v.track() == TrackBits::TRACK_BIT_WORMHOLE {
-            crate::vehicle_func::vehicles_on_tile(self.vs, self.map(), v.vehicle().tile(), |u| {
+            crate::vehicle_func::vehicles_on_tile(self.map(), v.vehicle().tile(), |u| {
                 num_victims = num_victims.wrapping_add(self.check_train_collision_with(u, v));
             });
             crate::vehicle_func::vehicles_on_tile(
-                self.vs,
                 self.map(),
                 self.get_other_tunnel_bridge_end(v.vehicle().tile()),
                 |u| {
@@ -2702,7 +2700,6 @@ impl Game<'_> {
             );
         } else {
             crate::vehicle_func::vehicles_near_tile_xy(
-                self.vs,
                 v.vehicle().x_pos(),
                 v.vehicle().y_pos(),
                 7,
@@ -2962,7 +2959,6 @@ impl Game<'_> {
 
                                             /* check if a train is waiting on the other side */
                                             if !crate::vehicle_func::has_vehicle_on_tile(
-                                                self.vs,
                                                 self.map(),
                                                 o_tile,
                                                 |u| {
@@ -3351,14 +3347,14 @@ impl Game<'_> {
 
         let mut t = tile;
         while world.is_compatible_train_station_tile(t, tile) {
-            if crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), t, is_train) {
+            if crate::vehicle_func::has_vehicle_on_tile(self.map(), t, is_train) {
                 return true;
             }
             t = t - delta;
         }
         let mut t = tile + delta;
         while world.is_compatible_train_station_tile(t, tile) {
-            if crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), t, is_train) {
+            if crate::vehicle_func::has_vehicle_on_tile(self.map(), t, is_train) {
                 return true;
             }
             t += delta;
@@ -3426,7 +3422,7 @@ impl Game<'_> {
 
             /* If there are still crashed vehicles on the tile, give the track reservation to them */
             let mut remaining_trackbits = TrackBits::TRACK_BIT_NONE;
-            crate::vehicle_func::vehicles_on_tile(self.vs, self.map(), tile, |u| {
+            crate::vehicle_func::vehicles_on_tile(self.map(), tile, |u| {
                 if u.vehicle_type() != VehicleType::VEH_TRAIN
                     || !u.vehstatus().test(VehState::Crashed)
                 {

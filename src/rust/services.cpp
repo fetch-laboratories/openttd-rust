@@ -224,7 +224,6 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 		.infrastructure_dirty = RustInfrastructureDirty,
 		.landscape_commands = []() noexcept { return &GetRustLandscapeCommandServices(); },
 		.company = []() noexcept { return &GetRustCompanyServices(); },
-		.occupancy = GetRustOccupancyCommands,
 		.shared = &GetRustSharedServices(),
 		.cost = &GetRustCommandCostServices(),
 		.rail_map = &GetRustRailMapServices(),

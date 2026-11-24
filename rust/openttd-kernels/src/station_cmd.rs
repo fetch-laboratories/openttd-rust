@@ -700,7 +700,7 @@ impl<'a> Ctx<'a> {
             return out.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
         }
         // SAFETY: the native output is a live command slot for this entry.
-        unsafe { self.command.no_vehicle(out.0, tile.0) };
+        self.command.no_vehicle(out.0, tile);
         if !out.ok() {
             return;
         }
@@ -2555,9 +2555,7 @@ impl Ctx<'_> {
                 continue;
             }
             /* If there is a vehicle on ground, do not allow to remove (flood) the tile */
-            unsafe {
-                self.command.no_vehicle(ret.0, tile.0);
-            }
+            self.command.no_vehicle(ret.0, tile);
             error.add(ret);
             if !error.ok() {
                 continue;
@@ -3668,7 +3666,7 @@ impl Ctx<'_> {
         if world.drive_through_stop_tile(tile.0) && flags.test(DoCommandFlag::Bankrupt) {
             /* remove the 'going through road stop' status from all vehicles on that tile */
             if flags.test(DoCommandFlag::Execute) {
-                crate::vehicle_func::vehicles_on_tile(self.vehicle(), self.map(), tile, |v| {
+                crate::vehicle_func::vehicles_on_tile(self.map(), tile, |v| {
                     if v.vehicle_type() != VehicleType::VEH_ROAD {
                         return;
                     }
@@ -3684,9 +3682,7 @@ impl Ctx<'_> {
                 });
             }
         } else {
-            unsafe {
-                self.command.no_vehicle(cost.0, tile.0);
-            }
+            self.command.no_vehicle(cost.0, tile);
             if !cost.ok() {
                 return;
             }
@@ -3832,9 +3828,7 @@ impl Ctx<'_> {
         }
         /* Ignore vehicles when the company goes bankrupt. The road will remain, any vehicles going to the waypoint will be removed. */
         if !flags.test(DoCommandFlag::Bankrupt) {
-            unsafe {
-                self.command.no_vehicle(cost.0, tile.0);
-            }
+            self.command.no_vehicle(cost.0, tile);
             if !cost.ok() {
                 return;
             }
@@ -4684,9 +4678,7 @@ impl Ctx<'_> {
             ) {
                 continue;
             }
-            unsafe {
-                self.command.no_vehicle(ret.0, tile_cur.0);
-            }
+            self.command.no_vehicle(ret.0, tile_cur);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -5258,13 +5250,9 @@ impl Ctx<'_> {
                 crate::map_func::World::new(self.shared).get_dock_direction(tile1),
                 |ok| crate::movement::native_assert(self.shared, ok),
             );
-        unsafe {
-            self.command.no_vehicle(cost.0, tile1.0);
-        }
+        self.command.no_vehicle(cost.0, tile1);
         if cost.ok() {
-            unsafe {
-                self.command.no_vehicle(cost.0, tile2.0);
-            }
+            self.command.no_vehicle(cost.0, tile2);
         }
         if !cost.ok() {
             return;

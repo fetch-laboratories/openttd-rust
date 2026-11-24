@@ -401,8 +401,7 @@ impl<'a> Ctx<'a> {
         crate::landscape_cmd::clear_command(self.commands, c.0, tile, flags);
     }
     unsafe fn collect_vehicles(&self, frame: *mut ConvertFrame, tile: u32) {
-        let p = self.s.physics;
-        crate::vehicle_func::vehicles_on_tile_raw(p.vehicle, self.map, tile, |v| {
+        crate::vehicle_func::vehicles_on_tile_raw(self.map, tile, |v| {
             if v.vehicle_type_raw() == crate::vehicle::VehicleType::ROAD.0 {
                 unsafe {
                     (self.s.include_vehicle)(frame, v.first());

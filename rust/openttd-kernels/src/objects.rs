@@ -1060,7 +1060,7 @@ impl<'a> World<'a> {
                                 out.error(STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP.0);
                                 return;
                             }
-                            self.commands().no_vehicle(tmp.0, t);
+                            self.commands().no_vehicle_raw(tmp.0, t);
                             out.add(tmp);
                         }
                     } else {

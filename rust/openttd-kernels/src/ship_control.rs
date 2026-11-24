@@ -417,10 +417,7 @@ impl Game<'_> {
         self.remember_rotation();
         self.vehicle().set_cur_speed(0);
         self.path_clear(id);
-        // SAFETY: Caller retains the live shell across this index update.
-        unsafe {
-            crate::vehicle::occupancy::update_position(self.vs(), v, self.services.map());
-        }
+        crate::vehicle::occupancy::update_position(v, self.services.map());
         self.viewport();
     }
     fn depot(&self, max_distance: u32) -> Option<Depot> {
@@ -549,7 +546,6 @@ impl Game<'_> {
         }
         if observed_dest == 0
             || crate::vehicle_func::has_vehicle_on_tile_raw(
-                self.vs(),
                 self.services.map(),
                 self.vehicle().tile_raw(),
                 |u| {
@@ -621,10 +617,7 @@ impl Game<'_> {
         if observed_tick & 7 == 0 {
             self.vehicle()
                 .set_z_pos(observed_z.wrapping_add(delta as u32) as i32);
-            // SAFETY: Caller retains the live shell across this index update.
-            unsafe {
-                crate::vehicle::occupancy::update_position(self.vs(), v, self.services.map());
-            }
+            crate::vehicle::occupancy::update_position(v, self.services.map());
             self.viewport();
         }
         true
@@ -904,14 +897,7 @@ impl Game<'_> {
                 {
                     self.vehicle().set_x_pos(x as i32);
                     self.vehicle().set_y_pos(y as i32);
-                    // SAFETY: Caller retains the live shell across this index update.
-                    unsafe {
-                        crate::vehicle::occupancy::update_position(
-                            self.vs(),
-                            v,
-                            self.services.map(),
-                        );
-                    }
+                    crate::vehicle::occupancy::update_position(v, self.services.map());
                     if (u32::from(self.vehicle().vehstatus_raw())) & 1 == 0 {
                         (self.leaves.base_viewport)(id);
                     }
@@ -923,10 +909,7 @@ impl Game<'_> {
             }
             self.vehicle().set_x_pos(x as i32);
             self.vehicle().set_y_pos(y as i32);
-            // SAFETY: Caller retains the live shell across this index update.
-            unsafe {
-                crate::vehicle::occupancy::update_position(self.vs(), v, self.services.map());
-            }
+            crate::vehicle::occupancy::update_position(v, self.services.map());
             self.viewport();
         }
     }
@@ -1218,10 +1201,7 @@ pub(crate) unsafe fn ship_build(
     };
     game.vehicle().set_cargo_cap(capacity as u16);
     (game.leaves.cache_invalidate)(id);
-    // SAFETY: The build transaction retains the new shell.
-    unsafe {
-        crate::vehicle::occupancy::update_position(game.vs(), v, game.services.map());
-    }
+    crate::vehicle::occupancy::update_position(v, game.services.map());
 }
 
 crate::abi::layouts! {

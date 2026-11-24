@@ -349,12 +349,8 @@ impl<'a> Ctx<'a> {
     fn current(&self) -> u8 {
         (self.shared.current_company)()
     }
-    fn vehicles(&self) -> &crate::vehicle::VehicleServices {
-        // SAFETY: The getter returns the immutable process-wide command context.
-        unsafe { &*(self.command.occupancy)() }.vehicles
-    }
     unsafe fn collect_trains(&self, frame: *mut ConvertFrame, tile: u32) {
-        crate::vehicle_func::vehicles_on_tile_raw(self.vehicles(), self.map, tile, |v| {
+        crate::vehicle_func::vehicles_on_tile_raw(self.map, tile, |v| {
             if v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0 {
                 unsafe {
                     (self.s.include_train)(frame, v);
@@ -2422,12 +2418,9 @@ impl<'a> Ctx<'a> {
             let was_water = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
                 && is_slope_with_one_corner_raised_raw(tileh_old.0);
             if was_water
-                && crate::vehicle_func::has_vehicle_on_tile_raw(
-                    self.vehicles(),
-                    self.map,
-                    tile,
-                    |v| v.vehicle_type_raw() == crate::vehicle::VehicleType::SHIP.0,
-                )
+                && crate::vehicle_func::has_vehicle_on_tile_raw(self.map, tile, |v| {
+                    v.vehicle_type_raw() == crate::vehicle::VehicleType::SHIP.0
+                })
             {
                 return cost.error(STR_ERROR_SHIP_IN_THE_WAY.0);
             }

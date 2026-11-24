@@ -396,7 +396,7 @@ impl Engine<'_> {
                     return self.fail(STR_ERROR_SITE_UNSUITABLE);
                 }
             } else {
-                unsafe { (*self.context.command_checks).no_vehicle(self.out.cast(), cur_tile.0) };
+                unsafe { (*self.context.command_checks).no_vehicle(self.out.cast(), cur_tile) };
                 if !self.succeeded() {
                     return false;
                 }

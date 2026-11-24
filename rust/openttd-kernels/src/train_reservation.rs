@@ -295,17 +295,13 @@ impl<'a> Game<'a> {
     }
     /// `TunnelBridgeIsFree(tile, endtile, ignore).Succeeded()`.
     fn tunnel_bridge_is_free(&self, tile: TileIndex, endtile: TileIndex, ignore: Handle) -> bool {
-        // SAFETY: The current train and every vehicle on both tiles survive this query.
-        unsafe {
-            crate::vehicle::occupancy::wormhole_blocker(
-                self.vs,
-                self.world.dimensions,
-                tile.0,
-                endtile.0,
-                ignore.vehicle().0.as_ptr(),
-            )
-            .is_none()
-        }
+        crate::vehicle::occupancy::tunnel_bridge_is_free(
+            self.world.dimensions,
+            tile,
+            endtile,
+            Some(ignore.vehicle()),
+        )
+        .is_none()
     }
     /// `IsRailStationTile(tile)`.
     fn is_rail_station_tile(&self, tile: TileIndex) -> bool {

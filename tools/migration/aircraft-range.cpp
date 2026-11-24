@@ -62,7 +62,6 @@ struct Fixture {
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
 	uint64_t blocks = 0;
 	std::array<unsigned, 4> messages{};
-	OpenTTDVehicleTileLinks links[2];
 };
 #include "aircraft-boundary.hpp"
 #include "controller-orders.hpp"
@@ -144,7 +143,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.airport_entry = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	vehicle.base_viewport = [](OpenTTDVehicle *) noexcept {};
-	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == &fixture->record ? 0 : 1]; };
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	leaves.station_owner = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 
@@ -172,8 +170,8 @@ int main()
 		f.record.orders = range_orders->vehicle.get();
 		openttd_test_aircraft_event(&leaves, {&f.record, f.state.get(), 17}, false);
 		if ((f.state->flags & 1) != (f.aircraft.flags & 1) || f.messages != expected) { std::fprintf(stderr, "range mismatch range=%u dest=%u state=%u flags=%u validity=%u\n", range, destination, state, flag, validity); return 1; }
-		openttd_rust_occupancy_update(&vehicle, nullptr, &f.record, true);
-		openttd_rust_occupancy_update(&vehicle, nullptr, &fixture->shadow, true);
+		openttd_rust_occupancy_update(nullptr, &f.record, true);
+		openttd_rust_occupancy_update(nullptr, &fixture->shadow, true);
 		cases++;
 	}
 	std::printf("finite range transition: %u unchanged-reference cases passed\n", cases);

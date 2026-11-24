@@ -787,22 +787,6 @@ const TOWN_ROAD_TYPES_2: [[Roadside; 2]; crate::house::NUM_HOUSE_ZONES as usize]
     [Roadside::StreetLights, Roadside::Paved],
 ];
 
-/// `EnsureNoVehicleOnGround(tile).Succeeded()`, in the batch's lazy native result.
-fn ensure_no_vehicle_on_ground_succeeded(c: &TileLoop<'_>, tile: TileIndex) -> bool {
-    // SAFETY: the batch's table is immutable and lives for the process.
-    let costs = unsafe { &*c.ground.costs };
-    // SAFETY: the batch owns this live native stack context.
-    let out = unsafe { (costs.prepare)(c.ground.call) };
-    // SAFETY: prepare provides live native result storage; the check has returned before
-    // the result is read and released.
-    unsafe {
-        (*costs.commands).no_vehicle(out, tile.0);
-        let succeeded = ((*costs.costs).success)(out);
-        (costs.release)(c.ground.call);
-        succeeded
-    }
-}
-
 /// `TileLoop_Road`'s roadside step: adjust road ground type depending on `grp` (`grp` is the
 /// distance to the center).
 #[inline]
@@ -952,7 +936,7 @@ pub(crate) fn tile_loop_road(c: &TileLoop<'_>, tile: TileIndex) {
                     && w.asserted(|m| crate::road_map::is_normal_road(m, tile.0))
                     && !crate::bitmath_func::has_at_most_one_bit(u64::from(w.all_road_bits(tile.0)))
                     && crate::movement::get_foundation_slope(s, tile).0 == Slope::SLOPE_FLAT
-                    && ensure_no_vehicle_on_ground_succeeded(c, tile)
+                    && crate::vehicle::occupancy::ensure_no_vehicle_on_ground(w, tile).is_none()
                     && crate::random_func::chance16(s, 1, 40)
                 {
                     w.asserted(|m| crate::road_map::start_road_works(m, tile));
@@ -1160,7 +1144,6 @@ mod tests {
         road_command: std::ptr::null(),
         tunnel: std::ptr::null(),
         water: std::ptr::null(),
-        costs: std::ptr::null(),
         call: std::ptr::null_mut(),
         climate: LandscapeType::Temperate,
         editor: false,

@@ -139,7 +139,7 @@ public:
 		}
 	private:
 		OpenTTDVehicleNear cursor;
-		Vehicle *Current() const { return VehicleFromRecord(this->cursor.current); }
+		Vehicle *Current() const { return VehicleFromRecord(this->cursor.current_veh); }
 		void Increment();
 		void SkipFalseMatches() {}
 	};

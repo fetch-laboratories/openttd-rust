@@ -9,8 +9,7 @@ struct ShipProbe {
 	OpenTTDVehicle record{};
 	ShipProbe() { record.type = VEH_SHIP; record.x_pos = 32768; record.y_pos = -32769; record.tick_counter = 255; record.running_ticks = 255; record.direction = 1; record.cur_speed = 33; }
 	OpenTTDConsistState consist{};
-	uint32_t stage = 0, paths = 0, positions = 0;
-	OpenTTDVehicleTileLinks links;
+	uint32_t stage = 0, paths = 0;
 	OpenTTDShipState *owner = nullptr;
 	const OpenTTDShipLeaves *leaves = nullptr;
 	OpenTTDSharedServices services{};
@@ -104,7 +103,6 @@ static void ShipBoundary()
 	ship_probe.services.map = &ship_map.statics;
 	leaves.state_owner = [](uint32_t) noexcept { return ship_probe.owner; };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
-	ship_vehicle.tile_links = [](OpenTTDVehicle *) noexcept { ++ship_probe.positions; return &ship_probe.links; };
 	ControllerOrders orders(&ship_vehicle);
 	static ControllerOrders *ship_orders;
 	ship_orders = &orders;
@@ -122,7 +120,7 @@ static void ShipBoundary()
 	};
 	leaves.viewport = [](OpenTTDVehicle *v, bool update_delta, bool force) noexcept {
 		CHECK(ship_probe.stage++ == 2 && v == &ship_probe.record && update_delta && force);
-		CHECK(ship_probe.record.direction == 5 && ship_probe.record.cur_speed == 0 && ship_probe.paths == 1 && ship_probe.positions == 1);
+		CHECK(ship_probe.record.direction == 5 && ship_probe.record.cur_speed == 0 && ship_probe.paths == 1 && ship_probe.record.hash_tile_current != nullptr);
 		CHECK(openttd_rust_ship_get_rotation_x(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.x_pos));
 		CHECK(openttd_rust_ship_get_rotation_y(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.y_pos));
 		/* The outer call holds no Rust reference to this owner during nested mutation. */
@@ -134,7 +132,7 @@ static void ShipBoundary()
 	 * advanced and before any order runs, and the broken-down ship's tick ends there. */
 	static OpenTTDVehicleResolverServices ship_resolver{};
 	ship_resolver.breakdown_delay = [](OpenTTDVehicle *) noexcept -> uint8_t {
-		CHECK(ship_probe.stage == 0 && ship_probe.paths == 0 && ship_probe.positions == 0);
+		CHECK(ship_probe.stage == 0 && ship_probe.paths == 0 && ship_probe.record.hash_tile_current == nullptr);
 		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
 		return 5;
 	};
@@ -145,6 +143,8 @@ static void ShipBoundary()
 	ship_probe.record.breakdown_ctr = 1;
 	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
 	CHECK(ship_delay == 4 && ship_probe.stage == 0 && ship_probe.paths == 0);
+	/* The reverse path starts with the ship outside the tile index. */
+	openttd_rust_occupancy_update(nullptr, shell, true);
 	/* The same tick state again, running normally: the reverse path. */
 	ship_probe.record.breakdown_ctr = 0;
 	ship_probe.record.tick_counter = 255;
@@ -152,7 +152,7 @@ static void ShipBoundary()
 	ship_probe.consist.current_order_time = -1;
 	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
 	CHECK(ship_probe.stage == 3 && openttd_rust_ship_get_rotation(state.get()) == 3);
-	openttd_rust_occupancy_update(&ship_vehicle, nullptr, shell, true);
+	openttd_rust_occupancy_update(nullptr, shell, true);
 	CHECK(!openttd_rust_ship_find_depot(4, 80, &leaves, &ship_probe.services).valid);
 	ship_probe.record.owner = 3;
 	leaves.next_depot = [](uint32_t first, OpenTTDShipDepot *out) noexcept {
