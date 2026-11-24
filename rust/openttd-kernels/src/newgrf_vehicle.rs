@@ -17,9 +17,12 @@
 )]
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO};
 use crate::debug::debug;
+use crate::engine_type::EngineID;
 use crate::newgrf_callbacks::{
-    CALLBACK_FAILED, CBID_VEHICLE_BUILD_PROBABILITY, CBID_VEHICLE_MODIFY_PROPERTY,
+    CALLBACK_FAILED, CBID_VEHICLE_BUILD_PROBABILITY, CBID_VEHICLE_MODIFY_PROPERTY, CallbackID,
 };
+use crate::newgrf_properties::PropertyID;
+use crate::order_type::OrderType;
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleRef, VehicleServices};
 use crate::vehicle_base::{
     NCVV_COMPANY_INFORMATION, NCVV_CONSIST_CARGO_INFORMATION, NCVV_END,
@@ -161,6 +164,86 @@ pub struct Services {
     ground: unsafe extern "C" fn() -> *const crate::ground_vehicle::Services,
     cargo_services: unsafe extern "C" fn() -> *const crate::cargo_storage::Services,
 }
+/// `GetVehicleProperty` returns the callback's result when callback 0x36 answers and the
+/// fallback when it fails. The properties and fallbacks are those the aircraft and road
+/// boundary fixtures supply, which those fixtures no longer see: the callback service is not
+/// given the fallback.
+#[cfg(test)]
+mod property_tests {
+    use super::{Services, State, TEST_TABLE, V, get_vehicle_property};
+    use crate::engine_type::OpenTTDEngine;
+    use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_MODIFY_PROPERTY};
+    use crate::newgrf_properties::PropertyID;
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
+    use std::cell::Cell;
+
+    thread_local! {
+        static ENGINE: Cell<*const OpenTTDEngine> = const { Cell::new(std::ptr::null()) };
+        /// The callback's answer, and the property it was last asked for.
+        static ANSWER: Cell<u16> = const { Cell::new(CALLBACK_FAILED) };
+        static ASKED: Cell<Option<(u16, u32)>> = const { Cell::new(None) };
+    }
+    unsafe extern "C" fn engine_by_id(_: u16) -> *const OpenTTDEngine {
+        ENGINE.get()
+    }
+    unsafe extern "C" fn cargo_type(_: V) -> u8 {
+        0
+    }
+    unsafe extern "C" fn resolve_callback(
+        _: *mut State,
+        _: u16,
+        callback: u16,
+        param1: u32,
+        _: u32,
+        _: *mut i32,
+        _: usize,
+    ) -> u16 {
+        ASKED.set(Some((callback, param1)));
+        ANSWER.get()
+    }
+
+    #[test]
+    fn get_vehicle_property_returns_the_fallback_when_the_callback_fails() {
+        let s = Services {
+            resolve_callback,
+            engine_by_id,
+            cargo_type,
+            ..TEST_TABLE
+        };
+        let engine = crate::engine::openttd_rust_engine_new();
+        ENGINE.set(engine);
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            VehicleType::VEH_AIRCRAFT,
+        );
+        // SAFETY: The test's fresh record is its own first part.
+        unsafe { (*record).first = record };
+        let v = VehicleRef::of(record);
+        for (property, fallback) in [
+            (PropertyID::PROP_AIRCRAFT_SPEED, 0),
+            (PropertyID::PROP_AIRCRAFT_CARGO_AGE_PERIOD, 71),
+            (PropertyID::PROP_AIRCRAFT_RANGE, 41),
+            (PropertyID::PROP_ROADVEH_CARGO_AGE_PERIOD, 0),
+            (PropertyID::PROP_ROADVEH_RUNNING_COST_FACTOR, 3),
+        ] {
+            ANSWER.set(CALLBACK_FAILED);
+            assert_eq!(get_vehicle_property(&s, v, property, fallback), fallback);
+            assert_eq!(
+                ASKED.get(),
+                Some((CBID_VEHICLE_MODIFY_PROPERTY.0, u32::from(property.0)))
+            );
+            ANSWER.set(200);
+            assert_eq!(get_vehicle_property(&s, v, property, fallback), 200);
+        }
+        // SAFETY: The test's owners, deleted once.
+        unsafe {
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+            crate::engine::openttd_rust_engine_destroy(engine);
+        }
+    }
+}
+
 /// Test-only table with every leaf unreachable; its private fields keep it in this module.
 #[cfg(test)]
 pub(crate) const TEST_TABLE: Services = Services {
@@ -326,7 +409,10 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     let mut u = v;
                     while !u.is_null() {
                         if handle(v).vehicle_type_raw() == 0 {
-                            user_data |= (s.vehicle.train_handle)(u).get_user_def_data() as u8;
+                            user_data |= crate::train::Handle::from_vehicle(
+                                crate::vehicle::VehicleRef::of(u),
+                            )
+                            .get_user_def_data() as u8;
                         }
                         if crate::engine_capabilities::openttd_rust_engine_can_carry_abi(
                             s.capabilities,
@@ -649,6 +735,93 @@ pub(crate) unsafe fn resolve_real(s: &Services, state: *const State, group: Grou
         (s.real_at)(group, motion, set.min(total - 1))
     }
 }
+/// `VehicleResolverObject::WO_NONE`: no wagon override.
+const WO_NONE: u8 = 0;
+/// `VehicleResolverObject::WO_UNCACHED`: the uncached wagon override.
+const WO_UNCACHED: u8 = 1;
+
+/// The arguments of `GetVehicleCallback` and `GetVehicleCallbackParent`.
+pub(crate) struct VehicleCallback<'a> {
+    /// The callback to evaluate.
+    pub callback: CallbackID,
+    /// First parameter of the callback.
+    pub param1: u32,
+    /// Second parameter of the callback.
+    pub param2: u32,
+    /// Engine type of the vehicle to evaluate the callback for.
+    pub engine: EngineID,
+    /// The vehicle to evaluate the callback for, or `None` if it doesn't exist yet.
+    pub v: Option<VehicleRef>,
+    /// `GetVehicleCallbackParent`'s vehicle for the parent scope.
+    pub parent: Option<V>,
+    /// Additional result values from registers 100+, written only where the callback
+    /// result sets them.
+    pub regs100: &'a mut [std::mem::MaybeUninit<i32>],
+}
+
+/// `GetVehicleCallback`, or `GetVehicleCallbackParent` where `parent` is given: evaluate a
+/// newgrf callback for vehicles. Returns the value the callback returned, or
+/// `CALLBACK_FAILED` if it failed.
+pub(crate) fn resolve_vehicle_callback(s: &Services, args: VehicleCallback<'_>) -> u16 {
+    let VehicleCallback {
+        callback,
+        param1,
+        param2,
+        engine,
+        v,
+        parent,
+        regs100,
+    } = args;
+    let v = v.map_or(null_mut(), |v| v.0.as_ptr());
+    let wagon = if parent.is_some() {
+        WO_NONE
+    } else {
+        WO_UNCACHED
+    };
+    // SAFETY: A handle names a live record of the serialized game state, and a parent is
+    // the caller's live vehicle.
+    unsafe {
+        let mut state = init(s, engine.0, v, wagon, false);
+        if let Some(parent) = parent {
+            state.parent.set_vehicle(parent);
+        }
+        // No Rust reference into state is retained while generic Action2 reenters.
+        (s.resolve_callback)(
+            &raw mut state,
+            engine.0,
+            callback.0,
+            param1,
+            param2,
+            regs100.as_mut_ptr().cast::<i32>(),
+            regs100.len(),
+        )
+    }
+}
+
+/// `GetVehicleCallback(callback, param1, param2, engine, v)` with no register output.
+pub(crate) fn get_vehicle_callback(
+    s: &Services,
+    callback: CallbackID,
+    param1: u32,
+    param2: u32,
+    engine: EngineID,
+    v: Option<VehicleRef>,
+) -> u16 {
+    resolve_vehicle_callback(
+        s,
+        VehicleCallback {
+            callback,
+            param1,
+            param2,
+            engine,
+            v,
+            parent: None,
+            regs100: &mut [],
+        },
+    )
+}
+
+/// The export of [`resolve_vehicle_callback`]; `regs` and `count` give the register output.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_callback(
     s: &Services,
@@ -662,14 +835,71 @@ pub unsafe extern "C" fn openttd_rust_vehicle_callback(
     regs: *mut i32,
     count: usize,
 ) -> u16 {
-    unsafe {
-        let mut state = init(s, id, v, u8::from(!override_parent), false);
-        if override_parent {
-            state.parent.set_vehicle(parent);
+    let regs100: &mut [std::mem::MaybeUninit<i32>] = if regs.is_null() {
+        &mut []
+    } else {
+        // SAFETY: The caller's span of `count` registers, live for the call; the slice
+        // claims no initialisation.
+        unsafe { std::slice::from_raw_parts_mut(regs.cast(), count) }
+    };
+    resolve_vehicle_callback(
+        s,
+        VehicleCallback {
+            callback: CallbackID(callback),
+            param1: p1,
+            param2: p2,
+            engine: EngineID(id),
+            v: std::ptr::NonNull::new(v).map(VehicleRef),
+            parent: override_parent.then_some(parent),
+            regs100,
+        },
+    )
+}
+/// `GetEngineProperty`: callback 0x36 for `property` of `engine`, or `orig_value` if the
+/// callback fails. `v` is `None` for an engine without a vehicle.
+pub(crate) fn get_engine_property(
+    s: &Services,
+    engine: EngineID,
+    property: PropertyID,
+    orig_value: i32,
+    v: Option<VehicleRef>,
+    is_signed: bool,
+) -> i32 {
+    let callback = get_vehicle_callback(
+        s,
+        CBID_VEHICLE_MODIFY_PROPERTY,
+        u32::from(property.0),
+        0,
+        engine,
+        v,
+    );
+    if callback != CALLBACK_FAILED {
+        if is_signed {
+            /* Sign extend 15 bit integer */
+            return i32::from((callback << 1) as i16) / 2;
         }
-        // No Rust reference into state is retained while generic Action2 reenters.
-        (s.resolve_callback)(&raw mut state, id, callback, p1, p2, regs, count)
+        return i32::from(callback);
     }
+
+    orig_value
+}
+/// `GetVehicleProperty(v, property, orig_value)`, the unsigned form.
+pub(crate) fn get_vehicle_property(
+    s: &Services,
+    v: VehicleRef,
+    property: PropertyID,
+    orig_value: i32,
+) -> i32 {
+    get_engine_property(s, v.engine_type(), property, orig_value, Some(v), false)
+}
+/// [`get_vehicle_property`] for callers in files no pass has finished.
+pub(crate) fn get_vehicle_property_raw(
+    s: &Services,
+    v: VehicleRef,
+    property: u8,
+    orig_value: i32,
+) -> i32 {
+    get_vehicle_property(s, v, PropertyID(property), orig_value)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_property(
@@ -680,27 +910,8 @@ pub unsafe extern "C" fn openttd_rust_vehicle_property(
     v: V,
     signed: bool,
 ) -> i32 {
-    unsafe {
-        let result = openttd_rust_vehicle_callback(
-            s,
-            CBID_VEHICLE_MODIFY_PROPERTY.0,
-            u32::from(property),
-            0,
-            id,
-            v,
-            null_mut(),
-            false,
-            null_mut(),
-            0,
-        );
-        if result == CALLBACK_FAILED {
-            fallback
-        } else if signed {
-            i32::from((result << 1) as i16) / 2
-        } else {
-            i32::from(result)
-        }
-    }
+    let v = std::ptr::NonNull::new(v).map(VehicleRef);
+    get_engine_property(s, EngineID(id), PropertyID(property), fallback, v, signed)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_build_probability(
@@ -709,24 +920,18 @@ pub unsafe extern "C" fn openttd_rust_vehicle_build_probability(
     id: u16,
     kind: u8,
 ) -> i8 {
-    unsafe {
-        let result = openttd_rust_vehicle_callback(
-            s,
-            CBID_VEHICLE_BUILD_PROBABILITY.0,
-            u32::from(kind),
-            0,
-            id,
-            v,
-            null_mut(),
-            false,
-            null_mut(),
-            0,
-        );
-        if result == CALLBACK_FAILED {
-            -1
-        } else {
-            i8::from(u32::from(result) + s.shared.random_range(100) >= 100)
-        }
+    let result = get_vehicle_callback(
+        s,
+        CBID_VEHICLE_BUILD_PROBABILITY,
+        u32::from(kind),
+        0,
+        EngineID(id),
+        std::ptr::NonNull::new(v).map(VehicleRef),
+    );
+    if result == CALLBACK_FAILED {
+        -1
+    } else {
+        i8::from(u32::from(result) + s.shared.random_range(100) >= 100)
     }
 }
 unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
@@ -786,45 +991,13 @@ pub unsafe extern "C" fn openttd_rust_vehicle_randomise(s: &Services, v: V, trig
         invalidate_newgrf_cache_of_chain(s, handle(v));
     }
 }
-// Vehicle property/callback table entries point directly to Rust. The caller
-// obtains the immutable resolver table once through the native getter.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_shell_property(
-    s: &Services,
-    v: V,
-    property: u8,
-    fallback: i32,
-) -> i32 {
-    unsafe { openttd_rust_vehicle_property(s, engine(v), property, fallback, v, false) }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_shell_callback(
-    s: &Services,
-    v: V,
-    callback: crate::newgrf_callbacks::CallbackID,
-) -> u16 {
-    unsafe {
-        openttd_rust_vehicle_callback(
-            s,
-            callback.0,
-            0,
-            0,
-            engine(v),
-            v,
-            null_mut(),
-            false,
-            null_mut(),
-            0,
-        )
-    }
-}
 // Named source compatibility helpers. Opaque shells remain native; these helpers
 // read only scalars at the original branches and never retain owner references.
 unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
     unsafe {
         match kind {
             0 => crate::train::openttd_rust_train_current_max_speed(
-                (s.vehicle.train_handle)(v),
+                crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
                 (s.train_services)(),
                 s.shared,
             ),
@@ -995,7 +1168,7 @@ unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
         }
     }
 }
-unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
+unsafe fn aircraft_movement_action(v: V) -> u32 {
     use crate::airport::{
         ENDLANDING, ENDTAKEOFF, FLYING, HANGAR, HELIENDLANDING, HELILANDING, HELIPAD1, HELIPAD2,
         HELIPAD3, HELITAKEOFF, LANDING, STARTTAKEOFF, TAKEOFF, TERM1, TERM2, TERM3, TERM4, TERM5,
@@ -1012,21 +1185,21 @@ unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
                 }
             }
             TERM1 | HELIPAD1 => {
-                if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_LOADING {
+                if handle(v).current_order().kind() == OrderType::OT_LOADING {
                     AMA_TTDP_ON_PAD1
                 } else {
                     AMA_TTDP_LANDING_TO_PAD1
                 }
             }
             TERM2 | HELIPAD2 => {
-                if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_LOADING {
+                if handle(v).current_order().kind() == OrderType::OT_LOADING {
                     AMA_TTDP_ON_PAD2
                 } else {
                     AMA_TTDP_LANDING_TO_PAD2
                 }
             }
             TERM3 | TERM4 | TERM5 | TERM6 | TERM7 | TERM8 | HELIPAD3 => {
-                if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_LOADING {
+                if handle(v).current_order().kind() == OrderType::OT_LOADING {
                     AMA_TTDP_ON_PAD3
                 } else {
                     AMA_TTDP_LANDING_TO_PAD3
@@ -1035,7 +1208,7 @@ unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
             TAKEOFF | STARTTAKEOFF | ENDTAKEOFF | HELITAKEOFF => AMA_TTDP_PAD1_TO_TAKEOFF,
             FLYING => AMA_TTDP_IN_FLIGHT,
             LANDING | ENDLANDING | HELILANDING | HELIENDLANDING => {
-                if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_GOTO_DEPOT {
+                if handle(v).current_order().kind() == OrderType::OT_GOTO_DEPOT {
                     AMA_TTDP_LANDING_TO_HANGAR
                 } else {
                     AMA_TTDP_LANDING_TO_PAD1
@@ -1153,7 +1326,9 @@ unsafe fn variable(
                             s.shared,
                             crate::tile_type::TileIndex(tile),
                         );
-                        let types = (s.vehicle.train_handle)(v).get_railtypes();
+                        let types =
+                            crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                                .get_railtypes();
                         return (u32::from((s.rail_catenary)(rt)) * 0x200)
                             | (u32::from((s.powered_rail)(types, rt)) * 0x100)
                             | u32::from(crate::type_registry::openttd_rust_rail_reverse(
@@ -1367,12 +1542,12 @@ unsafe fn variable(
             0xfe | 0xff => {
                 let mut flags = 0u32;
                 if kind() == 0 {
-                    let t = (s.vehicle.train_handle)(v);
+                    let t = crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v));
                     let f = t.get_flags();
                     let wagon = f & crate::train::VRF_POWERED_WAGON != 0;
                     let u = if wagon {
-                        (s.vehicle.train_handle)(
-                            crate::vehicle::VehicleRef::of(v).first().0.as_ptr(),
+                        crate::train::Handle::from_vehicle(
+                            crate::vehicle::VehicleRef::of(v).first(),
                         )
                     } else {
                         t
@@ -1412,15 +1587,16 @@ unsafe fn variable(
             0x81 => return old_subtype(s, v, kind()),
             0x84 | 0x85 => return high((s.id)(v)),
             0x8a => return u32::from((s.old_order)(v)),
-            0x8b => return u32::from((s.vehicle.order_destination)(h)),
+            0x8b => return u32::from(h.current_order().destination_raw()),
             0x8c => return u32::from((s.num_orders)(v)),
             0x8d => return u32::from((s.real_order)(v)),
             0x90 | 0x91 => {
-                let ticks = if (s.vehicle.order_type)(h) == crate::vehicle::OT_LOADING {
+                let ticks = if h.current_order().kind() == OrderType::OT_LOADING {
                     u32::from((s.load_ticks)(v))
                 } else {
                     match kind() {
-                        0 => (s.vehicle.train_handle)(v).get_wait_counter() as u32,
+                        0 => crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                            .get_wait_counter() as u32,
                         3 => u32::from(
                             (*crate::vehicle::VehicleRef::of(v).aircraft_state()).turn_counter,
                         ),
@@ -1491,7 +1667,11 @@ unsafe fn variable(
                     return u32::from(sprite);
                 }
                 return u32::from(
-                    if (s.vehicle.train_handle)(v).get_flags() & crate::train::VRF_FLIPPED != 0 {
+                    if crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                        .get_flags()
+                        & crate::train::VRF_FLIPPED
+                        != 0
+                    {
                         crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM_REVERSED
                     } else {
                         crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM
@@ -1534,9 +1714,14 @@ unsafe fn variable(
         }
         match kind() {
             0 => match variable {
-                0xe2 => return (s.vehicle.train_handle)(v).get_track() as u32,
+                0xe2 => {
+                    return crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                        .get_track() as u32;
+                }
                 0xe6 => {
-                    let bits = (s.vehicle.train_handle)(v).get_railtypes();
+                    let bits =
+                        crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                            .get_railtypes();
                     return u32::from(
                         crate::base_bitset_type::get_nth_set_bit(bits, 0)
                             .unwrap_or(crate::rail_type::INVALID_RAILTYPE),
@@ -1585,7 +1770,7 @@ unsafe fn variable(
                         (*crate::vehicle::VehicleRef::of(v).aircraft_state()).targetairport,
                     );
                 }
-                0xe6 => return aircraft_movement_action(s, v),
+                0xe6 => return aircraft_movement_action(v),
                 _ => {}
             },
             _ => {}
@@ -1707,20 +1892,25 @@ pub(crate) unsafe fn callback(
     registers: *mut i32,
     count: usize,
 ) -> u16 {
-    unsafe {
-        openttd_rust_vehicle_callback(
-            &*(vs.newgrf)(),
-            callback,
-            parameter,
-            0,
-            engine,
-            v.map_or(null_mut(), |v| v.0.as_ptr()),
-            parent,
-            override_parent,
-            registers,
-            count,
-        )
-    }
+    let regs100: &mut [std::mem::MaybeUninit<i32>] = if registers.is_null() {
+        &mut []
+    } else {
+        // SAFETY: The caller's span of `count` registers, live for the call; the slice
+        // claims no initialisation.
+        unsafe { std::slice::from_raw_parts_mut(registers.cast(), count) }
+    };
+    resolve_vehicle_callback(
+        vs.newgrf(),
+        VehicleCallback {
+            callback: CallbackID(callback),
+            param1: parameter,
+            param2: 0,
+            engine: EngineID(engine),
+            v,
+            parent: override_parent.then_some(parent),
+            regs100,
+        },
+    )
 }
 /// Direct signed property entry (unsigned users use the base vehicle table).
 pub(crate) unsafe fn signed_property(
@@ -1729,16 +1919,14 @@ pub(crate) unsafe fn signed_property(
     property: u8,
     fallback: i32,
 ) -> i32 {
-    unsafe {
-        openttd_rust_vehicle_property(
-            &*(vs.newgrf)(),
-            v.engine_type_raw(),
-            property,
-            fallback,
-            v.0.as_ptr(),
-            true,
-        )
-    }
+    get_engine_property(
+        vs.newgrf(),
+        v.engine_type(),
+        PropertyID(property),
+        fallback,
+        Some(v),
+        true,
+    )
 }
 /// `TestVehicleBuildProbability(..., Reversed).has_value()` still consumes its RNG.
 pub(crate) unsafe fn reverse_probability(vs: &VehicleServices, v: VehicleRef) -> bool {

@@ -34,10 +34,11 @@ use crate::table::strings::{
     STR_ERROR_TRAIN_START_NO_POWER, STR_ERROR_VEHICLE_IS_DESTROYED, STR_NULL,
 };
 use crate::tile_type::TileIndex;
-use crate::vehicle::{VehicleRef, VehicleType};
+use crate::vehicle::VehicleRef;
 use crate::vehicle_base::VehState;
 use crate::vehicle_gui::get_window_class_for_vehicle_type;
 use crate::vehicle_type::VehicleID;
+use crate::vehicle_type::VehicleType;
 use crate::vehiclelist::{VehicleListIdentifier, VehicleListType};
 use crate::widgets::vehicle_widget::VehicleViewWidgets;
 use crate::window_func::{
@@ -261,6 +262,8 @@ pub struct SelectionServices {
     pub transactions: &'static crate::fleet::transactions::Services,
     pub vehicles: &'static crate::vehicle::VehicleServices,
     pub links: &'static crate::station_service::Links,
+    /// The shared table, whose map descriptor the depot tile walk hashes with.
+    pub shared: &'static Services,
     pub in_depot: extern "C" fn(*mut ()) -> bool,
     pub list_clear: extern "C" fn(*mut ()),
     pub list_push: extern "C" fn(*mut (), *mut ()),
@@ -379,7 +382,7 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
         emit: &mut emit,
     };
     unsafe {
-        s.vehicles.for_each_on_tile(tile.0, |v| {
+        crate::vehicle_func::vehicles_on_tile(s.vehicles, s.shared.map(), tile, |v| {
             visit::<&mut F>(std::ptr::from_mut(&mut ctx).cast(), v);
         });
     };
@@ -800,7 +803,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             )
         };
         let mut error = STR_NULL;
-        if callback != crate::vehicle::CALLBACK_FAILED {
+        if callback != crate::newgrf_callbacks::CALLBACK_FAILED {
             if s.engine_grf_version(handle) < 8 {
                 /* 8 bit result 0xFF means 'allow' */
                 if callback < 0x400 && callback & 0xff != 0xff {
@@ -855,7 +858,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             (handle).set_cur_speed(0); // trains can stop 'slowly'
         }
         /* Unbunching data is no longer valid. */
-        (s.vehicles.reset_depot_unbunching)(handle);
+        crate::orders::reset_unbunching(handle);
         // Native presentation may reenter owners; no Rust owner borrow spans it.
         (unsafe { &*s.vehicles.maintenance }.mark_dirty)(handle);
         set_window_widget_dirty(
@@ -937,7 +940,7 @@ crate::abi::layouts! {
         value, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => SelectionServices {
-        groups, transactions, vehicles, links, in_depot, list_clear, list_push,
+        groups, transactions, vehicles, links, shared, in_depot, list_clear, list_push,
     };
     "OpenTTDVehicleTransactionServices" ["probe"] => TransactionServices {
         shared, commands, cost, groups, name, clear_name, set_name,

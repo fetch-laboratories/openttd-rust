@@ -103,7 +103,6 @@ pub struct Leaves {
     pub order_type: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub other_end: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub overlap: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub path_result: extern "C" fn(*mut std::ffi::c_void, Handle, u8),
     pub rail90: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
     pub reach_dirs: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub reach_tracks: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
@@ -210,6 +209,7 @@ impl Game<'_> {
         unsafe {
             crate::vehicle::occupancy::wormhole_blocker(
                 &*self.leaves.vehicle,
+                self.shared().map(),
                 tile,
                 end,
                 id.vehicle().0.as_ptr(),
@@ -771,7 +771,8 @@ fn choose(
         if new_tile == tile {
             best = result.track;
         }
-        (g.leaves.path_result)(g.context, id, result.found);
+        // SAFETY: The native table names the immutable process-wide base table.
+        (unsafe { &*g.leaves.vehicle }.pathfinding_result)(id.vehicle(), result.found != 0);
     }
     if !reserve {
         return (best, false);
@@ -1202,7 +1203,6 @@ crate::abi::layouts! {
         order_type,
         other_end,
         overlap,
-        path_result,
         rail90,
         reach_dirs,
         reach_tracks,
@@ -1309,7 +1309,6 @@ pub(crate) mod tests {
             order_type: unused(),
             other_end: unused(),
             overlap: unused(),
-            path_result: unused(),
             rail90: unused(),
             reach_dirs: unused(),
             reach_tracks: unused(),
@@ -1374,49 +1373,31 @@ pub(crate) mod tests {
     }
     fn vehicle_table() -> crate::vehicle::VehicleServices {
         crate::vehicle::VehicleServices {
-            record_from_shell: resolve_record,
-            tile_links: unused(),
-            map_log_x: unused(),
-            assertions: unused(),
-            train_handle: unused(),
-            waiting_for_unbunching: unused(),
-            leave_unbunching_depot: unused(),
-            reset_depot_unbunching: unused(),
-            enter_depot: unused(),
-            pathfinding_result: unused(),
-            new_position: unused(),
             base_viewport: unused(),
-            newgrf: unused(),
-            property: unused(),
-            callback: unused(),
-            set_max_age: unused(),
-            length_changed: unused(),
-            play_vehicle_sound: unused(),
-            play_sound: unused(),
-            order_free: unused(),
-            order_dummy: unused(),
-            start_stop_dirty: unused(),
-            destroy: unused(),
-            set_dest_tile: unused(),
-            engine: unused(),
-            order_type: unused(),
-            order_destination: unused(),
-            order_nonstop: unused(),
-            write_profit: unused(),
-            write_economy_service: unused(),
-            write_calendar_service: unused(),
-            write_breakdowns: unused(),
-            write_reliability: unused(),
-            profit: unused(),
-            make_dummy: unused(),
-            check_orders_only: unused(),
-            maintenance: unused(),
-            visits: unused(),
-            orders: unused(),
-            ship_get: unused(),
-            first_sprite: unused(),
-            update_delta: unused(),
             can_allocate: unused(),
+            destroy: unused(),
+            engine: unused(),
+            first_sprite: unused(),
+            length_changed: unused(),
+            maintenance: unused(),
+            newgrf: unused(),
+            orders: unused(),
+            pathfinding_result: unused(),
+            play_sound: unused(),
+            play_vehicle_sound: unused(),
+            profit: unused(),
+            record_from_shell: resolve_record,
+            set_max_age: unused(),
+            ship_get: unused(),
+            start_stop_dirty: unused(),
+            tile_links: unused(),
+            update_delta: unused(),
+            visits: unused(),
+            write_breakdowns: unused(),
+            write_calendar_service: unused(),
+            write_economy_service: unused(),
+            write_profit: unused(),
+            write_reliability: unused(),
         }
     }
     extern "C" fn resolve_record(shell: *mut c_void) -> *mut crate::vehicle_base::VehicleRecord {

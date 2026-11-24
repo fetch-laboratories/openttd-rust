@@ -43,7 +43,8 @@ use crate::track_func::{
 };
 use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
-use crate::vehicle::{OpenTTDVehicle, VehicleRef};
+use crate::vehicle::VehicleRef;
+use crate::vehicle_type::OpenTTDVehicle;
 use crate::vehicle_type::VehicleType;
 use crate::water_map::WaterClass;
 use crate::water_regions::{
@@ -758,9 +759,11 @@ impl<'v> Yapf<'v> for CYapfShip<'v> {
         if world.is_docking_tile(tile) {
             /* Check docking tile for occupancy. */
             let mut count: u32 = 0;
-            crate::movement::table(v.s)
-                .vehicle()
-                .for_each_on_tile(tile.0, |other| {
+            crate::vehicle_func::vehicles_on_tile(
+                crate::movement::table(v.s).vehicle(),
+                v.s.map(),
+                tile,
+                |other| {
                     /* Ignore other vehicles (aircraft) and ships inside depot. */
                     if other.vehicle_type() == VehicleType::VEH_SHIP
                         && !other
@@ -769,7 +772,8 @@ impl<'v> Yapf<'v> for CYapfShip<'v> {
                     {
                         count += 1;
                     }
-                });
+                },
+            );
             c = c.wrapping_add_unsigned(
                 count
                     .wrapping_mul(3)
@@ -1668,7 +1672,7 @@ mod tests {
     extern "C" fn engine(_: VehicleRef) -> crate::vehicle::EngineRef {
         crate::vehicle::EngineRef::of(ENGINE.get())
     }
-    unsafe extern "C" fn unit(_: *mut crate::vehicle::OpenTTDVehicle) -> u16 {
+    unsafe extern "C" fn unit(_: *mut crate::vehicle_type::OpenTTDVehicle) -> u16 {
         4242
     }
 
@@ -1705,7 +1709,7 @@ mod tests {
             ..shared(vehicles)
         };
         let mut lifecycle = crate::engine::Lifecycle::default();
-        lifecycle.vehicle_info_type = crate::vehicle::VehicleType::SHIP;
+        lifecycle.vehicle_info_type = crate::vehicle_type::VehicleType::SHIP;
         lifecycle.vehicle_info.ship = crate::engine::records::ShipVehicleInfo {
             max_speed: 301,
             ocean_speed_frac: 17,

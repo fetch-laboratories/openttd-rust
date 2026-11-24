@@ -36,10 +36,7 @@ use crate::map_func::{Map, World};
 use crate::math::is_inside_mm;
 use crate::movement::CachedTable;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
-use crate::newgrf_properties::{
-    PROP_ROADVEH_CARGO_AGE_PERIOD, PROP_ROADVEH_RUNNING_COST_FACTOR, PROP_ROADVEH_SHORTEN_FACTOR,
-    PROP_ROADVEH_SPEED,
-};
+use crate::newgrf_properties::PropertyID;
 use crate::newgrf_sound::VSE_START;
 use crate::news_func::{add_tile_news_item, add_vehicle_news_item};
 use crate::news_type::NewsType;
@@ -82,7 +79,7 @@ use crate::track_func::{
 use crate::track_type::{TrackBits, TrackStatus, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
 use crate::vehicle::maintenance;
-use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, YEAR_TICKS};
+use crate::vehicle::{GroundServices, VehicleRef, VehicleServices};
 use crate::vehicle_base::ClosestDepot;
 use crate::vehicle_base::{VehState, VehStates};
 use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH, VehicleID, VehicleType};
@@ -562,9 +559,7 @@ impl<'a> Game<'a> {
     }
     /// `assert(condition)`: evaluated only where the native build asserts.
     fn assert(&self, condition: impl FnOnce() -> bool) {
-        if self.vs.assertions {
-            crate::movement::native_assert(self.ss, condition());
-        }
+        self.world().assert_with(condition);
     }
     /// The entry's map descriptor, loaded at its first map use and shared with the movement
     /// table's track queries. Orders, sound, `NewGRF`, movement, crash and viewport callbacks
@@ -679,10 +674,10 @@ impl<'a> Game<'a> {
         let mut veh_len;
         if e.grf_version(self.ss) >= 8 {
             /* Use callback 36 */
-            veh_len = service!(self.vs.property)(
-                (self.vs.newgrf)(),
+            veh_len = crate::newgrf_vehicle::get_vehicle_property(
+                self.vs.newgrf(),
                 v,
-                PROP_ROADVEH_SHORTEN_FACTOR,
+                PropertyID::PROP_ROADVEH_SHORTEN_FACTOR,
                 i32::from(crate::newgrf_callbacks::CALLBACK_FAILED),
             ) as u16;
             if veh_len != crate::newgrf_callbacks::CALLBACK_FAILED
@@ -693,7 +688,14 @@ impl<'a> Game<'a> {
             }
         } else {
             /* Use callback 11 */
-            veh_len = service!(self.vs.callback)((self.vs.newgrf)(), v, CBID_VEHICLE_LENGTH);
+            veh_len = crate::newgrf_vehicle::get_vehicle_callback(
+                self.vs.newgrf(),
+                CBID_VEHICLE_LENGTH,
+                0,
+                0,
+                v.engine_type(),
+                Some(v),
+            );
         }
         if veh_len == crate::newgrf_callbacks::CALLBACK_FAILED {
             veh_len = u16::from(e.road_shorten());
@@ -755,18 +757,22 @@ impl<'a> Game<'a> {
 
             /* Update cargo aging period. */
             let cargo_age_period = service!(self.vs.engine)(u).cargo_age();
-            let period = service!(self.vs.property)(
-                (self.vs.newgrf)(),
+            let period = crate::newgrf_vehicle::get_vehicle_property(
+                self.vs.newgrf(),
                 u,
-                PROP_ROADVEH_CARGO_AGE_PERIOD,
+                PropertyID::PROP_ROADVEH_CARGO_AGE_PERIOD,
                 i32::from(cargo_age_period),
             );
             u.set_cached_cargo_age_period(period as u16);
             part = u.next();
         }
 
-        let max_speed =
-            service!(self.vs.property)((self.vs.newgrf)(), v.v, PROP_ROADVEH_SPEED, 0) as u32;
+        let max_speed = crate::newgrf_vehicle::get_vehicle_property(
+            self.vs.newgrf(),
+            v.v,
+            PropertyID::PROP_ROADVEH_SPEED,
+            0,
+        ) as u32;
         v.v.set_cached_max_speed(if max_speed != 0 {
             max_speed.wrapping_mul(4) as u16
         } else {
@@ -842,7 +848,7 @@ impl<'a> Game<'a> {
             v.set_reverse_ctr(180);
 
             /* Unbunching data is no longer valid. */
-            service!(self.vs.reset_depot_unbunching)(v.v);
+            crate::orders::reset_unbunching(v.v);
         }
 
         true
@@ -1007,10 +1013,16 @@ impl<'a> Game<'a> {
                     break 'next;
                 }
 
-                if self.vs.any_near(v.v.x_pos(), v.v.y_pos(), 4, |t| {
-                    t.vehicle_type() == VehicleType::VEH_TRAIN
-                        && t.z_pos().wrapping_sub(u.v.z_pos()).wrapping_abs() <= 6
-                }) {
+                if crate::vehicle_func::has_vehicle_near_tile_xy(
+                    self.vs,
+                    v.v.x_pos(),
+                    v.v.y_pos(),
+                    4,
+                    |t| {
+                        t.vehicle_type() == VehicleType::VEH_TRAIN
+                            && t.z_pos().wrapping_sub(u.v.z_pos()).wrapping_abs() <= 6
+                    },
+                ) {
                     self.road_veh_crash(v);
                     return true;
                 }
@@ -1109,15 +1121,19 @@ impl<'a> Game<'a> {
         };
 
         if front.state() == RVSB_WORMHOLE {
-            self.vs.for_each_on_tile(v.v.tile().0, |u| {
+            crate::vehicle_func::vehicles_on_tile(self.vs, self.map(), v.v.tile(), |u| {
                 self.find_closest_blocking_road_veh(u, &mut rvf);
             });
-            self.vs
-                .for_each_on_tile(service!(self.ss.other_tunnel_end)(v.v.tile().0), |u| {
+            crate::vehicle_func::vehicles_on_tile(
+                self.vs,
+                self.map(),
+                TileIndex(service!(self.ss.other_tunnel_end)(v.v.tile().0)),
+                |u| {
                     self.find_closest_blocking_road_veh(u, &mut rvf);
-                });
+                },
+            );
         } else {
-            self.vs.for_each_near(x, y, 8, |u| {
+            crate::vehicle_func::vehicles_near_tile_xy(self.vs, x, y, 8, |u| {
                 self.find_closest_blocking_road_veh(u, &mut rvf);
             });
         }
@@ -1329,7 +1345,7 @@ impl<'a> Game<'a> {
         }
 
         /* Are there more vehicles on the tile except the two vehicles involved in overtaking */
-        self.vs.any_on_tile(od.tile.0, |v| {
+        crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), od.tile, |v| {
             v.vehicle_type() == VehicleType::VEH_ROAD && v.first() == v && v != od.u && v != od.v.v
         })
     }
@@ -1671,7 +1687,7 @@ impl<'a> Game<'a> {
 
             // SAFETY: A live front shell; no owner borrow spans the servicing.
             unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
-            service!(self.vs.leave_unbunching_depot)(v.v);
+            crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(v.v);
 
             self.start_road_veh_sound(v.v);
 
@@ -1875,7 +1891,7 @@ impl<'a> Game<'a> {
 
         if v.state() == RVSB_WORMHOLE {
             /* Vehicle is entering a depot or is on a bridge or in a tunnel */
-            let gp = service!(self.vs.new_position)(v.v);
+            let gp = crate::vehicle::get_new_vehicle_pos(v.v, self.map());
 
             if v.v.is_front_engine() {
                 if let Some(u) = self.road_veh_find_close_to(v, gp.x, gp.y, v.v.direction(), true) {
@@ -1884,9 +1900,9 @@ impl<'a> Game<'a> {
                 }
             }
 
-            if self.is_tile_type(TileIndex(gp.tile), TileType::MP_TUNNELBRIDGE)
+            if self.is_tile_type(gp.new_tile, TileType::MP_TUNNELBRIDGE)
                 && self
-                    .vehicle_enter_tile(v.v, TileIndex(gp.tile), gp.x, gp.y)
+                    .vehicle_enter_tile(v.v, gp.new_tile, gp.x, gp.y)
                     .test(VehicleEnterTileState::EnteredWormhole)
             {
                 /* Vehicle has just entered a bridge or tunnel */
@@ -2475,7 +2491,7 @@ impl<'a> Game<'a> {
 
         let orders = self.vs.orders();
         crate::orders::process_orders(v.v, orders);
-        self.vs.handle_loading(v.v, false, orders);
+        self.vs.handle_loading(v.v, false);
 
         if v.v.current_order().is_type(OrderType::OT_LOADING) {
             return true;
@@ -2483,7 +2499,8 @@ impl<'a> Game<'a> {
 
         if v.is_in_depot() {
             /* Check if we should wait here for unbunching. */
-            if service!(self.vs.waiting_for_unbunching)(v.v) {
+            if crate::vehicle::is_waiting_for_unbunching(v.v, self.vs.orders(), || v.is_in_depot())
+            {
                 return true;
             }
             if self.road_veh_leave_depot(v, true) {
@@ -2501,7 +2518,8 @@ impl<'a> Game<'a> {
         /* Check how far the vehicle needs to proceed */
         let mut j = self.update_speed(v);
 
-        let mut adv_spd = crate::vehicle::advance_distance(v.v.direction().0);
+        // `int adv_spd`: the unsigned distance converts to the signed comparison type.
+        let mut adv_spd = v.v.get_advance_distance().cast_signed();
         let mut blocked = false;
         while j >= adv_spd {
             j -= adv_spd;
@@ -2521,7 +2539,7 @@ impl<'a> Game<'a> {
             }
 
             /* Determine distance to next map position */
-            adv_spd = crate::vehicle::advance_distance(v.v.direction().0);
+            adv_spd = v.v.get_advance_distance().cast_signed();
 
             /* Test for a collision, but only if another movement will occur. */
             if j >= adv_spd && self.road_veh_check_train_crash(v) {
@@ -2559,10 +2577,10 @@ impl<'a> Game<'a> {
             return 0;
         }
 
-        let cost_factor = service!(self.vs.property)(
-            (self.vs.newgrf)(),
+        let cost_factor = crate::newgrf_vehicle::get_vehicle_property(
+            self.vs.newgrf(),
             v.v,
-            PROP_ROADVEH_RUNNING_COST_FACTOR,
+            PropertyID::PROP_ROADVEH_RUNNING_COST_FACTOR,
             i32::from(e.road_running()),
         ) as u32;
         if cost_factor == 0 {
@@ -2702,7 +2720,7 @@ impl<'a> Game<'a> {
         let cost = self
             .get_running_cost(v)
             .saturating_mul(i64::from(v.v.running_ticks()))
-            / YEAR_TICKS;
+            / i64::from(crate::timer_game_common::DAYS_IN_YEAR * crate::timer_game_tick::DAY_TICKS);
 
         service!(self.vs.write_profit)(v.v, service!(self.vs.profit)(v.v).saturating_sub(cost));
         v.v.set_running_ticks(0);
@@ -2979,6 +2997,10 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
 pub unsafe extern "C" fn openttd_rust_road_set_dest(v: VehicleRef, state: *mut State, tile: u32) {
     set_dest_tile(Part::new(v, state), TileIndex(tile));
 }
+/// `RoadVehicle::SetDestTile` on a live road vehicle record and the road owner it stores.
+pub(crate) fn set_road_dest_tile(v: VehicleRef, tile: TileIndex) {
+    set_dest_tile(Part::of(v), tile);
+}
 /// The body of `CmdTurnRoadVeh` after its vehicle, primary and ownership checks; 0 for
 /// `CMD_ERROR`.
 /// # Safety
@@ -3050,10 +3072,54 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests;
 
+/// `RoadVehicle::SetDestTile`: the current destination leaves the path cache; another tile
+/// clears the cache and stores the tile.
+#[cfg(test)]
+mod set_dest_tile_tests {
+    use super::{
+        PathElement, openttd_rust_road_new, openttd_rust_road_path_push, set_road_dest_tile,
+    };
+    use crate::tile_type::TileIndex;
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
+
+    #[test]
+    fn set_dest_tile_clears_the_path_only_for_a_new_destination() {
+        let state = openttd_rust_road_new();
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            VehicleType::VEH_ROAD,
+        );
+        // SAFETY: The test's fresh record and road owner.
+        unsafe {
+            (*record).road = state.cast();
+            openttd_rust_road_path_push(
+                state,
+                PathElement {
+                    trackdir: 1,
+                    tile: 7,
+                },
+            );
+        }
+        let v = VehicleRef::of(record);
+        v.set_dest_tile(TileIndex(42));
+        let path = || unsafe { super::openttd_rust_road_path_size(state) };
+        set_road_dest_tile(v, TileIndex(42));
+        assert_eq!((v.dest_tile(), path()), (TileIndex(42), 1));
+        set_road_dest_tile(v, TileIndex(43));
+        assert_eq!((v.dest_tile(), path()), (TileIndex(43), 0));
+        // SAFETY: The test's owners, deleted once.
+        unsafe {
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+            super::openttd_rust_road_destroy(state);
+        }
+    }
+}
+
 #[cfg(test)]
 mod map_context_tests {
     use super::*;
-    use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE, unreachable1};
+    use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE};
 
     /// Pinned `RoadVehicle::Tick` returns for an articulated part after wrapping
     /// `tick_counter`. The native ABI fixture leaves map services unused here.
@@ -3064,7 +3130,6 @@ mod map_context_tests {
         let vehicle = VEHICLE;
         let ground = GroundServices {
             physics: &GROUND_VEHICLE,
-            has_articulated: unreachable1,
         };
         let mut leaves = ROAD_LEAVES;
         leaves.ground = &raw const ground;

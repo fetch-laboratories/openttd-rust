@@ -25,6 +25,7 @@ const OpenTTDVehicleSelectionServices &GetRustVehicleSelectionServices() noexcep
 		.transactions = &FleetTransactionServices(),
 		.vehicles = &GetRustVehicleServices(),
 		.links = &GetRustStationLinks(),
+		.shared = &GetRustSharedServices(),
 		.in_depot = RustOpaqueVehicleRead<bool, RustVehicleInDepot>,
 		.list_clear = SelectionListClear,
 		.list_push = SelectionListPush,

@@ -38,7 +38,8 @@ use crate::transport_type::TransportType;
 use crate::tree_map::{
     get_tree_count, get_tree_density, get_tree_ground, get_tree_growth, get_tree_type,
 };
-use crate::vehicle::{OpenTTDVehicle, VehicleRef};
+use crate::vehicle::VehicleRef;
+use crate::vehicle_type::OpenTTDVehicle;
 use crate::witness::{
     RAIL_CACHE_FLUSHES, RAIL_LIMIT_STOPS, RAIL_SIGNALS_RED, RAIL_SIGNALS_RESTORED,
     openttd_rust_witness_count as count, openttd_rust_witness_enable,

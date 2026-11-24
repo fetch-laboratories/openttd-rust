@@ -11,9 +11,8 @@ static void LinkGraphJob()
 		.cargo_classes = [](uint8_t cargo) noexcept -> uint16_t { CHECK(cargo == 0); return 1; },
 	};
 	static const OpenTTDVehicleServices vehicle{
-		.assertions = false,
-		.newgrf = []() noexcept { return &resolver; },
 		.maintenance = nullptr,
+		.newgrf = []() noexcept { return &resolver; },
 	};
 	static const OpenTTDSharedServices shared{
 		.clear_square_services = {},

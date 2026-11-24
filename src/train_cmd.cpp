@@ -1075,7 +1075,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.order_type = TrainReservationOrderType,
 		.other_end = OpenTTDLegacyContextMapQuery<uint64_t, RustOtherTunnelBridgeEnd, OpenTTDTrainHandle, uint32_t>,
 		.overlap = TrainReservationOverlap,
-		.path_result = TrainReservationPathResult,
 		.rail90 = OpenTTDLegacyContextMapQuery<uint64_t, RustTileRail90Disallowed, OpenTTDTrainHandle, uint32_t, uint32_t>,
 		.reach_dirs = TrainReservationReachDirs,
 		.reach_tracks = TrainReservationReachTracks,

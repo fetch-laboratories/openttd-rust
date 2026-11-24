@@ -81,14 +81,35 @@ static void AircraftDirectBoundary()
 	engine_record->vehicle_info.aircraft.max_range = 41;
 	engine_record->info.cargo_age_period = 71;
 	vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine_record; };
-	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if (property == 0x0C) { CHECK(fallback == 0); return int32_t{200}; } CHECK((property == 0x1C && fallback == 71) || (property == 0x1F && fallback == 41)); return fallback; };
+	/* GetVehicleProperty runs the production resolver: its speed callback answers 200, and
+	 * the cargo age and range callbacks fail, so the caches take the fallbacks 71 and 41. */
+	p.record.first = p.shadow.first = &p.record;
+	resolver.engine_by_id = [](uint16_t) noexcept -> const OpenTTDEngine * { return engine_record; };
+	resolver.cargo_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	static uint16_t speed_answer;
+	speed_answer = 200;
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
+		CHECK(callback == CBID_VEHICLE_MODIFY_PROPERTY);
+		if (property == 0x0C) return speed_answer;
+		CHECK(property == 0x1C || property == 0x1F);
+		return CALLBACK_FAILED;
+	};
 	p.record.subtype = 2;
 	p.vehicle = {&p.record, openttd_rust_aircraft_state_new(), 17};
 	p.record.aircraft = p.shadow.aircraft = p.vehicle.state;
 	resolver.id = [](OpenTTDVehicle *) noexcept -> uint32_t { return 18; };
 	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.orders == 1 && p.vehicle.state->pos == 19 && p.vehicle.state->cached_max_range == 41 && p.vehicle.state->cached_max_range_sqr == 1681);
-	CHECK(p.record.cached_max_speed == 2560 && p.record.cached_cargo_age_period == 71);
+	CHECK(p.record.cached_max_speed == 2560 && p.record.cached_cargo_age_period == 71 && p.shadow.cached_cargo_age_period == 71);
+	/* A failed speed callback takes the fallback 0, so the cache takes the engine's speed;
+	 * a 200 answer restores the cache the rest of this probe expects. */
+	engine_record->vehicle_info.aircraft.max_speed = 37;
+	speed_answer = CALLBACK_FAILED;
+	openttd_rust_aircraft_cache(&leaves, p.vehicle, true);
+	CHECK(p.record.cached_max_speed == 37);
+	speed_answer = 200;
+	openttd_rust_aircraft_cache(&leaves, p.vehicle, true);
+	CHECK(p.record.cached_max_speed == 2560);
 	/* A ProcessOrders callback replaces the order with OT_DUMMY. HandleLoading
 	 * advances both indices even on the second call of a tick. */
 	auto second = openttd_rust_order_vector_data(p.order_owner->vector.get())[0];
@@ -196,9 +217,8 @@ static void AircraftPhaseBoundary()
 	s.map_max_x = s.map_max_y = []() noexcept { return uint32_t{63}; };
 	s.plane_speed = []() noexcept { return uint8_t{1}; };
 	p.record.acceleration = 8; p.record.cached_max_speed = 100;
-	v.start_stop_dirty = [](OpenTTDVehicle *) noexcept { aircraft_probe.record.direction = DIR_NE; aircraft_probe.record.progress = 255; };
-	leaves.direction_towards = [](OpenTTDAircraftVehicle, int32_t, int32_t) noexcept { return uint8_t{1}; };
-	v.new_position = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleNewPosition{aircraft_probe.record.x_pos + 1, aircraft_probe.record.y_pos, 0}; };
+	v.start_stop_dirty = [](OpenTTDVehicle *) noexcept { aircraft_probe.record.direction = DIR_SW; aircraft_probe.record.progress = 255; };
+	leaves.direction_towards = [](OpenTTDAircraftVehicle, int32_t, int32_t) noexcept { return uint8_t{DIR_SW}; };
 	/* Both callbacks mutate canonical inputs. Subtype must be loaded after
 	 * UpdatePosition, then z after the rotor callback, rather than on acquisition. */
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.moves++; aircraft_probe.record.subtype = 0; aircraft_probe.record.z_pos = 17; };
@@ -213,14 +233,13 @@ static void AircraftPhaseBoundary()
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	v.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	v.tile_links = [](OpenTTDVehicle *shell) noexcept { return &aircraft_probe.links[shell == aircraft_probe.vehicle.handle ? 0 : 1]; };
-	v.map_log_x = []() noexcept { return uint32_t{6}; };
 	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.record.x_pos == 1 && p.record.y_pos == 0 && p.record.progress == 1);
 	p.record.subtype = 2; p.record.z_pos = 1;
 	openttd_rust_aircraft_position(&leaves, p.vehicle, 1, 0, 1);
 	CHECK(p.moves == 2 && p.record.z_pos == 25);
-	openttd_rust_occupancy_update(&v, p.vehicle.handle, true);
-	openttd_rust_occupancy_update(&v, &aircraft_probe.shadow, true);
+	openttd_rust_occupancy_update(&v, nullptr, p.vehicle.handle, true);
+	openttd_rust_occupancy_update(&v, nullptr, &aircraft_probe.shadow, true);
 	std::printf("aircraft rotor/order/loading phases and post-dirty motion mutation passed\n");
 }
 

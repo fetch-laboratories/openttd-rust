@@ -26,7 +26,6 @@ struct OpenTTDAircraftState;
 OpenTTDAircraftState *RustVehicleAircraftOwner(const Vehicle *v) noexcept;
 OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept;
 
-OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
 Train *RustTrainGetIfValid(uint32_t id) noexcept;
 /** Strict Ship::Get lookup, preserving source pool assertions. */
@@ -122,7 +121,6 @@ inline int64_t RustVehicleDisplayProfitLastYear(const Vehicle *v) noexcept { ret
 inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
 template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
 inline int32_t RustVehicleDisplaySpeed(OpenTTDVehicle *v) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(v)); }
-inline uint8_t RustVehicleOrderNonStop(const Vehicle *v) noexcept { return v->current_order.GetNonStopType().base(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
@@ -230,17 +228,10 @@ inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return Ve
 inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; }
 
 
-template <class T>
-inline bool OPENTTD_RUST_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcept
-{
-	return RustGroundHasArticulated(T::From(VehicleOf(v)));
-}
-
 /** One immutable process-wide GroundVehicle table per vehicle type. */
 template <class T>
 inline const OpenTTDGroundServices _rust_ground_services{
 	.physics = &GetRustGroundPhysicsServices(),
-	.has_articulated = GroundSvcHasArticulated<T>,
 };
 
 template <class T>

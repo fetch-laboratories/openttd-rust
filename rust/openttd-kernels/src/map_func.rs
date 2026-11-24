@@ -1040,3 +1040,30 @@ mod assertion_tests {
         }
     }
 }
+
+/// The offset tables and coordinate splits on a 256-wide map, against literal tile indices.
+#[cfg(test)]
+mod offset_tests {
+    use super::{Map, native_check};
+    use crate::direction_type::{DiagDirection, Direction};
+    use crate::tile_type::TileIndex;
+
+    #[test]
+    fn map_offsets_follow_the_original_tables() {
+        let map = Map::from_log_x(8);
+        let diag = |dir| {
+            map.tile_add_by_diag_dir(TileIndex(0x1010), dir, native_check)
+                .0
+        };
+        assert_eq!(diag(DiagDirection::DIAGDIR_NE), 0x100f);
+        assert_eq!(diag(DiagDirection::DIAGDIR_SE), 0x1110);
+        let dir = |tile, dir| map.tile_add_by_dir(TileIndex(tile), dir, native_check).0;
+        assert_eq!(dir(0x1010, Direction::DIR_N), 0x0f0f);
+        assert_eq!(dir(0x1010, Direction::DIR_SW), 0x1011);
+        assert_eq!(dir(0, Direction::DIR_N), 0_u32.wrapping_sub(257));
+        assert_eq!(
+            (map.tile_x(TileIndex(0x1234)), map.tile_y(TileIndex(0x1234))),
+            (0x34, 0x12)
+        );
+    }
+}

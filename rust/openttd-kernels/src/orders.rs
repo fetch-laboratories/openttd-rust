@@ -312,11 +312,19 @@ pub unsafe extern "C" fn openttd_rust_consist_delete(p: *mut Consist) {
         drop(Box::from_raw(p));
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_consist_reset(p: *mut Consist) {
+/// `BaseConsist::ResetDepotUnbunching`: reset all depot unbunching times.
+///
+/// # Safety
+/// `p` is a live consist owner of the serialized game state.
+unsafe fn reset_depot_unbunching(p: *mut Consist) {
     write_field!(p, last_departure, 0);
     write_field!(p, next_departure, 0);
     write_field!(p, round_trip, 0);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_consist_reset(p: *mut Consist) {
+    // SAFETY: As `reset_depot_unbunching`.
+    unsafe { reset_depot_unbunching(p) };
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_consist_copy(p: *mut Consist, src: *const Consist) {
@@ -1982,18 +1990,18 @@ impl Game {
             && (0..self.stored_count(list)).any(|i| predicate(self.stored_order(list, i)))
     }
     fn previous_unbunching(self, v: *mut c_void) -> bool {
-        let list = self.orders(v);
-        if list.is_null() {
-            return false;
-        }
-        let implicit = read_field!(self.consist(v), implicit);
-        let index = if (implicit >= self.count(v) && self.count(v) == 0) || implicit == 0 {
-            self.count(v).wrapping_sub(1)
-        } else {
-            implicit.wrapping_sub(1)
-        };
-        self.vehicle_order(v, index)
-            .is_some_and(|o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0)
+        self.previous_unbunching_of(self.orders(v), self.consist(v))
+    }
+    /// `PreviousOrderIsUnbunching` over a vehicle's order list shell (or null) and consist.
+    fn previous_unbunching_of(self, list: *mut c_void, consist: *mut Consist) -> bool {
+        !list.is_null()
+            && previous_order_is_unbunching(
+                &OrderAccess {
+                    list: self.list(list),
+                    vector: self.vector(list),
+                },
+                consist,
+            )
     }
     fn leave_unbunching(self, v: *mut c_void) {
         if !self.previous_unbunching(v) {
@@ -2111,16 +2119,7 @@ pub unsafe extern "C" fn openttd_rust_wait_unbunching(
     v: *mut c_void,
     leaves: &'static Leaves,
 ) -> u32 {
-    let g = Game(leaves);
-    {
-        u32::from(
-            !g.orders(v).is_null()
-                && read_field!(g.list(g.orders(v)), vehicles) > 1
-                && g.count(v) > 1
-                && g.previous_unbunching(v)
-                && read_field!(g.consist(v), next_departure) > (g.0.tick_counter)(),
-        )
-    }
+    u32::from(VisitOrders::new(leaves).is_waiting_for_unbunching(native_vehicle(v, leaves.base)))
 }
 
 /// `Order::Free`: 'Free' the order.
@@ -4800,6 +4799,37 @@ impl Control {
     }
 }
 
+/// `PreviousOrderIsUnbunching`: check if the previous order is a depot unbunching order, over
+/// the vehicle's resolved order list and its consist.
+fn previous_order_is_unbunching(orders: &OrderAccess, consist: *mut Consist) -> bool {
+    let count = orders.count();
+    let implicit = read_field!(consist, implicit);
+    /* If we are headed for the first order, we must wrap around back to the last order. */
+    let index = if (implicit >= count && count == 0) || implicit == 0 {
+        count.wrapping_sub(1)
+    } else {
+        implicit.wrapping_sub(1)
+    };
+    let Some(previous_order) = orders.order_ptr(index) else {
+        return false;
+    };
+    // SAFETY: `order_ptr` names one of the list's live, initialised orders.
+    let previous_order = unsafe { OrderView::of(previous_order) };
+    if !previous_order.is_type(crate::order_type::OrderType::OT_GOTO_DEPOT) {
+        return false;
+    }
+    previous_order
+        .depot_action_flags()
+        .test(crate::order_type::OrderDepotActionFlag::Unbunch)
+}
+
+/// `BaseConsist::ResetDepotUnbunching` on the consist owner of a live vehicle record.
+pub(crate) fn reset_unbunching(v: VehicleRef) {
+    let consist = read_field!(v.0.as_ptr(), consist);
+    // SAFETY: The consist owner the live record stores.
+    unsafe { reset_depot_unbunching(consist) };
+}
+
 /// Direct access to the canonical orders owner for route prediction.
 /// Handles are live for the synchronous entry; no owner borrow crosses a leaf.
 #[derive(Clone, Copy)]
@@ -4895,19 +4925,44 @@ impl VisitOrders {
     pub(crate) fn measure_unbunching(self, v: VehicleRef) {
         self.0.measure_unbunching(Self::shell(v));
     }
-    /// `BaseConsist::ResetDepotUnbunching`.
-    pub(crate) fn reset_unbunching(self, v: VehicleRef) {
-        reenter!(openttd_rust_consist_reset(self.0.consist(Self::shell(v))));
+    /// `Vehicle::LeaveUnbunchingDepot`.
+    pub(crate) fn leave_unbunching_depot(self, v: VehicleRef) {
+        self.0.leave_unbunching(Self::shell(v));
+    }
+    /// `Vehicle::IsWaitingForUnbunching` after its `assert(this->IsInDepot())`, which
+    /// `vehicle::is_waiting_for_unbunching` makes.
+    pub(crate) fn is_waiting_for_unbunching(self, v: VehicleRef) -> bool {
+        // `v->orders` and the consist owner, read in place from the live record.
+        let list = crate::vehicle_base::order_list(v.0.as_ptr());
+        let consist = read_field!(v.0.as_ptr(), consist);
+        /* Don't bother if there are no vehicles sharing orders. */
+        if list.is_null() {
+            return false;
+        }
+        let state = self.0.list(list);
+        if read_field!(state, vehicles) <= 1 {
+            return false;
+        }
+        let orders = OrderAccess {
+            list: state,
+            vector: self.0.vector(list),
+        };
+
+        /* Don't do anything if there aren't enough orders. */
+        if orders.count() <= 1 {
+            return false;
+        }
+
+        /* Don't do anything if this is not our unbunching order. */
+        if !previous_order_is_unbunching(&orders, consist) {
+            return false;
+        }
+
+        read_field!(consist, next_departure) > (self.0.0.tick_counter)()
     }
     /// `v->current_order.MakeLeaveStation()`.
     pub(crate) fn make_leave_station(self, v: VehicleRef) {
         reenter!(openttd_rust_order_leave(current_order(
-            self.0.vehicle(Self::shell(v))
-        )));
-    }
-    /// `v->current_order.MakeDummy()`.
-    pub(crate) fn make_dummy(self, v: VehicleRef) {
-        reenter!(openttd_rust_order_dummy(current_order(
             self.0.vehicle(Self::shell(v))
         )));
     }
@@ -5062,6 +5117,183 @@ fn order_can_use_station(vehicle: *mut std::ffi::c_void, destination: u16) -> u6
             crate::newgrf_airport::runtime(),
         )
     })
+}
+
+/// `Vehicle::IsWaitingForUnbunching` over a live record: a vehicle sharing a two-order list
+/// whose previous order is its unbunching depot order waits while its next departure is still
+/// ahead, and does not wait once that tick comes or without a shared list. A
+/// vehicle outside a depot fails the native depot assertion first.
+#[cfg(test)]
+mod unbunching_tests {
+    use super::{
+        Consist, List, Order, Vector, openttd_rust_consist_new, openttd_rust_order_vector_insert,
+        openttd_rust_order_vector_new, openttd_rust_orderlist_new, openttd_rust_vehicle_orders_new,
+    };
+    use crate::order_type::OT_GOTO_DEPOT;
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
+    use std::ffi::c_void;
+    use std::sync::atomic::{AtomicPtr, AtomicU32, Ordering};
+
+    static LIST: AtomicPtr<List> = AtomicPtr::new(std::ptr::null_mut());
+    static VECTOR: AtomicPtr<Vector> = AtomicPtr::new(std::ptr::null_mut());
+    static FAILED: AtomicU32 = AtomicU32::new(0);
+    unsafe extern "C" fn list(_: *mut c_void) -> *mut List {
+        LIST.load(Ordering::Relaxed)
+    }
+    unsafe extern "C" fn vector(_: *mut c_void) -> *mut Vector {
+        VECTOR.load(Ordering::Relaxed)
+    }
+    extern "C" fn tick_counter() -> u64 {
+        100
+    }
+    unsafe extern "C" fn construct(data: *mut c_void, count: usize) {
+        for i in 0..count {
+            // SAFETY: The vector's storage for `count` orders.
+            unsafe { data.cast::<Order>().add(i).write(order(0, 0)) };
+        }
+    }
+    unsafe extern "C" fn destroy(_: *mut c_void, _: usize) {}
+    extern "C" fn record_failure(condition: bool) {
+        if !condition {
+            FAILED.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    fn order(kind: u8, flags: u8) -> Order {
+        Order {
+            kind,
+            flags,
+            destination: 0,
+            refit: 0,
+            wait: 0,
+            travel: 0,
+            speed: 0,
+        }
+    }
+
+    #[test]
+    fn is_waiting_for_unbunching_follows_the_shared_list_and_departure_time() {
+        if crate::services_assert::isolate_test_check(
+            "orders::unbunching_tests::is_waiting_for_unbunching_follows_the_shared_list_and_departure_time",
+            record_failure,
+        ) {
+            return;
+        }
+        let shared = openttd_rust_orderlist_new();
+        let orders = openttd_rust_order_vector_new(construct, destroy);
+        LIST.store(shared, Ordering::Relaxed);
+        VECTOR.store(orders, Ordering::Relaxed);
+        let leaves: &'static super::Leaves = Box::leak(Box::new(super::Leaves {
+            list,
+            vector,
+            tick_counter,
+            ..crate::test_tables::ORDERS
+        }));
+        let consist: *mut Consist = openttd_rust_consist_new();
+        let owner = openttd_rust_vehicle_orders_new();
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            VehicleType::VEH_ROAD,
+        );
+        // SAFETY: The test's fresh owners, which it leaks; any non-null shell names the list.
+        unsafe {
+            (*owner).orders = shared.cast();
+            (*record).orders = owner;
+            (*record).consist = consist;
+            (*shared).vehicles = 2;
+            // The second order is current, so the previous one is the unbunching depot order.
+            // The depot action type is bits 3-6 of `flags`.
+            let unbunch = crate::order_type::OrderDepotActionFlags::from_element(
+                crate::order_type::OrderDepotActionFlag::Unbunch,
+            );
+            openttd_rust_order_vector_insert(orders, 0, &order(OT_GOTO_DEPOT, unbunch.0 << 3));
+            openttd_rust_order_vector_insert(orders, 1, &order(1, 0));
+            (*consist).implicit = 1;
+            (*consist).next_departure = 101;
+        }
+        let v = VehicleRef::of(record);
+        let waiting = || crate::vehicle::is_waiting_for_unbunching(v, leaves, || true);
+        assert!(waiting());
+        // SAFETY: Each write below is to the test's leaked owners, with no other access live.
+        unsafe { (*consist).next_departure = 100 };
+        assert!(!waiting());
+        // SAFETY: As above.
+        unsafe {
+            (*consist).next_departure = 101;
+            (*shared).vehicles = 1;
+        };
+        assert!(!waiting());
+        // SAFETY: As above.
+        unsafe { (*shared).vehicles = 2 };
+        assert!(waiting());
+        assert_eq!(FAILED.load(Ordering::Relaxed), 0);
+        // Outside a depot the assertion fails before the same tests run.
+        assert!(crate::vehicle::is_waiting_for_unbunching(v, leaves, || {
+            false
+        }));
+        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
+    }
+}
+
+/// `Order::Free` and `Order::MakeDummy` on a vehicle's current order write only the fields
+/// `order_cmd.cpp` names: `Free` the type, flags and destination; `MakeDummy` the type and
+/// flags. Every field starts with a distinct value, so a whole-order store fails.
+#[cfg(test)]
+mod current_order_write_tests {
+    use super::{Order, VehicleOrders, free, make_dummy, openttd_rust_vehicle_orders_new};
+    use crate::order_type::{OT_DUMMY, OT_NOTHING};
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
+
+    fn fields(o: Order) -> [u32; 7] {
+        [
+            o.kind.into(),
+            o.flags.into(),
+            o.destination.into(),
+            o.refit.into(),
+            o.wait.into(),
+            o.travel.into(),
+            o.speed.into(),
+        ]
+    }
+
+    #[test]
+    fn free_and_make_dummy_write_only_the_original_fields() {
+        let owner: *mut VehicleOrders = openttd_rust_vehicle_orders_new();
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            VehicleType::VEH_TRAIN,
+        );
+        // SAFETY: The test's fresh record and orders owner.
+        unsafe { (*record).orders = owner };
+        let v = VehicleRef::of(record);
+        let full = Order {
+            kind: 0x12,
+            flags: 0x34,
+            destination: 0x5678,
+            refit: 0x9a,
+            wait: 0xbcde,
+            travel: 0xf012,
+            speed: 0x3456,
+        };
+        // SAFETY: The record's current order, written and read with no other access.
+        unsafe {
+            v.current_order_pointer().write(full);
+            free(v);
+            assert_eq!(
+                fields(v.current_order_pointer().read()),
+                [OT_NOTHING.into(), 0, 0, 0x9a, 0xbcde, 0xf012, 0x3456]
+            );
+            v.current_order_pointer().write(full);
+            make_dummy(v.current_order_pointer());
+            assert_eq!(
+                fields(v.current_order_pointer().read()),
+                [OT_DUMMY.into(), 0, 0x5678, 0x9a, 0xbcde, 0xf012, 0x3456]
+            );
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+            crate::orders::openttd_rust_vehicle_orders_delete(owner);
+        }
+    }
 }
 
 #[cfg(test)]

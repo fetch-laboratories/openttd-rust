@@ -7,14 +7,17 @@ use crate::cargo_type::CargoType;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::economy_func::get_price;
 use crate::engine_type::EngineID;
+use crate::engine_type::OpenTTDEngine;
+use crate::engine_type::RailVehicleTypes;
 use crate::game_state::GameState;
 use crate::services::{CommandCost, ExpenseType};
 use crate::table::strings::{
     STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT, STR_ERROR_VEHICLE_IS_DESTROYED,
 };
-use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
 use crate::vehicle_gui::get_window_class_for_vehicle_type;
+use crate::vehicle_type::OpenTTDVehicle;
 use crate::vehicle_type::VehicleID;
+use crate::vehicle_type::VehicleType;
 use crate::window_func::{invalidate_window_classes_data, invalidate_window_data};
 use crate::window_type::{WindowClass, WindowNumber};
 use std::ptr;
@@ -88,10 +91,6 @@ impl Services {
             .as_ptr()
             .cast_const()
     }
-    /// `Train::From(v)` as its typed handle.
-    pub(crate) fn train_handle(&self, v: *mut OpenTTDVehicle) -> crate::train::Handle {
-        (self.common.vehicles.train_handle)(v)
-    }
 }
 #[derive(Clone, Copy)]
 /// `RefitResult`: helper structure for `RefitVehicle()`.
@@ -162,7 +161,7 @@ unsafe fn get_refit_cost_factor(
                 0,
             )
         };
-        if result != crate::vehicle::CALLBACK_FAILED {
+        if result != crate::newgrf_callbacks::CALLBACK_FAILED {
             let mut factor = i32::from(result & 0x3fff);
             if factor >= 0x2000 {
                 factor -= 0x4000; // Treat as signed integer.
@@ -695,7 +694,10 @@ pub(crate) unsafe fn cmd_refit_vehicle(
         match crate::fleet::record(b.groups, v).vehicle_type() {
             VehicleType::TRAIN => unsafe {
                 crate::train::openttd_rust_train_consist_changed(
-                    s.train_handle(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
+                    crate::train::Handle::from_vehicle(super::vehicle_ref(
+                        front,
+                        s.common.vehicles,
+                    )),
                     if auto_refit {
                         s.prices.auto_refit
                     } else {

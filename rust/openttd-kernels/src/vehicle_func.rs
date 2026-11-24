@@ -1,10 +1,17 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `vehicle_func.h`: the custom sprite numbers, `IsCompanyBuildableVehicleType`,
-//! and both `CanVehicleUseStation` overloads (`vehicle.cpp`).
+//! both `CanVehicleUseStation` overloads (`vehicle.cpp`), `GetNewVehiclePosResult` and
+//! the loops over `VehiclesOnTile` and `VehiclesNearTileXY`.
+//!
+//! The loops keep the native iterators' lifetime contract: a visitor may reenter owners but
+//! cannot delete the current shell, and no owner reference spans a visitor.
 use crate::airport::{AirportFTAClassFlag, AirportFTAClassFlags};
 use crate::engine_type::{AIR_CTOL, EngineID};
+use crate::map_func::Map;
 use crate::station_type::{StationFacilities, StationFacility};
-use crate::vehicle::{EngineRef, VehicleRef};
+use crate::tile_type::TileIndex;
+use crate::vehicle::occupancy::{Near, OnTile};
+use crate::vehicle::{EngineRef, VehicleRef, VehicleServices};
 use crate::vehicle_type::VehicleType;
 
 /// Special values for `Vehicle::spritenum` and `(Aircraft|Rail|Road|Ship)VehicleInfo::image_index`.
@@ -93,4 +100,121 @@ pub(crate) fn can_vehicle_use_station(
 #[must_use]
 pub fn is_company_buildable_vehicle_type(kind: VehicleType) -> bool {
     kind < VehicleType::VEH_COMPANY_END
+}
+
+/// Position information of a vehicle after it moved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct GetNewVehiclePosResult {
+    /// x position of the vehicle after moving.
+    pub x: i32,
+    /// y position of the vehicle after moving.
+    pub y: i32,
+    /// Current tile of the vehicle.
+    pub old_tile: TileIndex,
+    /// Tile of the vehicle after moving.
+    pub new_tile: TileIndex,
+}
+
+/// `for (Vehicle *v : VehiclesOnTile(tile))`: iterate over all vehicles on a tile.
+/// The order is non-deterministic. You have to make sure, that your processing is not order
+/// dependant.
+#[inline]
+pub(crate) fn vehicles_on_tile(
+    vs: &VehicleServices,
+    map: Map,
+    tile: TileIndex,
+    mut visit: impl FnMut(VehicleRef),
+) {
+    has_vehicle_on_tile(vs, map, tile, |v| {
+        visit(v);
+        false
+    });
+}
+/// [`vehicles_on_tile`] for callers in files no pass has finished.
+#[inline]
+pub(crate) fn vehicles_on_tile_raw(
+    vs: &VehicleServices,
+    map: Map,
+    tile: u32,
+    visit: impl FnMut(VehicleRef),
+) {
+    vehicles_on_tile(vs, map, TileIndex(tile), visit);
+}
+
+/// `HasVehicleOnTile`: loop over vehicles on a tile, and check whether a predicate is true
+/// for any of them.
+#[allow(unsafe_code)]
+#[inline]
+pub(crate) fn has_vehicle_on_tile(
+    vs: &VehicleServices,
+    map: Map,
+    tile: TileIndex,
+    mut predicate: impl FnMut(VehicleRef) -> bool,
+) -> bool {
+    // SAFETY: The module's iterator contract; no index borrow spans `predicate`.
+    unsafe {
+        let mut it = OnTile::new(vs, map, tile.0);
+        while let Some(v) = it.get() {
+            if predicate(v) {
+                return true;
+            }
+            it.advance(vs);
+        }
+    }
+    false
+}
+/// [`has_vehicle_on_tile`] for callers in files no pass has finished.
+#[inline]
+pub(crate) fn has_vehicle_on_tile_raw(
+    vs: &VehicleServices,
+    map: Map,
+    tile: u32,
+    predicate: impl FnMut(VehicleRef) -> bool,
+) -> bool {
+    has_vehicle_on_tile(vs, map, TileIndex(tile), predicate)
+}
+
+/// `for (Vehicle *v : VehiclesNearTileXY(x, y, max_dist))`: iterate over all vehicles near a
+/// given world coordinate.
+/// This only works for vehicles with proper `Vehicle::Tile`, so only ground vehicles outside
+/// wormholes. The order is non-deterministic. You have to make sure, that your processing is
+/// not order dependant.
+#[inline]
+pub(crate) fn vehicles_near_tile_xy(
+    vs: &VehicleServices,
+    x: i32,
+    y: i32,
+    max_dist: u32,
+    mut visit: impl FnMut(VehicleRef),
+) {
+    has_vehicle_near_tile_xy(vs, x, y, max_dist, |v| {
+        visit(v);
+        false
+    });
+}
+
+/// `HasVehicleNearTileXY`: loop over vehicles near a given world coordinate, and check
+/// whether a predicate is true for any of them.
+/// This only works for vehicles with proper `Vehicle::Tile`, so only ground vehicles outside
+/// wormholes.
+#[allow(unsafe_code)]
+#[inline]
+pub(crate) fn has_vehicle_near_tile_xy(
+    vs: &VehicleServices,
+    x: i32,
+    y: i32,
+    max_dist: u32,
+    mut predicate: impl FnMut(VehicleRef) -> bool,
+) -> bool {
+    // SAFETY: The module's iterator contract; no index borrow spans `predicate`.
+    unsafe {
+        let mut it = Near::new(vs, x, y, max_dist);
+        while let Some(v) = it.get() {
+            if predicate(v) {
+                return true;
+            }
+            it.advance(vs);
+        }
+    }
+    false
 }

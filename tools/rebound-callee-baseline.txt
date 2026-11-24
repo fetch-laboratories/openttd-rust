@@ -25,8 +25,6 @@ rebound | OpenTTDIsTileFlat | src/rust/station_command_services.hpp | tile_flat
 rebound | OpenTTDIsTileFlat | src/town_cmd.cpp | flat
 rebound | OpenTTDLargerTowns | src/newgrf_house.cpp | larger_towns
 rebound | OpenTTDLargerTowns | src/town_cmd.cpp | larger_towns
-rebound | OpenTTDMapLogX | src/rust/vehicle_services.cpp | map_log_x
-rebound | OpenTTDMapLogX | src/town_cmd.cpp | map_log_x
 rebound | OpenTTDMapScaleLandProportion | src/industry_cmd.cpp | scale_by_land_proportion
 rebound | OpenTTDMapScaleLandProportion | src/town_cmd.cpp | scale_land
 rebound | OpenTTDScaleTownCargo | src/object_cmd.cpp | scale_cargo

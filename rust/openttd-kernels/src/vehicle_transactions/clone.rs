@@ -9,8 +9,8 @@ use crate::order_type::CloneOptions;
 use crate::services::{ByteSpan, CommandCost, Cost};
 use crate::table::strings::{STR_ERROR_TOO_MANY_VEHICLES_IN_GAME, STR_ERROR_VEHICLE_IS_DESTROYED};
 use crate::tile_type::TileIndex;
-use crate::vehicle::VehicleType;
 use crate::vehicle_type::VehicleID;
+use crate::vehicle_type::VehicleType;
 use std::ffi::c_long;
 use std::ptr;
 #[repr(C)]
@@ -186,7 +186,7 @@ unsafe fn cmd_clone_vehicle(
     /* Crashed trains can only be cloned before cleanup begins. */
     if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN
         && (!crate::fleet::record(b.groups, v).is_front_engine()
-            || r.train_handle(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr())
+            || crate::train::Handle::from_vehicle(unsafe { super::vehicle_ref(v, c.vehicles) })
                 .get_crash_anim_pos()
                 >= 4400)
     {
@@ -273,8 +273,9 @@ unsafe fn cmd_clone_vehicle(
                 w = unsafe { (b.groups.vehicle)(new_id) };
                 if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN {
                     /* Only copy the reverse state if neither old or new vehicle implements reverse-on-build probability callback. */
-                    let old_train =
-                        r.train_handle(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
+                    let old_train = crate::train::Handle::from_vehicle(unsafe {
+                        super::vehicle_ref(v, c.vehicles)
+                    });
                     if old_train.get_flags() & (1 << crate::train::FLIPPED) != 0
                         && !unsafe {
                             crate::newgrf_vehicle::reverse_probability(
@@ -289,8 +290,10 @@ unsafe fn cmd_clone_vehicle(
                             )
                         }
                     {
-                        r.train_handle(unsafe { super::vehicle_ref(w, c.vehicles) }.0.as_ptr())
-                            .set_flag(crate::train::FLIPPED, true);
+                        crate::train::Handle::from_vehicle(unsafe {
+                            super::vehicle_ref(w, c.vehicles)
+                        })
+                        .set_flag(crate::train::FLIPPED, true);
                     }
                 }
                 if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN

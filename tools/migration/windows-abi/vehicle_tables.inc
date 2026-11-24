@@ -21,43 +21,27 @@ struct RoadTestTables {
 	OpenTTDRoadLeaves leaves;
 	explicit RoadTestTables(const OpenTTDSharedServices *world) : shared(*world)
 	{
-		VEHICLE_UNUSED(vehicle, record_from_shell);
+		VEHICLE_UNUSED(vehicle, base_viewport);
+		VEHICLE_UNUSED(vehicle, destroy);
+		VEHICLE_UNUSED(vehicle, engine);
 		VEHICLE_UNUSED(vehicle, first_sprite);
+		VEHICLE_UNUSED(vehicle, length_changed);
+		VEHICLE_UNUSED(vehicle, pathfinding_result);
+		VEHICLE_UNUSED(vehicle, play_sound);
+		VEHICLE_UNUSED(vehicle, play_vehicle_sound);
+		VEHICLE_UNUSED(vehicle, profit);
+		VEHICLE_UNUSED(vehicle, record_from_shell);
+		VEHICLE_UNUSED(vehicle, set_max_age);
+		VEHICLE_UNUSED(vehicle, start_stop_dirty);
+		VEHICLE_UNUSED(vehicle, visits);
+		VEHICLE_UNUSED(vehicle, write_breakdowns);
+		VEHICLE_UNUSED(vehicle, write_calendar_service);
+		VEHICLE_UNUSED(vehicle, write_economy_service);
+		VEHICLE_UNUSED(vehicle, write_profit);
+		VEHICLE_UNUSED(vehicle, write_reliability);
 		vehicle.maintenance = &_vehicle_maintenance_probe;
 		ground.physics = &physics;
 		physics.vehicle = &physics_vehicle;
-
-
-		VEHICLE_UNUSED(vehicle, check_orders_only);
-		VEHICLE_UNUSED(vehicle, write_profit);
-		VEHICLE_UNUSED(vehicle, write_economy_service);
-		VEHICLE_UNUSED(vehicle, write_calendar_service);
-		VEHICLE_UNUSED(vehicle, write_breakdowns);
-		VEHICLE_UNUSED(vehicle, write_reliability);
-		VEHICLE_UNUSED(vehicle, profit);
-		VEHICLE_UNUSED(vehicle, make_dummy);
-		VEHICLE_UNUSED(vehicle, order_type);
-		VEHICLE_UNUSED(vehicle, order_destination);
-		VEHICLE_UNUSED(vehicle, order_nonstop);
-		VEHICLE_UNUSED(ground, has_articulated);
-		VEHICLE_UNUSED(vehicle, visits);
-		VEHICLE_UNUSED(vehicle, waiting_for_unbunching);
-		VEHICLE_UNUSED(vehicle, leave_unbunching_depot);
-		VEHICLE_UNUSED(vehicle, reset_depot_unbunching);
-		VEHICLE_UNUSED(vehicle, enter_depot);
-		VEHICLE_UNUSED(vehicle, pathfinding_result);
-		VEHICLE_UNUSED(vehicle, new_position);
-		VEHICLE_UNUSED(vehicle, base_viewport);
-		VEHICLE_UNUSED(vehicle, property);
-		VEHICLE_UNUSED(vehicle, callback);
-		VEHICLE_UNUSED(vehicle, set_max_age);
-		VEHICLE_UNUSED(vehicle, length_changed);
-		VEHICLE_UNUSED(vehicle, play_vehicle_sound);
-		VEHICLE_UNUSED(vehicle, play_sound);
-		VEHICLE_UNUSED(vehicle, order_free);
-		VEHICLE_UNUSED(vehicle, order_dummy);
-		VEHICLE_UNUSED(vehicle, start_stop_dirty);
-		VEHICLE_UNUSED(vehicle, destroy);
 		VEHICLE_UNUSED(shared, tile_type);
 		VEHICLE_UNUSED(shared, tile_owner);
 		VEHICLE_UNUSED(shared, station_index);
@@ -65,7 +49,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(shared, tunnel_bridge_direction);
 		VEHICLE_UNUSED(shared, bridge_speed);
 		VEHICLE_UNUSED(leaves, build_road_context);
-		VEHICLE_UNUSED(vehicle, engine);
 		leaves.ground = &ground;
 		leaves.shared = &shared;
 		leaves.vehicle = &vehicle;

@@ -175,7 +175,7 @@ pub struct MovementVehicle {
     pub train: crate::train::Handle,
     pub road: *mut crate::road::State,
     pub ship: *mut crate::ship_control::State,
-    pub kind: crate::vehicle::VehicleType,
+    pub kind: crate::vehicle_type::VehicleType,
 }
 #[repr(C)]
 pub struct MovementServices {

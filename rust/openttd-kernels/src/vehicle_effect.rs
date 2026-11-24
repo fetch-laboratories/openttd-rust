@@ -101,8 +101,14 @@ pub(crate) fn update_visual_effect(v: VehicleRef, allow_power_change: bool) {
     let powered_before = has_bit(unsafe { *cache }, VE_DISABLE_WAGON_POWER);
     let mut visual = u32::from(engine.visual_effect());
     if engine.callbacks() & crate::newgrf_callbacks::VEHICLE_VISUAL_EFFECT != 0 {
-        let mut callback =
-            (s.vehicle.callback)((s.vehicle.newgrf)(), v, CBID_VEHICLE_VISUAL_EFFECT);
+        let mut callback = crate::newgrf_vehicle::get_vehicle_callback(
+            s.vehicle.newgrf(),
+            CBID_VEHICLE_VISUAL_EFFECT,
+            0,
+            0,
+            v.engine_type(),
+            Some(v),
+        );
         if callback != CALLBACK_FAILED {
             if callback >= 0x100 && engine.grf_version(s.shared) >= 8 {
                 s.vehicle
@@ -168,10 +174,10 @@ pub extern "C" fn openttd_rust_visual_eligible_abi(v: VehicleRef) -> u8 {
 /// smoke may be shown.
 pub(crate) fn show_visual_effect_allowed(v: VehicleRef) -> bool {
     let s = services();
-    if s.vehicle.assertions {
-        // SAFETY: The shared orders table and live shell obey the vehicle entry contract.
-        assert!(unsafe { (s.vehicle.orders().primary_vehicle)(v.shell()) } != 0);
-    }
+    // SAFETY: The shared orders table and live shell obey the vehicle entry contract.
+    crate::services_assert::assert_with(|| unsafe {
+        (s.vehicle.orders().primary_vehicle)(v.shell()) != 0
+    });
     /* Do not show any smoke when:
      * - vehicle smoke is disabled by the player
      * - the vehicle is slowing down or stopped (by the player)
@@ -219,18 +225,14 @@ fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate:
     } as i8;
     let dir = if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
         reverse_dir_raw(direction, |ok| {
-            if s.vehicle.assertions {
-                assert!(ok);
-            }
+            crate::services_assert::assert_with(|| ok);
         })
     } else {
         direction
     };
     let a = SMOKE_POS[usize::from(dir)];
     let b = SMOKE_POS[usize::from(change_dir_raw(dir, DIRDIFF_90RIGHT, |ok| {
-        if s.vehicle.assertions {
-            assert!(ok);
-        }
+        crate::services_assert::assert_with(|| ok);
     }))];
     let x_center = a.wrapping_mul(l_center);
     let y_center = b.wrapping_mul(l_center);
@@ -386,9 +388,7 @@ pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
             if m >= VESM_END { VESM_NONE } else { m }
         } else {
             let m = gb(u32::from(cache), VE_TYPE_START, VE_TYPE_COUNT) as u8;
-            if s.vehicle.assertions {
-                assert_ne!(m, VE_TYPE_DEFAULT);
-            }
+            crate::services_assert::assert_with(|| m != VE_TYPE_DEFAULT);
             m
         };
         // Show no smoke when:

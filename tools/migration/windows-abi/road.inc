@@ -52,7 +52,6 @@ static int road_abi_stop; ///< Its address is the opaque road stop shell.
  * shell services resolve the probe's single stop at tile 100. */
 static const OpenTTDRoadStopServices road_abi_stops{
 	.vehicle = nullptr,
-	.ground = nullptr,
 	.primary = [](uint32_t tile, RoadStopType) noexcept { CHECK(tile == 100); return reinterpret_cast<RoadStop *>(&road_abi_stop); },
 	.tile = [](const RoadStop *) noexcept -> uint32_t { return 100; },
 	.state = [](const RoadStop *) noexcept { return road_abi_probe->stop.get(); },
@@ -145,9 +144,16 @@ static void RoadBoundary()
 	capabilities.loading = []() noexcept -> const OpenTTDEngineLoadingServices * { return &loading; };
 	loading.unknown_refit = [](uint32_t grfid, uint16_t callback, uint16_t result) noexcept { CHECK(grfid == 0 && callback == 0x11 && result == 9); };
 	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
-	t.vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *u, uint8_t property, int32_t fallback) noexcept -> int32_t {
+	/* GetVehicleProperty runs the production resolver, which reads the parts' engines and
+	 * cargo before its callback service. A failed callback takes the property's fallback. */
+	resolver.shared = &t.shared;
+	resolver.engine_by_id = [](uint16_t id) noexcept -> const OpenTTDEngine * { return id == 9 ? road_abi_new_engine : road_abi_engine; };
+	resolver.cargo_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *state, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
+		CHECK(callback == CBID_VEHICLE_MODIFY_PROPERTY);
+		auto *u = const_cast<OpenTTDVehicle *>(state->self_.v);
 		auto &p = *road_abi_probe;
-		if (property == 0x22) { CHECK(fallback == 0); ++p.cargo_ages; return fallback; }
+		if (property == 0x22) { ++p.cargo_ages; return CALLBACK_FAILED; }
 		if (property == 0x23) CHECK(p.cache_properties == p.cargo_ages);
 		++p.cache_properties;
 		if (p.fallback_cache) {
@@ -156,7 +162,7 @@ static void RoadBoundary()
 			if (property == 0x15) { CHECK(p.cache_properties == 3); road_abi_new_engine->vehicle_info.road.max_speed = 99; }
 			p.engine_replaced = true;
 			RoadAbiHandle()->engine_type = 9;
-			return property == 0x23 ? (u == RoadAbiHandle() ? 0xFFFF : 9) : 0;
+			return property == 0x23 ? (u == RoadAbiHandle() ? CALLBACK_FAILED : 9) : 0;
 		}
 		CHECK(openttd_rust_road_max_speed(u, p.state, p.leaves) == 80);
 		CHECK(openttd_rust_road_trackdir(u, p.state, p.leaves) == 0);
@@ -164,9 +170,13 @@ static void RoadBoundary()
 		openttd_rust_road_set_dest(u, p.state, 142 + p.nested);
 		CHECK(openttd_rust_road_path_size(p.state) == 0);
 		openttd_rust_road_path_push(p.state, {10, 10815});
-		return property == 0x23 ? 0 : property == 0x15 ? 20 : fallback;
+		return property == 0x23 ? 0 : property == 0x15 ? 20 : CALLBACK_FAILED;
 	};
+	/* The failed cargo-age callback stores the engine's period, its fallback. */
+	road_abi_engine->info.cargo_age_period = 29;
 	openttd_rust_road_update_cache(v, probe.state, false, &t.leaves);
+	CHECK(road_abi_vehicle.cached_cargo_age_period == 29);
+	road_abi_engine->info.cargo_age_period = 0;
 	CHECK(road_abi_vehicle.cached_max_speed == 80);
 	CHECK(probe.ground.state->cache.cached_veh_length == 8 && probe.ground.state->cache.cached_total_length == 8 && probe.ground.state->cache.first_engine == UINT16_MAX);
 	CHECK(probe.nested == 2 && probe.dest == 144 && openttd_rust_road_path_size(probe.state) != 0);
@@ -192,10 +202,12 @@ static void RoadBoundary()
 		return road_abi_engine;
 	};
 	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
-	t.vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *u, uint8_t property, int32_t value) noexcept -> int32_t {
-		CHECK(u == RoadAbiHandle() && property == 9 && value == 3);
+	static uint16_t running_answer;
+	running_answer = 4;
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *state, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
+		CHECK(callback == CBID_VEHICLE_MODIFY_PROPERTY && state->self_.v == RoadAbiHandle() && property == 9);
 		road_abi_probe->engine_replaced = true;
-		return 4;
+		return running_answer;
 	};
 	road_abi_engine->vehicle_info.road.running_cost_class = static_cast<Price>(1);
 	road_abi_engine->vehicle_info.road.running_cost = 3;
@@ -207,6 +219,16 @@ static void RoadBoundary()
 	const int64_t old_price = openttd_rust_economy_prices()[1];
 	openttd_rust_economy_prices()[1] = 123;
 	CHECK(openttd_rust_road_running_cost(v, probe.state, &t.leaves) == 123);
+	/* A failed callback takes the engine's running cost, 3, as the factor: the cost of a
+	 * callback answering 3, which a zero factor would not give. */
+	int64_t answered_three = 0;
+	for (uint16_t answer : {uint16_t{3}, uint16_t{CALLBACK_FAILED}}) {
+		running_answer = answer;
+		probe.engine_replaced = false;
+		const int64_t cost = openttd_rust_road_running_cost(v, probe.state, &t.leaves);
+		if (answer == 3) answered_three = cost;
+		else CHECK(cost == answered_three && cost != 0);
+	}
 	openttd_rust_economy_prices()[1] = old_price;
 
 	/* A non-station order must not read its destination at the bay stopping frame. */
@@ -221,7 +243,6 @@ static void RoadBoundary()
 
 	t.shared.station_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == 100); return 55; };
 	probe.stop->status = 0xFF; // Entering the bay frees its entrance, then the bay tile marks it busy again.
-	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent event) noexcept { CHECK(event == 1); return true; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	static OpenTTDFixtureMap map{6, 4096};
@@ -268,7 +289,6 @@ static void RoadBoundary()
 		auto &p = *road_abi_probe;
 		openttd_rust_road_set_dest(u, p.state, destination);
 	};
-	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept { return road_orders->vehicle->current.type; };
 	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	OpenTTDEffectLeaves emission_leaves = EffectTestLeaves();
 	auto *emission_owner = openttd_rust_effect_new();
@@ -515,7 +535,6 @@ static void RoadServiceBoundary()
 	service_capabilities.shared = &t.shared;
 	t.physics.capabilities = &service_capabilities;
 	t.shared.depot_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == road_service_probe->tile); return 55; };
-	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *v) noexcept {
 		CHECK((v->ground->flags & (1 << GVF_SUPPRESS_IMPLICIT_ORDERS)) != 0);
 		CHECK((v->orders->current.type & 15) == OT_GOTO_DEPOT && v->orders->current.destination == 55 && v->orders->current.refit_cargo == CARGO_NO_REFIT);

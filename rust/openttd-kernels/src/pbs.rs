@@ -449,14 +449,14 @@ impl<'a> Pbs<'a> {
     fn check_trains_on_track(self, info: &mut FindTrainOnTrackInfo, tile: TileIndex) {
         // SAFETY: the serialized query keeps shells and service tables live.
         let vs = unsafe { &*self.train().vehicle };
-        vs.any_on_tile(tile.0, |v| {
+        crate::vehicle_func::has_vehicle_on_tile(vs, self.map(), tile, |v| {
             if v.vehicle_type() != crate::vehicle_type::VehicleType::VEH_TRAIN
                 || v.vehstatus().test(VehState::Crashed)
             {
                 return false;
             }
 
-            let t = (vs.train_handle)(v.0.as_ptr());
+            let t = crate::train::Handle::from_vehicle(v);
             if t.track() == TrackBits::TRACK_BIT_WORMHOLE.0
                 || has_bit(t.track(), trackdir_to_track(info.res.trackdir.0))
             {

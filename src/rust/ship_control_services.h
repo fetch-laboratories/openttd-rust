@@ -75,7 +75,6 @@ static void Ship_arrival(uint32_t id, uint32_t station) noexcept
 
 static void Ship_leave_unbunch(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->LeaveUnbunchingDepot(); }
 
-static void Ship_path_result(uint32_t id, bool found) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->HandlePathfindingResult(found); }
 
 static void Ship_order_free(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->current_order.Free(); }
 
@@ -249,7 +248,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.station = Ship_station, .industry_station = Ship_industry_station,
 		.arrival = Ship_arrival,
 		.leave_unbunch = Ship_leave_unbunch,
-		.path_result = Ship_path_result, .order_free = Ship_order_free,
+		.order_free = Ship_order_free,
 		.order_dummy = Ship_order_dummy, .order_depot = Ship_order_depot,
 		.order_leave = Ship_order_leave, .order_increment = Ship_order_increment,
 		.timetable = Ship_timetable,

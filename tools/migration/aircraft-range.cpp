@@ -117,7 +117,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	static OpenTTDVehicleResolverServices resolver{};
 	resolver.id = [](OpenTTDVehicle *v) noexcept -> uint32_t { return v == &fixture->record ? 17 : 18; };
 	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
-	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if ((property != 0x0C && property != 0x1C) || fallback != 0) std::abort(); return int32_t{0}; };
 	static std::unique_ptr<OpenTTDEngine, decltype(&openttd_rust_engine_destroy)> engine{
 		[] {
 			auto *record = openttd_rust_engine_new();
@@ -128,6 +127,14 @@ static OpenTTDAircraftLeaves RangeLeaves()
 			return record;
 		}(), openttd_rust_engine_destroy};
 	vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine.get(); };
+	/* GetVehicleProperty runs the production resolver; the speed (0x0C) and cargo age (0x1C)
+	 * callbacks fail, so both properties take their fallback, which is 0 here. */
+	resolver.engine_by_id = [](uint16_t) noexcept -> const OpenTTDEngine * { return engine.get(); };
+	resolver.cargo_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
+		if (callback != 0x36 /* CBID_VEHICLE_MODIFY_PROPERTY */ || (property != 0x0C && property != 0x1C)) std::abort();
+		return 0xFFFF; // CALLBACK_FAILED
+	};
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 	shared.plane_speed = []() noexcept { return uint8_t{1}; };
 	shared.local_company = []() noexcept { return _local_company; };
@@ -139,13 +146,11 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	vehicle.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == &fixture->record ? 0 : 1]; };
-	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	leaves.station_owner = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 
 	leaves.helipads = [](const void *) noexcept { return uint8_t{0}; };
 	leaves.airport_flags = [](const void *) noexcept { return uint8_t{1}; };
-	vehicle.waiting_for_unbunching = [](OpenTTDVehicle *) noexcept { return false; };
 	return leaves;
 }
 int main()
@@ -161,14 +166,15 @@ int main()
 		fixture = &f;
 		f.record.type = 3; f.record.subtype = 2; f.record.z_pos = 1; f.record.cached_max_speed = 100; f.record.vehstatus = f.aircraft.vehstatus.value;
 		f.shadow.type = 3; f.shadow.subtype = 4; f.record.next = &f.shadow;
+		f.record.first = f.shadow.first = &f.record;
 		f.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f);
 		f.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.shadow);
 		const auto leaves = RangeLeaves();
 		f.record.orders = range_orders->vehicle.get();
 		openttd_test_aircraft_event(&leaves, {&f.record, f.state.get(), 17}, false);
 		if ((f.state->flags & 1) != (f.aircraft.flags & 1) || f.messages != expected) { std::fprintf(stderr, "range mismatch range=%u dest=%u state=%u flags=%u validity=%u\n", range, destination, state, flag, validity); return 1; }
-		openttd_rust_occupancy_update(&vehicle, &f.record, true);
-		openttd_rust_occupancy_update(&vehicle, &fixture->shadow, true);
+		openttd_rust_occupancy_update(&vehicle, nullptr, &f.record, true);
+		openttd_rust_occupancy_update(&vehicle, nullptr, &fixture->shadow, true);
 		cases++;
 	}
 	std::printf("finite range transition: %u unchanged-reference cases passed\n", cases);

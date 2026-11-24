@@ -897,7 +897,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
                 crate::station_type::SRT_VEHICLE_DEPARTS,
             );
         }
-        let train = s.refit.train_handle(v.0.as_ptr());
+        let train = crate::train::Handle::from_vehicle(v);
         train.set_flags(train.get_flags() | VRF_LEAVING_STATION);
     }
     if kind == VehicleType::ROAD && (v).vehstatus_raw() & VS_CRASHED == 0 {
@@ -978,7 +978,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     s.orders().dirty_vehicle_windows(v);
     match kind {
         VehicleType::TRAIN => {
-            let train = s.refit.train_handle(v.0.as_ptr());
+            let train = crate::train::Handle::from_vehicle(v);
             crate::train::enter_depot(train, s.refit.train, s.shared);
         }
         VehicleType::ROAD => {}
@@ -1067,7 +1067,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
         // The link across this stop can't be predicted.
         (s.set_last_loading)(v, INVALID_STATION);
 
-        o.reset_unbunching(v);
+        crate::orders::reset_unbunching(v);
 
         (s.waiting_news)(v);
     }
@@ -1075,7 +1075,8 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     // If we've entered our unbunching depot, record the round trip duration.
     o.measure_unbunching(v);
 
-    o.make_dummy(v);
+    // SAFETY: The live vehicle's current order.
+    unsafe { crate::orders::make_dummy(v.current_order_pointer()) };
 }
 
 /// The current order's depot refit, under the owner's company.

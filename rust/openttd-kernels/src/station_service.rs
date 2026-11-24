@@ -429,7 +429,7 @@ pub struct LoadingWait {
 #[repr(C)]
 pub struct OrderDestination {
     pub(crate) destination: u16,
-    pub(crate) kind: crate::vehicle::OrderType,
+    pub(crate) kind: crate::order_type::OrderType,
     /// `GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)`.
     pub(crate) nearest_depot: bool,
 }
@@ -1750,18 +1750,21 @@ fn get_load_amount(
         let mut cb_load_amount = crate::newgrf_callbacks::CALLBACK_FAILED;
         if e.grf_version(shared) >= 8 {
             /* Use callback 36 */
-            cb_load_amount = (vehicle.property)(
-                (vehicle.newgrf)(),
+            cb_load_amount = crate::newgrf_vehicle::get_vehicle_property(
+                vehicle.newgrf(),
                 v,
-                crate::newgrf_properties::PROP_VEHICLE_LOAD_AMOUNT,
+                crate::newgrf_properties::PropertyID::PROP_VEHICLE_LOAD_AMOUNT,
                 i32::from(crate::newgrf_callbacks::CALLBACK_FAILED),
             ) as u16;
         } else if e.callbacks() & crate::newgrf_callbacks::VEHICLE_LOAD_AMOUNT != 0 {
             /* Use callback 12 */
-            cb_load_amount = (vehicle.callback)(
-                (vehicle.newgrf)(),
-                v,
+            cb_load_amount = crate::newgrf_vehicle::get_vehicle_callback(
+                vehicle.newgrf(),
                 crate::newgrf_callbacks::CBID_VEHICLE_LOAD_AMOUNT,
+                0,
+                0,
+                v.engine_type(),
+                Some(v),
             );
         }
         if cb_load_amount != crate::newgrf_callbacks::CALLBACK_FAILED {
@@ -2071,7 +2074,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
         if front.vehicle_type() == VehicleType::TRAIN && {
             let tile = front.tile().0;
             let shared = unsafe { &*w.shared };
-            (shared.tile_type)(tile) != crate::vehicle::MP_STATION
+            (shared.tile_type)(tile) != crate::tile_type::MP_STATION
                 || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
         } {
             /* The train reversed in the station. Take the "easy" way

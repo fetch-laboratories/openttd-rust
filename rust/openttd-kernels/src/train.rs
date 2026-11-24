@@ -68,6 +68,17 @@ impl Handle {
         // SAFETY: Entries and topology reads supply a live non-null train record.
         unsafe { VehicleRef(std::ptr::NonNull::new_unchecked(self.record)) }
     }
+    /// `TrainHandle(Train::From(v))`: the handle of a vehicle that is a train, with
+    /// `Train::From`'s type assertion.
+    pub(crate) fn from_vehicle(v: VehicleRef) -> Self {
+        crate::services_assert::assert_with(|| {
+            v.vehicle_type() == crate::vehicle_type::VehicleType::VEH_TRAIN
+        });
+        Self {
+            record: v.0.as_ptr(),
+            owner: read_field!(v.0.as_ptr(), train),
+        }
+    }
     pub(crate) fn from_record(record: *mut crate::vehicle::OpenTTDVehicle) -> Self {
         if record.is_null() {
             Self::NONE
@@ -541,7 +552,13 @@ impl<'a> Game<'a> {
     /// `UpdateVehicleTileHash` of this shell, which stays in place.
     fn update_occupancy(&self, id: Handle) {
         // SAFETY: The controller retains this live shell through the index update.
-        unsafe { crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false) };
+        unsafe {
+            crate::vehicle::occupancy::update_position(
+                self.vs(),
+                id.vehicle(),
+                self.services.map(),
+            );
+        };
     }
     fn handle_breakdown(&self, id: Handle) -> bool {
         // SAFETY: The live train and unborrowed owner satisfy `vehicle_handle_breakdown`.
@@ -562,16 +579,16 @@ impl<'a> Game<'a> {
     }
     fn visit_tile<F: FnMut(Handle) -> bool>(&self, tile: u32, mut visitor: F) -> bool {
         let vs = self.vs();
-        vs.any_on_tile(tile, |v| {
+        crate::vehicle_func::has_vehicle_on_tile_raw(vs, self.services.map(), tile, |v| {
             v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
-                && visitor((vs.train_handle)(v.0.as_ptr()))
+                && visitor(crate::train::Handle::from_vehicle(v))
         })
     }
     fn visit_near<F: FnMut(Handle) -> bool>(&self, x: i32, y: i32, mut visitor: F) -> bool {
         let vs = self.vs();
-        vs.any_near(x, y, 7, |v| {
+        crate::vehicle_func::has_vehicle_near_tile_xy(vs, x, y, 7, |v| {
             v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
-                && visitor((vs.train_handle)(v.0.as_ptr()))
+                && visitor(crate::train::Handle::from_vehicle(v))
         })
     }
 
@@ -586,8 +603,8 @@ impl<'a> Game<'a> {
 }
 impl Game<'_> {
     fn property(&self, id: Handle, prop: u32, default: u64) -> u64 {
-        (self.vs().property)(
-            (self.vs().newgrf)(),
+        crate::newgrf_vehicle::get_vehicle_property_raw(
+            self.vs().newgrf(),
             id.vehicle(),
             prop as u8,
             default as i32,
@@ -736,10 +753,13 @@ impl Game<'_> {
                     );
                 }
             } else if self.engine(u).callbacks() & crate::newgrf_callbacks::VEHICLE_LENGTH != 0 {
-                length = (self.vs().callback)(
-                    (self.vs().newgrf)(),
-                    u.vehicle(),
+                length = crate::newgrf_vehicle::get_vehicle_callback(
+                    self.vs().newgrf(),
                     crate::newgrf_callbacks::CBID_VEHICLE_LENGTH,
+                    0,
+                    0,
+                    u.vehicle().engine_type(),
+                    Some(u.vehicle()),
                 );
             }
             if length == u16::MAX {
@@ -2528,7 +2548,7 @@ impl Game<'_> {
             }
             id.set_flag(9, false);
         }
-        self.vs().handle_loading(id.vehicle(), mode, orders);
+        self.vs().handle_loading(id.vehicle(), mode);
         if (id).vehicle().current_order().kind_raw() == OT_LOADING || self.stay_depot(id) {
             return true;
         }
@@ -3308,3 +3328,45 @@ pub const VRF_FLIPPED: u64 = 1 << 4;
 
 #[cfg(test)]
 mod evidence_tests;
+
+/// `Train::From`'s type assertion holds the handle constructor: a road vehicle fails it once,
+/// a train passes it and its handle carries the record's train owner.
+#[cfg(test)]
+mod handle_tests {
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// Failed native assertions seen by the isolated child.
+    static FAILED: AtomicU32 = AtomicU32::new(0);
+    extern "C" fn record_failure(condition: bool) {
+        if !condition {
+            FAILED.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    #[test]
+    fn from_vehicle_asserts_the_vehicle_type_and_carries_the_train_owner() {
+        if crate::services_assert::isolate_test_check(
+            "train::handle_tests::from_vehicle_asserts_the_vehicle_type_and_carries_the_train_owner",
+            record_failure,
+        ) {
+            return;
+        }
+        let record = |kind| {
+            VehicleRef::of(crate::vehicle_base::openttd_rust_vehicle_record_new(
+                std::ptr::null_mut(),
+                kind,
+            ))
+        };
+        let owner = std::ptr::NonNull::<crate::train_state::TrainState>::dangling().as_ptr();
+        let train = record(VehicleType::VEH_TRAIN);
+        // SAFETY: The test's fresh record, which it leaks.
+        unsafe { (*train.0.as_ptr()).train = owner };
+        let handle = super::Handle::from_vehicle(train);
+        assert_eq!((handle.record, handle.owner), (train.0.as_ptr(), owner));
+        assert_eq!(FAILED.load(Ordering::Relaxed), 0);
+        let _ = super::Handle::from_vehicle(record(VehicleType::VEH_ROAD));
+        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
+    }
+}
