@@ -176,7 +176,7 @@ pub extern "C" fn openttd_rust_session_storage() -> *mut State {
 pub(crate) fn mode() -> GameMode {
     read_field!(STATE.get(), mode)
 }
-fn set_mode(mode: GameMode) {
+pub(crate) fn set_mode(mode: GameMode) {
     write_field!(STATE.get(), mode, mode);
 }
 pub(crate) fn pending() -> SwitchMode {
@@ -683,16 +683,10 @@ impl<'a> Session<'a> {
         let tables = (s.vehicle_tables)(self.frame, !calendar);
         unsafe {
             if calendar {
-                crate::vehicle::scheduler::calendar_day(
-                    &raw const tables,
-                    mode() == GameMode::NORMAL,
-                    usize::from(crate::timer_game_common::calendar_fraction()),
-                );
+                crate::vehicle::scheduler::calendar_day(&raw const tables);
             } else {
                 crate::vehicle::scheduler::ticks(
                     &raw const tables,
-                    mode() == GameMode::NORMAL,
-                    usize::from(crate::timer_game_common::economy_fraction()),
                     (s.vehicle_cost)(self.frame).cast(),
                 );
             }

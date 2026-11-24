@@ -111,8 +111,6 @@ struct Aircraft final : public SpecializedVehicle<Aircraft, VEH_AIRCRAFT> {
 	}
 
 	bool Tick() override;
-	void OnNewCalendarDay() override;
-	void OnNewEconomyDay() override;
 	uint Crash(bool flooded = false) override;
 	TileIndex GetOrderStationLocation(StationID station) override;
 	TileIndex GetCargoTile() const override { return this->First()->GetTile(); }

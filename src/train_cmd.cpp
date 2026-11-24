@@ -812,18 +812,6 @@ bool Train::Tick()
 	return openttd_rust_train_tick(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices()) != 0;
 }
 
-/** Calendar day handler. */
-void Train::OnNewCalendarDay()
-{
-	openttd_rust_train_calendar_day(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices());
-}
-
-/** Economy day handler. */
-void Train::OnNewEconomyDay()
-{
-	openttd_rust_train_economy_day(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices());
-}
-
 /**
  * Get the tracks of the train vehicle.
  * @return Current tracks of the vehicle.

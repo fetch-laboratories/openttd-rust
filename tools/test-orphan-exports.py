@@ -265,6 +265,37 @@ class OrphanTests(unittest.TestCase):
             (root / ORPHANS.BASELINE).write_text("")
             self.assertEqual(check(), 0)
 
+    def test_cli_reads_a_kept_fixture_outside_its_source_folders(self) -> None:
+        """The ratchet scans src/ and rust/; a kept row's tools/ fixture still counts."""
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(ORPHANS, "ROOT", Path(directory)),
+        ):
+            root = Path(directory)
+            initialize(
+                root,
+                {
+                    "rust/lib.rs": export("kept"),
+                    "src/rust/ffi.h": "void openttd_rust_kept();\n",
+                    "tools/probe.inc": "void Probe() { openttd_rust_kept(); }\n",
+                    ORPHANS.KEPT_FIXTURES: "openttd_rust_kept | tools/probe.inc | #736\n",
+                    ORPHANS.BASELINE: "",
+                },
+            )
+
+            def check() -> int:
+                with (
+                    patch.object(
+                        sys, "argv", ["orphan-exports.py", "--base-ref", "HEAD"]
+                    ),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    return ORPHANS.main()
+
+            self.assertEqual(check(), 0)
+            (root / "tools/probe.inc").write_text("void Probe() {}\n")
+            self.assertEqual(check(), 1)
+
     def test_uncalled_baseline_only_shrinks_and_names_owners(self) -> None:
         """#737 batch O: --report-uncalled is enforced against an owned baseline."""
         found = {"openttd_rust_age": "VehicleCargoList::AgeCargo"}

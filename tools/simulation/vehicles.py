@@ -165,7 +165,6 @@ def check(
             "packet_lookups",
             "running_sound",
             "periodic_sound",
-            "descriptor_bytes",
             "scalar_write_bytes",
         ]
     counts = core.branch_witnesses(scenario, run, role, "vehicle", required)

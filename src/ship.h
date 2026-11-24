@@ -121,8 +121,6 @@ struct Ship final : public SpecializedVehicle<Ship, VEH_SHIP> {
 	Money GetRunningCost() const override;
 	bool IsInDepot() const override { return this->GetState() == TRACK_BIT_DEPOT; }
 	bool Tick() override;
-	void OnNewCalendarDay() override;
-	void OnNewEconomyDay() override;
 	Trackdir GetVehicleTrackdir() const override;
 	TileIndex GetOrderStationLocation(StationID station) override;
 	ClosestDepot FindClosestDepot() override;

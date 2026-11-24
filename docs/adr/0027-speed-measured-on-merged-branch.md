@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR 0052
 may change: agents
 ---
 # Speed is measured on the merged branch, not on each pull request

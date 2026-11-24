@@ -424,21 +424,41 @@ impl<I: PoolId, R, S> TypedPool<I, R, S> {
             }
         }
     }
-    /// `PoolIterator::ValidateIndex`: reread live extent/slots, using the native end sentinel.
+    /// `Pool::GetPoolSize`: returns first unused index. Useful when iterating over all pool
+    /// items.
+    ///
+    /// # Safety
+    /// The view's descriptor is live.
     #[must_use]
-    pub unsafe fn next_index(&self, mut index: usize, max_size: usize) -> usize {
+    pub unsafe fn pool_size(&self) -> usize {
+        // SAFETY: The view's live descriptor.
+        unsafe { (*self.view).first_unused }
+    }
+    /// `PoolIterator::ValidateIndex` and the item it yields: the first slot at or after `index`
+    /// that holds a shell, as its index, shell and record, rereading the live extent and slots
+    /// at each slot; `None` where the iterator reaches its end sentinel. One slot load serves
+    /// both the validity test and `Get(index)`.
+    ///
+    /// # Safety
+    /// The view's descriptor is live, and nothing mutates the pool during this call.
+    #[must_use]
+    pub unsafe fn next_item(&self, mut index: usize) -> Option<(usize, *mut S, *mut R)> {
         unsafe {
             while index < (*self.view).first_unused {
-                if !(*(*self.view).slots.as_mut_ptr().add(index))
-                    .shell
-                    .is_null()
-                {
-                    return index;
+                let slot = *(*self.view).slots.as_mut_ptr().add(index);
+                if !slot.shell.is_null() {
+                    return Some((index, slot.shell.cast(), slot.record.cast()));
                 }
                 index += 1;
             }
-            max_size
+            None
         }
+    }
+    /// `PoolIterator::ValidateIndex`: reread live extent/slots, using the native end sentinel.
+    #[must_use]
+    pub unsafe fn next_index(&self, index: usize, max_size: usize) -> usize {
+        // SAFETY: The caller's live descriptor.
+        unsafe { self.next_item(index) }.map_or(max_size, |(index, _, _)| index)
     }
 }
 

@@ -350,6 +350,20 @@ def violations(
     return set(scan(files, broad, kept))
 
 
+def gate_violations(files: dict[str, str], kept: tuple[KeptFixture, ...]) -> set[str]:
+    """The gate's violations over its src/ and rust/ input, with each kept row's fixture.
+
+    The ratchet reads src/ and rust/ only; a kept fixture outside them, such as an ABI
+    probe under tools/, is read from the tree so that its uses count.
+    """
+    fixtures = {
+        row.fixture: (ROOT / row.fixture).read_text(errors="replace")
+        for row in kept
+        if row.fixture not in files and (ROOT / row.fixture).is_file()
+    }
+    return violations({**files, **fixtures}, kept=kept)
+
+
 def scan(
     files: dict[str, str], broad: bool = False, kept: tuple[KeptFixture, ...] = ()
 ) -> dict[str, set[str]]:
@@ -550,7 +564,7 @@ def main() -> int:
         BASELINE,
         ("src", "rust"),
         {".cpp", ".h", ".hpp", ".inc", ".rs"},
-        partial(violations, kept=kept_fixture_file()),
+        partial(gate_violations, kept=kept_fixture_file()),
         new_label="new orphan",
         summary="Orphan exports: {count} baselined violations",
     )

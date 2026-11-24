@@ -297,6 +297,17 @@ pub(crate) const TEST_TABLE: Services = Services {
     order_sort: crate::test_tables::unreachable2,
     order_count: crate::test_tables::unreachable0,
 };
+/// `TEST_TABLE` reporting unknown callback results to `unknown_refit`, for tests outside
+/// this module.
+#[cfg(test)]
+pub(crate) const fn test_table_with_unknown_refit(
+    unknown_refit: extern "C" fn(u32, u16, u16),
+) -> Services {
+    Services {
+        unknown_refit,
+        ..TEST_TABLE
+    }
+}
 /// `Engine::Iterate(from)`, through the engine table's type-availability owner.
 fn next(s: &Services, from: u32) -> EngineRef {
     // SAFETY: The immutable table names the process-lifetime type-availability table.

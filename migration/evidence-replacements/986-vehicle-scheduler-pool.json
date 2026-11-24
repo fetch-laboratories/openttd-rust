@@ -1,0 +1,14 @@
+[
+  {
+    "retires": [
+      "ctest:Base vehicle scheduler - native pool cursor binding"
+    ],
+    "oracle": "Fork-only native case, absent from the pinned original 14ec60f248547d4d062a1160f0fc26d742319888. It checked the C++ pool service VehicleSchedulerPool: the cursor it returned held the native descriptor's slots, their length and the canonical first_unused address, and a later acquisition saw grown storage. #986 deletes that service: the scheduler reads the pool in place through &_vehicle_pool.descriptor, the descriptor-address form linkgraph_schedule already uses, so no copied cursor remains to check. The walk the cursor fed runs on a real PoolCore against the original-only PoolIterator capture in rust/openttd-kernels/src/vehicle/scheduler/pool-oracle.txt, including growth that reallocates the slots, and the kept native case \"Base vehicle scheduler - Tick timing scope returns before post-Tick reads\" runs the session's tick entry over a copy of the production table, whose pool field is the production descriptor's address, and a pooled vehicle. Not carried: the cursor's slot pointer and length, which have no remaining native counterpart.",
+    "observations": {
+      "The scheduler's walk over the live pool rereads its extent and slots, through deletion, reuse and growth that reallocates the slots, against the original PoolIterator": [
+        "rust:lib:vehicle::scheduler::tests::pool::traversal_matches_original_pool_iterator",
+        "rust:lib:vehicle::scheduler::tests::pool::tick_growth_rereads_the_pool_and_the_fresh_type"
+      ]
+    }
+  }
+]

@@ -265,6 +265,15 @@ aircraft_fields! {
     cached_max_range_sqr, set_cached_max_range_sqr: u32 => std::convert::identity, std::convert::identity;
 }
 impl Vehicle {
+    /// `RustAircraftVehicle(v)` over the live aircraft record `v` at pool index `id`: the
+    /// record, its aircraft state and its `VehicleID`.
+    pub(crate) fn of(v: VehicleRef, id: VehicleID) -> Self {
+        Self {
+            handle: v.0.as_ptr(),
+            state: v.aircraft_state(),
+            id: id.0,
+        }
+    }
     fn base(self) -> VehicleRef {
         // SAFETY: Every entry receives a live, non-null vehicle record.
         VehicleRef(unsafe { NonNull::new_unchecked(self.handle) })
@@ -3248,21 +3257,15 @@ pub unsafe extern "C" fn openttd_rust_aircraft_tick_abi(leaves: *const Leaves, i
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     u8::from(with_world!(leaves, |w| { w.tick(id) }))
 }
-/// `Aircraft::OnNewCalendarDay`.
-/// # Safety
-/// See the shared export contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_calendar_day(leaves: *const Leaves, id: Vehicle) {
+/// `Aircraft::OnNewCalendarDay`, for the scheduler's dispatch over a live aircraft.
+pub(crate) fn on_new_calendar_day(leaves: &Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.on_new_calendar_day(id);
     });
 }
-/// `Aircraft::OnNewEconomyDay`.
-/// # Safety
-/// See the shared export contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_economy_day(leaves: *const Leaves, id: Vehicle) {
+/// `Aircraft::OnNewEconomyDay`, for the scheduler's dispatch over a live aircraft.
+pub(crate) fn on_new_economy_day(leaves: &Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.on_new_economy_day(id);

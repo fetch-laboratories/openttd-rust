@@ -83,7 +83,6 @@ extern const OpenTTDVehicleServices _rust_vehicle_services;
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept;
 
 struct Vehicle;
-struct OpenTTDCargoList;
 struct OpenTTDCargoStorageServices;
 struct OpenTTDSharedServices;
 struct OpenTTDStationServices;
@@ -91,35 +90,33 @@ struct OpenTTDStationLoading;
 struct OpenTTDFleetPendingServices;
 struct OpenTTDFleetTransactionServices;
 struct OpenTTDFleetGroupServices;
-/** Call-scoped actual indexing storage; growth invalidates slots but not first_unused. */
-struct OpenTTDVehiclePoolCursor {
-	const RustPoolSlot *slots;
-	size_t slots_len;
-	const size_t *first_unused;
-};
+struct OpenTTDAircraftLeaves;
+struct OpenTTDRoadLeaves;
+struct OpenTTDShipLeaves;
+struct OpenTTDTrainServices;
 struct OpenTTDVehicleSchedulerServices {
-	OpenTTDVehiclePoolCursor (OPENTTD_RUST_CALL *pool)() noexcept OPENTTD_SERVICE_DEFAULT(pool);
-	bool assertions;
+	const OpenTTDAircraftLeaves *aircraft; ///< Aircraft controller table, immutable for the process.
+	const RustPoolDescriptor *const *pool; ///< The vehicle pool's descriptor.
+	const OpenTTDRoadLeaves *road; ///< Road vehicle controller table, immutable for the process.
+	const OpenTTDSharedServices *shared; ///< Shared table, immutable for the process.
+	const OpenTTDShipLeaves *ship; ///< Ship controller table, immutable for the process.
 	/** Runs the virtual Tick; true when the vehicle survives. */
 	bool (OPENTTD_RUST_CALL *tick)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tick);
-	void (OPENTTD_RUST_CALL *calendar_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(calendar_day);
-	void (OPENTTD_RUST_CALL *economy_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(economy_day);
-	OpenTTDCargoList *(OPENTTD_RUST_CALL *cargo_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_owner);
+	const OpenTTDTrainServices *train; ///< Train controller table, immutable for the process.
 	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
-	const OpenTTDSharedServices *shared; ///< Shared table, immutable for the process.
 };
 struct OpenTTDCommandCost;
 struct OpenTTDVehicleSchedulerTables {
-	const OpenTTDVehicleSchedulerServices *scheduler;
 	const OpenTTDCargoStorageServices *cargo;
-	const OpenTTDStationServices *station;
+	const OpenTTDFleetGroupServices *group;
 	const OpenTTDStationLoading *loading;
 	const OpenTTDFleetPendingServices *pending;
-	const OpenTTDFleetTransactionServices *transaction;
-	const OpenTTDFleetGroupServices *group;
-	const OpenTTDVehicleVisits *visits;
 	OpenTTDCommandCost *refit_cost;
 	OpenTTDCommandCost *refit_temporary;
+	const OpenTTDVehicleSchedulerServices *scheduler;
+	const OpenTTDStationServices *station;
+	const OpenTTDFleetTransactionServices *transaction;
+	const OpenTTDVehicleVisits *visits;
 };
 const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept;
 struct OpenTTDCommandCostServices;

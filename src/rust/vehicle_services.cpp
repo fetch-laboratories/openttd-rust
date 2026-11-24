@@ -43,6 +43,9 @@
 #include "vehicle_maintenance_ffi.h"
 #include "clock_ffi.h"
 #include "aircraft_ffi.h"
+#include "road_ffi.h"
+#include "ship_control_ffi.h"
+#include "train_ffi.h"
 #include "fleet_ffi.h"
 #include "services_ffi.h"
 #include "company_identity_ffi.h"
@@ -189,37 +192,22 @@ const OpenTTDVehicleServices &GetRustVehicleServices() noexcept
 }
 
 
-/* New scheduler constants consumed by Rust branches. */
-static_assert(VEH_TRAIN == 0 && VEH_ROAD == 1 && VEH_SHIP == 2 && VEH_AIRCRAFT == 3 && VEH_EFFECT == 4 && VEH_DISASTER == 5 && VEH_END == 6 && VEH_INVALID == 255);
-static_assert(GVSF_FRONT == 0 && GVSF_ENGINE == 3 && AIR_AIRCRAFT == 2);
-static_assert(VehStates{VehState::TrainSlowing}.base() == 16 && Ticks::DAY_TICKS == 74);
-
-static OpenTTDVehiclePoolCursor OPENTTD_RUST_CALL VehicleSchedulerPool() noexcept
-{
-	return {.slots = _vehicle_pool.descriptor->slots.items, .slots_len = _vehicle_pool.descriptor->slots.size(), .first_unused = &_vehicle_pool.descriptor->first_unused};
-}
 /* Existing virtual facades own the original controller timing scopes. The
  * timing destructor completes before this callback returns to Rust assertions;
  * Rust then reads the survivor's type and First() from its records. */
 static bool OPENTTD_RUST_CALL VehicleSchedulerTick(OpenTTDVehicle *shell) noexcept { return VehicleOf(shell)->Tick(); }
-static void OPENTTD_RUST_CALL VehicleSchedulerCalendarDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewCalendarDay(); }
-static void OPENTTD_RUST_CALL VehicleSchedulerEconomyDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewEconomyDay(); }
 
 const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept
 {
 	static const OpenTTDVehicleSchedulerServices services{
-		.pool = VehicleSchedulerPool,
-#if !defined(NDEBUG) || defined(WITH_ASSERT)
-		.assertions = true,
-#else
-		.assertions = false,
-#endif
-		.tick = VehicleSchedulerTick,
-		.calendar_day = VehicleSchedulerCalendarDay,
-		.economy_day = VehicleSchedulerEconomyDay,
-		.cargo_owner = RustVehicleRead<OpenTTDCargoList *, RustVehicleCargoOwner>,
-		.vehicle = &_rust_vehicle_services,
+		.aircraft = &GetRustAircraftLeaves(),
+		.pool = &_vehicle_pool.descriptor,
+		.road = &GetRustRoadLeaves(),
 		.shared = &GetRustSharedServices(),
+		.ship = &GetRustShipServices(),
+		.tick = VehicleSchedulerTick,
+		.train = &GetTrainServices(),
+		.vehicle = &_rust_vehicle_services,
 	};
 	return services;
 }

@@ -8,6 +8,8 @@
 #include "../../src/rust/roadstop_resolver_ffi.h"
 #include "../../src/rust/animation_save.hpp"
 #include "../../src/rust/newgrf_storage_ffi.h"
+#include "../../src/rust/engine_capabilities_ffi.h"
+#include "../../src/rust/newgrf_vehicle_ffi.h"
 #include "../../src/newgrf_storage.h"
 /* Narrow owner fixtures enter the production state loop. Unrelated phases use
  * empty typed worlds; each fixture replaces only its observed native services. */
@@ -52,7 +54,25 @@ struct SessionFixture {
 	OpenTTDAnimationServices animation{};
 	std::optional<RustAnimationScope> animation_scope;
 	std::optional<RustAnimationSave> animation_queue;
-	static inline size_t empty_extent = 0;
+	/* An empty vehicle pool, and a resolver table that no vehicle reaches. The tick entry
+	 * holds the resolver for the process, so it and the tables it links are static. */
+	static inline RustPoolDescriptor empty_pool{};
+	static inline const RustPoolDescriptor *const empty_pool_address = &empty_pool;
+	static inline const OpenTTDSharedServices resolver_shared{};
+	static inline const OpenTTDVehicleServices resolver_vehicles{};
+	static inline const OpenTTDEngineCapabilitiesServices resolver_capabilities = [] {
+		OpenTTDEngineCapabilitiesServices capabilities{};
+		capabilities.vehicles = &resolver_vehicles;
+		capabilities.shared = &resolver_shared;
+		return capabilities;
+	}();
+	static inline const OpenTTDVehicleResolverServices resolver = [] {
+		OpenTTDVehicleResolverServices table{};
+		table.vehicle = &resolver_vehicles;
+		table.shared = &resolver_shared;
+		table.capabilities = &resolver_capabilities;
+		return table;
+	}();
 	static void Nothing() noexcept {}
 	static void FrameNothing(OpenTTDSessionFrame *) noexcept {}
 	SessionFixture()
@@ -81,7 +101,8 @@ struct SessionFixture {
 		finance.set_current_company = [](uint8_t) noexcept {}; commands.finance = &finance; transaction.commands = &commands;
 		shared.tick_counter = []() noexcept -> uint64_t { return 1; };
 		loop = {{.tick_counter = 0, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
-		scheduler.pool = []() noexcept { return OpenTTDVehiclePoolCursor{nullptr, 0, &empty_extent}; };
+		scheduler.pool = &empty_pool_address;
+		vehicles.newgrf = []() noexcept { return &resolver; };
 		scheduler.vehicle = &vehicles;
 		scheduler.shared = &shared;
 		shared.for_each_station = [](void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept {};

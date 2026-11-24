@@ -2928,18 +2928,19 @@ pub unsafe extern "C" fn openttd_rust_road_update_cache(
 ) {
     entry!(leaves).road_veh_update_cache(Part::new(v, state), same_length);
 }
-/// `RoadVehicle::OnNewCalendarDay`.
-/// # Safety
-/// As [`openttd_rust_road_tick_abi`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_calendar_day(
-    v: VehicleRef,
-    state: *mut State,
-    leaves: *const Leaves,
-) {
-    entry!(leaves).on_new_calendar_day(Part::new(v, state));
+/// `RoadVehicle::OnNewCalendarDay`, for the scheduler's dispatch over a live road vehicle
+/// record.
+pub(crate) fn on_new_calendar_day(v: VehicleRef, leaves: &Leaves) {
+    entry!(leaves).on_new_calendar_day(Part::of(v));
 }
-/// `RoadVehicle::OnNewEconomyDay`.
+/// `RoadVehicle::OnNewEconomyDay`, for the scheduler's dispatch over a live road vehicle
+/// record.
+pub(crate) fn on_new_economy_day(v: VehicleRef, leaves: &Leaves) {
+    entry!(leaves).on_new_economy_day(Part::of(v));
+}
+/// `RoadVehicle::OnNewEconomyDay` for the kept native fixture `RoadServiceBoundary`
+/// (`tools/migration/windows-abi/road.inc`), which supplies the road owner itself; it leaves
+/// with that fixture.
 /// # Safety
 /// As [`openttd_rust_road_tick_abi`].
 #[unsafe(no_mangle)]

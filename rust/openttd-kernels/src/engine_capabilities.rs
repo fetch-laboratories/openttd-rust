@@ -794,6 +794,16 @@ pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
         assertions: false,
         life_extension: crate::test_tables::unreachable0,
     };
+/// `TEST_TABLE` over another engine loading table, for tests outside this module.
+#[cfg(test)]
+pub(crate) const fn test_table_with_loading(
+    loading: extern "C" fn() -> *const crate::engine_loading::Services,
+) -> crate::engine_capabilities::Services {
+    crate::engine_capabilities::Services {
+        loading,
+        ..TEST_TABLE
+    }
+}
 /// `TEST_TABLE` over another shared table, for tests outside this module.
 #[cfg(test)]
 pub(crate) const fn test_table_with_shared(

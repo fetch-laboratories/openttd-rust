@@ -93,7 +93,7 @@ macro_rules! branch {
 )]
 impl Services {
     /// The vehicle table's maintenance services.
-    fn of(base: &VehicleServices) -> &Self {
+    pub(crate) fn of(base: &VehicleServices) -> &Self {
         // SAFETY: The module's table contract.
         unsafe { &*base.maintenance }
     }

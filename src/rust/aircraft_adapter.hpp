@@ -181,8 +181,6 @@ bool Aircraft::Tick()
 	PerformanceAccumulator framerate(PFE_GL_AIRCRAFT);
 	return openttd_rust_aircraft_tick(&_aircraft_leaves, RustAircraftVehicle(this));
 }
-void Aircraft::OnNewCalendarDay() { openttd_rust_aircraft_calendar_day(&_aircraft_leaves, RustAircraftVehicle(this)); }
-void Aircraft::OnNewEconomyDay() { openttd_rust_aircraft_economy_day(&_aircraft_leaves, RustAircraftVehicle(this)); }
 void SetAircraftPosition(Aircraft *v, int x, int y, int z) { openttd_rust_aircraft_position(&_aircraft_leaves, RustAircraftVehicle(v), x, y, z); }
 void UpdateAircraftCache(Aircraft *v, bool update_range) { openttd_rust_aircraft_cache(&_aircraft_leaves, RustAircraftVehicle(v), update_range); }
 void GetAircraftFlightLevelBounds(const Vehicle *v, int *min, int *max) { openttd_rust_aircraft_flight_bounds(&_aircraft_leaves, RustAircraftVehicle(const_cast<Vehicle *>(v)), min, max); }

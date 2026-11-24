@@ -160,18 +160,6 @@ Money Ship::GetRunningCost() const
 	return openttd_rust_engine_vehicle_running_cost(&GetRustEngineCapabilitiesServices(), RustEngine(this->GetEngine()), RustVehicle(this));
 }
 
-/** Calendar day handler. */
-void Ship::OnNewCalendarDay()
-{
-	openttd_rust_ship_calendar_day(this->index.base(), RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices());
-}
-
-/** Economy day handler. */
-void Ship::OnNewEconomyDay()
-{
-	openttd_rust_ship_economy_day(this->index.base(), RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices());
-}
-
 Trackdir Ship::GetVehicleTrackdir() const
 {
 	return static_cast<Trackdir>(openttd_rust_ship_trackdir(this->index.base(), &GetRustShipServices(), &GetRustSharedServices()));

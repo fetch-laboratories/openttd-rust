@@ -230,8 +230,6 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 	int GetDisplayImageWidth(Point *offset = nullptr) const;
 	bool IsInDepot() const override { return this->GetState() == RVSB_IN_DEPOT; }
 	bool Tick() override;
-	void OnNewCalendarDay() override;
-	void OnNewEconomyDay() override;
 	uint Crash(bool flooded = false) override;
 	Trackdir GetVehicleTrackdir() const override;
 	TileIndex GetOrderStationLocation(StationID station) override;
