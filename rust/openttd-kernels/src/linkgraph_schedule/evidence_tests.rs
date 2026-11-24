@@ -730,13 +730,23 @@ fn a_panic_after_install_unpublishes_the_tables() {
     let _lock = crate::town::tests::GLOBAL_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let unwound = std::panic::catch_unwind(|| {
+    const AFTER_INSTALL: &str = "a failed check after install";
+    let published = std::cell::Cell::new(false);
+    let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _unpublish = Unpublish;
         install();
-        assert!(with(|f| !f.services.is_null() && !f.world.is_null()));
-        panic!("a failed check after install");
-    });
-    assert!(unwound.is_err());
+        published.set(with(|f| {
+            !f.services.is_null()
+                && !f.post.is_null()
+                && !f.command.is_null()
+                && !f.session.is_null()
+                && !f.world.is_null()
+        }));
+        std::panic::panic_any(AFTER_INSTALL);
+    }));
+    assert!(published.get(), "install published all five tables");
+    let payload = unwound.expect_err("the test body unwinds");
+    assert_eq!(payload.downcast_ref::<&str>(), Some(&AFTER_INSTALL));
     assert!(with(|f| {
         f.services.is_null()
             && f.post.is_null()
