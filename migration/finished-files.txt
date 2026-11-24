@@ -136,6 +136,7 @@ rust/openttd-kernels/src/utf8.rs
 rust/openttd-kernels/src/vehicle.rs
 rust/openttd-kernels/src/vehicle_base.rs
 rust/openttd-kernels/src/vehicle_func.rs
+rust/openttd-kernels/src/vehicle/maintenance.rs
 rust/openttd-kernels/src/vehicle_transactions/articulated.rs
 rust/openttd-kernels/src/vehicle_transactions/build.rs
 rust/openttd-kernels/src/vehicle_transactions/clone_name.rs
