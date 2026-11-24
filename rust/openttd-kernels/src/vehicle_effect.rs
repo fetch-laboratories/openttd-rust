@@ -179,6 +179,8 @@ fn spawn_advanced_visual_effect(vs: &VehicleServices, shared: &Services, v: Vehi
     if auto_center {
         /* For road vehicles: Compute offset from vehicle position to vehicle center */
         if v.vehicle_type() == VehicleType::VEH_ROAD {
+            // `RoadVehicle::From(v)` asserts the type.
+            assert_with(|| v.vehicle_type() == VehicleType::VEH_ROAD);
             let cached_veh_length = v.cached_veh_length();
             l_center = (-(u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(cached_veh_length))
                 as i32)
