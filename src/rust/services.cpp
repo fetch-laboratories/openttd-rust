@@ -522,7 +522,7 @@ static uint8_t *StationHadVehicleOfTypeField(Station *st) noexcept { return rein
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.all_compatible_railtypes = RustAllCompatibleRailTypes,
 	.all_powered_railtypes = [](uint64_t types) noexcept { return GetAllPoweredRailTypes(RailTypes{types}).base(); },
-	.rail_type_curve_speed = [](RailType rt) noexcept { return GetRailTypeInfo(rt)->curve_speed; },
+	.rail_type_curve_speed = [](uint8_t rt) noexcept { return GetRailTypeInfo(static_cast<RailType>(rt))->curve_speed; },
 	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,

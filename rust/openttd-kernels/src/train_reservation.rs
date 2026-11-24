@@ -1276,7 +1276,7 @@ pub(crate) mod tests {
         T::unused()
     }
 
-    fn leaves() -> Leaves {
+    pub(crate) fn leaves() -> Leaves {
         Leaves {
             read_num_orders: unused(),
             backoff: unused(),

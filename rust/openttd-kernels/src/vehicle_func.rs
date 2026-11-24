@@ -229,3 +229,37 @@ pub(crate) fn has_vehicle_near_tile_xy(
     }
     false
 }
+
+#[cfg(test)]
+#[allow(unsafe_code, reason = "the test links and frees its own records")]
+mod chain_tests {
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
+
+    /// `CountVehiclesInChain` counts the given vehicle and each `Next()` after it.
+    #[test]
+    fn count_vehicles_in_chain_counts_from_the_given_vehicle_to_the_end() {
+        let records: Vec<_> = (0..4)
+            .map(|_| {
+                crate::vehicle_base::openttd_rust_vehicle_record_new(
+                    std::ptr::null_mut(),
+                    VehicleType::VEH_TRAIN,
+                )
+            })
+            .collect();
+        for pair in records.windows(2) {
+            // SAFETY: The test's fresh records.
+            unsafe { (*pair[0]).next = pair[1] };
+        }
+        for (i, &record) in records.iter().enumerate() {
+            assert_eq!(
+                super::count_vehicles_in_chain(VehicleRef::of(record)),
+                4 - i as u32
+            );
+        }
+        for record in records {
+            // SAFETY: Each record came from `openttd_rust_vehicle_record_new`.
+            unsafe { crate::vehicle_base::openttd_rust_vehicle_record_delete(record) };
+        }
+    }
+}

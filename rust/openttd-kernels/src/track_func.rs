@@ -561,3 +561,81 @@ pub fn set_trackdir_bit_iterator(
 ) -> impl Iterator<Item = crate::track_type::Trackdir> {
     crate::bitmath_func::SetBitIterator::new(u64::from(bits.0)).map(crate::track_type::Trackdir)
 }
+
+/// `TrackCrossesTracks` and `TrackDirectionToTrackdir` against `table/track_data.h`, with the
+/// native assertion recorded for an invalid track or direction.
+#[cfg(test)]
+mod track_table_tests {
+    use crate::direction_type::Direction;
+    use crate::track_type::{Track, TrackBits, Trackdir};
+    use std::cell::Cell;
+
+    #[test]
+    fn track_crosses_tracks_follows_the_original_table() {
+        let expected = [
+            TrackBits(2),  // TRACK_X: TRACK_BIT_Y
+            TrackBits(1),  // TRACK_Y: TRACK_BIT_X
+            TrackBits(48), // TRACK_UPPER: TRACK_BIT_VERT
+            TrackBits(48), // TRACK_LOWER: TRACK_BIT_VERT
+            TrackBits(12), // TRACK_LEFT: TRACK_BIT_HORZ
+            TrackBits(12), // TRACK_RIGHT: TRACK_BIT_HORZ
+        ];
+        let failures = Cell::new(0);
+        let check = |ok: bool| failures.set(failures.get() + u32::from(!ok));
+        for (track, bits) in expected.into_iter().enumerate() {
+            assert_eq!(super::track_crosses_tracks(Track(track as u8), check), bits);
+        }
+        assert_eq!(failures.get(), 0);
+        let failed = Cell::new(false);
+        let record = |ok: bool| failed.set(failed.get() || !ok);
+        // The assertion is reported before the table read, which the invalid index would
+        // overrun; the recording check stops there.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            super::track_crosses_tracks(Track(6), |ok| {
+                record(ok);
+                assert!(ok);
+            })
+        }));
+        assert!(failed.get());
+    }
+
+    #[test]
+    fn track_direction_to_trackdir_follows_the_original_table() {
+        const I: u8 = 0xFF;
+        // `_track_direction_to_trackdir[TRACK_END][DIR_END]`, rows by track, columns
+        // DIR_N, DIR_NE, DIR_E, DIR_SE, DIR_S, DIR_SW, DIR_W, DIR_NW.
+        let expected: [[u8; 8]; 6] = [
+            [I, 0, I, I, I, 8, I, I],
+            [I, I, I, 1, I, I, I, 9],
+            [I, I, 2, I, I, I, 10, I],
+            [I, I, 3, I, I, I, 11, I],
+            [12, I, I, I, 4, I, I, I],
+            [13, I, I, I, 5, I, I, I],
+        ];
+        let failures = Cell::new(0);
+        let check = |ok: bool| failures.set(failures.get() + u32::from(!ok));
+        for (track, row) in expected.iter().enumerate() {
+            for (dir, &td) in row.iter().enumerate() {
+                assert_eq!(
+                    super::track_direction_to_trackdir(
+                        Track(track as u8),
+                        Direction(dir as u8),
+                        check
+                    ),
+                    Trackdir(td),
+                    "track {track}, direction {dir}"
+                );
+            }
+        }
+        assert_eq!(failures.get(), 0);
+        let failed = Cell::new(0);
+        let record = |ok: bool| {
+            failed.set(failed.get() + u32::from(!ok));
+            assert!(ok);
+        };
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            super::track_direction_to_trackdir(Track(0), Direction(8), record)
+        }));
+        assert_eq!(failed.get(), 1, "the direction assertion");
+    }
+}
