@@ -112,7 +112,7 @@ pub extern "C" fn openttd_rust_script_marine_build_cost(build_type: u32) -> i64 
     ];
     match PRICES.get(build_type as usize) {
         #[allow(clippy::cast_possible_truncation)]
-        Some(&price) => crate::economy_func::get_price(price as u32, 1, 0, 0),
+        Some(&price) => crate::economy_func::get_price_raw(price as u32, 1, 0, 0),
         None => -1,
     }
 }

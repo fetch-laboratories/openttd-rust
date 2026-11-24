@@ -599,6 +599,10 @@ pub unsafe extern "C" fn openttd_rust_town_growth(state: *mut State) -> *mut Gro
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_simulation(state: *mut State) -> *mut SimulationFields {
+    simulation(state)
+}
+/// The town's simulation fields, for field-sized accesses at their observation points.
+pub(crate) fn simulation(state: *mut State) -> *mut SimulationFields {
     // SAFETY: Stable shell-owned allocation. C++ starts the matching trivial native
     // object's lifetime here; aliases remain valid until owner destruction.
     unsafe { &raw mut (*state).simulation }

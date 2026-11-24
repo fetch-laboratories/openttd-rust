@@ -17,42 +17,6 @@ pub const COLOUR_GREEN: u8 = Colours::COLOUR_GREEN.0;
 /// End of the native Colours enumeration, also the random-colour setting.
 pub(crate) const COLOUR_END: u8 = Colours::COLOUR_END.0;
 
-/// Native invalid colour sentinel.
-pub const INVALID_COLOUR: u8 = Colours::INVALID_COLOUR.0;
-
-/// `COLOUR_DARK_BLUE`.
-pub const COLOUR_DARK_BLUE: u8 = Colours::COLOUR_DARK_BLUE.0;
-
-/// `COLOUR_PALE_GREEN`.
-pub const COLOUR_PALE_GREEN: u8 = Colours::COLOUR_PALE_GREEN.0;
-
-/// `COLOUR_YELLOW`.
-pub const COLOUR_YELLOW: u8 = Colours::COLOUR_YELLOW.0;
-
-/// `COLOUR_LIGHT_BLUE`.
-pub const COLOUR_LIGHT_BLUE: u8 = Colours::COLOUR_LIGHT_BLUE.0;
-
-/// `COLOUR_DARK_GREEN`.
-pub const COLOUR_DARK_GREEN: u8 = Colours::COLOUR_DARK_GREEN.0;
-
-/// `COLOUR_CREAM`.
-pub const COLOUR_CREAM: u8 = Colours::COLOUR_CREAM.0;
-
-/// `COLOUR_MAUVE`.
-pub const COLOUR_MAUVE: u8 = Colours::COLOUR_MAUVE.0;
-
-/// `COLOUR_PURPLE`.
-pub const COLOUR_PURPLE: u8 = Colours::COLOUR_PURPLE.0;
-
-/// `COLOUR_BROWN`.
-pub const COLOUR_BROWN: u8 = Colours::COLOUR_BROWN.0;
-
-/// `COLOUR_GREY`.
-pub const COLOUR_GREY: u8 = Colours::COLOUR_GREY.0;
-
-/// `COLOUR_WHITE`.
-pub const COLOUR_WHITE: u8 = Colours::COLOUR_WHITE.0;
-
 /// Native `gfx_type.h::Colours`, retaining every underlying `u8` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

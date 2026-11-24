@@ -212,7 +212,7 @@ pub extern "C" fn openttd_rust_script_rail_build_cost(
     if !rail_type_available(s, rail_type) {
         return -1;
     }
-    let price = |index| crate::economy_func::get_price(index as u32, 1, 0, 0);
+    let price = |index| crate::economy_func::get_price_raw(index as u32, 1, 0, 0);
     match build_type {
         0 => (rail.rail_build_cost)(rail_type as u8),
         1 => price(PR_BUILD_SIGNALS),

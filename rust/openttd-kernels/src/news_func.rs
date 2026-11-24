@@ -419,11 +419,23 @@ pub(crate) mod testing {
         AiNewEvent(u8, ScriptEvent),
         AiBroadcastNewEvent(ScriptEvent, u8),
         GameNewEvent(ScriptEvent),
+        /// `AI::BroadcastNewEvent` of an event with a name: the event without its borrowed
+        /// text, the text's bytes and the skipped company.
+        AiBroadcastNewTextEvent(ScriptEvent, Vec<u8>, u8),
+        /// `Game::NewEvent` of an event with a name: the event without its borrowed text
+        /// and the text's bytes.
+        GameNewTextEvent(ScriptEvent, Vec<u8>),
     }
 
     thread_local! {
         static EFFECTS: RefCell<Vec<Effect>> = const { RefCell::new(Vec::new()) };
         static ON_ERROR_MESSAGE: std::cell::Cell<Option<fn()>> = const { std::cell::Cell::new(None) };
+        static OBSERVER: std::cell::Cell<Option<fn(&Effect)>> = const { std::cell::Cell::new(None) };
+    }
+    /// Call `observe` with each of this thread's recorded effects as it is made, so a test
+    /// can order them against its other recorders; `None` stops.
+    pub(crate) fn observe(observe: Option<fn(&Effect)>) {
+        OBSERVER.set(observe);
     }
     /// Run `observe` as this thread's recording `ShowErrorMessage` receives each message,
     /// so a test sees state at the call itself; `None` stops.
@@ -439,6 +451,9 @@ pub(crate) mod testing {
         unsafe { std::slice::from_raw_parts(p, len) }.to_vec()
     }
     fn push(effect: Effect) {
+        if let Some(observe) = OBSERVER.get() {
+            observe(&effect);
+        }
         EFFECTS.with(|e| e.borrow_mut().push(effect));
     }
 
@@ -646,17 +661,31 @@ pub(crate) mod testing {
         show_error_message,
         string_assertions: 1,
     };
+    /// The event without its borrowed text, and the text's bytes while they live.
+    fn text_event(event: *const ScriptEvent) -> (ScriptEvent, Option<Vec<u8>>) {
+        let mut event = copied(event, 1)[0];
+        if event.text.is_null() {
+            return (event, None);
+        }
+        let text = copied(event.text, event.text_length);
+        event.text = std::ptr::null();
+        event.text_length = 0;
+        (event, Some(text))
+    }
     extern "C" fn ai_broadcast(event: *const ScriptEvent, skip_company: u8) {
-        push(Effect::AiBroadcastNewEvent(
-            copied(event, 1)[0],
-            skip_company,
-        ));
+        push(match text_event(event) {
+            (event, None) => Effect::AiBroadcastNewEvent(event, skip_company),
+            (event, Some(text)) => Effect::AiBroadcastNewTextEvent(event, text, skip_company),
+        });
     }
     extern "C" fn ai_new(company: u8, event: *const ScriptEvent) {
         push(Effect::AiNewEvent(company, copied(event, 1)[0]));
     }
     extern "C" fn game_new(event: *const ScriptEvent) {
-        push(Effect::GameNewEvent(copied(event, 1)[0]));
+        push(match text_event(event) {
+            (event, None) => Effect::GameNewEvent(event),
+            (event, Some(text)) => Effect::GameNewTextEvent(event, text),
+        });
     }
     static EVENTS: crate::script_event::Services = crate::script_event::Services {
         ai_broadcast,

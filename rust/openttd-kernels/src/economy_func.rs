@@ -5,20 +5,187 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared economy helpers from `economy_func.h`.
+//! `GetPrice` of `economy.cpp` and `ScaleByInverseCargoScale` of `economy_func.h`.
+//! A setting address is a process-lifetime native field, read under the game-state mutex.
+use crate::economy_type::Price;
+use crate::services::Services;
+use crate::settings_type::SettingAddresses;
+use std::ffi::c_void;
 
-/// Original `GetPrice`. `grf_shift` is the `NewGRF`'s `price_base_multipliers[index]`
-/// (zero without a GRF file), read natively at the original point; `shift` is the
-/// caller's extra shift. The `PR_END` check is `openttd_rust_economy_price`'s bounds test.
-pub(crate) fn get_price(index: u32, cost_factor: u32, grf_shift: i32, shift: i32) -> i64 {
-    crate::company::openttd_rust_economy_price(index, cost_factor, shift.wrapping_add(grf_shift))
+/// Determine a certain price.
+/// `index` is the price base, `cost_factor` the price factor, `grf_file` the `NewGRF` to use
+/// local price multipliers from (null for none) and `shift` the extra bit shifting after the
+/// computation. Returns the price.
+pub(crate) fn get_price(
+    shared: &Services,
+    index: Price,
+    cost_factor: u32,
+    grf_file: *const c_void,
+    mut shift: i32,
+) -> i64 {
+    if index >= Price::PR_END {
+        return 0;
+    }
+    let cost = multiply_price(index, cost_factor);
+    if !grf_file.is_null() {
+        shift = shift.wrapping_add((shared.grf_price_shift)(grf_file, u32::from(index.0)));
+    }
+    shift_price(cost, shift)
 }
 
-/// `ScaleByInverseCargoScale`, with the percentage observed by the caller.
-pub(crate) fn scale_by_inverse_cargo_scale(num: u32, percentage: u16) -> u32 {
-    if percentage == 100 {
-        num
+/// Raw adapter of `get_price` for the unfinished callers that read the file's multiplier
+/// themselves: `grf_shift` is the file's `price_base_multipliers[index]`, zero without one.
+pub(crate) fn get_price_raw(index: u32, cost_factor: u32, grf_shift: i32, shift: i32) -> i64 {
+    if index >= u32::from(Price::PR_END.0) {
+        return 0;
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "Below `PR_END`, the index is a `Price`, an enum over `uint8_t`."
+    )]
+    let cost = multiply_price(Price(index as u8), cost_factor);
+    shift_price(cost, shift.wrapping_add(grf_shift))
+}
+
+/// `_price[index] * cost_factor`: `Money` is an `OverflowSafeInt64`, whose `uint` product
+/// saturates.
+fn multiply_price(index: Price, cost_factor: u32) -> i64 {
+    #[expect(
+        clippy::cast_possible_wrap,
+        reason = "`OverflowSafeInt::operator *(const uint)` passes `(int64_t)factor` to `operator *=(const int)`, which narrows it to `int`."
+    )]
+    let factor = cost_factor as i32;
+    crate::company::price(usize::from(index.0)).saturating_mul(i64::from(factor))
+}
+
+/// The shift that ends `GetPrice`: left for a non-negative `shift`, else arithmetic right.
+fn shift_price(cost: i64, shift: i32) -> i64 {
+    if shift >= 0 {
+        cost.wrapping_shl(shift.unsigned_abs())
     } else {
-        (num.wrapping_mul(100) / u32::from(percentage)).max(1)
+        cost >> (-shift)
+    }
+}
+
+/// `GetPrice` for its native callers.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)] // Export attribute only.
+pub extern "C" fn openttd_rust_economy_get_price(
+    shared: &Services,
+    index: u8,
+    cost_factor: u32,
+    grf_file: *const c_void,
+    shift: i32,
+) -> i64 {
+    get_price(shared, Price(index), cost_factor, grf_file, shift)
+}
+
+/// Scale a number by the inverse of the cargo scale setting, e.g. a scale of 25% multiplies
+/// the number by 4. `town` says whether town or industry production is scaled. Returns the
+/// number scaled by the inverse of the cargo scale setting, minimum of 1.
+#[allow(unsafe_code)] // The two setting reads.
+pub(crate) fn scale_by_inverse_cargo_scale(settings: &SettingAddresses, num: u32, town: bool) -> u32 {
+    // SAFETY: The module contract: both addresses are live native settings.
+    let percentage = unsafe {
+        if town {
+            settings.town_cargo_scale.read()
+        } else {
+            settings.industry_cargo_scale.read()
+        }
+    };
+    // We might not need to do anything.
+    if percentage == 100 {
+        return num;
+    }
+    // Never return 0, since we often divide by this number.
+    (num.wrapping_mul(100) / u32::from(percentage)).max(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_tables::SHARED;
+
+    extern "C" fn file_shift(file: *const c_void, index: u32) -> i32 {
+        assert_eq!(index, u32::from(Price::PR_BUILD_OBJECT.0));
+        assert!(!file.is_null());
+        -3
+    }
+    extern "C" fn no_shift(_: *const c_void, _: u32) -> i32 {
+        panic!("GetPrice reads no multiplier of a null file or at PR_END")
+    }
+
+    fn shared(grf_price_shift: extern "C" fn(*const c_void, u32) -> i32) -> Services {
+        let mut shared = SHARED;
+        shared.grf_price_shift = grf_price_shift;
+        shared
+    }
+
+    /// Store `_price[index]` and return its earlier value, under `GLOBAL_LOCK`.
+    #[allow(unsafe_code)] // One store to the process-lifetime price array.
+    fn set_price(index: Price, value: i64) -> i64 {
+        let earlier = crate::company::price(usize::from(index.0));
+        // SAFETY: The caller holds `GLOBAL_LOCK`, which serializes the price array.
+        unsafe {
+            crate::company::openttd_rust_economy_prices()
+                .add(usize::from(index.0))
+                .write(value);
+        }
+        earlier
+    }
+
+    /// `economy.cpp`: `index >= PR_END` returns 0 before `_price` or the file is read.
+    #[test]
+    fn get_price_end_returns_zero_without_the_file() {
+        let shared = shared(no_shift);
+        let file = std::ptr::NonNull::<u8>::dangling().as_ptr().cast::<c_void>();
+        assert_eq!(get_price(&shared, Price::PR_END, 1, file, 0), 0);
+        assert_eq!(get_price(&shared, Price(Price::PR_END.0 + 1), 1, file, 0), 0);
+        assert_eq!(get_price_raw(u32::from(Price::PR_END.0), 1, 0, 0), 0);
+    }
+
+    /// A null file adds nothing; a file's multiplier adds to `shift`, and a negative total
+    /// shifts right arithmetically.
+    #[test]
+    fn get_price_shifts_by_the_file_multiplier() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let earlier = set_price(Price::PR_BUILD_OBJECT, -800);
+        let none = shared(no_shift);
+        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), 2), -9600);
+        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), -4), -150);
+        let file = std::ptr::NonNull::<u8>::dangling().as_ptr().cast::<c_void>();
+        let with = shared(file_shift);
+        assert_eq!(get_price(&with, Price::PR_BUILD_OBJECT, 3, file, 2), -1200);
+        assert_eq!(get_price_raw(u32::from(Price::PR_BUILD_OBJECT.0), 3, -3, 2), -1200);
+        set_price(Price::PR_BUILD_OBJECT, earlier);
+    }
+
+    /// The `uint` factor narrows to `int` and the product saturates as `OverflowSafeInt64`.
+    #[test]
+    fn get_price_multiplies_as_overflow_safe_int() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let earlier = set_price(Price::PR_BUILD_OBJECT, i64::MAX / 2);
+        let none = shared(no_shift);
+        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), 0), i64::MAX);
+        set_price(Price::PR_BUILD_OBJECT, 5);
+        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, u32::MAX, std::ptr::null(), 0), -5);
+        set_price(Price::PR_BUILD_OBJECT, earlier);
+    }
+
+    /// `ScaleByInverseCargoScale` reads the town or the industry setting by `town`, returns
+    /// `num` at 100% and never less than 1.
+    #[test]
+    fn scale_by_inverse_cargo_scale_reads_the_selected_setting() {
+        let town: u16 = 25;
+        let industry: u16 = 400;
+        let mut settings = crate::settings_type::SettingAddresses::NULL;
+        settings.town_cargo_scale = &raw const town;
+        settings.industry_cargo_scale = &raw const industry;
+        assert_eq!(scale_by_inverse_cargo_scale(&settings, 256, true), 1024);
+        assert_eq!(scale_by_inverse_cargo_scale(&settings, 256, false), 64);
+        assert_eq!(scale_by_inverse_cargo_scale(&settings, 3, false), 1);
+        let hundred: u16 = 100;
+        settings.town_cargo_scale = &raw const hundred;
+        assert_eq!(scale_by_inverse_cargo_scale(&settings, 0, true), 0);
     }
 }

@@ -74,18 +74,16 @@ pub(crate) fn colour(shared: &crate::services::Services, primary: bool, colour: 
         true,
         |out, flags| {
             let s = unsafe { &*((p.command)().company)() };
-            if crate::company_identity::openttd_rust_company_colour_abi(
+            crate::company_identity::cmd_set_company_colour(
                 s.identity,
-                crate::livery::LS_DEFAULT,
-                primary,
-                colour,
-                flags & DoCommandFlag::EXECUTE != 0,
-            ) != 0
-            {
-                out.zero();
-            } else {
-                out.error(crate::strings_type::INVALID_STRING_ID);
-            }
+                out,
+                crate::command_type::DoCommandFlags(flags),
+                crate::company_identity::CmdSetCompanyColour {
+                    scheme: crate::livery::LiveryScheme::LS_DEFAULT,
+                    primary,
+                    colour: crate::gfx_type::Colours(colour),
+                },
+            );
         },
         || (p.pack_colour)(primary, colour),
     )

@@ -16,6 +16,7 @@ struct OpenTTDCompanyIdentityServices;
 #include "services_ffi.h"
 #include "call_ffi.h"
 struct CompanyFinances;
+struct GRFFile;
 struct OpenTTDCommandCost;
 struct OpenTTDCommandCostServices;
 struct OpenTTDObjectivesServices;
@@ -205,7 +206,7 @@ void OPENTTD_RUST_CALL openttd_rust_economy_reset_price_multipliers();
 void OPENTTD_RUST_CALL openttd_rust_economy_set_price_multiplier(uint32_t, int32_t);
 void OPENTTD_RUST_CALL openttd_rust_economy_startup(const OpenTTDCompanyServices *, const OpenTTDEconomySettings *);
 void OPENTTD_RUST_CALL openttd_rust_economy_initialize();
-int64_t OPENTTD_RUST_CALL openttd_rust_economy_price(uint32_t, uint32_t, int32_t);
+int64_t OPENTTD_RUST_CALL openttd_rust_economy_get_price(const OpenTTDSharedServices *, uint8_t, uint32_t, const GRFFile *, int32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_company_available_money(const CompanyFinances *, bool);
 int64_t OPENTTD_RUST_CALL openttd_rust_company_max_loan(const CompanyFinances *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_startup_abi(const OpenTTDCompanyServices *, OpenTTDCompanyStartup *);

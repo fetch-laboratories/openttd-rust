@@ -6,6 +6,7 @@ use super::{CommonServices, ERROR, SelectionServices, vehicle_ref, vehicle_set};
 use crate::cargo_type::CargoType;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::economy_func::get_price;
+use crate::economy_type::Price;
 use crate::engine_type::EngineID;
 use crate::engine_type::OpenTTDEngine;
 use crate::engine_type::RailVehicleTypes;
@@ -201,10 +202,16 @@ pub(super) unsafe fn get_refit_cost(
         _ => s.not_reached(),
     };
     let negative = factor < 0;
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "The table's prices are `PR_*` values of `Price`, an enum over `uint8_t`."
+    )]
+    let price = Price(price as u8);
     let amount = get_price(
+        s.capabilities.shared,
         price,
         factor.unsigned_abs(),
-        (s.capabilities.shared.grf_price_shift)(crate::vehicle::EngineRef::of(e).grf(), price),
+        crate::vehicle::EngineRef::of(e).grf(),
         -10,
     );
     (s.common.base.cost.expense_money)(

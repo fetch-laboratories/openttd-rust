@@ -128,7 +128,7 @@ pub(crate) unsafe fn new_company(
 
     if !ci.is_null() {
         /* ci is nullptr when replaying, or for AIs. In neither case there is a client. */
-        let index: CompanyID = (f.command.company.identity.company_id)(c);
+        let index: CompanyID = (f.command.company.identity.index)(c);
         (s.set_info_company)(ci.as_ptr(), index.0);
         (s.update_client_info)(ci.as_ptr());
 

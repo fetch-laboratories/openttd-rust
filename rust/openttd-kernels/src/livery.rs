@@ -1,6 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Shared livery schemes and native layout from `livery.h`.
-/// List of different livery schemes from `livery.h`, retaining every underlying byte.
+//! `livery.h`: the livery schemes, the livery flags and the `Livery` record that
+//! `Company` and `Group` hold.
+use crate::gfx_type::Colours;
+
+/// List of different livery schemes, retaining every underlying byte.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LiveryScheme(pub u8);
@@ -68,16 +71,11 @@ impl LiveryScheme {
     pub const LS_END: Self = Self(23);
 }
 
+// Raw adapters of `LiveryScheme` for the unfinished `session.rs` and `engine_loading.rs`.
 /// Raw compatibility view of `LiveryScheme::LS_DEFAULT`.
 pub const LS_DEFAULT: u8 = LiveryScheme::LS_DEFAULT.0;
 /// Raw compatibility view of `LiveryScheme::LS_STEAM`.
 pub const LS_STEAM: u8 = LiveryScheme::LS_STEAM.0;
-/// Raw compatibility view of `LiveryScheme::LS_DIESEL`.
-pub const LS_DIESEL: u8 = LiveryScheme::LS_DIESEL.0;
-/// Raw compatibility view of `LiveryScheme::LS_ELECTRIC`.
-pub const LS_ELECTRIC: u8 = LiveryScheme::LS_ELECTRIC.0;
-/// Raw compatibility view of `LiveryScheme::LS_MONORAIL`.
-pub const LS_MONORAIL: u8 = LiveryScheme::LS_MONORAIL.0;
 /// Raw compatibility view of `LiveryScheme::LS_MAGLEV`.
 pub const LS_MAGLEV: u8 = LiveryScheme::LS_MAGLEV.0;
 /// Raw compatibility view of `LiveryScheme::LS_DMU`.
@@ -88,46 +86,100 @@ pub const LS_EMU: u8 = LiveryScheme::LS_EMU.0;
 pub const LS_PASSENGER_WAGON_STEAM: u8 = LiveryScheme::LS_PASSENGER_WAGON_STEAM.0;
 /// Raw compatibility view of `LiveryScheme::LS_PASSENGER_WAGON_DIESEL`.
 pub const LS_PASSENGER_WAGON_DIESEL: u8 = LiveryScheme::LS_PASSENGER_WAGON_DIESEL.0;
-/// Raw compatibility view of `LiveryScheme::LS_PASSENGER_WAGON_ELECTRIC`.
-pub const LS_PASSENGER_WAGON_ELECTRIC: u8 = LiveryScheme::LS_PASSENGER_WAGON_ELECTRIC.0;
-/// Raw compatibility view of `LiveryScheme::LS_PASSENGER_WAGON_MONORAIL`.
-pub const LS_PASSENGER_WAGON_MONORAIL: u8 = LiveryScheme::LS_PASSENGER_WAGON_MONORAIL.0;
-/// Raw compatibility view of `LiveryScheme::LS_PASSENGER_WAGON_MAGLEV`.
-pub const LS_PASSENGER_WAGON_MAGLEV: u8 = LiveryScheme::LS_PASSENGER_WAGON_MAGLEV.0;
 /// Raw compatibility view of `LiveryScheme::LS_FREIGHT_WAGON`.
 pub const LS_FREIGHT_WAGON: u8 = LiveryScheme::LS_FREIGHT_WAGON.0;
-/// Raw compatibility view of `LiveryScheme::LS_BUS`.
-pub const LS_BUS: u8 = LiveryScheme::LS_BUS.0;
-/// Raw compatibility view of `LiveryScheme::LS_TRUCK`.
-pub const LS_TRUCK: u8 = LiveryScheme::LS_TRUCK.0;
-/// Raw compatibility view of `LiveryScheme::LS_PASSENGER_SHIP`.
-pub const LS_PASSENGER_SHIP: u8 = LiveryScheme::LS_PASSENGER_SHIP.0;
-/// Raw compatibility view of `LiveryScheme::LS_FREIGHT_SHIP`.
-pub const LS_FREIGHT_SHIP: u8 = LiveryScheme::LS_FREIGHT_SHIP.0;
-/// Raw compatibility view of `LiveryScheme::LS_HELICOPTER`.
-pub const LS_HELICOPTER: u8 = LiveryScheme::LS_HELICOPTER.0;
-/// Raw compatibility view of `LiveryScheme::LS_SMALL_PLANE`.
-pub const LS_SMALL_PLANE: u8 = LiveryScheme::LS_SMALL_PLANE.0;
-/// Raw compatibility view of `LiveryScheme::LS_LARGE_PLANE`.
-pub const LS_LARGE_PLANE: u8 = LiveryScheme::LS_LARGE_PLANE.0;
-/// Raw compatibility view of `LiveryScheme::LS_PASSENGER_TRAM`.
-pub const LS_PASSENGER_TRAM: u8 = LiveryScheme::LS_PASSENGER_TRAM.0;
-/// Raw compatibility view of `LiveryScheme::LS_FREIGHT_TRAM`.
-pub const LS_FREIGHT_TRAM: u8 = LiveryScheme::LS_FREIGHT_TRAM.0;
-/// Mask for `Livery::Flag::Primary`.
-pub const PRIMARY: u8 = 1 << 0;
-/// Mask for `Livery::Flag::Secondary`.
-pub const SECONDARY: u8 = 1 << 1;
-/// Shared native livery layout; used only through raw field accesses.
+
+/// `Livery::Flag`: the colours a livery sets.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LiveryFlag(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl LiveryFlag {
+    /// Primary colour is set.
+    pub const Primary: Self = Self(0);
+    /// Secondary colour is set.
+    pub const Secondary: Self = Self(1);
+}
+
+/// `Livery::Flags`, the `EnumBitSet` of `LiveryFlag`, retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct LiveryFlags(pub u8);
+
+impl LiveryFlags {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Set containing the named element (the element is a bit position).
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn from_element(element: LiveryFlag) -> Self {
+        Self((1_u64 << element.0) as u8)
+    }
+    /// Native `BaseBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, element: LiveryFlag) -> bool {
+        crate::base_bitset_type::test(self.0 as u64, element.0)
+    }
+    /// Native `BaseBitSet::Set` of one element.
+    pub fn set(&mut self, element: LiveryFlag) {
+        self.0 |= Self::from_element(element).0;
+    }
+    /// Native `BaseBitSet::Set(value, set)`: set or reset one element.
+    pub fn set_to(&mut self, element: LiveryFlag, set: bool) {
+        if set {
+            self.set(element);
+        } else {
+            self.reset(element);
+        }
+    }
+    /// Native `BaseBitSet::Reset` of one element.
+    pub fn reset(&mut self, element: LiveryFlag) {
+        self.0 &= !Self::from_element(element).0;
+    }
+    /// Native `BaseBitSet::Reset` of a set.
+    pub fn reset_set(&mut self, other: Self) {
+        self.0 &= !other.0;
+    }
+    /// Native `BaseBitSet::Reset()`: clear every bit.
+    pub fn reset_all(&mut self) {
+        self.0 = 0;
+    }
+    /// Native `BaseBitSet::Any` of a set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+}
+
+crate::base_bitset_type::impl_bitset_ops!(LiveryFlags);
+
+/// Raw mask of `LiveryFlag::Primary`, for the unfinished `fleet.rs`.
+pub const PRIMARY: u8 = LiveryFlags::from_element(LiveryFlag::Primary).0;
+/// Raw mask of `LiveryFlag::Secondary`, for the unfinished `fleet.rs`.
+pub const SECONDARY: u8 = LiveryFlags::from_element(LiveryFlag::Secondary).0;
+
+/// Information about a particular livery.
 #[repr(C)]
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Livery {
-    /// Livery flags, including unnamed bits.
-    pub in_use: u8,
+    /// Livery flags.
+    pub in_use: LiveryFlags,
     /// First colour, for all vehicles.
-    pub colour1: u8,
+    pub colour1: Colours,
     /// Second colour, for vehicles with 2CC support.
-    pub colour2: u8,
+    pub colour2: Colours,
+}
+
+impl Default for Livery {
+    /// The header's member initialisers: no flags and `COLOUR_BEGIN` for both colours.
+    fn default() -> Self {
+        Self {
+            in_use: LiveryFlags::EMPTY,
+            colour1: Colours::COLOUR_BEGIN,
+            colour2: Colours::COLOUR_BEGIN,
+        }
+    }
 }
 
 crate::abi::layouts! {

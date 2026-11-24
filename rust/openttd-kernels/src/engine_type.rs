@@ -73,8 +73,6 @@ impl EngineID {
     pub const INVALID: Self = Self(u16::MAX);
 }
 
-/// `EngineMiscFlag::RailIsMU`.
-pub const RAIL_IS_MU: u8 = EngineMiscFlags::from_element(EngineMiscFlag::RailIsMU).0;
 /// `EngineMiscFlag::RoadIsTram`.
 pub const ROAD_IS_TRAM: u8 = EngineMiscFlags::from_element(EngineMiscFlag::RoadIsTram).0;
 /// `AIR_FAST`.

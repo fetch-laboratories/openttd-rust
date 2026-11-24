@@ -175,7 +175,12 @@ static OpenTTDCompanyRef FixtureNext(uint32_t from) noexcept
 	return {nullptr, UINT32_MAX};
 }
 static void FixtureNoop(uint8_t) noexcept {}
-static void FixtureAdminUpdate(uint8_t id) noexcept { fixture_trace.push_back(fmt::format("admin {}", id)); }
+static void FixtureAdminUpdate(const Company *c) noexcept
+{
+	for (size_t id = 0; id < fixture_companies.size(); id++) {
+		if (reinterpret_cast<const Company *>(fixture_companies[id].get()) == c) fixture_trace.push_back(fmt::format("admin {}", id));
+	}
+}
 static void FixturePostDelete(uint8_t id) noexcept
 {
 	fixture_trace.push_back(fmt::format("post {}", id));
@@ -245,21 +250,19 @@ static void FixtureReset(bool networking, bool server)
 	fixture_identity.shared = &fixture_identity_shared;
 	fixture_identity.company = [](uint8_t id) noexcept { return reinterpret_cast<Company *>(fixture_companies[id].get()); };
 	fixture_identity.next_company = [](uint32_t) noexcept -> Company * { return nullptr; };
-	fixture_identity.company_id = [](const Company *) noexcept -> uint8_t { return 2; };
+	fixture_identity.index = [](const Company *) noexcept -> uint8_t { return 2; };
 	fixture_identity.set_colour = [](Company *c, uint8_t value) noexcept { FixtureProperties(c)->colour = static_cast<Colours>(value); };
 	fixture_identity.colour = [](const Company *c) noexcept -> uint8_t { return FixtureProperties(c)->colour; };
-	fixture_identity.livery = [](Company *c, LiveryScheme scheme) noexcept { return &FixtureProperties(c)->livery[scheme]; };
+	fixture_identity.livery = [](Company *c) noexcept { return FixtureProperties(c)->livery.data(); };
 	fixture_identity.face = [](Company *c) noexcept { return &FixtureProperties(c)->face; };
-	fixture_identity.set_president_id = [](Company *c, uint32_t value) noexcept { FixtureProperties(c)->president_name_1 = value; };
-	fixture_identity.set_president_parts = [](Company *c, uint32_t value) noexcept { FixtureProperties(c)->president_name_2 = value; };
-	fixture_identity.render = [](OpenTTDCompanyNameStorage *, uint32_t, uint32_t) noexcept { return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>("President"), 9}; };
+	fixture_identity.set_president_name_1 = [](Company *c, uint32_t value) noexcept { FixtureProperties(c)->president_name_1 = value; };
+	fixture_identity.set_president_name_2 = [](Company *c, uint32_t value) noexcept { FixtureProperties(c)->president_name_2 = value; };
 	fixture_identity.admin_update = FixtureAdminUpdate;
 	fixture_identity.is_ai = [](const Company *) noexcept { return fixture_is_ai; };
 	fixture_faces = GetRustFaceServices();
 	fixture_faces.count = []() noexcept -> uint32_t { return 1; };
 	fixture_faces.vars = [](uint32_t) noexcept { return OpenTTDFaceVars{nullptr, 0}; };
 	fixture_faces.spec = [](uint32_t) noexcept { static const FaceSpec spec{"fixture", FaceVars{}}; return &spec; };
-	fixture_faces.random = [](Randomizer *) noexcept -> uint32_t { return 0; };
 	fixture_identity.faces = &fixture_faces;
 	fixture_services.identity = &fixture_identity;
 	fixture_services.company_league_dirty = FixtureVoid; fixture_services.company_ctrl_windows = FixtureVoid;

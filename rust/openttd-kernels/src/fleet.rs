@@ -24,7 +24,8 @@ use crate::debug::debug;
 use crate::engine_type::EngineID;
 use crate::group::{GroupFlag, GroupFlags};
 use crate::group_type::GroupID;
-use crate::livery::{Livery, PRIMARY, SECONDARY};
+use crate::gfx_type::Colours;
+use crate::livery::{Livery, LiveryFlags, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::table::strings::STR_ERROR_GROUP_CAN_T_SET_PARENT_RECURSION;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef};
@@ -653,10 +654,10 @@ unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
     let mut from = 0;
     while let Some(child) = unsafe { child_after(g, from) } {
         let cg = unsafe { group(w, child) };
-        if read_field!(cg, livery.in_use) & PRIMARY == 0 {
+        if read_field!(cg, livery.in_use).0 & PRIMARY == 0 {
             write_field!(cg, livery.colour1, read_field!(g, livery.colour1));
         }
-        if read_field!(cg, livery.in_use) & SECONDARY == 0 {
+        if read_field!(cg, livery.in_use).0 & SECONDARY == 0 {
             write_field!(cg, livery.colour2, read_field!(g, livery.colour2));
         }
         unsafe { propagate_livery(w, child, reset) };
@@ -793,12 +794,12 @@ unsafe fn alter_group(
                 unsafe { openttd_rust_fleet_child_change(pg.cast(), u32::from(id), true) };
             }
             unsafe { update_autoreplace(w, owner) };
-            if read_field!(g, livery.in_use) & (PRIMARY | SECONDARY) != (PRIMARY | SECONDARY) {
+            if read_field!(g, livery.in_use).0 & (PRIMARY | SECONDARY) != (PRIMARY | SECONDARY) {
                 let inherited = unsafe { parent_livery(w, g) };
-                if read_field!(g, livery.in_use) & PRIMARY == 0 {
+                if read_field!(g, livery.in_use).0 & PRIMARY == 0 {
                     write_field!(g, livery.colour1, read_field!(inherited, colour1));
                 }
-                if read_field!(g, livery.in_use) & SECONDARY == 0 {
+                if read_field!(g, livery.in_use).0 & SECONDARY == 0 {
                     write_field!(g, livery.colour2, read_field!(inherited, colour2));
                 }
                 unsafe {
@@ -974,10 +975,10 @@ pub(crate) unsafe fn company_liveries(w: &GroupServices, company: u8) {
         let g = unsafe { group(w, id as u16) };
         if read_field!(g, owner) == company && read_field!(g, parent) == INVALID_GROUP {
             let inherited = unsafe { (w.company_livery)(company) };
-            if read_field!(g, livery.in_use) & PRIMARY == 0 {
+            if read_field!(g, livery.in_use).0 & PRIMARY == 0 {
                 write_field!(g, livery.colour1, read_field!(inherited, colour1));
             }
-            if read_field!(g, livery.in_use) & SECONDARY == 0 {
+            if read_field!(g, livery.in_use).0 & SECONDARY == 0 {
                 write_field!(g, livery.colour2, read_field!(inherited, colour2));
             }
             unsafe { propagate_livery(w, id as u16, false) };
@@ -1153,20 +1154,20 @@ unsafe fn set_livery(w: &GroupServices, flags: u32, id: u16, primary: bool, mut 
     if flags & 1 != 0 {
         let mask = if primary { PRIMARY } else { SECONDARY };
         if colour == 255 {
-            write_field!(g, livery.in_use, read_field!(g, livery.in_use) & !mask);
+            write_field!(g, livery.in_use, LiveryFlags(read_field!(g, livery.in_use).0 & !mask));
             let inherited = unsafe { parent_livery(w, g) };
             colour = if primary {
-                read_field!(inherited, colour1)
+                read_field!(inherited, colour1).0
             } else {
-                read_field!(inherited, colour2)
+                read_field!(inherited, colour2).0
             };
         } else {
-            write_field!(g, livery.in_use, read_field!(g, livery.in_use) | mask);
+            write_field!(g, livery.in_use, LiveryFlags(read_field!(g, livery.in_use).0 | mask));
         }
         if primary {
-            write_field!(g, livery.colour1, colour);
+            write_field!(g, livery.colour1, Colours(colour));
         } else {
-            write_field!(g, livery.colour2, colour);
+            write_field!(g, livery.colour2, Colours(colour));
         }
         unsafe {
             propagate_livery(w, id, true);

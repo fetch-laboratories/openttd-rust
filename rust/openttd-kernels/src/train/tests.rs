@@ -331,6 +331,8 @@ mod bodies {
         industry: 0,
         town: 0,
         company: 0,
+        text: std::ptr::null(),
+        text_length: 0,
     };
     extern "C" fn had_vehicle_of_type_field(st: *mut crate::station::Station) -> *mut u8 {
         assert_eq!(
@@ -523,6 +525,8 @@ mod bodies {
                 industry: 0,
                 town: 0,
                 company: owner,
+                text: std::ptr::null(),
+                text_length: 0,
             };
             assert_eq!(
                 RESERVED.with(std::cell::RefCell::take),

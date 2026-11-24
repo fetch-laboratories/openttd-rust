@@ -31,7 +31,7 @@ use crate::company_type::{
 };
 use crate::debug::debug;
 use crate::direction_type::DiagDirection;
-use crate::economy_func::get_price;
+use crate::economy_func::get_price_raw;
 use crate::economy_type::PR_BUILD_FOUNDATION;
 use crate::game_state::GameState;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
@@ -673,12 +673,12 @@ impl<'a> World<'a> {
     /// Original `ObjectSpec::GetBuildCost`; native storage supplies its factors.
     unsafe fn get_build_cost(&self, spec: *const Spec) -> i64 {
         let price = unsafe { (self.s.build_price)(spec) };
-        get_price(PR_BUILD_OBJECT, price.factor, price.shift, 0)
+        get_price_raw(PR_BUILD_OBJECT, price.factor, price.shift, 0)
     }
     /// Original `ObjectSpec::GetClearCost`; native storage supplies its factors.
     unsafe fn get_clear_cost(&self, spec: *const Spec) -> i64 {
         let price = unsafe { (self.s.clear_price)(spec) };
-        get_price(PR_CLEAR_OBJECT, price.factor, price.shift, 0)
+        get_price_raw(PR_CLEAR_OBJECT, price.factor, price.shift, 0)
     }
     fn current(&self) -> u8 {
         (self.shared.current_company)()
@@ -2284,8 +2284,14 @@ pub unsafe extern "C" fn openttd_rust_object_update_hq(
 /// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_colours(s: *const ObjectServices, company: u8) {
-    let w = unsafe { World::new::<false>(&*s) };
-    w.colours(company);
+    update_object_colours(unsafe { &*s }, crate::company_type::CompanyID(company));
+}
+
+/// `UpdateObjectColours(c)`: update the company colour of all objects the company owns,
+/// except those whose spec has the colour callback.
+pub(crate) fn update_object_colours(s: &ObjectServices, c: crate::company_type::CompanyID) {
+    let w = unsafe { World::new::<false>(s) };
+    w.colours(c.0);
 }
 
 /// Synchronous object owner entry.

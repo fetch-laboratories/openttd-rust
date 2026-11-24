@@ -61,6 +61,11 @@ crate::abi::shared_records! {
         pub town: u16,
         /// A company.
         pub company: u8,
+        /// A name's bytes, borrowed for the call: `ScriptEventCompanyRenamed` and
+        /// `ScriptEventPresidentRenamed` copy them into their `std::string`.
+        pub text: *const u8,
+        /// Byte length of `text`.
+        pub text_length: usize,
     }
 }
 
@@ -77,6 +82,8 @@ impl ScriptEvent {
             industry: 0,
             town: 0,
             company: 0,
+            text: std::ptr::null(),
+            text_length: 0,
         }
     }
 
@@ -208,6 +215,28 @@ impl ScriptEvent {
             company: company.0,
             town: town.0,
             ..Self::of(ScriptEventType::ET_ROAD_RECONSTRUCTION)
+        }
+    }
+
+    /// `ScriptEventCompanyRenamed(company, new_name)`, borrowing `new_name` for the call.
+    #[must_use]
+    pub const fn company_renamed(company: CompanyID, new_name: &[u8]) -> Self {
+        Self {
+            company: company.0,
+            text: new_name.as_ptr(),
+            text_length: new_name.len(),
+            ..Self::of(ScriptEventType::ET_COMPANY_RENAMED)
+        }
+    }
+
+    /// `ScriptEventPresidentRenamed(company, new_name)`, borrowing `new_name` for the call.
+    #[must_use]
+    pub const fn president_renamed(company: CompanyID, new_name: &[u8]) -> Self {
+        Self {
+            company: company.0,
+            text: new_name.as_ptr(),
+            text_length: new_name.len(),
+            ..Self::of(ScriptEventType::ET_PRESIDENT_RENAMED)
         }
     }
 }
