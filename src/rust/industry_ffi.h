@@ -320,9 +320,6 @@ void openttd_rust_industry_tile_acceptance(uint32_t tile, uint32_t *acceptance, 
 /** Industry-owned scratch value, matching the actual shared cleared-object entry. */
 typedef struct OpenTTDIndustryAllocation { OpenTTDIndustryShell *shell; OpenTTDIndustry *owner; uint16_t id; } OpenTTDIndustryAllocation;
 typedef struct OpenTTDIndustryConflictKinds { uint8_t kinds[3]; } OpenTTDIndustryConflictKinds;
-typedef struct OpenTTDIndustryConstructionErrors {
-	uint32_t site, forest, positioned, desert, rainforest, lowland, one_per_town, town, population, near_town, conflict, too_many;
-} OpenTTDIndustryConstructionErrors;
 typedef struct OpenTTDIndustryLocationResult { uint16_t callback; int32_t registers[16]; } OpenTTDIndustryLocationResult;
 typedef void (*OpenTTDIndustryTemporaryVisit)(void *, OpenTTDIndustryShell *);
 OpenTTDIndustryLocationResult openttd_industry_resolve_location(OpenTTDIndustryShell *, uint32_t tile, uint8_t type, uint32_t seed, uint8_t creation) OPENTTD_INDUSTRY_NOEXCEPT;
@@ -361,7 +358,6 @@ typedef struct OpenTTDIndustryTransactionContext {
 	const OpenTTDCommandServices *command_checks;
 	const OpenTTDIndustryCostServices *costs;
 	const OpenTTDIndustryTransactionServices *transaction;
-	const OpenTTDIndustryConstructionErrors *errors;
 } OpenTTDIndustryTransactionContext;
 void openttd_rust_industry_build(OpenTTDIndustryCost *, uint32_t tile, uint8_t type, uint16_t flags, uint32_t first_layout, bool fund, uint32_t seed, const OpenTTDIndustryTransactionContext *);
 void openttd_rust_industry_create(OpenTTDIndustryCost *, OpenTTDIndustryShell **industry, uint32_t tile, uint8_t type, uint8_t creation_type, const OpenTTDIndustryTransactionContext *);

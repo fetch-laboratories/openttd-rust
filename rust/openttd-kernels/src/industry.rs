@@ -2629,20 +2629,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryConflictKinds" ["industry"] => crate::industry::ConflictKinds {
         kinds,
     };
-    "OpenTTDIndustryConstructionErrors" ["industry"] => crate::industry::ConstructionErrors {
-        site,
-        forest,
-        positioned,
-        desert,
-        rainforest,
-        lowland,
-        one_per_town,
-        town,
-        population,
-        near_town,
-        conflict,
-        too_many,
-    };
     "OpenTTDIndustryTransactionServices" ["industry"] => crate::industry::TransactionServices {
         town,
         population,
@@ -2674,7 +2660,6 @@ crate::abi::layouts! {
         command_checks,
         costs,
         transaction,
-        errors,
     };
     "OpenTTDIndustryTilePolicyServices" ["industry"] => crate::industry::TilePolicyServices {
         object_in_way,

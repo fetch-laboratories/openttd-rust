@@ -29,6 +29,7 @@
 #include "../core/backup_type.hpp"
 #include "../economy_func.h"
 #include "../settings_type.h"
+#include "../table/strings.h"
 #include <thread>
 extern "C" int64_t openttd_test_industry_removal_cost(uint32_t);
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
@@ -423,8 +424,6 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	OpenTTDIndustryCommandServices commands{};
 	OpenTTDIndustryCostServices costs{};
 	OpenTTDIndustryTransactionServices transaction{};
-	OpenTTDIndustryConstructionErrors errors{};
-	errors.site = 1234;
 	tile_spec.grf_prop.grffile = &tile_file;
 	commands.owner = RustIndustryCanonicalOwner<Industry *>;
 	construction.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { CHECK(town == nullptr); static_cast<Industry *>(shell)->town = nullptr; };
@@ -455,7 +454,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 		.builder = nullptr, .production = &production, .generation = &generation,
 		.construction = &construction, .lifecycle = &lifecycle, .tiles = &tiles,
 		.commands = &commands, .command_checks = nullptr, .costs = &costs,
-		.transaction = &transaction, .errors = &errors,
+		.transaction = &transaction,
 	};
 	const auto pool_count = Industry::GetNumItems();
 	for (uint16_t callback : {uint16_t{0}, uint16_t{1}, uint16_t{0xFFFF}}) {
@@ -474,7 +473,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 			openttd_rust_industry_shape_check(&cost, 123, 456, &tile_spec, 7, 8, 258, 0xABCD, 2, 3, &context);
 			CHECK(cost.Succeeded() == (callback == 0xFFFF ? slope == 0 : version >= 7 || callback != 0));
 			CHECK(cost.GetCost() == (callback != 0xFFFF && version >= 7 ? 789 : 0));
-			if (callback == 0xFFFF) { CHECK(cost.GetErrorMessage() == (slope == 0 ? INVALID_STRING_ID : errors.site)); CHECK(trace == (std::vector<uint8_t>{1, 3, 5})); }
+			if (callback == 0xFFFF) { CHECK(cost.GetErrorMessage() == (slope == 0 ? INVALID_STRING_ID : STR_ERROR_SITE_UNSUITABLE)); CHECK(trace == (std::vector<uint8_t>{1, 3, 5})); }
 			else if (version < 7) { CHECK(trace == (std::vector<uint8_t>{1, 3, 6, 5})); }
 			else { CHECK(trace == (std::vector<uint8_t>{1, 3, 6, 4, 5})); }
 		}
