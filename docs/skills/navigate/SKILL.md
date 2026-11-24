@@ -36,7 +36,7 @@ Ask whether each part, followed literally, reaches the destination:
 - **Plan**: C++ left after every planned item and phase, and what plans the next phase before work runs dry.
 - **Rules**: rules, decisions or exclusions that retain C++ indefinitely, misdirect selection or waste time; hard limits and mandatory procedures where judgment would work better.
 - **Metrics**: whether every figure root and steer use measures distance.
-- **Rate**: its changes and the parts of the course responsible.
+- **Rate**: its changes and the parts of the course responsible, measured from each period's merges and PRs, not listed as candidates. In a stage that retires no C++ by design, such as the cleanup, judge that stage's own pace: its intended cost is not a finding.
 - **Autonomy**: waits, parked work and decisions the destination already answers.
 
 Done when every part has a verdict, and each failure names its text by file and line.
