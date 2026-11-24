@@ -587,7 +587,10 @@ fn depot_refit_result_tells_the_failure_or_shows_the_cost() {
         return;
     }
     let s = visits(|_, _, _| {});
-    let cost = std::ptr::NonNull::dangling().as_ptr();
+    let cost = crate::services::Cost(
+        std::ptr::NonNull::dangling().as_ptr(),
+        s.refit.common.base.cost,
+    );
     take();
     for owner in [LOCAL, LOCAL + 1] {
         let v = vehicle(

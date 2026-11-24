@@ -4903,6 +4903,22 @@ pub(crate) fn reset_unbunching(v: VehicleRef) {
     unsafe { reset_depot_unbunching(consist) };
 }
 
+/// `OrderList::GetOrders()`: an order list's stored span, resolved once by its caller and
+/// read in place; no caller changes the list while it holds the span.
+#[derive(Clone, Copy)]
+pub(crate) struct OrderSpan(*const Vector);
+impl OrderSpan {
+    /// `OrderList::GetNumOrders()`.
+    pub(crate) fn count(self) -> VehicleOrderID {
+        VehicleOrderID(read_field!(self.0, length) as u8)
+    }
+    /// `orders[index]` for an index below `count`, read in place.
+    pub(crate) fn order(self, index: VehicleOrderID) -> OrderView<'static> {
+        // SAFETY: An index below `count` names a live stored order of the span.
+        unsafe { OrderView::of(slot(self.0, usize::from(index.0))) }
+    }
+}
+
 /// Direct access to the canonical orders owner for route prediction.
 /// Handles are live for the synchronous entry; no owner borrow crosses a leaf.
 #[derive(Clone, Copy)]
@@ -4927,6 +4943,10 @@ impl VisitOrders {
         // SAFETY: An index below `count` names a live stored order, which no caller of a
         // view changes while it reads it.
         unsafe { OrderView::of(slot(self.0.vector(list), usize::from(index.0))) }
+    }
+    /// `OrderList::GetOrders()` of `list`, resolved once.
+    pub(crate) fn span(self, list: *mut c_void) -> OrderSpan {
+        OrderSpan(self.0.vector(list))
     }
     /// Full `OrderList::GetOrders()` span length, without `VehicleOrderID` narrowing.
     pub(crate) fn stored_count(self, list: *mut c_void) -> usize {
@@ -4961,13 +4981,6 @@ impl VisitOrders {
     pub(crate) fn get(self, v: VehicleRef, index: VehicleOrderID) -> Option<OrderView<'static>> {
         let list = crate::vehicle_base::order_list(v.0.as_ptr());
         (!list.is_null() && index < self.count(list)).then(|| self.order(list, index))
-    }
-    /// Virtual `Vehicle::GetDisplayMaxSpeed`: the maximum speed in km-ish/h as displayed
-    /// to the player.
-    pub(crate) fn get_display_max_speed(self, v: VehicleRef) -> i32 {
-        // SAFETY: The live shell; the leaf reads it and retains nothing. The leaf widens the
-        // virtual's `int`, which the cast narrows back.
-        unsafe { (self.0.0.display_speed)(Self::shell(v)) as i32 }
     }
     /// The implicit-order part of `Vehicle::BeginLoading`.
     pub(crate) fn begin_loading(self, v: VehicleRef) {

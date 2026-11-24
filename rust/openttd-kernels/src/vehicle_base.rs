@@ -770,6 +770,21 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn cur_real_order_index_raw(self) -> u8 {
         self.cur_real_order_index().0
     }
+    /// Virtual `Vehicle::GetDisplayMaxSpeed`: the maximum speed in km-ish/h as displayed to
+    /// the player, dispatched on the vehicle's type to each override; other types take the
+    /// base class's 0.
+    pub(crate) fn get_display_max_speed(self) -> i32 {
+        use crate::ground_vehicle::{GroundVehicleType, RoadVehicle, Train};
+        match self.vehicle_type() {
+            VehicleType::VEH_TRAIN => Train::get_display_max_speed(self),
+            VehicleType::VEH_ROAD => RoadVehicle::get_display_max_speed(self),
+            // `Ship::GetDisplayMaxSpeed`.
+            VehicleType::VEH_SHIP => i32::from(self.cached_max_speed()) / 2,
+            // `Aircraft::GetDisplayMaxSpeed`.
+            VehicleType::VEH_AIRCRAFT => i32::from(self.cached_max_speed()),
+            _ => 0,
+        }
+    }
     /// `Vehicle::cur_implicit_order_index`: the index to the current implicit order.
     pub(crate) fn cur_implicit_order_index(self) -> crate::order_type::VehicleOrderID {
         let consist = read_field!(self.0.as_ptr(), consist);

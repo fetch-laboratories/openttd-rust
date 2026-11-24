@@ -397,7 +397,9 @@ impl Refresher {
             let temp_cargo_type = v.cargo_type(resolver);
             let temp_subtype = v.cargo_subtype(resolver);
             v.set_cargo_type(vs, self.cargo);
-            // SAFETY: `GetBestFittingSubType(v, v, cargo)` reads both live shells only.
+            // SAFETY: `GetBestFittingSubType(v, v, cargo)` takes the live shell twice; it
+            // changes and restores the cargo type and subtype, invalidates NewGRF caches and
+            // runs cargo suffix callbacks, and no Rust borrow of the vehicle spans the call.
             let subtype = unsafe {
                 (r.common.transactions.subtype)(v.shell().cast(), v.shell().cast(), self.cargo.0)
             };
@@ -482,27 +484,28 @@ impl Refresher {
         let o = s.orders();
         assert_with(|| !orders(self.vehicle).is_null());
         let orderlist = orders(self.vehicle);
+        let span = o.span(orderlist);
 
         /* next is good if it's either nullptr (then the caller will stop the
          * evaluation) or if it's not conditional and the caller allows it to be
          * chosen (by setting RefreshFlag::UseNext). */
-        while next < o.count(orderlist)
+        while next < span.count()
             && (!flags.test(RefreshFlag::UseNext)
-                || o.order(orderlist, next).is_type(OrderType::OT_CONDITIONAL))
+                || span.order(next).is_type(OrderType::OT_CONDITIONAL))
         {
             /* After the first step any further non-conditional order is good,
              * regardless of previous RefreshFlag::UseNext settings. The case of cur and next or
              * their respective stations being equal is handled elsewhere. */
             flags = flags.set(RefreshFlag::UseNext);
 
-            if o.order(orderlist, next).is_type(OrderType::OT_CONDITIONAL) {
+            if span.order(next).is_type(OrderType::OT_CONDITIONAL) {
                 let skip_to = o.decision(
                     orderlist,
-                    o.order(orderlist, next).condition_skip_to_order(),
+                    span.order(next).condition_skip_to_order(),
                     num_hops,
                 );
                 if skip_to != VehicleOrderID::INVALID_VEH_ORDER_ID
-                    && num_hops < u32::from(o.count(orderlist).0)
+                    && num_hops < u32::from(span.count().0)
                 {
                     /* Make copies of capacity tracking lists. There is potential
                      * for optimization here: If the vehicle never refits we don't
@@ -535,9 +538,10 @@ impl Refresher {
         let v = self.vehicle;
         assert_with(|| !orders(v).is_null());
         let orderlist = orders(v);
+        let span = o.span(orderlist);
 
-        let next_station = o.order(orderlist, next).destination().to_station_id();
-        let st = s.station_if_valid(o.order(orderlist, cur).destination().to_station_id());
+        let next_station = span.order(next).destination().to_station_id();
+        let st = s.station_if_valid(span.order(cur).destination().to_station_id());
         if st.is_null()
             || next_station == StationID::INVALID
             || next_station == StationID((s.links.graphs.station_id)(st))
@@ -553,7 +557,7 @@ impl Refresher {
                 continue;
             }
 
-            if o.get_display_max_speed(v) == 0 {
+            if v.get_display_max_speed() == 0 {
                 continue;
             }
 
@@ -567,7 +571,7 @@ impl Refresher {
             }
 
             /* A link is at least partly restricted if a vehicle can't load at its source. */
-            let restricted_mode = if o.order(orderlist, cur).load_type() == OrderLoadType::NoLoad {
+            let restricted_mode = if span.order(cur).load_type() == OrderLoadType::NoLoad {
                 EdgeUpdateModes::RESTRICTED
             } else {
                 EdgeUpdateModes::UNRESTRICTED
@@ -580,7 +584,7 @@ impl Refresher {
                 .map()
                 .distance_manhattan(base_station_base::xy(st), base_station_base::xy(st_to))
                 .wrapping_mul(4096)
-                / o.get_display_max_speed(v).cast_unsigned();
+                / v.get_display_max_speed().cast_unsigned();
 
             /* If the vehicle is currently full loading, increase the capacities at the station
              * where it is loading by an estimate of what it would have transported if it wasn't
@@ -651,8 +655,9 @@ impl Refresher {
         let o = s.orders();
         assert_with(|| !orders(self.vehicle).is_null());
         let orderlist = orders(self.vehicle);
-        while next < o.count(orderlist) {
-            let next_order = o.order(orderlist, next);
+        let span = o.span(orderlist);
+        while next < span.count() {
+            let next_order = span.order(next);
 
             if (next_order.is_type(OrderType::OT_GOTO_DEPOT)
                 || next_order.is_type(OrderType::OT_GOTO_STATION))
@@ -701,7 +706,7 @@ impl Refresher {
                 break;
             }
 
-            let next_order = o.order(orderlist, next);
+            let next_order = span.order(next);
 
             /* Don't use the same order again, but choose a new one in the next round. */
             flags = flags.reset(RefreshFlag::UseNext);
@@ -719,7 +724,7 @@ impl Refresher {
                     .reset(RefreshFlags::from(RefreshFlag::ResetRefit).set(RefreshFlag::WasRefit));
             }
 
-            let cur_order = o.order(orderlist, cur);
+            let cur_order = span.order(cur);
 
             if cur_order.is_type(OrderType::OT_GOTO_STATION)
                 || cur_order.is_type(OrderType::OT_IMPLICIT)
@@ -837,6 +842,8 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut StringID>, s
     let order_no_load = is_loading && front.current_order().load_type() == OrderLoadType::NoLoad;
     let order_full_load = is_loading && front.current_order().is_full_load();
 
+    // The station's goods owner, resolved once when a rating is first read.
+    let mut service = None;
     /* Count up max and used */
     let mut part = Some(front);
     while let Some(v) = part {
@@ -847,7 +854,11 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut StringID>, s
                 v.vehicle_flags().test(VehicleFlag::CARGO_UNLOADING),
             ));
             loading |= !order_no_load
-                && (order_full_load || has_rating((s.station.owner)(st), v.cargo_type(r)))
+                && (order_full_load
+                    || has_rating(
+                        *service.get_or_insert_with(|| (s.station.owner)(st)),
+                        v.cargo_type(r),
+                    ))
                 && !front.vehicle_flags().test(VehicleFlag::LOADING_FINISHED)
                 && !front.vehicle_flags().test(VehicleFlag::STOP_LOADING);
             cars = cars.wrapping_add(1);
@@ -1291,7 +1302,7 @@ fn depot_refit(v: VehicleRef, index: VehicleID, s: &Services) {
                 crate::command::nested(
                     base.commands,
                     base.shared,
-                    crate::services::Cost(cost.0, base.cost),
+                    cost,
                     0,
                     crate::command_type::DoCommandFlag::EXECUTE,
                     // SAFETY: The static refit table and the scope's live native costs.
@@ -1313,7 +1324,7 @@ fn depot_refit(v: VehicleRef, index: VehicleID, s: &Services) {
             });
             (l.set_current_company)(cur_company);
 
-            depot_refit_result(v, index, cost.0, s);
+            depot_refit_result(v, index, cost, s);
         });
     }
 }
@@ -1323,13 +1334,12 @@ fn depot_refit(v: VehicleRef, index: VehicleID, s: &Services) {
 fn depot_refit_result(
     v: VehicleRef,
     index: VehicleID,
-    cost: *const crate::services::CommandCost,
+    cost: crate::services::Cost<'_>,
     s: &Services,
 ) {
-    let base = s.refit.common.base;
-    if (base.cost.success)(cost) {
+    if cost.ok() {
         witness::hit(witness::VISITS_DEPOT_REFIT);
-        let cost = (base.cost.money)(cost);
+        let cost = cost.money();
         if cost != 0 {
             // `Money` subtraction saturates.
             let vs = s.vehicles();
