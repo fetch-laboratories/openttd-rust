@@ -1537,10 +1537,6 @@ pub(crate) const SETTINGS: crate::settings_table::Services = crate::settings_tab
     change_game_setting: unreachable2,
     change_company_setting: unreachable3,
     error_message: unreachable1,
-    edges_not_empty: 0,
-    edges_not_water: 0,
-    dynamic_engines_existing_vehicles: 0,
-    too_high_mountain: 0,
 };
 
 /// `crate::timer_game_common::ClockServices` with every entry unreachable.
@@ -1831,7 +1827,6 @@ pub(crate) const SIGN_COMMANDS: crate::signs_cmd::Services = crate::signs_cmd::S
     rename: unreachable3,
     relocate: unreachable5,
     remove: unreachable1,
-    too_many_signs: 0,
 };
 
 /// `crate::session::Services` with every entry unreachable.

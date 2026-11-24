@@ -55,7 +55,6 @@ static const OpenTTDDepotServices &GetRustDepotServices() noexcept
 		.name = [](const Depot *d) noexcept { return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(d->name.data()), d->name.size()}; },
 		.set_name = [](Depot *d, OpenTTDByteSpan text) noexcept { d->name.assign(reinterpret_cast<const char *>(text.data), text.size); },
 		.renamed = RustDepotRenamed,
-		.name_unique = STR_ERROR_NAME_MUST_BE_UNIQUE,
 	};
 	return services;
 }

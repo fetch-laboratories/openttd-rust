@@ -79,7 +79,6 @@ const OpenTTDSignServices &GetRustSignServices() noexcept
 		.rename = RustSignRename,
 		.relocate = RustSignRelocate,
 		.remove = RustSignRemove,
-		.too_many_signs = STR_ERROR_TOO_MANY_SIGNS,
 	};
 	return services;
 }

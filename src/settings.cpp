@@ -1810,10 +1810,6 @@ const OpenTTDSettingServices &GetRustSettingServices() noexcept
 		.change_game_setting = [](const SettingDesc *sd, int32_t value) noexcept { sd->AsIntSetting()->ChangeValue(&GetGameSettings(), value); },
 		.change_company_setting = [](const SettingDesc *sd, uint8_t company, int32_t value) noexcept { sd->AsIntSetting()->ChangeValue(RustCompanySettings(company), value); },
 		.error_message = [](uint32_t message) noexcept { ShowErrorMessage(GetEncodedString(message), {}, WL_ERROR); },
-		.edges_not_empty = STR_CONFIG_SETTING_EDGES_NOT_EMPTY,
-		.edges_not_water = STR_CONFIG_SETTING_EDGES_NOT_WATER,
-		.dynamic_engines_existing_vehicles = STR_CONFIG_SETTING_DYNAMIC_ENGINES_EXISTING_VEHICLES,
-		.too_high_mountain = STR_CONFIG_SETTING_TOO_HIGH_MOUNTAIN,
 	};
 	return services;
 }

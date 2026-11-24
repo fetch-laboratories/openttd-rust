@@ -40,10 +40,6 @@ struct OpenTTDSettingServices {
 	void (*change_game_setting)(const SettingDesc *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(change_game_setting);
 	void (*change_company_setting)(const SettingDesc *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(change_company_setting);
 	void (*error_message)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
-	uint32_t edges_not_empty;
-	uint32_t edges_not_water;
-	uint32_t dynamic_engines_existing_vehicles;
-	uint32_t too_high_mountain;
 };
 const OpenTTDSettingServices &GetRustSettingServices() noexcept;
 extern "C" {

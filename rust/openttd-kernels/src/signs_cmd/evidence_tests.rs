@@ -105,7 +105,6 @@ fn sign_test_mode_matches_original_without_mutations() {
         shared: &crate::test_tables::SHARED,
         costs: &COSTS,
         can_allocate: full,
-        too_many_signs: 4258,
         ..crate::test_tables::SIGN_COMMANDS
     };
     let placed = super::place(&full_services, out, 0, 3860, span("Full"));

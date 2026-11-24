@@ -10,6 +10,7 @@ use crate::openttd::GameMode;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Cost, Services as Shared};
 use crate::signs_type::{MAX_LENGTH_SIGN_NAME_CHARS, Sign, SignID};
 use crate::strings_type::INVALID_STRING_ID;
+use crate::table::strings::STR_ERROR_TOO_MANY_SIGNS;
 use crate::tile_type::TILE_SIZE;
 use crate::tile_type::TileIndex;
 
@@ -30,12 +31,11 @@ pub struct Services {
     pub relocate: unsafe extern "C" fn(*mut Sign, Owner, i32, i32, i32),
     /// Unmark, remove from the viewport index, delete and refresh the list.
     pub remove: unsafe extern "C" fn(*mut Sign),
-    pub too_many_signs: u32,
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDSignServices" ["probe"] => Services { shared, costs, sign, owner, can_allocate, place, rename, relocate, remove, too_many_signs };
+    "OpenTTDSignServices" ["probe"] => Services { shared, costs, sign, owner, can_allocate, place, rename, relocate, remove };
 }
 
 fn editor() -> bool {
@@ -58,7 +58,7 @@ fn new_owner(s: &Services, si: *const Sign) -> Owner {
 /// `out` starts as native `CommandCost()`; only errors are written.
 fn place(s: &Services, out: Cost<'_>, flags: u16, tile: u32, text: ByteSpan) -> SignID {
     if !(s.can_allocate)() {
-        out.error(s.too_many_signs);
+        out.error(STR_ERROR_TOO_MANY_SIGNS.0);
         return SignID::INVALID;
     }
     if (s.shared.utf8_length)(text.data, text.size) >= MAX_LENGTH_SIGN_NAME_CHARS {

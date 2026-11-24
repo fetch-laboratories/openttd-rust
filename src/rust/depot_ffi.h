@@ -21,7 +21,6 @@ struct OpenTTDDepotServices {
 	OpenTTDByteSpan (*name)(const Depot *) noexcept OPENTTD_SERVICE_DEFAULT(name);
 	void (*set_name)(Depot *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
 	void (*renamed)(Depot *) noexcept OPENTTD_SERVICE_DEFAULT(renamed);
-	uint32_t name_unique;
 };
 extern "C" {
 void openttd_rust_depot_rename(const OpenTTDDepotServices *, OpenTTDCommandCost *, uint16_t, uint16_t, OpenTTDByteSpan);
