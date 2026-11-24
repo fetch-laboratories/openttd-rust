@@ -202,15 +202,16 @@ def check(
     if maintenance is not None:
         core.findings(result)[f"{mode}_{role}_vehicle_maintenance"] = {
             "counts": maintenance,
-            # Native entries plus both selected owners' outgoing calls. Existing
-            # controller/fleet internals retain their separate instrumentation.
-            "selected_boundary_calls": counts["crossings"]
-            + maintenance["crossings"]
-            + maintenance["entries"],
+            # Both selected owners' outgoing C calls. Maintenance entries count every
+            # entry to a maintenance body, from the C++ facades and the Rust controllers
+            # alike, so they are reported apart. Existing controller/fleet internals
+            # retain their separate instrumentation.
+            "selected_boundary_calls": counts["crossings"] + maintenance["crossings"],
             "selected_boundary_calls_per_outer_visit": (
-                counts["crossings"] + maintenance["crossings"] + maintenance["entries"]
+                counts["crossings"] + maintenance["crossings"]
             )
             / visits,
+            "maintenance_entries_per_outer_visit": maintenance["entries"] / visits,
         }
     core.findings(result)[f"{mode}_{role}_vehicle_scheduler"] = {
         "outer_visits": visits,

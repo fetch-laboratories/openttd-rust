@@ -807,15 +807,11 @@ entry!(
     vehicle_service_in_depot_impl
 );
 
-/// `Vehicle::HandleBreakdown`, called by the Rust controllers every tick. It counts no
-/// native entry: the call stays in Rust, and a running vehicle's crosses nothing.
-pub(crate) fn handle_breakdown(v: VehicleRef, base: &VehicleServices) -> bool {
-    if crate::witness::enabled() {
-        handle_breakdown_impl::<true>(v, base)
-    } else {
-        handle_breakdown_impl::<false>(v, base)
-    }
-}
+entry!(
+    /// `Vehicle::HandleBreakdown`.
+    handle_breakdown,
+    handle_breakdown_impl -> bool
+);
 
 // The C++ facades' entries. Each takes a live shell's record and the live vehicle table.
 
@@ -858,13 +854,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_handle_breakdown_abi(
     v: VehicleRef,
     base: *const VehicleServices,
 ) -> u8 {
-    let base = unsafe { &*base };
-    u8::from(if crate::witness::enabled() {
-        crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
-        handle_breakdown_impl::<true>(v, base)
-    } else {
-        handle_breakdown_impl::<false>(v, base)
-    })
+    u8::from(handle_breakdown(v, unsafe { &*base }))
 }
 /// `Vehicle::NeedsAutomaticServicing`.
 /// # Safety
@@ -1391,8 +1381,8 @@ mod tests {
             /// The company's renewal owner: the Rust-owned slot holding its list head.
             static HEAD: Cell<*mut ()> = const { Cell::new(ptr::null_mut()) };
         }
-        unsafe extern "C" fn head(company: u8) -> *mut () {
-            assert_eq!(company, OWNER.get().id.0, "the owner's renewal list");
+        extern "C" fn renewal_head(c: *const OpenTTDCompany) -> *mut () {
+            assert_eq!(c, company(), "the owner's renewal list");
             let list = OWNER.get().rule.map_or(ptr::null_mut(), |when_old| {
                 RULE.with(|r| {
                     let mut rule = r.get();
@@ -1412,9 +1402,9 @@ mod tests {
             engine_renew,
             engine_renew_money,
             engine_renew_months,
+            renewal_head,
             groups: leak(fleet::GroupServices {
                 group: no_group,
-                head,
                 renew_state,
                 ..FLEET_GROUPS
             }),
@@ -1689,13 +1679,11 @@ mod tests {
     }
 
     /// Every company, money and price read of a funded replacement, in the original's order.
-    /// The second `company_id` is `c->index` naming the company's renewal owner.
-    const FULL: [&str; 10] = [
+    const FULL: [&str; 9] = [
         "reserve",
         "company_id",
         "infinite",
         "finances",
-        "company_id",
         "price",
         "shift",
         "company_id",
@@ -1810,7 +1798,7 @@ mod tests {
         });
         let (due, seen) = servicing(&f);
         assert!(due);
-        assert_eq!(seen, full[..9]);
+        assert_eq!(seen, full[..8]);
         // Infinite money from the start reads no money at all.
         PRICE.set(Price {
             factor: 17,
@@ -1824,7 +1812,6 @@ mod tests {
                 "reserve",
                 "company_id",
                 "infinite",
-                "company_id",
                 "price",
                 "shift",
                 "company_id",
