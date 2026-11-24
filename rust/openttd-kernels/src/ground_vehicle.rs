@@ -1450,9 +1450,6 @@ mod tests {
     extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
         0
     }
-    extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        0
-    }
     extern "C" fn get_slope_pixel_z_evaluated(_: u32) -> u8 {
         panic!("GetSlopePixelZ was evaluated for the assertion with assertions off")
     }
@@ -1599,11 +1596,7 @@ mod tests {
     fn power_changed_on_a_later_part_reports_the_failed_assertion_and_continues() {
         FAILED.set(0);
         let s = services(
-            Box::new(crate::services::fixture(
-                std::ptr::null_mut(),
-                random,
-                industry,
-            )),
+            Box::new(crate::services::fixture(std::ptr::null_mut(), random)),
             true,
         );
         let part = LaterPart::new();
@@ -1620,11 +1613,7 @@ mod tests {
     fn cargo_changed_on_a_later_part_reports_both_failed_assertions_and_continues() {
         FAILED.set(0);
         let s = services(
-            Box::new(crate::services::fixture(
-                std::ptr::null_mut(),
-                random,
-                industry,
-            )),
+            Box::new(crate::services::fixture(std::ptr::null_mut(), random)),
             true,
         );
         let part = LaterPart::new();
@@ -1668,7 +1657,7 @@ mod tests {
             },
             6,
         );
-        let mut shared = crate::services::fixture(std::ptr::null_mut(), random, industry);
+        let mut shared = crate::services::fixture(std::ptr::null_mut(), random);
         shared.map = crate::map_func::fixture::statics();
         let s = services(Box::new(shared), true);
         let part = LaterPart::new();
@@ -1687,7 +1676,7 @@ mod tests {
     #[test]
     fn update_z_position_without_assertions_does_not_read_the_slope() {
         FAILED.set(0);
-        let mut shared = crate::services::fixture(std::ptr::null_mut(), random, industry);
+        let mut shared = crate::services::fixture(std::ptr::null_mut(), random);
         shared.tile_type = get_slope_pixel_z_evaluated;
         let s = services(Box::new(shared), false);
         let part = LaterPart::new();

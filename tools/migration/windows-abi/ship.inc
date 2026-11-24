@@ -99,7 +99,7 @@ static void ShipBoundary()
 	ship_probe.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&ship_probe);
 	ship_probe.owner = state.get();
 	ship_probe.leaves = &leaves;
-	ship_probe.services = OpenTTDFixtureSharedServices(nullptr, ShipProbeUnused<uint32_t, void *>, ShipProbeUnused<uint32_t, int32_t, int32_t, uint32_t *>);
+	ship_probe.services = OpenTTDFixtureSharedServices(nullptr, ShipProbeUnused<uint32_t, void *>);
 	/* The tile index hashes the ship's tile with the 64-wide map's dimensions. */
 	static OpenTTDFixtureMap ship_map{6, 4096};
 	ship_probe.services.map = &ship_map.statics;

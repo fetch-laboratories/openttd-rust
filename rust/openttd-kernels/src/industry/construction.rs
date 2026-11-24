@@ -488,7 +488,7 @@ pub(crate) unsafe fn do_create_new_industry(
             let cur_gfx = IndustryGfx(unsafe { (cons.translated_gfx)(it.gfx) });
             let its = get_industry_tile_spec(cur_gfx);
             if unsafe { (*its).animation.status != AnimationStatus::NoAnimation.0 } {
-                crate::animated_tile::openttd_rust_animation_add(cur_tile.0, true);
+                crate::animated_tile::add_animated_tile(cur_tile, true);
             }
         }
     }

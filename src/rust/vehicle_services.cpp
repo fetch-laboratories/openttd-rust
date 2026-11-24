@@ -171,8 +171,11 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.write_breakdowns = VehicleSvcWriteBreakdowns,
 	.write_calendar_service = VehicleSvcWriteCalendarService,
 	.write_economy_service = VehicleSvcWriteEconomyService,
+	.write_first_sprite = RustVehicleInvoke<RustWriteVehicleFirstSprite, SpriteID>,
 	.write_profit = VehicleSvcWriteProfit,
 	.write_reliability = VehicleSvcWriteReliability,
+	.write_sprite_seq = RustVehicleInvoke<RustWriteVehicleSpriteSequence, SpriteID>,
+	.write_spritenum = RustVehicleInvoke<RustWriteVehicleSprite, uint8_t>,
 };
 
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept

@@ -240,7 +240,7 @@ extern "C" fn industry_object(_: u32) -> *mut ShellHandle {
     clippy::cast_possible_truncation,
     reason = "the fixture's gfx is its tile index"
 )]
-unsafe extern "C" fn gfx(tile: u32) -> u16 {
+extern "C" fn gfx(tile: u32) -> u16 {
     // The builtin cases animate one gfx; elsewhere the gfx is the tile index.
     with(|w| if w.builtin { w.gfx } else { tile as u16 })
 }
@@ -320,6 +320,7 @@ fn tables() -> Tables {
     shared.tick_counter = tick_counter;
     shared.tile_type = tile_type;
     shared.play_sound = play_sound;
+    shared.industry_gfx = gfx;
     shared.settings = leak(settings);
     let shared = leak(shared);
     let mut industries = INDUSTRIES;
@@ -327,7 +328,6 @@ fn tables() -> Tables {
     let industries = leak(industries);
     let mut tiles = INDUSTRY_TILES;
     tiles.shared = shared;
-    tiles.gfx = gfx;
     tiles.set_gfx = set_gfx;
     tiles.frame = frame;
     tiles.animation_loop = animation_loop;

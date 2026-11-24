@@ -2142,12 +2142,8 @@ mod tests {
         extern "C" fn unused_random(_: *mut c_void) -> u32 {
             unreachable!()
         }
-        extern "C" fn unused_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-            unreachable!()
-        }
         let _lock = CODEC_TEST.lock().unwrap();
-        let mut shared_services =
-            crate::services::fixture(std::ptr::null_mut(), unused_random, unused_industry);
+        let mut shared_services = crate::services::fixture(std::ptr::null_mut(), unused_random);
         shared_services.string_data = encoded_data;
         let services = OpenTTDSaveLoadServices {
             shared: &raw const shared_services,

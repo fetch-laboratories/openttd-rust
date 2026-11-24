@@ -193,8 +193,11 @@ pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::Vehi
     write_breakdowns: unreachable2,
     write_calendar_service: unreachable2,
     write_economy_service: unreachable2,
+    write_first_sprite: unreachable2,
     write_profit: unreachable2,
     write_reliability: unreachable2,
+    write_sprite_seq: unreachable2,
+    write_spritenum: unreachable2,
 };
 
 /// `crate::road::Leaves` with every entry unreachable.
@@ -418,7 +421,7 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     free_train_reservation: unreachable1,
     has_road_type: unreachable1,
     has_water_ground: unreachable1,
-    industry: unreachable3,
+    industry_gfx: unreachable1,
     is_bay_stop: unreachable1,
     is_bridge: unreachable1,
     is_drive_through_stop: unreachable1,
@@ -924,7 +927,6 @@ pub(crate) const OBJECTS: crate::objects::ObjectServices = crate::objects::Objec
 pub(crate) const INDUSTRY_TILES: crate::industry::tile::TileServices =
     crate::industry::tile::TileServices {
         shared: ptr::null(),
-        gfx: unreachable1,
         set_gfx: unreachable2,
         frame: unreachable1,
         animation_loop: unreachable1,
