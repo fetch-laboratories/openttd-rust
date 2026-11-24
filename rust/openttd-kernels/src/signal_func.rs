@@ -30,11 +30,6 @@ pub const fn signal_on_track(track: Track) -> u8 {
     SIGNAL_ON_TRACK[track.0 as usize]
 }
 
-/// Temporary raw adapter of [`signal_along_trackdir`] for `rail_map.rs` until its
-/// pass.
-pub fn signal_along_trackdir_raw(trackdir: u8) -> u8 {
-    signal_along_trackdir(Trackdir(trackdir))
-}
 /// Temporary raw adapter of [`signal_on_track`] for the files no pass has
 /// finished yet.
 pub const fn signal_on_track_raw(track: u8) -> u8 {

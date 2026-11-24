@@ -1607,21 +1607,25 @@ impl Ctx<'_> {
             flags,
             affected_vehicles,
         } = context;
-        if rt != RailType((self.rail_map().invalid_rail_type)().0)
-            && crate::map_func::World::new(self.shared).is_plain_rail_tile_raw(tile_cur.0)
+        if rt != (self.rail_map().invalid_rail_type)()
+            && crate::map_func::World::new(self.shared).is_plain_rail_tile(tile_cur)
         {
             /* Don't overbuild signals. */
-            if crate::map_func::World::new(self.shared).has_signals_raw(tile_cur.0) {
+            if crate::map_func::World::new(self.shared).has_signals(tile_cur) {
                 cost.error(STR_ERROR_MUST_REMOVE_SIGNALS_FIRST.0);
                 return true;
             }
             /* The current rail type must have power on the to-be-built type (e.g. convert normal rail to electrified rail). */
             if (self.rail().powered_rail)(
-                crate::map_func::World::new(self.shared).get_rail_type_raw(tile_cur.0),
+                crate::map_func::World::new(self.shared)
+                    .get_rail_type(tile_cur)
+                    .0,
                 rt.0,
             ) {
                 let mut tracks = TrackBits(
-                    crate::map_func::World::new(self.shared).get_track_bits_raw(tile_cur.0),
+                    crate::map_func::World::new(self.shared)
+                        .get_track_bits(tile_cur)
+                        .0,
                 );
                 let track = crate::track_func::remove_first_track(&mut tracks, |ok| {
                     crate::movement::native_assert(self.shared, ok);
@@ -2262,7 +2266,8 @@ impl Ctx<'_> {
                                 infrastructure,
                                 crate::rail_type::RailType(
                                     crate::map_func::World::new(self.shared)
-                                        .get_rail_type_raw(tile.0),
+                                        .get_rail_type(tile)
+                                        .0,
                                 ),
                                 u32::MAX,
                             );
@@ -2470,7 +2475,7 @@ impl Ctx<'_> {
         let specindex = (self.s.custom_rail_index)(tile.0);
         let track = crate::map_func::World::new(self.shared).get_rail_station_track(tile);
         let owner = CompanyID((self.shared.tile_owner)(tile.0));
-        let rt = RailType(crate::map_func::World::new(self.shared).get_rail_type_raw(tile.0));
+        let rt = crate::map_func::World::new(self.shared).get_rail_type(tile);
         let mut v = std::ptr::null_mut();
         if self.has_station_reservation(tile) {
             v = crate::pbs::Pbs::acquire(self.shared)
@@ -5886,7 +5891,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        if !crate::tile_map::is_tile_owner(self.shared, TileIndex(tile.0), old_owner) {
+        if !crate::tile_map::is_tile_owner(self.shared, tile, old_owner) {
             return;
         }
         if new_owner != CompanyID::INVALID {
@@ -5911,20 +5916,12 @@ impl Ctx<'_> {
             match station_type {
                 StationType::Rail | StationType::RailWaypoint => {
                     if !self.is_station_tile_blocked(tile) {
-                        let rt = world.get_rail_type_raw(tile.0);
+                        let rt = world.get_rail_type(tile);
                         unsafe {
-                            CompanyInfrastructure::add_rail(
-                                old_infrastructure,
-                                crate::rail_type::RailType(rt),
-                                u32::MAX,
-                            );
+                            CompanyInfrastructure::add_rail(old_infrastructure, rt, u32::MAX);
                         };
                         unsafe {
-                            CompanyInfrastructure::add_rail(
-                                new_infrastructure,
-                                crate::rail_type::RailType(rt),
-                                1,
-                            );
+                            CompanyInfrastructure::add_rail(new_infrastructure, rt, 1);
                         };
                     }
                 }
@@ -5977,7 +5974,7 @@ impl Ctx<'_> {
              * Do not update when owned by OWNER_WATER (sea and rivers). */
             if (TileType((self.shared.tile_type)(tile.0)) == TileType::MP_WATER
                 || world.is_buoy_tile(tile))
-                && crate::tile_map::is_tile_owner(self.shared, TileIndex(tile.0), old_owner)
+                && crate::tile_map::is_tile_owner(self.shared, tile, old_owner)
             {
                 (self.shared.set_tile_owner)(tile.0, CompanyID::NONE.0);
             }

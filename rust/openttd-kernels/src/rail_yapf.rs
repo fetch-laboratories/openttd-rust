@@ -415,7 +415,7 @@ impl<T: Types> PfDestination<T> for CYapfDestinationAnyDepotRailT {
     }
     #[inline]
     fn pf_detect_destination_tile(pf: &CYapfRailT<'_, T>, tile: TileIndex, _: Trackdir) -> bool {
-        pf.world.is_rail_depot_tile_raw(tile.0)
+        pf.world.is_rail_depot_tile(tile)
     }
     #[inline]
     fn pf_calc_estimate(_: &CYapfRailT<'_, T>, n: &mut CYapfRailNode) -> bool {
@@ -527,7 +527,7 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
         }
 
         if pf.dest.any_depot {
-            return pf.world.is_rail_depot_tile_raw(tile.0);
+            return pf.world.is_rail_depot_tile(tile);
         }
 
         (tile == pf.dest.dest_tile) && has_trackdir(pf.dest.dest_trackdirs, td, |ok| pf.check(ok))
@@ -1124,21 +1124,21 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
     /// `SwitchCost`.
     #[inline]
     fn switch_cost(&self, tile1: TileIndex, tile2: TileIndex, exitdir: DiagDirection) -> i32 {
-        if self.world.is_plain_rail_tile_raw(tile1.0) && self.world.is_plain_rail_tile_raw(tile2.0)
-        {
+        if self.world.is_plain_rail_tile(tile1) && self.world.is_plain_rail_tile(tile2) {
             let t1 = kill_first_bit(
-                self.world.get_track_bits_raw(tile1.0)
+                (self.world.get_track_bits(tile1)
                     & diagdir_reaches_tracks(
                         reverse_diag_dir(exitdir, |ok| self.check(ok)),
                         |ok| {
                             self.check(ok);
                         },
-                    )
-                    .0,
+                    ))
+                .0,
             ) != TrackBits::TRACK_BIT_NONE.0;
             let t2 = kill_first_bit(
-                self.world.get_track_bits_raw(tile2.0)
-                    & diagdir_reaches_tracks(exitdir, |ok| self.check(ok)).0,
+                (self.world.get_track_bits(tile2)
+                    & diagdir_reaches_tracks(exitdir, |ok| self.check(ok)))
+                .0,
             ) != TrackBits::TRACK_BIT_NONE.0;
             if t1 && t2 {
                 return self.penalty(|s| s.rail_doubleslip_penalty);
@@ -1232,17 +1232,15 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
         let mut cost = 0_i32;
         /* if there is one-way signal in the opposite direction, then it is not our way */
         if self.world.kind(tile) == TileType::MP_RAILWAY {
-            let has_signal_against = self.world.has_signal_on_trackdir_raw(
-                tile.0,
-                reverse_trackdir(trackdir, |ok| self.check(ok)).0,
-            );
-            let has_signal_along = self.world.has_signal_on_trackdir_raw(tile.0, trackdir.0);
+            let has_signal_against = self
+                .world
+                .has_signal_on_trackdir(tile, reverse_trackdir(trackdir, |ok| self.check(ok)));
+            let has_signal_along = self.world.has_signal_on_trackdir(tile, trackdir);
             if has_signal_against
                 && !has_signal_along
-                && self.world.is_oneway_signal_raw(
-                    tile.0,
-                    trackdir_to_track(trackdir, |ok| self.check(ok)).0,
-                )
+                && self
+                    .world
+                    .is_oneway_signal(tile, trackdir_to_track(trackdir, |ok| self.check(ok)))
             {
                 /* one-way signal in opposite direction */
                 let mut segment = self.segment(n.segment);
@@ -1250,14 +1248,10 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                 self.set_segment(n.segment, segment);
             } else {
                 if has_signal_along {
-                    let sig_state = SignalState(
-                        self.world
-                            .get_signal_state_by_trackdir_raw(tile.0, trackdir.0),
-                    );
-                    let sig_type = SignalType(self.world.get_signal_type_raw(
-                        tile.0,
-                        trackdir_to_track(trackdir, |ok| self.check(ok)).0,
-                    ));
+                    let sig_state = self.world.get_signal_state_by_trackdir(tile, trackdir);
+                    let sig_type = self
+                        .world
+                        .get_signal_type(tile, trackdir_to_track(trackdir, |ok| self.check(ok)));
 
                     n.last_signal_type = sig_type;
 
@@ -1328,10 +1322,12 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                 }
 
                 if has_signal_against
-                    && crate::rail_map::is_pbs_signal_raw(self.world.get_signal_type_raw(
-                        tile.0,
-                        trackdir_to_track(trackdir, |ok| self.check(ok)).0,
-                    ))
+                    && crate::rail_map::is_pbs_signal(
+                        self.world.get_signal_type(
+                            tile,
+                            trackdir_to_track(trackdir, |ok| self.check(ok)),
+                        ),
+                    )
                 {
                     cost = cost.wrapping_add(
                         if u32::from(n.num_signals_passed)
@@ -1505,28 +1501,31 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                         /* We will need also some information about the last signal (if it was red). */
                         if cached.last_signal_tile != TileIndex::INVALID {
                             self.world.assert_with(|| {
-                                self.world.has_signal_on_trackdir_raw(
-                                    cached.last_signal_tile.0,
-                                    cached.last_signal_td.0,
+                                self.world.has_signal_on_trackdir(
+                                    cached.last_signal_tile,
+                                    cached.last_signal_td,
                                 )
                             });
-                            let sig_state =
-                                SignalState(self.world.get_signal_state_by_trackdir_raw(
-                                    cached.last_signal_tile.0,
-                                    cached.last_signal_td.0,
-                                ));
+                            let sig_state = self.world.get_signal_state_by_trackdir(
+                                cached.last_signal_tile,
+                                cached.last_signal_td,
+                            );
                             let is_red = sig_state == SignalState::SIGNAL_STATE_RED;
                             n.flags_u
                                 .set(CYapfRailNodeFlags::LAST_SIGNAL_WAS_RED, is_red);
                             if is_red {
                                 n.last_red_signal_type = SignalType(
-                                    self.world.get_signal_type_raw(
-                                        cached.last_signal_tile.0,
-                                        trackdir_to_track(cached.last_signal_td, |ok| {
-                                            self.check(ok)
-                                        })
+                                    self.world
+                                        .get_signal_type(
+                                            cached.last_signal_tile,
+                                            Track(
+                                                trackdir_to_track(cached.last_signal_td, |ok| {
+                                                    self.check(ok)
+                                                })
+                                                .0,
+                                            ),
+                                        )
                                         .0,
-                                    ),
                                 );
                             }
                         }
@@ -1578,10 +1577,10 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
             if cur.tile == prev.tile {
                 /* Penalty for reversing in a depot. */
                 self.world
-                    .assert_with(|| self.world.is_rail_depot_raw(cur.tile.0));
+                    .assert_with(|| self.world.is_rail_depot(cur.tile));
                 segment_cost =
                     segment_cost.wrapping_add(self.penalty(|s| s.rail_depot_reverse_penalty));
-            } else if self.world.is_rail_depot_tile_raw(cur.tile.0) {
+            } else if self.world.is_rail_depot_tile(cur.tile) {
                 /* We will end in this pass (depot is possible target) */
                 end_segment_reason.set(EndSegmentReason::DEPOT);
             } else if cur.tile_type == TileType::MP_STATION && self.world.is_rail_waypoint(cur.tile)
@@ -1664,11 +1663,13 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                 end_segment_reason.set(EndSegmentReason::STATION);
             } else if T::DO_TRACK_MASKING && cur.tile_type == TileType::MP_RAILWAY {
                 /* Searching for a safe tile? */
-                if self.world.has_signal_on_trackdir_raw(cur.tile.0, cur.td.0)
-                    && !crate::rail_map::is_pbs_signal_raw(self.world.get_signal_type_raw(
-                        cur.tile.0,
-                        trackdir_to_track(cur.td, |ok| self.check(ok)).0,
-                    ))
+                if self.world.has_signal_on_trackdir(cur.tile, cur.td)
+                    && !crate::rail_map::is_pbs_signal(
+                        self.world.get_signal_type(
+                            cur.tile,
+                            trackdir_to_track(cur.td, |ok| self.check(ok)),
+                        ),
+                    )
                 {
                     end_segment_reason.set(EndSegmentReason::SAFE_TILE);
                 }
@@ -1761,23 +1762,21 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
             );
 
             if T::DO_TRACK_MASKING && self.world.kind(next.tile) == TileType::MP_RAILWAY {
-                if self
-                    .world
-                    .has_signal_on_trackdir_raw(next.tile.0, next.td.0)
-                    && crate::rail_map::is_pbs_signal_raw(self.world.get_signal_type_raw(
-                        next.tile.0,
-                        trackdir_to_track(next.td, |ok| self.check(ok)).0,
+                if self.world.has_signal_on_trackdir(next.tile, next.td)
+                    && crate::rail_map::is_pbs_signal(self.world.get_signal_type(
+                        next.tile,
+                        trackdir_to_track(next.td, |ok| self.check(ok)),
                     ))
                 {
                     /* Possible safe tile. */
                     end_segment_reason.set(EndSegmentReason::SAFE_TILE);
-                } else if self.world.has_signal_on_trackdir_raw(
-                    next.tile.0,
-                    reverse_trackdir(next.td, |ok| self.check(ok)).0,
-                ) && SignalType(self.world.get_signal_type_raw(
-                    next.tile.0,
-                    trackdir_to_track(next.td, |ok| self.check(ok)).0,
-                )) == SignalType::SIGTYPE_PBS_ONEWAY
+                } else if self.world.has_signal_on_trackdir(
+                    next.tile,
+                    reverse_trackdir(next.td, |ok| self.check(ok)),
+                ) && self
+                    .world
+                    .get_signal_type(next.tile, trackdir_to_track(next.td, |ok| self.check(ok)))
+                    == SignalType::SIGTYPE_PBS_ONEWAY
                 {
                     /* Possible safe tile, but not so good as it's the back of a signal... */
                     end_segment_reason.set_all(EndSegmentReasons::of(&[
@@ -2098,10 +2097,8 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
 
             /* Green path signal opposing the path? Turn to red. */
             if (self.pbs.0.has_pbs)(tile.0, rev_td.0)
-                && SignalState(
-                    self.world
-                        .get_signal_state_by_trackdir_raw(tile.0, rev_td.0),
-                ) == SignalState::SIGNAL_STATE_GREEN
+                && self.world.get_signal_state_by_trackdir(tile, rev_td)
+                    == SignalState::SIGNAL_STATE_GREEN
             {
                 self.signals_set_to_red.push((tile, rev_td));
                 self.set_signal_state_by_trackdir(tile, rev_td, SignalState::SIGNAL_STATE_RED);

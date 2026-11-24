@@ -217,23 +217,23 @@ impl<'a> Game<'a> {
     }
     /// `IsRailDepotTile(tile)`.
     fn is_rail_depot_tile(&self, tile: TileIndex) -> bool {
-        self.world.is_rail_depot_tile_raw(tile.0)
+        self.world.is_rail_depot_tile(tile)
     }
     /// `IsPlainRail(tile)`.
     fn is_plain_rail(&self, tile: TileIndex) -> bool {
-        self.world.is_plain_rail_raw(tile.0)
+        self.world.is_plain_rail(tile)
     }
     /// `GetRailDepotDirection(tile)`.
     fn get_rail_depot_direction(&self, tile: TileIndex) -> DiagDirection {
-        DiagDirection(self.world.get_rail_depot_direction_raw(tile.0))
+        self.world.get_rail_depot_direction(tile)
     }
     /// `HasSignalOnTrackdir(tile, trackdir)`.
     fn has_signal_on_trackdir(&self, tile: TileIndex, trackdir: Trackdir) -> bool {
-        self.world.has_signal_on_trackdir_raw(tile.0, trackdir.0)
+        self.world.has_signal_on_trackdir(tile, trackdir)
     }
     /// `GetSignalType(tile, track)`.
     fn get_signal_type(&self, tile: TileIndex, track: Track) -> SignalType {
-        SignalType(self.world.get_signal_type_raw(tile.0, track.0))
+        self.world.get_signal_type(tile, track)
     }
     /// `IsPbsSignal(s)`.
     fn is_pbs_signal(s: SignalType) -> bool {
@@ -241,14 +241,11 @@ impl<'a> Game<'a> {
     }
     /// `IsOnewaySignal(tile, track)`.
     fn is_oneway_signal(&self, tile: TileIndex, track: Track) -> bool {
-        self.world.is_oneway_signal_raw(tile.0, track.0)
+        self.world.is_oneway_signal(tile, track)
     }
     /// `GetSignalStateByTrackdir(tile, trackdir)`.
     fn get_signal_state_by_trackdir(&self, tile: TileIndex, trackdir: Trackdir) -> SignalState {
-        SignalState(
-            self.world
-                .get_signal_state_by_trackdir_raw(tile.0, trackdir.0),
-        )
+        self.world.get_signal_state_by_trackdir(tile, trackdir)
     }
     /// `SetSignalStateByTrackdir(tile, trackdir, state)`.
     fn set_signal_state_by_trackdir(
@@ -1676,8 +1673,8 @@ mod tests {
         // SAFETY: The installing test keeps its line live.
         let w = World::new(unsafe { &*(*PBS_TABLE.get()).shared });
         w.is_tile_type(TileIndex(tile), TileType::MP_RAILWAY)
-            && w.has_signal_on_trackdir_raw(tile, td)
-            && crate::rail_map::is_pbs_signal_raw(w.get_signal_type_raw(tile, td & 7))
+            && w.has_signal_on_trackdir(TileIndex(tile), Trackdir(td))
+            && crate::rail_map::is_pbs_signal(w.get_signal_type(TileIndex(tile), Track(td & 7)))
     }
     extern "C" fn try_track(tile: u32, track: u8) -> bool {
         let m = current();
@@ -1762,7 +1759,7 @@ mod tests {
                 if ordinal > 0 {
                     // `RailTileType::Signals`; the signal along `TRACKDIR_X_SW` is present
                     // and green, and it is a two-way path signal.
-                    tile.m5 |= crate::rail_map::RAIL_TILE_SIGNALS << 6;
+                    tile.m5 |= crate::rail_map::RailTileType::Signals.0 << 6;
                     tile.m3 =
                         crate::signal_func::signal_along_trackdir(Trackdir::TRACKDIR_X_SW) << 4;
                     tile.m4 = tile.m3;

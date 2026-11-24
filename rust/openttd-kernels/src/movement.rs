@@ -233,12 +233,8 @@ impl Context<'_> {
         match kind {
             // `GetFoundation_Track`.
             TileType::MP_RAILWAY => {
-                if self.world.is_plain_rail_raw(tile.0) {
-                    get_rail_foundation(
-                        tileh,
-                        TrackBits(self.world.get_track_bits_raw(tile.0)),
-                        self.check(),
-                    )
+                if self.world.is_plain_rail(tile) {
+                    get_rail_foundation(tileh, self.world.get_track_bits(tile), self.check())
                 } else {
                     flattening_foundation(tileh)
                 }
@@ -319,7 +315,7 @@ impl Context<'_> {
         if matches!(
             kind,
             TileType::MP_HOUSE | TileType::MP_INDUSTRY | TileType::MP_STATION
-        ) || (kind == TileType::MP_RAILWAY && !self.world.is_plain_rail_raw(tile.0))
+        ) || (kind == TileType::MP_RAILWAY && !self.world.is_plain_rail(tile))
             || (kind == TileType::MP_ROAD && !self.world.is_normal_road(tile.0))
             || (kind == TileType::MP_OBJECT
                 && !unsafe {
@@ -344,11 +340,7 @@ impl Context<'_> {
                 return z;
             }
             let f = if kind == TileType::MP_RAILWAY {
-                get_rail_foundation(
-                    tileh,
-                    TrackBits(self.world.get_track_bits_raw(tile.0)),
-                    self.check(),
-                )
+                get_rail_foundation(tileh, self.world.get_track_bits(tile), self.check())
             } else {
                 get_road_foundation(
                     tileh,
@@ -799,13 +791,12 @@ impl Context<'_> {
         w::hit(w::MOVE_TRACK_RAIL);
         /* Case of half tile slope with water. */
         if mode == TransportType::TRANSPORT_WATER
-            && self.world.is_plain_rail_raw(tile.0)
-            && RailGroundType(self.world.get_rail_ground_type_raw(tile.0))
-                == RailGroundType::HalfTileWater
+            && self.world.is_plain_rail(tile)
+            && self.world.get_rail_ground_type(tile) == RailGroundType::HalfTileWater
             && is_slope_with_one_corner_raised(self.world.tile_slope(tile))
         {
             w::hit(w::MOVE_HALF_WATER);
-            let tb = match TrackBits(self.world.get_track_bits_raw(tile.0)) {
+            let tb = match self.world.get_track_bits(tile) {
                 TrackBits::TRACK_BIT_UPPER => TrackBits::TRACK_BIT_LOWER,
                 TrackBits::TRACK_BIT_LOWER => TrackBits::TRACK_BIT_UPPER,
                 TrackBits::TRACK_BIT_LEFT => TrackBits::TRACK_BIT_RIGHT,
@@ -825,37 +816,29 @@ impl Context<'_> {
         let mut trackbits = TrackBits::TRACK_BIT_NONE;
         let mut red_signals = TrackdirBits::TRACKDIR_BIT_NONE;
 
-        match RailTileType(self.world.get_rail_tile_type_raw(tile.0)) {
-            RailTileType::Normal => trackbits = TrackBits(self.world.get_track_bits_raw(tile.0)),
+        match self.world.get_rail_tile_type(tile) {
+            RailTileType::Normal => trackbits = self.world.get_track_bits(tile),
 
             RailTileType::Signals => {
-                trackbits = TrackBits(self.world.get_track_bits_raw(tile.0));
+                trackbits = self.world.get_track_bits(tile);
                 w::hit(w::MOVE_SIGNAL_DIRECTIONS);
-                let a = self.world.get_present_signals_raw(tile.0);
-                let mut b = u32::from(self.world.get_signal_states_raw(tile.0));
+                let a = self.world.get_present_signals(tile);
+                let mut b = self.world.get_signal_states(tile);
 
-                b &= u32::from(a);
+                b &= a;
 
                 /* When signals are not present (in neither direction),
                  * we pretend them to be green. Otherwise, it depends on
                  * the signal type. For signals that are only active from
                  * one side, we set the missing signals explicitly to
                  * `green'. Otherwise, they implicitly become `red'. */
-                let upper = crate::signal_func::signal_on_track(Track::TRACK_UPPER);
-                if !self
-                    .world
-                    .is_oneway_signal_raw(tile.0, Track::TRACK_UPPER.0)
-                    || a & upper == 0
-                {
-                    b |= u32::from(!a & upper);
+                let upper = u32::from(crate::signal_func::signal_on_track(Track::TRACK_UPPER));
+                if !self.world.is_oneway_signal(tile, Track::TRACK_UPPER) || a & upper == 0 {
+                    b |= !a & upper;
                 }
-                let lower = crate::signal_func::signal_on_track(Track::TRACK_LOWER);
-                if !self
-                    .world
-                    .is_oneway_signal_raw(tile.0, Track::TRACK_LOWER.0)
-                    || a & lower == 0
-                {
-                    b |= u32::from(!a & lower);
+                let lower = u32::from(crate::signal_func::signal_on_track(Track::TRACK_LOWER));
+                if !self.world.is_oneway_signal(tile, Track::TRACK_LOWER) || a & lower == 0 {
+                    b |= !a & lower;
                 }
 
                 if b & 0x8 == 0 {
@@ -881,7 +864,7 @@ impl Context<'_> {
             }
 
             RailTileType::Depot => {
-                let dir = DiagDirection(self.world.get_rail_depot_direction_raw(tile.0));
+                let dir = self.world.get_rail_depot_direction(tile);
 
                 if side == DiagDirection::INVALID_DIAGDIR || side == dir {
                     trackbits = diag_dir_to_diag_track_bits(dir, self.check());
@@ -1246,12 +1229,12 @@ impl MovementServices {
     ) -> VehicleEnterTileStates {
         let world = World::new(self.shared());
         /* This routine applies only to trains in depot tiles. */
-        if h.kind != VehicleType::VEH_TRAIN || !world.is_rail_depot_tile_raw(tile.0) {
+        if h.kind != VehicleType::VEH_TRAIN || !world.is_rail_depot_tile(tile) {
             return VehicleEnterTileStates(0);
         }
 
         /* Depot direction. */
-        let dir = DiagDirection(world.get_rail_depot_direction_raw(tile.0));
+        let dir = world.get_rail_depot_direction(tile);
 
         let fract_coord = ((x & 0xF) + ((y & 0xF) << 4)) as u8;
 
@@ -1711,7 +1694,9 @@ impl MovementServices {
     pub(crate) fn ticks_to_leave_depot(&self, v: crate::train::Handle) -> i32 {
         w::hit(w::MOVE_DEPOT_TICKS);
         let dir = DiagDirection(
-            World::new(self.shared()).get_rail_depot_direction_raw(v.vehicle().tile().0),
+            World::new(self.shared())
+                .get_rail_depot_direction(v.vehicle().tile())
+                .0,
         );
         let length = v.calc_next_vehicle_offset();
         let enter = FRACTCOORDS_ENTER[usize::from(dir.0)];

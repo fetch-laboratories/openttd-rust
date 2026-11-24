@@ -290,10 +290,6 @@ impl World<'_> {
     pub(crate) fn get_rail_tile_type_raw(&self, t: u32) -> u8 {
         self.get_rail_tile_type(TileIndex(t)).0
     }
-    /// Raw adapter: `IsPlainRail`.
-    pub(crate) fn is_plain_rail_raw(&self, t: u32) -> bool {
-        self.is_plain_rail(TileIndex(t))
-    }
     /// Raw adapter: `IsPlainRailTile`.
     pub(crate) fn is_plain_rail_tile_raw(&self, t: u32) -> bool {
         self.is_plain_rail_tile(TileIndex(t))
@@ -326,18 +322,6 @@ impl World<'_> {
     pub(crate) fn get_signal_type_raw(&self, t: u32, track: u8) -> u8 {
         self.get_signal_type(TileIndex(t), Track(track)).0
     }
-    /// Raw adapter: `IsPresignalEntry`.
-    pub(crate) fn is_presignal_entry_raw(&self, t: u32, track: u8) -> bool {
-        self.is_presignal_entry(TileIndex(t), Track(track))
-    }
-    /// Raw adapter: `IsPresignalExit`.
-    pub(crate) fn is_presignal_exit_raw(&self, t: u32, track: u8) -> bool {
-        self.is_presignal_exit(TileIndex(t), Track(track))
-    }
-    /// Raw adapter: `IsOnewaySignal`.
-    pub(crate) fn is_oneway_signal_raw(&self, t: u32, track: u8) -> bool {
-        self.is_oneway_signal(TileIndex(t), Track(track))
-    }
     /// Raw adapter: `GetSignalStates`.
     pub(crate) fn get_signal_states_raw(&self, t: u32) -> u8 {
         self.get_signal_states(TileIndex(t)) as u8
@@ -353,11 +337,6 @@ impl World<'_> {
     /// Raw adapter: `HasSignalOnTrackdir`.
     pub(crate) fn has_signal_on_trackdir_raw(&self, t: u32, trackdir: u8) -> bool {
         self.has_signal_on_trackdir(TileIndex(t), Trackdir(trackdir))
-    }
-    /// Raw adapter: `GetSignalStateByTrackdir`.
-    pub(crate) fn get_signal_state_by_trackdir_raw(&self, t: u32, trackdir: u8) -> u8 {
-        self.get_signal_state_by_trackdir(TileIndex(t), Trackdir(trackdir))
-            .0
     }
     /// Raw adapter: `GetRailGroundType`.
     pub(crate) fn get_rail_ground_type_raw(&self, t: u32) -> u8 {

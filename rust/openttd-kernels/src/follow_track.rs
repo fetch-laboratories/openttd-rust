@@ -397,9 +397,8 @@ impl CFollowTrackT {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     fn query_new_tile_track_status(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
-        if self.mode == RAIL && w.is_plain_rail_tile_raw(self.new_tile.0) {
-            self.new_td_bits =
-                TrackdirBits(u16::from(w.get_track_bits_raw(self.new_tile.0)) * 0x101);
+        if self.mode == RAIL && w.is_plain_rail_tile(self.new_tile) {
+            self.new_td_bits = TrackdirBits(u16::from(w.get_track_bits(self.new_tile).0) * 0x101);
         } else if self.mode == ROAD {
             self.new_td_bits = crate::pathfinder_func::get_trackdir_bits_for_road_in_world(
                 crate::movement::table(w.shared),
@@ -492,7 +491,7 @@ impl CFollowTrackT {
             }
         }
         if self.mode == RAIL && w.depot(self.new_tile.0, self.mode.0) {
-            let exitdir = DiagDirection(w.get_rail_depot_direction_raw(self.new_tile.0));
+            let exitdir = w.get_rail_depot_direction(self.new_tile);
             if reverse_diag_dir(exitdir, |ok| w.check(ok)) != self.exitdir {
                 self.err = ErrorCode::EC_NO_WAY;
                 return false;
@@ -598,11 +597,11 @@ impl CFollowTrackT {
     fn forced_reverse(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
         /* rail and road depots cause reversing */
         if self.mode != WATER && w.depot(self.old_tile.0, self.mode.0) {
-            let exitdir = DiagDirection(if self.mode == RAIL {
-                w.get_rail_depot_direction_raw(self.old_tile.0)
+            let exitdir = if self.mode == RAIL {
+                w.get_rail_depot_direction(self.old_tile)
             } else {
-                w.road_depot_dir(self.old_tile.0)
-            });
+                DiagDirection(w.road_depot_dir(self.old_tile.0))
+            };
             if exitdir != self.exitdir {
                 /* reverse */
                 self.reverse_state(w, exitdir);
@@ -688,9 +687,7 @@ pub(crate) fn get_speed_limit_with_road(
     }
     /* Check for speed limit imposed by railtype */
     if mode == RAIL {
-        let rail_speed = (m.train().physics.rail_speed)(crate::services::RailType(
-            w.get_rail_type_raw(old_tile.0),
-        ));
+        let rail_speed = (m.train().physics.rail_speed)(w.get_rail_type(old_tile));
         if rail_speed > 0 {
             max_speed = max_speed.min(i32::from(rail_speed));
         }

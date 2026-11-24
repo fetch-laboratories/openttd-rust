@@ -318,7 +318,9 @@ unsafe fn cmd_build_rail_wagon(
     /* Check that the wagon can drive on the track in question */
     let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
     let tiletype = crate::rail_type::RailType(
-        crate::map_func::World::new(x.t.shared).get_rail_type_raw(tile.0),
+        crate::map_func::World::new(x.t.shared)
+            .get_rail_type(tile)
+            .0,
     );
     if !crate::rail::is_compatible_rail_types(
         x.t.shared,
@@ -456,7 +458,9 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
      * We need to see if the engine got power on the tile to avoid electric engines in non-electric depots */
     let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
     let tiletype = crate::rail_type::RailType(
-        crate::map_func::World::new(x.t.shared).get_rail_type_raw(tile.0),
+        crate::map_func::World::new(x.t.shared)
+            .get_rail_type(tile)
+            .0,
     );
     if !(b.refit.train.physics.powered)(railtypes, tiletype) {
         (x.t.cost.error)(out, ERROR);
