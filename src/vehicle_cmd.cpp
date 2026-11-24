@@ -53,7 +53,6 @@
 #include "rust/company_services.h"
 #include "rust/presentation_services.h"
 #include "rust/orders_ffi.h"
-#include "rust/vehicle_maintenance_ffi.h"
 #include "rust/ship_control_ffi.h"
 #include "rust/services_station.h"
 #include "road_map.h"
@@ -72,7 +71,7 @@ static void VehicleTransactionSetInterval(void *shell, uint16_t interval, bool c
 	v->SetServiceInterval(interval);
 	v->SetServiceIntervalIsCustom(custom);
 	RustVehicleSetServiceIntervalIsPercent(v, percent);
-	GetRustVehicleServices().maintenance->details_dirty(RustVehicle(v));
+	RustVehicleDetailsDirty(RustVehicle(v));
 }
 const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noexcept
 {
