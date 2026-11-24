@@ -770,7 +770,7 @@ fn produce_industry_goods(entry: Entry, svc: &Services, builder: *mut Builder) {
         if chance16_i(1, 14, r) {
             let sounds = unsafe { (*indsp).random_sounds.len() } as u16;
             if sounds != 0
-                && unsafe { svc.shared().settings().ambient.read() }
+                && svc.shared().settings().ambient()
                 && (0..produced_count(owner)).any(|slot| unsafe {
                     (*produced(owner, slot)).history[usize::from(LAST_MONTH)].first > 0
                 })
@@ -868,7 +868,7 @@ pub(crate) unsafe fn on_tick_industry(builder: *mut Builder, services: *const Se
         if (*b).sound_ctr != 0 {
             (*b).sound_ctr = (*b).sound_ctr.wrapping_add(1);
             if (*b).sound_ctr == 75 {
-                if s.shared().settings().ambient.read() {
+                if s.shared().settings().ambient() {
                     (s.shared().play_sound)(
                         (*b).sound_tile,
                         u16::from(SoundFx::SND_37_LUMBER_MILL_2.0),
@@ -876,7 +876,7 @@ pub(crate) unsafe fn on_tick_industry(builder: *mut Builder, services: *const Se
                 }
             } else if (*b).sound_ctr == 160 {
                 (*b).sound_ctr = 0;
-                if s.shared().settings().ambient.read() {
+                if s.shared().settings().ambient() {
                     (s.shared().play_sound)(
                         (*b).sound_tile,
                         u16::from(SoundFx::SND_36_LUMBER_MILL_3.0),
@@ -2692,7 +2692,6 @@ crate::abi::layouts! {
     };
     "OpenTTDIndustryTileServices" ["industry"] => crate::industry::TileServices {
         shared,
-        gfx,
         set_gfx,
         frame,
         animation_loop,
@@ -3087,9 +3086,6 @@ mod production_policy_tests {
         RNG.set(value + 1);
         value
     }
-    extern "C" fn unused_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        unreachable!()
-    }
     extern "C" fn error(_: *mut c_void, _: bool) {
         ERRORS.set(ERRORS.get() + 1);
     }
@@ -3250,7 +3246,7 @@ mod production_policy_tests {
         let shared = Box::leak(Box::new(crate::services::Services {
             cargo_name,
             station_catchment: catchment,
-            ..crate::services::fixture(ptr::null_mut(), random, unused_industry)
+            ..crate::services::fixture(ptr::null_mut(), random)
         }));
         CATCHMENT.set(Box::leak(Box::new(crate::station::CatchmentServices {
             shared,
@@ -3322,7 +3318,7 @@ mod production_policy_tests {
         let shared = Box::leak(Box::new(crate::services::Services {
             station_catchment: catchment,
             map: crate::map_func::fixture::statics(),
-            ..crate::services::fixture(ptr::null_mut(), random, unused_industry)
+            ..crate::services::fixture(ptr::null_mut(), random)
         }));
         CATCHMENT.set(Box::leak(Box::new(crate::station::CatchmentServices {
             shared,
@@ -3675,7 +3671,7 @@ mod production_policy_tests {
 
     #[test]
     fn production_callback_matches_complete_original_corpus() {
-        let shared = crate::services::fixture(ptr::null_mut(), random, unused_industry);
+        let shared = crate::services::fixture(ptr::null_mut(), random);
         let services = services(&shared);
         let oracle = crate::oracle::parse(include_str!("industry/production-oracle.txt"));
         let section = &oracle["I"];

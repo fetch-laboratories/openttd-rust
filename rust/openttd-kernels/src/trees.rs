@@ -1779,9 +1779,6 @@ mod tests {
         log(Event::Draw);
         RANDOM.get()
     }
-    extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        0
-    }
     extern "C" fn tile_type(tile: u32) -> u8 {
         byte(TileIndex(tile), |b| b.kind >> 4)
     }
@@ -1881,7 +1878,7 @@ mod tests {
         }))
     }
     fn shared() -> &'static Services {
-        let fixture = crate::services::fixture(std::ptr::null_mut(), random, industry);
+        let fixture = crate::services::fixture(std::ptr::null_mut(), random);
         Box::leak(Box::new(Services {
             settings: settings(),
             snow_line_support: crate::snow_line::Support {

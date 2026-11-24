@@ -481,9 +481,6 @@ mod tests {
     extern "C" fn no_random(_: *mut std::ffi::c_void) -> u32 {
         std::process::abort()
     }
-    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        std::process::abort()
-    }
     extern "C" fn no_callback(_: u32) -> u8 {
         std::process::abort()
     }
@@ -642,7 +639,7 @@ mod tests {
         ];
         let shared = crate::services::Services {
             movement: MOVEMENT.with(std::ptr::from_ref),
-            ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
+            ..crate::services::fixture(std::ptr::null_mut(), no_random)
         };
         for assertions in [true, false] {
             let road_cases = ROAD_CASES
@@ -706,7 +703,7 @@ mod tests {
         let (base, extended) = tiles();
         let shared = crate::services::Services {
             movement: MOVEMENT.with(std::ptr::from_ref),
-            ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
+            ..crate::services::fixture(std::ptr::null_mut(), no_random)
         };
         let allocation = TileTypeAllocation {
             base: base.as_ptr(),

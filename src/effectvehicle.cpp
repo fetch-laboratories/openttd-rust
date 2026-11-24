@@ -22,45 +22,19 @@
 
 
 
-static void OPENTTD_RUST_CALL EffectViewport(void *context) noexcept
-{
-	/* Effects skip UpdatePosition; UpdateViewport has no NewGRF/script callbacks. */
-	static_cast<EffectVehicle *>(context)->UpdatePositionAndViewport();
-}
-
-static void OPENTTD_RUST_CALL EffectSound(void *context, uint8_t success) noexcept
-{
-	SndPlayVehicleFx(success == 0 ? SND_2F_BUBBLE_GENERATOR_FAIL : SND_31_BUBBLE_GENERATOR_SUCCESS, static_cast<EffectVehicle *>(context));
-}
-
-static const OpenTTDEffectLeaves &EffectServices()
-{
-	static const OpenTTDEffectLeaves leaves{
-		.vehicles = &GetRustVehicleServices(),
-		.sprite_sequence = RustOpaqueVehicleInvoke<RustWriteVehicleSpriteSequence, uint32_t>,
-		.sprite = RustOpaqueVehicleInvoke<RustWriteVehicleFirstSprite, uint32_t>,
-		.spritenum = RustOpaqueVehicleInvoke<RustWriteVehicleSprite, uint8_t>,
-		.viewport = EffectViewport,
-		.sound = EffectSound,
-	};
-	return leaves;
-}
-
 extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() noexcept
 {
 	static const OpenTTDEffectCreationServices services{
-		.effect = &EffectServices(),
+		.allocate = []() noexcept -> OpenTTDEffectAllocation { auto *v = new EffectVehicle(); return {RustVehicle(v), v->rust_state.get()}; },
 		.shared = &GetRustSharedServices(),
-		.allocate = []() noexcept -> OpenTTDEffectAllocation { auto *v = new EffectVehicle(); return {v, RustVehicle(v), v->rust_state.get()}; },
-		.owner = [](void *shell) noexcept { return static_cast<EffectVehicle *>(shell)->rust_state.get(); },
-
+		.vehicles = &GetRustVehicleServices(),
 	};
 	return &services;
 }
 
 static bool RunEffect(EffectVehicle *v)
 {
-	if (openttd_rust_effect_run(v->rust_state.get(), RustVehicle(v), &EffectServices(), &GetRustSharedServices()) != 0) return true;
+	if (openttd_rust_effect_run(v->rust_state.get(), RustVehicle(v), &GetRustVehicleServices(), &GetRustSharedServices()) != 0) return true;
 	/* Expiry returns before destroying the Rust owner. Vehicle::~Vehicle and
 	 * Pool::FreeItem/PostDestructor run wholly outside any Rust frame/borrow. */
 	delete v;
@@ -131,6 +105,5 @@ TransparencyOption EffectVehicle::GetTransparencyOption() const
 }
 
 #include "rust/service_table_check.hpp"
-#include "abi-visit-OpenTTDEffectLeaves.hpp"
 #include "abi-visit-OpenTTDEffectCreationServices.hpp"
-bool CheckAbi_effectvehicle() { return AbiServicesComplete(EffectServices()) && AbiServicesComplete(*GetRustEffectCreationServices()); }
+bool CheckAbi_effectvehicle() { return AbiServicesComplete(*GetRustEffectCreationServices()); }

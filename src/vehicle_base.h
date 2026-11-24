@@ -789,7 +789,6 @@ public:
 	void UpdatePosition();
 	void UpdateViewport(bool dirty);
 	void UpdateBoundingBoxCoordinates(bool update_cache) const;
-	void UpdatePositionAndViewport();
 	bool MarkAllViewportsDirty() const;
 
 	inline uint16_t GetServiceInterval() const { return this->service_interval; }

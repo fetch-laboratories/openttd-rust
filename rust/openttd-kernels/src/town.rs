@@ -2736,7 +2736,7 @@ impl Engine<'_> {
                 | (u32::from(c.is_protected) << 24),
         );
         if house::building_flags(self.leaves, house).test(BuildingFlag::IsAnimated) {
-            crate::animated_tile::openttd_rust_animation_add(tile.0, false);
+            crate::animated_tile::add_animated_tile(tile, false);
         }
         (self.services.mark_dirty)(tile.0);
     }
@@ -3631,12 +3631,9 @@ pub(crate) mod tests {
     extern "C" fn fixture_random(_: *mut std::ffi::c_void) -> u32 {
         0
     }
-    extern "C" fn fixture_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        0
-    }
     /// Shared services over the static fixture map, for the rating test mode.
     fn fixture_shared() -> Services {
-        crate::services::fixture(std::ptr::null_mut(), fixture_random, fixture_industry)
+        crate::services::fixture(std::ptr::null_mut(), fixture_random)
     }
 
     /// Serializes the tests that touch process-wide game state: the town owners and index,
@@ -3771,9 +3768,6 @@ mod policy_tests {
     extern "C" fn unused_random(_: *mut std::ffi::c_void) -> u32 {
         unreachable!()
     }
-    extern "C" fn unused_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        unreachable!()
-    }
     extern "C" fn company() -> u8 {
         COMPANY.get()
     }
@@ -3809,8 +3803,7 @@ mod policy_tests {
         OWNER.get()
     }
     fn shared() -> Services {
-        let mut services =
-            crate::services::fixture(ptr::null_mut(), unused_random, unused_industry);
+        let mut services = crate::services::fixture(ptr::null_mut(), unused_random);
         services.company_valid = valid;
         services.current_company = company;
         services.tile_type = tile_type;
@@ -4922,9 +4915,6 @@ mod protocol_tests {
         with(|w| w.draws += 1);
         0xABCD_EF01
     }
-    extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        0
-    }
     /// The fixture's road command: count it; a test succeeds and an execution fails.
     unsafe extern "C" fn do_build(
         _: *const crate::road_cmd::RoadCommandServices,
@@ -5251,7 +5241,7 @@ mod protocol_tests {
     /// `OpenTTDFixtureSharedServices` with the fixture's overrides: flat, empty ground without
     /// roads, depots, bridges or stations, and no town yet.
     fn fixture_services() -> *mut Services {
-        let mut services = crate::services::fixture(ptr::null_mut(), random, industry);
+        let mut services = crate::services::fixture(ptr::null_mut(), random);
         services.company_human = human;
         // Town roads and level crossings are disabled; growth uses the normal rate.
         services.settings = leak(crate::settings_type::SettingAddresses {

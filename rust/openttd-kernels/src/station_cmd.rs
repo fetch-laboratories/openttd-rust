@@ -4438,7 +4438,7 @@ impl Ctx<'_> {
                 iter.gfx,
                 unsafe { &*self.s.airport_runtime },
             )) {
-                crate::animated_tile::openttd_rust_animation_add(iter.tile, true);
+                crate::animated_tile::add_animated_tile(TileIndex(iter.tile), true);
             }
         }
         /* Only call the animation trigger after all tiles have been built */

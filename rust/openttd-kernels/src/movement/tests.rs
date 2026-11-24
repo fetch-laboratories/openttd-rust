@@ -94,9 +94,6 @@ extern "C" fn max_y() -> u32 {
 extern "C" fn random(_: *mut c_void) -> u32 {
     unreachable!()
 }
-extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-    unreachable!()
-}
 extern "C" fn compatible(_: VehicleRef) -> u64 {
     unreachable!()
 }
@@ -170,7 +167,7 @@ fn allocation(log_x: u32, log_y: u32) -> (Vec<BaseTileLayout>, Vec<ExtendedTileL
 
 #[test]
 fn extreme_coordinates_match_original() {
-    let mut shared = crate::services::fixture(ptr::null_mut(), random, industry);
+    let mut shared = crate::services::fixture(ptr::null_mut(), random);
     shared.map_max_x = max_x;
     shared.map_max_y = max_y;
     let movement = services(&shared);

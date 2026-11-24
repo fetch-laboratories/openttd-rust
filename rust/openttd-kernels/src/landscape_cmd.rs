@@ -450,14 +450,14 @@ impl<'a> World<'a> {
                     crate::command::with_cost(self.c, |ignored| self.clear_do(ignored, t, flags))
                 };
                 if (t == tile || t == start) && !(self.a.paused)() {
-                    crate::effect::openttd_rust_effect_create_above(
+                    let _ = crate::effect::create_effect_vehicle_above(
                         (self.map.tile_x(TileIndex(t)) * 16 + 8) as i32,
                         (self.map.tile_y(TileIndex(t)) * 16 + 8) as i32,
                         2,
                         if tile == start {
-                            crate::effectvehicle_func::EV_EXPLOSION_SMALL
+                            crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_SMALL
                         } else {
-                            crate::effectvehicle_func::EV_EXPLOSION_LARGE
+                            crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE
                         },
                     );
                 }

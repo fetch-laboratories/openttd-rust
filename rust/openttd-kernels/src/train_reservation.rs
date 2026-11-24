@@ -1395,8 +1395,11 @@ pub(crate) mod tests {
             write_breakdowns: unused(),
             write_calendar_service: unused(),
             write_economy_service: unused(),
+            write_first_sprite: unused(),
             write_profit: unused(),
             write_reliability: unused(),
+            write_sprite_seq: unused(),
+            write_spritenum: unused(),
         }
     }
     extern "C" fn resolve_record(shell: *mut c_void) -> *mut crate::vehicle_base::VehicleRecord {
@@ -1542,9 +1545,6 @@ pub(crate) mod tests {
     extern "C" fn no_random(_: *mut c_void) -> u32 {
         std::process::abort()
     }
-    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        std::process::abort()
-    }
     impl World {
         fn new() -> Box<Self> {
             let mut world = Box::new(Self {
@@ -1554,7 +1554,7 @@ pub(crate) mod tests {
                     tile_type: railway,
                     is_plain_rail: yes,
                     mark_dirty: mark,
-                    ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
+                    ..crate::services::fixture(std::ptr::null_mut(), no_random)
                 },
                 rail: rail_map(),
                 pbs: pbs_table(),
@@ -1832,7 +1832,7 @@ pub(crate) mod tests {
             };
             let shared = crate::services::Services {
                 settings: &raw const settings,
-                ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
+                ..crate::services::fixture(std::ptr::null_mut(), no_random)
             };
             let ls = Leaves {
                 shared: &raw const shared,
