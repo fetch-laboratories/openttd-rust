@@ -6,6 +6,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
@@ -430,7 +431,7 @@ class CandidateTests(unittest.TestCase):
     def test_rows_print_before_the_comment_pairing(self) -> None:
         printed: list[str] = []
 
-        def pairs(_head: str) -> list[object]:
+        def pairs(_head: str, _tests: object = None) -> list[object]:
             raise TimeoutError("yielded")
 
         with (
@@ -546,6 +547,31 @@ fn after_comment() { assert_ne!(a, b); }
                     [(1, "assertion macro", "assert!")],
                 )
 
+    def test_modules_resolve_inside_inline_modules_and_by_path(self) -> None:
+        tree = {
+            "src/lib.rs": (
+                "mod checks;\n#[cfg(test)]\nmod outer { mod checks; }\n"
+                '#[cfg(test)]\n#[path = "fixtures/table.rs"]\nmod table;\n'
+            ),
+            "src/checks.rs": "fn f() { assert!(a); }\n",
+            "src/outer/checks.rs": "fn f() { assert!(a); }\n",
+            "src/fixtures/table.rs": "fn f() { assert!(a); }\n",
+        }
+        tests = INVENTORY.test_modules(tree)
+        self.assertNotIn("src/checks.rs", tests)
+        self.assertIn("src/outer/checks.rs", tests)
+        self.assertIn("src/fixtures/table.rs", tests)
+
+    def test_parsed_bounds_decide_a_site_in_ordinary_code(self) -> None:
+        source = """
+const X: S<{1}> = { assert!(true); S };
+const _: () = { const fn checked(x: bool) { assert!(x); } };
+"""
+        self.assertEqual(
+            self.sites(source),
+            [(2, "const assertion", "assert!"), (3, "assertion macro", "assert!")],
+        )
+
     def test_const_initialisers_hold_const_assertions(self) -> None:
         source = """
 const _: () = assert!(A < B);
@@ -569,6 +595,35 @@ trait Limited { const MAX: u8; fn f() { debug_assert!(true); } }
 
 
 class TestCodeTests(unittest.TestCase):
+    def test_test_files_pair_with_no_original_body(self) -> None:
+        files = {RUST: PORT, "src/tile_cmd.cpp": ORIGINAL}
+        with (
+            patch.object(INVENTORY, "archive", return_value=files),
+            patch.object(INVENTORY, "baseline_commit", return_value="original"),
+        ):
+            self.assertEqual(len(INVENTORY.comment_pairs("head")), 1)
+            self.assertEqual(INVENTORY.comment_pairs("head", {RUST}), [])
+
+    def test_compare_finds_renames_across_the_rust_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = partial(subprocess.run, cwd=root, check=True, capture_output=True)
+            run(["git", "init", "--quiet"])
+            source = root / "rust/demo/src/lib.rs"
+            source.parent.mkdir(parents=True)
+            source.write_text("fn f() { assert!(a); }\n")
+            commit = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit"]
+            run(["git", "add", "-A"])
+            run([*commit, "--quiet", "-m", "Add: lib"])
+            run(["git", "mv", "rust/demo/src/lib.rs", "rust/demo/src/main.rs"])
+            run([*commit, "--quiet", "-m", "Move: main"])
+            with patch.object(INVENTORY, "ROOT", root):
+                self.assertEqual(INVENTORY.renamed_from("HEAD~1", "HEAD"), {})
+                self.assertEqual(
+                    INVENTORY.renamed_from("HEAD~1", "HEAD", "rust"),
+                    {"rust/demo/src/main.rs": "rust/demo/src/lib.rs"},
+                )
+
     def test_a_comment_naming_a_test_attribute_is_not_one(self) -> None:
         source = b"// Unlike #[test] helpers:\nfn live(a: u8) {}\n#[cfg(all(test, unix))]\nfn probe() {}\n"
         names = [f.name for f in INVENTORY.functions(RUST, source, "rust", tests=False)]
@@ -614,7 +669,7 @@ impl B { fn update(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {} }
             patch.object(
                 INVENTORY,
                 "comment_pairs",
-                side_effect=lambda revision: (pairs or {}).get(revision, []),
+                side_effect=lambda revision, _tests: (pairs or {}).get(revision, []),
             ),
             patch("builtins.print", side_effect=lambda *a, **_: printed.append(*a)),
         ):

@@ -437,13 +437,16 @@ class Matcher:
         ]
 
 
-def comment_pairs(head: str) -> list[tuple[Function, Function]]:
+def comment_pairs(
+    head: str, tests: set[str] | None = None
+) -> list[tuple[Function, Function]]:
+    """Rust bodies paired with original ones; test files pair with nothing."""
     baseline = baseline_commit(head)
     candidate = archive(head, RUST, "src")
     rust = [
         function
         for path, data in sorted(candidate.items())
-        if path.startswith(RUST) and path.endswith(".rs")
+        if path.startswith(RUST) and path.endswith(".rs") and path not in (tests or ())
         for function in functions(path, data, "rust", tests=False)
     ]
     facades = [
@@ -590,6 +593,30 @@ def type_sites(path: str, source: str) -> list[Site]:
 LONG_PARAMETERS = 7
 
 
+PATH_ATTRIBUTE = re.compile(r'#\[\s*path\s*=\s*"([^"]+)"\s*\]')
+
+
+def module_files(path: str, node: Node, data: bytes) -> set[str]:
+    """The files a `mod name;` item names: inside the inline modules around it,
+    or where its `#[path]` attribute points."""
+    file = PurePosixPath(path)
+    inline = []
+    current = node.parent
+    while current:
+        if current.type == "mod_item":
+            inline.append(text(current.child_by_field_name("name"), data))
+        current = current.parent
+    stem = [] if file.name in ("lib.rs", "mod.rs", "main.rs") else [file.stem]
+    directory = file.parent.joinpath(*stem, *reversed(inline))
+    name = text(node.child_by_field_name("name"), data)
+    for attribute in attributes(node, data):
+        if found := PATH_ATTRIBUTE.match(attribute):
+            # Outside inline modules a path is relative to the file's own folder.
+            base = directory if inline else file.parent
+            return {str(PurePosixPath(base, found[1]))}
+    return {str(directory / f"{name}.rs"), str(directory / name / "mod.rs")}
+
+
 def declared_modules(path: str, source: str) -> tuple[bool, set[str], set[str]]:
     """Whether a file is test code by its path or inner attribute, and the module
     files its `mod name;` items declare, as (file, test modules, other modules)."""
@@ -600,19 +627,12 @@ def declared_modules(path: str, source: str) -> tuple[bool, set[str], set[str]]:
         and TEST_FILE_ATTRIBUTE.fullmatch(text(child, data))
         for child in root.children
     )
-    parent = PurePosixPath(path)
-    parent = (
-        parent.parent
-        if parent.name in ("lib.rs", "mod.rs", "main.rs")
-        else parent.with_suffix("")
-    )
     tests: set[str] = set()
     others: set[str] = set()
     for node in walk(root):
         if node.type != "mod_item" or node.child_by_field_name("body") is not None:
             continue
-        name = text(node.child_by_field_name("name"), data)
-        files = {str(parent / f"{name}.rs"), str(parent / name / "mod.rs")}
+        files = module_files(path, node, data)
         (tests if in_test(node, data, path) else others).update(files)
     return whole, tests, others
 
@@ -688,9 +708,9 @@ LITERAL_NODES = ("string_literal", "raw_string_literal", "char_literal")
 CONST_ITEM = re.compile(r"\bconst\s+\$?\w+\s*:")
 
 
-def assertion_code(source: str) -> str:
-    """The file's text with comments, literals and test items blanked, offsets kept."""
-    data = source.encode()
+def assertion_code(data: bytes, root: Node) -> str:
+    """The file's text with comments, literals and test items blanked, decoded
+    byte for byte so that string offsets are the parser's byte offsets."""
     code = bytearray(data)
 
     def visit(node: Node) -> None:
@@ -702,8 +722,32 @@ def assertion_code(source: str) -> str:
         for child in node.children:
             visit(child)
 
-    visit(PARSERS["rust"].parse(data).root_node)
-    return code.decode(errors="replace")
+    visit(root)
+    return code.decode("latin-1")
+
+
+def contexts(root: Node, code: str) -> list[tuple[int, int, bool]]:
+    """The spans that decide a site's class, as (start, end, compile time): each
+    parsed `const` item's value and each function, and in a `macro_rules!` body,
+    where the parser gives only tokens, the `const` initialisers of the token scan."""
+    spans = []
+    for node in walk(root):
+        value = node.child_by_field_name("value")
+        if node.type == "const_item" and value is not None:
+            spans.append((value.start_byte, value.end_byte, True))
+        elif node.type == "function_item":
+            spans.append((node.start_byte, node.end_byte, False))
+        elif node.type == "macro_definition":
+            start = node.start_byte
+            body = code[start : node.end_byte]
+            spans += [(start + a, start + b, True) for a, b in const_spans(body)]
+    return spans
+
+
+def compile_time(spans: list[tuple[int, int, bool]], offset: int) -> bool:
+    """Whether the innermost span around offset is a `const` initialiser."""
+    around = [span for span in spans if span[0] <= offset < span[1]]
+    return min(around, key=lambda s: s[1] - s[0], default=(0, 0, False))[2]
 
 
 def assignment(code: str, index: int) -> bool:
@@ -742,7 +786,7 @@ def initialiser(code: str, start: int) -> tuple[int, int] | None:
 
 
 def const_spans(code: str) -> list[tuple[int, int]]:
-    """Initialisers of `const` items, parsed or in a macro body; a generic
+    """Initialisers of `const` items in a macro body's tokens; a generic
     `<const N: usize>` parameter and a `const fn` are not items with one."""
     spans = []
     for match in CONST_ITEM.finditer(code):
@@ -759,20 +803,21 @@ def assertion_sites(path: str, source: str) -> list[Site]:
     `static_assert`."""
     if test_path(path):
         return []
-    code = assertion_code(source)
-    spans = const_spans(code)
-    sites = []
-    for match in ASSERTION.finditer(code):
-        compile_time = any(a <= match.start() < b for a, b in spans)
-        sites.append(
-            Site(
-                path,
-                code.count("\n", 0, match.start()) + 1,
-                "const assertion" if compile_time else "assertion macro",
-                f"{match[1]}!",
-            )
+    data = source.encode()
+    root = PARSERS["rust"].parse(data).root_node
+    code = assertion_code(data, root)
+    spans = contexts(root, code)
+    return [
+        Site(
+            path,
+            code.count("\n", 0, match.start()) + 1,
+            "const assertion"
+            if compile_time(spans, match.start())
+            else "assertion macro",
+            f"{match[1]}!",
         )
-    return sites
+        for match in ASSERTION.finditer(code)
+    ]
 
 
 def assertion_class(site: Site) -> str:
@@ -913,10 +958,10 @@ def show(revision: str, path: str) -> str | None:
     return shown.stdout.decode() if shown.returncode == 0 else None
 
 
-def renamed_from(base: str, head: str) -> dict[str, str]:
-    """Head path to base path for files Git sees as renamed."""
+def renamed_from(base: str, head: str, scope: str = RUST) -> dict[str, str]:
+    """Head path to base path for files under scope that Git sees as renamed."""
     names = subprocess.check_output(
-        ["git", "diff", "--name-status", "-M", base, head, "--", RUST],
+        ["git", "diff", "--name-status", "-M", base, head, "--", scope],
         cwd=ROOT,
         text=True,
     )
@@ -1247,11 +1292,13 @@ def rust_sources(revision: str) -> dict[str, str]:
     }
 
 
-def missing_rows(revision: str, selected: set[str] | None) -> tuple[int, list[Site]]:
+def missing_rows(
+    revision: str, selected: set[str] | None, tests: set[str]
+) -> tuple[int, list[Site]]:
     """The matched bodies' count and the bodies that lack original comment lines."""
     pairs = [
         (r, o)
-        for r, o in comment_pairs(revision)
+        for r, o in comment_pairs(revision, tests)
         if selected is None or r.path in selected
     ]
     rows = [
@@ -1299,7 +1346,7 @@ def measure(
         for site in assertions if rows else []:
             show_row(site)
         print(assertion_line(revision, assertions), flush=True)
-    pairs, missing = missing_rows(revision, selected)
+    pairs, missing = missing_rows(revision, selected, tests)
     if rows:
         for site in missing:
             show_row(site)
@@ -1396,7 +1443,7 @@ def compare(base_ref: str, head: str, files: list[str]) -> int:
     base = subprocess.check_output(
         ["git", "merge-base", base_ref, head], cwd=ROOT, text=True
     ).strip()
-    renames = renamed_from(base, head)
+    renames = renamed_from(base, head, "rust")
     selected = files or compared_files(base, head, renames)
     after_tree = rust_sources(head)
     if unknown := set(selected) - set(after_tree):
