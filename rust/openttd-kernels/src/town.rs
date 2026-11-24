@@ -5426,15 +5426,42 @@ mod protocol_tests {
                 (r, a)
             }
         };
-        let before = installed();
+        // Seed distinct live predecessors, so restoring differs from clearing; the outer
+        // guard puts the process's own tables back after the seeds.
+        let seeds: (
+            *const resolver::ResolverServices,
+            *const crate::animated_tile::Services,
+        ) = (leak(resolver::TEST_TABLE), leak(ANIMATION));
+        // SAFETY: Both seeds are leaked, so they outlive their installation.
+        let _outer = unsafe {
+            RestoreCallbacks(
+                resolver::openttd_rust_house_resolver_exchange(seeds.0),
+                crate::animated_tile::openttd_rust_animation_exchange(seeds.1),
+            )
+        };
+        assert_eq!(installed(), seeds);
+        const AFTER_INSTALL: &str = "a failed check after install_callbacks";
+        let during = std::cell::Cell::new((ptr::null(), ptr::null()));
         let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let (r, a) = install_callbacks(ptr::null());
             let _restore = RestoreCallbacks(r, a);
-            assert_ne!(installed(), before);
-            panic!("a failed check after install_callbacks");
+            during.set(installed());
+            std::panic::panic_any(AFTER_INSTALL);
         }));
-        assert!(unwound.is_err());
-        assert_eq!(installed(), before);
+        let (r, a) = during.get();
+        assert!(
+            !r.is_null() && r != seeds.0,
+            "install_callbacks replaced the resolver"
+        );
+        assert!(
+            !a.is_null() && a != seeds.1,
+            "install_callbacks replaced the animation"
+        );
+        let payload = unwound.expect_err("the test body unwinds");
+        assert_eq!(payload.downcast_ref::<&str>(), Some(&AFTER_INSTALL));
+        let (r, a) = installed();
+        assert_eq!(r, seeds.0, "the resolver registry is restored");
+        assert_eq!(a, seeds.1, "the animation registry is restored");
     }
 
     /// The fixture's road command context: tests succeed, executions fail.
