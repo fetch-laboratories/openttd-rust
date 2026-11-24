@@ -389,14 +389,14 @@ fn handle_refit_stores_and_restores_type_and_subtype_in_the_original_order() {
 /// station may be absent.
 #[test]
 fn percent_filled_asserts_that_a_colour_needs_a_valid_station() {
+    extern "C" fn no_station(_: u16) -> *mut BaseStation {
+        std::ptr::null_mut()
+    }
     if crate::services_assert::isolate_test_check(
         "vehicle::visits::tests::percent_filled_asserts_that_a_colour_needs_a_valid_station",
         count_failed_check,
     ) {
         return;
-    }
-    extern "C" fn no_station(_: u16) -> *mut BaseStation {
-        std::ptr::null_mut()
     }
     let s = visits(|_, station, _| station.get = no_station);
     CARGO_LIST.set(crate::cargo_storage::openttd_rust_cargo_list_new(1));
@@ -651,13 +651,6 @@ fn enter_depot_of_a_road_vehicle_invalidates_its_windows_in_order() {
 /// `NOT_REACHED()` of its type `switch`, before any window call.
 #[test]
 fn enter_depot_of_an_effect_vehicle_is_not_reached_before_any_window_call() {
-    if crate::services_assert::isolate_test_ends(
-        "vehicle::visits::tests::enter_depot_of_an_effect_vehicle_is_not_reached_before_any_window_call",
-        ENDED,
-        ENDED_MARKER,
-    ) {
-        return;
-    }
     extern "C" fn not_reached() {
         let windows = crate::window_func::testing::take();
         if windows.is_empty() {
@@ -666,6 +659,13 @@ fn enter_depot_of_an_effect_vehicle_is_not_reached_before_any_window_call() {
         }
         eprintln!("windows before NOT_REACHED: {windows:?}");
         std::process::exit(1);
+    }
+    if crate::services_assert::isolate_test_ends(
+        "vehicle::visits::tests::enter_depot_of_an_effect_vehicle_is_not_reached_before_any_window_call",
+        ENDED,
+        ENDED_MARKER,
+    ) {
+        return;
     }
     let s = visits(|shared, _, _| shared.not_reached = not_reached);
     // SAFETY: The leaked shared table and this thread's map statics live through the child.
