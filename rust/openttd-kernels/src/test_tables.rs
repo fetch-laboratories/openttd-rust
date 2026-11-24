@@ -345,7 +345,6 @@ pub(crate) const SHIP_LEAVES: crate::ship_control::Leaves = crate::ship_control:
     industry_station: unreachable1,
     arrival: unreachable2,
     leave_unbunch: unreachable1,
-    path_result: unreachable2,
     order_free: unreachable1,
     order_dummy: unreachable1,
     order_depot: unreachable2,

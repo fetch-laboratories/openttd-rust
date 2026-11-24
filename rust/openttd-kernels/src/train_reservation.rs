@@ -103,7 +103,6 @@ pub struct Leaves {
     pub order_type: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub other_end: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub overlap: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub path_result: extern "C" fn(*mut std::ffi::c_void, Handle, u8),
     pub rail90: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
     pub reach_dirs: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub reach_tracks: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
@@ -771,7 +770,8 @@ fn choose(
         if new_tile == tile {
             best = result.track;
         }
-        (g.leaves.path_result)(g.context, id, result.found);
+        // SAFETY: The native table names the immutable process-wide base table.
+        (unsafe { &*g.leaves.vehicle }.pathfinding_result)(id.vehicle(), result.found != 0);
     }
     if !reserve {
         return (best, false);
@@ -1202,7 +1202,6 @@ crate::abi::layouts! {
         order_type,
         other_end,
         overlap,
-        path_result,
         rail90,
         reach_dirs,
         reach_tracks,
@@ -1309,7 +1308,6 @@ pub(crate) mod tests {
             order_type: unused(),
             other_end: unused(),
             overlap: unused(),
-            path_result: unused(),
             rail90: unused(),
             reach_dirs: unused(),
             reach_tracks: unused(),

@@ -190,7 +190,6 @@ pub struct Leaves {
     pub industry_station: extern "C" fn(u32) -> u32,
     pub arrival: extern "C" fn(u32, u32),
     pub leave_unbunch: extern "C" fn(u32),
-    pub path_result: extern "C" fn(u32, bool),
     pub order_free: extern "C" fn(u32),
     pub order_dummy: extern "C" fn(u32),
     pub order_depot: extern "C" fn(u32, u32),
@@ -674,7 +673,7 @@ impl Game<'_> {
             track = u32::from(result.track);
             found = result.found;
         }
-        (self.leaves.path_result)(id, found);
+        (self.vs().pathfinding_result)(self.vehicle(), found);
         track
     }
     fn destination_station(&self, tile: u32, station: u32) -> bool {
@@ -1236,7 +1235,6 @@ crate::abi::layouts! {
         industry_station,
         arrival,
         leave_unbunch,
-        path_result,
         order_free,
         order_dummy,
         order_depot,

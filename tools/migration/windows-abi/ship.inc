@@ -57,7 +57,7 @@ static void ShipBoundary()
 		.station = ShipProbeUnused<uint32_t, uint32_t>, .industry_station = ShipProbeUnused<uint32_t, uint32_t>,
 		.arrival = ShipProbeUnused<void, uint32_t, uint32_t>,
 		.leave_unbunch = ShipProbeUnused<void, uint32_t>,
-		.path_result = ShipProbeUnused<void, uint32_t, bool>, .order_free = ShipProbeUnused<void, uint32_t>,
+		.order_free = ShipProbeUnused<void, uint32_t>,
 		.order_dummy = ShipProbeUnused<void, uint32_t>, .order_depot = ShipProbeUnused<void, uint32_t, uint32_t>,
 		.order_leave = ShipProbeUnused<void, uint32_t>, .order_increment = ShipProbeUnused<void, uint32_t>,
 		.timetable = ShipProbeUnused<void, uint32_t>,

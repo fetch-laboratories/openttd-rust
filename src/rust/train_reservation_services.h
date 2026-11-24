@@ -96,11 +96,6 @@ static uint64_t TrainReservationOverlap(void *, OpenTTDTrainHandle, uint8_t a) n
 {
 	return TracksOverlap(static_cast<TrackBits>(a));
 }
-static void TrainReservationPathResult(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	v->HandlePathfindingResult(a != 0);
-}
 static uint64_t TrainReservationReachDirs(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return TrackdirReachesTrackdirs(static_cast<Trackdir>(a));
