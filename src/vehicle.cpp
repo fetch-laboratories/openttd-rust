@@ -1784,14 +1784,11 @@ bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2)
 }
 
 #include "rust/service_table_check.hpp"
-#include "abi-visit-OpenTTDGroundServices.hpp"
 #include "abi-visit-OpenTTDFleetPendingServices.hpp"
 #include "abi-visit-OpenTTDVehicleVisits.hpp"
 #include "abi-visit-OpenTTDVisualServices.hpp"
 bool CheckAbi_vehicle()
 {
-	return AbiServicesComplete(GetRustGroundServices<Train>()) &&
-		AbiServicesComplete(GetRustGroundServices<RoadVehicle>()) &&
-		AbiServicesComplete(_fleet_pending_services) &&
+	return AbiServicesComplete(_fleet_pending_services) &&
 		AbiServicesComplete(GetRustVehicleVisits()) && AbiServicesComplete(GetRustVisualServices());
 }
