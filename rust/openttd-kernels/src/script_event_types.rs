@@ -81,7 +81,8 @@ impl ScriptEvent {
         }
     }
 
-    const fn of(r#type: ScriptEventType) -> Self {
+    /// The record of an event class with every argument zero and no text.
+    pub(crate) const fn of(r#type: ScriptEventType) -> Self {
         Self {
             r#type,
             vehicle: 0,
@@ -227,63 +228,5 @@ impl ScriptEvent {
             town: town.0,
             ..Self::of(ScriptEventType::ET_ROAD_RECONSTRUCTION)
         }
-    }
-}
-
-/// A script event carrying a name, `ScriptEventCompanyRenamed` or
-/// `ScriptEventPresidentRenamed`. It holds the name's borrow; the raw record that points at
-/// the bytes is formed only inside the synchronous dispatch (`ai::broadcast_new_text_event`,
-/// `game::new_text_event`), so no record outlives them.
-#[derive(Clone, Copy)]
-pub struct ScriptTextEvent<'a> {
-    event: ScriptEvent,
-    text: &'a [u8],
-}
-
-impl<'a> ScriptTextEvent<'a> {
-    /// `ScriptEventCompanyRenamed(company, new_name)`.
-    #[must_use]
-    pub const fn company_renamed(company: CompanyID, new_name: &'a [u8]) -> Self {
-        Self {
-            event: ScriptEvent {
-                company: company.0,
-                ..ScriptEvent::of(ScriptEventType::ET_COMPANY_RENAMED)
-            },
-            text: new_name,
-        }
-    }
-
-    /// `ScriptEventPresidentRenamed(company, new_name)`.
-    #[must_use]
-    pub const fn president_renamed(company: CompanyID, new_name: &'a [u8]) -> Self {
-        Self {
-            event: ScriptEvent {
-                company: company.0,
-                ..ScriptEvent::of(ScriptEventType::ET_PRESIDENT_RENAMED)
-            },
-            text: new_name,
-        }
-    }
-
-    /// The raw record borrowing the name. It stays inside this module's two dispatches, and
-    /// the plain dispatches clear `text`, so no record pointing at the name outlives it.
-    const fn record(&self) -> ScriptEvent {
-        ScriptEvent {
-            text: self.text.as_ptr(),
-            text_length: self.text.len(),
-            ..self.event
-        }
-    }
-
-    /// `AI::BroadcastNewEvent(new ScriptEvent...(..., name), skip_company)`: the native
-    /// factory copies the bytes during the call.
-    pub(crate) fn ai_broadcast(&self, skip_company: CompanyID) {
-        (crate::script_event::services().ai_broadcast)(&self.record(), skip_company.0);
-    }
-
-    /// `Game::NewEvent(new ScriptEvent...(..., name))`: the native factory copies the bytes
-    /// during the call.
-    pub(crate) fn game_new(&self) {
-        (crate::script_event::services().game_new)(&self.record());
     }
 }

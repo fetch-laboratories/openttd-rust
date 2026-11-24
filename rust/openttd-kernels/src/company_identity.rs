@@ -19,7 +19,7 @@ use crate::livery::{Livery, LiveryFlag, LiveryFlags, LiveryScheme};
 use crate::news_func::{AddNewsItemArgs, add_news_item};
 use crate::news_type::{CompanyNewsInformation, NewsFlags, NewsReference, NewsStyle, NewsType};
 use crate::raw_field::{read_field, write_field};
-use crate::script_event_types::ScriptTextEvent;
+use crate::script_event::ScriptTextEvent;
 use crate::services::{ByteSpan, CommandCost, CommandServices, Cost, Services as Shared};
 use crate::services_assert::{assert_with, not_reached};
 use crate::strings_func::{get_encoded_string, get_string};

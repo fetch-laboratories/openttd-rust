@@ -693,11 +693,8 @@ pub(crate) mod testing {
             (event, Some(text)) => Effect::GameNewTextEvent(event, text),
         });
     }
-    static EVENTS: crate::script_event::Services = crate::script_event::Services {
-        ai_broadcast,
-        ai_new,
-        game_new,
-    };
+    static EVENTS: crate::script_event::Services =
+        crate::script_event::Services::new(ai_broadcast, ai_new, game_new);
 
     /// Bind the recording tables once for the process; return and clear this thread's
     /// recorded effects.

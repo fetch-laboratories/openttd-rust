@@ -11,22 +11,22 @@
 //! hold the network and company checks, the company backup and the active-instance scope.
 
 use crate::company_type::CompanyID;
-use crate::script_event::services;
-use crate::script_event_types::{ScriptEvent, ScriptTextEvent};
+use crate::script_event::ScriptTextEvent;
+use crate::script_event_types::ScriptEvent;
 
 /// `AI::NewEvent(company, new ScriptEvent...(...))`: queue a new event for an AI.
 pub(crate) fn new_event(company: CompanyID, event: &ScriptEvent) {
-    (services().ai_new)(company.0, &event.without_text());
+    crate::script_event::ai_new(company.0, event);
 }
 
 /// `AI::BroadcastNewEvent(new ScriptEvent...(...), skip_company)`: broadcast a new event to
 /// all active AIs; pass `CompanyID::INVALID` for the original's default `skip_company`.
 pub(crate) fn broadcast_new_event(event: &ScriptEvent, skip_company: CompanyID) {
-    (services().ai_broadcast)(&event.without_text(), skip_company.0);
+    crate::script_event::ai_broadcast(event, skip_company.0);
 }
 
 /// `AI::BroadcastNewEvent(new ScriptEvent...(..., name), skip_company)` for an event that
 /// carries a name: the native factory copies the bytes during the call.
 pub(crate) fn broadcast_new_text_event(event: &ScriptTextEvent<'_>, skip_company: CompanyID) {
-    event.ai_broadcast(skip_company);
+    crate::script_event::ai_broadcast_text(event, skip_company.0);
 }
