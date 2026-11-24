@@ -140,11 +140,11 @@ fn slot(vector: *const Vector, index: usize) -> *mut Order {
 }
 /// `OrderList::GetOrderAt(index)` over the list's vector: the order's address, or `None`
 /// without a vector or beyond its orders. The address must not survive list mutation.
-fn order_at(vector: *mut Vector, index: u8) -> Option<*const Order> {
-    if vector.is_null() || index >= read_field!(vector, length) as u8 {
+fn order_at(vector: *mut Vector, index: VehicleOrderID) -> Option<*const Order> {
+    if vector.is_null() || index >= VehicleOrderID(read_field!(vector, length) as u8) {
         None
     } else {
-        Some(slot(vector, usize::from(index)).cast_const())
+        Some(slot(vector, usize::from(index.0)).cast_const())
     }
 }
 /// Call an export of this module from inside an entry with that entry's live shells,
@@ -178,7 +178,7 @@ impl OrderAccess {
         }
     }
     fn order_ptr(&self, index: u8) -> Option<*const Order> {
-        order_at(self.vector, index)
+        order_at(self.vector, VehicleOrderID(index))
     }
     fn kind(&self, index: usize) -> u8 {
         read_field!(slot(self.vector, index), kind) & 15
@@ -805,7 +805,7 @@ impl Game {
         if list.is_null() {
             None
         } else {
-            order_at(self.vector(list), index).map(load)
+            order_at(self.vector(list), VehicleOrderID(index)).map(load)
         }
     }
     fn put_order(self, list: *mut c_void, index: u8, order: Order) {
@@ -4930,7 +4930,7 @@ impl VisitOrders {
         if list.is_null() {
             return ptr::null();
         }
-        order_at(self.0.vector(list), index.0).unwrap_or(ptr::null())
+        order_at(self.0.vector(list), index).unwrap_or(ptr::null())
     }
     /// `v->cur_real_order_index`.
     pub(crate) fn real(self, v: VehicleRef) -> u8 {
