@@ -29,11 +29,14 @@ pub(crate) fn engine_replacement_for_company(
     replace_when_old: Option<&mut bool>,
 ) -> EngineID {
     let replace_when_old = replace_when_old.map_or(std::ptr::null_mut(), std::ptr::from_mut);
-    // SAFETY: The company's live renewal list and the immutable group services.
+    let w = companies.groups;
+    // SAFETY: `c->RenewalList()`: the company's renewal owner holds the Rust-owned list head,
+    // read in place; the group services and the list are live for the call.
     EngineID(unsafe {
+        let head = (w.head)((companies.company_id)(c.cast_mut()).0);
         crate::fleet::engine_replacement(
-            companies.groups,
-            (companies.renewal_list)(c),
+            w,
+            head.cast::<*mut ()>().read(),
             engine.0,
             group.0,
             replace_when_old,
@@ -121,8 +124,16 @@ mod tests {
         };
         GROUPS.with(|g| g[index])
     }
-    extern "C" fn renewal_list(_: *const OpenTTDCompany) -> *mut () {
-        RULES.with(|r| *r)
+    thread_local! {
+        /// The company's renewal owner: the Rust-owned slot holding its list head.
+        static HEAD: std::cell::Cell<*mut ()> = std::cell::Cell::new(RULES.with(|r| *r));
+    }
+    extern "C" fn head(company: u8) -> *mut () {
+        assert_eq!(company, 3, "the company's own renewal owner");
+        HEAD.with(|h| h.as_ptr().cast())
+    }
+    extern "C" fn company_id(_: *mut OpenTTDCompany) -> crate::company_type::CompanyID {
+        crate::company_type::CompanyID(3)
     }
 
     fn lookup(
@@ -132,7 +143,7 @@ mod tests {
     ) -> (EngineID, bool) {
         let mut companies = COMPANY_IDENTITY;
         companies.groups = groups;
-        companies.renewal_list = renewal_list;
+        companies.company_id = company_id;
         let mut when_old = false;
         let to = engine_replacement_for_company(
             &companies,
@@ -155,6 +166,7 @@ mod tests {
     fn group_rule_then_all_group_unless_protected() {
         let groups: &'static GroupServices = Box::leak(Box::new(GroupServices {
             group: group_of,
+            head,
             renew_state,
             ..FLEET_GROUPS
         }));

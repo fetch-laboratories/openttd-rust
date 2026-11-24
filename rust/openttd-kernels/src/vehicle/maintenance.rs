@@ -1387,15 +1387,23 @@ mod tests {
         extern "C" fn engine_renew_months(_: *const OpenTTDCompany) -> i16 {
             OWNER.get().months
         }
-        extern "C" fn renewal_list(c: *const OpenTTDCompany) -> *mut () {
-            assert_eq!(c, company());
-            OWNER.get().rule.map_or(ptr::null_mut(), |when_old| {
+        thread_local! {
+            /// The company's renewal owner: the Rust-owned slot holding its list head.
+            static HEAD: Cell<*mut ()> = const { Cell::new(ptr::null_mut()) };
+        }
+        unsafe extern "C" fn head(company: u8) -> *mut () {
+            assert_eq!(company, OWNER.get().id.0, "the owner's renewal list");
+            let list = OWNER.get().rule.map_or(ptr::null_mut(), |when_old| {
                 RULE.with(|r| {
                     let mut rule = r.get();
                     rule.replace_when_old = when_old;
                     r.set(rule);
                     r.as_ptr().cast()
                 })
+            });
+            HEAD.with(|h| {
+                h.set(list);
+                h.as_ptr().cast()
             })
         }
         leak(Companies {
@@ -1406,10 +1414,10 @@ mod tests {
             engine_renew_months,
             groups: leak(fleet::GroupServices {
                 group: no_group,
+                head,
                 renew_state,
                 ..FLEET_GROUPS
             }),
-            renewal_list,
             ..COMPANY_IDENTITY
         })
     }
@@ -1681,11 +1689,13 @@ mod tests {
     }
 
     /// Every company, money and price read of a funded replacement, in the original's order.
-    const FULL: [&str; 9] = [
+    /// The second `company_id` is `c->index` naming the company's renewal owner.
+    const FULL: [&str; 10] = [
         "reserve",
         "company_id",
         "infinite",
         "finances",
+        "company_id",
         "price",
         "shift",
         "company_id",
@@ -1800,7 +1810,7 @@ mod tests {
         });
         let (due, seen) = servicing(&f);
         assert!(due);
-        assert_eq!(seen, full[..8]);
+        assert_eq!(seen, full[..9]);
         // Infinite money from the start reads no money at all.
         PRICE.set(Price {
             factor: 17,
@@ -1814,6 +1824,7 @@ mod tests {
                 "reserve",
                 "company_id",
                 "infinite",
+                "company_id",
                 "price",
                 "shift",
                 "company_id",

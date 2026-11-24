@@ -39,7 +39,6 @@ pub struct Services {
     pub engine_renew: extern "C" fn(*const OpenTTDCompany) -> bool,
     pub engine_renew_money: extern "C" fn(*const OpenTTDCompany) -> u32,
     pub engine_renew_months: extern "C" fn(*const OpenTTDCompany) -> i16,
-    pub renewal_list: extern "C" fn(*const OpenTTDCompany) -> *mut (),
     pub name_id: extern "C" fn(*mut OpenTTDCompany) -> u32,
     pub set_name_id: extern "C" fn(*mut OpenTTDCompany, u32) -> (),
     pub name_parts: extern "C" fn(*mut OpenTTDCompany) -> u32,
@@ -741,5 +740,5 @@ pub extern "C" fn openttd_rust_engine_livery_scheme(
 crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
- "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, company, next_company, company_id, engine_renew, engine_renew_money, engine_renew_months, renewal_list, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, capabilities, wagon_override, cargo_freight, vehicle_id, invalidate_vehicle, };
+ "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, company, next_company, company_id, engine_renew, engine_renew_money, engine_renew_months, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, capabilities, wagon_override, cargo_freight, vehicle_id, invalidate_vehicle, };
 }
