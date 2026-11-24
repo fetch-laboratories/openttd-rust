@@ -70,7 +70,7 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.name_1 = Identity_name_1,
 	.name_2 = Identity_name_2,
 	.next_company = RustCompanyNext,
-	.object_services = []() noexcept { return &GetRustObjectServices(); },
+	.objects = []() noexcept { return &GetRustObjectServices(); },
 	.president_name = Identity_president_name,
 	.president_name_1 = Identity_president_name_1,
 	.president_name_2 = Identity_president_name_2,

@@ -1176,7 +1176,7 @@ pub(crate) const COMPANY_IDENTITY: crate::company_identity::Services =
         name_1: unreachable1,
         name_2: unreachable1,
         next_company: unreachable1,
-        object_services: unreachable0,
+        objects: unreachable0,
         president_name: unreachable1,
         president_name_1: unreachable1,
         president_name_2: unreachable1,

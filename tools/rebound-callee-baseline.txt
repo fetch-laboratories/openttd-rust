@@ -1,6 +1,5 @@
 forwarded | src/economy.cpp | current_company = GetRustCompanyFinanceServices().current_company
 forwarded | src/economy.cpp | set_current_company = GetRustCompanyFinanceServices().set_current_company
-forwarded | src/rust/company_identity_adapter.cpp | random = GetRustTownNameServices().random_next
 rebound | GetRustAircraftVehicle | src/rust/station_command_services.hpp | aircraft_vehicle
 rebound | GetRustAircraftVehicle | src/rust/vehicle_refit_services.hpp | aircraft_handle
 rebound | OpenTTDAnimationFrame | src/industry_cmd.cpp | frame

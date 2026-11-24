@@ -129,7 +129,6 @@ fn set_bits(s: &Services, var: *const FaceVar, bits: &mut u32, val: u32) {
 /// wraps around to stay in the valid range.
 #[expect(
     clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     reason = "`FaceVar::ChangeBits` holds the value in an `int8_t`, narrowing each `int` result, and `SetBits` converts it to its `uint` parameter."
 )]

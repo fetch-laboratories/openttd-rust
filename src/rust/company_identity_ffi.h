@@ -39,7 +39,7 @@ struct OpenTTDCompanyIdentityServices {
 	uint32_t (OPENTTD_RUST_CALL *name_1)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(name_1);
 	uint32_t (OPENTTD_RUST_CALL *name_2)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(name_2);
 	Company * (OPENTTD_RUST_CALL *next_company)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_company);
-	const OpenTTDObjectServices * (OPENTTD_RUST_CALL *object_services)() noexcept OPENTTD_SERVICE_DEFAULT(object_services);
+	const OpenTTDObjectServices * (OPENTTD_RUST_CALL *objects)() noexcept OPENTTD_SERVICE_DEFAULT(objects);
 	OpenTTDByteSpan (OPENTTD_RUST_CALL *president_name)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(president_name);
 	uint32_t (OPENTTD_RUST_CALL *president_name_1)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(president_name_1);
 	uint32_t (OPENTTD_RUST_CALL *president_name_2)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(president_name_2);

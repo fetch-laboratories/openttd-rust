@@ -89,7 +89,7 @@ pub struct Services {
     /// The first company from an index on, as `Company::Iterate` advances; null at the end.
     pub next_company: extern "C" fn(u32) -> *mut OpenTTDCompany,
     /// The object table, resolved at the call: its initialiser reaches this table.
-    pub object_services: extern "C" fn() -> *const crate::objects::ObjectServices,
+    pub objects: extern "C" fn() -> *const crate::objects::ObjectServices,
     /// `Company::president_name`.
     pub president_name: extern "C" fn(*mut OpenTTDCompany) -> ByteSpan,
     /// `Company::president_name_1`.
@@ -490,6 +490,10 @@ pub(crate) struct CmdSetCompanyColour {
 
 /// Change the company's company-colour.
 #[allow(unsafe_code)] // The field-sized livery accesses and the vehicle cache stores.
+#[allow(
+    clippy::too_many_lines,
+    reason = "`CmdSetCompanyColour` is one body: its checks, livery updates and invalidations."
+)]
 pub(crate) fn cmd_set_company_colour(
     s: &Services,
     out: Cost<'_>,
@@ -624,7 +628,7 @@ pub(crate) fn cmd_set_company_colour(
         }
 
         // SAFETY: The object table is the canonical process-lifetime table.
-        crate::objects::update_object_colours(unsafe { &*(s.object_services)() }, (s.index)(c));
+        crate::objects::update_object_colours(unsafe { &*(s.objects)() }, (s.index)(c));
     }
     out.zero();
 }
@@ -781,6 +785,10 @@ pub(crate) fn cmd_rename_president(
 /// `engine_type` is the engine of the vehicle, `parent_engine_type` the engine of the front
 /// vehicle, `EngineID::INVALID` if the vehicle is at front itself, and `v` the vehicle,
 /// `None` if in purchase list etc. Returns the livery scheme to use.
+#[allow(
+    clippy::too_many_lines,
+    reason = "`GetEngineLiveryScheme` is one switch over the vehicle type."
+)]
 pub(crate) fn get_engine_livery_scheme(
     s: &Services,
     mut engine_type: EngineID,
@@ -828,35 +836,33 @@ pub(crate) fn get_engine_livery_scheme(
             }
             assert_with(|| is_valid_cargo_type(cargo_type.0));
             if EngineRef::of(e).rail_kind() == RailVehicleTypes::RAILVEH_WAGON {
-                if !(s.is_freight)(cargo_type) {
-                    if parent_engine_type == EngineID::INVALID {
-                        LiveryScheme::LS_PASSENGER_WAGON_STEAM
-                    } else {
-                        let p = EngineRef::of((s.capabilities().engine)(parent_engine_type.0));
-                        let is_mu = EngineMiscFlags(p.misc()).test(EngineMiscFlag::RailIsMU);
-                        match EngineClass(p.train_class()) {
-                            EngineClass::EC_STEAM => LiveryScheme::LS_PASSENGER_WAGON_STEAM,
-                            EngineClass::EC_DIESEL => {
-                                if is_mu {
-                                    LiveryScheme::LS_DMU
-                                } else {
-                                    LiveryScheme::LS_PASSENGER_WAGON_DIESEL
-                                }
-                            }
-                            EngineClass::EC_ELECTRIC => {
-                                if is_mu {
-                                    LiveryScheme::LS_EMU
-                                } else {
-                                    LiveryScheme::LS_PASSENGER_WAGON_ELECTRIC
-                                }
-                            }
-                            EngineClass::EC_MONORAIL => LiveryScheme::LS_PASSENGER_WAGON_MONORAIL,
-                            EngineClass::EC_MAGLEV => LiveryScheme::LS_PASSENGER_WAGON_MAGLEV,
-                            _ => not_reached(),
-                        }
-                    }
-                } else {
+                if (s.is_freight)(cargo_type) {
                     LiveryScheme::LS_FREIGHT_WAGON
+                } else if parent_engine_type == EngineID::INVALID {
+                    LiveryScheme::LS_PASSENGER_WAGON_STEAM
+                } else {
+                    let p = EngineRef::of((s.capabilities().engine)(parent_engine_type.0));
+                    let is_mu = EngineMiscFlags(p.misc()).test(EngineMiscFlag::RailIsMU);
+                    match EngineClass(p.train_class()) {
+                        EngineClass::EC_STEAM => LiveryScheme::LS_PASSENGER_WAGON_STEAM,
+                        EngineClass::EC_DIESEL => {
+                            if is_mu {
+                                LiveryScheme::LS_DMU
+                            } else {
+                                LiveryScheme::LS_PASSENGER_WAGON_DIESEL
+                            }
+                        }
+                        EngineClass::EC_ELECTRIC => {
+                            if is_mu {
+                                LiveryScheme::LS_EMU
+                            } else {
+                                LiveryScheme::LS_PASSENGER_WAGON_ELECTRIC
+                            }
+                        }
+                        EngineClass::EC_MONORAIL => LiveryScheme::LS_PASSENGER_WAGON_MONORAIL,
+                        EngineClass::EC_MAGLEV => LiveryScheme::LS_PASSENGER_WAGON_MAGLEV,
+                        _ => not_reached(),
+                    }
                 }
             } else {
                 let is_mu = EngineMiscFlags(EngineRef::of(e).misc()).test(EngineMiscFlag::RailIsMU);
@@ -1054,8 +1060,8 @@ pub extern "C" fn openttd_rust_engine_livery_scheme(
     .0
 }
 
-#[cfg(test)]
 #[allow(unsafe_code)] // The tests' fixture records and recording services.
+#[cfg(test)]
 mod tests;
 
 crate::abi::layouts! {
@@ -1085,7 +1091,7 @@ crate::abi::layouts! {
         name_1,
         name_2,
         next_company,
-        object_services,
+        objects,
         president_name,
         president_name_1,
         president_name_2,

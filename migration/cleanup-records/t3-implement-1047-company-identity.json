@@ -400,5 +400,29 @@
     "operation": "economy_func::tests::set_price",
     "source_contract": "The process-lifetime `_price` array `company.rs` owns, written by the test under `GLOBAL_LOCK` through `openttd_rust_economy_prices`.",
     "reason": "Unit tests of `GetPrice` set the price they read, as `company.rs`'s price tests do."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires if the lint configuration stops measuring function length (ADR 0024), or with the body's split at an original function boundary.",
+    "site": "rust/openttd-kernels/src/company_identity.rs | fn cmd_set_company_colour | allow clippy::too_many_lines",
+    "operation": "company_identity::cmd_set_company_colour",
+    "source_contract": "`CmdSetCompanyColour` (src/company_cmd.cpp), one original body of checks, livery updates, window invalidations, vehicle cache invalidation and object recolouring.",
+    "reason": "The base module allowed the lint for the file's bodies; the port keeps the original's one body, which the rewritten window and event calls bring past 100 lines, rather than splitting it at a boundary the original does not have."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires if the lint configuration stops measuring function length (ADR 0024).",
+    "site": "rust/openttd-kernels/src/company_identity.rs | fn get_engine_livery_scheme | allow clippy::too_many_lines",
+    "operation": "company_identity::get_engine_livery_scheme",
+    "source_contract": "`GetEngineLiveryScheme` (src/vehicle.cpp:1951-2035 of the original), one switch over the engine's vehicle type with its nested class and subtype switches.",
+    "reason": "The base module allowed the lint for the file's bodies; the port keeps the original's one switch with its three cargo fallbacks and four `NOT_REACHED` arms."
   }
 ]

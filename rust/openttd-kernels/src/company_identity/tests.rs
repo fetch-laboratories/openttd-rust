@@ -5,6 +5,7 @@
 //! trace. Expectations follow `company_cmd.cpp`.
 use super::*;
 use crate::news_func::testing::Effect as News;
+use crate::news_func::testing::{Param, encoded};
 use crate::test_tables::{COMMANDS, COMPANY_IDENTITY, FINANCE, FLEET_GROUPS, SHARED};
 use crate::window_func::testing::Effect as Window;
 use std::cell::{Cell, RefCell};
@@ -302,7 +303,7 @@ fn services(companies: Vec<Record>, current: u8) -> &'static Services {
     s.name_1 = name_1;
     s.name_2 = name_2;
     s.next_company = next_company;
-    s.object_services = object_services;
+    s.objects = object_services;
     s.president_name = president_name;
     s.president_name_1 = president_name_1;
     s.president_name_2 = president_name_2;
@@ -423,7 +424,7 @@ fn rename_president_resets_and_refuses_a_taken_name() {
     });
     assert!(!result.ok);
     assert_eq!(result.message, STR_ERROR_NAME_MUST_BE_UNIQUE.0);
-    assert!(take_trace().is_empty());
+    assert_eq!(take_trace(), Vec::<std::string::String>::new());
     finish();
 }
 
@@ -580,7 +581,7 @@ fn set_company_colour_invalidates_in_order() {
         );
     });
     assert!(!result.ok);
-    assert!(take_trace().is_empty());
+    assert_eq!(take_trace(), Vec::<std::string::String>::new());
     finish();
 }
 
@@ -672,7 +673,6 @@ fn generate_company_name_launches_an_ai_company() {
             .into_iter()
             .filter(|e| matches!(e, News::News { .. }))
             .collect();
-        use crate::news_func::testing::{Param, encoded};
         let name = crate::news_func::testing::company_news_name(0);
         let expected: Vec<News> = if ai {
             vec![News::News {
@@ -697,6 +697,13 @@ fn generate_company_name_launches_an_ai_company() {
     drop(unsafe { Box::from_raw(TOWN.replace(std::ptr::null_mut())) });
 }
 
+extern "C" fn no_spec(_: u32) -> *const crate::company_manager_face::FaceSpec {
+    std::ptr::null()
+}
+extern "C" fn stored(_: *mut CompanyManagerFace, _: u32) {
+    panic!("the style is stored after the assertion");
+}
+
 /// `SetCompanyManagerFaceStyle` asserts its spec before it stores the style: a null spec
 /// ends at the native assertion, not at the label store.
 #[test]
@@ -705,12 +712,6 @@ fn set_company_manager_face_style_asserts_its_spec() {
         "company_identity::tests::set_company_manager_face_style_asserts_its_spec",
     ) {
         return;
-    }
-    extern "C" fn no_spec(_: u32) -> *const crate::company_manager_face::FaceSpec {
-        std::ptr::null()
-    }
-    extern "C" fn stored(_: *mut CompanyManagerFace, _: u32) {
-        panic!("the style is stored after the assertion");
     }
     let mut faces = crate::test_tables::FACES;
     faces.spec = no_spec;
