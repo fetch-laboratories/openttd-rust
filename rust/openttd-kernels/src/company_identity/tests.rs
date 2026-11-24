@@ -40,6 +40,7 @@ impl Record {
     }
 }
 
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 thread_local! {
     static COMPANIES: RefCell<Vec<Record>> = const { RefCell::new(Vec::new()) };
     static TRACE: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
@@ -428,6 +429,7 @@ fn rename_president_resets_and_refuses_a_taken_name() {
     finish();
 }
 
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 thread_local! {
     static CACHES: RefCell<Vec<crate::newgrf_vehicle::Cache>> = const { RefCell::new(Vec::new()) };
 }
@@ -601,6 +603,7 @@ extern "C" fn authority_town_index(t: *const crate::services::TownHandle) -> u16
     assert_eq!(t.addr(), 64);
     3
 }
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 thread_local! {
     static TOWN: Cell<*mut crate::town::State> = const { Cell::new(std::ptr::null_mut()) };
 }
