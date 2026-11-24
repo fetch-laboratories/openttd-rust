@@ -819,33 +819,32 @@ def changed_refusal(item: Item) -> str | None:
         return (
             f"head moved since planning (now {head[:10]} on {checkout or 'no branch'})"
         )
-    return None
+    # Again here, last: a writer needs a process inside the tree.
+    return cwd_refusal(item.path)
 
 
 def delete_branch(main: Path, item: Item) -> str | None:
     """Delete the removed checkout's branch while its tip is still the planned head.
 
-    `branch -D` refuses a branch another worktree has checked out and removes
-    its configuration; the plan checked origin, so no upstream comparison as
-    `branch -d` makes.
+    `update-ref -d` with the planned head deletes only that tip, atomically. A
+    branch another worktree has checked out stays, as `branch -D` would keep it,
+    and the branch's configuration goes with it. The plan checked origin, so
+    there is no upstream comparison as `branch -d` makes.
     """
     if item.branch is None:
         return None
-    ref = f"refs/heads/{item.branch}"
-    tip = subprocess.run(
-        ["git", "-C", str(main), "rev-parse", "--verify", "--quiet", ref],
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    if item.head and tip != item.head:
-        return f"worktree removed; branch {item.branch} kept: it moved to {tip or 'nothing'}"
+    if any(tree.branch == item.branch for tree in list_worktrees(main)):
+        return f"worktree removed; branch {item.branch} kept: checked out elsewhere"
     deleted = subprocess.run(
-        ["git", "-C", str(main), "branch", "-D", item.branch],
+        ["git", "-C", str(main), "update-ref", "-d", f"refs/heads/{item.branch}"]
+        + ([item.head] if item.head else []),
         capture_output=True,
         text=True,
     )
     if deleted.returncode:
         return f"worktree removed; branch {item.branch} kept: {deleted.stderr.strip()}"
+    section = ["config", "--remove-section", f"branch.{item.branch}"]
+    subprocess.run(["git", "-C", str(main), *section], capture_output=True)
     return None
 
 

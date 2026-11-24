@@ -336,7 +336,8 @@ class HousekeepingTests(unittest.TestCase):
     def test_a_head_that_moves_after_planning_is_kept(self) -> None:
         """A commit made after planning keeps the checkout and its branch."""
         tree = self.top / "trees/merged"
-        item = self.planned(tree)
+        with patch.dict(PR_STATES, {"merged": "MERGED"}):
+            item = self.planned(tree)
         self.assertTrue(item.remove, item.reason)
         self.assertEqual(item.branch, "merged")
         git(tree, "commit", "--quiet", "--allow-empty", "-m", "Add: after planning")
@@ -350,7 +351,10 @@ class HousekeepingTests(unittest.TestCase):
 
     def test_a_head_that_moves_during_the_permission_walk_is_kept(self) -> None:
         tree = self.top / "trees/merged"
-        item = self.planned(tree)
+        # Its own merged PR makes it removable under .t3/worktrees/ too.
+        with patch.dict(PR_STATES, {"merged": "MERGED"}):
+            item = self.planned(tree)
+        self.assertTrue(item.remove, item.reason)
         real = housekeeping.writable
 
         def commit_during(path: Path) -> None:
@@ -394,6 +398,24 @@ class HousekeepingTests(unittest.TestCase):
         self.assertIn("branch closed kept", refusal or "")
         self.assertFalse(tree.exists())
         self.assertEqual(git(self.main, "rev-parse", "closed").strip(), moved)
+
+    def test_a_removed_checkouts_branch_and_its_config_go(self) -> None:
+        _, item = self.closed_item()
+        self.assertIsNone(housekeeping.remove(self.main, item))
+        self.assertNotIn("closed", self.branches())
+        config = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.main),
+                "config",
+                "--get-regexp",
+                "^branch[.]closed[.]",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(config.stdout, "")
 
     def test_a_branch_checked_out_again_elsewhere_is_kept(self) -> None:
         """Reattached at the planned tip after its checkout went, the branch stays."""
