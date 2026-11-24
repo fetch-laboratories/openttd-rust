@@ -516,8 +516,8 @@ mod controller {
             ..SHARED
         };
         let mut f = Fixture::new(LOCAL, &shared);
-        // SAFETY: The leaked table outlives the child's only call.
-        unsafe { crate::services_assert::bind_test_policy(no_assertion, f.leaves.shared) };
+        // SAFETY: `Fixture::new` leaks the shared table, so it lives for the process.
+        crate::services_assert::bind_test_policy(no_assertion, unsafe { &*f.leaves.shared });
         let part = f.part();
         f.game().update_speed(part);
     }

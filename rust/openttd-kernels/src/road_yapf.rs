@@ -1569,14 +1569,13 @@ mod tests {
             assert_eq!(status.code(), Some(NOT_REACHED_EXIT));
             return;
         }
-        let s = Services {
+        let s: &'static Services = Box::leak(Box::new(Services {
             not_reached,
             ..shared()
-        };
-        // SAFETY: `s` outlives the child process's only search.
-        unsafe { crate::services_assert::bind_test_policy(no_assertion, &raw const s) };
+        }));
+        crate::services_assert::bind_test_policy(no_assertion, s);
         let destination = TileIndex(10 + 10 * 64);
-        let mut pf = search(&s, input());
+        let mut pf = search(s, input());
         pf.dest_tile = destination;
         pf.dest_trackdirs = TrackdirBits::INVALID_TRACKDIR_BIT;
         // A closed node keyed by the destination tile and the north-east exit.

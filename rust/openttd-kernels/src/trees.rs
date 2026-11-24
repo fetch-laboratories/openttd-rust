@@ -2749,8 +2749,7 @@ mod tests {
                 not_reached: exit_not_reached,
                 ..*shared()
             }));
-            // SAFETY: The leaked table lives for the child process.
-            unsafe { crate::services_assert::bind_test_policy(record_assert, shared) };
+            crate::services_assert::bind_test_policy(record_assert, shared);
             body();
             std::process::exit(0);
         }

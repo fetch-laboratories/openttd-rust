@@ -81,17 +81,15 @@ pub(crate) fn bind_test_check(check: extern "C" fn(bool)) {
     }
 }
 
-/// Bind the assertion callback and the shared table for a Rust test.
-///
-/// # Safety
-/// `shared` outlives every assertion and `NOT_REACHED` the child process runs.
+/// Bind the assertion callback and the shared table for a Rust test. The binding
+/// retains `shared` for the rest of the process, so it takes a process-lifetime table.
 #[cfg(test)]
-pub(crate) unsafe fn bind_test_policy(
+pub(crate) fn bind_test_policy(
     check: extern "C" fn(bool),
-    shared: *const crate::services::Services,
+    shared: &'static crate::services::Services,
 ) {
     require_isolated_child();
-    // SAFETY: The caller's contract.
+    // SAFETY: `shared` lives for the process, as the export requires.
     unsafe {
         openttd_rust_assert_bind(check, shared);
     }
@@ -196,8 +194,10 @@ mod tests {
     #[test]
     #[should_panic(expected = "outside an isolated child process")]
     fn binding_the_policy_in_the_parent_process_panics() {
-        // SAFETY: The guard panics before anything is bound.
-        unsafe { super::bind_test_policy(unused_check, std::ptr::null()) };
+        super::bind_test_policy(
+            unused_check,
+            Box::leak(Box::new(crate::test_tables::SHARED)),
+        );
     }
 
     #[test]
