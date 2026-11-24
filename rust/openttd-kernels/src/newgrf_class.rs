@@ -20,10 +20,43 @@ pub struct Class {
     pub name: u32,
     pub rust_index: u32,
 }
-impl Class {
-    /// `NewGRFClass::Index`.
-    pub(crate) fn index(&self) -> u16 {
-        self.rust_index as u16
+/// A registry's `Tindex`: the class-ID wrapper its `NewGRFClass` instantiation indexes by.
+/// The registry stores and exports indices as `u16`; `from_index` narrows as the original's
+/// `static_cast<Tindex>` does.
+pub trait ClassIndex: Copy {
+    fn from_index(index: u16) -> Self;
+    fn index(self) -> u16;
+}
+impl ClassIndex for crate::newgrf_station::StationClassID {
+    fn from_index(index: u16) -> Self {
+        Self(index)
+    }
+    fn index(self) -> u16 {
+        self.0
+    }
+}
+impl ClassIndex for crate::newgrf_roadstop::RoadStopClassID {
+    fn from_index(index: u16) -> Self {
+        Self(index)
+    }
+    fn index(self) -> u16 {
+        self.0
+    }
+}
+impl ClassIndex for crate::newgrf_airport::AirportClassID {
+    fn from_index(index: u16) -> Self {
+        Self(index as u8)
+    }
+    fn index(self) -> u16 {
+        u16::from(self.0)
+    }
+}
+impl ClassIndex for crate::newgrf_object::ObjectClassID {
+    fn from_index(index: u16) -> Self {
+        Self(index)
+    }
+    fn index(self) -> u16 {
+        self.0
     }
 }
 #[repr(C)]
@@ -54,6 +87,10 @@ impl<T> Registry<T> {
             members: Vec::new(),
         }
     }
+}
+/// `NewGRFClass::Index`, a field-sized load of the class's own index.
+pub(crate) unsafe fn index<I: ClassIndex>(class: *const Class) -> I {
+    I::from_index(unsafe { (*class).rust_index } as u16)
 }
 /// `NewGRFClass::Allocate`: allocate a class with a given global class ID.
 unsafe fn allocate<T>(state: *mut Registry<T>, global_id: u32, max: u16) -> u16 {
@@ -160,7 +197,7 @@ unsafe fn by_grf<T>(
     ptr::null()
 }
 macro_rules! registry {
-    ($module:ident, $spec:ty, $prefix:literal, $insert_defaults:path, [$($assign_export:meta),*] $(, $set_name:ident)?) => {
+    ($module:ident, $spec:ty, $index:ty, $prefix:literal, $insert_defaults:path, [$($assign_export:meta),*] $(, $set_name:ident)?) => {
         pub mod $module {
             use super::*;
             type Spec = $spec;
@@ -175,20 +212,21 @@ macro_rules! registry {
                 }
             }
             /// `NewGRFClass::Allocate`.
-            pub unsafe fn allocate(id: u32, max: u16) -> u16 {
-                unsafe { super::allocate(STATE.get(), id, max) }
+            pub unsafe fn allocate(id: u32, max: $index) -> $index {
+                <$index>::from_index(unsafe { super::allocate(STATE.get(), id, max.index()) })
             }
             #[unsafe(export_name = concat!($prefix, "_allocate"))]
             pub unsafe extern "C" fn allocate_export(id: u32, max: u16) -> u16 {
-                unsafe { allocate(id, max) }
+                unsafe { allocate(id, <$index>::from_index(max)) }.index()
             }
             /// `NewGRFClass::Get`.
-            pub unsafe fn get(class_index: u16) -> *mut Class {
-                unsafe { super::get(STATE.get(), class_index, SERVICES.table()) }
+            pub unsafe fn get(class_index: $index) -> *mut Class {
+                unsafe { super::get(STATE.get(), class_index.index(), SERVICES.table()) }
             }
-            pub unsafe extern "C" fn insert(class: u16, spec: *mut Spec) {
+            /// `NewGRFClass::Insert`.
+            pub unsafe fn insert(class: $index, spec: *mut Spec) {
                 unsafe {
-                    super::insert(STATE.get(), class, spec, SERVICES.table());
+                    super::insert(STATE.get(), class.index(), spec, SERVICES.table());
                 }
             }
             $(
@@ -201,7 +239,7 @@ macro_rules! registry {
             $(#[$assign_export])*
             pub unsafe extern "C" fn assign(spec: *mut Spec) {
                 let s = unsafe { SERVICES.table() };
-                let class = unsafe { (s.class_index)(spec) };
+                let class = <$index>::from_index(unsafe { (s.class_index)(spec) });
                 unsafe {
                     insert(class, spec);
                 }
@@ -250,6 +288,7 @@ macro_rules! registry {
 registry!(
     station,
     crate::station_cmd::RailSpec,
+    crate::newgrf_station::StationClassID,
     "openttd_rust_station_class",
     crate::newgrf_station::insert_defaults,
     [unsafe(export_name = "openttd_rust_station_class_assign")],
@@ -258,6 +297,7 @@ registry!(
 registry!(
     roadstop,
     crate::station_cmd::RoadSpec,
+    crate::newgrf_roadstop::RoadStopClassID,
     "openttd_rust_roadstop_class",
     crate::newgrf_roadstop::insert_defaults,
     [unsafe(export_name = "openttd_rust_roadstop_class_assign")],
@@ -266,6 +306,7 @@ registry!(
 registry!(
     airport,
     crate::station_cmd::AirportSpec,
+    crate::newgrf_airport::AirportClassID,
     "openttd_rust_airport_class",
     crate::newgrf_airport::insert_defaults,
     []
@@ -273,6 +314,7 @@ registry!(
 registry!(
     object,
     crate::objects::Spec,
+    crate::newgrf_object::ObjectClassID,
     "openttd_rust_object_class",
     crate::newgrf_object::insert_defaults,
     [unsafe(export_name = "openttd_rust_object_class_assign")]
@@ -336,8 +378,8 @@ mod tests {
         let count = object::count() as u16;
         assert_eq!(count, 2);
         unsafe {
-            object::get(count - 1);
-            object::get(count);
+            object::get(crate::newgrf_object::ObjectClassID(count - 1));
+            object::get(crate::newgrf_object::ObjectClassID(count));
         }
         assert_eq!(ASSERTIONS.take(), [true, false]);
     }

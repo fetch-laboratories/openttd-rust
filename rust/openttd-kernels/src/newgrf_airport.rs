@@ -666,12 +666,11 @@ impl AirportClassID {
     pub const APC_MAX: Self = Self(16);
 }
 
-/// `AirportClass::InsertDefaults`: reset airport classes to their default state.
-/// This includes initialising the defaults classes with an empty entry, for standard
-/// airports.
+/// `AirportClass::InsertDefaults`: allocate the four default airport classes and set their
+/// names.
 pub(crate) unsafe fn insert_defaults() {
     use crate::newgrf_class::airport::{allocate, get};
-    let max = u16::from(AirportClassID::APC_MAX.0);
+    let max = AirportClassID::APC_MAX;
     unsafe {
         (*get(allocate(u32::from_be_bytes(*b"SMAL"), max))).name = STR_AIRPORT_CLASS_SMALL.0;
         (*get(allocate(u32::from_be_bytes(*b"LARG"), max))).name = STR_AIRPORT_CLASS_LARGE.0;

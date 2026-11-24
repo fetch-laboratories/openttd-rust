@@ -777,8 +777,6 @@ crate::abi::layouts! {
     "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, owner, random_bits, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_triggers, station_id, tile, tile_count, tile_random, town, town_tile, waiting, };
 }
 
-/// Class index limit from `newgrf_roadstop.h`.
-pub(crate) const ROADSTOP_CLASS_MAX: u16 = RoadStopClassID::ROADSTOP_CLASS_MAX.0;
 /// Per-file definition limit from `newgrf_roadstop.h`.
 pub(crate) const NUM_ROADSTOPS_PER_GRF: u32 = u16::MAX as u32 - 1;
 
@@ -803,19 +801,32 @@ pub const ROADSTOP_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
 
 /// `RoadStopClass::InsertDefaults`.
 pub(crate) unsafe fn insert_defaults() {
+    use crate::newgrf_class::index;
     use crate::newgrf_class::roadstop::{allocate, get, insert};
     /* Set up initial data */
     unsafe {
-        (*get(allocate(ROADSTOP_CLASS_LABEL_DEFAULT, ROADSTOP_CLASS_MAX))).name =
-            STR_STATION_CLASS_DFLT.0;
+        (*get(allocate(
+            ROADSTOP_CLASS_LABEL_DEFAULT,
+            RoadStopClassID::ROADSTOP_CLASS_MAX,
+        )))
+        .name = STR_STATION_CLASS_DFLT.0;
         insert(
-            (*get(allocate(ROADSTOP_CLASS_LABEL_DEFAULT, ROADSTOP_CLASS_MAX))).index(),
+            index(get(allocate(
+                ROADSTOP_CLASS_LABEL_DEFAULT,
+                RoadStopClassID::ROADSTOP_CLASS_MAX,
+            ))),
             std::ptr::null_mut(),
         );
-        (*get(allocate(ROADSTOP_CLASS_LABEL_WAYPOINT, ROADSTOP_CLASS_MAX))).name =
-            STR_STATION_CLASS_WAYP.0;
+        (*get(allocate(
+            ROADSTOP_CLASS_LABEL_WAYPOINT,
+            RoadStopClassID::ROADSTOP_CLASS_MAX,
+        )))
+        .name = STR_STATION_CLASS_WAYP.0;
         insert(
-            (*get(allocate(ROADSTOP_CLASS_LABEL_WAYPOINT, ROADSTOP_CLASS_MAX))).index(),
+            index(get(allocate(
+                ROADSTOP_CLASS_LABEL_WAYPOINT,
+                RoadStopClassID::ROADSTOP_CLASS_MAX,
+            ))),
             std::ptr::null_mut(),
         );
     }

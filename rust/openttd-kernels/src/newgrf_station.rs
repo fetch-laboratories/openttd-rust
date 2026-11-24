@@ -1112,8 +1112,6 @@ pub(crate) const fn is_waypoint_class(global_id: u32) -> bool {
 
 /// Waypoint class label from `newgrf_station.h`.
 pub(crate) const STATION_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
-/// Class index limit from `newgrf_station.h`.
-pub(crate) const STAT_CLASS_MAX: u16 = StationClassID::STAT_CLASS_MAX.0;
 
 /// Native station class index, retaining every original uint16 value.
 #[repr(transparent)]
@@ -1135,19 +1133,32 @@ pub const STATION_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
 
 /// `StationClass::InsertDefaults`.
 pub(crate) unsafe fn insert_defaults() {
+    use crate::newgrf_class::index;
     use crate::newgrf_class::station::{allocate, get, insert};
     /* Set up initial data */
     unsafe {
-        (*get(allocate(STATION_CLASS_LABEL_DEFAULT, STAT_CLASS_MAX))).name =
-            STR_STATION_CLASS_DFLT.0;
+        (*get(allocate(
+            STATION_CLASS_LABEL_DEFAULT,
+            StationClassID::STAT_CLASS_MAX,
+        )))
+        .name = STR_STATION_CLASS_DFLT.0;
         insert(
-            (*get(allocate(STATION_CLASS_LABEL_DEFAULT, STAT_CLASS_MAX))).index(),
+            index(get(allocate(
+                STATION_CLASS_LABEL_DEFAULT,
+                StationClassID::STAT_CLASS_MAX,
+            ))),
             std::ptr::null_mut(),
         );
-        (*get(allocate(STATION_CLASS_LABEL_WAYPOINT, STAT_CLASS_MAX))).name =
-            STR_STATION_CLASS_WAYP.0;
+        (*get(allocate(
+            STATION_CLASS_LABEL_WAYPOINT,
+            StationClassID::STAT_CLASS_MAX,
+        )))
+        .name = STR_STATION_CLASS_WAYP.0;
         insert(
-            (*get(allocate(STATION_CLASS_LABEL_WAYPOINT, STAT_CLASS_MAX))).index(),
+            index(get(allocate(
+                STATION_CLASS_LABEL_WAYPOINT,
+                StationClassID::STAT_CLASS_MAX,
+            ))),
             std::ptr::null_mut(),
         );
     }

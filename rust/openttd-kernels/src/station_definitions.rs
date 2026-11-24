@@ -156,10 +156,10 @@ unsafe fn station_change_info(
                         spec = (s.station_new)(file, id);
                     }
                     // Swap classid because we read it in BE meaning WAYP or DFLT
-                    let class = StationClassID(crate::newgrf_class::station::allocate(
+                    let class = crate::newgrf_class::station::allocate(
                         reader.dword()?.swap_bytes(),
-                        crate::newgrf_station::STAT_CLASS_MAX,
-                    ));
+                        StationClassID::STAT_CLASS_MAX,
+                    );
                     (s.station_class)(spec, class.0);
                 }
                 // Define sprite layout
@@ -495,10 +495,10 @@ unsafe fn road_stop_change_info(
                     }
                     // The class label is read with big-endian meaning: WAYP or DFLT.
                     let label = reader.dword()?.swap_bytes();
-                    let class = RoadStopClassID(crate::newgrf_class::roadstop::allocate(
+                    let class = crate::newgrf_class::roadstop::allocate(
                         label,
-                        crate::newgrf_roadstop::ROADSTOP_CLASS_MAX,
-                    ));
+                        RoadStopClassID::ROADSTOP_CLASS_MAX,
+                    );
                     (s.road_class)(spec, class.0);
                 }
                 // Road stop type

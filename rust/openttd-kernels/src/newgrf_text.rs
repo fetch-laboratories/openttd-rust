@@ -18,8 +18,9 @@ mod translation;
 use crate::control_codes::SCC_NEWGRF_PRINT_WORD_STRING_ID;
 use crate::debug::{Bytes, grf_msg};
 use crate::game_state::GameState;
+use crate::newgrf_text_type::GRFStringID;
 use crate::services::ByteSpan;
-use crate::strings_type::{TAB_SIZE_NEWGRF, grf_string_id};
+use crate::strings_type::{StringID, TAB_SIZE_NEWGRF, grf_string_id};
 use crate::table::strings::{STR_EMPTY, STR_UNDEFINED};
 use std::ffi::c_void;
 #[cfg(test)]
@@ -198,16 +199,16 @@ unsafe fn publish(index: usize, language: u8, bytes: *const u8, length: usize) {
 }
 
 /// `GetGRFStringID`: returns the index for this stringid associated with its grfID.
-fn get_grf_string_id(grfid: u32, stringid: u32) -> u32 {
+fn get_grf_string_id(grfid: u32, stringid: GRFStringID) -> StringID {
     unsafe { &*TEXTS.get() }
         .iter()
-        .position(|t| t.grfid == grfid && t.stringid == stringid)
-        .map_or(STR_UNDEFINED.0, grf_string_id)
+        .position(|t| t.grfid == grfid && t.stringid == stringid.0)
+        .map_or(STR_UNDEFINED, |id| StringID(grf_string_id(id)))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_text_id(grfid: u32, stringid: u32) -> u32 {
-    get_grf_string_id(grfid, stringid)
+    get_grf_string_id(grfid, GRFStringID(stringid)).0
 }
 
 /// `MapGRFStringID`: native legacy mappings cannot reenter the GRF table.
@@ -220,7 +221,7 @@ pub unsafe extern "C" fn openttd_rust_grf_text_map(s: &Services, grfid: u32, str
         } else {
             stringid
         };
-        get_grf_string_id(grfid, stringid)
+        get_grf_string_id(grfid, GRFStringID(stringid)).0
     } else {
         unsafe { (s.legacy_string)(stringid) }
     }

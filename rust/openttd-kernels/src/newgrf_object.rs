@@ -74,7 +74,7 @@ impl ObjectClassID {
 #[allow(unsafe_code)]
 pub(crate) unsafe fn insert_defaults() {
     use crate::newgrf_class::object::{allocate, get};
-    let max = ObjectClassID::OBJECT_CLASS_MAX.0;
+    let max = ObjectClassID::OBJECT_CLASS_MAX;
     unsafe {
         (*get(allocate(u32::from_be_bytes(*b"LTHS"), max))).name = STR_OBJECT_CLASS_LTHS.0;
         (*get(allocate(u32::from_be_bytes(*b"TRNS"), max))).name = STR_OBJECT_CLASS_TRNS.0;

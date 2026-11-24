@@ -9,6 +9,7 @@
 use super::GroupServices;
 use super::transactions::Services as TransactionServices;
 use crate::game_state::GameState;
+use crate::strings_type::INVALID_STRING_ID;
 use crate::table::strings::{
     STR_ERROR_AUTOREPLACE_MONEY_LIMIT, STR_ERROR_AUTOREPLACE_NOTHING_TO_DO,
     STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT,
@@ -24,8 +25,6 @@ pub struct Services {
     pub(crate) length_news: unsafe extern "C" fn(u32),
     pub(crate) failed_news: unsafe extern "C" fn(u32, u32),
 }
-/// `INVALID_STRING_ID`.
-const INVALID_STRING: u32 = 0xFFFF;
 
 /// `SetCurrentCompany`, through the command table's finance owner.
 fn set_current_company(t: &TransactionServices, company: crate::company_type::CompanyID) {
@@ -109,7 +108,7 @@ pub(crate) unsafe fn drain(
             return;
         }
         let mut error = unsafe { (t.error)(cost) };
-        if error == STR_ERROR_AUTOREPLACE_NOTHING_TO_DO.0 || error == INVALID_STRING {
+        if error == STR_ERROR_AUTOREPLACE_NOTHING_TO_DO.0 || error == INVALID_STRING_ID {
             return;
         }
         if error == STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY.0 {
