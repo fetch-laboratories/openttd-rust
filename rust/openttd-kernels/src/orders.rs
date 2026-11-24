@@ -4537,9 +4537,9 @@ impl Control {
                 g.put_current(v, current);
                 crate::window_func::set_window_dirty(
                     crate::window_type::WindowClass::WC_VEHICLE_VIEW,
-                    crate::window_type::WindowNumber::from(crate::vehicle_type::VehicleID(
-                        g.vehicle_id(v) as u32,
-                    )),
+                    crate::window_type::WindowNumber::from(
+                        native_vehicle(v, g.0.base).index(g.0.base.newgrf()),
+                    ),
                 );
             }
             if !g.orders(v).is_null() {
@@ -4935,9 +4935,16 @@ impl VisitOrders {
     /// True iff at least one order is a depot order.
     pub(crate) fn has_depot_order(self, v: VehicleRef) -> bool {
         let list = crate::vehicle_base::order_list(v.0.as_ptr());
-        !list.is_null()
-            && (0..self.0.stored_count(list))
-                .any(|i| self.0.stored_order(list, i).kind() == OT_GOTO_DEPOT)
+        if list.is_null() {
+            return false;
+        }
+        // `Vehicle::Orders()`: the list's one stored span, resolved once.
+        let vector = self.0.vector(list);
+        (0..read_field!(vector, length)).any(|i| {
+            // SAFETY: Each index below the span's length names a live stored order.
+            unsafe { OrderView::of(slot(vector, i)) }
+                .is_type(crate::order_type::OrderType::OT_GOTO_DEPOT)
+        })
     }
     /// `Vehicle::IsWaitingForUnbunching` after its `assert(this->IsInDepot())`, which
     /// `vehicle::is_waiting_for_unbunching` makes.
