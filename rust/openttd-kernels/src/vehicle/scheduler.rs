@@ -928,6 +928,33 @@ mod tests {
         assert_eq!(observed(|o| o.running), Some(false));
     }
 
+    /// `Train::From`, `RoadVehicle::From` and `Aircraft::From` assert the vehicle's type; inside
+    /// their `case` it holds, so the native policy records no failure on each type's own path.
+    #[test]
+    fn subtype_casts_assert_their_own_type() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static FAILURES: AtomicU32 = AtomicU32::new(0);
+        extern "C" fn record(condition: bool) {
+            if !condition {
+                FAILURES.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        if crate::services_assert::isolate_test_check(
+            "vehicle::scheduler::tests::subtype_casts_assert_their_own_type",
+            record,
+        ) {
+            return;
+        }
+        for (kind, subtype) in [(TRAIN, ENGINE), (ROAD, FRONT), (AIRCRAFT, 2)] {
+            let pair = Pair::new(kind, kind);
+            pair.front().cur_speed = 5;
+            pair.part().motion_counter = 254; // 259 passes 256: GB(259, 0, 8) < 5.
+            pair.part().subtype = subtype;
+            pair.run();
+            assert_eq!(events(), ["running-sound"], "{kind:?} reaches its sounds");
+        }
+        assert_eq!(FAILURES.load(Ordering::Relaxed), 0);
+    }
 }
 
 /// Traversal on the real Rust pool owner: deletion, reuse and growth order; the live walk;
@@ -1404,4 +1431,496 @@ mod pool_tests {
         clean();
     }
 
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// The failed native assertions an isolated child records.
+    static FAILURES: AtomicU32 = AtomicU32::new(0);
+    extern "C" fn record_failure(condition: bool) {
+        if !condition {
+            FAILURES.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    extern "C" fn deleting_survivor_tick(vehicle: VehicleRef) -> bool {
+        delete_vehicle(index_of(vehicle));
+        true
+    }
+    /// `assert(Vehicle::Get(vehicle_index) == v)` after a `Tick` that deleted its vehicle and
+    /// reported survival. The body after `Tick` would read the freed record, so the native
+    /// policy must end the process at the failed assertion rather than return into it.
+    #[test]
+    fn a_deleting_tick_that_reports_survival_fails_the_native_assertion() {
+        if crate::services_assert::isolate_test_exit(
+            "vehicle::scheduler::pool_tests::a_deleting_tick_that_reports_survival_fails_the_native_assertion",
+        ) {
+            return;
+        }
+        let _pool = new_pool();
+        new_vehicle(0);
+        run_ticks(deleting_survivor_tick);
+    }
+
+    extern "C" fn surviving_tick(_: VehicleRef) -> bool {
+        true
+    }
+    extern "C" fn deleting_tick(vehicle: VehicleRef) -> bool {
+        delete_vehicle(index_of(vehicle));
+        false
+    }
+    extern "C" fn undeleting_tick(_: VehicleRef) -> bool {
+        false
+    }
+    /// `assert(Vehicle::Get(vehicle_index) == nullptr)` after a false `Tick` and `== v` after a
+    /// true one run through the native policy: the two honest results record no failure, and
+    /// a `Tick` that reports a deletion it did not make records one.
+    #[test]
+    fn survival_assertions_run_through_the_native_policy() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle::scheduler::pool_tests::survival_assertions_run_through_the_native_policy",
+            record_failure,
+        ) {
+            return;
+        }
+        let ticks: [(extern "C" fn(VehicleRef) -> bool, u32); 3] = [
+            (surviving_tick, 0),
+            (deleting_tick, 0),
+            (undeleting_tick, 1),
+        ];
+        for (tick, failures) in ticks {
+            let _pool = new_pool();
+            new_vehicle(0);
+            FAILURES.store(0, Ordering::Relaxed);
+            run_ticks(tick);
+            assert_eq!(FAILURES.load(Ordering::Relaxed), failures);
+            clean();
+        }
+    }
+
+    /// What the day procedures' recording leaves saw, in order.
+    #[derive(Debug, PartialEq, Eq)]
+    enum Day {
+        /// The 32-day callback, asked for the engine of that number.
+        Callback(u16),
+        /// `TriggerVehicleRandomisation`'s store of the waiting triggers.
+        Trigger(u8),
+        Dirty(*mut VehicleRecord),
+        /// `v->GetGRFID()`'s engine lookup.
+        Engine,
+        /// `ErrorUnknownCallbackResult(grfid, callback, result)`.
+        Unknown(u16, u16),
+    }
+    thread_local! {
+        static DAY: RefCell<Vec<Day>> = const { RefCell::new(Vec::new()) };
+        static ANSWER: Cell<u16> = const { Cell::new(CALLBACK_FAILED) };
+        static ENGINE: Cell<*mut crate::vehicle::OpenTTDEngine> = const { Cell::new(null_mut()) };
+    }
+    fn day(event: Day) {
+        DAY.with(|d| d.borrow_mut().push(event));
+    }
+    fn take_days() -> Vec<Day> {
+        DAY.with(|d| std::mem::take(&mut *d.borrow_mut()))
+    }
+    unsafe extern "C" fn resolve_callback(
+        _: *mut newgrf_vehicle::State,
+        engine: u16,
+        callback: u16,
+        param1: u32,
+        param2: u32,
+        _: *mut i32,
+        _: usize,
+    ) -> u16 {
+        assert_eq!(
+            (callback, param1, param2),
+            (CBID_VEHICLE_32DAY_CALLBACK.0, 0, 0)
+        );
+        day(Day::Callback(engine));
+        ANSWER.get()
+    }
+    unsafe extern "C" fn engine_by_id(_: u16) -> *const crate::vehicle::OpenTTDEngine {
+        ENGINE.get()
+    }
+    unsafe extern "C" fn cargo_type(_: *mut VehicleRecord) -> u8 {
+        0
+    }
+    unsafe extern "C" fn cache(_: *mut VehicleRecord) -> *mut newgrf_vehicle::Cache {
+        Box::leak(Box::default())
+    }
+    unsafe extern "C" fn write_waiting(_: *mut VehicleRecord, waiting: u8) {
+        if waiting != 0 {
+            day(Day::Trigger(waiting));
+        }
+    }
+    extern "C" fn unknown_refit(grfid: u32, callback: u16, result: u16) {
+        assert_eq!(grfid, 0); // The test's engine has no GRF file.
+        day(Day::Unknown(callback, result));
+    }
+    extern "C" fn engine_loading() -> *const crate::engine_loading::Services {
+        const LOADING: crate::engine_loading::Services =
+            crate::engine_loading::test_table_with_unknown_refit(unknown_refit);
+        &LOADING
+    }
+    extern "C" fn mark_dirty(v: VehicleRef) {
+        day(Day::Dirty(v.0.as_ptr()));
+    }
+    extern "C" fn vehicle_engine(_: VehicleRef) -> crate::vehicle::EngineRef {
+        day(Day::Engine);
+        crate::vehicle::EngineRef(std::ptr::NonNull::new(ENGINE.get()).unwrap())
+    }
+    extern "C" fn day_resolver() -> *const newgrf_vehicle::Services {
+        const CAPABILITIES: crate::engine_capabilities::Services =
+            crate::engine_capabilities::test_table_with_loading(engine_loading);
+        thread_local! {
+            static RESOLVER: &'static newgrf_vehicle::Services =
+                Box::leak(Box::new(newgrf_vehicle::test_table_with(newgrf_vehicle::TestLeaves {
+                    cache,
+                    capabilities: &CAPABILITIES,
+                    cargo_type,
+                    engine_by_id,
+                    resolve_callback,
+                    shared: day_shared(),
+                    write_waiting,
+                    ..newgrf_vehicle::TestLeaves::UNREACHABLE
+                })));
+        }
+        RESOLVER.with(|r| *r)
+    }
+    /// A shared table over this thread's empty fixture map.
+    fn day_shared() -> &'static crate::services::Services {
+        thread_local! {
+            static SHARED: &'static crate::services::Services = {
+                crate::map_func::fixture::set(
+                    crate::map_func::TileTypeAllocation {
+                        base: null(),
+                        extended: null(),
+                        count: 0,
+                        assertions: true,
+                    },
+                    6,
+                );
+                let mut shared = crate::services::fixture(null_mut(), draw, no_industry);
+                shared.map = crate::map_func::fixture::statics();
+                Box::leak(Box::new(shared))
+            };
+        }
+        SHARED.with(|s| *s)
+    }
+    /// The day procedures' table over the test pool: the base vehicle table `vehicle`, and
+    /// controller tables over it and the shared table whose own leaves trap.
+    fn day_scheduler(vehicle: VehicleServices) -> SchedulerServices {
+        let shared = day_shared();
+        let vehicle: &'static VehicleServices = Box::leak(Box::new(vehicle));
+        SchedulerServices {
+            aircraft: Box::leak(Box::new(aircraft::Leaves {
+                shared,
+                vehicle,
+                ..crate::test_tables::AIRCRAFT_LEAVES
+            })),
+            pool: Box::leak(Box::new(view().cast_const())),
+            road: Box::leak(Box::new(road::Leaves {
+                ground: &crate::test_tables::ROAD_GROUND,
+                shared,
+                vehicle,
+                ..crate::test_tables::ROAD_LEAVES
+            })),
+            shared,
+            ship: Box::leak(Box::new(ship_control::Leaves {
+                vehicle,
+                ..crate::test_tables::SHIP_LEAVES
+            })),
+            tick: crate::test_tables::unreachable1,
+            train: Box::leak(Box::new(train::Leaves {
+                vehicle,
+                ..crate::test_tables::TRAIN_LEAVES
+            })),
+            vehicle,
+        }
+    }
+    /// The base vehicle table of the 32-day callback tests.
+    fn callback_vehicles() -> VehicleServices {
+        const MAINTENANCE: crate::vehicle::maintenance::Services =
+            crate::vehicle::maintenance::Services {
+                mark_dirty,
+                ..crate::test_tables::MAINTENANCE
+            };
+        VehicleServices {
+            engine: vehicle_engine,
+            maintenance: &MAINTENANCE,
+            newgrf: day_resolver,
+            ..VEHICLE
+        }
+    }
+    /// A road vehicle part at `index` that is not a front engine, with engine number `engine`,
+    /// its road and ground owners and the day counter `day_counter`.
+    fn road_part(index: usize, engine: u16, day_counter: u8) -> *mut VehicleRecord {
+        new_vehicle_of(index, VehicleType::VEH_ROAD);
+        let part = record(index);
+        // SAFETY: The fresh record; the owners live for the isolated child.
+        unsafe {
+            (*part).road = road::openttd_rust_road_new().cast();
+            (*part).ground = ground_vehicle::openttd_rust_ground_new();
+            (*part).engine_type = crate::engine_type::EngineID(engine);
+            (*part).day_counter = day_counter;
+        }
+        part
+    }
+    /// Run the day procedures in normal play, starting at day fraction `fraction`.
+    fn in_normal_play(fraction: u16) {
+        session::set_mode(GameMode::GM_NORMAL);
+        timer_game_common::write_economy_fraction(fraction);
+        timer_game_common::write_calendar_fraction(fraction);
+        ENGINE.set(crate::engine::openttd_rust_engine_new().cast());
+    }
+
+    /// `RunEconomyVehicleDayProc` over a pool with a hole: from the day fraction it visits every
+    /// `DAY_TICKS`-th slot and skips the free one, and it asks the 32-day callback of a vehicle
+    /// that has an engine type when its day counter is a multiple of 32. The calendar
+    /// procedure asks no callback, and neither runs outside normal play.
+    #[test]
+    fn economy_day_visits_every_day_ticks_vehicle_from_the_fraction() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle::scheduler::pool_tests::economy_day_visits_every_day_ticks_vehicle_from_the_fraction",
+            record_failure,
+        ) {
+            return;
+        }
+        let _pool = new_pool();
+        in_normal_play(3);
+        let stride = DAY_TICKS as usize;
+        road_part(3, 30, 0);
+        road_part(4, 40, 0); // Not a slot of this fraction.
+        road_part(3 + stride, 77, 0);
+        delete_vehicle(3 + stride); // The hole.
+        road_part(3 + 2 * stride, 151, 64);
+        road_part(3 + 3 * stride, 225, 33); // Its day counter is no multiple of 32.
+        let scheduler = day_scheduler(callback_vehicles());
+        ANSWER.set(0);
+        run_economy_vehicle_day_proc::<false>(&scheduler);
+        assert_eq!(take_days(), [Day::Callback(30), Day::Callback(151)]);
+        run_vehicle_calendar_day_proc::<false>(&scheduler);
+        assert_eq!(take_days(), Vec::<Day>::new());
+        session::set_mode(GameMode::GM_EDITOR);
+        run_economy_vehicle_day_proc::<false>(&scheduler);
+        assert_eq!(take_days(), Vec::<Day>::new());
+        assert_eq!(FAILURES.load(Ordering::Relaxed), 0);
+    }
+
+    /// The 32-day callback's result: bit 0 triggers the randomisation (trigger 10, waiting
+    /// bit `Callback32`), any nonzero result marks the front dirty, bits above 1 report an
+    /// unknown result for the engine's GRF, and a zero or failed result does none of them.
+    #[test]
+    fn economy_day_callback_results() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle::scheduler::pool_tests::economy_day_callback_results",
+            record_failure,
+        ) {
+            return;
+        }
+        let _pool = new_pool();
+        in_normal_play(0);
+        let part = road_part(0, 7, 32);
+        let scheduler = day_scheduler(callback_vehicles());
+        let trigger = 1 << newgrf_vehicle::Trigger::Callback32.0;
+        for (answer, expected) in [
+            (
+                1,
+                vec![Day::Callback(7), Day::Trigger(trigger), Day::Dirty(part)],
+            ),
+            (2, vec![Day::Callback(7), Day::Dirty(part)]),
+            (
+                4,
+                vec![
+                    Day::Callback(7),
+                    Day::Dirty(part),
+                    Day::Engine,
+                    Day::Unknown(CBID_VEHICLE_32DAY_CALLBACK.0, 4),
+                ],
+            ),
+            (0, vec![Day::Callback(7)]),
+            (CALLBACK_FAILED, vec![Day::Callback(7)]),
+        ] {
+            ANSWER.set(answer);
+            run_economy_vehicle_day_proc::<false>(&scheduler);
+            assert_eq!(take_days(), expected, "callback result {answer}");
+        }
+        assert_eq!(FAILURES.load(Ordering::Relaxed), 0);
+    }
+
+    /// The day virtuals' dispatch: effect and disaster vehicles keep the base class's empty
+    /// handlers, and a road vehicle that is not a front engine and an aircraft that is not a
+    /// normal aircraft (a shadow) return at their handlers' first tests, before any leaf.
+    /// Every controller leaf traps.
+    #[test]
+    fn day_dispatch_skips_vehicles_without_a_handler_or_past_its_guard() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle::scheduler::pool_tests::day_dispatch_skips_vehicles_without_a_handler_or_past_its_guard",
+            record_failure,
+        ) {
+            return;
+        }
+        let _pool = new_pool();
+        in_normal_play(0);
+        let stride = DAY_TICKS as usize;
+        new_vehicle_of(0, VehicleType::VEH_EFFECT);
+        new_vehicle_of(stride, VehicleType::VEH_DISASTER);
+        road_part(2 * stride, 7, 1);
+        new_vehicle_of(3 * stride, VehicleType::VEH_AIRCRAFT);
+        // SAFETY: The fresh aircraft record.
+        unsafe { (*record(3 * stride)).subtype = crate::aircraft::AircraftSubType::AIR_SHADOW.0 };
+        let scheduler = day_scheduler(VEHICLE);
+        run_vehicle_calendar_day_proc::<false>(&scheduler);
+        run_economy_vehicle_day_proc::<false>(&scheduler);
+        assert_eq!(FAILURES.load(Ordering::Relaxed), 0);
+    }
+
+    /// One day arm for a vehicle no scenario shows: the production day procedure over a live
+    /// vehicle of `kind` with `subtype` at index 0 reaches its handler's first leaf, which
+    /// `vehicle` names. That leaf ends the child through the native assertion policy, so the
+    /// handler goes no further than it.
+    fn day_arm(kind: VehicleType, subtype: u8, calendar: bool, vehicle: VehicleServices) {
+        let _pool = new_pool();
+        in_normal_play(0);
+        new_vehicle_of(0, kind);
+        // SAFETY: The fresh record; its ground owner, which the 32-day callback's resolver
+        // reads, lives for the isolated child. No handler reaches a controller owner before
+        // the leaf that ends the child.
+        unsafe {
+            let v = record(0);
+            (*v).subtype = subtype;
+            (*v).ground = ground_vehicle::openttd_rust_ground_new();
+        }
+        ARM_RECORD.set(record(0));
+        let scheduler = day_scheduler(vehicle);
+        if calendar {
+            run_vehicle_calendar_day_proc::<false>(&scheduler);
+        } else {
+            run_economy_vehicle_day_proc::<false>(&scheduler);
+        }
+    }
+    thread_local! {
+        static ARM_RECORD: Cell<*mut VehicleRecord> = const { Cell::new(null_mut()) };
+    }
+    /// The first leaf an arm reaches, with the vehicle it was given.
+    fn reached(v: *mut VehicleRecord) -> ! {
+        if v == ARM_RECORD.get() {
+            crate::services_assert::check(false);
+        }
+        std::process::exit(1)
+    }
+    /// `AgeVehicle`'s first read, `v->age`, through the calendar handlers' resolver.
+    extern "C" fn age_resolver() -> *const newgrf_vehicle::Services {
+        unsafe extern "C" fn age(v: *mut VehicleRecord) -> i32 {
+            reached(v)
+        }
+        const RESOLVER: newgrf_vehicle::Services =
+            newgrf_vehicle::test_table_with(newgrf_vehicle::TestLeaves {
+                age,
+                ..newgrf_vehicle::TestLeaves::UNREACHABLE
+            });
+        &RESOLVER
+    }
+    /// `EconomyAgeVehicle`'s first read, `v->economy_age`.
+    fn economy_age_vehicles() -> VehicleServices {
+        extern "C" fn economy_age(v: VehicleRef) -> i32 {
+            reached(v.0.as_ptr())
+        }
+        const MAINTENANCE: crate::vehicle::maintenance::Services =
+            crate::vehicle::maintenance::Services {
+                economy_age,
+                ..crate::test_tables::MAINTENANCE
+            };
+        VehicleServices {
+            maintenance: &MAINTENANCE,
+            ..VEHICLE
+        }
+    }
+    const ENGINE_SUBTYPE: u8 = 1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
+    const NORMAL_AIRCRAFT: u8 = crate::aircraft::AircraftSubType::AIR_AIRCRAFT.0;
+
+    #[test]
+    fn calendar_day_dispatches_a_train() {
+        if crate::services_assert::isolate_test_exit(
+            "vehicle::scheduler::pool_tests::calendar_day_dispatches_a_train",
+        ) {
+            return;
+        }
+        let vehicle = VehicleServices {
+            maintenance: &crate::test_tables::MAINTENANCE,
+            newgrf: age_resolver,
+            ..VEHICLE
+        };
+        day_arm(VehicleType::VEH_TRAIN, ENGINE_SUBTYPE, true, vehicle);
+    }
+    #[test]
+    fn economy_day_dispatches_a_train() {
+        if crate::services_assert::isolate_test_exit(
+            "vehicle::scheduler::pool_tests::economy_day_dispatches_a_train",
+        ) {
+            return;
+        }
+        // Day counter 0 and an engine type: the 32-day callback runs first and fails.
+        let vehicle = VehicleServices {
+            newgrf: failing_callback_resolver,
+            ..economy_age_vehicles()
+        };
+        day_arm(VehicleType::VEH_TRAIN, ENGINE_SUBTYPE, false, vehicle);
+    }
+    #[test]
+    fn calendar_day_dispatches_an_aircraft() {
+        if crate::services_assert::isolate_test_exit(
+            "vehicle::scheduler::pool_tests::calendar_day_dispatches_an_aircraft",
+        ) {
+            return;
+        }
+        let vehicle = VehicleServices {
+            maintenance: &crate::test_tables::MAINTENANCE,
+            newgrf: age_resolver,
+            ..VEHICLE
+        };
+        day_arm(VehicleType::VEH_AIRCRAFT, NORMAL_AIRCRAFT, true, vehicle);
+    }
+    #[test]
+    fn economy_day_dispatches_an_aircraft() {
+        if crate::services_assert::isolate_test_exit(
+            "vehicle::scheduler::pool_tests::economy_day_dispatches_an_aircraft",
+        ) {
+            return;
+        }
+        let vehicle = VehicleServices {
+            newgrf: failing_callback_resolver,
+            ..economy_age_vehicles()
+        };
+        day_arm(VehicleType::VEH_AIRCRAFT, NORMAL_AIRCRAFT, false, vehicle);
+    }
+    /// `Ship::OnNewCalendarDay`'s first leaf is the owner of the ship at `this->index`, the
+    /// loop's index; it ends the child for the ship at index `DAY_TICKS`.
+    extern "C" fn ship_owner(id: u32) -> *mut ship_control::State {
+        if id == DAY_TICKS as u32 {
+            crate::services_assert::check(false);
+        }
+        std::process::exit(1)
+    }
+    #[test]
+    fn calendar_day_dispatches_a_ship() {
+        if crate::services_assert::isolate_test_exit(
+            "vehicle::scheduler::pool_tests::calendar_day_dispatches_a_ship",
+        ) {
+            return;
+        }
+        let _pool = new_pool();
+        in_normal_play(0);
+        new_vehicle_of(DAY_TICKS as usize, VehicleType::VEH_SHIP);
+        let mut scheduler = day_scheduler(VEHICLE);
+        scheduler.ship = Box::leak(Box::new(ship_control::Leaves {
+            state_owner: ship_owner,
+            vehicle: scheduler.vehicle,
+            ..crate::test_tables::SHIP_LEAVES
+        }));
+        run_vehicle_calendar_day_proc::<false>(&scheduler);
+    }
+    /// The economy arms' resolver: the 32-day callback, which a fresh train or aircraft asks
+    /// first, fails.
+    extern "C" fn failing_callback_resolver() -> *const newgrf_vehicle::Services {
+        ANSWER.set(CALLBACK_FAILED);
+        day_resolver()
+    }
 }
