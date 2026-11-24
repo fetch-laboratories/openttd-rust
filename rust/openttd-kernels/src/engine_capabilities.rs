@@ -696,11 +696,19 @@ pub unsafe extern "C" fn openttd_rust_engine_cost(s: &Services, e: E) -> i64 {
 pub(crate) unsafe fn get_vehicle_running_cost(s: &Services, e: E, v: V) -> i64 {
     let base = unsafe { running_price(s, e) };
     let prop = match EngineRef::of(e).kind() {
-        VehicleType::SHIP => crate::newgrf_properties::PROP_SHIP_RUNNING_COST_FACTOR,
-        VehicleType::AIRCRAFT => crate::newgrf_properties::PROP_AIRCRAFT_RUNNING_COST_FACTOR,
+        VehicleType::SHIP => crate::newgrf_properties::PropertyID::PROP_SHIP_RUNNING_COST_FACTOR,
+        VehicleType::AIRCRAFT => {
+            crate::newgrf_properties::PropertyID::PROP_AIRCRAFT_RUNNING_COST_FACTOR
+        }
         _ => unsafe { invalid_kind(s) },
     };
-    let factor = unsafe { property(s, (s.id)(e), prop, running_factor(s, e), v) };
+    let fallback = unsafe { running_factor(s, e) };
+    let factor = crate::newgrf_vehicle::get_vehicle_property(
+        s.vehicles.newgrf(),
+        crate::vehicle::VehicleRef::of(v),
+        prop,
+        fallback as i32,
+    ) as u32;
     price(s, e, base, factor, 0)
 }
 /// Ship/aircraft vehicle running cost uses a vehicle callback and unscaled price.
