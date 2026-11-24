@@ -429,8 +429,6 @@ pub struct Leaves {
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     /// The ground vehicle physics table.
     pub physics: &'static crate::ground_vehicle::Services,
-    /// The path reservation table of `train_reservation.rs`.
-    pub reservation: *const reservation::Leaves,
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
 }
@@ -531,10 +529,9 @@ impl<'a> Game<'a> {
     fn pbs(&self) -> Pbs<'a> {
         Pbs::acquire(self.services)
     }
-    /// The path reservation context of train part `v`.
-    fn reservation(&self, v: Handle) -> reservation::Game<'a> {
-        // SAFETY: The native table names the immutable process-wide reservation table.
-        reservation::Game::new(unsafe { &*self.leaves.reservation }, v.vehicle())
+    /// The path reservation context of this entry's tables.
+    fn reservation(&self) -> reservation::Game<'a> {
+        reservation::Game::new(self.leaves, self.services)
     }
     /// The signal update context.
     fn signals(&self) -> crate::signal::Context {
@@ -1773,7 +1770,7 @@ impl Game<'_> {
 
         /* Clear path reservation in front if train is not stuck. */
         if !v.flags().test(VehicleRailFlag::Stuck) {
-            reservation::free_train_track_reservation(&self.reservation(v), v);
+            reservation::free_train_track_reservation(&self.reservation(), v);
         }
 
         /* Check if we were approaching a rail/road-crossing */
@@ -1882,9 +1879,9 @@ impl Game<'_> {
                     true,
                 );
             }
-            if reservation::try_path_reserve(&self.reservation(v), v, false, first_tile_okay) {
+            if reservation::try_path_reserve(&self.reservation(), v, false, first_tile_okay) {
                 /* Do a look-ahead now in case our current tile was already a safe tile. */
-                reservation::check_next_train_tile(&self.reservation(v), v);
+                reservation::check_next_train_tile(&self.reservation(), v);
             } else if v.vehicle().current_order().kind() != OrderType::OT_LOADING {
                 /* Do not wait for a way out when we're still loading */
                 self.mark_train_as_stuck(v);
@@ -2313,7 +2310,7 @@ impl Game<'_> {
 
         /* Only leave when we can reserve a path to our destination. */
         if seg_state == SigSegState::SIGSEG_PBS
-            && !reservation::try_path_reserve(&self.reservation(v), v, false, false)
+            && !reservation::try_path_reserve(&self.reservation(), v, false, false)
             && v.force_proceed() == TrainForceProceeding::TFP_NONE
         {
             /* No path and no force proceed. */
@@ -2536,12 +2533,12 @@ impl Game<'_> {
             /* Remove the reserved path in front of the train if it is not stuck.
              * Also clear all reserved tracks the train is currently on. */
             if !this.flags().test(VehicleRailFlag::Stuck) {
-                reservation::free_train_track_reservation(&self.reservation(this), this);
+                reservation::free_train_track_reservation(&self.reservation(), this);
             }
             let mut v = this;
             while v != Handle::NONE {
                 reservation::clear_path_reservation(
-                    &self.reservation(v),
+                    &self.reservation(),
                     v,
                     v.vehicle().tile(),
                     self.get_vehicle_trackdir(v),
@@ -2603,7 +2600,7 @@ impl Game<'_> {
 
         /* Try to re-reserve track under already crashed train too.
          * Crash() clears the reservation! */
-        reservation::reserve_track_under_consist(&self.reservation(v), v);
+        reservation::reserve_track_under_consist(&self.reservation(), v);
 
         victims
     }
@@ -2851,7 +2848,7 @@ impl Game<'_> {
                                 /* Currently the locomotive is active. Determine which one of the
                                  * available tracks to choose */
                                 let (track, _) = reservation::choose_train_track(
-                                    &self.reservation(v),
+                                    &self.reservation(),
                                     v,
                                     gp.new_tile,
                                     enterdir,
@@ -3137,7 +3134,7 @@ impl Game<'_> {
                                 /* Clear any track reservation when the last vehicle leaves the tile */
                                 if v.next() == Handle::NONE {
                                     reservation::clear_path_reservation(
-                                        &self.reservation(v),
+                                        &self.reservation(),
                                         v,
                                         v.vehicle().tile(),
                                         self.get_vehicle_trackdir(v),
@@ -3202,7 +3199,7 @@ impl Game<'_> {
                                 }
 
                                 /* Always try to extend the reservation when entering a tile. */
-                                reservation::check_next_train_tile(&self.reservation(v), v);
+                                reservation::check_next_train_tile(&self.reservation(), v);
                             }
 
                             if vets.test(VehicleEnterTileState::EnteredStation) {
@@ -3226,7 +3223,7 @@ impl Game<'_> {
                                 )),
                                 true,
                             );
-                            reservation::check_next_train_tile(&self.reservation(v), v);
+                            reservation::check_next_train_tile(&self.reservation(), v);
                         }
                         /* Prevent v->UpdateInclination() being called with wrong parameters.
                          * This could happen if the train was reversed inside the tunnel/bridge. */
@@ -3277,7 +3274,7 @@ impl Game<'_> {
                                     true,
                                 ))
                                 || !reservation::try_path_reserve(
-                                    &self.reservation(v),
+                                    &self.reservation(),
                                     v,
                                     false,
                                     false,
@@ -3306,7 +3303,7 @@ impl Game<'_> {
                             .tick_counter()
                             .is_multiple_of(self.path_backoff_interval())
                     {
-                        reservation::check_next_train_tile(&self.reservation(v), v);
+                        reservation::check_next_train_tile(&self.reservation(), v);
                     }
                 }
                 prev = v;
@@ -3797,7 +3794,7 @@ impl Game<'_> {
         let valid_order = !v.vehicle().current_order().is_type(OrderType::OT_NOTHING)
             && v.vehicle().current_order().kind() != OrderType::OT_CONDITIONAL;
         if crate::orders::process_orders(v.vehicle(), self.vs.orders())
-            && reservation::check_reverse_train(&self.reservation(v), v)
+            && reservation::check_reverse_train(&self.reservation(), v)
         {
             v.set_wait_counter(0);
             v.vehicle().set_cur_speed(0);
@@ -3824,7 +3821,7 @@ impl Game<'_> {
                 == SigSegState::SIGSEG_PBS
                 || self.reserve_paths()
             {
-                reservation::try_path_reserve(&self.reservation(v), v, true, true);
+                reservation::try_path_reserve(&self.reservation(), v, true, true);
             }
             v.set_flags(v.flags().reset(VehicleRailFlag::LeavingStation));
         }
@@ -3847,7 +3844,7 @@ impl Game<'_> {
 
         /* We had no order but have an order now, do look ahead. */
         if !valid_order && !v.vehicle().current_order().is_type(OrderType::OT_NOTHING) {
-            reservation::check_next_train_tile(&self.reservation(v), v);
+            reservation::check_next_train_tile(&self.reservation(), v);
         }
 
         /* Handle stuck trains. */
@@ -3867,7 +3864,7 @@ impl Game<'_> {
             {
                 return true;
             }
-            if !reservation::try_path_reserve(&self.reservation(v), v, false, false) {
+            if !reservation::try_path_reserve(&self.reservation(), v, false, false) {
                 /* Still stuck. */
                 if turn_around {
                     crate::witness::hit(crate::witness::TRAIN_STUCK_REVERSE);
@@ -4278,6 +4275,14 @@ pub(crate) fn update_level_crossing(
 pub(crate) fn get_vehicle_trackdir(leaves: &Leaves, services: &Services, v: Handle) -> Trackdir {
     Game::new(leaves, services).get_vehicle_trackdir(v)
 }
+/// `MarkTrainAsStuck`, for Rust callers outside a train entry.
+pub(crate) fn mark_train_as_stuck(leaves: &Leaves, services: &Services, v: Handle) {
+    Game::new(leaves, services).mark_train_as_stuck(v);
+}
+/// `CheckIfTrainNeedsService`, for Rust callers outside a train entry.
+pub(crate) fn check_if_train_needs_service(leaves: &Leaves, services: &Services, v: Handle) {
+    Game::new(leaves, services).check_if_train_needs_service(v);
+}
 
 /// `Train::ConsistChanged`.
 /// # Safety
@@ -4379,17 +4384,6 @@ pub unsafe extern "C" fn openttd_rust_train_trackdir(
 ) -> u8 {
     entry_game!(leaves, services).get_vehicle_trackdir(v).0
 }
-/// `MarkTrainAsStuck`.
-/// # Safety
-/// As [`openttd_rust_train_consist_changed`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_mark_stuck(
-    v: Handle,
-    leaves: *const Leaves,
-    services: *const Services,
-) {
-    entry_game!(leaves, services).mark_train_as_stuck(v);
-}
 /// `ReverseTrainSwapVeh`.
 /// # Safety
 /// As [`openttd_rust_train_consist_changed`].
@@ -4473,17 +4467,6 @@ pub unsafe extern "C" fn openttd_rust_train_crash(
 ) -> u32 {
     entry_game!(leaves, services).crash(v, flooded != 0)
 }
-/// `CheckIfTrainNeedsService`.
-/// # Safety
-/// As [`openttd_rust_train_consist_changed`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_needs_service(
-    v: Handle,
-    leaves: *const Leaves,
-    services: *const Services,
-) {
-    entry_game!(leaves, services).check_if_train_needs_service(v);
-}
 /// `Train::FindClosestDepot`.
 /// # Safety
 /// As [`openttd_rust_train_consist_changed`].
@@ -4565,7 +4548,6 @@ crate::abi::layouts! {
     "OpenTTDTrainServices" ["probe"] => Leaves {
         capabilities,
         physics,
-        reservation,
         vehicle,
     };
 }

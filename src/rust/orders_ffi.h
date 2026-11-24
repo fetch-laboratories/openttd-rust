@@ -175,9 +175,7 @@ uint64_t openttd_rust_delete_vehicle_orders(void *, uint8_t, uint8_t, const Open
 uint64_t openttd_rust_add_shared(void *, void *, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_delete_implicit(void *, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_timetable_bulk(void *, uint8_t, uint16_t, uint8_t, void *, const OpenTTDOrdersLeaves *);
-uint64_t openttd_rust_order_destination(void *, int32_t, uint8_t, const void *, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_process_orders(void *, const OpenTTDOrdersLeaves *);
-uint64_t openttd_rust_order_condition(void *, const void *, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_order_location(void *, uint8_t, const void *, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_order_distance(void *, uint8_t, uint8_t, int32_t, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_command_insert(void *, uint8_t, uint8_t, const void *, void *, const OpenTTDOrdersLeaves *);

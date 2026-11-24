@@ -785,9 +785,6 @@ impl crate::vehicle::VehicleRef {
         let consist = read_field!(self.0.as_ptr(), consist);
         crate::order_type::VehicleOrderID(read_field!(consist, real))
     }
-    pub(crate) fn cur_real_order_index_raw(self) -> u8 {
-        self.cur_real_order_index().0
-    }
     /// Virtual `Vehicle::GetDisplayMaxSpeed`: the maximum speed in km-ish/h as displayed to
     /// the player, dispatched on the vehicle's type to each override; other types take the
     /// base class's 0.

@@ -34,36 +34,4 @@ Track YapfShipChooseTrack(const Ship *v, TileIndex tile, bool &path_found, ShipP
  */
 bool YapfShipCheckReverse(const Ship *v, Trackdir *trackdir);
 
-/**
- * Finds the best path for given train using YAPF.
- * @param v        the train that needs to find a path
- * @param tile     the tile to find the path from (should be next tile the train is about to enter)
- * @param enterdir diagonal direction which the RV will enter this new tile from
- * @param tracks   available trackdirs on the new tile (to choose from)
- * @param path_found [out] Whether a path has been found (true) or has been guessed (false)
- * @param reserve_track indicates whether YAPF should try to reserve the found path
- * @param target   [out] the target tile of the reservation, free is set to true if path was reserved
- * @param dest     [out] the final tile of the best path found
- * @return         the best track for next turn
- */
-Track YapfTrainChooseTrack(const Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool &path_found, bool reserve_track, struct PBSTileInfo *target, TileIndex *dest);
-
-/**
- * Returns true if it is better to reverse the train before leaving station using YAPF.
- * @param v the train leaving the station
- * @return true if reversing is better
- */
-bool YapfTrainCheckReverse(const Train *v);
-
-/**
- * Try to extend the reserved path of a train to the nearest safe tile using YAPF.
- *
- * @param v    The train that needs to find a safe tile.
- * @param tile Last tile of the current reserved path.
- * @param td   Last trackdir of the current reserved path.
- * @param override_railtype Should all physically compatible railtypes be searched, even if the vehicle can't run on them on its own?
- * @return True if the path could be extended to a safe tile.
- */
-bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, bool override_railtype);
-
 #endif /* YAPF_H */

@@ -14,7 +14,7 @@
 #include "station_service_ffi.h"
 #include "station_ffi.h"
 #include "rail_command_ffi.h"
-#include "train_reservation_ffi.h"
+#include "train_ffi.h"
 #include "ground_ffi.h"
 #include "town_ffi.h"
 #include "byte_span_ffi.h"
@@ -90,7 +90,6 @@ struct OpenTTDStationCommandServices {
 	void (*set_train_area)(BaseStation *, OpenTTDStationArea) noexcept OPENTTD_SERVICE_DEFAULT(set_train_area);
 	Train *(*last_train)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(last_train);
 	const OpenTTDTrainServices *train;
-	const OpenTTDTrainReservationLeaves *reservation;
 	uint32_t (*custom_rail_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(custom_rail_index);
 	void (*make_rail_station)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_rail_station);
 	void (*close_station_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_station_inspect);

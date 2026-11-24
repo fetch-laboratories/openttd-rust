@@ -131,6 +131,7 @@ rust/openttd-kernels/src/town/resolver.rs
 rust/openttd-kernels/src/town.rs
 rust/openttd-kernels/src/town/spatial.rs
 rust/openttd-kernels/src/train.rs
+rust/openttd-kernels/src/train_reservation.rs
 rust/openttd-kernels/src/train_state.rs
 rust/openttd-kernels/src/tree_land.rs
 rust/openttd-kernels/src/tree_map.rs

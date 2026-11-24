@@ -1860,11 +1860,6 @@ pub(crate) fn should_stop_at_station(shared: &Services, v: VehicleRef, station: 
         )
     }
 }
-/// Temporary raw adapter of [`should_stop_at_station`] for `train_reservation.rs` until its
-/// pass.
-pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> bool {
-    should_stop_at_station(shared, v, StationID(station))
-}
 
 /// Lazy handler for header preconditions. Valid inline helpers never resolve the
 /// native registry; failed assertions follow the native build's assertion policy.
