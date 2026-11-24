@@ -109,11 +109,6 @@ fn vehicles(s: &Services) -> impl Iterator<Item = VehicleRef> + '_ {
     })
 }
 
-fn vehicle_services(s: &Services) -> &crate::vehicle::VehicleServices {
-    // SAFETY: The movement registry holds the process-lifetime vehicle table.
-    unsafe { &*crate::movement::table(s.shared).vehicle }
-}
-
 fn train_leaves(s: &Services) -> *const crate::train::Leaves {
     crate::movement::table(s.shared).train
 }
@@ -259,7 +254,6 @@ fn service_interval_range(s: &Services) -> Range {
 }
 
 fn update_consists(s: &Services) {
-    let vs = vehicle_services(s);
     trains(s, |v, subtype| {
         if crate::vehicle_base::is_front_engine(true, subtype)
             || crate::ground_vehicle::is_free_wagon(subtype)
@@ -268,7 +262,7 @@ fn update_consists(s: &Services) {
             // SAFETY: Process-lifetime tables; the live train shell is resolved per call.
             unsafe {
                 crate::train::openttd_rust_train_consist_changed(
-                    (vs.train_handle)(v.0.as_ptr()),
+                    crate::train::Handle::from_vehicle(v),
                     crate::train::CCF_TRACK,
                     train_leaves(s),
                     s.shared,
@@ -288,11 +282,10 @@ fn acceleration_windows() {
 }
 
 fn train_acceleration_model_changed(s: &Services) {
-    let vs = vehicle_services(s);
     trains(s, |v, subtype| {
         if crate::vehicle_base::is_front_engine(true, subtype) {
             hit(witness::SETTINGS_TRAIN_ACCELERATION);
-            let id = (vs.train_handle)(v.0.as_ptr());
+            let id = crate::train::Handle::from_vehicle(v);
             // SAFETY: The movement registry holds the process-lifetime train leaves.
             let limit = crate::train::curve_speed_limit(id, unsafe { &*train_leaves(s) }, s.shared);
             id.set_cached_max_curve_speed(u64::from(limit));

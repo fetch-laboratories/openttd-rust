@@ -82,7 +82,6 @@ void RustVehicleSetName(void *shell, OpenTTDByteSpan name) noexcept { static_cas
 bool RustVehiclePrimary(const Vehicle *v) noexcept { return v->IsPrimaryVehicle(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept { return v->IsInDepot(); }
 
-OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept { return TrainHandle(Train::From(VehicleOf(v))); }
 bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }
 uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept { return GetGRFStringID(grfid, GRFStringID(string)); }
 
@@ -166,7 +165,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 #else
 	.assertions = false,
 #endif
-	.train_handle = RustVehicleTrain,
 	.enter_depot = openttd_rust_visit_enter_depot,
 	.pathfinding_result = VehicleSvcPathfindingResult,
 	.new_position = VehicleSvcNewPosition,

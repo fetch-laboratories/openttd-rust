@@ -181,7 +181,7 @@ impl Ctx {
     fn consist_changed(self, v: R) {
         unsafe {
             crate::train::openttd_rust_train_consist_changed(
-                self.r.train_handle(v),
+                crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
                 CCF_ARRANGE,
                 self.r.train,
                 self.t.shared,
@@ -205,8 +205,7 @@ impl Ctx {
             )
         };
         if probability >= 0 {
-            self.r
-                .train_handle(v)
+            crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
                 .set_flag(crate::train::FLIPPED, probability != 0);
         }
     }
@@ -885,7 +884,11 @@ fn delete_orders(x: Ctx, v: R) {
 }
 fn mark_dirty(x: Ctx, v: R) {
     unsafe {
-        crate::train::openttd_rust_train_mark_dirty(x.r.train_handle(v), x.r.train, x.t.shared);
+        crate::train::openttd_rust_train_mark_dirty(
+            crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
+            x.r.train,
+            x.t.shared,
+        );
     }
 }
 

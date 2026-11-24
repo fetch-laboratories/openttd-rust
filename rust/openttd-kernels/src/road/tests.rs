@@ -423,9 +423,7 @@ mod controller {
                 ..SHARED
             },
         );
-        let ground = Box::leak(Box::new(GroundServices {
-            physics,
-        }));
+        let ground = Box::leak(Box::new(GroundServices { physics }));
         let leaves = Leaves {
             ground,
             ..*f.leaves
@@ -1238,9 +1236,7 @@ mod controller {
             ..GROUND_VEHICLE
         }));
         f.leaves = Box::leak(Box::new(Leaves {
-            ground: Box::leak(Box::new(GroundServices {
-                physics,
-            })),
+            ground: Box::leak(Box::new(GroundServices { physics })),
             vehicle: Box::leak(Box::new(crate::vehicle::VehicleServices {
                 maintenance,
                 start_stop_dirty: service_start_stop_dirty,

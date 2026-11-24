@@ -456,7 +456,7 @@ impl<'a> Pbs<'a> {
                 return false;
             }
 
-            let t = (vs.train_handle)(v.0.as_ptr());
+            let t = crate::train::Handle::from_vehicle(v);
             if t.track() == TrackBits::TRACK_BIT_WORMHOLE.0
                 || has_bit(t.track(), trackdir_to_track(info.res.trackdir.0))
             {

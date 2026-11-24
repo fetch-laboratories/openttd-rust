@@ -68,6 +68,17 @@ impl Handle {
         // SAFETY: Entries and topology reads supply a live non-null train record.
         unsafe { VehicleRef(std::ptr::NonNull::new_unchecked(self.record)) }
     }
+    /// `TrainHandle(Train::From(v))`: the handle of a vehicle that is a train, with
+    /// `Train::From`'s type assertion.
+    pub(crate) fn from_vehicle(v: VehicleRef) -> Self {
+        crate::services_assert::assert_with(|| {
+            v.vehicle_type() == crate::vehicle_type::VehicleType::VEH_TRAIN
+        });
+        Self {
+            record: v.0.as_ptr(),
+            owner: read_field!(v.0.as_ptr(), train),
+        }
+    }
     pub(crate) fn from_record(record: *mut crate::vehicle::OpenTTDVehicle) -> Self {
         if record.is_null() {
             Self::NONE
@@ -564,14 +575,14 @@ impl<'a> Game<'a> {
         let vs = self.vs();
         vs.any_on_tile(tile, |v| {
             v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
-                && visitor((vs.train_handle)(v.0.as_ptr()))
+                && visitor(crate::train::Handle::from_vehicle(v))
         })
     }
     fn visit_near<F: FnMut(Handle) -> bool>(&self, x: i32, y: i32, mut visitor: F) -> bool {
         let vs = self.vs();
         vs.any_near(x, y, 7, |v| {
             v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
-                && visitor((vs.train_handle)(v.0.as_ptr()))
+                && visitor(crate::train::Handle::from_vehicle(v))
         })
     }
 

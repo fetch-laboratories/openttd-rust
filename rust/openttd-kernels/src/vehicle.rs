@@ -106,7 +106,6 @@ pub struct VehicleServices {
     pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
     pub map_log_x: extern "C" fn() -> u32,
     pub assertions: bool,
-    pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
     /// `VehicleEnterDepot`, owned by `visits` (`openttd_rust_visit_enter_depot`).
     pub enter_depot: unsafe extern "C" fn(VehicleRef, *const visits::Services),
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
@@ -254,7 +253,6 @@ crate::abi::layouts! {
         tile_links,
         map_log_x,
         assertions,
-        train_handle,
         enter_depot,
         pathfinding_result,
         new_position,

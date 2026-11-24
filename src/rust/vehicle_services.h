@@ -26,7 +26,6 @@ struct OpenTTDAircraftState;
 OpenTTDAircraftState *RustVehicleAircraftOwner(const Vehicle *v) noexcept;
 OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept;
 
-OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
 Train *RustTrainGetIfValid(uint32_t id) noexcept;
 /** Strict Ship::Get lookup, preserving source pool assertions. */

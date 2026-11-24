@@ -899,7 +899,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
                 crate::station_type::SRT_VEHICLE_DEPARTS,
             );
         }
-        let train = s.refit.train_handle(v.0.as_ptr());
+        let train = crate::train::Handle::from_vehicle(v);
         train.set_flags(train.get_flags() | VRF_LEAVING_STATION);
     }
     if kind == VehicleType::ROAD && (v).vehstatus_raw() & VS_CRASHED == 0 {
@@ -980,7 +980,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     s.orders().dirty_vehicle_windows(v);
     match kind {
         VehicleType::TRAIN => {
-            let train = s.refit.train_handle(v.0.as_ptr());
+            let train = crate::train::Handle::from_vehicle(v);
             crate::train::enter_depot(train, s.refit.train, s.shared);
         }
         VehicleType::ROAD => {}

@@ -2483,7 +2483,8 @@ impl<'a> Game<'a> {
 
         if v.is_in_depot() {
             /* Check if we should wait here for unbunching. */
-            if crate::vehicle::is_waiting_for_unbunching(v.v, self.vs.orders(), || v.is_in_depot()) {
+            if crate::vehicle::is_waiting_for_unbunching(v.v, self.vs.orders(), || v.is_in_depot())
+            {
                 return true;
             }
             if self.road_veh_leave_depot(v, true) {

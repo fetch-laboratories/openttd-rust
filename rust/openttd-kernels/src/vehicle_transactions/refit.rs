@@ -88,10 +88,6 @@ impl Services {
             .as_ptr()
             .cast_const()
     }
-    /// `Train::From(v)` as its typed handle.
-    pub(crate) fn train_handle(&self, v: *mut OpenTTDVehicle) -> crate::train::Handle {
-        (self.common.vehicles.train_handle)(v)
-    }
 }
 #[derive(Clone, Copy)]
 /// `RefitResult`: helper structure for `RefitVehicle()`.
@@ -695,7 +691,10 @@ pub(crate) unsafe fn cmd_refit_vehicle(
         match crate::fleet::record(b.groups, v).vehicle_type() {
             VehicleType::TRAIN => unsafe {
                 crate::train::openttd_rust_train_consist_changed(
-                    s.train_handle(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
+                    crate::train::Handle::from_vehicle(super::vehicle_ref(
+                        front,
+                        s.common.vehicles,
+                    )),
                     if auto_refit {
                         s.prices.auto_refit
                     } else {

@@ -1378,7 +1378,6 @@ pub(crate) mod tests {
             tile_links: unused(),
             map_log_x: unused(),
             assertions: unused(),
-            train_handle: unused(),
             enter_depot: unused(),
             pathfinding_result: unused(),
             new_position: unused(),

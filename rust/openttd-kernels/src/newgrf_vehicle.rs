@@ -327,7 +327,10 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     let mut u = v;
                     while !u.is_null() {
                         if handle(v).vehicle_type_raw() == 0 {
-                            user_data |= (s.vehicle.train_handle)(u).get_user_def_data() as u8;
+                            user_data |= crate::train::Handle::from_vehicle(
+                                crate::vehicle::VehicleRef::of(u),
+                            )
+                            .get_user_def_data() as u8;
                         }
                         if crate::engine_capabilities::openttd_rust_engine_can_carry_abi(
                             s.capabilities,
@@ -825,7 +828,7 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
     unsafe {
         match kind {
             0 => crate::train::openttd_rust_train_current_max_speed(
-                (s.vehicle.train_handle)(v),
+                crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
                 (s.train_services)(),
                 s.shared,
             ),
@@ -1154,7 +1157,9 @@ unsafe fn variable(
                             s.shared,
                             crate::tile_type::TileIndex(tile),
                         );
-                        let types = (s.vehicle.train_handle)(v).get_railtypes();
+                        let types =
+                            crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                                .get_railtypes();
                         return (u32::from((s.rail_catenary)(rt)) * 0x200)
                             | (u32::from((s.powered_rail)(types, rt)) * 0x100)
                             | u32::from(crate::type_registry::openttd_rust_rail_reverse(
@@ -1368,12 +1373,12 @@ unsafe fn variable(
             0xfe | 0xff => {
                 let mut flags = 0u32;
                 if kind() == 0 {
-                    let t = (s.vehicle.train_handle)(v);
+                    let t = crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v));
                     let f = t.get_flags();
                     let wagon = f & crate::train::VRF_POWERED_WAGON != 0;
                     let u = if wagon {
-                        (s.vehicle.train_handle)(
-                            crate::vehicle::VehicleRef::of(v).first().0.as_ptr(),
+                        crate::train::Handle::from_vehicle(
+                            crate::vehicle::VehicleRef::of(v).first(),
                         )
                     } else {
                         t
@@ -1421,7 +1426,8 @@ unsafe fn variable(
                     u32::from((s.load_ticks)(v))
                 } else {
                     match kind() {
-                        0 => (s.vehicle.train_handle)(v).get_wait_counter() as u32,
+                        0 => crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                            .get_wait_counter() as u32,
                         3 => u32::from(
                             (*crate::vehicle::VehicleRef::of(v).aircraft_state()).turn_counter,
                         ),
@@ -1492,7 +1498,11 @@ unsafe fn variable(
                     return u32::from(sprite);
                 }
                 return u32::from(
-                    if (s.vehicle.train_handle)(v).get_flags() & crate::train::VRF_FLIPPED != 0 {
+                    if crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                        .get_flags()
+                        & crate::train::VRF_FLIPPED
+                        != 0
+                    {
                         crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM_REVERSED
                     } else {
                         crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM
@@ -1535,9 +1545,14 @@ unsafe fn variable(
         }
         match kind() {
             0 => match variable {
-                0xe2 => return (s.vehicle.train_handle)(v).get_track() as u32,
+                0xe2 => {
+                    return crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                        .get_track() as u32;
+                }
                 0xe6 => {
-                    let bits = (s.vehicle.train_handle)(v).get_railtypes();
+                    let bits =
+                        crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                            .get_railtypes();
                     return u32::from(
                         crate::base_bitset_type::get_nth_set_bit(bits, 0)
                             .unwrap_or(crate::rail_type::INVALID_RAILTYPE),

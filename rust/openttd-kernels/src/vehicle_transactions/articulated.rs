@@ -87,16 +87,12 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
                     c.vehicles.set_next_shell(previous.cast(), v.cast());
                     (*(c.vehicles.record_from_shell)(v.cast())).subtype = 0;
                 }
-                let front = r.train_handle(
-                    unsafe { super::vehicle_ref(first, r.common.vehicles) }
-                        .0
-                        .as_ptr(),
-                );
-                let train = r.train_handle(
-                    unsafe { super::vehicle_ref(v, r.common.vehicles) }
-                        .0
-                        .as_ptr(),
-                );
+                let front = crate::train::Handle::from_vehicle(unsafe {
+                    super::vehicle_ref(first, r.common.vehicles)
+                });
+                let train = crate::train::Handle::from_vehicle(unsafe {
+                    super::vehicle_ref(v, r.common.vehicles)
+                });
                 train.set_track(u64::from(front.track()));
                 train.set_railtypes(front.get_railtypes());
                 v
@@ -170,11 +166,9 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
                 )
             };
             if probability >= 0 {
-                r.train_handle(
-                    unsafe { super::vehicle_ref(v, r.common.vehicles) }
-                        .0
-                        .as_ptr(),
-                )
+                crate::train::Handle::from_vehicle(unsafe {
+                    super::vehicle_ref(v, r.common.vehicles)
+                })
                 .set_flag(crate::train::FLIPPED, probability != 0);
             }
         }

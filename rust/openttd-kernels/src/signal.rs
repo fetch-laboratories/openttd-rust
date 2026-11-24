@@ -378,7 +378,7 @@ impl<'a> Signals<'a> {
     fn train_on_tile(&self, tile: TileIndex, flags: &mut SigFlags) {
         let vehicles = self.vehicles();
         if !flags.test(SigFlag::TRAIN)
-            && vehicles.any_on_tile(tile.0, |v| is_train_and_not_in_depot(vehicles, v))
+            && vehicles.any_on_tile(tile.0, |v| is_train_and_not_in_depot(v))
         {
             flags.set(SigFlag::TRAIN);
             crate::witness::hit(crate::witness::SIGNAL_TRAIN);
@@ -938,10 +938,10 @@ impl<'a> Signals<'a> {
 }
 
 /// Check whether there is a train on rail, not in a depot.
-fn is_train_and_not_in_depot(vehicles: &VehicleServices, v: VehicleRef) -> bool {
+fn is_train_and_not_in_depot(v: VehicleRef) -> bool {
     v.vehicle_type() == VehicleType::TRAIN && {
         crate::witness::hit(crate::witness::SIGNAL_OCCUPANCY_ACCESSORS);
-        TrackBits((vehicles.train_handle)(v.0.as_ptr()).track()) != TrackBits::TRACK_BIT_DEPOT
+        TrackBits(crate::train::Handle::from_vehicle(v).track()) != TrackBits::TRACK_BIT_DEPOT
     }
 }
 
