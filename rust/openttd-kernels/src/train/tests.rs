@@ -537,7 +537,7 @@ mod bodies {
                 company: owner,
             };
             assert_eq!(
-                RESERVED.with(|r| r.take()),
+                RESERVED.with(std::cell::RefCell::take),
                 vec![(
                     TILE.0,
                     Track::TRACK_X.0,
@@ -555,10 +555,344 @@ mod bodies {
                 .set_vehstatus(f.train().vehicle().vehstatus().set(VehState::Crashed));
             assert_eq!(f.game().train_crashed(f.train()), 0);
             assert_eq!(
-                RESERVED.with(|r| r.take()),
+                RESERVED.with(std::cell::RefCell::take),
                 vec![(TILE.0, Track::TRACK_X.0, Vec::new())]
             );
             assert_eq!(take(), Vec::new());
+        }
+    }
+
+    /// `CheckTrainCollision(Train *v)` against the original body: both walks, the per-
+    /// vehicle overload's crash order, the victim-count headline and the rating before the
+    /// sound. Each case runs in an isolated child because the tile index is process-wide.
+    mod collision {
+        use super::*;
+        use crate::vehicle::occupancy::Links;
+        use std::cell::RefCell;
+
+        /// What the child observes, in call order.
+        #[derive(Debug, PartialEq)]
+        enum Call {
+            /// `Vehicle::Crash` of the record, through the ground table's `base_crash`.
+            Crash(*mut crate::vehicle_base::VehicleRecord),
+            /// `ModifyStationRatingAround`'s station table read.
+            Rating,
+            /// `SndPlayVehicleFx(SND_13_TRAIN_COLLISION, v)`.
+            Sound(*mut crate::vehicle_base::VehicleRecord, u16),
+            /// `SetTunnelBridgeReservation(tile, true)`.
+            Wormhole(u32),
+        }
+        thread_local! {
+            static CALLS: RefCell<Vec<Call>> = const { RefCell::new(Vec::new()) };
+            static LINKS: RefCell<Vec<(*mut crate::vehicle_base::VehicleRecord, *mut Links)>> =
+                const { RefCell::new(Vec::new()) };
+            static FAILED: Cell<u32> = const { Cell::new(0) };
+        }
+        extern "C" fn record_failure(ok: bool) {
+            if !ok {
+                FAILED.with(|f| f.set(f.get() + 1));
+            }
+        }
+        fn call(c: Call) {
+            CALLS.with(|calls| calls.borrow_mut().push(c));
+        }
+        /// `Vehicle::Crash` sets `VehState::Crashed` on each part; the fixture's parts are
+        /// single.
+        extern "C" fn base_crash(v: VehicleRef, flooded: bool) -> u32 {
+            assert!(!flooded);
+            call(Call::Crash(v.0.as_ptr().cast()));
+            v.set_vehstatus(v.vehstatus().set(VehState::Crashed));
+            4
+        }
+        extern "C" fn tile_links(v: VehicleRef) -> *mut Links {
+            let record = v.0.as_ptr().cast();
+            LINKS.with(|links| {
+                let mut links = links.borrow_mut();
+                if let Some(&(_, l)) = links.iter().find(|(r, _)| *r == record) {
+                    return l;
+                }
+                let l = Box::leak(Box::new(Links {
+                    next: std::ptr::null_mut(),
+                    prev: std::ptr::null_mut(),
+                    current: std::ptr::null_mut(),
+                }));
+                links.push((record, l));
+                l
+            })
+        }
+        extern "C" fn yes() -> bool {
+            true
+        }
+        extern "C" fn map_max_y() -> u32 {
+            15
+        }
+        extern "C" fn station_commands() -> *const crate::station_cmd::CommandServicesTable {
+            call(Call::Rating);
+            thread_local! {
+                static TABLE: &'static crate::station_cmd::CommandServicesTable =
+                    Box::leak(Box::new(crate::station_cmd::CommandServicesTable {
+                        station: &crate::test_tables::STATION_WORLD,
+                        ..crate::test_tables::STATION_COMMANDS
+                    }));
+            }
+            TABLE.with(|t| std::ptr::from_ref(*t))
+        }
+        extern "C" fn play_sound(v: VehicleRef, sound: u16) {
+            call(Call::Sound(v.0.as_ptr().cast(), sound));
+        }
+        extern "C" fn other_end(tile: u32) -> u32 {
+            assert_eq!(tile, TUNNEL.0);
+            OTHER_END.0
+        }
+        extern "C" fn wormhole_bits(_: u32) -> TrackBits {
+            TrackBits::TRACK_BIT_NONE
+        }
+        extern "C" fn set_wormhole(tile: u32, reserved: bool) {
+            assert!(reserved);
+            call(Call::Wormhole(tile));
+        }
+        extern "C" fn diag_track(_: *mut std::ffi::c_void, _: Handle, dir: u8) -> u64 {
+            u64::from(dir & 1)
+        }
+
+        /// Tile (5, 5): plain rail with `TRACK_BIT_X`.
+        const RAIL: TileIndex = TileIndex(5 + 5 * 16);
+        /// Tile (8, 2), a rail tunnel entrance facing south-east, and its other end (8, 10).
+        const TUNNEL: TileIndex = TileIndex(8 + 2 * 16);
+        const OTHER_END: TileIndex = TileIndex(8 + 10 * 16);
+
+        /// The fixture's train and the tables of the collision bodies.
+        fn fixture() -> Fixture {
+            let mut f = Fixture::new(
+                LOCAL,
+                0,
+                &Services {
+                    disaster_sound: yes,
+                    map_max_y,
+                    other_tunnel_end: other_end,
+                    pbs_services,
+                    station_commands,
+                    station_catchment,
+                    ..SHARED
+                },
+                &crate::vehicle::VehicleServices {
+                    play_sound,
+                    tile_links,
+                    ..VEHICLE
+                },
+            );
+            // SAFETY: The fixture's leaked reservation table.
+            let reservation = unsafe { *f.leaves.reservation };
+            f.leaves = Box::leak(Box::new(Leaves {
+                physics: Box::leak(Box::new(crate::ground_vehicle::Services {
+                    base_crash,
+                    ..GROUND_VEHICLE
+                })),
+                reservation: Box::leak(Box::new(reservation::Leaves {
+                    bits_track,
+                    diag_track,
+                    shared: f.shared,
+                    ..reservation
+                })),
+                ..*f.leaves
+            }));
+            PBS.with(|p| {
+                p.set(Box::leak(Box::new(crate::pbs::PbsServices {
+                    shared: f.shared,
+                    try_track,
+                    wormhole_bits,
+                    set_wormhole,
+                    show_reservation: hidden,
+                    assertions: false,
+                    ..crate::test_tables::PBS
+                })));
+            });
+            // SAFETY: The fixture's map; no reference into it is live. `RAIL` is
+            // `MP_RAILWAY`, `RAIL_TILE_NORMAL` with `TRACK_BIT_X`; both tunnel ends are
+            // `MP_TUNNELBRIDGE` rail tunnels (m5 bit 7 clear, transport 0), facing
+            // `DIAGDIR_SE` and `DIAGDIR_NW`.
+            unsafe {
+                let tile = |t: TileIndex| &mut *f.base.add(t.0 as usize);
+                tile(RAIL).kind = crate::tile_type::TileType::MP_RAILWAY.0 << 4;
+                tile(RAIL).m5 = TrackBits::TRACK_BIT_X.0;
+                for (t, dir) in [(TUNNEL, 1), (OTHER_END, 3)] {
+                    tile(t).kind = crate::tile_type::TileType::MP_TUNNELBRIDGE.0 << 4;
+                    tile(t).m5 = dir;
+                }
+            }
+            f
+        }
+
+        /// A train part of the fixture's owner on `tile` at (`x`, `y`), eight units long,
+        /// on `track`, inserted into the tile index.
+        fn part(
+            f: &Fixture,
+            record: *mut crate::vehicle_base::VehicleRecord,
+            tile: TileIndex,
+            x: i32,
+            y: i32,
+            track: TrackBits,
+        ) -> Handle {
+            // SAFETY: The test's live record and its owners.
+            unsafe {
+                if (*record).train.is_null() {
+                    (*record).train = crate::train_state::openttd_rust_train_state_new();
+                    (*record).ground =
+                        Box::leak(Box::new(crate::ground_vehicle::GroundState::default()));
+                    (*record).first = record;
+                    (*record).owner = crate::company_type::CompanyID(LOCAL);
+                    (*record).direction = crate::direction_type::Direction::DIR_NE;
+                }
+                (*record).tile = tile;
+                (*record).x_pos = x;
+                (*record).y_pos = y;
+                (*(*record).ground).cache.cached_veh_length = 8;
+            }
+            let h = Handle::from_record(record.cast());
+            h.set_track(track);
+            // SAFETY: The test's live record; the fixture's map.
+            unsafe {
+                crate::vehicle::occupancy::update_position(
+                    f.game().vs,
+                    h.vehicle(),
+                    f.shared.map(),
+                );
+            }
+            h
+        }
+        fn new_part(f: &Fixture, tile: TileIndex, x: i32, y: i32, track: TrackBits) -> Handle {
+            part(
+                f,
+                crate::vehicle_base::openttd_rust_vehicle_record_new(
+                    std::ptr::null_mut(),
+                    VehicleType::VEH_TRAIN,
+                ),
+                tile,
+                x,
+                y,
+                track,
+            )
+        }
+        /// `STR_NEWS_TRAIN_CRASH` with `victims`, `NewsType::Accident` and the tile.
+        fn crash_news(victims: u64, tile: TileIndex) -> Effect {
+            Effect::News {
+                headline: encoded(STR_NEWS_TRAIN_CRASH.0, &[Param::N(victims)]),
+                r#type: NewsType::Accident,
+                style: NewsStyle::Thin,
+                flags: NewsFlags::new(&[NewsFlag::NoTransparency, NewsFlag::Shaded]),
+                ref1: NewsReference::Tile(tile),
+                ref2: NewsReference::None,
+                data: None,
+                advice_type: AdviceType::Invalid,
+            }
+        }
+
+        /// Outside a wormhole the body walks the vehicles near the train to the end. Each
+        /// colliding train crashes `v` first (`TrainCrashed(t)`, then `TrainCrashed(coll)`),
+        /// and the second collision finds `v` already crashed; a train beyond the walk's
+        /// distance is not visited. 4 + 4 + 0 + 4 victims give the headline, then the
+        /// rating change and then the sound.
+        #[test]
+        fn near_walk_crashes_each_colliding_train_and_reports_the_victims() {
+            if crate::services_assert::isolate_test_check(
+                "train::tests::bodies::collision::near_walk_crashes_each_colliding_train_and_reports_the_victims",
+                record_failure,
+            ) {
+                return;
+            }
+            let f = fixture();
+            let v = part(&f, f.record, RAIL, 88, 88, TrackBits::TRACK_BIT_X);
+            let first = new_part(&f, RAIL, 90, 88, TrackBits::TRACK_BIT_X);
+            let second = new_part(&f, RAIL, 88, 86, TrackBits::TRACK_BIT_X);
+            let _far = new_part(
+                &f,
+                TileIndex(12 + 12 * 16),
+                200,
+                200,
+                TrackBits::TRACK_BIT_X,
+            );
+            take();
+            CALLS.with(|c| c.borrow_mut().clear());
+            assert!(f.game().check_train_collision(v));
+            let calls = CALLS.with(RefCell::take);
+            let crashes: Vec<_> = calls
+                .iter()
+                .filter_map(|c| match c {
+                    Call::Crash(r) => Some(*r),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(crashes.len(), 3, "{calls:?}");
+            assert_eq!(crashes[0], v.record.cast());
+            let mut victims_hit = crashes[1..].to_vec();
+            victims_hit.sort();
+            let mut expected = vec![first.record.cast(), second.record.cast()];
+            expected.sort();
+            assert_eq!(victims_hit, expected);
+            assert_eq!(
+                &calls[3..],
+                [
+                    Call::Rating,
+                    Call::Sound(
+                        v.record.cast(),
+                        SoundID::from(SoundFx::SND_13_TRAIN_COLLISION).0
+                    )
+                ]
+            );
+            let news: Vec<_> = take()
+                .into_iter()
+                .filter(|e| matches!(e, Effect::News { .. }))
+                .collect();
+            assert_eq!(news, vec![crash_news(12, RAIL)]);
+            assert_eq!(FAILED.with(Cell::get), 0);
+        }
+
+        /// In a wormhole the body walks the vehicles on the train's tile and then those on
+        /// the other end, each to the end: the train itself is skipped as its own wagon,
+        /// the part on the entrance crashes before the one on the other end. Each
+        /// `TrainCrashed` re-reserves its part's wormhole, including the second one of
+        /// `v`, which finds it already crashed.
+        #[test]
+        fn wormhole_walk_visits_the_tile_then_the_other_end() {
+            if crate::services_assert::isolate_test_check(
+                "train::tests::bodies::collision::wormhole_walk_visits_the_tile_then_the_other_end",
+                record_failure,
+            ) {
+                return;
+            }
+            let f = fixture();
+            let v = part(&f, f.record, TUNNEL, 136, 40, TrackBits::TRACK_BIT_WORMHOLE);
+            let entrance = new_part(&f, TUNNEL, 138, 40, TrackBits::TRACK_BIT_WORMHOLE);
+            let other = new_part(&f, OTHER_END, 136, 42, TrackBits::TRACK_BIT_WORMHOLE);
+            take();
+            CALLS.with(|c| c.borrow_mut().clear());
+            assert!(f.game().check_train_collision(v));
+            let calls = CALLS.with(RefCell::take);
+            assert_eq!(
+                calls,
+                [
+                    Call::Crash(v.record.cast()),
+                    Call::Wormhole(TUNNEL.0),
+                    Call::Crash(entrance.record.cast()),
+                    Call::Wormhole(TUNNEL.0),
+                    // The second collision: `TrainCrashed(v)` crashes nothing but
+                    // re-reserves `v`'s wormhole.
+                    Call::Wormhole(TUNNEL.0),
+                    Call::Crash(other.record.cast()),
+                    Call::Wormhole(OTHER_END.0),
+                    Call::Rating,
+                    Call::Sound(
+                        v.record.cast(),
+                        SoundID::from(SoundFx::SND_13_TRAIN_COLLISION).0
+                    ),
+                ]
+            );
+            let news: Vec<_> = take()
+                .into_iter()
+                .filter(|e| matches!(e, Effect::News { .. }))
+                .collect();
+            assert_eq!(news, vec![crash_news(12, TUNNEL)]);
+            assert_eq!(FAILED.with(Cell::get), 0);
         }
     }
 }
