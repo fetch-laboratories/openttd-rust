@@ -11,8 +11,8 @@ import subprocess
 import sys
 import time
 import uuid
-from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass
+from collections.abc import Callable, Collection, Mapping
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
@@ -833,35 +833,79 @@ def local_requests(repository: str, pr: int, head: str) -> list[Candidate]:
     return found
 
 
-def dispatched_runs(
-    repository: str, pr: int, opened: str, head: str
-) -> list[DispatchedRun]:
-    """Requested runs for the PR head, found on GitHub by their identifier, which
-    ends with the head (#922): every dispatched run since the PR opened at
-    `opened`, paginated."""
-    since = quote(">=" + opened)
-    pages = json.loads(
+# GitHub's run listing returns at most this many runs of one filtered search.
+SEARCH_LIMIT = 1000
+
+
+def utc_stamp(moment: datetime) -> str:
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class RunsPage(TypedDict):
+    """One page of the workflow runs listing."""
+
+    total_count: NotRequired[int]
+    workflow_runs: list[ci_log.Run]
+
+
+def workflow_runs(
+    repository: str, event: str, opened: str, until: datetime | None = None
+) -> list[ci_log.Run]:
+    """Every ci-request.yml run of `event` created from `opened` to `until` (now),
+    paginated. A search GitHub cuts at its limit is split in two, so a PR open
+    across more runs than that is read back to its opening."""
+    start = datetime.fromisoformat(opened.replace("Z", "+00:00"))
+    end = until or datetime.now(timezone.utc)
+    span = quote(f"{utc_stamp(start)}..{utc_stamp(end)}")
+    pages: list[RunsPage] = json.loads(
         gh(
             "api",
             "--paginate",
             "--slurp",
             f"repos/{repository}/actions/workflows/{WORKFLOW}/runs"
-            f"?event=workflow_dispatch&created={since}&per_page=100",
+            f"?event={event}&created={span}&per_page=100",
         )
     )
+    runs = [run for page in pages for run in page["workflow_runs"]]
+    total = max((page.get("total_count", 0) for page in pages), default=0)
+    if total <= len(runs) or (end - start).total_seconds() < 2:
+        return runs
+    middle = start + (end - start) / 2
+    found = {
+        run["id"]: run
+        for run in workflow_runs(repository, event, utc_stamp(middle), end)
+        + workflow_runs(repository, event, opened, middle)
+    }
+    return list(found.values())
+
+
+def pr_dispatched_runs(repository: str, pr: int, opened: str) -> list[DispatchedRun]:
+    """The PR's requested runs on GitHub, found by their identifier, which ends with
+    the commit they test (#922): every dispatched run since the PR opened at
+    `opened`."""
     found = []
-    for run in (run for page in pages for run in page["workflow_runs"]):
+    for run in workflow_runs(repository, "workflow_dispatch", opened):
         title = (run.get("display_title") or "").split()
         if (
             len(title) == 5
             and title[0] == "CI"
             and title[1] in PROFILES
             and title[2:4] == ["PR", str(pr)]
-            and title[4].endswith(f"-{head}")
             and run.get("head_branch") == PROTECTED_REF
         ):
             found.append(DispatchedRun(run, title[1], title[4]))
     return found
+
+
+def dispatched_runs(
+    repository: str, pr: int, opened: str, head: str
+) -> list[DispatchedRun]:
+    """The PR's requested runs at `head`."""
+    return [
+        dispatched
+        for dispatched in pr_dispatched_runs(repository, pr, opened)
+        if dispatched.request.endswith(f"-{head}")
+    ]
 
 
 def remote_requests(
@@ -1124,44 +1168,124 @@ def latest_quick(repository: str, head: str) -> CheckRun | None:
     return runs[-1] if runs else None
 
 
-def bootstrap_runs(repository: str, head: str) -> list[ci_log.Run]:
-    """The head's ci:full bootstrap label runs of ci-request.yml."""
-    path = f"actions/workflows/{WORKFLOW}/runs?per_page=100&event="
-    # Every label starts a run; only a ci:full bootstrap runs its plan.
+def bootstrap_runs(
+    repository: str, pr: int, opened: str, commits: Collection[str]
+) -> list[ci_log.Run]:
+    """The PR's ci:full bootstrap label runs of ci-request.yml at `commits`, since
+    the PR opened at `opened`, paginated.
+
+    Every label starts a run; only a ci:full bootstrap runs its plan. A run whose
+    plan has not been decided yet may be a bootstrap, so an unfinished run counts
+    until its plan job is skipped.
+    """
     return [
         run
-        for run in api(repository, path + f"pull_request&head_sha={head}")[
-            "workflow_runs"
-        ]
-        if any(
-            job["name"] == "plan" and job["conclusion"] != "skipped"
-            for job in api(repository, f"actions/runs/{run['id']}/jobs")["jobs"]
-        )
+        for run in workflow_runs(repository, "pull_request", opened)
+        if runs_for(run, pr) and run.get("head_sha") in commits
+        if is_bootstrap(repository, run)
     ]
 
 
-def latest_request(repository: str, pr: int, head: str) -> dict | None:
-    """The newest requested or bootstrap run of ci-request.yml for this PR head."""
-    path = f"actions/workflows/{WORKFLOW}/runs?per_page=100&event="
-    dispatched = api(repository, path + "workflow_dispatch")["workflow_runs"]
-    named = [
-        run
-        for run in dispatched
-        if (title := (run.get("display_title") or "").split())[2:4] == ["PR", str(pr)]
-        and title[-1].endswith(f"-{head}")
+def runs_for(run: ci_log.Run, pr: int) -> bool:
+    """Whether a ci-request.yml run's name, `CI PROFILE PR N ...`, names PR `pr`."""
+    return (run.get("display_title") or "").split()[2:4] == ["PR", str(pr)]
+
+
+def is_bootstrap(repository: str, run: ci_log.Run) -> bool:
+    """Whether a label run of ci-request.yml is, or may yet be, a bootstrap: its
+    plan ran, or it has not finished and its plan is not yet skipped."""
+    plans = [
+        job
+        for job in api(repository, f"actions/runs/{run['id']}/jobs")["jobs"]
+        if job["name"] == "plan"
     ]
-    labeled = bootstrap_runs(repository, head)
-    # Requests made before #922 carry no head in their identifier; their records do.
+    return any(job["conclusion"] != "skipped" for job in plans) or (
+        not plans and run["status"] != "completed"
+    )
+
+
+def pr_commits(repository: str, head: str) -> list[str]:
+    """The PR's own commits, oldest first and ending at `head`: those of
+    `compare/BASE...HEAD`. A comparison that omits commits counts the head only."""
+    compare = api(repository, f"compare/{PROTECTED_REF}...{head}")
+    commits = [row["sha"] for row in compare.get("commits", [])]
+    if not commits or compare.get("total_commits", 0) > len(commits):
+        return [head]
+    return commits if commits[-1] == head else [*commits, head]
+
+
+@dataclass
+class TestedRun:
+    """A requested or bootstrap run of the PR, with the commit it tested."""
+
+    profile: str  # a requested profile, or "full bootstrap"
+    commit: str
+    run: ci_log.Run
+
+
+@dataclass
+class PrRuns:
+    """One read of the PR's commits and of its requested runs on them, which
+    `state` shows and `enqueue`'s checks judge."""
+
+    commits: list[str]
+    runs: list[TestedRun]
+    unread: list[str] = field(default_factory=list)
+
+
+def recorded_runs(
+    repository: str, pr: int, commits: list[str], found: dict[int, TestedRun]
+) -> list[str]:
+    """Add to `found` the runs this checkout's request records name on `commits`
+    that the listings did not; return those GitHub could not return."""
+    # Requests made before #922 carry no commit in their identifier; their records
+    # do. A recorded label run is judged as a listed one, by what GitHub says it
+    # tested.
+    unread = []
     for record_path in REQUESTS.glob("*.json"):
-        record = json.loads(record_path.read_text())
-        if (
-            record.get("pr") == pr
-            and record.get("head") == head
-            and record.get("run_id")
-        ):
-            named.append(api(repository, f"actions/runs/{record['run_id']}"))
-    runs = named + labeled
-    return max(runs, key=lambda run: run["created_at"]) if runs else None
+        record = cast(RequestRecord, json.loads(record_path.read_text()))
+        run_id = record.get("run_id")
+        if record.get("pr") != pr or record.get("head") not in commits or not run_id:
+            continue
+        if run_id in found:
+            continue
+        try:
+            run = cast(ci_log.Run, api(repository, f"actions/runs/{run_id}"))
+        except subprocess.CalledProcessError:
+            unread.append(f"run {run_id} of {record_path.name}")
+            continue
+        if not runs_for(run, pr):
+            continue
+        if run.get("event") == "pull_request":
+            commit = run.get("head_sha", "")
+            if commit in commits and is_bootstrap(repository, run):
+                found[run_id] = TestedRun("full bootstrap", commit, run)
+        else:
+            profile = record.get("profile") or "requested"
+            found[run_id] = TestedRun(profile, record["head"], run)
+    return unread
+
+
+def pr_requested_runs(
+    repository: str, pr: int, opened: str, commits: list[str]
+) -> PrRuns:
+    """The PR's requested and bootstrap runs on its `commits`, oldest first by
+    `(created_at, id)`: the one order `enqueue` and `state` read. A recorded
+    run GitHub cannot return is named in `unread`."""
+    found: dict[int, TestedRun] = {}
+    for dispatched in pr_dispatched_runs(repository, pr, opened):
+        commit = dispatched.request.rpartition("-")[2]
+        if commit in commits:
+            found[dispatched.run["id"]] = TestedRun(
+                dispatched.profile, commit, dispatched.run
+            )
+    for run in bootstrap_runs(repository, pr, opened, commits):
+        found[run["id"]] = TestedRun("full bootstrap", run["head_sha"], run)
+    unread = recorded_runs(repository, pr, commits, found)
+    runs = sorted(
+        found.values(), key=lambda tested: (tested.run["created_at"], tested.run["id"])
+    )
+    return PrRuns(commits, runs, unread)
 
 
 def ejected_head(repository: str, run: QueueRun) -> str:
@@ -1230,7 +1354,58 @@ def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None
     print(f"Queueing PR #{pr} again unchanged after {url}; logged in {log}")
 
 
-def enqueue_checks(repository: str, pr: int, pull: dict) -> str:
+def read_pr_runs(repository: str, pr: int, opened: str, head: str) -> PrRuns:
+    return pr_requested_runs(repository, pr, opened, pr_commits(repository, head))
+
+
+def gate_run(repository: str, pr: int, head: str, read: PrRuns) -> TestedRun:
+    """The run `enqueue` reads: the PR's newest requested or bootstrap run on any of
+    its own commits, which must have succeeded. A workflow change also needs a
+    green bootstrap Full at the head itself (root-workflow.md, CI administration),
+    and its newest run there."""
+    if read.unread:
+        raise ValueError(
+            f"PR #{pr}'s request records name runs GitHub did not return: "
+            + ", ".join(read.unread)
+        )
+    runs = read.runs
+    if not runs:
+        raise ValueError(
+            f"PR #{pr} has no requested run on its commits up to {head}; "
+            f"run ci.py request {pr} --profile native"
+        )
+    newest = runs[-1]
+    run = newest.run
+    if run["conclusion"] != "success":
+        raise ValueError(
+            f"The newest requested run of PR #{pr}, {newest.profile} at "
+            f"{newest.commit}, is not green: "
+            f"{run['status']}/{run['conclusion']}: {run['html_url']}"
+        )
+    if changes_definitions(repository, pr):
+        if newest.commit != head:
+            raise ValueError(
+                f"PR #{pr} changes .github/workflows/, so its passing run must be at "
+                f"its head {head}; the newest, {newest.profile} {run['html_url']}, "
+                f"ran at {newest.commit}"
+            )
+        bootstraps = [
+            tested.run
+            for tested in runs
+            if tested.profile == "full bootstrap" and tested.commit == head
+        ]
+        if not bootstraps or bootstraps[-1]["conclusion"] != "success":
+            state = bootstraps and bootstraps[-1]["html_url"]
+            raise ValueError(
+                f"PR #{pr} changes .github/workflows/ and needs root's green "
+                f"bootstrap Full at its head {head}: {state or 'none'}"
+            )
+    return newest
+
+
+def enqueue_checks(
+    repository: str, pr: int, pull: dict, read: PrRuns | None = None
+) -> str:
     """enqueue's checks before its requeue gate, read-only: return the head, or
     raise naming the first that fails."""
     head = current_head(pull)
@@ -1248,13 +1423,9 @@ def enqueue_checks(repository: str, pr: int, pull: dict) -> str:
             quick and f"{quick['status']}/{quick['conclusion']}: {quick['html_url']}"
         )
         raise ValueError(f"{QUICK} at {head} is not green: {state or 'no run'}")
-    run = latest_request(repository, pr, head)
-    if not run or run["conclusion"] != "success":
-        state = run and f"{run['status']}/{run['conclusion']}: {run['html_url']}"
-        raise ValueError(
-            f"The latest requested run at {head} is not green: {state or 'none; '}"
-            + ("" if run else f"run ci.py request {pr} --profile native")
-        )
+    if read is None:
+        read = read_pr_runs(repository, pr, pull["created_at"], head)
+    gate_run(repository, pr, head, read)
     missing_acceptances(repository, pr, pull, head)
     return head
 
@@ -1372,11 +1543,15 @@ def enqueue(args: argparse.Namespace) -> str:
     raise ValueError(f"PR #{args.pr} is neither queued nor armed for auto-merge")
 
 
-def enqueue_assessment(repository: str, pr: int, pull: dict) -> str:
+def enqueue_assessment(
+    repository: str, pr: int, pull: dict, read: PrRuns | Exception
+) -> str:
     """What enqueue's current checks say of the PR, without queueing or logging:
     `pass` or `blocked: <reason>`. Passing them is not permission to merge."""
     try:
-        head = enqueue_checks(repository, pr, pull)
+        if isinstance(read, Exception):
+            raise read
+        head = enqueue_checks(repository, pr, pull, read)
         requeue_gate(repository, pr, head, None)
     except (ValueError, subprocess.CalledProcessError) as error:
         return f"blocked: {error}"
@@ -1406,6 +1581,17 @@ class QueueFact:
 
 
 @dataclass
+class NewestRequest:
+    """The PR's newest requested or bootstrap run on any of its commits, which
+    `enqueue` reads, and how many of the PR's commits follow the one it tested."""
+
+    profile: str
+    commit: str
+    behind: int
+    run: RunFact
+
+
+@dataclass
 class PullState:
     """One PR's state as `state` shows it, all read at one head."""
 
@@ -1418,6 +1604,7 @@ class PullState:
     mergeable: str
     quick: RunFact | None
     requests: dict[str, RunFact]
+    newest_request: NewestRequest | None
     queue: QueueFact
     reports: list[review_report.ReviewReport]
     enqueue_checks: str
@@ -1432,18 +1619,20 @@ def run_fact(run: Mapping[str, Any]) -> RunFact:
     )
 
 
-def requests_at_head(
-    repository: str, pr: int, opened: str, head: str
-) -> dict[str, RunFact]:
+def requests_at_head(runs: list[TestedRun], head: str) -> dict[str, RunFact]:
     """The newest requested run at the head for each profile, bootstrap apart."""
-    runs = [(d.profile, d.run) for d in dispatched_runs(repository, pr, opened, head)]
-    runs += [("full bootstrap", run) for run in bootstrap_runs(repository, head)]
-    newest: dict[str, ci_log.Run] = {}
-    for profile, run in sorted(
-        runs, key=lambda item: (item[1]["created_at"], item[1]["id"])
-    ):
-        newest[profile] = run
+    newest = {tested.profile: tested.run for tested in runs if tested.commit == head}
     return {profile: run_fact(run) for profile, run in sorted(newest.items())}
+
+
+def newest_on_commits(
+    runs: list[TestedRun], commits: list[str]
+) -> NewestRequest | None:
+    if not runs:
+        return None
+    newest = runs[-1]
+    behind = len(commits) - 1 - commits.index(newest.commit)
+    return NewestRequest(newest.profile, newest.commit, behind, run_fact(newest.run))
 
 
 def queue_fact(repository: str, pr: int) -> QueueFact:
@@ -1474,6 +1663,13 @@ def pull_state(repository: str, pr: int) -> PullState:
     reports = review_report.review_reports(comments, reviews, head)
     reports.sort(key=lambda report: report.reported_at, reverse=True)
     quick = latest_quick(repository, head)
+    # One read for the view and the checks; a failed read blocks only the checks.
+    read: PrRuns | Exception
+    try:
+        read = read_pr_runs(repository, pr, pull["created_at"], head)
+    except (ValueError, subprocess.CalledProcessError) as error:
+        read = error
+    shown = read if isinstance(read, PrRuns) else PrRuns([head], [])
     facts = PullState(
         repository=repository,
         number=pr,
@@ -1483,10 +1679,11 @@ def pull_state(repository: str, pr: int) -> PullState:
         head=head,
         mergeable=mergeable_word(pull),
         quick=run_fact(quick) if quick else None,
-        requests=requests_at_head(repository, pr, pull["created_at"], head),
+        requests=requests_at_head(shown.runs, head),
+        newest_request=newest_on_commits(shown.runs, shown.commits),
         queue=queue_fact(repository, pr),
         reports=reports,
-        enqueue_checks=enqueue_assessment(repository, pr, pull),
+        enqueue_checks=enqueue_assessment(repository, pr, pull, read),
     )
     end = api(repository, f"pulls/{pr}")["head"]["sha"]
     if end != head:
@@ -1525,6 +1722,14 @@ def state_lines(facts: PullState) -> list[str]:
     lines += [run_line(f"{p} at head", fact) for p, fact in requests.items()]
     if not requests:
         lines.append("Requested runs at head: none")
+    if (newest := facts.newest_request) and newest.behind:
+        lines.append(
+            run_line(
+                f"Newest requested run, {newest.profile} at {newest.commit[:10]}, "
+                f"{newest.behind} commit(s) below head",
+                newest.run,
+            )
+        )
     lines.append(f"Queue: {facts.queue.text}")
     reports = facts.reports
     lines.append(
