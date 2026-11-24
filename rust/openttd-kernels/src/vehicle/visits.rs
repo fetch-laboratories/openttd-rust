@@ -1111,6 +1111,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
 
     let vs = s.vehicles();
     let index = v.index(s.resolver());
+    let view = WindowNumber::from(index);
     match v.vehicle_type() {
         VehicleType::VEH_TRAIN => {
             let t = crate::train::Handle::from_vehicle(v);
@@ -1154,7 +1155,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
         }
         _ => not_reached(),
     }
-    set_window_dirty(WindowClass::WC_VEHICLE_VIEW, WindowNumber::from(index));
+    set_window_dirty(WindowClass::WC_VEHICLE_VIEW, view);
 
     if v.vehicle_type() != VehicleType::VEH_TRAIN {
         /* Trains update the vehicle list when the first unit enters the depot and calls VehicleEnterDepot() when the last unit enters.
@@ -1181,15 +1182,10 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     unsafe { crate::newgrf_vehicle::trigger(vs, v, crate::newgrf_vehicle::Trigger::Depot) };
     (s.maintenance().mark_dirty)(v);
 
-    invalidate_window_data(
-        WindowClass::WC_VEHICLE_VIEW,
-        WindowNumber::from(index),
-        0,
-        false,
-    );
+    invalidate_window_data(WindowClass::WC_VEHICLE_VIEW, view, 0, false);
 
     if v.current_order().is_type(OrderType::OT_GOTO_DEPOT) {
-        set_window_dirty(WindowClass::WC_VEHICLE_VIEW, WindowNumber::from(index));
+        set_window_dirty(WindowClass::WC_VEHICLE_VIEW, view);
 
         let o = s.orders();
         let real_order = o.get(v, v.cur_real_order_index());
