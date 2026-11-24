@@ -222,14 +222,13 @@ static void AircraftPhaseBoundary()
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	v.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	v.tile_links = [](OpenTTDVehicle *shell) noexcept { return &aircraft_probe.links[shell == aircraft_probe.vehicle.handle ? 0 : 1]; };
-	v.map_log_x = []() noexcept { return uint32_t{6}; };
 	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.record.x_pos == 1 && p.record.y_pos == 0 && p.record.progress == 1);
 	p.record.subtype = 2; p.record.z_pos = 1;
 	openttd_rust_aircraft_position(&leaves, p.vehicle, 1, 0, 1);
 	CHECK(p.moves == 2 && p.record.z_pos == 25);
-	openttd_rust_occupancy_update(&v, p.vehicle.handle, true);
-	openttd_rust_occupancy_update(&v, &aircraft_probe.shadow, true);
+	openttd_rust_occupancy_update(&v, nullptr, p.vehicle.handle, true);
+	openttd_rust_occupancy_update(&v, nullptr, &aircraft_probe.shadow, true);
 	std::printf("aircraft rotor/order/loading phases and post-dirty motion mutation passed\n");
 }
 

@@ -27,10 +27,10 @@ impl Services {
     /// Caller retains the live native shell through this synchronous update.
     pub(crate) unsafe fn position(&self, v: *mut ()) {
         unsafe {
-            crate::vehicle::occupancy::update(
+            crate::vehicle::occupancy::update_position(
                 self.refit.common.vehicles,
                 super::vehicle_ref(v, self.refit.common.vehicles),
-                false,
+                self.refit.common.base.shared.map(),
             );
         }
     }

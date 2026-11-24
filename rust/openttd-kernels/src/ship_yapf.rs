@@ -758,9 +758,11 @@ impl<'v> Yapf<'v> for CYapfShip<'v> {
         if world.is_docking_tile(tile) {
             /* Check docking tile for occupancy. */
             let mut count: u32 = 0;
-            crate::movement::table(v.s)
-                .vehicle()
-                .for_each_on_tile(tile.0, |other| {
+            crate::vehicle_func::vehicles_on_tile(
+                crate::movement::table(v.s).vehicle(),
+                v.s.map(),
+                tile,
+                |other| {
                     /* Ignore other vehicles (aircraft) and ships inside depot. */
                     if other.vehicle_type() == VehicleType::VEH_SHIP
                         && !other
@@ -769,7 +771,8 @@ impl<'v> Yapf<'v> for CYapfShip<'v> {
                     {
                         count += 1;
                     }
-                });
+                },
+            );
             c = c.wrapping_add_unsigned(
                 count
                     .wrapping_mul(3)

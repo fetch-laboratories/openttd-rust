@@ -95,8 +95,6 @@ pub struct VehicleServices {
     /// Resolve a legacy opaque native shell to its canonical record.
     pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
     pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
-    pub map_log_x: extern "C" fn() -> u32,
-    pub assertions: bool,
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
     /// `Vehicle::UpdateViewport(true)`.
     pub base_viewport: extern "C" fn(VehicleRef),
@@ -203,7 +201,9 @@ pub(crate) fn get_new_vehicle_pos(
 
     let direction = usize::from(v.direction().0);
     let x = v.x_pos().wrapping_add(i32::from(DELTA_COORD[direction]));
-    let y = v.y_pos().wrapping_add(i32::from(DELTA_COORD[direction + 8]));
+    let y = v
+        .y_pos()
+        .wrapping_add(i32::from(DELTA_COORD[direction + 8]));
 
     crate::vehicle_func::GetNewVehiclePosResult {
         x,
@@ -231,35 +231,11 @@ pub struct GroundServices {
     pub physics: &'static crate::ground_vehicle::Services,
 }
 
-/// `GetAdvanceDistance()`.
-#[must_use]
-pub fn advance_distance(direction: u8) -> i32 {
-    if direction & 1 != 0 { 192 } else { 256 }
-}
-
-impl VehicleServices {
-    /// Visit the live hash chain in source order. The callback may reenter owners
-    /// but cannot delete the current shell. No owner reference spans a callback.
-    #[allow(unsafe_code)]
-    pub(crate) fn for_each_on_tile<F: FnMut(VehicleRef)>(&self, tile: u32, mut visit: F) {
-        // SAFETY: Caller preserves the current shell; no index borrow spans visit.
-        unsafe {
-            let mut it = occupancy::OnTile::new(self, tile);
-            while let Some(v) = it.get() {
-                visit(v);
-                it.advance(self);
-            }
-        }
-    }
-}
-
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
         record_from_shell,
         tile_links,
-        map_log_x,
-        assertions,
         pathfinding_result,
         base_viewport,
         newgrf,
@@ -295,69 +271,8 @@ crate::abi::layouts! {
     };
 }
 
-/// `Vehicle::GetAdvanceSpeed`, with the source unsigned multiplication.
-pub const fn advance_speed(speed: u32) -> u32 {
-    speed.wrapping_mul(3) / 4
-}
-
-impl VehicleServices {
-    /// Live traversal under the same current-shell lifetime contract as the
-    /// native iterators. No owner borrow spans a potentially reentrant visitor.
-    #[allow(unsafe_code)]
-    pub(crate) fn any_on_tile(&self, tile: u32, mut visit: impl FnMut(VehicleRef) -> bool) -> bool {
-        unsafe {
-            let mut it = occupancy::OnTile::new(self, tile);
-            while let Some(v) = it.get() {
-                if visit(v) {
-                    return true;
-                }
-                it.advance(self);
-            }
-        }
-        false
-    }
-    #[allow(unsafe_code)]
-    #[inline]
-    pub(crate) fn any_near(
-        &self,
-        x: i32,
-        y: i32,
-        distance: u32,
-        mut visit: impl FnMut(VehicleRef) -> bool,
-    ) -> bool {
-        unsafe {
-            let mut it = occupancy::Near::new(self, x, y, distance);
-            while let Some(v) = it.get() {
-                if visit(v) {
-                    return true;
-                }
-                it.advance(self);
-            }
-        }
-        false
-    }
-}
-
 #[allow(unsafe_code)]
 impl VehicleServices {
-    /// Visit every vehicle near `(x, y)` in hash order, as a `VehiclesNearTileXY` range loop.
-    /// The callback may reenter owners but cannot delete the current shell.
-    pub(crate) fn for_each_near<F: FnMut(VehicleRef)>(
-        &self,
-        x: i32,
-        y: i32,
-        distance: u32,
-        mut visit: F,
-    ) {
-        // SAFETY: Caller preserves the current shell; no index borrow spans visit.
-        unsafe {
-            let mut it = occupancy::Near::new(self, x, y, distance);
-            while let Some(v) = it.get() {
-                visit(v);
-                it.advance(self);
-            }
-        }
-    }
     pub(crate) fn unknown_callback_result(
         &self,
         engine: EngineRef,
@@ -445,6 +360,5 @@ mod tests {
             (map.tile_x(TileIndex(0x1234)), map.tile_y(TileIndex(0x1234))),
             (0x34, 0x12)
         );
-        assert_eq!(advance_distance(3), 192);
     }
 }

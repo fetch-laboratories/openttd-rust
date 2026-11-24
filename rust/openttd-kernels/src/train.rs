@@ -552,7 +552,13 @@ impl<'a> Game<'a> {
     /// `UpdateVehicleTileHash` of this shell, which stays in place.
     fn update_occupancy(&self, id: Handle) {
         // SAFETY: The controller retains this live shell through the index update.
-        unsafe { crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false) };
+        unsafe {
+            crate::vehicle::occupancy::update_position(
+                self.vs(),
+                id.vehicle(),
+                self.services.map(),
+            );
+        };
     }
     fn handle_breakdown(&self, id: Handle) -> bool {
         // SAFETY: The live train and unborrowed owner satisfy `vehicle_handle_breakdown`.
@@ -573,14 +579,14 @@ impl<'a> Game<'a> {
     }
     fn visit_tile<F: FnMut(Handle) -> bool>(&self, tile: u32, mut visitor: F) -> bool {
         let vs = self.vs();
-        vs.any_on_tile(tile, |v| {
+        crate::vehicle_func::has_vehicle_on_tile_raw(vs, self.services.map(), tile, |v| {
             v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
                 && visitor(crate::train::Handle::from_vehicle(v))
         })
     }
     fn visit_near<F: FnMut(Handle) -> bool>(&self, x: i32, y: i32, mut visitor: F) -> bool {
         let vs = self.vs();
-        vs.any_near(x, y, 7, |v| {
+        crate::vehicle_func::has_vehicle_near_tile_xy(vs, x, y, 7, |v| {
             v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
                 && visitor(crate::train::Handle::from_vehicle(v))
         })

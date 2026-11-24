@@ -378,7 +378,12 @@ impl<'a> Signals<'a> {
     fn train_on_tile(&self, tile: TileIndex, flags: &mut SigFlags) {
         let vehicles = self.vehicles();
         if !flags.test(SigFlag::TRAIN)
-            && vehicles.any_on_tile(tile.0, |v| is_train_and_not_in_depot(v))
+            && crate::vehicle_func::has_vehicle_on_tile(
+                vehicles,
+                self.shared.map(),
+                tile,
+                is_train_and_not_in_depot,
+            )
         {
             flags.set(SigFlag::TRAIN);
             crate::witness::hit(crate::witness::SIGNAL_TRAIN);
@@ -488,6 +493,7 @@ impl<'a> Signals<'a> {
                             if !flags.test(SigFlag::TRAIN)
                                 && crate::vehicle::occupancy::ensure_no_train_on_track_bits(
                                     self.vehicles(),
+                                    self.shared.map(),
                                     tile,
                                     tracks,
                                 )

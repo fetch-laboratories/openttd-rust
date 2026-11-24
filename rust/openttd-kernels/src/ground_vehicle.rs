@@ -1355,7 +1355,7 @@ pub(crate) fn do_update_speed(v: VehicleRef, accel: u32, min_speed: i32, max_spe
         .max(min_speed) as u32;
     v.set_cur_speed(spd as u16);
 
-    let mut scaled_spd = crate::vehicle::advance_speed(spd) as i32;
+    let mut scaled_spd = VehicleRef::get_advance_speed(spd) as i32;
 
     scaled_spd = scaled_spd.wrapping_add(i32::from(v.progress()));
     v.set_progress(0); // set later in *Handler or *Controller

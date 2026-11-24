@@ -73,16 +73,6 @@ unsafe fn handle(shell: Shell) -> VehicleRef {
 unsafe fn next(s: &VehicleServices, shell: Shell) -> Shell {
     unsafe { (*((s.tile_links)(handle(shell)))).next }
 }
-/// Complete `UpdateVehicleTileHash`, including stale next/prev after removal.
-#[inline]
-pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
-    if remove {
-        unsafe { update_vehicle_tile_hash(s, v, (s.tile_links)(v), ptr::null_mut()) };
-    } else {
-        let map = Map::from_log_x((s.map_log_x)());
-        unsafe { update_position(s, v, map) };
-    }
-}
 /// The caller's dimensions cover only a serialized synchronous no-reset/no-yield
 /// interval. No map storage is exposed. Links resolve once here; native link access neither reenters nor mutates state.
 #[inline]
@@ -157,14 +147,20 @@ pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::Sche
         );
     }
 }
+/// Complete `UpdateVehicleTileHash`, including stale next/prev after removal. `shared`
+/// gives the map dimensions an insertion hashes the vehicle's tile with.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_update(
     s: &VehicleServices,
+    shared: *const crate::services::Services,
     v: VehicleRef,
     remove: bool,
 ) {
-    unsafe {
-        update(s, v, remove);
+    if remove {
+        unsafe { update_vehicle_tile_hash(s, v, (s.tile_links)(v), ptr::null_mut()) };
+    } else {
+        // SAFETY: An insertion's caller passes the process-lifetime shared table.
+        unsafe { update_position(s, v, (*shared).map()) };
     }
 }
 /// Iterate over all vehicles on a tile; no reference into index storage is retained.
@@ -177,8 +173,7 @@ pub struct OnTile {
 }
 impl OnTile {
     /// Iterator constructor. Find first vehicle on tile.
-    pub(crate) unsafe fn new(s: &VehicleServices, tile: u32) -> Self {
-        let map = Map::from_log_x((s.map_log_x)());
+    pub(crate) unsafe fn new(s: &VehicleServices, map: Map, tile: u32) -> Self {
         let mut it = Self {
             tile,
             current: unsafe { *get_tile_hash_for_tile(map, TileIndex(tile)) },
@@ -210,8 +205,12 @@ impl OnTile {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_occupancy_on_tile(s: &VehicleServices, tile: u32) -> OnTile {
-    unsafe { OnTile::new(s, tile) }
+pub unsafe extern "C" fn openttd_rust_occupancy_on_tile(
+    s: &VehicleServices,
+    shared: &crate::services::Services,
+    tile: u32,
+) -> OnTile {
+    unsafe { OnTile::new(s, shared.map(), tile) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_on_advance(s: &VehicleServices, it: &mut OnTile) {
@@ -329,9 +328,7 @@ impl Near {
     pub(crate) unsafe fn advance(&mut self, s: &VehicleServices) {
         // Resolve afresh AFTER the visitor; never reuse a skip_false_matches observation
         // across callbacks that can change the current shell's next link.
-        if s.assertions {
-            assert!(!self.current.is_null());
-        }
+        crate::services_assert::assert_with(|| !self.current.is_null());
         let links = (s.tile_links)(unsafe { handle(self.current) });
         unsafe {
             self.increment(links);
@@ -360,7 +357,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_near_advance(s: &VehicleServices
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDOccupancyCommands" ["probe"] => Commands { vehicles, max_pixel_z, costs, vehicle_error, };
+    "OpenTTDOccupancyCommands" ["probe"] => Commands { vehicles, shared, max_pixel_z, costs, vehicle_error, };
     "OpenTTDVehicleTileLinks" ["probe"] => Links { next, prev, current, };
     "OpenTTDVehicleOnTile" ["probe"] => OnTile { tile, current, };
     "OpenTTDVehicleNear" ["probe"] => Near { left, top, right, bottom, hxmin, hxmax, hymin, hymax, hx, hy, current, };
@@ -371,6 +368,8 @@ crate::abi::layouts! {
 #[repr(C)]
 pub struct Commands {
     pub vehicles: &'static VehicleServices,
+    /// The shared table, whose map descriptor the tile walks hash with.
+    pub shared: &'static crate::services::Services,
     pub max_pixel_z: extern "C" fn(u32) -> i32,
     pub costs: &'static crate::services::CommandCostServices,
     pub vehicle_error: u32,
@@ -395,7 +394,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_ground(
     let s = c.vehicles;
     let tile = TileIndex(tile);
     let z = (c.max_pixel_z)(tile.0);
-    let mut it = unsafe { OnTile::new(s, tile.0) };
+    let mut it = unsafe { OnTile::new(s, c.shared.map(), tile.0) };
     // Value v is not safe in MP games, however, it is used to generate a local
     // error message only (which may be different for different machines).
     // Such a message does not affect MP synchronisation.
@@ -424,17 +423,18 @@ pub unsafe extern "C" fn openttd_rust_occupancy_wormhole(
     ignore: *const OpenTTDVehicle,
 ) {
     c.result(out, unsafe {
-        wormhole_blocker(c.vehicles, tile, end, ignore)
+        wormhole_blocker(c.vehicles, c.shared.map(), tile, end, ignore)
     });
 }
 pub(crate) unsafe fn wormhole_blocker(
     s: &VehicleServices,
+    map: Map,
     tile: u32,
     end: u32,
     ignore: *const OpenTTDVehicle,
 ) -> Option<u8> {
     for t in [TileIndex(tile), TileIndex(end)] {
-        let mut it = unsafe { OnTile::new(s, t.0) };
+        let mut it = unsafe { OnTile::new(s, map, t.0) };
         // Value v is not safe in MP games, however, it is used to generate a local
         // error message only (which may be different for different machines).
         // Such a message does not affect MP synchronisation.
@@ -458,6 +458,7 @@ pub(crate) unsafe fn wormhole_blocker(
 /// error fails the command, or `None` when no train interacts.
 pub(crate) fn ensure_no_train_on_track_bits(
     s: &VehicleServices,
+    map: Map,
     tile: TileIndex,
     track_bits: TrackBits,
 ) -> Option<VehicleType> {
@@ -466,7 +467,7 @@ pub(crate) fn ensure_no_train_on_track_bits(
     // Such a message does not affect MP synchronisation.
     // SAFETY: The native iterator's current-shell contract; no owner borrow spans the walk.
     unsafe {
-        let mut it = OnTile::new(s, tile.0);
+        let mut it = OnTile::new(s, map, tile.0);
         while let Some(v) = it.get() {
             if VehicleType(v.vehicle_type_raw()) == VehicleType::TRAIN {
                 let track = TrackBits(crate::train::Handle::from_vehicle(v).track());
@@ -495,7 +496,12 @@ impl crate::services::CommandServices {
     ) {
         // SAFETY: the occupancy table is the live process-lifetime native table.
         let c = unsafe { &*(self.occupancy)() };
-        let blocker = ensure_no_train_on_track_bits(c.vehicles, TileIndex(tile), TrackBits(bits));
+        let blocker = ensure_no_train_on_track_bits(
+            c.vehicles,
+            c.shared.map(),
+            TileIndex(tile),
+            TrackBits(bits),
+        );
         c.result(out, blocker.map(|vehicle_type| vehicle_type.0));
     }
     pub(crate) unsafe fn wormhole_free(
@@ -542,12 +548,6 @@ mod index_tests {
             .find(|(record, _)| *record == v.0.as_ptr())
             .unwrap()
             .1
-    }
-    extern "C" fn map_log_x() -> u32 {
-        6
-    }
-    extern "C" fn no_map_read() -> u32 {
-        panic!("removal resolves no map dimensions")
     }
     extern "C" fn max_pixel_z(tile: u32) -> i32 {
         assert_eq!(tile, TILE);
@@ -611,13 +611,26 @@ mod index_tests {
         LINKS.set([(a, la), (b, lb)]);
         let mut vehicles = VEHICLE;
         vehicles.tile_links = tile_links;
-        vehicles.map_log_x = map_log_x;
         let vehicles: &'static VehicleServices = Box::leak(Box::new(vehicles));
         let mut costs = COMMAND_COSTS;
         costs.error = error;
         costs.zero = zero;
+        // The fixture's 64x64 map.
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: ptr::null(),
+                extended: ptr::null(),
+                count: 0,
+                assertions: true,
+            },
+            6,
+        );
+        let mut shared = crate::test_tables::SHARED;
+        shared.map = crate::map_func::fixture::statics();
+        let shared: &'static crate::services::Services = Box::leak(Box::new(shared));
         let commands = Commands {
             vehicles,
+            shared,
             max_pixel_z,
             costs: Box::leak(Box::new(costs)),
             vehicle_error: VEHICLE_ERROR,
@@ -625,8 +638,8 @@ mod index_tests {
         let (va, vb) = (VehicleRef::of(a), VehicleRef::of(b));
         // SAFETY: The test's live records, links and services throughout.
         unsafe {
-            update(vehicles, va, false);
-            update(vehicles, vb, false);
+            openttd_rust_occupancy_update(vehicles, shared, va, false);
+            openttd_rust_occupancy_update(vehicles, shared, vb, false);
             // A vehicle at the tile's highest pixel blocks the ground; one above it does not.
             assert_eq!(
                 ground(&commands),
@@ -637,11 +650,9 @@ mod index_tests {
             // The later insertion heads the bucket.
             assert_eq!((*lb).next, a);
             assert_eq!((*la).prev, &raw mut (*lb).next);
-            // Removal reads no map size and leaves the source's stale successor.
-            let mut removal = VEHICLE;
-            removal.tile_links = tile_links;
-            removal.map_log_x = no_map_read;
-            update(&removal, vb, true);
+            // Removal reads no map size (it has no shared table) and leaves the source's
+            // stale successor.
+            openttd_rust_occupancy_update(vehicles, ptr::null(), vb, true);
             assert!((*lb).current.is_null());
             assert_eq!((*lb).next, a);
             // Reset clears current positions only, keeping stale links.
@@ -664,14 +675,16 @@ mod index_tests {
             assert!((*la).current.is_null());
             assert_eq!((*lb).next, a);
             // Reinsertion makes the later vehicle the tile's first again.
-            update(vehicles, va, false);
-            update(vehicles, vb, false);
+            openttd_rust_occupancy_update(vehicles, shared, va, false);
+            openttd_rust_occupancy_update(vehicles, shared, vb, false);
             assert_eq!(
-                OnTile::new(vehicles, TILE).get().map(|v| v.0.as_ptr()),
+                OnTile::new(vehicles, shared.map(), TILE)
+                    .get()
+                    .map(|v| v.0.as_ptr()),
                 Some(b)
             );
-            update(vehicles, vb, true);
-            update(vehicles, va, true);
+            openttd_rust_occupancy_update(vehicles, ptr::null(), vb, true);
+            openttd_rust_occupancy_update(vehicles, ptr::null(), va, true);
             for record in [a, b] {
                 crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
             }

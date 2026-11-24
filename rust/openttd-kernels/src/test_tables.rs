@@ -172,8 +172,6 @@ pub(crate) const GROUND_VEHICLE: crate::ground_vehicle::Services =
 pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::VehicleServices {
     record_from_shell: unreachable1,
     tile_links: unreachable1,
-    map_log_x: unreachable0,
-    assertions: false,
     pathfinding_result: unreachable2,
     base_viewport: unreachable1,
     newgrf: unreachable0,
@@ -2507,6 +2505,7 @@ pub(crate) const VEHICLE_SELECTION: crate::vehicle_transactions::SelectionServic
         transactions: &FLEET_TRANSACTIONS,
         vehicles: &VEHICLE,
         links: &STATION_LINKS,
+        shared: &SHARED,
         in_depot: unreachable1,
         list_clear: unreachable1,
         list_push: unreachable2,

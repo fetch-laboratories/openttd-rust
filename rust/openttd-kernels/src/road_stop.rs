@@ -502,7 +502,7 @@ fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool, thi
     while is_drive_through_road_stop_continuation(s, xy, tile) {
         // SAFETY: As above; the read and write end before the vehicle traversal.
         unsafe { (*this).length = (*this).length.wrapping_add(TILE_UNITS) };
-        vehicle.for_each_on_tile(tile.0, |v| {
+        crate::vehicle_func::vehicles_on_tile(vehicle, map(s), tile, |v| {
             // Not a RV or not in the right direction or crashed :(
             if v.vehicle_type() != VehicleType::ROAD
                 || dir_to_diag_dir(v.direction(), |ok| {

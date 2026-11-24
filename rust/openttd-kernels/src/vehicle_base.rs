@@ -641,6 +641,34 @@ impl crate::vehicle::VehicleRef {
             speed.wrapping_mul(3) / 4
         }
     }
+    /// `Vehicle::GetAdvanceSpeed`: determines the effective vehicle movement speed.
+    ///
+    /// Together with `GetAdvanceDistance()` this function is a replacement for
+    /// `GetOldAdvanceSpeed()`.
+    ///
+    /// A vehicle progresses independent of it's movement direction. However different amounts
+    /// of "progress" are needed for moving a step in a specific direction. That way the
+    /// leftover progress does not need any adaption when changing movement direction.
+    ///
+    /// `speed` is the direction-independent unscaled speed; returns the speed scaled to match
+    /// `GetAdvanceDistance()`.
+    #[inline]
+    pub(crate) const fn get_advance_speed(speed: u32) -> u32 {
+        speed.wrapping_mul(3) / 4
+    }
+    /// `Vehicle::GetAdvanceDistance`: determines the vehicle "progress" needed for moving a
+    /// step.
+    ///
+    /// Together with `GetAdvanceSpeed()` this function is a replacement for
+    /// `GetOldAdvanceSpeed()`. Returns the distance to drive for a movement step on the map.
+    #[inline]
+    pub(crate) fn get_advance_distance(self) -> u32 {
+        if self.direction().0 & 1 != 0 {
+            TILE_AXIAL_DISTANCE
+        } else {
+            TILE_CORNER_DISTANCE * 2
+        }
+    }
     /// `Vehicle::GetGroundVehicleFlags`: access the ground vehicle flags of the vehicle.
     /// The original returns `uint16_t &`: `GroundVehicleFlags` is an enum of bit
     /// numbers with no set type.

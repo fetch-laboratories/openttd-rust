@@ -209,6 +209,7 @@ impl Game<'_> {
         unsafe {
             crate::vehicle::occupancy::wormhole_blocker(
                 &*self.leaves.vehicle,
+                self.shared().map(),
                 tile,
                 end,
                 id.vehicle().0.as_ptr(),
@@ -1374,8 +1375,6 @@ pub(crate) mod tests {
         crate::vehicle::VehicleServices {
             record_from_shell: resolve_record,
             tile_links: unused(),
-            map_log_x: unused(),
-            assertions: unused(),
             pathfinding_result: unused(),
             base_viewport: unused(),
             newgrf: unused(),

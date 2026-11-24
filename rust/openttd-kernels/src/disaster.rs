@@ -290,7 +290,7 @@ impl<'a> World<'a> {
     }
     fn viewport(&self, v: Vehicle) {
         unsafe {
-            crate::vehicle::occupancy::update(self.v, v.vehicle(), false);
+            crate::vehicle::occupancy::update_position(self.v, v.vehicle(), self.map());
         }
         (self.v.base_viewport)(v.vehicle());
     }

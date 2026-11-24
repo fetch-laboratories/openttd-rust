@@ -42,8 +42,6 @@ struct OpenTTDVehicleVisits;
 struct OpenTTDVehicleServices {
 	OpenTTDVehicle *(*record_from_shell)(void *) noexcept OPENTTD_SERVICE_DEFAULT(record_from_shell);
 	OpenTTDVehicleTileLinks *(OPENTTD_RUST_CALL *tile_links)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tile_links);
-	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
-	bool assertions;
 	void (OPENTTD_RUST_CALL *pathfinding_result)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(pathfinding_result);
 	void (OPENTTD_RUST_CALL *base_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	const OpenTTDVehicleResolverServices *(*newgrf)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf);
@@ -122,6 +120,7 @@ struct OpenTTDCommandCostServices;
 struct OpenTTDCommandCost;
 struct OpenTTDOccupancyCommands {
 	const OpenTTDVehicleServices *vehicles;
+	const OpenTTDSharedServices *shared;
 	int32_t (*max_pixel_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(max_pixel_z);
 	const OpenTTDCommandCostServices *costs;
 	uint32_t vehicle_error;
@@ -130,9 +129,9 @@ const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept;
 extern "C" {
 void openttd_rust_occupancy_ground(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t);
 void openttd_rust_occupancy_wormhole(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t, uint32_t, const OpenTTDVehicle *);
-void openttd_rust_occupancy_update(const OpenTTDVehicleServices *, OpenTTDVehicle *, bool);
+void openttd_rust_occupancy_update(const OpenTTDVehicleServices *, const OpenTTDSharedServices *, OpenTTDVehicle *, bool);
 void openttd_rust_occupancy_reset(const OpenTTDVehicleSchedulerServices *);
-OpenTTDVehicleOnTile openttd_rust_occupancy_on_tile(const OpenTTDVehicleServices *, uint32_t);
+OpenTTDVehicleOnTile openttd_rust_occupancy_on_tile(const OpenTTDVehicleServices *, const OpenTTDSharedServices *, uint32_t);
 void openttd_rust_occupancy_on_advance(const OpenTTDVehicleServices *, OpenTTDVehicleOnTile *);
 OpenTTDVehicleNear openttd_rust_occupancy_near(const OpenTTDVehicleServices *, int32_t, int32_t, uint32_t);
 void openttd_rust_occupancy_near_advance(const OpenTTDVehicleServices *, OpenTTDVehicleNear *);

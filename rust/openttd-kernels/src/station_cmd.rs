@@ -3664,7 +3664,7 @@ impl Ctx<'_> {
         if world.drive_through_stop_tile(tile.0) && flags.test(DoCommandFlag::Bankrupt) {
             /* remove the 'going through road stop' status from all vehicles on that tile */
             if flags.test(DoCommandFlag::Execute) {
-                self.vehicle().for_each_on_tile(tile.0, |v| {
+                crate::vehicle_func::vehicles_on_tile(self.vehicle(), self.map(), tile, |v| {
                     if v.vehicle_type() != VehicleType::VEH_ROAD {
                         return;
                     }

@@ -56,7 +56,6 @@ static void Disasters()
 	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 1);
 
 	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v->shell)->links; };
-	vehicles.map_log_x = []() noexcept { return 6U; };
 
 	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->links.current != nullptr); p->viewports++; };
 	vehicles.first_sprite = [](OpenTTDVehicle *) noexcept { return 3904U; };
@@ -114,7 +113,7 @@ static void Disasters()
 	probe.record.type = VEH_TRAIN;
 	subside();
 	CHECK(probe.news == 1 && probe.tile_types == 0 && probe.clears == 0);
-	openttd_rust_occupancy_update(&vehicles, vehicle.handle, true);
+	openttd_rust_occupancy_update(&vehicles, nullptr, vehicle.handle, true);
 	probe.record.subtype = 4; state->state = 1;
 	probe.tile_type = MP_HOUSE;
 	subside();

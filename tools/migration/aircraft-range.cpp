@@ -147,7 +147,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	vehicle.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == &fixture->record ? 0 : 1]; };
-	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	leaves.station_owner = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 
@@ -175,8 +174,8 @@ int main()
 		f.record.orders = range_orders->vehicle.get();
 		openttd_test_aircraft_event(&leaves, {&f.record, f.state.get(), 17}, false);
 		if ((f.state->flags & 1) != (f.aircraft.flags & 1) || f.messages != expected) { std::fprintf(stderr, "range mismatch range=%u dest=%u state=%u flags=%u validity=%u\n", range, destination, state, flag, validity); return 1; }
-		openttd_rust_occupancy_update(&vehicle, &f.record, true);
-		openttd_rust_occupancy_update(&vehicle, &fixture->shadow, true);
+		openttd_rust_occupancy_update(&vehicle, nullptr, &f.record, true);
+		openttd_rust_occupancy_update(&vehicle, nullptr, &fixture->shadow, true);
 		cases++;
 	}
 	std::printf("finite range transition: %u unchanged-reference cases passed\n", cases);

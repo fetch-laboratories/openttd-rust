@@ -166,9 +166,6 @@ extern "C" fn tile_links(v: VehicleRef) -> *mut Links {
         unsafe { (&raw mut (*w.links)[i]) }
     })
 }
-extern "C" fn map_log_x() -> u32 {
-    MAP_LOG_X
-}
 extern "C" fn resolve(v: VehicleRef) -> MovementVehicle {
     let i = index(v.0.as_ptr());
     let (entered, next) = with(|w| {
@@ -250,7 +247,6 @@ impl Fixture {
         );
         let vehicle = Box::into_raw(Box::new(VehicleServices {
             tile_links,
-            map_log_x,
             ..VEHICLE
         }));
         let leaves = Box::into_raw(Box::new(Leaves {
@@ -489,7 +485,12 @@ fn run() -> (Cases, Cases) {
         for &record in &fixture.records {
             // SAFETY: The vehicle table and the record are live for the call.
             unsafe {
-                openttd_rust_occupancy_update(&*fixture.vehicle, VehicleRef::of(record), true);
+                openttd_rust_occupancy_update(
+                    &*fixture.vehicle,
+                    std::ptr::null(),
+                    VehicleRef::of(record),
+                    true,
+                );
             }
         }
     }

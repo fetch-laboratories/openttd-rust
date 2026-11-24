@@ -262,6 +262,8 @@ pub struct SelectionServices {
     pub transactions: &'static crate::fleet::transactions::Services,
     pub vehicles: &'static crate::vehicle::VehicleServices,
     pub links: &'static crate::station_service::Links,
+    /// The shared table, whose map descriptor the depot tile walk hashes with.
+    pub shared: &'static Services,
     pub in_depot: extern "C" fn(*mut ()) -> bool,
     pub list_clear: extern "C" fn(*mut ()),
     pub list_push: extern "C" fn(*mut (), *mut ()),
@@ -380,7 +382,7 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
         emit: &mut emit,
     };
     unsafe {
-        s.vehicles.for_each_on_tile(tile.0, |v| {
+        crate::vehicle_func::vehicles_on_tile(s.vehicles, s.shared.map(), tile, |v| {
             visit::<&mut F>(std::ptr::from_mut(&mut ctx).cast(), v);
         });
     };
@@ -938,7 +940,7 @@ crate::abi::layouts! {
         value, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => SelectionServices {
-        groups, transactions, vehicles, links, in_depot, list_clear, list_push,
+        groups, transactions, vehicles, links, shared, in_depot, list_clear, list_push,
     };
     "OpenTTDVehicleTransactionServices" ["probe"] => TransactionServices {
         shared, commands, cost, groups, name, clear_name, set_name,

@@ -100,10 +100,12 @@ static void ShipBoundary()
 	ship_probe.owner = state.get();
 	ship_probe.leaves = &leaves;
 	ship_probe.services = OpenTTDFixtureSharedServices(nullptr, ShipProbeUnused<uint32_t, void *>, ShipProbeUnused<uint32_t, int32_t, int32_t, uint32_t *>);
+	/* The tile index hashes the ship's tile with the 64-wide map's dimensions. */
+	static OpenTTDFixtureMap ship_map{6, 4096};
+	ship_probe.services.map = &ship_map.statics;
 	leaves.state_owner = [](uint32_t) noexcept { return ship_probe.owner; };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
 	ship_vehicle.tile_links = [](OpenTTDVehicle *) noexcept { ++ship_probe.positions; return &ship_probe.links; };
-	ship_vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	ship_maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept {
 		CHECK(ship_probe.stage++ == 0);
 		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
@@ -136,7 +138,7 @@ static void ShipBoundary()
 	};
 	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
 	CHECK(ship_probe.stage == 4 && openttd_rust_ship_get_rotation(state.get()) == 3);
-	openttd_rust_occupancy_update(&ship_vehicle, shell, true);
+	openttd_rust_occupancy_update(&ship_vehicle, nullptr, shell, true);
 	CHECK(!openttd_rust_ship_find_depot(4, 80, &leaves, &ship_probe.services).valid);
 	ship_probe.record.owner = 3;
 	leaves.next_depot = [](uint32_t first, OpenTTDShipDepot *out) noexcept {

@@ -548,7 +548,6 @@ mod controller {
         }));
         let mut f = Fixture::new(LOCAL, &crate::services::Services { movement, ..SHARED });
         let vehicle = Box::leak(Box::new(crate::vehicle::VehicleServices {
-            assertions: true,
             newgrf,
             ..VEHICLE
         }));
@@ -597,7 +596,6 @@ mod controller {
         }));
         let mut f = Fixture::new(LOCAL, &crate::services::Services { movement, ..SHARED });
         let vehicle = Box::leak(Box::new(crate::vehicle::VehicleServices {
-            assertions: true,
             newgrf: newgrf_with_cache,
             ..VEHICLE
         }));

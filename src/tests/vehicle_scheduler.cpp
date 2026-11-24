@@ -306,7 +306,7 @@ TEST_CASE("Vehicle occupancy - native tile links and copied cursors")
 	CHECK(s.tile_links(RustVehicle(b)) == &b->tile_links);
 	auto it = VehiclesOnTile(a->GetTile()).begin(), copy = it;
 	CHECK(*it == b);
-	openttd_rust_occupancy_update(&s, RustVehicle(b), true);
+	openttd_rust_occupancy_update(&s, nullptr, RustVehicle(b), true);
 	++it; ++copy;
 	CHECK(*it == a); CHECK(it == copy);
 	ResetVehicleHash();

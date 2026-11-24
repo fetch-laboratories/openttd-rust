@@ -559,9 +559,7 @@ impl<'a> Game<'a> {
     }
     /// `assert(condition)`: evaluated only where the native build asserts.
     fn assert(&self, condition: impl FnOnce() -> bool) {
-        if self.vs.assertions {
-            crate::movement::native_assert(self.ss, condition());
-        }
+        self.world().assert_with(condition);
     }
     /// The entry's map descriptor, loaded at its first map use and shared with the movement
     /// table's track queries. Orders, sound, `NewGRF`, movement, crash and viewport callbacks
@@ -1015,10 +1013,16 @@ impl<'a> Game<'a> {
                     break 'next;
                 }
 
-                if self.vs.any_near(v.v.x_pos(), v.v.y_pos(), 4, |t| {
-                    t.vehicle_type() == VehicleType::VEH_TRAIN
-                        && t.z_pos().wrapping_sub(u.v.z_pos()).wrapping_abs() <= 6
-                }) {
+                if crate::vehicle_func::has_vehicle_near_tile_xy(
+                    self.vs,
+                    v.v.x_pos(),
+                    v.v.y_pos(),
+                    4,
+                    |t| {
+                        t.vehicle_type() == VehicleType::VEH_TRAIN
+                            && t.z_pos().wrapping_sub(u.v.z_pos()).wrapping_abs() <= 6
+                    },
+                ) {
                     self.road_veh_crash(v);
                     return true;
                 }
@@ -1117,15 +1121,19 @@ impl<'a> Game<'a> {
         };
 
         if front.state() == RVSB_WORMHOLE {
-            self.vs.for_each_on_tile(v.v.tile().0, |u| {
+            crate::vehicle_func::vehicles_on_tile(self.vs, self.map(), v.v.tile(), |u| {
                 self.find_closest_blocking_road_veh(u, &mut rvf);
             });
-            self.vs
-                .for_each_on_tile(service!(self.ss.other_tunnel_end)(v.v.tile().0), |u| {
+            crate::vehicle_func::vehicles_on_tile(
+                self.vs,
+                self.map(),
+                TileIndex(service!(self.ss.other_tunnel_end)(v.v.tile().0)),
+                |u| {
                     self.find_closest_blocking_road_veh(u, &mut rvf);
-                });
+                },
+            );
         } else {
-            self.vs.for_each_near(x, y, 8, |u| {
+            crate::vehicle_func::vehicles_near_tile_xy(self.vs, x, y, 8, |u| {
                 self.find_closest_blocking_road_veh(u, &mut rvf);
             });
         }
@@ -1337,7 +1345,7 @@ impl<'a> Game<'a> {
         }
 
         /* Are there more vehicles on the tile except the two vehicles involved in overtaking */
-        self.vs.any_on_tile(od.tile.0, |v| {
+        crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), od.tile, |v| {
             v.vehicle_type() == VehicleType::VEH_ROAD && v.first() == v && v != od.u && v != od.v.v
         })
     }
@@ -2510,7 +2518,8 @@ impl<'a> Game<'a> {
         /* Check how far the vehicle needs to proceed */
         let mut j = self.update_speed(v);
 
-        let mut adv_spd = crate::vehicle::advance_distance(v.v.direction().0);
+        // `int adv_spd`: the unsigned distance converts to the signed comparison type.
+        let mut adv_spd = v.v.get_advance_distance().cast_signed();
         let mut blocked = false;
         while j >= adv_spd {
             j -= adv_spd;
@@ -2530,7 +2539,7 @@ impl<'a> Game<'a> {
             }
 
             /* Determine distance to next map position */
-            adv_spd = crate::vehicle::advance_distance(v.v.direction().0);
+            adv_spd = v.v.get_advance_distance().cast_signed();
 
             /* Test for a collision, but only if another movement will occur. */
             if j >= adv_spd && self.road_veh_check_train_crash(v) {

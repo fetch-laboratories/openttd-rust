@@ -143,7 +143,7 @@ static int64_t OPENTTD_RUST_CALL VehicleSvcProfit(OpenTTDVehicle *v) noexcept { 
 
 const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
 {
-	static const OpenTTDOccupancyCommands services{.vehicles = &GetRustVehicleServices(), .max_pixel_z = OpenTTDTileMaxPixelZ, .costs = &GetRustCommandCostServices(), .vehicle_error = STR_ERROR_TRAIN_IN_THE_WAY};
+	static const OpenTTDOccupancyCommands services{.vehicles = &GetRustVehicleServices(), .shared = &GetRustSharedServices(), .max_pixel_z = OpenTTDTileMaxPixelZ, .costs = &GetRustCommandCostServices(), .vehicle_error = STR_ERROR_TRAIN_IN_THE_WAY};
 	return &services;
 }
 static_assert(AIR_SHADOW == 4);
@@ -155,12 +155,6 @@ static OpenTTDVehicle *VehicleRecordFromShell(void *shell) noexcept { return she
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.record_from_shell = VehicleRecordFromShell,
 	.tile_links = VehicleSvcTileLinks,
-	.map_log_x = OpenTTDMapLogX,
-#if !defined(NDEBUG) || defined(WITH_ASSERT)
-	.assertions = true,
-#else
-	.assertions = false,
-#endif
 	.pathfinding_result = VehicleSvcPathfindingResult,
 	.base_viewport = VehicleSvcBaseViewport,
 	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },

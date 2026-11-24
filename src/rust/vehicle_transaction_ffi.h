@@ -35,6 +35,7 @@ struct OpenTTDVehicleSelectionServices {
 	const OpenTTDFleetTransactionServices *transactions;
 	const OpenTTDVehicleServices *vehicles;
 	const OpenTTDStationLinks *links;
+	const OpenTTDSharedServices *shared;
 	bool (*in_depot)(void *) noexcept OPENTTD_SERVICE_DEFAULT(in_depot);
 	void (*list_clear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(list_clear);
 	void (*list_push)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(list_push);
