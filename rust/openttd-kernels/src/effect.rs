@@ -50,11 +50,42 @@ pub struct State {
     animation_substate: u8,
 }
 
+/// The live [`State`] one shell holds (module contract).
+#[derive(Clone, Copy)]
+struct StateRef(*mut State);
+
+impl StateRef {
+    /// `animation_state`.
+    #[allow(unsafe_code)]
+    fn animation_state(self) -> u16 {
+        // SAFETY: The shell's live owner (module contract).
+        unsafe { (*self.0).animation_state }
+    }
+    /// `animation_state = state`.
+    #[allow(unsafe_code)]
+    fn set_animation_state(self, state: u16) {
+        // SAFETY: The shell's live owner (module contract).
+        unsafe { (*self.0).animation_state = state };
+    }
+    /// `animation_substate`.
+    #[allow(unsafe_code)]
+    fn animation_substate(self) -> u8 {
+        // SAFETY: The shell's live owner (module contract).
+        unsafe { (*self.0).animation_substate }
+    }
+    /// `animation_substate = state`.
+    #[allow(unsafe_code)]
+    fn set_animation_substate(self, state: u8) {
+        // SAFETY: The shell's live owner (module contract).
+        unsafe { (*self.0).animation_substate = state };
+    }
+}
+
 /// `EffectVehicle *`: the shared record of one effect vehicle and the owner its shell holds.
 #[derive(Clone, Copy)]
 pub(crate) struct EffectVehicle {
     record: VehicleRef,
-    owner: *mut State,
+    owner: StateRef,
 }
 
 /// The tables an effect procedure calls: the process-wide vehicle and shared tables, or a
@@ -66,28 +97,20 @@ struct Tables<'a> {
 
 impl EffectVehicle {
     /// `animation_state`.
-    #[allow(unsafe_code)]
     fn animation_state(self) -> u16 {
-        // SAFETY: The shell's live owner (module contract).
-        unsafe { openttd_rust_effect_get_animation(self.owner) }
+        self.owner.animation_state()
     }
     /// `EffectVehicle::SetAnimationState`: `animation_state = state`.
-    #[allow(unsafe_code)]
     pub(crate) fn set_animation_state(self, state: u16) {
-        // SAFETY: The shell's live owner (module contract).
-        unsafe { openttd_rust_effect_set_animation(self.owner, state) };
+        self.owner.set_animation_state(state);
     }
     /// `animation_substate`.
-    #[allow(unsafe_code)]
     fn animation_substate(self) -> u8 {
-        // SAFETY: The shell's live owner (module contract).
-        unsafe { openttd_rust_effect_get_substate(self.owner) }
+        self.owner.animation_substate()
     }
     /// `EffectVehicle::SetAnimationSubstate`: `animation_substate = state`.
-    #[allow(unsafe_code)]
     pub(crate) fn set_animation_substate(self, state: u8) {
-        // SAFETY: The shell's live owner (module contract).
-        unsafe { openttd_rust_effect_set_substate(self.owner, state) };
+        self.owner.set_animation_substate(state);
     }
     /// `spritenum`, through the resolver table's reader.
     #[allow(unsafe_code)]
@@ -794,7 +817,7 @@ pub(crate) fn create_effect_vehicle(
     let allocation = (services.allocate)();
     let v = EffectVehicle {
         record: allocation.record,
-        owner: allocation.owner,
+        owner: StateRef(allocation.owner),
     };
     v.record.set_subtype(r#type.0);
     v.record.set_x_pos(x);
@@ -933,7 +956,13 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
             shared: &*shared,
         }
     };
-    u8::from(EffectVehicle { record, owner }.tick(&t))
+    u8::from(
+        EffectVehicle {
+            record,
+            owner: StateRef(owner),
+        }
+        .tick(&t),
+    )
 }
 
 /// A new shell's zeroed owner.
@@ -958,8 +987,7 @@ pub unsafe extern "C" fn openttd_rust_effect_destroy(owner: *mut State) {
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_effect_set_animation(owner: *mut State, value: u16) {
-    // SAFETY: The caller's live owner.
-    unsafe { (*owner).animation_state = value };
+    StateRef(owner).set_animation_state(value);
 }
 /// `animation_state`, for the shell and its save/load.
 ///
@@ -968,8 +996,7 @@ pub unsafe extern "C" fn openttd_rust_effect_set_animation(owner: *mut State, va
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_effect_get_animation(owner: *const State) -> u16 {
-    // SAFETY: The caller's live owner.
-    unsafe { (*owner).animation_state }
+    StateRef(owner.cast_mut()).animation_state()
 }
 /// `animation_substate = value`, for the shell and its save/load.
 ///
@@ -978,8 +1005,7 @@ pub unsafe extern "C" fn openttd_rust_effect_get_animation(owner: *const State) 
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_effect_set_substate(owner: *mut State, value: u8) {
-    // SAFETY: The caller's live owner.
-    unsafe { (*owner).animation_substate = value };
+    StateRef(owner).set_animation_substate(value);
 }
 /// `animation_substate`, for the shell and its save/load.
 ///
@@ -988,8 +1014,7 @@ pub unsafe extern "C" fn openttd_rust_effect_set_substate(owner: *mut State, val
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_effect_get_substate(owner: *const State) -> u8 {
-    // SAFETY: The caller's live owner.
-    unsafe { (*owner).animation_substate }
+    StateRef(owner.cast_mut()).animation_substate()
 }
 
 crate::abi::layouts! {
@@ -1150,7 +1175,7 @@ mod tests {
         });
         let v = EffectVehicle {
             record,
-            owner: openttd_rust_effect_new(),
+            owner: StateRef(openttd_rust_effect_new()),
         };
         v.set_animation_state(animation_state);
         v

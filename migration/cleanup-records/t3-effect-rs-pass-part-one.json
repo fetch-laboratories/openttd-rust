@@ -3,19 +3,19 @@
     "kind": "carry",
     "tool": "rust",
     "from": "rust/openttd-kernels/src/effect.rs | impl Controller<'_> | allow unsafe_code",
-    "to": "rust/openttd-kernels/src/effect.rs | impl EffectVehicle > fn animation_state | allow unsafe_code"
+    "to": "rust/openttd-kernels/src/effect.rs | impl StateRef > fn animation_state | allow unsafe_code"
   },
   {
     "kind": "carry",
     "tool": "rust",
     "from": "rust/openttd-kernels/src/effect.rs | fn set_animation | allow unsafe_code",
-    "to": "rust/openttd-kernels/src/effect.rs | impl EffectVehicle > fn set_animation_state | allow unsafe_code"
+    "to": "rust/openttd-kernels/src/effect.rs | impl StateRef > fn set_animation_state | allow unsafe_code"
   },
   {
     "kind": "carry",
     "tool": "rust",
     "from": "rust/openttd-kernels/src/effect.rs | fn set_substate | allow unsafe_code",
-    "to": "rust/openttd-kernels/src/effect.rs | impl EffectVehicle > fn set_animation_substate | allow unsafe_code"
+    "to": "rust/openttd-kernels/src/effect.rs | impl StateRef > fn set_animation_substate | allow unsafe_code"
   },
   {
     "kind": "suppression",
@@ -24,10 +24,10 @@
     "after": 1,
     "retiring_owner": "#656",
     "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and records, owners and tables are reached as Rust references.",
-    "site": "rust/openttd-kernels/src/effect.rs | impl EffectVehicle > fn animation_substate | allow unsafe_code",
-    "operation": "effect::EffectVehicle::animation_substate",
+    "site": "rust/openttd-kernels/src/effect.rs | impl StateRef > fn animation_substate | allow unsafe_code",
+    "operation": "effect::StateRef::animation_substate",
     "source_contract": "`EffectVehicle::animation_substate` (src/effectvehicle_base.h), held by the shell's Rust owner that `openttd_rust_effect_new` allocates and the shell's destructor frees.",
-    "reason": "Plan #1027 decision 1 gives the State's two fields a getter and setter each on the EffectVehicle handle, in place of the Controller's `state()` reference. Each delegates to the shell's export for the same field (`openttd_rust_effect_get_substate`), the one definition of the load, which is an `unsafe extern \"C\" fn` over the live owner; the base's Controller impl, set_animation and set_substate allowances carry to the other three accessors."
+    "reason": "Plan #1027 decision 1 gives the State's two fields a getter and setter each, in place of the Controller's `state()` reference; the re-check of #1044 asks for one typed Rust definition of each, which the EffectVehicle handle and the shell's exports both call. The getter is one field load through the owner pointer; the base's Controller impl, set_animation and set_substate allowances carry to the other three accessors."
   },
   {
     "kind": "suppression",
