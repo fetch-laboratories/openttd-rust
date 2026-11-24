@@ -98,3 +98,4 @@ By number and header, with a link to the file, for example [ADR 0049](0049-two-i
 | [0041](0041-globals-are-process-wide-statics.md) | A C++ global or static becomes a process-wide Rust static, not thread-local storage |
 | [0042](0042-ids-cross-as-plain-integers.md) | Typed C++ IDs cross the calling layer as their plain integer types |
 | [0043](0043-docs-only-changes-need-no-pr.md) | Docs-only changes are committed straight to the main branch without a PR |
+| [0051](0051-review-whole-pr.md) | A pull request is reviewed whole, by two reviewers and one re-check |

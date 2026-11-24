@@ -27,7 +27,7 @@
 - Add no guards, assertions, rejections or fatal paths absent from the original, and drop none it has: `tile + offset` is not `TileAdd`.
 - Native fatal paths keep the native error box and crash reason, which a Rust `panic!` or `unreachable!` loses. A `switch` with `NOT_REACHED` stays a match whose default arm takes the native unreachable path.
 - Operators and control flow follow the original's. Where C++ wraps or truncates, use `wrapping_*` operations or `as` casts. Release overflow checks and `panic = "abort"` may only back up operations that cannot overflow in the original.
-- Keep the exact sequence of random draws, with their width, and every state read and write at its original observation point.
+- Keep the exact sequence of random draws, with their width, and every state write at its original point. A read is at its observation point when no write, call or random draw that could change what it reads lies between it and the original's position; reads with nothing of that kind between them may come in any order.
 - A C++ global or static becomes a process-wide Rust static, not `thread_local!`: GUI input runs on the main thread and the game loop on `ottd:game`, and the single-threaded `-vnull` harness cannot show the difference.
 - Preserve lifetimes: allocation and ID reuse, publication and destruction order. End each borrow before a callback, mutation, container growth, throw or deletion that can invalidate it.
 
