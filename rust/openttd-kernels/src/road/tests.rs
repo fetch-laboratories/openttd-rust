@@ -169,16 +169,20 @@ mod controller {
     unsafe extern "C" fn id(_: *mut crate::vehicle::OpenTTDVehicle) -> u32 {
         VEHICLE_ID
     }
+    unsafe extern "C" fn service_interval(_: *mut crate::vehicle::OpenTTDVehicle) -> u16 {
+        0
+    }
     unsafe extern "C" fn roadtype(_: *mut crate::vehicle::OpenTTDVehicle) -> RoadType {
         RoadType(ROADTYPE.get())
     }
     extern "C" fn newgrf() -> *const crate::newgrf_vehicle::Services {
         thread_local! {
             static TABLE: &'static crate::newgrf_vehicle::Services = {
-                // The other fields are private, so the two live entries are set in place.
+                // The live entries, set in place.
                 let mut table = crate::newgrf_vehicle::TEST_TABLE;
                 table.id = id;
                 table.roadtype = roadtype;
+                table.service_interval = service_interval;
                 Box::leak(Box::new(table))
             };
         }
@@ -1091,27 +1095,28 @@ mod controller {
         }
         COMPANY.with(std::ptr::from_ref)
     }
-    /// No depot order, and not loading.
-    extern "C" fn service_automatic(_: VehicleRef) -> crate::vehicle::maintenance::Automatic {
-        crate::vehicle::maintenance::Automatic {
-            has_depot_order: false,
-            order_type: OrderType::OT_NOTHING,
+    /// The orders `NeedsAutomaticServicing` searches: the vehicle has no order list, so no
+    /// depot order.
+    extern "C" fn service_orders() -> *const crate::orders::Leaves {
+        thread_local! {
+            static ORDERS: crate::orders::Leaves = crate::test_tables::ORDERS;
         }
+        ORDERS.with(std::ptr::from_ref)
+    }
+    /// The owner `NeedsServicing` looks up before its interval tests.
+    extern "C" fn service_owner(
+        _: crate::company_type::CompanyID,
+    ) -> *mut crate::company::OpenTTDCompany {
+        std::ptr::null_mut()
     }
     /// Serviced on day 0 with no interval, now day 1, servicing allowed and breakdowns
-    /// off (`breakdowns: 0`): due, since the zero interval has passed.
-    extern "C" fn service_interval(_: VehicleRef) -> crate::vehicle::maintenance::Interval {
-        crate::vehicle::maintenance::Interval {
-            company: std::ptr::null(),
-            last_service: crate::timer_game_economy::EconomyDate(0),
-            now: crate::timer_game_economy::EconomyDate(1),
-            interval: 0,
-            reliability: 0,
-            percent: false,
-            wallclock: false,
-            no_service: false,
-            breakdowns: 0,
-        }
+    /// off: due, since the zero interval has passed.
+    extern "C" fn service_last_service(_: VehicleRef) -> i32 {
+        0
+    }
+    /// Service intervals in days.
+    extern "C" fn service_wallclock(_: bool) -> bool {
+        false
     }
     /// Each order the handler sends to the depot: a go-to-depot order for depot 55, with
     /// implicit orders suppressed.
@@ -1201,6 +1206,8 @@ mod controller {
             road_stop_occupied_penalty: &raw const yapf[4],
             road_stop_bay_occupied_penalty: &raw const yapf[5],
             road_curve_penalty: &raw const yapf[6],
+            no_servicing_if_no_breakdowns: Box::leak(Box::new(false)),
+            vehicle_breakdowns: Box::leak(Box::new(0)),
             ..crate::settings_type::SettingAddresses::NULL
         }));
         let movement = Box::leak(Box::new(crate::movement::MovementServices {
@@ -1232,11 +1239,20 @@ mod controller {
             ..crate::test_tables::FLEET_TRANSACTIONS
         }));
         let maintenance = Box::leak(Box::new(crate::vehicle::maintenance::Services {
+            clock: Box::leak(Box::new(crate::timer_game_common::ClockServices {
+                using_wallclock_units: service_wallclock,
+                ..crate::test_tables::CLOCK
+            })),
+            company: Box::leak(Box::new(crate::company_identity::Services {
+                company: service_owner,
+                ..crate::test_tables::COMPANY_IDENTITY
+            })),
+            date_of_last_service: service_last_service,
+            shared,
             transaction: transactions,
-            automatic: service_automatic,
-            interval: service_interval,
             ..crate::test_tables::MAINTENANCE
         }));
+        crate::timer_game_common::write_economy_date(crate::timer_game_economy::EconomyDate(1));
         movement.vehicle = f.leaves.vehicle;
         /* IsChainInDepot reads the map through the ground services' shared table. */
         let physics = Box::leak(Box::new(crate::ground_vehicle::Services {
@@ -1249,6 +1265,7 @@ mod controller {
             ground: Box::leak(Box::new(GroundServices { physics })),
             vehicle: Box::leak(Box::new(crate::vehicle::VehicleServices {
                 maintenance,
+                orders: service_orders,
                 start_stop_dirty: service_start_stop_dirty,
                 ..*f.game().vs
             })),
@@ -1264,6 +1281,17 @@ mod controller {
         unsafe {
             (*f.record).orders = orders;
             (*f.record).shell = shell().cast();
+            (*f.record).consist = Box::leak(Box::new(crate::orders::Consist {
+                time: 0,
+                lateness: 0,
+                start: 0,
+                last_departure: 0,
+                next_departure: 0,
+                round_trip: 0,
+                real: 0,
+                implicit: 0,
+                flags: 0,
+            }));
         }
         BUS.set(true);
         ROADTYPE.set(RoadType::ROADTYPE_ROAD.0);

@@ -91,7 +91,7 @@ pub(crate) unsafe fn drain(
         let y = v.y_pos();
         let z = v.z_pos();
         let company = unsafe { &*w.company };
-        let reserve = i64::from((company.renew_reserve)((company.company)(
+        let reserve = i64::from((company.engine_renew_money)((company.company)(
             crate::company_type::CompanyID(owner),
         )));
         unsafe {

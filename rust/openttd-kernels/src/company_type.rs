@@ -65,6 +65,11 @@ impl CompanyMask {
     pub const fn test(self, company: CompanyID) -> bool {
         self.0 & (1 << company.0) != 0
     }
+    /// `BaseBitSet::Any`: whether any company is in the set.
+    #[must_use]
+    pub const fn any(self) -> bool {
+        self.0 != 0
+    }
     /// `BaseBitSet::Set`.
     pub const fn set(&mut self, company: CompanyID) -> &mut Self {
         self.0 |= 1 << company.0;

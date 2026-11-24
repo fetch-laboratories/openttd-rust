@@ -18,6 +18,7 @@ mod alternating;
 mod animated_tile;
 mod animated_tile_map;
 mod auth;
+mod autoreplace_func;
 mod base_consist;
 mod base_station_base;
 mod binaryheap;

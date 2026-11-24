@@ -894,12 +894,6 @@ crate::abi::layouts! {
         data,
         size,
     };
-    "OpenTTDCalendarDate" ["maintenance"] => CalendarDate {
-        0 => value,
-    };
-    "OpenTTDEconomyDate" ["maintenance"] => EconomyDate {
-        0 => value,
-    };
     "LandscapeType" ["maintenance"] => LandscapeType {
     };
 }

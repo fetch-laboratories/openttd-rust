@@ -99,7 +99,6 @@ inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->Invalidat
 inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->unitnumber; }
 inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
-inline bool RustVehicleHasEngine(const Vehicle *v) noexcept { return v->HasEngineType(); }
 inline OpenTTDVehicleTileLinks *RustVehicleTileLinks(Vehicle *v) noexcept { return &v->tile_links; }
 inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->GetTile().base(); }
 inline OrderType RustVehicleOrderType(const Vehicle *v) noexcept { return v->current_order.GetType(); }
@@ -125,7 +124,6 @@ bool RustVehicleInDepot(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->GetOwner().base(); }
-inline uint8_t RustVehicleTick(const Vehicle *v) noexcept { return v->Record().tick_counter; }
 inline uint8_t RustVehicleStatus(const Vehicle *v) noexcept { return v->Record().vehstatus; }
 inline void RustWriteVehicleStatus(Vehicle *v, VehStates status) noexcept { v->SetVehStatus(status); }
 inline void RustWriteVehicleTile(Vehicle *v, TileIndex tile) noexcept { v->SetTile(tile); }
@@ -137,13 +135,11 @@ inline uint16_t RustVehicleReliabilityDecay(const Vehicle *v) noexcept { return 
 inline TimerGameCalendar::Date RustVehicleAge(const Vehicle *v) noexcept { return v->age; }
 inline int32_t RustVehicleAgeValue(const Vehicle *v) noexcept { return RustVehicleAge(v).base(); }
 inline void RustWriteVehicleAge(Vehicle *v, int32_t age) noexcept { v->age = TimerGameCalendar::Date{age}; }
-inline void RustVehicleWriteBreakdown(Vehicle *v, uint8_t counter, uint8_t delay) noexcept { v->Record().breakdown_ctr = counter; v->breakdown_delay = delay; }
 inline TimerGameCalendar::Date RustVehicleMaxAge(const Vehicle *v) noexcept { return v->max_age; }
 inline void RustVehicleSetMaxAge(OpenTTDVehicle *v, int32_t days) noexcept { VehicleOf(v)->max_age = TimerGameCalendar::Date{days}; }
 inline TimerGameEconomy::Date RustVehicleEconomyAge(const Vehicle *v) noexcept { return v->economy_age; }
 inline TimerGameEconomy::Date RustVehicleLastService(const Vehicle *v) noexcept { return v->date_of_last_service; }
 inline int32_t RustVehicleLastServiceOf(OpenTTDVehicle *v) noexcept { return RustVehicleLastService(VehicleOf(v)).base(); }
-inline uint8_t RustVehicleBreakdownCounter(const Vehicle *v) noexcept { return v->Record().breakdown_ctr; }
 inline int64_t RustVehicleValue(const Vehicle *v) noexcept { return v->value.base(); }
 inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->Record().reliability; }
 template <typename Handle> inline uint32_t RustVehicleIndex(Handle v) noexcept
@@ -173,7 +169,6 @@ ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept;
 template <class T>
 inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticulatedPart(); }
 
-inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return v->Record().subtype; }
 inline int32_t RustVehicleX(const Vehicle *v) noexcept { return v->Record().x_pos; }
 inline int32_t RustVehicleY(const Vehicle *v) noexcept { return v->Record().y_pos; }
 inline void RustWriteVehicleX(Vehicle *v, int32_t x) noexcept { v->Record().x_pos = x; }

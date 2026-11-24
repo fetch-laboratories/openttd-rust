@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! `vehicle_func.h`: the custom sprite numbers, `IsCompanyBuildableVehicleType`,
+//! `vehicle_func.h`: `VEHICLE_PROFIT_MIN_AGE`, the custom sprite numbers, `IsCompanyBuildableVehicleType`,
 //! both `CanVehicleUseStation` overloads (`vehicle.cpp`), `GetNewVehiclePosResult` and
 //! the loops over `VehiclesOnTile` and `VehiclesNearTileXY`.
 //!
@@ -13,6 +13,10 @@ use crate::tile_type::TileIndex;
 use crate::vehicle::occupancy::{Near, OnTile};
 use crate::vehicle::{EngineRef, VehicleRef, VehicleServices};
 use crate::vehicle_type::VehicleType;
+
+/// `VEHICLE_PROFIT_MIN_AGE`: only vehicles older than this have a meaningful profit.
+pub const VEHICLE_PROFIT_MIN_AGE: crate::timer_game_economy::EconomyDate =
+    crate::timer_game_economy::EconomyDate(crate::timer_game_common::DAYS_IN_YEAR * 2);
 
 /// Special values for `Vehicle::spritenum` and `(Aircraft|Rail|Road|Ship)VehicleInfo::image_index`.
 /// The unscoped native enum uses an integer; stored sprite indices are bytes.

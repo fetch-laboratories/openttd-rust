@@ -5,7 +5,9 @@
 #include "rust/road_ffi.h"
 #include "rust/engine_capabilities_ffi.h"
 #include "rust/engine_loading_ffi.h"
+#include "rust/clock_ffi.h"
 #include "rust/company_ffi.h"
+#include "rust/company_identity_ffi.h"
 #include "rust/fleet_ffi.h"
 #include "rust/settings_table_ffi.h"
 #include "rust/movement_ffi.h"
@@ -357,10 +359,6 @@ static void RoadBoundary()
 	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == INT32_MIN && probe.running == 0 && probe.progress == 7 && world.draws == 0);
 
 	/* Stopped parts preserve running ticks; later status resets must survive the entry. */
-	const auto breakdown_probe = _vehicle_maintenance_probe.breakdown_probe;
-	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept {
-		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = road_abi_probe->status};
-	};
 	const auto last_speed_dirty = t.physics_vehicle.start_stop_dirty;
 	probe.ground.state->cache.last_speed = UINT16_MAX;
 	t.physics_vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {
@@ -372,7 +370,6 @@ static void RoadBoundary()
 	probe.progress = 0;
 	CHECK(openttd_rust_road_tick(v, probe.state, &t.leaves, nullptr));
 	CHECK(probe.running == UINT8_MAX && probe.order_time == INT32_MIN && probe.status == 0);
-	_vehicle_maintenance_probe.breakdown_probe = breakdown_probe;
 	t.physics_vehicle.start_stop_dirty = last_speed_dirty;
 
 	/* Skip effects with no lookup; realistic UpdateSpeed still observes post-effect inputs. */
@@ -464,6 +461,7 @@ static RoadServiceProbe *road_service_probe;
 static OpenTTDVehicle road_service_vehicles[2]{};
 static OpenTTDGroundState road_service_ground[2]{};
 static OpenTTDVehicleOrderState road_service_orders[2]{};
+static OpenTTDConsistState road_service_consist[2]{};
 static OpenTTDVehicle *RoadServiceHandle(int part) { auto *record = &road_service_vehicles[part]; record->shell = reinterpret_cast<OpenTTDVehicleShell *>(record); return record; }
 static void RoadServiceBoundary()
 {
@@ -492,39 +490,36 @@ static void RoadServiceBoundary()
 	commands.company = []() noexcept -> const OpenTTDCompanyServices * { return &company; };
 	static OpenTTDFleetTransactionServices transactions{}; transactions.commands = &commands;
 	_vehicle_maintenance_probe.transaction = &transactions;
-	/* Direct maintenance: aged out, no reliability decay, no breakdown, service due. */
+	/* Direct maintenance of one consistent state: aged out, no reliability decay, broken down
+	 * so no new breakdown, and due for service. */
 	auto &maintenance = _vehicle_maintenance_probe;
-	maintenance.max_economy_date = OpenTTDEconomyDate{0};
-	maintenance.economy_age = [](OpenTTDVehicle *) noexcept { return OpenTTDEconomyDate{0}; };
-	maintenance.check_breakdown = [](OpenTTDVehicle *) noexcept {
-		OpenTTDVehicleMaintenanceCheckBreakdown r{};
-		r.no_service = true;
-		return r;
-	};
-	maintenance.breakdown_guard = [](OpenTTDVehicle *) noexcept {
-		OpenTTDVehicleMaintenanceBreakdownGuard r{};
-		r.counter = 1;
-		return r;
-	};
-	maintenance.automatic = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceAutomatic{}; };
-	maintenance.interval = [](OpenTTDVehicle *) noexcept {
-		OpenTTDVehicleMaintenanceInterval r{};
-		r.now = OpenTTDEconomyDate{1};
-		return r;
-	};
-	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept {};
-	/* The tail record is linked; its part has no engine type, so only the head is serviced. */
-	maintenance.has_engine = [](OpenTTDVehicle *) noexcept { return false; };
-	/* The servicing reset's aggregate return and the stores it feeds cross the maintenance table. */
-	maintenance.reset = [](OpenTTDVehicle *) noexcept {
-		++road_service_probe->services;
-		return OpenTTDVehicleMaintenanceReset{.economy_date = OpenTTDEconomyDate{0x1020304}, .calendar_date = OpenTTDCalendarDate{-0x12345}, .chance = 12, .breakdowns = 2};
-	};
+	maintenance.economy_age = [](OpenTTDVehicle *) noexcept { return EconomyTime::MAX_DATE.base(); };
+	static const bool no_servicing_if_no_breakdowns = false;
+	static const uint8_t vehicle_breakdowns = 2;
+	catalog.no_servicing_if_no_breakdowns = &no_servicing_if_no_breakdowns;
+	catalog.vehicle_breakdowns = &vehicle_breakdowns;
+	static OpenTTDVehicleResolverServices resolver{};
+	resolver.reliability = [](OpenTTDVehicle *) noexcept -> uint16_t { return 0x9876; };
+	resolver.reliability_decay = [](OpenTTDVehicle *) noexcept -> uint16_t { return 0; };
+	resolver.service_interval = [](OpenTTDVehicle *) noexcept -> uint16_t { return 0; };
+	resolver.breakdown_chance = [](OpenTTDVehicle *) noexcept -> uint8_t { return 12; };
+	resolver.id = [](OpenTTDVehicle *) noexcept -> uint32_t { return 0; };
+	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	static OpenTTDClockServices clock{};
+	clock.using_wallclock_units = [](bool) noexcept { return false; };
+	maintenance.clock = &clock;
+	static OpenTTDCompanyIdentityServices companies{};
+	companies.company = [](uint8_t) noexcept -> Company * { return nullptr; };
+	maintenance.company = &companies;
+	maintenance.date_of_last_service = [](OpenTTDVehicle *) noexcept -> int32_t { return 0; };
+	openttd_rust_economy_set_date(0x1020304, 0, false);
+	openttd_rust_calendar_set_date(-0x12345, 0);
+	/* The tail record's type has no engine type, so only the head is serviced. */
 	t.vehicle.write_economy_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == 0x1020304); };
 	t.vehicle.write_calendar_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == -0x12345); };
-	t.vehicle.write_breakdowns = [](OpenTTDVehicle *, uint8_t since) noexcept { CHECK(since == 0); };
+	t.vehicle.write_breakdowns = [](OpenTTDVehicle *, uint8_t since) noexcept { CHECK(since == 0); ++road_service_probe->services; };
 	t.vehicle.write_reliability = [](OpenTTDVehicle *, uint16_t reliability) noexcept { CHECK(reliability == 0x9876); };
-	maintenance.chance_write = [](OpenTTDVehicle *, uint8_t chance) noexcept { CHECK(chance == 3); };
+	maintenance.set_breakdown_chance = [](OpenTTDVehicle *, uint8_t chance) noexcept { CHECK(chance == 3); };
 
 
 	static OpenTTDFixtureMap service_map{6, 4096};
@@ -549,7 +544,7 @@ static void RoadServiceBoundary()
 	check_orders = std::make_unique<ControllerOrders>(&t.vehicle);
 	t.vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &check_orders->services; };
 	auto day = [&]() {
-		for (int i : {0, 1}) { auto *record = RoadServiceHandle(i); record->ground = &road_service_ground[i]; record->orders = &road_service_orders[i]; record->type = VEH_ROAD; record->subtype = i == 0 ? 1 << GVSF_FRONT : 0; record->first = RoadServiceHandle(0); record->tile = probe.tile; record->cur_speed = probe.speed; record->road = i == 0 ? probe.head : probe.tail; record->next = i == 0 ? RoadServiceHandle(1) : nullptr; }
+		for (int i : {0, 1}) { auto *record = RoadServiceHandle(i); record->ground = &road_service_ground[i]; record->orders = &road_service_orders[i]; record->consist = &road_service_consist[i]; record->type = i == 0 ? VEH_ROAD : VEH_EFFECT; record->breakdown_ctr = i == 0 ? 1 : 0; record->subtype = i == 0 ? 1 << GVSF_FRONT : 0; record->first = RoadServiceHandle(0); record->tile = probe.tile; record->cur_speed = probe.speed; record->road = i == 0 ? probe.head : probe.tail; record->next = i == 0 ? RoadServiceHandle(1) : nullptr; }
 		road_service_orders[0].current = {};
 		openttd_rust_road_economy_day(RoadServiceHandle(0), probe.head, &t.leaves); };
 	for (bool moving : {true, false}) {

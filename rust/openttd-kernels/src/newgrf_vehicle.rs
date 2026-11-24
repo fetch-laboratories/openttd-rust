@@ -122,19 +122,19 @@ pub struct Services {
     num_orders: unsafe extern "C" fn(V) -> u8,
     real_order: unsafe extern "C" fn(V) -> u8,
     load_ticks: unsafe extern "C" fn(V) -> u16,
-    service_interval: unsafe extern "C" fn(V) -> u16,
+    pub(crate) service_interval: unsafe extern "C" fn(V) -> u16,
     pub(crate) cargo_type: unsafe extern "C" fn(V) -> u8,
     cargo_subtype: unsafe extern "C" fn(V) -> u8,
-    age: unsafe extern "C" fn(V) -> i32,
-    max_age: unsafe extern "C" fn(V) -> i32,
+    pub(crate) age: unsafe extern "C" fn(V) -> i32,
+    pub(crate) max_age: unsafe extern "C" fn(V) -> i32,
     pub(crate) unit: unsafe extern "C" fn(V) -> u16,
     pub(crate) sprite: unsafe extern "C" fn(V) -> u8,
-    breakdowns: unsafe extern "C" fn(V) -> u8,
-    breakdown_delay: unsafe extern "C" fn(V) -> u8,
-    breakdown_chance: unsafe extern "C" fn(V) -> u8,
-    reliability: unsafe extern "C" fn(V) -> u16,
-    reliability_decay: unsafe extern "C" fn(V) -> u16,
-    value: unsafe extern "C" fn(V) -> i64,
+    pub(crate) breakdowns: unsafe extern "C" fn(V) -> u8,
+    pub(crate) breakdown_delay: unsafe extern "C" fn(V) -> u8,
+    pub(crate) breakdown_chance: unsafe extern "C" fn(V) -> u8,
+    pub(crate) reliability: unsafe extern "C" fn(V) -> u16,
+    pub(crate) reliability_decay: unsafe extern "C" fn(V) -> u16,
+    pub(crate) value: unsafe extern "C" fn(V) -> i64,
     profit_this: unsafe extern "C" fn(V) -> i64,
     profit_last: unsafe extern "C" fn(V) -> i64,
     vehicle_flags: unsafe extern "C" fn(V) -> u16,
@@ -241,6 +241,20 @@ mod property_tests {
             crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
             crate::engine::openttd_rust_engine_destroy(engine);
         }
+    }
+}
+
+/// `TEST_TABLE` answering engine property callbacks: `engine_by_id` names the engine and
+/// `resolve_callback` answers, for tests outside this module.
+#[cfg(test)]
+pub(crate) const fn test_table_with_callback(
+    engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
+    resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
+) -> Services {
+    Services {
+        engine_by_id,
+        resolve_callback,
+        ..TEST_TABLE
     }
 }
 

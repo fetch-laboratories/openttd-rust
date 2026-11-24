@@ -15,14 +15,18 @@
 //! access, and Rust holds no reference to a record across a callback.
 #![allow(unsafe_code)]
 
+use crate::base_consist::{VehicleFlag, VehicleFlags};
 use crate::bitmath_func::has_bit;
 use crate::company_type::{CompanyID, Owner};
 use crate::direction_type::Direction;
 use crate::engine_type::EngineID;
+use crate::group_type::GroupID;
 use crate::raw_field::{read_field, write_field};
 use crate::station_type::StationID;
 use crate::tile_type::TileIndex;
-use crate::vehicle_type::VehicleType;
+use crate::timer_game_calendar::CalendarDate;
+use crate::timer_game_economy::EconomyDate;
+use crate::vehicle_type::{VehicleID, VehicleType};
 
 /// Logical length of the tile in any `DiagDirection` used in vehicle movement.
 pub const TILE_AXIAL_DISTANCE: u32 = 192;
@@ -771,6 +775,172 @@ impl crate::vehicle::VehicleRef {
         let vehicles = crate::movement::table(shared).vehicle();
         // SAFETY: The vehicle table returns the static resolver service table.
         unsafe { ((*(vehicles.newgrf)()).unit)(self.0.as_ptr()) }
+    }
+
+    // `Vehicle` members still stored in the C++ shell, one C call each. A reader takes the
+    // resolved table its slot is in and resolves no table itself.
+
+    /// `Vehicle::age`: age in calendar days.
+    #[inline]
+    pub(crate) fn age(self, r: &crate::newgrf_vehicle::Services) -> CalendarDate {
+        // SAFETY: The resolver slot reads the live record's shell.
+        CalendarDate(unsafe { (r.age)(self.0.as_ptr()) })
+    }
+    /// Store `Vehicle::age`.
+    #[inline]
+    pub(crate) fn set_age(self, m: &crate::vehicle::maintenance::Services, value: CalendarDate) {
+        (m.set_age)(self, value.0);
+    }
+    /// `Vehicle::max_age`: maximum age.
+    #[inline]
+    pub(crate) fn max_age(self, r: &crate::newgrf_vehicle::Services) -> CalendarDate {
+        // SAFETY: As `age`.
+        CalendarDate(unsafe { (r.max_age)(self.0.as_ptr()) })
+    }
+    /// `Vehicle::breakdown_chance`: current chance of breakdowns.
+    #[inline]
+    pub(crate) fn breakdown_chance(self, r: &crate::newgrf_vehicle::Services) -> u8 {
+        // SAFETY: As `age`.
+        unsafe { (r.breakdown_chance)(self.0.as_ptr()) }
+    }
+    /// Store `Vehicle::breakdown_chance`.
+    #[inline]
+    pub(crate) fn set_breakdown_chance(self, m: &crate::vehicle::maintenance::Services, value: u8) {
+        (m.set_breakdown_chance)(self, value);
+    }
+    /// `Vehicle::breakdown_delay`: counter for managing breakdown length.
+    #[inline]
+    pub(crate) fn breakdown_delay(self, r: &crate::newgrf_vehicle::Services) -> u8 {
+        // SAFETY: As `age`.
+        unsafe { (r.breakdown_delay)(self.0.as_ptr()) }
+    }
+    /// Store `Vehicle::breakdown_delay`.
+    #[inline]
+    pub(crate) fn set_breakdown_delay(self, m: &crate::vehicle::maintenance::Services, value: u8) {
+        (m.set_breakdown_delay)(self, value);
+    }
+    /// `Vehicle::breakdowns_since_last_service`: counter for the amount of breakdowns.
+    #[inline]
+    pub(crate) fn breakdowns_since_last_service(self, r: &crate::newgrf_vehicle::Services) -> u8 {
+        // SAFETY: As `age`.
+        unsafe { (r.breakdowns)(self.0.as_ptr()) }
+    }
+    /// Store `Vehicle::breakdowns_since_last_service`.
+    #[inline]
+    pub(crate) fn set_breakdowns_since_last_service(
+        self,
+        base: &crate::vehicle::VehicleServices,
+        value: u8,
+    ) {
+        (base.write_breakdowns)(self, value);
+    }
+    /// `Vehicle::date_of_last_service`: last economy date the vehicle had a service at a depot.
+    #[inline]
+    pub(crate) fn date_of_last_service(
+        self,
+        m: &crate::vehicle::maintenance::Services,
+    ) -> EconomyDate {
+        EconomyDate((m.date_of_last_service)(self))
+    }
+    /// Store `Vehicle::date_of_last_service`.
+    #[inline]
+    pub(crate) fn set_date_of_last_service(
+        self,
+        base: &crate::vehicle::VehicleServices,
+        value: EconomyDate,
+    ) {
+        (base.write_economy_service)(self, value.0);
+    }
+    /// Store `Vehicle::date_of_last_service_newgrf`: last calendar date the vehicle had a
+    /// service at a depot, unchanged by the date cheat to protect `NewGRF` behaviour.
+    #[inline]
+    pub(crate) fn set_date_of_last_service_newgrf(
+        self,
+        base: &crate::vehicle::VehicleServices,
+        value: CalendarDate,
+    ) {
+        (base.write_calendar_service)(self, value.0);
+    }
+    /// `Vehicle::economy_age`: age in economy days.
+    #[inline]
+    pub(crate) fn economy_age(self, m: &crate::vehicle::maintenance::Services) -> EconomyDate {
+        EconomyDate((m.economy_age)(self))
+    }
+    /// Store `Vehicle::economy_age`.
+    #[inline]
+    pub(crate) fn set_economy_age(
+        self,
+        m: &crate::vehicle::maintenance::Services,
+        value: EconomyDate,
+    ) {
+        (m.set_economy_age)(self, value.0);
+    }
+    /// `Vehicle::group_id`: index of group pool array item.
+    #[inline]
+    pub(crate) fn group_id(self, g: &crate::fleet::GroupServices) -> GroupID {
+        // SAFETY: The group slot reads the live record's shell.
+        GroupID(unsafe { (g.vehicle_group)(self.shell().cast()) })
+    }
+    /// `Vehicle::index`.
+    #[inline]
+    pub(crate) fn index(self, r: &crate::newgrf_vehicle::Services) -> VehicleID {
+        // SAFETY: As `age`.
+        VehicleID(unsafe { (r.id)(self.0.as_ptr()) })
+    }
+    /// `Vehicle::reliability`: reliability.
+    #[inline]
+    pub(crate) fn reliability(self, r: &crate::newgrf_vehicle::Services) -> u16 {
+        // SAFETY: As `age`.
+        unsafe { (r.reliability)(self.0.as_ptr()) }
+    }
+    /// Store `Vehicle::reliability`.
+    #[inline]
+    pub(crate) fn set_reliability(self, base: &crate::vehicle::VehicleServices, value: u16) {
+        (base.write_reliability)(self, value);
+    }
+    /// `Vehicle::reliability_spd_dec`: reliability decrease speed.
+    #[inline]
+    pub(crate) fn reliability_spd_dec(self, r: &crate::newgrf_vehicle::Services) -> u16 {
+        // SAFETY: As `age`.
+        unsafe { (r.reliability_decay)(self.0.as_ptr()) }
+    }
+    /// Store `Vehicle::reliability_spd_dec`.
+    #[inline]
+    pub(crate) fn set_reliability_spd_dec(
+        self,
+        m: &crate::vehicle::maintenance::Services,
+        value: u16,
+    ) {
+        (m.set_reliability_spd_dec)(self, value);
+    }
+    /// `Vehicle::value`: value of the vehicle.
+    #[inline]
+    pub(crate) fn value(self, r: &crate::newgrf_vehicle::Services) -> i64 {
+        // SAFETY: As `age`.
+        unsafe { (r.value)(self.0.as_ptr()) }
+    }
+    /// Store `Vehicle::value`.
+    #[inline]
+    pub(crate) fn set_value(self, m: &crate::vehicle::maintenance::Services, value: i64) {
+        (m.set_value)(self, value);
+    }
+    /// `Vehicle::GetServiceInterval`.
+    #[inline]
+    pub(crate) fn get_service_interval(self, r: &crate::newgrf_vehicle::Services) -> u16 {
+        // SAFETY: As `age`.
+        unsafe { (r.service_interval)(self.0.as_ptr()) }
+    }
+    /// `Vehicle::vehicle_flags`, read in place from the record's consist state.
+    #[inline]
+    pub(crate) fn vehicle_flags(self) -> VehicleFlags {
+        let consist = read_field!(self.0.as_ptr(), consist);
+        VehicleFlags(read_field!(consist, flags))
+    }
+    /// `Vehicle::ServiceIntervalIsPercent`.
+    #[inline]
+    pub(crate) fn service_interval_is_percent(self) -> bool {
+        self.vehicle_flags()
+            .test(VehicleFlag::SERVICE_INTERVAL_IS_PERCENT)
     }
 
     #[inline]

@@ -445,9 +445,11 @@ unsafe fn add_profit(w: &GroupServices, v: *mut ()) {
         unsafe { (*p).fields.profit = (*p).fields.profit.saturating_add(profit) };
     }
 }
-unsafe fn min_age(w: &GroupServices, v: *mut ()) {
-    let profit = unsafe { (w.profit)(v) };
-    let v = record(w, v);
+/// `GroupStatistics::VehicleReachedMinAge`: add a vehicle to the profit sum of its group.
+/// # Safety
+/// `v` is a live vehicle of the serialized game state.
+pub(crate) unsafe fn vehicle_reached_min_age(w: &GroupServices, v: VehicleRef) {
+    let profit = unsafe { (w.profit)(v.shell().cast()) };
     let all = unsafe { vehicle_stats(w, v, true) };
     let stats = unsafe { vehicle_stats(w, v, false) };
     for p in [all, stats] {
@@ -957,7 +959,7 @@ unsafe fn update_profits(w: &GroupServices) {
         if unsafe { (w.primary)(v) } {
             unsafe { add_profit(w, v) };
             if unsafe { (w.old_enough)(v) } {
-                unsafe { min_age(w, v) };
+                unsafe { vehicle_reached_min_age(w, record(w, v)) };
             }
         }
     }
@@ -1221,7 +1223,7 @@ unsafe fn get_engine_replacement(
 /// `when_old` is set if the replacement should be done when old.
 /// Returns the engine type to replace with, or `EngineID::INVALID` if no
 /// replacement is in the list.
-unsafe fn engine_replacement(
+pub(crate) unsafe fn engine_replacement(
     w: &GroupServices,
     er: *mut (),
     engine: u16,
@@ -1386,7 +1388,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_count_engine(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_fleet_min_age(services: *const GroupServices, v: *mut ()) {
     let w = unsafe { &*services };
-    unsafe { min_age(w, v) }
+    unsafe { vehicle_reached_min_age(w, record(w, v)) }
 }
 /// Synchronous original fleet `update_afterload` control.
 /// # Safety
