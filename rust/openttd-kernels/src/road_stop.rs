@@ -23,7 +23,7 @@ use crate::services::{Map, Services};
 use crate::station::BaseStation;
 use crate::station_type::{RoadStopID, RoadStopType};
 use crate::tile_type::{MP_STATION, TILE_SIZE, TileIndex};
-use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle::{VehicleRef, VehicleServices, VehicleType};
 use crate::vehicle_base::VehState;
 
 /// `TILE_SIZE` in the `uint16_t` entry arithmetic.
@@ -77,8 +77,6 @@ fn total_length(v: VehicleRef) -> u16 {
 pub struct RoadStopServices {
     /// Shared vehicle table; Rebuild uses its tile hash traversal.
     pub vehicle: *const VehicleServices,
-    /// Shared road ground vehicle table.
-    pub ground: *const GroundServices,
     /// `Station::GetByTile(tile)->GetPrimaryRoadStop(type)`.
     pub primary: extern "C" fn(u32, RoadStopType) -> *mut Stop,
     /// The station's bus or truck stop list head.
@@ -128,7 +126,6 @@ pub(crate) fn next_for_vehicle(s: &Services, stop: *const Stop, v: VehicleRef) -
 fn accessible(s: &Services, mut stop: *mut Stop, v: VehicleRef) -> *mut Stop {
     let stops = table(s);
     let movement = crate::movement::table(s);
-    let ground = unsafe { &*stops.ground };
     let world = crate::map_func::World::new(s);
     while !stop.is_null() {
         let tile = TileIndex((stops.tile)(stop));
@@ -138,7 +135,7 @@ fn accessible(s: &Services, mut stop: *mut Stop, v: VehicleRef) -> *mut Stop {
             continue;
         }
         // The vehicle is articulated and can therefore not go to a standard road stop.
-        if world.is_bay_road_stop_tile(tile) && (ground.has_articulated)(v) {
+        if world.is_bay_road_stop_tile(tile) && v.has_articulated_part() {
             stop = (stops.next)(stop);
             continue;
         }
@@ -369,13 +366,10 @@ pub(crate) unsafe fn enter(
     v: VehicleRef,
     road: *mut RoadState,
 ) -> bool {
-    let t = table(s);
     if crate::map_func::World::new(s).is_bay_road_stop_tile(xy) {
-        // SAFETY: The shared road ground table is static.
-        let ground = unsafe { &*t.ground };
         // For normal (non drive-through) road stops
         // Check if station is busy or if there are no free bays or whether it is a articulated vehicle.
-        if is_entrance_busy(state) || !has_free_bay(state) || (ground.has_articulated)(v) {
+        if is_entrance_busy(state) || !has_free_bay(state) || v.has_articulated_part() {
             crate::witness::hit(crate::witness::ROAD_STOP_ENTER_REFUSED);
             return false;
         }
@@ -849,7 +843,6 @@ crate::abi::layouts! {
     "OpenTTDRoadStopState" ["probe"] => crate::road_stop::State { status, entries, };
     "OpenTTDRoadStopServices" ["probe"] => crate::road_stop::RoadStopServices {
         vehicle,
-        ground,
         primary,
         head,
         is_bus,

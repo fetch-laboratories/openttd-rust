@@ -229,17 +229,10 @@ inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return Ve
 inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; }
 
 
-template <class T>
-inline bool OPENTTD_RUST_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcept
-{
-	return RustGroundHasArticulated(T::From(VehicleOf(v)));
-}
-
 /** One immutable process-wide GroundVehicle table per vehicle type. */
 template <class T>
 inline const OpenTTDGroundServices _rust_ground_services{
 	.physics = &GetRustGroundPhysicsServices(),
-	.has_articulated = GroundSvcHasArticulated<T>,
 };
 
 template <class T>

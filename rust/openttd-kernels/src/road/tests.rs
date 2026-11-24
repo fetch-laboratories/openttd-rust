@@ -72,7 +72,7 @@ mod controller {
         STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL, STR_NEWS_FIRST_TRUCK_ARRIVAL,
         STR_NEWS_ROAD_VEHICLE_CRASH, STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER,
     };
-    use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE, unreachable1};
+    use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE};
     use std::cell::Cell;
 
     thread_local! {
@@ -191,7 +191,6 @@ mod controller {
         thread_local! {
             static STOPS: crate::road_stop::RoadStopServices = crate::road_stop::RoadStopServices {
                 vehicle: std::ptr::null(),
-                ground: std::ptr::null(),
                 primary: crate::test_tables::unreachable2,
                 head: crate::test_tables::unreachable2,
                 is_bus,
@@ -233,7 +232,6 @@ mod controller {
             }));
             let ground = Box::leak(Box::new(GroundServices {
                 physics: &GROUND_VEHICLE,
-                has_articulated: unreachable1,
             }));
             let shared = Box::leak(Box::new(crate::services::Services {
                 road_stops,
@@ -427,7 +425,6 @@ mod controller {
         );
         let ground = Box::leak(Box::new(GroundServices {
             physics,
-            has_articulated: unreachable1,
         }));
         let leaves = Leaves {
             ground,
@@ -697,7 +694,6 @@ mod controller {
         thread_local! {
             static STOPS: crate::road_stop::RoadStopServices = crate::road_stop::RoadStopServices {
                 vehicle: std::ptr::null(),
-                ground: std::ptr::null(),
                 primary: bay_primary,
                 head: crate::test_tables::unreachable2,
                 is_bus,
@@ -1244,7 +1240,6 @@ mod controller {
         f.leaves = Box::leak(Box::new(Leaves {
             ground: Box::leak(Box::new(GroundServices {
                 physics,
-                has_articulated: unreachable1,
             })),
             vehicle: Box::leak(Box::new(crate::vehicle::VehicleServices {
                 maintenance,

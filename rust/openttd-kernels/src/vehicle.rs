@@ -220,7 +220,6 @@ pub(crate) fn is_waiting_for_unbunching(
 #[repr(C)]
 pub struct GroundServices {
     pub physics: &'static crate::ground_vehicle::Services,
-    pub has_articulated: extern "C" fn(VehicleRef) -> bool,
 }
 
 /// `GetAdvanceDistance()`.
@@ -292,7 +291,6 @@ crate::abi::layouts! {
 
 
     "OpenTTDGroundServices" ["probe"] => GroundServices {
-        has_articulated,
         physics,
     };
     "OrderType" ["maintenance"] => OrderType {

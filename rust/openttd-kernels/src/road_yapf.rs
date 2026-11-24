@@ -1378,7 +1378,6 @@ mod tests {
         static BUS: Cell<bool> = const { Cell::new(false) };
         static ROAD_STOPS: crate::road_stop::RoadStopServices = crate::road_stop::RoadStopServices {
             vehicle: ptr::null(),
-            ground: ptr::null(),
             primary: crate::test_tables::unreachable2,
             head: crate::test_tables::unreachable2,
             is_bus,

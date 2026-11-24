@@ -3053,7 +3053,7 @@ mod tests;
 #[cfg(test)]
 mod map_context_tests {
     use super::*;
-    use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE, unreachable1};
+    use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE};
 
     /// Pinned `RoadVehicle::Tick` returns for an articulated part after wrapping
     /// `tick_counter`. The native ABI fixture leaves map services unused here.
@@ -3064,7 +3064,6 @@ mod map_context_tests {
         let vehicle = VEHICLE;
         let ground = GroundServices {
             physics: &GROUND_VEHICLE,
-            has_articulated: unreachable1,
         };
         let mut leaves = ROAD_LEAVES;
         leaves.ground = &raw const ground;

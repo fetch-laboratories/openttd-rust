@@ -52,7 +52,6 @@ static int road_abi_stop; ///< Its address is the opaque road stop shell.
  * shell services resolve the probe's single stop at tile 100. */
 static const OpenTTDRoadStopServices road_abi_stops{
 	.vehicle = nullptr,
-	.ground = nullptr,
 	.primary = [](uint32_t tile, RoadStopType) noexcept { CHECK(tile == 100); return reinterpret_cast<RoadStop *>(&road_abi_stop); },
 	.tile = [](const RoadStop *) noexcept -> uint32_t { return 100; },
 	.state = [](const RoadStop *) noexcept { return road_abi_probe->stop.get(); },

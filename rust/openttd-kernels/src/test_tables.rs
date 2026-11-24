@@ -2522,7 +2522,6 @@ pub(crate) const VEHICLE_SELECTION: crate::vehicle_transactions::SelectionServic
 /// `crate::vehicle::GroundServices` for road vehicles with every entry unreachable.
 pub(crate) const ROAD_GROUND: crate::vehicle::GroundServices = crate::vehicle::GroundServices {
     physics: &GROUND_VEHICLE,
-    has_articulated: unreachable1,
 };
 
 /// `crate::vehicle_transactions::refit::Services` with every entry unreachable.

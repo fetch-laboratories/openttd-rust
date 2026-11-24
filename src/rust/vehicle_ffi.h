@@ -83,7 +83,6 @@ struct OpenTTDVehicleServices {
 struct OpenTTDGroundPhysicsServices;
 struct OpenTTDGroundServices {
 	const OpenTTDGroundPhysicsServices *physics;
-	bool (OPENTTD_RUST_CALL *has_articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);
 };
 extern const OpenTTDVehicleServices _rust_vehicle_services;
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept;

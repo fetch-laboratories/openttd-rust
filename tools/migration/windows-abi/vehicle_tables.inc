@@ -34,7 +34,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, write_breakdowns);
 		VEHICLE_UNUSED(vehicle, write_reliability);
 		VEHICLE_UNUSED(vehicle, profit);
-		VEHICLE_UNUSED(ground, has_articulated);
 		VEHICLE_UNUSED(vehicle, visits);
 		VEHICLE_UNUSED(vehicle, enter_depot);
 		VEHICLE_UNUSED(vehicle, pathfinding_result);
