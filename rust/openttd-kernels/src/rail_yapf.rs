@@ -3682,7 +3682,9 @@ mod tests {
             not_reached,
             ..*f.s
         }));
-        crate::services_assert::bind_test_policy(no_assertion, s);
+        // SAFETY: The fixture's map statics belong to this thread, which runs every
+        // assertion in the child.
+        unsafe { crate::services_assert::bind_test_policy(no_assertion, s) };
         let mut pf = CYapfRailT::<CYapfAnyDepotRail>::new(s, f.v);
         // No look-ahead signals, so that the new node takes its global segment.
         pf.sig_look_ahead_costs.clear();

@@ -1868,7 +1868,9 @@ mod tests {
             not_reached,
             ..shared(&crate::test_tables::VEHICLE)
         }));
-        crate::services_assert::bind_test_policy(no_assertion, s);
+        // SAFETY: The fixture's map statics belong to this thread, which runs every
+        // assertion in the child.
+        unsafe { crate::services_assert::bind_test_policy(no_assertion, s) };
         let v = vehicle(s);
         let mut pf = CYapfShip::new(&v, 0);
         let destination = TileIndex(10 + 10 * 64);

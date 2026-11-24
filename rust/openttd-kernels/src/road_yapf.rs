@@ -1573,7 +1573,9 @@ mod tests {
             not_reached,
             ..shared()
         }));
-        crate::services_assert::bind_test_policy(no_assertion, s);
+        // SAFETY: The fixture's map statics belong to this thread, which runs every
+        // assertion in the child.
+        unsafe { crate::services_assert::bind_test_policy(no_assertion, s) };
         let destination = TileIndex(10 + 10 * 64);
         let mut pf = search(s, input());
         pf.dest_tile = destination;

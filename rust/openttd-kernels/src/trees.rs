@@ -2749,7 +2749,9 @@ mod tests {
                 not_reached: exit_not_reached,
                 ..*shared()
             }));
-            crate::services_assert::bind_test_policy(record_assert, shared);
+            // SAFETY: The fixture's map statics belong to this thread, which runs every
+            // assertion in the child.
+            unsafe { crate::services_assert::bind_test_policy(record_assert, shared) };
             body();
             std::process::exit(0);
         }

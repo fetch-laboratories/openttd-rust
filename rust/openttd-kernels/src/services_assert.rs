@@ -82,14 +82,24 @@ pub(crate) fn bind_test_check(check: extern "C" fn(bool)) {
 }
 
 /// Bind the assertion callback and the shared table for a Rust test. The binding
-/// retains `shared` for the rest of the process, so it takes a process-lifetime table.
+/// retains `shared` for the rest of the process, so it takes a process-lifetime table,
+/// and every later `assert_with` reads `shared.map`, so the binder refuses a null map.
+///
+/// # Safety
+/// `shared.map` points to map statics that live through the child process's last
+/// assertion.
 #[cfg(test)]
-pub(crate) fn bind_test_policy(
+pub(crate) unsafe fn bind_test_policy(
     check: extern "C" fn(bool),
     shared: &'static crate::services::Services,
 ) {
     require_isolated_child();
-    // SAFETY: `shared` lives for the process, as the export requires.
+    assert!(
+        !shared.map.is_null(),
+        "a test binds a shared table with no map statics"
+    );
+    // SAFETY: `shared` lives for the process, as the export requires, and the caller
+    // keeps its map statics live through every assertion.
     unsafe {
         openttd_rust_assert_bind(check, shared);
     }
@@ -194,10 +204,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "outside an isolated child process")]
     fn binding_the_policy_in_the_parent_process_panics() {
-        super::bind_test_policy(
-            unused_check,
-            Box::leak(Box::new(crate::test_tables::SHARED)),
-        );
+        // SAFETY: The guard panics before anything is bound.
+        unsafe {
+            super::bind_test_policy(
+                unused_check,
+                Box::leak(Box::new(crate::test_tables::SHARED)),
+            );
+        }
     }
 
     #[test]

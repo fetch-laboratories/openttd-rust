@@ -513,11 +513,13 @@ mod controller {
         let shared = crate::services::Services {
             settings,
             not_reached,
+            map: crate::map_func::fixture::statics(),
             ..SHARED
         };
         let mut f = Fixture::new(LOCAL, &shared);
-        // SAFETY: `Fixture::new` leaks the shared table, so it lives for the process.
-        crate::services_assert::bind_test_policy(no_assertion, unsafe { &*f.leaves.shared });
+        // SAFETY: `Fixture::new` leaks the shared table, so it lives for the process, and
+        // its map statics belong to this thread, which runs every assertion in the child.
+        unsafe { crate::services_assert::bind_test_policy(no_assertion, &*f.leaves.shared) };
         let part = f.part();
         f.game().update_speed(part);
     }
