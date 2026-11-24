@@ -277,6 +277,21 @@ pub(crate) const fn test_table_with_members(
     }
 }
 
+/// `table` answering engine property callbacks: `engine_by_id` names the engine and
+/// `resolve_callback` answers, for tests outside this module.
+#[cfg(test)]
+pub(crate) const fn test_table_answering(
+    table: Services,
+    engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
+    resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
+) -> Services {
+    Services {
+        resolve_callback,
+        engine_by_id,
+        ..table
+    }
+}
+
 /// Test-only table with every leaf unreachable; its private fields keep it in this module.
 #[cfg(test)]
 pub(crate) const TEST_TABLE: Services = Services {

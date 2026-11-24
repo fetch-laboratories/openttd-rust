@@ -28,6 +28,9 @@ enum Call {
     SetCargoSubtype(u8),
     /// `GetBestFittingSubType(v, v, cargo)`, with the cargo type stored when it runs.
     BestFittingSubType(u8, u8),
+    /// `Engine::DetermineCapacity` reading the vehicle's cargo type, with the cargo type and
+    /// subtype stored when it reads it.
+    Capacity(u8, u8),
     SetLastLoadingStation(u16),
     SetTripOccupancy(i8),
     HideFillingPercent,
@@ -100,6 +103,28 @@ extern "C" fn write_profit(_: VehicleRef, value: i64) {
 extern "C" fn mark_dirty(_: VehicleRef) {
     record(Call::MarkDirty);
 }
+unsafe extern "C" fn engine_by_id(_: u16) -> *const crate::engine_type::OpenTTDEngine {
+    ENGINE.get()
+}
+unsafe extern "C" fn no_callback(
+    _: *mut crate::newgrf_vehicle::State,
+    _: u16,
+    _: u16,
+    _: u32,
+    _: u32,
+    _: *mut i32,
+    _: usize,
+) -> u16 {
+    crate::newgrf_callbacks::CALLBACK_FAILED
+}
+// The engine capability table's leaves.
+extern "C" fn capacity_engine_id(_: *const crate::engine_type::OpenTTDEngine) -> u16 {
+    0
+}
+extern "C" fn capacity_cargo(_: *mut OpenTTDVehicle) -> u8 {
+    record(Call::Capacity(CARGO_TYPE.get(), CARGO_SUBTYPE.get()));
+    CARGO_TYPE.get()
+}
 unsafe extern "C" fn best_fitting_sub_type(_: *mut (), _: *mut (), cargo: u8) -> u8 {
     record(Call::BestFittingSubType(cargo, CARGO_TYPE.get()));
     9
@@ -161,11 +186,15 @@ fn visits(
     let mut loading = crate::test_tables::STATION_LOADING;
     edit(&mut shared, &mut station, &mut loading);
     let shared = leak(shared);
-    let resolver = leak(crate::newgrf_vehicle::test_table_with_members(
-        index,
-        cargo_type,
-        cargo_subtype,
-        cargo_owner,
+    let resolver = leak(crate::newgrf_vehicle::test_table_answering(
+        crate::newgrf_vehicle::test_table_with_members(
+            index,
+            cargo_type,
+            cargo_subtype,
+            cargo_owner,
+        ),
+        engine_by_id,
+        no_callback,
     ));
     RESOLVER.set(resolver);
     let vehicles = leak(crate::vehicle::VehicleServices {
@@ -207,9 +236,13 @@ fn visits(
         orders,
         ..crate::test_tables::VEHICLE_COMMON
     });
+    let mut capabilities = crate::engine_capabilities::test_table_with_shared(shared);
+    capabilities.vehicles = vehicles;
+    capabilities.id = capacity_engine_id;
+    capabilities.vehicle_cargo = capacity_cargo;
     let refit = leak(refit::Services {
         common,
-        capabilities: leak(crate::engine_capabilities::test_table_with_shared(shared)),
+        capabilities: leak(capabilities),
         ..crate::test_tables::REFIT
     });
     leak(Services {
@@ -325,19 +358,22 @@ fn autorefit_restore_reuses_storage_and_restores_payload() {
 
 /// `LinkRefresher::HandleRefit` (`refresh.cpp:81-92`) stores the refit cargo type, asks
 /// `GetBestFittingSubType` with that type stored, stores its subtype, and then restores the
-/// type and the subtype, each with its own store. An engine that cannot carry cargo has a
-/// capacity of 0, which drops the part's remaining capacity of its old cargo.
+/// type and the subtype, each with its own store. `DetermineCapacity` runs between the subtype
+/// store and the restores, seeing the refit cargo and subtype. A ship engine of capacity 40
+/// whose property callback fails has that capacity, and the refit drops the part's
+/// remaining capacity of its old cargo.
 #[test]
 fn handle_refit_stores_and_restores_type_and_subtype_in_the_original_order() {
     let s = visits(|_, _, _| {});
     let engine = crate::engine::openttd_rust_engine_new();
-    // A road engine without capacity, which cannot carry cargo.
+    // A ship engine carrying cargo 1, with capacity 40 and no callbacks.
     // SAFETY: The fresh engine; the test owns it.
     unsafe {
         (*engine).info.refit_mask = 1 << 5;
-        (*engine).r#type = VehicleType::VEH_ROAD;
-        (*engine).vehicle_info_type = VehicleType::VEH_ROAD;
-        (*crate::engine::Lifecycle::road(engine)).capacity = 0;
+        (*engine).info.cargo_type = 1;
+        (*engine).r#type = VehicleType::VEH_SHIP;
+        (*engine).vehicle_info_type = VehicleType::VEH_SHIP;
+        (*crate::engine::Lifecycle::ship(engine)).capacity = 40;
     }
     ENGINE.set(engine);
     CARGO_TYPE.set(2);
@@ -369,6 +405,7 @@ fn handle_refit_stores_and_restores_type_and_subtype_in_the_original_order() {
             Call::SetCargoType(5),
             Call::BestFittingSubType(5, 5),
             Call::SetCargoSubtype(9),
+            Call::Capacity(5, 9),
             Call::SetCargoType(2),
             Call::SetCargoSubtype(7),
         ]
@@ -376,7 +413,7 @@ fn handle_refit_stores_and_restores_type_and_subtype_in_the_original_order() {
     let desc = refresher.refit_capacities[0];
     assert_eq!(
         (desc.cargo, desc.capacity, desc.remaining),
-        (CargoType(5), 0, 0)
+        (CargoType(5), 40, 0)
     );
     assert_eq!(refresher.capacities[2], 0);
     assert_eq!(refresher.cargo, CargoType(5));
@@ -520,9 +557,14 @@ fn depot_halt_announces_the_wait_to_the_local_company_and_the_owners_ai() {
                 advice_type: AdviceType::VehicleWaiting,
             });
         }
+        // `ET_VEHICLE_WAITING_IN_DEPOT` is 14 in `script_event.hpp`'s enumeration; the
+        // event carries only the vehicle.
         expected.push(Effect::AiNewEvent(
             owner,
-            ScriptEvent::vehicle_waiting_in_depot(VehicleID(INDEX)),
+            ScriptEvent {
+                r#type: crate::script_event::ScriptEventType(14),
+                ..ScriptEvent::aircraft_dest_too_far(VehicleID(INDEX))
+            },
         ));
         assert_eq!(take(), expected, "owner {owner}");
     }
@@ -681,4 +723,25 @@ fn enter_depot_of_an_effect_vehicle_is_not_reached_before_any_window_call() {
     );
     crate::window_func::testing::take();
     enter_depot(v, s);
+}
+
+/// `VehicleEnterDepot` asserts that `v == v->First()`, with `First()` the stored link: a null
+/// link fails the native assertion rather than ending the process another way.
+#[test]
+fn enter_depot_asserts_on_a_null_first_link() {
+    if crate::services_assert::isolate_test_exit(
+        "vehicle::visits::tests::enter_depot_asserts_on_a_null_first_link",
+    ) {
+        return;
+    }
+    let s = visits(|_, _, _| {});
+    let v = vehicle(
+        VehicleType::VEH_ROAD,
+        crate::company_type::CompanyID(LOCAL),
+        order(OrderType::OT_NOTHING, 0, 0xFE),
+    );
+    // SAFETY: The test's fresh record.
+    unsafe { (*v.0.as_ptr()).first = std::ptr::null_mut() };
+    enter_depot(v, s);
+    unreachable!("the failed native assertion ends the child");
 }
