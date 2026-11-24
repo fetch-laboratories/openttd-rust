@@ -270,13 +270,11 @@ pub struct OpenTTDVehicleShell {
 /// that creates or deletes the vehicle.
 pub(crate) type Pool = crate::pool::TypedPool<VehicleID, VehicleRecord, OpenTTDVehicleShell>;
 
-/// `Pool::MAX_SIZE` of the vehicle pool, `VehicleID::End()`.
-const MAX_SIZE: usize = VehicleID::END.0 as usize;
 /// The ID of a pool index below `first_unused`. The pool never raises `first_unused` past
-/// `MAX_SIZE` (0xFF000), so the index fits `VehicleID`'s `uint32_t`.
+/// `Pool::MAX_SIZE`, `VehicleID::End()` (0xFF000), so the index fits `VehicleID`'s `uint32_t`.
 #[allow(
     clippy::cast_possible_truncation,
-    reason = "an index below `first_unused` is at most `MAX_SIZE`, which fits `uint32_t`"
+    reason = "an index below `first_unused` is at most `Pool::MAX_SIZE`, which fits `uint32_t`"
 )]
 pub(crate) const fn pool_id(index: usize) -> VehicleID {
     VehicleID(index as u32)
@@ -290,16 +288,29 @@ pub(crate) unsafe fn get(pool: &Pool, index: VehicleID) -> Option<crate::vehicle
     // SAFETY: The caller's live descriptor.
     std::ptr::NonNull::new(unsafe { pool.record(index) }).map(crate::vehicle::VehicleRef)
 }
-/// `Vehicle::Iterate()`'s `PoolIterator::ValidateIndex` from `index`: the first valid vehicle
-/// at or after it, rereading the pool's extent at each slot, or `None` where the iterator
-/// reaches its end sentinel `MAX_SIZE`.
+/// `Vehicle::Iterate()`'s `PoolIterator::ValidateIndex` from `index` and its `*it`: the first
+/// valid vehicle at or after it, as its ID, its shell (`Vehicle::Get(index)`) and its record,
+/// rereading the pool's extent at each slot, or `None` where the iterator reaches its end
+/// sentinel `Pool::MAX_SIZE`.
 ///
 /// # Safety
 /// As [`get`].
-pub(crate) unsafe fn next_vehicle(pool: &Pool, index: usize) -> Option<VehicleID> {
+pub(crate) unsafe fn next_vehicle(
+    pool: &Pool,
+    index: usize,
+) -> Option<(
+    VehicleID,
+    *mut OpenTTDVehicleShell,
+    crate::vehicle::VehicleRef,
+)> {
     // SAFETY: The caller's live descriptor.
-    let index = unsafe { pool.next_index(index, MAX_SIZE) };
-    (index != MAX_SIZE).then_some(pool_id(index))
+    let (index, shell, record) = unsafe { pool.next_item(index) }?;
+    // A slot with a shell holds its record (`Pool`).
+    Some((
+        pool_id(index),
+        shell,
+        crate::vehicle::VehicleRef::of(record),
+    ))
 }
 
 crate::abi::shared_records! {

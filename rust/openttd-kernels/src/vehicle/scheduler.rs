@@ -410,23 +410,30 @@ fn after_tick<const COUNTED: bool>(
     );
 
     // Check vehicle type specifics
-    match load!(COUNTED, v.vehicle_type()) {
+    // The switch's read of `v->type` serves the `From` casts' type assertions and
+    // `IsFrontEngine`'s ground test: nothing between them writes, calls or draws.
+    let kind = load!(COUNTED, v.vehicle_type());
+    match kind {
         VehicleType::VEH_TRAIN => {
-            let train = train::Handle::from_vehicle(v);
-            if !ground_vehicle::is_engine(load!(COUNTED, train.vehicle().subtype())) {
+            // `Train::From(v)`.
+            assert_with(|| kind == VehicleType::VEH_TRAIN);
+            if !ground_vehicle::is_engine(load!(COUNTED, v.subtype())) {
                 return;
             }
         }
         VehicleType::VEH_ROAD => {
             // `RoadVehicle::From(v)`.
-            assert_with(|| v.vehicle_type() == VehicleType::VEH_ROAD);
-            if !load!(COUNTED, v.is_front_engine()) {
+            assert_with(|| kind == VehicleType::VEH_ROAD);
+            if !vehicle_base::is_front_engine(
+                vehicle_base::is_ground_vehicle(kind),
+                load!(COUNTED, v.subtype()),
+            ) {
                 return;
             }
         }
         VehicleType::VEH_AIRCRAFT => {
             // `Aircraft::From(v)`.
-            assert_with(|| v.vehicle_type() == VehicleType::VEH_AIRCRAFT);
+            assert_with(|| kind == VehicleType::VEH_AIRCRAFT);
             if !aircraft::is_normal_aircraft(load!(COUNTED, v.subtype())) {
                 return;
             }
@@ -521,13 +528,13 @@ fn call_vehicle_ticks<const COUNTED: bool>(tables: &Tables, cost: *mut ()) {
     // `Tick` allocates ahead of the walk, past the old extent included, is visited this tick.
     let mut index = 0;
     // SAFETY, for the pool reads: the live descriptor, read afresh at each step.
-    while let Some(id) = unsafe { vehicle_base::next_vehicle(&pool, index) } {
+    // One slot load per step serves the iterator's validity test and its `*it`: nothing
+    // between them writes, calls or draws.
+    while let Some((id, shell, v)) = unsafe { vehicle_base::next_vehicle(&pool, index) } {
         index = id.index() + 1;
-        let v = VehicleRef::of(unsafe { pool.record(id) });
         // `v->index`, which the pool stores each vehicle at, so the walk's `id`; only the two
-        // assertions read it. The shell is read before `Tick`, which can delete the record.
+        // assertions read it. `v` is the slot's shell, the iterator's `Vehicle::Get(index)`.
         let vehicle_index = id;
-        let shell = v.shell();
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_OUTER_VISITS);
         }
@@ -545,7 +552,8 @@ fn call_vehicle_ticks<const COUNTED: bool>(tables: &Tables, cost: *mut ()) {
             continue;
         }
 
-        assert_with(|| unsafe { pool.shell(vehicle_index) }.cast::<std::ffi::c_void>() == shell);
+        // `Tick` can delete or allocate vehicles, so the slot is read again.
+        assert_with(|| unsafe { pool.shell(vehicle_index) } == shell);
 
         after_tick::<COUNTED>(tables, vs, newgrf, v);
     }
@@ -1327,10 +1335,9 @@ mod tests {
             let mut first_unused = 0;
             let mut from = 0;
             // SAFETY: The test's live pool, reread at each step.
-            while let Some(next) = unsafe { vehicle_base::next_vehicle(&walk, from) } {
+            while let Some((next, _, vehicle)) = unsafe { vehicle_base::next_vehicle(&walk, from) }
+            {
                 from = next.index() + 1;
-                // SAFETY: As the walk's.
-                let vehicle = VehicleRef::of(unsafe { walk.record(next) });
                 let id = index_of(vehicle);
                 visits.push(id);
                 if id == 0 {

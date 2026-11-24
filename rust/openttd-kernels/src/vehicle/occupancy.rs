@@ -132,12 +132,9 @@ pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::Sche
     let vs = s.vehicle();
     // `Vehicle::Iterate()`.
     let mut index = 0;
-    while let Some(id) = unsafe { crate::vehicle_base::next_vehicle(&pool, index) } {
+    while let Some((id, _, v)) = unsafe { crate::vehicle_base::next_vehicle(&pool, index) } {
         index = crate::pool::PoolId::index(id) + 1;
-        unsafe {
-            let v = VehicleRef::of(pool.record(id));
-            (*((vs.tile_links)(v))).current = ptr::null_mut();
-        }
+        unsafe { (*((vs.tile_links)(v))).current = ptr::null_mut() };
     }
     unsafe {
         ptr::write_bytes(
