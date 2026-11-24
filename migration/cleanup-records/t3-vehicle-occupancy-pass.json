@@ -1,0 +1,13 @@
+[
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-vehicle.h": 3
+    },
+    "reason": "#1003 decision 1: the original's NOSAVE members hash_tile_next, hash_tile_prev and hash_tile_current (vehicle_base.h:245-247) join VehicleRecord, where Rust, their only writer, reads and writes them in place. They replace OpenTTDVehicleTileLinks, Vehicle::tile_links, VehicleServices::tile_links and its C++ function, which cost one native call per position update, iterator step and relinked neighbour.",
+    "existing_alternatives": "The links had no record field: the C++ shell stored them and Rust reached them through the tile_links service, a moved field behind a service (porting.md, design faults).",
+    "retiring_owner": "#734",
+    "retirement_condition": "The fields are the members' one definition; they stay with the vehicle record."
+  }
+]

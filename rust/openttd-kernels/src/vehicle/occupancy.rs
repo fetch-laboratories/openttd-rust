@@ -19,6 +19,7 @@
 //! An iterator's visitor may change links but not delete the current vehicle, so an iterator
 //! reads the current vehicle's `hash_tile_next` after the visitor returns and never carries it
 //! across a visitor.
+#![allow(unsafe_code)]
 use crate::aircraft::AircraftSubType;
 use crate::game_state::GameState;
 use crate::map_func::{Map, World};
@@ -68,7 +69,6 @@ fn tile_hash_bucket(hash: usize) -> *mut *mut VehicleRecord {
         .wrapping_add(hash)
 }
 /// `_vehicle_tile_hash[hash]`.
-#[allow(unsafe_code)]
 fn tile_hash_head(hash: usize) -> *mut VehicleRecord {
     // SAFETY: `hash` is below `TOTAL_TILE_HASH_SIZE`; the module's serialized access.
     unsafe { tile_hash_bucket(hash).read() }
@@ -87,7 +87,6 @@ pub(crate) fn update_position(v: VehicleRef, map: Map) {
 }
 /// `UpdateVehicleTileHash` from `old_hash == new_hash` on, with the `new_hash` its `remove`
 /// selects: null to remove the vehicle, or its tile's bucket.
-#[allow(unsafe_code)]
 #[inline]
 fn update_vehicle_tile_hash(v: VehicleRef, new_hash: *mut *mut VehicleRecord) {
     let old_hash = v.hash_tile_current();
@@ -128,7 +127,6 @@ fn update_vehicle_tile_hash(v: VehicleRef, new_hash: *mut *mut VehicleRecord) {
 ///
 /// # Safety
 /// `v` is a live record; an insertion's `shared` is the process-lifetime shared table.
-#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_update(
     shared: *const crate::services::Services,
@@ -148,7 +146,6 @@ pub unsafe extern "C" fn openttd_rust_occupancy_update(
 ///
 /// # Safety
 /// `pool`'s descriptor is live, and nothing allocates, deletes or yields during the reset.
-#[allow(unsafe_code)]
 pub(crate) unsafe fn reset_vehicle_tile_hash(pool: &crate::vehicle_base::Pool) {
     crate::witness::hit(crate::witness::OCCUPANCY_RESET);
     // `for (Vehicle *v : Vehicle::Iterate())`.
@@ -165,7 +162,6 @@ pub(crate) unsafe fn reset_vehicle_tile_hash(pool: &crate::vehicle_base::Pool) {
 ///
 /// # Safety
 /// As [`reset_vehicle_tile_hash`], for the scheduler table's pool.
-#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::SchedulerServices) {
     // SAFETY: The caller's contract.
@@ -214,7 +210,6 @@ impl OnTile {
     }
 }
 /// `VehiclesOnTile::Iterator(tile)` for the native iterator class.
-#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_on_tile(
     shared: &crate::services::Services,
@@ -223,7 +218,6 @@ pub extern "C" fn openttd_rust_occupancy_on_tile(
     OnTile::new(shared.map(), TileIndex(tile))
 }
 /// `VehiclesOnTile::Iterator::operator++` for the native iterator class.
-#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_on_advance(it: &mut OnTile) {
     it.advance();
@@ -351,13 +345,11 @@ impl Near {
     }
 }
 /// `VehiclesNearTileXY::Iterator(x, y, max_dist)` for the native iterator class.
-#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_near(x: i32, y: i32, max_dist: u32) -> Near {
     Near::new(x, y, max_dist)
 }
 /// `VehiclesNearTileXY::Iterator::operator++` for the native iterator class.
-#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_near_advance(it: &mut Near) {
     it.advance();
@@ -466,7 +458,6 @@ fn command_cost(cost: Cost<'_>, blocker: Option<VehicleType>) {
     }
 }
 /// `EnsureNoVehicleOnGround(tile)` for the native function, into `out`.
-#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_ground(
     command: &CommandServices,
@@ -476,7 +467,6 @@ pub extern "C" fn openttd_rust_occupancy_ground(
     command.no_vehicle(out, TileIndex(tile));
 }
 /// `TunnelBridgeIsFree(tile, endtile, ignore)` for the native function, into `out`.
-#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_wormhole(
     command: &CommandServices,
@@ -536,7 +526,6 @@ impl CommandServices {
 /// that indexes a record holds `town::tests::GLOBAL_LOCK`, which the train swap oracle also
 /// holds, from its setup to the end of its cleanup, since the hash is process-wide.
 #[cfg(test)]
-#[allow(unsafe_code)]
 mod index_tests {
     use super::*;
     use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
