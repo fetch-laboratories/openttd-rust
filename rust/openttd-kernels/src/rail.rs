@@ -102,6 +102,7 @@ impl RailTypeInfoRef<'_> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailTypeSpriteGroup(pub u8);
 
+#[allow(dead_code, reason = "the header's whole enum; Rust reads RTSG_END only")]
 impl RailTypeSpriteGroup {
     /// Cursor and toolbar icon images
     pub const RTSG_CURSORS: Self = Self(0);
@@ -447,4 +448,351 @@ pub(crate) fn is_compatible_rail_raw(shared: &Shared, engine: u8, tile: u8) -> b
 /// Raw adapter: `GetAllIntroducesRailTypes`.
 pub fn get_all_introduces_rail_types_raw(shared: &Shared, types: u64) -> u64 {
     get_all_introduces_rail_types(shared, RailTypes(types)).0
+}
+
+#[cfg(test)]
+#[allow(unsafe_code)]
+mod tests {
+    use super::*;
+    use crate::engine::{EngineRef, Lifecycle};
+    use std::cell::RefCell;
+
+    /// One fixture rail type's members.
+    #[derive(Clone, Copy, Default)]
+    struct Info {
+        label: u32,
+        date: i32,
+        required: u64,
+        introduces: u64,
+        compatible: u64,
+        powered: u64,
+    }
+
+    thread_local! {
+        static TYPES: RefCell<Vec<Info>> = RefCell::new(vec![Info::default(); 64]);
+        /// Each `(rail type, member)` read, in order; member 0 is `GetRailTypeInfo`.
+        static READS: RefCell<Vec<(u8, char)>> = const { RefCell::new(Vec::new()) };
+        static ENGINES: RefCell<Vec<Box<Lifecycle>>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// The fixture record of the rail type the handle encodes as its address.
+    fn read(rti: *const RailTypeInfo, member: char) -> Info {
+        let rt = u8::try_from(rti as usize).unwrap();
+        READS.with(|r| r.borrow_mut().push((rt, member)));
+        TYPES.with(|t| t.borrow()[usize::from(rt)])
+    }
+    extern "C" fn rail_type_info(rt: RailType) -> *const RailTypeInfo {
+        READS.with(|r| r.borrow_mut().push((rt.0, 'i')));
+        std::ptr::without_provenance(usize::from(rt.0))
+    }
+    extern "C" fn label(rti: *const RailTypeInfo) -> u32 {
+        read(rti, 'l').label
+    }
+    extern "C" fn date(rti: *const RailTypeInfo) -> i32 {
+        read(rti, 'd').date
+    }
+    extern "C" fn required(rti: *const RailTypeInfo) -> u64 {
+        read(rti, 'r').required
+    }
+    extern "C" fn introduces(rti: *const RailTypeInfo) -> u64 {
+        read(rti, 'n').introduces
+    }
+    extern "C" fn compatible(rti: *const RailTypeInfo) -> u64 {
+        read(rti, 'c').compatible
+    }
+    extern "C" fn powered(rti: *const RailTypeInfo) -> u64 {
+        read(rti, 'p').powered
+    }
+    /// The fixture engines in order, each its own shell and lifecycle.
+    unsafe extern "C" fn next(from: u32) -> EngineRef {
+        ENGINES.with(|e| {
+            let engines = e.borrow();
+            match engines.get(from as usize) {
+                Some(record) => {
+                    let record: *const Lifecycle = &raw const **record;
+                    EngineRef {
+                        shell: record,
+                        state: record.cast_mut(),
+                        id: u16::try_from(from).unwrap(),
+                        kind: VehicleType::TRAIN,
+                    }
+                }
+                None => EngineRef {
+                    shell: std::ptr::null(),
+                    state: std::ptr::null_mut(),
+                    id: 0,
+                    kind: VehicleType::TRAIN,
+                },
+            }
+        })
+    }
+    extern "C" fn company_railtypes(_: u8) -> u64 {
+        u64::MAX
+    }
+
+    /// The shared table over the fixture rail types, and an availability table over it and
+    /// the fixture engines, in the temperate climate.
+    fn tables(types: &[(u8, Info)]) -> &'static Services {
+        TYPES.with(|t| {
+            let mut t = t.borrow_mut();
+            for &(rt, info) in types {
+                t[usize::from(rt)] = info;
+            }
+        });
+        static TEMPERATE: u8 = 0;
+        let settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
+            climate: &raw const TEMPERATE,
+            ..crate::settings_type::SettingAddresses::NULL
+        }));
+        let shared = Box::leak(Box::new(Shared {
+            settings,
+            rail_type_compatible_railtypes: compatible,
+            rail_type_info,
+            rail_type_introduces_railtypes: introduces,
+            rail_type_introduction_date: date,
+            rail_type_introduction_required_railtypes: required,
+            rail_type_label: label,
+            rail_type_powered_railtypes: powered,
+            ..crate::test_tables::SHARED
+        }));
+        Box::leak(Box::new(Services {
+            assertions: true,
+            company_railtypes,
+            company_roadtypes: crate::test_tables::unreachable1,
+            editor: crate::test_tables::unreachable0,
+            next,
+            road_flags: crate::test_tables::unreachable1,
+            road_info: crate::test_tables::unreachable1,
+            road_introduces: crate::test_tables::unreachable1,
+            road_introduction_date: crate::test_tables::unreachable1,
+            road_introduction_required: crate::test_tables::unreachable1,
+            road_label: crate::test_tables::unreachable1,
+            set_company_railtypes: crate::test_tables::unreachable2,
+            set_company_roadtypes: crate::test_tables::unreachable2,
+            shared,
+        }))
+    }
+    fn reads() -> Vec<(u8, char)> {
+        READS.with(|r| std::mem::take(&mut *r.borrow_mut()))
+    }
+    fn set(bits: &[u8]) -> RailTypes {
+        RailTypes(bits.iter().fold(0, |m, &b| m | 1 << b))
+    }
+
+    /// The `rail.h` unions over a two-type set return the union of each type's member and
+    /// resolve each type once; the compatibility and power tests follow them for either
+    /// overload.
+    #[test]
+    fn unions_resolve_each_type_once_and_the_tests_follow_them() {
+        let types = [
+            (
+                1,
+                Info {
+                    compatible: 0b0011,
+                    powered: 0b0100,
+                    introduces: 0b1_0000,
+                    ..Info::default()
+                },
+            ),
+            (
+                2,
+                Info {
+                    compatible: 0b1000,
+                    powered: 0b0110,
+                    introduces: 0b10_0000,
+                    ..Info::default()
+                },
+            ),
+        ];
+        let s = tables(&types);
+        // SAFETY: The fixture availability table names its leaked shared table.
+        let shared = unsafe { &*s.shared };
+        let both = set(&[1, 2]);
+        reads();
+        assert_eq!(
+            get_all_compatible_rail_types(shared, both),
+            RailTypes(0b1011)
+        );
+        assert_eq!(reads(), [(1, 'i'), (1, 'c'), (2, 'i'), (2, 'c')]);
+        assert_eq!(get_all_powered_rail_types(shared, both), RailTypes(0b0110));
+        assert_eq!(reads(), [(1, 'i'), (1, 'p'), (2, 'i'), (2, 'p')]);
+        assert_eq!(
+            get_all_introduces_rail_types(shared, both),
+            RailTypes(0b11_0000)
+        );
+        assert_eq!(reads(), [(1, 'i'), (1, 'n'), (2, 'i'), (2, 'n')]);
+
+        assert!(is_compatible_rail(shared, RailType(1), RailType(0)));
+        assert!(!is_compatible_rail(shared, RailType(1), RailType(3)));
+        assert!(is_compatible_rail_types(shared, both, RailType(3)));
+        assert!(!is_compatible_rail_types(shared, both, RailType(2)));
+        assert!(!has_power_on_rail(shared, RailType(1), RailType(1)));
+        assert!(has_power_on_rail(shared, RailType(2), RailType(1)));
+        assert!(has_power_on_rail_types(shared, both, RailType(2)));
+        assert!(!has_power_on_rail_types(shared, both, RailType(0)));
+    }
+
+    /// `AddDateIntroducedRailTypes` skips an unused type, one not date introduced, one not
+    /// yet introduced and one whose required types are missing, reading no member after
+    /// the test that fails, and runs again when a type it introduced enables another.
+    #[test]
+    fn date_introduction_skips_each_gate_and_runs_again() {
+        let l = u32::from_be_bytes(*b"TEST");
+        let types = [
+            (
+                0,
+                Info {
+                    label: 0,
+                    introduces: set(&[5]).0,
+                    ..Info::default()
+                },
+            ),
+            (
+                1,
+                Info {
+                    label: l,
+                    date: -1,
+                    introduces: set(&[6]).0,
+                    ..Info::default()
+                },
+            ),
+            (
+                2,
+                Info {
+                    label: l,
+                    date: MAX_DATE,
+                    introduces: set(&[6]).0,
+                    ..Info::default()
+                },
+            ),
+            (
+                3,
+                Info {
+                    label: l,
+                    date: 200,
+                    introduces: set(&[7]).0,
+                    ..Info::default()
+                },
+            ),
+            (
+                4,
+                Info {
+                    label: l,
+                    date: 50,
+                    required: set(&[9]).0,
+                    introduces: set(&[8]).0,
+                    ..Info::default()
+                },
+            ),
+            (
+                5,
+                Info {
+                    label: l,
+                    date: 100,
+                    introduces: set(&[10]).0,
+                    ..Info::default()
+                },
+            ),
+            (
+                20,
+                Info {
+                    label: l,
+                    date: 50,
+                    required: set(&[21]).0,
+                    introduces: set(&[22]).0,
+                    ..Info::default()
+                },
+            ),
+            (
+                30,
+                Info {
+                    label: l,
+                    date: 0,
+                    introduces: set(&[21]).0,
+                    ..Info::default()
+                },
+            ),
+        ];
+        let s = tables(&types);
+        reads();
+        let rts = add_date_introduced_rail_types(s, RailTypes::EMPTY, CalendarDate(100));
+        assert_eq!(rts, set(&[10, 21, 22]));
+        let first: Vec<_> = reads()
+            .into_iter()
+            .filter(|&(rt, m)| rt < 6 && m != 'i')
+            .take(15)
+            .collect();
+        assert_eq!(
+            first,
+            [
+                (0, 'l'),
+                (1, 'l'),
+                (1, 'd'),
+                (2, 'l'),
+                (2, 'd'),
+                (3, 'l'),
+                (3, 'd'),
+                (4, 'l'),
+                (4, 'd'),
+                (4, 'r'),
+                (5, 'l'),
+                (5, 'd'),
+                (5, 'r'),
+                (5, 'n'),
+                (0, 'l'),
+            ]
+        );
+        // A fixed point is returned as it is.
+        assert_eq!(
+            add_date_introduced_rail_types(s, rts, CalendarDate(100)),
+            rts
+        );
+    }
+
+    /// `GetCompanyRailTypes` and `GetRailTypes` differ for an engine that fails only the
+    /// company's availability gate, and both skip wagons.
+    #[test]
+    fn company_rail_types_gate_on_availability_and_skip_wagons() {
+        let engine = |railtypes: u8, wagon: bool, company_avail: u16| {
+            let mut record = Lifecycle::default();
+            record.r#type = VehicleType::TRAIN;
+            record.vehicle_info_type = VehicleType::TRAIN;
+            record.company_avail = company_avail;
+            // The calendar date is 0, before its first year of exclusivity ends.
+            record.intro_date = 1000;
+            record.info.climates = 1;
+            record.vehicle_info = crate::engine::records::VehicleInfo {
+                rail: crate::engine::records::RailVehicleInfo {
+                    railtypes: set(&[railtypes]).0,
+                    railveh_type: if wagon { RailVehicleTypes::WAGON.0 } else { 0 },
+                    ..crate::engine::records::RailVehicleInfo::default()
+                },
+            };
+            Box::new(record)
+        };
+        ENGINES.with(|e| {
+            *e.borrow_mut() = vec![engine(0, false, 0), engine(2, true, 1), engine(1, false, 1)];
+        });
+        let types = [
+            (
+                0,
+                Info {
+                    introduces: set(&[3]).0,
+                    ..Info::default()
+                },
+            ),
+            (
+                1,
+                Info {
+                    introduces: set(&[4]).0,
+                    ..Info::default()
+                },
+            ),
+        ];
+        let s = tables(&types);
+        assert_eq!(get_company_rail_types(s, CompanyID(0), false), set(&[1]));
+        assert_eq!(get_rail_types(s, false), set(&[0, 1]));
+        assert_eq!(get_company_rail_types(s, CompanyID(0), true), set(&[4]));
+        assert_eq!(get_rail_types(s, true), set(&[3, 4]));
+    }
 }
