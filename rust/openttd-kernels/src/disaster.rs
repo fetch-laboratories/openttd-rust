@@ -198,6 +198,9 @@ struct World<'a> {
     s: &'a Services,
     shared: &'a Shared,
     v: &'a VehicleServices,
+    /// `Map::LogX()`, loaded at the entry's first map use. Disaster callbacks cannot load,
+    /// reset or yield the map, so it holds for the synchronous entry.
+    map: std::cell::OnceCell<Map>,
 }
 impl<'a> World<'a> {
     unsafe fn new(s: &'a Services) -> Self {
@@ -205,10 +208,11 @@ impl<'a> World<'a> {
             s,
             shared: unsafe { &*s.shared },
             v: unsafe { &*s.vehicles },
+            map: std::cell::OnceCell::new(),
         }
     }
     fn map(&self) -> Map {
-        self.shared.map()
+        *self.map.get_or_init(|| self.shared.map())
     }
     fn size_y(&self) -> u32 {
         (self.shared.map_max_y)().wrapping_add(1)
