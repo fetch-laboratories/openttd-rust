@@ -202,7 +202,7 @@ unsafe fn publish(index: usize, language: u8, bytes: *const u8, length: usize) {
 fn get_grf_string_id(grfid: u32, stringid: GRFStringID) -> StringID {
     unsafe { &*TEXTS.get() }
         .iter()
-        .position(|t| t.grfid == grfid && t.stringid == stringid.0)
+        .position(|t| t.grfid == grfid && GRFStringID(t.stringid) == stringid)
         .map_or(STR_UNDEFINED, |id| StringID(grf_string_id(id)))
 }
 

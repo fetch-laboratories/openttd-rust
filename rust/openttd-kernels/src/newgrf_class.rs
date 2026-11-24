@@ -21,8 +21,8 @@ pub struct Class {
     pub rust_index: u32,
 }
 /// A registry's `Tindex`: the class-ID wrapper its `NewGRFClass` instantiation indexes by.
-/// The registry stores and exports indices as `u16`; `from_index` narrows as the original's
-/// `static_cast<Tindex>` does.
+/// The registry's adapters and exports pass indices as `u16` (the shared record keeps
+/// `rust_index` as `u32`); `from_index` narrows as the original's `static_cast<Tindex>` does.
 pub trait ClassIndex: Copy {
     fn from_index(index: u16) -> Self;
     fn index(self) -> u16;
