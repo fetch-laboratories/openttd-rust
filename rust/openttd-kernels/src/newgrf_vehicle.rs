@@ -164,6 +164,86 @@ pub struct Services {
     ground: unsafe extern "C" fn() -> *const crate::ground_vehicle::Services,
     cargo_services: unsafe extern "C" fn() -> *const crate::cargo_storage::Services,
 }
+/// `GetVehicleProperty` returns the callback's result when callback 0x36 answers and the
+/// fallback when it fails. The properties and fallbacks are those the aircraft and road
+/// boundary fixtures supply, which those fixtures no longer see: the callback service is not
+/// given the fallback.
+#[cfg(test)]
+mod property_tests {
+    use super::{Services, State, TEST_TABLE, V, get_vehicle_property};
+    use crate::engine_type::OpenTTDEngine;
+    use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_MODIFY_PROPERTY};
+    use crate::newgrf_properties::PropertyID;
+    use crate::vehicle::{VehicleRef, VehicleType};
+    use std::cell::Cell;
+
+    thread_local! {
+        static ENGINE: Cell<*const OpenTTDEngine> = const { Cell::new(std::ptr::null()) };
+        /// The callback's answer, and the property it was last asked for.
+        static ANSWER: Cell<u16> = const { Cell::new(CALLBACK_FAILED) };
+        static ASKED: Cell<Option<(u16, u32)>> = const { Cell::new(None) };
+    }
+    unsafe extern "C" fn engine_by_id(_: u16) -> *const OpenTTDEngine {
+        ENGINE.get()
+    }
+    unsafe extern "C" fn cargo_type(_: V) -> u8 {
+        0
+    }
+    unsafe extern "C" fn resolve_callback(
+        _: *mut State,
+        _: u16,
+        callback: u16,
+        param1: u32,
+        _: u32,
+        _: *mut i32,
+        _: usize,
+    ) -> u16 {
+        ASKED.set(Some((callback, param1)));
+        ANSWER.get()
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn get_vehicle_property_returns_the_fallback_when_the_callback_fails() {
+        let s = Services {
+            engine_by_id,
+            cargo_type,
+            resolve_callback,
+            ..TEST_TABLE
+        };
+        let engine = crate::engine::openttd_rust_engine_new();
+        ENGINE.set(engine);
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            VehicleType::VEH_AIRCRAFT,
+        );
+        // SAFETY: The test's fresh record is its own first part.
+        unsafe { (*record).first = record };
+        let v = VehicleRef::of(record);
+        for (property, fallback) in [
+            (PropertyID::PROP_AIRCRAFT_SPEED, 0),
+            (PropertyID::PROP_AIRCRAFT_CARGO_AGE_PERIOD, 71),
+            (PropertyID::PROP_AIRCRAFT_RANGE, 41),
+            (PropertyID::PROP_ROADVEH_CARGO_AGE_PERIOD, 0),
+            (PropertyID::PROP_ROADVEH_RUNNING_COST_FACTOR, 3),
+        ] {
+            ANSWER.set(CALLBACK_FAILED);
+            assert_eq!(get_vehicle_property(&s, v, property, fallback), fallback);
+            assert_eq!(
+                ASKED.get(),
+                Some((CBID_VEHICLE_MODIFY_PROPERTY.0, u32::from(property.0)))
+            );
+            ANSWER.set(200);
+            assert_eq!(get_vehicle_property(&s, v, property, fallback), 200);
+        }
+        // SAFETY: The test's owners, deleted once.
+        unsafe {
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+            crate::engine::openttd_rust_engine_destroy(engine);
+        }
+    }
+}
+
 /// Test-only table with every leaf unreachable; its private fields keep it in this module.
 #[cfg(test)]
 pub(crate) const TEST_TABLE: Services = Services {

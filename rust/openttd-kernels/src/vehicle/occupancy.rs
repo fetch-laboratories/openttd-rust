@@ -592,6 +592,34 @@ mod index_tests {
         RESULT.get()
     }
 
+    /// `VehiclesNearTileXY::Iterator::operator++` on an exhausted cursor fails the native
+    /// `assert(this->current_veh != nullptr)` before it reads the vehicle's links; the
+    /// isolated child ends at that assertion.
+    #[test]
+    fn near_advance_on_an_exhausted_cursor_fails_the_native_assertion() {
+        if crate::services_assert::isolate_test_exit(
+            "vehicle::occupancy::index_tests::near_advance_on_an_exhausted_cursor_fails_the_native_assertion",
+        ) {
+            return;
+        }
+        let mut it = Near {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            hxmin: 0,
+            hxmax: 0,
+            hymin: 0,
+            hymax: 0,
+            hx: 0,
+            hy: 0,
+            current: ptr::null_mut(),
+        };
+        // SAFETY: The failed assertion ends the child before any link is read.
+        unsafe { it.advance(&VEHICLE) };
+        unreachable!("the failed native assertion ends the child");
+    }
+
     #[test]
     fn index_links_removal_and_reset() {
         let mut links = [

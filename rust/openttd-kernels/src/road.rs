@@ -79,7 +79,7 @@ use crate::track_func::{
 use crate::track_type::{TrackBits, TrackStatus, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
 use crate::vehicle::maintenance;
-use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, YEAR_TICKS};
+use crate::vehicle::{GroundServices, VehicleRef, VehicleServices};
 use crate::vehicle_base::ClosestDepot;
 use crate::vehicle_base::{VehState, VehStates};
 use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH, VehicleID, VehicleType};
@@ -2720,7 +2720,7 @@ impl<'a> Game<'a> {
         let cost = self
             .get_running_cost(v)
             .saturating_mul(i64::from(v.v.running_ticks()))
-            / YEAR_TICKS;
+            / i64::from(crate::timer_game_common::DAYS_IN_YEAR * crate::timer_game_tick::DAY_TICKS);
 
         service!(self.vs.write_profit)(v.v, service!(self.vs.profit)(v.v).saturating_sub(cost));
         v.v.set_running_ticks(0);
@@ -3071,6 +3071,50 @@ crate::abi::layouts! {
 
 #[cfg(test)]
 mod tests;
+
+/// `RoadVehicle::SetDestTile`: the current destination leaves the path cache; another tile
+/// clears the cache and stores the tile.
+#[cfg(test)]
+mod set_dest_tile_tests {
+    use super::{
+        PathElement, openttd_rust_road_new, openttd_rust_road_path_push, set_road_dest_tile,
+    };
+    use crate::tile_type::TileIndex;
+    use crate::vehicle::{VehicleRef, VehicleType};
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn set_dest_tile_clears_the_path_only_for_a_new_destination() {
+        let state = openttd_rust_road_new();
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            VehicleType::VEH_ROAD,
+        );
+        // SAFETY: The test's fresh record and road owner.
+        unsafe {
+            (*record).road = state.cast();
+            openttd_rust_road_path_push(
+                state,
+                PathElement {
+                    trackdir: 1,
+                    tile: 7,
+                },
+            );
+        }
+        let v = VehicleRef::of(record);
+        v.set_dest_tile(TileIndex(42));
+        let path = || unsafe { super::openttd_rust_road_path_size(state) };
+        set_road_dest_tile(v, TileIndex(42));
+        assert_eq!((v.dest_tile(), path()), (TileIndex(42), 1));
+        set_road_dest_tile(v, TileIndex(43));
+        assert_eq!((v.dest_tile(), path()), (TileIndex(43), 0));
+        // SAFETY: The test's owners, deleted once.
+        unsafe {
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+            super::openttd_rust_road_destroy(state);
+        }
+    }
+}
 
 #[cfg(test)]
 mod map_context_tests {

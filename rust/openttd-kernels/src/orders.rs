@@ -5083,6 +5083,67 @@ fn order_can_use_station(vehicle: *mut std::ffi::c_void, destination: u16) -> u6
     })
 }
 
+/// `Order::Free` and `Order::MakeDummy` on a vehicle's current order write only the fields
+/// `order_cmd.cpp` names: `Free` the type, flags and destination; `MakeDummy` the type and
+/// flags. Every field starts with a distinct value, so a whole-order store fails.
+#[cfg(test)]
+mod current_order_write_tests {
+    use super::{Order, VehicleOrders, free, make_dummy, openttd_rust_vehicle_orders_new};
+    use crate::order_type::{OT_DUMMY, OT_NOTHING};
+    use crate::vehicle::{VehicleRef, VehicleType};
+
+    fn fields(o: Order) -> [u32; 7] {
+        [
+            o.kind.into(),
+            o.flags.into(),
+            o.destination.into(),
+            o.refit.into(),
+            o.wait.into(),
+            o.travel.into(),
+            o.speed.into(),
+        ]
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn free_and_make_dummy_write_only_the_original_fields() {
+        let owner: *mut VehicleOrders = openttd_rust_vehicle_orders_new();
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            VehicleType::VEH_TRAIN,
+        );
+        // SAFETY: The test's fresh record and orders owner.
+        unsafe { (*record).orders = owner };
+        let v = VehicleRef::of(record);
+        let full = Order {
+            kind: 0x12,
+            flags: 0x34,
+            destination: 0x5678,
+            refit: 0x9a,
+            wait: 0xbcde,
+            travel: 0xf012,
+            speed: 0x3456,
+        };
+        // SAFETY: The record's current order, written and read with no other access.
+        unsafe {
+            v.current_order_pointer().write(full);
+            free(v);
+            assert_eq!(
+                fields(v.current_order_pointer().read()),
+                [OT_NOTHING.into(), 0, 0, 0x9a, 0xbcde, 0xf012, 0x3456]
+            );
+            v.current_order_pointer().write(full);
+            make_dummy(v.current_order_pointer());
+            assert_eq!(
+                fields(v.current_order_pointer().read()),
+                [OT_DUMMY.into(), 0, 0x5678, 0x9a, 0xbcde, 0xf012, 0x3456]
+            );
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+            crate::orders::openttd_rust_vehicle_orders_delete(owner);
+        }
+    }
+}
+
 #[cfg(test)]
 mod order_view_tests {
     use super::{Order, OrderView};
