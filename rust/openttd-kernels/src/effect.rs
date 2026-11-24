@@ -1002,3 +1002,294 @@ crate::abi::layouts! {
         vehicles,
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
+    use crate::vehicle::OpenTTDVehicle;
+    use crate::vehicle_base::VehicleRecord;
+    use crate::vehicle_type::VehicleType;
+    use std::cell::{Cell, RefCell};
+
+    /// What one test's services observed.
+    #[derive(Default)]
+    struct Observed {
+        /// The tiles `industry_gfx` was asked for.
+        industry_gfx: Vec<u32>,
+        /// The sounds `play_sound` played.
+        sounds: Vec<u16>,
+        /// The number of random draws.
+        draws: u32,
+        /// The `spritenum` the record holds.
+        spritenum: u8,
+        /// The first sprite the record holds.
+        sprite: SpriteID,
+    }
+    thread_local! {
+        static OBSERVED: RefCell<Observed> = RefCell::default();
+        static RANDOM: Cell<u32> = const { Cell::new(0) };
+        static AMBIENT: Cell<bool> = const { Cell::new(false) };
+    }
+    fn observe<R>(f: impl FnOnce(&mut Observed) -> R) -> R {
+        OBSERVED.with(|o| f(&mut o.borrow_mut()))
+    }
+
+    extern "C" fn random(_: *mut c_void) -> u32 {
+        observe(|o| o.draws += 1);
+        RANDOM.get()
+    }
+    extern "C" fn industry_gfx(tile: u32) -> u16 {
+        observe(|o| o.industry_gfx.push(tile));
+        IndustryGfx::GFX_BUBBLE_GENERATOR.0
+    }
+    extern "C" fn play_sound(_: VehicleRef, sound: u16) {
+        observe(|o| o.sounds.push(sound));
+    }
+    extern "C" fn viewport(_: VehicleRef) {}
+    extern "C" fn update_delta(_: VehicleRef) {}
+    extern "C" fn first_sprite(_: VehicleRef) -> SpriteID {
+        observe(|o| o.sprite)
+    }
+    extern "C" fn write_sprite(_: VehicleRef, sprite: SpriteID) {
+        observe(|o| o.sprite = sprite);
+    }
+    extern "C" fn write_spritenum(_: VehicleRef, sprite: u8) {
+        observe(|o| o.spritenum = sprite);
+    }
+    #[allow(unsafe_code)]
+    unsafe extern "C" fn spritenum(_: *mut OpenTTDVehicle) -> u8 {
+        observe(|o| o.spritenum)
+    }
+    extern "C" fn resolver() -> *const crate::newgrf_vehicle::Services {
+        let mut resolver = crate::newgrf_vehicle::TEST_TABLE;
+        resolver.sprite = spritenum;
+        Box::leak(Box::new(resolver))
+    }
+
+    /// A 64 by 64 map of clear tiles, installed for this thread, with `industry` the one
+    /// industry tile, and the tables a procedure calls over it.
+    fn tables(industry: Option<u32>) -> Tables<'static> {
+        const SIZE: u32 = 64 * 64;
+        let base: &'static mut [BaseTileLayout] = Box::leak(
+            (0..SIZE)
+                .map(|tile| BaseTileLayout {
+                    kind: if Some(tile) == industry {
+                        TileType::MP_INDUSTRY.0 << 4
+                    } else {
+                        TileType::MP_CLEAR.0 << 4
+                    },
+                    height: 0,
+                    m2: 0,
+                    m1: 0,
+                    m3: 0,
+                    m4: 0,
+                    m5: 0,
+                })
+                .collect(),
+        );
+        let extended: &'static mut [ExtendedTileLayout] = Box::leak(
+            (0..SIZE)
+                .map(|_| ExtendedTileLayout {
+                    m6: 0,
+                    m7: 0,
+                    m8: 0,
+                })
+                .collect(),
+        );
+        crate::map_func::fixture::set(
+            TileTypeAllocation {
+                base: base.as_ptr(),
+                extended: extended.as_ptr(),
+                count: SIZE,
+                assertions: true,
+            },
+            6,
+        );
+        let mut settings = crate::settings_type::SettingAddresses::NULL;
+        settings.ambient = AMBIENT.with(Cell::as_ptr);
+        let mut shared = crate::services::fixture(std::ptr::null_mut(), random);
+        shared.map = crate::map_func::fixture::statics();
+        shared.industry_gfx = industry_gfx;
+        shared.settings = Box::leak(Box::new(settings));
+        Tables {
+            vehicles: Box::leak(Box::new(VehicleServices {
+                base_viewport: viewport,
+                can_allocate: crate::test_tables::unreachable1,
+                first_sprite,
+                newgrf: resolver,
+                play_sound,
+                update_delta,
+                write_first_sprite: write_sprite,
+                write_sprite_seq: write_sprite,
+                write_spritenum,
+                ..crate::test_tables::VEHICLE
+            })),
+            shared: Box::leak(Box::new(shared)),
+        }
+    }
+
+    /// A bubble at (`x`, `y`, `z`) whose next movement entry is `_bubble_movement[spritenum
+    /// - 1][animation_state + 1]`, at a progress that moves it on this tick.
+    fn bubble(x: i32, y: i32, z: i32, spritenum: u8, animation_state: u16) -> EffectVehicle {
+        let record = VehicleRef::of(VehicleRecord::new(
+            std::ptr::null_mut(),
+            VehicleType::EFFECT,
+        ));
+        record.set_subtype(EffectVehicleType::EV_BUBBLE.0);
+        record.set_x_pos(x);
+        record.set_y_pos(y);
+        record.set_z_pos(z);
+        record.set_progress(3);
+        observe(|o| {
+            *o = Observed {
+                spritenum,
+                ..Observed::default()
+            }
+        });
+        let v = EffectVehicle {
+            record,
+            owner: openttd_rust_effect_new(),
+        };
+        v.set_animation_state(animation_state);
+        v
+    }
+
+    /// At the absorber's `ME(2)` entry, the catcher test reads the tile of (`x_pos`,
+    /// `y_pos`) and asks for its graphics only when that tile is an industry. (0x35, 0x52)
+    /// is on tile (3, 5), index 323; its transpose (5, 3) is index 197.
+    #[test]
+    fn bubble_tick_asks_for_the_industry_graphics_of_its_own_industry_tile() {
+        AMBIENT.set(true);
+        for (industry, asked) in [(None, vec![]), (Some(197), vec![]), (Some(323), vec![323])] {
+            let t = tables(industry);
+            let v = bubble(0x35, 0x52, 100, 6, 77);
+            assert!(bubble_tick(v, &t));
+            observe(|o| {
+                assert_eq!(o.industry_gfx, asked);
+                assert_eq!(
+                    o.sounds,
+                    [SoundID::from(SoundFx::SND_31_BUBBLE_GENERATOR_SUCCESS).0]
+                );
+                assert_eq!(o.sprite, SPR_BUBBLE_0 + 0xA);
+            });
+            assert_eq!(v.animation_state(), 79);
+            assert_eq!(
+                (v.record.x_pos(), v.record.y_pos(), v.record.z_pos()),
+                (0x35, 0x52, 100)
+            );
+        }
+    }
+
+    /// With `ambient` off the bubble plays nothing at `ME(1)` and `ME(2)`, and `ME(1)`
+    /// still draws its `Chance16I` number at `z_pos <= 180`.
+    #[test]
+    fn bubble_tick_without_ambient_sound_plays_nothing_and_still_draws() {
+        AMBIENT.set(false);
+        let t = tables(None);
+        // `_bubble_float_sw[4]` is `ME(1)`; a zero draw bursts the bubble.
+        RANDOM.set(0);
+        let v = bubble(10, 20, 180, 1, 3);
+        assert!(bubble_tick(v, &t));
+        observe(|o| {
+            assert_eq!(o.draws, 1);
+            assert_eq!(o.spritenum, 5);
+            assert!(o.sounds.is_empty());
+        });
+        // `_bubble_absorb[78]` is `ME(2)`.
+        let v = bubble(10, 20, 100, 6, 77);
+        assert!(bubble_tick(v, &t));
+        observe(|o| {
+            assert_eq!(o.draws, 0);
+            assert!(o.sounds.is_empty());
+        });
+    }
+
+    extern "C" fn unused_check(_: bool) {
+        std::process::abort();
+    }
+    static ALLOCATED: std::sync::atomic::AtomicPtr<OpenTTDVehicle> =
+        std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+    static OWNER: std::sync::atomic::AtomicPtr<State> =
+        std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+    extern "C" fn allocate() -> Allocation {
+        Allocation {
+            record: VehicleRef::of(ALLOCATED.load(std::sync::atomic::Ordering::Relaxed)),
+            owner: OWNER.load(std::sync::atomic::Ordering::Relaxed),
+        }
+    }
+    extern "C" fn cannot_allocate(count: usize) -> bool {
+        assert_eq!(count, 1);
+        false
+    }
+    extern "C" fn can_allocate(count: usize) -> bool {
+        assert_eq!(count, 1);
+        true
+    }
+    extern "C" fn unused_allocate() -> Allocation {
+        std::process::abort();
+    }
+
+    /// Without room in the pool, creation returns `None` and calls nothing else: every
+    /// other service of its tables aborts. Binds the process-wide creation table, so it
+    /// runs in a child process.
+    #[test]
+    fn create_effect_vehicle_without_room_returns_none() {
+        if crate::services_assert::isolate_test_check(
+            "effect::tests::create_effect_vehicle_without_room_returns_none",
+            unused_check,
+        ) {
+            return;
+        }
+        let creation: &'static CreationServices = Box::leak(Box::new(CreationServices {
+            allocate: unused_allocate,
+            shared: &crate::test_tables::SHARED,
+            vehicles: Box::leak(Box::new(VehicleServices {
+                can_allocate: cannot_allocate,
+                ..crate::test_tables::VEHICLE
+            })),
+        }));
+        openttd_rust_effect_bind(creation);
+        assert!(create_effect_vehicle(1, 2, 3, EffectVehicleType::EV_ELECTRIC_SPARK).is_none());
+    }
+
+    /// `SetAnimationState` and `SetAnimationSubstate` on a created effect write the owner
+    /// its shell holds, which the shell's readers read. Binds the process-wide creation
+    /// table, so it runs in a child process.
+    #[test]
+    fn created_effect_animation_setters_write_the_shell_owner() {
+        if crate::services_assert::isolate_test_check(
+            "effect::tests::created_effect_animation_setters_write_the_shell_owner",
+            unused_check,
+        ) {
+            return;
+        }
+        let t = tables(None);
+        let shell = std::ptr::dangling_mut::<crate::vehicle_base::OpenTTDVehicleShell>();
+        ALLOCATED.store(
+            VehicleRecord::new(shell, VehicleType::EFFECT),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        let owner = openttd_rust_effect_new();
+        OWNER.store(owner, std::sync::atomic::Ordering::Relaxed);
+        let creation: &'static CreationServices = Box::leak(Box::new(CreationServices {
+            allocate,
+            shared: t.shared,
+            vehicles: Box::leak(Box::new(VehicleServices {
+                can_allocate,
+                ..*t.vehicles
+            })),
+        }));
+        openttd_rust_effect_bind(creation);
+        let v = create_effect_vehicle(1, 2, 3, EffectVehicleType::EV_ELECTRIC_SPARK).unwrap();
+        assert_eq!(v.shell(), shell.cast());
+        v.set_animation_state(0xBEEF);
+        v.set_animation_substate(0xA5);
+        // SAFETY: The owner the allocation returned, live until the test ends.
+        #[allow(unsafe_code)]
+        unsafe {
+            assert_eq!(openttd_rust_effect_get_animation(owner), 0xBEEF);
+            assert_eq!(openttd_rust_effect_get_substate(owner), 0xA5);
+        }
+    }
+}
