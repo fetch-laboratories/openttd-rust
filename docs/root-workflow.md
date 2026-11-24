@@ -37,7 +37,7 @@ Implementers queue nothing until root lifts the stop. A confirmed regression als
 | --- | --- | --- |
 | Session start | [Routine agent](team.md#routine-agent) | [Housekeeping](#housekeeping) |
 | After every fifth merge | Routine agent runs and reports; root decides | Platform cadence: `gh workflow run ci-build.yml --ref rust-migration` ([ADR 0018](adr/0018-builds-before-every-merge.md)); a red result [stops merges](#merge-stops) until fixed. Housekeeping runs with it. |
-| After every twelfth merge | Root | Stocktake under [`/start-development` step 4](skills/start-development/SKILL.md) ([ADR 0013](adr/0013-stocktake-every-12-merges.md)), with `python3 tools/retrospective.py stocktake START END`. Profile the merged tip in the background ([speed](speed.md#instruction-projections), [ADR 0052](adr/0052-speed-on-the-merged-branch-and-per-pass-counts.md)). Check issue placement and exclusion conditions, report #892's remaining production macro counts beside the #734 inventory, and pick the next interval's [tools batch](planning.md#selection). |
+| After every twelfth merge | Root | Stocktake under [`/start-development` step 4](skills/start-development/SKILL.md) ([ADR 0013](adr/0013-stocktake-every-12-merges.md)), with `python3 tools/retrospective.py stocktake START END`. Profile the merged tip in the background ([speed](speed.md#instruction-projections), [ADR 0052](adr/0052-speed-on-the-merged-branch-and-per-pass-counts.md)). Check issue placement and exclusion conditions, report #892's remaining production macro counts from the inventory's `Assertion macros` line (runtime sites, with the const assertions beside them) beside the #734 inventory, and pick the next interval's [tools batch](planning.md#selection). |
 | Cleanup exit and phase-3 exit | Root | All-member deep check ([ADR 0017](adr/0017-deep-checks-on-request.md), [deep checks](deep-checks.md#policy)) |
 
 ## CI administration
@@ -60,9 +60,14 @@ Implementers queue nothing until root lifts the stop. A confirmed regression als
 
 ### Housekeeping
 
-`python3 tools/housekeeping.py` lists stale worktrees and `.local` output; `--apply` removes the listed `remove` entries. Read the dry run first.
+`python3 tools/housekeeping.py` lists stale worktrees and `.local` output; `--apply` removes the listed `remove` entries. The routine agent reads the dry run and runs `--apply` without asking root; its spawn message adds no condition of its own. It reports what was removed, each `kept:` line the apply printed and the free space.
 
-- Naming a path or run in the roadmap, or in an open issue or PR body, protects it. Removing the name releases it. Name a worktree by its whole folder name: a shortened one, such as `t3-bc6721f0`, protects nothing.
+- A worktree's `remove` line means a clean tree whose head is merged into the base, or is on origin, with no open PR for its branch; or a T3 task's checkout still at a base commit; or a record whose folder is gone.
+- The tool keeps, whatever the head: an open PR's checkout; a lock, unless every issue or PR its note names is closed; a folder whose name or path is in the roadmap or an open issue or PR body; output the current deep report or speed anchors name, and pinned runtimes; a checkout with a live process's working directory inside; a merged or closed PR's checkout whose head origin lacks; and, outside `.t3/worktrees/`, a detached head or a branch with no PR still at a base commit. A branch at a base commit whose PR merged or closed is listed: a base commit holds nothing unpushed.
+- Under `.t3/worktrees/` it also keeps a checkout active in the last twelve hours, unless the checkout's own PR merged or closed with its head on origin. A reviewer's checkout, which has no PR of its own, is listed only after twelve idle hours, whether or not the PR it reviewed has merged. A checkout elsewhere has no such grace.
+- One `--apply` run plans and removes in the same invocation. Before each removal it checks again the references it read at the start, open output handles, live processes' working directories, the twelve-hour activity where it applies, that the tree is clean and is the folder it planned, and that its head and branch are the ones it planned; it deletes the branch only at the planned head. It does not ask GitHub again for the PR's state.
+- A missing folder's record goes through `git worktree prune`, which removes every unlocked record whose folder is gone, named in the roadmap or not. Nothing is on disk to lose.
+- Root keeps an entry the tool would remove by naming it in the roadmap, or by locking it with a note that names its issue, before the run. Naming a path or run in the roadmap, or in an open issue or PR body, protects it; removing the name releases it. Name a worktree by its whole folder name: a shortened one, such as `t3-bc6721f0`, protects nothing.
 - A lock stays until every issue or PR its note names is closed or merged, so name the work in a lock note.
 
 ## Automatic rollback and wind-down
