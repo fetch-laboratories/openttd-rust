@@ -108,9 +108,6 @@ pub struct VehicleServices {
     pub map_log_x: extern "C" fn() -> u32,
     pub assertions: bool,
     pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
-    pub waiting_for_unbunching: extern "C" fn(VehicleRef) -> bool,
-    pub leave_unbunching_depot: extern "C" fn(VehicleRef),
-    pub reset_depot_unbunching: extern "C" fn(VehicleRef),
     /// `VehicleEnterDepot`, owned by `visits` (`openttd_rust_visit_enter_depot`).
     pub enter_depot: unsafe extern "C" fn(VehicleRef, *const visits::Services),
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
@@ -130,9 +127,6 @@ pub struct VehicleServices {
     /// `PlayVehicleSound(v, event)`.
     pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
     pub play_sound: extern "C" fn(VehicleRef, u16),
-    pub order_free: extern "C" fn(VehicleRef),
-    /// `MakeDummy()`, then the start/stop widget dirty.
-    pub order_dummy: extern "C" fn(VehicleRef),
     pub start_stop_dirty: extern "C" fn(VehicleRef),
     /// `delete v`; the handle and its owner are dead afterwards.
     pub destroy: extern "C" fn(VehicleRef),
@@ -149,8 +143,6 @@ pub struct VehicleServices {
     pub write_breakdowns: extern "C" fn(VehicleRef, u8),
     pub write_reliability: extern "C" fn(VehicleRef, u16),
     pub profit: extern "C" fn(VehicleRef) -> i64,
-    pub make_dummy: extern "C" fn(VehicleRef),
-    pub check_orders_only: extern "C" fn(VehicleRef),
     pub maintenance: *const maintenance::Services,
     /// The static station and depot visit table (`vehicle/visits.rs`), resolved on use.
     pub visits: extern "C" fn() -> *const visits::Services,
@@ -216,6 +208,18 @@ impl VehicleServices {
     }
 }
 
+/// `Vehicle::IsWaitingForUnbunching`: check whether a vehicle inside a depot is waiting
+/// for unbunching. True if the vehicle must continue waiting, or false if it may try to
+/// leave the depot. `is_in_depot` is the vehicle type's `IsInDepot()`.
+pub(crate) fn is_waiting_for_unbunching(
+    v: VehicleRef,
+    orders: &'static crate::orders::Leaves,
+    is_in_depot: impl FnOnce() -> bool,
+) -> bool {
+    crate::services_assert::assert_with(is_in_depot);
+    crate::orders::VisitOrders::new(orders).is_waiting_for_unbunching(v)
+}
+
 /// `GroundVehicle<T>` members, one C++ template instance per vehicle type.
 #[repr(C)]
 pub struct GroundServices {
@@ -258,9 +262,6 @@ crate::abi::layouts! {
         map_log_x,
         assertions,
         train_handle,
-        waiting_for_unbunching,
-        leave_unbunching_depot,
-        reset_depot_unbunching,
         enter_depot,
         pathfinding_result,
         new_position,
@@ -272,8 +273,6 @@ crate::abi::layouts! {
         length_changed,
         play_vehicle_sound,
         play_sound,
-        order_free,
-        order_dummy,
         start_stop_dirty,
         destroy,
         set_dest_tile,
@@ -287,8 +286,6 @@ crate::abi::layouts! {
         write_breakdowns,
         write_reliability,
         profit,
-        make_dummy,
-        check_orders_only,
         maintenance,
         visits,
         orders,

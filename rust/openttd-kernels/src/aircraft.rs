@@ -884,7 +884,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             Self::call(|| unsafe { (self.leaves.service_order)(v, destination.0) });
             self.start_stop_dirty(v);
         } else if Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
-            Self::call(|| (self.vs.make_dummy)(v.base()));
+            crate::orders::VisitOrders::new(self.vs.orders()).make_dummy(v.base());
             self.start_stop_dirty(v);
         }
     }
@@ -918,7 +918,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             unsafe { maintenance::decrease_vehicle_value(b, self.vs) };
         }
 
-        Self::call(|| (self.vs.check_orders_only)(b));
+        crate::orders::check_orders(b, self.vs.orders());
 
         // SAFETY: As above.
         unsafe { maintenance::check_vehicle_breakdown(b, self.vs) };
@@ -2000,7 +2000,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 self.crash_airplane(v);
             }
         } else if !Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
-            Self::call(|| (self.vs.order_free)(v.base()));
+            crate::orders::free(v.base());
         }
     }
 
@@ -2220,7 +2220,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         self.service_in_depot(v);
-        Self::call(|| (self.vs.leave_unbunching_depot)(b));
+        crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(b);
         self.set_aircraft_position(v, b.x_pos(), b.y_pos(), b.z_pos());
         Self::call(|| {
             invalidate_window_data(
@@ -2260,12 +2260,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT)
             && vehstatus_test(v.base(), VehState::Stopped)
         {
-            Self::call(|| (self.vs.order_free)(v.base()));
+            crate::orders::free(v.base());
             return;
         }
 
         /* Check if we should wait here for unbunching. */
-        if Self::call(|| (self.vs.waiting_for_unbunching)(v.base())) {
+        if crate::vehicle::is_waiting_for_unbunching(v.base(), self.vs.orders(), || {
+            self.is_in_depot(v)
+        }) {
             return;
         }
 
@@ -2375,7 +2377,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             }
             _ => {
                 // orders have been deleted (no orders), goto depot and don't bother us
-                Self::call(|| (self.vs.order_free)(v.base()));
+                crate::orders::free(v.base());
                 go_to_hangar = true;
             }
         }
@@ -3061,7 +3063,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 && Self::order_destination(v) == index
                 && (!Self::airport_has_hangar(st) || !Self::can_vehicle_use_station(v, st))
             {
-                Self::call(|| (self.vs.make_dummy)(v.base()));
+                crate::orders::VisitOrders::new(self.vs.orders()).make_dummy(v.base());
                 self.start_stop_dirty(v);
             }
             let pos = self.aircraft_get_entry_point(v, ap, rotation);

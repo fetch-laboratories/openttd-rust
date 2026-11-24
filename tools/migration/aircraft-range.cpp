@@ -146,7 +146,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 
 	leaves.helipads = [](const void *) noexcept { return uint8_t{0}; };
 	leaves.airport_flags = [](const void *) noexcept { return uint8_t{1}; };
-	vehicle.waiting_for_unbunching = [](OpenTTDVehicle *) noexcept { return false; };
 	return leaves;
 }
 int main()

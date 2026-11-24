@@ -105,10 +105,6 @@ static_assert(PROP_AIRCRAFT_SPEED == 0x0C && CBID_VEHICLE_LENGTH == 0x11 && CBID
 static_assert(VSE_START == 1 && VSE_BREAKDOWN == 3 && VSE_RUNNING == 4 && VSE_TOUCHDOWN == 5 && VSE_RUNNING_16 == 7 && VSE_STOPPED_16 == 8);
 static_assert(HVOT_BUS == 4 && HVOT_TRUCK == 8);
 
-static void OPENTTD_RUST_CALL VehicleSvcCheckOrdersOnly(OpenTTDVehicle *v) noexcept { CheckOrders(VehicleOf(v)); }
-static bool OPENTTD_RUST_CALL VehicleSvcWaitingForUnbunching(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->IsWaitingForUnbunching(); }
-static void OPENTTD_RUST_CALL VehicleSvcLeaveUnbunchingDepot(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveUnbunchingDepot(); }
-static void OPENTTD_RUST_CALL VehicleSvcResetDepotUnbunching(OpenTTDVehicle *v) noexcept { VehicleOf(v)->ResetDepotUnbunching(); }
 static void OPENTTD_RUST_CALL VehicleSvcPathfindingResult(OpenTTDVehicle *v, bool found) noexcept { VehicleOf(v)->HandlePathfindingResult(found); }
 static OpenTTDVehicleNewPosition OPENTTD_RUST_CALL VehicleSvcNewPosition(OpenTTDVehicle *v) noexcept
 {
@@ -125,13 +121,6 @@ static const OpenTTDOrdersLeaves *VehicleOrders() noexcept { return &GetRustOrde
 static void OPENTTD_RUST_CALL VehicleSvcLengthChanged(OpenTTDVehicle *v) noexcept { VehicleLengthChanged(VehicleOf(v)); }
 static bool OPENTTD_RUST_CALL VehicleSvcPlayVehicleSound(OpenTTDVehicle *v, VehicleSoundEvent event) noexcept { return PlayVehicleSound(VehicleOf(v), event); }
 static void OPENTTD_RUST_CALL VehicleSvcPlaySound(OpenTTDVehicle *v, uint16_t sound) noexcept { SndPlayVehicleFx(static_cast<SoundID>(sound), VehicleOf(v)); }
-static void OPENTTD_RUST_CALL VehicleSvcOrderFree(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.Free(); }
-static void OPENTTD_RUST_CALL VehicleSvcOrderDummy(OpenTTDVehicle *v) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	u->current_order.MakeDummy();
-	SetWindowWidgetDirty(WC_VEHICLE_VIEW, u->index, WID_VV_START_STOP);
-}
 static void OPENTTD_RUST_CALL VehicleSvcStartStopDirty(OpenTTDVehicle *v) noexcept { SetWindowWidgetDirty(WC_VEHICLE_VIEW, VehicleOf(v)->index, WID_VV_START_STOP); }
 static void OPENTTD_RUST_CALL VehicleSvcDestroy(OpenTTDVehicle *v) noexcept { delete VehicleOf(v); }
 /* Legacy orders context adapters; the native operations have shared definitions. */
@@ -158,7 +147,6 @@ static void OPENTTD_RUST_CALL VehicleSvcWriteCalendarService(OpenTTDVehicle *v, 
 static void OPENTTD_RUST_CALL VehicleSvcWriteBreakdowns(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->breakdowns_since_last_service = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteReliability(OpenTTDVehicle *v, uint16_t value) noexcept { VehicleOf(v)->reliability = value; }
 static int64_t OPENTTD_RUST_CALL VehicleSvcProfit(OpenTTDVehicle *v) noexcept { return RustVehicleProfit(VehicleOf(v)); }
-static void OPENTTD_RUST_CALL VehicleSvcMakeDummy(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.MakeDummy(); }
 
 
 const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
@@ -182,9 +170,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.assertions = false,
 #endif
 	.train_handle = RustVehicleTrain,
-	.waiting_for_unbunching = VehicleSvcWaitingForUnbunching,
-	.leave_unbunching_depot = VehicleSvcLeaveUnbunchingDepot,
-	.reset_depot_unbunching = VehicleSvcResetDepotUnbunching,
 	.enter_depot = openttd_rust_visit_enter_depot,
 	.pathfinding_result = VehicleSvcPathfindingResult,
 	.new_position = VehicleSvcNewPosition,
@@ -196,8 +181,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.length_changed = VehicleSvcLengthChanged,
 	.play_vehicle_sound = VehicleSvcPlayVehicleSound,
 	.play_sound = VehicleSvcPlaySound,
-	.order_free = VehicleSvcOrderFree,
-	.order_dummy = VehicleSvcOrderDummy,
 	.start_stop_dirty = VehicleSvcStartStopDirty,
 	.destroy = VehicleSvcDestroy,
 	.set_dest_tile = RustVehicleSetDestTile,
@@ -211,8 +194,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.write_breakdowns = VehicleSvcWriteBreakdowns,
 	.write_reliability = VehicleSvcWriteReliability,
 	.profit = VehicleSvcProfit,
-	.make_dummy = VehicleSvcMakeDummy,
-	.check_orders_only = VehicleSvcCheckOrdersOnly,
 	.maintenance = &_rust_vehicle_maintenance_services,
 	.visits = RustVehicleVisits,
 	.orders = VehicleOrders,

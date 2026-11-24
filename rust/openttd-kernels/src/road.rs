@@ -842,7 +842,7 @@ impl<'a> Game<'a> {
             v.set_reverse_ctr(180);
 
             /* Unbunching data is no longer valid. */
-            service!(self.vs.reset_depot_unbunching)(v.v);
+            crate::orders::VisitOrders::new(self.vs.orders()).reset_unbunching(v.v);
         }
 
         true
@@ -1671,7 +1671,7 @@ impl<'a> Game<'a> {
 
             // SAFETY: A live front shell; no owner borrow spans the servicing.
             unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
-            service!(self.vs.leave_unbunching_depot)(v.v);
+            crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(v.v);
 
             self.start_road_veh_sound(v.v);
 
@@ -2483,7 +2483,7 @@ impl<'a> Game<'a> {
 
         if v.is_in_depot() {
             /* Check if we should wait here for unbunching. */
-            if service!(self.vs.waiting_for_unbunching)(v.v) {
+            if crate::vehicle::is_waiting_for_unbunching(v.v, self.vs.orders(), || v.is_in_depot()) {
                 return true;
             }
             if self.road_veh_leave_depot(v, true) {

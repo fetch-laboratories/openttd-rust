@@ -312,11 +312,19 @@ pub unsafe extern "C" fn openttd_rust_consist_delete(p: *mut Consist) {
         drop(Box::from_raw(p));
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_consist_reset(p: *mut Consist) {
+/// `BaseConsist::ResetDepotUnbunching`: reset all depot unbunching times.
+///
+/// # Safety
+/// `p` is a live consist owner of the serialized game state.
+unsafe fn reset_depot_unbunching(p: *mut Consist) {
     write_field!(p, last_departure, 0);
     write_field!(p, next_departure, 0);
     write_field!(p, round_trip, 0);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_consist_reset(p: *mut Consist) {
+    // SAFETY: As `reset_depot_unbunching`.
+    unsafe { reset_depot_unbunching(p) };
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_consist_copy(p: *mut Consist, src: *const Consist) {
@@ -1995,6 +2003,17 @@ impl Game {
         self.vehicle_order(v, index)
             .is_some_and(|o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0)
     }
+    /// The body of `Vehicle::IsWaitingForUnbunching` after its depot assertion.
+    fn waiting_for_unbunching(self, v: *mut c_void) -> bool {
+        /* Don't bother if there are no vehicles sharing orders. */
+        !self.orders(v).is_null()
+            && read_field!(self.list(self.orders(v)), vehicles) > 1
+            /* Don't do anything if there aren't enough orders. */
+            && self.count(v) > 1
+            /* Don't do anything if this is not our unbunching order. */
+            && self.previous_unbunching(v)
+            && read_field!(self.consist(v), next_departure) > (self.0.tick_counter)()
+    }
     fn leave_unbunching(self, v: *mut c_void) {
         if !self.previous_unbunching(v) {
             return;
@@ -2111,16 +2130,7 @@ pub unsafe extern "C" fn openttd_rust_wait_unbunching(
     v: *mut c_void,
     leaves: &'static Leaves,
 ) -> u32 {
-    let g = Game(leaves);
-    {
-        u32::from(
-            !g.orders(v).is_null()
-                && read_field!(g.list(g.orders(v)), vehicles) > 1
-                && g.count(v) > 1
-                && g.previous_unbunching(v)
-                && read_field!(g.consist(v), next_departure) > (g.0.tick_counter)(),
-        )
-    }
+    u32::from(Game(leaves).waiting_for_unbunching(v))
 }
 
 /// `Order::Free`: 'Free' the order.
@@ -4897,7 +4907,17 @@ impl VisitOrders {
     }
     /// `BaseConsist::ResetDepotUnbunching`.
     pub(crate) fn reset_unbunching(self, v: VehicleRef) {
-        reenter!(openttd_rust_consist_reset(self.0.consist(Self::shell(v))));
+        // SAFETY: The live vehicle's consist owner.
+        unsafe { reset_depot_unbunching(self.0.consist(Self::shell(v))) };
+    }
+    /// `Vehicle::LeaveUnbunchingDepot`.
+    pub(crate) fn leave_unbunching_depot(self, v: VehicleRef) {
+        self.0.leave_unbunching(Self::shell(v));
+    }
+    /// `Vehicle::IsWaitingForUnbunching` after its `assert(this->IsInDepot())`, which
+    /// `vehicle::is_waiting_for_unbunching` makes.
+    pub(crate) fn is_waiting_for_unbunching(self, v: VehicleRef) -> bool {
+        self.0.waiting_for_unbunching(Self::shell(v))
     }
     /// `v->current_order.MakeLeaveStation()`.
     pub(crate) fn make_leave_station(self, v: VehicleRef) {
@@ -4907,9 +4927,8 @@ impl VisitOrders {
     }
     /// `v->current_order.MakeDummy()`.
     pub(crate) fn make_dummy(self, v: VehicleRef) {
-        reenter!(openttd_rust_order_dummy(current_order(
-            self.0.vehicle(Self::shell(v))
-        )));
+        // SAFETY: The live vehicle's current order.
+        unsafe { make_dummy(v.current_order_pointer()) };
     }
 }
 
