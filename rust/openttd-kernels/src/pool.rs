@@ -424,6 +424,13 @@ impl<I: PoolId, R, S> TypedPool<I, R, S> {
             }
         }
     }
+    /// `Pool::GetPoolSize`: returns first unused index. Useful when iterating over all pool
+    /// items.
+    #[must_use]
+    pub unsafe fn pool_size(&self) -> usize {
+        // SAFETY: The view's live descriptor.
+        unsafe { (*self.view).first_unused }
+    }
     /// `PoolIterator::ValidateIndex`: reread live extent/slots, using the native end sentinel.
     #[must_use]
     pub unsafe fn next_index(&self, mut index: usize, max_size: usize) -> usize {

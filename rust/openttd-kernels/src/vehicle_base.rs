@@ -225,8 +225,6 @@ pub(crate) fn is_ground_vehicle(kind: VehicleType) -> bool {
 }
 
 /// Raw compatibility names for files no pass has finished; #734's closure removes them.
-pub const GVSF_FRONT: u8 = GroundVehicleSubtypeFlags::GVSF_FRONT.0;
-pub const GVSF_ENGINE: u8 = GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
 pub const VS_HIDDEN: u8 = VehStates::from_element(VehState::Hidden).0;
 pub const VS_STOPPED: u8 = VehStates::from_element(VehState::Stopped).0;
 pub const VS_UNCLICKABLE: u8 = VehStates::from_element(VehState::Unclickable).0;
@@ -249,6 +247,44 @@ pub const VESM_END: u8 = VisualEffectSpawnModel::VESM_END.0;
 #[repr(C)]
 pub struct OpenTTDVehicleShell {
     _private: [u8; 0],
+}
+
+/// `VehiclePool`, `Pool<Vehicle, VehicleID, 512>`, read in place through its descriptor.
+/// A slot's shell and record agree wherever Rust reads the pool: `BaseVehicle`'s
+/// constructor binds the record and its destructor retires it, both inside the C++ call
+/// that creates or deletes the vehicle.
+pub(crate) type Pool = crate::pool::TypedPool<VehicleID, VehicleRecord, OpenTTDVehicleShell>;
+
+/// `Pool::MAX_SIZE` of the vehicle pool, `VehicleID::End()`.
+const MAX_SIZE: usize = VehicleID::END.0 as usize;
+/// The ID of a pool index below `first_unused`. The pool never raises `first_unused` past
+/// `MAX_SIZE` (0xFF000), so the index fits `VehicleID`'s `uint32_t`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "an index below `first_unused` is at most `MAX_SIZE`, which fits `uint32_t`"
+)]
+pub(crate) const fn pool_id(index: usize) -> VehicleID {
+    VehicleID(index as u32)
+}
+/// `Vehicle::Get(index)` for an index below `GetPoolSize()`: the slot's record, or `None` for
+/// a free slot.
+///
+/// # Safety
+/// `pool`'s descriptor is live, and nothing mutates the pool during this call.
+pub(crate) unsafe fn get(pool: &Pool, index: VehicleID) -> Option<crate::vehicle::VehicleRef> {
+    // SAFETY: The caller's live descriptor.
+    std::ptr::NonNull::new(unsafe { pool.record(index) }).map(crate::vehicle::VehicleRef)
+}
+/// `Vehicle::Iterate()`'s `PoolIterator::ValidateIndex` from `index`: the first valid vehicle
+/// at or after it, rereading the pool's extent at each slot, or `None` where the iterator
+/// reaches its end sentinel `MAX_SIZE`.
+///
+/// # Safety
+/// As [`get`].
+pub(crate) unsafe fn next_vehicle(pool: &Pool, index: usize) -> Option<VehicleID> {
+    // SAFETY: The caller's live descriptor.
+    let index = unsafe { pool.next_index(index, MAX_SIZE) };
+    (index != MAX_SIZE).then_some(pool_id(index))
 }
 
 crate::abi::shared_records! {
@@ -973,8 +1009,14 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn set_dest_tile_raw(self, value: u32) {
         self.set_dest_tile(TileIndex(value));
     }
+    #[inline]
     pub(crate) fn motion_counter(self) -> u32 {
         read_field!(self.0.as_ptr(), motion_counter)
+    }
+    /// Store `Vehicle::motion_counter`: counter to occasionally play a vehicle sound.
+    #[inline]
+    pub(crate) fn set_motion_counter(self, value: u32) {
+        write_field!(self.0.as_ptr(), motion_counter, value);
     }
     pub(crate) fn x_pos(self) -> i32 {
         read_field!(self.0.as_ptr(), x_pos)
@@ -1060,8 +1102,34 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn set_cached_max_speed(self, value: u16) {
         write_field!(self.0.as_ptr(), cached_max_speed, value);
     }
+    /// `Vehicle::vcache.cached_cargo_age_period`: number of ticks before carried cargo is
+    /// aged.
+    #[inline]
+    pub(crate) fn cached_cargo_age_period(self) -> u16 {
+        read_field!(self.0.as_ptr(), cached_cargo_age_period)
+    }
     pub(crate) fn set_cached_cargo_age_period(self, value: u16) {
         write_field!(self.0.as_ptr(), cached_cargo_age_period, value);
+    }
+    /// `Vehicle::cargo_age_counter`: ticks till cargo is aged next.
+    #[inline]
+    pub(crate) fn cargo_age_counter(self) -> u16 {
+        read_field!(self.0.as_ptr(), cargo_age_counter)
+    }
+    /// Store `Vehicle::cargo_age_counter`.
+    #[inline]
+    pub(crate) fn set_cargo_age_counter(self, value: u16) {
+        write_field!(self.0.as_ptr(), cargo_age_counter, value);
+    }
+    /// `Vehicle::cargo`: the cargo this vehicle is carrying, the list the shell stores. The
+    /// resolver's slot hands Rust a `const` pointer to the shell's mutable member.
+    #[inline]
+    pub(crate) fn cargo(
+        self,
+        newgrf: &crate::newgrf_vehicle::Services,
+    ) -> *mut crate::cargo_storage::List {
+        // SAFETY: The slot reads the live record's shell.
+        unsafe { (newgrf.cargo_owner)(self.0.as_ptr()) }.cast_mut()
     }
     #[inline]
     pub(crate) fn vehicle_type(self) -> VehicleType {
