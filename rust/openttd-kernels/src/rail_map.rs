@@ -116,7 +116,10 @@ pub const fn is_pbs_signal_raw(kind: u8) -> bool {
     is_pbs_signal(SignalType(kind))
 }
 
-#[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "each reader casts its GB field to the original's field type"
+)]
 impl World<'_> {
     /// `GetRailTileType`: returns the `RailTileType` (normal with or without signals,
     /// waypoint or depot).

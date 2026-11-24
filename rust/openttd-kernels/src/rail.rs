@@ -97,42 +97,12 @@ impl RailTypeInfoRef<'_> {
     }
 }
 
-/// `RailTypeSpriteGroup`: sprite groups for a rail type.
+/// `RailTypeSpriteGroup`: sprite groups for a rail type. Rust names only its end marker.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailTypeSpriteGroup(pub u8);
 
-#[allow(
-    dead_code,
-    reason = "the header's whole enum; Rust reads RTSG_END only"
-)]
 impl RailTypeSpriteGroup {
-    /// Cursor and toolbar icon images
-    pub const RTSG_CURSORS: Self = Self(0);
-    /// Images for overlaying track
-    pub const RTSG_OVERLAY: Self = Self(1);
-    /// Main group of ground images
-    pub const RTSG_GROUND: Self = Self(2);
-    /// Main group of ground images for snow or desert
-    pub const RTSG_TUNNEL: Self = Self(3);
-    /// Catenary wires
-    pub const RTSG_WIRES: Self = Self(4);
-    /// Catenary pylons
-    pub const RTSG_PYLONS: Self = Self(5);
-    /// Bridge surface images
-    pub const RTSG_BRIDGE: Self = Self(6);
-    /// Level crossing overlay images
-    pub const RTSG_CROSSING: Self = Self(7);
-    /// Depot images
-    pub const RTSG_DEPOT: Self = Self(8);
-    /// Fence images
-    pub const RTSG_FENCES: Self = Self(9);
-    /// Tunnel portal overlay
-    pub const RTSG_TUNNEL_PORTAL: Self = Self(10);
-    /// Signal images
-    pub const RTSG_SIGNALS: Self = Self(11);
-    /// Complete ground images
-    pub const RTSG_GROUND_COMPLETE: Self = Self(12);
     /// End marker
     pub const RTSG_END: Self = Self(13);
 }
@@ -254,16 +224,49 @@ pub(crate) fn val_param_rail_type(shared: &Shared, rail: RailType) -> bool {
         )
 }
 
+/// The shared table the availability table names.
+#[allow(unsafe_code)]
+fn shared_of(s: &Services) -> &Shared {
+    // SAFETY: The availability table names the process-lifetime shared table.
+    unsafe { &*s.shared }
+}
+
+/// `Engine::IterateType(VEH_TRAIN)`: each train engine in ascending ID order, with its
+/// lifecycle for the company availability gate.
+#[allow(unsafe_code)]
+fn train_engines(s: &Services) -> impl Iterator<Item = crate::engine::EngineRef> + '_ {
+    let mut from = 0;
+    std::iter::from_fn(move || {
+        loop {
+            // SAFETY: Native pool leaves resolve one live shell; no borrow crosses calls.
+            let e = unsafe { (s.next)(from) };
+            if e.shell.is_null() {
+                return None;
+            }
+            from = u32::from(e.id) + 1;
+            if e.kind == VehicleType::TRAIN {
+                return Some(e);
+            }
+        }
+    })
+}
+
+/// `e->company_avail.Test(company) || TimerGameCalendar::date >= e->intro_date +
+/// CalendarTime::DAYS_IN_YEAR`.
+#[allow(unsafe_code)]
+fn engine_available(e: crate::engine::EngineRef, company: CompanyID) -> bool {
+    // SAFETY: `next` resolved this live engine shell; the reads end before any leaf.
+    unsafe { company_available(e, company.0) }
+}
+
 /// `AddDateIntroducedRailTypes`: add the rail types that are to be introduced at the given
 /// date.
-#[allow(unsafe_code)]
 pub(crate) fn add_date_introduced_rail_types(
     s: &Services,
     current: RailTypes,
     date: CalendarDate,
 ) -> RailTypes {
-    // SAFETY: The availability table names the process-lifetime shared table.
-    let shared = unsafe { &*s.shared };
+    let shared = shared_of(s);
     let mut rts = current;
 
     for rt in RailType::RAILTYPE_BEGIN.0..RailType::RAILTYPE_END.0 {
@@ -304,42 +307,26 @@ pub(crate) fn add_date_introduced_rail_types(
 
 /// The `RailVehicleInfo::railtypes` of a train engine the caller's gates admitted, or its
 /// introduced rail types, after the original's `assert(rvi->railtypes.Any())`.
-#[allow(unsafe_code)]
 fn engine_rail_types(s: &Services, railtypes: RailTypes, introduces: bool) -> RailTypes {
     crate::services_assert::assert_with(|| railtypes.any());
     if introduces {
-        // SAFETY: The availability table names the process-lifetime shared table.
-        get_all_introduces_rail_types(unsafe { &*s.shared }, railtypes)
+        get_all_introduces_rail_types(shared_of(s), railtypes)
     } else {
         railtypes
     }
 }
 
 /// `GetCompanyRailTypes`: get the rail types the given company can build.
-#[allow(unsafe_code)]
 pub(crate) fn get_company_rail_types(
     s: &Services,
     company: CompanyID,
     introduces: bool,
 ) -> RailTypes {
     let mut rts = RailTypes::EMPTY;
-    let mut from = 0;
-    loop {
-        // SAFETY: Native pool leaves resolve one live shell; no borrow crosses calls.
-        let e = unsafe { (s.next)(from) };
-        if e.shell.is_null() {
-            break;
-        }
-        from = u32::from(e.id) + 1;
-        if e.kind != VehicleType::TRAIN {
-            continue;
-        }
+    for e in train_engines(s) {
         let engine = crate::vehicle::EngineRef::of(e.shell);
-        // SAFETY: The availability table names the process-lifetime shared table.
-        let climate = unsafe { (&*s.shared).settings().climate.read() };
-        // SAFETY: `next` resolved this live engine shell; the reads end before any leaf.
-        if engine.climate(climate)
-            && unsafe { company_available(e, company.0) }
+        if engine.climate(shared_of(s).settings().landscape().0)
+            && engine_available(e, company)
             && engine.rail_kind() != RailVehicleTypes::WAGON
         {
             rts = rts.with(engine_rail_types(
@@ -357,24 +344,11 @@ pub(crate) fn get_company_rail_types(
 }
 
 /// `GetRailTypes`: get list of rail types, regardless of company availability.
-#[allow(unsafe_code)]
 pub(crate) fn get_rail_types(s: &Services, introduces: bool) -> RailTypes {
     let mut rts = RailTypes::EMPTY;
-    let mut from = 0;
-    loop {
-        // SAFETY: Native pool leaves resolve one live shell; no borrow crosses calls.
-        let e = unsafe { (s.next)(from) };
-        if e.shell.is_null() {
-            break;
-        }
-        from = u32::from(e.id) + 1;
-        if e.kind != VehicleType::TRAIN {
-            continue;
-        }
+    for e in train_engines(s) {
         let engine = crate::vehicle::EngineRef::of(e.shell);
-        // SAFETY: The availability table names the process-lifetime shared table.
-        let climate = unsafe { (&*s.shared).settings().climate.read() };
-        if !engine.climate(climate) {
+        if !engine.climate(shared_of(s).settings().landscape().0) {
             continue;
         }
 
@@ -448,7 +422,6 @@ pub fn get_all_introduces_rail_types_raw(shared: &Shared, types: u64) -> u64 {
 }
 
 #[cfg(test)]
-#[allow(unsafe_code)]
 mod tests {
     use super::*;
     use crate::engine::{EngineRef, Lifecycle};
@@ -501,7 +474,7 @@ mod tests {
         read(rti, 'p').powered
     }
     /// The fixture engines in order, each its own shell and lifecycle.
-    unsafe extern "C" fn next(from: u32) -> EngineRef {
+    extern "C" fn next(from: u32) -> EngineRef {
         ENGINES.with(|e| {
             let engines = e.borrow();
             match engines.get(from as usize) {
@@ -602,8 +575,7 @@ mod tests {
             ),
         ];
         let s = tables(&types);
-        // SAFETY: The fixture availability table names its leaked shared table.
-        let shared = unsafe { &*s.shared };
+        let shared = shared_of(s);
         let both = set(&[1, 2]);
         reads();
         assert_eq!(

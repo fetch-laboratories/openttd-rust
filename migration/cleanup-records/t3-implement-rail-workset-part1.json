@@ -1,0 +1,140 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | fn shared_of | allow unsafe_code",
+    "operation": "rail::shared_of",
+    "source_contract": "`GetRustTypeAvailabilityServices()` (src/rust/engine_adapter.hpp) sets `.shared = &GetRustSharedServices()`, a process-lifetime table.",
+    "reason": "Base rail.rs allowed unsafe_code on the whole module; plan #1046 decision 6 scopes each allowance to the code that needs it. The availability table names the shared table by raw pointer; this one dereference serves every body of the file that reads the rail type table.",
+    "retiring_owner": "#637",
+    "retirement_condition": "Retires when the engine pools move to Rust and the availability table holds the shared table as a reference."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | fn train_engines | allow unsafe_code",
+    "operation": "rail::train_engines",
+    "source_contract": "`Engine::IterateType(VEH_TRAIN)` (src/engine_base.h), through the availability table's `next` leaf, which resolves one live engine shell per call.",
+    "reason": "Base rail.rs allowed unsafe_code on the whole module; plan #1046 decision 6 scopes each allowance to the code that needs it. `next` is an unsafe leaf over the native engine pool; the iterator is the one caller for `GetCompanyRailTypes` and `GetRailTypes`.",
+    "retiring_owner": "#637",
+    "retirement_condition": "Retires when the engine pools move to Rust (#637) and the engines are iterated as Rust references."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | fn engine_available | allow unsafe_code",
+    "operation": "rail::engine_available",
+    "source_contract": "`e->company_avail.Test(company) || TimerGameCalendar::date >= e->intro_date + CalendarTime::DAYS_IN_YEAR` (src/rail.cpp `GetCompanyRailTypes`), over the lifecycle `next` resolved.",
+    "reason": "Base rail.rs allowed unsafe_code on the whole module; plan #1046 decision 6 scopes each allowance to the code that needs it. It calls `type_availability::company_available`, an unsafe read of the live engine lifecycle.",
+    "retiring_owner": "#637",
+    "retirement_condition": "Retires when the engine pools move to Rust (#637)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | fn openttd_rust_has_rail_type | allow unsafe_code",
+    "operation": "rail::openttd_rust_has_rail_type",
+    "source_contract": "`HasRailTypeAvail` (src/rail.cpp) calls this export with the process-lifetime table it names.",
+    "reason": "Base rail.rs allowed unsafe_code on the whole module; plan #1046 decision 6 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and is a shim over the internal body.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when src/rail.cpp's facade has no C++ caller and the export is deleted."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | fn openttd_rust_has_any_rail_types_abi | allow unsafe_code",
+    "operation": "rail::openttd_rust_has_any_rail_types_abi",
+    "source_contract": "`HasAnyRailTypesAvail` (src/rail.cpp) calls this export with the process-lifetime table it names.",
+    "reason": "Base rail.rs allowed unsafe_code on the whole module; plan #1046 decision 6 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and is a shim over the internal body.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when src/rail.cpp's facade has no C++ caller and the export is deleted."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | fn openttd_rust_val_rail_type | allow unsafe_code",
+    "operation": "rail::openttd_rust_val_rail_type",
+    "source_contract": "`ValParamRailType` (src/rail.cpp) calls this export with the process-lifetime table it names.",
+    "reason": "Base rail.rs allowed unsafe_code on the whole module; plan #1046 decision 6 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and is a shim over the internal body.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when src/rail.cpp's facade has no C++ caller and the export is deleted."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | fn openttd_rust_add_date_rail_types | allow unsafe_code",
+    "operation": "rail::openttd_rust_add_date_rail_types",
+    "source_contract": "`AddDateIntroducedRailTypes` (src/rail.cpp) calls this export with the process-lifetime table it names.",
+    "reason": "Base rail.rs allowed unsafe_code on the whole module; plan #1046 decision 6 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and is a shim over the internal body.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when src/rail.cpp's facade has no C++ caller and the export is deleted."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | fn openttd_rust_company_rail_types | allow unsafe_code",
+    "operation": "rail::openttd_rust_company_rail_types",
+    "source_contract": "`GetCompanyRailTypes` (src/rail.cpp) calls this export with the process-lifetime table it names.",
+    "reason": "Base rail.rs allowed unsafe_code on the whole module; plan #1046 decision 6 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and is a shim over the internal body.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when src/rail.cpp's facade has no C++ caller and the export is deleted."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | fn openttd_rust_rail_types | allow unsafe_code",
+    "operation": "rail::openttd_rust_rail_types",
+    "source_contract": "`GetRailTypes` (src/rail.cpp) calls this export with the process-lifetime table it names.",
+    "reason": "Base rail.rs allowed unsafe_code on the whole module; plan #1046 decision 6 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and is a shim over the internal body.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when src/rail.cpp's facade has no C++ caller and the export is deleted."
+  },
+  {
+    "kind": "growth",
+    "counter": "callback_slots",
+    "added": {
+      "rust/expanded.rs | services::Services.rail_type_acceleration_type": 1,
+      "rust/expanded.rs | services::Services.rail_type_compatible_railtypes": 1,
+      "rust/expanded.rs | services::Services.rail_type_info": 1,
+      "rust/expanded.rs | services::Services.rail_type_introduces_railtypes": 1,
+      "rust/expanded.rs | services::Services.rail_type_introduction_date": 1,
+      "rust/expanded.rs | services::Services.rail_type_introduction_required_railtypes": 1,
+      "rust/expanded.rs | services::Services.rail_type_label": 1,
+      "rust/expanded.rs | services::Services.rail_type_max_speed": 1,
+      "rust/expanded.rs | services::Services.rail_type_powered_railtypes": 1
+    },
+    "reason": "#1046 part 1, decision 5: RailTypeInfo stays a C++ record in _railtypes, so each member Rust reads gets one shared typed reader on the shared table, resolved once per entry through GetRailTypeInfo, as the availability table's RoadTypeInfo readers are. They replace seven slots here (the shared table's all_compatible_railtypes and all_powered_railtypes, the ground table's rail_acceleration and rail_speed, the availability table's rail_introduces and rail_introduction, the PBS table's compatible) and the curve-speed reader changes its argument.",
+    "existing_alternatives": "The rail command table's compatible_rail, powered_rail and train_powered, the NewGRF resolver's compatible_rail, powered_rail and powered_single_rail and the registry's type_label read the same members for unfinished files and stay until their passes; a once-bound table cannot be replaced per test by the kept native fixtures.",
+    "retiring_owner": "#1046",
+    "retirement_condition": "Part 2 (rail_cmd.rs) deletes the rail command table's three rail-type slots, which brings the count below the base; the readers retire with RailTypeInfo's storage port."
+  },
+  {
+    "kind": "growth",
+    "counter": "outside_cpp",
+    "added": {
+      "generated/abi-visit-OpenTTDSharedServices.hpp": 7
+    },
+    "reason": "The generated ABI visit of OpenTTDSharedServices lists the shared table's fields; the nine rail type readers replace two set readers there, one generated line more.",
+    "existing_alternatives": "The visit is generated from the Rust layout; it follows the callback_slots record above.",
+    "retiring_owner": "#1046",
+    "retirement_condition": "Retires with the callback_slots record above."
+  }
+]
