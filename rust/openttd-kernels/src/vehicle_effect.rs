@@ -11,7 +11,7 @@
 //!
 //! A [`VehicleRef`] names a live record for the whole entry. Each field is one load or store
 //! at the original's expression, and no reference into a record lives across a callback: the
-//! NewGRF callbacks, effect creation and the sound can reenter resolvers, the effect pool and
+//! `NewGRF` callbacks, effect creation and the sound can reenter resolvers, the effect pool and
 //! the calling controller.
 #![allow(
     clippy::cast_possible_truncation,
@@ -217,10 +217,10 @@ fn spawn_advanced_visual_effect(vs: &VehicleServices, shared: &Services, v: Vehi
         let z = gb(reg, 24, 8) as i8;
 
         if auto_rotate {
-            let l = i32::from(x);
-            let t = i32::from(y);
-            x = (i32::from(l_pos) * l + i32::from(t_pos) * t) as i8;
-            y = (i32::from(t_pos) * l - i32::from(l_pos) * t) as i8;
+            // `int8_t l = x; int8_t t = y;`
+            let (along, across) = (i32::from(x), i32::from(y));
+            x = (i32::from(l_pos) * along + i32::from(t_pos) * across) as i8;
+            y = (i32::from(t_pos) * along - i32::from(l_pos) * across) as i8;
         }
 
         if r#type >= 0xF0 {
@@ -255,6 +255,119 @@ fn is_bridge_above_vehicle(world: &World<'_>, shared: &Services, v: VehicleRef) 
         }
     }
     world.bridge_above(v.tile().0)
+}
+
+// `static_assert`s beside `ShowVisualEffect`'s cast of the type bits to a spawning model.
+const _: () = assert!(VisualEffectSpawnModel::VESM_STEAM.0 == VE_TYPE_STEAM);
+const _: () = assert!(VisualEffectSpawnModel::VESM_DIESEL.0 == VE_TYPE_DIESEL);
+const _: () = assert!(VisualEffectSpawnModel::VESM_ELECTRIC.0 == VE_TYPE_ELECTRIC);
+
+/// `ShowVisualEffect`'s `switch (effect_model)`: the effect part `v` of `this`'s chain emits
+/// on this tick under its spawning model, or `EV_END` for none.
+fn effect_vehicle_type(
+    shared: &Services,
+    this: VehicleRef,
+    v: VehicleRef,
+    effect_model: VisualEffectSpawnModel,
+    max_speed: u32,
+) -> EffectVehicleType {
+    let mut evt = EffectVehicleType::EV_END;
+    match effect_model {
+        VisualEffectSpawnModel::VESM_STEAM => {
+            /* Steam smoke - amount is gradually falling until vehicle reaches its maximum speed, after that it's normal.
+             * Details: while vehicle's current speed is gradually increasing, steam plumes' density decreases by one third each
+             * third of its maximum speed spectrum. Steam emission finally normalises at very close to vehicle's maximum speed.
+             * REGULATION:
+             * - instead of 1, 4 / 2^smoke_amount (max. 2) is used to provide sufficient regulation to steam puffs' amount. */
+            let n = (4_u32 >> shared.settings().smoke_amount())
+                + (u32::from(this.cur_speed()) * 3) / max_speed;
+            if gb(u32::from(v.tick_counter()), 0, n as u8) == 0 {
+                evt = EffectVehicleType::EV_STEAM_SMOKE;
+            }
+        }
+
+        VisualEffectSpawnModel::VESM_DIESEL => {
+            /* Diesel smoke - thicker when vehicle is starting, gradually subsiding till it reaches its maximum speed
+             * when smoke emission stops.
+             * Details: Vehicle's (max.) speed spectrum is divided into 32 parts. When max. speed is reached, chance for smoke
+             * emission erodes by 32 (1/4). For trains, power and weight come in handy too to either increase smoke emission in
+             * 6 steps (1000HP each) if the power is low or decrease smoke emission in 6 steps (512 tonnes each) if the train
+             * isn't overweight. Power and weight contributions are expressed in a way that neither extreme power, nor
+             * extreme weight can ruin the balance (e.g. FreightWagonMultiplier) in the formula. When the vehicle reaches
+             * maximum speed no diesel_smoke is emitted.
+             * REGULATION:
+             * - up to which speed a diesel vehicle is emitting smoke (with reduced/small setting only until 1/2 of max_speed),
+             * - in Chance16 - the last value is 512 / 2^smoke_amount (max. smoke when 128 = smoke_amount of 2). */
+            let mut power_weight_effect: i32 = 0;
+            if v.vehicle_type() == VehicleType::VEH_TRAIN {
+                let front = Train::from_vehicle(this).vehicle();
+                // The shift counts are left to the processor, as the original's are.
+                power_weight_effect = 32_i32.wrapping_shr(front.cached_power() >> 10)
+                    - 32_i32.wrapping_shr(front.cached_weight() >> 9);
+            }
+            if u32::from(this.cur_speed()) < (max_speed >> (2 >> shared.settings().smoke_amount()))
+                && chance16(
+                    shared,
+                    64_u32
+                        .wrapping_sub((u32::from(this.cur_speed()) << 5) / max_speed)
+                        .wrapping_add(power_weight_effect as u32),
+                    512 >> shared.settings().smoke_amount(),
+                )
+            {
+                evt = EffectVehicleType::EV_DIESEL_SMOKE;
+            }
+        }
+
+        VisualEffectSpawnModel::VESM_ELECTRIC => {
+            /* Electric train's spark - more often occurs when train is departing (more load)
+             * Details: Electric locomotives are usually at least twice as powerful as their diesel counterparts, so spark
+             * emissions are kept simple. Only when starting, creating huge force are sparks more likely to happen, but when
+             * reaching its max. speed, quarter by quarter of it, chance decreases until the usual 2,22% at train's top speed.
+             * REGULATION:
+             * - in Chance16 the last value is 360 / 2^smoke_amount (max. sparks when 90 = smoke_amount of 2). */
+            if gb(u32::from(v.tick_counter()), 0, 2) == 0
+                && chance16(
+                    shared,
+                    6_u32.wrapping_sub((u32::from(this.cur_speed()) << 2) / max_speed),
+                    360 >> shared.settings().smoke_amount(),
+                )
+            {
+                evt = EffectVehicleType::EV_ELECTRIC_SPARK;
+            }
+        }
+
+        _ => not_reached(),
+    }
+    evt
+}
+
+/// `ShowVisualEffect`'s stock emission of `evt` from part `v` at its `effect_offset`.
+fn spawn_visual_effect(v: VehicleRef, mut effect_offset: i32, evt: EffectVehicleType) {
+    /* The effect offset is relative to a point 4 units behind the vehicle's
+     * front (which is the center of an 8/8 vehicle). Shorter vehicles need a
+     * correction factor. */
+    if v.vehicle_type() == VehicleType::VEH_TRAIN {
+        let cached_veh_length = Train::from_vehicle(v).vehicle().cached_veh_length();
+        effect_offset = effect_offset.wrapping_add(
+            (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(cached_veh_length)) / 2) as i32,
+        );
+    }
+
+    let mut x =
+        i32::from(VEHICLE_SMOKE_POS[usize::from(v.direction().0)]).wrapping_mul(effect_offset);
+    let mut y = i32::from(VEHICLE_SMOKE_POS[((u32::from(v.direction().0) + 2) % 8) as usize])
+        .wrapping_mul(effect_offset);
+
+    if v.vehicle_type() == VehicleType::VEH_TRAIN
+        && Train::from_vehicle(v)
+            .flags()
+            .test(VehicleRailFlag::Flipped)
+    {
+        x = x.wrapping_neg();
+        y = y.wrapping_neg();
+    }
+
+    let _ = create_effect_vehicle_rel(v, x, y, 10, evt);
 }
 
 /// `Vehicle::ShowVisualEffect`: draw visual effects (smoke and/or sparks) for the vehicle
@@ -337,9 +450,6 @@ pub(crate) fn show_visual_effect(
                     VE_TYPE_COUNT,
                 ) as u8);
                 assert_with(|| effect_model != VisualEffectSpawnModel(VE_TYPE_DEFAULT)); // should have been resolved by UpdateVisualEffect
-                const _: () = assert!(VisualEffectSpawnModel::VESM_STEAM.0 == VE_TYPE_STEAM);
-                const _: () = assert!(VisualEffectSpawnModel::VESM_DIESEL.0 == VE_TYPE_DIESEL);
-                const _: () = assert!(VisualEffectSpawnModel::VESM_ELECTRIC.0 == VE_TYPE_ELECTRIC);
             }
 
             /* Show no smoke when:
@@ -364,74 +474,7 @@ pub(crate) fn show_visual_effect(
                 break 'part;
             }
 
-            let mut evt = EffectVehicleType::EV_END;
-            match effect_model {
-                VisualEffectSpawnModel::VESM_STEAM => {
-                    /* Steam smoke - amount is gradually falling until vehicle reaches its maximum speed, after that it's normal.
-                     * Details: while vehicle's current speed is gradually increasing, steam plumes' density decreases by one third each
-                     * third of its maximum speed spectrum. Steam emission finally normalises at very close to vehicle's maximum speed.
-                     * REGULATION:
-                     * - instead of 1, 4 / 2^smoke_amount (max. 2) is used to provide sufficient regulation to steam puffs' amount. */
-                    let n = (4_u32 >> shared.settings().smoke_amount())
-                        + (u32::from(this.cur_speed()) * 3) / max_speed;
-                    if gb(u32::from(v.tick_counter()), 0, n as u8) == 0 {
-                        evt = EffectVehicleType::EV_STEAM_SMOKE;
-                    }
-                }
-
-                VisualEffectSpawnModel::VESM_DIESEL => {
-                    /* Diesel smoke - thicker when vehicle is starting, gradually subsiding till it reaches its maximum speed
-                     * when smoke emission stops.
-                     * Details: Vehicle's (max.) speed spectrum is divided into 32 parts. When max. speed is reached, chance for smoke
-                     * emission erodes by 32 (1/4). For trains, power and weight come in handy too to either increase smoke emission in
-                     * 6 steps (1000HP each) if the power is low or decrease smoke emission in 6 steps (512 tonnes each) if the train
-                     * isn't overweight. Power and weight contributions are expressed in a way that neither extreme power, nor
-                     * extreme weight can ruin the balance (e.g. FreightWagonMultiplier) in the formula. When the vehicle reaches
-                     * maximum speed no diesel_smoke is emitted.
-                     * REGULATION:
-                     * - up to which speed a diesel vehicle is emitting smoke (with reduced/small setting only until 1/2 of max_speed),
-                     * - in Chance16 - the last value is 512 / 2^smoke_amount (max. smoke when 128 = smoke_amount of 2). */
-                    let mut power_weight_effect: i32 = 0;
-                    if v.vehicle_type() == VehicleType::VEH_TRAIN {
-                        let front = Train::from_vehicle(this).vehicle();
-                        // The shift counts are left to the processor, as the original's are.
-                        power_weight_effect = 32_i32.wrapping_shr(front.cached_power() >> 10)
-                            - 32_i32.wrapping_shr(front.cached_weight() >> 9);
-                    }
-                    if u32::from(this.cur_speed())
-                        < (max_speed >> (2 >> shared.settings().smoke_amount()))
-                        && chance16(
-                            shared,
-                            64_u32
-                                .wrapping_sub((u32::from(this.cur_speed()) << 5) / max_speed)
-                                .wrapping_add(power_weight_effect as u32),
-                            512 >> shared.settings().smoke_amount(),
-                        )
-                    {
-                        evt = EffectVehicleType::EV_DIESEL_SMOKE;
-                    }
-                }
-
-                VisualEffectSpawnModel::VESM_ELECTRIC => {
-                    /* Electric train's spark - more often occurs when train is departing (more load)
-                     * Details: Electric locomotives are usually at least twice as powerful as their diesel counterparts, so spark
-                     * emissions are kept simple. Only when starting, creating huge force are sparks more likely to happen, but when
-                     * reaching its max. speed, quarter by quarter of it, chance decreases until the usual 2,22% at train's top speed.
-                     * REGULATION:
-                     * - in Chance16 the last value is 360 / 2^smoke_amount (max. sparks when 90 = smoke_amount of 2). */
-                    if gb(u32::from(v.tick_counter()), 0, 2) == 0
-                        && chance16(
-                            shared,
-                            6_u32.wrapping_sub((u32::from(this.cur_speed()) << 2) / max_speed),
-                            360 >> shared.settings().smoke_amount(),
-                        )
-                    {
-                        evt = EffectVehicleType::EV_ELECTRIC_SPARK;
-                    }
-                }
-
-                _ => not_reached(),
-            }
+            let evt = effect_vehicle_type(shared, this, v, effect_model, max_speed);
 
             if evt != EffectVehicleType::EV_END && advanced {
                 sound = true;
@@ -439,33 +482,7 @@ pub(crate) fn show_visual_effect(
             } else if evt != EffectVehicleType::EV_END {
                 sound = true;
 
-                /* The effect offset is relative to a point 4 units behind the vehicle's
-                 * front (which is the center of an 8/8 vehicle). Shorter vehicles need a
-                 * correction factor. */
-                if v.vehicle_type() == VehicleType::VEH_TRAIN {
-                    let cached_veh_length = Train::from_vehicle(v).vehicle().cached_veh_length();
-                    effect_offset = effect_offset.wrapping_add(
-                        (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(cached_veh_length)) / 2)
-                            as i32,
-                    );
-                }
-
-                let mut x = i32::from(VEHICLE_SMOKE_POS[usize::from(v.direction().0)])
-                    .wrapping_mul(effect_offset);
-                let mut y =
-                    i32::from(VEHICLE_SMOKE_POS[((u32::from(v.direction().0) + 2) % 8) as usize])
-                        .wrapping_mul(effect_offset);
-
-                if v.vehicle_type() == VehicleType::VEH_TRAIN
-                    && Train::from_vehicle(v)
-                        .flags()
-                        .test(VehicleRailFlag::Flipped)
-                {
-                    x = x.wrapping_neg();
-                    y = y.wrapping_neg();
-                }
-
-                let _ = create_effect_vehicle_rel(v, x, y, 10, evt);
+                spawn_visual_effect(v, effect_offset, evt);
             }
         }
         match v.next() {
@@ -578,7 +595,8 @@ mod tests {
                         asked += 1;
                         100
                     });
-                    let passes = smoke_amount != 0 && status & 18 == 0 && cur_speed >= 2;
+                    // 0x12 is `TrainSlowing` (bit 4) with `Stopped` (bit 1).
+                    let passes = smoke_amount != 0 && status & 0x12 == 0 && cur_speed >= 2;
                     assert_eq!(
                         asked,
                         u32::from(passes),
@@ -645,7 +663,7 @@ mod tests {
     }
 
     /// When the visual effect callback flips the powered-wagon bit and the power state may
-    /// not change, `UpdateVisualEffect` toggles the bit back and reports the broken NewGRF
+    /// not change, `UpdateVisualEffect` toggles the bit back and reports the broken `NewGRF`
     /// once; when it may change, the new bit stays and nothing is reported. The fleet
     /// harness compares the cache but not the message.
     #[test]
