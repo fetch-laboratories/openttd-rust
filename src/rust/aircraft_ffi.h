@@ -66,7 +66,6 @@ struct OpenTTDAircraftLeaves {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStation *(OPENTTD_RUST_CALL *station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint8_t (OPENTTD_RUST_CALL *station_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
-	uint32_t (OPENTTD_RUST_CALL *station_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_tile);
 	void (OPENTTD_RUST_CALL *subtract_cost)(OpenTTDAircraftVehicle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_cost);
 	uint8_t (OPENTTD_RUST_CALL *terminal_count)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terminal_count);
 	void (OPENTTD_RUST_CALL *truncate_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(truncate_cargo);

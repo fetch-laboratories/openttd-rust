@@ -4,6 +4,7 @@
 //! presentation reentry from the qualified native `BaseStation::MoveSign`.
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 use super::{BaseStation, CatchmentServices};
+use crate::base_station_base;
 use crate::company_type::{CompanyID, Owner};
 use crate::tile_type::TileIndex;
 use crate::{game_state::GameState, kdtree::Kdtree, services::Services, station_type::StationID};
@@ -13,11 +14,11 @@ fn table(s: &Services) -> &CatchmentServices {
 }
 /// `Kdtree_StationXYFunc`: the sign tile's X or Y coordinate.
 fn coordinate(c: &CatchmentServices, map: crate::map_func::Map, id: StationID, dim: usize) -> u16 {
-    let tile = (c.location)((c.station_if_valid)(id));
+    let tile = base_station_base::xy((c.station_if_valid)(id));
     if dim == 0 {
-        map.tile_x(TileIndex(tile)) as u16
+        map.tile_x(tile) as u16
     } else {
-        map.tile_y(TileIndex(tile)) as u16
+        map.tile_y(tile) as u16
     }
 }
 /// `RebuildStationKdtree`: rebuild the station index from every station in
@@ -103,7 +104,7 @@ pub(crate) fn station_move_sign(s: &Services, st: *mut BaseStation, new_xy: Tile
         (commands.waypoint_move_sign)(st, new_xy.0);
         return;
     }
-    if (c.location)(st) == new_xy.0 {
+    if base_station_base::xy(st) == new_xy {
         return;
     }
     remove(s, (c.id)(st));
@@ -126,7 +127,7 @@ pub(crate) fn modify_station_rating_around(
     let map = s.map();
     for_all_stations_radius(s, tile, radius, |st| {
         if CompanyID((station.station_owner)(st)) == owner
-            && map.distance_manhattan(tile, TileIndex((c.location)(st))) <= radius
+            && map.distance_manhattan(tile, base_station_base::xy(st)) <= radius
         {
             unsafe {
                 crate::station_service::modify_rating((c.owner)(st), amount);

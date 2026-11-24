@@ -100,6 +100,7 @@
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_linkgraph.h"
 #include "rust/station_lifecycle_ffi.h"
+#include "rust/base_station_ffi.h"
 #include "rust/station_resolver_ffi.h"
 #include "rust/newgrf_vehicle_ffi.h"
 
@@ -325,10 +326,6 @@ static const OpenTTDStationServices _rust_station_services = {
 static const OpenTTDStationLinks _rust_station_links = {
 	.graphs = &GetRustLiveGraphServices(),
 	.automatic_distribution = OpenTTDAutomaticCargoDistribution,
-	.edge = [](OpenTTDBaseStation *from, uint16_t destination) noexcept -> OpenTTDStationEdge {
-		Station *to = Station::Get(StationID(destination));
-		return {to, OpenTTDDistanceManhattan(RustStationLocation(from), RustStationLocation(to))};
-	},
 	.delete_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
 		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
 		if (ge.HasData()) ge.GetData().flows.DeleteFlows(StationID(destination));
@@ -1425,9 +1422,15 @@ extern const TileTypeProcs _tile_type_station_procs = {
 #include "abi-visit-OpenTTDStationDefinitionServices.hpp"
 #include "abi-visit-OpenTTDStationCatchmentServices.hpp"
 #include "abi-visit-OpenTTDStationLifecycleServices.hpp"
+static const OpenTTDBaseStationServices _rust_base_station_services{
+	.xy = RustStationLocation,
+};
+[[maybe_unused]] static const bool _rust_base_station_bound = (openttd_rust_base_station_bind(&_rust_base_station_services), true);
+#include "abi-visit-OpenTTDBaseStationServices.hpp"
 bool CheckAbi_station_cmd()
 {
-	return AbiServicesComplete(GetRustStationLifecycleServices()) &&
+	return AbiServicesComplete(_rust_base_station_services) &&
+		AbiServicesComplete(GetRustStationLifecycleServices()) &&
 		AbiServicesComplete(GetRustStationCatchmentServices()) &&
 		AbiServicesComplete(_rust_station_services.environment) &&
 		AbiServicesComplete(_rust_station_services) &&

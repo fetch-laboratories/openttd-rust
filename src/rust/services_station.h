@@ -189,12 +189,6 @@ inline uint32_t Aircraft_airport_tile(const OpenTTDStation *s) noexcept
 	return RustStationAirportTile(st);
 }
 
-inline uint32_t Aircraft_station_tile(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationLocation(st);
-}
-
 inline uint8_t Aircraft_rotation(const OpenTTDStation *s) noexcept
 {
 	const Station *st = StationOf(s);

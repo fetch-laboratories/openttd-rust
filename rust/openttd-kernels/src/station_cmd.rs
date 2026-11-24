@@ -17,7 +17,7 @@
     clippy::too_many_arguments
 )]
 use crate::airport::{AT_OILRIG, FLYING, NUM_AIRPORTS};
-use crate::base_station_base::StationRectMode;
+use crate::base_station_base::{self, StationRectMode};
 use crate::bitmath_func::find_first_bit;
 use crate::bitmath_func::{gb, has_bit};
 use crate::cargo_type::NUM_CARGO;
@@ -216,7 +216,6 @@ pub struct CommandServicesTable {
     pub tile_area: extern "C" fn(*const BaseStation, u8) -> TileArea,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub links: *const crate::station_service::Links,
-    pub location: extern "C" fn(*const BaseStation) -> u32,
     pub base_move_sign: extern "C" fn(*mut BaseStation, u32),
     pub waypoint_move_sign: extern "C" fn(*mut BaseStation, u32),
     pub virtual_coord: extern "C" fn(*mut BaseStation),
@@ -897,14 +896,14 @@ impl Ctx<'_> {
         }
         let r = unsafe { crate::station::rect(owner) };
         /* clamp sign coord to be inside the station rect */
-        let xy = (self.s.location)(st);
+        let xy = base_station_base::xy(st);
         // SAFETY: Field-sized reads of the live rectangle at the clamp; no callback
         // runs between them.
         let new_xy = self.map().tile_xy(
-            (self.map().tile_x(TileIndex(xy)) as i32)
-                .clamp(unsafe { (*r).left }, unsafe { (*r).right }) as u32,
-            (self.map().tile_y(TileIndex(xy)) as i32)
-                .clamp(unsafe { (*r).top }, unsafe { (*r).bottom }) as u32,
+            (self.map().tile_x(xy) as i32).clamp(unsafe { (*r).left }, unsafe { (*r).right })
+                as u32,
+            (self.map().tile_y(xy) as i32).clamp(unsafe { (*r).top }, unsafe { (*r).bottom })
+                as u32,
         );
         crate::station::spatial::station_move_sign(self.shared, st, new_xy);
         if !(self.world().is_station)(st) {
@@ -920,7 +919,7 @@ impl Ctx<'_> {
                 crate::linkgraph::live::openttd_rust_live_node_location(
                     lg,
                     node,
-                    (self.s.location)(st),
+                    base_station_base::xy(st).0,
                 );
             }
         }
@@ -1070,7 +1069,7 @@ impl Ctx<'_> {
             }
             let cur_dist = self
                 .map()
-                .distance_manhattan(tile, TileIndex((self.s.location)(st)));
+                .distance_manhattan(tile, base_station_base::xy(st));
             if cur_dist < threshold {
                 threshold = cur_dist;
                 best_station = st;
@@ -1242,7 +1241,6 @@ impl Ctx<'_> {
             return StationID::INVALID;
         }
         let mut search = SignSearch {
-            c: self,
             station: st,
             tile,
             other: false,
@@ -1377,15 +1375,14 @@ impl Ctx<'_> {
 }
 /// `CmdMoveStationName` and `CmdMoveWaypointName`'s check for another
 /// station whose base tile is `tile`.
-struct SignSearch<'a> {
-    c: &'a Ctx<'a>,
+struct SignSearch {
     station: *mut BaseStation,
     tile: TileIndex,
     other: bool,
 }
 unsafe extern "C" fn sign_visit(context: *mut std::ffi::c_void, st: *mut BaseStation) {
-    let s = unsafe { &mut *context.cast::<SignSearch<'_>>() };
-    if !st.is_null() && st != s.station && TileIndex((s.c.s.location)(st)) == s.tile {
+    let s = unsafe { &mut *context.cast::<SignSearch>() };
+    if !st.is_null() && st != s.station && base_station_base::xy(st) == s.tile {
         s.other = true;
     }
 }
@@ -6093,7 +6090,6 @@ crate::abi::layouts! {
         tile_area,
         rail_spec,
         links,
-        location,
         base_move_sign,
         waypoint_move_sign,
         virtual_coord,

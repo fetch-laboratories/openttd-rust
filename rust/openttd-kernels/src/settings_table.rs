@@ -5,6 +5,7 @@
 //! process; no Rust borrow of game state spans a service call, and map reads and writes go
 //! through an entry-local `World` that ends before any presentation call.
 #![allow(unsafe_code)]
+use crate::base_station_base;
 use crate::command_type::DoCommandFlag;
 use crate::company_type::CompanyID;
 use crate::map_func::{Map, World};
@@ -400,8 +401,8 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
             if st.is_null() || !stations.in_use(st) {
                 continue;
             }
-            let xy = (catchment.location)(st);
-            if map.tile_x(TileIndex(xy)) == 0 || map.tile_y(TileIndex(xy)) == 0 {
+            let xy = base_station_base::xy(st);
+            if map.tile_x(xy) == 0 || map.tile_y(xy) == 0 {
                 hit(witness::SETTINGS_EDGES_OCCUPIED);
                 return refuse(s, s.edges_not_empty);
             }

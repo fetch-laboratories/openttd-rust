@@ -1043,7 +1043,6 @@ mod tests {
         let links = crate::station_service::Links {
             graphs,
             automatic_distribution,
-            edge: unused!((*mut crate::station::BaseStation, u16) -> crate::station_service::Edge),
             delete_flows: unused!((*mut crate::station::BaseStation, u8, u16)),
             restrict_flows: unused!((*mut crate::station::BaseStation, u8, u16)),
             order_list: unused!((u16) -> *mut crate::orders::NativeOrderList),

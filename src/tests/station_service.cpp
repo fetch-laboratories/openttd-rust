@@ -11,6 +11,7 @@
 #include "mock_environment.h"
 #include "../../tools/simulation/session-fixture.hpp"
 #include "../rust/station_service_ffi.h"
+#include "../rust/base_station_ffi.h"
 #include "../engine_type.h"
 #include "../rust/vehicle_visits_ffi.h"
 #include "../rust/vehicle_record_ffi.h"

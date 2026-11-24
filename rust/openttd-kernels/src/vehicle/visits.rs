@@ -14,8 +14,8 @@
 // stored value) and its `Map::LogX()` byte; `if_not_else` keeps source order.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::if_not_else)]
 use super::{VehicleRef, VehicleServices, VehicleType};
+use crate::base_station_base;
 use crate::debug::debug;
-use crate::tile_type::TileIndex;
 use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use crate::{
     base_consist::{VF_LOADING_FINISHED, VF_STOP_LOADING},
@@ -80,8 +80,6 @@ pub struct Services {
     pub prediction: extern "C" fn(VehicleRef) -> Prediction,
     /// Virtual `GetDisplayMaxSpeed()`.
     pub display_speed: extern "C" fn(VehicleRef) -> i32,
-    /// `BaseStation::xy`.
-    pub location: extern "C" fn(*const BaseStation) -> u32,
     pub percent: PercentStrings,
     /// `v->last_loading_station = station`.
     pub set_last_loading: extern "C" fn(VehicleRef, u16),
@@ -482,7 +480,7 @@ impl Refresher {
             };
             // Travel time at half the consist's maximum speed, in tiles/tick.
             let distance =
-                map.distance_manhattan(TileIndex((s.location)(st)), TileIndex((s.location)(st_to)));
+                map.distance_manhattan(base_station_base::xy(st), base_station_base::xy(st_to));
             let time_estimate = distance.wrapping_mul(4096) / (s.display_speed)(v).cast_unsigned();
 
             // While full loading, add an estimate of what would have been
@@ -1160,7 +1158,6 @@ crate::abi::layouts! {
         schedule,
         prediction,
         display_speed,
-        location,
         percent,
         set_last_loading,
         set_loading_tick,

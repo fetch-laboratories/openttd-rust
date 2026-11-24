@@ -36,7 +36,7 @@ pub(crate) fn calc_closest_station_tile(
 
     /* If the rail station is (temporarily) not present, use the station sign to drive near the station */
     if ta.tile == TileIndex::INVALID {
-        return TileIndex((s.base_station_xy)(station.0));
+        return crate::base_station_base::xy(st);
     }
 
     // The topmost corner of the station is `ta.tile`, and the lowermost

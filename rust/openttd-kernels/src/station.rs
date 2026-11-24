@@ -22,7 +22,7 @@
 
 pub(crate) mod spatial;
 
-use crate::base_station_base::StationRectMode;
+use crate::base_station_base::{self, StationRectMode};
 use crate::bitmap_type::{BitmapTileArea, BitmapTileIterator};
 use crate::cargo_type::{CargoArray, CargoType, CargoTypes, NUM_CARGO};
 use crate::company_type::CompanyID;
@@ -443,7 +443,6 @@ pub struct CatchmentServices {
     /// `Station::Get(id)`'s owner.
     pub station_owner: extern "C" fn(StationID) -> *mut Service,
     pub id: extern "C" fn(*mut BaseStation) -> StationID,
-    pub location: extern "C" fn(*const BaseStation) -> u32,
     pub associated_industry: extern "C" fn(*mut BaseStation) -> *mut ShellHandle,
     pub radius_facilities: extern "C" fn(*mut BaseStation) -> RadiusFacilities,
     pub modified_catchment: extern "C" fn() -> bool,
@@ -597,7 +596,7 @@ pub(crate) fn add_industry_to_deliver(
     c: &Ctx<'_>,
 ) {
     /* Using DistanceMax to get about the same order as with previously used SpiralTileSequence. */
-    let distance = c.map.distance_max(TileIndex((c.c.location)(st)), tile);
+    let distance = c.map.distance_max(base_station_base::xy(st), tile);
     // SAFETY: Live owner; the list borrow ends before the industry services.
     unsafe {
         let list = &mut (*catchment(state)).industries_near;
@@ -1268,7 +1267,7 @@ crate::abi::layouts! {
     "OpenTTDStationRadiusFacilities" ["station_service"] => RadiusFacilities { bus, truck, train, ship, airport };
     "OpenTTDStationCatchmentServices" ["station_service"] => CatchmentServices {
         shared, airport, industry_tile, object, town, station, visits, station_count, station_if_valid,
-        next_station, owner, station_owner, id, location, associated_industry, radius_facilities,
+        next_station, owner, station_owner, id, associated_industry, radius_facilities,
         modified_catchment, spread, industry_by_id, industry_id, industry_owner,
         industry_neutral, next_industry,
     };
