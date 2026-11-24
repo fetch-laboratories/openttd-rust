@@ -133,6 +133,7 @@ rust/openttd-kernels/src/tree_land.rs
 rust/openttd-kernels/src/tree_map.rs
 rust/openttd-kernels/src/trees.rs
 rust/openttd-kernels/src/utf8.rs
+rust/openttd-kernels/src/vehicle.rs
 rust/openttd-kernels/src/vehicle_base.rs
 rust/openttd-kernels/src/vehicle_func.rs
 rust/openttd-kernels/src/vehicle_transactions/articulated.rs

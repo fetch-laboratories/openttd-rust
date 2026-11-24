@@ -240,3 +240,10 @@
 - Five existing renewal-rule helpers and their immediate transaction callers use original names, canonical engine/group identities and `GroupFlag`/`GroupFlags`. Raw masks, adapters and native engine-renew ownership are preserved.
 - Ancestor-aware lookup/addition, exact removal, protection fallback, execution-only mutation, optional old-engine output, prepend order and next-before-delete traversal keep their existing operations and order. Unselected fleet and transaction bodies are unchanged.
 - Source operations/order review, exact spelling acceptance and combined Full pass. Archive equivalence is unclaimed; inherited fidelity differences and coverage limits remain on #156. PR #796, integrated in #799; remaining Orders/fleet vocabulary stays open.
+
+## Vehicle handles and the base vehicle table (#984)
+
+- Rust owns: `GetNewVehiclePos` and `Vehicle::IsWaitingForUnbunching` (`vehicle.rs`), the tile and near-tile loops (`vehicle_func.rs`), `GetAdvanceDistance` and `GetAdvanceSpeed` (`vehicle_base.rs`), `GetVehicleProperty`, `GetEngineProperty` and `GetVehicleCallback` (`newgrf_vehicle.rs`), `PropertyID` (`newgrf_properties.rs`), and the typed train handle `train::Handle::from_vehicle`. Callers reach orders, unbunching, depot entry, the current order and the train owner directly; the tile index hashes with the shared map descriptor.
+- C++ keeps: the base table's pool and shell operations, the fields the shell still stores, unported viewport, sound, window, NewGRF-error and path-result bodies, and links to other tables.
+- Checks: the Rust tests of `vehicle.rs`, `orders.rs`, `road.rs`, `newgrf_vehicle.rs` and `occupancy.rs`, and the aircraft, road, ship and disaster ABI fixtures.
+- PRs: #1031.
