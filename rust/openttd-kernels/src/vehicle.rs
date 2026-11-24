@@ -27,7 +27,6 @@ use std::ptr::NonNull;
 
 // Compatibility names for files no pass has finished; #734's closure removes them.
 pub use crate::engine_type::{OpenTTDEngine, RailVehicleTypes};
-pub use crate::newgrf_callbacks::CALLBACK_FAILED;
 pub use crate::vehicle_type::{OpenTTDVehicle, VehicleType};
 /// `VEHICLE_LENGTH`, as the byte its raw users store.
 #[allow(clippy::cast_possible_truncation)] // The native uint constant is 8.

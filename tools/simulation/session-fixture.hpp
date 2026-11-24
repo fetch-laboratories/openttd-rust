@@ -8,6 +8,7 @@
 #include "../../src/rust/roadstop_resolver_ffi.h"
 #include "../../src/rust/animation_save.hpp"
 #include "../../src/rust/newgrf_storage_ffi.h"
+#include "../../src/rust/engine_capabilities_ffi.h"
 #include "../../src/rust/newgrf_vehicle_ffi.h"
 #include "../../src/newgrf_storage.h"
 /* Narrow owner fixtures enter the production state loop. Unrelated phases use
@@ -53,10 +54,12 @@ struct SessionFixture {
 	OpenTTDAnimationServices animation{};
 	std::optional<RustAnimationScope> animation_scope;
 	std::optional<RustAnimationSave> animation_queue;
-	/* An empty vehicle pool, and a resolver table that no vehicle reaches. */
+	/* An empty vehicle pool, and a resolver table that no vehicle reaches; its links name this
+	 * fixture's live tables. */
 	static inline RustPoolDescriptor empty_pool{};
 	static inline const RustPoolDescriptor *const empty_pool_address = &empty_pool;
-	static inline const OpenTTDVehicleResolverServices empty_resolver{};
+	OpenTTDEngineCapabilitiesServices capabilities{};
+	OpenTTDVehicleResolverServices resolver{};
 	static void Nothing() noexcept {}
 	static void FrameNothing(OpenTTDSessionFrame *) noexcept {}
 	SessionFixture()
@@ -86,7 +89,12 @@ struct SessionFixture {
 		shared.tick_counter = []() noexcept -> uint64_t { return 1; };
 		loop = {{.tick_counter = 0, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
 		scheduler.pool = &empty_pool_address;
-		vehicles.newgrf = []() noexcept { return &empty_resolver; };
+		capabilities.vehicles = &vehicles;
+		capabilities.shared = &shared;
+		resolver.vehicle = &vehicles;
+		resolver.shared = &shared;
+		resolver.capabilities = &capabilities;
+		vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &active->resolver; };
 		scheduler.vehicle = &vehicles;
 		scheduler.shared = &shared;
 		shared.for_each_station = [](void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept {};

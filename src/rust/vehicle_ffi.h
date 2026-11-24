@@ -80,7 +80,6 @@ extern const OpenTTDVehicleServices _rust_vehicle_services;
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept;
 
 struct Vehicle;
-struct OpenTTDCargoList;
 struct OpenTTDCargoStorageServices;
 struct OpenTTDSharedServices;
 struct OpenTTDStationServices;
@@ -92,7 +91,6 @@ struct OpenTTDAircraftLeaves;
 struct OpenTTDRoadLeaves;
 struct OpenTTDShipLeaves;
 struct OpenTTDTrainServices;
-struct RustPoolDescriptor;
 struct OpenTTDVehicleSchedulerServices {
 	const OpenTTDAircraftLeaves *aircraft; ///< Aircraft controller table, immutable for the process.
 	const RustPoolDescriptor *const *pool; ///< The vehicle pool's descriptor.

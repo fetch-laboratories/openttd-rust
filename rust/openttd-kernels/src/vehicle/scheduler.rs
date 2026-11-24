@@ -19,10 +19,10 @@
 //! step. The tables are immutable for the process, and no service an entry calls resets the
 //! pool, loads a game or yields the game-state mutex.
 
-use super::{CALLBACK_FAILED, VehicleRef, VehicleServices};
+use super::{VehicleRef, VehicleServices};
 use crate::bitmath_func::{gb, gb_u8, has_bit};
 use crate::framerate_type::{PerformanceAccumulator, PerformanceElement, PerformanceMeasurer};
-use crate::newgrf_callbacks::CBID_VEHICLE_32DAY_CALLBACK;
+use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_32DAY_CALLBACK};
 use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16};
 use crate::openttd::GameMode;
 use crate::pool::{PoolDescriptor, PoolId};
@@ -140,6 +140,19 @@ macro_rules! store {
     }};
 }
 
+/// `VehicleServices::newgrf`, the resolver getter, as one counted crossing of this file.
+fn resolver<const COUNTED: bool>(vs: &VehicleServices) -> &'static newgrf_vehicle::Services {
+    let newgrf = vs.newgrf();
+    if COUNTED {
+        crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
+        crate::witness::add(
+            crate::witness::VEHICLE_OBSERVED_BYTES,
+            size_of::<*const newgrf_vehicle::Services>() as u64,
+        );
+    }
+    newgrf
+}
+
 /// `v->OnNewCalendarDay()`: the virtual's dispatch. Effect and disaster vehicles keep the base
 /// class's empty body.
 fn on_new_calendar_day(s: &SchedulerServices, v: VehicleRef, id: VehicleID) {
@@ -150,7 +163,7 @@ fn on_new_calendar_day(s: &SchedulerServices, v: VehicleRef, id: VehicleID) {
             s.shared(),
         ),
         VehicleType::VEH_ROAD => road::on_new_calendar_day(v, s.road()),
-        VehicleType::VEH_SHIP => ship_control::on_new_calendar_day(id.0, v, s.ship(), s.shared()),
+        VehicleType::VEH_SHIP => ship_control::on_new_calendar_day(v, s.ship()),
         VehicleType::VEH_AIRCRAFT => {
             aircraft::on_new_calendar_day(s.aircraft(), aircraft::Vehicle::of(v, id));
         }
@@ -167,7 +180,7 @@ fn on_new_economy_day(s: &SchedulerServices, v: VehicleRef, id: VehicleID) {
             s.shared(),
         ),
         VehicleType::VEH_ROAD => road::on_new_economy_day(v, s.road()),
-        VehicleType::VEH_SHIP => ship_control::on_new_economy_day(id.0, v, s.ship(), s.shared()),
+        VehicleType::VEH_SHIP => ship_control::on_new_economy_day(id, v, s.ship(), s.shared()),
         VehicleType::VEH_AIRCRAFT => {
             aircraft::on_new_economy_day(s.aircraft(), aircraft::Vehicle::of(v, id));
         }
@@ -232,10 +245,8 @@ fn run_economy_vehicle_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
                 if COUNTED {
                     crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
                 }
-                // SAFETY: The getter returns the process-lifetime resolver table.
-                let newgrf = unsafe { &*svc!(COUNTED, vs.newgrf) };
                 let callback = newgrf_vehicle::get_vehicle_callback(
-                    newgrf,
+                    resolver::<COUNTED>(vs),
                     CBID_VEHICLE_32DAY_CALLBACK,
                     0,
                     0,
@@ -255,8 +266,7 @@ fn run_economy_vehicle_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
                     // Note: MarkDirty also invalidates the palette, which is the meaning of bit 1.
                     // So, nothing special there.
                     if callback != 0 {
-                        // SAFETY: The process-lifetime maintenance table.
-                        let maintenance = unsafe { &*vs.maintenance };
+                        let maintenance = crate::vehicle::maintenance::Services::of(vs);
                         svc!(COUNTED, maintenance.mark_dirty, v.first());
                     }
 
@@ -347,13 +357,16 @@ fn after_tick<const COUNTED: bool>(
     }
     let kind = load!(COUNTED, v.vehicle_type());
     if COUNTED {
-        crate::witness::hit(
-            crate::witness::VEHICLE_VISITS
-                + match kind.0 {
-                    0..=6 => usize::from(kind.0),
-                    _ => 7,
-                },
-        );
+        crate::witness::hit(match kind {
+            VehicleType::VEH_TRAIN => crate::witness::VEHICLE_VISITS,
+            VehicleType::VEH_ROAD => crate::witness::VEHICLE_VISITS_ROAD,
+            VehicleType::VEH_SHIP => crate::witness::VEHICLE_VISITS_SHIP,
+            VehicleType::VEH_AIRCRAFT => crate::witness::VEHICLE_VISITS_AIRCRAFT,
+            VehicleType::VEH_EFFECT => crate::witness::VEHICLE_VISITS_EFFECT,
+            VehicleType::VEH_DISASTER => crate::witness::VEHICLE_VISITS_DISASTER,
+            VehicleType::VEH_END => crate::witness::VEHICLE_VISITS_END,
+            _ => crate::witness::VEHICLE_VISITS_INVALID,
+        });
     }
     match kind {
         VehicleType::VEH_TRAIN
@@ -502,8 +515,7 @@ fn call_vehicle_ticks<const COUNTED: bool>(tables: &Tables, cost: *mut ()) {
     }
 
     let vs = s.vehicle();
-    // SAFETY: The getter returns the process-lifetime resolver table.
-    let newgrf = unsafe { &*svc!(COUNTED, vs.newgrf) };
+    let newgrf = resolver::<COUNTED>(vs);
     let pool = s.pool();
     // `Vehicle::Iterate()`: each step rereads the pool's extent and slot, so a vehicle that
     // `Tick` allocates ahead of the walk, past the old extent included, is visited this tick.
@@ -848,7 +860,7 @@ mod tests {
                     list,
                     &raw const cargo_services,
                     pair.part.cast(),
-                    2, // Cargo keep action, as in the existing cargo-storage fixture.
+                    u16::from(crate::cargopacket::MoveToAction::MTA_KEEP.0),
                 );
             };
             observed(|o| {
@@ -962,7 +974,11 @@ mod tests {
             ) {
                 return;
             }
-            for (kind, subtype) in [(TRAIN, ENGINE), (ROAD, FRONT), (AIRCRAFT, 2)] {
+            for (kind, subtype) in [
+                (TRAIN, ENGINE),
+                (ROAD, FRONT),
+                (AIRCRAFT, crate::aircraft::AircraftSubType::AIR_AIRCRAFT.0),
+            ] {
                 let mut pair = Pair::new(kind, kind);
                 pair.front().cur_speed = 5;
                 pair.part().motion_counter = 254; // 259 passes 256: GB(259, 0, 8) < 5.
@@ -1723,6 +1739,7 @@ mod tests {
             assert_eq!(take_days(), Vec::<Day>::new());
             session::set_mode(GameMode::GM_EDITOR);
             run_economy_vehicle_day_proc::<false>(&scheduler);
+            run_vehicle_calendar_day_proc::<false>(&scheduler);
             assert_eq!(take_days(), Vec::<Day>::new());
             assert_eq!(FAILURES.load(Ordering::Relaxed), 0);
         }
@@ -1741,6 +1758,10 @@ mod tests {
             let _pool = new_pool();
             in_normal_play(0);
             let part = road_part(0, EngineID(7), 32);
+            // `v->First()` is a distinct live front, which the dirty marking must reach.
+            let front = VehicleRecord::new(null_mut(), VehicleType::VEH_ROAD);
+            // SAFETY: The fresh records; the front lives for the isolated child.
+            unsafe { (*part).first = front };
             let scheduler = day_scheduler(callback_vehicles());
             let trigger = 1 << newgrf_vehicle::Trigger::Callback32.0;
             for (answer, expected) in [
@@ -1749,15 +1770,15 @@ mod tests {
                     vec![
                         Day::Callback(EngineID(7)),
                         Day::Trigger(trigger),
-                        Day::Dirty(part),
+                        Day::Dirty(front),
                     ],
                 ),
-                (2, vec![Day::Callback(EngineID(7)), Day::Dirty(part)]),
+                (2, vec![Day::Callback(EngineID(7)), Day::Dirty(front)]),
                 (
                     4,
                     vec![
                         Day::Callback(EngineID(7)),
-                        Day::Dirty(part),
+                        Day::Dirty(front),
                         Day::Engine,
                         Day::Unknown(CBID_VEHICLE_32DAY_CALLBACK.0, 4),
                     ],
@@ -1917,14 +1938,7 @@ mod tests {
             };
             day_arm(VehicleType::VEH_AIRCRAFT, NORMAL_AIRCRAFT, false, vehicle);
         }
-        /// `Ship::OnNewCalendarDay`'s first leaf is the owner of the ship at `this->index`, the
-        /// loop's index; it ends the child for the ship at index `DAY_TICKS`.
-        extern "C" fn ship_owner(id: u32) -> *mut ship_control::State {
-            if id == DAY_TICKS as u32 {
-                crate::services_assert::check(false);
-            }
-            std::process::exit(1)
-        }
+        /// `Ship::OnNewCalendarDay` is `AgeVehicle(this)`: its first leaf is `v->age`.
         #[test]
         fn calendar_day_dispatches_a_ship() {
             if crate::services_assert::isolate_test_exit(
@@ -1932,16 +1946,12 @@ mod tests {
             ) {
                 return;
             }
-            let _pool = new_pool();
-            in_normal_play(0);
-            new_vehicle_of(DAY_TICKS as usize, VehicleType::VEH_SHIP);
-            let mut scheduler = day_scheduler(VEHICLE);
-            scheduler.ship = Box::leak(Box::new(ship_control::Leaves {
-                state_owner: ship_owner,
-                vehicle: scheduler.vehicle,
-                ..crate::test_tables::SHIP_LEAVES
-            }));
-            run_vehicle_calendar_day_proc::<false>(&scheduler);
+            let vehicle = VehicleServices {
+                maintenance: &crate::test_tables::MAINTENANCE,
+                newgrf: age_resolver,
+                ..VEHICLE
+            };
+            day_arm(VehicleType::VEH_SHIP, 0, true, vehicle);
         }
         /// The economy arms' resolver: the 32-day callback, which a fresh train or aircraft asks
         /// first, fails.

@@ -30,6 +30,7 @@ use crate::tile_type::MP_TUNNELBRIDGE;
 use crate::track_type::TrackBits;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 use crate::vehicle_base::VehState;
+use crate::vehicle_type::VehicleID;
 use crate::water_regions::WaterRegionPatchDesc as Patch;
 use std::collections::{HashSet, VecDeque};
 #[unsafe(no_mangle)]
@@ -990,35 +991,29 @@ pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
     u8::from(true)
 }
 /// `Ship::OnNewCalendarDay`: calendar day handler, for the scheduler's dispatch over the live
-/// ship `vehicle` at pool index `id`.
-pub(crate) fn on_new_calendar_day(
-    id: u32,
-    vehicle: VehicleRef,
-    leaves: &Leaves,
-    services: &Services,
-) {
-    let game = Game {
-        leaves,
-        services,
-        owner: (leaves.state_owner)(id),
-        vehicle: Some(vehicle),
-    };
-    maintenance::age_vehicle(vehicle, game.vs());
+/// ship `vehicle`.
+pub(crate) fn on_new_calendar_day(vehicle: VehicleRef, leaves: &Leaves) {
+    // SAFETY: The native table names the immutable process-wide base table.
+    maintenance::age_vehicle(vehicle, unsafe { &*leaves.vehicle });
 }
 /// `Ship::OnNewEconomyDay`: economy day handler, for the scheduler's dispatch over the live
-/// ship `vehicle` at pool index `id`.
+/// ship `vehicle` at pool index `index`.
 pub(crate) fn on_new_economy_day(
-    id: u32,
+    index: VehicleID,
     vehicle: VehicleRef,
     leaves: &Leaves,
     services: &Services,
 ) {
+    // The handler reads no ship owner: servicing, the depot search and the destination
+    // read the vehicle record and the leaves.
     let game = Game {
         leaves,
         services,
-        owner: (leaves.state_owner)(id),
+        owner: std::ptr::null_mut(),
         vehicle: Some(vehicle),
     };
+    // `this->index.base()`, which the leaves take.
+    let id = index.0;
     crate::witness::hit(crate::witness::SHIP_ECONOMY_DAY);
     maintenance::economy_age_vehicle(vehicle, game.vs());
     let day = (u32::from(game.vehicle().day_counter())).wrapping_add(1);
