@@ -261,8 +261,7 @@ impl crate::map_func::World<'_> {
     #[inline(always)]
     /// `IsRoadDepotTile`: return whether a tile is a road depot tile.
     pub(crate) fn road_depot(&self, t: TileIndex) -> bool {
-        self.kind(t) == TileType::MP_ROAD
-            && get_road_tile_type(&self.types, t.0).is_some_and(|kind| kind.0 == ROAD_TILE_DEPOT)
+        self.kind(t) == TileType::MP_ROAD && self.is_road_depot(t)
     }
     /// `GetRoadDepotDirection`: get the direction of the exit of a road depot. `IsRoadDepot`
     /// and its nested `GetRoadTileType` assertion are evaluated only where the native build
