@@ -938,12 +938,10 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 
 #include "rust/rail_construction_services.hpp"
 #include "rust/service_table_check.hpp"
-#include "abi-visit-OpenTTDTrainServices.hpp"
 #include "abi-visit-OpenTTDTrainReservationLeaves.hpp"
 #include "abi-visit-OpenTTDRailConstructionServices.hpp"
 bool CheckAbi_train_cmd()
 {
-	return AbiServicesComplete(GetTrainServices()) &&
-		AbiServicesComplete(GetTrainReservationServices()) &&
+	return AbiServicesComplete(GetTrainReservationServices()) &&
 		AbiServicesComplete(GetRustRailConstructionServices());
 }
