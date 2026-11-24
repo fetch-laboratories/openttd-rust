@@ -4,3 +4,5 @@
 openttd_rust_road_yapf_choose | src/tests/road_yapf.cpp | #725
 openttd_rust_road_yapf_depot | src/tests/road_yapf.cpp | #725
 openttd_rust_train_reservation_check_next | src/tests/train.cpp | #725
+openttd_rust_visual_show | tools/simulation/fleet-console.cpp | #656
+openttd_rust_visual_update | tools/simulation/fleet-console.cpp | #656

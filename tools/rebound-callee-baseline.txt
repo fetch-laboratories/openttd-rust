@@ -111,9 +111,6 @@ rebound | RustOpaqueVehicleInvoke | src/rust/vehicle_articulated_services.hpp | 
 rebound | RustOpaqueVehicleInvoke | src/rust/vehicle_build_services.hpp | mail_capacity_address
 rebound | RustOtherTunnelBridgeEnd | src/rust/services.cpp | other_tunnel_bridge_end
 rebound | RustOtherTunnelBridgeEnd | src/rust/services.cpp | other_tunnel_end
-rebound | RustRailPoweredMask | src/rust/ground_vehicle_services.cpp | powered
-rebound | RustRailPoweredMask | src/rust/vehicle_effect_services.hpp | powered
-rebound | RustRailPoweredMask | src/rust/vehicle_services_newgrf.h | powered_rail
 rebound | RustRealLoaded | src/newgrf_station.cpp | loaded
 rebound | RustRealLoaded | src/rust/newgrf_spritegroup_services.cpp | loaded
 rebound | RustRealLoadedCount | src/newgrf_station.cpp | loaded_count
@@ -213,7 +210,5 @@ rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
 rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
-rebound | SharedIsDepotTile | src/rust/vehicle_effect_services.hpp | depot
-rebound | SharedIsDepotTile | src/vehicle_cmd.cpp | is_depot
 rebound | openttd_orders_tick_counter | src/order_cmd.cpp | tick_counter
 rebound | openttd_orders_tick_counter | src/rust/services.cpp | tick_counter
