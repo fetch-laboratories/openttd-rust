@@ -429,7 +429,8 @@ pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
             if train.is_some_and(|t| {
                 !(s.powered)(
                     t.railtypes().0,
-                    crate::rail::get_tile_rail_type(s.shared, crate::tile_type::TileIndex(p.tile)),
+                    crate::map_func::World::new(s.shared)
+                        .get_tile_rail_type(crate::tile_type::TileIndex(p.tile)),
                 )
             }) {
                 break 'part;

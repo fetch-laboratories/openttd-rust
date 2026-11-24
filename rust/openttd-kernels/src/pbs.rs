@@ -55,7 +55,6 @@ pub struct PbsServices {
     pub write_train_on_res: extern "C" fn(*mut TrainOutput, Handle),
     pub assertions: bool,
     pub handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
-    pub compatible: extern "C" fn(u8) -> u64,
     pub rail90: extern "C" fn(u8, u8, bool) -> bool,
     pub blocking: extern "C" fn(u32, u8) -> bool,
     pub has_pbs: extern "C" fn(u32, u8) -> bool,
@@ -533,7 +532,7 @@ impl<'a> Pbs<'a> {
         let mut ftoti = FindTrainOnTrackInfo {
             res: self.follow_reservation(
                 v.vehicle().owner(),
-                RailTypes((s.all_compatible_railtypes)(v.railtypes().0)),
+                crate::rail::get_all_compatible_rail_types(s, v.railtypes()),
                 tile,
                 trackdir,
                 false,
@@ -604,7 +603,8 @@ impl<'a> Pbs<'a> {
         });
         let mut trackdir = track_to_trackdir(track, |ok| self.check(ok));
 
-        let rts = RailTypes((self.0.compatible)(w.tile_rail_type(tile.0)));
+        let rts =
+            crate::rail::get_rail_type_info(s, w.get_tile_rail_type(tile)).compatible_railtypes();
 
         /* Follow the path from tile to both ends, one of the end tiles should
          * have a train on it. We need FollowReservation to ignore one-way signals
@@ -680,8 +680,8 @@ impl<'a> Pbs<'a> {
         ft.new_td_bits &= diagdir_reaches_trackdirs(ft.exitdir, |ok| self.check(ok));
         let w = World::new(self.shared());
         if (self.0.rail90)(
-            w.tile_rail_type(ft.old_tile.0),
-            w.tile_rail_type(ft.new_tile.0),
+            w.get_tile_rail_type(ft.old_tile).0,
+            w.get_tile_rail_type(ft.new_tile).0,
             forbid_90deg,
         ) {
             ft.new_td_bits &= !trackdir_crosses_trackdirs(trackdir, |ok| self.check(ok));
@@ -715,7 +715,7 @@ impl<'a> Pbs<'a> {
             s,
             TransportType::TRANSPORT_RAIL,
             Some(v.vehicle()),
-            RailTypes((s.all_compatible_railtypes)(v.railtypes().0)),
+            crate::rail::get_all_compatible_rail_types(s, v.railtypes()),
             true,
         );
 
@@ -1016,7 +1016,6 @@ crate::abi::layouts! {
         write_train_on_res,
         assertions,
         handle,
-        compatible,
         rail90,
         blocking,
         has_pbs,

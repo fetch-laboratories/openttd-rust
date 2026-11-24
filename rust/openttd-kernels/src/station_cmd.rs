@@ -2012,7 +2012,7 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        if !crate::rail::val_param_rail_type(self.shared, rt.0) || !is_valid_axis(axis) {
+        if !crate::rail::val_param_rail_type(self.shared, rt) || !is_valid_axis(axis) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Check if the given station class is valid */

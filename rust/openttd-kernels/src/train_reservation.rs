@@ -209,7 +209,7 @@ impl<'a> Game<'a> {
     }
     /// `GetAllCompatibleRailTypes(railtypes)`.
     fn get_all_compatible_rail_types(&self, railtypes: RailTypes) -> RailTypes {
-        RailTypes((self.services.all_compatible_railtypes)(railtypes.0))
+        crate::rail::get_all_compatible_rail_types(self.services, railtypes)
     }
     /// `IsTileType(tile, type)`.
     fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
@@ -266,7 +266,7 @@ impl<'a> Game<'a> {
     }
     /// `GetTileRailType(tile)`.
     fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
-        RailType(self.world.tile_rail_type(tile.0))
+        self.world.get_tile_rail_type(tile)
     }
     /// `Rail90DegTurnDisallowed(rt1, rt2)` with the default `_settings_game.pf.forbid_90_deg`.
     fn rail_90_deg_turn_disallowed(&self, rt1: RailType, rt2: RailType) -> bool {
@@ -1634,7 +1634,12 @@ mod tests {
     extern "C" fn pbs_services(_: *const Services) -> *const PbsServices {
         PBS_TABLE.get()
     }
-    extern "C" fn every_type(_: u64) -> u64 {
+    /// `GetRailTypeInfo`: any rail type resolves to one stand-in record.
+    extern "C" fn rail_type_info(_: RailType) -> *const crate::rail::RailTypeInfo {
+        std::ptr::NonNull::dangling().as_ptr()
+    }
+    /// `RailTypeInfo::compatible_railtypes`: every rail type is compatible with plain rail.
+    extern "C" fn compatible_with_rail(_: *const crate::rail::RailTypeInfo) -> u64 {
         1
     }
     extern "C" fn no_rail90(_: u8, _: u8, _: bool) -> bool {
@@ -1709,7 +1714,8 @@ mod tests {
             let mut line = Box::new(Self {
                 shared: Services {
                     pbs_services,
-                    all_compatible_railtypes: every_type,
+                    rail_type_compatible_railtypes: compatible_with_rail,
+                    rail_type_info,
                     mark_dirty: mark,
                     ..crate::services::fixture(std::ptr::null_mut(), no_random)
                 },

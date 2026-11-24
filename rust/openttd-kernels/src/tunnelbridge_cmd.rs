@@ -412,7 +412,7 @@ impl<'a> World<'a> {
             }
             RAIL => {
                 railtype = kind;
-                if !crate::rail::val_param_rail_type(self.s, railtype) {
+                if !crate::rail::val_param_rail_type_raw(self.s, railtype) {
                     return Self::error(cost);
                 }
             }
@@ -838,7 +838,7 @@ impl<'a> World<'a> {
         match transport {
             RAIL => {
                 railtype = kind;
-                if !crate::rail::val_param_rail_type(self.s, railtype) {
+                if !crate::rail::val_param_rail_type_raw(self.s, railtype) {
                     return Self::error(cost);
                 }
             }

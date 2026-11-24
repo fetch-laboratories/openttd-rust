@@ -578,7 +578,7 @@ impl TileInfo {
             tile,
             td,
             tile_type: world.kind(tile),
-            rail_type: RailType(world.tile_rail_type(tile.0)),
+            rail_type: world.get_tile_rail_type(tile),
         }
     }
 }
@@ -1931,10 +1931,12 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
     fn set_destination_base(&mut self, override_rail_type: bool) {
         self.compatible_railtypes = self.v.compatible_railtypes();
         if override_rail_type {
-            self.compatible_railtypes = RailTypes(
-                self.compatible_railtypes.0
-                    | (self.s.all_compatible_railtypes)(self.v.railtypes().0),
-            );
+            self.compatible_railtypes =
+                self.compatible_railtypes
+                    .with(crate::rail::get_all_compatible_rail_types(
+                        self.s,
+                        self.v.railtypes(),
+                    ));
         }
     }
     /// `PfDetectDestination(Node &)`: called by YAPF to detect if node ends in
@@ -3239,7 +3241,6 @@ mod tests {
             write_train_on_res: unreachable2,
             assertions: true,
             handle: unreachable1,
-            compatible: unreachable1,
             rail90: crate::test_tables::unreachable3,
             blocking: unreachable2,
             has_pbs: unreachable2,

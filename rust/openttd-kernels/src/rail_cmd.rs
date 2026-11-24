@@ -473,7 +473,7 @@ impl<'a> Ctx<'a> {
         // Resolve at the first original access; the raw pointer retains no Rust borrow.
         let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         cost.set(0);
-        if !crate::rail::val_param_rail_type(self.shared, railtype) || track >= 6 {
+        if !crate::rail::val_param_rail_type_raw(self.shared, railtype) || track >= 6 {
             cost.error(INVALID_STRING_ID);
             return;
         }
@@ -1086,7 +1086,7 @@ impl<'a> Ctx<'a> {
         fail_on_obstacle: bool,
     ) {
         total.set(0);
-        if (!remove && !crate::rail::val_param_rail_type(self.shared, railtype)) || track >= 6 {
+        if (!remove && !crate::rail::val_param_rail_type_raw(self.shared, railtype)) || track >= 6 {
             return total.error(INVALID_STRING_ID);
         }
         let size = self.map_size();
@@ -1163,7 +1163,7 @@ impl<'a> Ctx<'a> {
         railtype: u8,
         dir: u8,
     ) {
-        if !crate::rail::val_param_rail_type(self.shared, railtype) || dir >= 4 {
+        if !crate::rail::val_param_rail_type_raw(self.shared, railtype) || dir >= 4 {
             return cost.error(INVALID_STRING_ID);
         }
         let tileh = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
@@ -1869,7 +1869,7 @@ impl<'a> Ctx<'a> {
         totype: u8,
         diagonal_area: bool,
     ) {
-        if !crate::rail::val_param_rail_type(self.shared, totype) {
+        if !crate::rail::val_param_rail_type_raw(self.shared, totype) {
             return cost.error(INVALID_STRING_ID);
         }
         if area_start >= self.map_size() {

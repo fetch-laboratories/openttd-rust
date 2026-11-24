@@ -635,7 +635,7 @@ impl<'a> Game<'a> {
     }
     /// `GetTileRailType(tile)`.
     fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
-        crate::rail::get_tile_rail_type(self.services, tile)
+        self.world().get_tile_rail_type(tile)
     }
     /// `IsTileType(tile, type)`.
     fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
@@ -920,9 +920,9 @@ impl Game<'_> {
                 /* Do not count powered wagons for the compatible railtypes, as wagons always
                 have railtype normal */
                 if e_u.ground_power(VehicleType::VEH_TRAIN) > 0 {
-                    this.set_compatible_railtypes(this.compatible_railtypes().with(RailTypes(
-                        (self.services.all_powered_railtypes)(u.railtypes().0),
-                    )));
+                    this.set_compatible_railtypes(this.compatible_railtypes().with(
+                        crate::rail::get_all_powered_rail_types(self.services, u.railtypes()),
+                    ));
                 }
 
                 /* Some electric engines can be allowed to run on normal rail. It happens to all
@@ -1243,9 +1243,11 @@ impl Game<'_> {
 
         if max_speed != ABSOLUTE_MAX_SPEED {
             /* Apply the current railtype's curve speed advantage */
-            let curve_speed = (self.services.rail_type_curve_speed)(RailType(
-                self.world().get_rail_type(this.vehicle().tile()).0,
-            ));
+            let curve_speed = crate::rail::get_rail_type_info(
+                self.services,
+                self.world().get_rail_type(this.vehicle().tile()),
+            )
+            .curve_speed();
             max_speed =
                 max_speed.wrapping_add((max_speed / 2).wrapping_mul(i32::from(curve_speed)));
 

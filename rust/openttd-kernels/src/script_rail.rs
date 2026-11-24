@@ -69,7 +69,7 @@ pub(crate) fn rail_type_available(s: &Services, rail_type: u32) -> bool {
     }
     let company = script_host::active_company();
     company == crate::company_type::OWNER_DEITY
-        || crate::rail::has_rail_type(
+        || crate::rail::has_rail_type_avail_raw(
             crate::type_availability::services(s.command.shared),
             company,
             rail_type,
@@ -161,7 +161,7 @@ fn train_can_run_on_rail(s: &Services, engine: u32, track: u32) -> bool {
     if !rail_type_available(s, engine) || !rail_type_available(s, track) {
         return false;
     }
-    crate::rail::is_compatible_rail(s.command.shared, engine as u8, track as u8)
+    crate::rail::is_compatible_rail_raw(s.command.shared, engine as u8, track as u8)
 }
 
 /// `ScriptRail::TrainHasPowerOnRail`, using the integrated rail-command table.
@@ -806,7 +806,7 @@ pub unsafe extern "C" fn openttd_rust_script_rail_type_list(
     let is_deity = owner_company == crate::company_type::OWNER_DEITY;
     let types = crate::type_availability::services(s.command.shared);
     for rt in 0..crate::rail_type::RAILTYPE_END {
-        if is_deity || crate::rail::has_rail_type(types, owner_company, rt) {
+        if is_deity || crate::rail::has_rail_type_avail_raw(types, owner_company, rt) {
             // SAFETY: caller contract.
             unsafe { (*owner).add(i64::from(rt), 0) };
         }
