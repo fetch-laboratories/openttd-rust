@@ -554,39 +554,37 @@ pub(crate) fn get_cargo_types_of_articulated_vehicle(
     v: crate::vehicle::VehicleRef,
     mut cargo_type: Option<&mut CargoType>,
 ) -> CargoTypes {
-    let mut v = v.0.as_ptr();
-    unsafe {
-        let mut cargoes = 0;
-        let mut first = INVALID_CARGO;
-        loop {
-            let cargo = (s.vehicle_cargo)(v);
-            if is_valid_cargo_type(cargo)
-                && (openttd_rust_engine_can_carry_abi(s, (s.vehicle_engine_object)(v)) != 0)
+    let mut part = Some(v);
+    let mut cargoes = 0;
+    let mut first = INVALID_CARGO;
+    while let Some(v) = part {
+        let record = v.0.as_ptr();
+        let cargo = (s.vehicle_cargo)(record);
+        // SAFETY: The live part's engine.
+        if is_valid_cargo_type(cargo)
+            && unsafe { openttd_rust_engine_can_carry_abi(s, (s.vehicle_engine_object)(record)) }
+                != 0
+        {
+            set_bit64(&mut cargoes, cargo);
+            if !is_valid_cargo_type(first) {
+                first = (s.vehicle_cargo)(record);
+            }
+            if first != (s.vehicle_cargo)(record)
+                && let Some(cargo_type) = cargo_type.take()
             {
-                set_bit64(&mut cargoes, cargo);
-                if !is_valid_cargo_type(first) {
-                    first = (s.vehicle_cargo)(v);
-                }
-                if first != (s.vehicle_cargo)(v)
-                    && let Some(cargo_type) = cargo_type.take()
-                {
-                    *cargo_type = CargoType::INVALID_CARGO;
-                }
-            }
-            v = if crate::vehicle::VehicleRef::of(v).has_articulated_part() {
-                crate::vehicle::VehicleRef::of(v).next().unwrap().0.as_ptr()
-            } else {
-                null_mut()
-            };
-            if v.is_null() {
-                break;
+                *cargo_type = CargoType::INVALID_CARGO;
             }
         }
-        if let Some(cargo_type) = cargo_type {
-            *cargo_type = CargoType(first);
-        }
-        CargoTypes(cargoes)
+        part = if v.has_articulated_part() {
+            v.get_next_articulated_part()
+        } else {
+            None
+        };
     }
+    if let Some(cargo_type) = cargo_type {
+        *cargo_type = CargoType(first);
+    }
+    CargoTypes(cargoes)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
