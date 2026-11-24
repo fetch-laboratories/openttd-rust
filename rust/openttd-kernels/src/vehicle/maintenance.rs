@@ -792,11 +792,6 @@ entry!(
     economy_age_vehicle_impl
 );
 entry!(
-    /// `Vehicle::HandleBreakdown`.
-    handle_breakdown,
-    handle_breakdown_impl -> bool
-);
-entry!(
     /// `Vehicle::NeedsAutomaticServicing`.
     needs_automatic_servicing,
     needs_automatic_servicing_impl -> bool
@@ -811,6 +806,16 @@ entry!(
     vehicle_service_in_depot,
     vehicle_service_in_depot_impl
 );
+
+/// `Vehicle::HandleBreakdown`, called by the Rust controllers every tick. It counts no
+/// native entry: the call stays in Rust, and a running vehicle's crosses nothing.
+pub(crate) fn handle_breakdown(v: VehicleRef, base: &VehicleServices) -> bool {
+    if crate::witness::enabled() {
+        handle_breakdown_impl::<true>(v, base)
+    } else {
+        handle_breakdown_impl::<false>(v, base)
+    }
+}
 
 // The C++ facades' entries. Each takes a live shell's record and the live vehicle table.
 
@@ -853,7 +858,13 @@ pub unsafe extern "C" fn openttd_rust_vehicle_handle_breakdown_abi(
     v: VehicleRef,
     base: *const VehicleServices,
 ) -> u8 {
-    u8::from(handle_breakdown(v, unsafe { &*base }))
+    let base = unsafe { &*base };
+    u8::from(if crate::witness::enabled() {
+        crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
+        handle_breakdown_impl::<true>(v, base)
+    } else {
+        handle_breakdown_impl::<false>(v, base)
+    })
 }
 /// `Vehicle::NeedsAutomaticServicing`.
 /// # Safety
