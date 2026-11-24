@@ -92,12 +92,18 @@ pub struct VehicleServices {
     /// The same canonical orders table used by visits/refit.
     pub orders: extern "C" fn() -> *const crate::orders::Leaves,
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
+    /// Virtual `Vehicle::PlayLeaveStationSound()`.
+    pub play_leave_station_sound: extern "C" fn(VehicleRef),
     pub play_sound: extern "C" fn(VehicleRef, u16),
     /// `PlayVehicleSound(v, event)`.
     pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
     pub profit: extern "C" fn(VehicleRef) -> i64,
     /// The record of a native shell.
     pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
+    /// `v->cargo_subtype = subtype`.
+    pub set_cargo_subtype: extern "C" fn(VehicleRef, u8),
+    /// `v->cargo_type = cargo`.
+    pub set_cargo_type: extern "C" fn(VehicleRef, u8),
     /// `v->colourmap = colourmap`.
     pub set_colourmap: extern "C" fn(VehicleRef, crate::gfx_type::PaletteID),
     /// Native `max_age` store after the Rust engine lifetime decision.
@@ -266,10 +272,13 @@ crate::abi::layouts! {
         newgrf,
         orders,
         pathfinding_result,
+        play_leave_station_sound,
         play_sound,
         play_vehicle_sound,
         profit,
         record_from_shell,
+        set_cargo_subtype,
+        set_cargo_type,
         set_colourmap,
         set_max_age,
         ship_get,

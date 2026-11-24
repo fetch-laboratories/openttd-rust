@@ -753,17 +753,20 @@ mod controller {
     ) {
     }
     /// No last loading station (`INVALID_STATION`): no link statistics.
-    extern "C" fn prediction(_: VehicleRef) -> crate::vehicle::visits::Prediction {
-        crate::vehicle::visits::Prediction {
-            loading_tick: 0,
-            last_loading: u16::MAX,
-            last_station: STATION.0,
-            ticks: 0,
-        }
-    }
-    /// `BeginLoading`'s arrival invalidation, after its orders and unload preparation.
-    extern "C" fn arrival_dirty(v: VehicleRef) {
+    extern "C" fn last_loading_station(v: VehicleRef) -> u16 {
         assert_eq!(v.0.as_ptr(), RECORD.get().cast());
+        u16::MAX
+    }
+    extern "C" fn last_loading_tick(_: VehicleRef) -> u64 {
+        0
+    }
+    unsafe extern "C" fn vehicle_index(_: *mut crate::vehicle::OpenTTDVehicle) -> u32 {
+        7
+    }
+    /// `BeginLoading`'s `Station::MarkTilesDirty`, after its orders, unload preparation and
+    /// window invalidation.
+    extern "C" fn mark_tiles(_: *mut crate::station::BaseStation, cargo_change: bool) {
+        assert!(cargo_change);
         // SAFETY: The bay's live road stop owner; one byte read.
         LOADING_STATUS.set(Some(unsafe { (*bay().stop).status }));
     }
@@ -913,7 +916,17 @@ mod controller {
         }));
         let station = Box::leak(Box::new(crate::station_service::World {
             station: loading_station,
+            mark_tiles,
             ..crate::test_tables::STATION_WORLD
+        }));
+        let links = Box::leak(Box::new(crate::station_service::Links {
+            vehicle_resolver: Box::leak(Box::new(crate::newgrf_vehicle::test_table_with_members(
+                vehicle_index,
+                crate::test_tables::unreachable1,
+                crate::test_tables::unreachable1,
+                crate::test_tables::unreachable1,
+            ))),
+            ..crate::test_tables::STATION_LINKS
         }));
         let loading = Box::leak(Box::new(crate::station_service::Loading {
             set_loading_finished,
@@ -931,8 +944,9 @@ mod controller {
             station,
             loading,
             refit,
-            prediction,
-            arrival_dirty,
+            last_loading_station,
+            last_loading_tick,
+            links,
             ..crate::test_tables::VISITS
         })));
         extern "C" fn visits() -> *const crate::vehicle::visits::Services {

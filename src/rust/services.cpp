@@ -966,7 +966,7 @@ static const OpenTTDNewsServices _rust_news_services{
 #include "abi-visit-OpenTTDNewsServices.hpp"
 
 static_assert(ScriptEvent::ET_SUBSIDY_OFFER == 2 && ScriptEvent::ET_SUBSIDY_OFFER_EXPIRED == 3 && ScriptEvent::ET_SUBSIDY_AWARDED == 4 && ScriptEvent::ET_SUBSIDY_EXPIRED == 5);
-static_assert(ScriptEvent::ET_VEHICLE_CRASHED == 12 && ScriptEvent::ET_INDUSTRY_OPEN == 16 && ScriptEvent::ET_INDUSTRY_CLOSE == 17 && ScriptEvent::ET_STATION_FIRST_VEHICLE == 19);
+static_assert(ScriptEvent::ET_VEHICLE_CRASHED == 12 && ScriptEvent::ET_VEHICLE_WAITING_IN_DEPOT == 14 && ScriptEvent::ET_INDUSTRY_OPEN == 16 && ScriptEvent::ET_INDUSTRY_CLOSE == 17 && ScriptEvent::ET_STATION_FIRST_VEHICLE == 19);
 static_assert(ScriptEvent::ET_TOWN_FOUNDED == 22 && ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR == 23 && ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS == 27 && ScriptEvent::ET_ROAD_RECONSTRUCTION == 28);
 static_assert(ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING == 1 && ScriptEventVehicleCrashed::CRASH_PLANE_LANDING == 3 && ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT == 4);
 
@@ -979,6 +979,7 @@ static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept
 		case ScriptEvent::ET_SUBSIDY_AWARDED: return new ScriptEventSubsidyAwarded(SubsidyID{e.subsidy});
 		case ScriptEvent::ET_SUBSIDY_EXPIRED: return new ScriptEventSubsidyExpired(SubsidyID{e.subsidy});
 		case ScriptEvent::ET_VEHICLE_CRASHED: return new ScriptEventVehicleCrashed(VehicleID{e.vehicle}, TileIndex{e.tile}, static_cast<ScriptEventVehicleCrashed::CrashReason>(e.crash_reason), e.victims, CompanyID{e.company});
+		case ScriptEvent::ET_VEHICLE_WAITING_IN_DEPOT: return new ScriptEventVehicleWaitingInDepot(VehicleID{e.vehicle});
 		case ScriptEvent::ET_INDUSTRY_OPEN: return new ScriptEventIndustryOpen(IndustryID{e.industry});
 		case ScriptEvent::ET_INDUSTRY_CLOSE: return new ScriptEventIndustryClose(IndustryID{e.industry});
 		case ScriptEvent::ET_STATION_FIRST_VEHICLE: return new ScriptEventStationFirstVehicle(StationID{e.station}, VehicleID{e.vehicle});

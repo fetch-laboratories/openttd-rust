@@ -75,9 +75,8 @@ static void ShipBoundary()
 		.path_size = ShipProbeUnused<size_t, uint32_t>,
 		.path_back = ShipProbeUnused<uint32_t, uint32_t>, .path_pop = ShipProbeUnused<void, uint32_t>,
 		.path_clear = ShipProbeUnused<void, uint32_t>,
-		.viewport = ShipProbeUnused<void, uint32_t, bool, bool>,
+		.viewport = ShipProbeUnused<void, OpenTTDVehicle *, bool, bool>,
 		.base_viewport = ShipProbeUnused<void, uint32_t>,
-		.play_sound = ShipProbeUnused<void, uint32_t>,
 		.yapf_reverse = ShipProbeUnused<OpenTTDShipReverseResult, uint32_t, bool>, .yapf_choose = ShipProbeUnused<OpenTTDShipTrackResult, uint32_t, uint32_t>,
 		.update_delta = ShipProbeUnused<void, uint32_t>, .build_owner = ShipProbeUnused<void, uint32_t>,
 		.build_z = ShipProbeUnused<void, uint32_t>, .build_properties = ShipProbeUnused<void, uint32_t, uint32_t>,
@@ -121,13 +120,13 @@ static void ShipBoundary()
 		CHECK(ship_probe.stage++ == 1 && !trackdir);
 		return OpenTTDShipReverseResult{true, 255};
 	};
-	leaves.viewport = [](uint32_t id, bool update_delta, bool force) noexcept {
-		CHECK(ship_probe.stage++ == 2 && update_delta && force);
+	leaves.viewport = [](OpenTTDVehicle *v, bool update_delta, bool force) noexcept {
+		CHECK(ship_probe.stage++ == 2 && v == &ship_probe.record && update_delta && force);
 		CHECK(ship_probe.record.direction == 5 && ship_probe.record.cur_speed == 0 && ship_probe.paths == 1 && ship_probe.positions == 1);
 		CHECK(openttd_rust_ship_get_rotation_x(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.x_pos));
 		CHECK(openttd_rust_ship_get_rotation_y(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.y_pos));
 		/* The outer call holds no Rust reference to this owner during nested mutation. */
-		openttd_rust_ship_destination(id, 17, ship_probe.leaves, &ship_probe.services);
+		openttd_rust_ship_destination(4, 17, ship_probe.leaves, &ship_probe.services);
 		CHECK(ship_probe.record.dest_tile == 17 && ship_probe.paths == 2);
 		openttd_rust_ship_set_rotation(ship_probe.owner, 3);
 	};

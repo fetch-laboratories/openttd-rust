@@ -26,13 +26,13 @@
     clippy::collapsible_match
 )]
 use crate::bitmath_func::{assign_bit16, gb_u8, has_bit};
+use crate::cargo_type::{CARGO_AUTO_REFIT, CargoType};
 use crate::company_type::OWNER_NONE;
 use crate::depot_type::DepotID;
 use crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
 use crate::order_type::{
-    CloneOptions, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION,
-    OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OUFB_TRANSFER,
-    OUFB_UNLOAD, OrderType, VehicleOrderID,
+    CloneOptions, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT,
+    OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OrderType, VehicleOrderID,
 };
 use crate::raw_field::{read_field, write_field};
 use crate::station_type::StationID;
@@ -988,6 +988,60 @@ impl OrderView<'_> {
         kind == crate::order_type::OrderLoadType::FullLoad
             || kind == crate::order_type::OrderLoadType::FullLoadAny
     }
+    /// `Order::GetUnloadType`: how must the consist be unloaded?
+    #[inline]
+    pub(crate) fn unload_type(self) -> crate::order_type::OrderUnloadType {
+        crate::order_type::OrderUnloadType(gb_u8(read_field!(self.0, flags), 0, 3))
+    }
+    /// `Order::IsRefit`: is this order a refit order.
+    #[inline]
+    pub(crate) fn is_refit(self) -> bool {
+        let refit_cargo = read_field!(self.0, refit);
+        refit_cargo < crate::cargo_type::NUM_CARGO || refit_cargo == CARGO_AUTO_REFIT
+    }
+    /// `Order::IsAutoRefit`: is this order an auto-refit order.
+    #[inline]
+    pub(crate) fn is_auto_refit(self) -> bool {
+        read_field!(self.0, refit) == CARGO_AUTO_REFIT
+    }
+    /// `Order::GetRefitCargo`: get the cargo to refit to.
+    #[inline]
+    pub(crate) fn refit_cargo(self) -> CargoType {
+        CargoType(read_field!(self.0, refit))
+    }
+    /// `Order::GetConditionSkipToOrder`: get the order to skip to.
+    #[inline]
+    pub(crate) fn condition_skip_to_order(self) -> VehicleOrderID {
+        VehicleOrderID(read_field!(self.0, flags))
+    }
+    /// `Order::IsWaitTimetabled`: does this order have an explicit wait time set?
+    #[inline]
+    pub(crate) fn is_wait_timetabled(self) -> bool {
+        if self.is_type(OrderType::OT_CONDITIONAL) {
+            read_field!(self.0, wait) > 0
+        } else {
+            has_bit(read_field!(self.0, flags), 3)
+        }
+    }
+    /// `Order::GetTimetabledWait`: get the time in ticks a vehicle should wait at the
+    /// destination or 0 if it's not timetabled.
+    #[inline]
+    pub(crate) fn timetabled_wait(self) -> u16 {
+        if self.is_wait_timetabled() {
+            read_field!(self.0, wait)
+        } else {
+            0
+        }
+    }
+    /// `Order::CanLeaveWithCargo`: a vehicle can leave the current station with cargo if it
+    /// can load cargo here, or if it could have loaded it before and does not unload all of it.
+    pub(crate) fn can_leave_with_cargo(self, has_cargo: bool) -> bool {
+        use crate::order_type::{OrderLoadType, OrderUnloadType};
+        self.load_type() != OrderLoadType::NoLoad
+            || (has_cargo
+                && self.unload_type() != OrderUnloadType::Unload
+                && self.unload_type() != OrderUnloadType::Transfer)
+    }
     /// A copy of the whole order, where the original copies it.
     pub(crate) fn copied(self) -> Order {
         // SAFETY: The view names a live order; the copy creates no reference.
@@ -1013,8 +1067,9 @@ impl Order {
     pub(crate) fn load(self) -> u8 {
         self.view().load_type().0
     }
+    /// `Order::GetUnloadType`.
     pub(crate) fn unload(self) -> u8 {
-        self.flags & 7
+        self.view().unload_type().0
     }
     /// `Order::GetDepotActionType`.
     pub(crate) fn action(&self) -> u8 {
@@ -1033,32 +1088,16 @@ impl Order {
     fn value(self) -> u16 {
         self.destination & 2047
     }
+    /// `Order::IsRefit`.
     pub(crate) fn is_refit(self) -> bool {
-        self.refit < 64 || self.refit == 0xfd
+        self.view().is_refit()
     }
     /// `Order::GetMaxSpeed`.
     pub(crate) fn max_speed(self) -> u16 {
         self.view().max_speed()
     }
-    /// `Order::GetConditionSkipToOrder`.
-    pub(crate) fn condition_skip_to(self) -> u8 {
-        self.flags
-    }
-    /// `Order::CanLeaveWithCargo`.
-    pub(crate) fn can_leave_with_cargo(self, has_cargo: bool) -> bool {
-        self.load() != OLFB_NO_LOAD
-            || (has_cargo && self.unload() != OUFB_UNLOAD && self.unload() != OUFB_TRANSFER)
-    }
-    /// `Order::IsFullLoadOrder`.
-    pub(crate) fn is_full_load(self) -> bool {
-        self.view().is_full_load()
-    }
     fn wait_timetabled(self) -> bool {
-        if self.kind() == OT_CONDITIONAL {
-            self.wait > 0
-        } else {
-            self.flags & 8 != 0
-        }
+        self.view().is_wait_timetabled()
     }
     fn travel_timetabled(self) -> bool {
         if self.kind() == OT_CONDITIONAL {
@@ -1068,7 +1107,7 @@ impl Order {
         }
     }
     pub(crate) fn timetabled_wait(self) -> u16 {
-        if self.wait_timetabled() { self.wait } else { 0 }
+        self.view().timetabled_wait()
     }
     fn timetabled_travel(self) -> u16 {
         if self.travel_timetabled() {
@@ -4853,12 +4892,14 @@ impl VisitOrders {
         self.0.orders(Self::shell(v))
     }
     /// `OrderList::GetNumOrders()`.
-    pub(crate) fn count(self, list: *mut c_void) -> u8 {
-        self.0.size(list)
+    pub(crate) fn count(self, list: *mut c_void) -> VehicleOrderID {
+        VehicleOrderID(self.0.size(list))
     }
-    /// `orders[index]` for an index below `count`.
-    pub(crate) fn order(self, list: *mut c_void, index: u8) -> Order {
-        self.0.stored_order(list, usize::from(index))
+    /// `orders[index]` for an index below `count`, read in place.
+    pub(crate) fn order(self, list: *mut c_void, index: VehicleOrderID) -> OrderView<'static> {
+        // SAFETY: An index below `count` names a live stored order, which no caller of a
+        // view changes while it reads it.
+        unsafe { OrderView::of(slot(self.0.vector(list), usize::from(index.0))) }
     }
     /// Full `OrderList::GetOrders()` span length, without `VehicleOrderID` narrowing.
     pub(crate) fn stored_count(self, list: *mut c_void) -> usize {
@@ -4869,20 +4910,17 @@ impl VisitOrders {
         self.0.stored_order(list, index)
     }
     /// `OrderList::GetNext`.
-    pub(crate) fn next(self, list: *mut c_void, index: u8) -> u8 {
-        self.0.next_index(list, index)
+    pub(crate) fn next(self, list: *mut c_void, index: VehicleOrderID) -> VehicleOrderID {
+        VehicleOrderID(self.0.next_index(list, index.0))
     }
     /// `OrderList::GetNextDecisionNode`.
-    pub(crate) fn decision(self, list: *mut c_void, next: u8, hops: u32) -> u8 {
-        self.0.decision(list, next, hops)
-    }
-    /// `v->cur_implicit_order_index`.
-    pub(crate) fn implicit(self, v: VehicleRef) -> u8 {
-        read_field!(self.0.consist(Self::shell(v)), implicit)
-    }
-    /// `v->current_order_time`.
-    pub(crate) fn time(self, v: VehicleRef) -> i32 {
-        read_field!(self.0.consist(Self::shell(v)), time)
+    pub(crate) fn decision(
+        self,
+        list: *mut c_void,
+        next: VehicleOrderID,
+        hops: u32,
+    ) -> VehicleOrderID {
+        VehicleOrderID(self.0.decision(list, next.0, hops))
     }
     /// `OrderList::GetTotalDuration()`.
     pub(crate) fn total(self, list: *mut c_void) -> i32 {
@@ -4892,21 +4930,17 @@ impl VisitOrders {
     pub(crate) fn current(self, v: VehicleRef) -> Order {
         self.0.current(Self::shell(v))
     }
-    /// `v->GetOrder(index)`: null without a list or beyond its orders.
-    pub(crate) fn get(self, v: VehicleRef, index: u8) -> Option<Order> {
-        self.0.vehicle_order(Self::shell(v), index)
+    /// `v->GetOrder(index)`: null without a list or beyond its orders, read in place.
+    pub(crate) fn get(self, v: VehicleRef, index: VehicleOrderID) -> Option<OrderView<'static>> {
+        let list = self.list(v);
+        (!list.is_null() && index < self.count(list)).then(|| self.order(list, index))
     }
-    /// `v->cur_real_order_index`.
-    pub(crate) fn real(self, v: VehicleRef) -> u8 {
-        read_field!(self.0.consist(Self::shell(v)), real)
-    }
-    /// `v->lateness_counter`.
-    pub(crate) fn lateness(self, v: VehicleRef) -> i32 {
-        read_field!(self.0.consist(Self::shell(v)), lateness)
-    }
-    /// `v->vehicle_flags`.
-    pub(crate) fn flags(self, v: VehicleRef) -> u16 {
-        read_field!(self.0.consist(Self::shell(v)), flags)
+    /// Virtual `Vehicle::GetDisplayMaxSpeed`: the maximum speed in km-ish/h as displayed
+    /// to the player.
+    pub(crate) fn get_display_max_speed(self, v: VehicleRef) -> i32 {
+        // SAFETY: The live shell; the leaf reads it and retains nothing. The leaf widens the
+        // virtual's `int`, which the cast narrows back.
+        unsafe { (self.0.0.display_speed)(Self::shell(v)) as i32 }
     }
     /// The implicit-order part of `Vehicle::BeginLoading`.
     pub(crate) fn begin_loading(self, v: VehicleRef) {
@@ -4919,10 +4953,6 @@ impl VisitOrders {
     /// `Vehicle::IncrementImplicitOrderIndex`.
     pub(crate) fn increment_implicit(self, v: VehicleRef) {
         self.0.increment_implicit(Self::shell(v));
-    }
-    /// The vehicle type's list-window invalidation.
-    pub(crate) fn dirty_vehicle_windows(self, v: VehicleRef) {
-        self.0.dirty_vehicle_windows(Self::shell(v));
     }
     /// `UpdateVehicleTimetable`.
     pub(crate) fn update_timetable(self, v: VehicleRef, travelling: bool) {

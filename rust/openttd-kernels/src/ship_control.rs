@@ -217,9 +217,8 @@ pub struct Leaves {
     pub path_back: extern "C" fn(u32) -> u32,
     pub path_pop: extern "C" fn(u32),
     pub path_clear: extern "C" fn(u32),
-    pub viewport: extern "C" fn(u32, bool, bool),
+    pub viewport: extern "C" fn(VehicleRef, bool, bool),
     pub base_viewport: extern "C" fn(u32),
-    pub play_sound: extern "C" fn(u32),
     pub yapf_reverse: extern "C" fn(u32, bool) -> ReverseResult,
     pub yapf_choose: extern "C" fn(u32, u32) -> TrackResult,
     pub update_delta: extern "C" fn(u32),
@@ -378,8 +377,8 @@ impl Game<'_> {
     }
 }
 impl Game<'_> {
-    fn viewport(&self, id: u32) {
-        (self.leaves.viewport)(id, true, true);
+    fn viewport(&self) {
+        (self.leaves.viewport)(self.vehicle(), true, true);
     }
     fn path_clear(&self, id: u32) {
         (self.leaves.path_clear)(id);
@@ -415,7 +414,7 @@ impl Game<'_> {
         unsafe {
             crate::vehicle::occupancy::update_position(self.vs(), v, self.services.map());
         }
-        self.viewport(id);
+        self.viewport();
     }
     fn depot(&self, max_distance: u32) -> Option<Depot> {
         crate::witness::hit(crate::witness::SHIP_DEPOT_SEARCH);
@@ -564,11 +563,11 @@ impl Game<'_> {
         self.set_rotation(direction as u16);
         self.vehicle().set_hidden(false);
         self.vehicle().set_cur_speed(0);
-        self.viewport(id);
+        self.viewport();
         (self.leaves.depot_dirty)(id);
         maintenance::vehicle_service_in_depot(v, self.vs());
         (self.leaves.leave_unbunch)(id);
-        (self.leaves.play_sound)(id);
+        (self.vs().play_leave_station_sound)(self.vehicle());
         (self.leaves.depot_invalidate)(id);
         (self.leaves.ships_dirty)();
         false
@@ -618,7 +617,7 @@ impl Game<'_> {
             unsafe {
                 crate::vehicle::occupancy::update_position(self.vs(), v, self.services.map());
             }
-            self.viewport(id);
+            self.viewport();
         }
         true
     }
@@ -737,7 +736,7 @@ impl Game<'_> {
                 let diff = observed_direction.wrapping_sub(rotation) & 7;
                 self.set_rotation(((rotation + if diff > 4 { 7 } else { 1 }) & 7) as u16);
                 (self.leaves.sprite_direction)(id);
-                self.viewport(id);
+                self.viewport();
             }
             return;
         }
@@ -921,7 +920,7 @@ impl Game<'_> {
             unsafe {
                 crate::vehicle::occupancy::update_position(self.vs(), v, self.services.map());
             }
-            self.viewport(id);
+            self.viewport();
         }
     }
 }
@@ -1039,8 +1038,20 @@ pub unsafe extern "C" fn openttd_rust_ship_cache(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(v));
-    game.cache(v);
+    // SAFETY: The service tables remain immutable and live for this entry.
+    let (leaves, services) = unsafe { (&*leaves, &*services) };
+    update_cache(leaves, services, (leaves.state_owner)(id), v);
+}
+/// `Ship::UpdateCache`: update the caches of this ship, whose state owner `owner` the
+/// caller has resolved.
+pub(crate) fn update_cache(leaves: &Leaves, services: &Services, owner: *mut State, v: VehicleRef) {
+    Game {
+        leaves,
+        services,
+        owner,
+        vehicle: Some(v),
+    }
+    .cache(v);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_destination(
@@ -1261,7 +1272,6 @@ crate::abi::layouts! {
         path_clear,
         viewport,
         base_viewport,
-        play_sound,
         yapf_reverse,
         yapf_choose,
         update_delta,

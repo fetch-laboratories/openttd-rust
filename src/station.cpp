@@ -244,7 +244,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
 		.sign_valid = RustStationSignValid,
 		.remove_sign = [](uint16_t id) noexcept { _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(StationID{id})); },
-		.last_loading = RustVehicleLastLoadingStation,
 		.airport_maintenance = RustAirportSpecMaintenance,
 		.maintenance_price = PR_INFRASTRUCTURE_AIRPORT,
 	};

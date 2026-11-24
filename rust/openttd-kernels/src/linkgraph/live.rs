@@ -475,8 +475,14 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
     other: *mut Graph,
     services: *const Services,
 ) {
+    unsafe { merge(graph, other, &*services) }
+}
+/// `LinkGraph::Merge`: merge `other` into `graph` and delete `other`.
+///
+/// # Safety
+/// `graph` and `other` are distinct live graphs; no graph borrow spans a station callback.
+pub(crate) unsafe fn merge(graph: *mut Graph, other: *mut Graph, services: &Services) {
     let date = crate::timer_game_common::economy_date().0;
-    let services = unsafe { &*services };
     witness::hit(witness::LINKGRAPH_MERGE);
     let index = (services.index)(graph);
     let source = other;

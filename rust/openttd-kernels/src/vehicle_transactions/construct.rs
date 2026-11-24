@@ -14,7 +14,6 @@ use crate::services::CommandCost;
 use crate::station::Station;
 use crate::table::strings::STR_ERROR_DEPOT_WRONG_DEPOT_TYPE;
 use crate::tile_type::TileIndex;
-use crate::vehicle_type::OpenTTDVehicle;
 use crate::vehicle_type::VehicleType;
 use std::ptr;
 
@@ -34,7 +33,6 @@ pub struct Services {
     pub rotor: extern "C" fn(*mut (), *mut (), *mut ()),
     pub mail_capacity_address: extern "C" fn(*mut ()) -> *mut u16,
     pub road_capacity: extern "C" fn(*mut (), *mut (), u16),
-    pub set_cargo_type: extern "C" fn(*mut OpenTTDVehicle, u8),
     pub engine_common: extern "C" fn(*mut (), u16, u16, u16),
     pub service_dates: extern "C" fn(*mut (), u16),
     pub build_stamp: extern "C" fn(*mut ()),
@@ -223,12 +221,8 @@ pub(crate) unsafe fn cmd_build_aircraft(
     let mail =
         crate::cargo_registry::get_cargo_type_by_label(crate::cargo_type::CargoLabel::CT_MAIL).0;
     if (c.valid_cargo)(mail) {
-        (k.set_cargo_type)(
-            unsafe { super::vehicle_ref(u, r.common.vehicles) }
-                .0
-                .as_ptr(),
-            mail,
-        );
+        unsafe { super::vehicle_ref(u, r.common.vehicles) }
+            .set_cargo_type(r.common.vehicles, crate::cargo_type::CargoType(mail));
         crate::vehicle::VehicleRef::of(
             unsafe { super::vehicle_ref(u, r.common.vehicles) }
                 .0
@@ -351,7 +345,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleConstructServices" ["probe"] => Services {
         articulated, new_road, road_front, station,
         hangar_tile, new_aircraft, aircraft_place, aircraft_properties,
-        rotor, mail_capacity_address, road_capacity, set_cargo_type, engine_common, service_dates,
+        rotor, mail_capacity_address, road_capacity, engine_common, service_dates,
         build_stamp, service_flags,
     };
 }
