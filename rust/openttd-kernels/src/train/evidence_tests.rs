@@ -486,8 +486,8 @@ fn run() -> (Cases, Cases) {
         for &record in &fixture.records {
             // SAFETY: A removal reads no shared table; the record is live.
             unsafe {
-                openttd_rust_occupancy_update(std::ptr::null(), VehicleRef::of(record), true)
-            };
+                openttd_rust_occupancy_update(std::ptr::null(), VehicleRef::of(record), true);
+            }
         }
     }
     with(|w| w.events.clear());

@@ -264,34 +264,38 @@ impl Near {
         let top = ((y as u32).wrapping_sub(max_dist) as i32).max(0);
         let bottom = ((y as u32).wrapping_add(max_dist) as i32).max(0);
 
-        let (hxmin, hxmax, hymin, hymax);
-        if max_dist.wrapping_mul(2) < TILE_HASH_MASK * TILE_SIZE {
-            // Hash area to scan
-            hxmin = get_tile_hash_1d(left as u32 / TILE_SIZE);
-            hxmax = get_tile_hash_1d(right as u32 / TILE_SIZE);
-            hymin = get_tile_hash_1d(top as u32 / TILE_SIZE);
-            hymax = get_tile_hash_1d(bottom as u32 / TILE_SIZE);
-        } else {
-            // Scan all
-            hxmin = 0;
-            hxmax = TILE_HASH_MASK;
-            hymin = 0;
-            hymax = TILE_HASH_MASK;
-        }
-
         let mut it = Self {
             left,
             top,
             right,
             bottom,
-            hxmin,
-            hxmax,
-            hymin,
-            hymax,
-            hx: hxmin,
-            hy: hymin,
-            current_veh: tile_hash_head(compose_tile_hash(hxmin, hymin)),
+            hxmin: 0,
+            hxmax: 0,
+            hymin: 0,
+            hymax: 0,
+            hx: 0,
+            hy: 0,
+            current_veh: ptr::null_mut(),
         };
+        if max_dist.wrapping_mul(2) < TILE_HASH_MASK * TILE_SIZE {
+            // Hash area to scan
+            it.hxmin = get_tile_hash_1d(it.left as u32 / TILE_SIZE);
+            it.hx = it.hxmin;
+            it.hxmax = get_tile_hash_1d(it.right as u32 / TILE_SIZE);
+            it.hymin = get_tile_hash_1d(it.top as u32 / TILE_SIZE);
+            it.hy = it.hymin;
+            it.hymax = get_tile_hash_1d(it.bottom as u32 / TILE_SIZE);
+        } else {
+            // Scan all
+            it.hxmin = 0;
+            it.hx = 0;
+            it.hxmax = TILE_HASH_MASK;
+            it.hymin = 0;
+            it.hy = 0;
+            it.hymax = TILE_HASH_MASK;
+        }
+
+        it.current_veh = tile_hash_head(compose_tile_hash(it.hx, it.hy));
         it.skip_empty_buckets();
         it.skip_false_matches();
         it
