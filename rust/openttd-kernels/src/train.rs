@@ -1863,9 +1863,10 @@ impl Game<'_> {
 
             /* If we are on a depot tile facing outwards, do not treat the current tile as safe. */
             if self.is_rail_depot_tile(tile)
-                && DiagDirection(crate::track_func::trackdir_to_exitdir(
-                    self.get_vehicle_trackdir(v).0,
-                )) == self.get_rail_depot_direction(tile)
+                && crate::track_func::trackdir_to_exitdir_asserted(
+                    self.get_vehicle_trackdir(v),
+                    self.check(),
+                ) == self.get_rail_depot_direction(tile)
             {
                 first_tile_okay = false;
             }
@@ -1873,9 +1874,10 @@ impl Game<'_> {
             if self.is_rail_station_tile(tile) {
                 self.pbs().set_rail_station_platform_reservation(
                     tile,
-                    DiagDirection(crate::track_func::trackdir_to_exitdir(
-                        self.get_vehicle_trackdir(v).0,
-                    )),
+                    crate::track_func::trackdir_to_exitdir_asserted(
+                        self.get_vehicle_trackdir(v),
+                        self.check(),
+                    ),
                     true,
                 );
             }
@@ -2144,9 +2146,10 @@ impl Game<'_> {
 
         let next_tile = self.tile_add_by_diag_dir(
             t.vehicle().tile(),
-            DiagDirection(crate::track_func::trackdir_to_exitdir(
-                self.get_vehicle_trackdir(t).0,
-            )),
+            crate::track_func::trackdir_to_exitdir_asserted(
+                self.get_vehicle_trackdir(t),
+                self.check(),
+            ),
         );
         if next_tile == TileIndex(INVALID_TILE)
             || !self.is_tile_type(next_tile, TileType::MP_RAILWAY)
@@ -2155,9 +2158,13 @@ impl Game<'_> {
             return TrainForceProceeding::TFP_STUCK;
         }
         let new_tracks = TrackBits(
-            crate::track_func::diagdir_reaches_tracks(crate::track_func::trackdir_to_exitdir(
-                self.get_vehicle_trackdir(t).0,
-            )) & self.world().tracks(next_tile.0),
+            crate::track_func::diagdir_reaches_tracks(
+                crate::track_func::trackdir_to_exitdir_asserted(
+                    self.get_vehicle_trackdir(t),
+                    self.check(),
+                )
+                .0,
+            ) & self.world().tracks(next_tile.0),
         );
         if new_tracks != TrackBits::TRACK_BIT_NONE
             && self.world().has_signal_on_track(
@@ -2484,7 +2491,7 @@ impl Game<'_> {
             let trackdir = Trackdir(crate::track_func::find_first_trackdir(tracks));
             if self.update_signals_on_segment(
                 tile,
-                DiagDirection(crate::track_func::trackdir_to_exitdir(trackdir.0)),
+                crate::track_func::trackdir_to_exitdir_asserted(trackdir, self.check()),
                 self.world().owner(tile),
             ) == SigSegState::SIGSEG_PBS
                 && self.has_signal_on_trackdir(tile, trackdir)
@@ -2922,9 +2929,11 @@ impl Game<'_> {
                                                     * crate::timer_game_tick::DAY_TICKS
                                                     * 2
                                         } {
-                                            let mut exitdir = DiagDirection(
-                                                crate::track_func::trackdir_to_exitdir(i.0),
-                                            );
+                                            let mut exitdir =
+                                                crate::track_func::trackdir_to_exitdir_asserted(
+                                                    i,
+                                                    self.check(),
+                                                );
                                             let o_tile =
                                                 self.tile_add_by_diag_dir(gp.new_tile, exitdir);
 

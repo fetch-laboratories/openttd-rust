@@ -221,6 +221,17 @@ pub fn trackdir_to_exitdir(td: u8) -> u8 {
     [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0, 0, 0][usize::from(td)]
 }
 
+/// `TrackdirToExitdir` with the original's `assert(IsValidTrackdirForRoadVehicle(trackdir))`
+/// through the native assertion policy `check`: maps a trackdir to the direction in which
+/// the train leaves the tile.
+pub fn trackdir_to_exitdir_asserted(
+    trackdir: crate::track_type::Trackdir,
+    check: impl Fn(bool),
+) -> crate::direction_type::DiagDirection {
+    check(is_valid_trackdir_for_road_vehicle(trackdir));
+    crate::direction_type::DiagDirection(trackdir_to_exitdir(trackdir.0))
+}
+
 /// `DiagdirReachesTrackdirs`.
 pub fn diagdir_reaches_trackdirs(dir: u8) -> u16 {
     [0x1009, 0x16, 0x520, 0x2a00][usize::from(dir)]
@@ -569,6 +580,35 @@ mod track_table_tests {
     use crate::direction_type::Direction;
     use crate::track_type::{Track, TrackBits, Trackdir};
     use std::cell::Cell;
+
+    /// `TrackdirToExitdir` reads `_trackdir_to_exitdir` (`table/track_data.h`) for every
+    /// trackdir below `TRACKDIR_END`, and asserts `IsValidTrackdirForRoadVehicle` first:
+    /// `INVALID_TRACKDIR` fails the assertion before the table read.
+    #[test]
+    fn trackdir_to_exitdir_asserted_follows_the_table_and_asserts_a_valid_trackdir() {
+        use crate::direction_type::DiagDirection;
+        // DIAGDIR_NE, SE, NE, SE, SW, SE, NE, NE, SW, NW, NW, SW, NW, NE, and the two
+        // zero-filled entries.
+        let expected: [u8; 16] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0, 0, 0];
+        let failures = Cell::new(0);
+        let check = |ok: bool| failures.set(failures.get() + u32::from(!ok));
+        for (td, dir) in (0u8..).zip(expected) {
+            assert_eq!(
+                super::trackdir_to_exitdir_asserted(Trackdir(td), check),
+                DiagDirection(dir)
+            );
+        }
+        assert_eq!(failures.get(), 0);
+        let failed = Cell::new(false);
+        let record = |ok: bool| failed.set(failed.get() || !ok);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            super::trackdir_to_exitdir_asserted(Trackdir::INVALID_TRACKDIR, |ok| {
+                record(ok);
+                assert!(ok);
+            })
+        }));
+        assert!(failed.get());
+    }
 
     #[test]
     fn track_crosses_tracks_follows_the_original_table() {
