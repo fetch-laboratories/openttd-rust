@@ -582,8 +582,8 @@ mod track_table_tests {
         ];
         let failures = Cell::new(0);
         let check = |ok: bool| failures.set(failures.get() + u32::from(!ok));
-        for (track, bits) in expected.into_iter().enumerate() {
-            assert_eq!(super::track_crosses_tracks(Track(track as u8), check), bits);
+        for (track, bits) in (0u8..).zip(expected) {
+            assert_eq!(super::track_crosses_tracks(Track(track), check), bits);
         }
         assert_eq!(failures.get(), 0);
         let failed = Cell::new(false);
@@ -614,14 +614,10 @@ mod track_table_tests {
         ];
         let failures = Cell::new(0);
         let check = |ok: bool| failures.set(failures.get() + u32::from(!ok));
-        for (track, row) in expected.iter().enumerate() {
-            for (dir, &td) in row.iter().enumerate() {
+        for (track, row) in (0u8..).zip(expected.iter()) {
+            for (dir, &td) in (0u8..).zip(row.iter()) {
                 assert_eq!(
-                    super::track_direction_to_trackdir(
-                        Track(track as u8),
-                        Direction(dir as u8),
-                        check
-                    ),
+                    super::track_direction_to_trackdir(Track(track), Direction(dir), check),
                     Trackdir(td),
                     "track {track}, direction {dir}"
                 );

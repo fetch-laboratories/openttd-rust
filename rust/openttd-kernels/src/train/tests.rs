@@ -51,6 +51,7 @@ mod handle_tests {
 /// The bodies of `train_cmd.cpp` whose effects no scenario compares: the fatal paths, the
 /// arrival news and events and the crash events, through recording tables. Each expectation
 /// is read from the original body.
+#[cfg(test)]
 mod bodies {
     use super::super::*;
     use crate::news_func::testing::{Effect, Param, encoded, take};
@@ -141,8 +142,8 @@ mod bodies {
         fn new(
             owner: u8,
             subtype: u8,
-            shared: Services,
-            vehicle: crate::vehicle::VehicleServices,
+            shared: &Services,
+            vehicle: &crate::vehicle::VehicleServices,
         ) -> Self {
             let base: Box<[crate::map_func::BaseTileLayout]> = (0..256)
                 .map(|_| crate::map_func::BaseTileLayout {
@@ -177,13 +178,13 @@ mod bodies {
                     native_assert: no_assertion,
                     ..crate::test_tables::MOVEMENT
                 })),
-                ..shared
+                ..*shared
             }));
             let leaves = Box::leak(Box::new(Leaves {
                 reservation: Box::leak(Box::new(crate::train_reservation::tests::leaves())),
                 vehicle: Box::leak(Box::new(crate::vehicle::VehicleServices {
                     newgrf,
-                    ..vehicle
+                    ..*vehicle
                 })),
                 ..TRAIN_LEAVES
             }));
@@ -243,7 +244,7 @@ mod bodies {
         ) {
             return;
         }
-        let f = Fixture::new(LOCAL, 0, SHARED, VEHICLE);
+        let f = Fixture::new(LOCAL, 0, &SHARED, &VEHICLE);
         f.game().consist_changed(f.train(), CCF_ARRANGE);
     }
 
@@ -268,12 +269,12 @@ mod bodies {
         let f = Fixture::new(
             LOCAL,
             FRONT_ENGINE,
-            Services {
+            &Services {
                 settings,
                 not_reached,
                 ..SHARED
             },
-            VEHICLE,
+            &VEHICLE,
         );
         // SAFETY: The fixture's shared table is leaked and its map statics belong to this
         // thread, which runs every assertion of the child.
@@ -298,12 +299,12 @@ mod bodies {
         let f = Fixture::new(
             LOCAL,
             FRONT_ENGINE,
-            Services {
-                not_reached,
+            &Services {
                 station_catchment,
+                not_reached,
                 ..SHARED
             },
-            VEHICLE,
+            &VEHICLE,
         );
         // SAFETY: The fixture's live record and order.
         unsafe {
@@ -380,13 +381,13 @@ mod bodies {
         let f = Fixture::new(
             owner,
             FRONT_ENGINE,
-            Services {
+            &Services {
                 local_company,
                 station_catchment,
                 station_had_vehicle_of_type_field: had_vehicle_of_type_field,
                 ..SHARED
             },
-            crate::vehicle::VehicleServices {
+            &crate::vehicle::VehicleServices {
                 visits: arrival_visits,
                 ..VEHICLE
             },
@@ -453,7 +454,7 @@ mod bodies {
             ..GROUND_VEHICLE
         }));
         for owner in [LOCAL, LOCAL + 1] {
-            let mut f = Fixture::new(owner, 0, SHARED, VEHICLE);
+            let mut f = Fixture::new(owner, 0, &SHARED, &VEHICLE);
             f.leaves = Box::leak(Box::new(Leaves {
                 physics,
                 ..*f.leaves

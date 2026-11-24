@@ -449,7 +449,6 @@ impl Roadside {
 }
 
 #[cfg(test)]
-#[allow(unsafe_code, reason = "the test reads its own map fixture")]
 mod crossing_tests {
     use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, World};
     use crate::tile_type::TileIndex;
@@ -468,10 +467,7 @@ mod crossing_tests {
     /// A shared table over a four-tile map whose native assertion records: tile 0 a level
     /// crossing (`MP_ROAD`, `ROAD_TILE_CROSSING` in m5 bits 6..7) with every other m5 bit
     /// set, tile 1 a rail depot facing each direction in turn, the rest clear.
-    fn map(
-        m5: [u8; 4],
-        kinds: [u8; 4],
-    ) -> (&'static crate::services::Services, *mut [BaseTileLayout]) {
+    fn map(m5: [u8; 4], kinds: [u8; 4]) -> &'static crate::services::Services {
         let base: Box<[BaseTileLayout]> = (0..4)
             .map(|i| BaseTileLayout {
                 kind: kinds[i] << 4,
@@ -490,25 +486,23 @@ mod crossing_tests {
                 m8: 0,
             })
             .collect();
-        let base = Box::into_raw(base);
         crate::map_func::fixture::set(
             TileTypeAllocation {
-                base: base.cast::<BaseTileLayout>(),
+                base: Box::into_raw(base).cast::<BaseTileLayout>(),
                 extended: Box::into_raw(extended).cast::<ExtendedTileLayout>(),
                 count: 4,
                 assertions: true,
             },
             1,
         );
-        let shared = Box::leak(Box::new(crate::services::Services {
+        Box::leak(Box::new(crate::services::Services {
             map: crate::map_func::fixture::statics(),
             movement: Box::leak(Box::new(crate::movement::MovementServices {
                 native_assert: record_check,
                 ..crate::test_tables::MOVEMENT
             })),
             ..crate::test_tables::SHARED
-        }));
-        (shared, base)
+        }))
     }
 
     /// `SetCrossingBarred` stores the bar bit (m5 bit 5) in place, leaves the tile's other
@@ -516,16 +510,14 @@ mod crossing_tests {
     #[test]
     fn set_crossing_barred_stores_bit_5_and_asserts_a_level_crossing() {
         let road = crate::tile_type::TileType::MP_ROAD.0;
-        let (shared, base) = map([0x40 | 0x1F, 0, 0, 0], [road, road, 0, 0]);
+        let shared = map([0x40 | 0x1F, 0, 0, 0], [road, road, 0, 0]);
         let world = World::new(shared);
         world.set_crossing_barred(TileIndex(0), true);
         assert!(world.crossing_barred(0));
-        // SAFETY: The test's map, read after the stores.
-        assert_eq!(unsafe { (*base)[0].m5 }, 0x40 | 0x20 | 0x1F);
+        assert_eq!(world.types.m5(TileIndex(0)), Some(0x40 | 0x20 | 0x1F));
         world.set_crossing_barred(TileIndex(0), false);
         assert!(!world.crossing_barred(0));
-        // SAFETY: As above.
-        assert_eq!(unsafe { (*base)[0].m5 }, 0x40 | 0x1F);
+        assert_eq!(world.types.m5(TileIndex(0)), Some(0x40 | 0x1F));
         assert!(take_checks().iter().all(|&ok| ok));
         // Tile 1 is a normal road: the precondition fails once.
         world.set_crossing_barred(TileIndex(1), true);
@@ -538,7 +530,7 @@ mod crossing_tests {
     fn get_rail_depot_track_follows_the_depot_direction() {
         let rail = crate::tile_type::TileType::MP_RAILWAY.0;
         for (dir, track) in [(0, 0), (1, 1), (2, 0), (3, 1)] {
-            let (shared, _) = map([0, 0xC0 | dir, 0, 0], [0, rail, 0, 0]);
+            let shared = map([0, 0xC0 | dir, 0, 0], [0, rail, 0, 0]);
             let world = World::new(shared);
             assert_eq!(
                 crate::rail_map::get_rail_depot_track(&world, TileIndex(1)),

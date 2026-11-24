@@ -295,7 +295,7 @@ impl Fixture {
     /// Write the trial's vehicles into the records, linked as the probe's `Sync` links them.
     fn sync(&self, t: &Trial) {
         for i in 0..VEHICLES {
-            let [track, direction, x, y, z, tile, flags, status] = t.before[i];
+            let [track, direction, x_pos, y_pos, z_pos, tile, flags, status] = t.before[i];
             // SAFETY: The fixture owns these allocations; no reference to them is live.
             unsafe {
                 let v = &mut *self.records[i];
@@ -308,19 +308,19 @@ impl Fixture {
                 };
                 v.first = self.records[0];
                 v.tile = TileIndex(tile);
-                v.x_pos = x as i32;
-                v.y_pos = y as i32;
-                v.z_pos = z as i32;
+                v.x_pos = x_pos as i32;
+                v.y_pos = y_pos as i32;
+                v.z_pos = z_pos as i32;
                 v.direction = crate::direction_type::Direction(direction as u8);
                 v.vehstatus = crate::vehicle_base::VehStates(status as u8);
                 v.subtype = ((i % 2) << 2) as u8;
-                let g = &mut *self.grounds[i];
-                g.cache.cached_veh_length = t.lengths[i] as u8;
-                g.flags = flags as u16;
-                let s = &mut *self.states[i];
-                s.track = TrackBits(track as u8);
-                s.cached_tilt = t.tilts[i];
-                s.cached_curve_speed_mod = t.curve_mods[i];
+                let ground = &mut *self.grounds[i];
+                ground.cache.cached_veh_length = t.lengths[i] as u8;
+                ground.flags = flags as u16;
+                let state = &mut *self.states[i];
+                state.track = TrackBits(track as u8);
+                state.cached_tilt = t.tilts[i];
+                state.cached_curve_speed_mod = t.curve_mods[i];
             }
         }
     }

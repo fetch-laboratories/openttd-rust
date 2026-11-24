@@ -413,10 +413,10 @@ impl Handle {
          * length of the next vehicle but may not round the length of the current
          * vehicle. */
         i32::from(self.cached_veh_length()) / 2
-            + (if self.next() != Self::NONE {
-                i32::from(self.next().cached_veh_length()) + 1
-            } else {
+            + (if self.next() == Self::NONE {
                 0
+            } else {
+                i32::from(self.next().cached_veh_length()) + 1
             }) / 2
     }
 }
@@ -794,7 +794,7 @@ impl<'a> Game<'a> {
         (unsafe { &*self.vs.maintenance }.details_dirty)(v.vehicle());
     }
     /// `InvalidateWindowData(WC_VEHICLE_DEPOT, tile)`.
-    fn invalidate_depot_window(&self, tile: TileIndex) {
+    fn invalidate_depot_window(tile: TileIndex) {
         invalidate_window_data(
             WindowClass::WC_VEHICLE_DEPOT,
             WindowNumber::from(tile),
@@ -903,7 +903,7 @@ impl Game<'_> {
 
             if rvi_v.wagon_power() != 0
                 && e_u.rail_kind() == RailVehicleTypes::WAGON
-                && crate::newgrf_engine::uses_wagon_override(self.vs.newgrf(), u.vehicle())
+                && crate::newgrf_vehicle::uses_wagon_override(self.vs.newgrf(), u.vehicle())
                 && !crate::bitmath_func::has_bit(
                     u.vehicle().cached_vis_effect(),
                     VE_DISABLE_WAGON_POWER,
@@ -934,7 +934,7 @@ impl Game<'_> {
 
                 /* max speed is the minimum of the speed limits of all vehicles in the consist */
                 if (e_u.rail_kind() != RailVehicleTypes::WAGON || self.wagon_speed_limits())
-                    && !crate::newgrf_engine::uses_wagon_override(self.vs.newgrf(), u.vehicle())
+                    && !crate::newgrf_vehicle::uses_wagon_override(self.vs.newgrf(), u.vehicle())
                 {
                     let speed = self.get_vehicle_property(
                         u,
@@ -1171,9 +1171,10 @@ impl Game<'_> {
     /// `Train::GetCurveSpeedLimit`: computes train speed limit caused by curves. Returns the
     /// imposed speed limit.
     fn get_curve_speed_limit(&self, this: Handle) -> u16 {
+        const ABSOLUTE_MAX_SPEED: i32 = u16::MAX as i32;
+
         crate::services_assert::assert_with(|| this.first() == this);
 
-        const ABSOLUTE_MAX_SPEED: i32 = u16::MAX as i32;
         let mut max_speed = ABSOLUTE_MAX_SPEED;
 
         if self.train_acceleration_model() == AccelerationModel::AM_ORIGINAL {
@@ -1355,14 +1356,7 @@ impl Game<'_> {
         }
 
         /* Call the proper EnterTile function unless we are in a wormhole. */
-        if v.track() != TrackBits::TRACK_BIT_WORMHOLE {
-            self.vehicle_enter_tile(
-                v,
-                v.vehicle().tile(),
-                v.vehicle().x_pos(),
-                v.vehicle().y_pos(),
-            );
-        } else {
+        if v.track() == TrackBits::TRACK_BIT_WORMHOLE {
             crate::witness::hit(crate::witness::TRAIN_WORMHOLE_SWAP);
             /* VehicleEnter_TunnelBridge() sets TRACK_BIT_WORMHOLE when the vehicle
              * is on the last bit of the bridge head (frame == TILE_SIZE - 1).
@@ -1382,28 +1376,41 @@ impl Game<'_> {
                     return;
                 }
             }
+        } else {
+            self.vehicle_enter_tile(
+                v,
+                v.vehicle().tile(),
+                v.vehicle().x_pos(),
+                v.vehicle().y_pos(),
+            );
         }
 
         self.update_position(v);
         self.viewport(v, true, true);
     }
 
-    /// `ReverseTrainSwapVeh`: swap vehicles `l` and `r` in consist `v`, and reverse their
-    /// direction. `l` and `r` are vehicle indices in the consist.
-    fn reverse_train_swap_veh(&self, v: Handle, mut l: i32, mut r: i32) {
+    /// `ReverseTrainSwapVeh`: swap vehicles `left` and `right` (the original's `l` and `r`)
+    /// in consist `v`, and reverse their direction. Both are vehicle indices in the consist.
+    fn reverse_train_swap_veh(&self, v: Handle, mut left: i32, mut right: i32) {
         /* locate vehicles to swap */
         let mut a = v;
-        while l != 0 {
+        while left != 0 {
             a = a.next();
-            l -= 1;
+            left -= 1;
         }
         let mut b = v;
-        while r != 0 {
+        while right != 0 {
             b = b.next();
-            r -= 1;
+            right -= 1;
         }
 
-        if a != b {
+        if a == b {
+            /* Swap GVF_GOINGUP_BIT/GVF_GOINGDOWN_BIT.
+             * This is a little bit redundant way, a->gv_flags will
+             * be (re)set twice, but it reduces code duplication */
+            swap_train_flags(a.vehicle().ground(), a.vehicle().ground());
+            self.update_status_after_swap(a);
+        } else {
             /* swap the hidden bits */
             {
                 let a_hidden = a.vehicle().vehstatus().test(VehState::Hidden);
@@ -1435,12 +1442,6 @@ impl Game<'_> {
 
             self.update_status_after_swap(a);
             self.update_status_after_swap(b);
-        } else {
-            /* Swap GVF_GOINGUP_BIT/GVF_GOINGDOWN_BIT.
-             * This is a little bit redundant way, a->gv_flags will
-             * be (re)set twice, but it reduces code duplication */
-            swap_train_flags(a.vehicle().ground(), a.vehicle().ground());
-            self.update_status_after_swap(a);
         }
     }
 
@@ -1690,7 +1691,9 @@ impl Game<'_> {
 
         let leave = dep.next(); // first vehicle in a depot we are leaving now
 
-        if leave != Handle::NONE {
+        if leave == Handle::NONE {
+            dep = Handle::NONE; // no vehicle in a depot, so no vehicle leaving a depot
+        } else {
             /* 'pull' next wagon out of the depot, so we won't miss it (it could stay in depot forever) */
             let d = crate::movement::ticks_to_leave_depot(self.services, dep);
 
@@ -1706,8 +1709,6 @@ impl Game<'_> {
                     i -= 1;
                 }
             }
-        } else {
-            dep = Handle::NONE; // no vehicle in a depot, so no vehicle leaving a depot
         }
 
         let mut base = v;
@@ -1766,7 +1767,7 @@ impl Game<'_> {
             if Self::is_whole_train_inside_depot(v) {
                 return;
             }
-            self.invalidate_depot_window(v.vehicle().tile());
+            Self::invalidate_depot_window(v.vehicle().tile());
         }
 
         /* Clear path reservation in front if train is not stuck. */
@@ -1796,7 +1797,7 @@ impl Game<'_> {
         self.advance_wagons_after_swap(v);
 
         if self.is_rail_depot_tile(v.vehicle().tile()) {
-            self.invalidate_depot_window(v.vehicle().tile());
+            Self::invalidate_depot_window(v.vehicle().tile());
         }
 
         v.set_flags(v.flags().flip(VehicleRailFlag::Reversed));
@@ -1910,9 +1911,9 @@ fn swap_train_flags(
     let flag1: u16 = read_field!(swap_flag1, flags);
     let flag2: u16 = read_field!(swap_flag2, flags);
     let update = |p: *mut crate::ground_vehicle::GroundState, f: &dyn Fn(&mut u16)| {
-        let mut flags: u16 = read_field!(p, flags);
-        f(&mut flags);
-        write_field!(p, flags, flags);
+        let mut bits: u16 = read_field!(p, flags);
+        f(&mut bits);
+        write_field!(p, flags, bits);
     };
 
     /* Clear the flags */
@@ -2335,7 +2336,7 @@ impl Game<'_> {
             v.vehicle().owner(),
         );
         update_acceleration(v);
-        self.invalidate_depot_window(v.vehicle().tile());
+        Self::invalidate_depot_window(v.vehicle().tile());
 
         false
     }
@@ -2406,8 +2407,8 @@ impl Game<'_> {
             // SAFETY: As above; one byte-sized read-modify-write.
             unsafe {
                 *(self.services.station_had_vehicle_of_type_field)(st.native) |=
-                    StationHadVehicleOfType::HVOT_TRAIN.0
-            };
+                    StationHadVehicleOfType::HVOT_TRAIN.0;
+            }
             add_vehicle_news_item(
                 &get_encoded_string(
                     STR_NEWS_FIRST_TRAIN_ARRIVAL,
@@ -2984,16 +2985,15 @@ impl Game<'_> {
                                         return false;
                                     }
                                     break 'controller false;
-                                } else {
-                                    self.try_reserve_rail_track(
-                                        gp.new_tile,
-                                        Track(crate::track_func::track_bits_to_track(
-                                            chosen_track.0,
-                                            self.check(),
-                                        )),
-                                        false,
-                                    );
                                 }
+                                self.try_reserve_rail_track(
+                                    gp.new_tile,
+                                    Track(crate::track_func::track_bits_to_track(
+                                        chosen_track.0,
+                                        self.check(),
+                                    )),
+                                    false,
+                                );
                             } else {
                                 /* The wagon is active, simply follow the prev vehicle. */
                                 if prev.vehicle().tile() == gp.new_tile {
@@ -3272,7 +3272,9 @@ impl Game<'_> {
 
                     /* Do not check on every tick to save some computing time. */
                     if v.is_front_engine()
-                        && v.vehicle().tick_counter() % self.path_backoff_interval() == 0
+                        && v.vehicle()
+                            .tick_counter()
+                            .is_multiple_of(self.path_backoff_interval())
                     {
                         reservation::check_next_train_tile(&self.reservation(v), v);
                     }
@@ -3462,11 +3464,11 @@ impl Game<'_> {
                 /* Refrain from updating the z position of the vehicle when on
                  * a bridge, because UpdateInclination() will put the vehicle under
                  * the bridge in that case */
-                if v.track() != TrackBits::TRACK_BIT_WORMHOLE {
+                if v.track() == TrackBits::TRACK_BIT_WORMHOLE {
+                    self.viewport(v, false, true);
+                } else {
                     self.update_position(v);
                     self.update_inclination(v, false, true);
-                } else {
-                    self.viewport(v, false, true);
                 }
             }
             v = v.next();
@@ -3520,11 +3522,11 @@ impl Game<'_> {
             }
         }
 
-        if state <= 240 && v.vehicle().tick_counter() & 3 == 0 {
+        if state <= 240 && v.vehicle().tick_counter().trailing_zeros() >= 2 {
             self.change_train_dir_randomly(v);
         }
 
-        if state >= 4440 && v.vehicle().tick_counter() & 0x1F == 0 {
+        if state >= 4440 && v.vehicle().tick_counter().trailing_zeros() >= 5 {
             let ret = v.next() != Handle::NONE;
             self.delete_last_wagon(v);
             return ret;
@@ -3565,7 +3567,7 @@ impl Game<'_> {
          * we only get odd x offsets there. */
         if !signal
             && x.wrapping_add(
-                ((u32::from(v.cached_veh_length()) + 1) / 2)
+                u32::from(v.cached_veh_length()).div_ceil(2)
                     * if crate::direction_func::is_diagonal_direction(
                         v.vehicle().direction(),
                         self.check(),
@@ -4099,7 +4101,7 @@ impl Game<'_> {
 
         this.vehicle()
             .set_day_counter(this.vehicle().day_counter().wrapping_add(1));
-        if this.vehicle().day_counter() & 7 == 0 {
+        if this.vehicle().day_counter().trailing_zeros() >= 3 {
             self.maintain(this, maintenance::decrease_vehicle_value);
         }
 

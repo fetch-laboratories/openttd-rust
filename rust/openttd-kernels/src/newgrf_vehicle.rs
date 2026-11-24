@@ -560,6 +560,15 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_fill(s: &Services, v: V) {
         );
     }
 }
+/// `UsesWagonOverride` (`newgrf_engine.cpp`): check if a wagon is currently using a wagon
+/// override.
+pub(crate) fn uses_wagon_override(s: &Services, v: VehicleRef) -> bool {
+    crate::services_assert::assert_with(|| {
+        v.vehicle_type() == crate::vehicle_type::VehicleType::VEH_TRAIN
+    });
+    // SAFETY: A live record and the immutable binding; one field read.
+    !unsafe { (s.cached_override)(v.0.as_ptr()) }.is_null()
+}
 unsafe fn wagon_override(s: &Services, id: u16, cargo: u8, overriding: u16) -> Group {
     let engine = unsafe { (s.engine_by_id)(id) };
     unsafe {
@@ -1596,8 +1605,10 @@ unsafe fn variable(
                     u32::from((s.load_ticks)(v))
                 } else {
                     match kind() {
-                        0 => crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
-                            .wait_counter() as u32,
+                        0 => u32::from(
+                            crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                                .wait_counter(),
+                        ),
                         3 => u32::from(
                             (*crate::vehicle::VehicleRef::of(v).aircraft_state()).turn_counter,
                         ),
@@ -1715,9 +1726,11 @@ unsafe fn variable(
         match kind() {
             0 => match variable {
                 0xe2 => {
-                    return crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
-                        .track()
-                        .0 as u32;
+                    return u32::from(
+                        crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                            .track()
+                            .0,
+                    );
                 }
                 0xe6 => {
                     let bits =
