@@ -1,0 +1,127 @@
+[
+  {
+    "from": "rust/openttd-kernels/src/vehicle/maintenance.rs | module | allow unsafe_code",
+    "kind": "carry",
+    "to": "rust/openttd-kernels/src/vehicle/maintenance.rs | mod tests | allow unsafe_code",
+    "tool": "rust"
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/vehicle/maintenance.rs | fn openttd_rust_vehicle_age | allow unsafe_code",
+    "operation": "vehicle::maintenance::openttd_rust_vehicle_age",
+    "source_contract": "`AgeVehicle(v)` (src/vehicle.cpp) runs this export with the live shell's record and the live vehicle table.",
+    "reason": "Base vehicle/maintenance.rs allowed unsafe_code on the whole module; plan #985 decision 9 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and dereferences the vehicle table pointer the C++ facade of `AgeVehicle` passes.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust (#656) and the C++ facades of vehicle.cpp's maintenance functions have no caller."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/vehicle/maintenance.rs | fn openttd_rust_vehicle_decrease_value | allow unsafe_code",
+    "operation": "vehicle::maintenance::openttd_rust_vehicle_decrease_value",
+    "source_contract": "`DecreaseVehicleValue(v)` (src/vehicle.cpp) runs this export with the live shell's record and the live vehicle table.",
+    "reason": "Base vehicle/maintenance.rs allowed unsafe_code on the whole module; plan #985 decision 9 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and dereferences the vehicle table pointer the C++ facade of `DecreaseVehicleValue` passes.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust (#656) and the C++ facades of vehicle.cpp's maintenance functions have no caller."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/vehicle/maintenance.rs | fn openttd_rust_vehicle_economy_age | allow unsafe_code",
+    "operation": "vehicle::maintenance::openttd_rust_vehicle_economy_age",
+    "source_contract": "`EconomyAgeVehicle(v)` (src/vehicle.cpp) runs this export with the live shell's record and the live vehicle table.",
+    "reason": "Base vehicle/maintenance.rs allowed unsafe_code on the whole module; plan #985 decision 9 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and dereferences the vehicle table pointer the C++ facade of `EconomyAgeVehicle` passes.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust (#656) and the C++ facades of vehicle.cpp's maintenance functions have no caller."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/vehicle/maintenance.rs | fn openttd_rust_vehicle_handle_breakdown_abi | allow unsafe_code",
+    "operation": "vehicle::maintenance::openttd_rust_vehicle_handle_breakdown_abi",
+    "source_contract": "`Vehicle::HandleBreakdown` (src/vehicle.cpp) runs this export with its record and the live vehicle table.",
+    "reason": "Base vehicle/maintenance.rs allowed unsafe_code on the whole module; plan #985 decision 9 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and dereferences the vehicle table pointer the C++ facade of `Vehicle::HandleBreakdown` passes.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust (#656) and the C++ facades of vehicle.cpp's maintenance functions have no caller."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/vehicle/maintenance.rs | fn openttd_rust_vehicle_needs_automatic_service_abi | allow unsafe_code",
+    "operation": "vehicle::maintenance::openttd_rust_vehicle_needs_automatic_service_abi",
+    "source_contract": "`Vehicle::NeedsAutomaticServicing` (src/vehicle.cpp) runs this export with its record and the live vehicle table.",
+    "reason": "Base vehicle/maintenance.rs allowed unsafe_code on the whole module; plan #985 decision 9 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and dereferences the vehicle table pointer the C++ facade of `Vehicle::NeedsAutomaticServicing` passes.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust (#656) and the C++ facades of vehicle.cpp's maintenance functions have no caller."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/vehicle/maintenance.rs | fn openttd_rust_vehicle_needs_renew_abi | allow unsafe_code",
+    "operation": "vehicle::maintenance::openttd_rust_vehicle_needs_renew_abi",
+    "source_contract": "`Vehicle::NeedsAutorenewing(c, use_renew_setting)` (src/vehicle.cpp) runs this export with its record, the live vehicle table and the live company it was given.",
+    "reason": "Base vehicle/maintenance.rs allowed unsafe_code on the whole module; plan #985 decision 9 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and dereferences the vehicle table pointer the C++ facade of `Vehicle::NeedsAutorenewing` passes.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust (#656) and the C++ facades of vehicle.cpp's maintenance functions have no caller."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/vehicle/maintenance.rs | fn openttd_rust_vehicle_needs_service_abi | allow unsafe_code",
+    "operation": "vehicle::maintenance::openttd_rust_vehicle_needs_service_abi",
+    "source_contract": "`Vehicle::NeedsServicing` (src/vehicle.cpp) runs this export with its record and the live vehicle table.",
+    "reason": "Base vehicle/maintenance.rs allowed unsafe_code on the whole module; plan #985 decision 9 scopes each allowance to the code that needs it. The export is `#[unsafe(no_mangle)]` and dereferences the vehicle table pointer the C++ facade of `Vehicle::NeedsServicing` passes.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust (#656) and the C++ facades of vehicle.cpp's maintenance functions have no caller."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/vehicle/maintenance.rs | impl Services | allow unsafe_code",
+    "operation": "vehicle::maintenance::Services",
+    "source_contract": "`_rust_vehicle_maintenance_services` (src/rust/vehicle_services.cpp) names process-lifetime clock, company identity, group, shared and fleet transaction tables, and `GetRustVehicleServices().maintenance` names it; `GroupStatistics`' `primary` service is the shell's virtual `Vehicle::IsPrimaryVehicle`.",
+    "reason": "Base vehicle/maintenance.rs allowed unsafe_code on the whole module; plan #985 decision 9 scopes each allowance to the code that needs it. The impl's accessors dereference the table pointers once each, and `is_primary_vehicle` calls the group table's unsafe virtual on the entry's live shell.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and the tables are reached as Rust references."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/autoreplace_func.rs | fn engine_replacement_for_company | allow unsafe_code",
+    "operation": "autoreplace_func::engine_replacement_for_company",
+    "source_contract": "`EngineReplacementForCompany(c, engine, group, replace_when_old)` (src/autoreplace_func.h) passes the live company's `RenewalList()` head and the optional out-value to `EngineReplacement`, which `fleet::engine_replacement` ports over the renewal list as a shell pointer.",
+    "reason": "New port of `EngineReplacementForCompany` (plan #985 decision 3): `fleet::engine_replacement` is an `unsafe fn` over the company's renewal list head and the `replace_when_old` out-pointer, which keep their raw forms until `fleet.rs`'s own pass.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when `fleet.rs`'s pass gives `engine_replacement` a safe typed signature, or the company and its renewal list move to Rust."
+  },
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-settings.h": 3
+    },
+    "reason": "#985 decision 1: CheckVehicleBreakdown, Vehicle::NeedsServicing, VehicleServiceInDepot and AgeVehicle read _settings_game.difficulty.vehicle_breakdowns, _settings_game.order.no_servicing_if_no_breakdowns and _settings_client.gui.old_vehicle_warn at each of their observation points with one field-sized load. Three catalog fields against the deleted maintenance records that carried them (Reset, Interval, CheckBreakdown, BreakdownGuard, BreakdownTrigger and Warning) and their C++ builders.",
+    "existing_alternatives": "The settings reached Rust only inside those per-call composite records. The settings catalog is the shared typed address table every other Rust owner reads settings through, and it had no field for the three settings.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The fields leave the catalog when Rust owns the game and client settings storage."
+  }
+]

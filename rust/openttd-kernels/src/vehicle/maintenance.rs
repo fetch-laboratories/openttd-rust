@@ -71,11 +71,33 @@ pub struct Services {
     pub transaction: *const fleet::transactions::Services,
 }
 
+/// One C call of this file: a `crossings` hit and its result's size in `bytes`.
+macro_rules! svc {
+    ($counted:ident, $function:expr $(, $arg:expr)*) => {
+        crate::witness::counted!(
+            VEHICLE_MAINT_CROSSINGS, VEHICLE_MAINT_BYTES if $counted, ($function)($($arg),*)
+        )
+    };
+}
+macro_rules! branch {
+    ($counted:ident, $name:ident) => {
+        if $counted {
+            crate::witness::hit(crate::witness::$name);
+        }
+    };
+}
+
 #[allow(
     unsafe_code,
-    reason = "the table pointers name immutable process-lifetime tables"
+    reason = "the table pointers name immutable process-lifetime tables, and the group \
+              table's virtual takes the live shell"
 )]
 impl Services {
+    /// The vehicle table's maintenance services.
+    fn of(base: &VehicleServices) -> &Self {
+        // SAFETY: The module's table contract.
+        unsafe { &*base.maintenance }
+    }
     fn clock(&self) -> &crate::timer_game_common::ClockServices {
         // SAFETY: The module's table contract.
         unsafe { &*self.clock }
@@ -100,47 +122,29 @@ impl Services {
         // SAFETY: The module's table contract.
         unsafe { &*self.transaction().commands }
     }
+    /// `Vehicle::IsPrimaryVehicle`, the virtual of the C++ shell.
+    fn is_primary_vehicle<const C: bool>(&self, v: VehicleRef) -> bool {
+        let g = self.group();
+        // SAFETY: The live shell of the entry's vehicle.
+        unsafe { svc!(C, g.primary, v.shell().cast()) }
+    }
 }
 
-/// The vehicle table's maintenance services.
-#[allow(
-    unsafe_code,
-    reason = "the table pointers name immutable process-lifetime tables"
-)]
-fn table(base: &VehicleServices) -> &Services {
-    // SAFETY: The module's table contract.
-    unsafe { &*base.maintenance }
-}
-
-/// One C call of this file: a `crossings` hit and its result's size in `bytes`.
-macro_rules! svc {
-    ($counted:ident, $function:expr $(, $arg:expr)*) => {
-        crate::witness::counted!(
-            VEHICLE_MAINT_CROSSINGS, VEHICLE_MAINT_BYTES if $counted, ($function)($($arg),*)
-        )
-    };
-}
-macro_rules! branch {
-    ($counted:ident, $name:ident) => {
-        if $counted {
-            crate::witness::hit(crate::witness::$name);
-        }
-    };
-}
-
-/// `Vehicle::IsPrimaryVehicle`, the virtual of the C++ shell.
-#[allow(unsafe_code, reason = "the group table's virtual takes the live shell")]
-fn is_primary_vehicle<const C: bool>(v: VehicleRef, g: &fleet::GroupServices) -> bool {
-    // SAFETY: The live shell of the entry's vehicle.
-    unsafe { svc!(C, g.primary, v.shell().cast()) }
+/// Count one getter call of this file: the table pointer it returns.
+fn getter<const C: bool>() {
+    if C {
+        crate::witness::hit(crate::witness::VEHICLE_MAINT_CROSSINGS);
+        crate::witness::add(
+            crate::witness::VEHICLE_MAINT_BYTES,
+            std::mem::size_of::<*const ()>() as u64,
+        );
+    }
 }
 
 /// The vehicle's resolver table, one C call.
-#[allow(unsafe_code, reason = "the getter returns the process-lifetime table")]
 fn resolver<const C: bool>(base: &VehicleServices) -> &'static newgrf_vehicle::Services {
-    let table = svc!(C, base.newgrf);
-    // SAFETY: The getter returns the immutable process-lifetime resolver table.
-    unsafe { &*table }
+    getter::<C>();
+    base.newgrf()
 }
 
 /// `SetWindowDirty(cls, v->index)`.
@@ -193,7 +197,7 @@ fn needs_autorenewing<const C: bool>(
 /// the vehicle or vehicle chain being serviced.
 fn vehicle_service_in_depot_impl<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
     // The original's `assert(v != nullptr)` holds for every `VehicleRef`.
-    let m = table(base);
+    let m = Services::of(base);
     let r = resolver::<C>(base);
     // Ensure that last service date and reliability are updated.
     set_vehicle_window_dirty::<C>(WindowClass::WC_VEHICLE_DETAILS, v, r);
@@ -241,14 +245,6 @@ fn vehicle_service_in_depot_impl<const C: bool>(mut v: VehicleRef, base: &Vehicl
 /// `Vehicle::NeedsServicing`: check if the vehicle needs to go to a depot in near future (if a
 /// opportunity presents itself) for service or replacement. See `needs_automatic_servicing`.
 /// Returns true if the vehicle should go to a depot if a opportunity presents itself.
-#[allow(
-    unsafe_code,
-    reason = "the engine capabilities take live engines and vehicles"
-)]
-#[allow(
-    clippy::too_many_lines,
-    reason = "the original body, with its comments"
-)]
 fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
     // Stopped or crashed vehicles will not move, as such making unmovable
     // vehicles to go for service is lame.
@@ -259,7 +255,7 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     }
 
     // Are we ready for the next service cycle?
-    let m = table(base);
+    let m = Services::of(base);
     let companies = m.company();
     let c = svc!(C, companies.company, v.owner()).cast_const();
     branch!(C, VEHICLE_MAINT_SERVICE);
@@ -311,99 +307,15 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     // There are a lot more reasons for autoreplace to fail than we can test here reasonably.
     let mut pending_replace = false;
     let mut needed_money = i64::from(svc!(C, companies.engine_renew_money, c));
-    let commands = m.commands();
-    if needed_money > get_available_money(commands, svc!(C, companies.company_id, c.cast_mut())) {
+    if needed_money > get_available_money(m.commands(), svc!(C, companies.company_id, c.cast_mut()))
+    {
         return false;
     }
 
-    let capabilities = m.transaction().capabilities;
     let mut next = Some(v);
     while let Some(v) = next {
-        'check: {
-            let mut replace_when_old = false;
-            let group_id = svc!(C, VehicleRef::group_id, v, m.group());
-            let new_engine = engine_replacement_for_company(
-                companies,
-                c,
-                v.engine_type(),
-                group_id,
-                Some(&mut replace_when_old),
-            );
-
-            // Check engine availability.
-            if new_engine == EngineID::INVALID {
-                break 'check;
-            }
-            let engine = svc!(C, capabilities.engine, new_engine.0);
-            if !CompanyMask(crate::vehicle::EngineRef::of(engine).company_availability())
-                .test(v.owner())
-            {
-                break 'check;
-            }
-            // Is the vehicle old if we are not always replacing?
-            if replace_when_old && !needs_autorenewing::<C>(v, r, companies, c, false) {
-                break 'check;
-            }
-
-            // Check refittability.
-            // SAFETY: The live new engine.
-            let (union_mask, available_cargo_types) = unsafe {
-                crate::engine_capabilities::get_articulated_refit_masks(
-                    capabilities,
-                    new_engine,
-                    true,
-                )
-            };
-            // Is there anything to refit?
-            if union_mask.0 != 0 {
-                let mut cargo_type = CargoType::INVALID_CARGO;
-                // SAFETY: The entry's live vehicle.
-                let cargo_mask = unsafe {
-                    crate::engine_capabilities::get_cargo_types_of_articulated_vehicle(
-                        capabilities,
-                        v,
-                        Some(&mut cargo_type),
-                    )
-                };
-                if has_at_most_one_bit(cargo_mask.0) {
-                    // Did the old vehicle carry anything?
-                    if is_valid_cargo_type(cargo_type.0) {
-                        // We can't refit the vehicle to carry the cargo we want.
-                        if !has_bit64(available_cargo_types.0, cargo_type.0) {
-                            break 'check;
-                        }
-                    }
-                } else {
-                    // SAFETY: The live new engine.
-                    let new_engine_default_cargoes = unsafe {
-                        crate::engine_capabilities::get_cargo_types_of_articulated_parts(
-                            capabilities,
-                            new_engine,
-                        )
-                    };
-                    if cargo_mask.0 & new_engine_default_cargoes.0 != cargo_mask.0 {
-                        // We cannot refit to mixed cargoes in an automated way.
-                        break 'check;
-                    }
-                    // engine_type is already a mixed cargo type which matches the incoming
-                    // vehicle by default, no refit required.
-                }
-            }
-
-            // Check money.
-            // We want 2*(the price of the new vehicle) without looking at the value of the
-            // vehicle we are going to sell.
-            pending_replace = true;
-            let engine = svc!(C, capabilities.engine, new_engine.0);
-            // SAFETY: The live new engine.
-            let cost = unsafe { crate::engine_capabilities::get_cost(capabilities, engine) };
-            needed_money = needed_money.saturating_add(cost.saturating_mul(2));
-            branch!(C, VEHICLE_MAINT_REPLACE);
-            if needed_money
-                > get_available_money(commands, svc!(C, companies.company_id, c.cast_mut()))
-            {
-                return false;
-            }
+        if replacement_is_short::<C>(v, base, r, c, &mut needed_money, &mut pending_replace) {
+            return false;
         }
         next = if v.vehicle_type() == VehicleType::VEH_TRAIN {
             v.next_unit()
@@ -415,14 +327,94 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     pending_replace
 }
 
+/// One part's iteration of `Vehicle::NeedsServicing`'s pending-autoreplace loop over the units
+/// of the owner `c`: returns true when the money needed so far is short, and false to go on to
+/// the next unit.
+fn replacement_is_short<const C: bool>(
+    v: VehicleRef,
+    base: &VehicleServices,
+    r: &newgrf_vehicle::Services,
+    c: *const OpenTTDCompany,
+    needed_money: &mut i64,
+    pending_replace: &mut bool,
+) -> bool {
+    let m = Services::of(base);
+    let companies = m.company();
+    let capabilities = m.transaction().capabilities;
+    let mut replace_when_old = false;
+    let group_id = svc!(C, VehicleRef::group_id, v, m.group());
+    let new_engine = engine_replacement_for_company(
+        companies,
+        c,
+        v.engine_type(),
+        group_id,
+        Some(&mut replace_when_old),
+    );
+
+    // Check engine availability.
+    if new_engine == EngineID::INVALID {
+        return false;
+    }
+    let engine = svc!(C, capabilities.engine, new_engine.0);
+    if !CompanyMask(crate::vehicle::EngineRef::of(engine).company_availability()).test(v.owner()) {
+        return false;
+    }
+    // Is the vehicle old if we are not always replacing?
+    if replace_when_old && !needs_autorenewing::<C>(v, r, companies, c, false) {
+        return false;
+    }
+
+    // Check refittability.
+    let (union_mask, available_cargo_types) =
+        crate::engine_capabilities::get_articulated_refit_masks(capabilities, new_engine, true);
+    // Is there anything to refit?
+    if union_mask.0 != 0 {
+        let mut cargo_type = CargoType::INVALID_CARGO;
+        let cargo_mask = crate::engine_capabilities::get_cargo_types_of_articulated_vehicle(
+            capabilities,
+            v,
+            Some(&mut cargo_type),
+        );
+        if has_at_most_one_bit(cargo_mask.0) {
+            // Did the old vehicle carry anything?
+            if is_valid_cargo_type(cargo_type.0) {
+                // We can't refit the vehicle to carry the cargo we want.
+                if !has_bit64(available_cargo_types.0, cargo_type.0) {
+                    return false;
+                }
+            }
+        } else {
+            let new_engine_default_cargoes =
+                crate::engine_capabilities::get_cargo_types_of_articulated_parts(
+                    capabilities,
+                    new_engine,
+                );
+            if cargo_mask.0 & new_engine_default_cargoes.0 != cargo_mask.0 {
+                // We cannot refit to mixed cargoes in an automated way.
+                return false;
+            }
+            // engine_type is already a mixed cargo type which matches the incoming vehicle by
+            // default, no refit required.
+        }
+    }
+
+    // Check money.
+    // We want 2*(the price of the new vehicle) without looking at the value of the vehicle we
+    // are going to sell.
+    *pending_replace = true;
+    let engine = crate::vehicle::EngineRef::of(svc!(C, capabilities.engine, new_engine.0));
+    let cost = crate::engine_capabilities::get_cost(capabilities, engine);
+    *needed_money = needed_money.saturating_add(cost.saturating_mul(2));
+    branch!(C, VEHICLE_MAINT_REPLACE);
+    *needed_money > get_available_money(m.commands(), svc!(C, companies.company_id, c.cast_mut()))
+}
+
 /// `Vehicle::NeedsAutomaticServicing`: checks if the current order should be interrupted for a
 /// service-in-depot order. See
 /// `needs_servicing`. Returns true if the current order should be interrupted.
 fn needs_automatic_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
-    let orders = svc!(C, base.orders);
-    // SAFETY: The getter returns the immutable process-lifetime orders table.
-    #[allow(unsafe_code, reason = "the getter returns the process-lifetime table")]
-    let orders = unsafe { &*orders };
+    getter::<C>();
+    let orders = base.orders();
     if crate::orders::VisitOrders::new(orders).has_depot_order(v) {
         return false;
     }
@@ -440,7 +432,7 @@ fn needs_automatic_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleSe
 
 /// `DecreaseVehicleValue`: decrease the value of a vehicle; `v` is the vehicle to devaluate.
 fn decrease_vehicle_value_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
-    let m = table(base);
+    let m = Services::of(base);
     let r = resolver::<C>(base);
     let value = svc!(C, VehicleRef::value, v, r);
     svc!(
@@ -472,7 +464,7 @@ const BREAKDOWN_CHANCE: [u8; 64] = [
     reason = "the original's int-to-uint8_t and int-to-uint16_t stores of in-range values"
 )]
 fn check_vehicle_breakdown_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
-    let m = table(base);
+    let m = Services::of(base);
     let settings = m.shared().settings();
     let resolved = std::cell::OnceCell::new();
     let r = || *resolved.get_or_init(|| resolver::<C>(base));
@@ -574,7 +566,7 @@ fn handle_breakdown_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -
                 if !svc!(C, base.play_vehicle_sound, v, VSE_BREAKDOWN) {
                     let train_or_ship = v.vehicle_type() == VehicleType::VEH_TRAIN
                         || v.vehicle_type() == VehicleType::VEH_SHIP;
-                    let landscape = table(base).shared().settings().landscape();
+                    let landscape = Services::of(base).shared().settings().landscape();
                     let sound = if landscape != LandscapeType::Toyland {
                         if train_or_ship {
                             SoundFx::SND_10_BREAKDOWN_TRAIN_SHIP
@@ -608,7 +600,7 @@ fn handle_breakdown_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -
                 }
             }
 
-            svc!(C, table(base).mark_dirty, v); // Update graphics after speed is zeroed
+            svc!(C, Services::of(base).mark_dirty, v); // Update graphics after speed is zeroed
             set_vehicle_window_dirty::<C>(WindowClass::WC_VEHICLE_VIEW, v, r());
             set_vehicle_window_dirty::<C>(WindowClass::WC_VEHICLE_DETAILS, v, r());
             // Fall through to the broken-down case.
@@ -643,11 +635,17 @@ fn handle_breakdown_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -
         == 0
     {
         let delay = svc!(C, VehicleRef::breakdown_delay, v, r()).wrapping_sub(1);
-        svc!(C, VehicleRef::set_breakdown_delay, v, table(base), delay);
+        svc!(
+            C,
+            VehicleRef::set_breakdown_delay,
+            v,
+            Services::of(base),
+            delay
+        );
         branch!(C, VEHICLE_MAINT_DELAY);
         if delay == 0 {
             v.set_breakdown_ctr(0);
-            svc!(C, table(base).mark_dirty, v);
+            svc!(C, Services::of(base).mark_dirty, v);
             set_vehicle_window_dirty::<C>(WindowClass::WC_VEHICLE_VIEW, v, r());
             branch!(C, VEHICLE_MAINT_ENDED);
         }
@@ -656,16 +654,14 @@ fn handle_breakdown_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -
 }
 
 /// `EconomyAgeVehicle`: update economy age of a vehicle; `v` is the vehicle to update.
-#[allow(unsafe_code, reason = "the group statistics take the live vehicle")]
 fn economy_age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
-    let m = table(base);
+    let m = Services::of(base);
     let economy_age = svc!(C, VehicleRef::economy_age, v, m);
     if economy_age.0 < MAX_DATE {
         let economy_age = EconomyDate(economy_age.0 + 1);
         svc!(C, VehicleRef::set_economy_age, v, m, economy_age);
-        if is_primary_vehicle::<C>(v, m.group()) && economy_age.0 == VEHICLE_PROFIT_MIN_AGE.0 + 1 {
-            // SAFETY: The entry's live vehicle.
-            unsafe { fleet::vehicle_reached_min_age(m.group(), v) };
+        if m.is_primary_vehicle::<C>(v) && economy_age.0 == VEHICLE_PROFIT_MIN_AGE.0 + 1 {
+            fleet::vehicle_reached_min_age(m.group(), v);
             branch!(C, VEHICLE_MAINT_PROFIT_AGE);
         }
     } else {
@@ -675,7 +671,7 @@ fn economy_age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices
 
 /// `AgeVehicle`: update age of a vehicle; `v` is the vehicle to update.
 fn age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
-    let m = table(base);
+    let m = Services::of(base);
     let r = resolver::<C>(base);
     let mut calendar_age = svc!(C, VehicleRef::age, v, r);
     if calendar_age.0 < MAX_DATE {
@@ -685,7 +681,7 @@ fn age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         branch!(C, VEHICLE_MAINT_MAX_AGE);
     }
 
-    if !is_primary_vehicle::<C>(v, m.group())
+    if !m.is_primary_vehicle::<C>(v)
         && (v.vehicle_type() != VehicleType::VEH_TRAIN
             || !crate::ground_vehicle::is_engine(v.subtype()))
     {
@@ -881,7 +877,7 @@ fn needs_autorenewing_entry<const C: bool>(
     use_renew_setting: bool,
 ) -> bool {
     let r = resolver::<C>(base);
-    needs_autorenewing::<C>(v, r, table(base).company(), c, use_renew_setting)
+    needs_autorenewing::<C>(v, r, Services::of(base).company(), c, use_renew_setting)
 }
 /// `Vehicle::NeedsAutorenewing`; `company` is the vehicle owner the caller passes.
 /// # Safety
@@ -1661,22 +1657,21 @@ mod tests {
         (due, reads())
     }
 
-    /// `NeedsServicing`'s budget: the renew reserve is tested before any replacement is
-    /// looked up, the new engine's cost is evaluated before the second money read, and
-    /// `GetAvailableMoney` reads the infinite-money setting first and looks the company up
-    /// only without it, an invalid company never being short.
-    #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "the probe's cases, each with its reads"
-    )]
-    fn needs_servicing_tests_the_reserve_then_twice_the_new_engine_price() {
-        if crate::services_assert::isolate_test_check(
-            "vehicle::maintenance::tests::needs_servicing_tests_the_reserve_then_twice_the_new_engine_price",
-            record_failure,
-        ) {
-            return;
-        }
+    /// Every company, money and price read of a funded replacement, in the original's order.
+    const FULL: [&str; 9] = [
+        "reserve",
+        "company_id",
+        "infinite",
+        "finances",
+        "price",
+        "shift",
+        "company_id",
+        "infinite",
+        "finances",
+    ];
+    /// A road vehicle due for service with servicing off without breakdowns, the price of
+    /// `NEW` at 25,600 and the owner company 7 with a million and the rule `OLD` to `NEW`.
+    fn due_for_replacement() -> Fixture {
         let f = Fixture::new();
         crate::timer_game_common::write_economy_date(EconomyDate(100));
         set(|n| n.service_interval = 1);
@@ -1684,22 +1679,36 @@ mod tests {
             store(s.no_servicing_if_no_breakdowns, true);
             store(s.vehicle_breakdowns, 0);
         });
-        // SAFETY: This child process owns the price table.
+        // SAFETY: The isolated test process owns the price table.
         unsafe {
             *crate::company::openttd_rust_economy_prices()
                 .add(crate::economy_type::PR_BUILD_VEHICLE_ROAD as usize) = 25_600;
         };
-        let full = [
-            "reserve",
-            "company_id",
-            "infinite",
-            "finances",
-            "price",
-            "shift",
-            "company_id",
-            "infinite",
-            "finances",
-        ];
+        owner(|o| {
+            *o = Owner {
+                id: CompanyID(7),
+                money: 1_000_000,
+                infinite: false,
+                months: 0,
+                renew: false,
+                rule: Some(false),
+            };
+        });
+        f
+    }
+
+    /// `NeedsServicing`'s budget: the renew reserve is tested before any replacement is
+    /// looked up and the new engine's cost is evaluated before the second money read.
+    #[test]
+    fn needs_servicing_tests_the_reserve_then_twice_the_new_engine_price() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle::maintenance::tests::needs_servicing_tests_the_reserve_then_twice_the_new_engine_price",
+            record_failure,
+        ) {
+            return;
+        }
+        let f = due_for_replacement();
+        let full = FULL;
 
         // Twice the price, 25,600 * factor >> 8, after the reserve of 100: 3,500 with the
         // callback's factor 17, 10,700 with the engine's own 53 when the callback fails. The
@@ -1740,6 +1749,22 @@ mod tests {
             assert_eq!(servicing(&f), (due, seen.to_vec()), "money {money}");
         }
 
+        assert_eq!(FAILED.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    /// `GetAvailableMoney` reads the infinite-money setting first and looks the company up
+    /// only without it, and an invalid company is never short; a replacement only when old
+    /// waits for the vehicle to be old.
+    #[test]
+    fn needs_servicing_money_reads_infinite_money_first() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle::maintenance::tests::needs_servicing_money_reads_infinite_money_first",
+            record_failure,
+        ) {
+            return;
+        }
+        let f = due_for_replacement();
+        let full = FULL;
         // Infinite money set by the price callback, which also spends the money: the second
         // test does not read it.
         owner(|o| o.money = 1_000_000);

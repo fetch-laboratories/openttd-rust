@@ -445,12 +445,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_capacity(
 }
 /// `GetCargoTypesOfArticulatedParts`: get cargo mask of all cargoes carried by an
 /// articulated vehicle. Note: Vehicles not carrying anything are ignored.
-/// # Safety
-/// `engine` names a live engine of the immutable engine pool.
-pub(crate) unsafe fn get_cargo_types_of_articulated_parts(
-    s: &Services,
-    engine: EngineID,
-) -> CargoTypes {
+pub(crate) fn get_cargo_types_of_articulated_parts(s: &Services, engine: EngineID) -> CargoTypes {
     let engine = engine.0;
     CargoTypes(unsafe {
         let mut cargoes = 0;
@@ -471,7 +466,7 @@ pub(crate) unsafe fn get_cargo_types_of_articulated_parts(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_articulated_cargoes(s: &Services, engine: u16) -> u64 {
-    unsafe { get_cargo_types_of_articulated_parts(s, EngineID(engine)) }.0
+    get_cargo_types_of_articulated_parts(s, EngineID(engine)).0
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_articulated_refittable_abi(s: &Services, engine: u16) -> u8 {
@@ -491,9 +486,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_refittable_abi(s: &Services, e
 /// `GetArticulatedRefitMasks`: merges the refit masks of all articulated parts. Returns
 /// the union of the parts' masks and the intersection of those that can carry anything.
 /// `include_initial_cargo_type` includes the parts' initial cargo type.
-/// # Safety
-/// `engine` names a live engine of the immutable engine pool.
-pub(crate) unsafe fn get_articulated_refit_masks(
+pub(crate) fn get_articulated_refit_masks(
     s: &Services,
     engine: EngineID,
     include_initial_cargo_type: bool,
@@ -527,9 +520,8 @@ pub unsafe extern "C" fn openttd_rust_articulated_refit_masks(
     union: *mut u64,
     intersection: *mut u64,
 ) {
+    let (union_mask, intersection_mask) = get_articulated_refit_masks(s, EngineID(engine), initial);
     unsafe {
-        let (union_mask, intersection_mask) =
-            get_articulated_refit_masks(s, EngineID(engine), initial);
         union.write(union_mask.0);
         intersection.write(intersection_mask.0);
     }
@@ -555,10 +547,9 @@ pub unsafe extern "C" fn openttd_rust_articulated_refit_union(
 }
 /// `GetCargoTypesOfArticulatedVehicle`: get cargo mask of all cargoes carried by an
 /// articulated vehicle. `cargo_type`, when given, is set to the cargo type of the whole
-/// vehicle, or `INVALID_CARGO` if it carries several.
-/// # Safety
-/// `v` is a live vehicle of the serialized game state.
-pub(crate) unsafe fn get_cargo_types_of_articulated_vehicle(
+/// vehicle, or `INVALID_CARGO` if it carries several. `v` is a live vehicle of the
+/// serialized game state.
+pub(crate) fn get_cargo_types_of_articulated_vehicle(
     s: &Services,
     v: crate::vehicle::VehicleRef,
     mut cargo_type: Option<&mut CargoType>,
@@ -604,14 +595,8 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
     cargo_out: *mut u8,
 ) -> u64 {
     // SAFETY: A null `cargo_out` is the original's null `cargo_type`; otherwise it is live.
-    unsafe {
-        get_cargo_types_of_articulated_vehicle(
-            s,
-            crate::vehicle::VehicleRef::of(v),
-            cargo_out.cast::<CargoType>().as_mut(),
-        )
-    }
-    .0
+    let cargo_type = unsafe { cargo_out.cast::<CargoType>().as_mut() };
+    get_cargo_types_of_articulated_vehicle(s, crate::vehicle::VehicleRef::of(v), cargo_type).0
 }
 crate::abi::layouts! {
     fn abi_layout;
@@ -709,13 +694,12 @@ pub unsafe extern "C" fn openttd_rust_engine_running_cost(s: &Services, e: E) ->
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_cost(s: &Services, e: E) -> i64 {
-    unsafe { get_cost(s, e) }
+    get_cost(s, EngineRef::of(e))
 }
 /// `Engine::GetCost`: return how much a new engine costs, including the wagon price kind
-/// and dynamic factors.
-/// # Safety
-/// `e` is a live engine of the immutable engine pool.
-pub(crate) unsafe fn get_cost(s: &Services, e: E) -> i64 {
+/// and dynamic factors. `e` is a live engine of the immutable engine pool.
+pub(crate) fn get_cost(s: &Services, e: EngineRef) -> i64 {
+    let e = e.0.as_ptr().cast_const();
     let (base, prop, fallback) = match EngineRef::of(e).kind() {
         VehicleType::TRAIN => (
             if EngineRef::of(e).rail_kind() == RailVehicleTypes::WAGON {

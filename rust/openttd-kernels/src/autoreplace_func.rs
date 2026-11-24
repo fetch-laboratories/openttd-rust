@@ -7,7 +7,6 @@
 
 //! `autoreplace_func.h`: a company's engine replacement lookups, over `fleet`'s
 //! `EngineReplacement`. The company is a live shell of the serialized game state.
-#![allow(unsafe_code)]
 
 use crate::company::OpenTTDCompany;
 use crate::company_identity::Services;
@@ -18,6 +17,10 @@ use crate::group_type::GroupID;
 /// original engine type. `group` is the group related to this replacement;
 /// `replace_when_old` is set to true if the replacement should be done when old. Returns the
 /// engine type to replace with, or `EngineID::INVALID` if no replacement is in the list.
+#[allow(
+    unsafe_code,
+    reason = "the renewal list and out-value cross as pointers"
+)]
 pub(crate) fn engine_replacement_for_company(
     companies: &Services,
     c: *const OpenTTDCompany,
@@ -59,7 +62,7 @@ mod tests {
     use crate::group::GroupFlag;
     use crate::livery::Livery;
     use crate::test_tables::{COMPANY_IDENTITY, FLEET_GROUPS};
-    use std::cell::UnsafeCell;
+    use std::ptr;
 
     const OLD: EngineID = EngineID(7);
     const NEW: EngineID = EngineID(9);
@@ -67,15 +70,8 @@ mod tests {
     const OTHER: GroupID = GroupID(6);
     const PROTECTED: GroupID = GroupID(8);
 
-    struct Fixture {
-        rules: [UnsafeCell<Renew>; 2],
-        groups: [UnsafeCell<GroupFields>; 3],
-    }
-    // SAFETY: The tests read the fixture through the services on one thread.
-    unsafe impl Sync for Fixture {}
-
-    const fn group(flags: u8) -> UnsafeCell<GroupFields> {
-        UnsafeCell::new(GroupFields {
+    fn group(flags: u8) -> *mut () {
+        ptr::from_mut(Box::leak(Box::new(GroupFields {
             owner: 0,
             vehicle_type: 0,
             flags,
@@ -86,52 +82,47 @@ mod tests {
             },
             parent: GroupID::INVALID.0,
             number: 0,
-        })
+        })))
+        .cast()
     }
-
-    /// Rule one replaces `OLD` by `NEW` in `PLAIN`, when old by setting; rule two
-    /// replaces `OLD` by itself in `ALL_GROUP`, with the setting off.
-    static FIXTURE: Fixture = Fixture {
-        rules: [
-            UnsafeCell::new(Renew {
-                from: OLD.0,
-                to: NEW.0,
-                next: std::ptr::null_mut(),
-                group_id: PLAIN.0,
-                replace_when_old: true,
-            }),
-            UnsafeCell::new(Renew {
+    thread_local! {
+        /// `PLAIN`, `OTHER` and `PROTECTED`, the last with replace protection.
+        static GROUPS: [*mut (); 3] = [group(0), group(0), group(1 << GroupFlag::ReplaceProtection.0)];
+        /// Rule one replaces `OLD` by `NEW` in `PLAIN`, when old by setting; rule two replaces
+        /// `OLD` by itself in `ALL_GROUP`, with the setting off.
+        static RULES: *mut () = {
+            let second = Box::leak(Box::new(Renew {
                 from: OLD.0,
                 to: OLD.0,
-                next: std::ptr::null_mut(),
+                next: ptr::null_mut(),
                 group_id: GroupID::ALL_GROUP.0,
                 replace_when_old: false,
-            }),
-        ],
-        groups: [
-            group(0),
-            group(0),
-            group(1 << GroupFlag::ReplaceProtection.0),
-        ],
-    };
+            }));
+            ptr::from_mut(Box::leak(Box::new(Renew {
+                from: OLD.0,
+                to: NEW.0,
+                next: ptr::from_mut(second).cast(),
+                group_id: PLAIN.0,
+                replace_when_old: true,
+            })))
+            .cast()
+        };
+    }
 
-    unsafe extern "C" fn renew_state(renew: *mut ()) -> *mut () {
+    extern "C" fn renew_state(renew: *mut ()) -> *mut () {
         renew
     }
-    unsafe extern "C" fn group_of(id: u16) -> *mut () {
+    extern "C" fn group_of(id: u16) -> *mut () {
         let index = match GroupID(id) {
             PLAIN => 0,
             OTHER => 1,
             PROTECTED => 2,
-            _ => return std::ptr::null_mut(),
+            _ => return ptr::null_mut(),
         };
-        FIXTURE.groups[index].get().cast()
+        GROUPS.with(|g| g[index])
     }
     extern "C" fn renewal_list(_: *const OpenTTDCompany) -> *mut () {
-        let [first, second] = &FIXTURE.rules;
-        // SAFETY: The fixture's rules, linked before each lookup.
-        unsafe { (*first.get()).next = second.get().cast() };
-        first.get().cast()
+        RULES.with(|r| *r)
     }
 
     fn lookup(
@@ -145,18 +136,21 @@ mod tests {
         let mut when_old = false;
         let to = engine_replacement_for_company(
             &companies,
-            std::ptr::null(),
+            ptr::null(),
             engine,
             group,
             Some(&mut when_old),
         );
         assert_eq!(
-            engine_has_replacement_for_company(&companies, std::ptr::null(), engine, group),
+            engine_has_replacement_for_company(&companies, ptr::null(), engine, group),
             to != EngineID::INVALID
         );
         (to, when_old)
     }
 
+    /// `EngineReplacement` over a two-rule renewal list: a group's own rule, the `ALL_GROUP`
+    /// fallback that a group's replace protection refuses, and `replace_when_old`.
+    /// Expectations are `autoreplace.cpp`'s.
     #[test]
     fn group_rule_then_all_group_unless_protected() {
         let groups: &'static GroupServices = Box::leak(Box::new(GroupServices {
