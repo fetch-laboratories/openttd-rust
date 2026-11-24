@@ -86,7 +86,7 @@ By number and header, with a link to the file, for example [ADR 0049](0049-two-i
 | [0024](0024-lint-ratchet-scope.md) | The lint check enforces only parameter count, safety documentation and production assertions |
 | [0025](0025-two-review-stages.md) | A pull request gets at most two review stages |
 | [0026](0026-roadmap-commit-timing.md) | Root commits the roadmap only at a stocktake, a change of course or wind-down |
-| [0027](0027-speed-measured-on-merged-branch.md) | Speed is measured on the merged branch, not on each pull request |
+| [0027](0027-speed-measured-on-merged-branch.md) | Speed is measured on the merged branch, not on each pull request (superseded by 0052) |
 | [0033](0033-correctness-is-compared-game-state.md) | Correctness is judged by running both games on the same scenarios and comparing their saved game state |
 | [0034](0034-one-copy-of-game-data.md) | Every piece of game data has one copy, read in place from either language |
 | [0035](0035-direct-synchronous-calls.md) | Rust calls C++ directly and waits for the answer |
@@ -99,3 +99,4 @@ By number and header, with a link to the file, for example [ADR 0049](0049-two-i
 | [0042](0042-ids-cross-as-plain-integers.md) | Typed C++ IDs cross the calling layer as their plain integer types |
 | [0043](0043-docs-only-changes-need-no-pr.md) | Docs-only changes are committed straight to the main branch without a PR |
 | [0051](0051-review-whole-pr.md) | A pull request is reviewed whole, by two reviewers and one re-check |
+| [0052](0052-speed-on-the-merged-branch-and-per-pass-counts.md) | Speed is judged on the merged branch, and a pass on a hot path compares instruction counts at its base and head |

@@ -16,6 +16,7 @@ A pass is ready for review when a reviewer would have nothing left on the [porti
 
 - Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports.
 - Run the fixtures that call the pass's functions: the comparison probes and the ABI probe fixtures under `tools/migration/windows-abi/`. Preflight only compiles them, so only a run shows a fixture that relied on a service read the pass replaced. Your plan names them.
+- Write each test the plan's Evidence names. One you cannot build from the fixtures the pass's files have is a departure: record it in the PR body and put its gap on #156's list.
 - Add each file the pass finishes to `migration/finished-files.txt`.
 - Where the plan has a speed check, measure base and head at the commits the PR finally compares, and keep both Callgrind outputs until it merges. If a count rises, attribute the rise to functions from the two outputs before review and put the largest movers in the PR body: a count that only stays under the plan's bound is not explained. Reads repeated with no write, call or random draw between them may share one lookup ([fidelity](porting.md#fidelity)). Measure again after a review fix or base update that touches the measured path.
 

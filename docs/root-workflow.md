@@ -37,7 +37,7 @@ Implementers queue nothing until root lifts the stop. A confirmed regression als
 | --- | --- | --- |
 | Session start | [Routine agent](team.md#routine-agent) | [Housekeeping](#housekeeping) |
 | After every fifth merge | Routine agent runs and reports; root decides | Platform cadence: `gh workflow run ci-build.yml --ref rust-migration` ([ADR 0018](adr/0018-builds-before-every-merge.md)); a red result [stops merges](#merge-stops) until fixed. Housekeeping runs with it. |
-| After every twelfth merge | Root | Stocktake under [`/start-development` step 4](skills/start-development/SKILL.md) ([ADR 0013](adr/0013-stocktake-every-12-merges.md)), with `python3 tools/retrospective.py stocktake START END`. Profile the merged tip in the background ([speed](speed.md#instruction-projections), [ADR 0027](adr/0027-speed-measured-on-merged-branch.md)). Check issue placement and exclusion conditions, report #892's remaining production macro counts beside the #734 inventory, and pick the next interval's [tools batch](planning.md#selection). |
+| After every twelfth merge | Root | Stocktake under [`/start-development` step 4](skills/start-development/SKILL.md) ([ADR 0013](adr/0013-stocktake-every-12-merges.md)), with `python3 tools/retrospective.py stocktake START END`. Profile the merged tip in the background ([speed](speed.md#instruction-projections), [ADR 0052](adr/0052-speed-on-the-merged-branch-and-per-pass-counts.md)). Check issue placement and exclusion conditions, report #892's remaining production macro counts beside the #734 inventory, and pick the next interval's [tools batch](planning.md#selection). |
 | Cleanup exit and phase-3 exit | Root | All-member deep check ([ADR 0017](adr/0017-deep-checks-on-request.md), [deep checks](deep-checks.md#policy)) |
 
 ## CI administration
@@ -78,6 +78,7 @@ Wind-down is when the user pauses the project. It is bounded by actions, not tim
 - Finish an edit underway and save its state even if incomplete; finish an active review by recording findings.
 - Start no new implementation, review, repair round, build, simulation, CI request or retry; do not wait on CI. Queue no PR. A PR already in the queue stays there and merges on a pass; one the queue removes, or one that needs a base update, waits for resume.
 - Perform an eligible automatic rollback, record each unfinished item's next action and running jobs, report and stop. Pending or later CI results do not restart wind-down.
+- Wait on no child's report. Send each child its stop, then write the checkpoint from GitHub, with `python3 tools/ci.py state PR` and the status comment of each open PR, commit it and report. Housekeeping follows the commit. A child's last message can fail to arrive (#710), and its checkpoint is on its PR either way.
 - Keep each open PR's one checkout and every worktree holding uncommitted or unpushed work. Remove review and update checkouts whose commits are pushed, and verified merged work.
 - The user's explicit action scope overrides these defaults.
 

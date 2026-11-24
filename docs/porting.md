@@ -45,7 +45,7 @@
 
 ### Design faults
 
-Fix these before integration; root grants no exceptions. A file pass fixes every one in the files it finishes and cannot leave one as residue. The rule's one exception is a carrier whose replacement is a shared service that several files need: that service has its own work order ([integration](root-workflow.md#integration)), and until it merges a pass keeps the carrier and names the work order in its PR body.
+Fix these before integration; root grants no exceptions. A file pass fixes every one in the files it finishes and cannot leave one as residue. The rule's one exception is a carrier whose replacement several files need and another work order builds: a shared service with its own work order ([integration](root-workflow.md#integration)), or shared accessors that belong in a file whose own pass has an issue that lists the carrier. Until that work order merges, a pass keeps the carrier and names the work order in its PR body.
 
 A pass owns the faults in the files it finishes, and every call those files make: a finished file calls each callee through its one shared binding, even while a duplicate binding stays for other files. Where a kept native fixture supplies a callee only through the duplicate, the call stays on it and is residue for the pass that owns the duplicate, which changes the fixture, moves the call and deletes the slot. A fault in a file the pass does not finish, at operations the pass left as they were, is residue: that file's own pass fixes it, or #734's closure sweep where the file is already finished. The pass records it on #734 and in its PR body, and it needs no work order.
 
