@@ -695,15 +695,6 @@ pub(crate) const HOUSES: crate::town::house::HouseServices = crate::town::house:
     scale_cargo: unreachable1,
     cargogen_mode: unreachable0,
     place_houses: unreachable0,
-    errors: crate::town::house::HouseErrors {
-        demolish: 0,
-        protected: 0,
-        refuses: 0,
-        sloped: 0,
-        bridge: 0,
-        flat: 0,
-        no_town: 0,
-    },
 };
 
 /// `crate::services::CommandServices` with every entry unreachable.

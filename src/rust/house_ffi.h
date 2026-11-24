@@ -33,7 +33,6 @@ struct OpenTTDHouseProduction { uint16_t callbacks; uint8_t population, mail; };
 struct OpenTTDHouseRemoval { uint8_t factor; uint16_t rating; };
 struct OpenTTDHouseAcceptance { uint8_t accepts[16], amounts[16]; };
 struct OpenTTDHouseReseed { uint32_t reseed; uint8_t used; };
-struct OpenTTDHouseErrors { uint32_t demolish, is_protected, refuses, sloped, bridge, flat, no_town; };
 /* Synchronous noexcept services; callbacks and commands may reenter Rust,
  * which holds no owner or map reference across any of them. */
 struct OpenTTDHouseServices {
@@ -79,7 +78,6 @@ struct OpenTTDHouseServices {
 	uint32_t (*scale_cargo)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(scale_cargo);
 	uint8_t (*cargogen_mode)() noexcept OPENTTD_SERVICE_DEFAULT(cargogen_mode);
 	uint8_t (*place_houses)() noexcept OPENTTD_SERVICE_DEFAULT(place_houses);
-	OpenTTDHouseErrors errors;
 };
 /* Resolver and AnimationBase services live beside their native templates. */
 
