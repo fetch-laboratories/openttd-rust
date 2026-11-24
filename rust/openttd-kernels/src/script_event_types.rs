@@ -70,6 +70,17 @@ crate::abi::shared_records! {
 }
 
 impl ScriptEvent {
+    /// The record without a name: a plain dispatch sends only this, so a record that
+    /// points at a name reaches native code only through `ScriptTextEvent`.
+    #[must_use]
+    pub(crate) const fn without_text(self) -> Self {
+        Self {
+            text: std::ptr::null(),
+            text_length: 0,
+            ..self
+        }
+    }
+
     const fn of(r#type: ScriptEventType) -> Self {
         Self {
             r#type,
@@ -254,13 +265,25 @@ impl<'a> ScriptTextEvent<'a> {
         }
     }
 
-    /// Calls `dispatch` with the raw record borrowing the name, for one synchronous call.
-    pub(crate) fn with_record<R>(&self, dispatch: impl FnOnce(&ScriptEvent) -> R) -> R {
-        let event = ScriptEvent {
+    /// The raw record borrowing the name. It stays inside this module's two dispatches, and
+    /// the plain dispatches clear `text`, so no record pointing at the name outlives it.
+    const fn record(&self) -> ScriptEvent {
+        ScriptEvent {
             text: self.text.as_ptr(),
             text_length: self.text.len(),
             ..self.event
-        };
-        dispatch(&event)
+        }
+    }
+
+    /// `AI::BroadcastNewEvent(new ScriptEvent...(..., name), skip_company)`: the native
+    /// factory copies the bytes during the call.
+    pub(crate) fn ai_broadcast(&self, skip_company: CompanyID) {
+        (crate::script_event::services().ai_broadcast)(&self.record(), skip_company.0);
+    }
+
+    /// `Game::NewEvent(new ScriptEvent...(..., name))`: the native factory copies the bytes
+    /// during the call.
+    pub(crate) fn game_new(&self) {
+        (crate::script_event::services().game_new)(&self.record());
     }
 }

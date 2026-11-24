@@ -1007,10 +1007,14 @@ pub extern "C" fn openttd_rust_company_colour(
     );
 }
 
-/// `CmdRenameCompany`; `text` is the command's `std::string`, live for the call.
+/// `CmdRenameCompany`, for the command table's native facade.
+///
+/// # Safety
+/// `text` denotes the command's live `std::string` bytes and `out` its live `CommandCost`,
+/// both for the synchronous call, as the facade in `company_cmd.cpp` passes them.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)] // Export attribute and the command's text bytes.
-pub extern "C" fn openttd_rust_company_rename(
+pub unsafe extern "C" fn openttd_rust_company_rename(
     s: &Services,
     out: *mut CommandCost,
     flags: u16,
@@ -1021,16 +1025,20 @@ pub extern "C" fn openttd_rust_company_rename(
         Cost(out, s.commands.cost),
         DoCommandFlags(flags),
         CmdRenameCompany {
-            // SAFETY: The facade's text is live for the synchronous command.
+            // SAFETY: The function's contract: the facade's text is live for the call.
             text: unsafe { text.bytes() },
         },
     );
 }
 
-/// `CmdRenamePresident`; `text` is the command's `std::string`, live for the call.
+/// `CmdRenamePresident`, for the command table's native facade.
+///
+/// # Safety
+/// `text` denotes the command's live `std::string` bytes and `out` its live `CommandCost`,
+/// both for the synchronous call, as the facade in `company_cmd.cpp` passes them.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)] // Export attribute and the command's text bytes.
-pub extern "C" fn openttd_rust_president_rename(
+pub unsafe extern "C" fn openttd_rust_president_rename(
     s: &Services,
     out: *mut CommandCost,
     flags: u16,
@@ -1041,7 +1049,7 @@ pub extern "C" fn openttd_rust_president_rename(
         Cost(out, s.commands.cost),
         DoCommandFlags(flags),
         CmdRenamePresident {
-            // SAFETY: The facade's text is live for the synchronous command.
+            // SAFETY: The function's contract: the facade's text is live for the call.
             text: unsafe { text.bytes() },
         },
     );

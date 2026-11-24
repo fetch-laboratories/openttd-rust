@@ -113,7 +113,7 @@
     "site": "rust/openttd-kernels/src/company_identity.rs | fn openttd_rust_company_rename | allow unsafe_code",
     "operation": "company_identity::openttd_rust_company_rename",
     "source_contract": "`CmdRenameCompany` (src/company_cmd.cpp), the command table's native facade, passes its `CommandCost`, its flags and the command's `std::string` text, live for the synchronous call.",
-    "reason": "The `#[unsafe(no_mangle)]` attribute of the native facade's entry and the one conversion of the facade's text span to the `&[u8]` the command takes (porting review of #1052, finding 2); the command body is safe Rust."
+    "reason": "The `#[unsafe(no_mangle)]` attribute of an `unsafe extern \"C\"` entry whose `# Safety` contract is the facade's live text span and `CommandCost`, and the one conversion of that span to the `&[u8]` the command takes (porting review of #1052, finding 2, and its re-check); the command body is safe Rust."
   },
   {
     "kind": "suppression",
@@ -161,7 +161,7 @@
     "site": "rust/openttd-kernels/src/company_identity.rs | fn openttd_rust_president_rename | allow unsafe_code",
     "operation": "company_identity::openttd_rust_president_rename",
     "source_contract": "`CmdRenamePresident` (src/company_cmd.cpp), the command table's native facade, passes its `CommandCost`, its flags and the command's `std::string` text, live for the synchronous call.",
-    "reason": "The `#[unsafe(no_mangle)]` attribute of the native facade's entry and the one conversion of the facade's text span to the `&[u8]` the command takes (porting review of #1052, finding 2); the command body is safe Rust."
+    "reason": "The `#[unsafe(no_mangle)]` attribute of an `unsafe extern \"C\"` entry whose `# Safety` contract is the facade's live text span and `CommandCost`, and the one conversion of that span to the `&[u8]` the command takes (porting review of #1052, finding 2, and its re-check); the command body is safe Rust."
   },
   {
     "kind": "suppression",
