@@ -754,8 +754,9 @@ pub(crate) struct VehicleCallback<'a> {
     pub v: Option<VehicleRef>,
     /// `GetVehicleCallbackParent`'s vehicle for the parent scope.
     pub parent: Option<V>,
-    /// Additional result values from registers 100+.
-    pub regs100: &'a mut [i32],
+    /// Additional result values from registers 100+, written only where the callback
+    /// result sets them.
+    pub regs100: &'a mut [std::mem::MaybeUninit<i32>],
 }
 
 /// `GetVehicleCallback`, or `GetVehicleCallbackParent` where `parent` is given: evaluate a
@@ -791,7 +792,7 @@ pub(crate) fn resolve_vehicle_callback(s: &Services, args: VehicleCallback<'_>) 
             callback.0,
             param1,
             param2,
-            regs100.as_mut_ptr(),
+            regs100.as_mut_ptr().cast::<i32>(),
             regs100.len(),
         )
     }
@@ -834,11 +835,12 @@ pub unsafe extern "C" fn openttd_rust_vehicle_callback(
     regs: *mut i32,
     count: usize,
 ) -> u16 {
-    let regs100: &mut [i32] = if regs.is_null() {
+    let regs100: &mut [std::mem::MaybeUninit<i32>] = if regs.is_null() {
         &mut []
     } else {
-        // SAFETY: The caller's span of `count` registers, live for the call.
-        unsafe { std::slice::from_raw_parts_mut(regs, count) }
+        // SAFETY: The caller's span of `count` registers, live for the call; the slice
+        // claims no initialisation.
+        unsafe { std::slice::from_raw_parts_mut(regs.cast(), count) }
     };
     resolve_vehicle_callback(
         s,
@@ -1890,11 +1892,12 @@ pub(crate) unsafe fn callback(
     registers: *mut i32,
     count: usize,
 ) -> u16 {
-    let regs100: &mut [i32] = if registers.is_null() {
+    let regs100: &mut [std::mem::MaybeUninit<i32>] = if registers.is_null() {
         &mut []
     } else {
-        // SAFETY: The caller's span of `count` registers, live for the call.
-        unsafe { std::slice::from_raw_parts_mut(registers, count) }
+        // SAFETY: The caller's span of `count` registers, live for the call; the slice
+        // claims no initialisation.
+        unsafe { std::slice::from_raw_parts_mut(registers.cast(), count) }
     };
     resolve_vehicle_callback(
         vs.newgrf(),

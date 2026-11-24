@@ -1994,18 +1994,7 @@ impl Game {
     }
     /// `PreviousOrderIsUnbunching` over a vehicle's order list shell (or null) and consist.
     fn previous_unbunching_of(self, list: *mut c_void, consist: *mut Consist) -> bool {
-        if list.is_null() {
-            return false;
-        }
-        let count = self.size(list);
-        let implicit = read_field!(consist, implicit);
-        let index = if (implicit >= count && count == 0) || implicit == 0 {
-            count.wrapping_sub(1)
-        } else {
-            implicit.wrapping_sub(1)
-        };
-        self.order(list, index)
-            .is_some_and(|o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0)
+        !list.is_null() && previous_order_is_unbunching(self.vector(list), consist)
     }
     fn leave_unbunching(self, v: *mut c_void) {
         if !self.previous_unbunching(v) {
@@ -4803,6 +4792,28 @@ impl Control {
     }
 }
 
+/// `PreviousOrderIsUnbunching`: check if the previous order is a depot unbunching order, over
+/// the vehicle's resolved order vector and its consist.
+fn previous_order_is_unbunching(vector: *const Vector, consist: *mut Consist) -> bool {
+    // `GetNumOrders()`, narrowed to `VehicleOrderID` as `Game::size` does.
+    let count = read_field!(vector, length) as u8;
+    let implicit = read_field!(consist, implicit);
+    let index = if (implicit >= count && count == 0) || implicit == 0 {
+        count.wrapping_sub(1)
+    } else {
+        implicit.wrapping_sub(1)
+    };
+    if index >= count {
+        return false;
+    }
+    // SAFETY: An index below the vector's length names one of its live, initialised orders.
+    let order = unsafe { OrderView::of(slot(vector, usize::from(index))) };
+    order.kind() == crate::order_type::OrderType::OT_GOTO_DEPOT
+        && order
+            .depot_action_flags()
+            .test(crate::order_type::OrderDepotActionFlag::Unbunch)
+}
+
 /// `BaseConsist::ResetDepotUnbunching` on the consist owner of a live vehicle record.
 pub(crate) fn reset_unbunching(v: VehicleRef) {
     let consist = read_field!(v.0.as_ptr(), consist);
@@ -4920,13 +4931,14 @@ impl VisitOrders {
             return false;
         }
 
+        let vector = self.0.vector(list);
         /* Don't do anything if there aren't enough orders. */
-        if self.0.size(list) <= 1 {
+        if read_field!(vector, length) as u8 <= 1 {
             return false;
         }
 
         /* Don't do anything if this is not our unbunching order. */
-        if !self.0.previous_unbunching_of(list, consist) {
+        if !previous_order_is_unbunching(vector, consist) {
             return false;
         }
 
@@ -5093,7 +5105,7 @@ fn order_can_use_station(vehicle: *mut std::ffi::c_void, destination: u16) -> u6
 
 /// `Vehicle::IsWaitingForUnbunching` over a live record: a vehicle sharing a two-order list
 /// whose previous order is its unbunching depot order waits while its next departure is still
-/// ahead, and does not wait once that tick comes, with one order, or without a shared list. A
+/// ahead, and does not wait once that tick comes or without a shared list. A
 /// vehicle outside a depot fails the native depot assertion first.
 #[cfg(test)]
 mod unbunching_tests {
@@ -5174,7 +5186,9 @@ mod unbunching_tests {
             (*record).consist = consist;
             (*shared).vehicles = 2;
             // The second order is current, so the previous one is the unbunching depot order.
-            openttd_rust_order_vector_insert(orders, 0, &order(OT_GOTO_DEPOT, 4 << 3));
+            // The depot action type is bits 3-6 of `flags`; `Unbunch` is its bit 2.
+            let unbunch = 1 << crate::order_type::OrderDepotActionFlag::Unbunch.0;
+            openttd_rust_order_vector_insert(orders, 0, &order(OT_GOTO_DEPOT, unbunch << 3));
             openttd_rust_order_vector_insert(orders, 1, &order(1, 0));
             (*consist).implicit = 1;
             (*consist).next_departure = 101;
