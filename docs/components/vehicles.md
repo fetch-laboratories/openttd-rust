@@ -4,11 +4,11 @@
 
 ## Effect vehicles
 
-- Rust owns: twelve controllers, movement tables and private animation bytes.
-- C++ keeps: vehicle shells, common random/map and effect sound/viewport services.
+- Rust owns: `effectvehicle.cpp`'s init and tick procedures and `_effect_procs` (`effect.rs`), the three creators, which Rust callers call typed, and each shell's `animation_state` and `animation_substate`.
+- C++ keeps: the shells, their pool allocation, save/load staging and `Tick` override, drawing (`UpdateDeltaXY`, `GetTransparencyOption`), and the shared vehicle table's sprite writers, viewport and sound, which read or write members the shells store. `GetIndustryGfx` is the shared table's `industry_gfx` until its translation is ported (#565).
 - Checks: `python3 tools/migration.py simulate effects`.
 - Limits: Gaps remain in viewport pixels, audible output or full legacy fixtures.
-- PRs: #105, #115, #300; service table #299.
+- PRs: #105, #115, #300, #1044; service table #299.
 
 ## Disaster scheduling and vehicles
 
