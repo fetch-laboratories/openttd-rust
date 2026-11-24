@@ -1,5 +1,6 @@
 # Exports whose only C++ user is a native fixture that #736's classification keeps
 # (https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013).
 # Each leaves with its fixture: export | fixture | issue that retires the fixture.
+openttd_rust_road_economy_day | tools/migration/windows-abi/road.inc | #736
 openttd_rust_road_yapf_choose | src/tests/road_yapf.cpp | #725
 openttd_rust_road_yapf_depot | src/tests/road_yapf.cpp | #725
