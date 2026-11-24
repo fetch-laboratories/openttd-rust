@@ -12,6 +12,20 @@
     "retirement_condition": "The event fields retire with the script event port, which constructs events in Rust; the setting address retires when the game settings move to Rust."
   },
   {
+    "kind": "growth",
+    "counter": "exports",
+    "added": {
+      "rust/expanded.rs | openttd_rust_company_colour": 1,
+      "rust/expanded.rs | openttd_rust_company_manager_face": 1,
+      "rust/expanded.rs | openttd_rust_economy_get_price": 1,
+      "rust/expanded.rs | openttd_rust_economy_scale_by_inverse_cargo_scale": 1
+    },
+    "reason": "Plan #1047 decision 2 renames the colour and face command exports (the `_abi` forms and their C++ `bool` wrappers go) and decision 7 replaces `company.rs`'s `openttd_rust_economy_price` with `economy_func.rs`'s `openttd_rust_economy_get_price`; those three replace three removed exports one for one. The fourth, `openttd_rust_economy_scale_by_inverse_cargo_scale`, is the one net export: the porting review of #1052 (finding 5) has the native `ScaleByInverseCargoScale`, which `ScaleByCargoScale` calls, forward to the Rust body instead of keeping its own copy.",
+    "existing_alternatives": "No export reaches `scale_by_inverse_cargo_scale`; keeping the header's static C++ body is the duplicate the review rejected, and `ScaleByCargoScale` (with its `Chance16` draw) has no Rust port to call the body directly.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Each export retires with its last native caller: the command facades when a Rust command table reaches the commands, `GetPrice`'s and `ScaleByInverseCargoScale`'s when their native callers are ported."
+  },
+  {
     "kind": "carry",
     "tool": "rust",
     "from": "rust/openttd-kernels/src/company_identity.rs | module | allow unsafe_code",
