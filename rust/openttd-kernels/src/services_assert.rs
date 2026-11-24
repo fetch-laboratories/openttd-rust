@@ -162,9 +162,44 @@ pub(crate) fn isolate_test_exit(name: &str) -> bool {
         bind_test_check(exit_on_failure);
         return false;
     }
+    let (status, stdout, stderr) = run_isolated_child(CHILD, name);
+    assert!(
+        status.code() == Some(ASSERT_EXIT_CODE)
+            && stdout.contains("running 1 test")
+            && stderr.contains(ASSERT_EXIT_MARKER),
+        "isolated native assertion test {name} did not run and end at a failed native \
+         assertion: {status:?}\n{stdout}{stderr}",
+    );
+    true
+}
+
+/// Run a test in a separate process that the test body itself ends, with
+/// `std::process::exit(code)` after writing `marker` to standard error, at an observation
+/// point inside the code under test. Require the child to start the named test and end
+/// that way. Return true in the parent; the child, which binds nothing, returns false to
+/// execute the test body.
+#[cfg(test)]
+pub(crate) fn isolate_test_ends(name: &str, code: i32, marker: &str) -> bool {
+    const CHILD: &str = "OPENTTD_ENDING_TEST_CHILD";
+    if std::env::var(CHILD).ok().as_deref() == Some(name) {
+        return false;
+    }
+    let (status, stdout, stderr) = run_isolated_child(CHILD, name);
+    assert!(
+        status.code() == Some(code) && stdout.contains("running 1 test") && stderr.contains(marker),
+        "isolated test {name} did not run and end with code {code} after {marker:?}: \
+         {status:?}\n{stdout}{stderr}",
+    );
+    true
+}
+
+/// Run the one test `name` in a child of this test binary, with `variable` naming it, and
+/// return its status and output. A child that does not end within a minute is killed.
+#[cfg(test)]
+fn run_isolated_child(variable: &str, name: &str) -> (std::process::ExitStatus, String, String) {
     let mut child = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", name, "--test-threads", "1", "--nocapture"])
-        .env(CHILD, name)
+        .env(variable, name)
         .env(ISOLATED_CHILD, "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -177,17 +212,11 @@ pub(crate) fn isolate_test_exit(name: &str) -> bool {
     }
     let _ = child.kill();
     let output = child.wait_with_output().unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        output.status.code() == Some(ASSERT_EXIT_CODE)
-            && stdout.contains("running 1 test")
-            && stderr.contains(ASSERT_EXIT_MARKER),
-        "isolated native assertion test {name} did not run and end at a failed native \
-         assertion: {:?}\n{stdout}{stderr}",
+    (
         output.status,
-    );
-    true
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
 }
 
 #[cfg(test)]

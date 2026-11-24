@@ -11,53 +11,22 @@
 #include "station_service_ffi.h"
 #include "vehicle_refit_ffi.h"
 
-/** Front loading fields read by one link prediction or arrival. */
-struct OpenTTDVisitPrediction {
-	uint64_t loading_tick;
-	uint16_t last_loading;
-	uint16_t last_station;
-	uint16_t ticks;
-};
-/** The loading indicator's colour strings. */
-struct OpenTTDVisitPercentStrings {
-	uint32_t up;
-	uint32_t down;
-	uint32_t up_down;
-	uint32_t none;
-};
-struct OpenTTDCommandCost;
 struct OpenTTDCargoList;
-/** Two native CommandCost stack slots for one nested depot refit. */
-struct OpenTTDVisitCosts {
-	OpenTTDCommandCost *out;
-	OpenTTDCommandCost *temporary;
-};
 struct OpenTTDScheduleServices;
 struct OpenTTDVehicleVisits {
-	const OpenTTDSharedServices *shared;
-	const OpenTTDStationServices *station;
+	void (*hide_filling_percent)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(hide_filling_percent);
+	uint16_t (*last_loading_station)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_loading_station);
+	uint64_t (*last_loading_tick)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_loading_tick);
 	const OpenTTDStationLinks *links;
 	const OpenTTDStationLoading *loading;
 	const OpenTTDVehicleRefitServices *refit;
 	const OpenTTDScheduleServices *schedule;
-	OpenTTDVisitPrediction (*prediction)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(prediction);
-	int32_t (*display_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(display_speed);
-	OpenTTDVisitPercentStrings percent;
-	void (*set_last_loading)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_last_loading);
-	void (*set_loading_tick)(OpenTTDVehicle *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_tick);
-	void (*arrival_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(arrival_dirty);
+	void (*set_last_loading_station)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_last_loading_station);
+	void (*set_last_loading_tick)(OpenTTDVehicle *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_last_loading_tick);
+	void (*set_trip_occupancy)(OpenTTDVehicle *, int8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_trip_occupancy);
+	const OpenTTDSharedServices *shared;
+	const OpenTTDStationServices *station;
 	OpenTTDCargoList *(*station_cargo)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo);
-	void (*hide_filling)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(hide_filling);
-	void (*set_occupancy)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_occupancy);
-
-	void (*leave_sound)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(leave_sound);
-	void (*depot_windows)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(depot_windows);
-	void (*ship_depot_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ship_depot_viewport);
-	void (*view_invalidate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(view_invalidate);
-	void (*with_costs)(void *, void (*)(void *, void *)) noexcept OPENTTD_SERVICE_DEFAULT(with_costs);
-	void (*refit_failed_news)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(refit_failed_news);
-	void (*cost_animation)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_animation);
-	void (*waiting_news)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_news);
 };
 const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept;
 inline const OpenTTDVehicleVisits *RustVehicleVisits() noexcept { return &GetRustVehicleVisits(); }

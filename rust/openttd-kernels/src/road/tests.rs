@@ -663,6 +663,9 @@ mod controller {
             const { Cell::new(std::ptr::null_mut()) };
         /// The bay's status when `BeginLoading` marks the arrival dirty.
         static LOADING_STATUS: Cell<Option<u8>> = const { Cell::new(None) };
+        /// The window calls made before `BeginLoading` marks the station's tiles dirty.
+        static ARRIVAL_WINDOWS: std::cell::RefCell<Vec<crate::window_func::testing::Effect>> =
+            const { std::cell::RefCell::new(Vec::new()) };
         static ROAD_SIDE: Cell<u8> = const { Cell::new(0) };
     }
     /// The opaque native shells of the vehicle and the bay's `RoadStop`.
@@ -753,19 +756,23 @@ mod controller {
     ) {
     }
     /// No last loading station (`INVALID_STATION`): no link statistics.
-    extern "C" fn prediction(_: VehicleRef) -> crate::vehicle::visits::Prediction {
-        crate::vehicle::visits::Prediction {
-            loading_tick: 0,
-            last_loading: u16::MAX,
-            last_station: STATION.0,
-            ticks: 0,
-        }
-    }
-    /// `BeginLoading`'s arrival invalidation, after its orders and unload preparation.
-    extern "C" fn arrival_dirty(v: VehicleRef) {
+    extern "C" fn last_loading_station(v: VehicleRef) -> u16 {
         assert_eq!(v.0.as_ptr(), RECORD.get().cast());
+        u16::MAX
+    }
+    extern "C" fn last_loading_tick(_: VehicleRef) -> u64 {
+        0
+    }
+    unsafe extern "C" fn vehicle_index(_: *mut crate::vehicle::OpenTTDVehicle) -> u32 {
+        7
+    }
+    /// `BeginLoading`'s `Station::MarkTilesDirty`, after its orders, unload preparation and
+    /// window invalidation.
+    extern "C" fn mark_tiles(_: *mut crate::station::BaseStation, cargo_change: bool) {
+        assert!(cargo_change);
         // SAFETY: The bay's live road stop owner; one byte read.
         LOADING_STATUS.set(Some(unsafe { (*bay().stop).status }));
+        ARRIVAL_WINDOWS.set(crate::window_func::testing::take());
     }
     extern "C" fn mark_dirty(_: VehicleRef) {}
     /// Failed native assertions in the isolated child.
@@ -913,7 +920,17 @@ mod controller {
         }));
         let station = Box::leak(Box::new(crate::station_service::World {
             station: loading_station,
+            mark_tiles,
             ..crate::test_tables::STATION_WORLD
+        }));
+        let links = Box::leak(Box::new(crate::station_service::Links {
+            vehicle_resolver: Box::leak(Box::new(crate::newgrf_vehicle::test_table_with_members(
+                vehicle_index,
+                crate::test_tables::unreachable1,
+                crate::test_tables::unreachable1,
+                crate::test_tables::unreachable1,
+            ))),
+            ..crate::test_tables::STATION_LINKS
         }));
         let loading = Box::leak(Box::new(crate::station_service::Loading {
             set_loading_finished,
@@ -931,8 +948,9 @@ mod controller {
             station,
             loading,
             refit,
-            prediction,
-            arrival_dirty,
+            last_loading_station,
+            last_loading_tick,
+            links,
             ..crate::test_tables::VISITS
         })));
         extern "C" fn visits() -> *const crate::vehicle::visits::Services {
@@ -969,6 +987,7 @@ mod controller {
         HAD.set(StationHadVehicleOfType::HVOT_BUS.0);
         LOADING_STATUS.set(None);
         take();
+        crate::window_func::testing::take();
 
         let part = f.part();
         let moved = f.game().individual_road_vehicle_controller(part, None);
@@ -980,6 +999,30 @@ mod controller {
             Some(0x7F),
             "BeginLoading runs with the entrance freed"
         );
+        {
+            use crate::window_func::testing::Effect;
+            use crate::window_type::{WindowClass, WindowNumber};
+            // `vehicle.cpp:2296-2299`, in order, before `Station::MarkTilesDirty(true)`: the
+            // owner's road vehicle list, the view's start/stop widget, the details and the
+            // station's view.
+            let windows = ARRIVAL_WINDOWS.take();
+            assert_eq!(
+                windows[windows.len().saturating_sub(4)..],
+                [
+                    Effect::SetWindowDirty(
+                        WindowClass::WC_ROADVEH_LIST,
+                        WindowNumber(LOCAL.into())
+                    ),
+                    Effect::SetWindowWidgetDirty(
+                        WindowClass::WC_VEHICLE_VIEW,
+                        WindowNumber(7),
+                        crate::widgets::vehicle_widget::VehicleViewWidgets::WID_VV_START_STOP.0,
+                    ),
+                    Effect::SetWindowDirty(WindowClass::WC_VEHICLE_DETAILS, WindowNumber(7)),
+                    Effect::SetWindowDirty(WindowClass::WC_STATION_VIEW, WindowNumber(55)),
+                ]
+            );
+        }
         // SAFETY: The live owners.
         unsafe {
             assert_eq!(

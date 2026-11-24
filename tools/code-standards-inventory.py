@@ -243,6 +243,11 @@ ALIASES = {
 # Branch-correspondence mappings the overhaul confirmed by hand (SIGNAL_* witnesses,
 # shared removal exports): Rust (file suffix, name) to original (path, name).
 MANUAL = {
+    # The order half of `Vehicle::BeginLoading`; `vehicle/visits.rs` holds its tail.
+    ("/orders.rs", "begin_loading_orders"): (
+        "src/vehicle.cpp",
+        "Vehicle::BeginLoading",
+    ),
     ("/signal.rs", "explore"): ("src/signal.cpp", "ExploreSegment"),
     ("/station_cmd.rs", "remove_rail_command"): (
         "src/station_cmd.cpp",

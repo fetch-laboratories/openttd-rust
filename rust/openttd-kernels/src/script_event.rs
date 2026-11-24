@@ -24,6 +24,8 @@ impl ScriptEventType {
     pub const ET_SUBSIDY_EXPIRED: Self = Self(5);
     /// `ET_VEHICLE_CRASHED`.
     pub const ET_VEHICLE_CRASHED: Self = Self(12);
+    /// `ET_VEHICLE_WAITING_IN_DEPOT`.
+    pub const ET_VEHICLE_WAITING_IN_DEPOT: Self = Self(14);
     /// `ET_INDUSTRY_OPEN`.
     pub const ET_INDUSTRY_OPEN: Self = Self(16);
     /// `ET_INDUSTRY_CLOSE`.

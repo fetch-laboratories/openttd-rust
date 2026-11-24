@@ -7,9 +7,6 @@
 
 //! `cargopacket.h` constants shared by simulation owners.
 
-/// `VehicleCargoList::MTA_LOAD`: temporary raw adapter for `vehicle/visits.rs`.
-pub const MTA_LOAD: u8 = MoveToAction::MTA_LOAD.0;
-
 /// Native `CargoPacketID`, retaining every underlying `u32` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

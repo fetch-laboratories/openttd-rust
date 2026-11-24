@@ -1576,10 +1576,6 @@ impl Loading {
     fn cargo_list(&self, v: VehicleRef) -> VehicleCargo {
         VehicleCargo((self.cargo_capacity)(v).owner.cast_mut())
     }
-    /// `v->cargo.StoredCount()`.
-    pub(crate) fn stored_count(&self, v: VehicleRef) -> u32 {
-        self.cargo_list(v).stored_count()
-    }
 }
 impl VehicleCargo {
     /// `StoredCount()`.
@@ -1610,7 +1606,7 @@ impl VehicleCargo {
     /// `ActionCount(action)`.
     fn action_count(self, action: MoveToAction) -> u32 {
         // SAFETY: As `stored_count`.
-        unsafe { crate::cargo_storage::openttd_rust_cargo_list_action_count(self.0, action.0) }
+        unsafe { crate::cargo_storage::action_count(self.0, action) }
     }
     /// `Reassign<from, to>(amount)`.
     fn reassign(self, l: &Loading, from: MoveToAction, to: MoveToAction, amount: u32) {
@@ -2405,11 +2401,8 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
          */
         if (l.indicator)(front) {
             let mut percent_up_down = STR_NULL;
-            let percent = crate::vehicle::visits::percent_filled(
-                front,
-                Some(&mut percent_up_down.0),
-                c.visits,
-            );
+            let percent =
+                crate::vehicle::visits::percent_filled(front, Some(&mut percent_up_down), c.visits);
             (l.show_indicator)(front, percent, percent_up_down.0);
         }
         if completely_emptied {

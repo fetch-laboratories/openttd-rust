@@ -78,92 +78,22 @@
 #include "rust/vehicle_effect_services.hpp"
 #include "safeguards.h"
 
-static_assert(VehicleFlags{VehicleFlag::LoadingFinished}.base() == 1 && VehicleFlags{VehicleFlag::StopLoading}.base() == 64);
-static_assert(VehicleRailFlags{VehicleRailFlag::Reversed}.base() == 128 && VehicleRailFlags{VehicleRailFlag::LeavingStation}.base() == 512);
-static_assert(CCF_ARRANGE.base() == 3 && TRACK_BIT_DEPOT == 0x80 && VehicleCargoList::MTA_LOAD == 3);
-static_assert(OrderDepotTypeFlags{OrderDepotTypeFlag::PartOfOrders}.base() == 2 && OrderDepotActionFlags{OrderDepotActionFlag::Halt}.base() == 1 && OrderDepotActionFlags{OrderDepotActionFlag::NearestDepot}.base() == 2);
-static_assert(to_underlying(OrderLoadType::FullLoad) == 2 && to_underlying(OrderLoadType::FullLoadAny) == 3);
-static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.loading_tick = v->last_loading_tick, .last_loading = RustVehicleLastLoadingStation(handle), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
-}
-static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
-{
-	Vehicle *v = VehicleOf(handle);
-	SetWindowDirty(GetWindowClassForVehicleType(v->GetType()), v->GetOwner());
-	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
-	RustVehicleDetailsDirty(handle);
-	SetWindowDirty(WC_STATION_VIEW, v->GetLastStationVisited());
-
-	RustStationMarkTilesDirty(Station::Get(v->GetLastStationVisited()), true);
-}
-static void VehicleVisitDepotWindows(OpenTTDVehicle *handle, bool invalidate) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	if (invalidate) RustVehicleInvalidateDepot(v);
-	RustVehicleDirtyDepot(v);
-}
-static void VehicleVisitShipDepotViewport(OpenTTDVehicle *handle) noexcept
-{
-	Ship *ship = Ship::From(VehicleOf(handle));
-	RustVehicleUpdateViewport(ship, true, true);
-	RustVehicleDirtyDepot(ship);
-}
-static void VehicleVisitWithCosts(void *context, void (*scope)(void *, void *)) noexcept
-{
-	CommandCost cost, temporary;
-	OpenTTDVisitCosts costs{reinterpret_cast<OpenTTDCommandCost *>(&cost), reinterpret_cast<OpenTTDCommandCost *>(&temporary)};
-	scope(context, &costs);
-}
-static void VehicleVisitRefitFailedNews(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	if (v->GetOwner() == _local_company) {
-		/* Notify the user that we stopped the vehicle */
-		AddVehicleAdviceNewsItem(AdviceType::RefitFailed, GetEncodedString(STR_NEWS_ORDER_REFIT_FAILED, v->index), v->index);
-	}
-}
-static void VehicleVisitCostAnimation(OpenTTDVehicle *handle, int64_t cost) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	if (v->GetOwner() == _local_company) RustCostOrIncomeAnimation(v->Record().x_pos, v->Record().y_pos, v->Record().z_pos, cost);
-}
-static void VehicleVisitWaitingNews(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	/* Announce that the vehicle is waiting to players and AIs. */
-	if (v->GetOwner() == _local_company) {
-		AddVehicleAdviceNewsItem(AdviceType::VehicleWaiting, GetEncodedString(STR_NEWS_TRAIN_IS_WAITING + v->GetType(), v->index), v->index);
-	}
-	AI::NewEvent(v->GetOwner(), new ScriptEventVehicleWaitingInDepot(v->index));
-}
 const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 {
 	static const OpenTTDVehicleVisits services{
-		.shared = &GetRustSharedServices(),
-		.station = &GetRustStationServices(),
+		.hide_filling_percent = RustVehicleHideFilling,
+		.last_loading_station = RustVehicleLastLoadingStation,
+		.last_loading_tick = RustVehicleLastLoadingTick,
 		.links = &GetRustStationLinks(),
 		.loading = &GetRustStationLoading(),
 		.refit = &GetRustVehicleRefitServices(),
 		.schedule = &LinkGraphSchedule::services,
-		.prediction = VehicleVisitPrediction,
-		.display_speed = RustVehicleDisplaySpeed,
-		.percent = {.up = STR_PERCENT_UP, .down = STR_PERCENT_DOWN, .up_down = STR_PERCENT_UP_DOWN, .none = STR_PERCENT_NONE},
-		.set_last_loading = RustVehicleSetLastLoadingStation,
-		.set_loading_tick = RustVehicleSetLastLoadingTick,
-		.arrival_dirty = VehicleVisitArrivalDirty,
+		.set_last_loading_station = RustVehicleSetLastLoadingStation,
+		.set_last_loading_tick = RustVehicleSetLastLoadingTick,
+		.set_trip_occupancy = RustVehicleSetTripOccupancy,
+		.shared = &GetRustSharedServices(),
+		.station = &GetRustStationServices(),
 		.station_cargo = RustStationCargoOwner,
-		.hide_filling = RustVehicleHideFilling,
-		.set_occupancy = RustVehicleSetTripOccupancy,
-		.leave_sound = RustVehiclePlayLeaveSound,
-		.depot_windows = VehicleVisitDepotWindows,
-		.ship_depot_viewport = VehicleVisitShipDepotViewport,
-		.view_invalidate = RustVehicleVisitInvalidateView,
-		.with_costs = VehicleVisitWithCosts,
-		.refit_failed_news = VehicleVisitRefitFailedNews,
-		.cost_animation = VehicleVisitCostAnimation,
-		.waiting_news = VehicleVisitWaitingNews,
 	};
 	return services;
 }
@@ -920,7 +850,6 @@ void AgeVehicle(Vehicle *v)
  */
 uint8_t CalcPercentVehicleFilled(const Vehicle *front, StringID *colour)
 {
-	assert(colour == nullptr || (Station::GetIfValid(front->GetLastStationVisited()) != nullptr && front->current_order.IsType(OT_LOADING)));
 	return openttd_rust_percent_filled(RustVehicle(front), colour, &GetRustVehicleVisits());
 }
 
@@ -930,9 +859,6 @@ uint8_t CalcPercentVehicleFilled(const Vehicle *front, StringID *colour)
  */
 void VehicleEnterDepot(Vehicle *v)
 {
-	/* Always work with the front of the vehicle */
-	assert(v == v->First());
-
 	openttd_rust_visit_enter_depot(RustVehicle(v), &GetRustVehicleVisits());
 }
 
@@ -1361,8 +1287,6 @@ void Vehicle::CancelReservation(StationID next, Station *st)
  */
 void Vehicle::LeaveStation()
 {
-	assert(this->current_order.IsType(OT_LOADING));
-
 	openttd_rust_visit_leave_station(RustVehicle(this), &GetRustVehicleVisits());
 }
 
