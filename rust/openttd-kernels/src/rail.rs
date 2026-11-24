@@ -128,16 +128,16 @@ impl crate::map_func::World<'_> {
     pub(crate) fn tile_rail_type(&self, t: u32) -> u8 {
         use crate::tile_type::TileType;
         match self.kind(TileIndex(t)) {
-            TileType::MP_RAILWAY => return self.rail_type(t),
+            TileType::MP_RAILWAY => return self.get_rail_type_raw(t),
             TileType::MP_ROAD
                 if crate::road_map::get_road_tile_type(&self.types, t)
                     .expect("road tile")
                     .0
                     == crate::road_map::ROAD_TILE_CROSSING =>
             {
-                return self.rail_type(t);
+                return self.get_rail_type_raw(t);
             }
-            TileType::MP_STATION if self.station_rail_raw(t) => return self.rail_type(t),
+            TileType::MP_STATION if self.station_rail_raw(t) => return self.get_rail_type_raw(t),
             TileType::MP_TUNNELBRIDGE
                 if crate::tunnelbridge_map::get_tunnel_bridge_transport_type(
                     &self.types,
@@ -146,7 +146,7 @@ impl crate::map_func::World<'_> {
                 .expect("tunnel or bridge tile")
                 .0 == crate::transport_type::TRANSPORT_RAIL =>
             {
-                return self.rail_type(t);
+                return self.get_rail_type_raw(t);
             }
             _ => {}
         }

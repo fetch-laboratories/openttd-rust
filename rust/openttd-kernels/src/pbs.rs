@@ -164,10 +164,10 @@ impl<'a> Pbs<'a> {
         let w = World::new(self.shared());
         match w.kind(t) {
             TileType::MP_RAILWAY => {
-                if w.is_rail_depot(t.0) {
+                if w.is_rail_depot_raw(t.0) {
                     return (self.0.depot_bits)(t.0);
                 }
-                if w.is_plain_rail(t.0) {
+                if w.is_plain_rail_raw(t.0) {
                     return (self.rail().rail_reservation)(t.0);
                 }
             }
@@ -269,10 +269,10 @@ impl<'a> Pbs<'a> {
         let w = World::new(s);
         match w.kind(tile) {
             TileType::MP_RAILWAY => {
-                if w.is_plain_rail(tile.0) {
+                if w.is_plain_rail_raw(tile.0) {
                     return (self.0.try_track)(tile.0, t.0);
                 }
-                if w.is_rail_depot(tile.0) && !(self.rail().depot_reserved)(tile.0) {
+                if w.is_rail_depot_raw(tile.0) && !(self.rail().depot_reserved)(tile.0) {
                     (self.0.set_depot)(tile.0, true);
                     (s.mark_dirty)(tile.0); // some GRFs change their appearance when tile is reserved
                     return true;
@@ -323,10 +323,10 @@ impl<'a> Pbs<'a> {
         let w = World::new(s);
         match w.kind(tile) {
             TileType::MP_RAILWAY => {
-                if w.is_rail_depot(tile.0) {
+                if w.is_rail_depot_raw(tile.0) {
                     (self.0.set_depot)(tile.0, false);
                     (s.mark_dirty)(tile.0);
-                } else if w.is_plain_rail(tile.0) {
+                } else if w.is_plain_rail_raw(tile.0) {
                     (self.0.unreserve_track)(tile.0, t.0);
                 }
             }
@@ -358,9 +358,9 @@ impl<'a> Pbs<'a> {
     fn has_non_pbs_signal(self, tile: TileIndex, trackdir: Trackdir) -> bool {
         let w = World::new(self.shared());
         is_tile_type(self.shared(), tile, TileType::MP_RAILWAY)
-            && w.has_signal_on_trackdir(tile.0, trackdir.0)
-            && !crate::rail_map::is_pbs_signal(
-                w.signal_type(tile.0, trackdir_to_track(trackdir, |ok| self.check(ok)).0),
+            && w.has_signal_on_trackdir_raw(tile.0, trackdir.0)
+            && !crate::rail_map::is_pbs_signal_raw(
+                w.get_signal_type_raw(tile.0, trackdir_to_track(trackdir, |ok| self.check(ok)).0),
             )
     }
 
@@ -453,7 +453,7 @@ impl<'a> Pbs<'a> {
                 break;
             }
             /* Depot tile? Can't continue. */
-            if w.rail_depot(tile.0) {
+            if w.is_rail_depot_tile_raw(tile.0) {
                 break;
             }
             /* Non-pbs signal? Reservation can't continue. */
@@ -522,7 +522,9 @@ impl<'a> Pbs<'a> {
         let tile = v.vehicle().tile();
         let trackdir = crate::train::get_vehicle_trackdir(self.train(), s, v);
 
-        if w.rail_depot(tile.0) && (self.0.depot_bits)(tile.0) == TrackBits::TRACK_BIT_NONE {
+        if w.is_rail_depot_tile_raw(tile.0)
+            && (self.0.depot_bits)(tile.0) == TrackBits::TRACK_BIT_NONE
+        {
             return PBSTileInfo {
                 tile,
                 trackdir,
@@ -701,7 +703,7 @@ impl<'a> Pbs<'a> {
     ) -> bool {
         let s = self.shared();
         let w = World::new(s);
-        if w.rail_depot(tile.0) {
+        if w.is_rail_depot_tile_raw(tile.0) {
             return true;
         }
 
@@ -746,13 +748,14 @@ impl<'a> Pbs<'a> {
             }
             /* One-way PBS signal against us? Safe if end-of-line is allowed. */
             if is_tile_type(s, ft.new_tile, TileType::MP_RAILWAY)
-                && w.has_signal_on_trackdir(
+                && w.has_signal_on_trackdir_raw(
                     ft.new_tile.0,
                     reverse_trackdir(td, |ok| self.check(ok)).0,
                 )
-                && SignalType(
-                    w.signal_type(ft.new_tile.0, trackdir_to_track(td, |ok| self.check(ok)).0),
-                ) == SignalType::SIGTYPE_PBS_ONEWAY
+                && SignalType(w.get_signal_type_raw(
+                    ft.new_tile.0,
+                    trackdir_to_track(td, |ok| self.check(ok)).0,
+                )) == SignalType::SIGTYPE_PBS_ONEWAY
             {
                 crate::witness::hit(crate::witness::PBS_SAFE_OPPOSING_PBS);
                 return include_line_end;
@@ -782,7 +785,7 @@ impl<'a> Pbs<'a> {
         }
 
         /* Not reserved and depot or not a pbs signal -> free. */
-        if World::new(s).rail_depot(tile.0) {
+        if World::new(s).is_rail_depot_tile_raw(tile.0) {
             return true;
         }
         if self.has_non_pbs_signal(tile, trackdir) {

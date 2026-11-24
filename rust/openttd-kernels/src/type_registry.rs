@@ -536,7 +536,7 @@ pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
         if convert {
             (map.set_rail_type)(
                 tile.0,
-                conversion[usize::from(crate::map_func::World::new(s).rail_type(tile.0))],
+                conversion[usize::from(crate::map_func::World::new(s).get_rail_type_raw(tile.0))],
             );
         }
     }

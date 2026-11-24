@@ -15,8 +15,8 @@ use crate::tile_type::TileType;
 /// `IsPossibleCrossing`, including the foundation-adjusted surface.
 pub(crate) fn is_possible_crossing(world: &World<'_>, tile: u32, axis: u8) -> bool {
     world.kind(TileIndex(tile)) == TileType::MP_RAILWAY
-        && world.rail_tile_type(tile) == crate::rail_map::RAIL_TILE_NORMAL
-        && world.tracks(tile)
+        && world.get_rail_tile_type_raw(tile) == crate::rail_map::RAIL_TILE_NORMAL
+        && world.get_track_bits_raw(tile)
             == if axis == crate::direction_type::AXIS_X {
                 crate::track_type::TRACK_BIT_Y
             } else {

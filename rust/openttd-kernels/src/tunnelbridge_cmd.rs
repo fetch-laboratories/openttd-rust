@@ -326,8 +326,10 @@ impl<'a> World<'a> {
             }
             RAIL => {
                 result = result.saturating_add((self.r.rail_clear_cost)(
-                    crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile))
-                        .0,
+                    crate::services::RailType(
+                        crate::map_func::World::new(self.s).get_rail_type_raw(tile),
+                    )
+                    .0,
                 ));
             }
             WATER => result = price(PR_CLEAR_AQUEDUCT),
@@ -479,8 +481,10 @@ impl<'a> World<'a> {
                 _ => (),
             }
             if transport == RAIL
-                && crate::services::RailType(crate::map_func::World::new(self.s).rail_type(start)).0
-                    != railtype
+                && crate::services::RailType(
+                    crate::map_func::World::new(self.s).get_rail_type_raw(start),
+                )
+                .0 != railtype
             {
                 return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
             }
@@ -1145,7 +1149,7 @@ impl<'a> World<'a> {
                             CompanyInfrastructure::get(self.s, CompanyID(owner)),
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.s).rail_type(tile),
+                                    crate::map_func::World::new(self.s).get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -1253,7 +1257,7 @@ impl<'a> World<'a> {
                             CompanyInfrastructure::get(self.s, CompanyID(owner)),
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.s).rail_type(tile),
+                                    crate::map_func::World::new(self.s).get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -1446,7 +1450,7 @@ impl<'a> World<'a> {
                     old_infrastructure,
                     crate::rail_type::RailType(
                         crate::services::RailType(
-                            crate::map_func::World::new(self.s).rail_type(tile),
+                            crate::map_func::World::new(self.s).get_rail_type_raw(tile),
                         )
                         .0,
                     ),
@@ -1465,7 +1469,7 @@ impl<'a> World<'a> {
                         },
                         crate::rail_type::RailType(
                             crate::services::RailType(
-                                crate::map_func::World::new(self.s).rail_type(tile),
+                                crate::map_func::World::new(self.s).get_rail_type_raw(tile),
                             )
                             .0,
                         ),

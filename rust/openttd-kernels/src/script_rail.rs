@@ -86,7 +86,7 @@ fn rail_tile(s: &Services, tile: u32) -> bool {
     if !valid(&w, tile) {
         return false;
     }
-    (w.kind(TileIndex(tile)) == TileType::MP_RAILWAY && !w.rail_depot(tile))
+    (w.kind(TileIndex(tile)) == TileType::MP_RAILWAY && !w.is_rail_depot_tile_raw(tile))
         || (w.station_rail_raw(tile) && !w.station_blocked(tile))
         || w.level_crossing_tile(tile)
 }
@@ -98,7 +98,7 @@ fn level_crossing_tile(s: &Services, tile: u32) -> bool {
 
 fn rail_depot_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.rail_depot(tile)
+    valid(&w, tile) && w.is_rail_depot_tile_raw(tile)
 }
 
 fn rail_station_tile(s: &Services, tile: u32) -> bool {
@@ -130,7 +130,7 @@ fn rail_tracks(s: &Services, tile: u32) -> u32 {
     if rail_depot_tile(s, tile) {
         return 0;
     }
-    u32::from(w.tracks(tile))
+    u32::from(w.get_track_bits_raw(tile))
 }
 
 /// `ScriptRail::GetRailTracks` as the C `uint`.
@@ -229,7 +229,7 @@ pub extern "C" fn openttd_rust_script_rail_type(s: &Services, tile: u32) -> u32 
     if !has_transport_type(s, tile, TRANSPORT_RAIL) {
         return RAILTYPE_INVALID;
     }
-    u32::from(world(s).rail_type(tile))
+    u32::from(world(s).get_rail_type_raw(tile))
 }
 
 /// `ScriptRail::GetRailDepotFrontTile`.
@@ -242,7 +242,7 @@ pub extern "C" fn openttd_rust_script_rail_depot_front_tile(s: &Services, depot:
     depot.wrapping_add(
         w.dimensions
             .tile_offs_by_diag_dir(
-                DiagDirection(w.rail_depot_dir(depot)),
+                DiagDirection(w.get_rail_depot_direction_raw(depot)),
                 crate::map_func::native_check,
             )
             .cast_unsigned(),
@@ -555,7 +555,7 @@ pub extern "C" fn openttd_rust_script_rail_remove_track(
     let w = world(s);
     if !enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         || !enforce(
-            w.plain_rail(tile) || w.level_crossing_tile(tile),
+            w.is_plain_rail_tile_raw(tile) || w.level_crossing_tile(tile),
             ERR_PRECONDITION_FAILED,
         )
         || !enforce(
@@ -631,7 +631,7 @@ pub extern "C" fn openttd_rust_script_rail_signal_type(s: &Services, tile: u32, 
         return SIGNALTYPE_NONE;
     }
     let w = world(s);
-    if w.kind(TileIndex(tile)) != TileType::MP_RAILWAY || !w.has_signals(tile) {
+    if w.kind(TileIndex(tile)) != TileType::MP_RAILWAY || !w.has_signals_raw(tile) {
         return SIGNALTYPE_NONE;
     }
     for (track, trackdir, _) in POSSIBLE_TRACKDIRS[data_index(&w, tile, front)] {
@@ -641,12 +641,13 @@ pub extern "C" fn openttd_rust_script_rail_signal_type(s: &Services, tile: u32, 
         {
             continue;
         }
-        if !w.has_signal_on_track(tile, track) || !w.has_signal_on_trackdir(tile, trackdir) {
+        if !w.has_signal_on_track_raw(tile, track) || !w.has_signal_on_trackdir_raw(tile, trackdir)
+        {
             continue;
         }
-        let mut signal = u32::from(w.signal_type(tile, track));
+        let mut signal = u32::from(w.get_signal_type_raw(tile, track));
         let reverse = crate::track_func::reverse_trackdir_raw(trackdir);
-        if w.has_signal_on_trackdir(tile, reverse) {
+        if w.has_signal_on_trackdir_raw(tile, reverse) {
             signal |= SIGNALTYPE_TWOWAY as u32;
         }
         return signal;
@@ -691,8 +692,10 @@ pub extern "C" fn openttd_rust_script_rail_build_signal(
     if !enforce(
         script_distance(s, tile, front) == 1,
         ERR_PRECONDITION_FAILED,
-    ) || !enforce(world(s).plain_rail(tile), ERR_PRECONDITION_FAILED)
-        || !enforce(is_valid_signal_type(signal), ERR_PRECONDITION_FAILED)
+    ) || !enforce(
+        world(s).is_plain_rail_tile_raw(tile),
+        ERR_PRECONDITION_FAILED,
+    ) || !enforce(is_valid_signal_type(signal), ERR_PRECONDITION_FAILED)
     {
         return refused;
     }

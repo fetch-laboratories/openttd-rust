@@ -1608,20 +1608,21 @@ impl Ctx<'_> {
             affected_vehicles,
         } = context;
         if rt != RailType((self.rail_map().invalid_rail_type)().0)
-            && crate::map_func::World::new(self.shared).plain_rail(tile_cur.0)
+            && crate::map_func::World::new(self.shared).is_plain_rail_tile_raw(tile_cur.0)
         {
             /* Don't overbuild signals. */
-            if crate::map_func::World::new(self.shared).has_signals(tile_cur.0) {
+            if crate::map_func::World::new(self.shared).has_signals_raw(tile_cur.0) {
                 cost.error(STR_ERROR_MUST_REMOVE_SIGNALS_FIRST.0);
                 return true;
             }
             /* The current rail type must have power on the to-be-built type (e.g. convert normal rail to electrified rail). */
             if (self.rail().powered_rail)(
-                crate::map_func::World::new(self.shared).rail_type(tile_cur.0),
+                crate::map_func::World::new(self.shared).get_rail_type_raw(tile_cur.0),
                 rt.0,
             ) {
-                let mut tracks =
-                    TrackBits(crate::map_func::World::new(self.shared).tracks(tile_cur.0));
+                let mut tracks = TrackBits(
+                    crate::map_func::World::new(self.shared).get_track_bits_raw(tile_cur.0),
+                );
                 let track = crate::track_func::remove_first_track(&mut tracks, |ok| {
                     crate::movement::native_assert(self.shared, ok);
                 });
@@ -2260,7 +2261,8 @@ impl Ctx<'_> {
                             CompanyInfrastructure::add_rail(
                                 infrastructure,
                                 crate::rail_type::RailType(
-                                    crate::map_func::World::new(self.shared).rail_type(tile.0),
+                                    crate::map_func::World::new(self.shared)
+                                        .get_rail_type_raw(tile.0),
                                 ),
                                 u32::MAX,
                             );
@@ -2468,7 +2470,7 @@ impl Ctx<'_> {
         let specindex = (self.s.custom_rail_index)(tile.0);
         let track = crate::map_func::World::new(self.shared).get_rail_station_track(tile);
         let owner = CompanyID((self.shared.tile_owner)(tile.0));
-        let rt = RailType(crate::map_func::World::new(self.shared).rail_type(tile.0));
+        let rt = RailType(crate::map_func::World::new(self.shared).get_rail_type_raw(tile.0));
         let mut v = std::ptr::null_mut();
         if self.has_station_reservation(tile) {
             v = crate::pbs::Pbs::acquire(self.shared)
@@ -5909,7 +5911,7 @@ impl Ctx<'_> {
             match station_type {
                 StationType::Rail | StationType::RailWaypoint => {
                     if !self.is_station_tile_blocked(tile) {
-                        let rt = world.rail_type(tile.0);
+                        let rt = world.get_rail_type_raw(tile.0);
                         unsafe {
                             CompanyInfrastructure::add_rail(
                                 old_infrastructure,

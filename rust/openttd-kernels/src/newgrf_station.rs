@@ -738,7 +738,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         0x42 => {
             (native.shared().terrain_type)(tile)
                 | (u32::from(crate::type_registry::openttd_rust_rail_reverse(
-                    crate::map_func::World::new(native.shared()).rail_type(tile),
+                    crate::map_func::World::new(native.shared()).get_rail_type_raw(tile),
                     (native.shared().specs().station().file)(spec),
                 )) << 8)
         }

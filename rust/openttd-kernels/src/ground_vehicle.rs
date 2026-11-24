@@ -361,7 +361,10 @@ impl GroundVehicleType for Train {
     fn get_power(s: &Services, w: &World<'_>, v: VehicleRef, o: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part()
-            && (s.powered)(o.train.railtypes().0, RailType(w.rail_type(v.tile().0)))
+            && (s.powered)(
+                o.train.railtypes().0,
+                RailType(w.get_rail_type_raw(v.tile().0)),
+            )
         {
             let engine = (s.vehicle.engine)(v);
             let mut power = s.property(
@@ -389,7 +392,10 @@ impl GroundVehicleType for Train {
     ) -> u16 {
         /* For powered wagons the engine defines the type of engine (i.e. railtype) */
         if o.train.flags().test(VehicleRailFlag::PoweredWagon)
-            && (s.powered)(head.train.railtypes().0, RailType(w.rail_type(v.tile().0)))
+            && (s.powered)(
+                head.train.railtypes().0,
+                RailType(w.get_rail_type_raw(v.tile().0)),
+            )
         {
             return s.first_engine(o).wagon_power();
         }
@@ -509,7 +515,9 @@ impl GroundVehicleType for Train {
         w: &World<'_>,
         v: VehicleRef,
     ) -> VehicleAccelerationModel {
-        VehicleAccelerationModel((s.rail_acceleration)(RailType(w.rail_type(v.tile().0))))
+        VehicleAccelerationModel((s.rail_acceleration)(RailType(
+            w.get_rail_type_raw(v.tile().0),
+        )))
     }
     /// Returns the slope steepness used by this vehicle.
     #[inline]
@@ -524,7 +532,7 @@ impl GroundVehicleType for Train {
     /// Gets the maximum speed allowed by the track for this vehicle.
     #[inline]
     fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
-        (s.rail_speed)(RailType(w.rail_type(v.tile().0)))
+        (s.rail_speed)(RailType(w.get_rail_type_raw(v.tile().0)))
     }
     /// Checks if the vehicle is at a tile that can be sloped.
     #[inline]

@@ -289,10 +289,9 @@ impl<'a> World<'a> {
                     == 0,
             ),
             1 => {
-                if self
-                    .types
-                    .asserted(self.s, |m| crate::rail_map::get_rail_ground_type(m, tile))
-                    == 13
+                if self.types.asserted(self.s, |m| {
+                    crate::rail_map::get_rail_ground_type_raw(m, tile)
+                }) == 13
                 {
                     if is_slope_with_one_corner_raised_raw(
                         (self.types.asserted(self.s, |m| {
@@ -346,10 +345,9 @@ impl<'a> World<'a> {
     }
     fn half_flood(&self, tile: u32, call: *mut Call) -> bool {
         let mut flooded = false;
-        if self
-            .types
-            .asserted(self.s, |m| crate::rail_map::get_rail_ground_type(m, tile))
-            == 13
+        if self.types.asserted(self.s, |m| {
+            crate::rail_map::get_rail_ground_type_raw(m, tile)
+        }) == 13
         {
             return false;
         }

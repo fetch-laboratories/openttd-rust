@@ -643,11 +643,11 @@ impl<'a> Game<'a> {
     }
     /// `IsRailDepotTile(tile)`.
     fn is_rail_depot_tile(&self, tile: TileIndex) -> bool {
-        self.world().rail_depot(tile.0)
+        self.world().is_rail_depot_tile_raw(tile.0)
     }
     /// `GetRailDepotDirection(tile)`.
     fn get_rail_depot_direction(&self, tile: TileIndex) -> DiagDirection {
-        DiagDirection(self.world().rail_depot_dir(tile.0))
+        DiagDirection(self.world().get_rail_depot_direction_raw(tile.0))
     }
     /// `IsLevelCrossingTile(tile)`.
     fn is_level_crossing_tile(&self, tile: TileIndex) -> bool {
@@ -671,11 +671,11 @@ impl<'a> Game<'a> {
     }
     /// `HasSignalOnTrackdir(tile, trackdir)`.
     fn has_signal_on_trackdir(&self, tile: TileIndex, trackdir: Trackdir) -> bool {
-        self.world().has_signal_on_trackdir(tile.0, trackdir.0)
+        self.world().has_signal_on_trackdir_raw(tile.0, trackdir.0)
     }
     /// `GetSignalType(tile, track)`.
     fn get_signal_type(&self, tile: TileIndex, track: Track) -> SignalType {
-        SignalType(self.world().signal_type(tile.0, track.0))
+        SignalType(self.world().get_signal_type_raw(tile.0, track.0))
     }
     /// `GetTunnelBridgeDirection(tile)`.
     fn get_tunnel_bridge_direction(&self, tile: TileIndex) -> DiagDirection {
@@ -1244,7 +1244,7 @@ impl Game<'_> {
         if max_speed != ABSOLUTE_MAX_SPEED {
             /* Apply the current railtype's curve speed advantage */
             let curve_speed = (self.services.rail_type_curve_speed)(RailType(
-                self.world().rail_type(this.vehicle().tile().0),
+                self.world().get_rail_type_raw(this.vehicle().tile().0),
             ));
             max_speed =
                 max_speed.wrapping_add((max_speed / 2).wrapping_mul(i32::from(curve_speed)));
@@ -1703,7 +1703,7 @@ impl Game<'_> {
             if d <= 0 {
                 leave.vehicle().set_hidden(false); // move it out of the depot
                 leave.set_track(crate::track_func::track_to_track_bits(
-                    crate::rail_map::get_rail_depot_track(self.world(), leave.vehicle().tile()),
+                    self.world().get_rail_depot_track(leave.vehicle().tile()),
                     self.check(),
                 ));
                 let mut i = 0;
@@ -1857,8 +1857,7 @@ impl Game<'_> {
             let mut first_tile_okay = !(self.is_tile_type(tile, TileType::MP_RAILWAY)
                 && self.has_signal_on_trackdir(tile, self.get_vehicle_trackdir(v))
                 && !crate::rail_map::is_pbs_signal(
-                    self.get_signal_type(tile, crate::track_func::find_first_track(v.track()))
-                        .0,
+                    self.get_signal_type(tile, crate::track_func::find_first_track(v.track())),
                 ));
 
             /* If we are on a depot tile facing outwards, do not treat the current tile as safe. */
@@ -2155,16 +2154,16 @@ impl Game<'_> {
         );
         if next_tile == TileIndex(INVALID_TILE)
             || !self.is_tile_type(next_tile, TileType::MP_RAILWAY)
-            || !self.world().has_signals(next_tile.0)
+            || !self.world().has_signals_raw(next_tile.0)
         {
             return TrainForceProceeding::TFP_STUCK;
         }
         let new_tracks = crate::track_func::diagdir_reaches_tracks(
             crate::track_func::trackdir_to_exitdir(self.get_vehicle_trackdir(t), self.check()),
             self.check(),
-        ) & TrackBits(self.world().tracks(next_tile.0));
+        ) & TrackBits(self.world().get_track_bits_raw(next_tile.0));
         if new_tracks != TrackBits::TRACK_BIT_NONE
-            && self.world().has_signal_on_track(
+            && self.world().has_signal_on_track_raw(
                 next_tile.0,
                 crate::track_func::find_first_track(new_tracks).0,
             )
@@ -2458,7 +2457,7 @@ impl Game<'_> {
         crate::tile_map::is_tile_owner(self.services, tile, v.vehicle().owner())
             && (!v.is_front_engine()
                 || v.compatible_railtypes()
-                    .test(RailType(self.world().rail_type(tile.0))))
+                    .test(RailType(self.world().get_rail_type_raw(tile.0))))
     }
 
     /// `AffectSpeedByZChange`: modify the speed of the vehicle due to a change in altitude.
@@ -2488,10 +2487,11 @@ impl Game<'_> {
     /// `TrainMovedChangeSignals`.
     fn train_moved_change_signals(&self, tile: TileIndex, dir: DiagDirection) -> bool {
         if self.is_tile_type(tile, TileType::MP_RAILWAY)
-            && self.world().rail_tile_type(tile.0) == crate::rail_map::RailTileType::Signals.0
+            && self.world().get_rail_tile_type_raw(tile.0)
+                == crate::rail_map::RailTileType::Signals.0
         {
             let tracks = crate::track_func::track_bits_to_trackdir_bits(TrackBits(
-                self.world().tracks(tile.0),
+                self.world().get_track_bits_raw(tile.0),
             )) & crate::track_func::diagdir_reaches_trackdirs(dir, self.check());
             let trackdir = crate::track_func::find_first_trackdir(tracks, self.check());
             if self.update_signals_on_segment(
@@ -2502,13 +2502,10 @@ impl Game<'_> {
                 && self.has_signal_on_trackdir(tile, trackdir)
             {
                 /* A PBS block with a non-PBS signal facing us? */
-                if !crate::rail_map::is_pbs_signal(
-                    self.get_signal_type(
-                        tile,
-                        crate::track_func::trackdir_to_track(trackdir, self.check()),
-                    )
-                    .0,
-                ) {
+                if !crate::rail_map::is_pbs_signal(self.get_signal_type(
+                    tile,
+                    crate::track_func::trackdir_to_track(trackdir, self.check()),
+                )) {
                     return true;
                 }
             }
@@ -2857,8 +2854,8 @@ impl Game<'_> {
                                 });
 
                                 if v.force_proceed() != TrainForceProceeding::TFP_NONE
-                                    && self.world().plain_rail(gp.new_tile.0)
-                                    && self.world().has_signals(gp.new_tile.0)
+                                    && self.world().is_plain_rail_tile_raw(gp.new_tile.0)
+                                    && self.world().has_signals_raw(gp.new_tile.0)
                                 {
                                     /* For each signal we find decrease the counter by one.
                                      * We start at two, so the first signal we pass decreases

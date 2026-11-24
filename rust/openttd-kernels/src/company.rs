@@ -1382,8 +1382,11 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             } else {
                 crate::company_type::CompanyID(0)
             };
-            if railway && owner == crate::company_type::CompanyID(new) && world.has_signals(tile) {
-                let mut tracks = world.tracks(tile);
+            if railway
+                && owner == crate::company_type::CompanyID(new)
+                && world.has_signals_raw(tile)
+            {
+                let mut tracks = world.get_track_bits_raw(tile);
                 loop {
                     // RemoveFirstTrack: INVALID_TRACK leaves NONE/INVALID bits unchanged.
                     let track = if tracks != 0 && tracks != 0xFF {
@@ -1393,7 +1396,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
                     } else {
                         0xFF
                     };
-                    if crate::map_func::World::new(s.shared).has_signal_on_track(tile, track) {
+                    if crate::map_func::World::new(s.shared).has_signal_on_track_raw(tile, track) {
                         (s.add_track_to_signal_buffer)(tile, track, new);
                     }
                     if tracks == 0 {

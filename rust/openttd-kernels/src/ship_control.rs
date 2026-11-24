@@ -276,7 +276,7 @@ pub(crate) fn get_effective_water_class(
     }
     if world.kind(tile) == crate::tile_type::TileType::MP_RAILWAY {
         world.assert_with(|| {
-            crate::rail_map::RailGroundType(world.rail_ground(tile.0))
+            crate::rail_map::RailGroundType(world.get_rail_ground_type_raw(tile.0))
                 == crate::rail_map::RailGroundType::HalfTileWater
         });
         return WaterClass::Sea;

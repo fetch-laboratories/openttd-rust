@@ -464,15 +464,17 @@ impl<'a> Signals<'a> {
                         continue; // do not propagate signals on others' tiles (remove for tracksharing)
                     }
 
-                    if map.is_rail_depot(tile.0) {
+                    if map.is_rail_depot_raw(tile.0) {
                         if enterdir == DiagDirection::INVALID_DIAGDIR {
                             // from 'inside' - train just entered or left the depot
                             crate::witness::hit(crate::witness::SIGNAL_DEPOT);
                             self.train_on_tile(tile, &mut flags);
-                            exitdir = DiagDirection(map.rail_depot_dir(tile.0));
+                            exitdir = DiagDirection(map.get_rail_depot_direction_raw(tile.0));
                             tile += self.tile_offs_by_diag_dir(exitdir);
                             enterdir = reverse_diag_dir(exitdir, check);
-                        } else if enterdir == DiagDirection(map.rail_depot_dir(tile.0)) {
+                        } else if enterdir
+                            == DiagDirection(map.get_rail_depot_direction_raw(tile.0))
+                        {
                             // entered a depot
                             self.train_on_tile(tile, &mut flags);
                             continue;
@@ -481,7 +483,7 @@ impl<'a> Signals<'a> {
                         }
                     } else {
                         self.source_assert(|| is_valid_diag_direction(enterdir));
-                        let mut tracks = TrackBits(map.tracks(tile.0)); // trackbits of tile
+                        let mut tracks = TrackBits(map.get_track_bits_raw(tile.0)); // trackbits of tile
                         let tracks_masked = tracks & ENTERDIR_TO_TRACKBITS[usize::from(enterdir.0)]; // only incidating trackbits
 
                         if tracks == TrackBits::TRACK_BIT_HORZ
@@ -515,12 +517,12 @@ impl<'a> Signals<'a> {
                             crate::witness::hit(crate::witness::SIGNAL_SPLIT);
                         }
 
-                        if map.has_signals(tile.0) {
+                        if map.has_signals_raw(tile.0) {
                             // there is exactly one track - not zero, because there is exit from this tile
                             let track = track_bits_to_track(tracks_masked, check); // mask TRACK_BIT_X and Y too
-                            if map.has_signal_on_track(tile.0, track.0) {
+                            if map.has_signal_on_track_raw(tile.0, track.0) {
                                 // now check whole track, not trackdir
-                                let sig = SignalType(map.signal_type(tile.0, track.0));
+                                let sig = SignalType(map.get_signal_type_raw(tile.0, track.0));
                                 let trackdir = Trackdir(find_first_bit(u64::from(
                                     (u32::from(tracks.0) * 0x101)
                                         & u32::from(
@@ -531,8 +533,8 @@ impl<'a> Signals<'a> {
                                 // add (tile, reversetrackdir) to 'to-be-updated' set when there is
                                 // ANY conventional signal in REVERSE direction
                                 // (if it is a presignal EXIT and it changes, it will be added to 'to-be-done' set later)
-                                if map.has_signal_on_trackdir(tile.0, reversedir.0) {
-                                    if is_pbs_signal(sig.0) {
+                                if map.has_signal_on_trackdir_raw(tile.0, reversedir.0) {
+                                    if is_pbs_signal(sig) {
                                         flags.set(SigFlag::PBS);
                                         crate::witness::hit(crate::witness::SIGNAL_PBS);
                                     }
@@ -546,16 +548,16 @@ impl<'a> Signals<'a> {
                                         return flags | SigFlags::FULL;
                                     }
                                 }
-                                if map.has_signal_on_trackdir(tile.0, trackdir.0)
-                                    && !map.oneway_signal(tile.0, track.0)
+                                if map.has_signal_on_trackdir_raw(tile.0, trackdir.0)
+                                    && !map.is_oneway_signal_raw(tile.0, track.0)
                                 {
                                     flags.set(SigFlag::PBS);
                                 }
 
                                 // if it is a presignal EXIT in OUR direction and we haven't found 2 green exits yes, do special check
                                 if !flags.test(SigFlag::MULTI_GREEN)
-                                    && map.is_presignal_exit(tile.0, track.0)
-                                    && map.has_signal_on_trackdir(tile.0, trackdir.0)
+                                    && map.is_presignal_exit_raw(tile.0, track.0)
+                                    && map.has_signal_on_trackdir_raw(tile.0, trackdir.0)
                                 {
                                     // found presignal exit
                                     if flags.test(SigFlag::EXIT) {
@@ -564,8 +566,9 @@ impl<'a> Signals<'a> {
                                     }
                                     flags.set(SigFlag::EXIT); // found at least one exit - allow for compiler optimizations
                                     crate::witness::hit(crate::witness::SIGNAL_EXIT);
-                                    if SignalState(map.signal_state_by_trackdir(tile.0, trackdir.0))
-                                        == SignalState::SIGNAL_STATE_GREEN
+                                    if SignalState(
+                                        map.get_signal_state_by_trackdir_raw(tile.0, trackdir.0),
+                                    ) == SignalState::SIGNAL_STATE_GREEN
                                     {
                                         // found green presignal exit
                                         if flags.test(SigFlag::GREEN) {
@@ -686,14 +689,14 @@ impl<'a> Signals<'a> {
         }) = access(|s| s.tbuset.get())
         {
             let map = self.map();
-            self.source_assert(|| map.has_signal_on_trackdir(tile.0, trackdir.0));
+            self.source_assert(|| map.has_signal_on_trackdir_raw(tile.0, trackdir.0));
 
             let track = trackdir_to_track(trackdir, check);
-            let sig = SignalType(map.signal_type(tile.0, track.0));
+            let sig = SignalType(map.get_signal_type_raw(tile.0, track.0));
             let mut newstate = SignalState::SIGNAL_STATE_GREEN;
 
             // Signal state of reserved path signals is handled by the reserve/unreserve process.
-            if is_pbs_signal(sig.0)
+            if is_pbs_signal(sig)
                 && (read!(self, rail, rail_reservation, tile.0) & track_to_track_bits(track, check))
                     != TrackBits::TRACK_BIT_NONE
             {
@@ -705,11 +708,11 @@ impl<'a> Signals<'a> {
             if flags.test(SigFlag::TRAIN) {
                 // train in the segment
                 newstate = SignalState::SIGNAL_STATE_RED;
-            } else if is_pbs_signal(sig.0) && flags.any(SigFlags::SPLIT | SigFlags::MULTI_ENTER) {
+            } else if is_pbs_signal(sig) && flags.any(SigFlags::SPLIT | SigFlags::MULTI_ENTER) {
                 // Turn path signals red if the segment has a junction or more than one way in.
                 newstate = SignalState::SIGNAL_STATE_RED;
             } else if sig == SignalType::SIGTYPE_COMBO
-                && map.has_signal_on_trackdir(tile.0, reverse_trackdir(trackdir, check).0)
+                && map.has_signal_on_trackdir_raw(tile.0, reverse_trackdir(trackdir, check).0)
             {
                 // is it a bidir combo? - then do not count its other signal direction as exit
                 crate::witness::hit(crate::witness::SIGNAL_COMBO);
@@ -719,7 +722,7 @@ impl<'a> Signals<'a> {
                     && (!flags.test(SigFlag::GREEN)
                         // only one green exit, and it is this one - so all other exits are red
                         || (!flags.test(SigFlag::MULTI_GREEN)
-                            && SignalState(map.signal_state_by_trackdir(
+                            && SignalState(map.get_signal_state_by_trackdir_raw(
                                 tile.0,
                                 reverse_trackdir(trackdir, check).0,
                             )) == SignalState::SIGNAL_STATE_GREEN))
@@ -727,7 +730,7 @@ impl<'a> Signals<'a> {
                     newstate = SignalState::SIGNAL_STATE_RED;
                     crate::witness::hit(crate::witness::SIGNAL_COMBO_RED);
                 }
-            } else if map.is_presignal_entry(tile.0, trackdir_to_track(trackdir, check).0)
+            } else if map.is_presignal_entry_raw(tile.0, trackdir_to_track(trackdir, check).0)
                 && flags.test(SigFlag::EXIT)
                 && !flags.test(SigFlag::GREEN)
             {
@@ -736,8 +739,8 @@ impl<'a> Signals<'a> {
             }
 
             // only when the state changes
-            if newstate != SignalState(map.signal_state_by_trackdir(tile.0, trackdir.0)) {
-                if map.is_presignal_exit(tile.0, trackdir_to_track(trackdir, check).0) {
+            if newstate != SignalState(map.get_signal_state_by_trackdir_raw(tile.0, trackdir.0)) {
+                if map.is_presignal_exit_raw(tile.0, trackdir_to_track(trackdir, check).0) {
                     // for pre-signal exits, add block to the global set
                     let exitdir = trackdir_to_exitdir(reverse_trackdir(trackdir, check), check);
                     add_to_set(|s| &mut s.globset, tile, exitdir); // do not check for full global set, first update all signals
@@ -798,11 +801,11 @@ impl<'a> Signals<'a> {
                 add_to_set(|s| &mut s.tbdset, tile, DiagDirection::INVALID_DIAGDIR); // we can safely start from wormhole centre
                 let other = TileIndex(read!(self, rail, other_tunnel_bridge_end, tile.0));
                 add_to_set(|s| &mut s.tbdset, other, DiagDirection::INVALID_DIAGDIR);
-            } else if kind == TileType::MP_RAILWAY && map.is_rail_depot(tile.0) {
+            } else if kind == TileType::MP_RAILWAY && map.is_rail_depot_raw(tile.0) {
                 // 'optimization assert' do not try to update signals in other cases
                 self.source_assert(|| {
                     dir == DiagDirection::INVALID_DIAGDIR
-                        || dir == DiagDirection(map.rail_depot_dir(tile.0))
+                        || dir == DiagDirection(map.get_rail_depot_direction_raw(tile.0))
                 });
                 add_to_set(|s| &mut s.tbdset, tile, DiagDirection::INVALID_DIAGDIR); // start from depot inside
             } else if (kind == TileType::MP_RAILWAY

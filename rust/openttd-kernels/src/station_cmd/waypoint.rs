@@ -130,7 +130,7 @@ impl Ctx<'_> {
         /* Non-plain rail type, no valid axis for waypoints. */
         if TileType((self.shared.tile_type)(tile.0)) != TileType::MP_RAILWAY
             || crate::services::RailTileType(
-                crate::map_func::World::new(self.shared).rail_tile_type(tile.0),
+                crate::map_func::World::new(self.shared).get_rail_tile_type_raw(tile.0),
             )
             .0 != RAIL_TILE_NORMAL
         {
@@ -656,7 +656,7 @@ impl Ctx<'_> {
                 id,
                 axis.0,
                 gfx,
-                crate::services::RailType(world().rail_type(tile.0)),
+                crate::services::RailType(world().get_rail_type_raw(tile.0)),
             );
             (self.s.set_custom_rail_index)(tile.0, specindex.value);
             self.set_rail_station_tile_flags(tile, spec);
