@@ -104,11 +104,7 @@ static_assert(PROP_AIRCRAFT_SPEED == 0x0C && CBID_VEHICLE_LENGTH == 0x11 && CBID
 static_assert(VSE_START == 1 && VSE_BREAKDOWN == 3 && VSE_RUNNING == 4 && VSE_TOUCHDOWN == 5 && VSE_RUNNING_16 == 7 && VSE_STOPPED_16 == 8);
 static_assert(HVOT_BUS == 4 && HVOT_TRUCK == 8);
 
-static void OPENTTD_RUST_CALL VehicleSvcPathfindingResult(OpenTTDVehicle *v, bool found) noexcept { VehicleOf(v)->HandlePathfindingResult(found); }
-static OpenTTDVehicleNewPosition OPENTTD_RUST_CALL VehicleSvcNewPosition(OpenTTDVehicle *v) noexcept
-{
-	GetNewVehiclePosResult gp = GetNewVehiclePos(VehicleOf(v));
-	return {.x = gp.x, .y = gp.y, .tile = gp.new_tile.base()};
+static void OPENTTD_RUST_CALL VehicleSvcPathfindingResult(OpenTTDVehicle *v, bool found) noexcept { VehicleOf(v)->HandlePathfindingResult(found); };
 }
 static void OPENTTD_RUST_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
 uint64_t RustTrainRailTypes(const Vehicle *v) noexcept { return Train::From(v)->GetRailTypes().base(); }
@@ -166,7 +162,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.assertions = false,
 #endif
 	.pathfinding_result = VehicleSvcPathfindingResult,
-	.new_position = VehicleSvcNewPosition,
 	.base_viewport = VehicleSvcBaseViewport,
 	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },
 	.set_max_age = RustVehicleSetMaxAge,

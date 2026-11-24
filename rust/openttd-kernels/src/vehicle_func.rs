@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `vehicle_func.h`: the custom sprite numbers, `IsCompanyBuildableVehicleType`,
-//! and both `CanVehicleUseStation` overloads (`vehicle.cpp`).
+//! both `CanVehicleUseStation` overloads (`vehicle.cpp`) and `GetNewVehiclePosResult`.
 use crate::airport::{AirportFTAClassFlag, AirportFTAClassFlags};
 use crate::engine_type::{AIR_CTOL, EngineID};
 use crate::station_type::{StationFacilities, StationFacility};
@@ -93,4 +93,17 @@ pub(crate) fn can_vehicle_use_station(
 #[must_use]
 pub fn is_company_buildable_vehicle_type(kind: VehicleType) -> bool {
     kind < VehicleType::VEH_COMPANY_END
+}
+
+/// Position information of a vehicle after it moved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct GetNewVehiclePosResult {
+    /// x position of the vehicle after moving.
+    pub x: i32,
+    /// y position of the vehicle after moving.
+    pub y: i32,
+    /// Current tile of the vehicle.
+    pub old_tile: crate::tile_type::TileIndex,
+    /// Tile of the vehicle after moving.
+    pub new_tile: crate::tile_type::TileIndex,
 }

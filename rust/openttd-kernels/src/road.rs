@@ -1883,7 +1883,7 @@ impl<'a> Game<'a> {
 
         if v.state() == RVSB_WORMHOLE {
             /* Vehicle is entering a depot or is on a bridge or in a tunnel */
-            let gp = service!(self.vs.new_position)(v.v);
+            let gp = crate::vehicle::get_new_vehicle_pos(v.v, self.map());
 
             if v.v.is_front_engine() {
                 if let Some(u) = self.road_veh_find_close_to(v, gp.x, gp.y, v.v.direction(), true) {
@@ -1892,9 +1892,9 @@ impl<'a> Game<'a> {
                 }
             }
 
-            if self.is_tile_type(TileIndex(gp.tile), TileType::MP_TUNNELBRIDGE)
+            if self.is_tile_type(gp.new_tile, TileType::MP_TUNNELBRIDGE)
                 && self
-                    .vehicle_enter_tile(v.v, TileIndex(gp.tile), gp.x, gp.y)
+                    .vehicle_enter_tile(v.v, gp.new_tile, gp.x, gp.y)
                     .test(VehicleEnterTileState::EnteredWormhole)
             {
                 /* Vehicle has just entered a bridge or tunnel */

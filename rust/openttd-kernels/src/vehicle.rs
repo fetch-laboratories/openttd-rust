@@ -82,15 +82,6 @@ pub const VEHICLE_LENGTH: u8 = crate::vehicle_type::VEHICLE_LENGTH as u8;
 /// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.
 pub const YEAR_TICKS: i64 = DAYS_IN_YEAR as i64 * DAY_TICKS as i64;
 
-/// `GetNewVehiclePos` result.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct NewPosition {
-    pub x: i32,
-    pub y: i32,
-    pub tile: u32,
-}
-
 /// `HandleBreakdown` result, then the vehicle status it leaves.
 #[derive(Clone, Copy)]
 pub struct Breakdown {
@@ -107,7 +98,6 @@ pub struct VehicleServices {
     pub map_log_x: extern "C" fn() -> u32,
     pub assertions: bool,
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
-    pub new_position: extern "C" fn(VehicleRef) -> NewPosition,
     /// `Vehicle::UpdateViewport(true)`.
     pub base_viewport: extern "C" fn(VehicleRef),
     /// Immutable process-wide vehicle resolver services.
@@ -198,6 +188,31 @@ impl VehicleServices {
     }
 }
 
+/// `GetNewVehiclePos`: get position information of a vehicle when moving one pixel in the
+/// direction it is facing.
+#[inline]
+#[must_use]
+pub(crate) fn get_new_vehicle_pos(
+    v: VehicleRef,
+    map: crate::map_func::Map,
+) -> crate::vehicle_func::GetNewVehiclePosResult {
+    const DELTA_COORD: [i8; 16] = [
+        -1, -1, -1, 0, 1, 1, 1, 0, /* x */
+        -1, 0, 1, 1, 1, 0, -1, -1, /* y */
+    ];
+
+    let direction = usize::from(v.direction().0);
+    let x = v.x_pos().wrapping_add(i32::from(DELTA_COORD[direction]));
+    let y = v.y_pos().wrapping_add(i32::from(DELTA_COORD[direction + 8]));
+
+    crate::vehicle_func::GetNewVehiclePosResult {
+        x,
+        y,
+        old_tile: v.tile(),
+        new_tile: map.tile_virt_xy(x.cast_unsigned(), y.cast_unsigned()),
+    }
+}
+
 /// `Vehicle::IsWaitingForUnbunching`: check whether a vehicle inside a depot is waiting
 /// for unbunching. True if the vehicle must continue waiting, or false if it may try to
 /// leave the depot. `is_in_depot` is the vehicle type's `IsInDepot()`.
@@ -240,18 +255,12 @@ impl VehicleServices {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVehicleNewPosition" ["probe"] => NewPosition {
-        x,
-        y,
-        tile,
-    };
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
         record_from_shell,
         tile_links,
         map_log_x,
         assertions,
         pathfinding_result,
-        new_position,
         base_viewport,
         newgrf,
         set_max_age,

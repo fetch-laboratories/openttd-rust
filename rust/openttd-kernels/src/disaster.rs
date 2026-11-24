@@ -352,7 +352,7 @@ impl<'a> World<'a> {
         }
     }
     fn move_flight(&self, v: Vehicle) {
-        let gp = (self.v.new_position)(v.vehicle());
+        let gp = crate::vehicle::get_new_vehicle_pos(v.vehicle(), self.map());
         self.update_position(v, gp.x, gp.y, self.flight(v));
     }
     fn effect_rel(v: Vehicle, x: i32, y: i32, z: i32, kind: u8) {
@@ -552,7 +552,7 @@ impl<'a> World<'a> {
             unsafe { ((*self.v.maintenance).breakdown_delay_write)(target.vehicle(), 140) };
         }
         (v.vehicle()).set_direction_raw((self.s.toward)(v.vehicle(), t.0, t.1));
-        let gp = (self.v.new_position)(v.vehicle());
+        let gp = crate::vehicle::get_new_vehicle_pos(v.vehicle(), self.map());
         let mut z = (v.vehicle()).z_pos();
         if dist <= TILE_SIZE && z > (target.vehicle()).z_pos() {
             z = z.wrapping_sub(1);
@@ -594,7 +594,7 @@ impl<'a> World<'a> {
         } else {
             0
         });
-        let gp = (self.v.new_position)(v.vehicle());
+        let gp = crate::vehicle::get_new_vehicle_pos(v.vehicle(), self.map());
         self.update_position(v, gp.x, gp.y, self.flight(v));
         if (leave_top && gp.x < -10 * TILE_SIZE as i32)
             || (!leave_top && gp.x > ((self.map().size_x() + 9) * TILE_SIZE - 1) as i32)
@@ -806,7 +806,7 @@ impl<'a> World<'a> {
     }
     fn destroyer(&self, v: Vehicle) -> bool {
         Self::increment_tick(v);
-        let gp = (self.v.new_position)(v.vehicle());
+        let gp = crate::vehicle::get_new_vehicle_pos(v.vehicle(), self.map());
         self.update_position(v, gp.x, gp.y, self.flight(v));
         if gp.x > ((self.map().size_x() + 9) * TILE_SIZE - 1) as i32 {
             return self.delete(v);
@@ -880,7 +880,7 @@ impl<'a> World<'a> {
                 crate::direction_type::INVALID_DIAGDIR,
             );
             if bits == u32::from(crate::track_type::TRACK_BIT_ALL) && !self.chance(90) {
-                let gp = (self.v.new_position)(v.vehicle());
+                let gp = crate::vehicle::get_new_vehicle_pos(v.vehicle(), self.map());
                 self.update_position(v, gp.x, gp.y, (v.vehicle()).z_pos());
                 return true;
             }

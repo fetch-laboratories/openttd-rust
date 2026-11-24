@@ -175,7 +175,6 @@ pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::Vehi
     map_log_x: unreachable0,
     assertions: false,
     pathfinding_result: unreachable2,
-    new_position: unreachable1,
     base_viewport: unreachable1,
     newgrf: unreachable0,
     set_max_age: unreachable2,

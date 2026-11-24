@@ -1377,7 +1377,6 @@ pub(crate) mod tests {
             map_log_x: unused(),
             assertions: unused(),
             pathfinding_result: unused(),
-            new_position: unused(),
             base_viewport: unused(),
             newgrf: unused(),
             set_max_age: unused(),

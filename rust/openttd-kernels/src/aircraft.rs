@@ -655,8 +655,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         crate::newgrf_vehicle::get_vehicle_property(self.vs.newgrf(), v, property, fallback)
     }
     /// `GetNewVehiclePos(v)`.
-    fn new_vehicle_pos(&self, v: Vehicle) -> crate::vehicle::NewPosition {
-        Self::call(|| (self.vs.new_position)(v.base()))
+    fn new_vehicle_pos(&self, v: Vehicle) -> crate::vehicle_func::GetNewVehiclePosResult {
+        crate::vehicle::get_new_vehicle_pos(v.base(), self.dims())
     }
     /// `GetDirectionTowards(v, x, y)`.
     fn get_direction_towards(&self, v: Vehicle, x: i32, y: i32) -> Direction {
@@ -1720,7 +1720,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                             let gp = self.new_vehicle_pos(v);
                             gp_x = gp.x;
                             gp_y = gp.y;
-                            gp_new_tile = TileIndex(gp.tile);
+                            gp_new_tile = gp.new_tile;
                         } else {
                             b.set_cur_speed(b.cur_speed() >> 1);
                             b.set_direction(newdir);
@@ -1740,7 +1740,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                         let gp = self.new_vehicle_pos(v);
                         gp_x = gp.x;
                         gp_y = gp.y;
-                        gp_new_tile = TileIndex(gp.tile);
+                        gp_new_tile = gp.new_tile;
                     }
                 }
 

@@ -36,11 +36,6 @@ struct OpenTTDVehicleNear {
 	OpenTTDVehicle *current;
 };
 struct OpenTTDEngine;
-struct OpenTTDVehicleNewPosition {
-	int32_t x;
-	int32_t y;
-	uint32_t tile;
-};
 struct OpenTTDVehicleMaintenanceServices;
 struct OpenTTDVehicleResolverServices;
 struct OpenTTDVehicleVisits;
@@ -50,7 +45,6 @@ struct OpenTTDVehicleServices {
 	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
 	bool assertions;
 	void (OPENTTD_RUST_CALL *pathfinding_result)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(pathfinding_result);
-	OpenTTDVehicleNewPosition (OPENTTD_RUST_CALL *new_position)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(new_position);
 	void (OPENTTD_RUST_CALL *base_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	const OpenTTDVehicleResolverServices *(*newgrf)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf);
 	void (*set_max_age)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_max_age);
