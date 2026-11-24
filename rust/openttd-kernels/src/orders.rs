@@ -4739,15 +4739,27 @@ impl Control {
         let last = record.last_station_visited_raw();
         if current.kind() == OT_GOTO_STATION && current.destination == last {
             self.delete_implicit(v);
+
+            /* Now both order indices point to the destination station, and we can start loading */
             let mut current = g.current(v);
             current.kind = OT_LOADING;
             g.put_current(v, current);
             g.update_timetable(v, true);
+
+            /* Furthermore add the Non Stop flag to mark that this station
+             * is the actual destination of the vehicle, which is (for example)
+             * necessary to be known for HandleTrainLoading to determine
+             * whether the train is lost or not; not marking a train lost
+             * that arrives at random stations is bad. */
             let mut current = g.current(v);
             current.kind = (current.kind & !0xc0) | 0xc0;
             g.put_current(v, current);
             return;
         }
+        /* We weren't scheduled to stop here. Insert an implicit order
+         * to show that we are stopping here.
+         * While only groundvehicles have implicit orders, e.g. aircraft might still enter
+         * the 'wrong' terminal when skipping orders etc. */
         let state = g.consist(v);
         let implicit = read_field!(state, implicit);
         let in_list = g.vehicle_order(v, implicit);
@@ -4755,6 +4767,7 @@ impl Control {
             && !in_list.is_some_and(|o| o.kind() == OT_IMPLICIT && o.destination == last)
         {
             let suppress = suppress_implicit(record);
+            /* Do not create consecutive duplicates of implicit orders */
             let previous = if implicit > 0 {
                 g.vehicle_order(v, implicit - 1)
             } else if g.count(v) > 1 {
@@ -4765,11 +4778,16 @@ impl Control {
             if !previous.is_some_and(|o| {
                 matches!(o.kind(), OT_GOTO_STATION | OT_IMPLICIT) && o.destination == last
             }) {
+                /* Prefer deleting implicit orders instead of inserting new ones,
+                 * so test whether the right order follows later. In case of only
+                 * implicit orders treat the last order in the list like an
+                 * explicit one, except if the overall number of orders surpasses
+                 * IMPLICIT_ORDER_ONLY_CAP. */
                 let mut target = i32::from(implicit);
                 let mut found = false;
                 while target != i32::from(read_field!(state, real)) || g.manual(v) == 0 {
                     let Some(order) = g.vehicle_order(v, target as u8) else {
-                        break;
+                        break; // No orders.
                     };
                     if order.kind() == OT_IMPLICIT && order.destination == last {
                         found = true;
@@ -4783,14 +4801,16 @@ impl Control {
                         target = 0;
                     }
                     if target == i32::from(read_field!(state, implicit)) {
-                        break;
+                        break; // Avoid infinite loop.
                     }
                 }
                 if found {
                     if suppress {
+                        /* Skip to the found order */
                         write_field!(state, implicit, target as u8);
                         g.invalidate_order(v, 0);
                     } else {
+                        /* Delete all implicit orders up to the station we just reached */
                         loop {
                             let order = g.vehicle_order(v, read_field!(state, implicit)).unwrap();
                             if order.kind() == OT_IMPLICIT && order.destination == last {
@@ -4799,12 +4819,15 @@ impl Control {
                             if order.kind() == OT_IMPLICIT {
                                 self.delete(v, read_field!(state, implicit));
                             } else {
+                                /* Skip non-implicit orders, e.g. service-orders */
                                 write_field!(
                                     state,
                                     implicit,
                                     read_field!(state, implicit).wrapping_add(1)
                                 );
                             }
+
+                            /* Wrapped around. */
                             if g.vehicle_order(v, read_field!(state, implicit)).is_none() {
                                 write_field!(state, implicit, 0);
                             }
@@ -4817,6 +4840,7 @@ impl Control {
                         g.count(v) < 254
                     })
                 {
+                    /* Insert new implicit order */
                     let order = Order {
                         kind: OT_IMPLICIT,
                         flags: 0,
@@ -4834,6 +4858,9 @@ impl Control {
                             read_field!(state, implicit).wrapping_sub(1)
                         );
                     }
+
+                    /* InsertOrder disabled creation of implicit orders for all vehicles with the same implicit order.
+                     * Reenable it for this vehicle */
                     assign_suppress_implicit(record, false);
                 }
             }
