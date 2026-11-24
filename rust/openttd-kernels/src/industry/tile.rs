@@ -111,7 +111,7 @@ impl TileServices {
     }
 }
 fn ambient(s: &Services) -> bool {
-    unsafe { s.shared().settings().ambient.read() }
+    s.shared().settings().ambient()
 }
 fn snd_play_tile_fx(sound: SoundID, tile: TileIndex, s: &Services) {
     (s.shared().play_sound)(tile.0, sound.0);

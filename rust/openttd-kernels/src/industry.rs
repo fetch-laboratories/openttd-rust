@@ -770,7 +770,7 @@ fn produce_industry_goods(entry: Entry, svc: &Services, builder: *mut Builder) {
         if chance16_i(1, 14, r) {
             let sounds = unsafe { (*indsp).random_sounds.len() } as u16;
             if sounds != 0
-                && unsafe { svc.shared().settings().ambient.read() }
+                && svc.shared().settings().ambient()
                 && (0..produced_count(owner)).any(|slot| unsafe {
                     (*produced(owner, slot)).history[usize::from(LAST_MONTH)].first > 0
                 })
@@ -868,7 +868,7 @@ pub(crate) unsafe fn on_tick_industry(builder: *mut Builder, services: *const Se
         if (*b).sound_ctr != 0 {
             (*b).sound_ctr = (*b).sound_ctr.wrapping_add(1);
             if (*b).sound_ctr == 75 {
-                if s.shared().settings().ambient.read() {
+                if s.shared().settings().ambient() {
                     (s.shared().play_sound)(
                         (*b).sound_tile,
                         u16::from(SoundFx::SND_37_LUMBER_MILL_2.0),
@@ -876,7 +876,7 @@ pub(crate) unsafe fn on_tick_industry(builder: *mut Builder, services: *const Se
                 }
             } else if (*b).sound_ctr == 160 {
                 (*b).sound_ctr = 0;
-                if s.shared().settings().ambient.read() {
+                if s.shared().settings().ambient() {
                     (s.shared().play_sound)(
                         (*b).sound_tile,
                         u16::from(SoundFx::SND_36_LUMBER_MILL_3.0),

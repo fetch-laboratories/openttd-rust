@@ -14,7 +14,14 @@
 //! lives across a service call. A tick procedure that ends its effect returns false where
 //! the original has `delete v; return false;`, and `RunEffect` (`src/effectvehicle.cpp`)
 //! deletes the shell after the export returns, with nothing run in between.
-#![allow(clippy::cast_possible_truncation, clippy::verbose_bit_mask)]
+#![allow(
+    clippy::cast_possible_truncation,
+    reason = "the original's integer stores into narrower members: progress = GB(r, 16, 3), spritenum = GB(Random(), 0, 2) + 1 and animation_state = anim_state"
+)]
+#![allow(
+    clippy::verbose_bit_mask,
+    reason = "the original's progress tests, such as (v->progress & 7) == 0"
+)]
 
 use crate::bitmath_func::gb;
 use crate::effectvehicle_func::EffectVehicleType;
@@ -62,25 +69,25 @@ impl EffectVehicle {
     #[allow(unsafe_code)]
     fn animation_state(self) -> u16 {
         // SAFETY: The shell's live owner (module contract).
-        unsafe { (*self.owner).animation_state }
+        unsafe { openttd_rust_effect_get_animation(self.owner) }
     }
     /// `EffectVehicle::SetAnimationState`: `animation_state = state`.
     #[allow(unsafe_code)]
     pub(crate) fn set_animation_state(self, state: u16) {
         // SAFETY: The shell's live owner (module contract).
-        unsafe { (*self.owner).animation_state = state };
+        unsafe { openttd_rust_effect_set_animation(self.owner, state) };
     }
     /// `animation_substate`.
     #[allow(unsafe_code)]
     fn animation_substate(self) -> u8 {
         // SAFETY: The shell's live owner (module contract).
-        unsafe { (*self.owner).animation_substate }
+        unsafe { openttd_rust_effect_get_substate(self.owner) }
     }
     /// `EffectVehicle::SetAnimationSubstate`: `animation_substate = state`.
     #[allow(unsafe_code)]
     pub(crate) fn set_animation_substate(self, state: u8) {
         // SAFETY: The shell's live owner (module contract).
-        unsafe { (*self.owner).animation_substate = state };
+        unsafe { openttd_rust_effect_set_substate(self.owner, state) };
     }
     /// `spritenum`, through the resolver table's reader.
     #[allow(unsafe_code)]
@@ -109,9 +116,10 @@ impl EffectVehicle {
         t.vehicles
             .update_position_and_viewport(self.record, || t.shared.map());
     }
-    /// `TileVirtXY(v->x_pos, v->y_pos)`, the coordinates converted to its `uint` parameters.
-    fn tile_virt_xy(self, t: &Tables) -> TileIndex {
-        t.shared.map().tile_virt_xy(
+    /// `TileVirtXY(v->x_pos, v->y_pos)` on the entry's map, the coordinates converted to its
+    /// `uint` parameters.
+    fn tile_virt_xy(self, world: &crate::map_func::World) -> TileIndex {
+        world.dimensions.tile_virt_xy(
             self.record.x_pos().cast_unsigned(),
             self.record.y_pos().cast_unsigned(),
         )
@@ -151,8 +159,9 @@ fn chimney_smoke_tick(v: EffectVehicle, t: &Tables) -> bool {
     if progress > 0 {
         v.record.set_progress(progress - 1);
     } else {
-        let tile = v.tile_virt_xy(t);
-        if !crate::tile_map::is_tile_type(t.shared, tile, TileType::MP_INDUSTRY) {
+        let world = crate::map_func::World::new(t.shared);
+        let tile = v.tile_virt_xy(&world);
+        if !world.is_tile_type(tile, TileType::MP_INDUSTRY) {
             return false;
         }
 
@@ -651,7 +660,7 @@ fn bubble_tick(v: EffectVehicle, t: &Tables) -> bool {
         if v.record.z_pos() > 180 || chance16_i(1, 96, t.shared.random()) {
             spritenum = 5;
             v.set_spritenum(t, spritenum);
-            if sound_ambient(t) {
+            if t.shared.settings().ambient() {
                 snd_play_vehicle_fx(SoundFx::SND_2F_BUBBLE_GENERATOR_FAIL, v, t);
             }
         }
@@ -660,12 +669,13 @@ fn bubble_tick(v: EffectVehicle, t: &Tables) -> bool {
 
     if b.y == 4 && b.x == 2 {
         anim_state += 1;
-        if sound_ambient(t) {
+        if t.shared.settings().ambient() {
             snd_play_vehicle_fx(SoundFx::SND_31_BUBBLE_GENERATOR_SUCCESS, v, t);
         }
 
-        let tile = v.tile_virt_xy(t);
-        if crate::tile_map::is_tile_type(t.shared, tile, TileType::MP_INDUSTRY)
+        let world = crate::map_func::World::new(t.shared);
+        let tile = v.tile_virt_xy(&world);
+        if world.is_tile_type(tile, TileType::MP_INDUSTRY)
             && crate::industry_map::get_industry_gfx(t.shared, tile)
                 == IndustryGfx::GFX_BUBBLE_CATCHER
         {
@@ -687,14 +697,6 @@ fn bubble_tick(v: EffectVehicle, t: &Tables) -> bool {
     v.update_position_and_viewport(t);
 
     true
-}
-
-/// `_settings_client.sound.ambient`, one field-sized load.
-#[allow(unsafe_code)]
-fn sound_ambient(t: &Tables) -> bool {
-    // SAFETY: The catalog addresses the process-wide setting, serialized by the game-state
-    // mutex.
-    unsafe { t.shared.settings().ambient.read() }
 }
 
 /// `SndPlayVehicleFx(sound, v)`.
@@ -1253,9 +1255,10 @@ mod tests {
     }
 
     /// `SetAnimationState` and `SetAnimationSubstate` on a created effect write the owner
-    /// the allocation returned for its shell. Binds the process-wide creation
+    /// the allocation returned for its shell, as the shell's save/load readers read it. Binds the process-wide creation
     /// table, so it runs in a child process.
     #[test]
+    #[allow(unsafe_code)]
     fn created_effect_animation_setters_write_the_shell_owner() {
         if crate::services_assert::isolate_test_check(
             "effect::tests::created_effect_animation_setters_write_the_shell_owner",
@@ -1284,11 +1287,13 @@ mod tests {
         assert_eq!(v.shell(), shell.cast());
         v.set_animation_state(0xBEEF);
         v.set_animation_substate(0xA5);
-        let shell_owner = EffectVehicle {
-            record: v.record,
-            owner,
+        // SAFETY: The owner the allocation returned, live for the rest of the test.
+        let (animation_state, animation_substate) = unsafe {
+            (
+                openttd_rust_effect_get_animation(owner),
+                openttd_rust_effect_get_substate(owner),
+            )
         };
-        assert_eq!(shell_owner.animation_state(), 0xBEEF);
-        assert_eq!(shell_owner.animation_substate(), 0xA5);
+        assert_eq!((animation_state, animation_substate), (0xBEEF, 0xA5));
     }
 }

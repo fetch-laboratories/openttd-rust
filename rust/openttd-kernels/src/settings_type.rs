@@ -121,6 +121,12 @@ impl SettingAddresses {
         // game-state mutex.
         crate::vehicle_type::AccelerationModel(unsafe { self.roadveh_acceleration_model.read() })
     }
+    /// `_settings_client.sound.ambient`; one field-sized load.
+    pub(crate) fn ambient(&self) -> bool {
+        // SAFETY: The catalog addresses the process-wide setting, serialized by the
+        // game-state mutex.
+        unsafe { self.ambient.read() }
+    }
     /// `_settings_game.vehicle.road_side`; one field-sized load.
     pub(crate) fn road_side(&self) -> u8 {
         // SAFETY: The catalog addresses the process-wide setting, serialized by the
