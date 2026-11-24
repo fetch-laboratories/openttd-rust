@@ -1266,10 +1266,28 @@ crate::abi::layouts! {
     "OpenTTDIndustryListEntry" ["station_service"] => IndustryListEntry { distance, industry, id };
     "OpenTTDStationRadiusFacilities" ["station_service"] => RadiusFacilities { bus, truck, train, ship, airport };
     "OpenTTDStationCatchmentServices" ["station_service"] => CatchmentServices {
-        shared, airport, industry_tile, object, town, station, visits, station_count, station_if_valid,
-        next_station, owner, station_owner, id, associated_industry, radius_facilities,
-        modified_catchment, spread, industry_by_id, industry_id, industry_owner,
-        industry_neutral, next_industry,
+        shared,
+        airport,
+        industry_tile,
+        object,
+        town,
+        station,
+        visits,
+        station_count,
+        station_if_valid,
+        next_station,
+        owner,
+        station_owner,
+        id,
+        associated_industry,
+        radius_facilities,
+        modified_catchment,
+        spread,
+        industry_by_id,
+        industry_id,
+        industry_owner,
+        industry_neutral,
+        next_industry,
     };
 }
 

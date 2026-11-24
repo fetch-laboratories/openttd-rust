@@ -1422,11 +1422,12 @@ extern const TileTypeProcs _tile_type_station_procs = {
 #include "abi-visit-OpenTTDStationDefinitionServices.hpp"
 #include "abi-visit-OpenTTDStationCatchmentServices.hpp"
 #include "abi-visit-OpenTTDStationLifecycleServices.hpp"
+#include "abi-visit-OpenTTDBaseStationServices.hpp"
 static const OpenTTDBaseStationServices _rust_base_station_services{
 	.xy = RustStationLocation,
 };
 [[maybe_unused]] static const bool _rust_base_station_bound = (openttd_rust_base_station_bind(&_rust_base_station_services), true);
-#include "abi-visit-OpenTTDBaseStationServices.hpp"
+
 bool CheckAbi_station_cmd()
 {
 	return AbiServicesComplete(_rust_base_station_services) &&
