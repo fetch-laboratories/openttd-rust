@@ -1,5 +1,11 @@
 [
   {
+    "kind": "carry",
+    "tool": "clippy",
+    "from": "rust/openttd-kernels/src/engine_capabilities.rs | fn openttd_rust_engine_capacity | disallowed_macros | 4a33eacd5fa65f2b2e28",
+    "to": "rust/openttd-kernels/src/engine_capabilities.rs | fn determine_capacity | disallowed_macros | 4a33eacd5fa65f2b2e28"
+  },
+  {
     "kind": "growth",
     "counter": "generated_records",
     "added": {
