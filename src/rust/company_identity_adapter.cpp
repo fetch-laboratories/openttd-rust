@@ -80,6 +80,7 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.engine_renew = RustCompanyEngineRenew,
 	.engine_renew_money = RustCompanyEngineRenewMoney,
 	.engine_renew_months = RustCompanyEngineRenewMonths,
+	.renewal_head = RustCompanyRenewalHead,
 	.name_id = Identity_name_id,
 	.set_name_id = Identity_set_name_id,
 	.name_parts = Identity_name_parts,

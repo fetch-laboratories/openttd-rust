@@ -108,8 +108,8 @@
     "after": 1,
     "site": "rust/openttd-kernels/src/autoreplace_func.rs | fn engine_replacement_for_company | allow unsafe_code",
     "operation": "autoreplace_func::engine_replacement_for_company",
-    "source_contract": "`EngineReplacementForCompany(c, engine, group, replace_when_old)` (src/autoreplace_func.h) passes the live company's `RenewalList()` head and the optional out-value to `EngineReplacement`, which `fleet::engine_replacement` ports; the fork's `RenewalList()` is the Rust-owned head slot that `FleetGroup_head` returns for the company's index.",
-    "reason": "New port of `EngineReplacementForCompany` (plan #985 decision 3): the head slot is read in place through the group table's `head` binding, and `fleet::engine_replacement` is an `unsafe fn` over that list head and the `replace_when_old` out-pointer, which keep their raw forms until `fleet.rs`'s own pass.",
+    "source_contract": "`EngineReplacementForCompany(c, engine, group, replace_when_old)` (src/autoreplace_func.h) passes the live company's `RenewalList()` head and the optional out-value to `EngineReplacement`, which `fleet::engine_replacement` ports; the fork's `RenewalList()` reads the Rust-owned head slot that the company's `renewal_head` owner names, which `company_identity::Services::renewal_head` returns for the resolved company.",
+    "reason": "New port of `EngineReplacementForCompany` (plan #985 decision 3): the head slot is read in place, and `fleet::engine_replacement` is an `unsafe fn` over that list head and the `replace_when_old` out-pointer, which keep their raw forms until `fleet.rs`'s own pass.",
     "retiring_owner": "#734",
     "retirement_condition": "Retires when `fleet.rs`'s pass gives `engine_replacement` a safe typed signature, or the company and its renewal list move to Rust."
   },

@@ -1227,6 +1227,7 @@ pub(crate) const COMPANY_IDENTITY: crate::company_identity::Services =
         engine_renew: unreachable1,
         engine_renew_money: unreachable1,
         engine_renew_months: unreachable1,
+        renewal_head: unreachable1,
         name_id: unreachable1,
         set_name_id: unreachable2,
         name_parts: unreachable1,

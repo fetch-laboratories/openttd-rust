@@ -34,6 +34,7 @@ inline void OpenTTDSetCurrentCompany(CompanyID company) noexcept { _current_comp
 inline bool RustCompanyEngineRenew(const Company *company) noexcept { return company->settings.engine_renew; }
 inline uint32_t RustCompanyEngineRenewMoney(const Company *company) noexcept { return company->settings.engine_renew_money; }
 inline int16_t RustCompanyEngineRenewMonths(const Company *company) noexcept { return company->settings.engine_renew_months; }
+inline void *RustCompanyRenewalHead(const Company *company) noexcept { return company->renewal_head.state; }
 inline bool RustCompanyServiceIntervalPercent(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->settings.vehicle.servint_ispercent; }
 inline CompanySettings *RustCompanySettings(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings; }
 inline VehicleDefaultSettings *RustCompanyVehicleDefaults(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings.vehicle; }

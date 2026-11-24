@@ -22,6 +22,7 @@ struct OpenTTDCompanyIdentityServices {
 	bool (OPENTTD_RUST_CALL *engine_renew)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(engine_renew);
 	uint32_t (OPENTTD_RUST_CALL *engine_renew_money)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(engine_renew_money);
 	int16_t (OPENTTD_RUST_CALL *engine_renew_months)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(engine_renew_months);
+	void * (OPENTTD_RUST_CALL *renewal_head)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(renewal_head);
 	uint32_t (OPENTTD_RUST_CALL *name_id)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(name_id);
 	void (OPENTTD_RUST_CALL *set_name_id)(Company *c, uint32_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_name_id);
 	uint32_t (OPENTTD_RUST_CALL *name_parts)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(name_parts);
