@@ -98,7 +98,7 @@ pub struct Services {
     cargo_bitnum: unsafe extern "C" fn(u8) -> u8,
     livery: unsafe extern "C" fn(u16, u8, u16, V) -> *const c_void,
     company_info: unsafe extern "C" fn(u8, *const c_void) -> u32,
-    cached_override: unsafe extern "C" fn(V) -> Group,
+    pub(crate) cached_override: unsafe extern "C" fn(V) -> Group,
     write_override: unsafe extern "C" fn(V, Group),
     random_bits: unsafe extern "C" fn(V) -> u16,
     waiting: unsafe extern "C" fn(V) -> u8,
@@ -428,7 +428,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                             user_data |= crate::train::Handle::from_vehicle(
                                 crate::vehicle::VehicleRef::of(u),
                             )
-                            .get_user_def_data() as u8;
+                            .user_def_data();
                         }
                         if crate::engine_capabilities::openttd_rust_engine_can_carry_abi(
                             s.capabilities,
@@ -575,6 +575,15 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_fill(s: &Services, v: V) {
             (*(s.cache)(v)).cache_valid == (1 << NCVV_END) - 1,
         );
     }
+}
+/// `UsesWagonOverride` (`newgrf_engine.cpp`): check if a wagon is currently using a wagon
+/// override.
+pub(crate) fn uses_wagon_override(s: &Services, v: VehicleRef) -> bool {
+    crate::services_assert::assert_with(|| {
+        v.vehicle_type() == crate::vehicle_type::VehicleType::VEH_TRAIN
+    });
+    // SAFETY: A live record and the immutable binding; one field read.
+    !unsafe { (s.cached_override)(v.0.as_ptr()) }.is_null()
 }
 unsafe fn wagon_override(s: &Services, id: u16, cargo: u8, overriding: u16) -> Group {
     let engine = unsafe { (s.engine_by_id)(id) };
@@ -1012,10 +1021,10 @@ pub unsafe extern "C" fn openttd_rust_vehicle_randomise(s: &Services, v: V, trig
 unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
     unsafe {
         match kind {
-            0 => crate::train::openttd_rust_train_current_max_speed(
-                crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
-                (s.train_services)(),
+            0 => crate::train::get_current_max_speed(
+                &*(s.train_services)(),
                 s.shared,
+                crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
             ),
             1 => crate::road::current_max_speed(s.shared, handle(v)),
             2 => crate::ship_control::current_max_speed(
@@ -1344,7 +1353,8 @@ unsafe fn variable(
                         );
                         let types =
                             crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
-                                .get_railtypes();
+                                .railtypes()
+                                .0;
                         return (u32::from((s.rail_catenary)(rt)) * 0x200)
                             | (u32::from((s.powered_rail)(types, rt)) * 0x100)
                             | u32::from(crate::type_registry::openttd_rust_rail_reverse(
@@ -1559,8 +1569,8 @@ unsafe fn variable(
                 let mut flags = 0u32;
                 if kind() == 0 {
                     let t = crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v));
-                    let f = t.get_flags();
-                    let wagon = f & crate::train::VRF_POWERED_WAGON != 0;
+                    let f = t.flags();
+                    let wagon = f.test(crate::train::VehicleRailFlag::PoweredWagon);
                     let u = if wagon {
                         crate::train::Handle::from_vehicle(
                             crate::vehicle::VehicleRef::of(v).first(),
@@ -1570,11 +1580,11 @@ unsafe fn variable(
                     };
                     let rt = ((&*(s.ground)()).rail_type)((h).tile_raw());
                     let powered = crate::ground_vehicle::is_engine(h.subtype()) || wagon;
-                    let power = (s.powered_rail)(u.get_railtypes(), rt);
+                    let power = (s.powered_rail)(u.railtypes().0, rt);
                     if powered {
                         flags |= if power { 1 << 5 } else { 1 << 6 };
                     }
-                    if f & crate::train::VRF_REVERSED != 0 {
+                    if f.test(crate::train::VehicleRailFlag::Reversed) {
                         flags |= 1 << 8;
                     }
                 }
@@ -1611,8 +1621,10 @@ unsafe fn variable(
                     u32::from((s.load_ticks)(v))
                 } else {
                     match kind() {
-                        0 => crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
-                            .get_wait_counter() as u32,
+                        0 => u32::from(
+                            crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                                .wait_counter(),
+                        ),
                         3 => u32::from(
                             (*crate::vehicle::VehicleRef::of(v).aircraft_state()).turn_counter,
                         ),
@@ -1684,9 +1696,8 @@ unsafe fn variable(
                 }
                 return u32::from(
                     if crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
-                        .get_flags()
-                        & crate::train::VRF_FLIPPED
-                        != 0
+                        .flags()
+                        .test(crate::train::VehicleRailFlag::Flipped)
                     {
                         crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM_REVERSED
                     } else {
@@ -1731,13 +1742,17 @@ unsafe fn variable(
         match kind() {
             0 => match variable {
                 0xe2 => {
-                    return crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
-                        .get_track() as u32;
+                    return u32::from(
+                        crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
+                            .track()
+                            .0,
+                    );
                 }
                 0xe6 => {
                     let bits =
                         crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
-                            .get_railtypes();
+                            .railtypes()
+                            .0;
                     return u32::from(
                         crate::base_bitset_type::get_nth_set_bit(bits, 0)
                             .unwrap_or(crate::rail_type::INVALID_RAILTYPE),
@@ -1926,22 +1941,6 @@ pub(crate) unsafe fn callback(
             parent: override_parent.then_some(parent),
             regs100,
         },
-    )
-}
-/// Direct signed property entry (unsigned users use the base vehicle table).
-pub(crate) unsafe fn signed_property(
-    vs: &VehicleServices,
-    v: VehicleRef,
-    property: u8,
-    fallback: i32,
-) -> i32 {
-    get_engine_property(
-        vs.newgrf(),
-        v.engine_type(),
-        PropertyID(property),
-        fallback,
-        Some(v),
-        true,
     )
 }
 /// `TestVehicleBuildProbability(..., Reversed).has_value()` still consumes its RNG.

@@ -124,11 +124,9 @@ inline OpenTTDTestRailYapf Run(uint32_t limit, uint32_t curve = 29, bool cache =
 	map.order_state.current.max_speed = 100;
 	map.state->track = TRACK_BIT_X;
 	map.record.vehstatus = 1;
-	map.record.direction = 0;
+	map.record.direction = 1; // DIR_NE: TRACK_X runs as TRACKDIR_X_NE.
 	map.rail.rail_reservation = [](uint32_t) noexcept { follow_reads.push_back('r'); return TRACK_BIT_NONE; };
 	map.physics.rail_speed = [](RailType) noexcept -> uint16_t { follow_reads.push_back('s'); return 0; };
-	map.train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
-	map.train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
 	map.pbs.try_track = [](uint32_t tile, uint8_t track) noexcept { return Write(tile, track, 1) != 0; };
 	map.pbs.unreserve_track = [](uint32_t tile, uint8_t track) noexcept { Write(tile, track, 2); };
 	map.pbs.blocking = [](uint32_t, uint8_t) noexcept { return false; };

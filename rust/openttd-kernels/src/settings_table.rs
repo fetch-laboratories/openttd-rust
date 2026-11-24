@@ -260,15 +260,13 @@ fn update_consists(s: &Services) {
             || crate::ground_vehicle::is_free_wagon(subtype)
         {
             hit(witness::SETTINGS_CONSISTS);
-            // SAFETY: Process-lifetime tables; the live train shell is resolved per call.
-            unsafe {
-                crate::train::openttd_rust_train_consist_changed(
-                    crate::train::Handle::from_vehicle(v),
-                    crate::train::CCF_TRACK,
-                    train_leaves(s),
-                    s.shared,
-                );
-            }
+            crate::train::consist_changed(
+                // SAFETY: The movement registry holds the process-lifetime train leaves.
+                unsafe { &*train_leaves(s) },
+                s.shared,
+                crate::train::Handle::from_vehicle(v),
+                crate::train::CCF_TRACK,
+            );
         }
     });
     invalidate_window_classes_data(WindowClass::WC_BUILD_VEHICLE, 0, false);
@@ -288,8 +286,9 @@ fn train_acceleration_model_changed(s: &Services) {
             hit(witness::SETTINGS_TRAIN_ACCELERATION);
             let id = crate::train::Handle::from_vehicle(v);
             // SAFETY: The movement registry holds the process-lifetime train leaves.
-            let limit = crate::train::curve_speed_limit(id, unsafe { &*train_leaves(s) }, s.shared);
-            id.set_cached_max_curve_speed(u64::from(limit));
+            let limit =
+                crate::train::get_curve_speed_limit(unsafe { &*train_leaves(s) }, s.shared, id);
+            id.set_cached_max_curve_speed(limit);
             crate::train::update_acceleration(id);
         }
     });

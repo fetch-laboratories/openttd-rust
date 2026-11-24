@@ -5,248 +5,75 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete train control. Canonical private fields are accessed only for one scalar
-//! operation; no Rust reference into an owner or world object crosses a callback.
-#![warn(clippy::undocumented_unsafe_blocks)]
+//! Handling of trains (`train_cmd.cpp`) and the `Train` members of `train.h`.
+//!
+//! A train part is a [`Handle`]: its canonical vehicle record and the train owner its native
+//! shell holds. Both are live for the synchronous entry that resolved them, and deletion
+//! invalidates both. Fields are read and written field-sized at the original's observation
+//! points; no Rust reference into a record or owner crosses a callback.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    clippy::too_many_lines,
-    clippy::too_many_arguments,
-    clippy::similar_names,
-    clippy::many_single_char_names,
-    clippy::items_after_statements,
-    clippy::if_not_else,
-    clippy::collapsible_if,
-    clippy::verbose_bit_mask
+    clippy::too_many_lines
 )]
-use crate::direction_type::DiagDirection;
-use crate::direction_type::{DirDiff, Direction};
-use crate::order_type::{
-    OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
-    OT_NOTHING, OrderStopLocation, OrderType,
+use crate::company_type::Owner;
+use crate::direction_func::{
+    axis_to_diag_dir, change_dir, diag_dir_to_axis, diag_dir_to_dir, dir_difference,
+    dir_to_diag_dir, is_valid_diag_direction, reverse_diag_dir, reverse_dir,
 };
+use crate::direction_type::{Axis, DiagDirection, DirDiff, Direction};
+use crate::engine_type::{EngineID, EngineMiscFlag, EngineMiscFlags, VE_DISABLE_WAGON_POWER};
+use crate::ground_vehicle::{AccelStatus, GroundVehicleFlags};
+use crate::map_func::{Map, World};
+use crate::movement::CachedTable;
+use crate::newgrf_callbacks::{
+    CALLBACK_FAILED, CBID_VEHICLE_LENGTH, VehicleCallbackMask, VehicleCallbackMasks,
+};
+use crate::newgrf_config::GRFBug;
+use crate::newgrf_debug::invalidate_newgrf_inspect_window;
+use crate::newgrf_properties::PropertyID;
+use crate::news_func::{add_tile_news_item, add_vehicle_advice_news_item, add_vehicle_news_item};
+use crate::news_type::{AdviceType, NewsType};
+use crate::order_type::{OrderNonStopFlag, OrderStopLocation, OrderType};
+use crate::orders::Closest;
+use crate::pathfinder_type::FindDepotData;
+use crate::pbs::Pbs;
+use crate::rail_type::{RailType, RailTypes};
 use crate::raw_field::{read_field, write_field};
+use crate::script_event_types::{CrashReason, ScriptEvent};
 use crate::services::Services;
-use crate::settings_type::SettingAddresses;
-use crate::station_type::StationHadVehicleOfType;
-const HVOT_TRAIN: StationHadVehicleOfType = StationHadVehicleOfType::HVOT_TRAIN;
-use crate::station_type::StationID;
-use crate::tile_map::is_tile_type;
-use crate::tile_type::{TILE_SIZE, TileIndex};
-use crate::track_type::TrackBits;
+use crate::signal_func::SigSegState;
+use crate::signal_type::SignalType;
+use crate::sound_type::{SoundFx, SoundID};
+use crate::sprites::PAL_NONE;
+use crate::station_type::{StationHadVehicleOfType, StationID, StationType};
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::StringParameterData::Integer;
+use crate::table::strings::{
+    STR_ERROR_CAN_T_REVERSE_DIRECTION_RAIL_VEHICLE_MULTIPLE_UNITS,
+    STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT, STR_NEWGRF_BROKEN,
+    STR_NEWGRF_BROKEN_CAPACITY, STR_NEWS_FIRST_TRAIN_ARRIVAL, STR_NEWS_TRAIN_CRASH,
+    STR_NEWS_TRAIN_IS_STUCK,
+};
+use crate::tile_cmd::{VehicleEnterTileState, VehicleEnterTileStates};
+use crate::tile_type::{INVALID_TILE, TILE_SIZE, TileIndex, TileType};
+use crate::track_type::{Track, TrackBits, TrackStatus, Trackdir, TrackdirBits};
+use crate::train_reservation as reservation;
 use crate::train_state::State;
-use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
-use crate::vehicle_base::{VehState, VehStates};
-use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH};
-/// Native identity and canonical scalar owner, resolved together once per entry or link.
-/// Neither pointer permits a Rust borrow to survive a callback. Deletion invalidates both.
-/// Each entry keeps `owner` live and serialized for the `raw_field` accesses below.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Handle {
-    pub record: *mut crate::vehicle::OpenTTDVehicle,
-    pub owner: *mut State,
-}
-impl PartialEq for Handle {
-    fn eq(&self, other: &Self) -> bool {
-        self.record == other.record
-    }
-}
-impl Eq for Handle {}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Depot {
-    pub tile: u32,
-    pub length: u32,
-}
-impl Handle {
-    /// Canonical record carried by this live train handle.
-    pub(crate) fn vehicle(self) -> VehicleRef {
-        // SAFETY: Entries and topology reads supply a live non-null train record.
-        unsafe { VehicleRef(std::ptr::NonNull::new_unchecked(self.record)) }
-    }
-    /// `TrainHandle(Train::From(v))`: the handle of a vehicle that is a train, with
-    /// `Train::From`'s type assertion.
-    pub(crate) fn from_vehicle(v: VehicleRef) -> Self {
-        crate::services_assert::assert_with(|| {
-            v.vehicle_type() == crate::vehicle_type::VehicleType::VEH_TRAIN
-        });
-        Self {
-            record: v.0.as_ptr(),
-            owner: read_field!(v.0.as_ptr(), train),
-        }
-    }
-    pub(crate) fn from_record(record: *mut crate::vehicle::OpenTTDVehicle) -> Self {
-        if record.is_null() {
-            Self::NONE
-        } else {
-            Self {
-                record,
-                owner: read_field!(record, train),
-            }
-        }
-    }
-    pub(crate) fn next(self) -> Self {
-        Self::from_record(read_field!(self.record, next))
-    }
-    pub(crate) fn previous(self) -> Self {
-        Self::from_record(read_field!(self.record, previous))
-    }
-    pub(crate) fn first(self) -> Self {
-        Self::from_record(self.vehicle().first().0.as_ptr())
-    }
-    pub(crate) fn last(self) -> Self {
-        Self::from_record(self.vehicle().last().0.as_ptr())
-    }
-    pub(crate) fn next_vehicle(self) -> Self {
-        self.vehicle()
-            .next_vehicle()
-            .map_or(Self::NONE, |v| Self::from_record(v.0.as_ptr()))
-    }
-    pub(crate) fn front(self) -> u8 {
-        u8::from(crate::vehicle_base::is_front_engine(
-            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type()),
-            self.vehicle().subtype(),
-        ))
-    }
-    pub(crate) fn articulated(self) -> u8 {
-        u8::from(crate::vehicle_base::is_articulated_part(
-            crate::vehicle_base::is_ground_vehicle(self.vehicle().vehicle_type()),
-            self.vehicle().subtype(),
-        ))
-    }
-    pub(crate) fn multiheaded(self) -> u8 {
-        u8::from(crate::ground_vehicle::is_multiheaded(
-            self.vehicle().subtype(),
-        ))
-    }
-    pub(crate) fn shell(self) -> *mut std::ffi::c_void {
-        VehicleRef::shell_from_record(self.record).cast()
-    }
-    pub(crate) const NONE: Self = Self {
-        record: std::ptr::null_mut(),
-        owner: std::ptr::null_mut(),
-    };
-}
-impl Default for Handle {
-    fn default() -> Self {
-        Self::NONE
-    }
-}
-impl Handle {
-    pub(crate) fn set_suppress_implicit(self, value: bool) {
-        let mask = 1 << crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
-        let flags = read_field!(self.vehicle().ground(), flags);
-        write_field!(
-            self.vehicle().ground(),
-            flags,
-            if value { flags | mask } else { flags & !mask }
-        );
-    }
-    pub(crate) fn clear_stuck(self) {
-        self.set_flags(self.get_flags() & !(1 << 8));
-    }
-    pub(crate) fn stuck(self) -> bool {
-        self.get_flags() & (1 << 8) != 0
-    }
+use crate::transport_type::TransportType;
+use crate::vehicle::{EngineRef, RailVehicleTypes, VehicleRef, VehicleServices, maintenance};
+use crate::vehicle_base::{ClosestDepot, VehState};
+use crate::vehicle_gui::VehicleInvalidateWindowData;
+use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH, VehicleID, VehicleType};
+use crate::widgets::vehicle_widget::VehicleViewWidgets;
+use crate::window_func::{
+    invalidate_window_data, set_window_classes_dirty, set_window_dirty, set_window_widget_dirty,
+};
+use crate::window_type::{WindowClass, WindowNumber};
 
-    pub(crate) fn track(self) -> u8 {
-        self.get_track() as u8
-    }
-    pub(crate) fn wait_inc(self) -> u16 {
-        let next = (self.get_wait_counter() as u16).wrapping_add(1);
-        self.set_wait_counter(u64::from(next));
-        next
-    }
-
-    fn flag(self, bit: u8) -> bool {
-        self.get_flags() & (1 << bit) != 0
-    }
-
-    pub(crate) fn get_flags(self) -> u64 {
-        u64::from(self.flags().0)
-    }
-    /// `Train::flags`.
-    pub(crate) fn flags(self) -> VehicleRailFlags {
-        read_field!(self.owner, flags)
-    }
-    pub(crate) fn set_flags(self, value: u64) {
-        write_field!(self.owner, flags, VehicleRailFlags(value as u16));
-    }
-    pub(crate) fn get_crash_anim_pos(self) -> u64 {
-        u64::from(read_field!(self.owner, crash_anim_pos))
-    }
-    pub(crate) fn set_crash_anim_pos(self, value: u64) {
-        write_field!(self.owner, crash_anim_pos, value as u16);
-    }
-    pub(crate) fn get_wait_counter(self) -> u64 {
-        u64::from(read_field!(self.owner, wait_counter))
-    }
-    pub(crate) fn set_wait_counter(self, value: u64) {
-        write_field!(self.owner, wait_counter, value as u16);
-    }
-    pub(crate) fn get_compatible_railtypes(self) -> u64 {
-        read_field!(self.owner, compatible_railtypes).0
-    }
-    pub(crate) fn set_compatible_railtypes(self, value: u64) {
-        write_field!(
-            self.owner,
-            compatible_railtypes,
-            crate::rail_type::RailTypes(value)
-        );
-    }
-    pub(crate) fn get_railtypes(self) -> u64 {
-        read_field!(self.owner, railtypes).0
-    }
-    pub(crate) fn set_railtypes(self, value: u64) {
-        write_field!(self.owner, railtypes, crate::rail_type::RailTypes(value));
-    }
-    pub(crate) fn get_track(self) -> u64 {
-        u64::from(read_field!(self.owner, track).0)
-    }
-    pub(crate) fn set_track(self, value: u64) {
-        write_field!(self.owner, track, crate::track_type::TrackBits(value as u8));
-    }
-    pub(crate) fn get_force_proceed(self) -> u64 {
-        u64::from(read_field!(self.owner, force_proceed).0)
-    }
-    pub(crate) fn set_force_proceed(self, value: u64) {
-        write_field!(self.owner, force_proceed, TrainForceProceeding(value as u8));
-    }
-    pub(crate) fn get_cached_tilt(self) -> u64 {
-        u64::from(read_field!(self.owner, cached_tilt))
-    }
-    pub(crate) fn set_cached_tilt(self, value: u64) {
-        write_field!(self.owner, cached_tilt, value != 0);
-    }
-    pub(crate) fn get_user_def_data(self) -> u64 {
-        u64::from(read_field!(self.owner, user_def_data))
-    }
-    pub(crate) fn set_user_def_data(self, value: u64) {
-        write_field!(self.owner, user_def_data, value as u8);
-    }
-    pub(crate) fn get_cached_curve_speed_mod(self) -> u64 {
-        u64::from(read_field!(self.owner, cached_curve_speed_mod) as u16)
-    }
-    pub(crate) fn set_cached_curve_speed_mod(self, value: u64) {
-        write_field!(self.owner, cached_curve_speed_mod, value as i16);
-    }
-    pub(crate) fn get_cached_max_curve_speed(self) -> u64 {
-        u64::from(read_field!(self.owner, cached_max_curve_speed))
-    }
-    pub(crate) fn set_cached_max_curve_speed(self, value: u64) {
-        write_field!(self.owner, cached_max_curve_speed, value as u16);
-    }
-    pub(crate) fn set_flag(self, bit: u8, value: bool) {
-        let mask = 1 << bit;
-        let old = self.get_flags();
-        self.set_flags(if value { old | mask } else { old & !mask });
-    }
-}
-/// Native `VehicleRailFlag`: rail vehicle flags, as bit positions of `VehicleRailFlags`.
+/// `VehicleRailFlag`: rail vehicle flags, as bit positions of `VehicleRailFlags`.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VehicleRailFlag(pub u8);
@@ -273,7 +100,7 @@ impl VehicleRailFlag {
     pub const LeavingStation: Self = Self(9);
 }
 
-/// Native `VehicleRailFlags`: the `VehicleRailFlag` bit set, stored as `uint16_t`.
+/// `VehicleRailFlags`: the `VehicleRailFlag` bit set, stored as `uint16_t`.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct VehicleRailFlags(pub u16);
@@ -281,171 +108,333 @@ pub struct VehicleRailFlags(pub u16);
 impl VehicleRailFlags {
     /// Set containing the named element.
     #[must_use]
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "EnumBitSet<VehicleRailFlag, uint16_t> stores the element's bit in uint16_t"
-    )]
     pub const fn from_element(element: VehicleRailFlag) -> Self {
-        Self((1_u64 << element.0) as u16)
+        Self(1 << element.0)
     }
-    /// Native bit-set union.
+    /// Bit-set union.
     #[must_use]
     pub const fn with(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
-    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    /// `BaseBitSet::Test`, with an element rather than a set mask.
     #[must_use]
     pub const fn test(self, element: VehicleRailFlag) -> bool {
         self.0 & Self::from_element(element).0 != 0
     }
-    /// Native `BaseBitSet::Any`: whether any element of `other` is set.
+    /// `BaseBitSet::Any`: whether any element of `other` is set.
     #[must_use]
     pub const fn any(self, other: Self) -> bool {
         self.0 & other.0 != 0
     }
+    /// `BaseBitSet::Set`: this set with `element` added.
+    #[must_use]
+    pub const fn set(self, element: VehicleRailFlag) -> Self {
+        Self(self.0 | Self::from_element(element).0)
+    }
+    /// `BaseBitSet::Reset`: this set with `element` removed.
+    #[must_use]
+    pub const fn reset(self, element: VehicleRailFlag) -> Self {
+        Self(self.0 & !Self::from_element(element).0)
+    }
+    /// `BaseBitSet::Flip`: this set with `element` toggled.
+    #[must_use]
+    pub const fn flip(self, element: VehicleRailFlag) -> Self {
+        Self(self.0 ^ Self::from_element(element).0)
+    }
 }
 
-/// Native `TrainForceProceeding`: Modes for ignoring signals.
+/// `TrainForceProceeding`: modes for ignoring signals.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TrainForceProceeding(pub u8);
 
 impl TrainForceProceeding {
-    /// `TFP_NONE`: Normal operation.
+    /// Normal operation.
     pub const TFP_NONE: Self = Self(0);
-    /// `TFP_STUCK`: Proceed till next signal, but ignore being stuck till then. This includes
-    /// force leaving depots.
+    /// Proceed till next signal, but ignore being stuck till then. This includes force
+    /// leaving depots.
     pub const TFP_STUCK: Self = Self(1);
-    /// `TFP_SIGNAL`: Ignore next signal, after the signal ignore being stuck.
+    /// Ignore next signal, after the signal ignore being stuck.
     pub const TFP_SIGNAL: Self = Self(2);
 }
 
-/// Native `VehicleRailFlag::Flipped`.
-pub(crate) const FLIPPED: u8 = 4;
-/// `CCF_ARRANGE`: `ConsistChangeFlag::Length` and `ConsistChangeFlag::Capacity`.
-pub(crate) const CCF_ARRANGE: u8 = 3;
-/// `CCF_LOADUNLOAD`: no length or capacity property changes.
-pub(crate) const CCF_LOADUNLOAD: u8 = 0;
-/// `CCF_TRACK`: no length or capacity changes.
-pub(crate) const CCF_TRACK: u8 = 0;
-use crate::tile_type::INVALID_TILE;
-use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
+/// `ConsistChangeFlag`: what may change when a consist changes.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ConsistChangeFlag(pub u8);
+
+#[allow(
+    non_upper_case_globals,
+    reason = "the enumerator names of the original ConsistChangeFlag (train.h)"
+)]
+impl ConsistChangeFlag {
+    /// Allow vehicles to change length.
+    pub const Length: Self = Self(0);
+    /// Allow vehicles to change capacity.
+    pub const Capacity: Self = Self(1);
+}
+
+/// `ConsistChangeFlags`: the `ConsistChangeFlag` bit set, stored as `uint8_t`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ConsistChangeFlags(pub u8);
+
+impl ConsistChangeFlags {
+    /// Set containing the named element.
+    #[must_use]
+    pub const fn from_element(element: ConsistChangeFlag) -> Self {
+        Self(1 << element.0)
+    }
+    /// Bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+    /// `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: ConsistChangeFlag) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
+}
+
+/// Valid changes while vehicle is driving, and possibly changing tracks.
+pub const CCF_TRACK: ConsistChangeFlags = ConsistChangeFlags(0);
+/// Valid changes while vehicle is loading/unloading.
+pub const CCF_LOADUNLOAD: ConsistChangeFlags = ConsistChangeFlags(0);
+/// Valid changes for autorefitting in stations.
+pub const CCF_AUTOREFIT: ConsistChangeFlags =
+    ConsistChangeFlags::from_element(ConsistChangeFlag::Capacity);
+/// Valid changes for refitting in a depot.
+pub const CCF_REFIT: ConsistChangeFlags =
+    ConsistChangeFlags::from_element(ConsistChangeFlag::Length).with(
+        ConsistChangeFlags::from_element(ConsistChangeFlag::Capacity),
+    );
+/// Valid changes for arranging the consist in a depot.
+pub const CCF_ARRANGE: ConsistChangeFlags =
+    ConsistChangeFlags::from_element(ConsistChangeFlag::Length).with(
+        ConsistChangeFlags::from_element(ConsistChangeFlag::Capacity),
+    );
+
+/// A `Train *`: the canonical record and the train owner of one live train part, or
+/// [`Handle::NONE`] for `nullptr`. Each entry keeps the owner live and serialized for the
+/// field accesses below.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Handle {
+    pub record: *mut crate::vehicle::OpenTTDVehicle,
+    pub owner: *mut State,
+}
+impl PartialEq for Handle {
+    fn eq(&self, other: &Self) -> bool {
+        self.record == other.record
+    }
+}
+impl Eq for Handle {}
+impl Default for Handle {
+    fn default() -> Self {
+        Self::NONE
+    }
+}
+
+impl Handle {
+    /// `nullptr`.
+    pub(crate) const NONE: Self = Self {
+        record: std::ptr::null_mut(),
+        owner: std::ptr::null_mut(),
+    };
+    /// The canonical record of this live train part.
+    pub(crate) fn vehicle(self) -> VehicleRef {
+        // SAFETY: Entries and topology reads supply a live non-null train record.
+        unsafe { VehicleRef(std::ptr::NonNull::new_unchecked(self.record)) }
+    }
+    /// `Train::From(v)`: the handle of a vehicle that is a train, with `Train::From`'s type
+    /// assertion.
+    pub(crate) fn from_vehicle(v: VehicleRef) -> Self {
+        crate::services_assert::assert_with(|| v.vehicle_type() == VehicleType::VEH_TRAIN);
+        Self {
+            record: v.0.as_ptr(),
+            owner: read_field!(v.0.as_ptr(), train),
+        }
+    }
+    /// The handle of a record the original already holds as a `Train *`, or
+    /// [`Handle::NONE`] for null.
+    pub(crate) fn from_record(record: *mut crate::vehicle::OpenTTDVehicle) -> Self {
+        if record.is_null() {
+            Self::NONE
+        } else {
+            Self {
+                record,
+                owner: read_field!(record, train),
+            }
+        }
+    }
+    /// `Train::Next`.
+    pub(crate) fn next(self) -> Self {
+        Self::from_record(read_field!(self.record, next))
+    }
+    /// `Train::Previous`.
+    pub(crate) fn previous(self) -> Self {
+        Self::from_record(read_field!(self.record, previous))
+    }
+    /// `Train::First`.
+    pub(crate) fn first(self) -> Self {
+        Self::from_record(self.vehicle().first().0.as_ptr())
+    }
+    /// `Train::Last`.
+    pub(crate) fn last(self) -> Self {
+        Self::from_record(self.vehicle().last().0.as_ptr())
+    }
+    /// `Train::GetNextVehicle`.
+    pub(crate) fn get_next_vehicle(self) -> Self {
+        self.vehicle()
+            .next_vehicle()
+            .map_or(Self::NONE, |v| Self::from_record(v.0.as_ptr()))
+    }
+    /// `Vehicle::IsFrontEngine`.
+    pub(crate) fn is_front_engine(self) -> bool {
+        self.vehicle().is_front_engine()
+    }
+    /// `Vehicle::IsArticulatedPart`.
+    pub(crate) fn is_articulated_part(self) -> bool {
+        self.vehicle().is_articulated_part()
+    }
+    /// `GroundVehicle::IsMultiheaded`.
+    pub(crate) fn is_multiheaded(self) -> bool {
+        crate::ground_vehicle::is_multiheaded(self.vehicle().subtype())
+    }
+    /// `GroundVehicle::IsFreeWagon`.
+    pub(crate) fn is_free_wagon(self) -> bool {
+        crate::ground_vehicle::is_free_wagon(self.vehicle().subtype())
+    }
+    /// `GroundVehicle::IsEngine`.
+    pub(crate) fn is_engine(self) -> bool {
+        crate::ground_vehicle::is_engine(self.vehicle().subtype())
+    }
+    /// The native shell of this train part.
+    pub(crate) fn shell(self) -> *mut std::ffi::c_void {
+        VehicleRef::shell_from_record(self.record).cast()
+    }
+
+    /// `Train::flags`.
+    pub(crate) fn flags(self) -> VehicleRailFlags {
+        read_field!(self.owner, flags)
+    }
+    pub(crate) fn set_flags(self, flags: VehicleRailFlags) {
+        write_field!(self.owner, flags, flags);
+    }
+    /// `Train::crash_anim_pos`.
+    pub(crate) fn crash_anim_pos(self) -> u16 {
+        read_field!(self.owner, crash_anim_pos)
+    }
+    pub(crate) fn set_crash_anim_pos(self, crash_anim_pos: u16) {
+        write_field!(self.owner, crash_anim_pos, crash_anim_pos);
+    }
+    /// `Train::wait_counter`.
+    pub(crate) fn wait_counter(self) -> u16 {
+        read_field!(self.owner, wait_counter)
+    }
+    pub(crate) fn set_wait_counter(self, wait_counter: u16) {
+        write_field!(self.owner, wait_counter, wait_counter);
+    }
+    /// `Train::compatible_railtypes`.
+    pub(crate) fn compatible_railtypes(self) -> RailTypes {
+        read_field!(self.owner, compatible_railtypes)
+    }
+    pub(crate) fn set_compatible_railtypes(self, compatible_railtypes: RailTypes) {
+        write_field!(self.owner, compatible_railtypes, compatible_railtypes);
+    }
+    /// `Train::railtypes`.
+    pub(crate) fn railtypes(self) -> RailTypes {
+        read_field!(self.owner, railtypes)
+    }
+    pub(crate) fn set_railtypes(self, railtypes: RailTypes) {
+        write_field!(self.owner, railtypes, railtypes);
+    }
+    /// `Train::track`.
+    pub(crate) fn track(self) -> TrackBits {
+        read_field!(self.owner, track)
+    }
+    pub(crate) fn set_track(self, track: TrackBits) {
+        write_field!(self.owner, track, track);
+    }
+    /// `Train::force_proceed`.
+    pub(crate) fn force_proceed(self) -> TrainForceProceeding {
+        read_field!(self.owner, force_proceed)
+    }
+    pub(crate) fn set_force_proceed(self, force_proceed: TrainForceProceeding) {
+        write_field!(self.owner, force_proceed, force_proceed);
+    }
+    /// `TrainCache::cached_tilt`.
+    pub(crate) fn cached_tilt(self) -> bool {
+        read_field!(self.owner, cached_tilt)
+    }
+    pub(crate) fn set_cached_tilt(self, cached_tilt: bool) {
+        write_field!(self.owner, cached_tilt, cached_tilt);
+    }
+    /// `TrainCache::user_def_data`.
+    pub(crate) fn user_def_data(self) -> u8 {
+        read_field!(self.owner, user_def_data)
+    }
+    pub(crate) fn set_user_def_data(self, user_def_data: u8) {
+        write_field!(self.owner, user_def_data, user_def_data);
+    }
+    /// `TrainCache::cached_curve_speed_mod`.
+    pub(crate) fn cached_curve_speed_mod(self) -> i16 {
+        read_field!(self.owner, cached_curve_speed_mod)
+    }
+    pub(crate) fn set_cached_curve_speed_mod(self, cached_curve_speed_mod: i16) {
+        write_field!(self.owner, cached_curve_speed_mod, cached_curve_speed_mod);
+    }
+    /// `TrainCache::cached_max_curve_speed`.
+    pub(crate) fn cached_max_curve_speed(self) -> u16 {
+        read_field!(self.owner, cached_max_curve_speed)
+    }
+    pub(crate) fn set_cached_max_curve_speed(self, cached_max_curve_speed: u16) {
+        write_field!(self.owner, cached_max_curve_speed, cached_max_curve_speed);
+    }
+    /// `GroundVehicleCache::cached_veh_length`.
+    fn cached_veh_length(self) -> u8 {
+        read_field!(self.vehicle().ground_cache(), cached_veh_length)
+    }
+    /// `GroundVehicleCache::cached_total_length`.
+    fn cached_total_length(self) -> u16 {
+        read_field!(self.vehicle().ground_cache(), cached_total_length)
+    }
+    /// `Train::IsInDepot`.
+    fn is_in_depot(self) -> bool {
+        self.track() == TrackBits::TRACK_BIT_DEPOT
+    }
+    /// `Train::CalcNextVehicleOffset`: calculate the offset from this vehicle's center to the
+    /// following center taking the vehicle lengths into account. Returns the offset from
+    /// center to center.
+    pub(crate) fn calc_next_vehicle_offset(self) -> i32 {
+        /* For vehicles with odd lengths the part before the center will be one unit
+         * longer than the part after the center. This means we have to round up the
+         * length of the next vehicle but may not round the length of the current
+         * vehicle. */
+        i32::from(self.cached_veh_length()) / 2
+            + (if self.next() == Self::NONE {
+                0
+            } else {
+                i32::from(self.next().cached_veh_length()) + 1
+            }) / 2
+    }
+}
+
+/// The services a train entry calls: the shared tables are borrowed through pointers.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub physics: &'static crate::ground_vehicle::Services,
-
-    pub write_colourmap: extern "C" fn(Handle, u64),
-
-    pub advance_distance: extern "C" fn(Handle) -> u64,
-    pub all_powered: extern "C" fn(Handle, u64) -> u64,
-    pub arrival_news: extern "C" fn(Handle, u16),
-
-    pub axis_diag: extern "C" fn(Handle, u8) -> u64,
-    pub backoff: extern "C" fn() -> u8,
-    pub base_viewport: extern "C" fn(Handle, u8),
+    /// Engine capability services, for `Engine::DetermineCapacity`.
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
-    pub capacity_error: extern "C" fn(Handle),
-    pub check_next: extern "C" fn(Handle),
-    pub check_orders: extern "C" fn(Handle),
-    pub check_reverse: extern "C" fn(Handle) -> u64,
-    pub choose_track: extern "C" fn(Handle, u32, u8, u8) -> u64,
-    pub clear_reservation: extern "C" fn(Handle, u32, u8),
-    pub consist_windows: extern "C" fn(Handle),
-    pub cost_divisor: extern "C" fn(Handle) -> u64,
-    pub count_chain: extern "C" fn(Handle) -> u64,
-    pub crash_event: extern "C" fn(Handle, u32),
-    pub crash_news: extern "C" fn(Handle, u32),
-    pub crash_sound: extern "C" fn(Handle),
-    pub crossing_barred: extern "C" fn(Handle, u32) -> u64,
-    pub crossing_rail_axis: extern "C" fn(Handle, u32) -> u64,
-    pub crossing_road_axis: extern "C" fn(Handle, u32) -> u64,
-    pub crossing_sound: extern "C" fn(Handle, u32),
-    pub curve_advantage: extern "C" fn(Handle) -> u64,
-    pub day_ticks: extern "C" fn(Handle) -> u64,
-    pub delete_vehicle: extern "C" fn(Handle),
-    pub depot_dir: extern "C" fn(Handle, u32) -> u64,
-    pub depot_dirty: extern "C" fn(Handle),
-    pub depot_track: extern "C" fn(Handle, u32) -> u64,
-    pub depot_window: extern "C" fn(Handle, u32),
-    pub diag_axis: extern "C" fn(Handle, u8) -> u64,
-    pub diag_between: extern "C" fn(Handle, u32, u32) -> u64,
-    pub diag_reaches_tracks: extern "C" fn(Handle, u8) -> u64,
-    pub diag_trackdir: extern "C" fn(Handle, u8) -> u64,
-    pub dir_diag: extern "C" fn(Handle, u8) -> u64,
-    pub disconnect: extern "C" fn(Handle),
-    pub find_depot: extern "C" fn(Handle, i32) -> Depot,
-    pub first_track: extern "C" fn(Handle, u8) -> u64,
-    pub has_depot_res: extern "C" fn(Handle, u32) -> u64,
-    pub has_signal: extern "C" fn(Handle, u32, u8) -> u64,
-    pub has_signals: extern "C" fn(Handle, u32) -> u64,
-    pub has_signal_td: extern "C" fn(Handle, u32, u8) -> u64,
-    pub hide_fill: extern "C" fn(Handle),
-    pub invalidate_grf: extern "C" fn(Handle),
-    pub is_bridge: extern "C" fn(Handle, u32) -> u64,
-    pub is_crossing: extern "C" fn(Handle, u32) -> u64,
-    pub is_depot: extern "C" fn(Handle, u32) -> u64,
-    pub is_plain_rail: extern "C" fn(Handle, u32) -> u64,
-    pub is_station: extern "C" fn(Handle, u32) -> u64,
-    pub is_station_any: extern "C" fn(Handle, u32) -> u64,
-    pub leave_sound: extern "C" fn(Handle),
-    pub leave_unbunch: extern "C" fn(Handle),
-    pub local_company: extern "C" fn(Handle) -> u64,
-    pub no_90: extern "C" fn(Handle, u8, u8) -> u64,
-    pub oneway_blocking: extern "C" fn(Handle, u32, u8) -> u64,
-    pub order_depot_service: extern "C" fn(Handle, u16),
-    pub order_dummy: extern "C" fn(Handle),
-    pub order_free: extern "C" fn(Handle),
-    pub order_max_speed: extern "C" fn(Handle) -> u64,
-    pub other_end: extern "C" fn(Handle, u32) -> u64,
-    pub pay_running: extern "C" fn(Handle, i64),
-    pub pbs_signal_type: extern "C" fn(Handle) -> u64,
-    pub rail_type: extern "C" fn(Handle, u32) -> u64,
-    pub reserve_paths: extern "C" fn() -> bool,
-    pub reserve_under: extern "C" fn(Handle),
-    pub reset_unbunch: extern "C" fn(Handle),
-    pub reverse_windows: extern "C" fn(Handle),
-    pub running_windows: extern "C" fn(Handle),
-    pub servint: extern "C" fn(Handle) -> u64,
-    pub set_depot_res: extern "C" fn(Handle, u32, u8),
-    pub set_signal_state: extern "C" fn(Handle, u32, u8, u8),
-    pub set_tunnel_res: extern "C" fn(Handle, u32, u8),
-    pub show_reservation: extern "C" fn(Handle) -> u64,
-    pub signal_context: extern "C" fn() -> crate::signal::Context,
-    pub signal_has_pbs: extern "C" fn(Handle, u32, u8) -> u64,
-    pub signal_pbs: extern "C" fn(Handle, u8) -> u64,
-    pub signal_type: extern "C" fn(Handle, u32, u8) -> u64,
-    pub sigseg_full: extern "C" fn(Handle) -> u64,
-    pub sigseg_pbs: extern "C" fn(Handle) -> u64,
-    pub start_stop_dirty: extern "C" fn(Handle),
-    pub station_axis: extern "C" fn(Handle, u32) -> u64,
-    pub station_compatible: extern "C" fn(Handle, u32, u32) -> u64,
-    pub station_dest: extern "C" fn(Handle) -> u64,
-    pub stopped_in_depot: extern "C" fn(Handle) -> u64,
-    pub stop_location: extern "C" fn(Handle) -> u64,
-    pub stuck_news: extern "C" fn(Handle),
-    pub suppress_implicit: extern "C" fn(Handle),
-    pub tile_offset_axis: extern "C" fn(Handle, u8) -> u64,
-    pub tile_offset_diag: extern "C" fn(Handle, u8) -> u64,
-    pub tile_rail_type: extern "C" fn(Handle, u32) -> u64,
-    pub tile_virt: extern "C" fn(i32, i32) -> u32,
-    pub trackdir_exit: extern "C" fn(Handle, u8) -> u64,
-    pub trackdir_reaches: extern "C" fn(Handle, u8) -> u64,
-    pub track_bits: extern "C" fn(Handle, u32) -> u64,
-    pub track_crosses: extern "C" fn(Handle, u8) -> u64,
-    pub track_direction: extern "C" fn(Handle, u8, u8) -> u64,
-    pub train_list: extern "C" fn(Handle),
-    pub truncate_cargo: extern "C" fn(Handle, u32),
-    pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
-    pub viewport: extern "C" fn(Handle, u8, u8),
-    pub wagon_override: extern "C" fn(Handle) -> u64,
-    pub wagon_speed_limits: extern "C" fn(Handle) -> u64,
-    pub wait_unbunch: extern "C" fn(Handle) -> u64,
-    pub write_crossing_bar: extern "C" fn(Handle, u32, u8),
-
+    /// The ground vehicle physics table.
+    pub physics: &'static crate::ground_vehicle::Services,
+    /// The path reservation table of `train_reservation.rs`.
+    pub reservation: *const reservation::Leaves,
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
 }
+
 /// The `Game` view of an entry's `leaves` and `services` tables.
 macro_rules! entry_game {
     ($leaves:expr, $services:expr) => {
@@ -453,363 +442,763 @@ macro_rules! entry_game {
         Game::new(unsafe { &*$leaves }, unsafe { &*$services })
     };
 }
-/// `Train::UpdateAcceleration`: update acceleration of the train from the cached power and
-/// weight.
-pub(crate) fn update_acceleration(id: Handle) {
-    let power: u32 = read_field!(id.vehicle().ground_cache(), cached_power);
-    let weight: u32 = read_field!(id.vehicle().ground_cache(), cached_weight);
-    // Clamp(int, int, int): the uint product converts to int first.
-    let accel = ((power / weight).wrapping_mul(4) as i32).clamp(1, 255);
-    write_field!((id).record, acceleration, accel as u8);
+
+/// `_breakdown_speeds`: maximum speeds for train that is broken down or approaching line end.
+const BREAKDOWN_SPEEDS: [u16; 16] = [
+    225, 210, 195, 180, 165, 150, 135, 120, 105, 90, 75, 60, 45, 30, 15, 15,
+];
+
+/// `_initial_tile_subcoord`: the sub-tile position and direction of a train entering a tile
+/// on a track from a direction.
+const INITIAL_TILE_SUBCOORD: [[[u8; 3]; 4]; 6] = [
+    [[15, 8, 1], [0, 0, 0], [0, 8, 5], [0, 0, 0]],
+    [[0, 0, 0], [8, 0, 3], [0, 0, 0], [8, 15, 7]],
+    [[0, 0, 0], [7, 0, 2], [0, 7, 6], [0, 0, 0]],
+    [[15, 8, 2], [0, 0, 0], [0, 0, 0], [8, 15, 6]],
+    [[15, 7, 0], [8, 0, 4], [0, 0, 0], [0, 0, 0]],
+    [[0, 0, 0], [0, 0, 0], [0, 8, 4], [7, 15, 0]],
+];
+
+/// `AccelerationSlowdownParams`: engine speed changes of an acceleration type.
+struct AccelerationSlowdownParams {
+    /// Speed change due to a small turn.
+    small_turn: u8,
+    /// Speed change due to a large turn.
+    large_turn: u8,
+    /// Fraction to remove when moving up.
+    z_up: u8,
+    /// Fraction to add when moving down.
+    z_down: u8,
 }
-#[derive(Clone)]
+
+/// `_accel_slowdown`: speed update fractions for each acceleration type.
+const ACCEL_SLOWDOWN: [AccelerationSlowdownParams; 3] = [
+    /* normal accel */
+    AccelerationSlowdownParams {
+        small_turn: (256 / 4) as u8,
+        large_turn: (256 / 2) as u8,
+        z_up: (256 / 4) as u8,
+        z_down: 2,
+    }, // normal
+    AccelerationSlowdownParams {
+        small_turn: (256 / 4) as u8,
+        large_turn: (256 / 2) as u8,
+        z_up: (256 / 4) as u8,
+        z_down: 2,
+    }, // monorail
+    AccelerationSlowdownParams {
+        small_turn: 0,
+        large_turn: (256 / 2) as u8,
+        z_up: (256 / 4) as u8,
+        z_down: 2,
+    }, // maglev
+];
+
+/// The tables of one synchronous train entry. It holds no vehicle field.
 struct Game<'a> {
     leaves: &'a Leaves,
     services: &'a Services,
-    movement: crate::movement::CachedTable<'a>,
+    vs: &'a VehicleServices,
+    movement: CachedTable<'a>,
+    /// The canonical map descriptor, loaded once at the entry.
+    world: World<'a>,
 }
-// Canonical settings, loaded in place from the shared catalog at each observation.
-impl Game<'_> {
-    fn setting<T: Copy + Into<u64>>(&self, field: fn(&SettingAddresses) -> *const T) -> u64 {
-        // SAFETY: The catalog addresses live process-wide settings; one field-sized load.
-        unsafe { field(self.services.settings()).read() }.into()
-    }
-    /// `_settings_game.vehicle.train_acceleration_model`.
-    fn acc_model(&self) -> u64 {
-        self.setting(|s| s.train_acceleration_model)
-    }
-    /// `_settings_client.gui.lost_vehicle_warn`.
-    fn lost_warn(&self) -> u64 {
-        self.setting(|s| s.lost_vehicle_warn)
-    }
-    /// `_settings_game.pf.yapf.maximum_go_to_depot_penalty`.
-    fn max_depot_penalty(&self) -> u64 {
-        self.setting(|s| s.maximum_go_to_depot_penalty)
-    }
-    /// `_settings_game.pf.reverse_at_signals`.
-    fn reverse_at_signals(&self) -> u64 {
-        self.setting(|s| s.reverse_at_signals)
-    }
-    /// `_settings_game.pf.wait_oneway_signal`.
-    fn wait_oneway(&self) -> u64 {
-        self.setting(|s| s.wait_oneway_signal)
-    }
-    /// `_settings_game.pf.wait_for_pbs_path`.
-    fn wait_pbs(&self) -> u64 {
-        self.setting(|s| s.wait_for_pbs_path)
-    }
-    /// `_settings_game.pf.wait_twoway_signal`.
-    fn wait_twoway(&self) -> u64 {
-        self.setting(|s| s.wait_twoway_signal)
-    }
-}
+
 impl<'a> Game<'a> {
     fn new(leaves: &'a Leaves, services: &'a Services) -> Self {
         Self {
             leaves,
             services,
-            movement: crate::movement::CachedTable::new(services),
+            // SAFETY: The native table names the immutable process-wide base table.
+            vs: unsafe { &*leaves.vehicle },
+            movement: CachedTable::new(services),
+            world: World::new(services),
         }
     }
-    /// Raw map access over the shared table's canonical allocation.
-    fn world(&self) -> crate::map_func::World<'a> {
-        crate::map_func::World::new(self.services)
+    /// The canonical map descriptor of the entry.
+    fn world(&self) -> &World<'a> {
+        &self.world
     }
-    fn vs(&self) -> &VehicleServices {
-        // SAFETY: The native table names the immutable process-wide base table.
-        unsafe { &*self.leaves.vehicle }
+    /// The map dimensions.
+    fn map(&self) -> Map {
+        self.world().dimensions
     }
-    fn engine(&self, id: Handle) -> crate::vehicle::EngineRef {
-        (self.vs().engine)(id.vehicle())
+    /// The native assertion handler, as a header helper's precondition check.
+    fn check(&self) -> impl Fn(bool) + Copy + '_ {
+        |ok| crate::movement::native_assert(self.services, ok)
     }
-    /// `TryPathReserve`.
-    fn try_path_reserve(&self, id: Handle, mark_as_reserved: bool, first_tile_okay: bool) -> bool {
-        // SAFETY: id.record identifies the live Train for this serialized entry; no owner borrow spans the call.
-        unsafe {
-            (self.services.try_path_reserve)(
-                id.vehicle().shell().cast(),
-                mark_as_reserved,
-                first_tile_okay,
+    /// The PBS routines.
+    fn pbs(&self) -> Pbs<'a> {
+        Pbs::acquire(self.services)
+    }
+    /// The path reservation context of train part `v`.
+    fn reservation(&self, v: Handle) -> reservation::Game<'a> {
+        // SAFETY: The native table names the immutable process-wide reservation table.
+        reservation::Game::new(unsafe { &*self.leaves.reservation }, v.vehicle())
+    }
+    /// The signal update context.
+    fn signals(&self) -> crate::signal::Context {
+        crate::signal::context(self.services)
+    }
+    /// `v->GetEngine()`.
+    fn engine(&self, v: Handle) -> EngineRef {
+        (self.vs.engine)(v.vehicle())
+    }
+    /// `v->index`.
+    fn index(&self, v: Handle) -> VehicleID {
+        // SAFETY: A live record and the immutable binding.
+        VehicleID(unsafe { (self.vs.newgrf().id)(v.vehicle().0.as_ptr()) })
+    }
+    /// `GetVehicleProperty(v, property, orig_value)`.
+    fn get_vehicle_property(&self, v: Handle, property: PropertyID, orig_value: i32) -> i32 {
+        crate::newgrf_vehicle::get_vehicle_property(
+            self.vs.newgrf(),
+            v.vehicle(),
+            property,
+            orig_value,
+        )
+    }
+    /// `v->InvalidateNewGRFCache()`.
+    fn invalidate_newgrf_cache(&self, v: Handle) {
+        // SAFETY: A live serialized record; the invalidation retains no borrow.
+        unsafe { crate::newgrf_vehicle::invalidate_newgrf_cache(self.vs.newgrf(), v.vehicle()) };
+    }
+    /// `v->UpdatePosition()`.
+    fn update_position(&self, v: Handle) {
+        // SAFETY: The live shell survives the synchronous index update.
+        unsafe { crate::vehicle::occupancy::update_position(self.vs, v.vehicle(), self.map()) };
+    }
+    /// `v->UpdateViewport(force_update, update_delta)` of a train.
+    fn viewport(&self, v: Handle, force_update: bool, update_delta: bool) {
+        (self.leaves.physics.viewport)(v.vehicle(), force_update, update_delta);
+    }
+    /// `v->UpdateInclination(new_tile, update_delta)`.
+    fn update_inclination(&self, v: Handle, new_tile: bool, update_delta: bool) -> i32 {
+        crate::ground_vehicle::update_inclination(
+            self.leaves.physics,
+            &self.movement,
+            v.vehicle(),
+            new_tile,
+            update_delta,
+        )
+    }
+    /// `v->SetLastSpeed()`.
+    fn set_last_speed(&self, v: Handle) {
+        crate::ground_vehicle::set_last_speed(self.leaves.physics, v.vehicle());
+    }
+    /// `v->CargoChanged()`.
+    fn cargo_changed(&self, v: Handle) {
+        crate::ground_vehicle::cargo_changed(self.leaves.physics, v.vehicle());
+    }
+    /// `v->IsChainInDepot()`.
+    fn is_chain_in_depot(&self, v: Handle) -> bool {
+        crate::ground_vehicle::is_chain_in_depot(self.leaves.physics, v.vehicle())
+    }
+    /// `v->GetAccelerationType()`.
+    fn get_acceleration_type(&self, v: Handle) -> usize {
+        usize::from(
+            <crate::ground_vehicle::Train as crate::ground_vehicle::GroundVehicleType>::get_acceleration_type(
+                self.leaves.physics,
+                self.world(),
+                v.vehicle(),
             )
+            .0,
+        )
+    }
+    /// `VehicleEnterTile(v, tile, x, y)`.
+    fn vehicle_enter_tile(
+        &self,
+        v: Handle,
+        tile: TileIndex,
+        x: i32,
+        y: i32,
+    ) -> VehicleEnterTileStates {
+        // SAFETY: The same live serialized shell as the original callback; no owner borrow
+        // spans it.
+        unsafe {
+            self.movement
+                .get()
+                .vehicle_enter_tile(v.vehicle(), tile, x, y)
         }
     }
-    /// `FreeTrainTrackReservation`.
-    fn free_train_reservation(&self, id: Handle) {
-        // SAFETY: id.record identifies the live Train for this serialized entry; no owner borrow spans the call.
-        unsafe { (self.services.free_train_reservation)(id.vehicle().shell().cast()) };
+    /// `GetTileTrackStatus(tile, TRANSPORT_RAIL, 0, side)`.
+    fn get_tile_track_status(&self, tile: TileIndex, side: DiagDirection) -> TrackStatus {
+        self.movement
+            .get()
+            .get_tile_track_status(tile, TransportType::TRANSPORT_RAIL, 0, side)
     }
-    /// `UpdateVehicleTileHash` of this shell, which stays in place.
-    fn update_occupancy(&self, id: Handle) {
-        // SAFETY: The controller retains this live shell through the index update.
-        unsafe {
-            crate::vehicle::occupancy::update_position(
-                self.vs(),
-                id.vehicle(),
-                self.services.map(),
-            );
-        };
+    /// `Rail90DegTurnDisallowed(rt1, rt2)` with the default `_settings_game.pf.forbid_90_deg`.
+    fn rail_90_deg_turn_disallowed(&self, rt1: RailType, rt2: RailType) -> bool {
+        (self.pbs().0.rail90)(rt1.0, rt2.0, (self.services.forbid_90_deg)())
     }
-    fn handle_breakdown(&self, id: Handle) -> bool {
-        maintenance::handle_breakdown(id.vehicle(), self.vs())
+    /// `GetTileRailType(tile)`.
+    fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
+        crate::rail::get_tile_rail_type(self.services, tile)
     }
-    fn needs_automatic_servicing(&self, id: Handle) -> bool {
-        maintenance::needs_automatic_servicing(id.vehicle(), self.vs())
+    /// `IsTileType(tile, type)`.
+    fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
+        self.world().is_tile_type(tile, kind)
     }
-    fn service_in_depot(&self, id: Handle) {
-        maintenance::vehicle_service_in_depot(id.vehicle(), self.vs());
+    /// `IsRailDepotTile(tile)`.
+    fn is_rail_depot_tile(&self, tile: TileIndex) -> bool {
+        self.world().rail_depot(tile.0)
+    }
+    /// `GetRailDepotDirection(tile)`.
+    fn get_rail_depot_direction(&self, tile: TileIndex) -> DiagDirection {
+        DiagDirection(self.world().rail_depot_dir(tile.0))
+    }
+    /// `IsLevelCrossingTile(tile)`.
+    fn is_level_crossing_tile(&self, tile: TileIndex) -> bool {
+        self.world().level_crossing_tile(tile.0)
+    }
+    /// `IsCrossingBarred(tile)`.
+    fn is_crossing_barred(&self, tile: TileIndex) -> bool {
+        self.world().crossing_barred(tile.0)
+    }
+    /// `GetCrossingRoadAxis(tile)`.
+    fn get_crossing_road_axis(&self, tile: TileIndex) -> Axis {
+        Axis(self.world().crossing_road_axis(tile.0))
+    }
+    /// `IsRailStationTile(tile)`.
+    fn is_rail_station_tile(&self, tile: TileIndex) -> bool {
+        self.world().is_rail_station_tile(tile)
+    }
+    /// `GetStationIndex(tile)`.
+    fn get_station_index(&self, tile: TileIndex) -> StationID {
+        self.world().get_station_index(tile)
+    }
+    /// `HasSignalOnTrackdir(tile, trackdir)`.
+    fn has_signal_on_trackdir(&self, tile: TileIndex, trackdir: Trackdir) -> bool {
+        self.world().has_signal_on_trackdir(tile.0, trackdir.0)
+    }
+    /// `GetSignalType(tile, track)`.
+    fn get_signal_type(&self, tile: TileIndex, track: Track) -> SignalType {
+        SignalType(self.world().signal_type(tile.0, track.0))
+    }
+    /// `GetTunnelBridgeDirection(tile)`.
+    fn get_tunnel_bridge_direction(&self, tile: TileIndex) -> DiagDirection {
+        DiagDirection(self.world().tunnel_bridge_dir(tile.0))
+    }
+    /// `GetOtherTunnelBridgeEnd(tile)`.
+    fn get_other_tunnel_bridge_end(&self, tile: TileIndex) -> TileIndex {
+        TileIndex((self.services.other_tunnel_end)(tile.0))
+    }
+    /// `TileAddByDiagDir(tile, dir)`.
+    fn tile_add_by_diag_dir(&self, tile: TileIndex, dir: DiagDirection) -> TileIndex {
+        self.map().tile_add_by_diag_dir(tile, dir, self.check())
+    }
+    /// `TileOffsByDiagDir(dir)`.
+    fn tile_offs_by_diag_dir(&self, dir: DiagDirection) -> crate::map_type::TileIndexDiff {
+        self.map().tile_offs_by_diag_dir(dir, self.check())
+    }
+    /// `TileVirtXY(x, y)`.
+    fn tile_virt_xy(&self, x: i32, y: i32) -> TileIndex {
+        self.map().tile_virt_xy(x as u32, y as u32)
+    }
+    /// `MarkTileDirtyByTile(tile)`.
+    fn mark_tile_dirty_by_tile(&self, tile: TileIndex) {
+        (self.services.mark_dirty)(tile.0);
+    }
+    /// `SndPlayTileFx(sound, tile)`.
+    fn snd_play_tile_fx(&self, sound: SoundFx, tile: TileIndex) {
+        (self.services.play_sound)(tile.0, SoundID::from(sound).0);
+    }
+    /// `UpdateSignalsOnSegment(tile, side, owner)`.
+    fn update_signals_on_segment(
+        &self,
+        tile: TileIndex,
+        side: DiagDirection,
+        owner: Owner,
+    ) -> SigSegState {
+        self.signals().update_signals_on_segment(tile, side, owner)
+    }
+    /// `TryReserveRailTrack(tile, t, trigger_stations)`.
+    fn try_reserve_rail_track(&self, tile: TileIndex, t: Track, trigger_stations: bool) -> bool {
+        self.pbs().try_reserve_rail_track(tile, t, trigger_stations)
+    }
+    /// `HasCrossingReservation(tile)`.
+    fn has_crossing_reservation(&self, tile: TileIndex) -> bool {
+        (self.services.crossing_reserved)(tile.0)
+    }
+    /// `_settings_client.sound.ambient`.
+    fn ambient(&self) -> bool {
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        unsafe { self.services.settings().ambient.read() }
+    }
+    /// `_settings_game.vehicle.train_acceleration_model`.
+    fn train_acceleration_model(&self) -> AccelerationModel {
+        // SAFETY: As above.
+        AccelerationModel(unsafe { self.services.settings().train_acceleration_model.read() })
+    }
+    /// `_settings_client.gui.lost_vehicle_warn`.
+    fn lost_vehicle_warn(&self) -> bool {
+        // SAFETY: As above.
+        unsafe { self.services.settings().lost_vehicle_warn.read() }
+    }
+    /// `_settings_game.pf.yapf.maximum_go_to_depot_penalty`.
+    fn maximum_go_to_depot_penalty(&self) -> u32 {
+        // SAFETY: As above.
+        unsafe { self.services.settings().maximum_go_to_depot_penalty.read() }
+    }
+    /// `_settings_game.pf.reverse_at_signals`.
+    fn reverse_at_signals(&self) -> bool {
+        // SAFETY: As above.
+        unsafe { self.services.settings().reverse_at_signals.read() }
+    }
+    /// `_settings_game.pf.wait_oneway_signal`.
+    fn wait_oneway_signal(&self) -> u8 {
+        // SAFETY: As above.
+        unsafe { self.services.settings().wait_oneway_signal.read() }
+    }
+    /// `_settings_game.pf.wait_twoway_signal`.
+    fn wait_twoway_signal(&self) -> u8 {
+        // SAFETY: As above.
+        unsafe { self.services.settings().wait_twoway_signal.read() }
+    }
+    /// `_settings_game.pf.wait_for_pbs_path`.
+    fn wait_for_pbs_path(&self) -> u8 {
+        // SAFETY: As above.
+        unsafe { self.services.settings().wait_for_pbs_path.read() }
+    }
+    /// `_settings_game.pf.reserve_paths`.
+    fn reserve_paths(&self) -> bool {
+        // SAFETY: As above.
+        unsafe { self.services.settings().reserve_paths.read() }
+    }
+    /// `_settings_game.pf.path_backoff_interval`.
+    fn path_backoff_interval(&self) -> u8 {
+        // SAFETY: As above.
+        unsafe { self.services.settings().path_backoff_interval.read() }
+    }
+    /// `_settings_game.vehicle.wagon_speed_limits`.
+    fn wagon_speed_limits(&self) -> bool {
+        // SAFETY: As above.
+        unsafe { self.services.settings().wagon_speed_limits.read() }
     }
     /// `SetWindowDirty(WC_VEHICLE_VIEW, v->index)`.
-    fn view_dirty(&self, id: Handle) {
-        crate::window_func::set_window_dirty(
-            crate::window_type::WindowClass::WC_VEHICLE_VIEW,
-            crate::window_type::WindowNumber::from(id.vehicle().index(self.vs().newgrf())),
+    fn set_vehicle_view_dirty(&self, v: Handle) {
+        set_window_dirty(
+            WindowClass::WC_VEHICLE_VIEW,
+            WindowNumber::from(self.index(v)),
         );
     }
-    fn visit_tile<F: FnMut(Handle) -> bool>(&self, tile: u32, mut visitor: F) -> bool {
-        let vs = self.vs();
-        crate::vehicle_func::has_vehicle_on_tile_raw(vs, self.services.map(), tile, |v| {
-            v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
-                && visitor(crate::train::Handle::from_vehicle(v))
-        })
+    /// `SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP)`.
+    fn set_start_stop_dirty(&self, v: Handle) {
+        set_window_widget_dirty(
+            WindowClass::WC_VEHICLE_VIEW,
+            WindowNumber::from(self.index(v)),
+            VehicleViewWidgets::WID_VV_START_STOP.0,
+        );
     }
-    fn visit_near<F: FnMut(Handle) -> bool>(&self, x: i32, y: i32, mut visitor: F) -> bool {
-        let vs = self.vs();
-        crate::vehicle_func::has_vehicle_near_tile_xy(vs, x, y, 7, |v| {
-            v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0
-                && visitor(crate::train::Handle::from_vehicle(v))
-        })
+    /// `SetWindowDirty(WC_VEHICLE_DETAILS, v->index)`.
+    fn set_details_dirty(&self, v: Handle) {
+        set_window_dirty(
+            WindowClass::WC_VEHICLE_DETAILS,
+            WindowNumber::from(self.index(v)),
+        );
     }
-
-    fn signal_context(&self) -> crate::signal::Context {
-        crate::signal::acquire_context(self.leaves.signal_context)
+    /// `InvalidateWindowData(WC_VEHICLE_DEPOT, tile)`.
+    fn invalidate_depot_window(tile: TileIndex) {
+        invalidate_window_data(
+            WindowClass::WC_VEHICLE_DEPOT,
+            WindowNumber::from(tile),
+            0,
+            false,
+        );
     }
-    fn signal_segment(&self, id: Handle, tile: u32, side: u8) -> u64 {
-        let owner = (id).vehicle().owner_raw();
-        crate::signal::count_context_owner_read();
-        u64::from(self.signal_context().segment(tile, side, owner))
+    /// The company defaults of `owner`'s company.
+    fn servint_trains(&self, owner: Owner) -> u16 {
+        // SAFETY: Base maintenance names the shared static command and company tables.
+        let company = unsafe { &*((*(*(*self.vs.maintenance).transaction).commands).company)() };
+        let defaults = ((company.settings)().company_vehicle_defaults)(owner);
+        read_field!(defaults, servint_trains)
     }
 }
+
 impl Game<'_> {
-    fn property(&self, id: Handle, prop: u32, default: u64) -> u64 {
-        crate::newgrf_vehicle::get_vehicle_property_raw(
-            self.vs().newgrf(),
-            id.vehicle(),
-            prop as u8,
-            default as i32,
-        ) as u64
-    }
-    fn consist_changed(&self, id: Handle, allowed: u8) {
+    /// `Train::ConsistChanged`: recalculates the cached stuff of a train. Should be called
+    /// each time a vehicle is added to/removed from the chain, and when the game is loaded.
+    /// Note: this needs to be called too for 'wagon chains' (in the depot, without an engine).
+    /// `allowed_changes` is the stuff that is allowed to change.
+    fn consist_changed(&self, this: Handle, allowed_changes: ConsistChangeFlags) {
         let mut max_speed = u16::MAX;
-        let head_engine: u16 = id.vehicle().engine_type_raw();
-        let head_front: u8 = id.front();
-        let mut first_engine = if head_front != 0 {
-            head_engine
+
+        crate::services_assert::assert_with(|| this.is_front_engine() || this.is_free_wagon());
+
+        let rvi_v = self.engine(this);
+        let mut first_engine = if this.is_front_engine() {
+            this.vehicle().engine_type()
         } else {
-            u16::MAX
+            EngineID::INVALID
         };
-        write_field!((id).vehicle().ground_cache(), cached_total_length, 0_u16);
-        id.set_compatible_railtypes(0);
-        let mut tilt = true;
-        let mut min_curve_mod = i16::MAX;
-        let mut u = id;
+        write_field!(this.vehicle().ground_cache(), cached_total_length, 0);
+        this.set_compatible_railtypes(RailTypes::EMPTY);
+
+        let mut train_can_tilt = true;
+        let mut min_curve_speed_mod = i16::MAX;
+
+        let mut u = this;
         while u != Handle::NONE {
-            let part_engine: u16 = u.vehicle().engine_type_raw();
-            let part_engine_part: u8 =
-                u8::from(crate::ground_vehicle::is_engine(u.vehicle().subtype()));
+            let rvi_u = self.engine(u);
+
+            /* Check the this->first cache. */
+            crate::services_assert::assert_with(|| u.first() == this);
+
+            /* update the 'first engine' */
             write_field!(
-                (u).vehicle().ground_cache(),
+                u.vehicle().ground_cache(),
                 first_engine,
-                (u64::from(if u == id { u16::MAX } else { first_engine })) as u16
+                if this == u {
+                    EngineID::INVALID
+                } else {
+                    first_engine
+                }
+                .0
             );
-            u.set_railtypes(self.engine(u).railtypes());
-            if part_engine_part != 0 {
-                first_engine = part_engine;
+            u.set_railtypes(RailTypes(rvi_u.railtypes()));
+
+            if u.is_engine() {
+                first_engine = u.vehicle().engine_type();
             }
-            u.set_user_def_data(u64::from(self.engine(u).train_user_data()));
-            (self.leaves.invalidate_grf)(id);
-            (self.leaves.invalidate_grf)(u);
-            u = (u).next();
+
+            /* Set user defined data to its default value */
+            u.set_user_def_data(rvi_u.train_user_data());
+            self.invalidate_newgrf_cache(this);
+            self.invalidate_newgrf_cache(u);
+            u = u.next();
         }
-        u = id;
+
+        let mut u = this;
         while u != Handle::NONE {
-            u.set_user_def_data(self.property(
+            /* Update user defined data (must be done before other properties) */
+            u.set_user_def_data(self.get_vehicle_property(
                 u,
-                u32::from(crate::newgrf_properties::PROP_TRAIN_USER_DATA),
-                u.get_user_def_data(),
-            ));
-            (self.leaves.invalidate_grf)(id);
-            (self.leaves.invalidate_grf)(u);
-            u = (u).next();
+                PropertyID::PROP_TRAIN_USER_DATA,
+                i32::from(u.user_def_data()),
+            ) as u8);
+            self.invalidate_newgrf_cache(this);
+            self.invalidate_newgrf_cache(u);
+            u = u.next();
         }
-        u = id;
+
+        let mut u = this;
         while u != Handle::NONE {
-            if self.engine(u).misc() & crate::engine_type::RAIL_TILTS == 0 {
-                tilt = false;
+            let e_u = self.engine(u);
+
+            if !EngineMiscFlags(e_u.misc()).test(EngineMiscFlag::RailTilts) {
+                train_can_tilt = false;
             }
-            // SAFETY: the current shell survives property evaluation; no owner borrow is held.
-            min_curve_mod = min_curve_mod.min(unsafe {
-                crate::newgrf_vehicle::signed_property(
-                    self.vs(),
-                    u.vehicle(),
-                    crate::newgrf_properties::PROP_TRAIN_CURVE_SPEED_MOD,
-                    i32::from(self.engine(u).train_curve_mod()),
+            min_curve_speed_mod = min_curve_speed_mod.min(self.get_curve_speed_modifier(u));
+
+            /* Cache wagon override sprite group. nullptr is returned if there is none */
+            // SAFETY: A live serialized shell; evaluation retains no owner reference.
+            unsafe { crate::newgrf_vehicle::cache_override(self.vs, u.vehicle()) };
+
+            /* Reset colour map */
+            (self.vs.set_colourmap)(u.vehicle(), PAL_NONE);
+
+            /* Update powered-wagon-status and visual effect */
+            crate::vehicle_effect::update_visual_effect(u.vehicle(), true);
+
+            if rvi_v.wagon_power() != 0
+                && e_u.rail_kind() == RailVehicleTypes::WAGON
+                && crate::newgrf_vehicle::uses_wagon_override(self.vs.newgrf(), u.vehicle())
+                && !crate::bitmath_func::has_bit(
+                    u.vehicle().cached_vis_effect(),
+                    VE_DISABLE_WAGON_POWER,
                 )
-            } as i16);
-            // SAFETY: live serialized shell; evaluation retains no owner reference.
-            unsafe { crate::newgrf_vehicle::cache_override(self.vs(), u.vehicle()) };
-            (self.leaves.write_colourmap)(u, 0);
-            crate::vehicle_effect::openttd_rust_visual_update(u.vehicle(), true);
-            let powered = self.engine(id).wagon_power() != 0
-                && self.engine(u).rail_kind() == crate::vehicle::RailVehicleTypes::WAGON
-                && (self.leaves.wagon_override)(u) != 0
-                && (u).vehicle().cached_vis_effect() & 0x80 == 0;
-            u.set_flag(3, powered);
-            if (u).articulated() == 0 {
-                if u64::from(
-                    self.engine(u)
-                        .ground_power(crate::vehicle::VehicleType(u.vehicle().vehicle_type_raw())),
-                ) > 0
-                {
-                    id.set_compatible_railtypes(
-                        id.get_compatible_railtypes()
-                            | (self.leaves.all_powered)(u, u.get_railtypes()),
-                    );
+            {
+                /* wagon is powered */
+                u.set_flags(u.flags().set(VehicleRailFlag::PoweredWagon)); // cache 'powered' status
+            } else {
+                u.set_flags(u.flags().reset(VehicleRailFlag::PoweredWagon));
+            }
+
+            if !u.is_articulated_part() {
+                /* Do not count powered wagons for the compatible railtypes, as wagons always
+                have railtype normal */
+                if e_u.ground_power(VehicleType::VEH_TRAIN) > 0 {
+                    this.set_compatible_railtypes(this.compatible_railtypes().with(RailTypes(
+                        (self.services.all_powered_railtypes)(u.railtypes().0),
+                    )));
                 }
-                if u.flag(6) {
-                    u.set_railtypes(u.get_railtypes() | 1);
-                    u.set_compatible_railtypes(u.get_compatible_railtypes() | 1);
+
+                /* Some electric engines can be allowed to run on normal rail. It happens to all
+                 * existing electric engines when elrails are disabled and then re-enabled */
+                if u.flags().test(VehicleRailFlag::AllowedOnNormalRail) {
+                    let rail = RailTypes::from_element(RailType::RAILTYPE_RAIL);
+                    u.set_railtypes(u.railtypes().with(rail));
+                    u.set_compatible_railtypes(u.compatible_railtypes().with(rail));
                 }
-                if (self.engine(u).rail_kind() != crate::vehicle::RailVehicleTypes::WAGON
-                    || (self.leaves.wagon_speed_limits)(u) != 0)
-                    && (self.leaves.wagon_override)(u) == 0
+
+                /* max speed is the minimum of the speed limits of all vehicles in the consist */
+                if (e_u.rail_kind() != RailVehicleTypes::WAGON || self.wagon_speed_limits())
+                    && !crate::newgrf_vehicle::uses_wagon_override(self.vs.newgrf(), u.vehicle())
                 {
-                    let speed = self.property(
+                    let speed = self.get_vehicle_property(
                         u,
-                        u32::from(crate::newgrf_properties::PROP_TRAIN_SPEED),
-                        u64::from(self.engine(u).train_speed()),
+                        PropertyID::PROP_TRAIN_SPEED,
+                        i32::from(e_u.train_speed()),
                     ) as u16;
                     if speed != 0 {
-                        max_speed = max_speed.min(speed);
+                        max_speed = speed.min(max_speed);
                     }
                 }
             }
-            // SAFETY: the current consist retains this shell during capacity callbacks.
-            let cap = unsafe {
-                crate::engine_capabilities::openttd_rust_engine_capacity(
+
+            // SAFETY: The current consist retains this shell during capacity callbacks.
+            let new_cap = unsafe {
+                crate::engine_capabilities::determine_capacity(
                     self.leaves.capabilities,
-                    (self.vs().engine)(u.vehicle()).0.as_ptr(),
+                    e_u.0.as_ptr(),
                     u.vehicle().0.as_ptr(),
                     std::ptr::null_mut(),
                 )
             } as u16;
-            let part_cargo_cap: u16 = read_field!(u.record, cargo_cap);
-            if allowed & 2 != 0 {
-                if part_cargo_cap > cap {
-                    (self.leaves.truncate_cargo)(u, u32::from(cap));
+            if allowed_changes.test(ConsistChangeFlag::Capacity) {
+                /* Update vehicle capacity. */
+                if u.vehicle().cargo_cap() > new_cap {
+                    self.truncate_cargo(u, new_cap);
                 }
-                write_field!(
-                    (u).record,
-                    refit_cap,
-                    (u64::from(cap.min(read_field!((u).record, refit_cap)))) as u16
-                );
-                (u).vehicle().set_cargo_cap((u64::from(cap)) as u16);
-            } else if cap != part_cargo_cap {
-                (self.leaves.capacity_error)(u);
-            }
-            write_field!(
-                (u).record,
-                cached_cargo_age_period,
-                (self.property(
-                    u,
-                    u32::from(crate::newgrf_properties::PROP_TRAIN_CARGO_AGE_PERIOD),
-                    u64::from(self.engine(u).cargo_age()),
-                )) as u16
-            );
-            let mut length = u16::MAX;
-            if self.engine(u).grf_version(self.services) >= 8 {
-                length = self.property(
-                    u,
-                    u32::from(crate::newgrf_properties::PROP_TRAIN_SHORTEN_FACTOR),
-                    u64::from(u16::MAX),
-                ) as u16;
-                if length != u16::MAX && length >= 8 {
-                    let vs = self.vs();
-                    vs.unknown_callback_result(
-                        (vs.engine)(u.vehicle()),
-                        crate::newgrf_callbacks::CBID_VEHICLE_LENGTH,
-                        length,
+                u.vehicle()
+                    .set_refit_cap(new_cap.min(u.vehicle().refit_cap()));
+                u.vehicle().set_cargo_cap(new_cap);
+            } else {
+                /* Verify capacity hasn't changed. */
+                if new_cap != u.vehicle().cargo_cap() {
+                    (self.vs.show_newgrf_vehicle_error)(
+                        u.vehicle().engine_type().0,
+                        STR_NEWGRF_BROKEN.0,
+                        STR_NEWGRF_BROKEN_CAPACITY.0,
+                        GRFBug::VehCapacity,
+                        true,
                     );
                 }
-            } else if self.engine(u).callbacks() & crate::newgrf_callbacks::VEHICLE_LENGTH != 0 {
-                length = crate::newgrf_vehicle::get_vehicle_callback(
-                    self.vs().newgrf(),
-                    crate::newgrf_callbacks::CBID_VEHICLE_LENGTH,
+            }
+            u.vehicle()
+                .set_cached_cargo_age_period(self.get_vehicle_property(
+                    u,
+                    PropertyID::PROP_TRAIN_CARGO_AGE_PERIOD,
+                    i32::from(e_u.cargo_age()),
+                ) as u16);
+
+            /* check the vehicle length (callback) */
+            let mut veh_len = CALLBACK_FAILED;
+            if e_u.grf_version(self.services) >= 8 {
+                /* Use callback 36 */
+                veh_len = self.get_vehicle_property(
+                    u,
+                    PropertyID::PROP_TRAIN_SHORTEN_FACTOR,
+                    i32::from(CALLBACK_FAILED),
+                ) as u16;
+
+                if veh_len != CALLBACK_FAILED && u32::from(veh_len) >= VEHICLE_LENGTH {
+                    self.vs
+                        .unknown_callback_result(e_u, CBID_VEHICLE_LENGTH, veh_len);
+                }
+            } else if VehicleCallbackMasks(e_u.callbacks()).test(VehicleCallbackMask::Length) {
+                /* Use callback 11 */
+                veh_len = crate::newgrf_vehicle::get_vehicle_callback(
+                    self.vs.newgrf(),
+                    CBID_VEHICLE_LENGTH,
                     0,
                     0,
                     u.vehicle().engine_type(),
                     Some(u.vehicle()),
                 );
             }
-            if length == u16::MAX {
-                length = u16::from(self.engine(u).train_shorten());
+            if veh_len == CALLBACK_FAILED {
+                veh_len = u16::from(e_u.train_shorten());
             }
-            length = 8 - length.min(7);
-            if allowed & 1 != 0 {
-                write_field!(
-                    (u).vehicle().ground_cache(),
-                    cached_veh_length,
-                    (u64::from(length)) as u8
-                );
-            } else if length
-                != u16::from(read_field!((u).vehicle().ground_cache(), cached_veh_length))
-            {
-                (self.vs().length_changed)(u.vehicle());
+            let veh_len = (VEHICLE_LENGTH as i32
+                - crate::math::clamp(
+                    i32::from(veh_len),
+                    0,
+                    VEHICLE_LENGTH as i32 - 1,
+                    self.check(),
+                )) as u8;
+
+            if allowed_changes.test(ConsistChangeFlag::Length) {
+                /* Update vehicle length. */
+                write_field!(u.vehicle().ground_cache(), cached_veh_length, veh_len);
+            } else {
+                /* Verify length hasn't changed. */
+                if veh_len != u.cached_veh_length() {
+                    (self.vs.length_changed)(u.vehicle());
+                }
             }
+
             write_field!(
-                (id).vehicle().ground_cache(),
+                this.vehicle().ground_cache(),
                 cached_total_length,
-                (u64::from(
-                    read_field!((id).vehicle().ground_cache(), cached_total_length).wrapping_add(
-                        u16::from(read_field!((u).vehicle().ground_cache(), cached_veh_length))
-                    ),
-                )) as u16
+                this.cached_total_length()
+                    .wrapping_add(u16::from(u.cached_veh_length()))
             );
-            (self.leaves.invalidate_grf)(id);
-            (self.leaves.invalidate_grf)(u);
-            u = (u).next();
+            self.invalidate_newgrf_cache(this);
+            self.invalidate_newgrf_cache(u);
+            u = u.next();
         }
-        (id).vehicle()
-            .set_cached_max_speed((u64::from(max_speed)) as u16);
-        id.set_cached_tilt(u64::from(tilt));
-        id.set_cached_curve_speed_mod(u64::from(min_curve_mod as u16));
-        id.set_cached_max_curve_speed(u64::from(self.get_curve_speed_limit(id)));
-        crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle());
-        if (id).front() != 0 {
-            update_acceleration(id);
-            (self.leaves.consist_windows)(id);
+
+        /* store consist weight/max speed in cache */
+        this.vehicle().set_cached_max_speed(max_speed);
+        this.set_cached_tilt(train_can_tilt);
+        this.set_cached_curve_speed_mod(min_curve_speed_mod);
+        this.set_cached_max_curve_speed(self.get_curve_speed_limit(this));
+
+        /* recalculate cached weights and power too (we do this *after* the rest, so it is known which wagons are powered and need extra weight added) */
+        self.cargo_changed(this);
+
+        if this.is_front_engine() {
+            update_acceleration(this);
+            self.set_details_dirty(this);
+            let index = WindowNumber::from(self.index(this));
+            invalidate_window_data(
+                WindowClass::WC_VEHICLE_REFIT,
+                index,
+                VehicleInvalidateWindowData::VIWD_CONSIST_CHANGED.0,
+                false,
+            );
+            invalidate_window_data(
+                WindowClass::WC_VEHICLE_ORDERS,
+                index,
+                VehicleInvalidateWindowData::VIWD_CONSIST_CHANGED.0,
+                false,
+            );
+            invalidate_newgrf_inspect_window(
+                crate::newgrf::GrfSpecFeature::GSF_TRAINS,
+                self.index(this).0,
+            );
+
+            /* If the consist is changed while in a depot, the vehicle view window must be invalidated to update the availability of refitting. */
+            invalidate_window_data(
+                WindowClass::WC_VEHICLE_VIEW,
+                index,
+                VehicleInvalidateWindowData::VIWD_CONSIST_CHANGED.0,
+                false,
+            );
         }
     }
-    /// Computes train speed limit caused by curves.
-    /// Returns the imposed speed limit.
-    fn get_curve_speed_limit(&self, id: Handle) -> u16 {
-        let absolute_max_speed = i32::from(u16::MAX);
-        let mut max_speed = absolute_max_speed;
-        if self.acc_model() == u64::from(AccelerationModel::AM_ORIGINAL.0) {
+
+    /// `u->cargo.Truncate(max_move)`.
+    fn truncate_cargo(&self, u: Handle, max_move: u16) {
+        let refit = self.vs.visits().refit;
+        let owner = (refit.scheduler.cargo_owner)(u.vehicle());
+        // SAFETY: The live record's canonical cargo list; no borrow survives the truncation.
+        unsafe { crate::cargo_storage::truncate_vehicle(owner, *refit.cargo, u32::from(max_move)) };
+    }
+
+    /// `Train::GetCurveSpeedModifier`: get the curve speed modifier of a single part of a
+    /// train.
+    #[inline]
+    fn get_curve_speed_modifier(&self, v: Handle) -> i16 {
+        crate::newgrf_vehicle::get_engine_property(
+            self.vs.newgrf(),
+            v.vehicle().engine_type(),
+            PropertyID::PROP_TRAIN_CURVE_SPEED_MOD,
+            i32::from(self.engine(v).train_curve_mod()),
+            Some(v.vehicle()),
+            true,
+        ) as i16
+    }
+
+    /// `GetTrainStopLocation`: get the stop location of (the center) of the front vehicle of
+    /// a train at a platform of a station. `station_id` is the ID of the station where we're
+    /// stopping and `tile` the tile where the vehicle currently is. Returns the location,
+    /// calculated from the begin of the station, to stop at; the amount of 1/16th tiles in
+    /// front of the train; and the station length in 1/16th tiles.
+    fn get_train_stop_location(
+        &self,
+        station_id: StationID,
+        tile: TileIndex,
+        v: Handle,
+    ) -> (i32, i32, i32) {
+        let world = self.world();
+        let st = self.station_get(station_id);
+        let station_ahead = (crate::station::get_platform_length_in_direction(
+            world,
+            tile,
+            dir_to_diag_dir(v.vehicle().direction(), self.check()),
+        ) as i32)
+            .wrapping_mul(TILE_SIZE as i32);
+        let station_length = (crate::station::get_platform_length(world, st, tile) as i32)
+            .wrapping_mul(TILE_SIZE as i32);
+
+        /* Default to the middle of the station for stations stops that are not in
+         * the order list like intermediate stations when non-stop is disabled */
+        let mut osl = OrderStopLocation::Middle;
+        if i32::from(v.cached_total_length()) >= station_length {
+            /* The train is longer than the station, make it stop at the far end of the platform */
+            osl = OrderStopLocation::FarEnd;
+        } else if v
+            .vehicle()
+            .current_order()
+            .is_type(OrderType::OT_GOTO_STATION)
+            && v.vehicle().current_order().destination().to_station_id() == station_id
+        {
+            osl = v.vehicle().current_order().stop_location();
+        }
+
+        /* The stop location of the FRONT! of the train */
+        let stop = match osl {
+            OrderStopLocation::NearEnd => i32::from(v.cached_total_length()),
+            OrderStopLocation::Middle => station_length
+                .wrapping_sub(station_length.wrapping_sub(i32::from(v.cached_total_length())) / 2),
+            OrderStopLocation::FarEnd => station_length,
+            _ => crate::services_assert::not_reached(),
+        };
+
+        /* Subtract half the front vehicle length of the train so we get the real
+         * stop location of the train. */
+        (
+            stop.wrapping_sub((i32::from(v.cached_veh_length()) + 1) / 2),
+            station_ahead,
+            station_length,
+        )
+    }
+
+    /// `Station::Get(station)`, through the station table's checked lookup.
+    fn station_get(&self, station: StationID) -> *mut crate::station::BaseStation {
+        self.station_lookup(station).base
+    }
+    /// `Station::Get(station)`, resolving both the station and its base.
+    fn station_lookup(&self, station: StationID) -> crate::station_service::LoadingStation {
+        // SAFETY: The process-lifetime tables resolve the original `Station::Get` once.
+        let stations = unsafe { &*(*(self.services.station_catchment)()).station };
+        (stations.station)(station.0)
+    }
+
+    /// `Train::GetCurveSpeedLimit`: computes train speed limit caused by curves. Returns the
+    /// imposed speed limit.
+    fn get_curve_speed_limit(&self, this: Handle) -> u16 {
+        const ABSOLUTE_MAX_SPEED: i32 = u16::MAX as i32;
+
+        crate::services_assert::assert_with(|| this.first() == this);
+
+        let mut max_speed = ABSOLUTE_MAX_SPEED;
+
+        if self.train_acceleration_model() == AccelerationModel::AM_ORIGINAL {
             return max_speed as u16;
         }
+
         let mut curvecount = [0_i32; 2];
-        // First find the curve speed limit.
-        let (mut numcurve, mut sum, mut pos, mut lastpos) = (0_i32, 0_i32, 0_i32, -1_i32);
-        let mut u = id;
-        loop {
-            let part_next: Handle = u.next();
-            let this_dir = Direction(u.vehicle().direction_raw());
-            if part_next == Handle::NONE {
-                break;
-            }
-            let next_dir = Direction((part_next).vehicle().direction_raw());
-            let dirdiff = DirDiff(this_dir.0.wrapping_sub(next_dir.0) & 7);
-            if dirdiff != DirDiff::DIRDIFF_SAME {
+
+        /* first find the curve speed limit */
+        let mut numcurve = 0_i32;
+        let mut sum = 0_i32;
+        let mut pos = 0_i32;
+        let mut lastpos = -1_i32;
+        let mut u = this;
+        let mut next = u.next();
+        while next != Handle::NONE {
+            'part: {
+                let this_dir = u.vehicle().direction();
+                let next_dir = next.vehicle().direction();
+
+                let dirdiff = dir_difference(this_dir, next_dir, self.check());
+                if dirdiff == DirDiff::DIRDIFF_SAME {
+                    break 'part;
+                }
+
                 if dirdiff == DirDiff::DIRDIFF_45LEFT {
                     curvecount[0] = curvecount[0].wrapping_add(1);
                 }
@@ -826,2195 +1215,3198 @@ impl Game<'_> {
                     }
                     lastpos = pos;
                 }
-                // If we have a 90 degree turn, fix the speed limit to 60.
+
+                /* if we have a 90 degree turn, fix the speed limit to 60 */
                 if dirdiff == DirDiff::DIRDIFF_90LEFT || dirdiff == DirDiff::DIRDIFF_90RIGHT {
                     max_speed = 61;
                 }
             }
-            u = part_next;
-            pos = pos.wrapping_add(i32::from(u16::from(read_field!(
-                (u).vehicle().ground_cache(),
-                cached_veh_length
-            ))));
+            u = next;
+            pos = pos.wrapping_add(i32::from(u.cached_veh_length()));
+            next = u.next();
         }
+
         if numcurve > 0 && max_speed > 88 {
-            if curvecount == [1, 1] {
-                max_speed = absolute_max_speed;
+            if curvecount[0] == 1 && curvecount[1] == 1 {
+                max_speed = ABSOLUTE_MAX_SPEED;
             } else {
-                sum = sum.wrapping_add(VEHICLE_LENGTH as i32 - 1) / VEHICLE_LENGTH as i32;
+                sum = crate::math::ceil_div(sum as u32, VEHICLE_LENGTH) as i32;
                 sum /= numcurve;
-                let d = 13 - sum.clamp(1, 12);
-                max_speed = 232 - d * d;
+                let check = self.check();
+                max_speed = 232
+                    - (13 - crate::math::clamp(sum, 1, 12, check))
+                        * (13 - crate::math::clamp(sum, 1, 12, check));
             }
         }
-        if max_speed != absolute_max_speed {
-            // Apply the current railtype's curve speed advantage.
-            max_speed = max_speed.wrapping_add(
-                (max_speed / 2).wrapping_mul((self.leaves.curve_advantage)(id) as i32),
-            );
-            if id.get_cached_tilt() != 0 {
-                // Apply max_speed bonus of 20% for a tilting train.
+
+        if max_speed != ABSOLUTE_MAX_SPEED {
+            /* Apply the current railtype's curve speed advantage */
+            let curve_speed = (self.services.rail_type_curve_speed)(RailType(
+                self.world().rail_type(this.vehicle().tile().0),
+            ));
+            max_speed =
+                max_speed.wrapping_add((max_speed / 2).wrapping_mul(i32::from(curve_speed)));
+
+            if this.cached_tilt() {
+                /* Apply max_speed bonus of 20% for a tilting train */
                 max_speed = max_speed.wrapping_add(max_speed / 5);
             }
-            // Apply max_speed modifier (cached value is fixed-point binary with 8 fractional bits)
-            // and clamp the result to an acceptable range.
+
+            /* Apply max_speed modifier (cached value is fixed-point binary with 8 fractional bits)
+             * and clamp the result to an acceptable range. */
             max_speed = max_speed.wrapping_add(
-                max_speed.wrapping_mul(i32::from(id.get_cached_curve_speed_mod() as i16)) / 256,
+                max_speed.wrapping_mul(i32::from(this.cached_curve_speed_mod())) / 256,
             );
-            max_speed = max_speed.clamp(2, absolute_max_speed);
+            max_speed = crate::math::clamp(max_speed, 2, ABSOLUTE_MAX_SPEED, self.check());
         }
+
         max_speed as u16
     }
-    /// Get the stop location of (the center) of the front vehicle of a train at
-    /// a platform of a station. Returns the location calculated from the begin of
-    /// the station, the amount of 1/16th tiles ahead, and the station length.
-    fn get_train_stop_location(
-        &self,
-        id: Handle,
-        station_id: StationID,
-        tile: TileIndex,
-    ) -> (i32, i32, i32) {
-        let world = crate::map_func::World::new(self.services);
-        // SAFETY: The process-lifetime tables resolve the original Station::Get once.
-        let stations = unsafe { &*(*((self.services.station_catchment)())).station };
-        let st = (stations.station)(station_id.0);
-        let dir =
-            crate::direction_func::dir_to_diag_dir_raw((id).vehicle().direction_raw(), |ok| {
-                world.check(ok);
-            });
-        let station_ahead =
-            (crate::station::get_platform_length_in_direction_raw(&world, tile.0, dir) as i32)
-                .wrapping_mul(TILE_SIZE as i32);
-        let station_length = (crate::station::get_platform_length_raw(&world, st.base, tile.0)
-            as i32)
-            .wrapping_mul(TILE_SIZE as i32);
-        let v_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));
-        let v_total_length: u16 = read_field!(id.vehicle().ground_cache(), cached_total_length);
-        let v_order_destination = StationID(id.vehicle().current_order().destination_raw());
-        let v_order = OrderType(id.vehicle().current_order().kind_raw());
-        // Default to the middle of the station for stations stops that are not in
-        // the order list like intermediate stations when non-stop is disabled.
-        let mut osl = u64::from(OrderStopLocation::Middle.0);
-        if i32::from(v_total_length) >= station_length {
-            // The train is longer than the station, make it stop at the far end of the platform.
-            osl = u64::from(OrderStopLocation::FarEnd.0);
-        } else if v_order == OrderType::OT_GOTO_STATION && v_order_destination == station_id {
-            osl = (self.leaves.stop_location)(id);
-        }
-        // The stop location of the FRONT! of the train.
-        let stop = match osl {
-            value if value == u64::from(OrderStopLocation::NearEnd.0) => i32::from(v_total_length),
-            value if value == u64::from(OrderStopLocation::Middle.0) => station_length
-                .wrapping_sub(station_length.wrapping_sub(i32::from(v_total_length)) / 2),
-            _ => station_length,
-        };
-        // Subtract half the front vehicle length of the train so we get the real
-        // stop location of the train.
-        (
-            stop.wrapping_sub((i32::from(v_length) + 1) / 2),
-            station_ahead,
-            station_length,
-        )
-    }
-    /// Calculates the maximum speed of the vehicle under its current conditions.
-    fn get_current_max_speed(&self, id: Handle) -> i32 {
-        let v_tile = TileIndex(id.vehicle().tile_raw());
-        let v_max_track_speed: u16 =
-            read_field!(id.vehicle().ground_cache(), cached_max_track_speed);
-        let v_speed: u16 = id.vehicle().cur_speed();
-        let model = self.acc_model();
-        let mut max_speed = if model == u64::from(AccelerationModel::AM_ORIGINAL.0) {
-            i32::from(v_max_track_speed)
+
+    /// `Train::GetCurrentMaxSpeed`: calculates the maximum speed of the vehicle under its
+    /// current conditions.
+    fn get_current_max_speed(&self, this: Handle) -> i32 {
+        let mut max_speed = if self.train_acceleration_model() == AccelerationModel::AM_ORIGINAL {
+            i32::from(read_field!(
+                this.vehicle().ground_cache(),
+                cached_max_track_speed
+            ))
         } else {
-            id.get_cached_max_curve_speed() as i32
+            i32::from(this.cached_max_curve_speed())
         };
-        if model == u64::from(AccelerationModel::AM_REALISTIC.0)
-            && (self.leaves.is_station)(id, v_tile.0) != 0
+
+        if self.train_acceleration_model() == AccelerationModel::AM_REALISTIC
+            && self.is_rail_station_tile(this.vehicle().tile())
         {
-            let sid = self.world().get_station_index(v_tile);
-            if crate::movement::should_stop(self.services, id.vehicle(), sid.0) {
+            let sid = self.get_station_index(this.vehicle().tile());
+            if crate::movement::should_stop_at_station(self.services, this.vehicle(), sid) {
                 let (stop_at, station_ahead, station_length) =
-                    self.get_train_stop_location(id, sid, v_tile);
-                // The distance to go is whatever is still ahead of the train minus the
-                // distance from the train's stop location to the end of the platform.
+                    self.get_train_stop_location(sid, this.vehicle().tile(), this);
+
+                /* The distance to go is whatever is still ahead of the train minus the
+                 * distance from the train's stop location to the end of the platform */
                 let distance_to_go = station_ahead / TILE_SIZE as i32
                     - station_length.wrapping_sub(stop_at) / TILE_SIZE as i32;
+
                 if distance_to_go > 0 {
                     let mut st_max_speed = 120;
-                    let delta_v = i32::from(v_speed) / distance_to_go.wrapping_add(1);
-                    if max_speed > i32::from(v_speed) - delta_v {
-                        st_max_speed = i32::from(v_speed) - delta_v / 10;
+
+                    let cur_speed = i32::from(this.vehicle().cur_speed());
+                    let delta_v = cur_speed / (distance_to_go + 1);
+                    if max_speed > cur_speed - delta_v {
+                        st_max_speed = cur_speed - (delta_v / 10);
                     }
+
                     st_max_speed = st_max_speed.max(25_i32.wrapping_mul(distance_to_go));
                     max_speed = max_speed.min(st_max_speed);
                 }
             }
         }
-        let mut u = id;
+
+        let mut u = this;
         while u != Handle::NONE {
-            if model == u64::from(AccelerationModel::AM_REALISTIC.0)
-                && u.get_track() == u64::from(TrackBits::TRACK_BIT_DEPOT.0)
+            if self.train_acceleration_model() == AccelerationModel::AM_REALISTIC
+                && u.track() == TrackBits::TRACK_BIT_DEPOT
             {
                 max_speed = max_speed.min(61);
                 break;
             }
-            // Vehicle is on the middle part of a bridge.
-            if u.get_track() == u64::from(TrackBits::TRACK_BIT_WORMHOLE.0)
-                && VehStates((u).vehicle().vehstatus_raw()).0
-                    & VehStates::from_element(VehState::Hidden).0
-                    == 0
+
+            /* Vehicle is on the middle part of a bridge. */
+            if u.track() == TrackBits::TRACK_BIT_WORMHOLE
+                && !u.vehicle().vehstatus().test(VehState::Hidden)
             {
-                let tile = (u).vehicle().tile_raw();
-                max_speed = max_speed.min(i32::from((self.services.bridge_speed)(tile)));
+                max_speed = max_speed.min(i32::from((self.services.bridge_speed)(
+                    u.vehicle().tile().0,
+                )));
             }
-            u = (u).next();
+            u = u.next();
         }
-        max_speed = max_speed.min((self.leaves.order_max_speed)(id) as i32);
+
+        max_speed = max_speed.min(i32::from(this.vehicle().current_order().max_speed()));
         max_speed.min(i32::from(read_field!(
-            (id).vehicle().ground_cache(),
+            this.vehicle().ground_cache(),
             cached_max_track_speed
         )))
     }
-    fn update_speed(&self, id: Handle) -> i32 {
-        let v_status: u8 = id.vehicle().vehstatus_raw();
-        let v_acceleration: u8 = id.vehicle().acceleration();
-        let braking = v_status & 2 != 0 || id.flag(0) || id.flag(8);
-        let max = self.get_current_max_speed(id);
-        if self.acc_model() == 0 {
-            crate::ground_vehicle::do_update_speed(
-                id.vehicle(),
-                (i64::from(i32::from(v_acceleration) * if braking { -4 } else { 2 }) as u64) as u32,
-                0,
-                (max as u64) as i32,
-            ) as i32
+
+    /// `MarkTrainAsStuck`: mark a train as stuck and stop it if it isn't stopped right now.
+    fn mark_train_as_stuck(&self, v: Handle) {
+        if !v.flags().test(VehicleRailFlag::Stuck) {
+            /* It is the first time the problem occurred, set the "train stuck" flag. */
+            v.set_flags(v.flags().set(VehicleRailFlag::Stuck));
+
+            v.set_wait_counter(0);
+
+            /* Stop train */
+            v.vehicle().set_cur_speed(0);
+            v.vehicle().set_subspeed(0);
+            self.set_last_speed(v);
+
+            self.set_start_stop_dirty(v);
+        }
+    }
+
+    /// `UpdateStatusAfterSwap`: updates some variables after swapping the vehicle.
+    #[inline]
+    fn update_status_after_swap(&self, v: Handle) {
+        /* Reverse the direction. */
+        if v.track() != TrackBits::TRACK_BIT_DEPOT {
+            v.vehicle()
+                .set_direction(reverse_dir(v.vehicle().direction(), self.check()));
+        }
+
+        /* Call the proper EnterTile function unless we are in a wormhole. */
+        if v.track() == TrackBits::TRACK_BIT_WORMHOLE {
+            crate::witness::hit(crate::witness::TRAIN_WORMHOLE_SWAP);
+            /* VehicleEnter_TunnelBridge() sets TRACK_BIT_WORMHOLE when the vehicle
+             * is on the last bit of the bridge head (frame == TILE_SIZE - 1).
+             * If we were swapped with such a vehicle, we have set TRACK_BIT_WORMHOLE,
+             * when we shouldn't have. Check if this is the case. */
+            let vt = self.tile_virt_xy(v.vehicle().x_pos(), v.vehicle().y_pos());
+            if self.is_tile_type(vt, TileType::MP_TUNNELBRIDGE) {
+                self.vehicle_enter_tile(v, vt, v.vehicle().x_pos(), v.vehicle().y_pos());
+                if v.track() != TrackBits::TRACK_BIT_WORMHOLE
+                    && self.world().bridge_tile(v.vehicle().tile().0)
+                {
+                    /* We have just left the wormhole, possibly set the
+                     * "goingdown" bit. UpdateInclination() can be used
+                     * because we are at the border of the tile. */
+                    self.update_position(v);
+                    self.update_inclination(v, true, true);
+                    return;
+                }
+            }
         } else {
-            crate::ground_vehicle::do_update_speed(
-                id.vehicle(),
-                crate::ground_vehicle::get_acceleration(self.leaves.physics, id.vehicle()) as u32,
-                (u64::from(!braking) * 2) as i32,
-                (max as u64) as i32,
-            ) as i32
+            self.vehicle_enter_tile(
+                v,
+                v.vehicle().tile(),
+                v.vehicle().x_pos(),
+                v.vehicle().y_pos(),
+            );
         }
+
+        self.update_position(v);
+        self.viewport(v, true, true);
     }
-    fn mark_dirty(&self, id: Handle) {
-        let mut u = id;
-        loop {
-            (self.leaves.write_colourmap)(u, 0);
-            (self.leaves.viewport)(u, 1, 0);
-            u = (u).next();
-            if u == Handle::NONE {
-                break;
-            }
+
+    /// `ReverseTrainSwapVeh`: swap vehicles `left` and `right` (the original's `l` and `r`)
+    /// in consist `v`, and reverse their direction. Both are vehicle indices in the consist.
+    fn reverse_train_swap_veh(&self, v: Handle, mut left: i32, mut right: i32) {
+        /* locate vehicles to swap */
+        let mut a = v;
+        while left != 0 {
+            a = a.next();
+            left -= 1;
         }
-        crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle());
-        update_acceleration(id);
-    }
-    fn trackdir(&self, id: Handle) -> u8 {
-        let v_tile: u32 = id.vehicle().tile_raw();
-        let v_direction: u8 = id.vehicle().direction_raw();
-        let v_status: u8 = id.vehicle().vehstatus_raw();
-        if v_status & 128 != 0 {
-            return u8::MAX;
+        let mut b = v;
+        while right != 0 {
+            b = b.next();
+            right -= 1;
         }
-        let track = id.get_track() as u8;
-        if track == DEPOT {
-            return (self.leaves.diag_trackdir)(id, (self.leaves.depot_dir)(id, v_tile) as u8)
-                as u8;
-        }
-        if track == WORMHOLE {
-            return (self.leaves.diag_trackdir)(id, (self.leaves.dir_diag)(id, v_direction) as u8)
-                as u8;
-        }
-        (self.leaves.track_direction)(id, (self.leaves.first_track)(id, track) as u8, v_direction)
-            as u8
-    }
-    fn running_cost(&self, id: Handle) -> i64 {
-        let vs = self.vs();
-        // SAFETY: The shared NewGRF services live for the simulation runtime.
-        let cap = unsafe { (&*(vs.newgrf)()).capabilities };
-        let mut cost = 0_i64;
-        let mut u = id;
-        loop {
-            let e = (vs.engine)(u.vehicle()).0.as_ptr();
-            if crate::vehicle::EngineRef::of(e).train_price() != crate::economy_type::INVALID_PRICE
+
+        if a == b {
+            /* Swap GVF_GOINGUP_BIT/GVF_GOINGDOWN_BIT.
+             * This is a little bit redundant way, a->gv_flags will
+             * be (re)set twice, but it reduces code duplication */
+            swap_train_flags(a.vehicle().ground(), a.vehicle().ground());
+            self.update_status_after_swap(a);
+        } else {
+            /* swap the hidden bits */
             {
-                let mut factor = self.property(
-                    u,
-                    u32::from(crate::newgrf_properties::PROP_TRAIN_RUNNING_COST_FACTOR),
-                    u64::from(crate::vehicle::EngineRef::of(e).train_running()),
-                ) as u32;
-                if factor != 0 {
-                    if (u).multiheaded() != 0 {
-                        factor /= 2;
-                    }
-                    cost = cost.saturating_add(crate::engine_capabilities::price(
-                        cap,
-                        e,
-                        u32::from(crate::vehicle::EngineRef::of(e).train_price()),
-                        factor,
-                        0,
-                    ));
-                }
+                let a_hidden = a.vehicle().vehstatus().test(VehState::Hidden);
+                let b_hidden = b.vehicle().vehstatus().test(VehState::Hidden);
+                b.vehicle().set_hidden(a_hidden);
+                a.vehicle().set_hidden(b_hidden);
             }
-            u = (u).next_vehicle();
-            if u == Handle::NONE {
-                break;
-            }
+
+            let track = a.track();
+            a.set_track(b.track());
+            b.set_track(track);
+            let direction = a.vehicle().direction();
+            a.vehicle().set_direction(b.vehicle().direction());
+            b.vehicle().set_direction(direction);
+            let x_pos = a.vehicle().x_pos();
+            a.vehicle().set_x_pos(b.vehicle().x_pos());
+            b.vehicle().set_x_pos(x_pos);
+            let y_pos = a.vehicle().y_pos();
+            a.vehicle().set_y_pos(b.vehicle().y_pos());
+            b.vehicle().set_y_pos(y_pos);
+            let tile = a.vehicle().tile();
+            a.vehicle().set_tile(b.vehicle().tile());
+            b.vehicle().set_tile(tile);
+            let z_pos = a.vehicle().z_pos();
+            a.vehicle().set_z_pos(b.vehicle().z_pos());
+            b.vehicle().set_z_pos(z_pos);
+
+            swap_train_flags(a.vehicle().ground(), b.vehicle().ground());
+
+            self.update_status_after_swap(a);
+            self.update_status_after_swap(b);
         }
-        cost
-    }
-}
-/// Train branch witness `index` (`crate::witness::NAMES` train order).
-const BREAKDOWN_SPEEDS: [u16; 16] = [
-    225, 210, 195, 180, 165, 150, 135, 120, 105, 90, 75, 60, 45, 30, 15, 15,
-];
-impl Game<'_> {
-    fn write_status(id: Handle, mask: u8, value: bool) {
-        let old = (id).vehicle().vehstatus_raw();
-        (id).vehicle()
-            .set_vehstatus_raw((u64::from(if value { old | mask } else { old & !mask })) as u8);
     }
 
-    fn exitdir(&self, id: Handle) -> u8 {
-        (self.leaves.veh_exit_dir)(id, (id).vehicle().direction_raw(), id.track()) as u8
-    }
-    fn compatible(&self, id: Handle, tile: u32) -> bool {
-        crate::tile_map::is_tile_owner(
-            self.services,
-            TileIndex(tile),
-            crate::company_type::CompanyID((id).vehicle().owner_raw()),
-        ) && ((id).front() == 0
-            || id.get_compatible_railtypes() & (1 << (self.leaves.rail_type)(Handle::NONE, tile))
-                != 0)
-    }
-    fn can_leave(&self, id: Handle) -> bool {
-        let v_tile: u32 = id.vehicle().tile_raw();
-        let v_direction: u8 = id.vehicle().direction_raw();
-        let track = id.track();
-        if track == WORMHOLE || track == DEPOT {
-            return false;
-        }
-        if is_tile_type(
-            self.services,
-            TileIndex(v_tile),
-            crate::tile_type::TileType::MP_TUNNELBRIDGE,
-        ) && self.world().tunnel_bridge_dir(v_tile) * 2 + 1 == v_direction
-        {
-            return false;
-        }
-        if (self.leaves.is_depot)(Handle::NONE, v_tile) != 0
-            && ((self.leaves.depot_dir)(Handle::NONE, v_tile) as u8 ^ 2) * 2 + 1 == v_direction
-        {
-            return false;
-        }
-        true
-    }
-    fn approaching_crossing(&self, id: Handle) -> u32 {
-        if !self.can_leave(id) {
-            return INVALID_TILE;
-        }
-        let base = (id).vehicle().tile_raw();
-        let dir = self.exitdir(id);
-        let tile = base.wrapping_add((self.leaves.tile_offset_diag)(id, dir) as u32);
-        if (self.leaves.is_crossing)(Handle::NONE, tile) == 0
-            || (self.leaves.diag_axis)(id, dir)
-                == (self.leaves.crossing_road_axis)(Handle::NONE, tile)
-            || !self.compatible(id, tile)
-        {
-            return INVALID_TILE;
-        }
-        tile
-    }
-    fn train_on_tile(&self, tile: u32) -> bool {
-        self.visit_tile(tile, |_| true)
-    }
-    fn crossing_approach(&self, tile: u32) -> bool {
-        let dir = (self.leaves.axis_diag)(
-            Handle::NONE,
-            (self.leaves.crossing_rail_axis)(Handle::NONE, tile) as u8,
-        ) as u8;
-        for d in [dir, dir ^ 2] {
-            let from = tile.wrapping_add((self.leaves.tile_offset_diag)(Handle::NONE, d) as u32);
-            if self.visit_tile(from, |id| {
-                let v_status: u8 = id.vehicle().vehstatus_raw();
-                let v_front: u8 = id.front();
-                if v_status & 128 == 0 && v_front != 0 && self.approaching_crossing(id) == tile {
-                    return true;
-                }
+    /// `TrainOnCrossing`: check if a level crossing tile has a train on it.
+    /// Precondition: `tile` is a level crossing.
+    fn train_on_crossing(&self, tile: TileIndex) -> bool {
+        crate::services_assert::assert_with(|| self.is_level_crossing_tile(tile));
 
-                false
-            }) {
-                return true;
-            }
+        crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), tile, is_train)
+    }
+
+    /// `TrainApproachingCrossingEnum`: checks if a train is approaching a rail-road crossing.
+    /// `v` is the vehicle on tile and `tile` the tile with crossing we are testing.
+    #[inline]
+    fn train_approaching_crossing_enum(&self, v: VehicleRef, tile: TileIndex) -> bool {
+        if v.vehicle_type() != VehicleType::VEH_TRAIN || v.vehstatus().test(VehState::Crashed) {
+            return false;
         }
-        false
+
+        let t = Handle::from_vehicle(v);
+        if !t.is_front_engine() {
+            return false;
+        }
+
+        self.train_approaching_crossing_tile(t) == tile
     }
-    fn check_crossing(&self, tile: u32) -> bool {
-        (self.services.crossing_reserved)(tile)
-            || self.train_on_tile(tile)
-            || self.crossing_approach(tile)
+
+    /// `TrainApproachingCrossing`: finds a vehicle approaching rail-road crossing.
+    /// Precondition: `tile` is a rail-road crossing.
+    #[inline]
+    fn train_approaching_crossing(&self, tile: TileIndex) -> bool {
+        crate::services_assert::assert_with(|| self.is_level_crossing_tile(tile));
+
+        let mut dir = axis_to_diag_dir(
+            crate::road_map::get_crossing_rail_axis(self.world(), tile),
+            self.check(),
+        );
+        let mut tile_from = tile + self.tile_offs_by_diag_dir(dir);
+
+        if crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), tile_from, |v| {
+            self.train_approaching_crossing_enum(v, tile)
+        }) {
+            return true;
+        }
+
+        dir = reverse_diag_dir(dir, self.check());
+        tile_from = tile + self.tile_offs_by_diag_dir(dir);
+
+        crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), tile_from, |v| {
+            self.train_approaching_crossing_enum(v, tile)
+        })
     }
-    fn update_crossing_tile(&self, tile: u32, sound: bool, force: bool) {
-        let barred = force || self.check_crossing(tile);
-        if barred != ((self.leaves.crossing_barred)(Handle::NONE, tile) != 0) {
-            crate::witness::hit(if barred {
+
+    /// `CheckLevelCrossing`: check if a level crossing should be barred.
+    #[inline]
+    fn check_level_crossing(&self, tile: TileIndex) -> bool {
+        /* reserved || train on crossing || train approaching crossing */
+        self.has_crossing_reservation(tile)
+            || self.train_on_crossing(tile)
+            || self.train_approaching_crossing(tile)
+    }
+
+    /// `UpdateLevelCrossingTile`: sets a level crossing tile to the correct state. `sound` is
+    /// whether to play sound and `force_barred` whether to set the crossing to barred.
+    /// Precondition: `tile` is a rail-road crossing.
+    fn update_level_crossing_tile(&self, tile: TileIndex, sound: bool, force_barred: bool) {
+        crate::services_assert::assert_with(|| self.is_level_crossing_tile(tile));
+
+        /* We force the crossing to be barred when an adjacent crossing is barred, otherwise let it decide for itself. */
+        let set_barred = force_barred || self.check_level_crossing(tile);
+
+        /* The state has changed */
+        if set_barred != self.is_crossing_barred(tile) {
+            crate::witness::hit(if set_barred {
                 crate::witness::TRAIN_CROSS_BAR
             } else {
                 crate::witness::TRAIN_CROSS_UNBAR
             });
-            // SAFETY: The shared catalog and native setting live for this serialized entry.
-            if barred && sound && unsafe { self.services.settings().ambient.read() } {
-                (self.leaves.crossing_sound)(Handle::NONE, tile);
+            if set_barred && sound && self.ambient() {
+                self.snd_play_tile_fx(SoundFx::SND_0E_LEVEL_CROSSING, tile);
             }
-            (self.leaves.write_crossing_bar)(Handle::NONE, tile, u8::from(barred));
-            (self.services.mark_dirty)(tile);
+            self.world().set_crossing_barred(tile, set_barred);
+            self.mark_tile_dirty_by_tile(tile);
         }
     }
-    fn update_crossing(&self, tile: u32, sound: bool, force: bool) {
-        if (self.leaves.is_crossing)(Handle::NONE, tile) == 0 {
+
+    /// `UpdateLevelCrossing`: update a level crossing to barred or open (crossing may include
+    /// multiple adjacent tiles). `tile` causes the update; `sound` says whether to play
+    /// sound; `force_bar` forces the crossing to be barred.
+    fn update_level_crossing(&self, tile: TileIndex, sound: bool, force_bar: bool) {
+        if !self.is_level_crossing_tile(tile) {
             return;
         }
-        let mut state = force;
-        let axis = (self.leaves.crossing_road_axis)(Handle::NONE, tile);
-        let dir = (self.leaves.axis_diag)(Handle::NONE, axis as u8) as u8;
-        for d in [dir, dir ^ 2] {
+
+        let mut forced_state = force_bar;
+
+        let axis = self.get_crossing_road_axis(tile);
+        let dir1 = axis_to_diag_dir(axis, self.check());
+        let dir2 = reverse_diag_dir(dir1, self.check());
+
+        /* Check if an adjacent crossing is barred. */
+        for dir in [dir1, dir2] {
             let mut t = tile;
-            while !state
-                && t < self.services.map_size()
-                && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+            while !forced_state
+                && t.0 < self.services.map_size()
+                && self.is_level_crossing_tile(t)
+                && self.get_crossing_road_axis(t) == axis
             {
-                state |= self.check_crossing(t);
-                t = self
-                    .services
-                    .map()
-                    .tile_add_by_diag_dir(
-                        TileIndex(t),
-                        DiagDirection(d),
-                        crate::map_func::native_check,
-                    )
-                    .0;
+                forced_state |= self.check_level_crossing(t);
+                t = self.tile_add_by_diag_dir(t, dir);
             }
         }
-        self.update_crossing_tile(tile, sound, state);
-        for d in [dir, dir ^ 2] {
-            let mut t = self
-                .services
-                .map()
-                .tile_add_by_diag_dir(
-                    TileIndex(tile),
-                    DiagDirection(d),
-                    crate::map_func::native_check,
-                )
-                .0;
-            while t < self.services.map_size()
-                && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+
+        /* Now that we know whether all tiles in this crossing should be barred or open,
+         * we need to update those tiles. We start with the tile itself, then look along the road axis. */
+        self.update_level_crossing_tile(tile, sound, forced_state);
+        for dir in [dir1, dir2] {
+            let mut t = self.tile_add_by_diag_dir(tile, dir);
+            while t.0 < self.services.map_size()
+                && self.is_level_crossing_tile(t)
+                && self.get_crossing_road_axis(t) == axis
             {
-                self.update_crossing_tile(t, sound, state);
-                t = self
-                    .services
-                    .map()
-                    .tile_add_by_diag_dir(
-                        TileIndex(t),
-                        DiagDirection(d),
-                        crate::map_func::native_check,
-                    )
-                    .0;
+                self.update_level_crossing_tile(t, sound, forced_state);
+                t = self.tile_add_by_diag_dir(t, dir);
             }
         }
     }
-    fn adjacent_crossing_dirty(&self, tile: u32, axis: u64) {
-        let dir = (self.leaves.axis_diag)(Handle::NONE, axis as u8) as u8;
-        for d in [dir, dir ^ 2] {
-            let t = self
-                .services
-                .map()
-                .tile_add_by_diag_dir(
-                    TileIndex(tile),
-                    DiagDirection(d),
-                    crate::map_func::native_check,
-                )
-                .0;
-            if t < self.services.map_size()
-                && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+
+    /// `MarkDirtyAdjacentLevelCrossingTiles`: find adjacent level crossing tiles in this
+    /// multi-track crossing and mark them dirty. `tile` causes the update.
+    fn mark_dirty_adjacent_level_crossing_tiles(&self, tile: TileIndex, road_axis: Axis) {
+        let dir1 = axis_to_diag_dir(road_axis, self.check());
+        let dir2 = reverse_diag_dir(dir1, self.check());
+        for dir in [dir1, dir2] {
+            let t = self.tile_add_by_diag_dir(tile, dir);
+            if t.0 < self.services.map_size()
+                && self.is_level_crossing_tile(t)
+                && self.get_crossing_road_axis(t) == road_axis
             {
-                (self.services.mark_dirty)(t);
+                self.mark_tile_dirty_by_tile(t);
             }
         }
     }
-    fn crossing_removed(&self, tile: u32, axis: u64) {
-        let dir = (self.leaves.axis_diag)(Handle::NONE, axis as u8) as u8;
-        for d in [dir, dir ^ 2] {
-            let diff = (self.leaves.tile_offset_diag)(Handle::NONE, d) as u32;
+
+    /// `UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval`: update adjacent level
+    /// crossing tiles in this multi-track crossing, due to removal of a level crossing tile.
+    /// `tile` is the crossing tile which has been or is about to be removed, and which caused
+    /// the update.
+    fn update_adjacent_level_crossing_tiles_on_level_crossing_removal(
+        &self,
+        tile: TileIndex,
+        road_axis: Axis,
+    ) {
+        let dir1 = axis_to_diag_dir(road_axis, self.check());
+        let dir2 = reverse_diag_dir(dir1, self.check());
+        for dir in [dir1, dir2] {
+            let diff = self.tile_offs_by_diag_dir(dir);
             let mut occupied = false;
-            let mut t = tile.wrapping_add(diff);
-            while t < self.services.map_size()
-                && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+            let mut t = tile + diff;
+            while t.0 < self.services.map_size()
+                && self.is_level_crossing_tile(t)
+                && self.get_crossing_road_axis(t) == road_axis
             {
-                occupied |= self.check_crossing(t);
-                t = t.wrapping_add(diff);
+                occupied |= self.check_level_crossing(t);
+                t += diff;
             }
             if occupied {
-                t = tile.wrapping_add(diff);
-                if t < self.services.map_size()
-                    && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                    && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+                /* Mark the immediately adjacent tile dirty */
+                let t = tile + diff;
+                if t.0 < self.services.map_size()
+                    && self.is_level_crossing_tile(t)
+                    && self.get_crossing_road_axis(t) == road_axis
                 {
-                    (self.services.mark_dirty)(t);
+                    self.mark_tile_dirty_by_tile(t);
                 }
             } else {
-                t = tile.wrapping_add(diff);
-                while t < self.services.map_size()
-                    && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                    && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+                /* Unbar the crossing tiles in this direction as necessary */
+                let mut t = tile + diff;
+                while t.0 < self.services.map_size()
+                    && self.is_level_crossing_tile(t)
+                    && self.get_crossing_road_axis(t) == road_axis
                 {
-                    if (self.leaves.crossing_barred)(Handle::NONE, t) != 0 {
-                        (self.leaves.write_crossing_bar)(Handle::NONE, t, 0);
-                        (self.services.mark_dirty)(t);
+                    if self.is_crossing_barred(t) {
+                        /* The crossing tile is barred, unbar it and continue to check the next tile */
+                        self.world().set_crossing_barred(t, false);
+                        self.mark_tile_dirty_by_tile(t);
                     } else {
-                        (self.services.mark_dirty)(t);
+                        /* The crossing tile is already unbarred, mark the tile dirty and stop checking */
+                        self.mark_tile_dirty_by_tile(t);
                         break;
                     }
-                    t = t.wrapping_add(diff);
+                    t += diff;
                 }
             }
         }
     }
-    fn bar_crossing(&self, tile: u32) {
-        if (self.leaves.crossing_barred)(Handle::NONE, tile) == 0 {
-            (self.services.set_crossing_reserved)(tile, true);
-            self.update_crossing(tile, true, false);
+
+    /// `MaybeBarCrossingWithSound`: bars crossing and plays ding-ding sound if not barred
+    /// already. Precondition: `tile` is a rail-road crossing.
+    #[inline]
+    fn maybe_bar_crossing_with_sound(&self, tile: TileIndex) {
+        if !self.is_crossing_barred(tile) {
+            (self.services.set_crossing_reserved)(tile.0, true);
+            self.update_level_crossing(tile, true, false);
         }
     }
-    fn mark_stuck(&self, id: Handle) {
-        if !id.flag(8) {
-            id.set_flag(8, true);
-            id.set_wait_counter(0);
-            (id).vehicle().set_cur_speed(0_u16);
-            (id).vehicle().set_subspeed(0_u8);
-            crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
-            (self.leaves.start_stop_dirty)(id);
-        }
-    }
-    fn whole_in_depot(id: Handle) -> bool {
-        let tile = (id).vehicle().tile_raw();
-        let mut u = id;
-        while u != Handle::NONE {
-            if u.track() != DEPOT || (u).vehicle().tile_raw() != tile {
-                return false;
-            }
-            u = (u).next();
-        }
-        true
-    }
-    fn next_offset(id: Handle) -> i32 {
-        let v_next: Handle = id.next();
-        let v_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));
-        i32::from(v_length) / 2
-            + if v_next == Handle::NONE {
-                0
-            } else {
-                (i32::from(u16::from(read_field!(
-                    (v_next).vehicle().ground_cache(),
-                    cached_veh_length
-                ))) + 1)
-                    / 2
-            }
-    }
-    fn after_swap(&self, id: Handle) {
-        if id.track() == WORMHOLE {
-            crate::witness::hit(crate::witness::TRAIN_WORMHOLE_SWAP);
-        }
-        if id.track() != DEPOT {
-            (id).vehicle()
-                .set_direction_raw((u64::from((id).vehicle().direction_raw() ^ 4)) as u8);
-        }
-        let v_tile: u32 = id.vehicle().tile_raw();
-        let v_x: i32 = id.vehicle().x_pos();
-        let v_y: i32 = id.vehicle().y_pos();
-        if id.track() != WORMHOLE {
-            self.movement_enter(id, v_tile, (v_x as u64) as i32, (v_y as u64) as i32);
-        } else {
-            let vt = (self.leaves.tile_virt)((v_x as u64) as i32, (v_y as u64) as i32);
-            if is_tile_type(
-                self.services,
-                TileIndex(vt),
-                crate::tile_type::TileType::MP_TUNNELBRIDGE,
-            ) {
-                self.movement_enter(id, vt, (v_x as u64) as i32, (v_y as u64) as i32);
-                if id.track() != WORMHOLE
-                    && (self.leaves.is_bridge)(Handle::NONE, (id).vehicle().tile_raw()) != 0
-                {
-                    self.update_occupancy(id);
-                    crate::ground_vehicle::update_inclination(
-                        self.leaves.physics,
-                        &self.movement,
-                        id.vehicle(),
-                        true,
-                        true,
-                    );
-                    return;
-                }
-            }
-        }
-        self.update_occupancy(id);
-        (self.leaves.viewport)(id, 1, 1);
-    }
-    fn swap_ground_flags(a: Handle, b: Handle) {
-        let fa = read_field!((a).vehicle().ground(), flags);
-        let fb = read_field!((b).vehicle().ground(), flags);
-        write_field!((a).vehicle().ground(), flags, (u64::from(fa & !3)) as u16);
-        write_field!(
-            (b).vehicle().ground(),
-            flags,
-            (u64::from(read_field!((b).vehicle().ground(), flags) & !3)) as u16
-        );
-        if fa & 1 != 0 {
-            write_field!(
-                (b).vehicle().ground(),
-                flags,
-                (u64::from(read_field!((b).vehicle().ground(), flags) | 2)) as u16
-            );
-        } else if fa & 2 != 0 {
-            write_field!(
-                (b).vehicle().ground(),
-                flags,
-                (u64::from(read_field!((b).vehicle().ground(), flags) | 1)) as u16
-            );
-        }
-        if fb & 1 != 0 {
-            write_field!(
-                (a).vehicle().ground(),
-                flags,
-                (u64::from(read_field!((a).vehicle().ground(), flags) | 2)) as u16
-            );
-        } else if fb & 2 != 0 {
-            write_field!(
-                (a).vehicle().ground(),
-                flags,
-                (u64::from(read_field!((a).vehicle().ground(), flags) | 1)) as u16
-            );
-        }
-    }
-    fn reverse_swap(&self, id: Handle, l: i32, r: i32) {
-        let (mut a, mut b) = (id, id);
-        for _ in 0..l {
-            a = (a).next();
-        }
-        for _ in 0..r {
-            b = (b).next();
-        }
-        if a != b {
-            let va_tile: u32 = a.vehicle().tile_raw();
-            let va_x: i32 = a.vehicle().x_pos();
-            let va_y: i32 = a.vehicle().y_pos();
-            let va_z: i32 = a.vehicle().z_pos();
-            let va_direction: u8 = a.vehicle().direction_raw();
-            let va_status: u8 = a.vehicle().vehstatus_raw();
-            let vb_tile: u32 = b.vehicle().tile_raw();
-            let vb_x: i32 = b.vehicle().x_pos();
-            let vb_y: i32 = b.vehicle().y_pos();
-            let vb_z: i32 = b.vehicle().z_pos();
-            let vb_direction: u8 = b.vehicle().direction_raw();
-            let vb_status: u8 = b.vehicle().vehstatus_raw();
-            Self::write_status(b, 1, va_status & 1 != 0);
-            Self::write_status(a, 1, vb_status & 1 != 0);
-            let ta = a.track();
-            a.set_track(u64::from(b.track()));
-            b.set_track(u64::from(ta));
-            (a).vehicle()
-                .set_direction_raw((u64::from(vb_direction)) as u8);
-            (b).vehicle()
-                .set_direction_raw((u64::from(va_direction)) as u8);
-            (a).vehicle().set_x_pos((vb_x as u64) as i32);
-            (b).vehicle().set_x_pos((va_x as u64) as i32);
-            (a).vehicle().set_y_pos((vb_y as u64) as i32);
-            (b).vehicle().set_y_pos((va_y as u64) as i32);
-            (a).vehicle().set_tile_raw((u64::from(vb_tile)) as u32);
-            (b).vehicle().set_tile_raw((u64::from(va_tile)) as u32);
-            (a).vehicle().set_z_pos((vb_z as u64) as i32);
-            (b).vehicle().set_z_pos((va_z as u64) as i32);
-            Self::swap_ground_flags(a, b);
-            self.after_swap(a);
-            self.after_swap(b);
-        } else {
-            Self::swap_ground_flags(a, a);
-            self.after_swap(a);
-        }
-    }
-    fn advance_before_swap(&self, id: Handle) {
-        let (mut base, mut first, mut last) = (id, id, (id).last());
-        let mut length = (self.leaves.count_chain)(id) as u32;
+
+    /// `AdvanceWagonsBeforeSwap`: advances wagons for train reversing, needed for variable
+    /// length wagons. This one is called before the train is reversed. `v` is the first
+    /// vehicle in chain.
+    fn advance_wagons_before_swap(&self, v: Handle) {
+        let mut base = v;
+        let mut first = base; // first vehicle to move
+        let mut last = v.last(); // last vehicle to move
+        let mut length = crate::vehicle_func::count_vehicles_in_chain(v.vehicle());
+
         while length > 2 {
-            last = (last).previous();
-            first = (first).next();
-            let diff = Self::next_offset(base) - Self::next_offset(last);
-            for _ in 0..diff {
+            last = last.previous();
+            first = first.next();
+
+            let differential = base.calc_next_vehicle_offset() - last.calc_next_vehicle_offset();
+
+            /* do not update images now
+             * negative differential will be handled in AdvanceWagonsAfterSwap() */
+            for _ in 0..differential {
                 crate::witness::hit(crate::witness::TRAIN_UNEQUAL_BEFORE);
-                self.controller(first, (last).next(), true);
+                self.train_controller(first, last.next(), true);
             }
-            base = first;
+
+            base = first; // == base->Next()
             length -= 2;
         }
     }
-    fn advance_after_swap(&self, id: Handle) {
-        let mut dep = id;
-        while (dep).next() != Handle::NONE
-            && (dep.track() == DEPOT || (dep).next().track() != DEPOT)
+
+    /// `AdvanceWagonsAfterSwap`: advances wagons for train reversing, needed for variable
+    /// length wagons. This one is called after the train is reversed. `v` is the first
+    /// vehicle in chain.
+    fn advance_wagons_after_swap(&self, v: Handle) {
+        /* first of all, fix the situation when the train was entering a depot */
+        let mut dep = v; // last vehicle in front of just left depot
+        while dep.next() != Handle::NONE
+            && (dep.track() == TrackBits::TRACK_BIT_DEPOT
+                || dep.next().track() != TrackBits::TRACK_BIT_DEPOT)
         {
-            dep = (dep).next();
+            dep = dep.next(); // find first vehicle outside of a depot, with next vehicle inside a depot
         }
-        let leave = (dep).next();
-        if leave != Handle::NONE {
+
+        let leave = dep.next(); // first vehicle in a depot we are leaving now
+
+        if leave == Handle::NONE {
+            dep = Handle::NONE; // no vehicle in a depot, so no vehicle leaving a depot
+        } else {
+            /* 'pull' next wagon out of the depot, so we won't miss it (it could stay in depot forever) */
             let d = crate::movement::ticks_to_leave_depot(self.services, dep);
+
             if d <= 0 {
-                Self::write_status(leave, 1, false);
-                leave.set_track(
-                    1 << (self.leaves.depot_track)(Handle::NONE, (leave).vehicle().tile_raw()),
-                );
-                for _ in d..=0 {
-                    self.controller(leave, Handle::NONE, true);
+                leave.vehicle().set_hidden(false); // move it out of the depot
+                leave.set_track(TrackBits(crate::track_func::track_to_track_bits(
+                    crate::rail_map::get_rail_depot_track(self.world(), leave.vehicle().tile()).0,
+                    self.check(),
+                )));
+                let mut i = 0;
+                while i >= d {
+                    self.train_controller(leave, Handle::NONE, true); // maybe move it, and maybe let another wagon leave
+                    i -= 1;
                 }
             }
-        } else {
-            dep = Handle::NONE;
         }
-        let (mut base, mut first, mut last) = (id, id, (id).last());
-        let mut length = (self.leaves.count_chain)(id) as u32;
-        let mut nomove = dep == Handle::NONE;
+
+        let mut base = v;
+        let mut first = base; // first vehicle to move
+        let mut last = v.last(); // last vehicle to move
+        let mut length = crate::vehicle_func::count_vehicles_in_chain(v.vehicle());
+
+        /* We have to make sure all wagons that leave a depot because of train reversing are moved correctly
+         * they have already correct spacing, so we have to make sure they are moved how they should */
+        let mut nomove = dep == Handle::NONE; // If there is no vehicle leaving a depot, limit the number of wagons moved immediately.
+
         while length > 2 {
+            /* we reached vehicle (originally) in front of a depot, stop now
+             * (we would move wagons that are already moved with new wagon length). */
             if base == dep {
                 break;
             }
+
+            /* the last wagon was that one leaving a depot, so do not move it anymore */
             if last == dep {
                 nomove = true;
             }
-            last = (last).previous();
-            first = (first).next();
-            let diff = Self::next_offset(last) - Self::next_offset(base);
-            for _ in 0..diff {
+
+            last = last.previous();
+            first = first.next();
+
+            let differential = last.calc_next_vehicle_offset() - base.calc_next_vehicle_offset();
+
+            /* do not update images now */
+            for _ in 0..differential {
                 crate::witness::hit(crate::witness::TRAIN_UNEQUAL_AFTER);
-                self.controller(
-                    first,
-                    if nomove { (last).next() } else { Handle::NONE },
-                    true,
-                );
+                self.train_controller(first, if nomove { last.next() } else { Handle::NONE }, true);
             }
-            base = first;
+
+            base = first; // == base->Next()
             length -= 2;
         }
     }
-    fn reverse(&self, id: Handle) {
+
+    /// `IsWholeTrainInsideDepot`.
+    fn is_whole_train_inside_depot(v: Handle) -> bool {
+        let mut u = v;
+        while u != Handle::NONE {
+            if u.track() != TrackBits::TRACK_BIT_DEPOT || u.vehicle().tile() != v.vehicle().tile() {
+                return false;
+            }
+            u = u.next();
+        }
+        true
+    }
+
+    /// `ReverseTrainDirection`: turn a train around.
+    fn reverse_train_direction(&self, v: Handle) {
         crate::witness::hit(crate::witness::TRAIN_REVERSAL);
-        if (self.leaves.is_depot)(Handle::NONE, (id).vehicle().tile_raw()) != 0 {
-            if Self::whole_in_depot(id) {
+        if self.is_rail_depot_tile(v.vehicle().tile()) {
+            if Self::is_whole_train_inside_depot(v) {
                 return;
             }
-            (self.leaves.depot_dirty)(id);
+            Self::invalidate_depot_window(v.vehicle().tile());
         }
-        if !id.flag(8) {
-            self.free_train_reservation(id);
+
+        /* Clear path reservation in front if train is not stuck. */
+        if !v.flags().test(VehicleRailFlag::Stuck) {
+            reservation::free_train_track_reservation(&self.reservation(v), v);
         }
-        let crossing = self.approaching_crossing(id);
-        let mut r = (self.leaves.count_chain)(id) as i32 - 1;
-        self.advance_before_swap(id);
+
+        /* Check if we were approaching a rail/road-crossing */
+        let mut crossing = self.train_approaching_crossing_tile(v);
+
+        /* count number of vehicles */
+        let mut r = crate::vehicle_func::count_vehicles_in_chain(v.vehicle()) as i32 - 1; // number of vehicles - 1
+
+        self.advance_wagons_before_swap(v);
+
+        /* swap start<>end, start+1<>end-1, ... */
         let mut l = 0;
         loop {
-            self.reverse_swap(id, l, r);
+            self.reverse_train_swap_veh(v, l, r);
             l += 1;
             r -= 1;
             if l > r {
                 break;
             }
         }
-        self.advance_after_swap(id);
-        if (self.leaves.is_depot)(Handle::NONE, (id).vehicle().tile_raw()) != 0 {
-            (self.leaves.depot_dirty)(id);
+
+        self.advance_wagons_after_swap(v);
+
+        if self.is_rail_depot_tile(v.vehicle().tile()) {
+            Self::invalidate_depot_window(v.vehicle().tile());
         }
-        id.set_flag(7, !id.flag(7));
-        id.set_flag(0, false);
-        self.consist_changed(id, 0);
-        let mut u = id;
+
+        v.set_flags(v.flags().flip(VehicleRailFlag::Reversed));
+        v.set_flags(v.flags().reset(VehicleRailFlag::Reversing));
+
+        /* recalculate cached data */
+        self.consist_changed(v, CCF_TRACK);
+
+        /* update all images */
+        let mut u = v;
         while u != Handle::NONE {
-            (self.leaves.viewport)(u, 0, 0);
-            u = (u).next();
+            self.viewport(u, false, false);
+            u = u.next();
         }
-        if crossing != INVALID_TILE {
-            self.update_crossing(crossing, true, false);
+
+        /* update crossing we were approaching */
+        if crossing != TileIndex(INVALID_TILE) {
+            self.update_level_crossing(crossing, true, false);
         }
-        let crossing = self.approaching_crossing(id);
-        if crossing != INVALID_TILE {
-            self.bar_crossing(crossing);
+
+        /* maybe we are approaching crossing now, after reversal */
+        crossing = self.train_approaching_crossing_tile(v);
+        if crossing != TileIndex(INVALID_TILE) {
+            self.maybe_bar_crossing_with_sound(crossing);
         }
-        if id.track() == DEPOT {
-            if id.flag(8) {
-                (self.leaves.start_stop_dirty)(id);
+
+        /* If we are inside a depot after reversing, don't bother with path reserving. */
+        if v.track() == TrackBits::TRACK_BIT_DEPOT {
+            /* Can't be stuck here as inside a depot is always a safe tile. */
+            if v.flags().test(VehicleRailFlag::Stuck) {
+                self.set_start_stop_dirty(v);
             }
-            id.set_flag(8, false);
+            v.set_flags(v.flags().reset(VehicleRailFlag::Stuck));
             return;
         }
-        let tile = (id).vehicle().tile_raw();
-        let mut dir = self.exitdir(id);
-        if (self.leaves.is_depot)(Handle::NONE, tile) != 0
-            || is_tile_type(
-                self.services,
-                TileIndex(tile),
-                crate::tile_type::TileType::MP_TUNNELBRIDGE,
-            )
+
+        /* VehicleExitDir does not always produce the desired dir for depots and
+         * tunnels/bridges that is needed for UpdateSignalsOnSegment. */
+        let mut dir =
+            crate::track_func::vehicle_exit_dir(v.vehicle().direction(), v.track(), self.check());
+        if self.is_rail_depot_tile(v.vehicle().tile())
+            || self.is_tile_type(v.vehicle().tile(), TileType::MP_TUNNELBRIDGE)
         {
-            dir = u8::MAX;
+            dir = DiagDirection::INVALID_DIAGDIR;
         }
-        if self.signal_segment(id, tile, dir) == (self.leaves.sigseg_pbs)(id)
-            || (self.leaves.reserve_paths)()
+
+        if self.update_signals_on_segment(v.vehicle().tile(), dir, v.vehicle().owner())
+            == SigSegState::SIGSEG_PBS
+            || self.reserve_paths()
         {
-            let td = self.trackdir(id);
-            let mut okay = !(is_tile_type(
-                self.services,
-                TileIndex(tile),
-                crate::tile_type::TileType::MP_RAILWAY,
-            ) && (self.leaves.has_signal_td)(id, tile, td) != 0
-                && (self.leaves.signal_pbs)(
-                    id,
-                    (self.leaves.signal_type)(id, tile, id.track().trailing_zeros() as u8) as u8,
-                ) == 0);
-            if (self.leaves.is_depot)(Handle::NONE, tile) != 0
-                && (self.leaves.trackdir_exit)(id, td)
-                    == (self.leaves.depot_dir)(Handle::NONE, tile)
+            /* If we are currently on a tile with conventional signals, we can't treat the
+             * current tile as a safe tile or we would enter a PBS block without a reservation. */
+            let tile = v.vehicle().tile();
+            let mut first_tile_okay = !(self.is_tile_type(tile, TileType::MP_RAILWAY)
+                && self.has_signal_on_trackdir(tile, self.get_vehicle_trackdir(v))
+                && !crate::rail_map::is_pbs_signal(
+                    self.get_signal_type(
+                        tile,
+                        Track(crate::track_func::find_first_track(v.track().0)),
+                    )
+                    .0,
+                ));
+
+            /* If we are on a depot tile facing outwards, do not treat the current tile as safe. */
+            if self.is_rail_depot_tile(tile)
+                && crate::track_func::trackdir_to_exitdir_asserted(
+                    self.get_vehicle_trackdir(v),
+                    self.check(),
+                ) == self.get_rail_depot_direction(tile)
             {
-                okay = false;
+                first_tile_okay = false;
             }
-            if (self.leaves.is_station)(Handle::NONE, tile) != 0 {
-                crate::pbs::Pbs::acquire(self.services).set_rail_station_platform_reservation_raw(
+
+            if self.is_rail_station_tile(tile) {
+                self.pbs().set_rail_station_platform_reservation(
                     tile,
-                    (self.leaves.trackdir_exit)(id, td) as u8,
+                    crate::track_func::trackdir_to_exitdir_asserted(
+                        self.get_vehicle_trackdir(v),
+                        self.check(),
+                    ),
                     true,
                 );
             }
-            if self.try_path_reserve(id, false, okay) {
-                (self.leaves.check_next)(id);
-            } else if (id).vehicle().current_order().kind_raw() != OT_LOADING {
-                self.mark_stuck(id);
+            if reservation::try_path_reserve(&self.reservation(v), v, false, first_tile_okay) {
+                /* Do a look-ahead now in case our current tile was already a safe tile. */
+                reservation::check_next_train_tile(&self.reservation(v), v);
+            } else if v.vehicle().current_order().kind() != OrderType::OT_LOADING {
+                /* Do not wait for a way out when we're still loading */
+                self.mark_train_as_stuck(v);
             }
-        } else if id.flag(8) {
-            id.set_flag(8, false);
-            id.set_wait_counter(0);
+        } else if v.flags().test(VehicleRailFlag::Stuck) {
+            /* A train not inside a PBS block can't be stuck. */
+            v.set_flags(v.flags().reset(VehicleRailFlag::Stuck));
+            v.set_wait_counter(0);
         }
-    }
-    fn approaching_end(&self, id: Handle, signal: bool, reverse: bool) -> bool {
-        let v_x: i32 = id.vehicle().x_pos();
-        let v_y: i32 = id.vehicle().y_pos();
-        let v_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));
-        let v_speed: u16 = id.vehicle().cur_speed();
-        let v_direction: u8 = id.vehicle().direction_raw();
-        let mut x = v_x as u32 & 15;
-        let y = v_y as u32 & 15;
-        match v_direction {
-            0 => x = (!x).wrapping_add(!y).wrapping_add(25),
-            7 => x = (!y).wrapping_add(16),
-            1 => x = (!x).wrapping_add(16),
-            2 => x = (!x).wrapping_add(y).wrapping_add(9),
-            3 => x = y,
-            4 => x = x.wrapping_add(y).wrapping_sub(7),
-            6 => x = (!y).wrapping_add(x).wrapping_add(9),
-            _ => {}
-        }
-        if !signal
-            && x.wrapping_add(
-                u32::from(v_length + 1) / 2 * if v_direction & 1 != 0 { 1 } else { 2 },
-            ) >= 16
-        {
-            (id).vehicle().set_cur_speed(0_u16);
-            if reverse {
-                self.reverse(id);
-            }
-            return false;
-        }
-        Self::write_status(id, 16, true);
-        let speed = BREAKDOWN_SPEEDS[(x & 15) as usize];
-        if speed < v_speed {
-            (id).vehicle().set_cur_speed((u64::from(speed)) as u16);
-        }
-        true
-    }
-    fn line_ends(&self, id: Handle, reverse: bool) -> bool {
-        let v_tile: u32 = id.vehicle().tile_raw();
-        let v_speed: u16 = id.vehicle().cur_speed();
-        let v_breakdown: u8 = read_field!(id.record, breakdown_ctr);
-        let t = v_breakdown;
-        if t > 1 {
-            Self::write_status(id, 16, true);
-            let speed = BREAKDOWN_SPEEDS[usize::from((!t >> 4) & 15)];
-            if speed < v_speed {
-                (id).vehicle().set_cur_speed((u64::from(speed)) as u16);
-            }
-        } else {
-            Self::write_status(id, 16, false);
-        }
-        if !self.can_leave(id) {
-            return true;
-        }
-        let dir = self.exitdir(id);
-        let tile = v_tile.wrapping_add((self.leaves.tile_offset_diag)(id, dir) as u32);
-        let ts = self.movement_tracks(tile, dir ^ 2) as u32;
-        let reaches = (self.leaves.trackdir_reaches)(id, dir) as u16;
-        let tds = ts as u16 & reaches;
-        let reds = (ts >> 16) as u16 & reaches;
-        let mut bits = ((tds | tds >> 8) & 63) as u8;
-        if (self.leaves.no_90)(
-            id,
-            (self.leaves.tile_rail_type)(Handle::NONE, v_tile) as u8,
-            (self.leaves.tile_rail_type)(Handle::NONE, tile) as u8,
-        ) != 0
-        {
-            bits &= !((self.leaves.track_crosses)(id, id.track().trailing_zeros() as u8) as u8);
-        }
-        if bits == 0 || !self.compatible(id, tile) {
-            return self.approaching_end(id, false, reverse);
-        }
-        if tds & reds != 0 {
-            return self.approaching_end(id, true, reverse);
-        }
-        if (self.leaves.is_crossing)(Handle::NONE, tile) != 0 {
-            self.bar_crossing(tile);
-        }
-        true
     }
 }
-const INITIAL_SUBCOORD: [[[u8; 3]; 4]; 6] = [
-    [[15, 8, 1], [0, 0, 0], [0, 8, 5], [0, 0, 0]],
-    [[0, 0, 0], [8, 0, 3], [0, 0, 0], [8, 15, 7]],
-    [[0, 0, 0], [7, 0, 2], [0, 7, 6], [0, 0, 0]],
-    [[15, 8, 2], [0, 0, 0], [0, 0, 0], [8, 15, 6]],
-    [[15, 7, 0], [8, 0, 4], [0, 0, 0], [0, 0, 0]],
-    [[0, 0, 0], [0, 0, 0], [0, 8, 4], [7, 15, 0]],
-];
-impl Game<'_> {
-    fn enter_station(&self, id: Handle, station: u16) {
-        (id).vehicle()
-            .set_last_station_visited_raw((u64::from(station)) as u16);
-        if (self.services.station_had_vehicle_of_type)(station) & HVOT_TRAIN.0 == 0 {
-            (self.services.station_add_vehicle_of_type)(station, HVOT_TRAIN.0);
-            (self.leaves.arrival_news)(id, station);
-        }
-        id.set_force_proceed(0);
-        self.view_dirty(id);
-        crate::vehicle::visits::begin_loading(id.vehicle(), self.vs().visits());
-        crate::animated_tile::rail_event(
-            crate::animated_tile::station_base(station),
-            (id.vehicle()).tile_raw(),
-            crate::station_type::SAT_VEHICLE_ARRIVES,
-            crate::station_type::SRT_VEHICLE_ARRIVES,
-        );
+
+/// `SwapTrainFlags`: swap the two up/down flags in two ways:
+/// - swap values of `swap_flag1` and `swap_flag2`, and
+/// - if going up previously (`GVF_GOINGUP_BIT` set), the `GVF_GOINGDOWN_BIT` is set, and vice
+///   versa.
+///
+/// The two ground states may be the same.
+#[inline]
+fn swap_train_flags(
+    swap_flag1: *mut crate::ground_vehicle::GroundState,
+    swap_flag2: *mut crate::ground_vehicle::GroundState,
+) {
+    use crate::bitmath_func::{clr_bit16, has_bit, set_bit16};
+    const UP: u8 = GroundVehicleFlags::GVF_GOINGUP_BIT.0;
+    const DOWN: u8 = GroundVehicleFlags::GVF_GOINGDOWN_BIT.0;
+    let flag1: u16 = read_field!(swap_flag1, flags);
+    let flag2: u16 = read_field!(swap_flag2, flags);
+    let update = |p: *mut crate::ground_vehicle::GroundState, f: &dyn Fn(&mut u16)| {
+        let mut bits: u16 = read_field!(p, flags);
+        f(&mut bits);
+        write_field!(p, flags, bits);
+    };
+
+    /* Clear the flags */
+    update(swap_flag1, &|f| {
+        clr_bit16(f, UP);
+    });
+    update(swap_flag1, &|f| {
+        clr_bit16(f, DOWN);
+    });
+    update(swap_flag2, &|f| {
+        clr_bit16(f, UP);
+    });
+    update(swap_flag2, &|f| {
+        clr_bit16(f, DOWN);
+    });
+
+    /* Reverse the rail-flags (if needed) */
+    if has_bit(flag1, UP) {
+        update(swap_flag2, &|f| {
+            set_bit16(f, DOWN);
+        });
+    } else if has_bit(flag1, DOWN) {
+        update(swap_flag2, &|f| {
+            set_bit16(f, UP);
+        });
     }
-    fn speed_z(&self, id: Handle, old: i32) {
-        let v_z: i32 = id.vehicle().z_pos();
-        let v_max_track_speed: u16 =
-            read_field!(id.vehicle().ground_cache(), cached_max_track_speed);
-        let v_speed: u16 = id.vehicle().cur_speed();
-        if old == v_z || self.acc_model() != 0 {
+    if has_bit(flag2, UP) {
+        update(swap_flag1, &|f| {
+            set_bit16(f, DOWN);
+        });
+    } else if has_bit(flag2, DOWN) {
+        update(swap_flag1, &|f| {
+            set_bit16(f, UP);
+        });
+    }
+}
+
+/// `IsTrain`: check if the vehicle is a train.
+#[inline]
+fn is_train(v: VehicleRef) -> bool {
+    v.vehicle_type() == VehicleType::VEH_TRAIN
+}
+
+/// `Train::UpdateAcceleration`: update acceleration of the train from the cached power and
+/// weight.
+pub(crate) fn update_acceleration(this: Handle) {
+    crate::services_assert::assert_with(|| this.is_front_engine() || this.is_free_wagon());
+
+    let power: u32 = read_field!(this.vehicle().ground_cache(), cached_power);
+    let weight: u32 = read_field!(this.vehicle().ground_cache(), cached_weight);
+    crate::services_assert::assert_with(|| weight != 0);
+    // Clamp(int, int, int): the uint product converts to int first.
+    let acceleration = crate::math::clamp(
+        (power / weight).wrapping_mul(4) as i32,
+        1,
+        255,
+        crate::map_func::native_check,
+    );
+    write_field!(this.record, acceleration, acceleration as u8);
+}
+
+/// `CmdReverseTrainDirection`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdReverseTrainDirection {
+    /// Train to reverse.
+    pub(crate) veh_id: VehicleID,
+    /// If true, reverse a unit in a train (needs to be in a depot).
+    pub(crate) reverse_single_veh: bool,
+}
+
+/// `CmdForceTrainProceed`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdForceTrainProceed {
+    /// Train to ignore the red signal.
+    pub(crate) veh_id: VehicleID,
+}
+
+/// The call context of a train command: the vehicle build services' rail and common
+/// tables (`Train::GetIfValid`, the record lookup, `CheckOwnership` and the cost results),
+/// the cost output and the execution flags.
+#[derive(Clone, Copy)]
+pub(crate) struct CommandContext<'a> {
+    pub(crate) rail: &'a crate::vehicle_transactions::rail::Services,
+    pub(crate) common: &'a crate::vehicle_transactions::CommonServices,
+    pub(crate) out: *mut crate::services::CommandCost,
+    pub(crate) flags: crate::command_type::DoCommandFlags,
+}
+
+impl CommandContext<'_> {
+    /// `Train::GetIfValid(veh_id)`.
+    fn train_get_if_valid(&self, veh_id: VehicleID) -> Handle {
+        let shell = (self.rail.train_if_valid)(veh_id.0);
+        if shell.is_null() {
+            return Handle::NONE;
+        }
+        Handle::from_record((self.common.vehicles.record_from_shell)(shell.cast()))
+    }
+    /// `return CMD_ERROR`.
+    fn cmd_error(&self) {
+        crate::command_func::cmd_error(crate::services::Cost(self.out, self.common.base.cost));
+    }
+    /// `return CommandCost(msg)`.
+    fn error(&self, msg: crate::strings_type::StringID) {
+        (self.common.base.cost.error)(self.out, msg.0);
+    }
+    /// `CommandCost ret = CheckOwnership(owner); if (ret.Failed()) return ret;`: whether
+    /// the check succeeded, with its result in the output.
+    fn check_ownership(&self, owner: Owner) -> bool {
+        let base = self.common.base;
+        // SAFETY: The command's live native result.
+        unsafe { base.commands.ownership(self.out, owner.0, 0) };
+        (base.cost.success)(self.out)
+    }
+    /// `flags.Test(DoCommandFlag::Execute)`.
+    fn execute(&self) -> bool {
+        self.flags.test(crate::command_type::DoCommandFlag::Execute)
+    }
+}
+
+impl Game<'_> {
+    /// `CmdReverseTrainDirection`: reverse train.
+    fn cmd_reverse_train_direction(&self, c: &CommandContext, cmd: CmdReverseTrainDirection) {
+        let CmdReverseTrainDirection {
+            veh_id,
+            reverse_single_veh,
+        } = cmd;
+        let v = c.train_get_if_valid(veh_id);
+        if v == Handle::NONE {
+            return c.cmd_error();
+        }
+
+        if !c.check_ownership(v.vehicle().owner()) {
             return;
         }
-        if old < v_z {
-            (id).vehicle().set_cur_speed(
-                (u64::from(v_speed - ((u32::from(v_speed) * 64) >> 8) as u16)) as u16,
-            );
+
+        if reverse_single_veh {
+            /* turn a single unit around */
+
+            if v.is_multiheaded()
+                || VehicleCallbackMasks(self.engine(v).callbacks())
+                    .test(VehicleCallbackMask::ArticEngine)
+            {
+                return c.error(STR_ERROR_CAN_T_REVERSE_DIRECTION_RAIL_VEHICLE_MULTIPLE_UNITS);
+            }
+
+            let front = v.first();
+            /* make sure the vehicle is stopped in the depot */
+            if !crate::vehicle_base::is_stopped_in_depot(front.vehicle(), self.leaves.physics) {
+                return c.error(STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT);
+            }
+
+            if c.execute() {
+                v.set_flags(v.flags().flip(VehicleRailFlag::Flipped));
+
+                self.consist_changed(front, CCF_ARRANGE);
+                set_window_dirty(
+                    WindowClass::WC_VEHICLE_DEPOT,
+                    WindowNumber::from(front.vehicle().tile()),
+                );
+                set_window_dirty(
+                    WindowClass::WC_VEHICLE_DETAILS,
+                    WindowNumber::from(self.index(front)),
+                );
+                set_window_dirty(
+                    WindowClass::WC_VEHICLE_VIEW,
+                    WindowNumber::from(self.index(front)),
+                );
+                set_window_classes_dirty(WindowClass::WC_TRAINS_LIST);
+            }
         } else {
-            let speed = v_speed.wrapping_add(2);
-            if speed <= v_max_track_speed {
-                (id).vehicle().set_cur_speed((u64::from(speed)) as u16);
+            /* turn the whole train around */
+            if !v.is_front_engine() {
+                return c.cmd_error();
+            }
+            if v.vehicle().vehstatus().test(VehState::Crashed) || v.vehicle().breakdown_ctr() != 0 {
+                return c.cmd_error();
+            }
+
+            if c.execute() {
+                /* Properly leave the station if we are loading and won't be loading anymore */
+                if v.vehicle().current_order().is_type(OrderType::OT_LOADING) {
+                    let last = v.vehicle().last();
+
+                    /* not a station || different station --> leave the station */
+                    if !self.is_tile_type(last.tile(), TileType::MP_STATION)
+                        || self.get_station_index(last.tile())
+                            != self.get_station_index(v.vehicle().tile())
+                    {
+                        crate::vehicle::visits::leave_station(v.vehicle(), self.vs.visits());
+                    }
+                }
+
+                /* We cancel any 'skip signal at dangers' here */
+                v.set_force_proceed(TrainForceProceeding::TFP_NONE);
+                self.set_vehicle_view_dirty(v);
+
+                if self.train_acceleration_model() != AccelerationModel::AM_ORIGINAL
+                    && v.vehicle().cur_speed() != 0
+                {
+                    v.set_flags(v.flags().flip(VehicleRailFlag::Reversing));
+                } else {
+                    v.vehicle().set_cur_speed(0);
+                    self.set_last_speed(v);
+                    (self.vs.visits().hide_filling)(v.vehicle());
+                    self.reverse_train_direction(v);
+                }
+
+                /* Unbunching data is no longer valid. */
+                crate::orders::reset_unbunching(v.vehicle());
             }
         }
     }
-    fn moved_signals(&self, id: Handle, tile: u32, dir: u8) -> bool {
-        if is_tile_type(
-            self.services,
-            TileIndex(tile),
-            crate::tile_type::TileType::MP_RAILWAY,
-        ) && (self.leaves.has_signals)(Handle::NONE, tile) != 0
+
+    /// `DetermineNextTrainForceProceeding`: determine to what `force_proceed` should be
+    /// changed. If we are forced to proceed, cancel that order. If we are marked stuck we
+    /// would want to force the train to proceed to the next signal unless we are stuck just
+    /// before the next signal. In the other cases we would like to pass the signal at danger
+    /// and run till the next signal we encounter.
+    #[inline]
+    fn determine_next_train_force_proceeding(&self, t: Handle) -> TrainForceProceeding {
+        if t.vehicle().vehstatus().test(VehState::Crashed)
+            || t.force_proceed() == TrainForceProceeding::TFP_SIGNAL
         {
-            let tracks = (self.leaves.track_bits)(Handle::NONE, tile) as u16;
-            let tds = (tracks | tracks << 8) & (self.leaves.trackdir_reaches)(id, dir) as u16;
-            let td = tds.trailing_zeros() as u8;
-            let exit = (self.leaves.trackdir_exit)(id, td);
-            // Tile owner is used here, rather than the moving train's owner.
-            if u64::from(self.signal_context().segment(
-                tile,
-                exit as u8,
-                self.world().owner(TileIndex(tile)).0,
-            )) == (self.leaves.sigseg_pbs)(id)
-                && (self.leaves.has_signal_td)(id, tile, td) != 0
+            return TrainForceProceeding::TFP_NONE;
+        }
+        if !t.flags().test(VehicleRailFlag::Stuck) {
+            return if self.is_chain_in_depot(t) {
+                TrainForceProceeding::TFP_STUCK
+            } else {
+                TrainForceProceeding::TFP_SIGNAL
+            };
+        }
+
+        let next_tile = self.tile_add_by_diag_dir(
+            t.vehicle().tile(),
+            crate::track_func::trackdir_to_exitdir_asserted(
+                self.get_vehicle_trackdir(t),
+                self.check(),
+            ),
+        );
+        if next_tile == TileIndex(INVALID_TILE)
+            || !self.is_tile_type(next_tile, TileType::MP_RAILWAY)
+            || !self.world().has_signals(next_tile.0)
+        {
+            return TrainForceProceeding::TFP_STUCK;
+        }
+        let new_tracks = TrackBits(
+            crate::track_func::diagdir_reaches_tracks(
+                crate::track_func::trackdir_to_exitdir_asserted(
+                    self.get_vehicle_trackdir(t),
+                    self.check(),
+                )
+                .0,
+            ) & self.world().tracks(next_tile.0),
+        );
+        if new_tracks != TrackBits::TRACK_BIT_NONE
+            && self.world().has_signal_on_track(
+                next_tile.0,
+                crate::track_func::find_first_track(new_tracks.0),
+            )
+        {
+            TrainForceProceeding::TFP_SIGNAL
+        } else {
+            TrainForceProceeding::TFP_STUCK
+        }
+    }
+
+    /// `CmdForceTrainProceed`: force a train through a red signal.
+    fn cmd_force_train_proceed(&self, c: &CommandContext, cmd: CmdForceTrainProceed) {
+        let CmdForceTrainProceed { veh_id } = cmd;
+        let t = c.train_get_if_valid(veh_id);
+        if t == Handle::NONE {
+            return c.cmd_error();
+        }
+
+        if !t.is_front_engine() {
+            return c.cmd_error();
+        }
+
+        if !c.check_ownership(t.vehicle().owner()) {
+            return;
+        }
+
+        if c.execute() {
+            t.set_force_proceed(self.determine_next_train_force_proceeding(t));
+            self.set_vehicle_view_dirty(t);
+
+            /* Unbunching data is no longer valid. */
+            crate::orders::reset_unbunching(t.vehicle());
+        }
+    }
+
+    /// `FindClosestTrainDepot`: try to find a depot nearby, within `max_distance`.
+    /// Precondition: the given vehicle must not be crashed!
+    #[inline]
+    fn find_closest_train_depot(&self, v: Handle, max_distance: i32) -> FindDepotData {
+        crate::services_assert::assert_with(|| !v.vehicle().vehstatus().test(VehState::Crashed));
+
+        crate::rail_yapf::yapf_train_find_nearest_depot(self.services, v, max_distance)
+    }
+
+    /// `Train::FindClosestDepot`.
+    fn find_closest_depot(&self, this: Handle) -> ClosestDepot {
+        let tfdd = self.find_closest_train_depot(this, 0);
+        if tfdd.best_length == u32::MAX {
+            return ClosestDepot::default();
+        }
+
+        ClosestDepot::new(
+            tfdd.tile,
+            crate::order_type::DestinationID((self.services.depot_index)(tfdd.tile.0)),
+            tfdd.reverse,
+        )
+    }
+
+    /// `CheckTrainStayInDepot`: will the train stay in the depot the next tick?
+    fn check_train_stay_in_depot(&self, v: Handle) -> bool {
+        /* bail out if not all wagons are in the same depot or not in a depot at all */
+        if !Self::is_whole_train_inside_depot(v) {
+            return false;
+        }
+
+        /* if the train got no power, then keep it in the depot */
+        if read_field!(v.vehicle().ground_cache(), cached_power) == 0 {
+            v.vehicle()
+                .set_vehstatus(v.vehicle().vehstatus().set(VehState::Stopped));
+            set_window_dirty(
+                WindowClass::WC_VEHICLE_DEPOT,
+                WindowNumber::from(v.vehicle().tile()),
+            );
+            return true;
+        }
+
+        /* Check if we should wait here for unbunching. */
+        if crate::vehicle::is_waiting_for_unbunching(v.vehicle(), self.vs.orders(), || {
+            v.is_in_depot()
+        }) {
+            return true;
+        }
+
+        let seg_state;
+
+        if v.force_proceed() == TrainForceProceeding::TFP_NONE {
+            /* force proceed was not pressed */
+            v.set_wait_counter(v.wait_counter().wrapping_add(1));
+            if v.wait_counter() < 37 {
+                set_window_classes_dirty(WindowClass::WC_TRAINS_LIST);
+                return true;
+            }
+
+            v.set_wait_counter(0);
+
+            seg_state = if self.reserve_paths() {
+                SigSegState::SIGSEG_PBS
+            } else {
+                self.update_signals_on_segment(
+                    v.vehicle().tile(),
+                    DiagDirection::INVALID_DIAGDIR,
+                    v.vehicle().owner(),
+                )
+            };
+            if seg_state == SigSegState::SIGSEG_FULL
+                || self.has_depot_reservation(v.vehicle().tile())
             {
-                if (self.leaves.signal_pbs)(id, (self.leaves.signal_type)(id, tile, td & 7) as u8)
-                    == 0
-                {
+                /* Full and no PBS signal in block or depot reserved, can't exit. */
+                set_window_classes_dirty(WindowClass::WC_TRAINS_LIST);
+                return true;
+            }
+        } else {
+            seg_state = if self.reserve_paths() {
+                SigSegState::SIGSEG_PBS
+            } else {
+                self.update_signals_on_segment(
+                    v.vehicle().tile(),
+                    DiagDirection::INVALID_DIAGDIR,
+                    v.vehicle().owner(),
+                )
+            };
+        }
+
+        /* We are leaving a depot, but have to go to the exact same one; re-enter. */
+        if v.vehicle()
+            .current_order()
+            .is_type(OrderType::OT_GOTO_DEPOT)
+            && v.vehicle().tile() == v.vehicle().dest_tile()
+        {
+            /* Service when depot has no reservation. */
+            if !self.has_depot_reservation(v.vehicle().tile()) {
+                crate::witness::hit(crate::witness::TRAIN_DEPOT_REENTRY);
+                self.vs.enter_depot(v.vehicle());
+            }
+            return true;
+        }
+
+        /* Only leave when we can reserve a path to our destination. */
+        if seg_state == SigSegState::SIGSEG_PBS
+            && !reservation::try_path_reserve(&self.reservation(v), v, false, false)
+            && v.force_proceed() == TrainForceProceeding::TFP_NONE
+        {
+            /* No path and no force proceed. */
+            set_window_classes_dirty(WindowClass::WC_TRAINS_LIST);
+            self.mark_train_as_stuck(v);
+            return true;
+        }
+
+        (self.pbs().0.set_depot)(v.vehicle().tile().0, true);
+        if (self.pbs().0.show_reservation)() {
+            self.mark_tile_dirty_by_tile(v.vehicle().tile());
+        }
+
+        crate::witness::hit(crate::witness::TRAIN_DEPOT_START);
+        maintenance::vehicle_service_in_depot(v.vehicle(), self.vs);
+        crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(v.vehicle());
+        (self.vs.visits().leave_sound)(v.vehicle());
+        set_window_classes_dirty(WindowClass::WC_TRAINS_LIST);
+
+        v.set_track(TrackBits::TRACK_BIT_X);
+        if v.vehicle().direction().0 & 2 != 0 {
+            v.set_track(TrackBits::TRACK_BIT_Y);
+        }
+
+        v.vehicle().set_hidden(false);
+        v.vehicle().set_cur_speed(0);
+
+        self.viewport(v, true, true);
+        self.update_position(v);
+        self.update_signals_on_segment(
+            v.vehicle().tile(),
+            DiagDirection::INVALID_DIAGDIR,
+            v.vehicle().owner(),
+        );
+        update_acceleration(v);
+        Self::invalidate_depot_window(v.vehicle().tile());
+
+        false
+    }
+
+    /// `HasDepotReservation(tile)`.
+    fn has_depot_reservation(&self, tile: TileIndex) -> bool {
+        // SAFETY: The PBS table names the immutable rail map table.
+        (unsafe { &*self.pbs().0.rail }.depot_reserved)(tile.0)
+    }
+
+    /// `Train::MarkDirty`: goods at the consist have changed, update the graphics, cargo, and
+    /// acceleration.
+    fn mark_dirty(&self, this: Handle) {
+        let mut v = this;
+        loop {
+            (self.vs.set_colourmap)(v.vehicle(), PAL_NONE);
+            self.viewport(v, true, false);
+            v = v.next();
+            if v == Handle::NONE {
+                break;
+            }
+        }
+
+        /* need to update acceleration and cached values since the goods on the train changed. */
+        self.cargo_changed(this);
+        update_acceleration(this);
+    }
+
+    /// `Train::UpdateSpeed`: this function looks at the vehicle and updates its speed
+    /// (`cur_speed` and `subspeed`) variables. Furthermore, it returns the distance that the
+    /// train can drive this tick. `Vehicle::GetAdvanceDistance()` determines the distance to
+    /// drive before moving a step on the map.
+    fn update_speed(&self, this: Handle) -> i32 {
+        let o = crate::ground_vehicle::Owner::of(this.vehicle());
+        let braking = crate::ground_vehicle::get_acceleration_status_owned(this.vehicle(), o)
+            == AccelStatus::AS_BRAKE;
+        match self.train_acceleration_model() {
+            AccelerationModel::AM_ORIGINAL => crate::ground_vehicle::do_update_speed(
+                this.vehicle(),
+                (i32::from(this.vehicle().acceleration()) * if braking { -4 } else { 2 }) as u32,
+                0,
+                self.get_current_max_speed(this),
+            ) as i32,
+            AccelerationModel::AM_REALISTIC => crate::ground_vehicle::do_update_speed(
+                this.vehicle(),
+                crate::ground_vehicle::get_acceleration_owned(
+                    self.leaves.physics,
+                    this.vehicle(),
+                    o,
+                ) as u32,
+                if braking { 0 } else { 2 },
+                self.get_current_max_speed(this),
+            ) as i32,
+            _ => crate::services_assert::not_reached(),
+        }
+    }
+
+    /// `TrainEnterStation`: trains enters a station, send out a news item if it is the first
+    /// train, and start loading.
+    fn train_enter_station(&self, v: Handle, station: StationID) {
+        v.vehicle().set_last_station_visited(station);
+
+        /* check if a train ever visited this station before */
+        let st = self.station_lookup(station);
+        // SAFETY: A live station resolved in this serialized entry; one byte-sized load.
+        let had = unsafe { *(self.services.station_had_vehicle_of_type_field)(st.native) };
+        if had & StationHadVehicleOfType::HVOT_TRAIN.0 == 0 {
+            // SAFETY: As above; one byte-sized read-modify-write.
+            unsafe {
+                *(self.services.station_had_vehicle_of_type_field)(st.native) |=
+                    StationHadVehicleOfType::HVOT_TRAIN.0;
+            }
+            add_vehicle_news_item(
+                &get_encoded_string(
+                    STR_NEWS_FIRST_TRAIN_ARRIVAL,
+                    &[Integer(u64::from(station.0))],
+                ),
+                if v.vehicle().owner().0 == (self.services.local_company)() {
+                    NewsType::ArrivalCompany
+                } else {
+                    NewsType::ArrivalOther
+                },
+                self.index(v),
+                station,
+            );
+            crate::ai::new_event(
+                v.vehicle().owner(),
+                &ScriptEvent::station_first_vehicle(station, self.index(v)),
+            );
+            crate::game::new_event(&ScriptEvent::station_first_vehicle(station, self.index(v)));
+        }
+
+        v.set_force_proceed(TrainForceProceeding::TFP_NONE);
+        self.set_vehicle_view_dirty(v);
+
+        crate::vehicle::visits::begin_loading(v.vehicle(), self.vs.visits());
+
+        crate::newgrf_station::trigger_station_randomisation(
+            st.base,
+            v.vehicle().tile(),
+            crate::station_type::StationRandomTrigger::VehicleArrives,
+            crate::cargo_type::CargoType::INVALID_CARGO,
+        );
+        crate::animated_tile::trigger_station_animation(
+            st.base,
+            v.vehicle().tile(),
+            crate::station_type::StationAnimationTrigger::VehicleArrives,
+            crate::cargo_type::CargoType::INVALID_CARGO,
+        );
+    }
+
+    /// `CheckCompatibleRail`: check if the vehicle is compatible with the specified tile.
+    #[inline]
+    fn check_compatible_rail(&self, v: Handle, tile: TileIndex) -> bool {
+        crate::tile_map::is_tile_owner(self.services, tile, v.vehicle().owner())
+            && (!v.is_front_engine()
+                || v.compatible_railtypes()
+                    .test(RailType(self.world().rail_type(tile.0))))
+    }
+
+    /// `AffectSpeedByZChange`: modify the speed of the vehicle due to a change in altitude.
+    #[inline]
+    fn affect_speed_by_z_change(&self, v: Handle, old_z: i32) {
+        if old_z == v.vehicle().z_pos()
+            || self.train_acceleration_model() != AccelerationModel::AM_ORIGINAL
+        {
+            return;
+        }
+
+        let asp = &ACCEL_SLOWDOWN[self.get_acceleration_type(v)];
+
+        let cur_speed = v.vehicle().cur_speed();
+        if old_z < v.vehicle().z_pos() {
+            v.vehicle().set_cur_speed(
+                cur_speed.wrapping_sub(((u32::from(cur_speed) * u32::from(asp.z_up)) >> 8) as u16),
+            );
+        } else {
+            let spd = cur_speed.wrapping_add(u16::from(asp.z_down));
+            if spd <= read_field!(v.vehicle().ground_cache(), cached_max_track_speed) {
+                v.vehicle().set_cur_speed(spd);
+            }
+        }
+    }
+
+    /// `TrainMovedChangeSignals`.
+    fn train_moved_change_signals(&self, tile: TileIndex, dir: DiagDirection) -> bool {
+        if self.is_tile_type(tile, TileType::MP_RAILWAY)
+            && self.world().rail_tile_type(tile.0) == crate::rail_map::RailTileType::Signals.0
+        {
+            let tracks =
+                crate::track_func::track_bits_to_trackdir_bits(self.world().tracks(tile.0))
+                    & crate::track_func::diagdir_reaches_trackdirs(dir.0);
+            let trackdir = Trackdir(crate::track_func::find_first_trackdir(tracks));
+            if self.update_signals_on_segment(
+                tile,
+                crate::track_func::trackdir_to_exitdir_asserted(trackdir, self.check()),
+                self.world().owner(tile),
+            ) == SigSegState::SIGSEG_PBS
+                && self.has_signal_on_trackdir(tile, trackdir)
+            {
+                /* A PBS block with a non-PBS signal facing us? */
+                if !crate::rail_map::is_pbs_signal(
+                    self.get_signal_type(
+                        tile,
+                        Track(crate::track_func::trackdir_to_track(trackdir.0)),
+                    )
+                    .0,
+                ) {
                     return true;
                 }
             }
         }
         false
     }
-    // Result: 0 moved, 1 no move/early stop, 2 invalid rail, 3 requested reversal.
-    fn move_vehicle(&self, id: Handle, prev: Handle, reverse: bool) -> (u8, bool) {
-        let v_tile: u32 = id.vehicle().tile_raw();
-        let v_x: i32 = id.vehicle().x_pos();
-        let v_y: i32 = id.vehicle().y_pos();
-        let v_direction: u8 = id.vehicle().direction_raw();
-        let v_front: u8 = id.front();
-        let v_articulated: u8 = id.articulated();
-        if v_articulated != 0 {
-            crate::witness::hit(crate::witness::TRAIN_ARTICULATED_MOVE);
-        }
-        let delta = [
-            (-1, -1),
-            (-1, 0),
-            (-1, 1),
-            (0, 1),
-            (1, 1),
-            (1, 0),
-            (1, -1),
-            (0, -1),
-        ];
-        let (dx, dy) = delta[usize::from(v_direction)];
-        let (mut x, mut y) = (v_x.wrapping_add(dx), v_y.wrapping_add(dy));
-        let mut old = v_tile;
-        let new = (self.leaves.tile_virt)((x as u64) as i32, (y as u64) as i32);
-        let mut entered = 0_u8;
-        let mut signals = false;
-        let mut changed = false;
-        if id.track() != WORMHOLE {
-            if old == new {
-                if id.track() == DEPOT {
-                    x = v_x;
-                    y = v_y;
-                } else {
-                    if v_front != 0 && !self.line_ends(id, reverse) {
-                        return (1, false);
-                    }
-                    let vets =
-                        self.movement_enter(id, new, (x as u64) as i32, (y as u64) as i32) as u8;
-                    if vets & 4 != 0 {
-                        return (2, false);
-                    }
-                    if vets & 1 != 0 {
-                        self.enter_station(id, self.world().get_station_index(TileIndex(new)).0);
-                    }
-                }
-            } else {
-                entered = (self.leaves.diag_between)(id, old, new) as u8;
-                let ts = self.movement_tracks(new, entered ^ 2) as u32;
-                let reaches = (self.leaves.trackdir_reaches)(id, entered) as u16;
-                let tds = ts as u16 & reaches;
-                let reds = (((ts >> 16) as u16 & reaches) | (((ts >> 16) as u16 & reaches) >> 8))
-                    as u8
-                    & 63;
-                let mut bits = ((tds | tds >> 8) & 63) as u8;
-                if (self.leaves.no_90)(
-                    id,
-                    (self.leaves.tile_rail_type)(Handle::NONE, old) as u8,
-                    (self.leaves.tile_rail_type)(Handle::NONE, new) as u8,
-                ) != 0
-                    && prev == Handle::NONE
-                {
-                    bits &=
-                        !((self.leaves.track_crosses)(id, id.track().trailing_zeros() as u8) as u8);
-                }
-                if bits == 0 || !self.compatible(id, new) {
-                    return (2, false);
-                }
-                let mut chosen;
-                if prev == Handle::NONE {
-                    chosen = 1_u8 << (self.leaves.choose_track)(id, new, entered, bits);
-                    if id.get_force_proceed() != 0
-                        && (self.leaves.is_plain_rail)(Handle::NONE, new) != 0
-                        && (self.leaves.has_signals)(Handle::NONE, new) != 0
-                    {
-                        let td = tds.trailing_zeros() as u8;
-                        if (self.leaves.has_signal_td)(id, new, td) != 0
-                            || ((self.leaves.has_signal_td)(id, new, td ^ 8) != 0
-                                && (self.leaves.signal_type)(id, new, td & 7)
-                                    != (self.leaves.pbs_signal_type)(id))
-                        {
-                            crate::witness::hit(crate::witness::TRAIN_FORCE_SIGNAL);
-                            id.set_force_proceed(u64::from(id.get_force_proceed() == 2));
-                            self.view_dirty(id);
-                        }
-                    }
-                    if reds & chosen != 0 && id.get_force_proceed() == 0 {
-                        let td = tds.trailing_zeros() as u8;
-                        if id.flag(8) {
-                            return (1, false);
-                        }
-                        if (self.leaves.has_signal_td)(id, new, td ^ 8) == 0 {
-                            (id).vehicle().set_cur_speed(0_u16);
-                            (id).vehicle().set_subspeed(0_u8);
-                            (id).vehicle().set_progress(255_u8);
-                            crate::witness::hit(crate::witness::TRAIN_RED_ONEWAY);
-                            if self.reverse_at_signals() == 0
-                                || u64::from(id.wait_inc())
-                                    < self.wait_oneway() * (self.leaves.day_ticks)(id) * 2
-                            {
-                                return (1, false);
-                            }
-                        } else if (self.leaves.has_signal_td)(id, new, td) != 0 {
-                            (id).vehicle().set_cur_speed(0_u16);
-                            (id).vehicle().set_subspeed(0_u8);
-                            (id).vehicle().set_progress(255_u8);
-                            crate::witness::hit(crate::witness::TRAIN_RED_TWOWAY);
-                            if self.reverse_at_signals() == 0
-                                || u64::from(id.wait_inc())
-                                    < self.wait_twoway() * (self.leaves.day_ticks)(id) * 2
-                            {
-                                let dir = (self.leaves.trackdir_exit)(id, td) as u8;
-                                let tile = self
-                                    .services
-                                    .map()
-                                    .tile_add_by_diag_dir(
-                                        TileIndex(new),
-                                        DiagDirection(dir),
-                                        crate::map_func::native_check,
-                                    )
-                                    .0;
-                                let mut waiting = false;
-                                self.visit_tile(tile, |u| {
-                                    let other_speed: u16 = u.vehicle().cur_speed();
-                                    let other_status: u8 = u.vehicle().vehstatus_raw();
-                                    let other_front: u8 = u.front();
-                                    if other_status & 128 == 0
-                                        && other_front != 0
-                                        && u.track() & 63 != 0
-                                        && other_speed <= 5
-                                        && self.exitdir(u) == dir ^ 2
-                                    {
-                                        waiting = true;
-                                        return true;
-                                    }
 
-                                    false
-                                });
-                                if !waiting {
-                                    return (1, false);
-                                }
-                            }
-                        }
-                        if self.reverse_at_signals() == 0
-                            && (self.leaves.oneway_blocking)(id, new, td) == 0
-                            && self.signal_segment(id, (id).vehicle().tile_raw(), entered)
-                                == (self.leaves.sigseg_pbs)(id)
-                        {
-                            id.set_wait_counter(0);
-                            return (1, false);
-                        }
-                        return (3, false);
-                    }
-                    crate::pbs::Pbs::acquire(self.services).try_reserve_rail_track_raw(
-                        new,
-                        chosen.trailing_zeros() as u8,
+    /// `Train::Crash`: the train vehicle crashed! Update its status and other parts around
+    /// it. `flooded` says the crash was caused by flooding. Returns the number of people
+    /// killed.
+    fn crash(&self, this: Handle, flooded: bool) -> u32 {
+        let mut victims = 0_u32;
+        if this.is_front_engine() {
+            victims += 2; // driver
+
+            /* Remove the reserved path in front of the train if it is not stuck.
+             * Also clear all reserved tracks the train is currently on. */
+            if !this.flags().test(VehicleRailFlag::Stuck) {
+                reservation::free_train_track_reservation(&self.reservation(this), this);
+            }
+            let mut v = this;
+            while v != Handle::NONE {
+                reservation::clear_path_reservation(
+                    &self.reservation(v),
+                    v,
+                    v.vehicle().tile(),
+                    self.get_vehicle_trackdir(v),
+                );
+                if self.is_tile_type(v.vehicle().tile(), TileType::MP_TUNNELBRIDGE) {
+                    /* ClearPathReservation will not free the wormhole exit
+                     * if the train has just entered the wormhole. */
+                    (self.pbs().0.set_wormhole)(
+                        self.get_other_tunnel_bridge_end(v.vehicle().tile()).0,
                         false,
                     );
-                } else {
-                    let before = (prev).vehicle().tile_raw();
-                    if before == new {
-                        chosen = if prev.track() == WORMHOLE {
-                            bits
-                        } else {
-                            prev.track()
-                        };
-                    } else {
-                        let exit = (self.leaves.diag_between)(id, new, before) as usize;
-                        let connecting =
-                            [[1, 8, 0, 16], [4, 2, 16, 0], [0, 32, 1, 4], [32, 0, 8, 2]];
-                        chosen = connecting[usize::from(entered)][exit];
-                    }
-                    chosen &= bits;
                 }
-                let sub = INITIAL_SUBCOORD[chosen.trailing_zeros() as usize][usize::from(entered)];
-                x = (x & !15) | i32::from(sub[0]);
-                y = (y & !15) | i32::from(sub[1]);
-                let dir = sub[2];
-                let vets = self.movement_enter(id, new, (x as u64) as i32, (y as u64) as i32) as u8;
-                if vets & 4 != 0 {
-                    return (2, false);
-                }
-                if vets & 2 == 0 {
-                    if (id).front() != 0 {
-                        crate::witness::hit(crate::witness::TRAIN_FIRST_TILE_RAIL);
-                    }
-                    let td =
-                        (self.leaves.track_direction)(id, chosen.trailing_zeros() as u8, dir) as u8;
-                    if (id).front() != 0 && (self.leaves.signal_has_pbs)(id, new, td) != 0 {
-                        (self.leaves.set_signal_state)(id, new, td, 0);
-                        (self.services.mark_dirty)(new);
-                    }
-                    if (id).next() == Handle::NONE {
-                        (self.leaves.clear_reservation)(
-                            id,
-                            (id).vehicle().tile_raw(),
-                            self.trackdir(id),
-                        );
-                    }
-                    (id).vehicle().set_tile_raw((u64::from(new)) as u32);
-                    if (self.leaves.tile_rail_type)(Handle::NONE, new)
-                        != (self.leaves.tile_rail_type)(Handle::NONE, old)
-                    {
-                        self.consist_changed((id).first(), 0);
-                    }
-                    id.set_track(u64::from(chosen));
-                }
-                signals = true;
-                if dir != (id).vehicle().direction_raw() {
-                    if prev == Handle::NONE && self.acc_model() == 0 {
-                        let diff = (id).vehicle().direction_raw().wrapping_sub(dir) & 7;
-                        let small = if <crate::ground_vehicle::Train as crate::ground_vehicle::GroundVehicleType>::get_acceleration_type(
-                            self.leaves.physics,
-                            &crate::map_func::World::new(self.services),
-                            id.vehicle(),
-                        ) == crate::engine_type::VehicleAccelerationModel::Maglev
-                        {
-                            0
-                        } else {
-                            64
-                        };
-                        let fraction = if diff == 1 || diff == 7 { small } else { 128 };
-                        let speed = (id).vehicle().cur_speed();
-                        (id).vehicle().set_cur_speed(
-                            (u64::from(speed - ((u32::from(speed) * fraction) >> 8) as u16)) as u16,
-                        );
-                    }
-                    changed = true;
-                    (id).vehicle().set_direction_raw((u64::from(dir)) as u8);
-                }
-                if (id).front() != 0 {
-                    id.set_wait_counter(0);
-                    let crossing = self.approaching_crossing(id);
-                    if crossing != INVALID_TILE
-                        && (self.services.crossing_reserved)(crossing)
-                        // SAFETY: The shared catalog and native setting live for this entry.
-                        && unsafe { self.services.settings().ambient.read() }
-                    {
-                        (self.leaves.crossing_sound)(Handle::NONE, crossing);
-                    }
-                    (self.leaves.check_next)(id);
-                }
-                if vets & 1 != 0 {
-                    self.enter_station(id, self.world().get_station_index(TileIndex(new)).0);
-                }
+                v = v.next();
             }
-        } else {
-            if is_tile_type(
-                self.services,
-                TileIndex(new),
-                crate::tile_type::TileType::MP_TUNNELBRIDGE,
-            ) && self.movement_enter(id, new, (x as u64) as i32, (y as u64) as i32) & 2 != 0
-            {
-                if (id).front() != 0 {
-                    crate::witness::hit(crate::witness::TRAIN_WORMHOLE_EXIT);
-                    self.reserve_track(id, new, self.world().tunnel_bridge_dir(new) & 1);
-                    (self.leaves.check_next)(id);
-                }
-                if old == new {
-                    old = (self.leaves.other_end)(Handle::NONE, old) as u32;
-                }
-            } else {
-                (id).vehicle().set_x_pos((x as u64) as i32);
-                (id).vehicle().set_y_pos((y as u64) as i32);
-                self.update_occupancy(id);
-                if (id).vehicle().vehstatus_raw() & 1 == 0 {
-                    (self.leaves.base_viewport)(id, 1);
-                }
-                return (0, false);
-            }
-        }
-        (self.vs().update_delta)(id.vehicle());
-        (id).vehicle().set_x_pos((x as u64) as i32);
-        (id).vehicle().set_y_pos((y as u64) as i32);
-        self.update_occupancy(id);
-        let old_z = crate::ground_vehicle::update_inclination(
-            self.leaves.physics,
-            &self.movement,
-            id.vehicle(),
-            new != old,
-            false,
-        );
-        if prev == Handle::NONE {
-            self.speed_z(id, old_z);
-        }
-        if signals {
-            if (id).front() != 0 && self.moved_signals(id, new, entered) {
-                if (!crate::pbs::Pbs::acquire(self.services)
-                    .has_reserved_tracks_raw(new, id.track())
-                    && self.reserve_track(id, new, id.track().trailing_zeros() as u8) == 0)
-                    || !self.try_path_reserve(id, false, false)
-                {
-                    self.mark_stuck(id);
-                }
-            }
-            if (id).next() == Handle::NONE {
-                self.moved_signals(id, old, entered ^ 2);
-                if (self.leaves.is_crossing)(Handle::NONE, old) != 0 {
-                    self.update_crossing(old, true, false);
-                }
-            }
-        }
-        if (id).front() != 0
-            && u64::from((id).vehicle().tick_counter()) % u64::from((self.leaves.backoff)()) == 0
-        {
-            (self.leaves.check_next)(id);
-        }
-        (0, changed)
-    }
-    fn controller(&self, mut id: Handle, nomove: Handle, reverse: bool) -> bool {
-        let first = (id).first();
-        let mut prev = (id).previous();
-        let mut changed = false;
-        while id != nomove {
-            let (outcome, direction) = self.move_vehicle(id, prev, reverse);
-            changed |= direction;
-            if outcome == 1 {
-                return false;
-            }
-            if outcome == 2 && prev != Handle::NONE {
-                (self.leaves.disconnect)(id);
-            }
-            if outcome >= 2 {
-                if reverse {
-                    id.set_wait_counter(0);
-                    (id).vehicle().set_cur_speed(0_u16);
-                    (id).vehicle().set_subspeed(0_u8);
-                    self.reverse(id);
-                }
-                return false;
-            }
-            prev = id;
-            id = (id).next();
-        }
-        if changed {
-            first.set_cached_max_curve_speed(u64::from(self.get_curve_speed_limit(first)));
-        }
-        true
-    }
-}
 
-impl Game<'_> {
-    /// `TryReserveRailTrack(tile, track)` with its default station triggers.
-    fn reserve_track(&self, _id: Handle, tile: u32, track: u8) -> u64 {
-        u64::from(
-            crate::pbs::Pbs::acquire(self.services).try_reserve_rail_track_raw(tile, track, true),
-        )
-    }
-    fn crash(&self, id: Handle, flooded: bool) -> u32 {
-        let mut victims = 0_u32;
-        if (id).front() != 0 {
-            victims += 2;
-            if !id.flag(8) {
-                self.free_train_reservation(id);
+            /* we may need to update crossing we were approaching,
+             * but must be updated after the train has been marked crashed */
+            let crossing = self.train_approaching_crossing_tile(this);
+            if crossing != TileIndex(INVALID_TILE) {
+                self.update_level_crossing(crossing, true, false);
             }
-            let mut u = id;
-            while u != Handle::NONE {
-                let tile = (u).vehicle().tile_raw();
-                (self.leaves.clear_reservation)(u, tile, self.trackdir(u));
-                if is_tile_type(
-                    self.services,
-                    TileIndex(tile),
-                    crate::tile_type::TileType::MP_TUNNELBRIDGE,
-                ) {
-                    (self.leaves.set_tunnel_res)(
-                        u,
-                        (self.leaves.other_end)(Handle::NONE, tile) as u32,
-                        0,
-                    );
-                }
-                u = (u).next();
-            }
-            let crossing = self.approaching_crossing(id);
-            if crossing != INVALID_TILE {
-                self.update_crossing(crossing, true, false);
-            }
-            (self.leaves.hide_fill)(id);
+
+            /* Remove the loading indicators (if any) */
+            (self.vs.visits().hide_filling)(this.vehicle());
         }
+
         victims = victims.wrapping_add(crate::ground_vehicle::crash(
             self.leaves.physics,
-            id.vehicle(),
+            this.vehicle(),
             flooded,
         ));
-        id.set_crash_anim_pos(if flooded { 4000 } else { 1 });
+
+        this.set_crash_anim_pos(if flooded { 4000 } else { 1 }); // max 4440, disappear pretty fast when flooded
         victims
     }
-    fn crashed(&self, id: Handle) -> u32 {
+
+    /// `TrainCrashed`: marks train as crashed and creates an AI event. Doesn't do anything if
+    /// the train is crashed already. `v` is the first vehicle of chain. Returns the number of
+    /// victims (including 2 drivers; zero if train was already crashed).
+    #[inline]
+    fn train_crashed(&self, v: Handle) -> u32 {
         let mut victims = 0;
-        if (id).vehicle().vehstatus_raw() & 128 == 0 {
-            victims = self.crash(id, false);
-            (self.leaves.crash_event)(id, victims);
+
+        /* do not crash train twice */
+        if !v.vehicle().vehstatus().test(VehState::Crashed) {
+            victims = self.crash(v, false);
+            let crashed = || {
+                ScriptEvent::vehicle_crashed(
+                    self.index(v),
+                    v.vehicle().tile(),
+                    CrashReason::CRASH_TRAIN,
+                    victims,
+                    v.vehicle().owner(),
+                )
+            };
+            crate::ai::new_event(v.vehicle().owner(), &crashed());
+            crate::game::new_event(&crashed());
         }
-        (self.leaves.reserve_under)(id);
+
+        /* Try to re-reserve track under already crashed train too.
+         * Crash() clears the reservation! */
+        reservation::reserve_track_under_consist(&self.reservation(v), v);
+
         victims
     }
-    fn collision_one(&self, other: Handle, id: Handle) -> u32 {
-        if other.track() == DEPOT {
+
+    /// `CheckTrainCollision(Vehicle *v, Train *t)`, the per-vehicle overload: collision test
+    /// of vehicle `v` with train `t`. Returns the number of victims.
+    fn check_train_collision_with(&self, v: VehicleRef, t: Handle) -> u32 {
+        /* not a train or in depot */
+        if v.vehicle_type() != VehicleType::VEH_TRAIN {
             return 0;
         }
-        let v_first: Handle = other.first();
-        let v_x: i32 = other.vehicle().x_pos();
-        let v_y: i32 = other.vehicle().y_pos();
-        let v_z: i32 = other.vehicle().z_pos();
-        let v_length: u16 = u16::from(read_field!(
-            other.vehicle().ground_cache(),
-            cached_veh_length
-        ));
-        let v_owner: u8 = other.vehicle().owner_raw();
-        let t_x: i32 = id.vehicle().x_pos();
-        let t_y: i32 = id.vehicle().y_pos();
-        let t_z: i32 = id.vehicle().z_pos();
-        let t_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));
-        let t_owner: u8 = id.vehicle().owner_raw();
-        if v_owner != t_owner || v_first == id {
+        let u = Handle::from_vehicle(v);
+        if u.track() == TrackBits::TRACK_BIT_DEPOT {
             return 0;
         }
-        let x = v_x.wrapping_sub(t_x);
-        let y = v_y.wrapping_sub(t_y);
-        if ((y.wrapping_add(7) | x.wrapping_add(7)) as u32) & !15 != 0 {
+
+        /* do not crash into trains of another company. */
+        if v.owner() != t.vehicle().owner() {
             return 0;
         }
-        let min = (i32::from(v_length) + 1) / 2 + (i32::from(t_length) + 1) / 2 - 1;
-        if x.wrapping_mul(x).wrapping_add(y.wrapping_mul(y)) > min.wrapping_mul(min)
-            || v_z.wrapping_sub(t_z).wrapping_abs() > 5
+
+        /* get first vehicle now to make most usual checks faster */
+        let coll = u.first();
+
+        /* can't collide with own wagons */
+        if coll == t {
+            return 0;
+        }
+
+        let x_diff = v.x_pos().wrapping_sub(t.vehicle().x_pos());
+        let y_diff = v.y_pos().wrapping_sub(t.vehicle().y_pos());
+
+        /* Do fast calculation to check whether trains are not in close vicinity
+         * and quickly reject trains distant enough for any collision.
+         * Differences are shifted by 7, mapping range [-7 .. 8] into [0 .. 15]
+         * Differences are then ORed and then we check for any higher bits */
+        let hash = (y_diff.wrapping_add(7) | x_diff.wrapping_add(7)) as u32;
+        if hash & !15 != 0 {
+            return 0;
+        }
+
+        /* Slower check using multiplication */
+        let min_diff = (i32::from(u.cached_veh_length()) + 1) / 2
+            + (i32::from(t.cached_veh_length()) + 1) / 2
+            - 1;
+        if x_diff
+            .wrapping_mul(x_diff)
+            .wrapping_add(y_diff.wrapping_mul(y_diff))
+            > min_diff * min_diff
         {
             return 0;
         }
-        let victims = self.crashed(id);
-        victims.wrapping_add(self.crashed(v_first))
+
+        /* Happens when there is a train under bridge next to bridge head */
+        if v.z_pos().wrapping_sub(t.vehicle().z_pos()).wrapping_abs() > 5 {
+            return 0;
+        }
+
+        /* Crash both trains. Two statements required to guarantee execution
+         * order because RandomRange() is involved. */
+        let num_victims = self.train_crashed(t);
+        num_victims.wrapping_add(self.train_crashed(coll))
     }
-    fn collision(&self, id: Handle) -> bool {
-        if id.track() == DEPOT {
+
+    /// `CheckTrainCollision(Train *v)`: checks whether the specified train has a collision
+    /// with another vehicle. If so, destroys this vehicle, and the other vehicle if its
+    /// subtype has `TS_Front`. Reports the incident in a flashy news item, modifies station
+    /// ratings and plays a sound.
+    fn check_train_collision(&self, v: Handle) -> bool {
+        /* can't collide in depot */
+        if v.track() == TrackBits::TRACK_BIT_DEPOT {
             return false;
         }
-        let v_tile: u32 = id.vehicle().tile_raw();
-        let v_x: i32 = id.vehicle().x_pos();
-        let v_y: i32 = id.vehicle().y_pos();
-        let mut victims = 0_u32;
-        if id.track() == WORMHOLE {
-            self.visit_tile(v_tile, |u| {
-                victims = victims.wrapping_add(self.collision_one(u, id));
 
-                false
-            });
-            self.visit_tile((self.leaves.other_end)(Handle::NONE, v_tile) as u32, |u| {
-                victims = victims.wrapping_add(self.collision_one(u, id));
+        crate::services_assert::assert_with(|| {
+            v.track() == TrackBits::TRACK_BIT_WORMHOLE
+                || self.tile_virt_xy(v.vehicle().x_pos(), v.vehicle().y_pos()) == v.vehicle().tile()
+        });
 
-                false
+        let mut num_victims = 0_u32;
+
+        /* find colliding vehicles */
+        if v.track() == TrackBits::TRACK_BIT_WORMHOLE {
+            crate::vehicle_func::vehicles_on_tile(self.vs, self.map(), v.vehicle().tile(), |u| {
+                num_victims = num_victims.wrapping_add(self.check_train_collision_with(u, v));
             });
+            crate::vehicle_func::vehicles_on_tile(
+                self.vs,
+                self.map(),
+                self.get_other_tunnel_bridge_end(v.vehicle().tile()),
+                |u| {
+                    num_victims = num_victims.wrapping_add(self.check_train_collision_with(u, v));
+                },
+            );
         } else {
-            self.visit_near(v_x, v_y, |u| {
-                victims = victims.wrapping_add(self.collision_one(u, id));
-
-                false
-            });
+            crate::vehicle_func::vehicles_near_tile_xy(
+                self.vs,
+                v.vehicle().x_pos(),
+                v.vehicle().y_pos(),
+                7,
+                |u| {
+                    num_victims = num_victims.wrapping_add(self.check_train_collision_with(u, v));
+                },
+            );
         }
-        if victims == 0 {
+
+        /* any dead -> no crash */
+        if num_victims == 0 {
             return false;
         }
+
         crate::witness::hit(crate::witness::TRAIN_COLLISION);
-        (self.leaves.crash_news)(id, victims);
-        crate::station::spatial::modify_rating_around(
+        add_tile_news_item(
+            &get_encoded_string(STR_NEWS_TRAIN_CRASH, &[Integer(u64::from(num_victims))]),
+            NewsType::Accident,
+            v.vehicle().tile(),
+            StationID::INVALID,
+        );
+
+        crate::station::spatial::modify_station_rating_around(
             self.services,
-            (id.vehicle()).tile_raw(),
-            (id.vehicle()).owner_raw(),
+            v.vehicle().tile(),
+            v.vehicle().owner(),
             -160,
             30,
         );
         if (self.services.disaster_sound)() {
-            (self.leaves.crash_sound)(id);
+            (self.vs.play_sound)(
+                v.vehicle(),
+                SoundID::from(SoundFx::SND_13_TRAIN_COLLISION).0,
+            );
         }
         true
     }
-    fn platform_occupied(&self, tile: u32) -> bool {
-        let delta = (self.leaves.tile_offset_axis)(
-            Handle::NONE,
-            (self.leaves.station_axis)(Handle::NONE, tile) as u8,
-        ) as u32;
-        let mut t = tile;
-        while (self.leaves.station_compatible)(Handle::NONE, t, tile) != 0 {
-            if self.train_on_tile(t) {
-                return true;
+
+    /// `TrainController`: move a vehicle chain one movement stop forwards. `v` is the first
+    /// vehicle to move; `nomove` stops moving this and all following vehicles; `reverse` set
+    /// to false does not execute the vehicle reversing, which does not change any other
+    /// logic. Returns true if the vehicle could be moved forward, false otherwise.
+    fn train_controller(&self, mut v: Handle, nomove: Handle, reverse: bool) -> bool {
+        let first = v.first();
+        let mut prev = v.previous();
+        let mut direction_changed = false; // has direction of any part changed?
+
+        /* The original's `goto invalid_rail` breaks with true and its
+         * `goto reverse_train_direction` with false. */
+        let invalid_rail = 'controller: {
+            /* For every vehicle after and including the given vehicle */
+            while v != nomove {
+                'part: {
+                    if v.is_articulated_part() {
+                        crate::witness::hit(crate::witness::TRAIN_ARTICULATED_MOVE);
+                    }
+                    let mut enterdir = DiagDirection::DIAGDIR_BEGIN;
+                    let mut update_signals_crossing = false; // will we update signals or crossing state?
+
+                    let mut gp = crate::vehicle::get_new_vehicle_pos(v.vehicle(), self.map());
+                    if v.track() != TrackBits::TRACK_BIT_WORMHOLE {
+                        /* Not inside tunnel */
+                        if gp.old_tile == gp.new_tile {
+                            /* Staying in the old tile */
+                            if v.track() == TrackBits::TRACK_BIT_DEPOT {
+                                /* Inside depot */
+                                gp.x = v.vehicle().x_pos();
+                                gp.y = v.vehicle().y_pos();
+                            } else {
+                                /* Not inside depot */
+
+                                /* Reverse when we are at the end of the track already, do not move to the new position */
+                                if v.is_front_engine() && !self.train_check_if_line_ends(v, reverse)
+                                {
+                                    return false;
+                                }
+
+                                let vets = self.vehicle_enter_tile(v, gp.new_tile, gp.x, gp.y);
+                                if vets.test(VehicleEnterTileState::CannotEnter) {
+                                    break 'controller true;
+                                }
+                                if vets.test(VehicleEnterTileState::EnteredStation) {
+                                    /* The new position is the end of the platform */
+                                    self.train_enter_station(
+                                        v,
+                                        self.get_station_index(gp.new_tile),
+                                    );
+                                }
+                            }
+                        } else {
+                            /* A new tile is about to be entered. */
+
+                            /* Determine what direction we're entering the new tile from */
+                            enterdir = self.map().diagdir_between_tiles(gp.old_tile, gp.new_tile);
+                            crate::services_assert::assert_with(|| {
+                                is_valid_diag_direction(enterdir)
+                            });
+
+                            /* Get the status of the tracks in the new tile and mask
+                             * away the bits that aren't reachable. */
+                            let ts = self.get_tile_track_status(
+                                gp.new_tile,
+                                reverse_diag_dir(enterdir, self.check()),
+                            );
+                            let reachable_trackdirs = TrackdirBits(
+                                crate::track_func::diagdir_reaches_trackdirs(enterdir.0),
+                            );
+
+                            let trackdirbits =
+                                TrackdirBits(crate::track_func::track_status_to_trackdir_bits(ts))
+                                    & reachable_trackdirs;
+                            let red_signals =
+                                TrackBits(crate::track_func::trackdir_bits_to_track_bits(
+                                    (crate::track_func::track_status_to_red_signals(ts)
+                                        & reachable_trackdirs)
+                                        .0,
+                                ));
+
+                            let mut bits = TrackBits(
+                                crate::track_func::trackdir_bits_to_track_bits(trackdirbits.0),
+                            );
+                            if self.rail_90_deg_turn_disallowed(
+                                self.get_tile_rail_type(gp.old_tile),
+                                self.get_tile_rail_type(gp.new_tile),
+                            ) && prev == Handle::NONE
+                            {
+                                /* We allow wagons to make 90 deg turns, because forbid_90_deg
+                                 * can be switched on halfway a turn */
+                                bits.0 &= !crate::track_func::track_crosses_tracks(
+                                    Track(crate::track_func::find_first_track(v.track().0)),
+                                    self.check(),
+                                )
+                                .0;
+                            }
+
+                            if bits == TrackBits::TRACK_BIT_NONE {
+                                break 'controller true;
+                            }
+
+                            /* Check if the new tile constrains tracks that are compatible
+                             * with the current train, if not, bail out. */
+                            if !self.check_compatible_rail(v, gp.new_tile) {
+                                break 'controller true;
+                            }
+
+                            let mut chosen_track;
+                            if prev == Handle::NONE {
+                                /* Currently the locomotive is active. Determine which one of the
+                                 * available tracks to choose */
+                                let (track, _) = reservation::choose_train_track(
+                                    &self.reservation(v),
+                                    v,
+                                    gp.new_tile,
+                                    enterdir,
+                                    bits,
+                                    false,
+                                    true,
+                                );
+                                chosen_track = TrackBits(crate::track_func::track_to_track_bits(
+                                    track.0,
+                                    self.check(),
+                                ));
+                                crate::services_assert::assert_with(|| {
+                                    chosen_track.0
+                                        & (bits.0
+                                            | self.pbs().get_reserved_trackbits(gp.new_tile).0)
+                                        != 0
+                                });
+
+                                if v.force_proceed() != TrainForceProceeding::TFP_NONE
+                                    && self.world().plain_rail(gp.new_tile.0)
+                                    && self.world().has_signals(gp.new_tile.0)
+                                {
+                                    /* For each signal we find decrease the counter by one.
+                                     * We start at two, so the first signal we pass decreases
+                                     * this to one, then if we reach the next signal it is
+                                     * decreased to zero and we won't pass that new signal. */
+                                    let dir = Trackdir(crate::track_func::find_first_trackdir(
+                                        trackdirbits.0,
+                                    ));
+                                    if self.has_signal_on_trackdir(gp.new_tile, dir)
+                                        || (self.has_signal_on_trackdir(
+                                            gp.new_tile,
+                                            Trackdir(crate::track_func::reverse_trackdir(dir.0)),
+                                        ) && self.get_signal_type(
+                                            gp.new_tile,
+                                            Track(crate::track_func::trackdir_to_track(dir.0)),
+                                        ) != SignalType::SIGTYPE_PBS)
+                                    {
+                                        /* However, we do not want to be stopped by PBS signals
+                                         * entered via the back. */
+                                        crate::witness::hit(crate::witness::TRAIN_FORCE_SIGNAL);
+                                        v.set_force_proceed(
+                                            if v.force_proceed() == TrainForceProceeding::TFP_SIGNAL
+                                            {
+                                                TrainForceProceeding::TFP_STUCK
+                                            } else {
+                                                TrainForceProceeding::TFP_NONE
+                                            },
+                                        );
+                                        self.set_vehicle_view_dirty(v);
+                                    }
+                                }
+
+                                /* Check if it's a red signal and that force proceed is not clicked. */
+                                if red_signals & chosen_track != TrackBits::TRACK_BIT_NONE
+                                    && v.force_proceed() == TrainForceProceeding::TFP_NONE
+                                {
+                                    /* In front of a red signal */
+                                    let i = Trackdir(crate::track_func::find_first_trackdir(
+                                        trackdirbits.0,
+                                    ));
+
+                                    /* Don't handle stuck trains here. */
+                                    if v.flags().test(VehicleRailFlag::Stuck) {
+                                        return false;
+                                    }
+
+                                    if !self.has_signal_on_trackdir(
+                                        gp.new_tile,
+                                        Trackdir(crate::track_func::reverse_trackdir(i.0)),
+                                    ) {
+                                        v.vehicle().set_cur_speed(0);
+                                        v.vehicle().set_subspeed(0);
+                                        v.vehicle().set_progress(255); // make sure that every bit of acceleration will hit the signal again, so speed stays 0.
+                                        crate::witness::hit(crate::witness::TRAIN_RED_ONEWAY);
+                                        if !self.reverse_at_signals() || {
+                                            v.set_wait_counter(v.wait_counter().wrapping_add(1));
+                                            i32::from(v.wait_counter())
+                                                < i32::from(self.wait_oneway_signal())
+                                                    * crate::timer_game_tick::DAY_TICKS
+                                                    * 2
+                                        } {
+                                            return false;
+                                        }
+                                    } else if self.has_signal_on_trackdir(gp.new_tile, i) {
+                                        v.vehicle().set_cur_speed(0);
+                                        v.vehicle().set_subspeed(0);
+                                        v.vehicle().set_progress(255); // make sure that every bit of acceleration will hit the signal again, so speed stays 0.
+                                        crate::witness::hit(crate::witness::TRAIN_RED_TWOWAY);
+                                        if !self.reverse_at_signals() || {
+                                            v.set_wait_counter(v.wait_counter().wrapping_add(1));
+                                            i32::from(v.wait_counter())
+                                                < i32::from(self.wait_twoway_signal())
+                                                    * crate::timer_game_tick::DAY_TICKS
+                                                    * 2
+                                        } {
+                                            let mut exitdir =
+                                                crate::track_func::trackdir_to_exitdir_asserted(
+                                                    i,
+                                                    self.check(),
+                                                );
+                                            let o_tile =
+                                                self.tile_add_by_diag_dir(gp.new_tile, exitdir);
+
+                                            exitdir = reverse_diag_dir(exitdir, self.check());
+
+                                            /* check if a train is waiting on the other side */
+                                            if !crate::vehicle_func::has_vehicle_on_tile(
+                                                self.vs,
+                                                self.map(),
+                                                o_tile,
+                                                |u| {
+                                                    if u.vehicle_type() != VehicleType::VEH_TRAIN
+                                                        || u.vehstatus().test(VehState::Crashed)
+                                                    {
+                                                        return false;
+                                                    }
+                                                    let t = Handle::from_vehicle(u);
+
+                                                    /* not front engine of a train, inside wormhole or depot, crashed */
+                                                    if !t.is_front_engine()
+                                                        || t.track().0 & TrackBits::TRACK_BIT_MASK.0
+                                                            == 0
+                                                    {
+                                                        return false;
+                                                    }
+
+                                                    if t.vehicle().cur_speed() > 5
+                                                        || crate::track_func::vehicle_exit_dir(
+                                                            t.vehicle().direction(),
+                                                            t.track(),
+                                                            self.check(),
+                                                        ) != exitdir
+                                                    {
+                                                        return false;
+                                                    }
+
+                                                    true
+                                                },
+                                            ) {
+                                                return false;
+                                            }
+                                        }
+                                    }
+
+                                    /* If we would reverse but are currently in a PBS block and
+                                     * reversing of stuck trains is disabled, don't reverse.
+                                     * This does not apply if the reason for reversing is a one-way
+                                     * signal blocking us, because a train would then be stuck forever. */
+                                    if !self.reverse_at_signals()
+                                        && !(self.pbs().0.blocking)(gp.new_tile.0, i.0)
+                                        && self.update_signals_on_segment(
+                                            v.vehicle().tile(),
+                                            enterdir,
+                                            v.vehicle().owner(),
+                                        ) == SigSegState::SIGSEG_PBS
+                                    {
+                                        v.set_wait_counter(0);
+                                        return false;
+                                    }
+                                    break 'controller false;
+                                }
+                                self.try_reserve_rail_track(
+                                    gp.new_tile,
+                                    Track(crate::track_func::track_bits_to_track(
+                                        chosen_track.0,
+                                        self.check(),
+                                    )),
+                                    false,
+                                );
+                            } else {
+                                /* The wagon is active, simply follow the prev vehicle. */
+                                if prev.vehicle().tile() == gp.new_tile {
+                                    /* Choose the same track as prev */
+                                    if prev.track() == TrackBits::TRACK_BIT_WORMHOLE {
+                                        /* Vehicles entering tunnels enter the wormhole earlier than for bridges.
+                                         * However, just choose the track into the wormhole. */
+                                        crate::services_assert::assert_with(|| {
+                                            self.world().tunnel(prev.vehicle().tile().0)
+                                        });
+                                        chosen_track = bits;
+                                    } else {
+                                        chosen_track = prev.track();
+                                    }
+                                } else {
+                                    /* Choose the track that leads to the tile where prev is.
+                                     * This case is active if 'prev' is already on the second next tile, when 'v' just enters the next tile.
+                                     * I.e. when the tile between them has only space for a single vehicle like
+                                     *  1) horizontal/vertical track tiles and
+                                     *  2) some orientations of tunnel entries, where the vehicle is already inside the wormhole at 8/16 from the tile edge.
+                                     *     Is also the train just reversing, the wagon inside the tunnel is 'on' the tile of the opposite tunnel entry.
+                                     */
+                                    const CONNECTING_TRACK: [[TrackBits;
+                                        DiagDirection::DIAGDIR_END.0 as usize];
+                                        DiagDirection::DIAGDIR_END.0 as usize] = [
+                                        [
+                                            TrackBits::TRACK_BIT_X,
+                                            TrackBits::TRACK_BIT_LOWER,
+                                            TrackBits::TRACK_BIT_NONE,
+                                            TrackBits::TRACK_BIT_LEFT,
+                                        ],
+                                        [
+                                            TrackBits::TRACK_BIT_UPPER,
+                                            TrackBits::TRACK_BIT_Y,
+                                            TrackBits::TRACK_BIT_LEFT,
+                                            TrackBits::TRACK_BIT_NONE,
+                                        ],
+                                        [
+                                            TrackBits::TRACK_BIT_NONE,
+                                            TrackBits::TRACK_BIT_RIGHT,
+                                            TrackBits::TRACK_BIT_X,
+                                            TrackBits::TRACK_BIT_UPPER,
+                                        ],
+                                        [
+                                            TrackBits::TRACK_BIT_RIGHT,
+                                            TrackBits::TRACK_BIT_NONE,
+                                            TrackBits::TRACK_BIT_LOWER,
+                                            TrackBits::TRACK_BIT_Y,
+                                        ],
+                                    ];
+                                    let exitdir = self
+                                        .map()
+                                        .diagdir_between_tiles(gp.new_tile, prev.vehicle().tile());
+                                    crate::services_assert::assert_with(|| {
+                                        is_valid_diag_direction(exitdir)
+                                    });
+                                    chosen_track = CONNECTING_TRACK[usize::from(enterdir.0)]
+                                        [usize::from(exitdir.0)];
+                                }
+                                chosen_track.0 &= bits.0;
+                            }
+
+                            /* Make sure chosen track is a valid track */
+                            crate::services_assert::assert_with(|| {
+                                matches!(
+                                    chosen_track,
+                                    TrackBits::TRACK_BIT_X
+                                        | TrackBits::TRACK_BIT_Y
+                                        | TrackBits::TRACK_BIT_UPPER
+                                        | TrackBits::TRACK_BIT_LOWER
+                                        | TrackBits::TRACK_BIT_LEFT
+                                        | TrackBits::TRACK_BIT_RIGHT
+                                )
+                            });
+
+                            /* Update XY to reflect the entrance to the new tile, and select the direction to use */
+                            let b = INITIAL_TILE_SUBCOORD[usize::from(
+                                crate::bitmath_func::find_first_bit(u64::from(chosen_track.0)),
+                            )][usize::from(enterdir.0)];
+                            gp.x = (gp.x & !0xF) | i32::from(b[0]);
+                            gp.y = (gp.y & !0xF) | i32::from(b[1]);
+                            let chosen_dir = Direction(b[2]);
+
+                            /* Call the landscape function and tell it that the vehicle entered the tile */
+                            let vets = self.vehicle_enter_tile(v, gp.new_tile, gp.x, gp.y);
+                            if vets.test(VehicleEnterTileState::CannotEnter) {
+                                break 'controller true;
+                            }
+
+                            if !vets.test(VehicleEnterTileState::EnteredWormhole) {
+                                if v.is_front_engine() {
+                                    crate::witness::hit(crate::witness::TRAIN_FIRST_TILE_RAIL);
+                                }
+                                let track =
+                                    Track(crate::track_func::find_first_track(chosen_track.0));
+                                let tdir = crate::track_func::track_direction_to_trackdir(
+                                    track,
+                                    chosen_dir,
+                                    self.check(),
+                                );
+                                if v.is_front_engine()
+                                    && (self.pbs().0.has_pbs)(gp.new_tile.0, tdir.0)
+                                {
+                                    // SAFETY: The PBS table names the immutable rail map table.
+                                    (unsafe { &*self.pbs().0.rail }.set_signal_state)(
+                                        gp.new_tile.0,
+                                        tdir.0,
+                                        crate::signal_type::SignalState::SIGNAL_STATE_RED.0,
+                                    );
+                                    self.mark_tile_dirty_by_tile(gp.new_tile);
+                                }
+
+                                /* Clear any track reservation when the last vehicle leaves the tile */
+                                if v.next() == Handle::NONE {
+                                    reservation::clear_path_reservation(
+                                        &self.reservation(v),
+                                        v,
+                                        v.vehicle().tile(),
+                                        self.get_vehicle_trackdir(v),
+                                    );
+                                }
+
+                                v.vehicle().set_tile(gp.new_tile);
+
+                                if self.get_tile_rail_type(gp.new_tile)
+                                    != self.get_tile_rail_type(gp.old_tile)
+                                {
+                                    self.consist_changed(v.first(), CCF_TRACK);
+                                }
+
+                                v.set_track(chosen_track);
+                                crate::services_assert::assert_with(|| {
+                                    v.track() != TrackBits::TRACK_BIT_NONE
+                                });
+                            }
+
+                            /* We need to update signal status, but after the vehicle position hash
+                             * has been updated by UpdateInclination() */
+                            update_signals_crossing = true;
+
+                            if chosen_dir != v.vehicle().direction() {
+                                if prev == Handle::NONE
+                                    && self.train_acceleration_model()
+                                        == AccelerationModel::AM_ORIGINAL
+                                {
+                                    let asp = &ACCEL_SLOWDOWN[self.get_acceleration_type(v)];
+                                    let diff = dir_difference(
+                                        v.vehicle().direction(),
+                                        chosen_dir,
+                                        self.check(),
+                                    );
+                                    let fraction = if diff == DirDiff::DIRDIFF_45RIGHT
+                                        || diff == DirDiff::DIRDIFF_45LEFT
+                                    {
+                                        asp.small_turn
+                                    } else {
+                                        asp.large_turn
+                                    };
+                                    let cur_speed = v.vehicle().cur_speed();
+                                    v.vehicle().set_cur_speed(cur_speed.wrapping_sub(
+                                        ((u32::from(fraction) * u32::from(cur_speed)) >> 8) as u16,
+                                    ));
+                                }
+                                direction_changed = true;
+                                v.vehicle().set_direction(chosen_dir);
+                            }
+
+                            if v.is_front_engine() {
+                                v.set_wait_counter(0);
+
+                                /* If we are approaching a crossing that is reserved, play the sound now. */
+                                let crossing = self.train_approaching_crossing_tile(v);
+                                if crossing != TileIndex(INVALID_TILE)
+                                    && self.has_crossing_reservation(crossing)
+                                    && self.ambient()
+                                {
+                                    self.snd_play_tile_fx(SoundFx::SND_0E_LEVEL_CROSSING, crossing);
+                                }
+
+                                /* Always try to extend the reservation when entering a tile. */
+                                reservation::check_next_train_tile(&self.reservation(v), v);
+                            }
+
+                            if vets.test(VehicleEnterTileState::EnteredStation) {
+                                /* The new position is the location where we want to stop */
+                                self.train_enter_station(v, self.get_station_index(gp.new_tile));
+                            }
+                        }
+                    } else if self.is_tile_type(gp.new_tile, TileType::MP_TUNNELBRIDGE)
+                        && self
+                            .vehicle_enter_tile(v, gp.new_tile, gp.x, gp.y)
+                            .test(VehicleEnterTileState::EnteredWormhole)
+                    {
+                        /* Perform look-ahead on tunnel exit. */
+                        if v.is_front_engine() {
+                            crate::witness::hit(crate::witness::TRAIN_WORMHOLE_EXIT);
+                            self.try_reserve_rail_track(
+                                gp.new_tile,
+                                Track(crate::track_func::diag_dir_to_diag_track(
+                                    self.get_tunnel_bridge_direction(gp.new_tile).0,
+                                    self.check(),
+                                )),
+                                true,
+                            );
+                            reservation::check_next_train_tile(&self.reservation(v), v);
+                        }
+                        /* Prevent v->UpdateInclination() being called with wrong parameters.
+                         * This could happen if the train was reversed inside the tunnel/bridge. */
+                        if gp.old_tile == gp.new_tile {
+                            gp.old_tile = self.get_other_tunnel_bridge_end(gp.old_tile);
+                        }
+                    } else {
+                        v.vehicle().set_x_pos(gp.x);
+                        v.vehicle().set_y_pos(gp.y);
+                        self.update_position(v);
+                        if !v.vehicle().vehstatus().test(VehState::Hidden) {
+                            (self.vs.base_viewport)(v.vehicle());
+                        }
+                        break 'part;
+                    }
+
+                    /* update image of train, as well as delta XY */
+                    (self.vs.update_delta)(v.vehicle());
+
+                    v.vehicle().set_x_pos(gp.x);
+                    v.vehicle().set_y_pos(gp.y);
+                    self.update_position(v);
+
+                    /* update the Z position of the vehicle */
+                    let old_z = self.update_inclination(v, gp.new_tile != gp.old_tile, false);
+
+                    if prev == Handle::NONE {
+                        /* This is the first vehicle in the train */
+                        self.affect_speed_by_z_change(v, old_z);
+                    }
+
+                    if update_signals_crossing {
+                        if v.is_front_engine()
+                            && self.train_moved_change_signals(gp.new_tile, enterdir)
+                        {
+                            /* We are entering a block with PBS signals right now, but
+                             * not through a PBS signal. This means we don't have a
+                             * reservation right now. As a conventional signal will only
+                             * ever be green if no other train is in the block, getting
+                             * a path should always be possible. If the player built
+                             * such a strange network that it is not possible, the train
+                             * will be marked as stuck and the player has to deal with
+                             * the problem. */
+                            if (!self.pbs().has_reserved_tracks(gp.new_tile, v.track())
+                                && !self.try_reserve_rail_track(
+                                    gp.new_tile,
+                                    Track(crate::track_func::find_first_track(v.track().0)),
+                                    true,
+                                ))
+                                || !reservation::try_path_reserve(
+                                    &self.reservation(v),
+                                    v,
+                                    false,
+                                    false,
+                                )
+                            {
+                                self.mark_train_as_stuck(v);
+                            }
+                        }
+
+                        /* Signals can only change when the first
+                         * (above) or the last vehicle moves. */
+                        if v.next() == Handle::NONE {
+                            self.train_moved_change_signals(
+                                gp.old_tile,
+                                reverse_diag_dir(enterdir, self.check()),
+                            );
+                            if self.is_level_crossing_tile(gp.old_tile) {
+                                self.update_level_crossing(gp.old_tile, true, false);
+                            }
+                        }
+                    }
+
+                    /* Do not check on every tick to save some computing time. */
+                    if v.is_front_engine()
+                        && v.vehicle()
+                            .tick_counter()
+                            .is_multiple_of(self.path_backoff_interval())
+                    {
+                        reservation::check_next_train_tile(&self.reservation(v), v);
+                    }
+                }
+                prev = v;
+                v = v.next();
             }
-            t = t.wrapping_sub(delta);
-        }
-        t = tile.wrapping_add(delta);
-        while (self.leaves.station_compatible)(Handle::NONE, t, tile) != 0 {
-            if self.train_on_tile(t) {
-                return true;
+
+            if direction_changed {
+                first.set_cached_max_curve_speed(self.get_curve_speed_limit(first));
             }
-            t = t.wrapping_add(delta);
+
+            return true;
+        };
+
+        if invalid_rail {
+            /* We've reached end of line?? */
+            if prev != Handle::NONE {
+                crate::error_func::fatal_error(self.services, "Disconnecting train");
+            }
         }
+
+        /* reverse_train_direction: */
+        if reverse {
+            v.set_wait_counter(0);
+            v.vehicle().set_cur_speed(0);
+            v.vehicle().set_subspeed(0);
+            self.reverse_train_direction(v);
+        }
+
         false
     }
-    fn delete_last(&self, mut id: Handle) {
-        crate::witness::hit(crate::witness::TRAIN_CRASH_DELETE);
-        let first = (id).first();
-        let mut last = id;
-        while (id).next() != Handle::NONE {
-            last = id;
-            id = (id).next();
-        }
-        // SAFETY: The crash chain remains live until the following delete.
-        unsafe { crate::vehicle_base::set_next(last.record, std::ptr::null_mut()) };
-        if first != id {
-            self.consist_changed(first, 3);
-            if first.track() == DEPOT {
-                (self.leaves.depot_window)(first, (first).vehicle().tile_raw());
-            }
-            (id).vehicle().set_last_station_visited_raw(
-                (u64::from((first).vehicle().last_station_visited_raw())) as u16,
-            );
-        }
-        let mut tracks = id.track();
-        let v_tile: u32 = id.vehicle().tile_raw();
-        let v_owner: u8 = id.vehicle().owner_raw();
-        let tile = v_tile;
-        let owner = v_owner;
-        (self.leaves.delete_vehicle)(id);
-        if tracks == WORMHOLE {
-            tracks = 1 << (u64::from(self.world().tunnel_bridge_dir(tile)) & 1);
-        }
-        let track = tracks.trailing_zeros() as u8;
-        if crate::pbs::Pbs::acquire(self.services).has_reserved_tracks_raw(tile, tracks) {
-            crate::pbs::Pbs::acquire(self.services).unreserve_rail_track_raw(tile, track);
-            let mut remaining = 0_u8;
-            self.visit_tile(tile, |u| {
-                if (u).vehicle().vehstatus_raw() & 128 == 0 {
-                    return false;
-                }
-                let t = u.track();
-                if t == WORMHOLE {
-                    remaining |= 1
-                        << (u64::from(self.world().tunnel_bridge_dir((u).vehicle().tile_raw()))
-                            & 1);
-                } else if t != DEPOT {
-                    remaining |= t;
-                }
+}
 
-                false
-            });
-            for t in 0..6 {
-                if remaining & (1 << t) != 0 {
-                    self.reserve_track(Handle::NONE, tile, t);
+impl Game<'_> {
+    /// `IsRailStationPlatformOccupied`.
+    fn is_rail_station_platform_occupied(&self, tile: TileIndex) -> bool {
+        let world = self.world();
+        let delta = self
+            .map()
+            .offs_by_axis(world.get_rail_station_axis(tile), self.check());
+
+        let mut t = tile;
+        while world.is_compatible_train_station_tile(t, tile) {
+            if crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), t, is_train) {
+                return true;
+            }
+            t = t - delta;
+        }
+        let mut t = tile + delta;
+        while world.is_compatible_train_station_tile(t, tile) {
+            if crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), t, is_train) {
+                return true;
+            }
+            t += delta;
+        }
+
+        false
+    }
+
+    /// `DeleteLastWagon`: deletes/clears the last wagon of a crashed train. It takes the
+    /// engine of the train, then goes to the last wagon and deletes that. Each call to this
+    /// function will remove the last wagon of a crashed train. If this wagon was on a
+    /// crossing, or inside a tunnel/bridge, recalculate the signals as they might need
+    /// updating.
+    fn delete_last_wagon(&self, mut v: Handle) {
+        crate::witness::hit(crate::witness::TRAIN_CRASH_DELETE);
+        let first = v.first();
+
+        /* Go to the last wagon and delete the link pointing there
+         * new_last is then the one-before-last wagon, and v the last
+         * one which will physically be removed */
+        let mut new_last = v;
+        while v.next() != Handle::NONE {
+            new_last = v;
+            v = v.next();
+        }
+        // SAFETY: The crashed chain stays live through the unlinking.
+        unsafe { crate::vehicle_base::set_next(new_last.record, std::ptr::null_mut()) };
+
+        if first != v {
+            /* Recalculate cached train properties */
+            self.consist_changed(first, CCF_ARRANGE);
+            /* Update the depot window if the first vehicle is in depot -
+             * if v == first, then it is updated in PreDestructor() */
+            if first.track() == TrackBits::TRACK_BIT_DEPOT {
+                set_window_dirty(
+                    WindowClass::WC_VEHICLE_DEPOT,
+                    WindowNumber::from(first.vehicle().tile()),
+                );
+            }
+            v.vehicle()
+                .set_last_station_visited(first.vehicle().last_station_visited()); // for PreDestructor
+        }
+
+        /* 'v' shouldn't be accessed after it has been deleted */
+        let mut trackbits = v.track();
+        let tile = v.vehicle().tile();
+        let owner = v.vehicle().owner();
+
+        (self.vs.destroy)(v.vehicle());
+
+        if trackbits == TrackBits::TRACK_BIT_WORMHOLE {
+            /* Vehicle is inside a wormhole, v->track contains no useful value then. */
+            trackbits = TrackBits(crate::track_func::diag_dir_to_diag_track_bits(
+                self.get_tunnel_bridge_direction(tile).0,
+                self.check(),
+            ));
+        }
+
+        let track = Track(crate::track_func::track_bits_to_track(
+            trackbits.0,
+            self.check(),
+        ));
+        if self.pbs().has_reserved_tracks(tile, trackbits) {
+            self.pbs().unreserve_rail_track(tile, track);
+
+            /* If there are still crashed vehicles on the tile, give the track reservation to them */
+            let mut remaining_trackbits = TrackBits::TRACK_BIT_NONE;
+            crate::vehicle_func::vehicles_on_tile(self.vs, self.map(), tile, |u| {
+                if u.vehicle_type() != VehicleType::VEH_TRAIN
+                    || !u.vehstatus().test(VehState::Crashed)
+                {
+                    return;
                 }
+                let train_tbits = Handle::from_vehicle(u).track();
+                if train_tbits == TrackBits::TRACK_BIT_WORMHOLE {
+                    /* Vehicle is inside a wormhole, u->track contains no useful value then. */
+                    remaining_trackbits.0 |= crate::track_func::diag_dir_to_diag_track_bits(
+                        self.get_tunnel_bridge_direction(u.tile()).0,
+                        self.check(),
+                    );
+                } else if train_tbits != TrackBits::TRACK_BIT_DEPOT {
+                    remaining_trackbits.0 |= train_tbits.0;
+                }
+            });
+
+            /* It is important that these two are the first in the loop, as reservation cannot deal with every trackbit combination */
+            crate::services_assert::assert_with(|| {
+                Track::TRACK_BEGIN == Track::TRACK_X && Track::TRACK_Y.0 == Track::TRACK_BEGIN.0 + 1
+            });
+            for t in crate::track_func::set_track_bit_iterator(remaining_trackbits) {
+                self.try_reserve_rail_track(tile, t, true);
             }
         }
-        if (self.leaves.is_crossing)(Handle::NONE, tile) != 0 {
-            self.update_crossing(tile, true, false);
+
+        /* check if the wagon was on a road/rail-crossing */
+        if self.is_level_crossing_tile(tile) {
+            self.update_level_crossing(tile, true, false);
         }
-        if (self.leaves.is_station)(Handle::NONE, tile) != 0 {
-            let occupied = self.platform_occupied(tile);
-            let dir = (self.leaves.axis_diag)(
-                Handle::NONE,
-                (self.leaves.station_axis)(Handle::NONE, tile) as u8,
-            ) as u8;
-            crate::pbs::Pbs::acquire(self.services)
-                .set_rail_station_platform_reservation_raw(tile, dir, occupied);
-            crate::pbs::Pbs::acquire(self.services).set_rail_station_platform_reservation_raw(
+
+        if self.is_rail_station_tile(tile) {
+            let occupied = self.is_rail_station_platform_occupied(tile);
+            let dir = axis_to_diag_dir(self.world().get_rail_station_axis(tile), self.check());
+            self.pbs()
+                .set_rail_station_platform_reservation(tile, dir, occupied);
+            self.pbs().set_rail_station_platform_reservation(
                 tile,
-                dir ^ 2,
+                reverse_diag_dir(dir, self.check()),
                 occupied,
             );
         }
-        if is_tile_type(
-            self.services,
-            TileIndex(tile),
-            crate::tile_type::TileType::MP_TUNNELBRIDGE,
-        ) || (self.leaves.is_depot)(Handle::NONE, tile) != 0
-        {
-            self.signal_context().segment(tile, u8::MAX, owner);
+
+        /* Update signals */
+        if self.is_tile_type(tile, TileType::MP_TUNNELBRIDGE) || self.is_rail_depot_tile(tile) {
+            self.update_signals_on_segment(tile, DiagDirection::INVALID_DIAGDIR, owner);
         } else {
-            self.signal_context().both(tile, track, owner);
+            self.signals().set_signals_on_both_dir(tile, track, owner);
         }
     }
-    fn change_dir_randomly(&self, mut id: Handle) {
+
+    /// `ChangeTrainDirRandomly`: rotate all vehicles of a (crashed) train chain randomly to
+    /// animate the crash. `v` is the first crashed vehicle.
+    fn change_train_dir_randomly(&self, mut v: Handle) {
+        const DELTA: [DirDiff; 4] = [
+            DirDiff::DIRDIFF_45LEFT,
+            DirDiff::DIRDIFF_SAME,
+            DirDiff::DIRDIFF_SAME,
+            DirDiff::DIRDIFF_45RIGHT,
+        ];
+
         loop {
-            if (id).vehicle().vehstatus_raw() & 1 == 0 {
-                let delta = [7, 0, 0, 1][(self.services.random() & 3) as usize];
-                (id).vehicle().set_direction_raw(
-                    (u64::from((id).vehicle().direction_raw().wrapping_add(delta) & 7)) as u8,
-                );
-                if id.track() != WORMHOLE {
-                    self.update_occupancy(id);
-                    crate::ground_vehicle::update_inclination(
-                        self.leaves.physics,
-                        &self.movement,
-                        id.vehicle(),
-                        false,
-                        true,
-                    );
+            /* We don't need to twist around vehicles if they're not visible */
+            if !v.vehicle().vehstatus().test(VehState::Hidden) {
+                v.vehicle().set_direction(change_dir(
+                    v.vehicle().direction(),
+                    DELTA[(self.services.random() & 3) as usize],
+                    self.check(),
+                ));
+                /* Refrain from updating the z position of the vehicle when on
+                 * a bridge, because UpdateInclination() will put the vehicle under
+                 * the bridge in that case */
+                if v.track() == TrackBits::TRACK_BIT_WORMHOLE {
+                    self.viewport(v, false, true);
                 } else {
-                    (self.leaves.viewport)(id, 0, 1);
+                    self.update_position(v);
+                    self.update_inclination(v, false, true);
                 }
             }
-            id = (id).next();
-            if id == Handle::NONE {
+            v = v.next();
+            if v == Handle::NONE {
                 break;
             }
         }
     }
-    fn handle_crashed(&self, id: Handle) -> bool {
-        let state = (id.get_crash_anim_pos() as u16).wrapping_add(1);
-        id.set_crash_anim_pos(u64::from(state));
-        if state == 4 && (id).vehicle().vehstatus_raw() & 1 == 0 {
-            let _ = crate::effect::create_effect_vehicle_rel(
-                id.vehicle(),
+
+    /// `HandleCrashedTrain`: handle a crashed train. `v` is the first train vehicle. Returns
+    /// whether the vehicle chain still exists.
+    fn handle_crashed_train(&self, v: Handle) -> bool {
+        v.set_crash_anim_pos(v.crash_anim_pos().wrapping_add(1));
+        let state = i32::from(v.crash_anim_pos());
+
+        if state == 4 && !v.vehicle().vehstatus().test(VehState::Hidden) {
+            crate::effect::create_effect_vehicle_rel(
+                v.vehicle(),
                 4,
                 4,
                 8,
                 crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE,
             );
         }
+
         if state <= 200 {
-            let mut r = self.services.random();
-            if crate::random_func::chance16_i(1, 7, r) {
+            let mut r = 0;
+            if crate::random_func::chance16r(self.services, 1, 7, &mut r) {
                 let mut index = (r.wrapping_mul(10) >> 16) as i32;
-                let mut u = id;
+
+                let mut u = v.vehicle();
                 loop {
                     index -= 1;
                     if index < 0 {
                         r = self.services.random();
-                        let _ = crate::effect::create_effect_vehicle_rel(
-                            u.vehicle(),
-                            (((r >> 8) & 7) + 2) as i32,
-                            (((r >> 16) & 7) + 2) as i32,
-                            ((r & 7) + 5) as i32,
+
+                        crate::effect::create_effect_vehicle_rel(
+                            u,
+                            crate::bitmath_func::gb(r, 8, 3) as i32 + 2,
+                            crate::bitmath_func::gb(r, 16, 3) as i32 + 2,
+                            crate::bitmath_func::gb(r, 0, 3) as i32 + 5,
                             crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_SMALL,
                         );
                         break;
                     }
-                    u = (u).next();
-                    if u == Handle::NONE {
-                        break;
+                    match u.next() {
+                        Some(next) => u = next,
+                        None => break,
                     }
                 }
             }
         }
-        let tick = (id).vehicle().tick_counter();
-        if state <= 240 && tick & 3 == 0 {
-            self.change_dir_randomly(id);
+
+        if state <= 240 && v.vehicle().tick_counter().trailing_zeros() >= 2 {
+            self.change_train_dir_randomly(v);
         }
-        if state >= 4440 && tick & 31 == 0 {
-            let remains = (id).next() != Handle::NONE;
-            self.delete_last(id);
-            return remains;
+
+        if state >= 4440 && v.vehicle().tick_counter().trailing_zeros() >= 5 {
+            let ret = v.next() != Handle::NONE;
+            self.delete_last_wagon(v);
+            return ret;
         }
+
         true
     }
-    fn stay_depot(&self, id: Handle) -> bool {
-        if !Self::whole_in_depot(id) {
+
+    /// `TrainApproachingLineEnd`: train is approaching line end, slow down and possibly
+    /// reverse. `v` is the front train engine; `signal` means not line end, just a red
+    /// signal; `reverse` set to false does not execute the vehicle reversing, which does not
+    /// change any other logic. Returns true iff we did NOT have to reverse.
+    fn train_approaching_line_end(&self, v: Handle, signal: bool, reverse: bool) -> bool {
+        /* Calc position within the current tile */
+        let mut x = v.vehicle().x_pos() as u32 & 0xF;
+        let y = v.vehicle().y_pos() as u32 & 0xF;
+
+        /* for diagonal directions, 'x' will be 0..15 -
+         * for other directions, it will be 1, 3, 5, ..., 15 */
+        match v.vehicle().direction() {
+            Direction::DIR_N => x = (!x).wrapping_add(!y).wrapping_add(25),
+            Direction::DIR_NW => {
+                x = y;
+                x = (!x).wrapping_add(16);
+            }
+            Direction::DIR_NE => x = (!x).wrapping_add(16),
+            Direction::DIR_E => x = (!x).wrapping_add(y).wrapping_add(9),
+            Direction::DIR_SE => x = y,
+            Direction::DIR_S => x = x.wrapping_add(y).wrapping_sub(7),
+            Direction::DIR_W => x = (!y).wrapping_add(x).wrapping_add(9),
+            _ => {}
+        }
+
+        /* Do not reverse when approaching red signal. Make sure the vehicle's front
+         * does not cross the tile boundary when we do reverse, but as the vehicle's
+         * location is based on their center, use half a vehicle's length as offset.
+         * Multiply the half-length by two for straight directions to compensate that
+         * we only get odd x offsets there. */
+        if !signal
+            && x.wrapping_add(
+                u32::from(v.cached_veh_length()).div_ceil(2)
+                    * if crate::direction_func::is_diagonal_direction(
+                        v.vehicle().direction(),
+                        self.check(),
+                    ) {
+                        1
+                    } else {
+                        2
+                    },
+            ) >= TILE_SIZE
+        {
+            /* we are too near the tile end, reverse now */
+            v.vehicle().set_cur_speed(0);
+            if reverse {
+                self.reverse_train_direction(v);
+            }
             return false;
         }
-        let v_tile: u32 = id.vehicle().tile_raw();
-        let v_power: u32 = read_field!(id.vehicle().ground_cache(), cached_power);
-        if v_power == 0 {
-            Self::write_status(id, 2, true);
-            (self.leaves.depot_window)(id, v_tile);
-            return true;
+
+        /* slow down */
+        v.vehicle()
+            .set_vehstatus(v.vehicle().vehstatus().set(VehState::TrainSlowing));
+        let break_speed = BREAKDOWN_SPEEDS[(x & 0xF) as usize];
+        if break_speed < v.vehicle().cur_speed() {
+            v.vehicle().set_cur_speed(break_speed);
         }
-        if (self.leaves.wait_unbunch)(id) != 0 {
-            return true;
-        }
-        if id.get_force_proceed() == 0 {
-            if id.wait_inc() < 37 {
-                (self.leaves.train_list)(id);
-                return true;
-            }
-            id.set_wait_counter(0);
-        }
-        let segment = if (self.leaves.reserve_paths)() {
-            (self.leaves.sigseg_pbs)(id)
-        } else {
-            self.signal_segment(id, v_tile, u8::MAX)
-        };
-        if id.get_force_proceed() == 0
-            && (segment == (self.leaves.sigseg_full)(id)
-                || (self.leaves.has_depot_res)(Handle::NONE, v_tile) != 0)
-        {
-            (self.leaves.train_list)(id);
-            return true;
-        }
-        if (id).vehicle().current_order().kind_raw() == OT_GOTO_DEPOT
-            && (id).vehicle().tile_raw() == (id).vehicle().dest_tile_raw()
-        {
-            if (self.leaves.has_depot_res)(Handle::NONE, (id).vehicle().tile_raw()) == 0 {
-                crate::witness::hit(crate::witness::TRAIN_DEPOT_REENTRY);
-                self.vs().enter_depot(id.vehicle());
-            }
-            return true;
-        }
-        if segment == (self.leaves.sigseg_pbs)(id)
-            && !self.try_path_reserve(id, false, false)
-            && id.get_force_proceed() == 0
-        {
-            (self.leaves.train_list)(id);
-            self.mark_stuck(id);
-            return true;
-        }
-        (self.leaves.set_depot_res)(id, (id).vehicle().tile_raw(), 1);
-        if (self.leaves.show_reservation)(id) != 0 {
-            (self.services.mark_dirty)((id).vehicle().tile_raw());
-        }
-        crate::witness::hit(crate::witness::TRAIN_DEPOT_START);
-        self.service_in_depot(id);
-        (self.leaves.leave_unbunch)(id);
-        (self.leaves.leave_sound)(id);
-        (self.leaves.train_list)(id);
-        id.set_track(if (id).vehicle().direction_raw() & 2 != 0 {
-            2
-        } else {
-            1
-        });
-        Self::write_status(id, 1, false);
-        (id).vehicle().set_cur_speed(0_u16);
-        (self.leaves.viewport)(id, 1, 1);
-        self.update_occupancy(id);
-        self.signal_segment(id, (id).vehicle().tile_raw(), u8::MAX);
-        update_acceleration(id);
-        (self.leaves.depot_dirty)(id);
-        false
+
+        true
     }
-    fn loco(&self, id: Handle, mode: bool) -> bool {
+
+    /// `TrainCanLeaveTile`: determines whether train would like to leave the tile. Returns
+    /// true iff vehicle is NOT entering or inside a depot or tunnel/bridge.
+    fn train_can_leave_tile(&self, v: Handle) -> bool {
+        /* Exit if inside a tunnel/bridge or a depot */
+        if v.track() == TrackBits::TRACK_BIT_WORMHOLE || v.track() == TrackBits::TRACK_BIT_DEPOT {
+            return false;
+        }
+
+        let tile = v.vehicle().tile();
+
+        /* entering a tunnel/bridge? */
+        if self.is_tile_type(tile, TileType::MP_TUNNELBRIDGE) {
+            let dir = self.get_tunnel_bridge_direction(tile);
+            if diag_dir_to_dir(dir, self.check()) == v.vehicle().direction() {
+                return false;
+            }
+        }
+
+        /* entering a depot? */
+        if self.is_rail_depot_tile(tile) {
+            let dir = reverse_diag_dir(self.get_rail_depot_direction(tile), self.check());
+            if diag_dir_to_dir(dir, self.check()) == v.vehicle().direction() {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// `TrainApproachingCrossingTile`: determines whether train is approaching a rail-road
+    /// crossing (thus making it barred). `v` is the front engine of train. Returns the
+    /// `TileIndex` of crossing the train is approaching, else `INVALID_TILE`.
+    /// Precondition: `v` is a non-crashed front engine.
+    fn train_approaching_crossing_tile(&self, v: Handle) -> TileIndex {
+        crate::services_assert::assert_with(|| v.is_front_engine());
+        crate::services_assert::assert_with(|| !v.vehicle().vehstatus().test(VehState::Crashed));
+
+        if !self.train_can_leave_tile(v) {
+            return TileIndex(INVALID_TILE);
+        }
+
+        let dir =
+            crate::track_func::vehicle_exit_dir(v.vehicle().direction(), v.track(), self.check());
+        let tile = v.vehicle().tile() + self.tile_offs_by_diag_dir(dir);
+
+        /* not a crossing || wrong axis || unusable rail (wrong type or owner) */
+        if !self.is_level_crossing_tile(tile)
+            || diag_dir_to_axis(dir, self.check()) == self.get_crossing_road_axis(tile)
+            || !self.check_compatible_rail(v, tile)
+        {
+            return TileIndex(INVALID_TILE);
+        }
+
+        tile
+    }
+
+    /// `TrainCheckIfLineEnds`: checks for line end. Also, bars crossing at next tile if
+    /// needed. `reverse` set to false does not execute the vehicle reversing, which does not
+    /// change any other logic. Returns true iff we did NOT have to reverse.
+    fn train_check_if_line_ends(&self, v: Handle, reverse: bool) -> bool {
+        /* First, handle broken down train */
+
+        let t = i32::from(v.vehicle().breakdown_ctr());
+        if t > 1 {
+            v.vehicle()
+                .set_vehstatus(v.vehicle().vehstatus().set(VehState::TrainSlowing));
+
+            let break_speed = BREAKDOWN_SPEEDS[crate::bitmath_func::gb(!t as u32, 4, 4) as usize];
+            if break_speed < v.vehicle().cur_speed() {
+                v.vehicle().set_cur_speed(break_speed);
+            }
+        } else {
+            v.vehicle()
+                .set_vehstatus(v.vehicle().vehstatus().reset(VehState::TrainSlowing));
+        }
+
+        if !self.train_can_leave_tile(v) {
+            return true;
+        }
+
+        /* Determine the non-diagonal direction in which we will exit this tile */
+        let dir =
+            crate::track_func::vehicle_exit_dir(v.vehicle().direction(), v.track(), self.check());
+        /* Calculate next tile */
+        let tile = v.vehicle().tile() + self.tile_offs_by_diag_dir(dir);
+
+        /* Determine the track status on the next tile */
+        let ts = self.get_tile_track_status(tile, reverse_diag_dir(dir, self.check()));
+        let reachable_trackdirs = TrackdirBits(crate::track_func::diagdir_reaches_trackdirs(dir.0));
+
+        let trackdirbits = TrackdirBits(crate::track_func::track_status_to_trackdir_bits(ts))
+            & reachable_trackdirs;
+        let red_signals = crate::track_func::track_status_to_red_signals(ts) & reachable_trackdirs;
+
+        /* We are sure the train is not entering a depot, it is detected above */
+
+        /* mask unreachable track bits if we are forbidden to do 90deg turns */
+        let mut bits = TrackBits(crate::track_func::trackdir_bits_to_track_bits(
+            trackdirbits.0,
+        ));
+        if self.rail_90_deg_turn_disallowed(
+            self.get_tile_rail_type(v.vehicle().tile()),
+            self.get_tile_rail_type(tile),
+        ) {
+            bits.0 &= !crate::track_func::track_crosses_tracks(
+                Track(crate::track_func::find_first_track(v.track().0)),
+                self.check(),
+            )
+            .0;
+        }
+
+        /* no suitable trackbits at all || unusable rail (wrong type or owner) */
+        if bits == TrackBits::TRACK_BIT_NONE || !self.check_compatible_rail(v, tile) {
+            return self.train_approaching_line_end(v, false, reverse);
+        }
+
+        /* approaching red signal */
+        if trackdirbits & red_signals != TrackdirBits::TRACKDIR_BIT_NONE {
+            return self.train_approaching_line_end(v, true, reverse);
+        }
+
+        /* approaching a rail/road crossing? then make it red */
+        if self.is_level_crossing_tile(tile) {
+            self.maybe_bar_crossing_with_sound(tile);
+        }
+
+        true
+    }
+
+    /// `TrainLocoHandler`.
+    fn train_loco_handler(&self, v: Handle, mode: bool) -> bool {
         crate::witness::hit(if mode {
             crate::witness::TRAIN_TICK_SECOND
         } else {
             crate::witness::TRAIN_TICK_FIRST
         });
-        if (id).vehicle().vehstatus_raw() & 128 != 0 {
-            return if mode { true } else { self.handle_crashed(id) };
+        /* train has crashed? */
+        if v.vehicle().vehstatus().test(VehState::Crashed) {
+            return if mode {
+                true
+            } else {
+                self.handle_crashed_train(v)
+            }; // 'this' can be deleted here
         }
-        if id.get_force_proceed() != 0 {
-            id.set_flag(8, false);
-            (self.leaves.start_stop_dirty)(id);
+
+        if v.force_proceed() != TrainForceProceeding::TFP_NONE {
+            v.set_flags(v.flags().reset(VehicleRailFlag::Stuck));
+            self.set_start_stop_dirty(v);
         }
-        if self.handle_breakdown(id) {
+
+        /* train is broken down? */
+        if maintenance::handle_breakdown(v.vehicle(), self.vs) {
             return true;
         }
-        if id.flag(0) && (id).vehicle().cur_speed() == 0 {
-            self.reverse(id);
+
+        if v.flags().test(VehicleRailFlag::Reversing) && v.vehicle().cur_speed() == 0 {
+            self.reverse_train_direction(v);
         }
-        let v_speed: u16 = id.vehicle().cur_speed();
-        let v_status: u8 = id.vehicle().vehstatus_raw();
-        let v_order: u8 = id.vehicle().current_order().kind_raw();
-        if v_status & 2 != 0 && v_speed == 0 {
+
+        /* exit if train is stopped */
+        if v.vehicle().vehstatus().test(VehState::Stopped) && v.vehicle().cur_speed() == 0 {
             return true;
         }
-        let valid_order = v_order != OT_NOTHING && v_order != OT_CONDITIONAL;
-        let orders = self.vs().orders();
-        // SAFETY: The original live train shell survives orders; no owner borrow spans reentry.
-        if unsafe {
-            crate::orders::openttd_rust_process_orders(id.vehicle().shell().cast(), orders)
-        } != 0
-            && (self.leaves.check_reverse)(id) != 0
+
+        let valid_order = !v.vehicle().current_order().is_type(OrderType::OT_NOTHING)
+            && v.vehicle().current_order().kind() != OrderType::OT_CONDITIONAL;
+        if crate::orders::process_orders(v.vehicle(), self.vs.orders())
+            && reservation::check_reverse_train(&self.reservation(v), v)
         {
-            id.set_wait_counter(0);
-            (id).vehicle().set_cur_speed(0_u16);
-            (id).vehicle().set_subspeed(0_u8);
-            id.set_flag(9, false);
-            self.reverse(id);
+            v.set_wait_counter(0);
+            v.vehicle().set_cur_speed(0);
+            v.vehicle().set_subspeed(0);
+            v.set_flags(v.flags().reset(VehicleRailFlag::LeavingStation));
+            self.reverse_train_direction(v);
             return true;
-        } else if id.flag(9) {
-            let tile = (id).vehicle().tile_raw();
-            let mut dir = self.exitdir(id);
-            if (self.leaves.is_depot)(Handle::NONE, tile) != 0
-                || is_tile_type(
-                    self.services,
-                    TileIndex(tile),
-                    crate::tile_type::TileType::MP_TUNNELBRIDGE,
-                )
+        } else if v.flags().test(VehicleRailFlag::LeavingStation) {
+            /* Try to reserve a path when leaving the station as we
+             * might not be marked as wanting a reservation, e.g.
+             * when an overlength train gets turned around in a station. */
+            let mut dir = crate::track_func::vehicle_exit_dir(
+                v.vehicle().direction(),
+                v.track(),
+                self.check(),
+            );
+            if self.is_rail_depot_tile(v.vehicle().tile())
+                || self.is_tile_type(v.vehicle().tile(), TileType::MP_TUNNELBRIDGE)
             {
-                dir = u8::MAX;
+                dir = DiagDirection::INVALID_DIAGDIR;
             }
-            if self.signal_segment(id, tile, dir) == (self.leaves.sigseg_pbs)(id)
-                || (self.leaves.reserve_paths)()
+
+            if self.update_signals_on_segment(v.vehicle().tile(), dir, v.vehicle().owner())
+                == SigSegState::SIGSEG_PBS
+                || self.reserve_paths()
             {
-                self.try_path_reserve(id, true, true);
+                reservation::try_path_reserve(&self.reservation(v), v, true, true);
             }
-            id.set_flag(9, false);
+            v.set_flags(v.flags().reset(VehicleRailFlag::LeavingStation));
         }
-        self.vs().handle_loading(id.vehicle(), mode);
-        if (id).vehicle().current_order().kind_raw() == OT_LOADING || self.stay_depot(id) {
+
+        self.vs.handle_loading(v.vehicle(), mode);
+
+        if v.vehicle().current_order().is_type(OrderType::OT_LOADING) {
             return true;
         }
-        if !mode {
-            if crate::vehicle_effect::openttd_rust_visual_eligible_abi(id.vehicle()) != 0 {
-                crate::vehicle_effect::show_visual_effect(
-                    id.vehicle(),
-                    self.get_current_max_speed(id) as u32,
-                );
-            }
+
+        if self.check_train_stay_in_depot(v) {
+            return true;
         }
-        if !valid_order && (id).vehicle().current_order().kind_raw() != OT_NOTHING {
-            (self.leaves.check_next)(id);
+
+        if !mode && crate::vehicle_effect::show_visual_effect_allowed(v.vehicle()) {
+            crate::vehicle_effect::show_visual_effect(
+                v.vehicle(),
+                self.get_current_max_speed(v) as u32,
+            );
         }
-        if !mode && id.flag(8) {
+
+        /* We had no order but have an order now, do look ahead. */
+        if !valid_order && !v.vehicle().current_order().is_type(OrderType::OT_NOTHING) {
+            reservation::check_next_train_tile(&self.reservation(v), v);
+        }
+
+        /* Handle stuck trains. */
+        if !mode && v.flags().test(VehicleRailFlag::Stuck) {
             crate::witness::hit(crate::witness::TRAIN_STUCK_RETRY);
-            let wait = u64::from(id.wait_inc());
-            let turn = wait % (self.wait_pbs() * (self.leaves.day_ticks)(id)) == 0
-                && self.reverse_at_signals() != 0;
-            if !turn
-                && wait % u64::from((self.leaves.backoff)()) != 0
-                && id.get_force_proceed() == 0
+            v.set_wait_counter(v.wait_counter().wrapping_add(1));
+
+            /* Should we try reversing this tick if still stuck? */
+            let turn_around = i32::from(v.wait_counter())
+                % (i32::from(self.wait_for_pbs_path()) * crate::timer_game_tick::DAY_TICKS)
+                == 0
+                && self.reverse_at_signals();
+
+            if !turn_around
+                && i32::from(v.wait_counter()) % i32::from(self.path_backoff_interval()) != 0
+                && v.force_proceed() == TrainForceProceeding::TFP_NONE
             {
                 return true;
             }
-            if !self.try_path_reserve(id, false, false) {
-                if turn {
+            if !reservation::try_path_reserve(&self.reservation(v), v, false, false) {
+                /* Still stuck. */
+                if turn_around {
                     crate::witness::hit(crate::witness::TRAIN_STUCK_REVERSE);
-                    self.reverse(id);
+                    self.reverse_train_direction(v);
                 }
-                if id.flag(8)
-                    && id.get_wait_counter() > 2 * self.wait_pbs() * (self.leaves.day_ticks)(id)
+
+                if v.flags().test(VehicleRailFlag::Stuck)
+                    && i32::from(v.wait_counter())
+                        > 2 * i32::from(self.wait_for_pbs_path())
+                            * crate::timer_game_tick::DAY_TICKS
                 {
-                    if self.lost_warn() != 0
-                        && u64::from((id).vehicle().owner_raw()) == (self.leaves.local_company)(id)
+                    /* Show message to player. */
+                    if self.lost_vehicle_warn()
+                        && v.vehicle().owner().0 == (self.services.local_company)()
                     {
-                        (self.leaves.stuck_news)(id);
+                        add_vehicle_advice_news_item(
+                            AdviceType::TrainStuck,
+                            &get_encoded_string(
+                                STR_NEWS_TRAIN_IS_STUCK,
+                                &[Integer(u64::from(self.index(v).0))],
+                            ),
+                            self.index(v),
+                        );
                     }
-                    id.set_wait_counter(0);
+                    v.set_wait_counter(0);
                 }
-                if id.get_force_proceed() == 0 {
+                /* Exit if force proceed not pressed, else reset stuck flag anyway. */
+                if v.force_proceed() == TrainForceProceeding::TFP_NONE {
                     return true;
                 }
-                id.set_flag(8, false);
-                id.set_wait_counter(0);
-                (self.leaves.start_stop_dirty)(id);
+                v.set_flags(v.flags().reset(VehicleRailFlag::Stuck));
+                v.set_wait_counter(0);
+                self.set_start_stop_dirty(v);
             }
         }
-        if (id).vehicle().current_order().kind_raw() == OT_LEAVESTATION {
-            (self.leaves.order_free)(id);
-            (self.leaves.start_stop_dirty)(id);
+
+        if v.vehicle()
+            .current_order()
+            .is_type(OrderType::OT_LEAVESTATION)
+        {
+            crate::orders::free(v.vehicle());
+            self.set_start_stop_dirty(v);
             return true;
         }
-        let mut distance = self.update_speed(id);
-        if (id).vehicle().cur_speed() == 0 && (id).vehicle().vehstatus_raw() & 2 != 0 {
-            id.set_force_proceed(0);
-            self.view_dirty(id);
+
+        let mut j = self.update_speed(v);
+
+        /* we need to invalidate the widget if we are stopping from 'Stopping 0 km/h' to 'Stopped' */
+        if v.vehicle().cur_speed() == 0 && v.vehicle().vehstatus().test(VehState::Stopped) {
+            /* If we manually stopped, we're not force-proceeding anymore. */
+            v.set_force_proceed(TrainForceProceeding::TFP_NONE);
+            self.set_vehicle_view_dirty(v);
         }
-        let mut advance = (self.leaves.advance_distance)(id) as i32;
-        if distance < advance {
-            if (id).vehicle().cur_speed() == 0 {
-                crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
+
+        let mut adv_spd = v.vehicle().get_advance_distance() as i32;
+        if j < adv_spd {
+            /* if the vehicle has speed 0, update the last_speed field. */
+            if v.vehicle().cur_speed() == 0 {
+                self.set_last_speed(v);
             }
         } else {
-            self.line_ends(id, true);
+            self.train_check_if_line_ends(v, true);
+            /* Loop until the train has finished moving. */
             loop {
-                distance = distance.wrapping_sub(advance);
-                self.controller(id, Handle::NONE, true);
-                if self.collision(id) {
+                j = j.wrapping_sub(adv_spd);
+                self.train_controller(v, Handle::NONE, true);
+                /* Don't continue to move if the train crashed. */
+                if self.check_train_collision(v) {
                     break;
                 }
-                advance = (self.leaves.advance_distance)(id) as i32;
-                if distance < advance || (id).vehicle().cur_speed() == 0 {
+                /* Determine distance to next map position */
+                adv_spd = v.vehicle().get_advance_distance() as i32;
+
+                /* No more moving this tick */
+                if j < adv_spd || v.vehicle().cur_speed() == 0 {
                     break;
                 }
-                let v_tile: u32 = id.vehicle().tile_raw();
-                let v_order_destination: u16 = id.vehicle().current_order().destination_raw();
-                let v_order: u8 = id.vehicle().current_order().kind_raw();
-                let v_nonstop: u8 = id.vehicle().current_order().non_stop_raw();
-                if (v_order == OT_GOTO_WAYPOINT || v_order == OT_GOTO_STATION)
-                    && v_nonstop & 2 != 0
-                    && (self.leaves.is_station_any)(Handle::NONE, v_tile) != 0
-                    && v_order_destination == self.world().get_station_index(TileIndex(v_tile)).0
+
+                let order_type = v.vehicle().current_order().kind();
+                /* Do not skip waypoints (incl. 'via' stations) when passing through at full speed. */
+                if (order_type == OrderType::OT_GOTO_WAYPOINT
+                    || order_type == OrderType::OT_GOTO_STATION)
+                    && v.vehicle()
+                        .current_order()
+                        .non_stop()
+                        .test(OrderNonStopFlag::NoDestination)
+                    && self.is_tile_type(v.vehicle().tile(), TileType::MP_STATION)
+                    && v.vehicle().current_order().destination().to_station_id()
+                        == self.get_station_index(v.vehicle().tile())
                 {
-                    // SAFETY: The orders owner is resolved at this source call; no owner borrow remains.
-                    unsafe {
-                        crate::orders::openttd_rust_process_orders(
-                            id.vehicle().shell().cast(),
-                            self.vs().orders(),
-                        )
-                    };
+                    crate::orders::process_orders(v.vehicle(), self.vs.orders());
                 }
             }
-            crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
+            self.set_last_speed(v);
         }
-        let mut u = id;
+
+        let mut u = v;
         while u != Handle::NONE {
-            if (u).vehicle().vehstatus_raw() & 1 == 0 {
-                (self.leaves.viewport)(u, 0, 0);
+            if !u.vehicle().vehstatus().test(VehState::Hidden) {
+                self.viewport(u, false, false);
             }
-            u = (u).next();
+            u = u.next();
         }
-        if (id).vehicle().progress() == 0 {
-            (id).vehicle().set_progress((distance as u64) as u8);
+
+        if v.vehicle().progress() == 0 {
+            v.vehicle().set_progress(j as u8); // Save unused spd for next time, if TrainController didn't set progress
         }
+
         true
     }
-    fn tick(&self, id: Handle) -> bool {
-        (id).vehicle()
-            .set_tick_counter((u64::from((id).vehicle().tick_counter().wrapping_add(1))) as u8);
-        let v_speed: u16 = id.vehicle().cur_speed();
-        let v_status: u8 = id.vehicle().vehstatus_raw();
-        let v_running: u8 = id.vehicle().running_ticks();
-        let v_front: u8 = id.front();
-        let v_free_wagon: u8 =
-            u8::from(crate::ground_vehicle::is_free_wagon(id.vehicle().subtype()));
-        if v_front != 0 {
-            if v_status & 2 == 0 || v_speed > 0 {
-                (id).vehicle()
-                    .set_running_ticks((u64::from(v_running.wrapping_add(1))) as u8);
+
+    /// `Train::GetRunningCost`: get running cost for the train consist. Returns yearly
+    /// running costs.
+    fn get_running_cost(&self, this: Handle) -> i64 {
+        let mut cost = 0_i64;
+        let mut v = this;
+
+        loop {
+            'part: {
+                let e = self.engine(v);
+                if e.train_price() == crate::economy_type::INVALID_PRICE {
+                    break 'part;
+                }
+
+                let mut cost_factor = self.get_vehicle_property(
+                    v,
+                    PropertyID::PROP_TRAIN_RUNNING_COST_FACTOR,
+                    i32::from(e.train_running()),
+                ) as u32;
+                if cost_factor == 0 {
+                    break 'part;
+                }
+
+                /* Halve running cost for multiheaded parts */
+                if v.is_multiheaded() {
+                    cost_factor /= 2;
+                }
+
+                cost = cost.saturating_add(crate::engine_capabilities::price(
+                    self.vs.newgrf().capabilities,
+                    e.0.as_ptr(),
+                    u32::from(e.train_price()),
+                    cost_factor,
+                    0,
+                ));
             }
-            (id).vehicle().set_current_order_time(
-                ((id).vehicle().current_order_time().wrapping_add(1) as u64) as i32,
-            );
-            if !self.loco(id, false) {
+            v = v.get_next_vehicle();
+            if v == Handle::NONE {
+                break;
+            }
+        }
+
+        cost
+    }
+
+    /// `Train::Tick`: update train vehicle data for a tick. Returns true if the vehicle
+    /// still exists, false if it has ceased to exist (front of consists only).
+    fn tick(&self, this: Handle) -> bool {
+        this.vehicle()
+            .set_tick_counter(this.vehicle().tick_counter().wrapping_add(1));
+
+        if this.is_front_engine() {
+            if !this.vehicle().vehstatus().test(VehState::Stopped) || this.vehicle().cur_speed() > 0
+            {
+                this.vehicle()
+                    .set_running_ticks(this.vehicle().running_ticks().wrapping_add(1));
+            }
+
+            this.vehicle()
+                .set_current_order_time(this.vehicle().current_order_time().wrapping_add(1));
+
+            if !self.train_loco_handler(this, false) {
                 return false;
             }
-            return self.loco(id, true);
-        } else if v_free_wagon != 0 && v_status & 128 != 0 {
-            let state = (id.get_crash_anim_pos() as u16).wrapping_add(1);
-            id.set_crash_anim_pos(u64::from(state));
-            if state >= 4400 {
+
+            return self.train_loco_handler(this, true);
+        } else if this.is_free_wagon() && this.vehicle().vehstatus().test(VehState::Crashed) {
+            /* Delete flooded standalone wagon chain */
+            this.set_crash_anim_pos(this.crash_anim_pos().wrapping_add(1));
+            if this.crash_anim_pos() >= 4400 {
                 crate::witness::hit(crate::witness::TRAIN_FREE_WAGON_DELETE);
-                (self.leaves.delete_vehicle)(id);
+                (self.vs.destroy)(this.vehicle());
                 return false;
             }
         }
+
         true
     }
-    fn needs_service(&self, id: Handle) {
-        if (self.leaves.servint)(id) == 0 || !self.needs_automatic_servicing(id) {
+
+    /// `CheckIfTrainNeedsService`: check whether a train needs service, and if so, find a
+    /// depot or service it.
+    fn check_if_train_needs_service(&self, v: Handle) {
+        if self.servint_trains(v.vehicle().owner()) == 0
+            || !maintenance::needs_automatic_servicing(v.vehicle(), self.vs)
+        {
             return;
         }
-        if u64::from(crate::ground_vehicle::is_chain_in_depot(
-            self.leaves.physics,
-            id.vehicle(),
-        )) != 0
-        {
+        if self.is_chain_in_depot(v) {
             crate::witness::hit(crate::witness::TRAIN_DEPOT_SERVICE);
-            self.service_in_depot(id);
+            maintenance::vehicle_service_in_depot(v.vehicle(), self.vs);
             return;
         }
-        let max = self.max_depot_penalty() as u32;
-        let depot = (self.leaves.find_depot)(id, max as i32);
-        let length = depot.length;
-        if length == u32::MAX || length > max {
-            if (id).vehicle().current_order().kind_raw() == OT_GOTO_DEPOT {
-                (self.leaves.order_dummy)(id);
-                (self.leaves.start_stop_dirty)(id);
+
+        let max_penalty = self.maximum_go_to_depot_penalty();
+
+        let tfdd = self.find_closest_train_depot(v, max_penalty as i32);
+        /* Only go to the depot if it is not too far out of our way. */
+        if tfdd.best_length == u32::MAX || tfdd.best_length > max_penalty {
+            if v.vehicle()
+                .current_order()
+                .is_type(OrderType::OT_GOTO_DEPOT)
+            {
+                /* If we were already heading for a depot but it has
+                 * suddenly moved farther away, we continue our normal
+                 * schedule? */
+                // SAFETY: The current order belongs to this live serialized record.
+                unsafe { crate::orders::make_dummy(v.vehicle().current_order_pointer()) };
+                self.set_start_stop_dirty(v);
             }
             return;
         }
-        let tile = depot.tile;
-        let depot_id = (self.services.depot_index)(tile);
-        let v_order_destination: u16 = id.vehicle().current_order().destination_raw();
-        let v_order: u8 = id.vehicle().current_order().kind_raw();
-        if v_order == OT_GOTO_DEPOT
-            && v_order_destination != depot_id
-            && !crate::random_func::chance16_i(3, 16, self.services.random())
+
+        let depot = crate::order_type::DestinationID((self.services.depot_index)(tfdd.tile.0));
+
+        if v.vehicle()
+            .current_order()
+            .is_type(OrderType::OT_GOTO_DEPOT)
+            && v.vehicle().current_order().destination() != depot
+            && !crate::random_func::chance16(self.services, 3, 16)
         {
             return;
         }
-        (self.leaves.suppress_implicit)(id);
-        (self.leaves.order_depot_service)(id, depot_id);
-        (id).vehicle().set_dest_tile_raw((u64::from(tile)) as u32);
-        (self.leaves.start_stop_dirty)(id);
+
+        let mut gv_flags = read_field!(v.vehicle().ground(), flags);
+        crate::bitmath_func::set_bit16(
+            &mut gv_flags,
+            GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
+        );
+        write_field!(v.vehicle().ground(), flags, gv_flags);
+        // SAFETY: The current order belongs to this live serialized record.
+        unsafe {
+            crate::orders::make_go_to_depot(
+                v.vehicle().current_order_pointer(),
+                depot,
+                crate::order_type::OrderDepotTypeFlags::from_element(
+                    crate::order_type::OrderDepotTypeFlag::Service,
+                ),
+                crate::order_type::OrderNonStopFlags::from_element(
+                    OrderNonStopFlag::NoIntermediate,
+                ),
+                crate::order_type::OrderDepotActionFlags::from_element(
+                    crate::order_type::OrderDepotActionFlag::NearestDepot,
+                ),
+                crate::cargo_type::CargoType::CARGO_NO_REFIT,
+            );
+        }
+        v.vehicle().set_dest_tile(tfdd.tile);
+        self.set_start_stop_dirty(v);
     }
-    fn economy_day(&self, id: Handle) {
-        maintenance::economy_age_vehicle(id.vehicle(), self.vs());
-        let day = (id).vehicle().day_counter().wrapping_add(1);
-        (id).vehicle().set_day_counter((u64::from(day)) as u8);
-        if day & 7 == 0 {
-            maintenance::decrease_vehicle_value(id.vehicle(), self.vs());
-        }
-        if (id).front() != 0 {
-            maintenance::check_vehicle_breakdown(id.vehicle(), self.vs());
-            self.needs_service(id);
-            (self.leaves.check_orders)(id);
-            if (id).vehicle().current_order().kind_raw() == OT_GOTO_STATION {
-                let tile = (self.leaves.station_dest)(id) as u32;
-                if tile != INVALID_TILE {
-                    (id).vehicle().set_dest_tile_raw((u64::from(tile)) as u32);
-                }
-            }
-            let running = (id).vehicle().running_ticks();
-            if running != 0 {
-                let cost = self.running_cost(id).saturating_mul(i64::from(running))
-                    / ((self.leaves.cost_divisor)(id) as i64);
-                // `running_ticks = 0` precedes the company payment; nothing between observes it.
-                (id).vehicle().set_running_ticks(0);
-                (self.leaves.pay_running)(id, (cost as u64) as i64);
-                (self.leaves.running_windows)(id);
-            }
-        }
+
+    /// `Train::OnNewCalendarDay`: calendar day handler.
+    fn on_new_calendar_day(&self, this: Handle) {
+        maintenance::age_vehicle(this.vehicle(), self.vs);
     }
-}
-impl Game<'_> {
-    fn next_force(&self, id: Handle) -> u8 {
-        let v_tile: u32 = id.vehicle().tile_raw();
-        let v_status: u8 = id.vehicle().vehstatus_raw();
-        if v_status & 128 != 0 || id.get_force_proceed() == 2 {
-            return 0;
+
+    /// `Train::OnNewEconomyDay`: economy day handler.
+    fn on_new_economy_day(&self, this: Handle) {
+        maintenance::economy_age_vehicle(this.vehicle(), self.vs);
+
+        this.vehicle()
+            .set_day_counter(this.vehicle().day_counter().wrapping_add(1));
+        if this.vehicle().day_counter().trailing_zeros() >= 3 {
+            maintenance::decrease_vehicle_value(this.vehicle(), self.vs);
         }
-        if !id.flag(8) {
-            return if u64::from(crate::ground_vehicle::is_chain_in_depot(
-                self.leaves.physics,
-                id.vehicle(),
-            )) != 0
+
+        if this.is_front_engine() {
+            maintenance::check_vehicle_breakdown(this.vehicle(), self.vs);
+
+            self.check_if_train_needs_service(this);
+
+            crate::orders::check_orders(this.vehicle(), self.vs.orders());
+
+            /* update destination */
+            if this
+                .vehicle()
+                .current_order()
+                .is_type(OrderType::OT_GOTO_STATION)
             {
-                1
-            } else {
-                2
-            };
-        }
-        let dir = (self.leaves.trackdir_exit)(id, self.trackdir(id)) as u8;
-        let tile = self
-            .services
-            .map()
-            .tile_add_by_diag_dir(
-                TileIndex(v_tile),
-                DiagDirection(dir),
-                crate::map_func::native_check,
-            )
-            .0;
-        if tile == INVALID_TILE
-            || !is_tile_type(
-                self.services,
-                TileIndex(tile),
-                crate::tile_type::TileType::MP_RAILWAY,
-            )
-            || (self.leaves.has_signals)(Handle::NONE, tile) == 0
-        {
-            return 1;
-        }
-        let tracks = (self.leaves.diag_reaches_tracks)(id, dir) as u8
-            & (self.leaves.track_bits)(Handle::NONE, tile) as u8;
-        if tracks != 0 && (self.leaves.has_signal)(id, tile, tracks.trailing_zeros() as u8) != 0 {
-            2
-        } else {
-            1
+                let st =
+                    self.station_get(this.vehicle().current_order().destination().to_station_id());
+                // SAFETY: The shared table names the immutable station command table.
+                let commands = unsafe { &*(self.services.station_commands)() };
+                let tile = (commands.tile_area)(st, StationType::Rail.0).tile;
+                if tile != TileIndex(INVALID_TILE) {
+                    this.vehicle().set_dest_tile(tile);
+                }
+            }
+
+            if this.vehicle().running_ticks() != 0 {
+                /* running costs */
+                let cost = self
+                    .get_running_cost(this)
+                    .saturating_mul(i64::from(this.vehicle().running_ticks()))
+                    / i64::from(
+                        crate::timer_game_common::DAYS_IN_YEAR * crate::timer_game_tick::DAY_TICKS,
+                    );
+
+                (self.vs.write_profit)(
+                    this.vehicle(),
+                    (self.vs.profit)(this.vehicle()).saturating_sub(cost),
+                );
+                this.vehicle().set_running_ticks(0);
+
+                // SAFETY: Base maintenance names the shared static command and company tables.
+                let company =
+                    unsafe { &*((*(*(*self.vs.maintenance).transaction).commands).company)() };
+                crate::company::subtract_money_from_company_fract(
+                    company.finance,
+                    this.vehicle().owner(),
+                    cost,
+                    crate::economy_type::ExpensesType::EXPENSES_TRAIN_RUN,
+                );
+
+                self.set_details_dirty(this);
+                set_window_classes_dirty(WindowClass::WC_TRAINS_LIST);
+            }
         }
     }
-    fn reverse_command(&self, id: Handle, execute: bool, single: bool) -> u8 {
-        if single {
-            if (id).multiheaded() != 0
-                || self.engine(id).callbacks() & crate::newgrf_callbacks::VEHICLE_ARTIC_ENGINE != 0
-            {
-                return 1;
-            }
-            let first = (id).first();
-            if (self.leaves.stopped_in_depot)(first) == 0 {
-                return 2;
-            }
-            if execute {
-                id.set_flag(4, !id.flag(4));
-                self.consist_changed(first, 3);
-                (self.leaves.reverse_windows)(first);
-            }
-        } else {
-            let v_status: u8 = id.vehicle().vehstatus_raw();
-            let v_breakdown: u8 = read_field!(id.record, breakdown_ctr);
-            let v_front: u8 = id.front();
-            if v_front == 0 || v_status & 128 != 0 || v_breakdown != 0 {
-                return 3;
-            }
-            if execute {
-                if (id).vehicle().current_order().kind_raw() == OT_LOADING {
-                    let last = ((id).last()).vehicle().tile_raw();
-                    if (self.leaves.is_station_any)(Handle::NONE, last) == 0
-                        || self.world().get_station_index(TileIndex(last))
-                            != self
-                                .world()
-                                .get_station_index(TileIndex((id).vehicle().tile_raw()))
-                    {
-                        crate::vehicle::visits::leave_station(id.vehicle(), self.vs().visits());
-                    }
-                }
-                id.set_force_proceed(0);
-                self.view_dirty(id);
-                if self.acc_model() != 0 && (id).vehicle().cur_speed() != 0 {
-                    id.set_flag(0, !id.flag(0));
-                } else {
-                    (id).vehicle().set_cur_speed(0_u16);
-                    crate::ground_vehicle::set_last_speed(self.leaves.physics, id.vehicle());
-                    (self.leaves.hide_fill)(id);
-                    self.reverse(id);
-                }
-                (self.leaves.reset_unbunch)(id);
-            }
+
+    /// `Train::GetVehicleTrackdir`: get the tracks of the train vehicle. Returns the current
+    /// tracks of the vehicle.
+    fn get_vehicle_trackdir(&self, this: Handle) -> Trackdir {
+        if this.vehicle().vehstatus().test(VehState::Crashed) {
+            return Trackdir::INVALID_TRACKDIR;
         }
-        0
-    }
-    fn force_command(&self, id: Handle, execute: bool) -> bool {
-        if (id).front() == 0 {
-            return false;
+
+        if this.track() == TrackBits::TRACK_BIT_DEPOT {
+            /* We'll assume the train is facing outwards */
+            return Trackdir(crate::track_func::diag_dir_to_diag_trackdir(
+                self.get_rail_depot_direction(this.vehicle().tile()).0,
+                self.check(),
+            )); // Train in depot
         }
-        if execute {
-            id.set_force_proceed(u64::from(self.next_force(id)));
-            self.view_dirty(id);
-            (self.leaves.reset_unbunch)(id);
+
+        if this.track() == TrackBits::TRACK_BIT_WORMHOLE {
+            /* train in tunnel or on bridge, so just use its direction and assume a diagonal track */
+            return Trackdir(crate::track_func::diag_dir_to_diag_trackdir(
+                dir_to_diag_dir(this.vehicle().direction(), self.check()).0,
+                self.check(),
+            ));
         }
-        true
+
+        crate::track_func::track_direction_to_trackdir(
+            Track(crate::track_func::find_first_track(this.track().0)),
+            this.vehicle().direction(),
+            self.check(),
+        )
     }
 }
 
-/// `VehicleRailFlag::LeavingStation`.
-pub(crate) const VRF_LEAVING_STATION: u64 = 1 << 9;
-/// `VehicleRailFlag::Reversed`.
-pub const VRF_REVERSED: u64 = 1 << 7;
-
-/// The train part of `VehicleEnterDepot`: clear the depot reservation,
-/// update the segment's signals and arrange the consist.
-pub(crate) fn enter_depot(id: Handle, leaves: &Leaves, services: &Services) {
-    let g = Game::new(leaves, services);
-    let tile = id.vehicle().tile_raw();
-    (leaves.set_depot_res)(id, tile, 0);
-    if (leaves.show_reservation)(id) != 0 {
-        (services.mark_dirty)(tile);
-    }
-    g.signal_segment(id, tile, crate::direction_type::INVALID_DIAGDIR);
-    id.set_wait_counter(0);
-    id.set_force_proceed(0);
-    id.set_flags(id.get_flags() & !VRF_REVERSED);
-    g.consist_changed(id, CCF_ARRANGE);
+/// `Train::ConsistChanged`, for Rust callers outside a train entry.
+pub(crate) fn consist_changed(
+    leaves: &Leaves,
+    services: &Services,
+    v: Handle,
+    allowed_changes: ConsistChangeFlags,
+) {
+    Game::new(leaves, services).consist_changed(v, allowed_changes);
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::MarkDirty`, for Rust callers outside a train entry.
+pub(crate) fn mark_dirty(leaves: &Leaves, services: &Services, v: Handle) {
+    Game::new(leaves, services).mark_dirty(v);
+}
+/// `Train::GetCurrentMaxSpeed`, for Rust callers outside a train entry.
+pub(crate) fn get_current_max_speed(leaves: &Leaves, services: &Services, v: Handle) -> i32 {
+    Game::new(leaves, services).get_current_max_speed(v)
+}
+/// `Train::GetCurveSpeedLimit`, for Rust callers outside a train entry.
+pub(crate) fn get_curve_speed_limit(leaves: &Leaves, services: &Services, v: Handle) -> u16 {
+    Game::new(leaves, services).get_curve_speed_limit(v)
+}
+/// `GetTrainStopLocation`, for Rust callers outside a train entry: the stop location, the
+/// station ahead and the station length.
+pub(crate) fn get_train_stop_location(
+    leaves: &Leaves,
+    services: &Services,
+    station_id: StationID,
+    tile: TileIndex,
+    v: Handle,
+) -> (i32, i32, i32) {
+    Game::new(leaves, services).get_train_stop_location(station_id, tile, v)
+}
+/// `TrainOnCrossing`, for Rust callers outside a train entry.
+pub(crate) fn train_on_crossing(leaves: &Leaves, services: &Services, tile: TileIndex) -> bool {
+    Game::new(leaves, services).train_on_crossing(tile)
+}
+/// `UpdateLevelCrossing`, for Rust callers outside a train entry.
+pub(crate) fn update_level_crossing(
+    leaves: &Leaves,
+    services: &Services,
+    tile: TileIndex,
+    sound: bool,
+    force_bar: bool,
+) {
+    Game::new(leaves, services).update_level_crossing(tile, sound, force_bar);
+}
+/// `Train::GetVehicleTrackdir`, for Rust callers outside a train entry.
+pub(crate) fn get_vehicle_trackdir(leaves: &Leaves, services: &Services, v: Handle) -> Trackdir {
+    Game::new(leaves, services).get_vehicle_trackdir(v)
+}
+
+/// `Train::ConsistChanged`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// The tables and shell must remain live until the call returns; callbacks may reenter.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_consist_changed(
-    id: Handle,
-    allowed: u8,
+    v: Handle,
+    allowed_changes: u8,
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    g.consist_changed(id, allowed);
+    entry_game!(leaves, services).consist_changed(v, ConsistChangeFlags(allowed_changes));
 }
-/// The train speed limit caused by curves, for callers outside a train entry; the
-/// original body is `Game::get_curve_speed_limit`.
-pub(crate) fn curve_speed_limit(id: Handle, leaves: &Leaves, services: &Services) -> u16 {
-    Game::new(leaves, services).get_curve_speed_limit(id)
-}
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::GetCurrentMaxSpeed`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_current_max_speed(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) -> i32 {
-    let g = entry_game!(leaves, services);
-    g.get_current_max_speed(id)
+    entry_game!(leaves, services).get_current_max_speed(v)
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::UpdateSpeed`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_update_speed(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) -> i32 {
-    let g = entry_game!(leaves, services);
-    g.update_speed(id)
+    entry_game!(leaves, services).update_speed(v)
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::MarkDirty`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_mark_dirty(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    g.mark_dirty(id);
+    entry_game!(leaves, services).mark_dirty(v);
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::Tick`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_tick(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = entry_game!(leaves, services);
-    u8::from(g.tick(id))
+    u8::from(entry_game!(leaves, services).tick(v))
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::OnNewCalendarDay`: calendar day handler.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_calendar_day(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    maintenance::age_vehicle(id.vehicle(), g.vs());
+    entry_game!(leaves, services).on_new_calendar_day(v);
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::OnNewEconomyDay`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_economy_day(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    g.economy_day(id);
+    entry_game!(leaves, services).on_new_economy_day(v);
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::GetRunningCost`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_running_cost(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) -> i64 {
-    let g = entry_game!(leaves, services);
-    g.running_cost(id)
+    entry_game!(leaves, services).get_running_cost(v)
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::GetVehicleTrackdir`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_trackdir(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = entry_game!(leaves, services);
-    g.trackdir(id)
+    entry_game!(leaves, services).get_vehicle_trackdir(v).0
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `MarkTrainAsStuck`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_mark_stuck(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    g.mark_stuck(id);
+    entry_game!(leaves, services).mark_train_as_stuck(v);
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `ReverseTrainSwapVeh`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_reverse_swap(
-    id: Handle,
-    left: i32,
-    right: i32,
+    v: Handle,
+    l: i32,
+    r: i32,
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    g.reverse_swap(id, left, right);
+    entry_game!(leaves, services).reverse_train_swap_veh(v, l, r);
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `UpdateLevelCrossing`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_update_crossing(
     tile: u32,
@@ -3023,100 +4415,146 @@ pub unsafe extern "C" fn openttd_rust_train_update_crossing(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    g.update_crossing(tile, sound != 0, force_bar != 0);
+    entry_game!(leaves, services).update_level_crossing(
+        TileIndex(tile),
+        sound != 0,
+        force_bar != 0,
+    );
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `MarkDirtyAdjacentLevelCrossingTiles`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_adjacent_crossing_dirty(
     tile: u32,
-    axis: u8,
+    road_axis: u8,
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    g.adjacent_crossing_dirty(tile, u64::from(axis));
+    entry_game!(leaves, services)
+        .mark_dirty_adjacent_level_crossing_tiles(TileIndex(tile), Axis(road_axis));
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_crossing_removed(
     tile: u32,
-    axis: u8,
+    road_axis: u8,
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    g.crossing_removed(tile, u64::from(axis));
+    entry_game!(leaves, services).update_adjacent_level_crossing_tiles_on_level_crossing_removal(
+        TileIndex(tile),
+        Axis(road_axis),
+    );
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `TrainController`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_controller(
-    id: Handle,
+    v: Handle,
     nomove: Handle,
     reverse: u8,
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = entry_game!(leaves, services);
-    u8::from(g.controller(id, nomove, reverse != 0))
+    u8::from(entry_game!(leaves, services).train_controller(v, nomove, reverse != 0))
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::Crash`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_crash(
-    id: Handle,
+    v: Handle,
     flooded: u8,
     leaves: *const Leaves,
     services: *const Services,
 ) -> u32 {
-    let g = entry_game!(leaves, services);
-    g.crash(id, flooded != 0)
+    entry_game!(leaves, services).crash(v, flooded != 0)
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `CheckIfTrainNeedsService`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_needs_service(
-    id: Handle,
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = entry_game!(leaves, services);
-    g.needs_service(id);
+    entry_game!(leaves, services).check_if_train_needs_service(v);
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `Train::FindClosestDepot`.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_reverse_command(
-    id: Handle,
-    execute: u8,
-    single: u8,
+pub unsafe extern "C" fn openttd_rust_train_find_closest_depot(
+    v: Handle,
     leaves: *const Leaves,
     services: *const Services,
-) -> u8 {
-    let g = entry_game!(leaves, services);
-    g.reverse_command(id, execute != 0, single != 0)
+    closest: *mut Closest,
+) {
+    let result = entry_game!(leaves, services).find_closest_depot(v);
+    // SAFETY: As this function's contract; `closest` is a writable record.
+    unsafe {
+        closest.write(Closest {
+            tile: result.location.0,
+            destination: result.destination.0,
+            reverse: u8::from(result.reverse),
+            found: u8::from(result.found),
+        });
+    };
 }
-/// Invoke synchronous train policy with live serialized services.
+/// `CmdReverseTrainDirection`, over the positional base integers of the command.
 /// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
+/// As [`openttd_rust_train_consist_changed`]; `out` is the command's live native result.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_force_command(
-    id: Handle,
-    execute: u8,
+pub unsafe extern "C" fn openttd_rust_train_reverse_direction(
+    build: &crate::vehicle_transactions::build::Services,
+    out: *mut crate::services::CommandCost,
+    flags: u16,
+    veh_id: u32,
+    reverse_single_veh: bool,
     leaves: *const Leaves,
     services: *const Services,
-) -> u8 {
-    let g = entry_game!(leaves, services);
-    u8::from(g.force_command(id, execute != 0))
+) {
+    entry_game!(leaves, services).cmd_reverse_train_direction(
+        &CommandContext {
+            rail: build.rail,
+            common: build.refit.common,
+            out,
+            flags: crate::command_type::DoCommandFlags(flags),
+        },
+        CmdReverseTrainDirection {
+            veh_id: VehicleID(veh_id),
+            reverse_single_veh,
+        },
+    );
+}
+/// `CmdForceTrainProceed`, over the positional base integers of the command.
+/// # Safety
+/// As [`openttd_rust_train_reverse_direction`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_train_force_proceed(
+    build: &crate::vehicle_transactions::build::Services,
+    out: *mut crate::services::CommandCost,
+    flags: u16,
+    veh_id: u32,
+    leaves: *const Leaves,
+    services: *const Services,
+) {
+    entry_game!(leaves, services).cmd_force_train_proceed(
+        &CommandContext {
+            rail: build.rail,
+            common: build.refit.common,
+            out,
+            flags: crate::command_type::DoCommandFlags(flags),
+        },
+        CmdForceTrainProceed {
+            veh_id: VehicleID(veh_id),
+        },
+    );
 }
 
 crate::abi::layouts! {
@@ -3126,231 +4564,14 @@ crate::abi::layouts! {
         owner,
     };
     "OpenTTDTrainServices" ["probe"] => Leaves {
-        write_colourmap,
-        advance_distance,
-        all_powered,
-        arrival_news,
-
-        axis_diag,
-        backoff,
-        base_viewport,
         capabilities,
-        capacity_error,
-        check_next,
-        check_orders,
-        check_reverse,
-        choose_track,
-        clear_reservation,
-        consist_windows,
-        cost_divisor,
-        count_chain,
-        crash_event,
-        crash_news,
-        crash_sound,
-        crossing_barred,
-        crossing_rail_axis,
-        crossing_road_axis,
-        crossing_sound,
-        curve_advantage,
-        day_ticks,
-        delete_vehicle,
-        depot_dir,
-        depot_dirty,
-        depot_track,
-        depot_window,
-        diag_axis,
-        diag_between,
-        diag_reaches_tracks,
-        diag_trackdir,
-        dir_diag,
-        disconnect,
-        find_depot,
-        first_track,
-        has_depot_res,
-        has_signal,
-        has_signals,
-        has_signal_td,
-        hide_fill,
-        invalidate_grf,
-        is_bridge,
-        is_crossing,
-        is_depot,
-        is_plain_rail,
-        is_station,
-        is_station_any,
-        leave_sound,
-        leave_unbunch,
-        local_company,
-        no_90,
-        oneway_blocking,
-        order_depot_service,
-        order_dummy,
-        order_free,
-        order_max_speed,
-        other_end,
-        pay_running,
-        pbs_signal_type,
-        rail_type,
-        reserve_paths,
-        reserve_under,
-        reset_unbunch,
-        reverse_windows,
-        running_windows,
-        servint,
-        set_depot_res,
-        set_signal_state,
-        set_tunnel_res,
-        show_reservation,
-        signal_context,
-        signal_has_pbs,
-        signal_pbs,
-        signal_type,
-        sigseg_full,
-        sigseg_pbs,
-        start_stop_dirty,
-        station_axis,
-        station_compatible,
-        station_dest,
-        stopped_in_depot,
-        stop_location,
-        stuck_news,
-        suppress_implicit,
-        tile_offset_axis,
-        tile_offset_diag,
-        tile_rail_type,
-        tile_virt,
-        trackdir_exit,
-        trackdir_reaches,
-        track_bits,
-        track_crosses,
-        track_direction,
-        train_list,
-        truncate_cargo,
-        veh_exit_dir,
-        viewport,
-        wagon_override,
-        wagon_speed_limits,
-        wait_unbunch,
-        write_crossing_bar,
-        vehicle,
         physics,
-    };
-    "OpenTTDTrainDepot" ["probe"] => Depot {
-        tile,
-        length,
+        reservation,
+        vehicle,
     };
 }
-/// Base mask of `VehicleRailFlag::Reversing`, for callers in files no pass has finished.
-pub(crate) const FLAG_REVERSING: u64 = 1 << VehicleRailFlag::Reversing.0;
-
-/// `GetTrainStopLocation`: the same owned stop-location callee for tile admission
-/// and train speed control. Returns the stop location, the station ahead and the
-/// station length.
-pub(crate) fn get_train_stop_location(
-    leaves: &Leaves,
-    services: &Services,
-    id: Handle,
-    station_id: StationID,
-    tile: TileIndex,
-) -> (i32, i32, i32) {
-    Game::new(leaves, services).get_train_stop_location(id, station_id, tile)
-}
-/// `Train::CalcNextVehicleOffset`, shared with depot movement policy.
-pub(crate) fn calc_next_vehicle_offset(id: Handle) -> i32 {
-    Game::next_offset(id)
-}
-/// `TrainOnCrossing`: check if a level crossing tile has a train on it.
-pub(crate) fn train_on_crossing(leaves: &Leaves, services: &Services, tile: TileIndex) -> bool {
-    crate::movement::native_assert(
-        services,
-        crate::map_func::World::new(services).level_crossing_tile(tile.0),
-    );
-
-    Game::new(leaves, services).train_on_tile(tile.0)
-}
-/// Update a level crossing to barred or open (crossing may include multiple adjacent tiles).
-/// `tile` causes the update; `sound` says whether to play sound; `force_bar` forces the
-/// crossing to be barred.
-pub(crate) fn update_level_crossing(
-    leaves: &Leaves,
-    services: &Services,
-    tile: TileIndex,
-    sound: bool,
-    force_bar: bool,
-) {
-    Game::new(leaves, services).update_crossing(tile.0, sound, force_bar);
-}
-/// `Train::GetVehicleTrackdir`: get the tracks of the train vehicle.
-pub(crate) fn get_vehicle_trackdir(
-    leaves: &Leaves,
-    services: &Services,
-    id: Handle,
-) -> crate::track_type::Trackdir {
-    crate::track_type::Trackdir(Game::new(leaves, services).trackdir(id))
-}
-
-impl Game<'_> {
-    fn movement_enter(&self, id: Handle, tile: u32, x: i32, y: i32) -> u64 {
-        // SAFETY: Same live train as the original synchronous native callback.
-        u64::from(unsafe {
-            crate::movement::openttd_rust_movement_enter(
-                self.movement.get(),
-                id.vehicle(),
-                tile,
-                x,
-                y,
-            )
-        })
-    }
-    fn movement_tracks(&self, tile: u32, side: u8) -> u64 {
-        u64::from(self.movement.get().track_status(tile, 0, 0, side))
-    }
-}
-
-pub const VRF_POWERED_WAGON: u64 = 1 << 3;
-pub const VRF_FLIPPED: u64 = 1 << 4;
 
 #[cfg(test)]
 mod evidence_tests;
-
-/// `Train::From`'s type assertion holds the handle constructor: a road vehicle fails it once,
-/// a train passes it and its handle carries the record's train owner.
 #[cfg(test)]
-mod handle_tests {
-    use crate::vehicle::VehicleRef;
-    use crate::vehicle_type::VehicleType;
-    use std::sync::atomic::{AtomicU32, Ordering};
-
-    /// Failed native assertions seen by the isolated child.
-    static FAILED: AtomicU32 = AtomicU32::new(0);
-    extern "C" fn record_failure(condition: bool) {
-        if !condition {
-            FAILED.fetch_add(1, Ordering::Relaxed);
-        }
-    }
-
-    #[test]
-    fn from_vehicle_asserts_the_vehicle_type_and_carries_the_train_owner() {
-        if crate::services_assert::isolate_test_check(
-            "train::handle_tests::from_vehicle_asserts_the_vehicle_type_and_carries_the_train_owner",
-            record_failure,
-        ) {
-            return;
-        }
-        let record = |kind| {
-            VehicleRef::of(crate::vehicle_base::openttd_rust_vehicle_record_new(
-                std::ptr::null_mut(),
-                kind,
-            ))
-        };
-        let owner = std::ptr::NonNull::<crate::train_state::TrainState>::dangling().as_ptr();
-        let train = record(VehicleType::VEH_TRAIN);
-        // SAFETY: The test's fresh record, which it leaks.
-        unsafe { (*train.0.as_ptr()).train = owner };
-        let handle = super::Handle::from_vehicle(train);
-        assert_eq!((handle.record, handle.owner), (train.0.as_ptr(), owner));
-        assert_eq!(FAILED.load(Ordering::Relaxed), 0);
-        let _ = super::Handle::from_vehicle(record(VehicleType::VEH_ROAD));
-        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
-    }
-}
+mod tests;

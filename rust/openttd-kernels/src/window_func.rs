@@ -23,6 +23,8 @@ pub struct Services {
     pub close_window_by_id: extern "C" fn(u16, i32, bool, i32),
     /// `DeleteNewGRFInspectWindow(feature, index)`.
     pub delete_newgrf_inspect_window: extern "C" fn(u8, u32),
+    /// `InvalidateNewGRFInspectWindow(feature, index)`.
+    pub invalidate_newgrf_inspect_window: extern "C" fn(u8, u32),
     /// `InvalidateWindowClassesData(cls, data, gui_scope)`.
     pub invalidate_window_classes_data: extern "C" fn(u16, i32, bool),
     /// `InvalidateWindowData(cls, number, data, gui_scope)`.
@@ -40,6 +42,7 @@ crate::abi::layouts! {
     "OpenTTDWindowServices" ["window"] => Services {
         close_window_by_id,
         delete_newgrf_inspect_window,
+        invalidate_newgrf_inspect_window,
         invalidate_window_classes_data,
         invalidate_window_data,
         set_window_classes_dirty,
@@ -52,6 +55,9 @@ extern "C" fn unbound_close_window_by_id(_: u16, _: i32, _: bool, _: i32) {
     std::process::abort()
 }
 extern "C" fn unbound_delete_newgrf_inspect_window(_: u8, _: u32) {
+    std::process::abort()
+}
+extern "C" fn unbound_invalidate_newgrf_inspect_window(_: u8, _: u32) {
     std::process::abort()
 }
 extern "C" fn unbound_invalidate_window_classes_data(_: u16, _: i32, _: bool) {
@@ -73,6 +79,7 @@ extern "C" fn unbound_set_window_widget_dirty(_: u16, _: i32, _: i32) {
 static UNBOUND: Services = Services {
     close_window_by_id: unbound_close_window_by_id,
     delete_newgrf_inspect_window: unbound_delete_newgrf_inspect_window,
+    invalidate_newgrf_inspect_window: unbound_invalidate_newgrf_inspect_window,
     invalidate_window_classes_data: unbound_invalidate_window_classes_data,
     invalidate_window_data: unbound_invalidate_window_data,
     set_window_classes_dirty: unbound_set_window_classes_dirty,
@@ -161,6 +168,7 @@ pub(crate) mod testing {
     pub(crate) enum Effect {
         CloseWindowById(WindowClass, WindowNumber, bool, i32),
         DeleteNewGRFInspectWindow(GrfSpecFeature, u32),
+        InvalidateNewGRFInspectWindow(GrfSpecFeature, u32),
         InvalidateWindowClassesData(WindowClass, i32, bool),
         InvalidateWindowData(WindowClass, WindowNumber, i32, bool),
         SetWindowClassesDirty(WindowClass),
@@ -194,6 +202,12 @@ pub(crate) mod testing {
     }
     extern "C" fn delete_newgrf_inspect_window(feature: u8, index: u32) {
         push(Effect::DeleteNewGRFInspectWindow(
+            GrfSpecFeature(feature),
+            index,
+        ));
+    }
+    extern "C" fn invalidate_newgrf_inspect_window(feature: u8, index: u32) {
+        push(Effect::InvalidateNewGRFInspectWindow(
             GrfSpecFeature(feature),
             index,
         ));
@@ -232,6 +246,7 @@ pub(crate) mod testing {
     static WINDOWS: Services = Services {
         close_window_by_id,
         delete_newgrf_inspect_window,
+        invalidate_newgrf_inspect_window,
         invalidate_window_classes_data,
         invalidate_window_data,
         set_window_classes_dirty,

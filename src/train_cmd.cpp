@@ -61,10 +61,8 @@ static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructi
 #include "rust/effect_ffi.h"
 #include "safeguards.h"
 
-static Track ChooseTrainTrack(Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool force_res, bool *got_reservation, bool mark_stuck);
 bool TrainController(Train *v, Vehicle *nomove, bool reverse = true); // Also used in vehicle_sl.cpp.
 static void CheckIfTrainNeedsService(Train *v);
-static void CheckNextTrainTile(Train *v);
 
 static const uint8_t _vehicle_initial_x_fract[4] = {10, 8, 4,  8};
 static const uint8_t _vehicle_initial_y_fract[4] = { 8, 4, 8, 10};
@@ -525,16 +523,9 @@ void UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval(TileIndex tile, Axis
  */
 CommandCost CmdReverseTrainDirection(DoCommandFlags flags, VehicleID veh_id, bool reverse_single_veh)
 {
-	Train *v = Train::GetIfValid(veh_id);
-	if (v == nullptr) return CMD_ERROR;
-	CommandCost ret = CheckOwnership(v->GetOwner());
-	if (ret.Failed()) return ret;
-	switch (openttd_rust_train_reverse_command(TrainHandle(v), static_cast<uint8_t>(flags.Test(DoCommandFlag::Execute)), static_cast<uint8_t>(reverse_single_veh), &GetTrainServices(), &GetRustSharedServices())) {
-		case 0: return CommandCost();
-		case 1: return CommandCost(STR_ERROR_CAN_T_REVERSE_DIRECTION_RAIL_VEHICLE_MULTIPLE_UNITS);
-		case 2: return CommandCost(STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT);
-		default: return CMD_ERROR;
-	}
+	CommandCost cost;
+	openttd_rust_train_reverse_direction(&GetRustVehicleBuildServices(), RustCommandCost(&cost), flags.base(), veh_id.base(), reverse_single_veh, &GetTrainServices(), &GetRustSharedServices());
+	return cost;
 }
 
 /**
@@ -556,36 +547,21 @@ CommandCost CmdReverseTrainDirection(DoCommandFlags flags, VehicleID veh_id, boo
  */
 CommandCost CmdForceTrainProceed(DoCommandFlags flags, VehicleID veh_id)
 {
-	Train *t = Train::GetIfValid(veh_id);
-	if (t == nullptr) return CMD_ERROR;
-	/* Preserve primary validation before the ownership shared service. */
-	if (!t->IsPrimaryVehicle()) return CMD_ERROR;
-	CommandCost ret = CheckOwnership(t->GetOwner());
-	if (ret.Failed()) return ret;
-	openttd_rust_train_force_command(TrainHandle(t), static_cast<uint8_t>(flags.Test(DoCommandFlag::Execute)), &GetTrainServices(), &GetRustSharedServices());
-	return CommandCost();
-}
-
-/**
- * Try to find a depot nearby.
- * @param v %Train that wants a depot.
- * @param max_distance Maximal search distance.
- * @return Information where the closest train depot is located.
- * @pre The given vehicle must not be crashed!
- */
-static FindDepotData FindClosestTrainDepot(Train *v, int max_distance)
-{
-	assert(!v->GetVehStatus().Test(VehState::Crashed));
-
-	return YapfTrainFindNearestDepot(v, max_distance);
+	CommandCost cost;
+	openttd_rust_train_force_proceed(&GetRustVehicleBuildServices(), RustCommandCost(&cost), flags.base(), veh_id.base(), &GetTrainServices(), &GetRustSharedServices());
+	return cost;
 }
 
 ClosestDepot Train::FindClosestDepot()
 {
-	FindDepotData tfdd = FindClosestTrainDepot(this, 0);
-	if (tfdd.best_length == UINT_MAX) return ClosestDepot();
-
-	return ClosestDepot(tfdd.tile, GetDepotIndex(tfdd.tile), tfdd.reverse);
+	OpenTTDOrdersClosest closest;
+	openttd_rust_train_find_closest_depot(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices(), &closest);
+	ClosestDepot result;
+	result.location = TileIndex{closest.tile};
+	result.destination = DestinationID(closest.destination);
+	result.reverse = closest.reverse != 0;
+	result.found = closest.found != 0;
+	return result;
 }
 
 /** Play a sound for a train leaving the station. */
@@ -605,30 +581,10 @@ void Train::PlayLeaveStationSound(bool force) const
 }
 
 /**
- * Check if the train is on the last reserved tile and try to extend the path then.
- * @param v %Train that needs its path extended.
- */
-static void CheckNextTrainTile(Train *v)
-{
-	openttd_rust_train_reservation_check_next(TrainHandle(v), RustVehicle(v), &GetTrainReservationServices(), nullptr);
-}
-
-/**
  * Will the train stay in the depot the next tick?
  * @param v %Train to check.
  * @return True if it stays in the depot, false otherwise.
  */
-
-/**
- * Clear the reservation of \a tile that was just left by a wagon on \a track_dir.
- * @param v %Train owning the reservation.
- * @param tile Tile with reservation to clear.
- * @param track_dir Track direction to clear.
- */
-static void ClearPathReservation(const Train *v, TileIndex tile, Trackdir track_dir)
-{
-	openttd_rust_train_reservation_clear(TrainHandle(v), RustVehicle(v), static_cast<uint32_t>(tile.base()), static_cast<uint8_t>(track_dir), &GetTrainReservationServices(), nullptr);
-}
 
 /**
  * Free the reserved path in front of a vehicle.
@@ -673,14 +629,6 @@ void FreeTrainTrackReservation(const Train *v)
 
 /** This class will save the current order of a vehicle and restore it on destruction. */
 
-/* choose a track */
-static Track ChooseTrainTrack(Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool force_res, bool *got_reservation, bool mark_stuck)
-{
-	OpenTTDTrainReservationChoice result = openttd_rust_train_reservation_choose(TrainHandle(v), RustVehicle(v), static_cast<uint32_t>(tile.base()), static_cast<uint8_t>(enterdir), static_cast<uint8_t>(tracks), static_cast<uint8_t>(force_res), static_cast<uint8_t>(mark_stuck), &GetTrainReservationServices(), nullptr);
-	if (got_reservation != nullptr) *got_reservation = result.reserved != 0;
-	return static_cast<Track>(result.track);
-}
-
 /**
  * Try to reserve a path to a safe position.
  *
@@ -694,11 +642,6 @@ bool TryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay)
 	return (openttd_rust_train_reservation_try_path(TrainHandle(v), RustVehicle(v), static_cast<uint8_t>(mark_as_stuck), static_cast<uint8_t>(first_tile_okay), &GetTrainReservationServices(), nullptr)) != 0;
 }
 
-
-static bool CheckReverseTrain(const Train *v)
-{
-	return (openttd_rust_train_reservation_check_reverse(TrainHandle(v), RustVehicle(v), &GetTrainReservationServices(), nullptr)) != 0;
-}
 
 /**
  * Get the location of the next station to visit.
@@ -914,7 +857,6 @@ uint16_t Train::GetMaxWeight() const
 	return openttd_rust_ground_max_weight(&GetRustGroundPhysicsServices(), this->record);
 }
 
-#include "rust/train_services.h"
 
 #include "rust/train_reservation_services.h"
 
@@ -923,118 +865,9 @@ uint16_t Train::GetMaxWeight() const
 const OpenTTDTrainServices &GetTrainServices() noexcept
 {
 	static const OpenTTDTrainServices services{
-		.physics = &GetRustGroundPhysicsServices(),
-		.write_colourmap = TrainWriteColourmap,
-		.advance_distance = TrainAdvanceDistance,
-		.all_powered = TrainAllPowered,
-		.arrival_news = TrainArrivalNews,
-		.axis_diag = TrainAxisDiag,
-		.backoff = RustTrainPathBackoffInterval,
-		.base_viewport = TrainBaseViewport,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
-		.capacity_error = TrainCapacityError,
-		.check_next = TrainCheckNext,
-		.check_orders = TrainCheckOrders,
-		.check_reverse = TrainCheckReverse,
-		.choose_track = TrainChooseTrack,
-		.clear_reservation = TrainClearReservation,
-		.consist_windows = TrainConsistWindows,
-		.cost_divisor = TrainCostDivisor,
-		.count_chain = TrainCountChain,
-		.crash_event = TrainCrashEvent,
-		.crash_news = TrainCrashNews,
-		.crash_sound = TrainCrashSound,
-		.crossing_barred = OpenTTDLegacyMapQuery<uint64_t, RustCrossingBarred, OpenTTDTrainHandle, uint32_t>,
-		.crossing_rail_axis = TrainCrossingRailAxis,
-		.crossing_road_axis = OpenTTDLegacyMapQuery<uint64_t, RustCrossingRoadAxis, OpenTTDTrainHandle, uint32_t>,
-		.crossing_sound = RustCrossingSound<OpenTTDTrainHandle>,
-		.curve_advantage = TrainCurveAdvantage,
-		.day_ticks = TrainDayTicks,
-		.delete_vehicle = TrainDeleteVehicle,
-		.depot_dir = OpenTTDLegacyMapQuery<uint64_t, RustRailDepotDirection, OpenTTDTrainHandle, uint32_t>,
-		.depot_dirty = TrainDepotDirty,
-		.depot_track = TrainDepotTrack,
-		.depot_window = TrainDepotWindow,
-		.diag_axis = TrainDiagAxis,
-		.diag_between = TrainDiagBetween,
-		.diag_reaches_tracks = TrainDiagReachesTracks,
-		.diag_trackdir = TrainDiagTrackdir,
-		.dir_diag = TrainDirDiag,
-		.disconnect = TrainDisconnect,
-		.find_depot = TrainFindDepot,
-		.first_track = TrainFirstTrack,
-		.has_depot_res = OpenTTDLegacyMapQuery<uint64_t, RustDepotReserved, OpenTTDTrainHandle, uint32_t>,
-
-		.has_signal = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignalTrack, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.has_signals = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignals, OpenTTDTrainHandle, uint32_t>,
-		.has_signal_td = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignalTrackdir, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.hide_fill = TrainHideFill,
-		.invalidate_grf = TrainVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
-		.is_bridge = TrainIsBridge,
-		.is_crossing = OpenTTDLegacyMapQuery<uint64_t, MapSvcIsLevelCrossing, OpenTTDTrainHandle, uint32_t>,
-		.is_depot = OpenTTDLegacyMapQuery<uint64_t, RustRailDepotTile, OpenTTDTrainHandle, uint32_t>,
-		.is_plain_rail = OpenTTDLegacyMapQuery<uint64_t, RustPlainRailTile, OpenTTDTrainHandle, uint32_t>,
-		.is_station = OpenTTDLegacyMapQuery<uint64_t, RustIsRailStation, OpenTTDTrainHandle, uint32_t>,
-		.is_station_any = TrainIsStationAny,
-		.leave_sound = TrainLeaveSound,
-		.leave_unbunch = TrainLeaveUnbunch,
-		.local_company = TrainLocalCompany,
-		.no_90 = OpenTTDLegacyMapQuery<uint64_t, RustDefaultRail90Disallowed, OpenTTDTrainHandle, uint8_t, uint8_t>,
-		.oneway_blocking = OpenTTDLegacyMapQuery<uint64_t, RustOnewaySignalBlocking, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.order_depot_service = TrainOrderDepotService,
-		.order_dummy = TrainOrderDummy,
-		.order_free = TrainOrderFree,
-		.order_max_speed = TrainVehicleRead<uint64_t, RustVehicleOrderMaxSpeed>,
-		.other_end = OpenTTDLegacyMapQuery<uint64_t, RustOtherTunnelBridgeEnd, OpenTTDTrainHandle, uint32_t>,
-		.pay_running = TrainPayRunning,
-		.pbs_signal_type = TrainPbsSignalType,
-		.rail_type = OpenTTDLegacyMapQuery<uint64_t, RustRailType, OpenTTDTrainHandle, uint32_t>,
-		.reserve_paths = RustTrainReservePaths,
-		.reserve_under = TrainReserveUnder,
-		.reset_unbunch = TrainResetUnbunch,
-		.reverse_windows = TrainReverseWindows,
-		.running_windows = TrainRunningWindows,
-		.servint = TrainServint,
-		.set_depot_res = OpenTTDLegacyMapQuery<void, RustSetDepotReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
-
-		.set_signal_state = OpenTTDLegacyMapQuery<void, RustRailSetSignalState, OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t>,
-		.set_tunnel_res = OpenTTDLegacyMapQuery<void, RustSetTunnelBridgeReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.show_reservation = OpenTTDLegacyMapQuery<uint64_t, RustShowTrackReservation, OpenTTDTrainHandle>,
-		.signal_context = GetRustSignalContext,
-		.signal_has_pbs = OpenTTDLegacyMapQuery<uint64_t, RustHasPbsSignal, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.signal_pbs = TrainSignalPbs,
-		.signal_type = OpenTTDLegacyMapQuery<uint64_t, RustRailSignalType, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.sigseg_full = TrainSigsegFull,
-		.sigseg_pbs = TrainSigsegPbs,
-		.start_stop_dirty = TrainStartStopDirty,
-		.station_axis = OpenTTDLegacyMapQuery<uint64_t, RustRailStationAxis, OpenTTDTrainHandle, uint32_t>,
-		.station_compatible = RustStationLegacyCompatible<OpenTTDTrainHandle>,
-		.station_dest = TrainStationDest,
-		.stopped_in_depot = TrainStoppedInDepot,
-		.stop_location = TrainStopLocation,
-		.stuck_news = TrainStuckNews,
-		.suppress_implicit = TrainSuppressImplicit,
-
-		.tile_offset_axis = TrainTileOffsetAxis,
-		.tile_offset_diag = TrainTileOffsetDiag,
-		.tile_rail_type = OpenTTDLegacyMapQuery<uint64_t, RustTileRailType, OpenTTDTrainHandle, uint32_t>,
-		.tile_virt = RustTileVirtXY,
-		.trackdir_exit = TrainTrackdirExit,
-		.trackdir_reaches = TrainTrackdirReaches,
-		.track_bits = OpenTTDLegacyMapQuery<uint64_t, RustRailTracks, OpenTTDTrainHandle, uint32_t>,
-		.track_crosses = TrainTrackCrosses,
-		.track_direction = TrainTrackDirection,
-
-		.train_list = TrainTrainList,
-		.truncate_cargo = TrainTruncateCargo,
-
-
-		.veh_exit_dir = TrainVehExitDir,
-		.viewport = TrainViewport,
-		.wagon_override = TrainVehicleRead<uint64_t, RustVehicleUsesWagonOverride>,
-		.wagon_speed_limits = RustSettingRead<uint64_t, RustWagonSpeedLimits, OpenTTDTrainHandle>,
-		.wait_unbunch = TrainWaitUnbunch,
-		.write_crossing_bar = TrainWriteCrossingBar,
+		.physics = &GetRustGroundPhysicsServices(),
+		.reservation = &GetTrainReservationServices(),
 		.vehicle = &GetRustVehicleServices(),
 	};
 	return services;
@@ -1105,12 +938,10 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 
 #include "rust/rail_construction_services.hpp"
 #include "rust/service_table_check.hpp"
-#include "abi-visit-OpenTTDTrainServices.hpp"
 #include "abi-visit-OpenTTDTrainReservationLeaves.hpp"
 #include "abi-visit-OpenTTDRailConstructionServices.hpp"
 bool CheckAbi_train_cmd()
 {
-	return AbiServicesComplete(GetTrainServices()) &&
-		AbiServicesComplete(GetTrainReservationServices()) &&
+	return AbiServicesComplete(GetTrainReservationServices()) &&
 		AbiServicesComplete(GetRustRailConstructionServices());
 }

@@ -219,6 +219,21 @@ pub(crate) fn is_articulated_part(ground: bool, subtype: u8) -> bool {
     ground && has_bit(subtype, GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0)
 }
 
+/// `Vehicle::IsStoppedInDepot` of a ground vehicle `v`, whose `IsPrimaryVehicle` is
+/// `IsFrontEngine` and whose `IsChainInDepot` is `GroundVehicle::IsChainInDepot`: check
+/// whether the vehicle is in the depot *and* stopped.
+pub(crate) fn is_stopped_in_depot(
+    v: crate::vehicle::VehicleRef,
+    physics: &crate::ground_vehicle::Services,
+) -> bool {
+    crate::services_assert::assert_with(|| v == v.first());
+    /* Free wagons have no VehState::Stopped state */
+    if v.is_front_engine() && !v.vehstatus().test(VehState::Stopped) {
+        return false;
+    }
+    crate::ground_vehicle::is_chain_in_depot(physics, v)
+}
+
 /// `Vehicle::IsGroundVehicle`: is this a ground vehicle (train or road vehicle)?
 pub(crate) fn is_ground_vehicle(kind: VehicleType) -> bool {
     kind == VehicleType::VEH_TRAIN || kind == VehicleType::VEH_ROAD
@@ -1365,6 +1380,28 @@ mod record_tests {
             for record in records {
                 VehicleRecord::delete(record);
             }
+        }
+    }
+
+    /// `CountVehiclesInChain` counts the given vehicle and each `Next()` after it.
+    #[test]
+    fn count_vehicles_in_chain_counts_from_the_given_vehicle_to_the_end() {
+        let records: Vec<_> = (0..4)
+            .map(|_| openttd_rust_vehicle_record_new(std::ptr::null_mut(), VehicleType::VEH_TRAIN))
+            .collect();
+        for pair in records.windows(2) {
+            // SAFETY: The test's fresh records.
+            unsafe { (*pair[0]).next = pair[1] };
+        }
+        for (&record, remaining) in records.iter().zip((1..=4u32).rev()) {
+            assert_eq!(
+                crate::vehicle_func::count_vehicles_in_chain(VehicleRef::of(record)),
+                remaining
+            );
+        }
+        for record in records {
+            // SAFETY: Each record came from `openttd_rust_vehicle_record_new`.
+            unsafe { openttd_rust_vehicle_record_delete(record) };
         }
     }
 }

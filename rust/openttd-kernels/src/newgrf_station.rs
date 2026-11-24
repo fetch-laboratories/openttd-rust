@@ -910,6 +910,10 @@ pub(crate) fn cargo_count(st: *mut BaseStation, cargo: u8) -> u32 {
 pub(crate) fn get_empty_mask(st: *mut BaseStation) -> CargoTypes {
     CargoTypes(services().get_empty_mask(st))
 }
+/// Kept out of line: the PBS comparison probe interposes this symbol
+/// (`tools/simulation/rails.py`'s `pbs_interpose`), so a Rust caller such as
+/// `animated_tile::rail_event` must call it, not an inlined copy of its shim.
+#[inline(never)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_randomisation(
     st: *mut BaseStation,
@@ -917,6 +921,22 @@ pub extern "C" fn openttd_rust_station_randomisation(
     trigger: u8,
     cargo: u8,
 ) {
+    trigger_station_randomisation(
+        st,
+        TileIndex(tile),
+        crate::station_type::StationRandomTrigger(trigger),
+        CargoType(cargo),
+    );
+}
+/// `TriggerStationRandomisation`: trigger station randomisation of station `st` at `tile`
+/// for `trigger`, limited to `cargo` unless it is `INVALID_CARGO`.
+pub(crate) fn trigger_station_randomisation(
+    st: *mut BaseStation,
+    tile: TileIndex,
+    trigger: crate::station_type::StationRandomTrigger,
+    cargo: CargoType,
+) {
+    let (tile, trigger, cargo) = (tile.0, trigger.0, cargo.0);
     let native = services();
     let mask = (native.cached_cargo)(st);
     if mask == 0 || is_valid_cargo_type(cargo) && mask & 1_u64.wrapping_shl(u32::from(cargo)) == 0 {

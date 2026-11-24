@@ -187,7 +187,7 @@ unsafe fn cmd_clone_vehicle(
     if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN
         && (!crate::fleet::record(b.groups, v).is_front_engine()
             || crate::train::Handle::from_vehicle(unsafe { super::vehicle_ref(v, c.vehicles) })
-                .get_crash_anim_pos()
+                .crash_anim_pos()
                 >= 4400)
     {
         total.error(STR_ERROR_VEHICLE_IS_DESTROYED.0);
@@ -276,7 +276,9 @@ unsafe fn cmd_clone_vehicle(
                     let old_train = crate::train::Handle::from_vehicle(unsafe {
                         super::vehicle_ref(v, c.vehicles)
                     });
-                    if old_train.get_flags() & (1 << crate::train::FLIPPED) != 0
+                    if old_train
+                        .flags()
+                        .test(crate::train::VehicleRailFlag::Flipped)
                         && !unsafe {
                             crate::newgrf_vehicle::reverse_probability(
                                 c.vehicles,
@@ -290,10 +292,14 @@ unsafe fn cmd_clone_vehicle(
                             )
                         }
                     {
-                        crate::train::Handle::from_vehicle(unsafe {
+                        let new_train = crate::train::Handle::from_vehicle(unsafe {
                             super::vehicle_ref(w, c.vehicles)
-                        })
-                        .set_flag(crate::train::FLIPPED, true);
+                        });
+                        new_train.set_flags(
+                            new_train
+                                .flags()
+                                .set(crate::train::VehicleRailFlag::Flipped),
+                        );
                     }
                 }
                 if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN

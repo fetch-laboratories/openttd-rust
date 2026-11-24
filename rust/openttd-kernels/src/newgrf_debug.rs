@@ -16,3 +16,10 @@ use crate::newgrf::GrfSpecFeature;
 pub(crate) fn delete_newgrf_inspect_window(feature: GrfSpecFeature, index: u32) {
     (crate::window_func::services().delete_newgrf_inspect_window)(feature.0, index);
 }
+
+/// `InvalidateNewGRFInspectWindow`: invalidate the inspect window for a given feature and
+/// index. The index is normally an in-game location/identifier, such as a `TileIndex` or an
+/// `IndustryID`, passed as its base.
+pub(crate) fn invalidate_newgrf_inspect_window(feature: GrfSpecFeature, index: u32) {
+    (crate::window_func::services().invalidate_newgrf_inspect_window)(feature.0, index);
+}

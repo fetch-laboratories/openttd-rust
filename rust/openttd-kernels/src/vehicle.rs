@@ -99,10 +99,14 @@ pub struct VehicleServices {
     pub profit: extern "C" fn(VehicleRef) -> i64,
     /// The record of a native shell.
     pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
+    /// `v->colourmap = colourmap`.
+    pub set_colourmap: extern "C" fn(VehicleRef, crate::gfx_type::PaletteID),
     /// Native `max_age` store after the Rust engine lifetime decision.
     pub set_max_age: extern "C" fn(VehicleRef, i32),
     /// Strict `Ship::Get`, never a nullable pool lookup.
     pub ship_get: extern "C" fn(u32) -> VehicleRef,
+    /// `ShowNewGrfVehicleError(engine, part1, part2, bug, critical)`.
+    pub show_newgrf_vehicle_error: extern "C" fn(u16, u32, u32, crate::newgrf_config::GRFBug, bool),
     pub start_stop_dirty: extern "C" fn(VehicleRef),
     pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
     /// Virtual `UpdateDeltaXY()`.
@@ -283,8 +287,10 @@ crate::abi::layouts! {
         play_vehicle_sound,
         profit,
         record_from_shell,
+        set_colourmap,
         set_max_age,
         ship_get,
+        show_newgrf_vehicle_error,
         start_stop_dirty,
         tile_links,
         update_delta,

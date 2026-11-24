@@ -182,14 +182,12 @@ impl Ctx {
         self.rec((self.s.train_if_valid)(id.0))
     }
     fn consist_changed(self, v: R) {
-        unsafe {
-            crate::train::openttd_rust_train_consist_changed(
-                crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
-                CCF_ARRANGE,
-                self.r.train,
-                self.t.shared,
-            );
-        }
+        crate::train::consist_changed(
+            self.r.train,
+            self.t.shared,
+            crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
+            CCF_ARRANGE,
+        );
     }
     fn update_group(self, v: R) {
         unsafe { crate::fleet::update_train_group_id(self.g, Self::sh(v)) };
@@ -208,8 +206,12 @@ impl Ctx {
             )
         };
         if probability >= 0 {
-            crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
-                .set_flag(crate::train::FLIPPED, probability != 0);
+            let train = crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v));
+            train.set_flags(if probability != 0 {
+                train.flags().set(crate::train::VehicleRailFlag::Flipped)
+            } else {
+                train.flags().reset(crate::train::VehicleRailFlag::Flipped)
+            });
         }
     }
 }
@@ -887,13 +889,11 @@ fn delete_orders(x: Ctx, v: R) {
     };
 }
 fn mark_dirty(x: Ctx, v: R) {
-    unsafe {
-        crate::train::openttd_rust_train_mark_dirty(
-            crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
-            x.r.train,
-            x.t.shared,
-        );
-    }
+    crate::train::mark_dirty(
+        x.r.train,
+        x.t.shared,
+        crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
+    );
 }
 
 /// `CmdMoveRailVehicle`'s arguments.
