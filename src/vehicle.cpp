@@ -617,7 +617,18 @@ Vehicle::~Vehicle()
 #include "rust/vehicle_refit_ffi.h"
 OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit_cost, OpenTTDCommandCost *temporary) noexcept
 {
-	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices(), .visits = &GetRustVehicleVisits(), .refit_cost = refit_cost, .refit_temporary = temporary};
+	return {
+		.cargo = CargoStorageServices(),
+		.group = &FleetGroupServices(),
+		.loading = &GetRustStationLoading(),
+		.pending = &_fleet_pending_services,
+		.refit_cost = refit_cost,
+		.refit_temporary = temporary,
+		.scheduler = &GetRustVehicleSchedulerServices(),
+		.station = &GetRustStationServices(),
+		.transaction = &FleetTransactionServices(),
+		.visits = &GetRustVehicleVisits(),
+	};
 }
 
 

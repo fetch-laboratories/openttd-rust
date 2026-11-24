@@ -20,7 +20,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.common = &GetRustVehicleCommonServices(),
 		.selection = &GetRustVehicleSelectionServices(),
 		.cargo = CargoStorageServices(),
-		.scheduler = &GetRustVehicleSchedulerServices(),
 		.train = &GetTrainServices(),
 		.road = &GetRustRoadLeaves(),
 		.aircraft = &GetRustAircraftLeaves(),

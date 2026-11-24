@@ -52,7 +52,7 @@
 ## Vehicle scheduling and base maintenance (#213)
 
 - Rust owns: calendar/economy-day scheduling, `CallVehicleTicks` traversal, survival, cargo aging, motion/sound, loading/fleet sequencing, renewal, service/depot resets, reliability, breakdowns, age and value.
-- C++ keeps: `Vehicle` shells/pools, type-specific tick/day facades, NewGRF callbacks, commands and presentation.
+- C++ keeps: `Vehicle` shells/pools, type-specific tick facades, NewGRF callbacks, commands and presentation.
 - Checks: default vehicle, fleet and aircraft simulations.
 - Limits: Gaps remain in replacement and old-news branches, NewGRF and reentrant sound, custom/articulated combinations, and legacy saves (#156).
 - PRs: #257.
@@ -215,6 +215,13 @@
 - `EngineReplacementForCompany` and `EngineHasReplacementForCompany` are ported in `autoreplace_func.rs`; `GroupStatistics::VehicleReachedMinAge`, `Vehicle::HasDepotOrder`, `GetAvailableMoney`, the articulated refit and cargo queries and `Engine::GetCost` have Rust-internal forms the bodies call. `Vehicle::NeedsAutorenewing`'s owner assertion runs in Rust through the native assertion policy.
 - C++ keeps the seven facades of `vehicle.cpp`'s maintenance functions, `PlayVehicleSound` and `SndPlayVehicleFx`, and the shell members until the vehicle storage port.
 - Checks: `vehicle::maintenance::tests`, `autoreplace_func::tests`, the `windows-abi` maintenance, road, ship and aircraft probes, `vehicle_scheduler`'s native scalar test, the `vehicles-*` maintenance scenarios and exact-head Full. Archive equivalence is unclaimed: every body changes how it reaches its values.
+
+## Vehicle scheduler file pass (#986)
+
+- `vehicle/scheduler.rs` is finished. `RunVehicleCalendarDayProc`, `RunEconomyVehicleDayProc` and `CallVehicleTicks` read the vehicle pool through its descriptor and each member through its `VehicleRef` accessor, where the original reads it; the survival assertions and the three subtype casts run through the native assertion policy. Each day procedure reads the game mode and day fraction itself and dispatches `OnNewCalendarDay` and `OnNewEconomyDay` on the vehicle's type to the controllers' bodies, so the eight C++ overrides and the two base virtuals are gone; `SchedulerServices` links the four controller tables.
+- The vehicle's cargo list has one binding, `VehicleRef::cargo` over the resolver's slot. C++ keeps the virtual `Tick` with its controllers' timing scopes (#1011), `PlayVehicleSound`, `MarkDirty` and the pool and shells.
+- Checks: `vehicle::scheduler::tests` (post-Tick bodies over live records, the pool walk against `scheduler/pool-oracle.txt`, survival assertions, day procedures, the 32-day callback's results and the day dispatch), the native `Tick` timing-scope test, `RoadServiceBoundary`, source review and exact-head Full. Archive equivalence is unclaimed: every body changes how it reaches its values.
+- PRs: this pass. `vehicle/occupancy.rs` follows in #1003.
 
 ## Original renewal and servicing vocabulary (#734)
 

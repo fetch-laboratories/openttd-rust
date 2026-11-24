@@ -259,6 +259,60 @@ pub(crate) const fn test_table_with_callback(
     }
 }
 
+/// Builders over a test table, for tests outside this module, which cannot name its private
+/// fields.
+#[cfg(test)]
+macro_rules! test_leaves {
+    ($($(#[$doc:meta])* $with:ident: $field:ident: $ty:ty;)*) => {
+        impl Services {
+            $(
+                $(#[$doc])*
+                pub(crate) const fn $with(self, $field: $ty) -> Self {
+                    Self { $field, ..self }
+                }
+            )*
+        }
+    };
+}
+#[cfg(test)]
+test_leaves! {
+    with_age: age: unsafe extern "C" fn(V) -> i32;
+    with_cache: cache: unsafe extern "C" fn(V) -> *mut Cache;
+    with_capabilities: capabilities: &'static crate::engine_capabilities::Services;
+    with_cargo_owner: cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List;
+    with_cargo_type: cargo_type: unsafe extern "C" fn(V) -> u8;
+    with_engine_by_id: engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine;
+    with_resolve_callback: resolve_callback:
+        unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16;
+    with_shared: shared: &'static crate::services::Services;
+    /// `VehicleScopeResolver`'s store of the waiting random triggers.
+    with_write_waiting: write_waiting: unsafe extern "C" fn(V, u8);
+}
+#[cfg(test)]
+impl Services {
+    /// This table with a randomisation that reads no waiting trigger, no random bits and no
+    /// reseed, and stores no random bits.
+    pub(crate) const fn with_inert_randomisation(self) -> Self {
+        unsafe extern "C" fn waiting(_: V) -> u8 {
+            0
+        }
+        unsafe extern "C" fn resolve_random(_: *mut State, _: u16, _: u8) -> RandomResult {
+            RandomResult { used: 0, reseed: 0 }
+        }
+        unsafe extern "C" fn random_bits(_: V) -> u16 {
+            0
+        }
+        unsafe extern "C" fn write_random(_: V, _: u16) {}
+        Self {
+            random_bits,
+            waiting,
+            write_random,
+            resolve_random,
+            ..self
+        }
+    }
+}
+
 /// `TEST_TABLE` with the vehicle member readers `id` (`v->index`), `cargo_type`,
 /// `cargo_subtype` and `cargo_owner` (`v->cargo`), for tests outside this module.
 #[cfg(test)]

@@ -33,12 +33,19 @@ fn set_current_company(t: &TransactionServices, company: crate::company_type::Co
 }
 
 static PENDING: GameState<BTreeMap<u32, bool>> = GameState::new(BTreeMap::new());
-/// Clear pending replacements at the original initialization/tick-start point.
+/// `_vehicles_to_autoreplace.clear()`: clear pending replacements at the original
+/// initialization/tick-start point.
 /// # Safety
 /// Serial game-thread access; no map reference is active during this call.
+pub(crate) unsafe fn clear() {
+    unsafe { (&mut *PENDING.get()).clear() };
+}
+/// [`clear`], for C++ callers.
+/// # Safety
+/// As [`clear`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_fleet_pending_clear() {
-    unsafe { (&mut *PENDING.get()).clear() };
+    unsafe { clear() };
 }
 /// Record or overwrite the original `VehicleID` key's leave-depot flag.
 /// # Safety

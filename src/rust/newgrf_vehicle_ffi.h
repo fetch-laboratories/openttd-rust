@@ -20,6 +20,7 @@ struct AirportSpec;
 enum TTDPAirportType : uint8_t;
 struct OpenTTDGroundPhysicsServices;
 struct OpenTTDTrainServices;
+struct OpenTTDCargoList;
 struct OpenTTDCargoStorageServices;
 struct OpenTTDShipState;
 enum RoadTramType : bool;
