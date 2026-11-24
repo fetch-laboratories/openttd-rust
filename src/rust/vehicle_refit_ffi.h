@@ -71,7 +71,6 @@ struct OpenTTDVehicleConstructServices {
 	void (*rotor)(void *, void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(rotor);
 	uint16_t *(*mail_capacity_address)(void *) noexcept OPENTTD_SERVICE_DEFAULT(mail_capacity_address);
 	void (*road_capacity)(void *, void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_capacity);
-	void (*set_cargo_type)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_type);
 	void (*engine_common)(void *, uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_common);
 	void (*service_dates)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(service_dates);
 	void (*build_stamp)(void *) noexcept OPENTTD_SERVICE_DEFAULT(build_stamp);

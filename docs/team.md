@@ -31,6 +31,7 @@ At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-wai
 ## Background jobs
 
 - Claude Code: start the job with Bash `run_in_background`; a T3 child also passes its ID to `t3_background_wait` as `{taskIds: ["<id>"]}`. A background job is stopped after 30 minutes unless the call sets `timeout`: give a build, profile, verify or CI wait `timeout: 7200000`, the two-hour maximum.
+- Stop only your own job, by the task ID its start returned or the process ID you started. Never stop one by a name pattern (`pgrep -f`, `pkill`, `killall`): several agents run the same tools on this host, and a pattern stops theirs too.
 - Codex, root or child: start the job with `exec_command` and check it once, as your last action before the final message; if it has already exited, read its output now.
 - Start each long job as `exec python3 tools/signal-witness.py -- <command>`. If the job exits 143 and the log shows no failure, read the sender record and the run's log or report, then rerun once incrementally. Add each new kill time and sender evidence to #724.
 

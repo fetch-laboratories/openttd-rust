@@ -82,6 +82,10 @@ const SPAWN_JOIN_TICK: u16 = 21;
 
 #[unsafe(no_mangle)]
 pub(crate) extern "C" fn openttd_rust_schedule_queue(s: &Services, graph: *mut Graph) {
+    queue(s, graph);
+}
+/// `LinkGraphSchedule::Queue`: queue a link graph for execution.
+pub(crate) fn queue(s: &Services, graph: *mut Graph) {
     (s.assert_graph)(graph);
     access(|q| q.schedule.push_back(graph));
     witness::hit(witness::SCHEDULE_QUEUE);

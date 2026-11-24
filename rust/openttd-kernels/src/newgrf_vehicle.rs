@@ -125,7 +125,7 @@ pub struct Services {
     load_ticks: unsafe extern "C" fn(V) -> u16,
     pub(crate) service_interval: unsafe extern "C" fn(V) -> u16,
     pub(crate) cargo_type: unsafe extern "C" fn(V) -> u8,
-    cargo_subtype: unsafe extern "C" fn(V) -> u8,
+    pub(crate) cargo_subtype: unsafe extern "C" fn(V) -> u8,
     pub(crate) age: unsafe extern "C" fn(V) -> i32,
     pub(crate) max_age: unsafe extern "C" fn(V) -> i32,
     pub(crate) unit: unsafe extern "C" fn(V) -> u16,
@@ -256,6 +256,39 @@ pub(crate) const fn test_table_with_callback(
         resolve_callback,
         engine_by_id,
         ..TEST_TABLE
+    }
+}
+
+/// `TEST_TABLE` with the vehicle member readers `id` (`v->index`), `cargo_type`,
+/// `cargo_subtype` and `cargo_owner` (`v->cargo`), for tests outside this module.
+#[cfg(test)]
+pub(crate) const fn test_table_with_members(
+    id: unsafe extern "C" fn(V) -> u32,
+    cargo_type: unsafe extern "C" fn(V) -> u8,
+    cargo_subtype: unsafe extern "C" fn(V) -> u8,
+    cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List,
+) -> Services {
+    Services {
+        cargo_owner,
+        id,
+        cargo_type,
+        cargo_subtype,
+        ..TEST_TABLE
+    }
+}
+
+/// `table` answering engine property callbacks: `engine_by_id` names the engine and
+/// `resolve_callback` answers, for tests outside this module.
+#[cfg(test)]
+pub(crate) const fn test_table_answering(
+    table: &Services,
+    engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
+    resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
+) -> Services {
+    Services {
+        resolve_callback,
+        engine_by_id,
+        ..*table
     }
 }
 

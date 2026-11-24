@@ -17,6 +17,7 @@
 
 use crate::base_consist::{VehicleFlag, VehicleFlags};
 use crate::bitmath_func::has_bit;
+use crate::cargo_type::CargoType;
 use crate::company_type::{CompanyID, Owner};
 use crate::direction_type::Direction;
 use crate::engine_type::EngineID;
@@ -766,6 +767,31 @@ impl crate::vehicle::VehicleRef {
         let consist = read_field!(self.0.as_ptr(), consist);
         crate::order_type::VehicleOrderID(read_field!(consist, real))
     }
+    /// Virtual `Vehicle::GetDisplayMaxSpeed`: the maximum speed in km-ish/h as displayed to
+    /// the player, dispatched on the vehicle's type to each override; other types take the
+    /// base class's 0.
+    pub(crate) fn get_display_max_speed(self) -> i32 {
+        use crate::ground_vehicle::{GroundVehicleType, RoadVehicle, Train};
+        match self.vehicle_type() {
+            VehicleType::VEH_TRAIN => Train::get_display_max_speed(self),
+            VehicleType::VEH_ROAD => RoadVehicle::get_display_max_speed(self),
+            // `Ship::GetDisplayMaxSpeed`.
+            VehicleType::VEH_SHIP => i32::from(self.cached_max_speed()) / 2,
+            // `Aircraft::GetDisplayMaxSpeed`.
+            VehicleType::VEH_AIRCRAFT => i32::from(self.cached_max_speed()),
+            _ => 0,
+        }
+    }
+    /// `Vehicle::cur_implicit_order_index`: the index to the current implicit order.
+    pub(crate) fn cur_implicit_order_index(self) -> crate::order_type::VehicleOrderID {
+        let consist = read_field!(self.0.as_ptr(), consist);
+        crate::order_type::VehicleOrderID(read_field!(consist, implicit))
+    }
+    /// `Vehicle::lateness_counter`: how many ticks late (or early if negative) this vehicle is.
+    pub(crate) fn lateness_counter(self) -> i32 {
+        let consist = read_field!(self.0.as_ptr(), consist);
+        read_field!(consist, lateness)
+    }
     /// `Vehicle::current_order_time`: how many ticks have passed since this order started.
     pub(crate) fn current_order_time(self) -> i32 {
         let consist = read_field!(self.0.as_ptr(), consist);
@@ -897,6 +923,16 @@ impl crate::vehicle::VehicleRef {
         // SAFETY: As `age`.
         VehicleID(unsafe { (r.id)(self.0.as_ptr()) })
     }
+    /// `Vehicle::profit_this_year`: profit this year << 8, low 8 bits are fract.
+    #[inline]
+    pub(crate) fn profit_this_year(self, base: &crate::vehicle::VehicleServices) -> i64 {
+        (base.profit)(self)
+    }
+    /// Store `Vehicle::profit_this_year`.
+    #[inline]
+    pub(crate) fn set_profit_this_year(self, base: &crate::vehicle::VehicleServices, value: i64) {
+        (base.write_profit)(self, value);
+    }
     /// `Vehicle::reliability`: reliability.
     #[inline]
     pub(crate) fn reliability(self, r: &crate::newgrf_vehicle::Services) -> u16 {
@@ -939,6 +975,60 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn get_service_interval(self, r: &crate::newgrf_vehicle::Services) -> u16 {
         // SAFETY: As `age`.
         unsafe { (r.service_interval)(self.0.as_ptr()) }
+    }
+    /// `Vehicle::cargo_type`: type of cargo this vehicle is carrying.
+    #[inline]
+    pub(crate) fn cargo_type(self, r: &crate::newgrf_vehicle::Services) -> CargoType {
+        // SAFETY: As `age`.
+        CargoType(unsafe { (r.cargo_type)(self.0.as_ptr()) })
+    }
+    /// Store `Vehicle::cargo_type`.
+    #[inline]
+    pub(crate) fn set_cargo_type(self, base: &crate::vehicle::VehicleServices, value: CargoType) {
+        (base.set_cargo_type)(self, value.0);
+    }
+    /// `Vehicle::cargo_subtype`: used for livery refits (`NewGRF` variations).
+    #[inline]
+    pub(crate) fn cargo_subtype(self, r: &crate::newgrf_vehicle::Services) -> u8 {
+        // SAFETY: As `age`.
+        unsafe { (r.cargo_subtype)(self.0.as_ptr()) }
+    }
+    /// Store `Vehicle::cargo_subtype`.
+    #[inline]
+    pub(crate) fn set_cargo_subtype(self, base: &crate::vehicle::VehicleServices, value: u8) {
+        (base.set_cargo_subtype)(self, value);
+    }
+    /// `Vehicle::last_loading_station`: last station the vehicle has stopped at and could
+    /// possibly leave from with any cargo loaded.
+    #[inline]
+    pub(crate) fn last_loading_station(self, s: &crate::vehicle::visits::Services) -> StationID {
+        StationID((s.last_loading_station)(self))
+    }
+    /// Store `Vehicle::last_loading_station`.
+    #[inline]
+    pub(crate) fn set_last_loading_station(
+        self,
+        s: &crate::vehicle::visits::Services,
+        value: StationID,
+    ) {
+        (s.set_last_loading_station)(self, value.0);
+    }
+    /// `Vehicle::last_loading_tick`: last `TimerGameTick::counter` tick that the vehicle has
+    /// stopped at a station and could possibly leave with any cargo loaded.
+    #[inline]
+    pub(crate) fn last_loading_tick(self, s: &crate::vehicle::visits::Services) -> u64 {
+        (s.last_loading_tick)(self)
+    }
+    /// Store `Vehicle::last_loading_tick`.
+    #[inline]
+    pub(crate) fn set_last_loading_tick(self, s: &crate::vehicle::visits::Services, value: u64) {
+        (s.set_last_loading_tick)(self, value);
+    }
+    /// Store `Vehicle::trip_occupancy`: occupancy of vehicle of the current trip (updated
+    /// after leaving a station).
+    #[inline]
+    pub(crate) fn set_trip_occupancy(self, s: &crate::vehicle::visits::Services, value: i8) {
+        (s.set_trip_occupancy)(self, value);
     }
     /// `Vehicle::vehicle_flags`, read in place from the record's consist state.
     #[inline]

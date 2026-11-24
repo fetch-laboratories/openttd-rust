@@ -52,6 +52,7 @@ rust/openttd-kernels/src/industrytype.rs
 rust/openttd-kernels/src/integer.rs
 rust/openttd-kernels/src/json.rs
 rust/openttd-kernels/src/kdtree.rs
+rust/openttd-kernels/src/linkgraph/refresh.rs
 rust/openttd-kernels/src/map_func.rs
 rust/openttd-kernels/src/math.rs
 rust/openttd-kernels/src/md5.rs
@@ -140,6 +141,8 @@ rust/openttd-kernels/src/vehicle.rs
 rust/openttd-kernels/src/vehicle_base.rs
 rust/openttd-kernels/src/vehicle_func.rs
 rust/openttd-kernels/src/vehicle/maintenance.rs
+rust/openttd-kernels/src/vehicle/visits.rs
+rust/openttd-kernels/src/vehicle/visits/tests.rs
 rust/openttd-kernels/src/vehicle_transactions/articulated.rs
 rust/openttd-kernels/src/vehicle_transactions/build.rs
 rust/openttd-kernels/src/vehicle_transactions/clone_name.rs

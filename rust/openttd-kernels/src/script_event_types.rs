@@ -163,6 +163,16 @@ impl ScriptEvent {
         }
     }
 
+    /// `ScriptEventVehicleWaitingInDepot(vehicle_id)`: a vehicle has arrived a depot and is
+    /// now waiting there.
+    #[must_use]
+    pub const fn vehicle_waiting_in_depot(vehicle_id: VehicleID) -> Self {
+        Self {
+            vehicle: vehicle_id.0,
+            ..Self::of(ScriptEventType::ET_VEHICLE_WAITING_IN_DEPOT)
+        }
+    }
+
     /// `ScriptEventTownFounded(town)`.
     #[must_use]
     pub const fn town_founded(town: TownId) -> Self {

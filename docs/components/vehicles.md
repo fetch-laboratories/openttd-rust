@@ -160,11 +160,11 @@
 
 ## Vehicle station/depot visits and route-link prediction (#349)
 
-- Rust owns: `BeginLoading`, `HandleLoading`, `LeaveStation`, `CancelReservation`, `ResetRefitCaps`, `CalcPercentVehicleFilled`, `VehicleEnterDepot`, `LinkRefresher` and both `IncreaseStats` overloads.
-- C++ keeps: link-graph pools and allocation, station/vehicle shells, NewGRF triggers, window/news/sound and depot refit costs.
-- Checks: `orders-visits` (padhattan-ridge-2000, cargodist) and station scenarios.
-- Limits: The checks do not cover link-graph pool exhaustion (#156).
-- PRs: #359; visits dispatch #555.
+- Rust owns: `BeginLoading`, `HandleLoading`, `LeaveStation`, `CancelReservation`, `ResetRefitCaps`, `CalcPercentVehicleFilled`, `VehicleEnterDepot`, `LinkRefresher` and both `IncreaseStats` overloads (`vehicle/visits.rs`, finished), with `RefreshFlags` in `linkgraph/refresh.rs`. Each body reads vehicle members at the original's points through the `VehicleRef` accessor named after each, orders in place through `OrderView`, and calls the shared window, news, script-event, cost-animation, assertion and command-cost services; `PlayLeaveStationSound` is one vehicle-table slot for every caller.
+- C++ keeps: link-graph pools and allocation, station/vehicle shells, the shell members the visit table reads and writes (`last_loading_station`, `last_loading_tick`, `trip_occupancy`), `HideFillingPercent`, `GoodsEntry::GetOrCreateData`, NewGRF triggers and the `CommandCost` storage of the depot refit.
+- Checks: `orders-visits` (padhattan-ridge-2000, cargodist) and station scenarios; `vehicle::visits::tests` for the refit stores, the leave-station occupancy, the depot halt and refit news and events, the road depot window order, the percent-filled assertion and the unreachable vehicle type.
+- Limits: The checks do not cover link-graph pool exhaustion or a depot order that reaches the refit test without a refit (#156).
+- PRs: #359; visits dispatch #555; file pass #987.
 
 ## Common ground-vehicle dynamics and canonical cache (#372)
 

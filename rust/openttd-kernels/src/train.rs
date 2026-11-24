@@ -2117,7 +2117,7 @@ impl Game<'_> {
                 } else {
                     v.vehicle().set_cur_speed(0);
                     self.set_last_speed(v);
-                    (self.vs.visits().hide_filling)(v.vehicle());
+                    (self.vs.visits().hide_filling_percent)(v.vehicle());
                     self.reverse_train_direction(v);
                 }
 
@@ -2327,7 +2327,7 @@ impl Game<'_> {
         crate::witness::hit(crate::witness::TRAIN_DEPOT_START);
         maintenance::vehicle_service_in_depot(v.vehicle(), self.vs);
         crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(v.vehicle());
-        (self.vs.visits().leave_sound)(v.vehicle());
+        (self.vs.play_leave_station_sound)(v.vehicle());
         set_window_classes_dirty(WindowClass::WC_TRAINS_LIST);
 
         v.set_track(TrackBits::TRACK_BIT_X);
@@ -2562,7 +2562,7 @@ impl Game<'_> {
             }
 
             /* Remove the loading indicators (if any) */
-            (self.vs.visits().hide_filling)(this.vehicle());
+            (self.vs.visits().hide_filling_percent)(this.vehicle());
         }
 
         victims = victims.wrapping_add(crate::ground_vehicle::crash(
