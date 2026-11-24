@@ -19,7 +19,7 @@ Attribution on every issue, comment and commit body you write:
 
 - Count original C++ code lines retired and still compiled, excluding comments, blank and preprocessor lines, for the whole fork and each area: simulation logic, simulation storage (object classes, pools, map accessors), save/load, script API, network, NewGRF, support, GUI and drawing, platform and vendored. Use `python3 tools/port-metrics.py --whole-fork` where it reports these; count the rest.
 - State the metric's source and build-target scope. Count candidate tooling and generated C++ it omits, keeping reference-only oracle support separate. Recount past endpoints with the same metric version (`--head`) and report inventory corrections apart from retirement.
-- Measure retired lines per running hour ([who decides](../../../AGENTS.md#who-decides)) across the fork's history and each of the last several steering periods (`git log --format='%h %ad %s' | grep -i 'Doc: .*Steer'`).
+- Measure retired lines per running hour ([who decides](../../../AGENTS.md#who-decides)) across the fork's history and each of the last several steering periods (`git log --format='%h %ad %s' | grep -i 'Doc: .*Steer'`). The host got faster [hardware](../../rust-migration.md#hardware) on 2026-11-23; say so when a compared period spans that date.
 - The last navigation is `git log --format='%h %ad %s' | grep 'Doc: Navigate'`; its figures are in that commit's roadmap "Phases".
 
 Done when one table holds done and remaining lines by area and the rate, each with its change since the last navigation.
@@ -36,7 +36,7 @@ Ask whether each part, followed literally, reaches the destination:
 - **Plan**: C++ left after every planned item and phase, and what plans the next phase before work runs dry.
 - **Rules**: rules, decisions or exclusions that retain C++ indefinitely, misdirect selection or waste time; hard limits and mandatory procedures where judgment would work better.
 - **Metrics**: whether every figure root and steer use measures distance.
-- **Rate**: its changes and the parts of the course responsible.
+- **Rate**: its changes and the parts of the course responsible, measured from each period's merges and PRs, not listed as candidates. In a stage that retires no C++ by design, such as the cleanup, judge that stage's own pace: its intended cost is not a finding.
 - **Autonomy**: waits, parked work and decisions the destination already answers.
 
 Done when every part has a verdict, and each failure names its text by file and line.

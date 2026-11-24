@@ -30,6 +30,12 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 - This host runs Ubuntu 24.04 x86-64 with these packages plus `valgrind`, `ccache`, `unifdef` and `gdb`. Keep `.local/deps` absent here: the driver puts it ahead of the system on every compiler, library and pkg-config path.
 - `tools/bootstrap-local.py --install` is for an Ubuntu 26.04 host without administrator access. Do not run it here.
 
+### Hardware
+
+- Since 2026-11-23 the host has an Intel i7-4790K with four cores and eight threads at up to 4.4 GHz, 32 GB of DDR3-2133 as the user reports it, and a 4 TB SSD that holds the system and all output ([output disk](#output-disk)). The GTX 970 graphics card plays no part: games run with the null or SDL dummy video driver and draw in software.
+- From 2026-11-05, when the project moved to this machine, until 2026-11-23, the same processor ran without the user's overclock (they report 4.0 GHz and DDR3-1333), on a 220 GB SSD with output on the hard disk. Wall times, compile-step times, speed-pass wall ratios and per-hour pace from before 2026-11-23 do not compare with later ones. Instruction counts do: they do not depend on clock, memory or disk speed.
+- A quiet speed pass on 2026-11-23 timed the unchanged original game within 4% of its 2026-11-05 times, faster or slower by scenario: one game on one thread barely gained. All eight threads now hold 4.4 GHz under load, so parallel builds gain more than single games.
+
 ## Build and verification
 
 | Command | Use |
@@ -93,17 +99,11 @@ Cache build outputs only when the key covers everything that determines them; do
 
 ## Output disk
 
-Write-once output lives on the HDD at `/mnt/storage` behind symlinks; caches, toolchains, the pinned original and its builds, and each worktree's `build-rust` stay on the SSD.
+All output lives on the SSD in ordinary folders, and each worktree's `.local` is a real folder ([ADR 0050](adr/0050-output-on-the-ssd.md)). No Git hook makes links.
 
-| Path | Symlink target |
-| --- | --- |
-| Main checkout `.local/` `simulation`, `verification`, `coverage`, `deep`, `speed-pass`, `worktrees` | `/mnt/storage/openttd-rust/main-local/<name>` |
-| Each other worktree's `.local` | `/mnt/storage/openttd-rust/worktree-local/<worktree>-<id>/local` |
-
-- `.git/hooks/post-checkout` links each new worktree's `.local` through `.git/hooks/offload-local`; both are untracked. Worktrees inside the main `.local` keep a real `.local`.
-- `offload-local migrate` moves a worktree's real `.local` onto the HDD, for example after `git worktree add --no-checkout` skipped the hook, and recreates a missing main-checkout link. `offload-local sweep` lists output of removed worktrees; `--apply` deletes it. The hook also deletes output of worktrees removed more than 24 hours ago.
-- If the HDD is unmounted, the links dangle and runs fail. Mount it and rerun.
-- In tool code, `.resolve()` can take a `.local` path off the checkout's tree, so compute `relative_to(ROOT)` from the unresolved path. `Path.rglob` follows a symlinked starting folder but not symlinked subfolders.
+- Until 2026-11-23 output lived on the hard disk behind symlinks, and records from then embed `/mnt/storage/openttd-rust/` paths. That folder now links to `~/storage/openttd-rust`, where `main-local` links to the main checkout's `.local` and each live `worktree-local/<key>/local` to its worktree's `.local`, so old paths still resolve while the hard disk is mounted. Write no new path through them.
+- `~/storage/openttd-rust` also keeps what had no live owner: output of removed worktrees, `old-host-ubuntu2604-20261105` from the previous host, `overhaul-20261106`, and the old offload script and log.
+- The checkouts in `.local/worktrees/root-*` were made on the hard disk, so their build files name `/mnt/storage` paths. The `root-profile-*` ones are kept as evidence; do not rebuild in them.
 
 ## Simulation comparison
 

@@ -8,7 +8,7 @@ Read this brief; your work order's implementation plan, in the body of the issue
 
 ## Following the plan
 
-The plan holds the decisions; carry them out, in a PR that closes the plan's issue. Where the tree contradicts the plan or a decision proves wrong, take the better course and record the departure and its reason in the PR body. Ask root first only when the departure changes what the work order delivers.
+The plan holds the decisions; carry them out, in a PR that closes the plan's issue. Do the work yourself: start no agent but your PR's reviewers, since a helper that edits or builds is one more implementer than the [slots](team.md#slots) allow. Where the tree contradicts the plan or a decision proves wrong, take the better course and record the departure and its reason in the PR body. Ask root first only when the departure changes what the work order delivers.
 
 ## Finishing a file pass
 
@@ -24,16 +24,16 @@ Message root, at the thread your spawn message names, only when the queue merges
 
 ## Starting reviewers
 
-This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says, once the PR is ready and `native` is requested. Each group, or the whole PR when it has no groups, gets two reviewers at once: one for behaviour and one for porting. Start each with its fixed message and nothing more, where `<group>` is the group's number, or `pr` for the whole PR:
+This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says, once the PR is ready and `native` is requested: one for behaviour and one for porting, both for the whole PR, or the behaviour reviewer alone for a PR with no game code. Start each with its fixed message and nothing more:
 
-> Review PR <URL> under `docs/review-brief.md` for behaviour. You are /root/review-<PR>-<group>-behaviour. Review <group N of the PR body's review groups | the whole PR | the commits <SHAs>>.
+> Review PR <URL> under `docs/review-brief.md` for behaviour. You are /root/review-<PR>-behaviour. Review <the whole PR | the commits <SHAs>>.
 
-> Review PR <URL> under `docs/review-brief.md` for porting. You are /root/review-<PR>-<group>-porting. Review <group N of the PR body's review groups | the whole PR | the commits <SHAs>>.
+> Review PR <URL> under `docs/review-brief.md` for porting. You are /root/review-<PR>-porting. Review <the whole PR | the commits <SHAs>>.
 
-A re-check, when [review](workflow.md#review) calls for one, is one reviewer per group, given both of the group's reports:
+A re-check, when [review](workflow.md#review) calls for one, is one reviewer for the whole PR, given every first-stage report:
 
-> Re-check PR <URL> under `docs/review-brief.md`. You are /root/review-<PR>-<group>-recheck. Check the fixing commits <SHAs> against the findings in <report URLs>.
+> Re-check PR <URL> under `docs/review-brief.md`. You are /root/review-<PR>-recheck. Check the fixing commits <SHAs> against the findings in <report URLs>.
 
-A fresh review of a substantive rewrite gets both reviewers, scoped to its commits. A fresh review of a simulation behaviour fix that CI found, or of a conflict resolution, gets a behaviour reviewer only.
+The scoped reviews that [review](workflow.md#review) allows after a review use the first two messages with `the commits <SHAs>` and a name that says what they cover, such as /root/review-<PR>-base-behaviour.
 
 Each reviewer's last message, with its report's URL and disposition, reaches you when its turn ends. A tool call cancelled with a notice to stop as such a message arrives is the host delivering it: read the message, rerun the call and carry on.

@@ -3,7 +3,7 @@
 ## Policy
 
 - Speed is measured on the merged branch at each stocktake, not per PR ([ADR 0027](adr/0027-speed-measured-on-merged-branch.md)). PRs do not edit `SPEED_ANCHORS` or `SPEED_INTEGRATED`.
-- Ceiling and band decisions use the mean of a scenario's last three speed-pass ratios on this host, carried forward by the projection. Until a scenario has three passes here, use the mean of those it has.
+- Ceiling and band decisions use the mean of a scenario's last three speed-pass ratios on this host's current [hardware](rust-migration.md#hardware), carried forward by the projection. Until a scenario has three passes on it, use the mean of those it has.
 
 | Scenario | Ceiling ([ADR 0014](adr/0014-speed-ceilings.md)) | Band starts |
 | --- | --- | --- |
@@ -29,6 +29,7 @@ python3 tools/migration.py simulate --instructions --jobs 2
 ```
 
 - Before expensive profiling, `python3 tools/simulate.py speed prepare DIR` checks existing instruction builds' identity without games.
+- Instruction counts compare across the [hardware change](rust-migration.md#hardware) of 2026-11-23. The anchors' wall ratios `R0` were measured before it and stand until a speed pass on the current hardware replaces them.
 - Anchors carry this host's and toolchain's identity, and `simulate --instructions` rejects a profile under another's. `speed prepare` accepts a profile whose only failure is that mismatch; the next speed pass replaces the anchors.
 
 ## Wall timing
@@ -41,7 +42,7 @@ Benchmark totals include startup, loading, serial link-graph work and save I/O; 
 
 ## Speed passes
 
-- From a clean checkout of the head to anchor, build and profile with `simulate --instructions`, then run `python3 tools/simulate.py speed prepare DIR --profile REPORT` and `python3 tools/simulate.py speed collect DIR` on a quiet host. A rejected collection needs a freshly prepared directory. Paste the printed `SPEED_HEAD` and `SPEED_PASS` into `tools/simulation/instructions.py`.
+- From a clean checkout of the head to anchor, build and profile with `simulate --instructions`, then run `python3 tools/simulate.py speed prepare DIR --profile REPORT` and `python3 tools/simulate.py speed collect DIR` on a quiet host. A rejected collection needs a freshly prepared directory. Paste the printed `SPEED_HEAD` and `SPEED_PASS` into `tools/simulation/instructions.py`. `collect` prints each new ratio after the scenario's two previous ones; the first pass on new [hardware](rust-migration.md#hardware) deletes the previous ones from each row, which restarts the three-pass record.
 - `collect` holds builds and games only while its timed games run ([shared lock](deep-checks.md#running)); ready owners proceed meanwhile.
 - An unrelated process crossing an uncalibrated CPU threshold alone does not reject a collection; exclude genuinely contaminated samples from anchors and record why.
 - Attribute boundary cost as overhead beyond the original's inline work, ranking net costs rather than callback counts. Candidates under 0.5% of loop count remain notes on #275; batch candidates until they credit 1% together (provisional).
