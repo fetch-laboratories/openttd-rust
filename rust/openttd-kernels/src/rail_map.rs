@@ -343,3 +343,124 @@ impl World<'_> {
         self.get_rail_ground_type(TileIndex(t)).0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, World};
+    use crate::signal_type::{SignalState, SignalType};
+    use crate::tile_type::{TileIndex, TileType};
+    use crate::track_type::{Track, TrackBits, Trackdir};
+    use std::cell::RefCell;
+
+    thread_local! {
+        static CHECKS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+    }
+    extern "C" fn record_check(condition: bool) {
+        CHECKS.with(|c| c.borrow_mut().push(condition));
+    }
+    /// The number of failed native assertions since the last call.
+    fn failed_checks() -> usize {
+        CHECKS.with(|c| {
+            std::mem::take(&mut *c.borrow_mut())
+                .iter()
+                .filter(|ok| !**ok)
+                .count()
+        })
+    }
+
+    /// A four-tile rail map whose native assertion records: tile 0 a depot (`RailTileType::Depot`
+    /// in m5 bits 6..7), tile 1 plain rail with `TRACK_BIT_X`, tiles 2 and 3 `TRACK_BIT_X` with
+    /// signals, a PBS signal on `TRACK_X` (m2 bits 0..2) and the signal along `TRACKDIR_X_NE`
+    /// present (m3 bit 7), green on tile 2 and red on tile 3 (m4 bit 7).
+    fn map() -> World<'static> {
+        let rail = TileType::MP_RAILWAY.0 << 4;
+        let tiles = [
+            (0xC0, 0, 0, 0),
+            (0x01, 0, 0, 0),
+            (0x41, 4, 0x80, 0x80),
+            (0x41, 4, 0x80, 0),
+        ];
+        let base: Box<[BaseTileLayout]> = tiles
+            .iter()
+            .map(|&(m5, m2, m3, m4)| BaseTileLayout {
+                kind: rail,
+                height: 0,
+                m2,
+                m1: 0,
+                m3,
+                m4,
+                m5,
+            })
+            .collect();
+        let extended: Box<[ExtendedTileLayout]> = (0..4)
+            .map(|_| ExtendedTileLayout {
+                m6: 0,
+                m7: 0,
+                m8: 0,
+            })
+            .collect();
+        crate::map_func::fixture::set(
+            TileTypeAllocation {
+                base: Box::into_raw(base).cast::<BaseTileLayout>(),
+                extended: Box::into_raw(extended).cast::<ExtendedTileLayout>(),
+                count: 4,
+                assertions: true,
+            },
+            1,
+        );
+        World::new(Box::leak(Box::new(crate::services::Services {
+            map: crate::map_func::fixture::statics(),
+            movement: Box::leak(Box::new(crate::movement::MovementServices {
+                native_assert: record_check,
+                ..crate::test_tables::MOVEMENT
+            })),
+            ..crate::test_tables::SHARED
+        })))
+    }
+
+    /// `GetTrackBits` asserts `IsPlainRailTile` and `GetSignalType` asserts a signal tile:
+    /// each records one failed assertion on a tile that fails it, none on a valid tile, and
+    /// reads the field in place either way.
+    #[test]
+    fn readers_assert_the_tile_they_read() {
+        let w = map();
+        failed_checks();
+        assert_eq!(w.get_track_bits(TileIndex(1)), TrackBits::TRACK_BIT_X);
+        assert_eq!(failed_checks(), 0);
+        assert_eq!(w.get_track_bits(TileIndex(0)), TrackBits::TRACK_BIT_NONE);
+        assert_eq!(failed_checks(), 1);
+        assert_eq!(
+            w.get_signal_type(TileIndex(2), Track::TRACK_X),
+            SignalType::SIGTYPE_PBS
+        );
+        assert_eq!(failed_checks(), 0);
+        assert_eq!(
+            w.get_signal_type(TileIndex(1), Track::TRACK_X),
+            SignalType::SIGTYPE_BLOCK
+        );
+        assert_eq!(failed_checks(), 1);
+    }
+
+    /// `GetSignalStateByTrackdir` is `SIGNAL_STATE_GREEN` for a set state bit along the
+    /// trackdir and `SIGNAL_STATE_RED` for a clear one, after asserting a signal on its track.
+    #[test]
+    fn signal_state_by_trackdir_follows_the_state_bit() {
+        let w = map();
+        failed_checks();
+        assert_eq!(
+            w.get_signal_state_by_trackdir(TileIndex(2), Trackdir::TRACKDIR_X_NE),
+            SignalState::SIGNAL_STATE_GREEN
+        );
+        assert_eq!(
+            w.get_signal_state_by_trackdir(TileIndex(3), Trackdir::TRACKDIR_X_NE),
+            SignalState::SIGNAL_STATE_RED
+        );
+        assert_eq!(failed_checks(), 0);
+        // Tile 1 has no signal on `TRACK_X`.
+        assert_eq!(
+            w.get_signal_state_by_trackdir(TileIndex(1), Trackdir::TRACKDIR_X_NE),
+            SignalState::SIGNAL_STATE_RED
+        );
+        assert_eq!(failed_checks(), 1);
+    }
+}
