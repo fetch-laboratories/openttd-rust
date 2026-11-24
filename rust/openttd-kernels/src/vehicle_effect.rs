@@ -302,10 +302,10 @@ fn effect_vehicle_type(
              * - in Chance16 - the last value is 512 / 2^smoke_amount (max. smoke when 128 = smoke_amount of 2). */
             let mut power_weight_effect: i32 = 0;
             if v.vehicle_type() == VehicleType::VEH_TRAIN {
-                let front = Train::from_vehicle(this).vehicle();
+                let gcache = Train::from_vehicle(this).vehicle().gcache();
                 // The shift counts are left to the processor, as the original's are.
-                power_weight_effect = 32_i32.wrapping_shr(front.cached_power() >> 10)
-                    - 32_i32.wrapping_shr(front.cached_weight() >> 9);
+                power_weight_effect = 32_i32.wrapping_shr(gcache.cached_power() >> 10)
+                    - 32_i32.wrapping_shr(gcache.cached_weight() >> 9);
             }
             if u32::from(this.cur_speed()) < (max_speed >> (2 >> shared.settings().smoke_amount()))
                 && chance16(

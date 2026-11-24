@@ -736,17 +736,14 @@ impl crate::vehicle::VehicleRef {
         // SAFETY: Ground shells bind a live owner before controller entries.
         unsafe { std::ptr::addr_of_mut!((*ground).cache) }
     }
-    /// `GroundVehicle::gcache.cached_power` of a live train or road vehicle.
-    pub(crate) fn cached_power(self) -> u32 {
-        read_field!(self.ground_cache(), cached_power)
-    }
-    /// `GroundVehicle::gcache.cached_weight` of a live train or road vehicle.
-    pub(crate) fn cached_weight(self) -> u32 {
-        read_field!(self.ground_cache(), cached_weight)
+    /// `GroundVehicle::gcache` of a live train or road vehicle, resolved once for its
+    /// field loads.
+    pub(crate) fn gcache(self) -> GroundCacheRef {
+        GroundCacheRef(self.ground_cache())
     }
     /// `GroundVehicle::gcache.cached_veh_length` of a live train or road vehicle.
     pub(crate) fn cached_veh_length(self) -> u8 {
-        read_field!(self.ground_cache(), cached_veh_length)
+        self.gcache().cached_veh_length()
     }
     /// The aircraft owner link; the record is a live aircraft.
     pub(crate) fn aircraft_state(self) -> *mut crate::aircraft::AircraftState {
@@ -1294,6 +1291,25 @@ impl crate::vehicle::VehicleRef {
     }
     pub(crate) fn set_breakdown_ctr(self, value: u8) {
         write_field!(self.0.as_ptr(), breakdown_ctr, value);
+    }
+}
+
+/// The `GroundVehicle::gcache` of a live train or road vehicle part. Each accessor is one
+/// field-sized load from the cache in place; the handle lives no longer than the part.
+#[derive(Clone, Copy)]
+pub(crate) struct GroundCacheRef(*mut crate::ground_vehicle::GroundCache);
+impl GroundCacheRef {
+    /// `gcache.cached_power`.
+    pub(crate) fn cached_power(self) -> u32 {
+        read_field!(self.0, cached_power)
+    }
+    /// `gcache.cached_weight`.
+    pub(crate) fn cached_weight(self) -> u32 {
+        read_field!(self.0, cached_weight)
+    }
+    /// `gcache.cached_veh_length`.
+    pub(crate) fn cached_veh_length(self) -> u8 {
+        read_field!(self.0, cached_veh_length)
     }
 }
 
