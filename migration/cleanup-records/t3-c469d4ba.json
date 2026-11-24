@@ -1,0 +1,38 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool moves to Rust and tools/simulation/fleet-console.cpp, which #736's classification keeps until then, leaves with it.",
+    "site": "rust/openttd-kernels/src/vehicle_effect.rs | fn openttd_rust_visual_show | allow unsafe_code",
+    "operation": "vehicle_effect::openttd_rust_visual_show",
+    "source_contract": "`Vehicle::ShowVisualEffect` (src/vehicle.cpp), reached by the fleet harness through this export with the vehicle and shared tables and a `GetCurrentMaxSpeed` thunk.",
+    "reason": "Plan #1027 part 2 decision 7 keeps this export as the shim the fleet harness calls once the C++ member is deleted. The allowance covers only the `no_mangle` attribute; the body is safe Rust that calls show_visual_effect. The base's module-wide `unsafe_code` allowance goes."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool moves to Rust and tools/simulation/fleet-console.cpp, which #736's classification keeps until then, leaves with it.",
+    "site": "rust/openttd-kernels/src/vehicle_effect.rs | fn openttd_rust_visual_update | allow unsafe_code",
+    "operation": "vehicle_effect::openttd_rust_visual_update",
+    "source_contract": "`Vehicle::UpdateVisualEffect` (src/vehicle.cpp), reached by the fleet harness through this export with the vehicle and shared tables.",
+    "reason": "Plan #1027 part 2 decision 7 keeps this export as the shim the fleet harness calls once the C++ member is deleted. The allowance covers only the `no_mangle` attribute; the body is safe Rust that calls update_visual_effect. The base's module-wide `unsafe_code` allowance goes."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#734 workset 16 (newgrf_vehicle.rs)",
+    "retirement_condition": "Retires when newgrf_vehicle.rs's pass gives resolve_vehicle_callback an initialised register span (`&mut [i32]`), so that its callers read the registers without `assume_init`.",
+    "site": "rust/openttd-kernels/src/vehicle_effect.rs | fn spawn_advanced_visual_effect | allow unsafe_code",
+    "operation": "vehicle_effect::spawn_advanced_visual_effect",
+    "source_contract": "`std::array<int32_t, 4> regs100` in `SpawnAdvancedVisualEffect` (src/vehicle.cpp), filled by `GetVehicleCallback`'s register copy, which newgrf_vehicle::resolve_vehicle_callback takes as `&mut [MaybeUninit<i32>]`.",
+    "reason": "Plan #1027 part 2 decision 4 zero-fills the register array and reads only the callback's `count` registers after a callback that did not fail; each read is an `assume_init` of an element the zero fill initialised. The base reached the same registers through the `openttd_rust_vehicle_callback` export over a raw pointer under the module-wide allowance, which goes."
+  }
+]
