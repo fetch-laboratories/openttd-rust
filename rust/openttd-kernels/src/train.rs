@@ -404,11 +404,14 @@ impl Handle {
     fn is_in_depot(self) -> bool {
         self.track() == TrackBits::TRACK_BIT_DEPOT
     }
-    /// `Train::CalcNextVehicleOffset`: for vehicles with odd lengths the part before the
-    /// center will be one unit longer than the part after the center. This means we have to
-    /// round up the length of the next vehicle but may not round the length of the current
-    /// vehicle.
+    /// `Train::CalcNextVehicleOffset`: calculate the offset from this vehicle's center to the
+    /// following center taking the vehicle lengths into account. Returns the offset from
+    /// center to center.
     pub(crate) fn calc_next_vehicle_offset(self) -> i32 {
+        /* For vehicles with odd lengths the part before the center will be one unit
+         * longer than the part after the center. This means we have to round up the
+         * length of the next vehicle but may not round the length of the current
+         * vehicle. */
         i32::from(self.cached_veh_length()) / 2
             + (if self.next() != Self::NONE {
                 i32::from(self.next().cached_veh_length()) + 1
@@ -564,7 +567,7 @@ impl<'a> Game<'a> {
         unsafe { crate::vehicle::occupancy::update_position(self.vs, v.vehicle(), self.map()) };
     }
     /// `v->UpdateViewport(update_delta, force)` of a train.
-    fn update_viewport(&self, v: Handle, update_delta: bool, force: bool) {
+    fn viewport(&self, v: Handle, update_delta: bool, force: bool) {
         (self.leaves.physics.viewport)(v.vehicle(), update_delta, force);
     }
     /// `v->UpdateInclination(new_tile, update_delta)`.
@@ -1382,7 +1385,7 @@ impl Game<'_> {
         }
 
         self.update_position(v);
-        self.update_viewport(v, true, true);
+        self.viewport(v, true, true);
     }
 
     /// `ReverseTrainSwapVeh`: swap vehicles `l` and `r` in consist `v`, and reverse their
@@ -1805,7 +1808,7 @@ impl Game<'_> {
         /* update all images */
         let mut u = v;
         while u != Handle::NONE {
-            self.update_viewport(u, false, false);
+            self.viewport(u, false, false);
             u = u.next();
         }
 
@@ -2324,7 +2327,7 @@ impl Game<'_> {
         v.vehicle().set_hidden(false);
         v.vehicle().set_cur_speed(0);
 
-        self.update_viewport(v, true, true);
+        self.viewport(v, true, true);
         self.update_position(v);
         self.update_signals_on_segment(
             v.vehicle().tile(),
@@ -2349,7 +2352,7 @@ impl Game<'_> {
         let mut v = this;
         loop {
             (self.vs.set_colourmap)(v.vehicle(), PAL_NONE);
-            self.update_viewport(v, true, false);
+            self.viewport(v, true, false);
             v = v.next();
             if v == Handle::NONE {
                 break;
@@ -3463,7 +3466,7 @@ impl Game<'_> {
                     self.update_position(v);
                     self.update_inclination(v, false, true);
                 } else {
-                    self.update_viewport(v, false, true);
+                    self.viewport(v, false, true);
                 }
             }
             v = v.next();
@@ -3929,7 +3932,7 @@ impl Game<'_> {
         let mut u = v;
         while u != Handle::NONE {
             if !u.vehicle().vehstatus().test(VehState::Hidden) {
-                self.update_viewport(u, false, false);
+                self.viewport(u, false, false);
             }
             u = u.next();
         }
