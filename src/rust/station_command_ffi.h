@@ -67,7 +67,6 @@ struct OpenTTDStationCommandServices {
 	OpenTTDStationArea (*tile_area)(const BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_area);
 	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
 	const OpenTTDStationLinks *links;
-	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	void (*base_move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_move_sign);
 	void (*waypoint_move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_move_sign);
 	void (*virtual_coord)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(virtual_coord);

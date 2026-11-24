@@ -165,7 +165,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.shared = &GetRustSharedServices(),
 	.station = Aircraft_station,
 	.station_owner = Aircraft_station_owner,
-	.station_tile = Aircraft_station_tile,
 	.subtract_cost = Aircraft_subtract_cost,
 	.terminal_count = Aircraft_terminal_count,
 	.truncate_cargo = Aircraft_truncate_cargo,

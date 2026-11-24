@@ -11,6 +11,7 @@
 //! reset specs or the map, yield, or destroy the animated shell.
 #![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
 use crate::animated_tile_map::AnimatedTileState;
+use crate::base_station_base;
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO};
 use crate::framerate_type::{PerformanceAccumulator, PerformanceElement};
 use crate::game_state::GameState;
@@ -47,7 +48,6 @@ pub struct Services {
     pub shared: *const Shared,
     pub station_base: extern "C" fn(u16) -> *mut BaseStation,
     pub as_station: extern "C" fn(*mut BaseStation) -> *mut Station,
-    pub location: extern "C" fn(*const BaseStation) -> u32,
     pub is_station: extern "C" fn(*mut BaseStation) -> bool,
     pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
     pub town: *const Leaves,
@@ -531,7 +531,10 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAnimationServices" ["probe"] => Services {
         shared,
-        station_base, as_station, location, is_station, roadstop_resolver,
+        station_base,
+        as_station,
+        is_station,
+        roadstop_resolver,
         town,
         industries,
         construction,
@@ -608,26 +611,26 @@ pub(crate) fn cargo_event(
     random_trigger: u8,
 ) {
     let a = services();
-    let tile = (a.location)(st);
-    crate::newgrf_station::openttd_rust_station_randomisation(st, tile, random_trigger, cargo);
-    openttd_rust_trigger_station(st, tile, trigger, cargo);
+    let tile = base_station_base::xy(st);
+    crate::newgrf_station::openttd_rust_station_randomisation(st, tile.0, random_trigger, cargo);
+    openttd_rust_trigger_station(st, tile.0, trigger, cargo);
     openttd_rust_trigger_airport_abi((a.as_station)(st), airport_trigger, cargo);
     unsafe {
         crate::newgrf_roadstop::openttd_rust_roadstop_randomise(
             st,
-            tile,
+            tile.0,
             random_trigger,
             cargo,
             a.roadstop_resolver,
         );
     }
-    openttd_rust_trigger_roadstop(st, tile, trigger, cargo);
+    openttd_rust_trigger_roadstop(st, tile.0, trigger, cargo);
 }
 pub(crate) fn acceptance(st: *mut BaseStation) {
     let a = services();
-    let tile = (a.location)(st);
-    openttd_rust_trigger_station(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
-    openttd_rust_trigger_roadstop(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
+    let tile = base_station_base::xy(st);
+    openttd_rust_trigger_station(st, tile.0, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
+    openttd_rust_trigger_roadstop(st, tile.0, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
     if (a.is_station)(st) {
         openttd_rust_trigger_airport_abi((a.as_station)(st), AAT_ACCEPTANCE_TICK, INVALID_CARGO);
     }

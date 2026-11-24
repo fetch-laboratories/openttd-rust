@@ -31,7 +31,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.tile_area = [](const BaseStation *st, uint8_t type) noexcept -> OpenTTDStationArea { const auto area = st->GetTileArea(static_cast<StationType>(type)); return {area.tile.base(), area.w, area.h}; },
 		.rail_spec = RustAnimationRailSpec,
 		.links = &_rust_station_links,
-		.location = RustStationLocation,
 		.base_move_sign = [](BaseStation *st, uint32_t tile) noexcept { st->BaseStation::MoveSign(TileIndex{tile}); },
 		.waypoint_move_sign = [](BaseStation *st, uint32_t tile) noexcept { Waypoint::From(st)->MoveSign(TileIndex{tile}); },
 		.virtual_coord = [](BaseStation *st) noexcept { st->UpdateVirtCoord(); },

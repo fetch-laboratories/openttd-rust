@@ -31,6 +31,7 @@ pub(crate) mod policy;
 pub mod resolver;
 pub(crate) mod spatial;
 
+use crate::base_station_base;
 use crate::bitmath_func::gb;
 use crate::bridge::MAX_BRIDGES;
 use crate::cargo_type::{CargoType, is_valid_cargo_type};
@@ -1370,7 +1371,7 @@ impl Engine<'_> {
         let search_radius = radius / 2;
         let c = unsafe { &*(self.services.station_catchment)() };
         crate::station::spatial::for_all_stations_radius(self.services, xy, search_radius, |st| {
-            if self.map().distance_square(TileIndex((c.location)(st)), xy) <= radius {
+            if self.map().distance_square(base_station_base::xy(st), xy) <= radius {
                 func(c, st);
             }
         });
