@@ -5,1409 +5,1555 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Controller path extension, rollback, temporary-order lookahead, and reservations.
-#![allow(
-    unsafe_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::too_many_lines,
-    clippy::too_many_arguments,
-    clippy::similar_names,
-    clippy::many_single_char_names,
-    clippy::items_after_statements
-)]
+//! The path reservation bodies of `train_cmd.cpp`: following, extending, choosing and
+//! freeing a train's reserved path, and the order lookahead of `VehicleOrderSaver`.
+//!
+//! Every body runs on a train entry's tables, borrowed for the synchronous call. A train
+//! part is a [`Handle`], live for that call; fields are read and written field-sized at the
+//! original's observation points, and no Rust reference into a record or owner crosses a
+//! callback.
+#![allow(unsafe_code, clippy::too_many_lines)]
+use crate::bitmath_func::{assign_bit16, has_bit, kill_first_bit, kill_first_bit_u16};
+use crate::direction_func::reverse_diag_dir;
 use crate::direction_type::DiagDirection;
+use crate::follow_track::{CFollowTrackT, ErrorCode};
+use crate::ground_vehicle::GroundVehicleFlags;
+use crate::map_func::World;
 use crate::order_type::{
-    OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION,
-    OT_LOADING, OT_NOTHING,
+    DestinationID, OrderDepotActionFlag, OrderDepotTypeFlag, OrderType, VehicleOrderID,
 };
-use crate::raw_field::read_field;
-use crate::tile_map::is_tile_type;
-use crate::tile_type::INVALID_TILE;
-use crate::tile_type::TileIndex;
+use crate::orders::{Order, OrderView};
+use crate::pbs::{PBSTileInfo, Pbs};
+use crate::rail_type::{RailType, RailTypes};
+use crate::raw_field::{read_field, write_field};
+use crate::services::Services;
+use crate::services_assert::assert_with;
+use crate::signal_type::{SignalState, SignalType};
+use crate::station_type::{StationFacilities, StationFacility, StationID};
+use crate::tile_type::{TileIndex, TileType};
 use crate::track_func::{
-    find_first_trackdir as first, track_bits_to_trackdir_bits as dirs,
-    trackdir_bits_to_track_bits as tracks,
+    diagdir_reaches_trackdirs_asserted, diagdir_reaches_tracks_asserted, find_first_track,
+    find_first_trackdir_asserted, is_valid_trackdir, remove_first_trackdir,
+    reverse_trackdir_asserted, track_bits_to_track, track_bits_to_trackdir_bits,
+    track_crosses_tracks, track_enterdir_to_trackdir, track_status_to_trackdir_bits,
+    track_to_track_bits, trackdir_bits_to_track_bits, trackdir_crosses_trackdirs_asserted,
+    trackdir_reaches_trackdirs, trackdir_to_exitdir_asserted, trackdir_to_track_asserted,
+    tracks_overlap,
 };
-use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
+use crate::track_type::{Track, TrackBits, TrackStatus, Trackdir, TrackdirBits};
+use crate::train::{Handle, VehicleRailFlag};
+use crate::transport_type::TransportType;
+use crate::vehicle::{VehicleServices, maintenance};
+use crate::vehicle_type::VehicleID;
+use crate::widgets::vehicle_widget::VehicleViewWidgets;
+use crate::window_func::set_window_widget_dirty;
+use crate::window_type::{WindowClass, WindowNumber};
 
-use crate::follow_track::CFollowTrackT as Follower;
-use crate::train::Handle;
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Pbs {
-    pub tile: u32,
-    pub other: Handle,
-    pub td: u8,
-    pub okay: u8,
-}
-impl Default for Pbs {
-    fn default() -> Self {
-        Self {
-            tile: INVALID_TILE,
-            other: Handle::NONE,
-            td: 0xff,
-            okay: 0,
-        }
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct Search {
-    pub track: u8,
-    pub tile: u32,
-    pub final_dest: u32,
-    pub td: u8,
-    pub found: u8,
-    pub okay: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Leaves {
-    pub read_num_orders: extern "C" fn(Handle) -> u8,
-
-    pub backoff: extern "C" fn() -> u8,
-    pub bits_track: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub blocking: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
-    pub check_reverse: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-    pub compat_station: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
-    pub conditional: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub copy_order: extern "C" fn(*mut std::ffi::c_void, Handle, u8),
-    pub cross_dirs: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub cross_tracks: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub depot_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub depot_reserved: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub diag_reach_dirs: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub diag_track: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub enter_td: extern "C" fn(*mut std::ffi::c_void, Handle, u8, u8) -> u64,
-    pub exit_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub green: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
-    pub has_pbs: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
-    pub has_signal: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
-    pub increment_order: extern "C" fn(*mut std::ffi::c_void, Handle),
-    pub is_bridge: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub is_depot: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub is_pbs: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
-    pub is_plain: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub is_station: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub is_waypoint: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub oneway: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
-    pub order_service: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub order_type: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub other_end: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub overlap: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub rail90: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
-    pub reach_dirs: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub reach_tracks: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub reserve_paths: extern "C" fn() -> bool,
-    pub service: extern "C" fn(*mut std::ffi::c_void, Handle),
-    pub set_depot: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
-    pub set_signal: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8, u8),
-    pub set_tunnel: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
-    pub show_res: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-    pub signal_context: extern "C" fn() -> crate::signal::Context,
-    pub vehicle: *const crate::vehicle::VehicleServices,
-    pub shared: *const crate::services::Services,
-    pub start_stop: extern "C" fn(*mut std::ffi::c_void, Handle),
-    pub stuck: extern "C" fn(*mut std::ffi::c_void, Handle),
-    pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub trackdir: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-
-    pub pathfind: extern "C" fn(Handle, u32, u8, u8, u8, u8) -> Search,
-    pub safe_track: extern "C" fn(Handle, u32, u8, u8) -> u8,
-    pub process_orders: extern "C" fn(Handle) -> u8,
-    pub update_order_dest: extern "C" fn(Handle, u8) -> u8,
-}
-/// The tables of one reservation entry, for the train part's record.
-#[derive(Clone, Copy)]
+/// The tables of one reservation entry: a train entry's pair and the map descriptor. It
+/// holds no vehicle field.
 pub(crate) struct Game<'a> {
-    vehicle: *mut crate::vehicle::OpenTTDVehicle,
-    leaves: &'a Leaves,
-    context: *mut std::ffi::c_void,
+    leaves: &'a crate::train::Leaves,
+    services: &'a Services,
+    vs: &'a VehicleServices,
+    /// The canonical map descriptor, loaded once at the entry.
+    world: World<'a>,
 }
+
 impl<'a> Game<'a> {
-    /// The context of a Rust caller: the table and the train's record, with a null
-    /// callback context, as every C++ facade passes.
-    pub(crate) fn new(leaves: &'a Leaves, vehicle: crate::vehicle::VehicleRef) -> Self {
+    /// The context of a train entry's `leaves` and `services` tables.
+    pub(crate) fn new(leaves: &'a crate::train::Leaves, services: &'a Services) -> Self {
         Self {
-            vehicle: vehicle.0.as_ptr(),
             leaves,
-            context: std::ptr::null_mut(),
+            services,
+            // SAFETY: The native table names the immutable process-wide base table.
+            vs: unsafe { &*leaves.vehicle },
+            world: World::new(services),
         }
     }
-}
-impl Game<'_> {
-    /// # Safety
-    /// `leaves` is the entry's table, live and immutable for the call.
-    unsafe fn entry(
-        vehicle: crate::vehicle::VehicleRef,
-        leaves: *const Leaves,
-        context: *mut std::ffi::c_void,
-    ) -> Self {
-        Self {
-            vehicle: vehicle.0.as_ptr(),
-            // SAFETY: The function contract.
-            leaves: unsafe { &*leaves },
-            context,
-        }
+    /// The native assertion handler, as a header helper's precondition check.
+    fn check(&self) -> impl Fn(bool) + Copy + '_ {
+        |ok| crate::movement::native_assert(self.services, ok)
     }
-    fn read_num_orders(&self, id: Handle) -> u8 {
-        (self.leaves.read_num_orders)(id)
+    /// The PBS routines.
+    fn pbs(&self) -> Pbs<'a> {
+        Pbs::acquire(self.services)
+    }
+    /// The rail map services the PBS routines name.
+    fn rail(&self) -> &'a crate::services::RailMapServices {
+        // SAFETY: The PBS table names the immutable process-lifetime rail map table.
+        unsafe { &*self.pbs().0.rail }
+    }
+    /// `v->index`.
+    fn index(&self, v: Handle) -> VehicleID {
+        v.vehicle().index(self.vs.newgrf())
+    }
+    /// `v->GetVehicleTrackdir()`.
+    fn get_vehicle_trackdir(&self, v: Handle) -> Trackdir {
+        crate::train::get_vehicle_trackdir(self.leaves, self.services, v)
+    }
+    /// `MarkTrainAsStuck(v)`.
+    fn mark_train_as_stuck(&self, v: Handle) {
+        crate::train::mark_train_as_stuck(self.leaves, self.services, v);
+    }
+    /// `CheckIfTrainNeedsService(v)`.
+    fn check_if_train_needs_service(&self, v: Handle) {
+        crate::train::check_if_train_needs_service(self.leaves, self.services, v);
+    }
+    /// `v->NeedsServicing()`.
+    fn needs_servicing(&self, v: Handle) -> bool {
+        maintenance::needs_servicing(v.vehicle(), self.vs)
+    }
+    /// `v->HandlePathfindingResult(path_found)`.
+    fn handle_pathfinding_result(&self, v: Handle, path_found: bool) {
+        (self.vs.pathfinding_result)(v.vehicle(), path_found);
+    }
+    /// `ProcessOrders(v)`.
+    fn process_orders(&self, v: Handle) -> bool {
+        crate::orders::process_orders(v.vehicle(), self.vs.orders())
+    }
+    /// The orders owner's route view.
+    fn orders(&self) -> crate::orders::VisitOrders {
+        crate::orders::VisitOrders::new(self.vs.orders())
+    }
+    /// `v->GetNumOrders()`.
+    fn get_num_orders(&self, v: Handle) -> VehicleOrderID {
+        self.orders().get_num_orders(v.vehicle())
+    }
+    /// `v->GetOrder(index)`.
+    fn get_order(&self, v: Handle, index: VehicleOrderID) -> *const Order {
+        self.orders().get_order(v.vehicle(), index)
+    }
+    /// `UpdateOrderDest(v, order, conditional_depth, pbs_look_ahead)`.
+    fn update_order_dest(
+        &self,
+        v: Handle,
+        order: *const Order,
+        conditional_depth: i32,
+        pbs_look_ahead: bool,
+    ) -> bool {
+        crate::orders::update_order_dest(
+            v.vehicle(),
+            order,
+            conditional_depth,
+            pbs_look_ahead,
+            self.vs.orders(),
+        )
+    }
+    /// `ProcessConditionalOrder(order, v)`.
+    fn process_conditional_order(&self, order: *const Order, v: Handle) -> VehicleOrderID {
+        crate::orders::process_conditional_order(order, v.vehicle(), self.vs.orders())
+    }
+    /// `v->IncrementRealOrderIndex()`.
+    fn increment_real_order_index(&self, v: Handle) {
+        crate::orders::increment_real_order_index(v.vehicle(), self.vs.orders());
+    }
+    /// `v->current_order.ShouldStopAtStation(v, station)`.
+    fn should_stop_at_station(&self, v: Handle, station: StationID) -> bool {
+        crate::movement::should_stop_at_station(self.services, v.vehicle(), station)
+    }
+    /// `Station::Get(station)`, resolving both the station and its base.
+    fn station_get(&self, station: StationID) -> crate::station_service::LoadingStation {
+        // SAFETY: The process-lifetime tables resolve the original `Station::Get` once.
+        let stations = unsafe { &*(*(self.services.station_catchment)()).station };
+        (stations.station)(station.0)
+    }
+    /// `st->facilities` of a station `station_get` resolved.
+    fn facilities(&self, st: *mut crate::station::BaseStation) -> StationFacilities {
+        // SAFETY: As `station_get`.
+        let stations = unsafe { &*(*(self.services.station_catchment)()).station };
+        StationFacilities((stations.facilities)(st))
+    }
+    /// `SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP)`.
+    fn set_start_stop_dirty(&self, v: Handle) {
+        set_window_widget_dirty(
+            WindowClass::WC_VEHICLE_VIEW,
+            WindowNumber::from(self.index(v)),
+            VehicleViewWidgets::WID_VV_START_STOP.0,
+        );
+    }
+    /// `_settings_game.pf.reserve_paths`.
+    fn reserve_paths(&self) -> bool {
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        unsafe { self.services.settings().reserve_paths.read() }
+    }
+    /// `_settings_game.pf.path_backoff_interval`.
+    fn path_backoff_interval(&self) -> u8 {
+        // SAFETY: As above.
+        unsafe { self.services.settings().path_backoff_interval.read() }
+    }
+    /// `_settings_game.difficulty.line_reverse_mode`.
+    fn line_reverse_mode(&self) -> bool {
+        // SAFETY: As above.
+        unsafe { self.services.settings().line_reverse_mode.read() }
+    }
+    /// `_settings_game.pf.forbid_90_deg`.
+    fn forbid_90_deg(&self) -> bool {
+        (self.services.forbid_90_deg)()
+    }
+    /// `_settings_client.gui.show_track_reservation`.
+    fn show_track_reservation(&self) -> bool {
+        (self.pbs().0.show_reservation)()
     }
 
-    fn pbs(&self) -> crate::pbs::Pbs<'_> {
-        crate::pbs::Pbs::acquire(self.shared())
+    /// `CFollowTrackRail ft(v)`.
+    fn follower(&self, v: Handle) -> CFollowTrackT {
+        self.follower_override(v, RailTypes::INVALID_RAILTYPES)
     }
-    fn free(&self, id: Handle, tile: u32, td: u8) -> bool {
-        self.pbs()
-            .is_waiting_position_free_raw(id, tile, td, (self.shared().forbid_90_deg)())
+    /// `CFollowTrackRail ft(v, railtype_override)`.
+    fn follower_override(&self, v: Handle, railtype_override: RailTypes) -> CFollowTrackT {
+        CFollowTrackT::vehicle(
+            self.services,
+            TransportType::TRANSPORT_RAIL,
+            Some(v.vehicle()),
+            railtype_override,
+            true,
+        )
     }
-    fn has_reserved(&self, tile: u32, tracks: u8) -> bool {
-        self.pbs().has_reserved_tracks_raw(tile, tracks)
+    /// `GetAllCompatibleRailTypes(railtypes)`.
+    fn get_all_compatible_rail_types(&self, railtypes: RailTypes) -> RailTypes {
+        RailTypes((self.services.all_compatible_railtypes)(railtypes.0))
     }
-    fn needs_service(&self, id: Handle) -> bool {
-        // SAFETY: The leaves name the immutable process-wide base table.
-        crate::vehicle::maintenance::needs_servicing(id.vehicle(), unsafe { &*self.leaves.vehicle })
+    /// `IsTileType(tile, type)`.
+    fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
+        self.world.is_tile_type(tile, kind)
     }
-    fn order_stop(&self, id: Handle, station: u16) -> bool {
-        crate::movement::should_stop(self.shared(), id.vehicle(), station)
+    /// `IsRailDepotTile(tile)`.
+    fn is_rail_depot_tile(&self, tile: TileIndex) -> bool {
+        self.world.rail_depot(tile.0)
     }
-    fn reserved(&self, tile: u32) -> u8 {
-        self.pbs().get_reserved_trackbits_raw(tile)
+    /// `IsPlainRail(tile)`.
+    fn is_plain_rail(&self, tile: TileIndex) -> bool {
+        self.world.is_plain_rail(tile.0)
     }
-    fn safe(&self, id: Handle, tile: u32, td: u8) -> bool {
-        self.pbs()
-            .is_safe_waiting_position_raw(id, tile, td, true, (self.shared().forbid_90_deg)())
+    /// `GetRailDepotDirection(tile)`.
+    fn get_rail_depot_direction(&self, tile: TileIndex) -> DiagDirection {
+        DiagDirection(self.world.rail_depot_dir(tile.0))
     }
-    fn shared(&self) -> &crate::services::Services {
-        // SAFETY: The entry's shared table lives for the process (or the test fixture's scope).
-        unsafe { &*self.leaves.shared }
+    /// `HasSignalOnTrackdir(tile, trackdir)`.
+    fn has_signal_on_trackdir(&self, tile: TileIndex, trackdir: Trackdir) -> bool {
+        self.world.has_signal_on_trackdir(tile.0, trackdir.0)
     }
-    fn set_platform(&self, tile: u32, dir: u8, reserved: bool) {
-        self.pbs()
-            .set_rail_station_platform_reservation_raw(tile, dir, reserved);
+    /// `GetSignalType(tile, track)`.
+    fn get_signal_type(&self, tile: TileIndex, track: Track) -> SignalType {
+        SignalType(self.world.signal_type(tile.0, track.0))
     }
-    fn signal_buffer(&self, tile: u32, td: u8) {
-        // SAFETY: C++ supplies the adjusted Vehicle base of the entry train.
-        // The live shell and immutable table survive this call; no owner borrow
-        // spans the shared callback. free() retains that entry train.
-        let owner = unsafe {
-            let vehicle =
-                crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(self.vehicle));
-            vehicle.owner_raw()
-        };
-        crate::signal::count_context_owner_read();
-        crate::signal::acquire_context(self.leaves.signal_context).add_side(tile, td, owner);
+    /// `IsPbsSignal(s)`.
+    fn is_pbs_signal(s: SignalType) -> bool {
+        crate::rail_map::is_pbs_signal(s.0)
     }
-    fn track_status(&self, tile: u32) -> u16 {
-        crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
-            self.shared(),
-            tile,
-            0,
-            0,
-            255,
-        ))
+    /// `IsOnewaySignal(tile, track)`.
+    fn is_oneway_signal(&self, tile: TileIndex, track: Track) -> bool {
+        self.world.oneway_signal(tile.0, track.0)
     }
-    fn tunnel_free(&self, id: Handle, tile: u32, end: u32) -> bool {
-        // SAFETY: The current train and all offered shells survive this query.
+    /// `GetSignalStateByTrackdir(tile, trackdir)`.
+    fn get_signal_state_by_trackdir(&self, tile: TileIndex, trackdir: Trackdir) -> SignalState {
+        SignalState(self.world.signal_state_by_trackdir(tile.0, trackdir.0))
+    }
+    /// `SetSignalStateByTrackdir(tile, trackdir, state)`.
+    fn set_signal_state_by_trackdir(
+        &self,
+        tile: TileIndex,
+        trackdir: Trackdir,
+        state: SignalState,
+    ) {
+        (self.rail().set_signal_state)(tile.0, trackdir.0, state.0);
+    }
+    /// `HasPbsSignalOnTrackdir(tile, td)`.
+    fn has_pbs_signal_on_trackdir(&self, tile: TileIndex, td: Trackdir) -> bool {
+        (self.pbs().0.has_pbs)(tile.0, td.0)
+    }
+    /// `HasOnewaySignalBlockingTrackdir(tile, td)`.
+    fn has_oneway_signal_blocking_trackdir(&self, tile: TileIndex, td: Trackdir) -> bool {
+        (self.pbs().0.blocking)(tile.0, td.0)
+    }
+    /// `GetTileRailType(tile)`.
+    fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
+        RailType(self.world.tile_rail_type(tile.0))
+    }
+    /// `Rail90DegTurnDisallowed(rt1, rt2)` with the default `_settings_game.pf.forbid_90_deg`.
+    fn rail_90_deg_turn_disallowed(&self, rt1: RailType, rt2: RailType) -> bool {
+        (self.pbs().0.rail90)(rt1.0, rt2.0, self.forbid_90_deg())
+    }
+    /// `HasDepotReservation(tile)`.
+    fn has_depot_reservation(&self, tile: TileIndex) -> bool {
+        (self.rail().depot_reserved)(tile.0)
+    }
+    /// `SetDepotReservation(tile, b)`.
+    fn set_depot_reservation(&self, tile: TileIndex, b: bool) {
+        (self.pbs().0.set_depot)(tile.0, b);
+    }
+    /// `SetTunnelBridgeReservation(tile, b)`.
+    fn set_tunnel_bridge_reservation(&self, tile: TileIndex, b: bool) {
+        (self.pbs().0.set_wormhole)(tile.0, b);
+    }
+    /// `IsBridge(tile)`.
+    fn is_bridge(&self, tile: TileIndex) -> bool {
+        self.world.bridge(tile.0)
+    }
+    /// `GetTunnelBridgeDirection(tile)`.
+    fn get_tunnel_bridge_direction(&self, tile: TileIndex) -> DiagDirection {
+        DiagDirection(self.world.tunnel_bridge_dir(tile.0))
+    }
+    /// `GetOtherTunnelBridgeEnd(tile)`.
+    fn get_other_tunnel_bridge_end(&self, tile: TileIndex) -> TileIndex {
+        TileIndex((self.services.other_tunnel_end)(tile.0))
+    }
+    /// `TunnelBridgeIsFree(tile, endtile, ignore).Succeeded()`.
+    fn tunnel_bridge_is_free(&self, tile: TileIndex, endtile: TileIndex, ignore: Handle) -> bool {
+        // SAFETY: The current train and every vehicle on both tiles survive this query.
         unsafe {
             crate::vehicle::occupancy::wormhole_blocker(
-                &*self.leaves.vehicle,
-                self.shared().map(),
-                tile,
-                end,
-                id.vehicle().0.as_ptr(),
+                self.vs,
+                self.world.dimensions,
+                tile.0,
+                endtile.0,
+                ignore.vehicle().0.as_ptr(),
             )
             .is_none()
         }
     }
-    fn update_buffer(&self) {
-        crate::signal::acquire_context(self.leaves.signal_context).flush();
+    /// `IsRailStationTile(tile)`.
+    fn is_rail_station_tile(&self, tile: TileIndex) -> bool {
+        self.world.is_rail_station_tile(tile)
     }
-    fn pathfind(
+    /// `IsRailWaypointTile(tile)`.
+    fn is_rail_waypoint_tile(&self, tile: TileIndex) -> bool {
+        self.world.is_rail_waypoint_tile(tile)
+    }
+    /// `GetStationIndex(tile)`.
+    fn get_station_index(&self, tile: TileIndex) -> StationID {
+        self.world.get_station_index(tile)
+    }
+    /// `IsCompatibleTrainStationTile(test_tile, station_tile)`.
+    fn is_compatible_train_station_tile(
         &self,
-        id: Handle,
-        tile: u32,
-        dir: u8,
-        tracks: u8,
-        reserve: bool,
-        want_final: bool,
-    ) -> Search {
-        (self.leaves.pathfind)(
-            id,
+        test_tile: TileIndex,
+        station_tile: TileIndex,
+    ) -> bool {
+        self.world
+            .is_compatible_train_station_tile(test_tile, station_tile)
+    }
+    /// `GetDepotIndex(tile)`.
+    fn get_depot_index(&self, tile: TileIndex) -> DestinationID {
+        DestinationID((self.services.depot_index)(tile.0))
+    }
+    /// `TileAddByDiagDir(tile, dir)`.
+    fn tile_add_by_diag_dir(&self, tile: TileIndex, dir: DiagDirection) -> TileIndex {
+        self.world
+            .dimensions
+            .tile_add_by_diag_dir(tile, dir, self.check())
+    }
+    /// `TileOffsByDiagDir(dir)`.
+    fn tile_offs_by_diag_dir(&self, dir: DiagDirection) -> crate::map_type::TileIndexDiff {
+        self.world
+            .dimensions
+            .tile_offs_by_diag_dir(dir, self.check())
+    }
+    /// `GetTileTrackStatus(tile, TRANSPORT_RAIL, 0)`.
+    fn get_tile_track_status(&self, tile: TileIndex) -> TrackStatus {
+        crate::movement::table(self.services).get_tile_track_status_in_world(
+            &self.world,
             tile,
-            dir,
-            tracks,
-            u8::from(reserve),
-            u8::from(want_final),
+            TransportType::TRANSPORT_RAIL,
+            0,
+            DiagDirection::INVALID_DIAGDIR,
         )
     }
-    fn safe_track(&self, id: Handle, tile: u32, td: u8, override_types: bool) -> bool {
-        (self.leaves.safe_track)(id, tile, td, u8::from(override_types)) != 0
+    /// `MarkTileDirtyByTile(tile)`.
+    fn mark_tile_dirty_by_tile(&self, tile: TileIndex) {
+        (self.services.mark_dirty)(tile.0);
     }
-
-    fn follower(&self, id: Handle, types: u64) -> Follower {
-        Follower::rail_raw(self.shared(), id, 0, types)
+    /// `MarkBridgeDirty(tile)`.
+    fn mark_bridge_dirty(&self, tile: TileIndex) {
+        (self.services.mark_bridge_dirty)(tile.0);
     }
-    fn origin(&self, id: Handle, other: bool) -> Pbs {
-        self.pbs()
-            .follow_train_reservation_raw(id, other, Handle::NONE)
-    }
-    fn dir(&self, id: Handle, td: u8) -> u8 {
-        (self.leaves.exit_dir)(self.context, id, td) as u8
-    }
-    fn signal(&self, id: Handle, tile: u32, td: u8, green: bool) {
-        (self.leaves.set_signal)(self.context, id, tile, td, u8::from(green));
-    }
-    fn reserve_track(&self, tile: u32, track: u8) -> bool {
-        self.pbs().try_reserve_rail_track_raw(tile, track, true)
-    }
-    /// `TryReserveRailTrack(tile, TrackdirToTrack(td))`.
-    fn reserve(&self, tile: u32, td: u8) -> bool {
-        self.reserve_track(tile, td & 7)
-    }
-    /// `UnreserveRailTrack(tile, TrackdirToTrack(td))`.
-    fn unreserve(&self, tile: u32, td: u8) {
-        self.pbs().unreserve_rail_track_raw(tile, td & 7);
-    }
-
-    fn td(&self, id: Handle) -> u8 {
-        (self.leaves.trackdir)(self.context, id) as u8
-    }
-}
-/// `Train::ReserveTrackUnderConsist`: tries to reserve track under whole train consist.
-pub(crate) fn reserve_track_under_consist(g: &Game, id: Handle) {
-    let mut part = id;
-    while part != Handle::NONE {
-        let v_tile: u32 = part.vehicle().tile_raw();
-        let track = part.track().0;
-        match track {
-            WORMHOLE => {
-                g.reserve_track(
-                    v_tile,
-                    (g.leaves.diag_track)(
-                        g.context,
-                        part,
-                        crate::map_func::World::new(g.shared()).tunnel_bridge_dir(v_tile),
-                    ) as u8,
-                );
-            }
-            DEPOT => {}
-            _ => {
-                g.reserve_track(v_tile, (g.leaves.bits_track)(g.context, part, track) as u8);
-            }
-        }
-        part = part.next();
-    }
-}
-fn single(bits: u16) -> bool {
-    bits & bits.wrapping_sub(1) == 0
-}
-fn pbs(step: Search) -> Pbs {
-    Pbs {
-        tile: step.tile,
-        td: step.td,
-        okay: step.okay,
-        other: Handle::NONE,
-    }
-}
-fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
-    let dir = g.dir(id, td);
-    if is_tile_type(
-        g.shared(),
-        TileIndex(tile),
-        crate::tile_type::TileType::MP_TUNNELBRIDGE,
+    /// `AddSideToSignalBuffer(tile, side, owner)`.
+    fn add_side_to_signal_buffer(
+        &self,
+        tile: TileIndex,
+        side: DiagDirection,
+        owner: crate::company_type::Owner,
     ) {
-        if crate::map_func::World::new(g.shared()).tunnel_bridge_dir(tile) == dir ^ 2 {
-            let end = (g.leaves.other_end)(g.context, id, tile) as u32;
-            if g.tunnel_free(id, tile, end) {
-                (g.leaves.set_tunnel)(g.context, id, tile, 0);
-                (g.leaves.set_tunnel)(g.context, id, end, 0);
-                if (g.leaves.show_res)(g.context, id) != 0 {
-                    if (g.leaves.is_bridge)(g.context, id, tile) != 0 {
-                        (g.shared().mark_bridge_dirty)(tile);
-                    } else {
-                        (g.shared().mark_dirty)(tile);
-                        (g.shared().mark_dirty)(end);
-                    }
-                }
-            }
-        }
-    } else if (g.leaves.is_station)(g.context, id, tile) != 0 {
-        let next = g
-            .shared()
-            .map()
-            .tile_add_by_diag_dir(
-                TileIndex(tile),
-                DiagDirection(dir),
-                crate::map_func::native_check,
-            )
-            .0;
-        if (g.leaves.compat_station)(g.context, id, next, tile) == 0 {
-            g.set_platform(tile, dir ^ 2, false);
-        }
-    } else {
-        g.unreserve(tile, td);
+        crate::signal::context(self.services).add_side_to_signal_buffer(tile, side, owner);
+    }
+    /// `UpdateSignalsInBuffer()`.
+    fn update_signals_in_buffer(&self) {
+        crate::signal::context(self.services).update_signals_in_buffer();
+    }
+    /// `GetReservedTrackbits(t)`.
+    fn get_reserved_trackbits(&self, t: TileIndex) -> TrackBits {
+        self.pbs().get_reserved_trackbits(t)
+    }
+    /// `HasReservedTracks(tile, tracks)`.
+    fn has_reserved_tracks(&self, tile: TileIndex, tracks: TrackBits) -> bool {
+        self.pbs().has_reserved_tracks(tile, tracks)
+    }
+    /// `TryReserveRailTrack(tile, t)`, which triggers the stations by default.
+    fn try_reserve_rail_track(&self, tile: TileIndex, t: Track) -> bool {
+        self.pbs().try_reserve_rail_track(tile, t, true)
+    }
+    /// `UnreserveRailTrack(tile, t)`.
+    fn unreserve_rail_track(&self, tile: TileIndex, t: Track) {
+        self.pbs().unreserve_rail_track(tile, t);
+    }
+    /// `SetRailStationPlatformReservation(start, dir, b)`.
+    fn set_rail_station_platform_reservation(&self, start: TileIndex, dir: DiagDirection, b: bool) {
+        self.pbs()
+            .set_rail_station_platform_reservation(start, dir, b);
+    }
+    /// `FollowTrainReservation(v, train_on_res)`.
+    fn follow_train_reservation(
+        &self,
+        v: Handle,
+        train_on_res: Option<&mut Handle>,
+    ) -> PBSTileInfo {
+        self.pbs().follow_train_reservation(v, train_on_res)
+    }
+    /// `IsSafeWaitingPosition(v, tile, trackdir, include_line_end, forbid_90deg)`.
+    fn is_safe_waiting_position(
+        &self,
+        v: Handle,
+        tile: TileIndex,
+        trackdir: Trackdir,
+        include_line_end: bool,
+        forbid_90deg: bool,
+    ) -> bool {
+        self.pbs()
+            .is_safe_waiting_position(v, tile, trackdir, include_line_end, forbid_90deg)
+    }
+    /// `IsWaitingPositionFree(v, tile, trackdir, forbid_90deg)`.
+    fn is_waiting_position_free(
+        &self,
+        v: Handle,
+        tile: TileIndex,
+        trackdir: Trackdir,
+        forbid_90deg: bool,
+    ) -> bool {
+        self.pbs()
+            .is_waiting_position_free(v, tile, trackdir, forbid_90deg)
+    }
+    /// `TryReserveSafeTrack(v, tile, td, override_railtype)`: try to reserve any path to a
+    /// safe tile, ignoring the vehicle's destination. Safe tiles are tiles in front of a
+    /// signal, depots and station tiles at end of line. `override_railtype` says whether all
+    /// physically compatible railtypes should be followed. Returns true if a path to a safe
+    /// stopping tile could be reserved.
+    fn try_reserve_safe_track(
+        &self,
+        v: Handle,
+        tile: TileIndex,
+        td: Trackdir,
+        override_railtype: bool,
+    ) -> bool {
+        crate::rail_yapf::yapf_train_find_nearest_safe_tile(
+            self.services,
+            v,
+            tile,
+            td,
+            override_railtype,
+        )
     }
 }
-#[allow(clippy::nonminimal_bool)] // `FreeTrainTrackReservation`'s condition as written.
-fn free(g: &Game, id: Handle) {
-    crate::witness::hit(crate::witness::TRAIN_FREE_PATH);
-    if g.pbs().0.assertions {
-        crate::movement::native_assert(g.shared(), id.is_front_engine());
+
+/// `CheckNextTrainTile`: check if the train is on the last reserved tile and try to extend
+/// the path then.
+pub(crate) fn check_next_train_tile(g: &Game, v: Handle) {
+    /* Don't do any look-ahead if path_backoff_interval is 255. */
+    if g.path_backoff_interval() == 255 {
+        return;
     }
-    let v_tile: u32 = id.vehicle().tile_raw();
-    let mut tile = v_tile;
-    let mut td = g.td(id);
-    let mut free_tile = !(((g.leaves.is_station)(g.context, id, tile) != 0)
-        || (is_tile_type(
-            g.shared(),
-            TileIndex(tile),
-            crate::tile_type::TileType::MP_TUNNELBRIDGE,
-        )));
-    let station = if (g.leaves.is_station)(g.context, id, tile) != 0 {
-        crate::map_func::World::new(g.shared())
-            .get_station_index(crate::tile_type::TileIndex(tile))
-            .0
-    } else {
-        u16::MAX
-    };
-    if ((g.leaves.is_depot)(g.context, id, tile) != 0)
-        && g.dir(id, td) != (g.leaves.depot_dir)(g.context, id, tile) as u8
+
+    /* Exit if we are inside a depot. */
+    if v.track() == TrackBits::TRACK_BIT_DEPOT {
+        return;
+    }
+
+    match v.vehicle().current_order().kind() {
+        /* Exit if we reached our destination depot. */
+        OrderType::OT_GOTO_DEPOT if v.vehicle().tile() == v.vehicle().dest_tile() => return,
+
+        OrderType::OT_GOTO_WAYPOINT => {
+            /* If we reached our waypoint, make sure we see that. */
+            if g.is_rail_waypoint_tile(v.vehicle().tile())
+                && g.get_station_index(v.vehicle().tile()).0
+                    == v.vehicle().current_order().destination().0
+            {
+                g.process_orders(v);
+            }
+        }
+
+        /* Exit if the current order doesn't have a destination, but the train has orders. */
+        OrderType::OT_NOTHING | OrderType::OT_LEAVESTATION | OrderType::OT_LOADING
+            if g.get_num_orders(v).0 > 0 =>
+        {
+            return;
+        }
+
+        _ => {}
+    }
+    /* Exit if we are on a station tile and are going to stop. */
+    if g.is_rail_station_tile(v.vehicle().tile())
+        && g.should_stop_at_station(v, g.get_station_index(v.vehicle().tile()))
     {
         return;
     }
-    if id.track().0 == DEPOT {
-        let mut u = id;
-        while u != Handle::NONE {
-            let part_tile: u32 = u.vehicle().tile_raw();
-            let part_next: Handle = u.next();
-            if u.track().0 != DEPOT || part_tile != v_tile {
-                return;
-            }
-            u = part_next;
-        }
-    }
-    let reserved = g.reserved(tile);
-    if (g.leaves.overlap)(g.context, id, reserved | (1 << (td & 7))) != 0 {
+
+    let td = g.get_vehicle_trackdir(v);
+
+    /* On a tile with a red non-pbs signal, don't look ahead. */
+    if g.is_tile_type(v.vehicle().tile(), TileType::MP_RAILWAY)
+        && g.has_signal_on_trackdir(v.vehicle().tile(), td)
+        && !Game::is_pbs_signal(g.get_signal_type(
+            v.vehicle().tile(),
+            trackdir_to_track_asserted(td, g.check()),
+        ))
+        && g.get_signal_state_by_trackdir(v.vehicle().tile(), td) == SignalState::SIGNAL_STATE_RED
+    {
         return;
     }
-    let types = (g.shared().all_compatible_railtypes)(id.railtypes().0);
-    let mut ft = g.follower(id, types);
-    while ft.follow_raw(g.shared(), tile, td) {
-        tile = ft.new_tile.0;
-        let bits = ft.new_td_bits.0 & dirs(g.reserved(tile));
-        td = first(bits);
-        crate::movement::native_assert(g.shared(), single(bits));
-        if td == 0xff {
+
+    let mut ft = g.follower(v);
+    if !ft.follow(g.services, v.vehicle().tile(), td) {
+        return;
+    }
+
+    if !g.has_reserved_tracks(
+        ft.new_tile,
+        TrackBits(trackdir_bits_to_track_bits(ft.new_td_bits.0)),
+    ) {
+        /* Next tile is not reserved. */
+        if kill_first_bit_u16(ft.new_td_bits.0) == TrackdirBits::TRACKDIR_BIT_NONE.0
+            && g.has_pbs_signal_on_trackdir(
+                ft.new_tile,
+                find_first_trackdir_asserted(ft.new_td_bits, g.check()),
+            )
+        {
+            /* If the next tile is a PBS signal, try to make a reservation. */
+            let mut tracks = TrackBits(trackdir_bits_to_track_bits(ft.new_td_bits.0));
+            if g.rail_90_deg_turn_disallowed(
+                g.get_tile_rail_type(ft.old_tile),
+                g.get_tile_rail_type(ft.new_tile),
+            ) {
+                tracks &= !track_crosses_tracks(
+                    trackdir_to_track_asserted(ft.old_td, g.check()),
+                    g.check(),
+                );
+            }
+            choose_train_track(g, v, ft.new_tile, ft.exitdir, tracks, false, false);
+        }
+    }
+}
+
+/// `ClearPathReservation`: clear the reservation of `tile` that was just left by a wagon on
+/// `track_dir`. `v` is the train owning the reservation.
+pub(crate) fn clear_path_reservation(g: &Game, v: Handle, tile: TileIndex, track_dir: Trackdir) {
+    let dir = trackdir_to_exitdir_asserted(track_dir, g.check());
+
+    if g.is_tile_type(tile, TileType::MP_TUNNELBRIDGE) {
+        /* Are we just leaving a tunnel/bridge? */
+        if g.get_tunnel_bridge_direction(tile) == reverse_diag_dir(dir, g.check()) {
+            let end = g.get_other_tunnel_bridge_end(tile);
+
+            if g.tunnel_bridge_is_free(tile, end, v) {
+                /* Free the reservation only if no other train is on the tiles. */
+                g.set_tunnel_bridge_reservation(tile, false);
+                g.set_tunnel_bridge_reservation(end, false);
+
+                if g.show_track_reservation() {
+                    if g.is_bridge(tile) {
+                        g.mark_bridge_dirty(tile);
+                    } else {
+                        g.mark_tile_dirty_by_tile(tile);
+                        g.mark_tile_dirty_by_tile(end);
+                    }
+                }
+            }
+        }
+    } else if g.is_rail_station_tile(tile) {
+        let new_tile = g.tile_add_by_diag_dir(tile, dir);
+        /* If the new tile is not a further tile of the same station, we
+         * clear the reservation for the whole platform. */
+        if !g.is_compatible_train_station_tile(new_tile, tile) {
+            g.set_rail_station_platform_reservation(tile, reverse_diag_dir(dir, g.check()), false);
+        }
+    } else {
+        /* Any other tile */
+        g.unreserve_rail_track(tile, trackdir_to_track_asserted(track_dir, g.check()));
+    }
+}
+
+/// `FreeTrainTrackReservation`: free the reserved path in front of a vehicle. `v` is the
+/// train owning the reserved path.
+#[allow(clippy::nonminimal_bool)] // `FreeTrainTrackReservation`'s condition as written.
+pub(crate) fn free_train_track_reservation(g: &Game, v: Handle) {
+    crate::witness::hit(crate::witness::TRAIN_FREE_PATH);
+    assert_with(|| v.is_front_engine());
+
+    let mut tile = v.vehicle().tile();
+    let mut td = g.get_vehicle_trackdir(v);
+    let mut free_tile = !(g.is_rail_station_tile(v.vehicle().tile())
+        || g.is_tile_type(v.vehicle().tile(), TileType::MP_TUNNELBRIDGE));
+    let station_id = if g.is_rail_station_tile(v.vehicle().tile()) {
+        g.get_station_index(v.vehicle().tile())
+    } else {
+        StationID::INVALID
+    };
+
+    /* Can't be holding a reservation if we enter a depot. */
+    if g.is_rail_depot_tile(tile)
+        && trackdir_to_exitdir_asserted(td, g.check()) != g.get_rail_depot_direction(tile)
+    {
+        return;
+    }
+    if v.track() == TrackBits::TRACK_BIT_DEPOT {
+        /* Front engine is in a depot. We enter if some part is not in the depot. */
+        let mut u = v;
+        while u != Handle::NONE {
+            if u.track() != TrackBits::TRACK_BIT_DEPOT || u.vehicle().tile() != v.vehicle().tile() {
+                return;
+            }
+            u = u.next();
+        }
+    }
+    /* Don't free reservation if it's not ours. */
+    if tracks_overlap(
+        g.get_reserved_trackbits(tile).0
+            | track_to_track_bits(trackdir_to_track_asserted(td, g.check()).0, g.check()),
+    ) {
+        return;
+    }
+
+    let mut ft = g.follower_override(v, g.get_all_compatible_rail_types(v.railtypes()));
+    while ft.follow(g.services, tile, td) {
+        tile = ft.new_tile;
+        let mut bits = ft.new_td_bits
+            & TrackdirBits(track_bits_to_trackdir_bits(
+                g.get_reserved_trackbits(tile).0,
+            ));
+        td = remove_first_trackdir(&mut bits, g.check());
+        assert_with(|| bits == TrackdirBits::TRACKDIR_BIT_NONE);
+
+        if !is_valid_trackdir(td.0) {
             break;
         }
-        if is_tile_type(
-            g.shared(),
-            TileIndex(tile),
-            crate::tile_type::TileType::MP_RAILWAY,
-        ) {
-            if ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
-                && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
+
+        if g.is_tile_type(tile, TileType::MP_RAILWAY) {
+            if g.has_signal_on_trackdir(tile, td)
+                && !Game::is_pbs_signal(
+                    g.get_signal_type(tile, trackdir_to_track_asserted(td, g.check())),
+                )
             {
-                g.unreserve(tile, td);
+                /* Conventional signal along trackdir: remove reservation and stop. */
+                g.unreserve_rail_track(tile, trackdir_to_track_asserted(td, g.check()));
                 break;
             }
-            if (g.leaves.has_pbs)(g.context, id, tile, td) != 0 {
-                if (g.leaves.green)(g.context, id, tile, td) == 0 {
+            if g.has_pbs_signal_on_trackdir(tile, td) {
+                if g.get_signal_state_by_trackdir(tile, td) == SignalState::SIGNAL_STATE_RED {
+                    /* Red PBS signal? Can't be our reservation, would be green then. */
                     break;
                 }
-                g.signal(id, tile, td, false);
-                (g.shared().mark_dirty)(tile);
-            } else if (g.leaves.has_pbs)(g.context, id, tile, td ^ 8) != 0 {
-                g.signal_buffer(tile, g.dir(id, td ^ 8));
-            } else if ((g.leaves.has_signal)(g.context, id, tile, td ^ 8) != 0)
-                && ((g.leaves.oneway)(g.context, id, tile, td & 7) != 0)
+                /* Turn the signal back to red. */
+                g.set_signal_state_by_trackdir(tile, td, SignalState::SIGNAL_STATE_RED);
+                g.mark_tile_dirty_by_tile(tile);
+            } else if g.has_pbs_signal_on_trackdir(tile, reverse_trackdir_asserted(td, g.check())) {
+                /* Reservation passes an opposing path signal. Mark signal for update to re-establish the proper default state. */
+                g.add_side_to_signal_buffer(
+                    tile,
+                    trackdir_to_exitdir_asserted(
+                        reverse_trackdir_asserted(td, g.check()),
+                        g.check(),
+                    ),
+                    v.vehicle().owner(),
+                );
+            } else if g.has_signal_on_trackdir(tile, reverse_trackdir_asserted(td, g.check()))
+                && g.is_oneway_signal(tile, trackdir_to_track_asserted(td, g.check()))
             {
                 break;
             }
         }
+
+        /* Don't free first station/bridge/tunnel if we are on it. */
         if free_tile
-            || (!(ft.is_station
-                && crate::map_func::World::new(g.shared())
-                    .get_station_index(crate::tile_type::TileIndex(ft.new_tile.0))
-                    .0
-                    == station)
+            || (!(ft.is_station && g.get_station_index(ft.new_tile) == station_id)
                 && !ft.is_tunnel
                 && !ft.is_bridge)
         {
-            clear(g, id, tile, td);
+            clear_path_reservation(g, v, tile, td);
         }
+
         free_tile = true;
     }
-    g.update_buffer();
+
+    g.update_signals_in_buffer();
 }
-fn extend(g: &Game, id: Handle, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
+
+/// `ExtendTrainReservation`: extend a train path as far as possible. Stops on encountering
+/// a safe tile, another reservation or a track choice. A tile of `INVALID_TILE` indicates
+/// that the reservation failed. On a choice, `new_tracks` and `enterdir` receive the
+/// choice tile's tracks and entry direction.
+fn extend_train_reservation(
+    g: &Game,
+    v: Handle,
+    new_tracks: &mut TrackBits,
+    enterdir: &mut DiagDirection,
+) -> PBSTileInfo {
     crate::witness::hit(crate::witness::TRAIN_CONTROLLER_EXTENSION);
-    extend_from(g, id, g.origin(id, false), new_tracks, enterdir)
-}
-/// `ExtendTrainReservation` after its `FollowTrainReservation`.
-fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
-    let types = id.compatible_railtypes().0;
-    let mut ft = g.follower(id, types);
-    let mut red = Vec::new();
+    let origin = g.follow_train_reservation(v, None);
+
+    let mut ft = g.follower(v);
+
+    let mut signals_set_to_red: Vec<(TileIndex, Trackdir)> = Vec::new();
+
     let mut tile = origin.tile;
-    let mut td = origin.td;
-    while ft.follow_raw(g.shared(), tile, td) {
-        if single(ft.new_td_bits.0)
-            && ((g.leaves.blocking)(g.context, id, ft.new_tile.0, first(ft.new_td_bits.0)) != 0)
+    let mut cur_td = origin.trackdir;
+    while ft.follow(g.services, tile, cur_td) {
+        /* Possible signal tile. */
+        if kill_first_bit_u16(ft.new_td_bits.0) == TrackdirBits::TRACKDIR_BIT_NONE.0
+            && g.has_oneway_signal_blocking_trackdir(
+                ft.new_tile,
+                find_first_trackdir_asserted(ft.new_td_bits, g.check()),
+            )
         {
             break;
         }
-        if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
-            ft.new_td_bits.0 &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td.0) as u16);
-            if ft.new_td_bits.0 == 0 {
+
+        if g.rail_90_deg_turn_disallowed(
+            g.get_tile_rail_type(ft.old_tile),
+            g.get_tile_rail_type(ft.new_tile),
+        ) {
+            ft.new_td_bits &= !trackdir_crosses_trackdirs_asserted(ft.old_td, g.check());
+            if ft.new_td_bits == TrackdirBits::TRACKDIR_BIT_NONE {
                 break;
             }
         }
-        let target = ft.is_station
-            || ((is_tile_type(
-                g.shared(),
-                TileIndex(ft.new_tile.0),
-                crate::tile_type::TileType::MP_RAILWAY,
-            )) && ((g.leaves.is_plain)(g.context, id, ft.new_tile.0) == 0));
-        if target || !single(ft.new_td_bits.0) {
-            if g.has_reserved(
-                ft.new_tile.0,
-                tracks((g.leaves.reach_dirs)(g.context, id, ft.old_td.0) as u16),
+
+        /* Station, depot or waypoint are a possible target. */
+        let target_seen = ft.is_station
+            || (g.is_tile_type(ft.new_tile, TileType::MP_RAILWAY) && !g.is_plain_rail(ft.new_tile));
+        if target_seen || kill_first_bit_u16(ft.new_td_bits.0) != TrackdirBits::TRACKDIR_BIT_NONE.0
+        {
+            /* Choice found or possible target encountered.
+             * On finding a possible target, we need to stop and let the pathfinder handle the
+             * remaining path. This is because we don't know if this target is in one of our
+             * orders, so we might cause pathfinding to fail later on if we find a choice.
+             * This failure would cause a bogous call to TryReserveSafePath which might reserve
+             * a wrong path not leading to our next destination. */
+            if g.has_reserved_tracks(
+                ft.new_tile,
+                TrackBits(trackdir_bits_to_track_bits(
+                    trackdir_reaches_trackdirs(ft.old_td, g.check()).0,
+                )),
             ) {
                 break;
             }
+
+            /* If we did skip some tiles, backtrack to the first skipped tile so the pathfinder
+             * actually starts its search at the first unreserved tile. */
             if ft.tiles_skipped != 0 {
-                let off = (g.leaves.tile_offset)(g.context, id, ft.exitdir.0) as i32;
-                ft.new_tile.0 = ft
-                    .new_tile
-                    .0
-                    .wrapping_sub(off.wrapping_mul(ft.tiles_skipped) as u32);
+                ft.new_tile = ft.new_tile
+                    - g.tile_offs_by_diag_dir(ft.exitdir)
+                        .wrapping_mul(ft.tiles_skipped);
             }
-            *new_tracks = tracks(ft.new_td_bits.0);
-            *enterdir = ft.exitdir.0;
-            return Pbs {
-                tile: ft.new_tile.0,
-                td: ft.old_td.0,
-                okay: 0,
-                other: Handle::NONE,
+
+            /* Choice found, path valid but not okay. Save info about the choice tile as well. */
+            *new_tracks = TrackBits(trackdir_bits_to_track_bits(ft.new_td_bits.0));
+            *enterdir = ft.exitdir;
+            return PBSTileInfo {
+                tile: ft.new_tile,
+                trackdir: ft.old_td,
+                okay: false,
             };
         }
-        tile = ft.new_tile.0;
-        td = first(ft.new_td_bits.0);
-        let rev = td ^ 8;
-        // SAFETY: The entry keeps the native train live; no owner borrow spans the callback.
-        if g.safe(id, tile, td) {
-            if !(g.free(id, tile, td) && g.reserve(tile, td)) {
+
+        tile = ft.new_tile;
+        cur_td = find_first_trackdir_asserted(ft.new_td_bits, g.check());
+
+        let rev_td = reverse_trackdir_asserted(cur_td, g.check());
+        if g.is_safe_waiting_position(v, tile, cur_td, true, g.forbid_90_deg()) {
+            let wp_free = g.is_waiting_position_free(v, tile, cur_td, g.forbid_90_deg());
+            if !(wp_free
+                && g.try_reserve_rail_track(tile, trackdir_to_track_asserted(cur_td, g.check())))
+            {
                 break;
             }
-            if ((g.leaves.has_pbs)(g.context, id, tile, rev) != 0)
-                && ((g.leaves.green)(g.context, id, tile, rev) != 0)
+            /* Green path signal opposing the path? Turn to red. */
+            if g.has_pbs_signal_on_trackdir(tile, rev_td)
+                && g.get_signal_state_by_trackdir(tile, rev_td) == SignalState::SIGNAL_STATE_GREEN
             {
                 crate::witness::hit(crate::witness::TRAIN_EXTENSION_OPPOSING_RED);
-                red.push((tile, rev));
-                g.signal(id, tile, rev, false);
-                (g.shared().mark_dirty)(tile);
+                signals_set_to_red.push((tile, rev_td));
+                g.set_signal_state_by_trackdir(tile, rev_td, SignalState::SIGNAL_STATE_RED);
+                g.mark_tile_dirty_by_tile(tile);
             }
-            return Pbs {
+            /* Safe position is all good, path valid and okay. */
+            return PBSTileInfo {
                 tile,
-                td,
-                okay: 1,
-                other: Handle::NONE,
+                trackdir: cur_td,
+                okay: true,
             };
         }
-        if !g.reserve(tile, td) {
+
+        if !g.try_reserve_rail_track(tile, trackdir_to_track_asserted(cur_td, g.check())) {
             break;
         }
-        if ((g.leaves.has_pbs)(g.context, id, tile, rev) != 0)
-            && ((g.leaves.green)(g.context, id, tile, rev) != 0)
+
+        /* Green path signal opposing the path? Turn to red. */
+        if g.has_pbs_signal_on_trackdir(tile, rev_td)
+            && g.get_signal_state_by_trackdir(tile, rev_td) == SignalState::SIGNAL_STATE_GREEN
         {
             crate::witness::hit(crate::witness::TRAIN_EXTENSION_OPPOSING_RED);
-            red.push((tile, rev));
-            g.signal(id, tile, rev, false);
-            (g.shared().mark_dirty)(tile);
+            signals_set_to_red.push((tile, rev_td));
+            g.set_signal_state_by_trackdir(tile, rev_td, SignalState::SIGNAL_STATE_RED);
+            g.mark_tile_dirty_by_tile(tile);
         }
     }
-    if ft.err.0 == 1 || ft.err.0 == 4 {
-        return Pbs {
-            tile: ft.old_tile.0,
-            td: ft.old_td.0,
-            okay: 1,
-            other: Handle::NONE,
+
+    if ft.err == ErrorCode::EC_OWNER || ft.err == ErrorCode::EC_NO_WAY {
+        /* End of line, path valid and okay. */
+        return PBSTileInfo {
+            tile: ft.old_tile,
+            trackdir: ft.old_td,
+            okay: true,
         };
     }
+
     crate::witness::hit(crate::witness::TRAIN_EXTENSION_FAIL);
+    /* Sorry, can't reserve path, back out. */
     tile = origin.tile;
-    td = origin.td;
-    let stopped = ft.old_tile.0;
-    let stopped_td = ft.old_td.0;
-    while tile != stopped || td != stopped_td {
-        if !ft.follow_raw(g.shared(), tile, td) {
+    cur_td = origin.trackdir;
+    let stopped = ft.old_tile;
+    let stopped_td = ft.old_td;
+    while tile != stopped || cur_td != stopped_td {
+        if !ft.follow(g.services, tile, cur_td) {
             break;
         }
-        if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
-            ft.new_td_bits.0 &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td.0) as u16);
-            crate::movement::native_assert(g.shared(), ft.new_td_bits.0 != 0);
+
+        if g.rail_90_deg_turn_disallowed(
+            g.get_tile_rail_type(ft.old_tile),
+            g.get_tile_rail_type(ft.new_tile),
+        ) {
+            ft.new_td_bits &= !trackdir_crosses_trackdirs_asserted(ft.old_td, g.check());
+            assert_with(|| ft.new_td_bits != TrackdirBits::TRACKDIR_BIT_NONE);
         }
-        crate::movement::native_assert(g.shared(), single(ft.new_td_bits.0));
-        tile = ft.new_tile.0;
-        td = first(ft.new_td_bits.0);
+        assert_with(|| kill_first_bit_u16(ft.new_td_bits.0) == TrackdirBits::TRACKDIR_BIT_NONE.0);
+
+        tile = ft.new_tile;
+        cur_td = find_first_trackdir_asserted(ft.new_td_bits, g.check());
+
         crate::witness::hit(crate::witness::TRAIN_EXTENSION_ROLLBACK);
-        g.unreserve(tile, td);
+        g.unreserve_rail_track(tile, trackdir_to_track_asserted(cur_td, g.check()));
     }
-    for (tile, td) in red {
+
+    /* Re-instate green signals we turned to red. */
+    for (sig_tile, td) in signals_set_to_red {
         crate::witness::hit(crate::witness::TRAIN_EXTENSION_RESTORE);
-        g.signal(id, tile, td, true);
+        g.set_signal_state_by_trackdir(sig_tile, td, SignalState::SIGNAL_STATE_GREEN);
     }
-    Pbs::default()
+
+    /* Path invalid. */
+    PBSTileInfo::default()
 }
-struct Orders<'a> {
-    g: Game<'a>,
-    id: Handle,
-    dest: u32,
-    last: u16,
-    suppress: u8,
-    index: u8,
+
+/// `VehicleOrderSaver`: this class will save the current order of a vehicle and restore it
+/// on destruction.
+struct VehicleOrderSaver<'g, 'a> {
+    g: &'g Game<'a>,
+    v: Handle,
+    old_order: Order,
+    old_dest_tile: TileIndex,
+    old_last_station_visited: StationID,
+    index: VehicleOrderID,
+    suppress_implicit_orders: bool,
     restored: bool,
-    saved_order: crate::orders::Order,
 }
-impl<'a> Orders<'a> {
-    fn new(g: &Game<'a>, id: Handle) -> Self {
-        let v_dest: u32 = id.vehicle().dest_tile_raw();
-        let v_last_station: u16 = id.vehicle().last_station_visited_raw();
-        let v_order_index: u8 = id.vehicle().cur_real_order_index_raw();
-        let v_suppress: u8 = u8::from(
-            read_field!(id.vehicle().ground(), flags)
-                & (1 << crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS)
-                != 0,
-        );
-        let saved_order = id.vehicle().current_order().copied();
+
+impl<'g, 'a> VehicleOrderSaver<'g, 'a> {
+    fn new(g: &'g Game<'a>, v: Handle) -> Self {
         Self {
-            g: *g,
-            id,
-            dest: v_dest,
-            last: v_last_station,
-            suppress: v_suppress,
-            index: v_order_index,
+            g,
+            v,
+            old_order: v.vehicle().current_order().copied(),
+            old_dest_tile: v.vehicle().dest_tile(),
+            old_last_station_visited: v.vehicle().last_station_visited(),
+            index: v.vehicle().cur_real_order_index(),
+            suppress_implicit_orders: has_bit(
+                read_field!(v.vehicle().ground(), flags),
+                GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
+            ),
             restored: false,
-            saved_order,
         }
     }
+
+    /// `Restore`: restore the saved order to the vehicle.
     fn restore(&mut self) {
         crate::witness::hit(crate::witness::TRAIN_ORDER_RESTORE);
-        // SAFETY: The current order and this stack snapshot are live for this copy.
+        // SAFETY: The vehicle's live current order; the copy creates no reference.
         unsafe {
-            self.id
+            self.v
                 .vehicle()
                 .current_order_pointer()
-                .write(self.saved_order);
-        };
-        self.id.vehicle().set_dest_tile_raw(self.dest);
-        self.id.vehicle().set_last_station_visited_raw(self.last);
-        let mut gv_flags = read_field!(self.id.vehicle().ground(), flags);
-        crate::bitmath_func::assign_bit16(
+                .write(self.old_order);
+        }
+        self.v.vehicle().set_dest_tile(self.old_dest_tile);
+        self.v
+            .vehicle()
+            .set_last_station_visited(self.old_last_station_visited);
+        let mut gv_flags = read_field!(self.v.vehicle().ground(), flags);
+        assign_bit16(
             &mut gv_flags,
-            crate::ground_vehicle::GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
-            self.suppress != 0,
+            GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
+            self.suppress_implicit_orders,
         );
-        crate::raw_field::write_field!(self.id.vehicle().ground(), flags, gv_flags);
+        write_field!(self.v.vehicle().ground(), flags, gv_flags);
         self.restored = true;
     }
-    fn next(&mut self, skip: bool) -> bool {
+
+    /// `SwitchToNextOrder`: set the current vehicle order to the next order in the order
+    /// list. `skip_first` says whether the first (i.e. active) order shall be skipped.
+    /// Returns true if a suitable next order could be found.
+    fn switch_to_next_order(&mut self, skip_first: bool) -> bool {
         crate::witness::hit(crate::witness::TRAIN_ORDER_LOOKAHEAD);
         let g = self.g;
-        let id = self.id;
-        if g.read_num_orders(id) == 0 {
+        let v = self.v;
+        if g.get_num_orders(v).0 == 0 {
             return false;
         }
-        if skip {
-            self.index = self.index.wrapping_add(1);
+
+        if skip_first {
+            self.index = VehicleOrderID(self.index.0.wrapping_add(1));
         }
-        let mut depth = 0;
+
+        let mut depth = 0_i32;
+
         loop {
-            if self.index >= g.read_num_orders(id) {
-                self.index = 0;
+            /* Wrap around. */
+            if self.index >= g.get_num_orders(v) {
+                self.index = VehicleOrderID(0);
             }
-            let kind = (g.leaves.order_type)(g.context, id, self.index) as u8;
-            match kind {
-                1 | 2 | 6 => {
-                    if kind != 2
-                        || (g.leaves.order_service)(g.context, id, self.index) == 0
-                        || g.needs_service(id)
-                    {
-                        (g.leaves.copy_order)(g.context, id, self.index);
-                        return (g.leaves.update_order_dest)(id, self.index) != 0;
-                    }
+
+            let order = g.get_order(v, self.index);
+            assert_with(|| !order.is_null());
+
+            // SAFETY: The list has orders and the index is below their count, so `order`
+            // names one of them, live until the list changes; each read below ends before
+            // the call that follows it.
+            let view = unsafe { OrderView::of(order) };
+            let goto = match view.kind() {
+                /* Skip service in depot orders when the train doesn't need service. */
+                OrderType::OT_GOTO_DEPOT
+                    if view.depot_type().test(OrderDepotTypeFlag::Service)
+                        && !g.needs_servicing(v) =>
+                {
+                    false
                 }
-                7 => {
-                    let next = (g.leaves.conditional)(g.context, id, self.index) as u8;
-                    if next != 0xff {
+                OrderType::OT_GOTO_DEPOT
+                | OrderType::OT_GOTO_STATION
+                | OrderType::OT_GOTO_WAYPOINT => true,
+                OrderType::OT_CONDITIONAL => {
+                    let next = g.process_conditional_order(order, v);
+                    if next != VehicleOrderID::INVALID_VEH_ORDER_ID {
                         depth += 1;
                         self.index = next;
-                        if self.index != id.vehicle().cur_real_order_index_raw()
-                            && depth < i32::from(g.read_num_orders(id))
+                        /* Don't increment next, so no break here. */
+                        if self.index != v.vehicle().cur_real_order_index()
+                            && depth < i32::from(g.get_num_orders(v).0)
                         {
                             continue;
                         }
                         return false;
                     }
+                    false
                 }
-                _ => {}
+                _ => false,
+            };
+            if goto {
+                // SAFETY: As above; the copy creates no reference.
+                unsafe { v.vehicle().current_order_pointer().write(view.copied()) };
+                return g.update_order_dest(v, order, 0, true);
             }
-            self.index = self.index.wrapping_add(1);
+            /* Don't increment inside the while because otherwise conditional
+             * orders can lead to an infinite loop. */
+            self.index = VehicleOrderID(self.index.0.wrapping_add(1));
             depth += 1;
-            if self.index == id.vehicle().cur_real_order_index_raw()
-                || depth >= i32::from(g.read_num_orders(id))
+            if !(self.index != v.vehicle().cur_real_order_index()
+                && depth < i32::from(g.get_num_orders(v).0))
             {
                 return false;
             }
         }
     }
 }
-impl Drop for Orders<'_> {
+
+/// `~VehicleOrderSaver`: restore the saved order to the vehicle, if `Restore()` has not
+/// already been called.
+impl Drop for VehicleOrderSaver<'_, '_> {
     fn drop(&mut self) {
         if !self.restored {
             self.restore();
         }
     }
 }
-fn choose(
-    g: &Game,
-    id: Handle,
-    tile: u32,
-    dir: u8,
-    mut available: u8,
-    force: bool,
-    mark: bool,
-) -> (u8, bool) {
-    crate::witness::hit(crate::witness::TRAIN_CHOOSE_TRACK);
-    let mut best = 0xff;
-    let mut reserve = (g.leaves.reserve_paths)() || force;
-    let mut changed = false;
-    let mut final_dest = INVALID_TILE;
-    let mut got = false;
-    let res = g.reserved(tile) & (g.leaves.reach_tracks)(g.context, id, dir) as u8;
-    if res != 0 {
-        return (first(u16::from(res)), false);
-    }
-    if single(u16::from(available)) {
-        let track = first(u16::from(available));
-        if track != 0xff
-            && ((g.leaves.has_pbs)(
-                g.context,
-                id,
-                tile,
-                (g.leaves.enter_td)(g.context, id, track, dir) as u8,
-            ) != 0)
-        {
-            reserve = true;
-            changed = true;
-            g.signal(
-                id,
-                tile,
-                (g.leaves.enter_td)(g.context, id, track, dir) as u8,
-                true,
-            );
-        } else if !reserve {
-            return (track, false);
-        }
-        best = track;
-    }
-    let mut dest = Pbs {
-        tile,
-        td: 0xff,
-        okay: 0,
-        other: Handle::NONE,
-    };
-    let mut dest_dir = dir;
-    if reserve {
-        dest = extend(g, id, &mut available, &mut dest_dir);
-        if dest.tile == INVALID_TILE {
-            if mark {
-                (g.leaves.stuck)(g.context, id);
-            }
-            if changed {
-                g.signal(
-                    id,
-                    tile,
-                    (g.leaves.enter_td)(g.context, id, best, dir) as u8,
-                    false,
-                );
-            }
-            return (first(u16::from(available)), false);
-        }
-        if dest.okay != 0 {
-            if changed {
-                (g.shared().mark_dirty)(tile);
-            }
-            g.reserve(id.vehicle().tile_raw(), g.td(id));
-            return (best, true);
-        }
-        (g.leaves.service)(g.context, id);
-        if matches!(
-            id.vehicle().current_order().kind_raw(),
-            OT_GOTO_DEPOT | OT_DUMMY | OT_CONDITIONAL
-        ) {
-            (g.leaves.process_orders)(id);
-        }
-    }
-    let mut orders = Orders::new(g, id);
-    let v_tile: u32 = id.vehicle().tile_raw();
-    let v_dest: u32 = id.vehicle().dest_tile_raw();
-    let v_destination: u16 = id.vehicle().current_order().destination_raw();
-    let v_order: u8 = id.vehicle().current_order().kind_raw();
-    if v_order == OT_LEAVESTATION {
-        orders.next(false);
-    } else if v_order == OT_LOADING
-        || (v_order != OT_GOTO_DEPOT
-            && if v_order == OT_GOTO_STATION {
-                ((g.leaves.is_station)(g.context, id, v_tile) != 0)
-                    && v_destination
-                        == crate::map_func::World::new(g.shared())
-                            .get_station_index(crate::tile_type::TileIndex(v_tile))
-                            .0
-            } else {
-                v_tile == v_dest
-            })
-    {
-        orders.next(true);
-    }
-    if dest.tile != INVALID_TILE && dest.okay == 0 {
-        let new_tile = dest.tile;
-        let result = g.pathfind(id, new_tile, dest_dir, available, reserve, true);
-        dest = pbs(result);
-        final_dest = result.final_dest;
-        if new_tile == tile {
-            best = result.track;
-        }
-        // SAFETY: The native table names the immutable process-wide base table.
-        (unsafe { &*g.leaves.vehicle }.pathfinding_result)(id.vehicle(), result.found != 0);
-    }
-    if !reserve {
-        return (best, false);
-    }
-    if dest.tile != INVALID_TILE && dest.okay == 0 {
-        if mark {
-            (g.leaves.stuck)(g.context, id);
-        }
-        free(g, id);
-        return (best, false);
-    }
-    if dest.tile == INVALID_TILE {
-        let origin = g.origin(id, false);
-        if g.safe_track(id, origin.tile, origin.td, false) {
-            let res = g.reserved(tile) & (g.leaves.reach_tracks)(g.context, id, dir) as u8;
-            best = first(u16::from(res));
-            g.reserve(id.vehicle().tile_raw(), g.td(id));
-            got = true;
-            if changed {
-                (g.shared().mark_dirty)(tile);
-            }
-        } else {
-            free(g, id);
-            if mark {
-                (g.leaves.stuck)(g.context, id);
-            }
-        }
-        return (best, got);
-    }
-    got = true;
-    // SAFETY: The entry keeps the native train live through reservation traversal.
-    while !g.safe(id, dest.tile, dest.td) {
-        let exit = g.dir(id, dest.td);
-        let next = g
-            .shared()
-            .map()
-            .tile_add_by_diag_dir(
-                TileIndex(dest.tile),
-                DiagDirection(exit),
-                crate::map_func::native_check,
-            )
-            .0;
-        let mut reachable =
-            tracks(g.track_status(next)) & (g.leaves.reach_tracks)(g.context, id, exit) as u8;
-        if (g.leaves.rail90)(g.context, id, dest.tile, next) != 0 {
-            reachable &= !((g.leaves.cross_tracks)(g.context, id, dest.td & 7) as u8);
-        }
-        if orders.next(true) {
-            let current = pbs(g.pathfind(id, next, exit, reachable, true, false));
-            if current.tile != INVALID_TILE {
-                dest = current;
-                if dest.okay != 0 {
-                    continue;
-                }
-                free(g, id);
-                if mark {
-                    (g.leaves.stuck)(g.context, id);
-                }
-                got = false;
-                changed = false;
-                break;
-            }
-        }
-        if !g.safe_track(id, dest.tile, dest.td, true) {
-            free(g, id);
-            if mark {
-                (g.leaves.stuck)(g.context, id);
-            }
-            got = false;
-            changed = false;
-        }
-        break;
-    }
-    g.reserve(id.vehicle().tile_raw(), g.td(id));
-    if changed {
-        (g.shared().mark_dirty)(tile);
-    }
-    orders.restore();
-    let v_order: u8 = id.vehicle().current_order().kind_raw();
-    let v_nearest: u8 = u8::from(
-        id.vehicle().current_order().depot_action_flags_raw()
-            & crate::order_type::ODATF_NEAREST_DEPOT
-            != 0,
-    );
-    if v_order == OT_GOTO_DEPOT
-        && v_nearest != 0
-        && final_dest != INVALID_TILE
-        && ((g.leaves.is_depot)(g.context, id, final_dest) != 0)
-    {
-        let destination = (g.shared().depot_index)(final_dest);
-        // SAFETY: The live current order belongs to this serialized train.
-        unsafe { (*id.vehicle().current_order_pointer()).destination = destination };
-        id.vehicle().set_dest_tile_raw(final_dest);
-        (g.leaves.start_stop)(g.context, id);
-    }
-    (best, got)
-}
-fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
-    let v_tile: u32 = id.vehicle().tile_raw();
-    if id.track().0 == DEPOT {
-        if (g.leaves.depot_reserved)(g.context, id, v_tile) != 0 {
-            if mark {
-                (g.leaves.stuck)(g.context, id);
-            }
-            return false;
-        }
-        let dir = (g.leaves.depot_dir)(g.context, id, v_tile) as u8;
-        let next = g
-            .shared()
-            .map()
-            .tile_add_by_diag_dir(
-                TileIndex(v_tile),
-                DiagDirection(dir),
-                crate::map_func::native_check,
-            )
-            .0;
-        if g.has_reserved(next, (g.leaves.reach_tracks)(g.context, id, dir) as u8) {
-            return false;
-        }
-    }
-    let origin = g.origin(id, true);
-    if origin.other != Handle::NONE && origin.other != id {
-        if mark {
-            (g.leaves.stuck)(g.context, id);
-        }
-        return false;
-    }
-    if origin.okay != 0 && (v_tile != origin.tile || first_okay) {
-        if id.flags().test(crate::train::VehicleRailFlag::Stuck) {
-            (g.leaves.start_stop)(g.context, id);
-        }
-        id.set_flags(id.flags().reset(crate::train::VehicleRailFlag::Stuck));
-        return true;
-    }
-    if id.track().0 == DEPOT {
-        (g.leaves.set_depot)(g.context, id, v_tile, 1);
-        if (g.leaves.show_res)(g.context, id) != 0 {
-            (g.shared().mark_dirty)(v_tile);
-        }
-    }
-    let exit = g.dir(id, origin.td);
-    let new_tile = g
-        .shared()
-        .map()
-        .tile_add_by_diag_dir(
-            TileIndex(origin.tile),
-            DiagDirection(exit),
-            crate::map_func::native_check,
-        )
-        .0;
-    let mut reachable =
-        tracks(g.track_status(new_tile) & (g.leaves.diag_reach_dirs)(g.context, id, exit) as u16);
-    if (g.leaves.rail90)(g.context, id, origin.tile, new_tile) != 0 {
-        reachable &= !((g.leaves.cross_tracks)(g.context, id, origin.td & 7) as u8);
-    }
-    let (_, made) = choose(g, id, new_tile, exit, reachable, true, mark);
-    if !made {
-        if id.track().0 == DEPOT {
-            (g.leaves.set_depot)(g.context, id, id.vehicle().tile_raw(), 0);
-        }
-        return false;
-    }
-    if id.flags().test(crate::train::VehicleRailFlag::Stuck) {
-        id.set_wait_counter(0);
-        (g.leaves.start_stop)(g.context, id);
-    }
-    id.set_flags(id.flags().reset(crate::train::VehicleRailFlag::Stuck));
-    true
-}
-fn check_next(g: &Game, id: Handle) {
-    if (g.leaves.backoff)() == 255 || id.track().0 == DEPOT {
-        return;
-    }
-    let v_tile: u32 = id.vehicle().tile_raw();
-    let v_dest: u32 = id.vehicle().dest_tile_raw();
-    let v_destination: u16 = id.vehicle().current_order().destination_raw();
-    let v_order: u8 = id.vehicle().current_order().kind_raw();
-    let v_num_orders: u8 = g.read_num_orders(id);
-    match v_order {
-        OT_GOTO_DEPOT => {
-            if v_tile == v_dest {
-                return;
-            }
-        }
-        OT_GOTO_WAYPOINT => {
-            if ((g.leaves.is_waypoint)(g.context, id, v_tile) != 0)
-                && crate::map_func::World::new(g.shared())
-                    .get_station_index(crate::tile_type::TileIndex(v_tile))
-                    .0
-                    == v_destination
-            {
-                (g.leaves.process_orders)(id);
-            }
-        }
-        OT_NOTHING | OT_LOADING | OT_LEAVESTATION if v_num_orders > 0 => return,
-        _ => {}
-    }
-    let tile = id.vehicle().tile_raw();
-    if ((g.leaves.is_station)(g.context, id, tile) != 0)
-        && g.order_stop(
-            id,
-            crate::map_func::World::new(g.shared())
-                .get_station_index(crate::tile_type::TileIndex(tile))
-                .0,
-        )
-    {
-        return;
-    }
-    let td = g.td(id);
-    if (is_tile_type(
-        g.shared(),
-        TileIndex(tile),
-        crate::tile_type::TileType::MP_RAILWAY,
-    )) && ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
-        && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
-        && ((g.leaves.green)(g.context, id, tile, td) == 0)
-    {
-        return;
-    }
-    let mut ft = g.follower(id, id.compatible_railtypes().0);
-    if !ft.follow_raw(g.shared(), tile, td) {
-        return;
-    }
-    if !g.has_reserved(ft.new_tile.0, tracks(ft.new_td_bits.0))
-        && single(ft.new_td_bits.0)
-        && ((g.leaves.has_pbs)(g.context, id, ft.new_tile.0, first(ft.new_td_bits.0)) != 0)
-    {
-        let mut available = tracks(ft.new_td_bits.0);
-        if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
-            available &= !((g.leaves.cross_tracks)(g.context, id, ft.old_td.0 & 7) as u8);
-        }
-        choose(g, id, ft.new_tile.0, ft.exitdir.0, available, false, false);
-    }
-}
 
-/// Synchronous reservation policy; order snapshots live on the Rust stack.
-/// # Safety
-/// Leaves, context and shell are live for this call. No state borrow spans a callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_reservation_check_next(
-    id: Handle,
-    vehicle: crate::vehicle::VehicleRef,
-    leaves: *const Leaves,
-    context: *mut std::ffi::c_void,
-) {
-    let g = unsafe { Game::entry(vehicle, leaves, context) };
-    check_next(&g, id);
-}
-
-/// Synchronous reservation policy; order snapshots live on the Rust stack.
-/// # Safety
-/// Leaves, context and shell are live for this call. No state borrow spans a callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_reservation_free(
-    id: Handle,
-    vehicle: crate::vehicle::VehicleRef,
-    leaves: *const Leaves,
-    context: *mut std::ffi::c_void,
-) {
-    let g = unsafe { Game::entry(vehicle, leaves, context) };
-    free(&g, id);
-}
-
-/// Synchronous reservation policy; order snapshots live on the Rust stack.
-/// # Safety
-/// Leaves, context and shell are live for this call. No state borrow spans a callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_reservation_try_path(
-    id: Handle,
-    vehicle: crate::vehicle::VehicleRef,
-    mark: u8,
-    first_okay: u8,
-    leaves: *const Leaves,
-    context: *mut std::ffi::c_void,
-) -> u8 {
-    let g = unsafe { Game::entry(vehicle, leaves, context) };
-    u8::from(try_path(&g, id, mark != 0, first_okay != 0))
-}
-
-/// `CheckNextTrainTile`: check if the train is on the last reserved tile and try to extend
-/// the path then.
-pub(crate) fn check_next_train_tile(g: &Game, v: Handle) {
-    check_next(g, v);
-}
-/// `ClearPathReservation`: clear the reservation of `tile` that was just left by a wagon on
-/// `track_dir`.
-pub(crate) fn clear_path_reservation(
-    g: &Game,
-    v: Handle,
-    tile: TileIndex,
-    track_dir: crate::track_type::Trackdir,
-) {
-    clear(g, v, tile.0, track_dir.0);
-}
-/// `FreeTrainTrackReservation`: free the reserved path in front of a vehicle.
-pub(crate) fn free_train_track_reservation(g: &Game, v: Handle) {
-    free(g, v);
-}
 /// `ChooseTrainTrack`: choose a track. Returns the track and whether a reservation was
-/// made, in place of the original's `got_reservation` output.
+/// made, in place of the original's `got_reservation` output, whose writes no reader sees
+/// before the return.
 pub(crate) fn choose_train_track(
     g: &Game,
     v: Handle,
     tile: TileIndex,
     enterdir: DiagDirection,
-    tracks: crate::track_type::TrackBits,
+    mut tracks: TrackBits,
     force_res: bool,
     mark_stuck: bool,
-) -> (crate::track_type::Track, bool) {
-    let (track, got_reservation) =
-        choose(g, v, tile.0, enterdir.0, tracks.0, force_res, mark_stuck);
-    (crate::track_type::Track(track), got_reservation)
+) -> (Track, bool) {
+    crate::witness::hit(crate::witness::TRAIN_CHOOSE_TRACK);
+    let mut best_track = Track::INVALID_TRACK;
+    let mut do_track_reservation = g.reserve_paths() || force_res;
+    let mut changed_signal = false;
+    let mut final_dest = TileIndex::INVALID;
+
+    assert_with(|| tracks & !TrackBits::TRACK_BIT_MASK == TrackBits::TRACK_BIT_NONE);
+
+    let mut got_reservation = false;
+
+    /* Don't use tracks here as the setting to forbid 90 deg turns might have been switched between reservation and now. */
+    let res_tracks =
+        g.get_reserved_trackbits(tile) & diagdir_reaches_tracks_asserted(enterdir, g.check());
+    /* Do we have a suitable reserved track? */
+    if res_tracks != TrackBits::TRACK_BIT_NONE {
+        return (Track(find_first_track(res_tracks.0)), got_reservation);
+    }
+
+    /* Quick return in case only one possible track is available */
+    if kill_first_bit(tracks.0) == TrackBits::TRACK_BIT_NONE.0 {
+        let track = Track(find_first_track(tracks.0));
+        /* We need to check for signals only here, as a junction tile can't have signals. */
+        if track != Track::INVALID_TRACK
+            && g.has_pbs_signal_on_trackdir(
+                tile,
+                track_enterdir_to_trackdir(track, enterdir, g.check()),
+            )
+        {
+            do_track_reservation = true;
+            changed_signal = true;
+            g.set_signal_state_by_trackdir(
+                tile,
+                track_enterdir_to_trackdir(track, enterdir, g.check()),
+                SignalState::SIGNAL_STATE_GREEN,
+            );
+        } else if !do_track_reservation {
+            return (track, got_reservation);
+        }
+        best_track = track;
+    }
+
+    let mut res_dest = PBSTileInfo {
+        tile,
+        trackdir: Trackdir::INVALID_TRACKDIR,
+        okay: false,
+    };
+    let mut dest_enterdir = enterdir;
+    if do_track_reservation {
+        res_dest = extend_train_reservation(g, v, &mut tracks, &mut dest_enterdir);
+        if res_dest.tile == TileIndex::INVALID {
+            /* Reservation failed? */
+            if mark_stuck {
+                g.mark_train_as_stuck(v);
+            }
+            if changed_signal {
+                g.set_signal_state_by_trackdir(
+                    tile,
+                    track_enterdir_to_trackdir(best_track, enterdir, g.check()),
+                    SignalState::SIGNAL_STATE_RED,
+                );
+            }
+            return (Track(find_first_track(tracks.0)), got_reservation);
+        }
+        if res_dest.okay {
+            /* Got a valid reservation that ends at a safe target, quick exit. */
+            got_reservation = true;
+            if changed_signal {
+                g.mark_tile_dirty_by_tile(tile);
+            }
+            g.try_reserve_rail_track(
+                v.vehicle().tile(),
+                trackdir_to_track_asserted(g.get_vehicle_trackdir(v), g.check()),
+            );
+            return (best_track, got_reservation);
+        }
+
+        /* Check if the train needs service here, so it has a chance to always find a depot.
+         * Also check if the current order is a service order so we don't reserve a path to
+         * the destination but instead to the next one if service isn't needed. */
+        g.check_if_train_needs_service(v);
+        if v.vehicle().current_order().is_type(OrderType::OT_DUMMY)
+            || v.vehicle()
+                .current_order()
+                .is_type(OrderType::OT_CONDITIONAL)
+            || v.vehicle()
+                .current_order()
+                .is_type(OrderType::OT_GOTO_DEPOT)
+        {
+            g.process_orders(v);
+        }
+    }
+
+    /* Save the current train order. The destructor will restore the old order on function exit. */
+    let mut orders = VehicleOrderSaver::new(g, v);
+
+    /* If the current tile is the destination of the current order and
+     * a reservation was requested, advance to the next order.
+     * Don't advance on a depot order as depots are always safe end points
+     * for a path and no look-ahead is necessary. This also avoids a
+     * problem with depot orders not part of the order list when the
+     * order list itself is empty. */
+    if v.vehicle()
+        .current_order()
+        .is_type(OrderType::OT_LEAVESTATION)
+    {
+        orders.switch_to_next_order(false);
+    } else if v.vehicle().current_order().is_type(OrderType::OT_LOADING)
+        || (!v
+            .vehicle()
+            .current_order()
+            .is_type(OrderType::OT_GOTO_DEPOT)
+            && if v
+                .vehicle()
+                .current_order()
+                .is_type(OrderType::OT_GOTO_STATION)
+            {
+                g.is_rail_station_tile(v.vehicle().tile())
+                    && v.vehicle().current_order().destination().0
+                        == g.get_station_index(v.vehicle().tile()).0
+            } else {
+                v.vehicle().tile() == v.vehicle().dest_tile()
+            })
+    {
+        orders.switch_to_next_order(true);
+    }
+
+    if res_dest.tile != TileIndex::INVALID && !res_dest.okay {
+        /* Pathfinders are able to tell that route was only 'guessed'. */
+        let mut path_found = true;
+        let new_tile = res_dest.tile;
+
+        /* `DoTrainPathfind`: initialise the final destination, then perform the
+         * pathfinding. */
+        final_dest = TileIndex::INVALID;
+        let next_track = crate::rail_yapf::yapf_train_choose_track(
+            g.services,
+            v,
+            new_tile,
+            dest_enterdir,
+            tracks,
+            &mut path_found,
+            do_track_reservation,
+            Some(&mut res_dest),
+            Some(&mut final_dest),
+        );
+        if new_tile == tile {
+            best_track = next_track;
+        }
+        g.handle_pathfinding_result(v, path_found);
+    }
+
+    /* No track reservation requested -> finished. */
+    if !do_track_reservation {
+        return (best_track, got_reservation);
+    }
+
+    /* A path was found, but could not be reserved. */
+    if res_dest.tile != TileIndex::INVALID && !res_dest.okay {
+        if mark_stuck {
+            g.mark_train_as_stuck(v);
+        }
+        free_train_track_reservation(g, v);
+        return (best_track, got_reservation);
+    }
+
+    /* No possible reservation target found, we are probably lost. */
+    if res_dest.tile == TileIndex::INVALID {
+        /* Try to find any safe destination. */
+        let origin = g.follow_train_reservation(v, None);
+        if g.try_reserve_safe_track(v, origin.tile, origin.trackdir, false) {
+            let res = g.get_reserved_trackbits(tile)
+                & diagdir_reaches_tracks_asserted(enterdir, g.check());
+            best_track = Track(find_first_track(res.0));
+            g.try_reserve_rail_track(
+                v.vehicle().tile(),
+                trackdir_to_track_asserted(g.get_vehicle_trackdir(v), g.check()),
+            );
+            got_reservation = true;
+            if changed_signal {
+                g.mark_tile_dirty_by_tile(tile);
+            }
+        } else {
+            free_train_track_reservation(g, v);
+            if mark_stuck {
+                g.mark_train_as_stuck(v);
+            }
+        }
+        return (best_track, got_reservation);
+    }
+
+    got_reservation = true;
+
+    /* Reservation target found and free, check if it is safe. */
+    while !g.is_safe_waiting_position(v, res_dest.tile, res_dest.trackdir, true, g.forbid_90_deg())
+    {
+        /* Extend reservation until we have found a safe position. */
+        let exitdir = trackdir_to_exitdir_asserted(res_dest.trackdir, g.check());
+        let next_tile = g.tile_add_by_diag_dir(res_dest.tile, exitdir);
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "the original's (TrackdirBits) cast of the track status"
+        )]
+        let status = TrackdirBits(g.get_tile_track_status(next_tile) as u16);
+        let mut reachable = TrackBits(trackdir_bits_to_track_bits(status.0))
+            & diagdir_reaches_tracks_asserted(exitdir, g.check());
+        if g.rail_90_deg_turn_disallowed(
+            g.get_tile_rail_type(res_dest.tile),
+            g.get_tile_rail_type(next_tile),
+        ) {
+            reachable &= !track_crosses_tracks(
+                trackdir_to_track_asserted(res_dest.trackdir, g.check()),
+                g.check(),
+            );
+        }
+
+        /* Get next order with destination. */
+        if orders.switch_to_next_order(true) {
+            let mut cur_dest = PBSTileInfo::default();
+            /* `DoTrainPathfind` with no final destination: the original leaves `path_found`
+             * uninitialised and never reads it. */
+            let mut path_found = true;
+            crate::rail_yapf::yapf_train_choose_track(
+                g.services,
+                v,
+                next_tile,
+                exitdir,
+                reachable,
+                &mut path_found,
+                true,
+                Some(&mut cur_dest),
+                None,
+            );
+            if cur_dest.tile != TileIndex::INVALID {
+                res_dest = cur_dest;
+                if res_dest.okay {
+                    continue;
+                }
+                /* Path found, but could not be reserved. */
+                free_train_track_reservation(g, v);
+                if mark_stuck {
+                    g.mark_train_as_stuck(v);
+                }
+                got_reservation = false;
+                changed_signal = false;
+                break;
+            }
+        }
+        /* No order or no safe position found, try any position. */
+        if !g.try_reserve_safe_track(v, res_dest.tile, res_dest.trackdir, true) {
+            free_train_track_reservation(g, v);
+            if mark_stuck {
+                g.mark_train_as_stuck(v);
+            }
+            got_reservation = false;
+            changed_signal = false;
+        }
+        break;
+    }
+
+    g.try_reserve_rail_track(
+        v.vehicle().tile(),
+        trackdir_to_track_asserted(g.get_vehicle_trackdir(v), g.check()),
+    );
+
+    if changed_signal {
+        g.mark_tile_dirty_by_tile(tile);
+    }
+
+    orders.restore();
+    if v.vehicle()
+        .current_order()
+        .is_type(OrderType::OT_GOTO_DEPOT)
+        && v.vehicle()
+            .current_order()
+            .depot_action_flags()
+            .test(OrderDepotActionFlag::NearestDepot)
+        && final_dest != TileIndex::INVALID
+        && g.is_rail_depot_tile(final_dest)
+    {
+        // SAFETY: The vehicle's live current order.
+        unsafe {
+            crate::orders::set_destination(
+                v.vehicle().current_order_pointer(),
+                g.get_depot_index(final_dest),
+            );
+        };
+        v.vehicle().set_dest_tile(final_dest);
+        g.set_start_stop_dirty(v);
+    }
+
+    (best_track, got_reservation)
 }
+
 /// `TryPathReserve`: try to reserve a path to a safe position. `mark_as_stuck` says whether
 /// the train should be marked as stuck on a failed reservation; `first_tile_okay` that no
-/// path should be reserved if the current tile is a safe position.
+/// path should be reserved if the current tile is a safe position. Returns true if a path
+/// could be reserved.
 pub(crate) fn try_path_reserve(
     g: &Game,
     v: Handle,
     mark_as_stuck: bool,
     first_tile_okay: bool,
 ) -> bool {
-    try_path(g, v, mark_as_stuck, first_tile_okay)
+    assert_with(|| v.is_front_engine());
+
+    /* We have to handle depots specially as the track follower won't look
+     * at the depot tile itself but starts from the next tile. If we are still
+     * inside the depot, a depot reservation can never be ours. */
+    if v.track() == TrackBits::TRACK_BIT_DEPOT {
+        if g.has_depot_reservation(v.vehicle().tile()) {
+            if mark_as_stuck {
+                g.mark_train_as_stuck(v);
+            }
+            return false;
+        }
+        /* Depot not reserved, but the next tile might be. */
+        let next_tile = g.tile_add_by_diag_dir(
+            v.vehicle().tile(),
+            g.get_rail_depot_direction(v.vehicle().tile()),
+        );
+        if g.has_reserved_tracks(
+            next_tile,
+            diagdir_reaches_tracks_asserted(
+                g.get_rail_depot_direction(v.vehicle().tile()),
+                g.check(),
+            ),
+        ) {
+            return false;
+        }
+    }
+
+    let mut other_train = Handle::NONE;
+    let origin = g.follow_train_reservation(v, Some(&mut other_train));
+    /* The path we are driving on is already blocked by some other train.
+     * This can only happen in certain situations when mixing path and
+     * block signals or when changing tracks and/or signals.
+     * Exit here as doing any further reservations will probably just
+     * make matters worse. */
+    if other_train != Handle::NONE && g.index(other_train) != g.index(v) {
+        if mark_as_stuck {
+            g.mark_train_as_stuck(v);
+        }
+        return false;
+    }
+    /* If we have a reserved path and the path ends at a safe tile, we are finished already. */
+    if origin.okay && (v.vehicle().tile() != origin.tile || first_tile_okay) {
+        /* Can't be stuck then. */
+        if v.flags().test(VehicleRailFlag::Stuck) {
+            g.set_start_stop_dirty(v);
+        }
+        v.set_flags(v.flags().reset(VehicleRailFlag::Stuck));
+        return true;
+    }
+
+    /* If we are in a depot, tentatively reserve the depot. */
+    if v.track() == TrackBits::TRACK_BIT_DEPOT {
+        g.set_depot_reservation(v.vehicle().tile(), true);
+        if g.show_track_reservation() {
+            g.mark_tile_dirty_by_tile(v.vehicle().tile());
+        }
+    }
+
+    let exitdir = trackdir_to_exitdir_asserted(origin.trackdir, g.check());
+    let new_tile = g.tile_add_by_diag_dir(origin.tile, exitdir);
+    let mut reachable = TrackBits(trackdir_bits_to_track_bits(
+        track_status_to_trackdir_bits(g.get_tile_track_status(new_tile))
+            & diagdir_reaches_trackdirs_asserted(exitdir, g.check()).0,
+    ));
+
+    if g.rail_90_deg_turn_disallowed(
+        g.get_tile_rail_type(origin.tile),
+        g.get_tile_rail_type(new_tile),
+    ) {
+        reachable &= !track_crosses_tracks(
+            trackdir_to_track_asserted(origin.trackdir, g.check()),
+            g.check(),
+        );
+    }
+
+    let (_, res_made) = choose_train_track(g, v, new_tile, exitdir, reachable, true, mark_as_stuck);
+
+    if !res_made {
+        /* Free the depot reservation as well. */
+        if v.track() == TrackBits::TRACK_BIT_DEPOT {
+            g.set_depot_reservation(v.vehicle().tile(), false);
+        }
+        return false;
+    }
+
+    if v.flags().test(VehicleRailFlag::Stuck) {
+        v.set_wait_counter(0);
+        g.set_start_stop_dirty(v);
+    }
+    v.set_flags(v.flags().reset(VehicleRailFlag::Stuck));
+    true
 }
+
 /// `CheckReverseTrain`.
-pub(crate) fn check_reverse_train(g: &Game, id: Handle) -> bool {
-    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-    if unsafe { g.shared().settings().line_reverse_mode.read() }
-        || id.track().0 == DEPOT
-        || id.track().0 == WORMHOLE
-        || id.vehicle().direction_raw() & 1 == 0
+pub(crate) fn check_reverse_train(g: &Game, v: Handle) -> bool {
+    if g.line_reverse_mode()
+        || v.track() == TrackBits::TRACK_BIT_DEPOT
+        || v.track() == TrackBits::TRACK_BIT_WORMHOLE
+        || v.vehicle().direction().0 & 1 == 0
     {
         return false;
     }
-    (g.leaves.check_reverse)(g.context, id) != 0
+
+    assert_with(|| v.track() != TrackBits::TRACK_BIT_NONE);
+
+    crate::rail_yapf::yapf_train_check_reverse(g.services, v)
 }
 
-/// Synchronous reservation policy; order snapshots live on the Rust stack.
+/// `Train::GetOrderStationLocation`: get the location of the next station to visit.
+/// `station` is the next station to visit. Returns the location of the new station.
+fn get_order_station_location(g: &Game, this: Handle, station: StationID) -> TileIndex {
+    if station == this.vehicle().last_station_visited() {
+        this.vehicle().set_last_station_visited(StationID::INVALID);
+    }
+
+    let st = g.station_get(station);
+    if !g.facilities(st.base).test(StationFacility::Train) {
+        /* The destination station has no trainstation tiles. */
+        g.increment_real_order_index(this);
+        return TileIndex(0);
+    }
+
+    crate::base_station_base::xy(st.base)
+}
+
+/// `Train::ReserveTrackUnderConsist`: tries to reserve track under whole train consist.
+pub(crate) fn reserve_track_under_consist(g: &Game, this: Handle) {
+    let mut u = this;
+    while u != Handle::NONE {
+        match u.track() {
+            TrackBits::TRACK_BIT_WORMHOLE => {
+                g.try_reserve_rail_track(
+                    u.vehicle().tile(),
+                    Track(crate::track_func::diag_dir_to_diag_track(
+                        g.get_tunnel_bridge_direction(u.vehicle().tile()).0,
+                        g.check(),
+                    )),
+                );
+            }
+            TrackBits::TRACK_BIT_DEPOT => {}
+            _ => {
+                g.try_reserve_rail_track(
+                    u.vehicle().tile(),
+                    Track(track_bits_to_track(u.track().0, g.check())),
+                );
+            }
+        }
+        u = u.next();
+    }
+}
+
+/// The C++ callers of these entries hold the game-state mutex and pass the live train part
+/// and the immutable process-lifetime train and shared tables, which survive the call.
+/// Callbacks may reenter; no Rust borrow of a record spans one.
+macro_rules! entry_game {
+    ($leaves:expr, $services:expr) => {
+        // SAFETY: The entry's contract keeps both immutable tables live until it returns.
+        Game::new(unsafe { &*$leaves }, unsafe { &*$services })
+    };
+}
+
+/// `CheckNextTrainTile`, for the kept native test.
 /// # Safety
-/// Leaves, context and shell are live for this call. No state borrow spans a callback.
+/// The tables and the train part are live until the call returns.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_train_reservation_check_next(
+    v: Handle,
+    leaves: *const crate::train::Leaves,
+    services: *const Services,
+) {
+    check_next_train_tile(&entry_game!(leaves, services), v);
+}
+
+/// `FreeTrainTrackReservation`.
+/// # Safety
+/// As [`openttd_rust_train_reservation_check_next`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_train_reservation_free(
+    v: Handle,
+    leaves: *const crate::train::Leaves,
+    services: *const Services,
+) {
+    free_train_track_reservation(&entry_game!(leaves, services), v);
+}
+
+/// `TryPathReserve`.
+/// # Safety
+/// As [`openttd_rust_train_reservation_check_next`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_train_reservation_try_path(
+    v: Handle,
+    mark_as_stuck: u8,
+    first_tile_okay: u8,
+    leaves: *const crate::train::Leaves,
+    services: *const Services,
+) -> u8 {
+    u8::from(try_path_reserve(
+        &entry_game!(leaves, services),
+        v,
+        mark_as_stuck != 0,
+        first_tile_okay != 0,
+    ))
+}
+
+/// `Train::GetOrderStationLocation`.
+/// # Safety
+/// As [`openttd_rust_train_reservation_check_next`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_reservation_station_location(
-    id: Handle,
-    vehicle: crate::vehicle::VehicleRef,
+    v: Handle,
     station: u16,
-    leaves: *const Leaves,
-    context: *mut std::ffi::c_void,
+    leaves: *const crate::train::Leaves,
+    services: *const Services,
 ) -> u32 {
-    let g = unsafe { Game::entry(vehicle, leaves, context) };
-    if station == id.vehicle().last_station_visited_raw() {
-        id.vehicle().set_last_station_visited_raw(u16::MAX);
-    }
-    if (g.shared().station_facilities)(station) & crate::station_type::FACILITY_TRAIN == 0 {
-        (g.leaves.increment_order)(g.context, id);
-        0
-    } else {
-        (g.shared().station_xy)(station)
-    }
+    get_order_station_location(&entry_game!(leaves, services), v, StationID(station)).0
 }
 
-/// Synchronous reservation policy; order snapshots live on the Rust stack.
+/// `Train::ReserveTrackUnderConsist`.
 /// # Safety
-/// Leaves, context and shell are live for this call. No state borrow spans a callback.
+/// As [`openttd_rust_train_reservation_check_next`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_reservation_reserve_under(
-    id: Handle,
-    vehicle: crate::vehicle::VehicleRef,
-    leaves: *const Leaves,
-    context: *mut std::ffi::c_void,
+    v: Handle,
+    leaves: *const crate::train::Leaves,
+    services: *const Services,
 ) {
-    let g = unsafe { Game::entry(vehicle, leaves, context) };
-    reserve_track_under_consist(&g, id);
-}
-
-crate::abi::layouts! {
-    fn abi_layout;
-    "OpenTTDTrainReservationPbs" ["probe"] => Pbs {
-        tile,
-        other,
-        td,
-        okay,
-    };
-    "OpenTTDTrainReservationSearch" ["probe"] => Search {
-        track,
-        tile,
-        final_dest,
-        td,
-        found,
-        okay,
-    };
-    "OpenTTDTrainReservationLeaves" ["probe"] => Leaves {
-        read_num_orders,
-        backoff,
-        bits_track,
-        blocking,
-        check_reverse,
-        compat_station,
-        conditional,
-        copy_order,
-        cross_dirs,
-        cross_tracks,
-        depot_dir,
-        depot_reserved,
-        diag_reach_dirs,
-        diag_track,
-        enter_td,
-        exit_dir,
-        green,
-        has_pbs,
-        has_signal,
-        increment_order,
-        is_bridge,
-        is_depot,
-        is_pbs,
-        is_plain,
-        is_station,
-        is_waypoint,
-        oneway,
-        order_service,
-        order_type,
-        other_end,
-        overlap,
-        rail90,
-        reach_dirs,
-        reach_tracks,
-        reserve_paths,
-        service,
-        set_depot,
-        set_signal,
-        set_tunnel,
-        show_res,
-        signal_context,
-        vehicle,
-        shared,
-        start_stop,
-        stuck,
-        tile_offset,
-        trackdir,
-        pathfind,
-        safe_track,
-        process_orders,
-        update_order_dest,
-    };
+    reserve_track_under_consist(&entry_game!(leaves, services), v);
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
+    use crate::map_func::{BaseTileLayout, ExtendedTileLayout};
     use crate::pbs::PbsServices;
     use crate::services::RailMapServices;
+    use crate::test_tables::{MOVEMENT, ORDERS, PBS, RAIL_MAP, TRAIN_LEAVES, VEHICLE};
     use crate::train_state::State;
     use std::cell::Cell;
     use std::ffi::c_void;
 
-    /// An aborting callee of any fixture slot's signature.
-    trait Unused {
-        fn unused() -> Self;
-    }
-    macro_rules! unused_arity {
-        ($($arg:ident),*) => {
-            impl<R, $($arg),*> Unused for extern "C" fn($($arg),*) -> R {
-                fn unused() -> Self {
-                    #[allow(improper_ctypes_definitions)]
-                    extern "C" fn abort<R, $($arg),*>($(_: $arg),*) -> R {
-                        std::process::abort()
-                    }
-                    abort::<R, $($arg),*>
-                }
-            }
-            impl<R, $($arg),*> Unused for unsafe extern "C" fn($($arg),*) -> R {
-                fn unused() -> Self {
-                    #[allow(improper_ctypes_definitions)]
-                    unsafe extern "C" fn abort<R, $($arg),*>($(_: $arg),*) -> R {
-                        std::process::abort()
-                    }
-                    abort::<R, $($arg),*>
-                }
-            }
-        };
-    }
-    unused_arity!();
-    unused_arity!(A);
-    unused_arity!(A, B);
-    unused_arity!(A, B, C);
-    unused_arity!(A, B, C, D);
-    unused_arity!(A, B, C, D, E);
-    unused_arity!(A, B, C, D, E, F);
-    fn unused<T: Unused>() -> T {
-        T::unused()
-    }
-
-    pub(crate) fn leaves() -> Leaves {
-        Leaves {
-            read_num_orders: unused(),
-            backoff: unused(),
-            bits_track: unused(),
-            blocking: unused(),
-            check_reverse: unused(),
-            compat_station: unused(),
-            conditional: unused(),
-            copy_order: unused(),
-            cross_dirs: unused(),
-            cross_tracks: unused(),
-            depot_dir: unused(),
-            depot_reserved: unused(),
-            diag_reach_dirs: unused(),
-            diag_track: unused(),
-            enter_td: unused(),
-            exit_dir: unused(),
-            green: unused(),
-            has_pbs: unused(),
-            has_signal: unused(),
-            increment_order: unused(),
-            is_bridge: unused(),
-            is_depot: unused(),
-            is_pbs: unused(),
-            is_plain: unused(),
-            is_station: unused(),
-            is_waypoint: unused(),
-            oneway: unused(),
-            order_service: unused(),
-            order_type: unused(),
-            other_end: unused(),
-            overlap: unused(),
-            rail90: unused(),
-            reach_dirs: unused(),
-            reach_tracks: unused(),
-            reserve_paths: unused(),
-            service: unused(),
-            set_depot: unused(),
-            set_signal: unused(),
-            set_tunnel: unused(),
-            show_res: unused(),
-            signal_context: unused(),
-            vehicle: std::ptr::null(),
-            shared: std::ptr::null(),
-            start_stop: unused(),
-            stuck: unused(),
-            tile_offset: unused(),
-            trackdir: unused(),
-            pathfind: unused(),
-            safe_track: unused(),
-            process_orders: unused(),
-            update_order_dest: unused(),
-        }
-    }
-
-    impl<T> Unused for *const T {
-        fn unused() -> Self {
-            std::ptr::null()
-        }
-    }
-    impl<T> Unused for *mut T {
-        fn unused() -> Self {
-            std::ptr::null_mut()
-        }
-    }
-    impl<T> Unused for Option<T> {
-        fn unused() -> Self {
-            None
-        }
-    }
-    impl Unused for bool {
-        fn unused() -> Self {
-            false
-        }
-    }
-    /// Movement table whose every service is unused and which has no map descriptor.
-    pub(crate) fn movement_table() -> crate::movement::MovementServices {
-        crate::movement::MovementServices {
-            shared: unused(),
-            orders: unused(),
-            train: unused(),
-            vehicle: unused(),
-            tunnel_bridge: unused(),
-            road_compatible: unused(),
-            road_type_speed: unused(),
-            road_kind: unused(),
-            resolve: unused(),
-            depot_invalidate: unused(),
-            native_assert: unused(),
-            objects: unused(),
-            town: unused(),
-            industry_tiles: unused(),
-        }
-    }
-    fn vehicle_table() -> crate::vehicle::VehicleServices {
-        crate::vehicle::VehicleServices {
-            base_viewport: unused(),
-            can_allocate: unused(),
-            destroy: unused(),
-            engine: unused(),
-            first_sprite: unused(),
-            length_changed: unused(),
-            maintenance: unused(),
-            newgrf: unused(),
-            orders: unused(),
-            pathfinding_result: unused(),
-            play_sound: unused(),
-            play_vehicle_sound: unused(),
-            profit: unused(),
-            record_from_shell: resolve_record,
-            set_colourmap: unused(),
-            set_max_age: unused(),
-            ship_get: unused(),
-            show_newgrf_vehicle_error: unused(),
-            start_stop_dirty: unused(),
-            tile_links: unused(),
-            update_delta: unused(),
-            visits: unused(),
-            write_breakdowns: unused(),
-            write_calendar_service: unused(),
-            write_economy_service: unused(),
-            write_first_sprite: unused(),
-            write_profit: unused(),
-            write_reliability: unused(),
-            write_sprite_seq: unused(),
-            write_spritenum: unused(),
-        }
-    }
     extern "C" fn resolve_record(shell: *mut c_void) -> *mut crate::vehicle_base::VehicleRecord {
         // SAFETY: Test handles retain their exclusive stack Mock for each query.
         unsafe { &raw mut *(*shell.cast::<Mock>()).record }
     }
+    /// A train record and the owners it links, with a log of the recording services.
     struct Mock {
         record: Box<crate::vehicle_base::VehicleRecord>,
         state: State,
@@ -1464,23 +1610,28 @@ pub(crate) mod tests {
         fn set_order_token(&mut self, token: u32) {
             // SAFETY: The fixture initializes this Order before every access.
             let order = unsafe { self.orders.current.assume_init_mut() };
-            order.destination = token as u16;
-            order.wait = (token >> 16) as u16;
+            order.destination = u16::try_from(token & 0xffff).unwrap();
+            order.wait = u16::try_from(token >> 16).unwrap();
         }
         fn order_token(&self) -> u32 {
             // SAFETY: The fixture initializes this Order before every access.
             let order = unsafe { self.orders.current.assume_init_ref() };
             u32::from(order.destination) | (u32::from(order.wait) << 16)
         }
+        /// The handle of the train part, standing on the line's first tile and facing
+        /// north-east on `TRACK_X`.
         fn handle(&mut self) -> Handle {
-            self.record.dest_tile = crate::tile_type::TileIndex(9);
-            self.record.last_station_visited = crate::station_type::StationID(7);
+            self.record.dest_tile = TileIndex(9);
+            self.record.last_station_visited = StationID(7);
+            self.record.tile = index(0);
+            self.record.direction = crate::direction_type::Direction::DIR_NE;
             self.record.ground = &raw mut self.ground;
             self.record.consist = &raw mut self.consist;
             self.record.orders = &raw mut self.orders;
             self.record.train = &raw mut self.state;
             self.record.owner = crate::company_type::CompanyID(0);
             self.record.shell = std::ptr::from_mut(self).cast();
+            self.state.track = TrackBits::TRACK_BIT_X;
             Handle {
                 record: &raw mut *self.record,
                 owner: &raw mut self.state,
@@ -1492,49 +1643,50 @@ pub(crate) mod tests {
         unsafe { &mut *h.vehicle().shell().cast::<Mock>() }
     }
 
-    // A PBS service has no vehicle argument; each test thread names its world here.
+    // A PBS service has no vehicle argument; each test thread names its line here.
     thread_local! {
         static TRAIN: Cell<Handle> = const { Cell::new(Handle::NONE) };
-        static PBS: Cell<*const PbsServices> = const { Cell::new(std::ptr::null()) };
-        static WORLD: Cell<*const World> = const { Cell::new(std::ptr::null()) };
+        static PBS_TABLE: Cell<*const PbsServices> = const { Cell::new(std::ptr::null()) };
     }
     fn current<'a>() -> &'a mut Mock {
         // SAFETY: The installing test keeps this mock live; callbacks end each access.
         unsafe { mock(TRAIN.get()) }
     }
-    /// One railway world: every tile is plain unsignalled, unreserved rail.
-    struct World {
-        shared: crate::services::Services,
-        rail: RailMapServices,
-        pbs: PbsServices,
-        movement: crate::movement::MovementServices,
-        vehicle: crate::vehicle::VehicleServices,
-        base: Vec<crate::map_func::BaseTileLayout>,
-        extended: Vec<crate::map_func::ExtendedTileLayout>,
+    /// The tile `ordinal` steps north-east of the train's tile on a 64 by 64 map.
+    const fn index(ordinal: u32) -> TileIndex {
+        TileIndex(72 - ordinal)
     }
-    extern "C" fn pbs_services(_: *const crate::services::Services) -> *const PbsServices {
-        PBS.get()
+    const fn ordinal(tile: u32) -> u32 {
+        72 - tile
     }
-    extern "C" fn railway(_: u32) -> u8 {
-        crate::tile_type::MP_RAILWAY
-    }
-    extern "C" fn yes(_: u32) -> bool {
-        true
-    }
-    extern "C" fn no_signal(_: u32, _: u8) -> bool {
-        false
-    }
-    extern "C" fn no_reservation(_: u32) -> crate::services::TrackBits {
-        crate::services::TrackBits(0)
-    }
-    extern "C" fn no_show() -> bool {
-        false
+    extern "C" fn pbs_services(_: *const Services) -> *const PbsServices {
+        PBS_TABLE.get()
     }
     extern "C" fn every_type(_: u64) -> u64 {
         1
     }
-    extern "C" fn same_types(_: u8, _: u8, _: bool) -> bool {
+    extern "C" fn no_rail90(_: u8, _: u8, _: bool) -> bool {
         false
+    }
+    extern "C" fn no_signal(_: u32, _: u8) -> bool {
+        false
+    }
+    extern "C" fn no_reservation(_: u32) -> TrackBits {
+        TrackBits::TRACK_BIT_NONE
+    }
+    extern "C" fn no_show() -> bool {
+        false
+    }
+    extern "C" fn no_random(_: *mut c_void) -> u32 {
+        std::process::abort()
+    }
+    /// `HasPbsSignalOnTrackdir` over the line's map.
+    extern "C" fn has_pbs(tile: u32, td: u8) -> bool {
+        // SAFETY: The installing test keeps its line live.
+        let w = World::new(unsafe { &*(*PBS_TABLE.get()).shared });
+        w.is_tile_type(TileIndex(tile), TileType::MP_RAILWAY)
+            && w.has_signal_on_trackdir(tile, td)
+            && crate::rail_map::is_pbs_signal(w.signal_type(tile, td & 7))
     }
     extern "C" fn try_track(tile: u32, track: u8) -> bool {
         let m = current();
@@ -1544,26 +1696,57 @@ pub(crate) mod tests {
     extern "C" fn unreserve_track(tile: u32, track: u8) {
         current().log.push(("unreserve", ordinal(tile), track));
     }
-    extern "C" fn no_random(_: *mut c_void) -> u32 {
-        std::process::abort()
+    extern "C" fn set_signal(tile: u32, _: u8, state: u8) {
+        current().log.push(("signal", ordinal(tile), state));
     }
-    impl World {
+    extern "C" fn mark(tile: u32) {
+        current().log.push(("mark", ordinal(tile), 0));
+    }
+
+    /// A straight line of rail north-east of the train: the train's tile is plain rail on
+    /// `TRACK_X`, and the four tiles ahead carry a two-way path signal on `TRACK_X` facing
+    /// south-west, green, and no reservation.
+    struct Line {
+        shared: Services,
+        rail: RailMapServices,
+        pbs: PbsServices,
+        movement: crate::movement::MovementServices,
+        vehicle: VehicleServices,
+        train: crate::train::Leaves,
+        base: Vec<BaseTileLayout>,
+        extended: Vec<ExtendedTileLayout>,
+    }
+    impl Line {
         fn new() -> Box<Self> {
-            let mut world = Box::new(Self {
-                shared: crate::services::Services {
+            let mut line = Box::new(Self {
+                shared: Services {
                     pbs_services,
                     all_compatible_railtypes: every_type,
-                    tile_type: railway,
-                    is_plain_rail: yes,
                     mark_dirty: mark,
                     ..crate::services::fixture(std::ptr::null_mut(), no_random)
                 },
-                rail: rail_map(),
-                pbs: pbs_table(),
-                movement: movement_table(),
-                vehicle: vehicle_table(),
+                rail: RailMapServices {
+                    rail_reservation: no_reservation,
+                    set_signal_state: set_signal,
+                    ..RAIL_MAP
+                },
+                pbs: PbsServices {
+                    try_track,
+                    unreserve_track,
+                    show_reservation: no_show,
+                    rail90: no_rail90,
+                    blocking: no_signal,
+                    has_pbs,
+                    ..PBS
+                },
+                movement: MOVEMENT,
+                vehicle: VehicleServices {
+                    record_from_shell: resolve_record,
+                    ..VEHICLE
+                },
+                train: TRAIN_LEAVES,
                 base: (0..4096)
-                    .map(|_| crate::map_func::BaseTileLayout {
+                    .map(|_| BaseTileLayout {
                         kind: 0,
                         height: 0,
                         m2: 0,
@@ -1574,7 +1757,7 @@ pub(crate) mod tests {
                     })
                     .collect(),
                 extended: (0..4096)
-                    .map(|_| crate::map_func::ExtendedTileLayout {
+                    .map(|_| ExtendedTileLayout {
                         m6: 0,
                         m7: 0,
                         m8: 0,
@@ -1582,149 +1765,74 @@ pub(crate) mod tests {
                     .collect(),
             });
             for ordinal in 0..=4 {
-                world.base[index(ordinal) as usize].kind = crate::tile_type::MP_RAILWAY << 4;
-                world.base[index(ordinal) as usize].m5 = crate::track_type::TRACK_BIT_X;
+                let tile = &mut line.base[index(ordinal).0 as usize];
+                tile.kind = TileType::MP_RAILWAY.0 << 4;
+                tile.m5 = TrackBits::TRACK_BIT_X.0;
+                if ordinal > 0 {
+                    // `RailTileType::Signals`; the signal along `TRACKDIR_X_SW` is present
+                    // and green, and it is a two-way path signal.
+                    tile.m5 |= crate::rail_map::RAIL_TILE_SIGNALS << 6;
+                    tile.m3 =
+                        crate::signal_func::signal_along_trackdir(Trackdir::TRACKDIR_X_SW) << 4;
+                    tile.m4 = tile.m3;
+                    tile.m2 = u16::from(SignalType::SIGTYPE_PBS.0);
+                }
             }
-            world.movement.vehicle = &raw const world.vehicle;
-            world.movement.shared = &raw const world.shared;
-            world.shared.movement = &raw const world.movement;
-            world.pbs.shared = &raw const world.shared;
-            world.pbs.rail = &raw const world.rail;
-            world
+            line.movement.vehicle = &raw const line.vehicle;
+            line.movement.shared = &raw const line.shared;
+            line.shared.movement = &raw const line.movement;
+            line.train.vehicle = &raw const line.vehicle;
+            line.pbs.shared = &raw const line.shared;
+            line.pbs.rail = &raw const line.rail;
+            line.pbs.train = &raw const line.train;
+            line
         }
-        /// Route this thread's PBS queries to the world and to `train`'s mock.
+        /// Route this thread's PBS queries to the line and to `train`'s mock; the line ends
+        /// at its fourth tile, or its third when the train's mock stops at `2`.
         fn install(&mut self, train: Handle) {
+            // SAFETY: The test's live mock.
             let stop = unsafe { mock(train) }.stop;
-            self.base[index(if stop == 2 { 3 } else { 4 }) as usize].m5 = 0;
-            WORLD.set(std::ptr::from_ref(self));
+            let end = &mut self.base[index(if stop == 2 { 3 } else { 4 }).0 as usize];
+            *end = BaseTileLayout {
+                kind: TileType::MP_RAILWAY.0 << 4,
+                height: 0,
+                m2: 0,
+                m1: 0,
+                m3: 0,
+                m4: 0,
+                m5: 0,
+            };
             crate::map_func::fixture::set(
                 crate::map_func::TileTypeAllocation {
                     base: self.base.as_ptr(),
                     extended: self.extended.as_ptr(),
-                    count: self.base.len() as u32,
+                    count: u32::try_from(self.base.len()).unwrap(),
                     assertions: false,
                 },
                 6,
             );
             TRAIN.set(train);
-            PBS.set(&raw const self.pbs);
+            PBS_TABLE.set(&raw const self.pbs);
         }
-    }
-    fn rail_map() -> RailMapServices {
-        RailMapServices {
-            ground: std::ptr::null(),
-            set_signal_state: unused(),
-            other_tunnel_bridge_end: unused(),
-            invalid_rail_type: unused(),
-            set_rail_type: unused(),
-            set_track_bits: unused(),
-            set_present_signals: unused(),
-            set_signal_states: unused(),
-            set_has_signals: unused(),
-            set_signal_type: unused(),
-            signal_variant: unused(),
-            set_signal_variant: unused(),
-            cycle_signal_side: unused(),
-            rail_reservation: no_reservation,
-            set_track_reservation: unused(),
-            depot_reserved: unused(),
-            set_depot_exit: unused(),
-            make_rail_normal: unused(),
-            make_rail_depot: unused(),
-            wormhole_reserved: unused(),
+        fn game(&self) -> Game<'_> {
+            Game::new(&self.train, &self.shared)
         }
     }
 
-    const fn index(ordinal: u32) -> u32 {
-        72 - ordinal
-    }
-    const fn ordinal(tile: u32) -> u32 {
-        72 - tile
-    }
-    fn pbs_table() -> PbsServices {
-        PbsServices {
-            shared: std::ptr::null(),
-            rail: std::ptr::null(),
-            train: std::ptr::null(),
-            depot_bits: unused(),
-            crossing_bits: unused(),
-            station_bits: unused(),
-            wormhole_bits: unused(),
-            set_depot: unused(),
-            set_station: unused(),
-            set_wormhole: unused(),
-            try_track,
-            unreserve_track,
-            show_reservation: no_show,
-            station: unused(),
-            is_crossing: unused(),
-            read_train_on_res: unused(),
-            write_train_on_res: unused(),
-            assertions: false,
-            handle: unused(),
-            compatible: unused(),
-            rail90: same_types,
-            blocking: no_signal,
-            has_pbs: no_signal,
-            index: unused(),
-        }
-    }
-
-    extern "C" fn is_plain(_: *mut c_void, _: Handle, tile: u32) -> u64 {
-        u64::from(yes(tile))
-    }
-    extern "C" fn zero_pair(_: *mut c_void, _: Handle, _: u32, _: u32) -> u64 {
-        0
-    }
-    extern "C" fn zero_track(_: *mut c_void, _: Handle, _: u32, _: u8) -> u64 {
-        0
-    }
-    extern "C" fn one_track(_: *mut c_void, _: Handle, _: u32, _: u8) -> u64 {
-        1
-    }
-    extern "C" fn signal(_: *mut c_void, h: Handle, tile: u32, _: u8, green: u8) {
-        // SAFETY: Live exclusive test mock.
-        unsafe {
-            mock(h).log.push(("signal", ordinal(tile), green));
-        }
-    }
-    extern "C" fn mark(tile: u32) {
-        current().log.push(("mark", ordinal(tile), 0));
-    }
-    fn extension_leaves(shared: &crate::services::Services) -> Leaves {
-        Leaves {
-            shared,
-            blocking: zero_track,
-            rail90: zero_pair,
-            is_plain,
-            has_pbs: one_track,
-            green: one_track,
-            set_signal: signal,
-            ..leaves()
-        }
-    }
-    const ORIGIN: Pbs = Pbs {
-        tile: index(0),
-        other: Handle::NONE,
-        td: 0,
-        okay: 0,
-    };
+    /// `ExtendTrainReservation` reserves each tile from the end of the train's reservation,
+    /// turning each opposing green path signal red, until a reservation fails; it then
+    /// unreserves only the tracks it reserved, from the origin, and turns the signals green
+    /// again in the order it turned them red.
     #[test]
     fn controller_extension_rolls_back_only_new_tracks_and_restores_signal_order() {
         let mut m = Mock::new(0);
         let h = m.handle();
-        let mut world = World::new();
-        world.install(h);
-        let ls = extension_leaves(&world.shared);
-        let g = Game {
-            vehicle: std::ptr::null_mut(),
-            leaves: &ls,
-            context: std::ptr::null_mut(),
-        };
-        let mut available = 0;
-        let mut dir = 0;
-        let result = extend_from(&g, h, ORIGIN, &mut available, &mut dir);
-        assert_eq!(result.tile, INVALID_TILE);
+        let mut line = Line::new();
+        line.install(h);
+        let mut tracks = TrackBits::TRACK_BIT_NONE;
+        let mut dir = DiagDirection::INVALID_DIAGDIR;
+        let result = extend_train_reservation(&line.game(), h, &mut tracks, &mut dir);
+        assert_eq!(result.tile, TileIndex::INVALID);
         assert_eq!(
             m.log,
             vec![
@@ -1742,25 +1850,26 @@ pub(crate) mod tests {
             ]
         );
     }
+
+    /// A safe waiting position or the end of the line ends the extension with a valid path
+    /// and rolls nothing back.
     #[test]
     fn controller_extension_accepts_safe_position_or_end_of_line_without_rollback() {
         for stop in [1, 2] {
             let mut m = Mock::new(stop);
             let h = m.handle();
-            let mut world = World::new();
-            world.install(h);
-            let ls = extension_leaves(&world.shared);
-            let g = Game {
-                vehicle: std::ptr::null_mut(),
-                leaves: &ls,
-                context: std::ptr::null_mut(),
-            };
-            let mut available = 0;
-            let mut dir = 0;
-            let result = extend_from(&g, h, ORIGIN, &mut available, &mut dir);
+            let mut line = Line::new();
+            line.install(h);
+            let mut tracks = TrackBits::TRACK_BIT_NONE;
+            let mut dir = DiagDirection::INVALID_DIAGDIR;
+            let result = extend_train_reservation(&line.game(), h, &mut tracks, &mut dir);
             assert_eq!(
-                (result.tile, result.td, result.okay),
-                (index(if stop == 1 { 3 } else { 2 }), 0, 1)
+                (result.tile, result.trackdir, result.okay),
+                (
+                    index(if stop == 1 { 3 } else { 2 }),
+                    Trackdir::TRACKDIR_X_NE,
+                    true
+                )
             );
             assert!(
                 !m.log
@@ -1769,33 +1878,28 @@ pub(crate) mod tests {
             );
         }
     }
+
+    /// `VehicleOrderSaver` restores the current order, destination, last station and
+    /// implicit-order flag once, whether `Restore` or its destructor runs it, and a nested
+    /// saver restores what it saw.
     #[test]
     fn explicit_or_drop_order_restoration_runs_once_with_nested_snapshots() {
         for explicit in [false, true] {
             let mut m = Mock::new(0);
             m.set_order_token(0x89ab_cdef);
             let h = m.handle();
-            let ls = leaves();
-            let g = Game {
-                vehicle: std::ptr::null_mut(),
-                leaves: &ls,
-                context: std::ptr::null_mut(),
-            };
+            let line = Line::new();
+            let g = line.game();
             {
-                let mut outer = Orders::new(&g, h);
+                let mut outer = VehicleOrderSaver::new(&g, h);
                 m.set_order_token(0x7654_3210);
-                m.record.dest_tile = crate::tile_type::TileIndex(42);
-                m.record.last_station_visited = crate::station_type::StationID(8);
+                m.record.dest_tile = TileIndex(42);
+                m.record.last_station_visited = StationID(8);
                 m.ground.flags &= !4;
                 {
-                    let inner_game = Game {
-                        vehicle: std::ptr::null_mut(),
-                        leaves: &ls,
-                        context: std::ptr::null_mut(),
-                    };
-                    let mut inner = Orders::new(&inner_game, h);
+                    let mut inner = VehicleOrderSaver::new(&g, h);
                     m.set_order_token(3);
-                    m.record.dest_tile = crate::tile_type::TileIndex(99);
+                    m.record.dest_tile = TileIndex(99);
                     inner.restore();
                 }
                 assert_eq!(
@@ -1807,7 +1911,7 @@ pub(crate) mod tests {
                     ),
                     (42, 8, 0, 0x7654_3210)
                 );
-                assert_eq!(outer.index, 254);
+                assert_eq!(outer.index, VehicleOrderID(254));
                 if explicit {
                     outer.restore();
                     m.set_order_token(0x1357_2468);
@@ -1824,6 +1928,10 @@ pub(crate) mod tests {
             );
         }
     }
+
+    /// `TryReserveRailTrack` reaches a station trigger that can reenter the train's own
+    /// entries: a nested direct entry on the same train sees and makes ordinary writes, and
+    /// `ReserveTrackUnderConsist` continues on the state the nested entry left.
     #[test]
     fn direct_station_reservation_can_reenter_the_same_owner() {
         extern "C" fn nested(_: u32, _: u8) -> bool {
@@ -1832,49 +1940,229 @@ pub(crate) mod tests {
                 line_reverse_mode: &raw const line_reverse,
                 ..crate::settings_type::SettingAddresses::NULL
             };
-            let shared = crate::services::Services {
+            let shared = Services {
                 settings: &raw const settings,
                 ..crate::services::fixture(std::ptr::null_mut(), no_random)
             };
-            let ls = Leaves {
-                shared: &raw const shared,
-                ..leaves()
-            };
             let h = TRAIN.get();
-            h.set_track(crate::track_type::TrackBits::TRACK_BIT_DEPOT);
-            // SAFETY: Nested direct entry receives the same live owner and its own native stack context.
-            assert!(!check_reverse_train(
-                &Game::new(
-                    &ls,
-                    crate::vehicle::VehicleRef(std::ptr::NonNull::dangling())
-                ),
-                h,
-            ));
+            h.set_track(TrackBits::TRACK_BIT_DEPOT);
+            assert!(!check_reverse_train(&Game::new(&TRAIN_LEAVES, &shared), h));
             h.set_flags(crate::train::VehicleRailFlags(1 << 8));
-            h.set_flags(h.flags().reset(crate::train::VehicleRailFlag::Stuck));
+            h.set_flags(h.flags().reset(VehicleRailFlag::Stuck));
             h.set_wait_counter(0);
             h.set_flags(crate::train::VehicleRailFlags(7));
             true
         }
         let mut m = Mock::new(0);
         let h = m.handle();
-        let mut world = World::new();
-        world.pbs.try_track = nested;
-        // Tile 7, which the reservation names, is plain rail like the stubbed tile type.
-        world.base[7].kind = crate::tile_type::MP_RAILWAY << 4;
-        world.base[7].m5 = crate::track_type::TRACK_BIT_UPPER;
-        world.install(h);
-        let ls = Leaves {
-            shared: &raw const world.shared,
-            ..leaves()
-        };
-        let g = Game {
-            vehicle: std::ptr::null_mut(),
-            leaves: &ls,
-            context: std::ptr::null_mut(),
-        };
-        assert!(g.reserve_track(7, 2));
+        let mut line = Line::new();
+        line.pbs.try_track = nested;
+        // The train's tile, which its track names, is plain rail with `TRACK_BIT_UPPER`.
+        line.base[index(0).0 as usize].m5 = TrackBits::TRACK_BIT_UPPER.0;
+        line.install(h);
+        h.set_track(TrackBits::TRACK_BIT_UPPER);
+        reserve_track_under_consist(&line.game(), h);
         assert_eq!(h.flags().0, 7);
         assert_eq!(m.state.wait_counter, 0);
+        assert_eq!(h.track(), TrackBits::TRACK_BIT_DEPOT);
+    }
+
+    /// The tables of an entry whose every PBS, rail map and pathfinder service aborts,
+    /// with the settings `catalog`.
+    fn unreachable_services(catalog: &crate::settings_type::SettingAddresses) -> Services {
+        extern "C" fn unreachable_pbs(_: *const Services) -> *const PbsServices {
+            std::process::abort()
+        }
+        Services {
+            pbs_services: unreachable_pbs,
+            settings: catalog,
+            ..crate::services::fixture(std::ptr::null_mut(), no_random)
+        }
+    }
+
+    /// `TryPathReserve` asserts `v->IsFrontEngine()` first: a wagon ends the child there,
+    /// before the depot check reads the depot reservation.
+    #[test]
+    fn try_path_reserve_asserts_a_front_engine_before_the_depot_check() {
+        if crate::services_assert::isolate_test_exit(
+            "train_reservation::tests::try_path_reserve_asserts_a_front_engine_before_the_depot_check",
+        ) {
+            return;
+        }
+        let mut m = Mock::new(0);
+        let h = m.handle();
+        h.set_track(TrackBits::TRACK_BIT_DEPOT);
+        let shared = unreachable_services(&crate::settings_type::SettingAddresses::NULL);
+        try_path_reserve(&Game::new(&TRAIN_LEAVES, &shared), h, false, false);
+    }
+
+    /// `ChooseTrainTrack` reads `reserve_paths`, then asserts that the tracks hold no bit
+    /// outside `TRACK_BIT_MASK`: `TRACK_BIT_DEPOT` ends the child there, before the
+    /// reserved track bits are read.
+    #[test]
+    fn choose_train_track_asserts_the_track_mask_after_reading_reserve_paths() {
+        static RESERVE_PATHS: bool = false;
+        if crate::services_assert::isolate_test_exit(
+            "train_reservation::tests::choose_train_track_asserts_the_track_mask_after_reading_reserve_paths",
+        ) {
+            return;
+        }
+        let mut m = Mock::new(0);
+        let h = m.handle();
+        let catalog = crate::settings_type::SettingAddresses {
+            reserve_paths: &raw const RESERVE_PATHS,
+            ..crate::settings_type::SettingAddresses::NULL
+        };
+        let shared = unreachable_services(&catalog);
+        choose_train_track(
+            &Game::new(&TRAIN_LEAVES, &shared),
+            h,
+            index(1),
+            DiagDirection::DIAGDIR_NE,
+            TrackBits::TRACK_BIT_X | TrackBits::TRACK_BIT_DEPOT,
+            false,
+            false,
+        );
+    }
+
+    /// `CheckReverseTrain` asserts `v->track != TRACK_BIT_NONE` once the train may reverse:
+    /// a train on no track and on a diagonal direction ends the child there, before the
+    /// pathfinder runs.
+    #[test]
+    fn check_reverse_train_asserts_a_track_before_the_pathfinder() {
+        static LINE_REVERSE_MODE: bool = false;
+        if crate::services_assert::isolate_test_exit(
+            "train_reservation::tests::check_reverse_train_asserts_a_track_before_the_pathfinder",
+        ) {
+            return;
+        }
+        let mut m = Mock::new(0);
+        let h = m.handle();
+        h.set_track(TrackBits::TRACK_BIT_NONE);
+        let catalog = crate::settings_type::SettingAddresses {
+            line_reverse_mode: &raw const LINE_REVERSE_MODE,
+            ..crate::settings_type::SettingAddresses::NULL
+        };
+        let shared = unreachable_services(&catalog);
+        check_reverse_train(&Game::new(&TRAIN_LEAVES, &shared), h);
+    }
+
+    unsafe extern "C" fn vehicle_orders(shell: *mut c_void) -> *mut crate::orders::VehicleOrders {
+        // SAFETY: Test handles retain their exclusive stack Mock for each query.
+        unsafe { &raw mut (*shell.cast::<Mock>()).orders }
+    }
+    unsafe extern "C" fn consist(shell: *mut c_void) -> *mut crate::orders::Consist {
+        // SAFETY: As above.
+        unsafe { &raw mut (*shell.cast::<Mock>()).consist }
+    }
+    unsafe extern "C" fn invalidate_order(shell: *mut c_void, data: i32) {
+        // SAFETY: As above.
+        unsafe {
+            (*shell.cast::<Mock>())
+                .log
+                .push(("invalidate", 0, u8::try_from(data).unwrap()));
+        }
+    }
+    /// The orders table of a train without an order list: the vehicle's orders owner and
+    /// consist, and a recording order invalidation; every list access aborts.
+    extern "C" fn orders_table() -> *const crate::orders::Leaves {
+        thread_local! {
+            static TABLE: &'static crate::orders::Leaves = Box::leak(Box::new(crate::orders::Leaves {
+                vehicle: vehicle_orders,
+                consist,
+                invalidate_order,
+                ..ORDERS
+            }));
+        }
+        TABLE.with(|t| std::ptr::from_ref(*t))
+    }
+
+    /// `SwitchToNextOrder` of a train without an order list returns false at once, as
+    /// `v->GetNumOrders()` is zero there, and reads no order and no index.
+    #[test]
+    fn switch_to_next_order_without_an_order_list_finds_none() {
+        let mut m = Mock::new(0);
+        let h = m.handle();
+        let mut line = Line::new();
+        line.vehicle.orders = orders_table;
+        let g = line.game();
+        let mut orders = VehicleOrderSaver::new(&g, h);
+        assert!(!orders.switch_to_next_order(true));
+        assert_eq!(orders.index, VehicleOrderID(254));
+        drop(orders);
+        assert_eq!(m.order_token(), 1);
+    }
+
+    thread_local! {
+        static STATION_LOOKUPS: Cell<u32> = const { Cell::new(0) };
+        static FACILITIES: Cell<u8> = const { Cell::new(0) };
+    }
+    /// The base station the recording table resolves.
+    const BASE: *mut crate::station::BaseStation = std::ptr::dangling_mut();
+    const STATION: StationID = StationID(5);
+    extern "C" fn station(id: u16) -> crate::station_service::LoadingStation {
+        assert_eq!(id, STATION.0, "Station::Get(station)");
+        STATION_LOOKUPS.set(STATION_LOOKUPS.get() + 1);
+        crate::station_service::LoadingStation {
+            native: std::ptr::dangling_mut(),
+            base: BASE,
+            state: std::ptr::null_mut(),
+        }
+    }
+    extern "C" fn facilities(st: *mut crate::station::BaseStation) -> u8 {
+        assert_eq!(st, BASE);
+        FACILITIES.get()
+    }
+    extern "C" fn station_catchment() -> *const crate::station::CatchmentServices {
+        thread_local! {
+            static TABLE: &'static crate::station::CatchmentServices = Box::leak(Box::new(
+                crate::station::CatchmentServices {
+                    station: Box::leak(Box::new(crate::station_service::World {
+                        station,
+                        facilities,
+                        ..crate::test_tables::STATION_WORLD
+                    })),
+                    ..crate::test_tables::CATCHMENT
+                },
+            ));
+        }
+        TABLE.with(|t| std::ptr::from_ref(*t))
+    }
+
+    /// `Train::GetOrderStationLocation` forgets a last visit to the station and resolves
+    /// it once: a station with train facilities gives its `xy`; one without advances the
+    /// real order index, which without manual orders returns it to the first order and
+    /// invalidates the order window, and gives tile 0.
+    #[test]
+    fn get_order_station_location_resolves_the_station_once() {
+        crate::base_station_base::testing::set_xy(|st| {
+            assert_eq!(st, BASE.cast_const());
+            TileIndex(1234)
+        });
+        for (train_facility, location, real, log) in [
+            (true, TileIndex(1234), 254, vec![]),
+            (false, TileIndex(0), 0, vec![("invalidate", 0, 0)]),
+        ] {
+            let mut m = Mock::new(0);
+            let h = m.handle();
+            m.record.last_station_visited = STATION;
+            m.consist.implicit = 3;
+            let mut line = Line::new();
+            line.shared.station_catchment = station_catchment;
+            line.vehicle.orders = orders_table;
+            STATION_LOOKUPS.set(0);
+            FACILITIES.set(if train_facility {
+                1 << StationFacility::Train.0
+            } else {
+                0
+            });
+            assert_eq!(
+                get_order_station_location(&line.game(), h, STATION),
+                location
+            );
+            assert_eq!(STATION_LOOKUPS.get(), 1);
+            assert_eq!(m.record.last_station_visited, StationID::INVALID);
+            assert_eq!((m.consist.real, m.log.clone()), (real, log));
+        }
     }
 }

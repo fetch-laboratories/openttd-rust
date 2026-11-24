@@ -214,7 +214,6 @@ pub(crate) const ROAD_LEAVES: crate::road::Leaves = crate::road::Leaves {
 pub(crate) const TRAIN_LEAVES: crate::train::Leaves = crate::train::Leaves {
     capabilities: &crate::engine_capabilities::TEST_TABLE,
     physics: &GROUND_VEHICLE,
-    reservation: ptr::null(),
     vehicle: &VEHICLE,
 };
 
@@ -1909,7 +1908,6 @@ pub(crate) const STATION_COMMANDS: crate::station_cmd::CommandServicesTable =
         set_train_area: unreachable2,
         last_train: unreachable1,
         train: ptr::null(),
-        reservation: ptr::null(),
         custom_rail_index: unreachable1,
         make_rail_station: unreachable6,
         close_station_inspect: unreachable1,

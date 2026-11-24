@@ -169,16 +169,6 @@ impl CFollowTrackT {
             Self::new(s, RAIL, None, o, types, true)
         }
     }
-    /// Temporary raw adapter of [`Self::rail`] for `train_reservation.rs` until
-    /// its pass.
-    pub(crate) fn rail_raw(s: &Services, v: crate::train::Handle, owner: u8, types: u64) -> Self {
-        Self::rail(
-            s,
-            v,
-            crate::company_type::CompanyID(owner),
-            RailTypes(types),
-        )
-    }
 
     /// `IsTram()`: the road context's road kind where the caller supplies one.
     fn is_tram(&self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
@@ -215,11 +205,6 @@ impl CFollowTrackT {
     /// Otherwise returns false if track can't be followed.
     pub(crate) fn follow(&mut self, s: &Services, old_tile: TileIndex, old_td: Trackdir) -> bool {
         self.follow_with_road(s, old_tile, old_td, None)
-    }
-    /// Temporary raw adapter of [`Self::follow`] for `train_reservation.rs`
-    /// until its pass.
-    pub(crate) fn follow_raw(&mut self, s: &Services, tile: u32, td: u8) -> bool {
-        self.follow(s, TileIndex(tile), Trackdir(td))
     }
     /// `Follow`, with the road search's invariant vehicle facts where the caller
     /// supplies them.

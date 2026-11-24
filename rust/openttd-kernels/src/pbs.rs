@@ -73,16 +73,41 @@ pub(crate) struct PBSTileInfo {
     pub okay: bool,
 }
 
+impl Default for PBSTileInfo {
+    /// `PBSTileInfo()`: an invalid path.
+    fn default() -> Self {
+        Self {
+            tile: TileIndex::INVALID,
+            trackdir: Trackdir::INVALID_TRACKDIR,
+            okay: false,
+        }
+    }
+}
+
 impl PBSTileInfo {
     /// The FFI record of this result, carrying `other` beside it.
-    fn to_ffi(self, other: Handle) -> crate::train_reservation::Pbs {
-        crate::train_reservation::Pbs {
+    fn to_ffi(self, other: Handle) -> PBSTileInfoRecord {
+        PBSTileInfoRecord {
             tile: self.tile.0,
             other,
             td: self.trackdir.0,
             okay: u8::from(self.okay),
         }
     }
+}
+
+/// `PBSTileInfo` as the exports return it to C++, with a train beside it.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PBSTileInfoRecord {
+    /// `PBSTileInfo::tile`.
+    pub tile: u32,
+    /// A train the follower met, or [`Handle::NONE`].
+    pub other: Handle,
+    /// `PBSTileInfo::trackdir`.
+    pub td: u8,
+    /// `PBSTileInfo::okay`.
+    pub okay: u8,
 }
 
 /// Helper struct for finding the best matching vehicle on a specific track.
@@ -781,53 +806,16 @@ impl<'a> Pbs<'a> {
 /// Temporary raw adapters for callers in files no pass has finished; each
 /// delegates to the typed routine named after the original.
 impl Pbs<'_> {
-    /// [`Self::get_reserved_trackbits`] for `train_reservation.rs`, `rail_cmd.rs`
-    /// and `road_cmd.rs`.
+    /// [`Self::get_reserved_trackbits`] for `rail_cmd.rs` and `road_cmd.rs`.
     pub(crate) fn get_reserved_trackbits_raw(self, tile: u32) -> u8 {
         self.get_reserved_trackbits(TileIndex(tile)).0
-    }
-    /// [`Self::has_reserved_tracks`] for `train_reservation.rs` and `train.rs`.
-    pub(crate) fn has_reserved_tracks_raw(self, tile: u32, tracks: u8) -> bool {
-        self.has_reserved_tracks(TileIndex(tile), TrackBits(tracks))
-    }
-    /// [`Self::set_rail_station_platform_reservation`] for `train_reservation.rs`
-    /// and `train.rs`.
-    pub(crate) fn set_rail_station_platform_reservation_raw(self, start: u32, dir: u8, b: bool) {
-        self.set_rail_station_platform_reservation(TileIndex(start), DiagDirection(dir), b);
-    }
-    /// [`Self::try_reserve_rail_track`] for `train_reservation.rs` and `train.rs`.
-    pub(crate) fn try_reserve_rail_track_raw(
-        self,
-        tile: u32,
-        t: u8,
-        trigger_stations: bool,
-    ) -> bool {
-        self.try_reserve_rail_track(TileIndex(tile), Track(t), trigger_stations)
-    }
-    /// [`Self::unreserve_rail_track`] for `train_reservation.rs` and `train.rs`.
-    pub(crate) fn unreserve_rail_track_raw(self, tile: u32, t: u8) {
-        self.unreserve_rail_track(TileIndex(tile), Track(t));
-    }
-    /// [`Self::follow_train_reservation`] for `train_reservation.rs`: with
-    /// `check_other`, the `train_on_res` slot starts at
-    /// `initial`; the record carries the slot's final value.
-    pub(crate) fn follow_train_reservation_raw(
-        self,
-        v: Handle,
-        check_other: bool,
-        initial: Handle,
-    ) -> crate::train_reservation::Pbs {
-        let mut train_on_res = initial;
-        let res = self.follow_train_reservation(v, check_other.then_some(&mut train_on_res));
-        res.to_ffi(train_on_res)
     }
     /// [`Self::get_train_for_reservation`] for `rail_cmd.rs` and
     /// `tunnelbridge_cmd.rs`.
     pub(crate) fn get_train_for_reservation_raw(self, tile: u32, track: u8) -> Handle {
         self.get_train_for_reservation(TileIndex(tile), Track(track))
     }
-    /// [`Self::is_safe_waiting_position`] for `train_reservation.rs` and
-    /// `rail_cmd.rs`.
+    /// [`Self::is_safe_waiting_position`] for `rail_cmd.rs`.
     pub(crate) fn is_safe_waiting_position_raw(
         self,
         v: Handle,
@@ -843,16 +831,6 @@ impl Pbs<'_> {
             include_line_end,
             forbid_90deg,
         )
-    }
-    /// [`Self::is_waiting_position_free`] for `train_reservation.rs`.
-    pub(crate) fn is_waiting_position_free_raw(
-        self,
-        v: Handle,
-        tile: u32,
-        trackdir: u8,
-        forbid_90deg: bool,
-    ) -> bool {
-        self.is_waiting_position_free(v, TileIndex(tile), Trackdir(trackdir), forbid_90deg)
     }
 }
 
@@ -903,7 +881,7 @@ pub unsafe extern "C" fn openttd_rust_pbs_follow_train(
     s: *const PbsServices,
     v: Handle,
     output: *mut TrainOutput,
-) -> crate::train_reservation::Pbs {
+) -> PBSTileInfoRecord {
     let pbs = Pbs(unsafe { &*s });
     let mut train_on_res = NativeTrainOnRes { pbs, output };
     let res = pbs.follow_train_reservation(v, (!output.is_null()).then_some(&mut train_on_res));
@@ -961,7 +939,7 @@ pub unsafe extern "C" fn openttd_rust_pbs_follow(
     types: u64,
     tile: u32,
     td: u8,
-) -> crate::train_reservation::Pbs {
+) -> PBSTileInfoRecord {
     Pbs(unsafe { &*s })
         .follow_reservation(
             crate::company_type::CompanyID(owner),
@@ -1008,6 +986,12 @@ impl TrainOnRes for NativeTrainOnRes<'_> {
 
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDPbsTileInfo" ["probe"] => PBSTileInfoRecord {
+        tile,
+        other,
+        td,
+        okay,
+    };
     "OpenTTDPbsServices" ["probe"] => PbsServices {
         shared,
         rail,
