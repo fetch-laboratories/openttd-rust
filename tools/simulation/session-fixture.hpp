@@ -60,8 +60,19 @@ struct SessionFixture {
 	static inline const RustPoolDescriptor *const empty_pool_address = &empty_pool;
 	static inline const OpenTTDSharedServices resolver_shared{};
 	static inline const OpenTTDVehicleServices resolver_vehicles{};
-	static inline const OpenTTDEngineCapabilitiesServices resolver_capabilities{.vehicles = &resolver_vehicles, .shared = &resolver_shared};
-	static inline const OpenTTDVehicleResolverServices resolver{.vehicle = &resolver_vehicles, .shared = &resolver_shared, .capabilities = &resolver_capabilities};
+	static inline const OpenTTDEngineCapabilitiesServices resolver_capabilities = [] {
+		OpenTTDEngineCapabilitiesServices capabilities{};
+		capabilities.vehicles = &resolver_vehicles;
+		capabilities.shared = &resolver_shared;
+		return capabilities;
+	}();
+	static inline const OpenTTDVehicleResolverServices resolver = [] {
+		OpenTTDVehicleResolverServices table{};
+		table.vehicle = &resolver_vehicles;
+		table.shared = &resolver_shared;
+		table.capabilities = &resolver_capabilities;
+		return table;
+	}();
 	static void Nothing() noexcept {}
 	static void FrameNothing(OpenTTDSessionFrame *) noexcept {}
 	SessionFixture()
