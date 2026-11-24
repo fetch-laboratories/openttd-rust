@@ -15,6 +15,7 @@ The plan holds the decisions; carry them out, in a PR that closes the plan's iss
 A pass is ready for review when a reviewer would have nothing left on the [porting review's list](review-brief.md#a-porting-review). Before the first checkpoint, look for the [design faults](porting.md#design-faults) in your files and count their repair in the pass's size. Before marking the PR ready, for each file:
 
 - Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports.
+- Run `python3 tools/code-standards-inventory.py --compare origin/rust-migration` and put its table in the status comment. Settle each row it lists as new or grown at the head, or name in the PR body the rule that allows it.
 - Run the fixtures that call the pass's functions: the comparison probes and the ABI probe fixtures under `tools/migration/windows-abi/`. Preflight only compiles them, so only a run shows a fixture that relied on a service read the pass replaced. Your plan names them.
 - Write each test the plan's Evidence names. One you cannot build from the fixtures the pass's files have is a departure: record it in the PR body and put its gap on #156's list.
 - Add each file the pass finishes to `migration/finished-files.txt`.

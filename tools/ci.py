@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import ci_log
 import cleanup_contract
@@ -400,12 +400,101 @@ def label_request(repository: str, pr: int, pull: dict, head: str) -> None:
     gh("pr", "edit", str(pr), "--repo", repository, "--add-label", "ci:full")
 
 
+# Git's SCP-like remote syntax, `user@host:path`, where the path is not absolute.
+SCP_REMOTE = re.compile(r"^(?:[^@/:]+@)?([^/:]+):(?!/)(.+)$")
+
+
+def github_repository(url: str) -> str | None:
+    """The `owner/name` of a remote URL on github.com itself, or None."""
+    if "://" in url:
+        parts = urlsplit(url)
+        if parts.query or parts.fragment:
+            return None
+        try:
+            host, path = parts.hostname, parts.path
+        except ValueError:
+            return None
+    elif scp := SCP_REMOTE.match(url):
+        host, path = scp[1].lower(), scp[2]
+    else:
+        return None
+    name = path.strip("/").removesuffix(".git")
+    owner_name = name.split("/")
+    if host != "github.com" or len(owner_name) != 2 or not all(owner_name):
+        return None
+    return name
+
+
+class HeadRepository(TypedDict):
+    full_name: str
+
+
+class PullHead(TypedDict):
+    """The fields of a PR's `head` that name its commit, branch and repository."""
+
+    sha: str
+    ref: NotRequired[str]
+    repo: NotRequired[HeadRepository | None]
+
+
+def checkout_git(*arguments: str) -> str:
+    """A Git query in this tool's checkout; empty when Git answers nothing."""
+    found = subprocess.run(
+        ["git", "-C", str(vcs.ROOT), *arguments], capture_output=True, text=True
+    )
+    return found.stdout.strip() if found.returncode == 0 else ""
+
+
+def checkout_head(pr: int, head: PullHead) -> str | None:
+    """This checkout's HEAD when the checkout is the PR's own, else None.
+
+    It is the PR's when its `origin` is the PR's head repository on github.com
+    and its branch, or that branch's upstream on origin, is the PR's head
+    branch. There a tracking ref that is not at HEAD, ahead or behind, is
+    refused at once rather than waited for.
+    """
+    branch = head.get("ref")
+    repository = (head.get("repo") or {"full_name": ""})["full_name"]
+    local = checkout_git("symbolic-ref", "--quiet", "--short", "HEAD")
+    if not branch or not repository or not local:
+        return None
+    tracking_ref = f"refs/remotes/origin/{branch}"
+    # Fully qualified, so only an upstream on origin can name the PR's branch.
+    upstream = checkout_git(
+        "rev-parse", "--symbolic-full-name", f"{local}@{{upstream}}"
+    )
+    remote = github_repository(checkout_git("remote", "get-url", "origin")) or ""
+    if (branch != local and upstream != tracking_ref) or (
+        remote.lower() != repository.lower()
+    ):
+        return None
+    commit = checkout_git("rev-parse", "HEAD")
+    tracking = checkout_git("rev-parse", "--verify", "--quiet", tracking_ref)
+    if tracking != commit:
+        raise ValueError(
+            f"This checkout is PR #{pr}'s branch {branch} at {commit}, but "
+            f"origin/{branch} is at {tracking or 'no commit'}: push, update the "
+            "checkout, or pass --head"
+        )
+    print(
+        f"Requesting for this checkout's HEAD {commit}: it is PR #{pr}'s branch "
+        f"{branch}, and origin/{branch} is at it",
+        flush=True,
+    )
+    return commit
+
+
 def requestable(repository: str, args: argparse.Namespace) -> tuple[dict, str] | None:
-    """The PR and the head to request for, or None when Full already passed it."""
+    """The PR and the head to request for, or None when Full already passed it.
+
+    Without --head, the PR's own checkout names the head it pushed, so a read
+    that still shows the previous head waits for the push to show.
+    """
     pull = api(repository, f"pulls/{args.pr}")
-    if args.head:
-        pull = pushed_head(repository, args.pr, pull, args.head)
-    head = expected_head(pull, args.head)
+    expected = args.head or checkout_head(args.pr, cast(PullHead, pull["head"]))
+    if expected:
+        pull = pushed_head(repository, args.pr, pull, expected)
+    head = expected_head(pull, expected)
     require_stamp(args.pr, head, args.unstamped)
     if (
         args.profile == "full"
@@ -415,7 +504,15 @@ def requestable(repository: str, args: argparse.Namespace) -> tuple[dict, str] |
         return None
     if args.bootstrap and args.profile != "full":
         raise ValueError("Bootstrap label requests only support --profile full")
-    return await_mergeable(repository, args.pr, pull, head), head
+    try:
+        return await_mergeable(repository, args.pr, pull, head), head
+    except HeadMoved as moved:
+        if expected and not args.head:
+            # The checkout's head pins the request as --head would: no retry.
+            raise ValueError(
+                f"{moved}; this checkout's HEAD {expected} was the head to request"
+            ) from moved
+        raise
 
 
 def request(args: argparse.Namespace) -> Path | None:

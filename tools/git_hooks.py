@@ -3,8 +3,8 @@
 
     python3 tools/git_hooks.py install
 
-writes three small shims into the clone's shared hooks directory, beside
-`post-checkout`, so they serve every worktree. Each shim runs this file from
+writes three small shims into the clone's shared hooks directory, so they
+serve every worktree. Each shim runs this file from
 the worktree that runs the hook, and does nothing in a worktree whose branch
 predates that hook.
 

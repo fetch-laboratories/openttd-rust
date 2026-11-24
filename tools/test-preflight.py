@@ -438,7 +438,6 @@ class StampTests(unittest.TestCase):
             patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
             patch.object(preflight, "commit_step", return_value=passing),
             patch.object(preflight, "environment", return_value=env),
-            patch.object(preflight.migration, "link_local"),
             patch.object(preflight.migration, "LOCAL", repo / ".local"),
             patch.object(sys, "argv", ["preflight.py"]),
             patch("builtins.print"),
