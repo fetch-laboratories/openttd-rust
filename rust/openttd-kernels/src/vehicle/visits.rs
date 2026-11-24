@@ -1111,7 +1111,8 @@ fn entered_depot_this_tick(v: VehicleRef, index: VehicleID) {
 #[allow(unsafe_code)]
 pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     /* Always work with the front of the vehicle */
-    assert_with(|| v == v.first());
+    // `v->First()` returns the stored link, which may be null; only the assertion reads it.
+    assert_with(|| v.first_link() == Some(v));
     witness::hit(witness::VISITS_DEPOT);
 
     let vs = s.vehicles();
