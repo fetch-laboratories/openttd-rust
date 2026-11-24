@@ -1132,7 +1132,7 @@ mod tests {
         )));
         s.map = crate::map_func::fixture::statics();
         s.tile_type = tile_type;
-        let mut movement = crate::train_reservation::tests::movement_table();
+        let mut movement = crate::test_tables::MOVEMENT;
         movement.native_assert = native_assert;
         movement.shared = std::ptr::from_ref(s);
         s.movement = Box::leak(Box::new(movement));

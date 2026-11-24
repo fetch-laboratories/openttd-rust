@@ -50,7 +50,6 @@ use crate::track_func::{
 };
 use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
-use crate::vehicle_type::OpenTTDVehicle;
 use crate::witness;
 use crate::yapf_common::octile_distance_cost;
 use crate::yapf_costbase::st_slope_cost;
@@ -2933,104 +2932,6 @@ pub(crate) fn yapf_notify_track_layout_change(_tile: TileIndex, _track: Track) {
         let counter = S_RAIL_CHANGE_COUNTER.get();
         *counter = (*counter).wrapping_add(1);
     }
-}
-
-/// The native train controller's [`yapf_train_choose_track`]. `target` and
-/// `dest` may be null; a written `target` field overwrites the record's.
-///
-/// # Safety
-/// The caller holds the game-state mutex and supplies the live shared table, a
-/// live front train record and valid `path_found`, `target` and `dest`
-/// pointers, which nothing else reads during the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_yapf_train_choose_track(
-    shared: *const Services,
-    v: *const OpenTTDVehicle,
-    tile: u32,
-    enterdir: u8,
-    tracks: u8,
-    path_found: *mut bool,
-    reserve_track: u8,
-    target: *mut crate::train_reservation::Pbs,
-    dest: *mut u32,
-) -> u8 {
-    // SAFETY: As this function's contract.
-    let (s, path_found) = unsafe { (&*shared, &mut *path_found) };
-    let mut info = None;
-    // SAFETY: As this function's contract.
-    if let Some(record) = unsafe { target.as_ref() } {
-        info = Some(PBSTileInfo {
-            tile: TileIndex(record.tile),
-            trackdir: Trackdir(record.td),
-            okay: record.okay != 0,
-        });
-    }
-    // SAFETY: As this function's contract.
-    let mut dest_tile = unsafe { dest.as_ref() }.map(|&d| TileIndex(d));
-    let track = yapf_train_choose_track(
-        s,
-        crate::train::Handle::from_record(v.cast_mut()),
-        TileIndex(tile),
-        DiagDirection(enterdir),
-        TrackBits(tracks),
-        path_found,
-        reserve_track != 0,
-        info.as_mut(),
-        dest_tile.as_mut(),
-    );
-    // SAFETY: As this function's contract.
-    if let (Some(record), Some(info)) = (unsafe { target.as_mut() }, info) {
-        record.tile = info.tile.0;
-        record.td = info.trackdir.0;
-        record.okay = u8::from(info.okay);
-    }
-    // SAFETY: As this function's contract.
-    if let (Some(d), Some(dest_tile)) = (unsafe { dest.as_mut() }, dest_tile) {
-        *d = dest_tile.0;
-    }
-    track.0
-}
-
-/// The native train controller's [`yapf_train_check_reverse`].
-///
-/// # Safety
-/// The caller holds the game-state mutex and supplies the live shared table
-/// and a live front train record.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_yapf_train_check_reverse(
-    shared: *const Services,
-    v: *const OpenTTDVehicle,
-) -> u8 {
-    // SAFETY: As this function's contract.
-    let s = unsafe { &*shared };
-    u8::from(yapf_train_check_reverse(
-        s,
-        crate::train::Handle::from_record(v.cast_mut()),
-    ))
-}
-
-/// The native train controller's [`yapf_train_find_nearest_safe_tile`].
-///
-/// # Safety
-/// The caller holds the game-state mutex and supplies the live shared table
-/// and a live front train record.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_yapf_train_find_nearest_safe_tile(
-    shared: *const Services,
-    v: *const OpenTTDVehicle,
-    tile: u32,
-    td: u8,
-    override_railtype: u8,
-) -> u8 {
-    // SAFETY: As this function's contract.
-    let s = unsafe { &*shared };
-    u8::from(yapf_train_find_nearest_safe_tile(
-        s,
-        crate::train::Handle::from_record(v.cast_mut()),
-        TileIndex(tile),
-        Trackdir(td),
-        override_railtype != 0,
-    ))
 }
 
 /// The native track layout notification's [`yapf_notify_track_layout_change`].

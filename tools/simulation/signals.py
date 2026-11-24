@@ -269,14 +269,12 @@ def boundary_profile(counts: dict[str, int] | None) -> dict[str, Any] | None:
             "entries",
             "services",
             "context_acquisitions",
-            "context_owner_reads",
             "occupancy_accessors",
         )
     )
     copied = (
         counts["bytes"]
         + counts["context_bytes"]
-        + counts["context_owner_reads"]
         + counts["occupancy_accessors"]
         + counts["classification_bytes"]
     )
@@ -299,7 +297,7 @@ def boundary_profile(counts: dict[str, int] | None) -> dict[str, Any] | None:
         "returned_bytes_per_update": copied / counts["updates"]
         if counts["updates"]
         else None,
-        "scope": "ordinary facade entries, signal world services, direct train/reservation context and owner reads, direct occupancy GetTrack reads; returned typed records/context/scalars include padding; excludes call arguments, diagnostic snapshots/probe and witness reporting; counters disabled during timing",
+        "scope": "ordinary facade entries, signal world services, context acquisitions through the native GetRustSignalContext getter (signal::context reads the command tables uncounted), direct occupancy GetTrack reads; returned typed records/context/scalars include padding; excludes call arguments, diagnostic snapshots/probe and witness reporting; counters disabled during timing",
     }
 
 

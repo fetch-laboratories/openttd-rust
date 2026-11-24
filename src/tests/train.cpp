@@ -7,6 +7,7 @@
 #include "abi-record-ground.h"
 #include "../rust/pbs_ffi.h"
 #include "../rust/train_reservation_ffi.h"
+#include "../rust/services_assert.h"
 #include "../tile_type.h"
 #include "../track_type.h"
 #include "follower_fixture.hpp"
@@ -26,6 +27,9 @@ TEST_CASE("PBS depot early return does not read or write train_on_res")
 
 namespace {
 unsigned _reservation_assert_failures;
+/* The assertion policy keeps the table it is bound to, so the binding's is static. */
+OpenTTDMapStatics _reservation_assert_map{};
+OpenTTDSharedServices _reservation_assert_shared{};
 }
 
 TEST_CASE("Train reservation - native front-engine assertion precedes depot return")
@@ -33,20 +37,17 @@ TEST_CASE("Train reservation - native front-engine assertion precedes depot retu
 	for (bool assertions : {false, true}) for (bool front : {false, true}) {
 		CAPTURE(assertions, front);
 		FollowerFixture map;
-		map.Tile(23, MP_RAILWAY, TRACK_BIT_X);
-		map.pbs.assertions = assertions;
+		map.Tile(23, MP_RAILWAY, (3 << 6) | DIAGDIR_SW); // A rail depot facing away from the train.
 		map.record.subtype = front ? 1 : 0;
 		map.record.tile = 23;
+		map.record.direction = DIR_NE;
+		(map.state.get())->track = TRACK_BIT_X;
 		_reservation_assert_failures = 0;
-		map.movement.native_assert = [](bool okay) noexcept { if (!okay) ++_reservation_assert_failures; };
-		auto leaves = OpenTTDTrainReservationLeaves{};
-		leaves.shared = &map.shared;
-		leaves.trackdir = [](void *, OpenTTDTrainHandle) noexcept -> uint64_t { return TRACKDIR_X_NE; };
-		leaves.is_station = [](void *, OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 0; };
-		leaves.is_depot = [](void *, OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 1; };
-		leaves.exit_dir = [](void *, OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return DIAGDIR_NE; };
-		leaves.depot_dir = [](void *, OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return DIAGDIR_SW; };
-		openttd_rust_train_reservation_free({map.Vehicle(), map.state.get()}, map.Vehicle(), &leaves, nullptr);
+		_reservation_assert_map.assertions = assertions;
+		_reservation_assert_shared.map = &_reservation_assert_map;
+		openttd_rust_assert_bind([](bool okay) noexcept { if (!okay) ++_reservation_assert_failures; }, &_reservation_assert_shared);
+		openttd_rust_train_reservation_free({map.Vehicle(), map.state.get()}, &map.train, &map.shared);
+		openttd_rust_assert_bind(RustAssertCondition, &GetRustSharedServices());
 		CHECK(_reservation_assert_failures == unsigned(assertions && !front));
 	}
 }
@@ -89,10 +90,11 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 }
 TEST_CASE("Train reservation - backoff 255 skips lookahead before owner reads")
 {
-	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> owner(openttd_rust_train_state_new(), openttd_rust_train_state_destroy);
-	auto leaves = OpenTTDTrainReservationLeaves{};
-	leaves.backoff = []() noexcept -> uint8_t { return 255; };
-	OpenTTDVehicle record{};
-	openttd_rust_train_reservation_check_next({&record, owner.get()}, &record, &leaves, nullptr);
-	CHECK((owner.get())->track == 0);
+	FollowerFixture map;
+	uint8_t backoff = 255;
+	OpenTTDSettingAddresses settings{};
+	settings.path_backoff_interval = &backoff;
+	map.shared.settings = &settings;
+	openttd_rust_train_reservation_check_next({map.Vehicle(), map.state.get()}, &map.train, &map.shared);
+	CHECK((map.state.get())->track == 0);
 }

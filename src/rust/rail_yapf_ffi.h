@@ -9,14 +9,8 @@
 #ifndef OPENTTD_RUST_RAIL_YAPF_FFI_H
 #define OPENTTD_RUST_RAIL_YAPF_FFI_H
 #include <stdint.h>
-#include "services_ffi.h"
-#include "train_reservation_ffi.h"
 extern "C" {
-/* Each entry runs synchronously under the game-state mutex. A non-null target or dest is read
- * before and written after the search. Bool results are 0 or 1. */
-uint8_t openttd_rust_yapf_train_choose_track(const OpenTTDSharedServices *, const OpenTTDVehicle *, uint32_t tile, uint8_t enterdir, uint8_t tracks, bool *path_found, uint8_t reserve_track, OpenTTDTrainReservationPbs *target, uint32_t *dest);
-uint8_t openttd_rust_yapf_train_check_reverse(const OpenTTDSharedServices *, const OpenTTDVehicle *);
-uint8_t openttd_rust_yapf_train_find_nearest_safe_tile(const OpenTTDSharedServices *, const OpenTTDVehicle *, uint32_t tile, uint8_t td, uint8_t override_railtype);
+/* The entry runs synchronously under the game-state mutex. */
 void openttd_rust_rail_invalidate(uint32_t tile, uint8_t track);
 }
 /** The rail search's DumpState through the native DumpTarget, which #725 retires. */

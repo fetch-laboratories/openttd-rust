@@ -226,11 +226,11 @@ impl Owner {
         }
     }
     /// `gv_flags`.
-    fn gv_flags(self) -> u16 {
+    pub(crate) fn gv_flags(self) -> u16 {
         read_field!(self.state, flags)
     }
     /// Store `gv_flags`.
-    fn set_gv_flags(self, gv_flags: u16) {
+    pub(crate) fn set_gv_flags(self, gv_flags: u16) {
         write_field!(self.state, flags, gv_flags);
     }
 }

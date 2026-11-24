@@ -451,7 +451,7 @@ mod tests {
             assert_eq!(crate::utf8::borrow(text.data, text.size), b"Deutsch");
             clean_up_strings();
             assert_eq!(openttd_rust_grf_text_id(123, 0xd000), STR_UNDEFINED.0);
-            let mut movement = crate::train_reservation::tests::movement_table();
+            let mut movement = crate::test_tables::MOVEMENT;
             movement.native_assert = returning_assert;
             let mut shared = shared();
             shared.movement = &raw const movement;
