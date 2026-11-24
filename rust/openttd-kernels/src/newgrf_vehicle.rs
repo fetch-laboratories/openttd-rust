@@ -174,7 +174,8 @@ mod property_tests {
     use crate::engine_type::OpenTTDEngine;
     use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_MODIFY_PROPERTY};
     use crate::newgrf_properties::PropertyID;
-    use crate::vehicle::{VehicleRef, VehicleType};
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
     use std::cell::Cell;
 
     thread_local! {

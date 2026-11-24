@@ -3080,7 +3080,8 @@ mod set_dest_tile_tests {
         PathElement, openttd_rust_road_new, openttd_rust_road_path_push, set_road_dest_tile,
     };
     use crate::tile_type::TileIndex;
-    use crate::vehicle::{VehicleRef, VehicleType};
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
 
     #[test]
     fn set_dest_tile_clears_the_path_only_for_a_new_destination() {

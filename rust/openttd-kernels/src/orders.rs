@@ -5101,7 +5101,8 @@ mod unbunching_tests {
         openttd_rust_order_vector_new, openttd_rust_orderlist_new, openttd_rust_vehicle_orders_new,
     };
     use crate::order_type::OT_GOTO_DEPOT;
-    use crate::vehicle::{VehicleRef, VehicleType};
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
     use std::ffi::c_void;
     use std::sync::atomic::{AtomicPtr, AtomicU32, Ordering};
 
@@ -5204,7 +5205,8 @@ mod unbunching_tests {
 mod current_order_write_tests {
     use super::{Order, VehicleOrders, free, make_dummy, openttd_rust_vehicle_orders_new};
     use crate::order_type::{OT_DUMMY, OT_NOTHING};
-    use crate::vehicle::{VehicleRef, VehicleType};
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
 
     fn fields(o: Order) -> [u32; 7] {
         [

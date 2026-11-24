@@ -10,5 +10,59 @@
     "tool": "rust",
     "from": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices > fn any_near | allow unsafe_code",
     "to": "rust/openttd-kernels/src/vehicle_func.rs | fn has_vehicle_near_tile_xy | allow unsafe_code"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/vehicle.rs | impl VehicleRef | allow unsafe_code",
+    "to": "rust/openttd-kernels/src/vehicle.rs | impl VehicleRef > fn shell | allow unsafe_code"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices | allow unsafe_code",
+    "to": "rust/openttd-kernels/src/vehicle.rs | fn table | allow unsafe_code"
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and records, engines and tables are reached as Rust references.",
+    "site": "rust/openttd-kernels/src/vehicle.rs | impl VehicleRef > fn from_shell | allow unsafe_code",
+    "operation": "vehicle::VehicleRef::from_shell",
+    "source_contract": "A native `Vehicle *` shell names its record through `Vehicle::record`; `VehicleRecordFromShell` (src/rust/vehicle_services.cpp) reads it for a live shell.",
+    "reason": "Base vehicle.rs allowed unsafe_code on the whole `impl VehicleRef`; plan #984 decision 7 scopes each allowance to the function that needs it. `from_shell` is an `unsafe fn` whose contract is the caller's live shell, and it wraps the service's non-null record unchecked."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and records, engines and tables are reached as Rust references.",
+    "site": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices > fn unknown_callback_result | allow unsafe_code",
+    "operation": "vehicle::VehicleServices::unknown_callback_result",
+    "source_contract": "`ErrorUnknownCallbackResult` (src/newgrf_commons.cpp) for a live engine's GRF, reached through the resolver table's engine capabilities.",
+    "reason": "Base vehicle.rs allowed unsafe_code on the whole `impl VehicleServices`; plan #984 decision 7 scopes each allowance to the function that needs it. The body calls the unsafe `engine_capabilities::unknown_callback` with the live engine record."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and records, engines and tables are reached as Rust references.",
+    "site": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices > fn running_cost | allow unsafe_code",
+    "operation": "vehicle::VehicleServices::running_cost",
+    "source_contract": "`Ship::GetRunningCost` and `Aircraft::GetRunningCost` (src/ship_cmd.cpp:247, src/aircraft_cmd.cpp:440) on a live vehicle and its current engine.",
+    "reason": "Base vehicle.rs allowed unsafe_code on the whole `impl VehicleServices`; plan #984 decision 7 scopes each allowance to the function that needs it. `running_cost` is an `unsafe fn` whose contract is the caller's live ship or aircraft, and it calls the unsafe `engine_capabilities::get_vehicle_running_cost`."
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices > fn for_each_on_tile | allow unsafe_code",
+    "to": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices > fn set_next_shell | allow unsafe_code"
   }
 ]

@@ -37,10 +37,9 @@ pub const VEHICLE_LENGTH: u8 = crate::vehicle_type::VEHICLE_LENGTH as u8;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VehicleRef(pub NonNull<OpenTTDVehicle>);
 
-// Each access names a live record, as the module states.
-#[allow(unsafe_code)]
 impl VehicleRef {
     /// The record's native shell, the context its untyped services take.
+    #[allow(unsafe_code)]
     pub(crate) fn shell(self) -> *mut std::ffi::c_void {
         crate::raw_field::read_field!(self.0.as_ptr(), shell).cast()
     }
@@ -60,6 +59,7 @@ impl VehicleRef {
     ///
     /// # Safety
     /// `shell` is a live non-null vehicle shell.
+    #[allow(unsafe_code)]
     pub(crate) unsafe fn from_shell(
         shell: *mut std::ffi::c_void,
         services: &VehicleServices,
@@ -96,7 +96,7 @@ pub struct VehicleServices {
     /// `PlayVehicleSound(v, event)`.
     pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
     pub profit: extern "C" fn(VehicleRef) -> i64,
-    /// Resolve a legacy opaque native shell to its canonical record.
+    /// The record of a native shell.
     pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
     /// Native `max_age` store after the Rust engine lifetime decision.
     pub set_max_age: extern "C" fn(VehicleRef, i32),
@@ -114,13 +114,19 @@ pub struct VehicleServices {
     pub write_profit: extern "C" fn(VehicleRef, i64),
     pub write_reliability: extern "C" fn(VehicleRef, u16),
 }
-// The getters return immutable process-wide tables and every handle names a live record.
+/// The immutable process-wide table a getter field returns.
 #[allow(unsafe_code)]
+fn table<T>(getter: extern "C" fn() -> *const T) -> &'static T {
+    // SAFETY: Each getter field returns a table that lives for the process.
+    unsafe { &*getter() }
+}
+
 impl VehicleServices {
     /// `Vehicle::SetNext` on two native shells.
     ///
     /// # Safety
     /// `shell` and a non-null `next` are live shells.
+    #[allow(unsafe_code)]
     pub(crate) unsafe fn set_next_shell(
         &self,
         shell: *mut std::ffi::c_void,
@@ -134,18 +140,15 @@ impl VehicleServices {
 
     /// The immutable process-wide vehicle resolver services.
     pub(crate) fn newgrf(&self) -> &'static crate::newgrf_vehicle::Services {
-        // SAFETY: The getter returns the immutable process-wide resolver table.
-        unsafe { &*(self.newgrf)() }
+        table(self.newgrf)
     }
     /// The immutable process-wide station and depot visit table.
     pub(crate) fn visits(&self) -> &'static visits::Services {
-        // SAFETY: The getter returns the immutable process-wide visit table.
-        unsafe { &*(self.visits)() }
+        table(self.visits)
     }
     /// The immutable process-wide orders services, shared by every controller.
     pub(crate) fn orders(&self) -> &'static crate::orders::Leaves {
-        // SAFETY: The getter returns the immutable process-wide orders table.
-        unsafe { &*(self.orders)() }
+        table(self.orders)
     }
     /// `VehicleEnterDepot(v)`.
     pub(crate) fn enter_depot(&self, v: VehicleRef) {
@@ -169,6 +172,7 @@ impl VehicleServices {
         }
     }
     /// `ErrorUnknownCallbackResult` for an engine's callback result.
+    #[allow(unsafe_code)]
     pub(crate) fn unknown_callback_result(
         &self,
         engine: EngineRef,
@@ -190,6 +194,7 @@ impl VehicleServices {
     ///
     /// # Safety
     /// `v` is a live ship or aircraft.
+    #[allow(unsafe_code)]
     pub(crate) unsafe fn running_cost(&self, v: VehicleRef) -> i64 {
         // SAFETY: The caller's live vehicle and its current engine.
         unsafe {

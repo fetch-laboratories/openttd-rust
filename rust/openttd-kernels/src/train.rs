@@ -3333,7 +3333,8 @@ mod evidence_tests;
 /// a train passes it and its handle carries the record's train owner.
 #[cfg(test)]
 mod handle_tests {
-    use crate::vehicle::{VehicleRef, VehicleType};
+    use crate::vehicle::VehicleRef;
+    use crate::vehicle_type::VehicleType;
     use std::sync::atomic::{AtomicU32, Ordering};
 
     /// Failed native assertions seen by the isolated child.
