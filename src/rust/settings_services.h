@@ -110,7 +110,6 @@ inline int32_t RustStartingYear() noexcept { return _settings_game.game_creation
 /** Adapt legacy callback widths and unused context arguments to a canonical setting read. */
 template <typename Result, auto Read, typename... Args>
 inline Result RustSettingRead(Args...) noexcept { return Read(); }
-inline uint8_t RustVehicleSmokeAmount() noexcept { return _settings_game.vehicle.smoke_amount; }
 inline uint8_t RustTrainPathBackoffInterval() noexcept { return _settings_game.pf.path_backoff_interval; }
 inline bool RustTrainReservePaths() noexcept { return _settings_game.pf.reserve_paths; }
 inline uint16_t RustMinutesPerCalendarYear() noexcept { return _settings_game.economy.minutes_per_calendar_year; }

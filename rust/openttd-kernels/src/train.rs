@@ -394,7 +394,7 @@ impl Handle {
     }
     /// `GroundVehicleCache::cached_veh_length`.
     fn cached_veh_length(self) -> u8 {
-        read_field!(self.vehicle().ground_cache(), cached_veh_length)
+        self.vehicle().cached_veh_length()
     }
     /// `GroundVehicleCache::cached_total_length`.
     fn cached_total_length(self) -> u16 {
@@ -898,7 +898,7 @@ impl Game<'_> {
             (self.vs.set_colourmap)(u.vehicle(), PAL_NONE);
 
             /* Update powered-wagon-status and visual effect */
-            crate::vehicle_effect::update_visual_effect(u.vehicle(), true);
+            crate::vehicle_effect::update_visual_effect(self.vs, self.services, u.vehicle(), true);
 
             if rvi_v.wagon_power() != 0
                 && e_u.rail_kind() == RailVehicleTypes::WAGON
@@ -3839,11 +3839,10 @@ impl Game<'_> {
             return true;
         }
 
-        if !mode && crate::vehicle_effect::show_visual_effect_allowed(v.vehicle()) {
-            crate::vehicle_effect::show_visual_effect(
-                v.vehicle(),
-                self.get_current_max_speed(v) as u32,
-            );
+        if !mode {
+            crate::vehicle_effect::show_visual_effect(self.vs, self.services, v.vehicle(), || {
+                self.get_current_max_speed(v)
+            });
         }
 
         /* We had no order but have an order now, do look ahead. */

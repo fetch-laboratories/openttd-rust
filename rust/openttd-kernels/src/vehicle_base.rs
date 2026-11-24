@@ -255,11 +255,6 @@ pub const NCVV_CONSIST_CARGO_INFORMATION: u8 =
 pub const NCVV_COMPANY_INFORMATION: u8 = NewGRFCacheValidValues::NCVV_COMPANY_INFORMATION.0;
 pub const NCVV_POSITION_IN_VEHICLE: u8 = NewGRFCacheValidValues::NCVV_POSITION_IN_VEHICLE.0;
 pub const NCVV_END: u8 = NewGRFCacheValidValues::NCVV_END.0;
-pub const VESM_NONE: u8 = VisualEffectSpawnModel::VESM_NONE.0;
-pub const VESM_STEAM: u8 = VisualEffectSpawnModel::VESM_STEAM.0;
-pub const VESM_DIESEL: u8 = VisualEffectSpawnModel::VESM_DIESEL.0;
-pub const VESM_ELECTRIC: u8 = VisualEffectSpawnModel::VESM_ELECTRIC.0;
-pub const VESM_END: u8 = VisualEffectSpawnModel::VESM_END.0;
 
 /// Opaque native `Vehicle` shell: pool identity, virtual operations and unmoved fields.
 #[repr(C)]
@@ -541,6 +536,17 @@ impl crate::vehicle::VehicleRef {
         }
         v
     }
+    /// `Vehicle::IsPrimaryVehicle`: whether this is the primary vehicle in the chain. Each
+    /// override reads only `subtype`: `Train` and `RoadVehicle` return `IsFrontEngine()`,
+    /// `Ship` `true`, `Aircraft` `IsNormalAircraft()`, and `Vehicle` itself `false`.
+    pub(crate) fn is_primary_vehicle(self) -> bool {
+        match self.vehicle_type() {
+            VehicleType::VEH_TRAIN | VehicleType::VEH_ROAD => self.is_front_engine(),
+            VehicleType::VEH_SHIP => true,
+            VehicleType::VEH_AIRCRAFT => crate::aircraft::is_primary_vehicle(self.subtype()),
+            _ => false,
+        }
+    }
     /// `Vehicle::IsFrontEngine`: is the vehicle a front engine?
     pub(crate) fn is_front_engine(self) -> bool {
         is_ground_vehicle(self.vehicle_type())
@@ -730,6 +736,18 @@ impl crate::vehicle::VehicleRef {
         // SAFETY: Ground shells bind a live owner before controller entries.
         unsafe { std::ptr::addr_of_mut!((*ground).cache) }
     }
+    /// `GroundVehicle::gcache.cached_power` of a live train or road vehicle.
+    pub(crate) fn cached_power(self) -> u32 {
+        read_field!(self.ground_cache(), cached_power)
+    }
+    /// `GroundVehicle::gcache.cached_weight` of a live train or road vehicle.
+    pub(crate) fn cached_weight(self) -> u32 {
+        read_field!(self.ground_cache(), cached_weight)
+    }
+    /// `GroundVehicle::gcache.cached_veh_length` of a live train or road vehicle.
+    pub(crate) fn cached_veh_length(self) -> u8 {
+        read_field!(self.ground_cache(), cached_veh_length)
+    }
     /// The aircraft owner link; the record is a live aircraft.
     pub(crate) fn aircraft_state(self) -> *mut crate::aircraft::AircraftState {
         read_field!(self.0.as_ptr(), aircraft)
@@ -809,6 +827,17 @@ impl crate::vehicle::VehicleRef {
         let visual = read_field!(self.0.as_ptr(), visual);
         // SAFETY: The bound visual owner lives throughout the source access interval.
         unsafe { visual.read() }
+    }
+    /// Store `Vehicle::vcache.cached_vis_effect`.
+    pub(crate) fn set_cached_vis_effect(self, value: u8) {
+        let visual = read_field!(self.0.as_ptr(), visual);
+        // SAFETY: As `cached_vis_effect`.
+        unsafe { visual.write(value) }
+    }
+    /// Point the record's `visual` link at `cache`, a test's `vcache.cached_vis_effect`.
+    #[cfg(test)]
+    pub(crate) fn set_visual(self, cache: *mut u8) {
+        write_field!(self.0.as_ptr(), visual, cache);
     }
     /// `Vehicle::unitnumber`, a field still stored in the C++ shell, read
     /// through the vehicle resolver's field service.
@@ -1322,6 +1351,40 @@ mod record_tests {
         for record in records {
             // SAFETY: No traversal follows these private records after cleanup.
             unsafe { VehicleRecord::delete(record.0.as_ptr()) };
+        }
+    }
+
+    /// `IsPrimaryVehicle` over each type's override: `IsFrontEngine()` for trains and road
+    /// vehicles (`train.h`, `roadveh.h`), `true` for ships (`ship.h`), `IsNormalAircraft()`
+    /// for aircraft (`aircraft.h`) and the base's `false` for effect and disaster vehicles.
+    #[test]
+    fn is_primary_vehicle_takes_each_types_override() {
+        let front = 1 << GroundVehicleSubtypeFlags::GVSF_FRONT.0;
+        let wagon = 1 << GroundVehicleSubtypeFlags::GVSF_WAGON.0;
+        // `AIR_HELICOPTER` 0, `AIR_AIRCRAFT` 2, `AIR_SHADOW` 4 and `AIR_ROTOR` 6.
+        for (kind, subtype, primary) in [
+            (VehicleType::VEH_TRAIN, front, true),
+            (VehicleType::VEH_TRAIN, wagon, false),
+            (VehicleType::VEH_ROAD, front, true),
+            (VehicleType::VEH_ROAD, 0, false),
+            (VehicleType::VEH_SHIP, 0, true),
+            (VehicleType::VEH_AIRCRAFT, 0, true),
+            (VehicleType::VEH_AIRCRAFT, 2, true),
+            (VehicleType::VEH_AIRCRAFT, 4, false),
+            (VehicleType::VEH_AIRCRAFT, 6, false),
+            (VehicleType::VEH_EFFECT, front, false),
+            (VehicleType::VEH_DISASTER, front, false),
+        ] {
+            let record = VehicleRecord::new(std::ptr::null_mut(), kind);
+            let v = VehicleRef::of(record);
+            v.set_subtype(subtype);
+            assert_eq!(
+                v.is_primary_vehicle(),
+                primary,
+                "{kind:?} subtype {subtype}"
+            );
+            // SAFETY: The test's own record, deleted once.
+            unsafe { openttd_rust_vehicle_record_delete(record) };
         }
     }
 

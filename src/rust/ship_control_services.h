@@ -5,7 +5,6 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-#include "vehicle_effect_ffi.h"
 #include "effect_ffi.h"
 #include "services_ffi.h"
 #include "company_services.h"

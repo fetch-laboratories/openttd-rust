@@ -55,7 +55,6 @@ struct OpenTTDVehicleListId { uint8_t kind, vehicle_type, company; uint32_t inde
 struct OpenTTDVehicleMassServices {
 	const OpenTTDVehicleCommonServices *common;
 	const OpenTTDVehicleSelectionServices *selection;
-	bool (*is_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_depot);
 	void (*send)(OpenTTDCommandCost *, void *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(send);
 	uint8_t service, mass_send, dont_cancel;
 	uint32_t invalid_client;

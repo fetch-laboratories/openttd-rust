@@ -57,7 +57,6 @@ static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == a
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
 
 
-#include "rust/vehicle_effect_ffi.h"
 #include "rust/effect_ffi.h"
 #include "safeguards.h"
 

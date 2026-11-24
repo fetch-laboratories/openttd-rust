@@ -115,6 +115,8 @@ static_assert(VE_OFFSET_CENTRE == 8);
 static_assert(VE_TYPE_START == 4);
 static_assert(VE_TYPE_DEFAULT == 0);
 static_assert(VE_TYPE_STEAM == 1);
+static_assert(VE_TYPE_DIESEL == 2);
+static_assert(VE_TYPE_ELECTRIC == 3);
 static_assert(VE_DISABLE_EFFECT == 6);
 static_assert(VE_ADVANCED_EFFECT == 6);
 static_assert(VE_DISABLE_WAGON_POWER == 7);
@@ -342,6 +344,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.select_goods = &_settings_game.order.selectgoods,
 	.ship_curve45_penalty = &_settings_game.pf.yapf.ship_curve45_penalty,
 	.ship_curve90_penalty = &_settings_game.pf.yapf.ship_curve90_penalty,
+	.smoke_amount = &_settings_game.vehicle.smoke_amount,
 	.starting_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour),
 	.station_noise = &_settings_game.economy.station_noise_level,
 	.town_council_tolerance = &_settings_game.difficulty.town_council_tolerance,
@@ -548,6 +551,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.industry_gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(TileIndex(tile)); },
 	.is_bay_stop = Shared_is_bay_stop,
 	.is_bridge = Shared_is_bridge,
+	.is_depot_tile = SharedIsDepotTile,
 	.is_drive_through_stop = Shared_is_drive_through_stop,
 	.is_plain_rail = RustPlainRailTile,
 	.is_road_depot = Shared_is_road_depot,
@@ -836,6 +840,7 @@ static_assert(VESM_STEAM == 1);
 static_assert(VESM_DIESEL == 2);
 static_assert(VESM_ELECTRIC == 3);
 static_assert(VESM_END == 4);
+static_assert(to_underlying(VehicleCallbackMask::VisualEffect) == 0);
 static_assert(VE_OFFSET_COUNT == 4 && VE_TYPE_COUNT == 2);
 static_assert(CalendarTime::MAX_DATE.base() == 1826212865 && CalendarTime::DAYS_IN_YEAR == 365);
 static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63);

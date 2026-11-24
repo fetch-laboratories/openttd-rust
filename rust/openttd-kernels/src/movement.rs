@@ -1860,8 +1860,8 @@ pub(crate) fn should_stop_at_station(shared: &Services, v: VehicleRef, station: 
         )
     }
 }
-/// Temporary raw adapter of [`should_stop_at_station`] for `train.rs`,
-/// `train_reservation.rs` and `vehicle_effect.rs` until their passes.
+/// Temporary raw adapter of [`should_stop_at_station`] for `train_reservation.rs` until its
+/// pass.
 pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> bool {
     should_stop_at_station(shared, v, StationID(station))
 }

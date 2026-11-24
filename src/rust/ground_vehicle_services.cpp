@@ -36,7 +36,6 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.cargo_weight = GroundCargoWeight,
 		.train_cargo_weight = GroundTrainCargoWeight,
-		.powered = RustRailPoweredMask,
 		.rail_type = RustRailType,
 		.rail_acceleration = RustRailAccelerationType,
 		.rail_speed = RustRailMaxSpeed,

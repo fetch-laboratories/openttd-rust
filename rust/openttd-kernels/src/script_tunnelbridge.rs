@@ -35,7 +35,7 @@ fn bridge_tile(s: &Services, tile: u32) -> bool {
 
 fn tunnel_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE && w.tunnel(tile)
+    valid(&w, tile) && w.tunnel_tile(TileIndex(tile))
 }
 
 /// `ScriptBridge::GetBridgeType`; `(BridgeType)-1` for other tiles.

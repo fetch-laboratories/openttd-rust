@@ -20,8 +20,12 @@ pub const VE_OFFSET_CENTRE: u8 = 8;
 pub const VE_TYPE_START: u8 = 4;
 /// `VE_TYPE_DEFAULT`.
 pub const VE_TYPE_DEFAULT: u8 = 0;
-/// `VE_TYPE_STEAM`.
+/// `VE_TYPE_STEAM`: steam plumes.
 pub const VE_TYPE_STEAM: u8 = 1;
+/// `VE_TYPE_DIESEL`: diesel fumes.
+pub const VE_TYPE_DIESEL: u8 = 2;
+/// `VE_TYPE_ELECTRIC`: electric sparks.
+pub const VE_TYPE_ELECTRIC: u8 = 3;
 /// `VE_DISABLE_EFFECT`.
 pub const VE_DISABLE_EFFECT: u8 = 6;
 /// `VE_ADVANCED_EFFECT`.

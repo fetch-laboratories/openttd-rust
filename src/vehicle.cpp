@@ -75,7 +75,6 @@
 
 #include "rust/movement_ffi.h"
 
-#include "rust/vehicle_effect_services.hpp"
 #include "safeguards.h"
 
 const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
@@ -397,7 +396,6 @@ static void ClearPendingAutoreplace() { openttd_rust_fleet_pending_clear(); }
 void InitializeVehicles()
 {
 	openttd_rust_effect_bind(GetRustEffectCreationServices());
-	openttd_rust_visual_bind(&GetRustVisualServices());
 	ClearPendingAutoreplace();
 	ResetVehicleHash();
 }
@@ -1412,42 +1410,6 @@ CommandCost Vehicle::SendToDepot(DoCommandFlags flags, DepotCommandFlags command
 }
 
 /**
- * Update the cached visual effect.
- * @param allow_power_change true if the wagon-is-powered-state may change.
- */
-void Vehicle::UpdateVisualEffect(bool allow_power_change)
-{
-	openttd_rust_visual_bind(&GetRustVisualServices());
-	openttd_rust_visual_update(RustVehicle(this), allow_power_change);
-}
-
-
-/**
- * Draw visual effects (smoke and/or sparks) for a vehicle chain.
- * @pre this->IsPrimaryVehicle()
- */
-void Vehicle::ShowVisualEffect() const
-{
-	if (!this->VisualEffectEligible()) return;
-	/* Use the speed as limited by underground and orders. */
-	this->ShowVisualEffectAtSpeed(this->GetCurrentMaxSpeed());
-}
-
-/** Shared assertion and eligibility gate, before any maximum-speed query. */
-bool Vehicle::VisualEffectEligible() const
-{
-	openttd_rust_visual_bind(&GetRustVisualServices());
-	return openttd_rust_visual_eligible(RustVehicle(this));
-}
-
-/** Draw effects after VisualEffectEligible(), using the owner's current speed limit. */
-void Vehicle::ShowVisualEffectAtSpeed(uint max_speed) const
-{
-	openttd_rust_visual_bind(&GetRustVisualServices());
-	openttd_rust_visual_show(RustVehicle(this), max_speed);
-}
-
-/**
  * Set the next vehicle of this vehicle.
  * @param next the next vehicle. nullptr removes the next vehicle.
  */
@@ -1700,9 +1662,8 @@ bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2)
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDFleetPendingServices.hpp"
 #include "abi-visit-OpenTTDVehicleVisits.hpp"
-#include "abi-visit-OpenTTDVisualServices.hpp"
 bool CheckAbi_vehicle()
 {
 	return AbiServicesComplete(_fleet_pending_services) &&
-		AbiServicesComplete(GetRustVehicleVisits()) && AbiServicesComplete(GetRustVisualServices());
+		AbiServicesComplete(GetRustVehicleVisits());
 }

@@ -32,7 +32,7 @@ pub(crate) fn st_slope_cost(world: &World<'_>, tile: TileIndex, td: Trackdir) ->
             return !crate::bridge::has_bridge_flat_ramp(world.shared, tile_slope.0, axis.0);
         }
         /* not bridge ramp */
-        if world.kind(tile) == TileType::MP_TUNNELBRIDGE && world.tunnel(tile.0) {
+        if world.tunnel_tile(tile) {
             return false; // tunnel entry/exit doesn't slope
         }
         let tile_slope = world.tile_slope(tile);

@@ -9,3 +9,12 @@ impl crate::map_func::World<'_> {
         }
     }
 }
+
+/// `IsDepotTile`: is the given tile a tile with a depot on it? It ends in `IsHangarTile`,
+/// which reads the station's airport specification, so it stays a native service (#565).
+pub(crate) fn is_depot_tile(
+    shared: &crate::services::Services,
+    tile: crate::tile_type::TileIndex,
+) -> bool {
+    (shared.is_depot_tile)(tile.0)
+}

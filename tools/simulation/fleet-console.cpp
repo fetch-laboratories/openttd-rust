@@ -50,6 +50,10 @@
 #include "bridge_map.h"
 #include "tunnel_map.h"
 #include "newgrf_sound.h"
+#ifdef WITH_RUST
+#include "rust/vehicle_effect_ffi.h"
+#include "rust/vehicle_services.h"
+#endif
 
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "FLEET setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
 static bool SameRandom(const SavedRandomSeeds &a, const SavedRandomSeeds &b);
@@ -1034,6 +1038,25 @@ static void ResolverProbe()
 	fmt::print(stderr, "FLEET resolver-checkpoint complete\n");
 }
 
+/** Vehicle::UpdateVisualEffect: the candidate's port, the reference's member. */
+static void FleetUpdateVisualEffect(Vehicle *v, bool allow_power_change = true)
+{
+#ifdef WITH_RUST
+	openttd_rust_visual_update(RustVehicle(v), allow_power_change, &GetRustVehicleServices(), &GetRustSharedServices());
+#else
+	v->UpdateVisualEffect(allow_power_change);
+#endif
+}
+/** Vehicle::ShowVisualEffect: the candidate's port, which asks for the maximum speed after its gate; the reference's member. */
+static void FleetShowVisualEffect(const Vehicle *v)
+{
+#ifdef WITH_RUST
+	openttd_rust_visual_show(RustVehicle(v), &GetRustVehicleServices(), &GetRustSharedServices(), [](OpenTTDVehicle *u) noexcept -> int32_t { return VehicleOf(u)->GetCurrentMaxSpeed(); });
+#else
+	v->ShowVisualEffect();
+#endif
+}
+
 struct VisualEffectObserver : SpriteGroup {
 	VisualEffectObserver() : SpriteGroup() {}
 	const SpriteGroup *program = nullptr;
@@ -1093,14 +1116,14 @@ static void VisualEffectProbe()
 		program->adjusts.push_back({.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = result});
 		std::set<VehicleID> before;
 		for (const EffectVehicle *u : EffectVehicle::Iterate()) before.insert(u->index);
-		v->UpdateVisualEffect();
+		FleetUpdateVisualEffect(v);
 		VehicleCache copied(v->vcache);
 		v->vcache.cached_vis_effect = 0x42;
 		bool independent = copied.cached_vis_effect == 0x41;
 		v->vcache = copied;
 		auto expected = _random; expected.Next();
 		uint old_sound = observer->sound, old_spawn = observer->spawn;
-		v->ShowVisualEffect();
+		FleetShowVisualEffect(v);
 		fmt::print(stderr, "FLEET effect-emission {} cache {} independent {} callbacks {} sound {} rng {}\n", result, v->vcache.cached_vis_effect, independent, observer->spawn - old_spawn, observer->sound - old_sound, _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1]);
 		uint count = 0;
 		for (const EffectVehicle *u : EffectVehicle::Iterate()) if (!before.contains(u->index)) {
@@ -1128,7 +1151,7 @@ static void VisualEffectProbe()
 		if (std::string_view(label) == "bridge-middle") { MakeBridgeRamp(current, FIXTURE_GET(v, Owner, owner), 0, DIAGDIR_NE, TRANSPORT_ROAD); SetBridgeMiddle(current, AXIS_X); FIXTURE_FIELD(v, x_pos) += TILE_SIZE; }
 		if (std::string_view(label) == "bridge") SetBridgeMiddle(FIXTURE_GET(v, Tile, tile), AXIS_X);
 		const size_t effects = EffectVehicle::GetNumItems();
-		v->ShowVisualEffect();
+		FleetShowVisualEffect(v);
 		std::tie(current.type(), current.m1(), current.m2(), current.m3(), current.m4(), current.m5(), current.m6(), current.m7(), current.m8()) = original_tile;
 		FIXTURE_FIELD(v, x_pos) = original_x;
 		SaveRandomSeeds(&after);
@@ -1147,7 +1170,7 @@ static void VisualEffectProbe()
 		std::set<VehicleID> before;
 		for (const EffectVehicle *u : EffectVehicle::Iterate()) before.insert(u->index);
 		const uint old_sound = observer->sound;
-		v->ShowVisualEffect();
+		FleetShowVisualEffect(v);
 		uint count = 0;
 		for (const EffectVehicle *u : EffectVehicle::Iterate()) if (!before.contains(u->index)) {
 			++count;
@@ -1159,7 +1182,7 @@ static void VisualEffectProbe()
 		observer->visual = callback;
 		v->vcache.cached_vis_effect = 0x41;
 		SavedRandomSeeds before, after; SaveRandomSeeds(&before);
-		v->UpdateVisualEffect(callback != 0xC1);
+		FleetUpdateVisualEffect(v, callback != 0xC1);
 		SaveRandomSeeds(&after);
 		fmt::print(stderr, "FLEET effect-cache {} {} rng {}\n", callback, v->vcache.cached_vis_effect, SameRandom(before, after));
 	}
@@ -1241,7 +1264,7 @@ static void VisualTrainProbe()
 		std::set<VehicleID> before;
 		for (const EffectVehicle *u : EffectVehicle::Iterate()) before.insert(u->index);
 		uint old_sound = observer->sound;
-		v->ShowVisualEffect();
+		FleetShowVisualEffect(v);
 		uint count = 0;
 		for (const EffectVehicle *u : EffectVehicle::Iterate()) if (!before.contains(u->index)) {
 			++count;
@@ -1252,11 +1275,11 @@ static void VisualTrainProbe()
 	EngineFields(e).info.callback_mask = {};
 	for (uint8_t kind : {uint8_t(EC_STEAM), uint8_t(EC_DIESEL), uint8_t(EC_ELECTRIC), uint8_t(EC_MONORAIL), uint8_t(255)}) {
 		e->VehInfo<RailVehicleInfo>().engclass = static_cast<EngineClass>(kind); e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_SINGLEHEAD; e->VehInfo<RailVehicleInfo>().visual_effect = VE_DEFAULT;
-		v->UpdateVisualEffect();
+		FleetUpdateVisualEffect(v);
 		fmt::print(stderr, "FLEET effect-train-default {} {}\n", kind, v->vcache.cached_vis_effect);
 	}
 	e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_WAGON; e->VehInfo<RailVehicleInfo>().engclass = EC_STEAM;
-	v->UpdateVisualEffect(); fmt::print(stderr, "FLEET effect-train-wagon {}\n", v->vcache.cached_vis_effect);
+	FleetUpdateVisualEffect(v); fmt::print(stderr, "FLEET effect-train-wagon {}\n", v->vcache.cached_vis_effect);
 	VisualTrainState(v, flags, rail);
 	tile.Restore(); x.Restore(); y.Restore(); z.Restore();
 	props.Restore(); mask.Restore(); info.Restore(); smoke.Restore(); sound.Restore(); status.Restore(); speed.Restore(); tick.Restore(); direction.Restore(); length.Restore();

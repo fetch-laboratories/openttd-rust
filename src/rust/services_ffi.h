@@ -132,6 +132,7 @@ struct OpenTTDSharedServices {
 	uint16_t (*industry_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_gfx);
 	bool (*is_bay_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bay_stop);
 	bool (*is_bridge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bridge);
+	bool (*is_depot_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_depot_tile);
 	bool (*is_drive_through_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_drive_through_stop);
 	bool (*is_plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_plain_rail);
 	bool (*is_road_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot);
