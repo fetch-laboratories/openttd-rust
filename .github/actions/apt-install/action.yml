@@ -70,8 +70,14 @@ runs:
           sed -n 's|^\([^#]*[[:space:]]\)\{0,1\}https\{0,1\}://\([^/[:space:]]*\)/ubuntu.*|\2|p' |
           grep -v '^security\.ubuntu\.com$' | head -n 1 || true)
       fi
-      # The archive hosts a retry moves off: the configured one and Ubuntu's.
-      archives="${configured//./\\.}|([a-z0-9-]+\\.)*archive\\.ubuntu\\.com"
+      # The archive hosts a retry moves off: every one an active entry names, in any
+      # mirror list or source, and Ubuntu's.
+      archives="([a-z0-9-]+\\.)*archive\\.ubuntu\\.com"
+      while read -r host; do
+        archives+="|${host//./\\.}"
+      done < <({ cat "${lists[@]}" "${files[@]}" 2>/dev/null || true; } |
+        grep -v '^[[:space:]]*#' | grep -o 'https\{0,1\}://[^/[:space:]]*/ubuntu' |
+        sed 's|^https\{0,1\}://||; s|/ubuntu$||' | grep -v '^security\.ubuntu\.com$' | sort -u)
       hosts=()
       if [ -n "$configured" ]; then
         for host in "$configured" azure.archive.ubuntu.com archive.ubuntu.com; do

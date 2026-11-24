@@ -1759,6 +1759,34 @@ class AptInstallTests(unittest.TestCase):
             "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n" + SECURITY,
         )
 
+    def test_a_retry_moves_every_active_list_off_its_host(self) -> None:
+        # Two mirror lists for different suites, each on its own host: the one
+        # a retry did not pick must not keep its stalled host.
+        files = {
+            "main-mirrors.txt": "http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n",
+            "updates-mirrors.txt": "http://mirror.example.net/ubuntu/\n",
+            "sources.list.d/ubuntu.sources": "Types: deb\n"
+            "URIs: mirror+file:ETC/main-mirrors.txt\nSuites: noble\n\n"
+            "Types: deb\nURIs: mirror+file:ETC/updates-mirrors.txt\n"
+            "Suites: noble-updates\n",
+        }
+        code, log, after, _ = self.install(
+            files, "updates-mirrors.txt", [0, 1, 0, 0, 0]
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            log,
+            [
+                "update mirror.example.net",
+                "download mirror.example.net",
+                "update azure.archive.ubuntu.com",
+                "download azure.archive.ubuntu.com",
+                "install azure.archive.ubuntu.com",
+            ],
+        )
+        for name in ("main-mirrors.txt", "updates-mirrors.txt"):
+            self.assertEqual(after[name], "http://azure.archive.ubuntu.com/ubuntu/\n")
+
     def test_a_first_attempt_that_succeeds_rewrites_nothing(self) -> None:
         code, log, after, warnings = self.install(
             self.HOSTED, "apt-mirrors.txt", [0, 0, 0]
