@@ -348,3 +348,83 @@ impl Price {
         self.0 as usize
     }
 }
+
+/// `ScoreID`: score categories in the detailed performance rating.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ScoreID(pub u8);
+impl ScoreID {
+    /// Native `SCORE_BEGIN`.
+    pub const SCORE_BEGIN: Self = Self(0);
+    /// Native `SCORE_VEHICLES`.
+    pub const SCORE_VEHICLES: Self = Self(0);
+    /// Native `SCORE_STATIONS`.
+    pub const SCORE_STATIONS: Self = Self(1);
+    /// Native `SCORE_MIN_PROFIT`.
+    pub const SCORE_MIN_PROFIT: Self = Self(2);
+    /// Native `SCORE_MIN_INCOME`.
+    pub const SCORE_MIN_INCOME: Self = Self(3);
+    /// Native `SCORE_MAX_INCOME`.
+    pub const SCORE_MAX_INCOME: Self = Self(4);
+    /// Native `SCORE_DELIVERED`.
+    pub const SCORE_DELIVERED: Self = Self(5);
+    /// Native `SCORE_CARGO`.
+    pub const SCORE_CARGO: Self = Self(6);
+    /// Native `SCORE_MONEY`.
+    pub const SCORE_MONEY: Self = Self(7);
+    /// Native `SCORE_LOAN`.
+    pub const SCORE_LOAN: Self = Self(8);
+    /// This must always be the last entry.
+    pub const SCORE_TOTAL: Self = Self(9);
+    /// How many scores are there.
+    pub const SCORE_END: Self = Self(10);
+}
+
+/// The max score that can be in the performance history.
+/// The scores together of score_info is allowed to be more!
+pub const SCORE_MAX: i32 = 1000;
+
+/// `ScoreInfo`: how the score is computed for a single score id.
+#[derive(Clone, Copy, Debug)]
+pub struct ScoreInfo {
+    /// How much you need to get the perfect score.
+    pub needed: i32,
+    /// How much score it will give.
+    pub score: i32,
+}
+
+/// `PriceCategory`: categories of a price bases.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PriceCategory(pub u8);
+impl PriceCategory {
+    /// Not affected by difficulty settings.
+    pub const PCAT_NONE: Self = Self(0);
+    /// Price is affected by "vehicle running cost" difficulty setting.
+    pub const PCAT_RUNNING: Self = Self(1);
+    /// Price is affected by "construction cost" difficulty setting.
+    pub const PCAT_CONSTRUCTION: Self = Self(2);
+}
+
+/// The "steps" in loan size, in British Pounds!
+pub const LOAN_INTERVAL: i32 = 10000;
+/// The size of loan for a new company, in British Pounds!
+pub const INITIAL_LOAN: i64 = 100_000;
+/// The max amount possible to configure for a max loan of a company.
+pub const MAX_LOAN_LIMIT: i64 = 2_000_000_000;
+
+/// Maximum inflation (including fractional part) without causing overflows in int64_t price
+/// computations.
+/// This allows for 32 bit base prices (21 are currently needed).
+/// Considering the sign bit and 16 fractional bits, there are 15 bits left.
+/// 170 years of 4% inflation result in a inflation of about 822, so 10 bits are actually enough.
+/// Note that NewGRF multipliers share the 16 fractional bits.
+/// See `MAX_PRICE_MODIFIER`.
+pub const MAX_INFLATION: u64 = (1_u64 << (63 - 32)) - 1;
+
+/// Maximum NewGRF price modifiers.
+/// Increasing base prices by factor 65536 should be enough.
+/// See `MAX_INFLATION`.
+pub const MIN_PRICE_MODIFIER: i32 = -8;
+/// See `MIN_PRICE_MODIFIER`.
+pub const MAX_PRICE_MODIFIER: i32 = 16;
