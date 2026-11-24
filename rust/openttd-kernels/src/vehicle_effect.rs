@@ -245,12 +245,12 @@ fn spawn_advanced_visual_effect(vs: &VehicleServices, shared: &Services, v: Vehi
 }
 
 /// `IsBridgeAboveVehicle`: test if a bridge is above vehicle `v`.
-fn is_bridge_above_vehicle(world: &World<'_>, shared: &Services, v: VehicleRef) -> bool {
+fn is_bridge_above_vehicle(world: &World<'_>, v: VehicleRef) -> bool {
     if world.bridge_tile(v.tile()) {
         /* If the vehicle is 'on' a bridge tile, check the real position of the vehicle. If it's different then the
          * vehicle is on the middle of the bridge, which cannot have a bridge above. */
-        let tile = shared
-            .map()
+        let tile = world
+            .dimensions
             .tile_virt_xy(v.x_pos() as u32, v.y_pos() as u32);
         if tile != v.tile() {
             return false;
@@ -462,14 +462,14 @@ pub(crate) fn show_visual_effect(
              * - The vehicle is a train engine that is currently unpowered */
             if effect_model == VisualEffectSpawnModel::VESM_NONE
                 || v.vehstatus().test(VehState::Hidden)
-                || is_bridge_above_vehicle(&world, shared, v)
+                || is_bridge_above_vehicle(&world, v)
                 || crate::depot_map::is_depot_tile(&world, v.tile())
                 || world.tunnel_tile(v.tile())
                 || (v.vehicle_type() == VehicleType::VEH_TRAIN
                     && !crate::rail::has_power_on_rail(
                         shared,
                         Train::from_vehicle(v).railtypes(),
-                        crate::rail::get_tile_rail_type(shared, v.tile()),
+                        world.get_tile_rail_type(v.tile()),
                     ))
             {
                 break 'part;
