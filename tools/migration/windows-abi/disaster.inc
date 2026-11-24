@@ -56,6 +56,9 @@ static void Disasters()
 	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 1);
 
 	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v->shell)->links; };
+	/* The tile index hashes the vehicle's tile with the 64-wide map's dimensions. */
+	static OpenTTDFixtureMap map{6, 4096};
+	shared.map = &map.statics;
 
 	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->links.current != nullptr); p->viewports++; };
 	vehicles.first_sprite = [](OpenTTDVehicle *) noexcept { return 3904U; };
@@ -71,7 +74,7 @@ static void Disasters()
 	costs.zero = [](OpenTTDCommandCost *p) noexcept { _disaster_cost_calls.push_back(3); *reinterpret_cast<uint32_t *>(p) = 0; };
 	costs.error = [](OpenTTDCommandCost *p, uint32_t error) noexcept { CHECK(error == 0x87654321); _disaster_cost_calls.push_back(3); *reinterpret_cast<uint32_t *>(p) = error; };
 	costs.success = [](const OpenTTDCommandCost *p) noexcept { _disaster_cost_calls.push_back(4); return *reinterpret_cast<const uint32_t *>(p) == 0; };
-	const OpenTTDOccupancyCommands commands{.vehicles = &vehicles, .max_pixel_z = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_cost_calls.push_back(2); return 0; }, .costs = &costs, .vehicle_error = 0x87654321};
+	const OpenTTDOccupancyCommands commands{.vehicles = &vehicles, .shared = &shared, .max_pixel_z = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_cost_calls.push_back(2); return 0; }, .costs = &costs, .vehicle_error = 0x87654321};
 	services.occupancy = &commands;
 	services.disasters_enabled = []() noexcept { return true; };
 	services.next_industry = [](uint32_t from) noexcept -> OpenTTDDisasterIndustryTarget {
@@ -95,9 +98,7 @@ static void Disasters()
 		openttd_rust_disaster_release_industry(p->services, 7);
 	};
 	/* Tile 0 is plain rail, not a depot, wherever the probe reports a railway. */
-	static OpenTTDFixtureMap map{6, 4096};
 	map.base[0].type = MP_RAILWAY << 4;
-	shared.map = &map.statics;
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1955});
 	shared.tile_valid = [](uint32_t tile) noexcept { return tile == 0; };
 	shared.tile_type = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_probe->tile_types++; return _disaster_probe->tile_type; };
