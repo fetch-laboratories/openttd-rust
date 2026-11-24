@@ -2809,14 +2809,14 @@ impl Game<'_> {
                                 crate::track_func::diagdir_reaches_trackdirs(enterdir.0),
                             );
 
-                            let trackdirbits = TrackdirBits(
-                                crate::track_func::track_status_to_trackdir_bits(ts)
-                                    & reachable_trackdirs.0,
-                            );
+                            let trackdirbits =
+                                TrackdirBits(crate::track_func::track_status_to_trackdir_bits(ts))
+                                    & reachable_trackdirs;
                             let red_signals =
                                 TrackBits(crate::track_func::trackdir_bits_to_track_bits(
-                                    crate::track_func::track_status_to_red_signals(ts).0
-                                        & reachable_trackdirs.0,
+                                    (crate::track_func::track_status_to_red_signals(ts)
+                                        & reachable_trackdirs)
+                                        .0,
                                 ));
 
                             let mut bits = TrackBits(
@@ -2906,7 +2906,7 @@ impl Game<'_> {
                                 }
 
                                 /* Check if it's a red signal and that force proceed is not clicked. */
-                                if red_signals.0 & chosen_track.0 != 0
+                                if red_signals & chosen_track != TrackBits::TRACK_BIT_NONE
                                     && v.force_proceed() == TrainForceProceeding::TFP_NONE
                                 {
                                     /* In front of a red signal */
@@ -3720,12 +3720,9 @@ impl Game<'_> {
         let ts = self.get_tile_track_status(tile, reverse_diag_dir(dir, self.check()));
         let reachable_trackdirs = TrackdirBits(crate::track_func::diagdir_reaches_trackdirs(dir.0));
 
-        let trackdirbits = TrackdirBits(
-            crate::track_func::track_status_to_trackdir_bits(ts) & reachable_trackdirs.0,
-        );
-        let red_signals = TrackdirBits(
-            crate::track_func::track_status_to_red_signals(ts).0 & reachable_trackdirs.0,
-        );
+        let trackdirbits = TrackdirBits(crate::track_func::track_status_to_trackdir_bits(ts))
+            & reachable_trackdirs;
+        let red_signals = crate::track_func::track_status_to_red_signals(ts) & reachable_trackdirs;
 
         /* We are sure the train is not entering a depot, it is detected above */
 
@@ -3750,7 +3747,7 @@ impl Game<'_> {
         }
 
         /* approaching red signal */
-        if trackdirbits.0 & red_signals.0 != 0 {
+        if trackdirbits & red_signals != TrackdirBits::TRACKDIR_BIT_NONE {
             return self.train_approaching_line_end(v, true, reverse);
         }
 

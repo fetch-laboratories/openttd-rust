@@ -1243,6 +1243,14 @@ mod bodies {
                 .vehicle()
                 .set_vehstatus(c.train().vehicle().vehstatus().set(VehState::Stopped));
             assert_eq!(c.reverse(VEHICLE_ID, true, true), depot);
+            // Stopped in its depot: the query succeeds without a change.
+            let c = Command::new(LOCAL, FRONT_ENGINE);
+            c.in_depot();
+            c.train()
+                .vehicle()
+                .set_vehstatus(c.train().vehicle().vehstatus().set(VehState::Stopped));
+            assert_eq!(c.reverse(VEHICLE_ID, true, false), [Cost::Zero]);
+            assert!(!c.train().flags().test(VehicleRailFlag::Flipped));
 
             let c = Command::new(LOCAL, FREE_WAGON);
             c.in_depot();
@@ -1291,6 +1299,50 @@ mod bodies {
                 .set_flags(c.train().flags().set(VehicleRailFlag::Stuck));
             assert_eq!(c.force(VEHICLE_ID, true), [Cost::Zero]);
             assert_eq!(c.train().force_proceed(), TrainForceProceeding::TFP_STUCK);
+        }
+        thread_local! {
+            static HEAD_FAILED: Cell<u32> = const { Cell::new(0) };
+        }
+        extern "C" fn record_head_failure(ok: bool) {
+            if !ok {
+                HEAD_FAILED.with(|f| f.set(f.get() + 1));
+            }
+        }
+        /// `Vehicle::IsStoppedInDepot` asserts `this == this->First()`: the second part of
+        /// a chain fails it once, and the head passes it.
+        #[test]
+        fn is_stopped_in_depot_asserts_the_head_of_the_chain() {
+            if crate::services_assert::isolate_test_check(
+                "train::tests::bodies::commands::is_stopped_in_depot_asserts_the_head_of_the_chain",
+                record_head_failure,
+            ) {
+                return;
+            }
+            let c = Command::new(LOCAL, FRONT_ENGINE);
+            let second = crate::vehicle_base::openttd_rust_vehicle_record_new(
+                std::ptr::null_mut(),
+                VehicleType::VEH_TRAIN,
+            );
+            // SAFETY: The fresh record and the fixture's head, linked as `Next()`.
+            unsafe {
+                (*second).train = crate::train_state::openttd_rust_train_state_new();
+                (*second).ground =
+                    Box::leak(Box::new(crate::ground_vehicle::GroundState::default()));
+                (*second).first = c.f.record;
+                (*second).tile = TILE;
+                (*c.f.record).next = second;
+            }
+            let head = c.train().vehicle();
+            assert!(!crate::vehicle_base::is_stopped_in_depot(
+                head,
+                c.f.leaves.physics
+            ));
+            assert_eq!(HEAD_FAILED.with(Cell::get), 0);
+            let _ = crate::vehicle_base::is_stopped_in_depot(
+                VehicleRef::of(second),
+                c.f.leaves.physics,
+            );
+            assert_eq!(HEAD_FAILED.with(Cell::get), 1);
         }
     }
 }
