@@ -7,12 +7,10 @@
 #include "road_command_services.h"
 #include "generation_sea_set.hpp"
 #include "heightmap_services.hpp"
-#include "../framerate_type.h"
 #include <exception>
 #include <optional>
 OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *, const OpenTTDRoadCommandContext *) noexcept;
 struct RustGenerationLoop {
-	PerformanceAccumulator framerate{PFE_GL_LANDSCAPE};
 	OpenTTDGroundCall ground;
 	RustRoadCommandContext road;
 	OpenTTDLandscapeLoopServices services{RustLandscapeLoopServices(&ground, &road.view)};

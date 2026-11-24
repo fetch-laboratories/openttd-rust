@@ -9,11 +9,15 @@
 )]
 use crate::company_type::{CompanyID, MAX_COMPANIES};
 use crate::debug::debug;
+use crate::framerate_type::{
+    PerformanceAccumulator, PerformanceElement, PerformanceMeasurer, PerformanceMeasurerStorage,
+};
 use crate::game_state::GameState;
 use crate::network_action::{Actions, Resume};
 use crate::openttd::{GameMode, PauseMode, SwitchMode};
 use crate::raw_field::{read_field, write_field};
 use crate::settings_type::ParticipateSurvey;
+use std::mem::MaybeUninit;
 #[repr(C)]
 pub struct Frame {
     _opaque: [u8; 0],
@@ -118,12 +122,8 @@ pub struct Services {
     pub failed: extern "C" fn(*mut Frame) -> bool,
     pub console_exception:
         extern "C" fn(*mut Frame) -> *mut crate::timer_game_common::ConsoleException,
-    pub state_begin: extern "C" fn(*mut Frame),
     pub company_begin: extern "C" fn(*mut Frame),
     pub company_restore: extern "C" fn(*mut Frame),
-    pub scripts_begin: extern "C" fn(*mut Frame),
-    pub scripts_end: extern "C" fn(*mut Frame),
-    pub paused_measurements: extern "C" fn(),
     pub scripts_enabled: extern "C" fn() -> bool,
     pub assert_local_company: extern "C" fn(),
     pub tick_timer: extern "C" fn(*mut Frame) -> bool,
@@ -141,8 +141,6 @@ pub struct Services {
     pub post_ai: extern "C" fn(*mut Frame) -> bool,
     pub road_begin: extern "C" fn(*mut Frame) -> *const crate::road_cmd::CommandContext,
     pub road_end: extern "C" fn(*mut Frame),
-    pub landscape_begin: extern "C" fn(*mut Frame),
-    pub landscape_end: extern "C" fn(*mut Frame),
 }
 impl Services {
     /// One client or game setting from the shared catalog, loaded at its observation point.
@@ -675,14 +673,8 @@ impl<'a> Session<'a> {
     fn tile_loop(&self) {
         let s = self.s;
         let call = unsafe { &*(s.tile_loop_begin)(self.frame) };
-        let shared = unsafe { &*s.shared };
         unsafe {
-            crate::tile_loop::run(
-                shared.map().log_x,
-                shared.map_log_y(),
-                call.settings,
-                call.services,
-            );
+            crate::tile_loop::run(call.settings, call.services);
         }
         (s.tile_loop_end)(self.frame);
     }
@@ -711,19 +703,26 @@ impl<'a> Session<'a> {
     }
     fn landscape_tick(&self) -> Outcome {
         let s = self.s;
-        (s.landscape_begin)(self.frame);
-        let road = (s.road_begin)(self.frame);
-        unsafe {
-            crate::town::tick_all(s.town, s.shared, road);
+        {
+            let mut storage = MaybeUninit::uninit();
+            // SAFETY: `CallLandscapeTick` runs in the game loop, serialized by the game-state
+            // mutex; the guard drops at the end of this block.
+            let _framerate = unsafe {
+                PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_LANDSCAPE)
+            };
+
+            let road = (s.road_begin)(self.frame);
+            unsafe {
+                crate::town::tick_all(s.town, s.shared, road);
+            }
+            (s.road_end)(self.frame);
+            unsafe {
+                crate::trees::tick(s.trees, s.shared);
+                crate::station_service::on_tick_station(&*s.station, &*s.links, &*s.visits);
+                let world = self.world();
+                crate::industry::on_tick_industry(s.industry_builder, world.industry);
+            }
         }
-        (s.road_end)(self.frame);
-        unsafe {
-            crate::trees::tick(s.trees, s.shared);
-            crate::station_service::on_tick_station(&*s.station, &*s.links, &*s.visits);
-            let world = self.world();
-            crate::industry::on_tick_industry(s.industry_builder, world.industry);
-        }
-        (s.landscape_end)(self.frame);
         let mut company = crate::company::Tick::default();
         while unsafe { crate::company::on_tick(&*s.company, &mut company) } {
             complete((s.post_ai)(self.frame))?;
@@ -733,7 +732,13 @@ impl<'a> Session<'a> {
         });
         Ok(())
     }
-    fn state_loop(&self) -> Outcome {
+    /// `StateGameLoop`. `framerate` is the `PFE_GAMELOOP` measurer, which the caller keeps
+    /// beyond the native frame: see [`openttd_rust_session_state_loop_abi`].
+    fn state_loop<'f>(
+        &self,
+        storage: &'f mut MaybeUninit<PerformanceMeasurerStorage>,
+        framerate: &mut Option<PerformanceMeasurer<'f>>,
+    ) -> Outcome {
         let s = self.s;
         if !(unsafe { &*s.company }.finance.networking)()
             || (unsafe { &*s.company }.network_server)()
@@ -748,7 +753,18 @@ impl<'a> Session<'a> {
             }
         }
         if pause() != 0 || (self.world().modal)() {
-            (s.paused_measurements)();
+            // SAFETY: `StateGameLoop` runs serialized by the game-state mutex on the game
+            // loop's thread, as do the measurements below.
+            unsafe {
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GAMELOOP);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_ECONOMY);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_TRAINS);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_ROADVEHS);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_SHIPS);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_AIRCRAFT);
+                PerformanceMeasurer::paused(PerformanceElement::PFE_GL_LANDSCAPE);
+            }
+
             if !(self.world().modal)() {
                 self.landscaping();
             }
@@ -757,7 +773,15 @@ impl<'a> Session<'a> {
             }
             return Ok(());
         }
-        (s.state_begin)(self.frame);
+        // SAFETY: As above; the state loop's entry drops the guard on this thread.
+        unsafe {
+            *framerate = Some(PerformanceMeasurer::new(
+                storage,
+                PerformanceElement::PFE_GAMELOOP,
+            ));
+            PerformanceAccumulator::reset(PerformanceElement::PFE_GL_LANDSCAPE);
+        }
+
         if mode() == GameMode::EDITOR {
             self.storage(crate::newgrf_storage::PSM_ENTER_GAMELOOP);
             self.tile_loop();
@@ -777,9 +801,7 @@ impl<'a> Session<'a> {
             (s.check_caches)();
             (s.company_begin)(self.frame);
             self.storage(crate::newgrf_storage::PSM_ENTER_GAMELOOP);
-            (s.landscape_begin)(self.frame);
             crate::animated_tile::run();
-            (s.landscape_end)(self.frame);
             let exception = (s.console_exception)(self.frame);
             let advanced = unsafe { crate::timer_game_calendar::elapsed(&*s.clock, exception) };
             self.checked()?;
@@ -796,10 +818,13 @@ impl<'a> Session<'a> {
             self.landscape_tick()?;
             self.storage(crate::newgrf_storage::PSM_LEAVE_GAMELOOP);
             if (s.scripts_enabled)() {
-                (s.scripts_begin)(self.frame);
+                let mut storage = MaybeUninit::uninit();
+                // SAFETY: As above; the guard drops at the end of this block.
+                let _script_framerate = unsafe {
+                    PerformanceMeasurer::new(&mut storage, PerformanceElement::PFE_ALLSCRIPTS)
+                };
                 complete((s.ai_script)(self.frame))?;
                 complete((s.game_script)(self.frame))?;
-                (s.scripts_end)(self.frame);
             }
             self.landscaping();
             (s.window_tick)();
@@ -940,10 +965,19 @@ pub unsafe extern "C" fn openttd_rust_session_state_loop_abi(
     s: &Services,
     parent: *mut Frame,
 ) -> u8 {
-    let mut storage = std::mem::MaybeUninit::<FrameStorage>::uninit();
+    // The original declares `framerate` before `cur_company`, the native frame's `company`,
+    // so it destroys `cur_company` first, on every exit path. The measurer and its storage
+    // therefore outlive the native frame.
+    let mut framerate_storage = MaybeUninit::uninit();
+    let mut framerate = None;
+    let mut storage = MaybeUninit::<FrameStorage>::uninit();
     let frame = (s.state_frame_begin)(storage.as_mut_ptr());
-    let result = (Session::new(s, frame)).state_loop().is_ok();
-    u8::from((s.state_frame_end)(parent, frame) && result)
+    let result = (Session::new(s, frame))
+        .state_loop(&mut framerate_storage, &mut framerate)
+        .is_ok();
+    let completed = (s.state_frame_end)(parent, frame) && result;
+    drop(framerate);
+    u8::from(completed)
 }
 /// # Safety
 /// Native frame is live through loading, network and callback reentry.
@@ -1078,12 +1112,8 @@ crate::abi::layouts! {
         network_actions,
         failed,
         console_exception,
-        state_begin,
         company_begin,
         company_restore,
-        scripts_begin,
-        scripts_end,
-        paused_measurements,
         scripts_enabled,
         assert_local_company,
         tick_timer,
@@ -1101,8 +1131,6 @@ crate::abi::layouts! {
         post_ai,
         road_begin,
         road_end,
-        landscape_begin,
-        landscape_end,
     };
 }
 

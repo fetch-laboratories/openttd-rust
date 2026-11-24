@@ -42,14 +42,11 @@ struct OpenTTDSessionFrame {
 	std::optional<std::string> packet_text;
 	std::optional<std::pair<std::string, std::string>> reconnect;
 	std::exception_ptr exception;
-	std::optional<PerformanceMeasurer> framerate;
 	std::optional<Backup<CompanyID>> company;
-	std::optional<PerformanceMeasurer> scripts;
 	std::optional<RustGenerationLoop> loop;
 	std::optional<RustSessionVehicleCosts> vehicle;
 	std::optional<OpenTTDWorldSetupFrame> setup;
 	std::optional<RustRoadCommandContext> road;
-	std::optional<PerformanceAccumulator> landscape;
 	void Rethrow() { RustNetworkCompleteActions(this); if (this->exception) std::rethrow_exception(this->exception); }
 };
 static_assert(sizeof(OpenTTDSessionFrame) <= sizeof(OpenTTDSessionFrameStorage));

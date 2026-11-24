@@ -1,0 +1,157 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | fn openttd_rust_framerate_bind | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::openttd_rust_framerate_bind",
+    "source_contract": "PerformanceMeasurer and PerformanceAccumulator (framerate_type.h, framerate_gui.cpp) stay native until the GUI is ported; services.cpp binds their table once before main, as it binds the window table.",
+    "reason": "`#[unsafe(no_mangle)]` on the binding export is unsafe code; the crate denies it outside item-scoped allows.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported (phase 5) and the table is removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | fn services | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::services",
+    "source_contract": "The bound table is either the discarding services or the process-lifetime native table that services.cpp binds before main.",
+    "reason": "The dereference of the table pointer loaded from the process-wide atomic is unsafe code.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported (phase 5) and the table is removed."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | mod testing > fn read | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::testing::read",
+    "source_contract": "The native destructor runs on the object its constructor placed in the caller's storage; the recording table stands for both in Rust tests.",
+    "reason": "The recording end reads back, through the storage pointer, the element its begin wrote, and checks that it ends the innermost live scope at the address that scope began at, so a test observes each guard's begin and end pairing on the caller's storage.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and the guards own their state in Rust."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | mod testing > fn write | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::testing::write",
+    "source_contract": "The native constructor places its object in the caller's storage; the recording table stands for it in Rust tests.",
+    "reason": "The recording begin writes its element into the caller's storage through the storage pointer, for the recording end to read back.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and the guards own their state in Rust."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | impl<'a> PerformanceAccumulator<'a> | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::PerformanceAccumulator::{new,reset}",
+    "source_contract": "`_pf_data` (framerate_gui.cpp) is unsynchronised; the original's measurements run on the thread that runs each statement, serialized with every other by the game-state mutex.",
+    "reason": "`new` and `reset` are `unsafe fn`: their caller runs on the original statement's thread, serialized with every other framerate call, and the guard drops there. The safe types cannot express that native precondition.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and Rust owns `_pf_data` behind the game-state serialization."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | impl<'a> PerformanceMeasurer<'a> | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::PerformanceMeasurer::{new,paused,set_inactive}",
+    "source_contract": "`_pf_data` (framerate_gui.cpp) is unsynchronised; the original's measurements run on the thread that runs each statement, serialized with every other by the game-state mutex.",
+    "reason": "`new`, `paused` and `set_inactive` are `unsafe fn`: their caller runs on the original statement's thread, serialized with every other framerate call, and the guard drops there. The safe types cannot express that native precondition.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and Rust owns `_pf_data` behind the game-state serialization."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | mod tests > fn each_function_passes_its_element_to_its_entry_point | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::tests::each_function_passes_its_element_to_its_entry_point",
+    "source_contract": "`_pf_data` (framerate_gui.cpp) is unsynchronised; the original's measurements run on the thread that runs each statement, serialized with every other by the game-state mutex.",
+    "reason": "The guard test calls the `unsafe fn` entry points on its own test thread, against the recording table, under their contract.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and Rust owns `_pf_data` behind the game-state serialization."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | mod tests > fn a_guard_begins_at_new_and_ends_at_drop | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::tests::a_guard_begins_at_new_and_ends_at_drop",
+    "source_contract": "`_pf_data` (framerate_gui.cpp) is unsynchronised; the original's measurements run on the thread that runs each statement, serialized with every other by the game-state mutex.",
+    "reason": "The guard test calls the `unsafe fn` entry points on its own test thread, against the recording table, under their contract.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and Rust owns `_pf_data` behind the game-state serialization."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | mod tests > fn nested_guards_end_in_reverse_order | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::tests::nested_guards_end_in_reverse_order",
+    "source_contract": "`_pf_data` (framerate_gui.cpp) is unsynchronised; the original's measurements run on the thread that runs each statement, serialized with every other by the game-state mutex.",
+    "reason": "The guard test calls the `unsafe fn` entry points on its own test thread, against the recording table, under their contract.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and Rust owns `_pf_data` behind the game-state serialization."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/framerate_type.rs | mod tests > fn a_guard_ends_when_its_function_returns_early | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "framerate_type::tests::a_guard_ends_when_its_function_returns_early",
+    "source_contract": "`_pf_data` (framerate_gui.cpp) is unsynchronised; the original's measurements run on the thread that runs each statement, serialized with every other by the game-state mutex.",
+    "reason": "The guard test calls the `unsafe fn` entry points on its own test thread, against the recording table, under their contract.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and Rust owns `_pf_data` behind the game-state serialization."
+  },
+  {
+    "kind": "growth",
+    "counter": "exports",
+    "added": {
+      "rust/expanded.rs | openttd_rust_framerate_bind": 1
+    },
+    "reason": "The process-wide binding entry of the shared framerate table, called once from services.cpp. It replaces ten one-site timing slots (session, vehicle scheduler and link graph) and their C++ bodies.",
+    "existing_alternatives": "A pointer to the framerate table in every component table, or the per-site slots it replaces, which design faults forbids in finished files.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When framerate_gui.cpp's measurements are ported and the table is removed."
+  },
+  {
+    "kind": "growth",
+    "counter": "outside_cpp",
+    "added": {
+      "generated/abi-layout-framerate.inc": 3,
+      "generated/abi-visit-OpenTTDFramerateServices.hpp": 11
+    },
+    "reason": "The generated layout checks of the framerate table and its two storage records, and the completeness visitor of the table; the removed slots shrink other generated fragments, so the counter grows by 4 net.",
+    "existing_alternatives": "None: every Rust-declared table and record gets its generated checks.",
+    "retiring_owner": "#734",
+    "retirement_condition": "With the table."
+  },
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/landscape_protocol.hpp": 1,
+      "src/tests/session.cpp": 4
+    },
+    "reason": "The native observation that the game binds the framerate table before main: no Rust test or scenario can see it, since Rust tests bind a recording table and the harness compares game state. It is the boundary exception of porting's tests in Rust and C++. The landscape protocol's one added line is its `TimerGameTick::counter` callback: the tile loop now reads the counter through the shared table inside its timing scope, as the original does, and the fixture's default callback aborts.",
+    "existing_alternatives": "None in Rust or the harness; the discarding table makes a missing bind silent. For the tick callback: none, since fixtures specify the callbacks they use.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The session bind check retires with framerate_gui.cpp's port, when the table is removed; the landscape protocol's tick callback retires with the fixture at the #565 map port, under #736's classification."
+  }
+]

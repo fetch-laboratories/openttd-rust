@@ -60,6 +60,7 @@ pub use engine_type::{
     ExtraEngineFlag, ExtraEngineFlags, RailVehicleTypes, VehicleAccelerationModel,
 };
 mod follow_track;
+mod framerate_type;
 mod game;
 mod game_state;
 mod genland;

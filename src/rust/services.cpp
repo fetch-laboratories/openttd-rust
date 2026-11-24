@@ -91,6 +91,8 @@
 #include "newgrf_storage_ffi.h"
 #include "signal_ffi.h"
 #include "debug_ffi.h"
+#include "framerate_ffi.h"
+#include "../framerate_type.h"
 #include "encoded_adapter.hpp"
 #include "news_ffi.h"
 #include "window_ffi.h"
@@ -1012,5 +1014,21 @@ static const OpenTTDWindowServices _rust_window_services{
 };
 [[maybe_unused]] static const bool _rust_window_bound = (openttd_rust_window_bind(&_rust_window_services), true);
 #include "abi-visit-OpenTTDWindowServices.hpp"
+static_assert(PFE_GAMELOOP == 0 && PFE_GL_ECONOMY == 1 && PFE_GL_TRAINS == 2 && PFE_GL_ROADVEHS == 3 && PFE_GL_SHIPS == 4 && PFE_GL_AIRCRAFT == 5 && PFE_GL_LANDSCAPE == 6 && PFE_GL_LINKGRAPH == 7 && PFE_ALLSCRIPTS == 12);
+static_assert(sizeof(PerformanceMeasurer) == sizeof(OpenTTDPerformanceMeasurer) && alignof(PerformanceMeasurer) == alignof(OpenTTDPerformanceMeasurer));
+static_assert(sizeof(PerformanceAccumulator) == sizeof(OpenTTDPerformanceAccumulator) && alignof(PerformanceAccumulator) == alignof(OpenTTDPerformanceAccumulator));
+
+static const OpenTTDFramerateServices _rust_framerate_services{
+	.accumulator_begin = [](OpenTTDPerformanceAccumulator *storage, uint8_t elem) noexcept { new (storage) PerformanceAccumulator(static_cast<PerformanceElement>(elem)); },
+	.accumulator_end = [](OpenTTDPerformanceAccumulator *storage) noexcept { reinterpret_cast<PerformanceAccumulator *>(storage)->~PerformanceAccumulator(); },
+	.accumulator_reset = [](uint8_t elem) noexcept { PerformanceAccumulator::Reset(static_cast<PerformanceElement>(elem)); },
+	.measurer_begin = [](OpenTTDPerformanceMeasurer *storage, uint8_t elem) noexcept { new (storage) PerformanceMeasurer(static_cast<PerformanceElement>(elem)); },
+	.measurer_end = [](OpenTTDPerformanceMeasurer *storage) noexcept { reinterpret_cast<PerformanceMeasurer *>(storage)->~PerformanceMeasurer(); },
+	.measurer_paused = [](uint8_t elem) noexcept { PerformanceMeasurer::Paused(static_cast<PerformanceElement>(elem)); },
+	.measurer_set_inactive = [](uint8_t elem) noexcept { PerformanceMeasurer::SetInactive(static_cast<PerformanceElement>(elem)); },
+};
+const OpenTTDFramerateServices &GetRustFramerateServices() noexcept { return _rust_framerate_services; }
+[[maybe_unused]] static const bool _rust_framerate_bound = (openttd_rust_framerate_bind(&_rust_framerate_services), true);
+#include "abi-visit-OpenTTDFramerateServices.hpp"
 /** The tables bound once for the process. */
-bool CheckAbi_debug() { return AbiServicesComplete(_rust_debug_services) && AbiServicesComplete(_rust_news_services) && AbiServicesComplete(_rust_script_event_services) && AbiServicesComplete(_rust_window_services); }
+bool CheckAbi_debug() { return AbiServicesComplete(_rust_debug_services) && AbiServicesComplete(_rust_framerate_services) && AbiServicesComplete(_rust_news_services) && AbiServicesComplete(_rust_script_event_services) && AbiServicesComplete(_rust_window_services); }

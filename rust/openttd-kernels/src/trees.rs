@@ -88,6 +88,7 @@ pub extern "C" fn openttd_rust_tree_counter() -> *mut u8 {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct LoopSettings {
+    /// `TimerGameTick::counter`, which `tile_loop::run` reads inside its timing scope.
     pub tick_counter: u64,
     pub size_x: u32,
     pub climate: LandscapeType,

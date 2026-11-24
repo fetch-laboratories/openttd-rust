@@ -113,7 +113,6 @@ struct OpenTTDVehiclePoolCursor {
 	size_t slots_len;
 	const size_t *first_unused;
 };
-struct OpenTTDVehicleSchedulerTables;
 struct OpenTTDVehicleSchedulerServices {
 	OpenTTDVehiclePoolCursor (OPENTTD_RUST_CALL *pool)() noexcept OPENTTD_SERVICE_DEFAULT(pool);
 	bool assertions;
@@ -124,8 +123,6 @@ struct OpenTTDVehicleSchedulerServices {
 	OpenTTDCargoList *(OPENTTD_RUST_CALL *cargo_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_owner);
 	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
 	const OpenTTDSharedServices *shared; ///< Shared table, immutable for the process.
-	void (OPENTTD_RUST_CALL *with_loading_timer)(const OpenTTDVehicleSchedulerTables *, void (OPENTTD_RUST_CALL *)(const OpenTTDVehicleSchedulerTables *)) noexcept OPENTTD_SERVICE_DEFAULT(with_loading_timer);
-	void (OPENTTD_RUST_CALL *reset_accumulators)() noexcept OPENTTD_SERVICE_DEFAULT(reset_accumulators);
 };
 struct OpenTTDCommandCost;
 struct OpenTTDVehicleSchedulerTables {

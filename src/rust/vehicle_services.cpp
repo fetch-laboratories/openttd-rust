@@ -36,7 +36,6 @@
 #include "../window_func.h"
 #include "../widgets/vehicle_widget.h"
 #include "../sound_type.h"
-#include "../framerate_type.h"
 #include "../aircraft.h"
 #include "../ship.h"
 #include "../train.h"
@@ -243,18 +242,6 @@ static OpenTTDVehiclePoolCursor OPENTTD_RUST_CALL VehicleSchedulerPool() noexcep
 static bool OPENTTD_RUST_CALL VehicleSchedulerTick(OpenTTDVehicle *shell) noexcept { return VehicleOf(shell)->Tick(); }
 static void OPENTTD_RUST_CALL VehicleSchedulerCalendarDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewCalendarDay(); }
 static void OPENTTD_RUST_CALL VehicleSchedulerEconomyDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewEconomyDay(); }
-static void OPENTTD_RUST_CALL VehicleSchedulerWithLoadingTimer(const OpenTTDVehicleSchedulerTables *tables, void (OPENTTD_RUST_CALL *load)(const OpenTTDVehicleSchedulerTables *)) noexcept
-{
-	PerformanceMeasurer framerate(PFE_GL_ECONOMY);
-	load(tables);
-}
-static void OPENTTD_RUST_CALL VehicleSchedulerResetAccumulators() noexcept
-{
-	PerformanceAccumulator::Reset(PFE_GL_TRAINS);
-	PerformanceAccumulator::Reset(PFE_GL_ROADVEHS);
-	PerformanceAccumulator::Reset(PFE_GL_SHIPS);
-	PerformanceAccumulator::Reset(PFE_GL_AIRCRAFT);
-}
 
 const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept
 {
@@ -271,8 +258,6 @@ const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcep
 		.cargo_owner = RustVehicleRead<OpenTTDCargoList *, RustVehicleCargoOwner>,
 		.vehicle = &_rust_vehicle_services,
 		.shared = &GetRustSharedServices(),
-		.with_loading_timer = VehicleSchedulerWithLoadingTimer,
-		.reset_accumulators = VehicleSchedulerResetAccumulators,
 	};
 	return services;
 }
