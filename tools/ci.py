@@ -12,7 +12,7 @@ import sys
 import time
 import uuid
 from collections.abc import Callable, Collection, Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
@@ -841,6 +841,13 @@ def utc_stamp(moment: datetime) -> str:
     return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+class RunsPage(TypedDict):
+    """One page of the workflow runs listing."""
+
+    total_count: NotRequired[int]
+    workflow_runs: list[ci_log.Run]
+
+
 def workflow_runs(
     repository: str, event: str, opened: str, until: datetime | None = None
 ) -> list[ci_log.Run]:
@@ -850,7 +857,7 @@ def workflow_runs(
     start = datetime.fromisoformat(opened.replace("Z", "+00:00"))
     end = until or datetime.now(timezone.utc)
     span = quote(f"{utc_stamp(start)}..{utc_stamp(end)}")
-    pages = json.loads(
+    pages: list[RunsPage] = json.loads(
         gh(
             "api",
             "--paginate",
@@ -859,7 +866,7 @@ def workflow_runs(
             f"?event={event}&created={span}&per_page=100",
         )
     )
-    runs: list[ci_log.Run] = [run for page in pages for run in page["workflow_runs"]]
+    runs = [run for page in pages for run in page["workflow_runs"]]
     total = max((page.get("total_count", 0) for page in pages), default=0)
     if total <= len(runs) or (end - start).total_seconds() < 2:
         return runs
@@ -1174,10 +1181,14 @@ def bootstrap_runs(
     return [
         run
         for run in workflow_runs(repository, "pull_request", opened)
-        if (run.get("display_title") or "").split()[2:4] == ["PR", str(pr)]
-        and run.get("head_sha") in commits
-        and is_bootstrap(repository, run)
+        if runs_for(run, pr) and run.get("head_sha") in commits
+        if is_bootstrap(repository, run)
     ]
+
+
+def runs_for(run: ci_log.Run, pr: int) -> bool:
+    """Whether a ci-request.yml run's name, `CI PROFILE PR N ...`, names PR `pr`."""
+    return (run.get("display_title") or "").split()[2:4] == ["PR", str(pr)]
 
 
 def is_bootstrap(repository: str, run: ci_log.Run) -> bool:
@@ -1212,11 +1223,55 @@ class TestedRun:
     run: ci_log.Run
 
 
+@dataclass
+class PrRuns:
+    """One read of the PR's commits and of its requested runs on them, which
+    `state` shows and `enqueue`'s checks judge."""
+
+    commits: list[str]
+    runs: list[TestedRun]
+    unread: list[str] = field(default_factory=list)
+
+
+def recorded_runs(
+    repository: str, pr: int, commits: list[str], found: dict[int, TestedRun]
+) -> list[str]:
+    """Add to `found` the runs this checkout's request records name on `commits`
+    that the listings did not; return those GitHub could not return."""
+    # Requests made before #922 carry no commit in their identifier; their records
+    # do. A recorded label run is judged as a listed one, by what GitHub says it
+    # tested.
+    unread = []
+    for record_path in REQUESTS.glob("*.json"):
+        record = cast(RequestRecord, json.loads(record_path.read_text()))
+        run_id = record.get("run_id")
+        if record.get("pr") != pr or record.get("head") not in commits or not run_id:
+            continue
+        if run_id in found:
+            continue
+        try:
+            run = cast(ci_log.Run, api(repository, f"actions/runs/{run_id}"))
+        except subprocess.CalledProcessError:
+            unread.append(f"run {run_id} of {record_path.name}")
+            continue
+        if not runs_for(run, pr):
+            continue
+        if run.get("event") == "pull_request":
+            commit = run.get("head_sha", "")
+            if commit in commits and is_bootstrap(repository, run):
+                found[run_id] = TestedRun("full bootstrap", commit, run)
+        else:
+            profile = record.get("profile") or "requested"
+            found[run_id] = TestedRun(profile, record["head"], run)
+    return unread
+
+
 def pr_requested_runs(
     repository: str, pr: int, opened: str, commits: list[str]
-) -> list[TestedRun]:
+) -> PrRuns:
     """The PR's requested and bootstrap runs on its `commits`, oldest first by
-    `(created_at, id)`: the one order `enqueue` and `state` read."""
+    `(created_at, id)`: the one order `enqueue` and `state` read. A recorded
+    run GitHub cannot return is named in `unread`."""
     found: dict[int, TestedRun] = {}
     for dispatched in pr_dispatched_runs(repository, pr, opened):
         commit = dispatched.request.rpartition("-")[2]
@@ -1226,24 +1281,11 @@ def pr_requested_runs(
             )
     for run in bootstrap_runs(repository, pr, opened, commits):
         found[run["id"]] = TestedRun("full bootstrap", run["head_sha"], run)
-    # Requests made before #922 carry no commit in their identifier; their records do.
-    for record_path in REQUESTS.glob("*.json"):
-        record = cast(RequestRecord, json.loads(record_path.read_text()))
-        run_id = record.get("run_id")
-        if record.get("pr") != pr or record.get("head") not in commits or not run_id:
-            continue
-        if run_id in found:
-            continue
-        run = cast(ci_log.Run, api(repository, f"actions/runs/{run_id}"))
-        if run.get("event") == "pull_request":
-            if is_bootstrap(repository, run):
-                found[run_id] = TestedRun("full bootstrap", record["head"], run)
-        else:
-            profile = record.get("profile") or "requested"
-            found[run_id] = TestedRun(profile, record["head"], run)
-    return sorted(
+    unread = recorded_runs(repository, pr, commits, found)
+    runs = sorted(
         found.values(), key=lambda tested: (tested.run["created_at"], tested.run["id"])
     )
+    return PrRuns(commits, runs, unread)
 
 
 def ejected_head(repository: str, run: QueueRun) -> str:
@@ -1312,18 +1354,8 @@ def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None
     print(f"Queueing PR #{pr} again unchanged after {url}; logged in {log}")
 
 
-@dataclass
-class PrRuns:
-    """One read of the PR's commits and of its requested runs on them, which
-    `state` shows and `enqueue`'s checks judge."""
-
-    commits: list[str]
-    runs: list[TestedRun]
-
-
 def read_pr_runs(repository: str, pr: int, opened: str, head: str) -> PrRuns:
-    commits = pr_commits(repository, head)
-    return PrRuns(commits, pr_requested_runs(repository, pr, opened, commits))
+    return pr_requested_runs(repository, pr, opened, pr_commits(repository, head))
 
 
 def gate_run(repository: str, pr: int, head: str, read: PrRuns) -> TestedRun:
@@ -1331,6 +1363,11 @@ def gate_run(repository: str, pr: int, head: str, read: PrRuns) -> TestedRun:
     its own commits, which must have succeeded. A workflow change also needs a
     green bootstrap Full at the head itself (root-workflow.md, CI administration),
     and its newest run there."""
+    if read.unread:
+        raise ValueError(
+            f"PR #{pr}'s request records name runs GitHub did not return: "
+            + ", ".join(read.unread)
+        )
     runs = read.runs
     if not runs:
         raise ValueError(

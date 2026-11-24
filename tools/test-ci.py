@@ -3605,16 +3605,12 @@ class EnqueueWorld:
     record names), retry, entry and armed (the queue's answer), records and
     comments (cleanup records and the discussion)."""
 
-    quick: Mapping[str, object] | None = field(
-        default_factory=lambda: EnqueueTests.QUICK
-    )
-    requested: Mapping[str, object] | None = field(
-        default_factory=lambda: EnqueueTests.REQUESTED
-    )
-    dispatched: list[Mapping[str, object]] | None = None
-    pages: list[list[Mapping[str, object]]] | None = None
-    labeled: list[Mapping[str, object]] = field(default_factory=list)
-    queue: list[Mapping[str, object]] = field(default_factory=list)
+    quick: ci.CheckRun | None = field(default_factory=lambda: EnqueueTests.QUICK)
+    requested: ci_log.Run | None = field(default_factory=lambda: EnqueueTests.REQUESTED)
+    dispatched: list[ci_log.Run] | None = None
+    pages: list[list[ci_log.Run]] | None = None
+    labeled: list[ci_log.Run] = field(default_factory=list)
+    queue: list[ci.QueueRun] = field(default_factory=list)
     ejected: str = HEAD
     behind: int = 0
     base_files: list[dict[str, str]] = field(default_factory=list)
@@ -3623,7 +3619,7 @@ class EnqueueWorld:
     files: list[dict[str, str]] = field(
         default_factory=lambda: [{"filename": "tools/ci.py"}]
     )
-    recorded: Mapping[str, object] | None = None
+    recorded: ci_log.Run | None = None
     recorded_jobs: list[dict[str, str]] = field(default_factory=list)
     retry: str | None = None
     entry: dict[str, object] | None = None
@@ -3635,13 +3631,13 @@ class EnqueueWorld:
 class EnqueueTests(unittest.TestCase):
     """Recorded gh answers for ci.py enqueue's gates (#922)."""
 
-    QUICK = {
+    QUICK: ci.CheckRun = {
         "status": "completed",
         "conclusion": "success",
         "started_at": "2026-11-12T01:00:00Z",
         "html_url": "https://github.com/example/fork/runs/1",
     }
-    REQUESTED = {
+    REQUESTED: ci_log.Run = {
         "id": 2,
         "display_title": f"CI native PR 170 {'c' * 32}-{HEAD}",
         "head_branch": "rust-migration",
@@ -4023,6 +4019,7 @@ class EnqueueTests(unittest.TestCase):
             id=9,
             event="pull_request",
             display_title="CI full PR 170 bootstrap-9",
+            head_sha=HEAD,
             conclusion="failure",
             created_at="2026-11-12T05:00:00Z",
             html_url="label",
@@ -4038,6 +4035,17 @@ class EnqueueTests(unittest.TestCase):
                 recorded=label,
                 recorded_jobs=[{"name": "plan", "conclusion": "success"}],
             )
+        # GitHub's word on its PR and tested commit decides, not the record's.
+        for other in (
+            dict(label, display_title="CI full PR 171 bootstrap-9"),
+            dict(label, head_sha=PARENT),
+        ):
+            reported, _ = self.enqueue(
+                recorded=other,
+                recorded_jobs=[{"name": "plan", "conclusion": "success"}],
+                entry={"state": "QUEUED", "position": 1},
+            )
+            self.assertTrue(reported.startswith("queued"))
 
     def test_ejected_head_queues_again_once_only_with_retry(self) -> None:
         entry = {"state": "QUEUED", "position": 1}
@@ -4829,8 +4837,13 @@ class StateTests(unittest.TestCase):
         self.assertEqual(code, 0)
         lines = output.splitlines()
         self.assertEqual(lines[0], "PR #170 open, ready: Port the thing")
-        self.assertIn("Requested runs at head: none", lines)
+        # The runs GitHub listed still show; only the checks name the lost run.
+        self.assertIn(
+            "native at head: success https://github.com/example/fork/actions/runs/04",
+            lines,
+        )
         self.assertTrue(lines[-1].startswith("enqueue checks: blocked: "), lines[-1])
+        self.assertIn("run 77 of 0.json", lines[-1])
 
     def test_moved_head_prints_no_mixed_view(self) -> None:
         code, output, _ = self.state(
