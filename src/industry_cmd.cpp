@@ -842,7 +842,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 {
 	static const OpenTTDIndustryTileServices services = {
 		.shared = &GetRustSharedServices(),
-		.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(TileIndex(tile)); },
 		.set_gfx = [](uint32_t tile, uint16_t gfx) noexcept { SetIndustryGfx(TileIndex(tile), gfx); },
 		.frame = OpenTTDAnimationFrame,
 		.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(TileIndex(tile)); },

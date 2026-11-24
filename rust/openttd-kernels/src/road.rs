@@ -910,7 +910,7 @@ impl<'a> Game<'a> {
     fn road_veh_is_crashed(&self, v: Part) -> bool {
         v.set_crashed_ctr(v.crashed_ctr().wrapping_add(1));
         if v.crashed_ctr() == 2 {
-            crate::effect::create_effect_vehicle_rel(
+            let _ = crate::effect::create_effect_vehicle_rel(
                 v.v,
                 4,
                 4,

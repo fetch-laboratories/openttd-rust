@@ -666,7 +666,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `CreateEffectVehicleRel(v, x, y, z, type)`.
     fn create_effect_vehicle_rel(v: Vehicle, x: i32, y: i32, z: i32, kind: EffectVehicleType) {
-        crate::effect::create_effect_vehicle_rel(v.base(), x, y, z, kind);
+        let _ = crate::effect::create_effect_vehicle_rel(v.base(), x, y, z, kind);
     }
     /// `v->UpdatePosition()` and `v->UpdateViewport(true, false)`.
     fn update_position_and_full_viewport(&self, v: Vehicle) {
@@ -676,9 +676,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `u->UpdatePositionAndViewport()`.
     fn update_position_and_viewport(&self, u: VehicleRef) {
-        // SAFETY: A live vehicle; the tile hash ends before the viewport callback.
-        unsafe { crate::vehicle::occupancy::update_position(self.vs, u, self.dims()) };
-        Self::call(|| (self.vs.base_viewport)(u));
+        Self::call(|| self.vs.update_position_and_viewport(u, || self.dims()));
     }
     /// `v->UpdateDeltaXY()`.
     fn update_delta_xy(&self, v: Vehicle) {

@@ -23,7 +23,7 @@ static void VehicleMaintenanceBoundary()
 	maintenance.renewal = [](OpenTTDVehicle *, const Company *) noexcept {
 		return OpenTTDVehicleMaintenanceRenewal{.age = OpenTTDCalendarDate{100}, .max_age = OpenTTDCalendarDate{100}, .months = -4, .enabled = false, .kind = static_cast<VehicleType>(254), .subtype = 0};
 	};
-	const auto shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
+	const auto shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom);
 	RoadTestTables tables(&shared);
 	static OpenTTDEngine *engine_record;
 	engine_record = openttd_rust_engine_new();

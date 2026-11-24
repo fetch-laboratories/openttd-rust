@@ -1192,7 +1192,7 @@ mod pool_tests {
             ..crate::test_tables::FINANCE
         };
         let _guard = crate::fleet::pending::TEST_LOCK.lock().unwrap();
-        let mut shared = crate::services::fixture(null_mut(), draw, no_industry);
+        let mut shared = crate::services::fixture(null_mut(), draw);
         shared.for_each_station = mark_stations;
         let mut scheduler = SCHEDULER;
         scheduler.pool = cursor;
@@ -1223,9 +1223,6 @@ mod pool_tests {
         unsafe { ticks(&raw const tables, false, 0, null_mut()) };
     }
     extern "C" fn draw(_: *mut c_void) -> u32 {
-        0
-    }
-    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
         0
     }
 

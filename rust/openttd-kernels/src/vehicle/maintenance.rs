@@ -569,16 +569,16 @@ unsafe fn handle_breakdown_impl<const C: bool>(
                     == 0
                     && EngineMiscFlags((base.engine)(v).misc()).0 & NO_BREAKDOWN_SMOKE == 0
                 {
-                    let u = crate::effect::openttd_rust_effect_create_rel(
-                        v.0.as_ptr(),
+                    let u = crate::effect::create_effect_vehicle_rel(
+                        v,
                         4,
                         4,
                         5,
-                        crate::effectvehicle_func::EV_BREAKDOWN_SMOKE,
+                        crate::effectvehicle_func::EffectVehicleType::EV_BREAKDOWN_SMOKE,
                     );
                     let delay = svc!(C, s.smoke_delay, v);
-                    if !u.is_null() {
-                        crate::effect::set_animation(u, u16::from(delay) * 2);
+                    if let Some(u) = u {
+                        u.set_animation_state(u16::from(delay) * 2);
                         branch!(C, VEHICLE_MAINT_SMOKE);
                     }
                 }

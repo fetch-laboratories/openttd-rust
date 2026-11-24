@@ -360,7 +360,13 @@ impl<'a> World<'a> {
         self.update_position(v, gp.x, gp.y, self.flight(v));
     }
     fn effect_rel(v: Vehicle, x: i32, y: i32, z: i32, kind: u8) {
-        crate::effect::openttd_rust_effect_create_rel(v.handle, x, y, z, kind);
+        let _ = crate::effect::create_effect_vehicle_rel(
+            v.vehicle(),
+            x,
+            y,
+            z,
+            crate::effectvehicle_func::EffectVehicleType(kind),
+        );
     }
     fn sound_vehicle(&self, v: Vehicle) {
         if (self.shared.disaster_sound)() {
@@ -613,11 +619,11 @@ impl<'a> World<'a> {
                 let x = map.tile_x(TileIndex(tile)) * TILE_SIZE;
                 let y = map.tile_y(TileIndex(tile)) * TILE_SIZE;
                 let r = self.random();
-                crate::effect::openttd_rust_effect_create_above(
+                let _ = crate::effect::create_effect_vehicle_above(
                     ((r & 63) + x) as i32,
                     (((r >> 6) & 63) + y) as i32,
                     ((r >> 12) & 15) as i32,
-                    crate::effectvehicle_func::EV_EXPLOSION_SMALL,
+                    crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_SMALL,
                 );
                 if self.increment_age(v) >= 55 {
                     v.set_state(3);
@@ -833,11 +839,11 @@ impl<'a> World<'a> {
             for _ in 0..80 {
                 let r = self.random();
                 let p = (v.vehicle().x_pos(), v.vehicle().y_pos());
-                crate::effect::openttd_rust_effect_create_above(
+                let _ = crate::effect::create_effect_vehicle_above(
                     (r & 63).wrapping_add(p.0 as u32).wrapping_sub(32) as i32,
                     ((r >> 5) & 63).wrapping_add(p.1 as u32).wrapping_sub(32) as i32,
                     0,
-                    crate::effectvehicle_func::EV_EXPLOSION_SMALL,
+                    crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_SMALL,
                 );
             }
             for dy in -3..3 {
@@ -1327,9 +1333,6 @@ mod tests {
     extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
         0
     }
-    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        unreachable!("unexpected industry lookup")
-    }
 
     /// A submarine on row 0 of a 64x64 map heading north-west. Pinned
     /// `disaster_vehicle.cpp:685` adds `TileOffsByDiagDir` by hand, so at the native
@@ -1352,7 +1355,7 @@ mod tests {
             },
             6,
         );
-        let mut shared = crate::services::fixture(std::ptr::null_mut(), random, no_industry);
+        let mut shared = crate::services::fixture(std::ptr::null_mut(), random);
         shared.map = fixture::statics();
         shared.tile_valid = record_validity;
         let mut services = crate::test_tables::DISASTER;

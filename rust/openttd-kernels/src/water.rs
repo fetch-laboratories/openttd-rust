@@ -415,12 +415,12 @@ impl<'a> World<'a> {
         (self.w.ai_event)(v, victims);
         (self.w.game_event)(v, victims);
         (self.w.news)(v, victims);
-        crate::effect::openttd_rust_effect_create_rel(
-            v.0.as_ptr(),
+        let _ = crate::effect::create_effect_vehicle_rel(
+            v,
             4,
             4,
             8,
-            crate::effectvehicle_func::EV_EXPLOSION_LARGE,
+            crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE,
         );
         if (self.s.disaster_sound)() {
             (self.v().play_sound)(v, 16);

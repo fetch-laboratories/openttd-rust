@@ -65,8 +65,7 @@ extern const OpenTTDMapStatics _rust_map_statics;
  * underlying type (TileType, TropicZone and Slope are uint8_t, GetTileZ is int). Train reservation
  * services can reenter the Rust train owners. Random debug logging names this wrapper's location.
  * mark_dirty is MarkTileDirtyByTile, free_train_reservation FreeTrainTrackReservation and
- * try_path_reserve TryPathReserve(v, mark_as_stuck, first_tile_okay).
- * Industry query returns 0 not industry, 1 industry, 2 bubble catcher and writes TileVirtXY(x, y). */
+ * try_path_reserve TryPathReserve(v, mark_as_stuck, first_tile_okay) and industry_gfx GetIndustryGfx. */
 enum ClearGround : uint8_t;
 enum TreeGround : uint8_t;
 enum Foundation : uint8_t;
@@ -127,7 +126,7 @@ struct OpenTTDSharedServices {
 	void (*free_train_reservation)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(free_train_reservation);
 	bool (*has_road_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_road_type);
 	bool (*has_water_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_water_ground);
-	uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(industry);
+	uint16_t (*industry_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_gfx);
 	bool (*is_bay_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bay_stop);
 	bool (*is_bridge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bridge);
 	bool (*is_drive_through_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_drive_through_stop);
@@ -307,14 +306,14 @@ Result OpenTTDFixtureMapService(Args...) noexcept
 {
 	if constexpr (!std::is_void_v<Result>) return Result{};
 }
-inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept, uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept = OpenTTDAbortService<uint32_t (*)(int32_t, int32_t, uint32_t *) noexcept>::Call) noexcept
+inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept) noexcept
 {
 	static const uint8_t snow_line_height = 0;
 	return {
 		.clear_square_services = {},
 		.context = context,
 		.current_company = []() noexcept -> uint8_t { return UINT8_MAX; },
-		.industry = industry,
+		.industry_gfx = OpenTTDAbortService<uint16_t (*)(uint32_t) noexcept>::Call,
 		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
 		.random = random,
 		.snow_line_support = { .height = &snow_line_height },

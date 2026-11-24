@@ -357,11 +357,8 @@ mod tests {
     extern "C" fn unused_random(_: *mut c_void) -> u32 {
         std::process::abort()
     }
-    extern "C" fn unused_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        std::process::abort()
-    }
     fn shared() -> crate::services::Services {
-        crate::services::fixture(std::ptr::null_mut(), unused_random, unused_industry)
+        crate::services::fixture(std::ptr::null_mut(), unused_random)
     }
     extern "C" fn returning_assert(condition: bool) {
         assert!(!condition);

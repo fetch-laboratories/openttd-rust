@@ -13,12 +13,13 @@ use super::{
     ConstructionServices, Industry, IndustryCost, IndustryCostServices, LifecycleServices,
     Services, SpecHandle,
 };
+use crate::animated_tile::add_animated_tile;
 use crate::bitmath_func::{gb, has_bit, set_bit64};
 use crate::cargo_type::{CargoArray, CargoType, CargoTypes};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, Owner};
 use crate::economy_type::{ExpensesType, Price};
-use crate::effectvehicle_func::{EV_BUBBLE, EV_CHIMNEY_SMOKE, EV_COPPER_MINE_SMOKE};
+use crate::effectvehicle_func::EffectVehicleType;
 use crate::industry_type::{
     INDUSTRY_COMPLETED, INDUSTRY_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
     IndustryAnimationTrigger, IndustryGfx, IndustryRandomTrigger,
@@ -56,7 +57,6 @@ pub struct TileAcceptance {
 #[repr(C)]
 pub struct TileServices {
     pub shared: *const crate::services::Services,
-    pub gfx: unsafe extern "C" fn(u32) -> u16,
     pub set_gfx: unsafe extern "C" fn(u32, u16),
     pub frame: unsafe extern "C" fn(u32) -> u8,
     pub animation_loop: unsafe extern "C" fn(u32) -> u8,
@@ -79,7 +79,7 @@ pub struct TileServices {
 impl TileServices {
     /// `GetIndustryGfx`.
     fn get_industry_gfx(&self, tile: TileIndex) -> IndustryGfx {
-        IndustryGfx(unsafe { (self.gfx)(tile.0) })
+        crate::industry_map::get_industry_gfx(unsafe { &*self.shared }, tile)
     }
     /// `SetIndustryGfx`.
     fn set_industry_gfx(&self, tile: TileIndex, gfx: IndustryGfx) {
@@ -124,9 +124,6 @@ fn ambient_sound(tile: TileIndex, sound: SoundFx, s: &Services) {
 }
 fn mark_tile_dirty_by_tile(tile: TileIndex, s: &Services) {
     (s.shared().mark_dirty)(tile.0);
-}
-fn add_animated_tile(tile: TileIndex) {
-    crate::animated_tile::openttd_rust_animation_add(tile.0, true);
 }
 fn delete_animated_tile(tile: TileIndex) {
     crate::animated_tile::openttd_rust_animation_delete(tile.0, false);
@@ -354,11 +351,11 @@ fn create_chimney_smoke(tile: TileIndex, map: crate::services::Map, t: &TileServ
     let x = map.tile_x(tile).wrapping_mul(TILE_SIZE);
     let y = map.tile_y(tile).wrapping_mul(TILE_SIZE);
     let z = unsafe { (t.pixel_max_z)(tile.0) };
-    crate::effect::openttd_rust_effect_create(
+    let _ = crate::effect::create_effect_vehicle(
         x.wrapping_add(15) as i32,
         y.wrapping_add(14) as i32,
         z.wrapping_add(59),
-        EV_CHIMNEY_SMOKE,
+        EffectVehicleType::EV_CHIMNEY_SMOKE,
     );
 }
 /// `MakeIndustryTileBigger`.
@@ -424,7 +421,7 @@ fn make_industry_tile_bigger(
             ..=IndustryGfx::GFX_PLASTIC_FOUNTAIN_ANIMATED_8)
             .contains(&gfx) =>
         {
-            crate::animated_tile::openttd_rust_animation_add(tile.0, false);
+            add_animated_tile(tile, false);
         }
         _ => {}
     }
@@ -441,7 +438,7 @@ fn tile_loop_industry_bubble_generator(tile: TileIndex, s: &Services, map: crate
         [[11, 0, -4, -14], [-4, -10, -4, 1], [49, 59, 60, 65]];
     ambient_sound(tile, SoundFx::SND_2E_BUBBLE_GENERATOR, s);
     let dir = (s.shared().random() & 3) as usize;
-    let v = crate::effect::openttd_rust_effect_create_above(
+    let v = crate::effect::create_effect_vehicle_above(
         map.tile_x(tile)
             .wrapping_mul(TILE_SIZE)
             .wrapping_add(i32::from(BUBBLE_SPAWN_LOCATION[0][dir]) as u32) as i32,
@@ -449,10 +446,10 @@ fn tile_loop_industry_bubble_generator(tile: TileIndex, s: &Services, map: crate
             .wrapping_mul(TILE_SIZE)
             .wrapping_add(i32::from(BUBBLE_SPAWN_LOCATION[1][dir]) as u32) as i32,
         i32::from(BUBBLE_SPAWN_LOCATION[2][dir]),
-        EV_BUBBLE,
+        EffectVehicleType::EV_BUBBLE,
     );
-    if !v.is_null() {
-        crate::effect::set_substate(v, dir as u8);
+    if let Some(v) = v {
+        v.set_animation_substate(dir as u8);
     }
 }
 /// `TileLoop_Industry`, with the tile-loop batch's industry tables.
@@ -569,14 +566,14 @@ pub(crate) unsafe fn tile_loop(
                 };
                 tiles.set_industry_gfx(tile, gfx);
                 tiles.set_animation_frame(tile, 0x80);
-                add_animated_tile(tile);
+                add_animated_tile(tile, true);
             }
         }
         IndustryGfx::GFX_OILWELL_NOT_ANIMATED => {
             if crate::random_func::chance16(prod.shared(), 1, 6) {
                 tiles.set_industry_gfx(tile, IndustryGfx::GFX_OILWELL_ANIMATED_1);
                 tiles.set_animation_frame(tile, 0);
-                add_animated_tile(tile);
+                add_animated_tile(tile, true);
             }
         }
         IndustryGfx::GFX_COAL_MINE_TOWER_ANIMATED
@@ -602,15 +599,15 @@ pub(crate) unsafe fn tile_loop(
         IndustryGfx::GFX_POWERPLANT_SPARKS => {
             if crate::random_func::chance16(prod.shared(), 1, 3) {
                 ambient_sound(tile, SoundFx::SND_0C_POWER_STATION, prod);
-                add_animated_tile(tile);
+                add_animated_tile(tile, true);
             }
         }
         IndustryGfx::GFX_COPPER_MINE_CHIMNEY => {
-            crate::effect::openttd_rust_effect_create_above(
+            let _ = crate::effect::create_effect_vehicle_above(
                 map.tile_x(tile).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
                 map.tile_y(tile).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
                 43,
-                EV_COPPER_MINE_SMOKE,
+                EffectVehicleType::EV_COPPER_MINE_SMOKE,
             );
         }
         IndustryGfx::GFX_TOY_FACTORY => {
@@ -620,13 +617,13 @@ pub(crate) unsafe fn tile_loop(
             if delivered != 0 {
                 unsafe { (*i.owner).fields.was_cargo_delivered = 0 };
                 tiles.set_industry_animation_loop(tile, 0);
-                add_animated_tile(tile);
+                add_animated_tile(tile, true);
             }
         }
         IndustryGfx::GFX_BUBBLE_GENERATOR => tile_loop_industry_bubble_generator(tile, prod, map),
-        IndustryGfx::GFX_TOFFEE_QUARRY => add_animated_tile(tile),
+        IndustryGfx::GFX_TOFFEE_QUARRY => add_animated_tile(tile, true),
         IndustryGfx::GFX_SUGAR_MINE_SIEVE if crate::random_func::chance16(prod.shared(), 1, 3) => {
-            add_animated_tile(tile);
+            add_animated_tile(tile, true);
         }
         _ => {}
     }

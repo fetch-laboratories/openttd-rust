@@ -1340,9 +1340,6 @@ mod tests {
         extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
             unreachable!()
         }
-        extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-            unreachable!()
-        }
         // An 8 by 1 map: canal water, an aqueduct head, a rail bridge head, a
         // half-tile water rail tile and a barren rail tile.
         let tiles = [
@@ -1409,7 +1406,7 @@ mod tests {
         };
         let s = Services {
             movement: &raw const movement,
-            ..crate::services::fixture(std::ptr::null_mut(), random, industry)
+            ..crate::services::fixture(std::ptr::null_mut(), random)
         };
         let world = World::new(&s);
         let class = |tile| get_effective_water_class(&world, TileIndex(tile));

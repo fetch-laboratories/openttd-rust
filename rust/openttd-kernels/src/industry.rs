@@ -2692,7 +2692,6 @@ crate::abi::layouts! {
     };
     "OpenTTDIndustryTileServices" ["industry"] => crate::industry::TileServices {
         shared,
-        gfx,
         set_gfx,
         frame,
         animation_loop,
@@ -3087,9 +3086,6 @@ mod production_policy_tests {
         RNG.set(value + 1);
         value
     }
-    extern "C" fn unused_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        unreachable!()
-    }
     extern "C" fn error(_: *mut c_void, _: bool) {
         ERRORS.set(ERRORS.get() + 1);
     }
@@ -3250,7 +3246,7 @@ mod production_policy_tests {
         let shared = Box::leak(Box::new(crate::services::Services {
             cargo_name,
             station_catchment: catchment,
-            ..crate::services::fixture(ptr::null_mut(), random, unused_industry)
+            ..crate::services::fixture(ptr::null_mut(), random)
         }));
         CATCHMENT.set(Box::leak(Box::new(crate::station::CatchmentServices {
             shared,
@@ -3322,7 +3318,7 @@ mod production_policy_tests {
         let shared = Box::leak(Box::new(crate::services::Services {
             station_catchment: catchment,
             map: crate::map_func::fixture::statics(),
-            ..crate::services::fixture(ptr::null_mut(), random, unused_industry)
+            ..crate::services::fixture(ptr::null_mut(), random)
         }));
         CATCHMENT.set(Box::leak(Box::new(crate::station::CatchmentServices {
             shared,
@@ -3675,7 +3671,7 @@ mod production_policy_tests {
 
     #[test]
     fn production_callback_matches_complete_original_corpus() {
-        let shared = crate::services::fixture(ptr::null_mut(), random, unused_industry);
+        let shared = crate::services::fixture(ptr::null_mut(), random);
         let services = services(&shared);
         let oracle = crate::oracle::parse(include_str!("industry/production-oracle.txt"));
         let section = &oracle["I"];

@@ -34,8 +34,6 @@ impl EffectVehicleType {
     pub const EV_END: Self = Self(12);
 }
 
-/// `EV_CHIMNEY_SMOKE`.
-pub const EV_CHIMNEY_SMOKE: u8 = EffectVehicleType::EV_CHIMNEY_SMOKE.0;
 /// `EV_STEAM_SMOKE`.
 pub const EV_STEAM_SMOKE: u8 = EffectVehicleType::EV_STEAM_SMOKE.0;
 /// `EV_DIESEL_SMOKE`.
@@ -46,17 +44,7 @@ pub const EV_ELECTRIC_SPARK: u8 = EffectVehicleType::EV_ELECTRIC_SPARK.0;
 pub const EV_CRASH_SMOKE: u8 = EffectVehicleType::EV_CRASH_SMOKE.0;
 /// `EV_EXPLOSION_LARGE`.
 pub const EV_EXPLOSION_LARGE: u8 = EffectVehicleType::EV_EXPLOSION_LARGE.0;
-/// `EV_BREAKDOWN_SMOKE`.
-pub const EV_BREAKDOWN_SMOKE: u8 = EffectVehicleType::EV_BREAKDOWN_SMOKE.0;
 /// `EV_EXPLOSION_SMALL`.
 pub const EV_EXPLOSION_SMALL: u8 = EffectVehicleType::EV_EXPLOSION_SMALL.0;
-/// `EV_BULLDOZER`.
-pub const EV_BULLDOZER: u8 = EffectVehicleType::EV_BULLDOZER.0;
-/// `EV_BUBBLE`.
-pub const EV_BUBBLE: u8 = EffectVehicleType::EV_BUBBLE.0;
 /// `EV_BREAKDOWN_SMOKE_AIRCRAFT`.
 pub const EV_BREAKDOWN_SMOKE_AIRCRAFT: u8 = EffectVehicleType::EV_BREAKDOWN_SMOKE_AIRCRAFT.0;
-/// `EV_COPPER_MINE_SMOKE`.
-pub const EV_COPPER_MINE_SMOKE: u8 = EffectVehicleType::EV_COPPER_MINE_SMOKE.0;
-/// `EV_END`.
-pub const EV_END: u8 = EffectVehicleType::EV_END.0;

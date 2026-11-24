@@ -1080,9 +1080,6 @@ mod tests {
     extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
         unreachable!("no draw")
     }
-    extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        unreachable!("no industry")
-    }
     extern "C" fn tile_type(_: u32) -> u8 {
         unreachable!("the raw map backend serves every tile")
     }
@@ -1132,7 +1129,6 @@ mod tests {
         let s = Box::leak(Box::new(crate::services::fixture(
             std::ptr::null_mut(),
             random,
-            industry,
         )));
         s.map = crate::map_func::fixture::statics();
         s.tile_type = tile_type;

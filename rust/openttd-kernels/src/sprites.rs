@@ -77,3 +77,54 @@ pub const SPR_AH_64A_FIRING: SpriteID = 3923;
 pub const SPR_ROTOR_MOVING_1: SpriteID = 3902;
 /// `SPR_ROTOR_MOVING_3`.
 pub const SPR_ROTOR_MOVING_3: SpriteID = 3904;
+
+/* Effect vehicles */
+/// `SPR_BULLDOZER_NE`.
+pub const SPR_BULLDOZER_NE: SpriteID = 1416;
+
+/// `SPR_SMOKE_0`.
+pub const SPR_SMOKE_0: SpriteID = 2040;
+/// `SPR_SMOKE_4`.
+pub const SPR_SMOKE_4: SpriteID = 2044;
+
+/// `SPR_DIESEL_SMOKE_0`.
+pub const SPR_DIESEL_SMOKE_0: SpriteID = 3073;
+/// `SPR_DIESEL_SMOKE_5`.
+pub const SPR_DIESEL_SMOKE_5: SpriteID = 3078;
+
+/// `SPR_STEAM_SMOKE_0`.
+pub const SPR_STEAM_SMOKE_0: SpriteID = 3079;
+/// `SPR_STEAM_SMOKE_4`.
+pub const SPR_STEAM_SMOKE_4: SpriteID = 3083;
+
+/// `SPR_ELECTRIC_SPARK_0`.
+pub const SPR_ELECTRIC_SPARK_0: SpriteID = 3084;
+/// `SPR_ELECTRIC_SPARK_5`.
+pub const SPR_ELECTRIC_SPARK_5: SpriteID = 3089;
+
+/// `SPR_CHIMNEY_SMOKE_0`.
+pub const SPR_CHIMNEY_SMOKE_0: SpriteID = 3701;
+/// `SPR_CHIMNEY_SMOKE_7`.
+pub const SPR_CHIMNEY_SMOKE_7: SpriteID = 3708;
+
+/// `SPR_EXPLOSION_LARGE_0`.
+pub const SPR_EXPLOSION_LARGE_0: SpriteID = 3709;
+/// `SPR_EXPLOSION_LARGE_F`.
+pub const SPR_EXPLOSION_LARGE_F: SpriteID = 3724;
+
+/// `SPR_EXPLOSION_SMALL_0`.
+pub const SPR_EXPLOSION_SMALL_0: SpriteID = 3725;
+/// `SPR_EXPLOSION_SMALL_B`.
+pub const SPR_EXPLOSION_SMALL_B: SpriteID = 3736;
+
+/// `SPR_BREAKDOWN_SMOKE_0`.
+pub const SPR_BREAKDOWN_SMOKE_0: SpriteID = 3737;
+/// `SPR_BREAKDOWN_SMOKE_3`.
+pub const SPR_BREAKDOWN_SMOKE_3: SpriteID = 3740;
+
+/// `SPR_BUBBLE_0`.
+pub const SPR_BUBBLE_0: SpriteID = 4748;
+/// `SPR_BUBBLE_GENERATE_0`.
+pub const SPR_BUBBLE_GENERATE_0: SpriteID = 4751;
+/// `SPR_BUBBLE_GENERATE_3`.
+pub const SPR_BUBBLE_GENERATE_3: SpriteID = 4754;

@@ -53,9 +53,6 @@ unsafe extern "C" fn visit_text(
 extern "C" fn random(_: *mut c_void) -> u32 {
     unreachable!()
 }
-extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-    unreachable!()
-}
 
 fn text(prob: u8, value: &[u8]) -> Vec<u8> {
     [&[prob], value, &[0]].concat()
@@ -280,7 +277,7 @@ fn action_0f_parsing_and_generation_match_the_original() {
 }
 
 fn check_oracle(f: &Fixture, list: &[u32]) {
-    let builtin = crate::services::fixture(null_mut(), random, industry);
+    let builtin = crate::services::fixture(null_mut(), random);
     let mut styles = 0;
     let mut samples = 0;
     TEXT_ROWS.lock().unwrap().clear();

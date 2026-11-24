@@ -17,7 +17,8 @@
 use crate::bitmath_func::{gb, has_bit, sb, set_bit, toggle_bit};
 use crate::direction_func::{change_dir_raw, reverse_dir_raw};
 use crate::direction_type::DIRDIFF_90RIGHT;
-use crate::effect::openttd_rust_effect_create_rel as create_rel;
+use crate::effect::create_effect_vehicle_rel as create_rel;
+use crate::effectvehicle_func::EffectVehicleType;
 use crate::effectvehicle_func::{
     EV_BREAKDOWN_SMOKE_AIRCRAFT, EV_DIESEL_SMOKE, EV_ELECTRIC_SPARK, EV_STEAM_SMOKE,
 };
@@ -254,12 +255,12 @@ fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate:
             0xfa => EV_BREAKDOWN_SMOKE_AIRCRAFT,
             _ => continue,
         };
-        create_rel(
-            v.0.as_ptr(),
+        let _ = create_rel(
+            v,
             i32::from(x_center) + i32::from(x),
             i32::from(y_center) + i32::from(y),
             i32::from(z),
-            typ,
+            EffectVehicleType(typ),
         );
     }
 }
@@ -341,7 +342,7 @@ fn emit_part(
             VESM_ELECTRIC => EV_ELECTRIC_SPARK,
             _ => unreachable!(),
         };
-        create_rel(v.0.as_ptr(), x, y, 10, kind);
+        let _ = create_rel(v, x, y, 10, EffectVehicleType(kind));
     }
     true
 }

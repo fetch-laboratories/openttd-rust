@@ -25,13 +25,12 @@ static uint32_t DisasterProbeRandom(void *context) noexcept
 	p->draws++;
 	return p->scripted < p->script.size() ? p->script[p->scripted++] : p->random;
 }
-static uint32_t DisasterProbeIndustry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
 static void Disasters()
 {
 	using StateOwner = std::unique_ptr<OpenTTDDisasterState, decltype(&openttd_rust_disaster_state_destroy)>;
 	DisasterProbe probe;
 	_disaster_probe = &probe;
-	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(&probe, DisasterProbeRandom, DisasterProbeIndustry);
+	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(&probe, DisasterProbeRandom);
 	OpenTTDVehicleServices vehicles{};
 
 	vehicles.destroy = [](OpenTTDVehicle *v) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->deletes++; };

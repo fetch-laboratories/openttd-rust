@@ -2373,12 +2373,12 @@ impl Game<'_> {
         let state = (id.get_crash_anim_pos() as u16).wrapping_add(1);
         id.set_crash_anim_pos(u64::from(state));
         if state == 4 && (id).vehicle().vehstatus_raw() & 1 == 0 {
-            crate::effect::openttd_rust_effect_create_rel(
-                id.vehicle().0.as_ptr(),
+            let _ = crate::effect::create_effect_vehicle_rel(
+                id.vehicle(),
                 4,
                 4,
                 8,
-                crate::effectvehicle_func::EV_EXPLOSION_LARGE,
+                crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE,
             );
         }
         if state <= 200 {
@@ -2390,12 +2390,12 @@ impl Game<'_> {
                     index -= 1;
                     if index < 0 {
                         r = self.services.random();
-                        crate::effect::openttd_rust_effect_create_rel(
-                            u.vehicle().0.as_ptr(),
+                        let _ = crate::effect::create_effect_vehicle_rel(
+                            u.vehicle(),
                             (((r >> 8) & 7) + 2) as i32,
                             (((r >> 16) & 7) + 2) as i32,
                             ((r & 7) + 5) as i32,
-                            crate::effectvehicle_func::EV_EXPLOSION_SMALL,
+                            crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_SMALL,
                         );
                         break;
                     }

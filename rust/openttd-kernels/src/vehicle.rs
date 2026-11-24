@@ -18,6 +18,7 @@ pub(crate) mod occupancy;
 pub(crate) mod scheduler;
 pub(crate) mod visits;
 
+use crate::gfx_type::SpriteID;
 use crate::map_func::Map;
 use crate::newgrf_callbacks::CallbackID;
 use crate::newgrf_sound::VehicleSoundEvent;
@@ -111,8 +112,14 @@ pub struct VehicleServices {
     pub write_breakdowns: extern "C" fn(VehicleRef, u8),
     pub write_calendar_service: extern "C" fn(VehicleRef, i32),
     pub write_economy_service: extern "C" fn(VehicleRef, i32),
+    /// `sprite_cache.sprite_seq.seq[0].sprite = sprite`.
+    pub write_first_sprite: extern "C" fn(VehicleRef, SpriteID),
     pub write_profit: extern "C" fn(VehicleRef, i64),
     pub write_reliability: extern "C" fn(VehicleRef, u16),
+    /// `sprite_cache.sprite_seq.Set(sprite)`.
+    pub write_sprite_seq: extern "C" fn(VehicleRef, SpriteID),
+    /// `spritenum = sprite`.
+    pub write_spritenum: extern "C" fn(VehicleRef, u8),
 }
 /// The immutable process-wide table a getter field returns.
 #[allow(unsafe_code)]
@@ -153,6 +160,16 @@ impl VehicleServices {
     /// `VehicleEnterDepot(v)`.
     pub(crate) fn enter_depot(&self, v: VehicleRef) {
         visits::enter_depot(v, self.visits());
+    }
+    /// `v->UpdatePositionAndViewport()`: update the position of the vehicle, and update the
+    /// viewport. `map` gives the entry's map, which only the position update reads.
+    #[allow(unsafe_code)]
+    pub(crate) fn update_position_and_viewport(&self, v: VehicleRef, map: impl FnOnce() -> Map) {
+        if v.vehicle_type() != VehicleType::VEH_EFFECT {
+            // SAFETY: A live vehicle; the tile hash ends before the viewport callback.
+            unsafe { occupancy::update_position(self, v, map()) };
+        }
+        (self.base_viewport)(v);
     }
     /// `v->HandleLoading(mode)`: handle the loading of the vehicle; when not it skips
     /// through dummy orders and does nothing in all other cases. `mode` is whether this is
@@ -275,8 +292,11 @@ crate::abi::layouts! {
         write_breakdowns,
         write_calendar_service,
         write_economy_service,
+        write_first_sprite,
         write_profit,
         write_reliability,
+        write_sprite_seq,
+        write_spritenum,
     };
     "OpenTTDGroundServices" ["probe"] => GroundServices {
         physics,

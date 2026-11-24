@@ -5,588 +5,760 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Owns every effect controller and the private animation bytes.
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::many_single_char_names,
-    clippy::verbose_bit_mask
-)]
+//! `effectvehicle.cpp`: the effect vehicles' init and tick procedures, their creation, and
+//! the Rust owner of the two members `EffectVehicle` adds to `Vehicle`.
+//!
+//! Each native `EffectVehicle` shell owns one [`State`], allocated with the shell and freed
+//! by its destructor. An [`EffectVehicle`] handle names the shell's shared record and that
+//! owner. Every access to the owner is one field load or store, and no reference to it
+//! lives across a service call. A tick procedure that ends its effect returns false where
+//! the original has `delete v; return false;`, and `RunEffect` (`src/effectvehicle.cpp`)
+//! deletes the shell after the export returns, with nothing run in between.
+#![allow(clippy::cast_possible_truncation, clippy::verbose_bit_mask)]
 
-#[derive(Default)]
-pub struct State {
-    animation: u16,
-    substate: u8,
-}
+use crate::bitmath_func::gb;
+use crate::effectvehicle_func::EffectVehicleType;
+use crate::gfx_type::SpriteID;
+use crate::industry_type::IndustryGfx;
 use crate::random_func::chance16_i;
 use crate::services::Services;
-use crate::vehicle::VehicleRef;
+use crate::sound_type::{SoundFx, SoundID};
+use crate::sprites::{
+    SPR_BREAKDOWN_SMOKE_0, SPR_BREAKDOWN_SMOKE_3, SPR_BUBBLE_0, SPR_BUBBLE_GENERATE_0,
+    SPR_BUBBLE_GENERATE_3, SPR_BULLDOZER_NE, SPR_CHIMNEY_SMOKE_0, SPR_CHIMNEY_SMOKE_7,
+    SPR_DIESEL_SMOKE_0, SPR_DIESEL_SMOKE_5, SPR_ELECTRIC_SPARK_0, SPR_ELECTRIC_SPARK_5,
+    SPR_EXPLOSION_LARGE_0, SPR_EXPLOSION_LARGE_F, SPR_EXPLOSION_SMALL_0, SPR_EXPLOSION_SMALL_B,
+    SPR_SMOKE_0, SPR_SMOKE_4, SPR_STEAM_SMOKE_0, SPR_STEAM_SMOKE_4,
+};
+use crate::tile_type::{TILE_SIZE, TileIndex, TileType};
+use crate::vehicle::{VehicleRef, VehicleServices};
 use std::ffi::c_void;
 
-/// Controller-local values at the original observation points.
+/// The members `EffectVehicle` adds to `Vehicle` (`effectvehicle_base.h`).
 #[derive(Default)]
-struct View {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
-    pub sprite: u32,
-    pub progress: u8,
-    pub spritenum: u8,
-    pub subtype: u8,
-    pub ambient: u8,
+pub struct State {
+    /// State primarily used to change the graphics/behaviour.
+    animation_state: u16,
+    /// Sub state to time the change of the graphics/behaviour.
+    animation_substate: u8,
 }
-/// All leaves are noexcept and cannot reenter or retain pointers. Shared vehicle
-/// fields use the shared record; every mutation is written immediately.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Leaves {
-    pub vehicles: *const crate::vehicle::VehicleServices,
-    pub sprite_sequence: extern "C" fn(*mut c_void, u32),
-    pub sprite: extern "C" fn(*mut c_void, u32),
-    pub spritenum: extern "C" fn(*mut c_void, u8),
-    pub viewport: extern "C" fn(*mut c_void),
-    pub sound: extern "C" fn(*mut c_void, u8),
-}
-const INITIAL: [u32; crate::effectvehicle_func::EV_END as usize] = [
-    3701, 3079, 3073, 3084, 2040, 3709, 3737, 3725, 1416, 4751, 2040, 2040,
-];
-const LAST: [u32; crate::effectvehicle_func::EV_END as usize] = [
-    3708, 3083, 3078, 3089, 2044, 3724, 3740, 3736, 0, 0, 2044, 2044,
-];
-const BULLDOZER: [(usize, u32, u8); 20] = [
-    (0, 0, 4),
-    (3, 3, 4),
-    (2, 2, 7),
-    (0, 2, 7),
-    (1, 1, 3),
-    (2, 2, 7),
-    (0, 2, 7),
-    (1, 1, 3),
-    (2, 2, 7),
-    (0, 2, 7),
-    (3, 3, 6),
-    (2, 2, 6),
-    (1, 1, 7),
-    (3, 1, 7),
-    (0, 0, 3),
-    (1, 1, 7),
-    (3, 1, 7),
-    (0, 0, 3),
-    (1, 1, 7),
-    (3, 1, 7),
-];
-const INC: [(i32, i32); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
-const BUBBLE_FLOAT_SW: &[(i32, i32, i32, u32)] = &[
-    (0, 0, 1, 0),
-    (1, 0, 1, 1),
-    (0, 0, 1, 0),
-    (1, 0, 1, 2),
-    (1, 4, 0, 0),
-];
-const BUBBLE_FLOAT_NE: &[(i32, i32, i32, u32)] = &[
-    (0, 0, 1, 0),
-    (-1, 0, 1, 1),
-    (0, 0, 1, 0),
-    (-1, 0, 1, 2),
-    (1, 4, 0, 0),
-];
-const BUBBLE_FLOAT_SE: &[(i32, i32, i32, u32)] = &[
-    (0, 0, 1, 0),
-    (0, 1, 1, 1),
-    (0, 0, 1, 0),
-    (0, 1, 1, 2),
-    (1, 4, 0, 0),
-];
-const BUBBLE_FLOAT_NW: &[(i32, i32, i32, u32)] = &[
-    (0, 0, 1, 0),
-    (0, -1, 1, 1),
-    (0, 0, 1, 0),
-    (0, -1, 1, 2),
-    (1, 4, 0, 0),
-];
-const BUBBLE_BURST: &[(i32, i32, i32, u32)] = &[
-    (0, 0, 1, 2),
-    (0, 0, 1, 7),
-    (0, 0, 1, 8),
-    (0, 0, 1, 9),
-    (0, 4, 0, 0),
-];
-const BUBBLE_ABSORB: &[(i32, i32, i32, u32)] = &[
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (0, 0, 1, 0),
-    (0, 0, 1, 2),
-    (0, 0, 1, 0),
-    (0, 0, 1, 1),
-    (2, 1, 3, 0),
-    (1, 1, 3, 1),
-    (2, 1, 3, 0),
-    (1, 1, 3, 2),
-    (2, 1, 3, 0),
-    (1, 1, 3, 1),
-    (2, 1, 3, 0),
-    (1, 0, 1, 2),
-    (0, 0, 1, 0),
-    (1, 0, 1, 1),
-    (0, 0, 1, 0),
-    (1, 0, 1, 2),
-    (0, 0, 1, 0),
-    (1, 0, 1, 1),
-    (0, 0, 1, 0),
-    (1, 0, 1, 2),
-    (2, 4, 0, 0),
-    (0, 0, 0, 10),
-    (0, 0, 0, 11),
-    (0, 0, 0, 12),
-    (0, 0, 0, 13),
-    (0, 0, 0, 14),
-    (0, 4, 0, 0),
-];
-const BUBBLES: [&[(i32, i32, i32, u32)]; 6] = [
-    BUBBLE_FLOAT_SW,
-    BUBBLE_FLOAT_NE,
-    BUBBLE_FLOAT_SE,
-    BUBBLE_FLOAT_NW,
-    BUBBLE_BURST,
-    BUBBLE_ABSORB,
-];
 
-// No Rust reference to the private owner survives a service call. Its lifetime
-// ends only after run returns false and the C++ facade deletes the shell.
-struct Controller<'a> {
-    owner: *mut State,
-    context: *mut c_void,
+/// `EffectVehicle *`: the shared record of one effect vehicle and the owner its shell holds.
+#[derive(Clone, Copy)]
+pub(crate) struct EffectVehicle {
     record: VehicleRef,
-    leaves: &'a Leaves,
-    services: &'a Services,
-    v: View,
+    owner: *mut State,
 }
-#[allow(unsafe_code)]
-impl Controller<'_> {
-    // Every call-scoped borrow ends at its statement, before any service call.
-    fn state(&mut self) -> &mut State {
-        unsafe { &mut *self.owner }
+
+/// The tables an effect procedure calls: the process-wide vehicle and shared tables, or a
+/// fixture's.
+struct Tables<'a> {
+    vehicles: &'a VehicleServices,
+    shared: &'a Services,
+}
+
+impl EffectVehicle {
+    /// `animation_state`.
+    #[allow(unsafe_code)]
+    fn animation_state(self) -> u16 {
+        // SAFETY: The shell's live owner (module contract).
+        unsafe { (*self.owner).animation_state }
     }
-    fn set_x(&mut self, value: i32) {
-        self.v.x = value;
-        self.record.set_x_pos(value);
+    /// `EffectVehicle::SetAnimationState`: `animation_state = state`.
+    #[allow(unsafe_code)]
+    pub(crate) fn set_animation_state(self, state: u16) {
+        // SAFETY: The shell's live owner (module contract).
+        unsafe { (*self.owner).animation_state = state };
     }
-    fn set_y(&mut self, value: i32) {
-        self.v.y = value;
-        self.record.set_y_pos(value);
+    /// `animation_substate`.
+    #[allow(unsafe_code)]
+    fn animation_substate(self) -> u8 {
+        // SAFETY: The shell's live owner (module contract).
+        unsafe { (*self.owner).animation_substate }
     }
-    fn set_z(&mut self, value: i32) {
-        self.v.z = value;
-        self.record.set_z_pos(value);
+    /// `EffectVehicle::SetAnimationSubstate`: `animation_substate = state`.
+    #[allow(unsafe_code)]
+    pub(crate) fn set_animation_substate(self, state: u8) {
+        // SAFETY: The shell's live owner (module contract).
+        unsafe { (*self.owner).animation_substate = state };
     }
-    fn set_sprite_sequence(&mut self, value: u32) {
-        self.v.sprite = value;
-        (self.leaves.sprite_sequence)(self.context, value);
+    /// `spritenum`, through the resolver table's reader.
+    #[allow(unsafe_code)]
+    fn spritenum(self, t: &Tables) -> u8 {
+        // SAFETY: The live record of the shell.
+        unsafe { (t.vehicles.newgrf().sprite)(self.record.0.as_ptr()) }
     }
-    fn set_first_sprite(&mut self, value: u32) {
-        self.v.sprite = value;
-        (self.leaves.sprite)(self.context, value);
+    /// `spritenum = sprite`.
+    fn set_spritenum(self, t: &Tables, sprite: u8) {
+        (t.vehicles.write_spritenum)(self.record, sprite);
     }
-    fn set_progress(&mut self, value: u8) {
-        self.v.progress = value;
-        self.record.set_progress(value);
+    /// `sprite_cache.sprite_seq.seq[0].sprite`.
+    fn first_sprite(self, t: &Tables) -> SpriteID {
+        (t.vehicles.first_sprite)(self.record)
     }
-    fn set_spritenum(&mut self, value: u8) {
-        self.v.spritenum = value;
-        (self.leaves.spritenum)(self.context, value);
+    /// `sprite_cache.sprite_seq.seq[0].sprite = sprite`.
+    fn set_first_sprite(self, t: &Tables, sprite: SpriteID) {
+        (t.vehicles.write_first_sprite)(self.record, sprite);
     }
-    fn increment(&mut self) -> bool {
-        if self.v.sprite == LAST[usize::from(self.v.subtype)] {
+    /// `sprite_cache.sprite_seq.Set(sprite)`.
+    fn set_sprite_seq(self, t: &Tables, sprite: SpriteID) {
+        (t.vehicles.write_sprite_seq)(self.record, sprite);
+    }
+    /// `UpdatePositionAndViewport()`.
+    fn update_position_and_viewport(self, t: &Tables) {
+        t.vehicles
+            .update_position_and_viewport(self.record, || t.shared.map());
+    }
+    /// `TileVirtXY(v->x_pos, v->y_pos)`, the coordinates converted to its `uint` parameters.
+    fn tile_virt_xy(self, t: &Tables) -> TileIndex {
+        t.shared.map().tile_virt_xy(
+            self.record.x_pos().cast_unsigned(),
+            self.record.y_pos().cast_unsigned(),
+        )
+    }
+    /// The effect vehicle's native shell.
+    pub(crate) fn shell(self) -> *mut c_void {
+        self.record.shell()
+    }
+    /// `EffectVehicle::Tick`.
+    fn tick(self, t: &Tables) -> bool {
+        (EFFECT_PROCS[usize::from(self.record.subtype())].tick_proc)(self, t)
+    }
+}
+
+/// `IncrementSprite`: increment the sprite unless it has reached the end of the animation.
+/// `last` is the last sprite of the animation. Returns true if the sprite was incremented,
+/// false if the end was reached.
+fn increment_sprite(v: EffectVehicle, t: &Tables, last: SpriteID) -> bool {
+    let sprite = v.first_sprite(t);
+    if sprite == last {
+        return false;
+    }
+    v.set_first_sprite(t, sprite.wrapping_add(1));
+    true
+}
+
+/// `ChimneySmokeInit`.
+fn chimney_smoke_init(v: EffectVehicle, t: &Tables) {
+    let r = t.shared.random();
+    v.set_sprite_seq(t, SPR_CHIMNEY_SMOKE_0 + gb(r, 0, 3));
+    v.record.set_progress(gb(r, 16, 3) as u8);
+}
+
+/// `ChimneySmokeTick`.
+fn chimney_smoke_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let progress = v.record.progress();
+    if progress > 0 {
+        v.record.set_progress(progress - 1);
+    } else {
+        let tile = v.tile_virt_xy(t);
+        if !crate::tile_map::is_tile_type(t.shared, tile, TileType::MP_INDUSTRY) {
             return false;
         }
-        self.set_first_sprite(self.v.sprite.wrapping_add(1));
-        true
-    }
-    fn viewport(&self) {
-        (self.leaves.viewport)(self.context);
-    }
-    fn industry(&self, tile: &mut u32) -> u32 {
-        (self.services.industry)(self.v.x, self.v.y, tile)
-    }
-    fn init(&mut self) {
-        if self.v.subtype == 0 {
-            let r = self.services.random();
-            self.set_sprite_sequence(INITIAL[0] + (r & 7));
-            self.set_progress(((r >> 16) & 7) as u8);
-            return;
+
+        if !increment_sprite(v, t, SPR_CHIMNEY_SMOKE_7) {
+            v.set_sprite_seq(t, SPR_CHIMNEY_SMOKE_0);
         }
-        self.set_sprite_sequence(INITIAL[usize::from(self.v.subtype)]);
-        if self.v.subtype == 9 {
-            self.set_spritenum(0);
+        v.record.set_progress(7);
+        v.update_position_and_viewport(t);
+    }
+
+    true
+}
+
+/// `SteamSmokeInit`.
+fn steam_smoke_init(v: EffectVehicle, t: &Tables) {
+    v.set_sprite_seq(t, SPR_STEAM_SMOKE_0);
+    v.record.set_progress(12);
+}
+
+/// `SteamSmokeTick`.
+fn steam_smoke_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let mut moved = false;
+
+    let progress = v.record.progress().wrapping_add(1);
+    v.record.set_progress(progress);
+
+    if (progress & 7) == 0 {
+        v.record.set_z_pos(v.record.z_pos().wrapping_add(1));
+        moved = true;
+    }
+
+    if (progress & 0xF) == 4 {
+        if !increment_sprite(v, t, SPR_STEAM_SMOKE_4) {
+            return false;
         }
-        self.set_progress(match self.v.subtype {
-            1 | 4 | 10 | 11 => 12,
-            3 => 1,
-            _ => 0,
-        });
-        if self.v.subtype == 8 {
-            self.state().animation = 0;
-            self.state().substate = 0;
+        moved = true;
+    }
+
+    if moved {
+        v.update_position_and_viewport(t);
+    }
+
+    true
+}
+
+/// `DieselSmokeInit`.
+fn diesel_smoke_init(v: EffectVehicle, t: &Tables) {
+    v.set_sprite_seq(t, SPR_DIESEL_SMOKE_0);
+    v.record.set_progress(0);
+}
+
+/// `DieselSmokeTick`.
+fn diesel_smoke_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let progress = v.record.progress().wrapping_add(1);
+    v.record.set_progress(progress);
+
+    if (progress & 3) == 0 {
+        v.record.set_z_pos(v.record.z_pos().wrapping_add(1));
+        v.update_position_and_viewport(t);
+    } else if (progress & 7) == 1 {
+        if !increment_sprite(v, t, SPR_DIESEL_SMOKE_5) {
+            return false;
+        }
+        v.update_position_and_viewport(t);
+    }
+
+    true
+}
+
+/// `ElectricSparkInit`.
+fn electric_spark_init(v: EffectVehicle, t: &Tables) {
+    v.set_sprite_seq(t, SPR_ELECTRIC_SPARK_0);
+    v.record.set_progress(1);
+}
+
+/// `ElectricSparkTick`.
+fn electric_spark_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let progress = v.record.progress();
+    if progress < 2 {
+        v.record.set_progress(progress + 1);
+    } else {
+        v.record.set_progress(0);
+
+        if !increment_sprite(v, t, SPR_ELECTRIC_SPARK_5) {
+            return false;
+        }
+        v.update_position_and_viewport(t);
+    }
+
+    true
+}
+
+/// `SmokeInit`.
+fn smoke_init(v: EffectVehicle, t: &Tables) {
+    v.set_sprite_seq(t, SPR_SMOKE_0);
+    v.record.set_progress(12);
+}
+
+/// `SmokeTick`.
+fn smoke_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let mut moved = false;
+
+    let progress = v.record.progress().wrapping_add(1);
+    v.record.set_progress(progress);
+
+    if (progress & 3) == 0 {
+        v.record.set_z_pos(v.record.z_pos().wrapping_add(1));
+        moved = true;
+    }
+
+    if (progress & 0xF) == 4 {
+        if !increment_sprite(v, t, SPR_SMOKE_4) {
+            return false;
+        }
+        moved = true;
+    }
+
+    if moved {
+        v.update_position_and_viewport(t);
+    }
+
+    true
+}
+
+/// `ExplosionLargeInit`.
+fn explosion_large_init(v: EffectVehicle, t: &Tables) {
+    v.set_sprite_seq(t, SPR_EXPLOSION_LARGE_0);
+    v.record.set_progress(0);
+}
+
+/// `ExplosionLargeTick`.
+fn explosion_large_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let progress = v.record.progress().wrapping_add(1);
+    v.record.set_progress(progress);
+    if (progress & 3) == 0 {
+        if !increment_sprite(v, t, SPR_EXPLOSION_LARGE_F) {
+            return false;
+        }
+        v.update_position_and_viewport(t);
+    }
+
+    true
+}
+
+/// `BreakdownSmokeInit`.
+fn breakdown_smoke_init(v: EffectVehicle, t: &Tables) {
+    v.set_sprite_seq(t, SPR_BREAKDOWN_SMOKE_0);
+    v.record.set_progress(0);
+}
+
+/// `BreakdownSmokeTick`.
+fn breakdown_smoke_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let progress = v.record.progress().wrapping_add(1);
+    v.record.set_progress(progress);
+    if (progress & 7) == 0 {
+        if !increment_sprite(v, t, SPR_BREAKDOWN_SMOKE_3) {
+            v.set_sprite_seq(t, SPR_BREAKDOWN_SMOKE_0);
+        }
+        v.update_position_and_viewport(t);
+    }
+
+    let animation_state = v.animation_state().wrapping_sub(1);
+    v.set_animation_state(animation_state);
+    if animation_state == 0 {
+        return false;
+    }
+
+    true
+}
+
+/// `ExplosionSmallInit`.
+fn explosion_small_init(v: EffectVehicle, t: &Tables) {
+    v.set_sprite_seq(t, SPR_EXPLOSION_SMALL_0);
+    v.record.set_progress(0);
+}
+
+/// `ExplosionSmallTick`.
+fn explosion_small_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let progress = v.record.progress().wrapping_add(1);
+    v.record.set_progress(progress);
+    if (progress & 3) == 0 {
+        if !increment_sprite(v, t, SPR_EXPLOSION_SMALL_B) {
+            return false;
+        }
+        v.update_position_and_viewport(t);
+    }
+
+    true
+}
+
+/// `BulldozerInit`.
+fn bulldozer_init(v: EffectVehicle, t: &Tables) {
+    v.set_sprite_seq(t, SPR_BULLDOZER_NE);
+    v.record.set_progress(0);
+    v.set_animation_state(0);
+    v.set_animation_substate(0);
+}
+
+/// `BulldozerMovement`, whose `direction:2`, `image:2` and `duration:3` bit fields are
+/// whole bytes here.
+struct BulldozerMovement {
+    direction: u8,
+    image: u8,
+    duration: u8,
+}
+
+/// `_bulldozer_movement`.
+static BULLDOZER_MOVEMENT: [BulldozerMovement; 20] = {
+    const fn m(direction: u8, image: u8, duration: u8) -> BulldozerMovement {
+        BulldozerMovement {
+            direction,
+            image,
+            duration,
         }
     }
-    fn countdown(&mut self) -> bool {
-        self.state().animation = self.state().animation.wrapping_sub(1);
-        self.state().animation != 0
+    [
+        m(0, 0, 4),
+        m(3, 3, 4),
+        m(2, 2, 7),
+        m(0, 2, 7),
+        m(1, 1, 3),
+        m(2, 2, 7),
+        m(0, 2, 7),
+        m(1, 1, 3),
+        m(2, 2, 7),
+        m(0, 2, 7),
+        m(3, 3, 6),
+        m(2, 2, 6),
+        m(1, 1, 7),
+        m(3, 1, 7),
+        m(0, 0, 3),
+        m(1, 1, 7),
+        m(3, 1, 7),
+        m(0, 0, 3),
+        m(1, 1, 7),
+        m(3, 1, 7),
+    ]
+};
+
+/// An `_inc_by_dir` entry.
+struct IncByDir {
+    x: i8,
+    y: i8,
+}
+
+/// `_inc_by_dir`.
+static INC_BY_DIR: [IncByDir; 4] = [
+    IncByDir { x: -1, y: 0 },
+    IncByDir { x: 0, y: 1 },
+    IncByDir { x: 1, y: 0 },
+    IncByDir { x: 0, y: -1 },
+];
+
+/// `BulldozerTick`.
+fn bulldozer_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let progress = v.record.progress().wrapping_add(1);
+    v.record.set_progress(progress);
+    if (progress & 7) == 0 {
+        let b = &BULLDOZER_MOVEMENT[usize::from(v.animation_state())];
+
+        v.set_sprite_seq(t, SPR_BULLDOZER_NE + SpriteID::from(b.image));
+
+        let inc = &INC_BY_DIR[usize::from(b.direction)];
+        v.record
+            .set_x_pos(v.record.x_pos().wrapping_add(i32::from(inc.x)));
+        v.record
+            .set_y_pos(v.record.y_pos().wrapping_add(i32::from(inc.y)));
+
+        let animation_substate = v.animation_substate().wrapping_add(1);
+        v.set_animation_substate(animation_substate);
+        if animation_substate >= b.duration {
+            v.set_animation_substate(0);
+            let animation_state = v.animation_state().wrapping_add(1);
+            v.set_animation_state(animation_state);
+            if usize::from(animation_state) == BULLDOZER_MOVEMENT.len() {
+                return false;
+            }
+        }
+        v.update_position_and_viewport(t);
     }
-    fn bubble(&mut self) -> bool {
-        if self.v.progress & 3 != 0 {
+
+    true
+}
+
+/// `BubbleInit`.
+fn bubble_init(v: EffectVehicle, t: &Tables) {
+    v.set_sprite_seq(t, SPR_BUBBLE_GENERATE_0);
+    v.set_spritenum(t, 0);
+    v.record.set_progress(0);
+}
+
+/// `BubbleMovement`, whose signed `x:4`, `y:4` and `z:4` and unsigned `image:4` bit fields
+/// are whole bytes here.
+#[derive(Clone, Copy)]
+struct BubbleMovement {
+    x: i8,
+    y: i8,
+    z: i8,
+    image: u8,
+}
+
+/// `MK(x, y, z, i)`.
+const fn mk(x: i8, y: i8, z: i8, i: u8) -> BubbleMovement {
+    BubbleMovement { x, y, z, image: i }
+}
+/// `ME(i)`: the end of a movement, whose `x` says what follows.
+const fn me(i: i8) -> BubbleMovement {
+    BubbleMovement {
+        x: i,
+        y: 4,
+        z: 0,
+        image: 0,
+    }
+}
+
+/// `_bubble_float_sw`.
+static BUBBLE_FLOAT_SW: [BubbleMovement; 5] = [
+    mk(0, 0, 1, 0),
+    mk(1, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(1, 0, 1, 2),
+    me(1),
+];
+
+/// `_bubble_float_ne`.
+static BUBBLE_FLOAT_NE: [BubbleMovement; 5] = [
+    mk(0, 0, 1, 0),
+    mk(-1, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(-1, 0, 1, 2),
+    me(1),
+];
+
+/// `_bubble_float_se`.
+static BUBBLE_FLOAT_SE: [BubbleMovement; 5] = [
+    mk(0, 0, 1, 0),
+    mk(0, 1, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 1, 1, 2),
+    me(1),
+];
+
+/// `_bubble_float_nw`.
+static BUBBLE_FLOAT_NW: [BubbleMovement; 5] = [
+    mk(0, 0, 1, 0),
+    mk(0, -1, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, -1, 1, 2),
+    me(1),
+];
+
+/// `_bubble_burst`.
+static BUBBLE_BURST: [BubbleMovement; 5] = [
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 7),
+    mk(0, 0, 1, 8),
+    mk(0, 0, 1, 9),
+    me(0),
+];
+
+/// `_bubble_absorb`.
+static BUBBLE_ABSORB: [BubbleMovement; 85] = [
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(0, 0, 1, 1),
+    mk(2, 1, 3, 0),
+    mk(1, 1, 3, 1),
+    mk(2, 1, 3, 0),
+    mk(1, 1, 3, 2),
+    mk(2, 1, 3, 0),
+    mk(1, 1, 3, 1),
+    mk(2, 1, 3, 0),
+    mk(1, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(1, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(1, 0, 1, 2),
+    mk(0, 0, 1, 0),
+    mk(1, 0, 1, 1),
+    mk(0, 0, 1, 0),
+    mk(1, 0, 1, 2),
+    me(2),
+    mk(0, 0, 0, 0xA),
+    mk(0, 0, 0, 0xB),
+    mk(0, 0, 0, 0xC),
+    mk(0, 0, 0, 0xD),
+    mk(0, 0, 0, 0xE),
+    me(0),
+];
+
+/// `_bubble_movement`.
+static BUBBLE_MOVEMENT: [&[BubbleMovement]; 6] = [
+    &BUBBLE_FLOAT_SW,
+    &BUBBLE_FLOAT_NE,
+    &BUBBLE_FLOAT_SE,
+    &BUBBLE_FLOAT_NW,
+    &BUBBLE_BURST,
+    &BUBBLE_ABSORB,
+];
+
+/// `BubbleTick`.
+fn bubble_tick(v: EffectVehicle, t: &Tables) -> bool {
+    let mut anim_state: u32;
+
+    let progress = v.record.progress().wrapping_add(1);
+    v.record.set_progress(progress);
+    if (progress & 3) != 0 {
+        return true;
+    }
+
+    let mut spritenum = v.spritenum(t);
+    if spritenum == 0 {
+        let sprite = v.first_sprite(t).wrapping_add(1);
+        v.set_first_sprite(t, sprite);
+        if sprite < SPR_BUBBLE_GENERATE_3 {
+            v.update_position_and_viewport(t);
             return true;
         }
-        let mut animation;
-        if self.v.spritenum == 0 {
-            self.set_first_sprite(self.v.sprite.wrapping_add(1));
-            if self.v.sprite < 4754 {
-                self.viewport();
-                return true;
-            }
-            let spritenum = if self.state().substate != 0 {
-                (self.services.random() & 3) + 1
-            } else {
-                6
-            };
-            self.set_spritenum(spritenum as u8);
-            animation = 0;
+        spritenum = if v.animation_substate() != 0 {
+            (gb(t.shared.random(), 0, 2) + 1) as u8
         } else {
-            animation = u32::from(self.state().animation) + 1;
-        }
-        let b = BUBBLES[usize::from(self.v.spritenum) - 1][animation as usize];
-        if b.1 == 4 && b.0 == 0 {
-            return false;
-        }
-        if b.1 == 4 && b.0 == 1 {
-            if self.v.z > 180 || chance16_i(1, 96, self.services.random()) {
-                self.set_spritenum(5);
-                if self.v.ambient != 0 {
-                    (self.leaves.sound)(self.context, 0);
-                }
-            }
-            animation = 0;
-        }
-        if b.1 == 4 && b.0 == 2 {
-            animation += 1;
-            if self.v.ambient != 0 {
-                (self.leaves.sound)(self.context, 1);
-            }
-            let mut tile = 0;
-            if self.industry(&mut tile) == 2 {
-                crate::animated_tile::openttd_rust_animation_add(tile, true);
-            }
-        }
-        self.state().animation = animation as u16;
-        let b = BUBBLES[usize::from(self.v.spritenum) - 1][animation as usize];
-        self.set_x(self.v.x.wrapping_add(b.0));
-        self.set_y(self.v.y.wrapping_add(b.1));
-        self.set_z(self.v.z.wrapping_add(b.2));
-        self.set_sprite_sequence(4748 + b.3);
-        self.viewport();
-        true
+            6
+        };
+        v.set_spritenum(t, spritenum);
+        anim_state = 0;
+    } else {
+        anim_state = u32::from(v.animation_state()) + 1;
     }
-    #[allow(clippy::too_many_lines)]
-    fn tick(&mut self) -> bool {
-        match self.v.subtype {
-            0 => {
-                if self.v.progress > 0 {
-                    self.set_progress(self.v.progress - 1);
-                    return true;
-                }
-                if self.industry(&mut 0) == 0 {
-                    return false;
-                }
-                if !self.increment() {
-                    self.set_sprite_sequence(3701);
-                }
-                self.set_progress(7);
-                self.viewport();
-            }
-            3 => {
-                if self.v.progress < 2 {
-                    self.set_progress(self.v.progress + 1);
-                    return true;
-                }
-                self.set_progress(0);
-                if !self.increment() {
-                    return false;
-                }
-                self.viewport();
-            }
-            _ => {
-                self.set_progress(self.v.progress.wrapping_add(1));
-                match self.v.subtype {
-                    1 | 4 | 10 | 11 => {
-                        let mut moved = false;
-                        if self.v.progress & (if self.v.subtype == 1 { 7 } else { 3 }) == 0 {
-                            self.set_z(self.v.z.wrapping_add(1));
-                            moved = true;
-                        }
-                        if self.v.progress & 15 == 4 {
-                            if !self.increment() {
-                                return false;
-                            }
-                            moved = true;
-                        }
-                        if moved {
-                            self.viewport();
-                        }
-                    }
-                    2 => {
-                        if self.v.progress & 3 == 0 {
-                            self.set_z(self.v.z.wrapping_add(1));
-                            self.viewport();
-                        } else if self.v.progress & 7 == 1 {
-                            if !self.increment() {
-                                return false;
-                            }
-                            self.viewport();
-                        }
-                    }
-                    5 | 7 => {
-                        if self.v.progress & 3 == 0 {
-                            if !self.increment() {
-                                return false;
-                            }
-                            self.viewport();
-                        }
-                    }
-                    6 => {
-                        if self.v.progress & 7 == 0 {
-                            if !self.increment() {
-                                self.set_sprite_sequence(3737);
-                            }
-                            self.viewport();
-                        }
-                        return self.countdown();
-                    }
-                    8 => {
-                        if self.v.progress & 7 != 0 {
-                            return true;
-                        }
-                        let b = BULLDOZER[usize::from(self.state().animation)];
-                        self.set_sprite_sequence(1416 + b.1);
-                        self.set_x(self.v.x.wrapping_add(INC[b.0].0));
-                        self.set_y(self.v.y.wrapping_add(INC[b.0].1));
-                        self.state().substate = self.state().substate.wrapping_add(1);
-                        if self.state().substate >= b.2 {
-                            self.state().substate = 0;
-                            self.state().animation = self.state().animation.wrapping_add(1);
-                            if usize::from(self.state().animation) == BULLDOZER.len() {
-                                return false;
-                            }
-                        }
-                        self.viewport();
-                    }
-                    9 => return self.bubble(),
-                    _ => {
-                        let _ = INITIAL[usize::from(self.v.subtype)];
-                    }
-                }
+
+    let b = &BUBBLE_MOVEMENT[usize::from(spritenum) - 1][anim_state as usize];
+
+    if b.y == 4 && b.x == 0 {
+        return false;
+    }
+
+    if b.y == 4 && b.x == 1 {
+        if v.record.z_pos() > 180 || chance16_i(1, 96, t.shared.random()) {
+            spritenum = 5;
+            v.set_spritenum(t, spritenum);
+            if sound_ambient(t) {
+                snd_play_vehicle_fx(SoundFx::SND_2F_BUBBLE_GENERATOR_FAIL, v, t);
             }
         }
-        true
+        anim_state = 0;
     }
+
+    if b.y == 4 && b.x == 2 {
+        anim_state += 1;
+        if sound_ambient(t) {
+            snd_play_vehicle_fx(SoundFx::SND_31_BUBBLE_GENERATOR_SUCCESS, v, t);
+        }
+
+        let tile = v.tile_virt_xy(t);
+        if crate::tile_map::is_tile_type(t.shared, tile, TileType::MP_INDUSTRY)
+            && crate::industry_map::get_industry_gfx(t.shared, tile)
+                == IndustryGfx::GFX_BUBBLE_CATCHER
+        {
+            crate::animated_tile::add_animated_tile(tile, true);
+        }
+    }
+
+    v.set_animation_state(anim_state as u16);
+    let b = &BUBBLE_MOVEMENT[usize::from(spritenum) - 1][anim_state as usize];
+
+    v.record
+        .set_x_pos(v.record.x_pos().wrapping_add(i32::from(b.x)));
+    v.record
+        .set_y_pos(v.record.y_pos().wrapping_add(i32::from(b.y)));
+    v.record
+        .set_z_pos(v.record.z_pos().wrapping_add(i32::from(b.z)));
+    v.set_sprite_seq(t, SPR_BUBBLE_0 + SpriteID::from(b.image));
+
+    v.update_position_and_viewport(t);
+
+    true
 }
 
-/// Allocates zeroed private state for both ordinary construction and indexed loading.
+/// `_settings_client.sound.ambient`, one field-sized load.
 #[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_effect_new() -> *mut State {
-    Box::into_raw(Box::default())
-}
-/// # Safety
-/// Destroy exactly once after the shell's final use. No borrow survives return.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_destroy(owner: *mut State) {
-    drop(unsafe { Box::from_raw(owner) });
-}
-/// # Safety
-/// Owner is live/aligned and access is serialized with no active callback.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_set_animation(owner: *mut State, value: u16) {
-    unsafe { (*owner).animation = value };
-}
-/// # Safety
-/// Same live/serialized owner contract as `openttd_rust_effect_set_animation`.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_get_animation(owner: *const State) -> u16 {
-    unsafe { (*owner).animation }
-}
-/// # Safety
-/// Same live/serialized owner contract as `openttd_rust_effect_set_animation`.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_set_substate(owner: *mut State, value: u8) {
-    unsafe { (*owner).substate = value };
-}
-/// # Safety
-/// Same live/serialized owner contract as `openttd_rust_effect_set_animation`.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_get_substate(owner: *const State) -> u8 {
-    unsafe { (*owner).substate }
-}
-/// # Safety
-/// Owner is live and exclusive for this invocation and context is its live C++ shell; tables
-/// stay live and immutable until return. Leaves may allocate but cannot destroy the owner.
-/// False requests deletion after return. Save/load uses the get/set exports instead. The
-/// alignment, disjointness, callback and source-index requirements are in `effect_ffi.h`.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_run(
-    owner: *mut State,
-    record: VehicleRef,
-    leaves: *const Leaves,
-    services: *const Services,
-) -> u8 {
-    let leaves = unsafe { &*leaves };
-    let vehicles = unsafe { &*leaves.vehicles };
-    let v = View {
-        x: record.x_pos(),
-        y: record.y_pos(),
-        z: record.z_pos(),
-        sprite: (vehicles.first_sprite)(record),
-        progress: record.progress(),
-        spritenum: unsafe { ((*((vehicles.newgrf)())).sprite)(record.0.as_ptr()) },
-        subtype: record.subtype(),
-        ambient: u8::from(unsafe { (*services).settings().ambient.read() }),
-    };
-    let context = record.shell();
-    let mut controller = Controller {
-        owner,
-        context,
-        record,
-        leaves,
-        services: unsafe { &*services },
-        v,
-    };
-    u8::from(controller.tick())
-}
-/// Initialize one newly allocated effect through the same owner used by creation.
-/// # Safety
-/// The live owner, shell and immutable tables obey `openttd_rust_effect_run`'s contract.
-#[allow(unsafe_code)]
-unsafe fn initialize(
-    owner: *mut State,
-    record: VehicleRef,
-    kind: u8,
-    leaves: &Leaves,
-    services: &Services,
-) {
-    let mut controller = Controller {
-        owner,
-        context: record.shell(),
-        record,
-        leaves,
-        services,
-        v: View {
-            subtype: kind,
-            ..View::default()
-        },
-    };
-    controller.init();
+fn sound_ambient(t: &Tables) -> bool {
+    // SAFETY: The catalog addresses the process-wide setting, serialized by the game-state
+    // mutex.
+    unsafe { t.shared.settings().ambient.read() }
 }
 
-crate::abi::layouts! {
-    fn abi_layout;
-    "OpenTTDEffectLeaves" ["probe"] => Leaves {
-        vehicles,
-        sprite_sequence, sprite, spritenum,
-        viewport,
-        sound,
-
-    };
-"OpenTTDEffectAllocation" ["probe"] => Allocation { shell, record, owner, };
-    "OpenTTDEffectCreationServices" ["probe"] => CreationServices {
-        effect, shared, allocate, owner,
-    };
-
+/// `SndPlayVehicleFx(sound, v)`.
+fn snd_play_vehicle_fx(sound: SoundFx, v: EffectVehicle, t: &Tables) {
+    (t.vehicles.play_sound)(v.record, SoundID::from(sound).0);
 }
 
-/// Creation owns the allocation gate, field/initializer/viewport order and offsets.
-/// Services are immutable for the process. Native pools and shells remain canonical;
-/// creation callbacks cannot reset the map or delete a newly allocated effect.
-#[repr(C)]
-struct Allocation {
-    shell: *mut c_void,
-    record: VehicleRef,
-    owner: *mut State,
+/// `EffectProcs`: the init and tick procedures of one effect vehicle type. The original's
+/// third member, the transparency option, is drawing and stays in
+/// `EffectVehicle::GetTransparencyOption` (`src/effectvehicle.cpp`).
+struct EffectProcs {
+    /// Function to initialise an effect vehicle after construction.
+    init_proc: fn(EffectVehicle, &Tables),
+    /// Functions for controlling effect vehicles at each tick.
+    tick_proc: fn(EffectVehicle, &Tables) -> bool,
 }
+
+/// Per-`EffectVehicleType` handling.
+static EFFECT_PROCS: [EffectProcs; EffectVehicleType::EV_END.0 as usize] = {
+    const fn p(
+        init_proc: fn(EffectVehicle, &Tables),
+        tick_proc: fn(EffectVehicle, &Tables) -> bool,
+    ) -> EffectProcs {
+        EffectProcs {
+            init_proc,
+            tick_proc,
+        }
+    }
+    [
+        p(chimney_smoke_init, chimney_smoke_tick), // EV_CHIMNEY_SMOKE
+        p(steam_smoke_init, steam_smoke_tick),     // EV_STEAM_SMOKE
+        p(diesel_smoke_init, diesel_smoke_tick),   // EV_DIESEL_SMOKE
+        p(electric_spark_init, electric_spark_tick), // EV_ELECTRIC_SPARK
+        p(smoke_init, smoke_tick),                 // EV_CRASH_SMOKE
+        p(explosion_large_init, explosion_large_tick), // EV_EXPLOSION_LARGE
+        p(breakdown_smoke_init, breakdown_smoke_tick), // EV_BREAKDOWN_SMOKE
+        p(explosion_small_init, explosion_small_tick), // EV_EXPLOSION_SMALL
+        p(bulldozer_init, bulldozer_tick),         // EV_BULLDOZER
+        p(bubble_init, bubble_tick),               // EV_BUBBLE
+        p(smoke_init, smoke_tick),                 // EV_BREAKDOWN_SMOKE_AIRCRAFT
+        p(smoke_init, smoke_tick),                 // EV_COPPER_MINE_SMOKE
+    ]
+};
+
+/// The services creation calls: how the native vehicle pool allocates an effect vehicle,
+/// and the tables its procedures call. `src/vehicle.cpp` binds the process-wide table.
 #[repr(C)]
 pub struct CreationServices {
-    effect: &'static Leaves,
-    shared: &'static Services,
     allocate: extern "C" fn() -> Allocation,
-    owner: extern "C" fn(*mut c_void) -> *mut State,
+    shared: &'static Services,
+    vehicles: &'static VehicleServices,
+}
+/// `new EffectVehicle()`: the new shell's record and the owner it holds.
+#[repr(C)]
+struct Allocation {
+    record: VehicleRef,
+    owner: *mut State,
 }
 static CREATION: std::sync::atomic::AtomicPtr<CreationServices> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
-/// Bind immutable process-wide services before vehicle initialization or native creation.
-#[unsafe(no_mangle)]
+/// Bind the process-wide creation services, returning the previous binding.
 #[allow(unsafe_code)]
-pub unsafe extern "C" fn openttd_rust_effect_bind(
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_effect_bind(
     services: *const CreationServices,
 ) -> *const CreationServices {
     CREATION
@@ -595,109 +767,238 @@ pub unsafe extern "C" fn openttd_rust_effect_bind(
 }
 #[allow(unsafe_code)]
 fn creation() -> &'static CreationServices {
+    // SAFETY: The bound table is immutable and outlives every creation.
     unsafe { &*CREATION.load(std::sync::atomic::Ordering::Acquire) }
 }
-/// `CreateEffectVehicle` over the shared native pool.
-#[unsafe(no_mangle)]
-#[allow(unsafe_code)]
-pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -> *mut c_void {
-    let s = creation();
-    // SAFETY: The bound leaves name the process-wide canonical vehicle table.
-    let vehicles = unsafe { &*s.effect.vehicles };
-    if !(vehicles.can_allocate)(1) {
-        return std::ptr::null_mut();
-    }
-    let v = (s.allocate)();
-    crate::raw_field::write_field!(v.record.0.as_ptr(), subtype, kind);
-    v.record.set_x_pos(x);
-    v.record.set_y_pos(y);
-    v.record.set_z_pos(z);
-    v.record.set_tile_raw(0);
-    (vehicles.update_delta)(v.record);
-    v.record
-        .set_vehstatus_raw(crate::vehicle_base::VS_UNCLICKABLE);
-    unsafe {
-        initialize(v.owner, v.record, kind, s.effect, s.shared);
-    }
-    (s.effect.viewport)(v.shell);
-    v.shell
-}
-/// `CreateEffectVehicleAbove`, clamping only the terrain lookup.
-#[unsafe(no_mangle)]
-#[allow(unsafe_code)]
-pub extern "C" fn openttd_rust_effect_create_above(
+
+/// `CreateEffectVehicle`: create an effect vehicle at a particular location (`x`, `y`, `z`)
+/// of the given `type`. Returns the effect vehicle, or `None` where the original returns
+/// `nullptr`.
+pub(crate) fn create_effect_vehicle(
     x: i32,
     y: i32,
     z: i32,
-    kind: u8,
-) -> *mut c_void {
-    let s = creation();
-    let safe_x = x.clamp(
+    r#type: EffectVehicleType,
+) -> Option<EffectVehicle> {
+    let services = creation();
+    let tables = Tables {
+        vehicles: services.vehicles,
+        shared: services.shared,
+    };
+    if !(tables.vehicles.can_allocate)(1) {
+        return None;
+    }
+
+    let allocation = (services.allocate)();
+    let v = EffectVehicle {
+        record: allocation.record,
+        owner: allocation.owner,
+    };
+    v.record.set_subtype(r#type.0);
+    v.record.set_x_pos(x);
+    v.record.set_y_pos(y);
+    v.record.set_z_pos(z);
+    v.record.set_tile(TileIndex(0));
+    (tables.vehicles.update_delta)(v.record);
+    v.record
+        .set_vehstatus(crate::vehicle_base::VehStates::from_element(
+            crate::vehicle_base::VehState::Unclickable,
+        ));
+
+    (EFFECT_PROCS[usize::from(r#type.0)].init_proc)(v, &tables);
+
+    v.update_position_and_viewport(&tables);
+
+    Some(v)
+}
+
+/// `CreateEffectVehicleAbove`: create an effect vehicle above a particular location; `z`
+/// is the offset from the ground.
+pub(crate) fn create_effect_vehicle_above(
+    x: i32,
+    y: i32,
+    z: i32,
+    r#type: EffectVehicleType,
+) -> Option<EffectVehicle> {
+    let shared = creation().shared;
+    let world = crate::map_func::World::new(shared);
+    let check = |condition| world.check(condition);
+    let safe_x = crate::math::clamp(
+        x,
         0,
-        ((s.shared.map_max_x)() * crate::tile_type::TILE_SIZE) as i32,
+        world
+            .dimensions
+            .max_x()
+            .wrapping_mul(TILE_SIZE)
+            .cast_signed(),
+        check,
     );
-    let safe_y = y.clamp(
+    let safe_y = crate::math::clamp(
+        y,
         0,
-        ((s.shared.map_max_y)() * crate::tile_type::TILE_SIZE) as i32,
+        crate::map_func::Map::max_y(world.size_y())
+            .wrapping_mul(TILE_SIZE)
+            .cast_signed(),
+        check,
     );
-    openttd_rust_effect_create(
+    create_effect_vehicle(
         x,
         y,
-        crate::movement::get_slope_pixel_z(s.shared, safe_x, safe_y, false).wrapping_add(z),
-        kind,
+        crate::movement::get_slope_pixel_z(shared, safe_x, safe_y, false).wrapping_add(z),
+        r#type,
     )
 }
-/// `CreateEffectVehicleRel`: create an effect vehicle above a particular vehicle. `x`, `y`
-/// and `z` are offsets from the vehicle's position; returns the effect vehicle shell.
+
+/// `CreateEffectVehicleRel`: create an effect vehicle above a particular vehicle `v`; `x`,
+/// `y` and `z` are the offsets to the vehicle.
 pub(crate) fn create_effect_vehicle_rel(
     v: VehicleRef,
     x: i32,
     y: i32,
     z: i32,
-    kind: crate::effectvehicle_func::EffectVehicleType,
-) -> *mut c_void {
-    openttd_rust_effect_create(
+    r#type: EffectVehicleType,
+) -> Option<EffectVehicle> {
+    create_effect_vehicle(
         v.x_pos().wrapping_add(x),
         v.y_pos().wrapping_add(y),
         v.z_pos().wrapping_add(z),
-        kind.0,
+        r#type,
     )
 }
 
-/// `CreateEffectVehicleRel`; the source shell is live for this synchronous call.
-#[unsafe(no_mangle)]
+/// The shell of a created effect vehicle, or null.
+fn shell_or_null(v: Option<EffectVehicle>) -> *mut c_void {
+    v.map_or(std::ptr::null_mut(), EffectVehicle::shell)
+}
+/// `CreateEffectVehicle`, for `src/effectvehicle.cpp`.
 #[allow(unsafe_code)]
-pub extern "C" fn openttd_rust_effect_create_rel(
-    v: *const crate::vehicle::OpenTTDVehicle,
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, r#type: u8) -> *mut c_void {
+    shell_or_null(create_effect_vehicle(x, y, z, EffectVehicleType(r#type)))
+}
+/// `CreateEffectVehicleAbove`, for `src/effectvehicle.cpp`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_effect_create_above(
     x: i32,
     y: i32,
     z: i32,
-    kind: u8,
+    r#type: u8,
 ) -> *mut c_void {
-    let record = VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast_mut()) });
-    create_effect_vehicle_rel(
-        record,
+    shell_or_null(create_effect_vehicle_above(
         x,
         y,
         z,
-        crate::effectvehicle_func::EffectVehicleType(kind),
-    )
+        EffectVehicleType(r#type),
+    ))
+}
+/// `CreateEffectVehicleRel`, for `src/effectvehicle.cpp`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_effect_create_rel(
+    v: VehicleRef,
+    x: i32,
+    y: i32,
+    z: i32,
+    r#type: u8,
+) -> *mut c_void {
+    shell_or_null(create_effect_vehicle_rel(
+        v,
+        x,
+        y,
+        z,
+        EffectVehicleType(r#type),
+    ))
 }
 
-/// `EffectVehicle::SetAnimationState` on a live created shell.
+/// `EffectVehicle::Tick` for the shell that holds `owner`, over the given tables. Returns
+/// 0 where the original deletes the effect, which the caller then does.
+///
+/// # Safety
+/// `owner` is the live owner `record`'s shell holds, and both tables are live.
 #[allow(unsafe_code)]
-pub(crate) fn set_animation(shell: *mut c_void, duration: u16) {
-    let owner = (creation().owner)(shell);
-    unsafe {
-        openttd_rust_effect_set_animation(owner, duration);
-    }
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_run(
+    owner: *mut State,
+    record: VehicleRef,
+    vehicles: *const VehicleServices,
+    shared: *const Services,
+) -> u8 {
+    // SAFETY: The caller's live tables.
+    let t = unsafe {
+        Tables {
+            vehicles: &*vehicles,
+            shared: &*shared,
+        }
+    };
+    u8::from(EffectVehicle { record, owner }.tick(&t))
 }
 
-/// `EffectVehicle::SetAnimationSubstate` on a live created shell.
+/// A new shell's zeroed owner.
 #[allow(unsafe_code)]
-pub(crate) fn set_substate(shell: *mut c_void, value: u8) {
-    let owner = (creation().owner)(shell);
-    unsafe {
-        openttd_rust_effect_set_substate(owner, value);
-    }
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_effect_new() -> *mut State {
+    Box::into_raw(Box::default())
+}
+/// # Safety
+/// `owner` came from `openttd_rust_effect_new` and is destroyed once, after the shell's last
+/// use of it.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_destroy(owner: *mut State) {
+    // SAFETY: The caller's owner, destroyed once.
+    drop(unsafe { Box::from_raw(owner) });
+}
+/// `animation_state = value`, for the shell and its save/load.
+///
+/// # Safety
+/// `owner` is live.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_set_animation(owner: *mut State, value: u16) {
+    // SAFETY: The caller's live owner.
+    unsafe { (*owner).animation_state = value };
+}
+/// `animation_state`, for the shell and its save/load.
+///
+/// # Safety
+/// `owner` is live.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_get_animation(owner: *const State) -> u16 {
+    // SAFETY: The caller's live owner.
+    unsafe { (*owner).animation_state }
+}
+/// `animation_substate = value`, for the shell and its save/load.
+///
+/// # Safety
+/// `owner` is live.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_set_substate(owner: *mut State, value: u8) {
+    // SAFETY: The caller's live owner.
+    unsafe { (*owner).animation_substate = value };
+}
+/// `animation_substate`, for the shell and its save/load.
+///
+/// # Safety
+/// `owner` is live.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_get_substate(owner: *const State) -> u8 {
+    // SAFETY: The caller's live owner.
+    unsafe { (*owner).animation_substate }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDEffectAllocation" ["probe"] => Allocation {
+        record,
+        owner,
+    };
+    "OpenTTDEffectCreationServices" ["probe"] => CreationServices {
+        allocate,
+        shared,
+        vehicles,
+    };
 }

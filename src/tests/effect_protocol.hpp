@@ -16,6 +16,9 @@
 #include <memory>
 
 #include "../rust/animation_save.hpp"
+#include "../industry_map.h"
+#include "../sound_type.h"
+#include "fixture_map.hpp"
 struct EffectTestView {
 	int32_t x, y, z;
 	uint32_t sprite;
@@ -26,49 +29,37 @@ struct EffectTestWorld {
 	EffectTestView view{};
 	OpenTTDVehicle record{};
 	OpenTTDEffectState *owner = nullptr;
-	EffectTestWorld() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); }
-	uint32_t random = UINT32_MAX, draws = 0, industry = 0, queries = 0, writes = 0, viewports = 0, animated = 0;
-	uint8_t sound = 0; ///< Last sound played: 1 + success, or 0 for none.
+	EffectTestWorld() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); this->record.type = VEH_EFFECT; }
+	uint32_t random = UINT32_MAX, draws = 0, queries = 0, writes = 0, viewports = 0, animated = 0;
+	IndustryGfx gfx = 0; ///< The industry graphics under the bubble.
+	uint8_t sound = 0; ///< Last sound played: 1 fail, 2 success, or 0 for none.
 };
 static inline EffectTestWorld *effect_test_world;
-static inline void OPENTTD_RUST_CALL EffectTestWrite(void *context, uint8_t field, uint32_t value) noexcept
+static inline EffectTestWorld &EffectTestRecordWorld(OpenTTDVehicle *record) noexcept { return *reinterpret_cast<EffectTestWorld *>(record->shell); }
+static inline void OPENTTD_RUST_CALL EffectTestWrite(OpenTTDVehicle *record, uint8_t field, uint32_t value) noexcept
 {
-	auto &w = *static_cast<EffectTestWorld *>(context);
+	auto &w = EffectTestRecordWorld(record);
 	w.writes++;
 	switch (field) {
-		case 0: w.view.x = static_cast<int32_t>(value); break;
-		case 1: w.view.y = static_cast<int32_t>(value); break;
-		case 2: w.view.z = static_cast<int32_t>(value); break;
 		case 3: case 4: w.view.sprite = value; break;
 		case 6: w.view.spritenum = static_cast<uint8_t>(value); break;
 	}
 }
-static inline OpenTTDEffectLeaves EffectTestLeaves()
+static inline OpenTTDVehicleServices EffectTestVehicles()
 {
 	static OpenTTDVehicleResolverServices resolver{};
-	resolver.sprite = [](OpenTTDVehicle *record) noexcept { return reinterpret_cast<EffectTestWorld *>(record->shell)->view.spritenum; };
-	static OpenTTDVehicleServices vehicles{};
-	vehicles.first_sprite = [](OpenTTDVehicle *record) noexcept { return reinterpret_cast<EffectTestWorld *>(record->shell)->view.sprite; };
-	vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	resolver.sprite = [](OpenTTDVehicle *record) noexcept { return EffectTestRecordWorld(record).view.spritenum; };
+	OpenTTDVehicleServices vehicles{};
+	vehicles.base_viewport = [](OpenTTDVehicle *record) noexcept { EffectTestRecordWorld(record).viewports++; };
 	vehicles.can_allocate = [](size_t) noexcept { return true; };
+	vehicles.first_sprite = [](OpenTTDVehicle *record) noexcept { return EffectTestRecordWorld(record).view.sprite; };
+	vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	vehicles.play_sound = [](OpenTTDVehicle *record, uint16_t sound) noexcept { EffectTestRecordWorld(record).sound = sound == SND_2F_BUBBLE_GENERATOR_FAIL ? 1 : sound == SND_31_BUBBLE_GENERATOR_SUCCESS ? 2 : UINT8_MAX; };
 	vehicles.update_delta = [](OpenTTDVehicle *) noexcept {};
-	return {
-		.vehicles = &vehicles,
-		.sprite_sequence = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 3, v); },
-		.sprite = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 4, v); },
-		.spritenum = [](void *c, uint8_t v) noexcept { EffectTestWrite(c, 6, v); },
-		.viewport = [](void *c) noexcept { static_cast<EffectTestWorld *>(c)->viewports++; },
-		.sound = [](void *c, uint8_t v) noexcept { static_cast<EffectTestWorld *>(c)->sound = 1 + v; },
-	};
-}
-static inline void OPENTTD_RUST_CALL EffectTestViewport(void *context) noexcept { static_cast<EffectTestWorld *>(context)->viewports++; }
-static inline void OPENTTD_RUST_CALL EffectTestSound(void *context, uint8_t success) noexcept { static_cast<EffectTestWorld *>(context)->sound = 1 + success; }
-static inline uint32_t OPENTTD_RUST_CALL EffectTestIndustry(int32_t, int32_t, uint32_t *tile) noexcept
-{
-	auto &w = *effect_test_world;
-	w.queries++;
-	*tile = 123;
-	return w.industry;
+	vehicles.write_first_sprite = [](OpenTTDVehicle *record, uint32_t v) noexcept { EffectTestWrite(record, 4, v); };
+	vehicles.write_sprite_seq = [](OpenTTDVehicle *record, uint32_t v) noexcept { EffectTestWrite(record, 3, v); };
+	vehicles.write_spritenum = [](OpenTTDVehicle *record, uint8_t v) noexcept { EffectTestWrite(record, 6, v); };
+	return vehicles;
 }
 
 static inline uint32_t EffectTestRandom(void *context) noexcept
@@ -84,8 +75,12 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	 * observe immediate writes, transient services and RNG short circuit. */
 	EffectTestWorld w;
 	effect_test_world = &w;
-	const OpenTTDEffectLeaves leaves = EffectTestLeaves();
-	auto services = OpenTTDFixtureSharedServices(&w, EffectTestRandom, EffectTestIndustry);
+	const OpenTTDVehicleServices vehicles = EffectTestVehicles();
+	auto services = OpenTTDFixtureSharedServices(&w, EffectTestRandom);
+	/* A 64 by 64 map; the bubble at (10, 20) is over tile TileVirtXY(10, 20) == 64. */
+	OpenTTDFixtureMap map{6, 4096};
+	services.map = &map.statics;
+	services.industry_gfx = [](uint32_t) noexcept { effect_test_world->queries++; return effect_test_world->gfx; };
 	OpenTTDSettingAddresses settings{};
 	settings.ambient = &w.view.ambient;
 	services.settings = &settings;
@@ -100,9 +95,9 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	auto owner = std::unique_ptr<OpenTTDEffectState, decltype(&openttd_rust_effect_destroy)>(openttd_rust_effect_new(), openttd_rust_effect_destroy);
 	w.owner = owner.get();
 	const OpenTTDEffectCreationServices creation{
-		.effect = &leaves,
+		.allocate = []() noexcept { auto &w = *effect_test_world; return OpenTTDEffectAllocation{&w.record, w.owner}; },
 		.shared = &services,
-		.allocate = []() noexcept { auto &w = *effect_test_world; return OpenTTDEffectAllocation{&w, &w.record, w.owner}; },
+		.vehicles = &vehicles,
 	};
 	const auto *previous_creation = openttd_rust_effect_bind(&creation);
 	check(openttd_rust_effect_get_animation(owner.get()) == 0 && openttd_rust_effect_get_substate(owner.get()) == 0);
@@ -117,7 +112,7 @@ template <typename Check> void CheckEffectProtocol(Check check)
 		w.record.progress = w.view.progress; w.record.subtype = w.view.subtype;
 		uint8_t alive = 1;
 		if (init != 0) check(openttd_rust_effect_create(w.view.x, w.view.y, w.view.z, w.view.subtype) == reinterpret_cast<OpenTTDEffectVehicle *>(&w));
-		else alive = openttd_rust_effect_run(owner.get(), &w.record, &leaves, &services);
+		else alive = openttd_rust_effect_run(owner.get(), &w.record, &vehicles, &services);
 		w.view.x = w.record.x_pos; w.view.y = w.record.y_pos; w.view.z = w.record.z_pos;
 		w.view.progress = w.record.progress;
 		return alive;
@@ -154,10 +149,13 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	w.view = {10,20,181,4748,3,1,9,1}; w.draws = 0;
 	openttd_rust_effect_set_animation(owner.get(), 3);
 	check(run() == 1 && w.draws == 0 && w.view.spritenum == 5 && w.sound == 1 && w.view.z == 182);
+	/* The tile is not an industry, an industry of other graphics, then the bubble catcher. */
 	for (uint32_t industry : {0U, 1U, 2U}) {
-		w.view = {10,20,100,4748,3,6,9,1}; w.industry = industry; w.queries = 0;
+		w.view = {10,20,100,4748,3,6,9,1}; w.queries = 0;
+		map.base[64].type = (industry == 0 ? MP_CLEAR : MP_INDUSTRY) << 4;
+		w.gfx = industry == 2 ? GFX_BUBBLE_CATCHER : GFX_BUBBLE_GENERATOR;
 		openttd_rust_effect_set_animation(owner.get(), 77);
-		check(run() == 1 && w.queries == 1 && w.sound == 2 && w.animated == (industry == 2 ? 123 : 0));
+		check(run() == 1 && w.queries == (industry == 0 ? 0 : 1) && w.sound == 2 && w.animated == (industry == 2 ? 64 : 0));
 		check(openttd_rust_effect_get_animation(owner.get()) == 79 && w.view.sprite == 4758 && w.view.x == 10 && w.view.y == 20 && w.view.z == 100);
 	}
 	w.view = {0,0,0,4757,3,5,9,0};
