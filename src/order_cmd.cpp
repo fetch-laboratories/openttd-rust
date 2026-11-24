@@ -976,29 +976,6 @@ uint16_t GetServiceIntervalClamped(int interval, bool ispercent)
 
 
 /**
- * Process a conditional order and determine the next order.
- * @param order the order the vehicle currently has
- * @param v the vehicle to update
- * @return index of next order to jump to, or INVALID_VEH_ORDER_ID to use the next order
- */
-VehicleOrderID ProcessConditionalOrder(const Order *order, const Vehicle *v)
-{
-	return openttd_rust_order_condition(const_cast<Vehicle *>(v), order, &GetRustOrdersLeaves());
-}
-
-/**
- * Update the vehicle's destination tile from an order.
- * @param order the order the vehicle currently has
- * @param v the vehicle to update
- * @param conditional_depth the depth (amount of steps) to go with conditional orders. This to prevent infinite loops.
- * @param pbs_look_ahead Whether we are forecasting orders for pbs reservations in advance. If true, the order indices must not be modified.
- */
-bool UpdateOrderDest(Vehicle *v, const Order *order, int conditional_depth, bool pbs_look_ahead)
-{
-	return openttd_rust_order_destination(v, conditional_depth, pbs_look_ahead, order, &GetRustOrdersLeaves()) != 0;
-}
-
-/**
  * Handle the orders of a vehicle and determine the next place
  * to go to if needed.
  * @param v the vehicle to do this for.

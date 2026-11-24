@@ -2790,19 +2790,6 @@ pub unsafe extern "C" fn openttd_rust_timetable_bulk(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_destination(
-    v: *mut c_void,
-    depth: i32,
-    look_ahead: u8,
-    input: *const Order,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    let input = load(input);
-    u64::from(control.destination(v, input, depth, look_ahead != 0))
-}
-
 /// `ProcessOrders`: handle the orders of a vehicle and determine the next place to go to
 /// if needed. Returns true if the order was a new (non-implicit) order.
 pub(crate) fn process_orders(v: VehicleRef, leaves: &'static Leaves) -> bool {
@@ -2870,18 +2857,6 @@ pub(crate) fn get_next_stopping_station(
     g.stopping(list, v.shell(), u8::MAX, 0, &mut |station| {
         next_station(StationID(station));
     });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_condition(
-    v: *mut c_void,
-    input: *const Order,
-    leaves: &'static Leaves,
-) -> u64 {
-    let g = Game(leaves);
-
-    let input = load(input);
-    u64::from(g.conditional(input, v))
 }
 
 #[unsafe(no_mangle)]
