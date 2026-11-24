@@ -124,7 +124,6 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 		.set_cargo_type = RustVehicleSetCargoType, .engine_common = VehicleConstructEngineCommon,
 		.service_dates = VehicleConstructServiceDates, .build_stamp = VehicleConstructStamp,
 		.service_flags = VehicleConstructServiceFlags,
-		.wrong_depot = STR_ERROR_DEPOT_WRONG_DEPOT_TYPE,
 	};
 	return services;
 }
@@ -149,7 +148,6 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip, .set_purchase = VehicleBuildSetPurchase,
 
 		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .presentation = VehicleBuildPresentation, .use_unit = RustVehicleUseCurrentUnit,
-		.too_many = STR_ERROR_TOO_MANY_VEHICLES_IN_GAME, .unavailable = STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
 	};
 	return services;
 }

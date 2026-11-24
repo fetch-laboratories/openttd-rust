@@ -54,8 +54,8 @@ pub struct Services {
 use crate::economy_type::ExpensesType;
 use crate::table::strings::{
     STR_ERROR_INCOMPATIBLE_RAIL_TYPES, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS,
-    STR_ERROR_REAR_ENGINE_FOLLOW_FRONT, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT,
-    STR_NULL,
+    STR_ERROR_REAR_ENGINE_FOLLOW_FRONT, STR_ERROR_TOO_MANY_VEHICLES_IN_GAME,
+    STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT, STR_NULL,
 };
 use crate::train::CCF_ARRANGE;
 
@@ -639,7 +639,7 @@ fn check_new_train(x: Ctx, original_dst: R, dst: R, original_src: R, src: R) -> 
     {
         return None;
     }
-    Some(StringID(x.b.too_many))
+    Some(STR_ERROR_TOO_MANY_VEHICLES_IN_GAME)
 }
 /// `CheckTrainAttachment`: check whether the train parts can be attached. An
 /// error leaves the chain split, exactly as the original; every caller

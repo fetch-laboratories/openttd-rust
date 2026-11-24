@@ -12,13 +12,13 @@ use crate::industry_type::{
 use crate::newgrf::CargoLabel;
 use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
 use crate::override_manager::{self, Mapping};
-/// Native inputs: the original tables and the string ids Rust cannot name.
+use crate::table::strings::STR_NEWGRF_INVALID_INDUSTRYTYPE;
+/// Native inputs: the original tables.
 #[repr(C)]
 pub struct Services {
     pub shared: *const crate::services::Services,
     pub origin: *const IndustrySpec,
     pub origin_tiles: *const IndustryTileSpec,
-    pub invalid_name: u32,
     /// `AddStringForMapping` into a `StringID` field of a record.
     pub map_string: unsafe extern "C" fn(u16, *mut u32),
 }
@@ -236,7 +236,7 @@ pub unsafe fn finalise(s: &Services) {
             }
         }
         if !enabled {
-            unsafe { (*spec).name = s.invalid_name };
+            unsafe { (*spec).name = STR_NEWGRF_INVALID_INDUSTRYTYPE.0 };
         }
         // Apply default cargo translation map for unset cargo slots
         let mut produced = unsafe { (*spec).produced_cargo };
@@ -271,6 +271,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDSubstituteSpecIdentity" ["industry"] => Identity { grfid, local, substitute };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
-        shared, origin, origin_tiles, invalid_name, map_string
+        shared, origin, origin_tiles, map_string
     };
 }

@@ -652,7 +652,6 @@ const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcep
 		.shared = &GetRustSharedServices(),
 		.origin = _origin_industry_specs,
 		.origin_tiles = _origin_industry_tile_specs,
-		.invalid_name = STR_NEWGRF_INVALID_INDUSTRYTYPE,
 		.map_string = [](uint16_t source, uint32_t *target) noexcept { AddStringForMapping(GRFStringID{source}, target); },
 	};
 	return services;

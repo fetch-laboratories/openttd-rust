@@ -2478,7 +2478,6 @@ pub(crate) const VEHICLE_TRANSACTION: crate::vehicle_transactions::TransactionSe
         set_name: unreachable2,
         interval_clamp: unreachable2,
         set_interval: unreachable4,
-        unique_name: 0,
         max_name: 0,
     };
 

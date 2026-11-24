@@ -30,8 +30,8 @@ use crate::strings_type::INVALID_STRING_ID as ERROR;
 use crate::strings_type::StringID;
 use crate::table::strings::{
     STR_ERROR_AIRCRAFT_IS_IN_FLIGHT, STR_ERROR_INCOMPATIBLE_RAIL_TYPES,
-    STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT, STR_ERROR_TRAIN_START_NO_POWER,
-    STR_ERROR_VEHICLE_IS_DESTROYED, STR_NULL,
+    STR_ERROR_NAME_MUST_BE_UNIQUE, STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT,
+    STR_ERROR_TRAIN_START_NO_POWER, STR_ERROR_VEHICLE_IS_DESTROYED, STR_NULL,
 };
 use crate::tile_type::TileIndex;
 use crate::vehicle::{VehicleRef, VehicleType};
@@ -57,7 +57,6 @@ pub struct TransactionServices {
     pub set_name: extern "C" fn(*mut (), ByteSpan),
     pub interval_clamp: extern "C" fn(i32, bool) -> u16,
     pub set_interval: extern "C" fn(*mut (), u16, bool, bool),
-    pub unique_name: u32,
     pub max_name: usize,
 }
 
@@ -139,7 +138,7 @@ pub(crate) unsafe fn cmd_rename_vehicle(
             return (s.cost.error)(cost, ERROR);
         }
         if !flags.test(DoCommandFlag::AutoReplace) && !unsafe { unique_name(s, text) } {
-            return (s.cost.error)(cost, s.unique_name);
+            return (s.cost.error)(cost, STR_ERROR_NAME_MUST_BE_UNIQUE.0);
         }
     }
     if flags.test(DoCommandFlag::Execute) {
@@ -942,7 +941,7 @@ crate::abi::layouts! {
     };
     "OpenTTDVehicleTransactionServices" ["probe"] => TransactionServices {
         shared, commands, cost, groups, name, clear_name, set_name,
-        interval_clamp, set_interval, unique_name, max_name,
+        interval_clamp, set_interval, max_name,
     };
 }
 

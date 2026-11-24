@@ -77,7 +77,6 @@ struct OpenTTDVehicleConstructServices {
 	void (*service_dates)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(service_dates);
 	void (*build_stamp)(void *) noexcept OPENTTD_SERVICE_DEFAULT(build_stamp);
 	void (*service_flags)(void *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(service_flags);
-	uint32_t wrong_depot;
 };
 struct OpenTTDRailConstructionServices {
 	const OpenTTDCargoCapacityServices *cargo_capacity;
@@ -108,7 +107,6 @@ struct OpenTTDVehicleBuildServices {
 	bool (*is_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(is_engine);
 	void (*presentation)(void *, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(presentation);
 	void (*use_unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(use_unit);
-	uint32_t too_many, unavailable;
 };
 struct OpenTTDVehicleCloneServices {
 	const OpenTTDVehicleBuildServices *build;

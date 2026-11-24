@@ -27,7 +27,6 @@ struct OpenTTDVehicleTransactionServices {
 	void (*set_name)(void *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
 	uint16_t (*interval_clamp)(int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(interval_clamp);
 	void (*set_interval)(void *, uint16_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_interval);
-	uint32_t unique_name;
 	size_t max_name;
 };
 struct OpenTTDVehicleSelectionServices {
