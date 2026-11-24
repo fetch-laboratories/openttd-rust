@@ -90,8 +90,10 @@ pub(crate) mod testing {
     use std::cell::Cell;
     use std::sync::Once;
 
+    /// A test thread's reader of `BaseStation::xy`.
+    type Reader = fn(*const BaseStation) -> u32;
     thread_local! {
-        static XY: Cell<Option<fn(*const BaseStation) -> u32>> = const { Cell::new(None) };
+        static XY: Cell<Option<Reader>> = const { Cell::new(None) };
     }
     extern "C" fn xy(st: *const BaseStation) -> u32 {
         let reader = XY
@@ -103,7 +105,7 @@ pub(crate) mod testing {
 
     /// Bind the test table once for the process and register this thread's `xy` reader.
     #[allow(unsafe_code, reason = "binding the test table for the process")]
-    pub(crate) fn set_xy(reader: fn(*const BaseStation) -> u32) {
+    pub(crate) fn set_xy(reader: Reader) {
         static BIND: Once = Once::new();
         BIND.call_once(|| unsafe { super::openttd_rust_base_station_bind(&raw const RECORDING) });
         XY.with(|x| x.set(Some(reader)));
