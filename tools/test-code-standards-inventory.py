@@ -444,5 +444,275 @@ class CandidateTests(unittest.TestCase):
         self.assertIn(f"{RUST}:8: unsuffixed adapter: both", printed)
 
 
+class AssertionTests(unittest.TestCase):
+    """#892's sites: runtime assertion macros and const assertions outside tests."""
+
+    def sites(self, source: str, path: str = RUST) -> list[tuple[int, str, str]]:
+        return [
+            (site.line, site.kind, site.detail)
+            for site in INVENTORY.assertion_sites(path, source)
+        ]
+
+    def test_each_name_and_delimiter_counts_in_its_class(self) -> None:
+        names = (
+            "debug_assert",
+            "debug_assert_eq",
+            "debug_assert_ne",
+            "assert",
+            "assert_eq",
+            "assert_ne",
+            "unreachable",
+        )
+        calls = [
+            f"    {name}!{open_}x{close};"
+            for name in names
+            for open_, close in ("()", "[]", "{}")
+        ]
+        source = "fn f() {\n" + "\n".join(calls) + "\n}\n"
+        found = INVENTORY.assertion_sites(RUST, source)
+        self.assertEqual(len(found), 21)
+        self.assertEqual({s.kind for s in found}, {"assertion macro"})
+        self.assertEqual(
+            [INVENTORY.assertion_class(s) for s in found],
+            ["debug_assert"] * 9 + ["assert"] * 9 + ["unreachable"] * 3,
+        )
+        line = INVENTORY.assertion_line("head", found)
+        self.assertIn("21 runtime sites in 1 files (9 debug_assert, 9 assert", line)
+
+    def test_comments_literals_and_test_items_are_not_sites(self) -> None:
+        source = """
+// assert!(a);
+/* assert!(b); /* nested */ unreachable!() */
+fn f() -> &'static str { "assert!(c)"; r#"assert!(d)"#; "x" }
+#[cfg(test)]
+mod checks { fn g() { assert!(e); } }
+#[test]
+fn probe() { assert_eq!(f, g); }
+#[cfg(all(test, target_os = "linux"))]
+mod linux { fn h() { unreachable!(); } }
+"""
+        self.assertEqual(self.sites(source), [])
+
+    def test_test_files_are_not_scanned(self) -> None:
+        crate = "rust/openttd-kernels/src"
+        tree = {
+            f"{crate}/lib.rs": "#[cfg(test)]\nmod stubs;\nmod live;\n",
+            f"{crate}/stubs.rs": "fn f() { assert!(a); }\nmod nested;\n",
+            f"{crate}/stubs/nested.rs": "fn f() { assert!(a); }\n",
+            f"{crate}/live.rs": "#![cfg(test)]\nfn f() { assert!(a); }\n",
+            f"{crate}/road/tests.rs": "fn f() { assert!(a); }\n",
+        }
+        tests = INVENTORY.test_modules(tree)
+        self.assertEqual(
+            {path for path in tree if path in tests},
+            set(tree) - {f"{crate}/lib.rs"},
+        )
+
+    def test_production_sites_beside_test_lookalikes_are_counted(self) -> None:
+        source = """
+fn quote() -> char { let c = '"'; assert!(c != 'x'); c }
+macro_rules! check { ($e:expr) => { debug_assert!($e) }; }
+#[cfg(any(test, feature = "x"))]
+fn shared() { unreachable!() }
+// Not #[test]: this is production code.
+fn after_comment() { assert_ne!(a, b); }
+"""
+        self.assertEqual(
+            self.sites(source),
+            [
+                (2, "assertion macro", "assert!"),
+                (3, "assertion macro", "debug_assert!"),
+                (5, "assertion macro", "unreachable!"),
+                (7, "assertion macro", "assert_ne!"),
+            ],
+        )
+
+    def test_lookalike_macros_are_not_sites(self) -> None:
+        source = (
+            "fn f() { if assert != x {} prefix_assert!(a); assert_matches!(a, b); }\n"
+        )
+        self.assertEqual(self.sites(source), [])
+
+    def test_a_test_declaration_in_a_comment_or_string_is_not_one(self) -> None:
+        for declaration in (
+            "// #[cfg(test)] mod production;\n",
+            'const NOTE: &str = "#[cfg(test)] mod production;";\n',
+        ):
+            with self.subTest(declaration=declaration):
+                tree = {"src/lib.rs": declaration, "src/production.rs": "fn f() {}"}
+                self.assertNotIn("src/production.rs", INVENTORY.test_modules(tree))
+                self.assertEqual(
+                    self.sites("fn f() { assert!(a); }\n", "src/production.rs"),
+                    [(1, "assertion macro", "assert!")],
+                )
+
+    def test_const_initialisers_hold_const_assertions(self) -> None:
+        source = """
+const _: () = assert!(A < B);
+const LIMIT: [u8; 2] = { assert!(C); [0; 2] };
+macro_rules! names { ($($n:expr),*) => { const _: () = { $(assert!($n < 4);)* }; }; }
+const fn checked(a: u8) -> u8 { assert!(a < 4); a }
+fn generic<const N: usize>() { assert!(N > 0); }
+trait Limited { const MAX: u8; fn f() { debug_assert!(true); } }
+"""
+        self.assertEqual(
+            self.sites(source),
+            [
+                (2, "const assertion", "assert!"),
+                (3, "const assertion", "assert!"),
+                (4, "const assertion", "assert!"),
+                (5, "assertion macro", "assert!"),
+                (6, "assertion macro", "assert!"),
+                (7, "assertion macro", "debug_assert!"),
+            ],
+        )
+
+
+class TestCodeTests(unittest.TestCase):
+    def test_a_comment_naming_a_test_attribute_is_not_one(self) -> None:
+        source = b"// Unlike #[test] helpers:\nfn live(a: u8) {}\n#[cfg(all(test, unix))]\nfn probe() {}\n"
+        names = [f.name for f in INVENTORY.functions(RUST, source, "rust", tests=False)]
+        self.assertEqual(names, ["live"])
+
+
+def function(name: str, scope: str, line: int, comments: int) -> object:
+    return INVENTORY.Function(RUST, name, line, line, line + 3, comments, "", [], scope)
+
+
+class CompareTests(unittest.TestCase):
+    """--compare: each row at the merge base and the head, and what is new."""
+
+    BASE = """
+fn cmd_build(tile: u32) { old_raw(tile); }
+impl A { fn update(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {} }
+impl B { fn update(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {} }
+"""
+
+    def compare(
+        self,
+        trees: dict[str, dict[str, str]],
+        files: list[str] | None = None,
+        renames: dict[str, str] | None = None,
+        pairs: dict[str, list[tuple[object, object]]] | None = None,
+    ) -> list[str]:
+        """Run --compare between revisions "base" and "head" and return its lines."""
+        printed: list[str] = []
+
+        def show(revision: str, path: str) -> str | None:
+            if path == INVENTORY.FINISHED:
+                return "".join(f"{p}\n" for p in trees.get(f"{revision}-list", {}))
+            return trees[revision].get(path)
+
+        def archive(revision: str, *_paths: str) -> dict[str, bytes]:
+            return {p: t.encode() for p, t in trees[revision].items()}
+
+        with (
+            patch.object(INVENTORY, "show", side_effect=show),
+            patch.object(INVENTORY, "archive", side_effect=archive),
+            patch.object(INVENTORY, "renamed_from", return_value=renames or {}),
+            patch.object(INVENTORY.subprocess, "check_output", return_value="base\n"),
+            patch.object(
+                INVENTORY,
+                "comment_pairs",
+                side_effect=lambda revision: (pairs or {}).get(revision, []),
+            ),
+            patch("builtins.print", side_effect=lambda *a, **_: printed.append(*a)),
+        ):
+            self.assertEqual(INVENTORY.compare("origin", "head", files or []), 0)
+        return "\n".join(printed).splitlines()
+
+    def changed(self, lines: list[str]) -> list[str]:
+        start = next(i for i, line in enumerate(lines) if "new or grown" in line)
+        return lines[start + 1 :]
+
+    def test_table_counts_both_sides_and_lists_new_rows(self) -> None:
+        head = self.BASE.replace("old_raw(tile);", "old_raw(tile); assert!(t);")
+        head += "const LIMIT: u8 = 4;\n"
+        lines = self.compare({"base": {RUST: self.BASE}, "head": {RUST: head}}, [RUST])
+        self.assertIn("| bare integer | 1 | 1 |", lines)
+        self.assertIn("| raw adapter call | 1 | 1 |", lines)
+        self.assertIn("| long helper | 2 | 2 |", lines)
+        self.assertIn("| constant | 0 | 1 |", lines)
+        self.assertIn("| assertion macro | 0 | 1 |", lines)
+        self.assertNotIn("| wrapper | 0 | 0 |", lines)
+        self.assertEqual(
+            self.changed(lines),
+            [f"{RUST}:2: assertion macro: assert!", f"{RUST}:5: constant: LIMIT"],
+        )
+
+    def test_a_replaced_occurrence_is_new_and_a_moved_one_is_not(self) -> None:
+        replaced = self.BASE.replace("old_raw", "new_raw")
+        lines = self.compare(
+            {"base": {RUST: self.BASE}, "head": {RUST: replaced}}, [RUST]
+        )
+        self.assertIn("| raw adapter call | 1 | 1 |", lines)
+        self.assertEqual(self.changed(lines), [f"{RUST}:2: raw adapter call: new_raw"])
+        moved = "\n\n// Moved down.\n" + self.BASE
+        lines = self.compare({"base": {RUST: self.BASE}, "head": {RUST: moved}}, [RUST])
+        self.assertEqual(self.changed(lines), [])
+
+    def test_only_the_method_that_grew_is_listed(self) -> None:
+        grown = self.BASE.replace(
+            "impl A { fn update(a: u8,", "impl A { fn update(z: u8, a: u8,"
+        )
+        lines = self.compare({"base": {RUST: self.BASE}, "head": {RUST: grown}}, [RUST])
+        self.assertEqual(
+            self.changed(lines),
+            [f"{RUST}:3: long helper: update: 9 parameters (grown from 8)"],
+        )
+        missing = {
+            "base": [(function("f", "impl A::f", 2, 0), function("F", "F", 1, 1))],
+            "head": [
+                (function("f", "impl B::f", 2, 0), function("F", "F", 1, 1)),
+                (function("f", "impl A::f", 9, 0), function("F", "F", 1, 3)),
+            ],
+        }
+        lines = self.compare(
+            {"base": {RUST: self.BASE}, "head": {RUST: self.BASE}},
+            [RUST],
+            pairs=missing,
+        )
+        self.assertIn("| missing comment lines | 1 | 4 |", lines)
+        self.assertEqual(
+            self.changed(lines),
+            [
+                f"{RUST}:2: missing comment lines: 1 (f; original {RUST}:1 F)",
+                f"{RUST}:9: missing comment lines: 3 (f; original {RUST}:1 F) (grown from 1)",
+            ],
+        )
+
+    def test_finished_files_are_selected_by_change_and_paired_through_renames(
+        self,
+    ) -> None:
+        crate = INVENTORY.RUST
+        same, new, moved = f"{crate}/same.rs", f"{crate}/new.rs", f"{crate}/moved.rs"
+        old = f"{crate}/old.rs"
+        trees = {
+            "base": {same: self.BASE, new: self.BASE, old: self.BASE},
+            "head": {
+                same: self.BASE,
+                new: self.BASE,
+                moved: self.BASE + "fn x_raw() {}\n",
+            },
+            "base-list": {same: ""},
+            "head-list": {same: "", new: "", moved: ""},
+        }
+        lines = self.compare(trees, renames={moved: old})
+        self.assertIn(f"- {moved} (at the base {old})", lines)
+        self.assertIn(f"- {new}", lines)
+        self.assertNotIn(f"- {same}", lines)
+        self.assertEqual(self.changed(lines), [])
+        lines = self.compare(trees, [same], renames={moved: old})
+        self.assertEqual(
+            [line for line in lines if line.startswith("- ")], [f"- {same}"]
+        )
+
+    def test_no_selected_file_prints_the_notice(self) -> None:
+        trees = {"base": {RUST: self.BASE}, "head": {RUST: self.BASE}}
+        trees["base-list"] = trees["head-list"] = {RUST: ""}
+        lines = self.compare(trees)
+        self.assertEqual(lines, ["No finished file changed between base and head."])
+
+
 if __name__ == "__main__":
     unittest.main()
