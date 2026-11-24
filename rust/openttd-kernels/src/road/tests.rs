@@ -1099,7 +1099,7 @@ mod controller {
     /// depot order.
     extern "C" fn service_orders() -> *const crate::orders::Leaves {
         thread_local! {
-            static ORDERS: crate::orders::Leaves = crate::test_tables::ORDERS;
+            static ORDERS: crate::orders::Leaves = const { crate::test_tables::ORDERS };
         }
         ORDERS.with(std::ptr::from_ref)
     }

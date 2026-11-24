@@ -252,8 +252,8 @@ pub(crate) const fn test_table_with_callback(
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
 ) -> Services {
     Services {
-        engine_by_id,
         resolve_callback,
+        engine_by_id,
         ..TEST_TABLE
     }
 }
