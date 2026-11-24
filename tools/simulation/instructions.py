@@ -22,22 +22,23 @@ CANDIDATE_ENTRIES = (
 # Drawing workloads count C++ drawing, which both builds still share (#566).
 DRAW_ENTRY = "ViewportDoDraw(Viewport const&, int, int, int, int)"
 
-# Quiet speed pass at 27de6f8c18, the first on the Ubuntu 24.04 host (2026-11-05):
-# ratio is the median of four three-pair medians; Ir and compatible identity come
-# from profiles of the same build. The three-pass record restarted on this host,
-# so each scenario has one pass so far and decisions use the mean of the passes
-# it has (docs/speed.md). The drawing workload is anchored for projection only;
+# Quiet speed pass at f80cbafdf4 (merge 75), the first after the host's hardware
+# change of 2026-11-23 (docs/rust-migration.md#hardware): ratio is the median of
+# four three-pair medians; Ir and compatible identity come from profiles of the
+# same build. The three-pass record restarted with this pass, so each scenario
+# has one pass so far and decisions use the mean of the passes it has
+# (docs/speed.md). The drawing workload is anchored for projection only;
 # speed_budget applies no ceiling to it.
-SPEED_HEAD = "27de6f8c18"
+SPEED_HEAD = "f80cbafdf4"
 # fmt: off
 SPEED_PASS = (
-    ("generate-tgp-256-1", (1.1601069121937235,), 2773615856, "4cbae59849fc44afcb65b35e6352c72b40b7caee046e7eb98dbba84ca7941a98"),
-    ("play-opus-55-167-002-manual", (1.3451151318876846,), 28611669801, "fd6c4136ee3265c95d39e5492b0bc2bf2e003e5176eccc54196e33bb23d5df1f"),
-    ("play-grok-159-001-manual", (1.346652325266398,), 27178405243, "c21abdd5925c474ceb5281286464f9058ac738b858533d9ba07b89cfaefe5111"),
-    ("play-padhattan-ridge-1996-manual", (1.3521934654919234,), 4744876185, "7de5a803c02832c70c7b22c739820e2d61bd8eabdae6f968a24947f893e33820"),
-    ("play-padhattan-ridge-2000-manual", (1.444530637399886,), 7834343043, "b66513819d453d3b54e0a5945f843a1c86d00ca09fc7856989d700f89e0a2865"),
-    ("play-padhattan-ridge-2016-manual", (1.3825932133062313,), 14200776421, "ed5da7ab10aedea72c0c9724dc6046c472c16ee66f9509b4e1888df22bf54ef7"),
-    ("draw-padhattan-ridge-1996-giant", (1.0046350128333592,), 2154533064, "ba0981bf678450f011e33e2a90d881e5562ba8b6274aec9992837f69ed0698ff"),
+    ("generate-tgp-256-1", (1.1724880276447516,), 2787693321, "80a4b78cf914a844b878c8faceeeccef95550eeb19cdf2aac21a9a6d01559cb5"),
+    ("play-opus-55-167-002-manual", (1.3178179039495106,), 26128713751, "f7e4b938a0aba87e6b73b230b1570be9884ddd79c59fcd64a542f2de8da7f011"),
+    ("play-grok-159-001-manual", (1.3355973518446413,), 25061181180, "cf37717b30ad6d3ff1c97d0789c7dcb3993a3dae08e0e114c43b651c0556f58e"),
+    ("play-padhattan-ridge-1996-manual", (1.3192425336396454,), 4424761002, "a398b5efb4723c87f1fdf55d6c8de34d8f9066c8e39df27bb0839783821170e0"),
+    ("play-padhattan-ridge-2000-manual", (1.401372931598286,), 7333932545, "51dcb7d20e1287f3d3b74d0c2a7061b2266428d2480aeed0cd0e6a2a9ecc6e0f"),
+    ("play-padhattan-ridge-2016-manual", (1.3435819383028007,), 13602478108, "4274daefe463ed4d38abe55ea85c249126f7c52f5e8d4a46bc142b760c5a02ab"),
+    ("draw-padhattan-ridge-1996-giant", (1.0045766830044824,), 2154272967, "e13bf4370828875a436868f6b80e921b0ecf47ebdbd71d5785392d6a9e29de94"),
 )
 # Loop Ir at the anchor, in SPEED_PASS order, for projecting instruction-count growth.
 SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
