@@ -1988,11 +1988,13 @@ pub(crate) struct CmdForceTrainProceed {
     pub(crate) veh_id: VehicleID,
 }
 
-/// The call context of a train command: the command services, the cost output and the
-/// execution flags.
+/// The call context of a train command: the vehicle build services' rail and common
+/// tables (`Train::GetIfValid`, the record lookup, `CheckOwnership` and the cost results),
+/// the cost output and the execution flags.
 #[derive(Clone, Copy)]
 pub(crate) struct CommandContext<'a> {
-    pub(crate) build: &'a crate::vehicle_transactions::build::Services,
+    pub(crate) rail: &'a crate::vehicle_transactions::rail::Services,
+    pub(crate) common: &'a crate::vehicle_transactions::CommonServices,
     pub(crate) out: *mut crate::services::CommandCost,
     pub(crate) flags: crate::command_type::DoCommandFlags,
 }
@@ -2000,26 +2002,24 @@ pub(crate) struct CommandContext<'a> {
 impl CommandContext<'_> {
     /// `Train::GetIfValid(veh_id)`.
     fn train_get_if_valid(&self, veh_id: VehicleID) -> Handle {
-        let shell = (self.build.rail.train_if_valid)(veh_id.0);
+        let shell = (self.rail.train_if_valid)(veh_id.0);
         if shell.is_null() {
             return Handle::NONE;
         }
-        Handle::from_record((self.build.refit.common.vehicles.record_from_shell)(
-            shell.cast(),
-        ))
+        Handle::from_record((self.common.vehicles.record_from_shell)(shell.cast()))
     }
     /// `return CMD_ERROR`.
     fn cmd_error(&self) {
-        (self.build.refit.common.base.cost.error)(self.out, crate::strings_type::INVALID_STRING_ID);
+        (self.common.base.cost.error)(self.out, crate::strings_type::INVALID_STRING_ID);
     }
     /// `return CommandCost(msg)`.
     fn error(&self, msg: crate::strings_type::StringID) {
-        (self.build.refit.common.base.cost.error)(self.out, msg.0);
+        (self.common.base.cost.error)(self.out, msg.0);
     }
     /// `CommandCost ret = CheckOwnership(owner); if (ret.Failed()) return ret;`: whether
     /// the check succeeded, with its result in the output.
     fn check_ownership(&self, owner: Owner) -> bool {
-        let base = self.build.refit.common.base;
+        let base = self.common.base;
         // SAFETY: The command's live native result.
         unsafe { base.commands.ownership(self.out, owner.0, 0) };
         (base.cost.success)(self.out)
@@ -4491,7 +4491,8 @@ pub unsafe extern "C" fn openttd_rust_train_reverse_direction(
 ) {
     entry_game!(leaves, services).cmd_reverse_train_direction(
         &CommandContext {
-            build,
+            rail: build.rail,
+            common: build.refit.common,
             out,
             flags: crate::command_type::DoCommandFlags(flags),
         },
@@ -4515,7 +4516,8 @@ pub unsafe extern "C" fn openttd_rust_train_force_proceed(
 ) {
     entry_game!(leaves, services).cmd_force_train_proceed(
         &CommandContext {
-            build,
+            rail: build.rail,
+            common: build.refit.common,
             out,
             flags: crate::command_type::DoCommandFlags(flags),
         },

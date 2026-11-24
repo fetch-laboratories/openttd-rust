@@ -895,4 +895,402 @@ mod bodies {
             assert_eq!(FAILED.with(Cell::get), 0);
         }
     }
+
+    /// `CmdReverseTrainDirection` and `CmdForceTrainProceed` through their argument structs,
+    /// with recording cost, ownership and window tables. Each expectation is read from the
+    /// original command.
+    mod commands {
+        use super::*;
+        use crate::table::strings::STR_ERROR_OWNED_BY;
+        use crate::window_func::testing::Effect as Window;
+        use std::cell::RefCell;
+
+        /// One cost operation on the command's result, in call order.
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        enum Cost {
+            /// `CommandCost(msg)`, or `CMD_ERROR` with `INVALID_STRING_ID`.
+            Error(u32),
+            /// A successful zero cost.
+            Zero,
+            /// `CheckOwnership`'s owner and tile parameters for its error message.
+            OwnedBy(u8, u32),
+            /// `CheckOwnership`'s error owner.
+            ErrorOwner(u8),
+        }
+        const CMD_ERROR: Cost = Cost::Error(crate::strings_type::INVALID_STRING_ID);
+        thread_local! {
+            static COSTS: RefCell<Vec<Cost>> = const { RefCell::new(Vec::new()) };
+            static FAILED: Cell<bool> = const { Cell::new(false) };
+            static TRAIN: Cell<*mut crate::vehicle_base::VehicleRecord> =
+                const { Cell::new(std::ptr::null_mut()) };
+            static ENGINE: Cell<*mut crate::engine::Lifecycle> =
+                const { Cell::new(std::ptr::null_mut()) };
+        }
+        fn cost(c: Cost) {
+            COSTS.with(|costs| costs.borrow_mut().push(c));
+        }
+        extern "C" fn error(_: *mut crate::services::CommandCost, msg: u32) {
+            FAILED.set(true);
+            cost(Cost::Error(msg));
+        }
+        extern "C" fn zero(_: *mut crate::services::CommandCost) {
+            FAILED.set(false);
+            cost(Cost::Zero);
+        }
+        extern "C" fn success(_: *const crate::services::CommandCost) -> bool {
+            !FAILED.get()
+        }
+        extern "C" fn encode_owned_by(
+            _: *mut crate::services::CommandCost,
+            owner: Owner,
+            tile: TileIndex,
+        ) {
+            cost(Cost::OwnedBy(owner.0, tile.0));
+        }
+        extern "C" fn error_owner(_: *mut crate::services::CommandCost, owner: Owner) {
+            cost(Cost::ErrorOwner(owner.0));
+        }
+        extern "C" fn current_company() -> u8 {
+            LOCAL
+        }
+        /// `Train::GetIfValid`: the fixture's train for its index, otherwise null.
+        extern "C" fn train_if_valid(index: u32) -> *mut () {
+            if index == VEHICLE_ID {
+                TRAIN.get().cast()
+            } else {
+                std::ptr::null_mut()
+            }
+        }
+        /// The shell is the record itself.
+        extern "C" fn record_from_shell(
+            shell: *mut std::ffi::c_void,
+        ) -> *mut crate::vehicle::OpenTTDVehicle {
+            shell.cast()
+        }
+        extern "C" fn engine(_: VehicleRef) -> crate::vehicle::EngineRef {
+            crate::vehicle::EngineRef::of(ENGINE.get())
+        }
+
+        /// The fixture's train, `AM_REALISTIC`, and the command tables over it.
+        struct Command {
+            f: Fixture,
+            rail: &'static crate::vehicle_transactions::rail::Services,
+            common: &'static crate::vehicle_transactions::CommonServices,
+        }
+        impl Command {
+            fn new(owner: u8, subtype: u8) -> Self {
+                static MODEL: u8 = crate::vehicle_type::AccelerationModel::AM_REALISTIC.0;
+                let settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
+                    train_acceleration_model: &raw const MODEL,
+                    ..crate::settings_type::SettingAddresses::NULL
+                }));
+                let mut f = Fixture::new(
+                    owner,
+                    subtype,
+                    &Services {
+                        local_company,
+                        settings,
+                        ..SHARED
+                    },
+                    &crate::vehicle::VehicleServices { engine, ..VEHICLE },
+                );
+                // `GroundVehicle::IsChainInDepot` reads the map through the ground table.
+                let mut capabilities = crate::engine_capabilities::TEST_TABLE;
+                capabilities.shared = f.shared;
+                f.leaves = Box::leak(Box::new(Leaves {
+                    physics: Box::leak(Box::new(crate::ground_vehicle::Services {
+                        capabilities: Box::leak(Box::new(capabilities)),
+                        ..GROUND_VEHICLE
+                    })),
+                    ..*f.leaves
+                }));
+                ENGINE.set(Box::leak(Box::default()));
+                TRAIN.set(f.record);
+                // SAFETY: The fixture's record; `ResetDepotUnbunching` writes its consist.
+                unsafe {
+                    (*f.record).consist = Box::leak(Box::new(crate::orders::Consist {
+                        time: 0,
+                        lateness: 0,
+                        start: 0,
+                        last_departure: 1,
+                        next_departure: 2,
+                        round_trip: 3,
+                        real: 0,
+                        implicit: 0,
+                        flags: 0,
+                    }));
+                }
+                let costs = Box::leak(Box::new(crate::services::CommandCostServices {
+                    zero,
+                    error,
+                    success,
+                    encode_owned_by,
+                    error_owner,
+                    ..crate::test_tables::COMMAND_COSTS
+                }));
+                let company: &'static crate::company::Services =
+                    Box::leak(Box::new(crate::company::Services {
+                        finance: Box::leak(Box::new(crate::company::FinanceServices {
+                            current_company,
+                            ..crate::test_tables::FINANCE
+                        })),
+                        shared: f.shared,
+                        cost: costs,
+                        ..crate::test_tables::COMPANY
+                    }));
+                COMPANY.with(|c| c.set(company));
+                let common = Box::leak(Box::new(crate::vehicle_transactions::CommonServices {
+                    base: Box::leak(Box::new(crate::vehicle_transactions::TransactionServices {
+                        commands: Box::leak(Box::new(crate::services::CommandServices {
+                            company: company_table,
+                            cost: costs,
+                            ..crate::test_tables::COMMANDS
+                        })),
+                        cost: costs,
+                        ..crate::test_tables::VEHICLE_TRANSACTION
+                    })),
+                    vehicles: Box::leak(Box::new(crate::vehicle::VehicleServices {
+                        record_from_shell,
+                        ..VEHICLE
+                    })),
+                    ..crate::test_tables::VEHICLE_COMMON
+                }));
+                let rail = Box::leak(Box::new(crate::vehicle_transactions::rail::Services {
+                    cargo_capacity: Box::leak(Box::new(crate::cargo_storage::CapacityServices {
+                        read: crate::test_tables::unreachable2,
+                        cargo: std::ptr::null(),
+                    })),
+                    train_if_valid,
+                    new_wagon: crate::test_tables::unreachable2,
+                    new_engine: crate::test_tables::unreachable2,
+                    engine_dates: crate::test_tables::unreachable2,
+                    new_rear: crate::test_tables::unreachable1,
+                    invalidate_grf: crate::test_tables::unreachable1,
+                    unit: crate::test_tables::unreachable1,
+                    use_unit: crate::test_tables::unreachable2,
+                    release_unit: crate::test_tables::unreachable1,
+                    company_dirty: crate::test_tables::unreachable0,
+                    depot_changed: crate::test_tables::unreachable1,
+                }));
+                COSTS.with(|c| c.borrow_mut().clear());
+                FAILED.set(false);
+                crate::window_func::testing::take();
+                Self { f, rail, common }
+            }
+            fn context(&self, execute: bool) -> CommandContext<'static> {
+                CommandContext {
+                    rail: self.rail,
+                    common: self.common,
+                    out: std::ptr::dangling_mut(),
+                    flags: if execute {
+                        crate::command_type::DoCommandFlags::from_element(
+                            crate::command_type::DoCommandFlag::Execute,
+                        )
+                    } else {
+                        crate::command_type::DoCommandFlags(0)
+                    },
+                }
+            }
+            fn reverse(&self, veh_id: u32, reverse_single_veh: bool, execute: bool) -> Vec<Cost> {
+                self.f.game().cmd_reverse_train_direction(
+                    &self.context(execute),
+                    CmdReverseTrainDirection {
+                        veh_id: VehicleID(veh_id),
+                        reverse_single_veh,
+                    },
+                );
+                COSTS.with(RefCell::take)
+            }
+            fn force(&self, veh_id: u32, execute: bool) -> Vec<Cost> {
+                self.f.game().cmd_force_train_proceed(
+                    &self.context(execute),
+                    CmdForceTrainProceed {
+                        veh_id: VehicleID(veh_id),
+                    },
+                );
+                COSTS.with(RefCell::take)
+            }
+            fn train(&self) -> Handle {
+                self.f.train()
+            }
+            /// Make the fixture's tile a rail depot and its train stand in it.
+            fn in_depot(&self) {
+                // SAFETY: The fixture's map; no reference into it is live. `MP_RAILWAY` with
+                // `RAIL_TILE_DEPOT` in m5 bits 6..7.
+                unsafe {
+                    let tile = &mut *self.f.base.add(TILE.0 as usize);
+                    tile.kind = crate::tile_type::TileType::MP_RAILWAY.0 << 4;
+                    tile.m5 = 0xC0;
+                }
+                self.train().set_track(TrackBits::TRACK_BIT_DEPOT);
+                self.train().vehicle().set_cur_speed(0);
+            }
+            fn consist(&self) -> (u64, u64, i32) {
+                // SAFETY: The consist this fixture set.
+                unsafe {
+                    let c = &*(*self.f.record).consist;
+                    (c.last_departure, c.next_departure, c.round_trip)
+                }
+            }
+        }
+        thread_local! {
+            static COMPANY: Cell<*const crate::company::Services> = const { Cell::new(std::ptr::null()) };
+        }
+        extern "C" fn company_table() -> *const crate::company::Services {
+            COMPANY.with(Cell::get)
+        }
+        const MULTIHEADED: u8 =
+            1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_MULTIHEADED.0;
+        const FREE_WAGON: u8 =
+            1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_FREE_WAGON.0;
+        const WAGON: u8 = 1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_WAGON.0;
+
+        /// `if (v == nullptr) return CMD_ERROR;` then `CheckOwnership(v->owner)`: another
+        /// company's train fails with `STR_ERROR_OWNED_BY`, whose owner and tile parameters
+        /// the local company's command adds. Both commands share these results; force
+        /// proceed tests `IsPrimaryVehicle` first, so another company's wagon gets
+        /// `CMD_ERROR` and no ownership check.
+        #[test]
+        fn lookup_and_ownership_fail_in_the_original_order() {
+            let c = Command::new(LOCAL, FRONT_ENGINE);
+            assert_eq!(c.reverse(VEHICLE_ID + 1, false, true), [CMD_ERROR]);
+            assert_eq!(c.force(VEHICLE_ID + 1, true), [CMD_ERROR]);
+
+            let other = LOCAL + 1;
+            let owned_by = [
+                Cost::Error(STR_ERROR_OWNED_BY.0),
+                Cost::OwnedBy(other, 0),
+                Cost::ErrorOwner(other),
+            ];
+            let c = Command::new(other, FRONT_ENGINE);
+            assert_eq!(c.reverse(VEHICLE_ID, false, true), owned_by);
+            assert_eq!(c.reverse(VEHICLE_ID, true, true), owned_by);
+            assert_eq!(c.force(VEHICLE_ID, true), owned_by);
+            let c = Command::new(other, WAGON);
+            assert_eq!(c.force(VEHICLE_ID, true), [CMD_ERROR]);
+            assert_eq!(crate::window_func::testing::take(), []);
+        }
+
+        /// The whole-train branch alone tests `IsFrontEngine`, crashed and broken down for
+        /// `CMD_ERROR`. A query succeeds without a change; the executed command cancels
+        /// `force_proceed`, dirties the vehicle view, and under `AM_REALISTIC` with the train
+        /// moving flips `Reversing`, then resets the unbunching data.
+        #[test]
+        fn reverse_whole_train_checks_the_front_engine_and_changes_state_only_on_execute() {
+            let c = Command::new(LOCAL, WAGON);
+            assert_eq!(c.reverse(VEHICLE_ID, false, true), [Cost::Zero, CMD_ERROR]);
+            for broken in [false, true] {
+                let c = Command::new(LOCAL, FRONT_ENGINE);
+                if broken {
+                    c.train().vehicle().set_breakdown_ctr(1);
+                } else {
+                    c.train()
+                        .vehicle()
+                        .set_vehstatus(c.train().vehicle().vehstatus().set(VehState::Crashed));
+                }
+                assert_eq!(c.reverse(VEHICLE_ID, false, true), [Cost::Zero, CMD_ERROR]);
+            }
+
+            let c = Command::new(LOCAL, FRONT_ENGINE);
+            c.train()
+                .set_force_proceed(TrainForceProceeding::TFP_SIGNAL);
+            c.train().vehicle().set_cur_speed(10);
+            assert_eq!(c.reverse(VEHICLE_ID, false, false), [Cost::Zero]);
+            assert_eq!(c.train().force_proceed(), TrainForceProceeding::TFP_SIGNAL);
+            assert!(!c.train().flags().test(VehicleRailFlag::Reversing));
+            assert_eq!(c.consist(), (1, 2, 3));
+            assert_eq!(crate::window_func::testing::take(), []);
+
+            assert_eq!(c.reverse(VEHICLE_ID, false, true), [Cost::Zero]);
+            assert_eq!(c.train().force_proceed(), TrainForceProceeding::TFP_NONE);
+            assert!(c.train().flags().test(VehicleRailFlag::Reversing));
+            assert_eq!(c.consist(), (0, 0, 0));
+            assert_eq!(
+                crate::window_func::testing::take(),
+                [Window::SetWindowDirty(
+                    WindowClass::WC_VEHICLE_VIEW,
+                    WindowNumber(VEHICLE_ID as i32)
+                )]
+            );
+        }
+
+        /// The single-unit branch: a multiheaded unit gets
+        /// `STR_ERROR_CAN_T_REVERSE_DIRECTION_RAIL_VEHICLE_MULTIPLE_UNITS`; a front engine
+        /// that is not stopped in its depot gets
+        /// `STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT`, and so does a stopped
+        /// one outside a depot. A free wagon has no stopped state, so in its depot it
+        /// passes `IsStoppedInDepot`; the whole-train checks do not apply to it, and the
+        /// query succeeds without a change.
+        #[test]
+        fn reverse_single_unit_returns_the_two_strings_and_passes_a_free_wagon_in_its_depot() {
+            let c = Command::new(LOCAL, FRONT_ENGINE | MULTIHEADED);
+            assert_eq!(
+                c.reverse(VEHICLE_ID, true, true),
+                [
+                    Cost::Zero,
+                    Cost::Error(STR_ERROR_CAN_T_REVERSE_DIRECTION_RAIL_VEHICLE_MULTIPLE_UNITS.0)
+                ]
+            );
+            let depot = [
+                Cost::Zero,
+                Cost::Error(STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT.0),
+            ];
+            let c = Command::new(LOCAL, FRONT_ENGINE);
+            c.in_depot();
+            assert_eq!(c.reverse(VEHICLE_ID, true, true), depot);
+            let c = Command::new(LOCAL, FRONT_ENGINE);
+            c.train()
+                .vehicle()
+                .set_vehstatus(c.train().vehicle().vehstatus().set(VehState::Stopped));
+            assert_eq!(c.reverse(VEHICLE_ID, true, true), depot);
+
+            let c = Command::new(LOCAL, FREE_WAGON);
+            c.in_depot();
+            c.train()
+                .vehicle()
+                .set_vehstatus(c.train().vehicle().vehstatus().set(VehState::Crashed));
+            assert_eq!(c.reverse(VEHICLE_ID, true, false), [Cost::Zero]);
+            assert!(!c.train().flags().test(VehicleRailFlag::Flipped));
+            assert_eq!(crate::window_func::testing::take(), []);
+        }
+
+        /// `DetermineNextTrainForceProceeding`: a running train is forced to the signal, a
+        /// train in its depot is marked stuck, a stuck train before a tile without signals
+        /// stays stuck, and a train already passing a signal is cancelled. Only the
+        /// executed command stores it, dirties the view and resets the unbunching data.
+        #[test]
+        fn force_proceed_stores_the_next_force_proceeding_only_on_execute() {
+            let c = Command::new(LOCAL, FRONT_ENGINE);
+            c.train().set_track(TrackBits::TRACK_BIT_X);
+            assert_eq!(c.force(VEHICLE_ID, false), [Cost::Zero]);
+            assert_eq!(c.train().force_proceed(), TrainForceProceeding::TFP_NONE);
+            assert_eq!(c.consist(), (1, 2, 3));
+            assert_eq!(crate::window_func::testing::take(), []);
+            assert_eq!(c.force(VEHICLE_ID, true), [Cost::Zero]);
+            assert_eq!(c.train().force_proceed(), TrainForceProceeding::TFP_SIGNAL);
+            assert_eq!(c.consist(), (0, 0, 0));
+            assert_eq!(
+                crate::window_func::testing::take(),
+                [Window::SetWindowDirty(
+                    WindowClass::WC_VEHICLE_VIEW,
+                    WindowNumber(VEHICLE_ID as i32)
+                )]
+            );
+            // Passing a signal already: the order is cancelled.
+            assert_eq!(c.force(VEHICLE_ID, true), [Cost::Zero]);
+            assert_eq!(c.train().force_proceed(), TrainForceProceeding::TFP_NONE);
+
+            let c = Command::new(LOCAL, FRONT_ENGINE);
+            c.in_depot();
+            assert_eq!(c.force(VEHICLE_ID, true), [Cost::Zero]);
+            assert_eq!(c.train().force_proceed(), TrainForceProceeding::TFP_STUCK);
+
+            let c = Command::new(LOCAL, FRONT_ENGINE);
+            c.train().set_track(TrackBits::TRACK_BIT_X);
+            c.train()
+                .set_flags(c.train().flags().set(VehicleRailFlag::Stuck));
+            assert_eq!(c.force(VEHICLE_ID, true), [Cost::Zero]);
+            assert_eq!(c.train().force_proceed(), TrainForceProceeding::TFP_STUCK);
+        }
+    }
 }
