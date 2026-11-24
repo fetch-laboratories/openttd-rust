@@ -292,8 +292,8 @@ impl CFollowTrackT {
         if (self.mode != RAIL && !self.allow90)
             || (self.mode == RAIL
                 && (Pbs::acquire(s).0.rail90)(
-                    w.tile_rail_type(self.old_tile.0),
-                    w.tile_rail_type(self.new_tile.0),
+                    w.get_tile_rail_type(self.old_tile).0,
+                    w.get_tile_rail_type(self.new_tile).0,
                     !self.allow90,
                 ))
         {
@@ -512,7 +512,7 @@ impl CFollowTrackT {
 
         /* rail transport is possible only on compatible rail types */
         if self.mode == RAIL && self.railtypes.any() {
-            let rail_type = crate::rail_type::RailType(w.tile_rail_type(self.new_tile.0));
+            let rail_type = w.get_tile_rail_type(self.new_tile);
             if !self.railtypes.test(rail_type) {
                 /* incompatible rail type */
                 self.err = ErrorCode::EC_RAIL_ROAD_TYPE;

@@ -601,7 +601,7 @@ impl<'a> Pbs<'a> {
         });
         let mut trackdir = Trackdir(track_to_trackdir(track.0));
 
-        let rts = RailTypes((self.0.compatible)(w.tile_rail_type(tile.0)));
+        let rts = RailTypes((self.0.compatible)(w.get_tile_rail_type(tile).0));
 
         /* Follow the path from tile to both ends, one of the end tiles should
          * have a train on it. We need FollowReservation to ignore one-way signals
@@ -674,8 +674,8 @@ impl<'a> Pbs<'a> {
         ft.new_td_bits &= TrackdirBits(diagdir_reaches_trackdirs(ft.exitdir.0));
         let w = World::new(self.shared());
         if (self.0.rail90)(
-            w.tile_rail_type(ft.old_tile.0),
-            w.tile_rail_type(ft.new_tile.0),
+            w.get_tile_rail_type(ft.old_tile).0,
+            w.get_tile_rail_type(ft.new_tile).0,
             forbid_90deg,
         ) {
             ft.new_td_bits &= !TrackdirBits(trackdir_crosses_trackdirs(trackdir.0));

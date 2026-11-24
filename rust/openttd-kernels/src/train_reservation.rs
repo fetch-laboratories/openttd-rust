@@ -263,7 +263,7 @@ impl<'a> Game<'a> {
     }
     /// `GetTileRailType(tile)`.
     fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
-        RailType(self.world.tile_rail_type(tile.0))
+        self.world.get_tile_rail_type(tile)
     }
     /// `Rail90DegTurnDisallowed(rt1, rt2)` with the default `_settings_game.pf.forbid_90_deg`.
     fn rail_90_deg_turn_disallowed(&self, rt1: RailType, rt2: RailType) -> bool {

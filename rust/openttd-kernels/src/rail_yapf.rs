@@ -579,7 +579,7 @@ impl TileInfo {
             tile,
             td,
             tile_type: world.kind(tile),
-            rail_type: RailType(world.tile_rail_type(tile.0)),
+            rail_type: world.get_tile_rail_type(tile),
         }
     }
 }

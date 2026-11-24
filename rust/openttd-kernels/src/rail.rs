@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `rail.h` helpers and complete rail introduction/construction availability.
 #![allow(unsafe_code)]
-use crate::rail_type::RAILTYPE_END;
+use crate::rail_type::{RAILTYPE_END, RailType};
 use crate::services::Services as Shared;
 use crate::tile_type::TileIndex;
 use crate::timer_game_common::MAX_DATE;
@@ -125,42 +125,36 @@ pub extern "C" fn openttd_rust_rail_types(s: &Services, introduces: bool) -> u64
 }
 
 impl crate::map_func::World<'_> {
-    pub(crate) fn tile_rail_type(&self, t: u32) -> u8 {
+    /// `GetTileRailType`: the rail type of a rail, crossing, rail station or waypoint, or
+    /// rail tunnel or bridge tile, read in place from this entry's map; `INVALID_RAILTYPE`
+    /// otherwise.
+    pub(crate) fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
         use crate::tile_type::TileType;
-        match self.kind(TileIndex(t)) {
-            TileType::MP_RAILWAY => return self.rail_type(t),
+        let t = tile.0;
+        match self.kind(tile) {
+            TileType::MP_RAILWAY => return RailType(self.rail_type(t)),
             TileType::MP_ROAD
                 if crate::road_map::get_road_tile_type(&self.types, t)
                     .expect("road tile")
                     .0
                     == crate::road_map::ROAD_TILE_CROSSING =>
             {
-                return self.rail_type(t);
+                return RailType(self.rail_type(t));
             }
-            TileType::MP_STATION if self.station_rail_raw(t) => return self.rail_type(t),
+            TileType::MP_STATION if self.station_rail_raw(t) => {
+                return RailType(self.rail_type(t));
+            }
             TileType::MP_TUNNELBRIDGE
-                if crate::tunnelbridge_map::get_tunnel_bridge_transport_type(
-                    &self.types,
-                    crate::tile_type::TileIndex(t),
-                )
-                .expect("tunnel or bridge tile")
-                .0 == crate::transport_type::TRANSPORT_RAIL =>
+                if crate::tunnelbridge_map::get_tunnel_bridge_transport_type(&self.types, tile)
+                    .expect("tunnel or bridge tile")
+                    .0
+                    == crate::transport_type::TRANSPORT_RAIL =>
             {
-                return self.rail_type(t);
+                return RailType(self.rail_type(t));
             }
             _ => {}
         }
-        crate::rail_type::INVALID_RAILTYPE
-    }
-
-    /// `GetTileRailType`: the rail type of a rail, crossing, rail station or waypoint, or
-    /// rail tunnel or bridge tile, read in place from this entry's map; `INVALID_RAILTYPE`
-    /// otherwise.
-    pub(crate) fn get_tile_rail_type(
-        &self,
-        tile: crate::tile_type::TileIndex,
-    ) -> crate::rail_type::RailType {
-        crate::rail_type::RailType(self.tile_rail_type(tile.0))
+        RailType::INVALID_RAILTYPE
     }
 }
 
