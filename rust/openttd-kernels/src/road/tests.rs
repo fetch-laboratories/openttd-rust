@@ -663,6 +663,9 @@ mod controller {
             const { Cell::new(std::ptr::null_mut()) };
         /// The bay's status when `BeginLoading` marks the arrival dirty.
         static LOADING_STATUS: Cell<Option<u8>> = const { Cell::new(None) };
+        /// The window calls made before `BeginLoading` marks the station's tiles dirty.
+        static ARRIVAL_WINDOWS: std::cell::RefCell<Vec<crate::window_func::testing::Effect>> =
+            const { std::cell::RefCell::new(Vec::new()) };
         static ROAD_SIDE: Cell<u8> = const { Cell::new(0) };
     }
     /// The opaque native shells of the vehicle and the bay's `RoadStop`.
@@ -769,6 +772,7 @@ mod controller {
         assert!(cargo_change);
         // SAFETY: The bay's live road stop owner; one byte read.
         LOADING_STATUS.set(Some(unsafe { (*bay().stop).status }));
+        ARRIVAL_WINDOWS.set(crate::window_func::testing::take());
     }
     extern "C" fn mark_dirty(_: VehicleRef) {}
     /// Failed native assertions in the isolated child.
@@ -983,6 +987,7 @@ mod controller {
         HAD.set(StationHadVehicleOfType::HVOT_BUS.0);
         LOADING_STATUS.set(None);
         take();
+        crate::window_func::testing::take();
 
         let part = f.part();
         let moved = f.game().individual_road_vehicle_controller(part, None);
@@ -994,6 +999,30 @@ mod controller {
             Some(0x7F),
             "BeginLoading runs with the entrance freed"
         );
+        {
+            use crate::window_func::testing::Effect;
+            use crate::window_type::{WindowClass, WindowNumber};
+            // `vehicle.cpp:2296-2299`, in order, before `Station::MarkTilesDirty(true)`: the
+            // owner's road vehicle list, the view's start/stop widget, the details and the
+            // station's view.
+            let windows = ARRIVAL_WINDOWS.take();
+            assert_eq!(
+                windows[windows.len().saturating_sub(4)..],
+                [
+                    Effect::SetWindowDirty(
+                        WindowClass::WC_ROADVEH_LIST,
+                        WindowNumber(LOCAL.into())
+                    ),
+                    Effect::SetWindowWidgetDirty(
+                        WindowClass::WC_VEHICLE_VIEW,
+                        WindowNumber(7),
+                        crate::widgets::vehicle_widget::VehicleViewWidgets::WID_VV_START_STOP.0,
+                    ),
+                    Effect::SetWindowDirty(WindowClass::WC_VEHICLE_DETAILS, WindowNumber(7)),
+                    Effect::SetWindowDirty(WindowClass::WC_STATION_VIEW, WindowNumber(55)),
+                ]
+            );
+        }
         // SAFETY: The live owners.
         unsafe {
             assert_eq!(
