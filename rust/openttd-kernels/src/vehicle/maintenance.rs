@@ -245,6 +245,10 @@ fn vehicle_service_in_depot_impl<const C: bool>(mut v: VehicleRef, base: &Vehicl
 /// `Vehicle::NeedsServicing`: check if the vehicle needs to go to a depot in near future (if a
 /// opportunity presents itself) for service or replacement. See `needs_automatic_servicing`.
 /// Returns true if the vehicle should go to a depot if a opportunity presents itself.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the original body, with its comments"
+)]
 fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
     // Stopped or crashed vehicles will not move, as such making unmovable
     // vehicles to go for service is lame.
@@ -312,10 +316,86 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
         return false;
     }
 
+    let capabilities = m.transaction().capabilities;
     let mut next = Some(v);
     while let Some(v) = next {
-        if replacement_is_short::<C>(v, base, r, c, &mut needed_money, &mut pending_replace) {
-            return false;
+        'check: {
+            let mut replace_when_old = false;
+            let group_id = svc!(C, VehicleRef::group_id, v, m.group());
+            let new_engine = engine_replacement_for_company(
+                companies,
+                c,
+                v.engine_type(),
+                group_id,
+                Some(&mut replace_when_old),
+            );
+
+            // Check engine availability.
+            if new_engine == EngineID::INVALID {
+                break 'check;
+            }
+            let engine = svc!(C, capabilities.engine, new_engine.0);
+            if !CompanyMask(crate::vehicle::EngineRef::of(engine).company_availability())
+                .test(v.owner())
+            {
+                break 'check;
+            }
+            // Is the vehicle old if we are not always replacing?
+            if replace_when_old && !needs_autorenewing::<C>(v, r, companies, c, false) {
+                break 'check;
+            }
+
+            // Check refittability.
+            let (union_mask, available_cargo_types) =
+                crate::engine_capabilities::get_articulated_refit_masks(
+                    capabilities,
+                    new_engine,
+                    true,
+                );
+            // Is there anything to refit?
+            if union_mask.0 != 0 {
+                let mut cargo_type = CargoType::INVALID_CARGO;
+                let cargo_mask = crate::engine_capabilities::get_cargo_types_of_articulated_vehicle(
+                    capabilities,
+                    v,
+                    Some(&mut cargo_type),
+                );
+                if has_at_most_one_bit(cargo_mask.0) {
+                    // Did the old vehicle carry anything?
+                    if is_valid_cargo_type(cargo_type.0) {
+                        // We can't refit the vehicle to carry the cargo we want.
+                        if !has_bit64(available_cargo_types.0, cargo_type.0) {
+                            break 'check;
+                        }
+                    }
+                } else {
+                    let new_engine_default_cargoes =
+                        crate::engine_capabilities::get_cargo_types_of_articulated_parts(
+                            capabilities,
+                            new_engine,
+                        );
+                    if cargo_mask.0 & new_engine_default_cargoes.0 != cargo_mask.0 {
+                        // We cannot refit to mixed cargoes in an automated way.
+                        break 'check;
+                    }
+                    // engine_type is already a mixed cargo type which matches the incoming
+                    // vehicle by default, no refit required.
+                }
+            }
+
+            // Check money.
+            // We want 2*(the price of the new vehicle) without looking at the value of the
+            // vehicle we are going to sell.
+            pending_replace = true;
+            let engine = crate::vehicle::EngineRef::of(svc!(C, capabilities.engine, new_engine.0));
+            let cost = crate::engine_capabilities::get_cost(capabilities, engine);
+            needed_money = needed_money.saturating_add(cost.saturating_mul(2));
+            branch!(C, VEHICLE_MAINT_REPLACE);
+            if needed_money
+                > get_available_money(m.commands(), svc!(C, companies.company_id, c.cast_mut()))
+            {
+                return false;
+            }
         }
         next = if v.vehicle_type() == VehicleType::VEH_TRAIN {
             v.next_unit()
@@ -325,88 +405,6 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     }
 
     pending_replace
-}
-
-/// One part's iteration of `Vehicle::NeedsServicing`'s pending-autoreplace loop over the units
-/// of the owner `c`: returns true when the money needed so far is short, and false to go on to
-/// the next unit.
-fn replacement_is_short<const C: bool>(
-    v: VehicleRef,
-    base: &VehicleServices,
-    r: &newgrf_vehicle::Services,
-    c: *const OpenTTDCompany,
-    needed_money: &mut i64,
-    pending_replace: &mut bool,
-) -> bool {
-    let m = Services::of(base);
-    let companies = m.company();
-    let capabilities = m.transaction().capabilities;
-    let mut replace_when_old = false;
-    let group_id = svc!(C, VehicleRef::group_id, v, m.group());
-    let new_engine = engine_replacement_for_company(
-        companies,
-        c,
-        v.engine_type(),
-        group_id,
-        Some(&mut replace_when_old),
-    );
-
-    // Check engine availability.
-    if new_engine == EngineID::INVALID {
-        return false;
-    }
-    let engine = svc!(C, capabilities.engine, new_engine.0);
-    if !CompanyMask(crate::vehicle::EngineRef::of(engine).company_availability()).test(v.owner()) {
-        return false;
-    }
-    // Is the vehicle old if we are not always replacing?
-    if replace_when_old && !needs_autorenewing::<C>(v, r, companies, c, false) {
-        return false;
-    }
-
-    // Check refittability.
-    let (union_mask, available_cargo_types) =
-        crate::engine_capabilities::get_articulated_refit_masks(capabilities, new_engine, true);
-    // Is there anything to refit?
-    if union_mask.0 != 0 {
-        let mut cargo_type = CargoType::INVALID_CARGO;
-        let cargo_mask = crate::engine_capabilities::get_cargo_types_of_articulated_vehicle(
-            capabilities,
-            v,
-            Some(&mut cargo_type),
-        );
-        if has_at_most_one_bit(cargo_mask.0) {
-            // Did the old vehicle carry anything?
-            if is_valid_cargo_type(cargo_type.0) {
-                // We can't refit the vehicle to carry the cargo we want.
-                if !has_bit64(available_cargo_types.0, cargo_type.0) {
-                    return false;
-                }
-            }
-        } else {
-            let new_engine_default_cargoes =
-                crate::engine_capabilities::get_cargo_types_of_articulated_parts(
-                    capabilities,
-                    new_engine,
-                );
-            if cargo_mask.0 & new_engine_default_cargoes.0 != cargo_mask.0 {
-                // We cannot refit to mixed cargoes in an automated way.
-                return false;
-            }
-            // engine_type is already a mixed cargo type which matches the incoming vehicle by
-            // default, no refit required.
-        }
-    }
-
-    // Check money.
-    // We want 2*(the price of the new vehicle) without looking at the value of the vehicle we
-    // are going to sell.
-    *pending_replace = true;
-    let engine = crate::vehicle::EngineRef::of(svc!(C, capabilities.engine, new_engine.0));
-    let cost = crate::engine_capabilities::get_cost(capabilities, engine);
-    *needed_money = needed_money.saturating_add(cost.saturating_mul(2));
-    branch!(C, VEHICLE_MAINT_REPLACE);
-    *needed_money > get_available_money(m.commands(), svc!(C, companies.company_id, c.cast_mut()))
 }
 
 /// `Vehicle::NeedsAutomaticServicing`: checks if the current order should be interrupted for a

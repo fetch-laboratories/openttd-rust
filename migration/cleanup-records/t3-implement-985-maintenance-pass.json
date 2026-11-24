@@ -123,5 +123,17 @@
     "existing_alternatives": "The settings reached Rust only inside those per-call composite records. The settings catalog is the shared typed address table every other Rust owner reads settings through, and it had no field for the three settings.",
     "retiring_owner": "#734",
     "retirement_condition": "The fields leave the catalog when Rust owns the game and client settings storage."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/vehicle/maintenance.rs | fn needs_servicing_impl | allow clippy::too_many_lines",
+    "operation": "vehicle::maintenance::needs_servicing_impl",
+    "source_contract": "`Vehicle::NeedsServicing` (src/vehicle.cpp:201-276) is one body: the stopped test, the three service-interval units, the breakdown setting test, the reserve test and the per-unit autoreplace loop with its engine, refit and money tests.",
+    "reason": "The port keeps the original's single body with every one of its comments at its branch, which the code-standards inventory counts per original body; a helper for the loop holds ten of those comment lines outside the matched body.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires if the lint stops applying to bodies ported whole, or the original body is split upstream."
   }
 ]
