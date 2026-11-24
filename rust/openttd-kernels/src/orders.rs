@@ -4959,7 +4959,7 @@ impl VisitOrders {
     }
     /// `v->GetOrder(index)`: null without a list or beyond its orders, read in place.
     pub(crate) fn get(self, v: VehicleRef, index: VehicleOrderID) -> Option<OrderView<'static>> {
-        let list = self.list(v);
+        let list = crate::vehicle_base::order_list(v.0.as_ptr());
         (!list.is_null() && index < self.count(list)).then(|| self.order(list, index))
     }
     /// Virtual `Vehicle::GetDisplayMaxSpeed`: the maximum speed in km-ish/h as displayed

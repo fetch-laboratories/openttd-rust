@@ -117,7 +117,12 @@ impl Services {
     }
 }
 
-/// The local company, `_local_company`.
+/// `v->orders`, the vehicle's order list or null, read in place.
+fn orders(v: VehicleRef) -> *mut std::ffi::c_void {
+    crate::vehicle_base::order_list(v.0.as_ptr())
+}
+
+/// `v->owner == _local_company`.
 fn is_local_company(v: VehicleRef, s: &Services) -> bool {
     v.owner().0 == (s.shared.local_company)()
 }
@@ -475,8 +480,8 @@ impl Refresher {
         s: &Services,
     ) -> VehicleOrderID {
         let o = s.orders();
-        assert_with(|| !o.list(self.vehicle).is_null());
-        let orderlist = o.list(self.vehicle);
+        assert_with(|| !orders(self.vehicle).is_null());
+        let orderlist = orders(self.vehicle);
 
         /* next is good if it's either nullptr (then the caller will stop the
          * evaluation) or if it's not conditional and the caller allows it to be
@@ -528,8 +533,8 @@ impl Refresher {
     fn refresh_stats(&self, cur: VehicleOrderID, next: VehicleOrderID, s: &Services) {
         let o = s.orders();
         let v = self.vehicle;
-        assert_with(|| !o.list(v).is_null());
-        let orderlist = o.list(v);
+        assert_with(|| !orders(v).is_null());
+        let orderlist = orders(v);
 
         let next_station = o.order(orderlist, next).destination().to_station_id();
         let st = s.station_if_valid(o.order(orderlist, cur).destination().to_station_id());
@@ -592,23 +597,23 @@ impl Refresher {
                 modes: modes.with(restricted_mode),
             };
             if self.is_full_loading
-                && !o.list(v).is_null()
+                && !orders(v).is_null()
                 && StationID((s.links.graphs.station_id)(st)) == v.last_station_visited()
-                && o.total(o.list(v)) > v.current_order_time()
+                && o.total(orders(v)) > v.current_order_time()
             {
                 let effective_capacity =
                     cargo_quantity.wrapping_mul(u32::from((s.loading.load_unload_ticks)(v)));
-                if effective_capacity > o.total(o.list(v)).cast_unsigned() {
+                if effective_capacity > o.total(orders(v)).cast_unsigned() {
                     witness::hit(witness::VISITS_FULL_LOAD_INCREASE);
                     increase_stats(
                         s,
                         stats(
-                            effective_capacity / o.total(o.list(v)).cast_unsigned(),
+                            effective_capacity / o.total(orders(v)).cast_unsigned(),
                             0,
                             EdgeUpdateModes::INCREASE,
                         ),
                     );
-                } else if s.shared.random_range(o.total(o.list(v)).cast_unsigned())
+                } else if s.shared.random_range(o.total(orders(v)).cast_unsigned())
                     < effective_capacity
                 {
                     witness::hit(witness::VISITS_FULL_LOAD_RANDOM);
@@ -644,8 +649,8 @@ impl Refresher {
         s: &Services,
     ) {
         let o = s.orders();
-        assert_with(|| !o.list(self.vehicle).is_null());
-        let orderlist = o.list(self.vehicle);
+        assert_with(|| !orders(self.vehicle).is_null());
+        let orderlist = orders(self.vehicle);
         while next < o.count(orderlist) {
             let next_order = o.order(orderlist, next);
 
@@ -739,12 +744,12 @@ impl Refresher {
 pub(crate) fn refresh_links(v: VehicleRef, allow_merge: bool, is_full_loading: bool, s: &Services) {
     let o = s.orders();
     /* If there are no orders we can't predict anything.*/
-    if o.list(v).is_null() {
+    if orders(v).is_null() {
         return;
     }
 
     /* Make sure the first order is a useful order. */
-    let first = o.decision(o.list(v), v.cur_implicit_order_index(), 0);
+    let first = o.decision(orders(v), v.cur_implicit_order_index(), 0);
     if first == VehicleOrderID::INVALID_VEH_ORDER_ID {
         return;
     }
