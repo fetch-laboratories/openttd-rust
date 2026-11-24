@@ -123,8 +123,8 @@ const OpenTTDTreeServices &GetRustTreeServices() noexcept { return TreeServices(
 
 OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
 {
-	/* tile_loop::run reads TimerGameTick::counter itself, inside RunTileLoop's timing scope. */
 	return {
+		.tick_counter = 0, // tile_loop::run reads TimerGameTick::counter itself, inside its timing scope.
 		.size_x = Map::SizeX(),
 		.climate = to_underlying(_settings_game.game_creation.landscape),
 		.extra = _settings_game.construction.extra_tree_placement,

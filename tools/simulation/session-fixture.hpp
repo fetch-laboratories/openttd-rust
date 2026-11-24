@@ -80,7 +80,7 @@ struct SessionFixture {
 		group.shared = &shared; shared.current_company = []() noexcept -> uint8_t { return 0; };
 		finance.set_current_company = [](uint8_t) noexcept {}; commands.finance = &finance; transaction.commands = &commands;
 		shared.tick_counter = []() noexcept -> uint64_t { return 1; };
-		loop = {{.size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
+		loop = {{.tick_counter = 0, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
 		scheduler.pool = []() noexcept { return OpenTTDVehiclePoolCursor{nullptr, 0, &empty_extent}; };
 		scheduler.vehicle = &vehicles;
 		scheduler.shared = &shared;
