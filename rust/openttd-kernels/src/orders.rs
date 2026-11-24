@@ -5317,6 +5317,108 @@ mod unbunching_tests {
 /// `Order::Free` and `Order::MakeDummy` on a vehicle's current order write only the fields
 /// `order_cmd.cpp` names: `Free` the type, flags and destination; `MakeDummy` the type and
 /// flags. Every field starts with a distinct value, so a whole-order store fails.
+/// The `OrderView` getters `vehicle/visits.rs` reads, on orders whose fields are all
+/// distinct, against `order_base.h`'s bit layouts: the unload type is bits 0-2 of `flags`, the
+/// load type bits 4-6, the wait-timetabled flag bit 3 (`wait_time > 0` for a conditional
+/// order), and the skip-to order of a conditional order is the whole `flags` byte.
+#[cfg(test)]
+mod order_view_getter_tests {
+    use super::{Order, OrderView};
+    use crate::cargo_type::CargoType;
+    use crate::order_type::{OrderLoadType, OrderUnloadType, VehicleOrderID};
+
+    fn order(kind: u8, flags: u8, refit: u8, wait: u16) -> Order {
+        Order {
+            kind,
+            flags,
+            destination: 0x1234,
+            refit,
+            wait,
+            travel: 888,
+            speed: 999,
+        }
+    }
+    fn view(o: &Order) -> OrderView<'_> {
+        // SAFETY: A reference names a live, initialized order.
+        unsafe { OrderView::of(o) }
+    }
+
+    #[test]
+    fn a_station_order_decodes_its_flags_and_refit() {
+        // OT_GOTO_STATION with non-stop bits; full load (2 << 4), wait timetabled (bit 3),
+        // unload (1); refit to cargo 5.
+        let o = order(0x41, 0x29, 5, 777);
+        let v = view(&o);
+        assert_eq!(v.unload_type(), OrderUnloadType(1));
+        assert_eq!(v.load_type(), OrderLoadType(2));
+        assert!(v.is_refit());
+        assert!(!v.is_auto_refit());
+        assert_eq!(v.refit_cargo(), CargoType(5));
+        assert_eq!(v.condition_skip_to_order(), VehicleOrderID(0x29));
+        assert!(v.is_wait_timetabled());
+        assert_eq!(v.timetabled_wait(), 777);
+        assert!(v.can_leave_with_cargo(false));
+        assert_eq!(o.unload(), 1);
+        assert!(o.is_refit());
+        assert_eq!(o.timetabled_wait(), 777);
+    }
+
+    #[test]
+    fn a_conditional_order_takes_its_wait_from_the_wait_time() {
+        // OT_CONDITIONAL: bit 3 is part of the skip-to order, not the wait flag.
+        let timetabled = order(7, 0x0A, 0xFD, 300);
+        assert!(view(&timetabled).is_wait_timetabled());
+        assert_eq!(view(&timetabled).timetabled_wait(), 300);
+        assert_eq!(
+            view(&timetabled).condition_skip_to_order(),
+            VehicleOrderID(0x0A)
+        );
+        let untimed = order(7, 0x0A, 0xFD, 0);
+        assert!(!view(&untimed).is_wait_timetabled());
+        assert_eq!(view(&untimed).timetabled_wait(), 0);
+        // The station order's bit 3 clear: not timetabled, whatever its wait time.
+        assert_eq!(view(&order(1, 0x21, 0, 500)).timetabled_wait(), 0);
+    }
+
+    #[test]
+    fn refit_cargo_values_decode_as_refit_and_auto_refit() {
+        for (refit, is_refit, auto) in [
+            (0, true, false),
+            (63, true, false),
+            (64, false, false),
+            (0xFD, true, true),
+            (0xFE, false, false),
+            (0xFF, false, false),
+        ] {
+            let o = order(1, 0, refit, 0);
+            assert_eq!(view(&o).is_refit(), is_refit, "refit cargo {refit}");
+            assert_eq!(view(&o).is_auto_refit(), auto, "refit cargo {refit}");
+            assert_eq!(view(&o).refit_cargo(), CargoType(refit));
+        }
+    }
+
+    #[test]
+    fn can_leave_with_cargo_follows_the_load_and_unload_types() {
+        // (flags, has_cargo, expected): no load is 4 << 4; unload 1, transfer 2, no unload 4.
+        for (flags, has_cargo, expected) in [
+            (0x00, false, true),
+            (0x40, false, false),
+            (0x40, true, true),
+            (0x41, true, false),
+            (0x42, true, false),
+            (0x44, true, true),
+            (0x21, true, true),
+        ] {
+            let o = order(1, flags, 0xFE, 0);
+            assert_eq!(
+                view(&o).can_leave_with_cargo(has_cargo),
+                expected,
+                "flags {flags:#x}, has cargo {has_cargo}"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod current_order_write_tests {
     use super::{Order, VehicleOrders, free, make_dummy, openttd_rust_vehicle_orders_new};

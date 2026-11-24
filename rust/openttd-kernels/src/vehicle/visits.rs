@@ -47,7 +47,7 @@ use crate::table::strings::{
     STR_PERCENT_UP, STR_PERCENT_UP_DOWN,
 };
 use crate::tile_type::TileType;
-use crate::track_type::TRACK_BIT_DEPOT;
+use crate::track_type::TrackBits;
 use crate::vehicle_base::VehState;
 use crate::vehicle_gui::get_window_class_for_vehicle_type;
 use crate::vehicle_transactions::refit;
@@ -364,7 +364,7 @@ impl Refresher {
     }
 
     /// `LinkRefresher::HandleRefit`: handle refit orders by updating capacities and
-    /// refit_capacities. Returns true if any vehicle was refit; false if none was.
+    /// `refit_capacities`. Returns true if any vehicle was refit; false if none was.
     #[allow(
         unsafe_code,
         clippy::cast_possible_truncation,
@@ -447,7 +447,7 @@ impl Refresher {
         any_refit
     }
 
-    /// `LinkRefresher::ResetRefit`: restore capacities and refit_capacities as vehicle might
+    /// `LinkRefresher::ResetRefit`: restore capacities and `refit_capacities` as vehicle might
     /// have been able to load now.
     fn reset_refit(&mut self) {
         for it in &mut self.refit_capacities {
@@ -812,6 +812,7 @@ pub(crate) fn cancel_reservation(
 /// empty or full. This is useful for both display and conditional orders.
 #[allow(
     clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
     reason = "CalcPercentVehicleFilled returns its `uint` and `int` quotients as `uint8_t`"
 )]
 pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut StringID>, s: &Services) -> u8 {
@@ -1139,9 +1140,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
             let leaves = s.refit.ship;
             let ship = (leaves.state_owner)(index.0);
             // SAFETY: The live ship's state owner.
-            unsafe {
-                crate::ship_control::set_state(ship, crate::track_type::TrackBits(TRACK_BIT_DEPOT))
-            };
+            unsafe { crate::ship_control::set_state(ship, TrackBits::TRACK_BIT_DEPOT) };
             crate::ship_control::update_cache(leaves, s.shared, ship, v);
             (leaves.viewport)(v, true, true);
             set_window_dirty(WindowClass::WC_VEHICLE_DEPOT, WindowNumber::from(v.tile()));
@@ -1234,29 +1233,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
             .depot_action_flags()
             .test(OrderDepotActionFlag::Halt)
         {
-            witness::hit(witness::VISITS_DEPOT_HALT);
-            /* Vehicles are always stopped on entering depots. Do not restart this one. */
-            set_vehicle_to_autoreplace(index, false);
-            /* Invalidate last_loading_station. As the link from the station
-             * before the stop to the station after the stop can't be predicted
-             * we shouldn't construct it when the vehicle visits the next stop. */
-            v.set_last_loading_station(s, StationID::INVALID);
-
-            /* Clear unbunching data. */
-            crate::orders::reset_unbunching(v);
-
-            /* Announce that the vehicle is waiting to players and AIs. */
-            if is_local_company(v, s) {
-                add_vehicle_advice_news_item(
-                    AdviceType::VehicleWaiting,
-                    &get_encoded_string(
-                        StringID(STR_NEWS_TRAIN_IS_WAITING.0 + u32::from(v.vehicle_type().0)),
-                        &[Integer(u64::from(index.0))],
-                    ),
-                    index,
-                );
-            }
-            crate::ai::new_event(v.owner(), &ScriptEvent::vehicle_waiting_in_depot(index));
+            depot_halt(v, index, s);
         }
 
         /* If we've entered our unbunching depot, record the round trip duration. */
@@ -1265,6 +1242,33 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
         // SAFETY: The live vehicle's current order.
         unsafe { crate::orders::make_dummy(v.current_order_pointer()) };
     }
+}
+
+/// The current order's halt in `VehicleEnterDepot` (`vehicle.cpp:1623-1639`).
+fn depot_halt(v: VehicleRef, index: VehicleID, s: &Services) {
+    witness::hit(witness::VISITS_DEPOT_HALT);
+    /* Vehicles are always stopped on entering depots. Do not restart this one. */
+    set_vehicle_to_autoreplace(index, false);
+    /* Invalidate last_loading_station. As the link from the station
+     * before the stop to the station after the stop can't be predicted
+     * we shouldn't construct it when the vehicle visits the next stop. */
+    v.set_last_loading_station(s, StationID::INVALID);
+
+    /* Clear unbunching data. */
+    crate::orders::reset_unbunching(v);
+
+    /* Announce that the vehicle is waiting to players and AIs. */
+    if is_local_company(v, s) {
+        add_vehicle_advice_news_item(
+            AdviceType::VehicleWaiting,
+            &get_encoded_string(
+                StringID(STR_NEWS_TRAIN_IS_WAITING.0 + u32::from(v.vehicle_type().0)),
+                &[Integer(u64::from(index.0))],
+            ),
+            index,
+        );
+    }
+    crate::ai::new_event(v.owner(), &ScriptEvent::vehicle_waiting_in_depot(index));
 }
 
 /// The current order's refit in `VehicleEnterDepot` (`vehicle.cpp:1598-1615`), under the
@@ -1307,36 +1311,45 @@ fn depot_refit(v: VehicleRef, index: VehicleID, s: &Services) {
             });
             (l.set_current_company)(cur_company);
 
-            if !(base.cost.success)(cost.0) {
-                witness::hit(witness::VISITS_DEPOT_REFIT_FAILED);
-                set_vehicle_to_autoreplace(index, false);
-                if is_local_company(v, s) {
-                    /* Notify the user that we stopped the vehicle */
-                    add_vehicle_advice_news_item(
-                        AdviceType::RefitFailed,
-                        &get_encoded_string(
-                            STR_NEWS_ORDER_REFIT_FAILED,
-                            &[Integer(u64::from(index.0))],
-                        ),
-                        index,
-                    );
-                }
-            } else {
-                witness::hit(witness::VISITS_DEPOT_REFIT);
-                let cost = (base.cost.money)(cost.0);
-                if cost != 0 {
-                    // `Money` subtraction saturates.
-                    let vs = s.vehicles();
-                    v.set_profit_this_year(
-                        vs,
-                        v.profit_this_year(vs).saturating_sub(cost.wrapping_shl(8)),
-                    );
-                    if is_local_company(v, s) {
-                        (s.shared.cost_animation)(v.x_pos(), v.y_pos(), v.z_pos(), cost);
-                    }
-                }
-            }
+            depot_refit_result(v, index, cost.0, s);
         });
+    }
+}
+
+/// The outcome of the depot refit command in `VehicleEnterDepot` (`vehicle.cpp:1603-1614`),
+/// read from its native result `cost`.
+fn depot_refit_result(
+    v: VehicleRef,
+    index: VehicleID,
+    cost: *const crate::services::CommandCost,
+    s: &Services,
+) {
+    let base = s.refit.common.base;
+    if (base.cost.success)(cost) {
+        witness::hit(witness::VISITS_DEPOT_REFIT);
+        let cost = (base.cost.money)(cost);
+        if cost != 0 {
+            // `Money` subtraction saturates.
+            let vs = s.vehicles();
+            v.set_profit_this_year(
+                vs,
+                v.profit_this_year(vs).saturating_sub(cost.wrapping_shl(8)),
+            );
+            if is_local_company(v, s) {
+                (s.shared.cost_animation)(v.x_pos(), v.y_pos(), v.z_pos(), cost);
+            }
+        }
+    } else {
+        witness::hit(witness::VISITS_DEPOT_REFIT_FAILED);
+        set_vehicle_to_autoreplace(index, false);
+        if is_local_company(v, s) {
+            /* Notify the user that we stopped the vehicle */
+            add_vehicle_advice_news_item(
+                AdviceType::RefitFailed,
+                &get_encoded_string(STR_NEWS_ORDER_REFIT_FAILED, &[Integer(u64::from(index.0))]),
+                index,
+            );
+        }
     }
 }
 

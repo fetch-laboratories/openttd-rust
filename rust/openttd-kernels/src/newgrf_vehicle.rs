@@ -269,10 +269,10 @@ pub(crate) const fn test_table_with_members(
     cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List,
 ) -> Services {
     Services {
+        cargo_owner,
         id,
         cargo_type,
         cargo_subtype,
-        cargo_owner,
         ..TEST_TABLE
     }
 }
