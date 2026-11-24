@@ -14,7 +14,8 @@ fn table(s: &Services) -> &CatchmentServices {
 }
 /// `Kdtree_StationXYFunc`: the sign tile's X or Y coordinate.
 fn coordinate(c: &CatchmentServices, map: crate::map_func::Map, id: StationID, dim: usize) -> u16 {
-    let tile = base_station_base::xy((c.station_if_valid)(id));
+    // SAFETY: The catchment table's shared services live for the process.
+    let tile = base_station_base::xy((unsafe { &*c.shared }.base_station)(id.0));
     if dim == 0 {
         map.tile_x(tile) as u16
     } else {
