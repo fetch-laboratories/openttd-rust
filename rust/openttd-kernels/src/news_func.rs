@@ -425,6 +425,9 @@ pub(crate) mod testing {
         /// `Game::NewEvent` of an event with a name: the event without its borrowed text
         /// and the text's bytes.
         GameNewTextEvent(ScriptEvent, Vec<u8>),
+        /// `AI::NewEvent` of an event with a name: the company, the event without its
+        /// borrowed text and the text's bytes.
+        AiNewTextEvent(u8, ScriptEvent, Vec<u8>),
     }
 
     thread_local! {
@@ -679,7 +682,10 @@ pub(crate) mod testing {
         });
     }
     extern "C" fn ai_new(company: u8, event: *const ScriptEvent) {
-        push(Effect::AiNewEvent(company, copied(event, 1)[0]));
+        push(match text_event(event) {
+            (event, None) => Effect::AiNewEvent(company, event),
+            (event, Some(text)) => Effect::AiNewTextEvent(company, event, text),
+        });
     }
     extern "C" fn game_new(event: *const ScriptEvent) {
         push(match text_event(event) {

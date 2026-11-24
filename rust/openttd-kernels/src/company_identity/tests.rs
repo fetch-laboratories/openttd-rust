@@ -165,8 +165,11 @@ extern "C" fn draw(_: *mut std::ffi::c_void) -> u32 {
     DRAWS.set(draw + 1);
     draw
 }
-extern "C" fn no_group(_: u32) -> u32 {
-    u32::MAX
+extern "C" fn no_group(_: u32) -> crate::fleet::NextGroup {
+    crate::fleet::NextGroup {
+        group: std::ptr::null_mut(),
+        index: u32::MAX,
+    }
 }
 
 /// The fixture's `CommandCost`: success and the error message.
@@ -356,14 +359,7 @@ fn rename_president_renames_an_unnamed_company() {
     other.president_name = b"Bob".to_vec();
     let s = services(vec![Record::new(Colours::COLOUR_BLUE), other], 0);
     let result = run(s, |out, flags| {
-        cmd_rename_president(
-            s,
-            out,
-            flags,
-            CmdRenamePresident {
-                text: span(b"Alice"),
-            },
-        );
+        cmd_rename_president(s, out, flags, CmdRenamePresident { text: b"Alice" });
     });
     assert!(result.ok);
     let company = STR_COMPANY_NAME.0;
@@ -401,7 +397,7 @@ fn rename_president_resets_and_refuses_a_taken_name() {
     other.president_name = b"Bob".to_vec();
     let s = services(vec![Record::new(Colours::COLOUR_BLUE), other], 0);
     let result = run(s, |out, flags| {
-        cmd_rename_president(s, out, flags, CmdRenamePresident { text: span(b"") });
+        cmd_rename_president(s, out, flags, CmdRenamePresident { text: b"" });
     });
     assert!(result.ok);
     let president = STR_PRESIDENT_NAME.0;
@@ -421,7 +417,7 @@ fn rename_president_resets_and_refuses_a_taken_name() {
         ]
     );
     let result = run(s, |out, flags| {
-        cmd_rename_president(s, out, flags, CmdRenamePresident { text: span(b"Bob") });
+        cmd_rename_president(s, out, flags, CmdRenamePresident { text: b"Bob" });
     });
     assert!(!result.ok);
     assert_eq!(result.message, STR_ERROR_NAME_MUST_BE_UNIQUE.0);

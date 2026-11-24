@@ -3376,8 +3376,11 @@ mod startup_tests {
     extern "C" fn style(_: *mut CompanyManagerFace) -> u32 {
         0
     }
-    extern "C" fn no_group(_: u32) -> u32 {
-        u32::MAX
+    extern "C" fn no_group(_: u32) -> crate::fleet::NextGroup {
+        crate::fleet::NextGroup {
+            group: std::ptr::null_mut(),
+            index: u32::MAX,
+        }
     }
     extern "C" fn admin_update(_: *mut OpenTTDCompany) {
         trace("admin");

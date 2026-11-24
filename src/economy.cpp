@@ -258,6 +258,11 @@ Money GetPrice(Price index, uint cost_factor, const GRFFile *grf_file, int shift
 	return openttd_rust_economy_get_price(&GetRustSharedServices(), index, cost_factor, grf_file, shift);
 }
 
+uint ScaleByInverseCargoScale(uint num, bool town)
+{
+	return openttd_rust_economy_scale_by_inverse_cargo_scale(&GetRustSharedServices(), num, town);
+}
+
 /* Leaves only read/write canonical world storage or call existing shared services.
  * NewGRF sprite-group resolution cannot reenter these owners or execute commands.
  * No exception crosses Rust; allocation/debug/UI failures terminate here. */

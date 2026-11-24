@@ -207,6 +207,7 @@ void OPENTTD_RUST_CALL openttd_rust_economy_set_price_multiplier(uint32_t, int32
 void OPENTTD_RUST_CALL openttd_rust_economy_startup(const OpenTTDCompanyServices *, const OpenTTDEconomySettings *);
 void OPENTTD_RUST_CALL openttd_rust_economy_initialize();
 int64_t OPENTTD_RUST_CALL openttd_rust_economy_get_price(const OpenTTDSharedServices *, uint8_t, uint32_t, const GRFFile *, int32_t);
+uint32_t OPENTTD_RUST_CALL openttd_rust_economy_scale_by_inverse_cargo_scale(const OpenTTDSharedServices *, uint32_t, bool);
 int64_t OPENTTD_RUST_CALL openttd_rust_company_available_money(const CompanyFinances *, bool);
 int64_t OPENTTD_RUST_CALL openttd_rust_company_max_loan(const CompanyFinances *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_startup_abi(const OpenTTDCompanyServices *, OpenTTDCompanyStartup *);

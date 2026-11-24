@@ -18,10 +18,6 @@ struct OpenTTDEngineCapabilitiesServices;
 #include "cargo_storage_ffi.h"
 struct OpenTTDVehicleRefitCapacity { uint32_t total; uint16_t mail; uint32_t cargo[64]; };
 struct OpenTTDRefitCargoKind { uint8_t cargo, subtype; };
-struct OpenTTDRefitPrices {
-	uint32_t train, wagon, road, ship, aircraft;
-	uint8_t train_run, road_run, ship_run, aircraft_run;
-};
 struct OpenTTDVehicleRefitServices {
 	const OpenTTDVehicleCommonServices *common;
 	const OpenTTDVehicleSelectionServices *selection;
@@ -31,7 +27,6 @@ struct OpenTTDVehicleRefitServices {
 	const OpenTTDAircraftLeaves *aircraft;
 	const OpenTTDShipLeaves *ship;
 	const OpenTTDGroundServices *road_ground;
-	OpenTTDRefitPrices prices;
 	const OpenTTDEngine *(*engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	OpenTTDRefitCargoKind (*cargo_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_kind);

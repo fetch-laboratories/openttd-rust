@@ -19,7 +19,7 @@ use crate::livery::{Livery, LiveryFlag, LiveryFlags, LiveryScheme};
 use crate::news_func::{AddNewsItemArgs, add_news_item};
 use crate::news_type::{CompanyNewsInformation, NewsFlags, NewsReference, NewsStyle, NewsType};
 use crate::raw_field::{read_field, write_field};
-use crate::script_event_types::ScriptEvent;
+use crate::script_event_types::ScriptTextEvent;
 use crate::services::{ByteSpan, CommandCost, CommandServices, Cost, Services as Shared};
 use crate::services_assert::{assert_with, not_reached};
 use crate::strings_func::{get_encoded_string, get_string};
@@ -149,6 +149,15 @@ fn companies(s: &Services, mut f: impl FnMut(*mut OpenTTDCompany) -> bool) -> bo
 /// `&c->livery[scheme]`, given the array `Services::livery` returns.
 fn livery_at(livery: *mut Livery, scheme: LiveryScheme) -> *mut Livery {
     livery.wrapping_add(usize::from(scheme.0))
+}
+
+/// A span over `bytes`, live while they are, for a native string member's assignment or
+/// comparison.
+fn span(bytes: &[u8]) -> ByteSpan {
+    ByteSpan {
+        data: bytes.as_ptr(),
+        size: bytes.len(),
+    }
 }
 
 /// `Utf8StringLength(text)`.
@@ -327,11 +336,11 @@ pub(crate) fn generate_company_name(s: &Services, c: *mut OpenTTDCompany) {
     (s.set_name_2)(c, strp);
 
     (s.shared.screen_dirty)();
-    crate::ai::broadcast_new_event(
-        &ScriptEvent::company_renamed((s.index)(c), &name),
+    crate::ai::broadcast_new_text_event(
+        &ScriptTextEvent::company_renamed((s.index)(c), &name),
         CompanyID::INVALID,
     );
-    crate::game::new_event(&ScriptEvent::company_renamed((s.index)(c), &name));
+    crate::game::new_text_event(&ScriptTextEvent::company_renamed((s.index)(c), &name));
 
     if (s.is_ai)(c) {
         // `CompanyNewsInformation` resolves the company by its index (#1048).
@@ -392,16 +401,14 @@ pub(crate) fn generate_president_name(s: &Services, c: *mut OpenTTDCompany) {
 /// Reset the livery schemes to the company's primary colour.
 /// This is used on loading games without livery information and on new company start up.
 #[allow(unsafe_code)] // The group table's iteration and the field-sized livery stores.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "The group table's `GroupID` is a `uint16_t` pool index."
-)]
 pub(crate) fn reset_company_livery(s: &Services, c: *mut OpenTTDCompany) {
     let livery = (s.livery)(c);
     for scheme in LiveryScheme::LS_BEGIN.0..LiveryScheme::LS_END.0 {
         let l = livery_at(livery, LiveryScheme(scheme));
-        // `in_use.Reset()`.
-        write_field!(l, in_use, LiveryFlags::EMPTY);
+        // `in_use.Reset()`, through one field-sized load and store.
+        let mut in_use = read_field!(l, in_use);
+        in_use.reset_all();
+        write_field!(l, in_use, in_use);
         write_field!(l, colour1, (s.colour)(c));
         write_field!(l, colour2, (s.colour)(c));
     }
@@ -409,16 +416,16 @@ pub(crate) fn reset_company_livery(s: &Services, c: *mut OpenTTDCompany) {
     let mut from = 0;
     loop {
         // SAFETY: The module contract: the group table's records are live.
-        let id = unsafe { (s.groups.next_group)(from) };
-        if id == u32::MAX {
+        let crate::fleet::NextGroup { group: g, index } = unsafe { (s.groups.next_group)(from) };
+        if index == u32::MAX {
             break;
         }
-        from = id + 1;
-        // SAFETY: The module contract: the group table's records are live.
-        let g = unsafe { (s.groups.group)(id as u16) }.cast::<crate::fleet::GroupFields>();
+        from = index + 1;
         if read_field!(g, owner) == (s.index)(c).0 {
-            // `g->livery.in_use.Reset()`.
-            write_field!(g, livery.in_use, LiveryFlags::EMPTY);
+            // `g->livery.in_use.Reset()`, through one field-sized load and store.
+            let mut in_use = read_field!(g, livery.in_use);
+            in_use.reset_all();
+            write_field!(g, livery.in_use, in_use);
             write_field!(g, livery.colour1, (s.colour)(c));
             write_field!(g, livery.colour2, (s.colour)(c));
         }
@@ -441,7 +448,7 @@ pub(crate) fn update_company_liveries(s: &Services, c: *mut OpenTTDCompany) {
         }
     }
     // SAFETY: The module contract: the group table's records are live.
-    unsafe { crate::fleet::company_liveries(s.groups, (s.index)(c).0) };
+    unsafe { crate::fleet::company_liveries(s.groups, (s.index)(c).0, default) };
 }
 
 /// Arguments of `CmdSetCompanyManagerFace`, in command order.
@@ -628,41 +635,39 @@ pub(crate) fn cmd_set_company_colour(
         }
 
         // SAFETY: The object table is the canonical process-lifetime table.
-        crate::objects::update_object_colours(unsafe { &*(s.objects)() }, (s.index)(c));
+        crate::objects::update_object_colours(unsafe { &*(s.objects)() }, c, (s.index)(c));
     }
     out.zero();
 }
 
 /// Is the given name in use as name of a company? Returns true if the name is unique (that
 /// is, not in use), else false.
-fn is_unique_company_name(s: &Services, name: ByteSpan) -> bool {
+fn is_unique_company_name(s: &Services, name: &[u8]) -> bool {
     companies(s, |c| {
         let n = (s.name)(c);
-        n.size == 0 || !n.same_bytes(name)
+        n.size == 0 || !n.same_bytes(span(name))
     })
 }
 
 /// Arguments of `CmdRenameCompany`, in command order.
 #[derive(Clone, Copy)]
-pub(crate) struct CmdRenameCompany {
+pub(crate) struct CmdRenameCompany<'a> {
     /// The new name or an empty string when resetting to the default.
-    pub text: ByteSpan,
+    pub text: &'a [u8],
 }
 
 /// Change the name of the company.
-#[allow(unsafe_code)] // The command's text bytes, live for the call.
 pub(crate) fn cmd_rename_company(
     s: &Services,
     out: Cost<'_>,
     flags: DoCommandFlags,
-    args: CmdRenameCompany,
+    args: CmdRenameCompany<'_>,
 ) {
     let CmdRenameCompany { text } = args;
-    let reset = text.size == 0;
+    let reset = text.is_empty();
 
     if !reset {
-        // SAFETY: The command's text is live for the call.
-        if utf8_string_length(s, unsafe { text.bytes() }) >= MAX_LENGTH_COMPANY_NAME_CHARS {
+        if utf8_string_length(s, text) >= MAX_LENGTH_COMPANY_NAME_CHARS {
             crate::command_func::cmd_error(out);
             return;
         }
@@ -675,16 +680,16 @@ pub(crate) fn cmd_rename_company(
     if flags.test(DoCommandFlag::Execute) {
         let c = (s.company)(s.current_company());
         // An empty text clears the name (`c->name.clear()`), resetting it to the default.
-        (s.set_name)(c, text);
+        (s.set_name)(c, span(text));
         (s.shared.screen_dirty)();
         (s.admin_update)(c);
 
         let new_name = get_string(STR_COMPANY_NAME, [Integer(u64::from((s.index)(c).0))]);
-        crate::ai::broadcast_new_event(
-            &ScriptEvent::company_renamed((s.index)(c), &new_name),
+        crate::ai::broadcast_new_text_event(
+            &ScriptTextEvent::company_renamed((s.index)(c), &new_name),
             CompanyID::INVALID,
         );
-        crate::game::new_event(&ScriptEvent::company_renamed((s.index)(c), &new_name));
+        crate::game::new_text_event(&ScriptTextEvent::company_renamed((s.index)(c), &new_name));
     }
 
     out.zero();
@@ -692,34 +697,33 @@ pub(crate) fn cmd_rename_company(
 
 /// Is the given name in use as president name of a company? Returns true if the name is
 /// unique (that is, not in use), else false.
-fn is_unique_president_name(s: &Services, name: ByteSpan) -> bool {
+fn is_unique_president_name(s: &Services, name: &[u8]) -> bool {
     companies(s, |c| {
         let n = (s.president_name)(c);
-        n.size == 0 || !n.same_bytes(name)
+        n.size == 0 || !n.same_bytes(span(name))
     })
 }
 
 /// Arguments of `CmdRenamePresident`, in command order.
 #[derive(Clone, Copy)]
-pub(crate) struct CmdRenamePresident {
+pub(crate) struct CmdRenamePresident<'a> {
     /// The new name or an empty string when resetting to the default.
-    pub text: ByteSpan,
+    pub text: &'a [u8],
 }
 
 /// Change the name of the president.
-#[allow(unsafe_code)] // The command's text bytes and the nested command's result storage.
+#[allow(unsafe_code)] // The nested command's result storage.
 pub(crate) fn cmd_rename_president(
     s: &Services,
     out: Cost<'_>,
     flags: DoCommandFlags,
-    args: CmdRenamePresident,
+    args: CmdRenamePresident<'_>,
 ) {
     let CmdRenamePresident { text } = args;
-    let reset = text.size == 0;
+    let reset = text.is_empty();
 
     if !reset {
-        // SAFETY: The command's text is live for the call.
-        if utf8_string_length(s, unsafe { text.bytes() }) >= MAX_LENGTH_PRESIDENT_NAME_CHARS {
+        if utf8_string_length(s, text) >= MAX_LENGTH_PRESIDENT_NAME_CHARS {
             crate::command_func::cmd_error(out);
             return;
         }
@@ -733,17 +737,12 @@ pub(crate) fn cmd_rename_president(
         let c = (s.company)(s.current_company());
 
         // An empty text clears the name (`c->president_name.clear()`).
-        (s.set_president_name)(c, text);
+        (s.set_president_name)(c, span(text));
         if !reset && (s.name_1)(c) == STR_SV_UNNAMED && (s.name)(c).size == 0 {
             // `Command<CMD_RENAME_COMPANY>::Do(DoCommandFlag::Execute, text + " Transport")`;
             // its result is dropped.
-            // SAFETY: The command's text is live for the call.
-            let mut transport = unsafe { text.bytes() }.to_vec();
+            let mut transport = text.to_vec();
             transport.extend_from_slice(b" Transport");
-            let transport = ByteSpan {
-                data: transport.as_ptr(),
-                size: transport.len(),
-            };
             // SAFETY: The nested result lives on this stack for the synchronous command.
             unsafe {
                 crate::command::with_cost(s.commands.cost, |result| {
@@ -758,7 +757,7 @@ pub(crate) fn cmd_rename_president(
                                 s,
                                 result,
                                 DoCommandFlags(flags),
-                                CmdRenameCompany { text: transport },
+                                CmdRenameCompany { text: &transport },
                             );
                         },
                     );
@@ -771,11 +770,11 @@ pub(crate) fn cmd_rename_president(
         (s.admin_update)(c);
 
         let new_name = get_string(STR_PRESIDENT_NAME, [Integer(u64::from((s.index)(c).0))]);
-        crate::ai::broadcast_new_event(
-            &ScriptEvent::president_renamed((s.index)(c), &new_name),
+        crate::ai::broadcast_new_text_event(
+            &ScriptTextEvent::president_renamed((s.index)(c), &new_name),
             CompanyID::INVALID,
         );
-        crate::game::new_event(&ScriptEvent::president_renamed((s.index)(c), &new_name));
+        crate::game::new_text_event(&ScriptTextEvent::president_renamed((s.index)(c), &new_name));
     }
 
     out.zero();
@@ -1008,9 +1007,9 @@ pub extern "C" fn openttd_rust_company_colour(
     );
 }
 
-/// `CmdRenameCompany`.
+/// `CmdRenameCompany`; `text` is the command's `std::string`, live for the call.
 #[unsafe(no_mangle)]
-#[allow(unsafe_code)] // Export attribute only.
+#[allow(unsafe_code)] // Export attribute and the command's text bytes.
 pub extern "C" fn openttd_rust_company_rename(
     s: &Services,
     out: *mut CommandCost,
@@ -1021,13 +1020,16 @@ pub extern "C" fn openttd_rust_company_rename(
         s,
         Cost(out, s.commands.cost),
         DoCommandFlags(flags),
-        CmdRenameCompany { text },
+        CmdRenameCompany {
+            // SAFETY: The facade's text is live for the synchronous command.
+            text: unsafe { text.bytes() },
+        },
     );
 }
 
-/// `CmdRenamePresident`.
+/// `CmdRenamePresident`; `text` is the command's `std::string`, live for the call.
 #[unsafe(no_mangle)]
-#[allow(unsafe_code)] // Export attribute only.
+#[allow(unsafe_code)] // Export attribute and the command's text bytes.
 pub extern "C" fn openttd_rust_president_rename(
     s: &Services,
     out: *mut CommandCost,
@@ -1038,7 +1040,10 @@ pub extern "C" fn openttd_rust_president_rename(
         s,
         Cost(out, s.commands.cost),
         DoCommandFlags(flags),
-        CmdRenamePresident { text },
+        CmdRenamePresident {
+            // SAFETY: The facade's text is live for the synchronous command.
+            text: unsafe { text.bytes() },
+        },
     );
 }
 

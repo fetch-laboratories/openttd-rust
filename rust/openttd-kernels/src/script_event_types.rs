@@ -217,26 +217,50 @@ impl ScriptEvent {
             ..Self::of(ScriptEventType::ET_ROAD_RECONSTRUCTION)
         }
     }
+}
 
-    /// `ScriptEventCompanyRenamed(company, new_name)`, borrowing `new_name` for the call.
+/// A script event carrying a name, `ScriptEventCompanyRenamed` or
+/// `ScriptEventPresidentRenamed`. It holds the name's borrow; the raw record that points at
+/// the bytes is formed only inside the synchronous dispatch (`ai::broadcast_new_text_event`,
+/// `game::new_text_event`), so no record outlives them.
+#[derive(Clone, Copy)]
+pub struct ScriptTextEvent<'a> {
+    event: ScriptEvent,
+    text: &'a [u8],
+}
+
+impl<'a> ScriptTextEvent<'a> {
+    /// `ScriptEventCompanyRenamed(company, new_name)`.
     #[must_use]
-    pub const fn company_renamed(company: CompanyID, new_name: &[u8]) -> Self {
+    pub const fn company_renamed(company: CompanyID, new_name: &'a [u8]) -> Self {
         Self {
-            company: company.0,
-            text: new_name.as_ptr(),
-            text_length: new_name.len(),
-            ..Self::of(ScriptEventType::ET_COMPANY_RENAMED)
+            event: ScriptEvent {
+                company: company.0,
+                ..ScriptEvent::of(ScriptEventType::ET_COMPANY_RENAMED)
+            },
+            text: new_name,
         }
     }
 
-    /// `ScriptEventPresidentRenamed(company, new_name)`, borrowing `new_name` for the call.
+    /// `ScriptEventPresidentRenamed(company, new_name)`.
     #[must_use]
-    pub const fn president_renamed(company: CompanyID, new_name: &[u8]) -> Self {
+    pub const fn president_renamed(company: CompanyID, new_name: &'a [u8]) -> Self {
         Self {
-            company: company.0,
-            text: new_name.as_ptr(),
-            text_length: new_name.len(),
-            ..Self::of(ScriptEventType::ET_PRESIDENT_RENAMED)
+            event: ScriptEvent {
+                company: company.0,
+                ..ScriptEvent::of(ScriptEventType::ET_PRESIDENT_RENAMED)
+            },
+            text: new_name,
         }
+    }
+
+    /// Calls `dispatch` with the raw record borrowing the name, for one synchronous call.
+    pub(crate) fn with_record<R>(&self, dispatch: impl FnOnce(&ScriptEvent) -> R) -> R {
+        let event = ScriptEvent {
+            text: self.text.as_ptr(),
+            text_length: self.text.len(),
+            ..self.event
+        };
+        dispatch(&event)
     }
 }

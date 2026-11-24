@@ -80,6 +80,17 @@ pub extern "C" fn openttd_rust_economy_get_price(
     get_price(shared, Price(index), cost_factor, grf_file, shift)
 }
 
+/// `ScaleByInverseCargoScale` for its native caller, `ScaleByCargoScale` (`economy_func.h`).
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)] // Export attribute only.
+pub extern "C" fn openttd_rust_economy_scale_by_inverse_cargo_scale(
+    shared: &Services,
+    num: u32,
+    town: bool,
+) -> u32 {
+    scale_by_inverse_cargo_scale(shared.settings(), num, town)
+}
+
 /// Scale a number by the inverse of the cargo scale setting, e.g. a scale of 25% multiplies
 /// the number by 4. `town` says whether town or industry production is scaled. Returns the
 /// number scaled by the inverse of the cargo scale setting, minimum of 1.

@@ -6,7 +6,7 @@ use super::{CommonServices, ERROR, SelectionServices, vehicle_ref, vehicle_set};
 use crate::cargo_type::CargoType;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::economy_func::get_price;
-use crate::economy_type::Price;
+use crate::economy_type::{ExpensesType, Price};
 use crate::engine_type::EngineID;
 use crate::engine_type::OpenTTDEngine;
 use crate::engine_type::RailVehicleTypes;
@@ -45,18 +45,6 @@ pub struct CargoKind {
     pub subtype: u8,
 }
 #[repr(C)]
-pub struct Prices {
-    pub train: u32,
-    pub wagon: u32,
-    pub road: u32,
-    pub ship: u32,
-    pub aircraft: u32,
-    pub train_run: u8,
-    pub road_run: u8,
-    pub ship_run: u8,
-    pub aircraft_run: u8,
-}
-#[repr(C)]
 pub struct Services {
     pub common: &'static CommonServices,
     pub selection: &'static SelectionServices,
@@ -66,7 +54,6 @@ pub struct Services {
     pub aircraft: &'static crate::aircraft::Leaves,
     pub ship: &'static crate::ship_control::Leaves,
     pub road_ground: &'static crate::vehicle::GroundServices,
-    pub prices: Prices,
     pub engine: extern "C" fn(u16) -> *const OpenTTDEngine,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub cargo_kind: extern "C" fn(*mut OpenTTDVehicle) -> CargoKind,
@@ -174,10 +161,6 @@ unsafe fn get_refit_cost_factor(
 /// `GetRefitCost`: learn the price of refitting a certain engine. `v` can be
 /// null. The price is added to `out`; returns whether the refit is allowed as
 /// an auto-refit.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "The table's prices are `PR_*` values of `Price`, an enum over `uint8_t`."
-)]
 pub(super) unsafe fn get_refit_cost(
     s: &Services,
     out: *mut CommandCost,
@@ -190,22 +173,30 @@ pub(super) unsafe fn get_refit_cost(
     let (mut factor, automatic) =
         unsafe { get_refit_cost_factor(s, v, engine_type, new_cargo_type, new_subtype) };
     let (price, expense) = match crate::vehicle::EngineRef::of(e).kind() {
-        VehicleType::SHIP => (s.prices.ship, s.prices.ship_run),
-        VehicleType::ROAD => (s.prices.road, s.prices.road_run),
-        VehicleType::AIRCRAFT => (s.prices.aircraft, s.prices.aircraft_run),
+        VehicleType::SHIP => (
+            Price::PR_BUILD_VEHICLE_SHIP,
+            ExpensesType::EXPENSES_SHIP_RUN,
+        ),
+        VehicleType::ROAD => (
+            Price::PR_BUILD_VEHICLE_ROAD,
+            ExpensesType::EXPENSES_ROADVEH_RUN,
+        ),
+        VehicleType::AIRCRAFT => (
+            Price::PR_BUILD_VEHICLE_AIRCRAFT,
+            ExpensesType::EXPENSES_AIRCRAFT_RUN,
+        ),
         VehicleType::TRAIN => {
             let price = if crate::vehicle::EngineRef::of(e).rail_kind() == RailVehicleTypes::WAGON {
-                s.prices.wagon
+                Price::PR_BUILD_VEHICLE_WAGON
             } else {
-                s.prices.train
+                Price::PR_BUILD_VEHICLE_TRAIN
             };
             factor = factor.wrapping_mul(2);
-            (price, s.prices.train_run)
+            (price, ExpensesType::EXPENSES_TRAIN_RUN)
         }
         _ => s.not_reached(),
     };
     let negative = factor < 0;
-    let price = Price(price as u8);
     let amount = get_price(
         s.capabilities.shared,
         price,
@@ -215,7 +206,7 @@ pub(super) unsafe fn get_refit_cost(
     );
     (s.common.base.cost.expense_money)(
         out,
-        expense,
+        expense.0,
         if negative {
             amount.saturating_neg()
         } else {
@@ -826,10 +817,7 @@ crate::abi::layouts! {
     "OpenTTDRefitCargoKind" ["probe"] => CargoKind {
         cargo, subtype,
     };
-    "OpenTTDRefitPrices" ["probe"] => Prices {
-        train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run,
-    };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, aircraft_handle,
+        common, selection, cargo, train, road, aircraft, ship, road_ground, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, aircraft_handle,
     };
 }

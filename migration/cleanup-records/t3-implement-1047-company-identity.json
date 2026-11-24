@@ -23,23 +23,11 @@
     "before": 0,
     "after": 1,
     "retiring_owner": "#734",
-    "retirement_condition": "Retires when the command's text arrives as a Rust slice from a Rust command dispatcher.",
-    "site": "rust/openttd-kernels/src/company_identity.rs | fn cmd_rename_company | allow unsafe_code",
-    "operation": "company_identity::cmd_rename_company",
-    "source_contract": "`CmdRenameCompany`'s `const std::string &text`, which the facade passes as a byte span live for the command.",
-    "reason": "Plan #1047 decision 2: the name's UTF-8 length is measured over the command's text bytes, as `Utf8StringLength(text)` reads them."
-  },
-  {
-    "kind": "suppression",
-    "tool": "rust",
-    "before": 0,
-    "after": 1,
-    "retiring_owner": "#734",
-    "retirement_condition": "Retires when the command's text arrives as a Rust slice and nested commands own their result in Rust.",
+    "retirement_condition": "Retires when nested commands own their result in Rust.",
     "site": "rust/openttd-kernels/src/company_identity.rs | fn cmd_rename_president | allow unsafe_code",
     "operation": "company_identity::cmd_rename_president",
-    "source_contract": "`CmdRenamePresident`'s `const std::string &text`, a byte span live for the command, and the nested `Command<CMD_RENAME_COMPANY>::Do`'s `CommandCost`.",
-    "reason": "Plan #1047 decisions 2 and 3: the text bytes are read for `Utf8StringLength` and `text + \" Transport\"`, and the nested rename's result lives in `command::with_cost` storage on this stack, as `aircraft.rs`'s nested command holds it."
+    "source_contract": "`Command<CMD_RENAME_COMPANY>::Do(DoCommandFlag::Execute, text + \" Transport\")` in `CmdRenamePresident` (src/company_cmd.cpp), whose result the original drops.",
+    "reason": "The nested `CMD_RENAME_COMPANY`'s result storage, which lives on this stack for the synchronous command (`command::with_cost` and `command::nested`); the text is a Rust slice."
   },
   {
     "kind": "suppression",
@@ -110,8 +98,8 @@
     "retirement_condition": "Retires when the command table reaches `cmd_rename_company` from Rust and the facade is deleted.",
     "site": "rust/openttd-kernels/src/company_identity.rs | fn openttd_rust_company_rename | allow unsafe_code",
     "operation": "company_identity::openttd_rust_company_rename",
-    "source_contract": "`CmdRenameCompany` (src/company_cmd.cpp), the command table's native facade.",
-    "reason": "The `#[unsafe(no_mangle)]` attribute of the native facade's entry, which only builds the body's arguments; plan #1047 decisions 2, 6 and 7 keep these exports as shims for their native callers. The body is safe Rust."
+    "source_contract": "`CmdRenameCompany` (src/company_cmd.cpp), the command table's native facade, passes its `CommandCost`, its flags and the command's `std::string` text, live for the synchronous call.",
+    "reason": "The `#[unsafe(no_mangle)]` attribute of the native facade's entry and the one conversion of the facade's text span to the `&[u8]` the command takes (porting review of #1052, finding 2); the command body is safe Rust."
   },
   {
     "kind": "suppression",
@@ -158,8 +146,8 @@
     "retirement_condition": "Retires when the command table reaches `cmd_rename_president` from Rust and the facade is deleted.",
     "site": "rust/openttd-kernels/src/company_identity.rs | fn openttd_rust_president_rename | allow unsafe_code",
     "operation": "company_identity::openttd_rust_president_rename",
-    "source_contract": "`CmdRenamePresident` (src/company_cmd.cpp), the command table's native facade.",
-    "reason": "The `#[unsafe(no_mangle)]` attribute of the native facade's entry, which only builds the body's arguments; plan #1047 decisions 2, 6 and 7 keep these exports as shims for their native callers. The body is safe Rust."
+    "source_contract": "`CmdRenamePresident` (src/company_cmd.cpp), the command table's native facade, passes its `CommandCost`, its flags and the command's `std::string` text, live for the synchronous call.",
+    "reason": "The `#[unsafe(no_mangle)]` attribute of the native facade's entry and the one conversion of the facade's text span to the `&[u8]` the command takes (porting review of #1052, finding 2); the command body is safe Rust."
   },
   {
     "kind": "suppression",
@@ -376,6 +364,18 @@
     "operation": "economy_func::openttd_rust_economy_get_price",
     "source_contract": "`GetPrice` (src/economy.cpp), called by native code, passes its four arguments and the shared table.",
     "reason": "The `#[unsafe(no_mangle)]` attribute of the native facade's entry, which only builds the body's arguments; plan #1047 decisions 2, 6 and 7 keep these exports as shims for their native callers. The body is safe Rust."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when the last native caller of `ScaleByInverseCargoScale` (`ScaleByCargoScale` in src/economy_func.h) is ported.",
+    "site": "rust/openttd-kernels/src/economy_func.rs | fn openttd_rust_economy_scale_by_inverse_cargo_scale | allow unsafe_code",
+    "operation": "economy_func::openttd_rust_economy_scale_by_inverse_cargo_scale",
+    "source_contract": "`ScaleByInverseCargoScale` (src/economy.cpp), the native facade `ScaleByCargoScale` calls, passes its two arguments and the shared table.",
+    "reason": "The `#[unsafe(no_mangle)]` attribute of the native facade's entry, which only builds the body's arguments (porting review of #1052, finding 5: the native body became a facade to the Rust one). The body is safe Rust."
   },
   {
     "kind": "suppression",

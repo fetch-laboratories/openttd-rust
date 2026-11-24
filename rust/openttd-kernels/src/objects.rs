@@ -288,6 +288,9 @@ pub struct ObjectServices {
     pub next: unsafe extern "C" fn(u32) -> Next,
     pub set_colour: unsafe extern "C" fn(*mut Object, u8) -> (),
     pub recolour: unsafe extern "C" fn(u8, bool) -> u8,
+    /// `c->GetCompanyRecolourOffset(LS_DEFAULT, use_secondary)` of a company the caller holds.
+    pub company_recolour:
+        unsafe extern "C" fn(*const crate::company_type::OpenTTDCompany, bool) -> u8,
     pub colour_error: unsafe extern "C" fn(*const Spec, u16) -> (),
     pub make: unsafe extern "C" fn(u32, u8, u32, WaterClass, u32) -> (),
     pub delete_object: unsafe extern "C" fn(*mut Object) -> (),
@@ -1460,7 +1463,7 @@ impl World<'_> {
         }
         crate::witness::hit(crate::witness::OBJECT_OWNER);
     }
-    fn colours(&self, company: u8) {
+    fn colours(&self, c: *const crate::company_type::OpenTTDCompany, company: u8) {
         unsafe {
             let mut from = 0;
             loop {
@@ -1478,7 +1481,7 @@ impl World<'_> {
                 }
                 (self.s.set_colour)(
                     object.object,
-                    (self.s.recolour)(company, shape.flags & TWO_CC != 0),
+                    (self.s.company_recolour)(c, shape.flags & TWO_CC != 0),
                 );
             }
         }
@@ -2283,15 +2286,23 @@ pub unsafe extern "C" fn openttd_rust_object_update_hq(
 /// # Safety
 /// The module's export contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_colours(s: *const ObjectServices, company: u8) {
-    update_object_colours(unsafe { &*s }, crate::company_type::CompanyID(company));
+pub unsafe extern "C" fn openttd_rust_object_colours(
+    s: *const ObjectServices,
+    c: *const crate::company_type::OpenTTDCompany,
+    company: u8,
+) {
+    update_object_colours(unsafe { &*s }, c, crate::company_type::CompanyID(company));
 }
 
 /// `UpdateObjectColours(c)`: update the company colour of all objects the company owns,
-/// except those whose spec has the colour callback.
-pub(crate) fn update_object_colours(s: &ObjectServices, c: crate::company_type::CompanyID) {
+/// except those whose spec has the colour callback. `index` is `c->index`.
+pub(crate) fn update_object_colours(
+    s: &ObjectServices,
+    c: *const crate::company_type::OpenTTDCompany,
+    index: crate::company_type::CompanyID,
+) {
     let w = unsafe { World::new::<false>(s) };
-    w.colours(c.0);
+    w.colours(c, index.0);
 }
 
 /// Synchronous object owner entry.
@@ -2595,6 +2606,7 @@ crate::abi::layouts! {
         next,
         set_colour,
         recolour,
+        company_recolour,
         colour_error,
         make,
         delete_object,

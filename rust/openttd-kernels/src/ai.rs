@@ -12,7 +12,7 @@
 
 use crate::company_type::CompanyID;
 use crate::script_event::services;
-use crate::script_event_types::ScriptEvent;
+use crate::script_event_types::{ScriptEvent, ScriptTextEvent};
 
 /// `AI::NewEvent(company, new ScriptEvent...(...))`: queue a new event for an AI.
 pub(crate) fn new_event(company: CompanyID, event: &ScriptEvent) {
@@ -23,4 +23,10 @@ pub(crate) fn new_event(company: CompanyID, event: &ScriptEvent) {
 /// all active AIs; pass `CompanyID::INVALID` for the original's default `skip_company`.
 pub(crate) fn broadcast_new_event(event: &ScriptEvent, skip_company: CompanyID) {
     (services().ai_broadcast)(event, skip_company.0);
+}
+
+/// `AI::BroadcastNewEvent(new ScriptEvent...(..., name), skip_company)` for an event that
+/// carries a name: the native factory copies the bytes during the call.
+pub(crate) fn broadcast_new_text_event(event: &ScriptTextEvent<'_>, skip_company: CompanyID) {
+    event.with_record(|event| broadcast_new_event(event, skip_company));
 }

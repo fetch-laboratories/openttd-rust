@@ -125,6 +125,13 @@ fn set_bits(s: &Services, var: *const FaceVar, bits: &mut u32, val: u32) {
     sb(bits, (s.offset)(var), (s.length)(var), val);
 }
 
+/// `SetBits` on a native face: one load of its `bits` member, the bit edit and one store.
+fn set_face_var_bits(s: &Services, var: *const FaceVar, cmf: *mut CompanyManagerFace, val: u32) {
+    let mut bits = face_bits(s, cmf);
+    set_bits(s, var, &mut bits, val);
+    set_face_bits(s, cmf, bits);
+}
+
 /// Increase/Decrease the company manager's face variable by the given amount. The value
 /// wraps around to stay in the valid range.
 #[expect(
@@ -141,9 +148,7 @@ fn change_bits(s: &Services, var: *const FaceVar, cmf: *mut CompanyManagerFace, 
     }
     val = (i32::from(val) % i32::from((s.valid_values)(var))) as i8;
 
-    let mut bits = face_bits(s, cmf);
-    set_bits(s, var, &mut bits, val as u32); // save the new value
-    set_face_bits(s, cmf, bits);
+    set_face_var_bits(s, var, cmf, val as u32); // save the new value
 }
 
 /// Checks whether the company manager's face bits have a valid range. `bits` is the face's
@@ -300,9 +305,7 @@ pub extern "C" fn openttd_rust_face_set_bits(
     cmf: *mut CompanyManagerFace,
     val: u32,
 ) {
-    let mut bits = face_bits(s, cmf);
-    set_bits(s, var, &mut bits, val);
-    set_face_bits(s, cmf, bits);
+    set_face_var_bits(s, var, cmf, val);
 }
 
 /// `FaceVar::ChangeBits`.
