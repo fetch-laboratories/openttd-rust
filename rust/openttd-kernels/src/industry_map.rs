@@ -17,6 +17,11 @@ pub(crate) fn get_industry_index(
     m.require_type(t, TileType::MP_INDUSTRY)?;
     Some(IndustryID(m.m2(t)?))
 }
+/// `GetIndustryGfx`: get the industry graphics ID for the given industry tile.
+#[must_use]
+pub(crate) fn get_industry_gfx(shared: &crate::services::Services, t: TileIndex) -> IndustryGfx {
+    IndustryGfx((shared.industry_gfx)(t.0))
+}
 /// `Industry::GetByTile` (`industry.h`): get the industry of the given tile.
 pub(crate) fn get_industry_by_tile(
     m: &crate::map_func::TileTypeAccess,

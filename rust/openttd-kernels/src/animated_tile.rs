@@ -121,19 +121,31 @@ pub extern "C" fn openttd_rust_animation_initialize() {
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_animation_add(tile: u32, dirty: bool) {
+    add_animated_tile(crate::tile_type::TileIndex(tile), dirty);
+}
+/// `AddAnimatedTile`: add the given tile to the animated tile table (if it does not exist
+/// yet). `mark_dirty` is whether to also mark the tile dirty.
+pub(crate) fn add_animated_tile(tile: crate::tile_type::TileIndex, mark_dirty: bool) {
     let a = services();
     let s = a.shared();
-    if dirty {
-        (s.mark_dirty)(tile);
+    if mark_dirty {
+        (s.mark_dirty)(tile.0);
     }
-    let state = (a.state)(tile);
+    let state = (a.state)(tile.0);
+
+    /* Tile is already animated so nothing needs to happen. */
     if state == AnimatedTileState::ANIMATED {
         return;
     }
+
+    /* Tile has no previous animation state, so add to the tile list. If the state is anything
+     * other than None (e.g. Deleted) then the tile will still be in the list and does not need
+     * to be added again. */
     if state == AnimatedTileState::NONE {
-        queue(|q| q.push(tile));
+        queue(|q| q.push(tile.0));
     }
-    (a.set_state)(tile, AnimatedTileState::ANIMATED);
+
+    (a.set_state)(tile.0, AnimatedTileState::ANIMATED);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_animation_delete(tile: u32, immediate: bool) {

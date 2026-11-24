@@ -1207,9 +1207,6 @@ mod tests {
     extern "C" fn unexpected_random(_: *mut c_void) -> u32 {
         unreachable!()
     }
-    extern "C" fn unexpected_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        unreachable!()
-    }
 
     thread_local! {
         static FAILED_ASSERTIONS: Cell<u32> = const { Cell::new(0) };
@@ -1280,7 +1277,7 @@ mod tests {
             base_station: some_station,
             station_commands,
             station_catchment: catchment,
-            ..crate::services::fixture(ptr::null_mut(), unexpected_random, unexpected_industry)
+            ..crate::services::fixture(ptr::null_mut(), unexpected_random)
         };
         movement.shared = Box::leak(Box::new(s));
         s

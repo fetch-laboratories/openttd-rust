@@ -964,11 +964,11 @@ pub(crate) fn tile_loop_road(c: &TileLoop<'_>, tile: TileIndex) {
                             u16::from(crate::sound_type::SoundFx::SND_21_ROAD_WORKS.0),
                         );
                     }
-                    crate::effect::openttd_rust_effect_create_above(
+                    let _ = crate::effect::create_effect_vehicle_above(
                         (w.dimensions.tile_x(tile) * crate::tile_type::TILE_SIZE + 7) as i32,
                         (w.dimensions.tile_y(tile) * crate::tile_type::TILE_SIZE + 7) as i32,
                         0,
-                        crate::effectvehicle_func::EV_BULLDOZER,
+                        crate::effectvehicle_func::EffectVehicleType::EV_BULLDOZER,
                     );
                     c.mark_tile_dirty_by_tile(tile);
                     return;
@@ -1098,9 +1098,6 @@ mod tests {
     extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
         0
     }
-    extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        0
-    }
 
     /// A 64x64 map of `kind` tiles, installed as this thread's canonical map.
     struct Map {
@@ -1145,7 +1142,6 @@ mod tests {
         let shared: &'static mut Services = Box::leak(Box::new(crate::services::fixture(
             std::ptr::null_mut(),
             random,
-            industry,
         )));
         shared.map = crate::map_func::fixture::statics();
         let movement = Box::leak(Box::new(crate::movement::MovementServices {

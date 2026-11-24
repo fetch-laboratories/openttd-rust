@@ -312,8 +312,9 @@ pub struct Services {
     pub has_road_type: extern "C" fn(u32) -> bool,
     /// Original native `has_water_ground` map observation.
     pub has_water_ground: extern "C" fn(u32) -> bool,
-    /// `TileVirtXY` query: 0 not industry, 1 industry, 2 bubble catcher; writes tile.
-    pub industry: extern "C" fn(i32, i32, *mut u32) -> u32,
+    /// `GetIndustryGfx`, with its tile-type assertion and its translation through the
+    /// industry tile overrides, which have no Rust port (#565).
+    pub industry_gfx: extern "C" fn(u32) -> u16,
     /// Original native `is_bay_stop` map observation.
     pub is_bay_stop: extern "C" fn(u32) -> bool,
     /// Original native `is_bridge` map observation.
@@ -779,7 +780,7 @@ crate::abi::layouts! {
         free_train_reservation,
         has_road_type,
         has_water_ground,
-        industry,
+        industry_gfx,
         is_bay_stop,
         is_bridge,
         is_drive_through_stop,
@@ -932,11 +933,10 @@ extern "C" fn unexpected_base_station(_: u16) -> *mut crate::station::BaseStatio
 #[cfg(test)]
 #[must_use]
 #[allow(clippy::too_many_lines)] // One field per shared service.
-pub fn fixture(
-    context: *mut c_void,
-    random: extern "C" fn(*mut c_void) -> u32,
-    industry: extern "C" fn(i32, i32, *mut u32) -> u32,
-) -> Services {
+pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) -> Services {
+    extern "C" fn unused_industry_gfx(_: u32) -> u16 {
+        unreachable!()
+    }
     unsafe extern "C" fn unused_snow_line_destroy(_: *mut crate::snow_line::SnowLine) {
         unreachable!()
     }
@@ -1130,7 +1130,7 @@ pub fn fixture(
         free_train_reservation: train,
         has_road_type: flag,
         has_water_ground: flag,
-        industry,
+        industry_gfx: unused_industry_gfx,
         is_bay_stop: flag,
         is_bridge: flag,
         is_drive_through_stop: flag,

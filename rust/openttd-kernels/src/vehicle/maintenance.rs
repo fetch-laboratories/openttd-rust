@@ -589,9 +589,9 @@ fn handle_breakdown_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -
                         5,
                         EffectVehicleType::EV_BREAKDOWN_SMOKE,
                     );
-                    if !u.is_null() {
+                    if let Some(u) = u {
                         let delay = svc!(C, VehicleRef::breakdown_delay, v, r());
-                        crate::effect::set_animation(u, u16::from(delay) * 2);
+                        u.set_animation_state(u16::from(delay) * 2);
                         branch!(C, VEHICLE_MAINT_SMOKE);
                     }
                 }

@@ -36,7 +36,7 @@ static const OpenTTDTreeServices tree_probe_services{
 };
 static void Trees()
 {
-	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
+	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom);
 	shared.mark_dirty = [](uint32_t) noexcept {};
 	shared.current_company = []() noexcept -> uint8_t { return 0; };
 	shared.company_valid = [](uint8_t) noexcept { return false; };

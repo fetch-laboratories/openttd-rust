@@ -819,10 +819,7 @@ mod generator_tests {
         extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
             0
         }
-        extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-            0
-        }
-        let shared = crate::services::fixture(std::ptr::null_mut(), random, industry);
+        let shared = crate::services::fixture(std::ptr::null_mut(), random);
         let mut output = String::new();
         GENERATORS[lang](&mut output, seed, &shared);
         output

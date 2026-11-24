@@ -38,7 +38,7 @@ static void VehicleMaintenanceBoundary()
 	company.engine_renew = [](const Company *c) noexcept { CHECK(c == reinterpret_cast<const Company *>(&company_shell)); return false; };
 	company.engine_renew_months = [](const Company *c) noexcept -> int16_t { CHECK(c == reinterpret_cast<const Company *>(&company_shell)); return -4; };
 	maintenance.company = &company;
-	const auto shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
+	const auto shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom);
 	RoadTestTables tables(&shared);
 	auto &base = tables.vehicle;
 	base.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };

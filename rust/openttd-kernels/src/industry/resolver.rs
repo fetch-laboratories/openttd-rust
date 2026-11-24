@@ -827,7 +827,7 @@ fn industry_tile_get_variable(
             s,
         ),
         0x7A => {
-            let gfx = IndustryGfx(unsafe { (s.tile().gfx)(c.tile().0) });
+            let gfx = crate::industry_map::get_industry_gfx(s.shared(), c.tile());
             let badges = unsafe { (*get_industry_tile_spec(gfx)).badges.badge_view() };
             badges.resolve(s.shared(), ro, parameter)
         }

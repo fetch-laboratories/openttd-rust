@@ -1089,6 +1089,9 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn subtype(self) -> u8 {
         read_field!(self.0.as_ptr(), subtype)
     }
+    pub(crate) fn set_subtype(self, value: u8) {
+        write_field!(self.0.as_ptr(), subtype, value);
+    }
     #[inline]
     pub(crate) fn owner(self) -> Owner {
         read_field!(self.0.as_ptr(), owner)

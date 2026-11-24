@@ -296,7 +296,6 @@ typedef struct OpenTTDIndustryTileAcceptance {
 /** Consumed direct leaves; generic animation/map leaves share native definitions. */
 typedef struct OpenTTDIndustryTileServices {
 	const OpenTTDSharedServices *shared;
-	uint16_t (*gfx)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(gfx);
 	void (*set_gfx)(uint32_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_gfx);
 	uint8_t (*frame)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(frame);
 	uint8_t (*animation_loop)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(animation_loop);

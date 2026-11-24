@@ -359,8 +359,14 @@ impl<'a> World<'a> {
         let gp = crate::vehicle::get_new_vehicle_pos(v.vehicle(), self.map());
         self.update_position(v, gp.x, gp.y, self.flight(v));
     }
-    fn effect_rel(v: Vehicle, x: i32, y: i32, z: i32, kind: u8) {
-        crate::effect::openttd_rust_effect_create_rel(v.handle, x, y, z, kind);
+    fn effect_rel(
+        v: Vehicle,
+        x: i32,
+        y: i32,
+        z: i32,
+        kind: crate::effectvehicle_func::EffectVehicleType,
+    ) {
+        let _ = crate::effect::create_effect_vehicle_rel(v.vehicle(), x, y, z, kind);
     }
     fn sound_vehicle(&self, v: Vehicle) {
         if (self.shared.disaster_sound)() {
@@ -414,7 +420,13 @@ impl<'a> World<'a> {
                     self.set_age(v, 0);
                 }
                 if Self::tick(v) & 7 == 0 {
-                    Self::effect_rel(v, 0, -17, 2, crate::effectvehicle_func::EV_CRASH_SMOKE);
+                    Self::effect_rel(
+                        v,
+                        0,
+                        -17,
+                        2,
+                        crate::effectvehicle_func::EffectVehicleType::EV_CRASH_SMOKE,
+                    );
                 }
             } else if v.state() == 0 {
                 let tile = Self::tile(v);
@@ -456,7 +468,13 @@ impl<'a> World<'a> {
         self.update_position(v, p.0, p.1, z);
         let age = self.increment_age(v);
         if age == 1 {
-            Self::effect_rel(v, 0, 7, 8, crate::effectvehicle_func::EV_EXPLOSION_LARGE);
+            Self::effect_rel(
+                v,
+                0,
+                7,
+                8,
+                crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE,
+            );
             self.sound_vehicle(v);
             v.set_image(SPR_BLIMP_CRASHING);
         } else if age == 70 {
@@ -469,7 +487,7 @@ impl<'a> World<'a> {
                     (r & 15).wrapping_sub(7) as i32,
                     ((r >> 4) & 15).wrapping_sub(7) as i32,
                     ((r >> 8) & 7) as i32 + 5,
-                    crate::effectvehicle_func::EV_EXPLOSION_SMALL,
+                    crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_SMALL,
                 );
             }
         } else if age == 350 {
@@ -583,7 +601,13 @@ impl<'a> World<'a> {
             }
         }
         if self.age(v) > 50 {
-            Self::effect_rel(v, 0, 7, 8, crate::effectvehicle_func::EV_EXPLOSION_LARGE);
+            Self::effect_rel(
+                v,
+                0,
+                7,
+                8,
+                crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE,
+            );
             self.sound_vehicle(v);
             return self.delete(v);
         }
@@ -615,11 +639,11 @@ impl<'a> World<'a> {
                 let x = map.tile_x(TileIndex(tile)) * TILE_SIZE;
                 let y = map.tile_y(TileIndex(tile)) * TILE_SIZE;
                 let r = self.random();
-                crate::effect::openttd_rust_effect_create_above(
+                let _ = crate::effect::create_effect_vehicle_above(
                     ((r & 63) + x) as i32,
                     (((r >> 6) & 63) + y) as i32,
                     ((r >> 12) & 15) as i32,
-                    crate::effectvehicle_func::EV_EXPLOSION_SMALL,
+                    crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_SMALL,
                 );
                 if self.increment_age(v) >= 55 {
                     v.set_state(3);
@@ -828,18 +852,18 @@ impl<'a> World<'a> {
                 0,
                 7,
                 8,
-                crate::effectvehicle_func::EV_EXPLOSION_LARGE,
+                crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE,
             );
             self.sound_vehicle(target);
             self.delete(target);
             for _ in 0..80 {
                 let r = self.random();
                 let p = (v.vehicle().x_pos(), v.vehicle().y_pos());
-                crate::effect::openttd_rust_effect_create_above(
+                let _ = crate::effect::create_effect_vehicle_above(
                     (r & 63).wrapping_add(p.0 as u32).wrapping_sub(32) as i32,
                     ((r >> 5) & 63).wrapping_add(p.1 as u32).wrapping_sub(32) as i32,
                     0,
-                    crate::effectvehicle_func::EV_EXPLOSION_SMALL,
+                    crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_SMALL,
                 );
             }
             for dy in -3..3 {
@@ -1329,9 +1353,6 @@ mod tests {
     extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
         0
     }
-    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        unreachable!("unexpected industry lookup")
-    }
 
     /// A submarine on row 0 of a 64x64 map heading north-west. Pinned
     /// `disaster_vehicle.cpp:685` adds `TileOffsByDiagDir` by hand, so at the native
@@ -1354,7 +1375,7 @@ mod tests {
             },
             6,
         );
-        let mut shared = crate::services::fixture(std::ptr::null_mut(), random, no_industry);
+        let mut shared = crate::services::fixture(std::ptr::null_mut(), random);
         shared.map = fixture::statics();
         shared.tile_valid = record_validity;
         let mut services = crate::test_tables::DISASTER;

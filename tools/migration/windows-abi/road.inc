@@ -83,7 +83,7 @@ static void RoadBoundary()
 	road_abi_hidden.road = probe.state; road_abi_hidden.ground = probe.ground.state;
 	EffectTestWorld world;
 	effect_test_world = &world;
-	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom, EffectTestIndustry);
+	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom);
 	RoadTestTables t(&services);
 	t.shared.settings = &probe.settings;
 	road_abi_engine->info.cargo_age_period = road_abi_new_engine->info.cargo_age_period = 0;
@@ -295,13 +295,13 @@ static void RoadBoundary()
 		openttd_rust_road_set_dest(u, p.state, destination);
 	};
 	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
-	OpenTTDEffectLeaves emission_leaves = EffectTestLeaves();
+	const OpenTTDVehicleServices emission_effects = EffectTestVehicles();
 	auto *emission_owner = openttd_rust_effect_new();
 	static OpenTTDEffectState *current_emission_owner;
 	current_emission_owner = emission_owner;
 	OpenTTDEffectCreationServices creation{
-		.effect = &emission_leaves, .shared = &t.shared,
-		.allocate = []() noexcept -> OpenTTDEffectAllocation { return {effect_test_world, &effect_test_world->record, current_emission_owner}; },
+		.allocate = []() noexcept -> OpenTTDEffectAllocation { return {&effect_test_world->record, current_emission_owner}; },
+		.shared = &t.shared, .vehicles = &emission_effects,
 	};
 	auto previous_creation = openttd_rust_effect_bind(&creation);
 	auto emission_vehicle = t.vehicle;
@@ -472,7 +472,7 @@ static void RoadServiceBoundary()
 	road_service_probe = &probe;
 	EffectTestWorld world;
 	effect_test_world = &world;
-	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom, EffectTestIndustry);
+	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom);
 	RoadTestTables t(&services);
 	static OpenTTDEngine *service_engine;
 	service_engine = openttd_rust_engine_new();

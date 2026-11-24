@@ -1022,15 +1022,6 @@ void Vehicle::UpdateViewport(bool dirty)
 }
 
 /**
- * Update the position of the vehicle, and update the viewport.
- */
-void Vehicle::UpdatePositionAndViewport()
-{
-	if (this->GetType() != VEH_EFFECT) this->UpdatePosition();
-	this->UpdateViewport(true);
-}
-
-/**
  * Marks viewports dirty where the vehicle's image is.
  * @return true if at least one viewport has a dirty block
  */

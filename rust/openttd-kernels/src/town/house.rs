@@ -858,7 +858,7 @@ impl<'a> House<'a> {
             && !rec.lift_has_destination
             && chance16_i(1, 2, self.s.random())
         {
-            crate::animated_tile::openttd_rust_animation_add(tile.0, true);
+            crate::animated_tile::add_animated_tile(tile, true);
         }
         let r = self.s.random();
         let stations = StationFinder::new(tile);

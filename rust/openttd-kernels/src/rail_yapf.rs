@@ -3136,9 +3136,6 @@ mod tests {
     extern "C" fn unexpected_random(_: *mut c_void) -> u32 {
         unreachable!()
     }
-    extern "C" fn unexpected_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        unreachable!()
-    }
     extern "C" fn pbs_services(_: *const Services) -> *const PbsServices {
         PBS.get()
     }
@@ -3287,7 +3284,7 @@ mod tests {
             movement,
             settings: Box::leak(Box::new(catalog())),
             pbs_services,
-            ..crate::services::fixture(ptr::null_mut(), unexpected_random, unexpected_industry)
+            ..crate::services::fixture(ptr::null_mut(), unexpected_random)
         }));
         movement.shared = s;
         PBS.set(Box::leak(Box::new(PbsServices {

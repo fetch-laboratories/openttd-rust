@@ -1823,11 +1823,8 @@ mod tests {
     extern "C" fn draw(_: *mut c_void) -> u32 {
         0
     }
-    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        0
-    }
     thread_local! {
-        static SHARED: crate::services::Services = crate::services::fixture(std::ptr::null_mut(), draw, no_industry);
+        static SHARED: crate::services::Services = crate::services::fixture(std::ptr::null_mut(), draw);
     }
     extern "C" fn next_packet(shell: *mut c_void) -> *mut c_void {
         POOL.with(|pool| {

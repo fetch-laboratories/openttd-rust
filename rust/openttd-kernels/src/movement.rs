@@ -1882,11 +1882,8 @@ mod tests {
         extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
             0
         }
-        extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-            0
-        }
         // The fixture has no movement registry, as before native first use.
-        let shared = crate::services::fixture(std::ptr::null_mut(), random, industry);
+        let shared = crate::services::fixture(std::ptr::null_mut(), random);
         super::native_assert(&shared, true);
     }
 }

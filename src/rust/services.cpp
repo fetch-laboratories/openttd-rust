@@ -391,15 +391,6 @@ static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { Se
 static bool Shared_road_powered(uint8_t from, uint8_t to) noexcept { return HasPowerOnRoad(static_cast<RoadType>(from), static_cast<RoadType>(to)); }
 static void SharedSetTropicZone(uint32_t tile, uint8_t zone) noexcept { SetTropicZone(TileIndex{tile}, static_cast<TropicZone>(zone)); }
 
-/** Pure map query; no allocation, reentry or C++ exception crosses into Rust. */
-static uint32_t SharedIndustry(int32_t x, int32_t y, uint32_t *index) noexcept
-{
-	TileIndex tile{RustTileVirtXY(x, y)};
-	*index = tile.base();
-	if (!IsTileType(tile, MP_INDUSTRY)) return 0;
-	return GetIndustryGfx(tile) == GFX_BUBBLE_CATCHER ? 2 : 1;
-}
-
 static uint16_t MapSvcDepotIndex(uint32_t tile) noexcept { return GetDepotIndex(TileIndex(tile)).base(); }
 static uint8_t MapSvcTunnelBridgeDirection(uint32_t tile) noexcept { return GetTunnelBridgeDirection(TileIndex(tile)); }
 static uint16_t MapSvcBridgeSpeed(uint32_t tile) noexcept { return RustBridgeSpecSpeed(RustBridgeType(tile)); }
@@ -554,7 +545,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.free_train_reservation = SharedFreeTrainReservation,
 	.has_road_type = Shared_has_road_type,
 	.has_water_ground = Shared_has_water_ground,
-	.industry = SharedIndustry,
+	.industry_gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(TileIndex(tile)); },
 	.is_bay_stop = Shared_is_bay_stop,
 	.is_bridge = Shared_is_bridge,
 	.is_drive_through_stop = Shared_is_drive_through_stop,
