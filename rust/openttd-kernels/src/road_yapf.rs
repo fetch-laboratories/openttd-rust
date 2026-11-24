@@ -1244,8 +1244,8 @@ mod tests {
     extern "C" fn some_station(_: u16) -> *mut crate::station::BaseStation {
         NonNull::dangling().as_ptr()
     }
-    fn station_sign(_: *const crate::station::BaseStation) -> u32 {
-        7
+    fn station_sign(_: *const crate::station::BaseStation) -> TileIndex {
+        TileIndex(7)
     }
     extern "C" fn station_commands() -> *const crate::station_cmd::CommandServicesTable {
         STATION_COMMANDS.with(ptr::from_ref)

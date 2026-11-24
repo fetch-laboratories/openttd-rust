@@ -87,11 +87,12 @@ pub(crate) fn xy(st: *const BaseStation) -> TileIndex {
 #[cfg(test)]
 pub(crate) mod testing {
     use super::{BaseStation, Services};
+    use crate::tile_type::TileIndex;
     use std::cell::Cell;
     use std::sync::Once;
 
     /// A test thread's reader of `BaseStation::xy`.
-    type Reader = fn(*const BaseStation) -> u32;
+    type Reader = fn(*const BaseStation) -> TileIndex;
     thread_local! {
         static XY: Cell<Option<Reader>> = const { Cell::new(None) };
     }
@@ -99,7 +100,7 @@ pub(crate) mod testing {
         let reader = XY
             .with(Cell::get)
             .expect("no BaseStation::xy reader registered");
-        reader(st)
+        reader(st).0
     }
     static RECORDING: Services = Services { xy };
 
