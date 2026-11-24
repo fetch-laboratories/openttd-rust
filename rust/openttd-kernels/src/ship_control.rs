@@ -720,7 +720,7 @@ impl Game<'_> {
             self.reverse(id, v, INVALID);
             return;
         }
-        self.vs().handle_loading(v, false, orders);
+        self.vs().handle_loading(v, false);
         if (self.leaves.order_type)(id) == u32::from(OT_LOADING) {
             return;
         }

@@ -2937,7 +2937,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         Self::handle_aircraft_smoke(v, r#loop != 0);
         let orders = Self::call(|| self.vs.orders());
         crate::orders::process_orders(b, orders);
-        Self::call(|| self.vs.handle_loading(b, r#loop != 0, orders));
+        self.vs.handle_loading(b, r#loop != 0);
 
         if Self::current_order_is_type(v, OrderType::OT_LOADING)
             || Self::current_order_is_type(v, OrderType::OT_LEAVESTATION)

@@ -167,19 +167,19 @@ impl VehicleServices {
     pub(crate) fn enter_depot(&self, v: VehicleRef) {
         visits::enter_depot(v, self.visits());
     }
-    /// `v->HandleLoading(mode)`.
+    /// `v->HandleLoading(mode)`: handle the loading of the vehicle; when not it skips
+    /// through dummy orders and does nothing in all other cases. `mode` is whether this is
+    /// the non-first call for this vehicle in this tick.
+    ///
+    /// The `switch` on `current_order.GetType()` is tested here, inline at each controller's
+    /// call, because most calls take its `default: return;`; `visits::handle_loading` holds
+    /// the `OT_LOADING` and `OT_DUMMY` arms out of line.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn handle_loading(
-        &self,
-        v: VehicleRef,
-        mode: bool,
-        orders: &'static crate::orders::Leaves,
-    ) {
-        let kind = crate::orders::VisitOrders::new(orders).current(v).kind();
+    pub(crate) fn handle_loading(&self, v: VehicleRef, mode: bool) {
         if matches!(
-            kind,
-            crate::order_type::OT_LOADING | crate::order_type::OT_DUMMY
+            v.current_order().kind(),
+            crate::order_type::OrderType::OT_LOADING | crate::order_type::OrderType::OT_DUMMY
         ) {
             visits::handle_loading(v, mode, self.visits());
         }
@@ -293,7 +293,7 @@ impl VehicleServices {
     pub(crate) unsafe fn running_cost(&self, v: VehicleRef) -> i64 {
         let cap = unsafe { (&*(self.newgrf)()).capabilities };
         unsafe {
-            crate::engine_capabilities::openttd_rust_engine_vehicle_running_cost(
+            crate::engine_capabilities::get_vehicle_running_cost(
                 cap,
                 (self.engine)(v).0.as_ptr(),
                 v.0.as_ptr(),

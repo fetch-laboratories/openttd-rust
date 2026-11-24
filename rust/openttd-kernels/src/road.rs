@@ -2491,7 +2491,7 @@ impl<'a> Game<'a> {
 
         let orders = self.vs.orders();
         crate::orders::process_orders(v.v, orders);
-        self.vs.handle_loading(v.v, false, orders);
+        self.vs.handle_loading(v.v, false);
 
         if v.v.current_order().is_type(OrderType::OT_LOADING) {
             return true;

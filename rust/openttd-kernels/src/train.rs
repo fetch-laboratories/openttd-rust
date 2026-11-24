@@ -2548,7 +2548,7 @@ impl Game<'_> {
             }
             id.set_flag(9, false);
         }
-        self.vs().handle_loading(id.vehicle(), mode, orders);
+        self.vs().handle_loading(id.vehicle(), mode);
         if (id).vehicle().current_order().kind_raw() == OT_LOADING || self.stay_depot(id) {
             return true;
         }
