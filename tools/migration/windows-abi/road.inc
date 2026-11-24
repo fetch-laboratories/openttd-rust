@@ -297,7 +297,8 @@ static void RoadBoundary()
 	static OpenTTDEffectState *current_emission_owner;
 	current_emission_owner = emission_owner;
 	OpenTTDEffectCreationServices creation{
-		.allocate = []() noexcept -> OpenTTDEffectAllocation { return {&effect_test_world->record, current_emission_owner}; },
+		/* Emission's effect allocation is its last call before the sound: it marks the stage. */
+		.allocate = []() noexcept -> OpenTTDEffectAllocation { road_abi_probe->visual_stage = 1; return {&effect_test_world->record, current_emission_owner}; },
 		.shared = &t.shared, .vehicles = &emission_effects,
 	};
 	auto previous_creation = openttd_rust_effect_bind(&creation);
@@ -309,15 +310,9 @@ static void RoadBoundary()
 		p.speed = 0; road_abi_vehicle.subspeed = 0;
 		p.post_effect_max = 40; p.ground.state->cache.cached_max_track_speed = 40; ++p.nested; return false;
 	};
-	/* Emission asks whether the part is on a depot tile before the sound: tile 100 is a
-	 * station tile, so IsDepotTile reaches IsHangarTile, whose tile-type read marks the
-	 * stage. The bus stop is no airport, and the tunnel and bridge tests read false from
-	 * the map. */
-	t.shared.tile_type = [](uint32_t tile) noexcept -> uint8_t {
-		CHECK(tile == 100);
-		road_abi_probe->visual_stage = 1;
-		return MP_STATION;
-	};
+	/* Tile 100 is a station tile, so IsDepotTile reaches IsHangarTile, which reads the
+	 * map in place: the bus stop is no airport. The tunnel and bridge tests read false
+	 * from the map. */
 	static OpenTTDAirportResolverServices emission_airports{};
 	emission_airports.shared = &t.shared;
 	auto previous_airports = openttd_rust_airport_exchange(&emission_airports);

@@ -17,5 +17,5 @@ pub(crate) fn is_depot_tile(world: &crate::map_func::World<'_>, tile: TileIndex)
     world.rail_depot(tile)
         || world.road_depot(tile)
         || world.is_ship_depot_tile(tile)
-        || crate::station_map::is_hangar_tile(tile, crate::newgrf_airport::runtime())
+        || crate::station_map::is_hangar_tile_in(world, tile, crate::newgrf_airport::runtime())
 }
