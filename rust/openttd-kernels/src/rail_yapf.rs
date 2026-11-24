@@ -51,7 +51,7 @@ use crate::track_func::{
 };
 use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
-use crate::vehicle::OpenTTDVehicle;
+use crate::vehicle_type::OpenTTDVehicle;
 use crate::witness;
 use crate::yapf_common::octile_distance_cost;
 use crate::yapf_costbase::st_slope_cost;

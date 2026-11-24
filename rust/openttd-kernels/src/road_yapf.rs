@@ -44,7 +44,8 @@ use crate::track_func::{
 };
 use crate::track_type::{Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
-use crate::vehicle::{OpenTTDVehicle, VehicleRef};
+use crate::vehicle::VehicleRef;
+use crate::vehicle_type::OpenTTDVehicle;
 use crate::yapf_common::octile_distance_cost;
 use crate::yapf_node::CYapfNodeKeyExitDir;
 use std::cell::OnceCell;

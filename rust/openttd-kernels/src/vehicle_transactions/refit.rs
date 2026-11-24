@@ -7,14 +7,17 @@ use crate::cargo_type::CargoType;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::economy_func::get_price;
 use crate::engine_type::EngineID;
+use crate::engine_type::OpenTTDEngine;
+use crate::engine_type::RailVehicleTypes;
 use crate::game_state::GameState;
 use crate::services::{CommandCost, ExpenseType};
 use crate::table::strings::{
     STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT, STR_ERROR_VEHICLE_IS_DESTROYED,
 };
-use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
 use crate::vehicle_gui::get_window_class_for_vehicle_type;
+use crate::vehicle_type::OpenTTDVehicle;
 use crate::vehicle_type::VehicleID;
+use crate::vehicle_type::VehicleType;
 use crate::window_func::{invalidate_window_classes_data, invalidate_window_data};
 use crate::window_type::{WindowClass, WindowNumber};
 use std::ptr;
@@ -158,7 +161,7 @@ unsafe fn get_refit_cost_factor(
                 0,
             )
         };
-        if result != crate::vehicle::CALLBACK_FAILED {
+        if result != crate::newgrf_callbacks::CALLBACK_FAILED {
             let mut factor = i32::from(result & 0x3fff);
             if factor >= 0x2000 {
                 factor -= 0x4000; // Treat as signed integer.

@@ -5,10 +5,11 @@ use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::economy_type::ExpensesType;
 use crate::engine_type::EngineID;
+use crate::engine_type::RailVehicleTypes;
 use crate::network_type::ClientID;
 use crate::services::{CommandCost, Cost, RandomServices};
 use crate::tile_type::TileIndex;
-use crate::vehicle::{RailVehicleTypes, VehicleType};
+use crate::vehicle_type::VehicleType;
 use std::ptr;
 #[repr(C)]
 pub struct Result {

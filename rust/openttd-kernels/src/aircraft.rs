@@ -49,8 +49,9 @@ use crate::table::strings::{
 };
 use crate::tile_type::{TILE_HEIGHT, TILE_SIZE, TileIndex};
 use crate::vehicle::maintenance;
-use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices, YEAR_TICKS};
+use crate::vehicle::{VehicleRef, VehicleServices};
 use crate::vehicle_base::VehState;
+use crate::vehicle_type::OpenTTDVehicle;
 use crate::vehicle_type::{DepotCommandFlag, DepotCommandFlags, VehicleID, VehicleType};
 use crate::window_func::{invalidate_window_data, set_window_classes_dirty, set_window_dirty};
 use crate::window_type::{WindowClass, WindowNumber};
@@ -929,7 +930,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         // SAFETY: A live vehicle and its static NewGRF tables.
         let running_cost = Self::call(|| unsafe { self.vs.running_cost(b) });
         /* Money's OverflowSafeInt multiplication saturates; the division does not. */
-        let cost = running_cost.saturating_mul(i64::from(b.running_ticks())) / YEAR_TICKS;
+        let cost = running_cost.saturating_mul(i64::from(b.running_ticks()))
+            / i64::from(crate::timer_game_common::DAYS_IN_YEAR * crate::timer_game_tick::DAY_TICKS);
 
         let profit = Self::call(|| (self.vs.profit)(b));
         Self::call(|| (self.vs.write_profit)(b, profit.saturating_sub(cost)));

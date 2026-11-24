@@ -34,10 +34,11 @@ use crate::table::strings::{
     STR_ERROR_VEHICLE_IS_DESTROYED, STR_NULL,
 };
 use crate::tile_type::TileIndex;
-use crate::vehicle::{VehicleRef, VehicleType};
+use crate::vehicle::VehicleRef;
 use crate::vehicle_base::VehState;
 use crate::vehicle_gui::get_window_class_for_vehicle_type;
 use crate::vehicle_type::VehicleID;
+use crate::vehicle_type::VehicleType;
 use crate::vehiclelist::{VehicleListIdentifier, VehicleListType};
 use crate::widgets::vehicle_widget::VehicleViewWidgets;
 use crate::window_func::{
@@ -803,7 +804,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             )
         };
         let mut error = STR_NULL;
-        if callback != crate::vehicle::CALLBACK_FAILED {
+        if callback != crate::newgrf_callbacks::CALLBACK_FAILED {
             if s.engine_grf_version(handle) < 8 {
                 /* 8 bit result 0xFF means 'allow' */
                 if callback < 0x400 && callback & 0xff != 0xff {

@@ -9,10 +9,12 @@ use crate::airport::HANGAR;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
 use crate::engine_type::AIR_CTOL;
+use crate::engine_type::OpenTTDEngine;
 use crate::services::CommandCost;
 use crate::station::Station;
 use crate::tile_type::TileIndex;
-use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleType};
+use crate::vehicle_type::OpenTTDVehicle;
+use crate::vehicle_type::VehicleType;
 use std::ptr;
 
 const HRS_ROTOR_STOPPED: u8 = 0;

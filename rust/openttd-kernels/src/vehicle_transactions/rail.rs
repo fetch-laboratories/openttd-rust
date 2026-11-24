@@ -8,10 +8,13 @@ use super::{CommonServices, ERROR, TransactionServices, build, construct, refit}
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
 use crate::engine_type::EngineID;
+use crate::engine_type::OpenTTDEngine;
+use crate::engine_type::RailVehicleTypes;
 use crate::fleet::{DEFAULT_GROUP, GroupServices, INVALID_VEHICLE};
 use crate::ground_vehicle as gv;
 use crate::network_type::ClientID;
 use crate::newgrf::GrfSpecFeature;
+use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::newgrf_debug::delete_newgrf_inspect_window;
 use crate::newgrf_text_type::GRFStringID;
 use crate::raw_field::{read_field, write_field};
@@ -19,10 +22,10 @@ use crate::services::{CommandCost, Cost};
 use crate::strings_type::StringID;
 use crate::tile_type::TILE_SIZE;
 use crate::tile_type::TileIndex;
-use crate::vehicle::OpenTTDVehicle;
-use crate::vehicle::{CALLBACK_FAILED, OpenTTDEngine, RailVehicleTypes, VehicleRef};
+use crate::vehicle::VehicleRef;
 use crate::vehicle_base::{is_articulated_part, is_front_engine};
 use crate::vehicle_gui::VehicleInvalidateWindowData;
+use crate::vehicle_type::OpenTTDVehicle;
 use crate::vehicle_type::VehicleID;
 use crate::widgets::vehicle_widget::VehicleViewWidgets;
 use crate::window_func::{
@@ -221,7 +224,7 @@ fn get_free_wagons_in_depot(x: Ctx, tile: TileIndex) -> Vec<VehicleID> {
         // SAFETY: synchronous traversal; only the caller-local list is mutated.
         let c = unsafe { &mut *ctx.cast::<Visit>() };
         let v = handle.0.as_ptr();
-        if handle.vehicle_type() != crate::vehicle::VehicleType::VEH_TRAIN {
+        if handle.vehicle_type() != crate::vehicle_type::VehicleType::VEH_TRAIN {
             return;
         }
         if handle
@@ -634,7 +637,7 @@ fn check_new_train(x: Ctx, original_dst: R, dst: R, original_src: R, src: R) -> 
     /* Get a free unit number and check whether it's within the bounds.
      * There will always be a maximum of one new train. */
     // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-    if (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN)
+    if (x.b.free_unit)(crate::vehicle_type::VehicleType::TRAIN)
         <= unsafe { x.t.shared.settings().max_trains.read() }
     {
         return None;
@@ -863,7 +866,7 @@ fn normalise_train_head(x: Ctx, head: R) {
     }
     (x.s.use_unit)(
         Ctx::sh(head),
-        (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN),
+        (x.b.free_unit)(crate::vehicle_type::VehicleType::TRAIN),
     );
 }
 /// `new_head->orders = old->orders`.

@@ -23,8 +23,9 @@ use crate::services::{Map, Services};
 use crate::station::BaseStation;
 use crate::station_type::{RoadStopID, RoadStopType};
 use crate::tile_type::{MP_STATION, TILE_SIZE, TileIndex};
-use crate::vehicle::{VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle::{VehicleRef, VehicleServices};
 use crate::vehicle_base::VehState;
+use crate::vehicle_type::VehicleType;
 
 /// `TILE_SIZE` in the `uint16_t` entry arithmetic.
 #[allow(clippy::cast_possible_truncation)] // TILE_SIZE is 16.

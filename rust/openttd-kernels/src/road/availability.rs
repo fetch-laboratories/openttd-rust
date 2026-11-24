@@ -9,7 +9,7 @@ use crate::services::Services as Shared;
 use crate::timer_game_calendar::CalendarDate;
 use crate::timer_game_common::MAX_DATE;
 use crate::type_availability::{Services, company_available, services};
-use crate::vehicle::VehicleType;
+use crate::vehicle_type::VehicleType;
 
 /// `IsInsideMM(rti->introduction_date, 0, CalendarTime::MAX_DATE.base())`, with the date
 /// converted to `size_t` as the original's call converts it.

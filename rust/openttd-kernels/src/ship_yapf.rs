@@ -43,7 +43,8 @@ use crate::track_func::{
 };
 use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
-use crate::vehicle::{OpenTTDVehicle, VehicleRef};
+use crate::vehicle::VehicleRef;
+use crate::vehicle_type::OpenTTDVehicle;
 use crate::vehicle_type::VehicleType;
 use crate::water_map::WaterClass;
 use crate::water_regions::{
@@ -1671,7 +1672,7 @@ mod tests {
     extern "C" fn engine(_: VehicleRef) -> crate::vehicle::EngineRef {
         crate::vehicle::EngineRef::of(ENGINE.get())
     }
-    unsafe extern "C" fn unit(_: *mut crate::vehicle::OpenTTDVehicle) -> u16 {
+    unsafe extern "C" fn unit(_: *mut crate::vehicle_type::OpenTTDVehicle) -> u16 {
         4242
     }
 
@@ -1708,7 +1709,7 @@ mod tests {
             ..shared(vehicles)
         };
         let mut lifecycle = crate::engine::Lifecycle::default();
-        lifecycle.vehicle_info_type = crate::vehicle::VehicleType::SHIP;
+        lifecycle.vehicle_info_type = crate::vehicle_type::VehicleType::SHIP;
         lifecycle.vehicle_info.ship = crate::engine::records::ShipVehicleInfo {
             max_speed: 301,
             ocean_speed_frac: 17,

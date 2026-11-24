@@ -9,8 +9,8 @@ use crate::order_type::CloneOptions;
 use crate::services::{ByteSpan, CommandCost, Cost};
 use crate::table::strings::STR_ERROR_VEHICLE_IS_DESTROYED;
 use crate::tile_type::TileIndex;
-use crate::vehicle::VehicleType;
 use crate::vehicle_type::VehicleID;
+use crate::vehicle_type::VehicleType;
 use std::ffi::c_long;
 use std::ptr;
 #[repr(C)]

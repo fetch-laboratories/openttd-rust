@@ -463,7 +463,7 @@ fn record_of(v: Option<crate::vehicle::VehicleRef>) -> *mut VehicleRecord {
 
 /// `Vehicle::orders`: the native `OrderList` shell named by the live record's canonical order
 /// state, read at the caller's observation point.
-pub(crate) fn order_list(v: *mut crate::vehicle::OpenTTDVehicle) -> *mut std::ffi::c_void {
+pub(crate) fn order_list(v: *mut crate::vehicle_type::OpenTTDVehicle) -> *mut std::ffi::c_void {
     let state = crate::raw_field::read_field!(v, orders);
     crate::raw_field::read_field!(state, orders)
 }

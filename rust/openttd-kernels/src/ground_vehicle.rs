@@ -30,9 +30,10 @@ use crate::track_func::track_status_to_track_bits;
 use crate::track_type::TrackBits;
 use crate::train::{VehicleRailFlag, VehicleRailFlags};
 use crate::transport_type::TransportType;
-use crate::vehicle::{VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle::{VehicleRef, VehicleServices};
 use crate::vehicle_base::{GroundVehicleSubtypeFlags, VehState, VehStates};
 use crate::vehicle_type::GROUND_ACCELERATION;
+use crate::vehicle_type::VehicleType;
 use crate::witness::{self, hit};
 use std::marker::PhantomData;
 

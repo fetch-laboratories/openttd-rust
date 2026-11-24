@@ -3,7 +3,8 @@
 #![allow(clippy::many_single_char_names)]
 use super::refit;
 use crate::cargo_type::CargoType;
-use crate::vehicle::{OpenTTDEngine, VehicleType};
+use crate::engine_type::OpenTTDEngine;
+use crate::vehicle_type::VehicleType;
 use std::mem::MaybeUninit;
 #[repr(C)]
 pub struct Services {

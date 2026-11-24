@@ -1002,7 +1002,7 @@ pub struct ABICalls {
         crate::services::FloodingBehaviour,
         DiagDirection,
         LandscapeType,
-        crate::vehicle::VehicleType,
+        crate::vehicle_type::VehicleType,
     ) -> bool,
 }
 /// # Safety

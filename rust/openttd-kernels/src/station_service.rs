@@ -428,7 +428,7 @@ pub struct LoadingWait {
 #[repr(C)]
 pub struct OrderDestination {
     pub(crate) destination: u16,
-    pub(crate) kind: crate::vehicle::OrderType,
+    pub(crate) kind: crate::order_type::OrderType,
     /// `GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)`.
     pub(crate) nearest_depot: bool,
 }
@@ -2079,7 +2079,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
         if front.vehicle_type() == VehicleType::TRAIN && {
             let tile = front.tile().0;
             let shared = unsafe { &*w.shared };
-            (shared.tile_type)(tile) != crate::vehicle::MP_STATION
+            (shared.tile_type)(tile) != crate::tile_type::MP_STATION
                 || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
         } {
             /* The train reversed in the station. Take the "easy" way

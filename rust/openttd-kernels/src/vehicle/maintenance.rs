@@ -12,12 +12,13 @@
     clippy::struct_excessive_bools,
     clippy::struct_field_names
 )]
-use super::{Breakdown, OrderType, VehicleRef, VehicleServices, VehicleType};
+use super::{VehicleRef, VehicleServices, VehicleType};
 use crate::cargo_type::{CargoType, CargoTypes};
 use crate::company_type::CompanyID;
 use crate::engine_type::{EngineID, EngineMiscFlags, NO_BREAKDOWN_SMOKE};
 use crate::landscape_type::LandscapeType;
 use crate::newgrf_sound::VSE_BREAKDOWN;
+use crate::order_type::OrderType;
 use crate::sound_type::SoundFx;
 use crate::strings_type::StringID;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
@@ -26,6 +27,13 @@ use crate::vehicle_base::{GroundVehicleSubtypeFlags, VehState, VehStates};
 use crate::{company::OpenTTDCompany, fleet, services};
 
 use crate::services::{CalendarDate, EconomyDate};
+
+/// `HandleBreakdown` result, then the vehicle status it leaves.
+#[derive(Clone, Copy)]
+pub struct Breakdown {
+    pub broken: bool,
+    pub status: u8,
+}
 
 #[repr(C)]
 pub struct Renewal {

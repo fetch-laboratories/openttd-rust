@@ -5,61 +5,61 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared vehicle boundary: one canonical record handle (valid until its shell is
-//! deleted), the base-`Vehicle` and `GroundVehicle` service tables and constants. The tables
-//! are declared in `src/rust/vehicle_ffi.h` and filled in `src/rust/vehicle_services.cpp`.
-//! Callers end every owner borrow before a service that can reenter Rust.
+//! The shared vehicle boundary: the canonical record and engine handles, the base `Vehicle`
+//! and `GroundVehicle` service tables, and `vehicle.cpp`'s `GetNewVehiclePos` and
+//! `Vehicle::IsWaitingForUnbunching`. The tables are declared in `src/rust/vehicle_ffi.h`
+//! and filled in `src/rust/vehicle_services.cpp`.
+//!
+//! A handle names a record that stays live until its shell is deleted, and every access to
+//! it is serialized by the game-state mutex. Callers end every owner borrow before a service
+//! that can reenter Rust.
 pub(crate) mod maintenance;
 pub(crate) mod occupancy;
 pub(crate) mod scheduler;
 pub(crate) mod visits;
 
+use crate::map_func::Map;
 use crate::newgrf_callbacks::CallbackID;
 use crate::newgrf_sound::VehicleSoundEvent;
-use crate::timer_game_common::DAYS_IN_YEAR;
-use crate::timer_game_tick::DAY_TICKS;
+use crate::vehicle_func::GetNewVehiclePosResult;
 use std::ptr::NonNull;
 
-/// Shared Rust-owned record of a C++ `Vehicle` shell.
-pub use crate::vehicle_type::OpenTTDVehicle;
-
-/// Native `VehicleType : uint8_t`. A transparent carrier preserves every byte,
-/// including sentinels and unnamed values, without Rust enum validity constraints.
-pub use crate::vehicle_type::VehicleType;
-
-/// Compatibility import of the original header type.
-pub use crate::order_type::OrderType;
-
-/// Compatibility import of the original header type.
-pub use crate::engine_type::RailVehicleTypes;
+// Compatibility names for files no pass has finished; #734's closure removes them.
+pub use crate::engine_type::{OpenTTDEngine, RailVehicleTypes};
+pub use crate::newgrf_callbacks::CALLBACK_FAILED;
+pub use crate::vehicle_type::{OpenTTDVehicle, VehicleType};
+/// `VEHICLE_LENGTH`, as the byte its raw users store.
+#[allow(clippy::cast_possible_truncation)] // The native uint constant is 8.
+pub const VEHICLE_LENGTH: u8 = crate::vehicle_type::VEHICLE_LENGTH as u8;
 
 /// Non-null live vehicle handle; `Option<VehicleRef>` crosses as a nullable pointer.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VehicleRef(pub NonNull<OpenTTDVehicle>);
 
-// A VehicleRef and its record are live and serialized at every field access.
-#[allow(unsafe_code)]
 impl VehicleRef {
-    /// Native shell identity for legacy opaque contexts.
+    /// The record's native shell, the context its untyped services take.
+    #[allow(unsafe_code)]
     pub(crate) fn shell(self) -> *mut std::ffi::c_void {
         crate::raw_field::read_field!(self.0.as_ptr(), shell).cast()
     }
 
-    /// A live, non-null canonical record pointer.
+    /// The handle of a non-null record.
     pub(crate) fn of(record: *mut OpenTTDVehicle) -> Self {
+        // A null record is a broken caller contract, as the native dereference would be.
         Self(NonNull::new(record).unwrap())
     }
 
-    /// Convert a nullable canonical record to a legacy native context.
+    /// The native shell of a record, or null for a null record.
     pub(crate) fn shell_from_record(record: *mut OpenTTDVehicle) -> *mut () {
         NonNull::new(record).map_or(std::ptr::null_mut(), |record| Self(record).shell().cast())
     }
 
-    /// Resolve a legacy native shell under the caller's original lifetime rules.
+    /// The record of a native shell.
     ///
     /// # Safety
-    /// `shell` is a live non-null vehicle shell for this serialized entry.
+    /// `shell` is a live non-null vehicle shell.
+    #[allow(unsafe_code)]
     pub(crate) unsafe fn from_shell(
         shell: *mut std::ffi::c_void,
         services: &VehicleServices,
@@ -68,26 +68,10 @@ impl VehicleRef {
     }
 }
 
-/// A live canonical Engine record captured under the serialized game lifetime.
-pub use crate::engine_type::OpenTTDEngine;
+/// Non-null live engine handle.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct EngineRef(pub NonNull<OpenTTDEngine>);
-
-pub use crate::newgrf_callbacks::CALLBACK_FAILED;
-pub use crate::tile_type::MP_STATION;
-/// `VEHICLE_LENGTH`.
-#[allow(clippy::cast_possible_truncation)] // Native uint constant is 8; retain the u8 compatibility surface.
-pub const VEHICLE_LENGTH: u8 = crate::vehicle_type::VEHICLE_LENGTH as u8;
-/// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.
-pub const YEAR_TICKS: i64 = DAYS_IN_YEAR as i64 * DAY_TICKS as i64;
-
-/// `HandleBreakdown` result, then the vehicle status it leaves.
-#[derive(Clone, Copy)]
-pub struct Breakdown {
-    pub broken: bool,
-    pub status: u8,
-}
 
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
@@ -130,13 +114,12 @@ pub struct VehicleServices {
     /// `Vehicle::CanAllocateItem(count)`.
     pub can_allocate: extern "C" fn(usize) -> bool,
 }
-// The visit table and its entries are native-supplied static Rust functions.
-#[allow(unsafe_code)]
 impl VehicleServices {
-    /// `Vehicle::SetNext` for legacy native shell contexts.
+    /// `Vehicle::SetNext` on two native shells.
     ///
     /// # Safety
-    /// `shell` and non-null `next` and their linked records remain live.
+    /// `shell` and a non-null `next` are live shells.
+    #[allow(unsafe_code)]
     pub(crate) unsafe fn set_next_shell(
         &self,
         shell: *mut std::ffi::c_void,
@@ -144,23 +127,26 @@ impl VehicleServices {
     ) {
         let record = (self.record_from_shell)(shell);
         let next = (self.record_from_shell)(next);
-        // SAFETY: The caller preserves both resolved records.
+        // SAFETY: The caller's live shells name live records.
         unsafe { crate::vehicle_base::set_next(record, next) };
     }
 
     /// The immutable process-wide vehicle resolver services.
+    #[allow(unsafe_code)]
     pub(crate) fn newgrf(&self) -> &'static crate::newgrf_vehicle::Services {
-        // SAFETY: the getter returns the immutable process-wide resolver table.
+        // SAFETY: The getter returns the immutable process-wide resolver table.
         unsafe { &*(self.newgrf)() }
     }
-    /// The static station/depot visit table.
+    /// The immutable process-wide station and depot visit table.
+    #[allow(unsafe_code)]
     pub(crate) fn visits(&self) -> &'static visits::Services {
-        // SAFETY: the getter returns the immutable process-wide visit table.
+        // SAFETY: The getter returns the immutable process-wide visit table.
         unsafe { &*(self.visits)() }
     }
-    /// The immutable canonical orders services, shared by every controller.
+    /// The immutable process-wide orders services, shared by every controller.
+    #[allow(unsafe_code)]
     pub(crate) fn orders(&self) -> &'static crate::orders::Leaves {
-        // SAFETY: the getter returns the immutable process-wide orders table.
+        // SAFETY: The getter returns the immutable process-wide orders table.
         unsafe { &*(self.orders)() }
     }
     /// `VehicleEnterDepot(v)`.
@@ -184,16 +170,47 @@ impl VehicleServices {
             visits::handle_loading(v, mode, self.visits());
         }
     }
+    /// `ErrorUnknownCallbackResult` for an engine's callback result.
+    #[allow(unsafe_code)]
+    pub(crate) fn unknown_callback_result(
+        &self,
+        engine: EngineRef,
+        callback: CallbackID,
+        result: u16,
+    ) {
+        // SAFETY: The resolver table's capabilities and the live engine record.
+        unsafe {
+            crate::engine_capabilities::unknown_callback(
+                self.newgrf().capabilities,
+                engine.0.as_ptr(),
+                callback,
+                result,
+            );
+        }
+    }
+
+    /// `Ship::GetRunningCost` and `Aircraft::GetRunningCost`.
+    ///
+    /// # Safety
+    /// `v` is a live ship or aircraft.
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn running_cost(&self, v: VehicleRef) -> i64 {
+        // SAFETY: The caller's live vehicle and its current engine.
+        unsafe {
+            crate::engine_capabilities::get_vehicle_running_cost(
+                self.newgrf().capabilities,
+                (self.engine)(v).0.as_ptr(),
+                v.0.as_ptr(),
+            )
+        }
+    }
 }
 
 /// `GetNewVehiclePos`: get position information of a vehicle when moving one pixel in the
 /// direction it is facing.
 #[inline]
 #[must_use]
-pub(crate) fn get_new_vehicle_pos(
-    v: VehicleRef,
-    map: crate::map_func::Map,
-) -> crate::vehicle_func::GetNewVehiclePosResult {
+pub(crate) fn get_new_vehicle_pos(v: VehicleRef, map: Map) -> GetNewVehiclePosResult {
     const DELTA_COORD: [i8; 16] = [
         -1, -1, -1, 0, 1, 1, 1, 0, /* x */
         -1, 0, 1, 1, 1, 0, -1, -1, /* y */
@@ -205,7 +222,7 @@ pub(crate) fn get_new_vehicle_pos(
         .y_pos()
         .wrapping_add(i32::from(DELTA_COORD[direction + 8]));
 
-    crate::vehicle_func::GetNewVehiclePosResult {
+    GetNewVehiclePosResult {
         x,
         y,
         old_tile: v.tile(),
@@ -260,105 +277,153 @@ crate::abi::layouts! {
         update_delta,
         can_allocate,
     };
-
-
-
-
     "OpenTTDGroundServices" ["probe"] => GroundServices {
         physics,
     };
-    "OrderType" ["maintenance"] => OrderType {
+    "OrderType" ["maintenance"] => crate::order_type::OrderType {
     };
-}
-
-#[allow(unsafe_code)]
-impl VehicleServices {
-    pub(crate) fn unknown_callback_result(
-        &self,
-        engine: EngineRef,
-        callback: CallbackID,
-        result: u16,
-    ) {
-        unsafe {
-            crate::engine_capabilities::unknown_callback(
-                (&*(self.newgrf)()).capabilities,
-                engine.0.as_ptr(),
-                callback,
-                result,
-            );
-        }
-    }
-
-    /// Ship/aircraft running cost; the caller retains its live vehicle shell.
-    pub(crate) unsafe fn running_cost(&self, v: VehicleRef) -> i64 {
-        let cap = unsafe { (&*(self.newgrf)()).capabilities };
-        unsafe {
-            crate::engine_capabilities::get_vehicle_running_cost(
-                cap,
-                (self.engine)(v).0.as_ptr(),
-                v.0.as_ptr(),
-            )
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::direction_type::{DiagDirection, Direction};
-    use crate::services::Map;
+    use crate::direction_type::Direction;
     use crate::tile_type::TileIndex;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// Failed native assertions seen by the isolated child.
+    static FAILED: AtomicU32 = AtomicU32::new(0);
+    extern "C" fn record_failure(condition: bool) {
+        if !condition {
+            FAILED.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn record(kind: VehicleType) -> VehicleRef {
+        VehicleRef::of(crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            kind,
+        ))
+    }
+    #[allow(unsafe_code)]
+    fn delete(v: VehicleRef) {
+        // SAFETY: The test's record, deleted once.
+        unsafe { crate::vehicle_base::openttd_rust_vehicle_record_delete(v.0.as_ptr()) };
+    }
+
+    /// `GetNewVehiclePos` moves one pixel by `_delta_coord` and hashes the new position
+    /// with `TileVirtXY`; `old_tile` is the vehicle's tile, read as stored.
     #[test]
-    fn map_offsets_follow_the_original_tables() {
+    fn get_new_vehicle_pos_moves_one_pixel_by_the_delta_table() {
         let map = Map::from_log_x(8);
-        assert_eq!(
-            map.tile_add_by_diag_dir(
-                TileIndex(0x1010),
-                DiagDirection::DIAGDIR_NE,
-                crate::map_func::native_check
-            )
-            .0,
-            0x100f
-        );
-        assert_eq!(
-            map.tile_add_by_diag_dir(
-                TileIndex(0x1010),
-                DiagDirection::DIAGDIR_SE,
-                crate::map_func::native_check
-            )
-            .0,
-            0x1110
-        );
-        assert_eq!(
-            map.tile_add_by_dir(
-                TileIndex(0x1010),
-                Direction::DIR_N,
-                crate::map_func::native_check
-            )
-            .0,
-            0x0f0f
-        );
-        assert_eq!(
-            map.tile_add_by_dir(
-                TileIndex(0x1010),
-                Direction::DIR_SW,
-                crate::map_func::native_check
-            )
-            .0,
-            0x1011
-        );
-        assert_eq!(
-            map.tile_add_by_dir(
-                TileIndex(0),
-                Direction::DIR_N,
-                crate::map_func::native_check
-            )
-            .0,
-            0_u32.wrapping_sub(257)
-        );
-        assert_eq!(
-            (map.tile_x(TileIndex(0x1234)), map.tile_y(TileIndex(0x1234))),
-            (0x34, 0x12)
-        );
+        let v = record(VehicleType::VEH_ROAD);
+        let cases = [
+            (Direction::DIR_N, 0x2f, 0x4f, 0x0402),
+            (Direction::DIR_NE, 0x2f, 0x50, 0x0502),
+            (Direction::DIR_E, 0x2f, 0x51, 0x0502),
+            (Direction::DIR_SE, 0x30, 0x51, 0x0503),
+            (Direction::DIR_S, 0x31, 0x51, 0x0503),
+            (Direction::DIR_SW, 0x31, 0x50, 0x0503),
+            (Direction::DIR_W, 0x31, 0x4f, 0x0403),
+            (Direction::DIR_NW, 0x30, 0x4f, 0x0403),
+        ];
+        for (direction, x, y, tile) in cases {
+            v.set_x_pos(0x30);
+            v.set_y_pos(0x50);
+            v.set_tile(TileIndex(0x0777));
+            v.set_direction(direction);
+            assert_eq!(
+                get_new_vehicle_pos(v, map),
+                GetNewVehiclePosResult {
+                    x,
+                    y,
+                    old_tile: TileIndex(0x0777),
+                    new_tile: TileIndex(tile),
+                },
+                "{direction:?}"
+            );
+        }
+        // A negative x reaches `TileVirtXY` as the unsigned 0xFFFFFFFF.
+        v.set_x_pos(0);
+        v.set_direction(Direction::DIR_NE);
+        let gp = get_new_vehicle_pos(v, map);
+        assert_eq!((gp.x, gp.new_tile), (-1, TileIndex(0x1000_04ff)));
+        delete(v);
+    }
+
+    /// `assert(this->IsInDepot())` runs before the unbunching tests: a vehicle outside a
+    /// depot fails it once, one inside none. Without an order list the vehicle never waits.
+    #[test]
+    #[allow(unsafe_code)]
+    fn is_waiting_for_unbunching_asserts_that_the_vehicle_is_in_a_depot() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle::tests::is_waiting_for_unbunching_asserts_that_the_vehicle_is_in_a_depot",
+            record_failure,
+        ) {
+            return;
+        }
+        let owner = crate::orders::openttd_rust_vehicle_orders_new();
+        unsafe extern "C" fn vehicle_orders(
+            _: *mut std::ffi::c_void,
+        ) -> *mut crate::orders::VehicleOrders {
+            OWNER.load(Ordering::Relaxed)
+        }
+        static OWNER: std::sync::atomic::AtomicPtr<crate::orders::VehicleOrders> =
+            std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+        OWNER.store(owner, Ordering::Relaxed);
+        let orders: &'static crate::orders::Leaves = Box::leak(Box::new(crate::orders::Leaves {
+            vehicle: vehicle_orders,
+            ..crate::test_tables::ORDERS
+        }));
+        let v = record(VehicleType::VEH_ROAD);
+        assert!(!is_waiting_for_unbunching(v, orders, || false));
+        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
+        assert!(!is_waiting_for_unbunching(v, orders, || true));
+        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
+        delete(v);
+        // SAFETY: The test's owner, deleted once.
+        unsafe { crate::orders::openttd_rust_vehicle_orders_delete(owner) };
+    }
+
+    /// `Train::From`'s type assertion holds the handle constructor: a road vehicle fails it
+    /// once, a train passes it and its handle carries the record's train owner.
+    #[test]
+    #[allow(unsafe_code)]
+    fn train_handle_asserts_the_vehicle_type_and_carries_the_train_owner() {
+        if crate::services_assert::isolate_test_check(
+            "vehicle::tests::train_handle_asserts_the_vehicle_type_and_carries_the_train_owner",
+            record_failure,
+        ) {
+            return;
+        }
+        let owner = std::ptr::NonNull::<crate::train_state::TrainState>::dangling().as_ptr();
+        let train = record(VehicleType::VEH_TRAIN);
+        // SAFETY: The test's fresh record.
+        unsafe { (*train.0.as_ptr()).train = owner };
+        let handle = crate::train::Handle::from_vehicle(train);
+        assert_eq!((handle.record, handle.owner), (train.0.as_ptr(), owner));
+        assert_eq!(FAILED.load(Ordering::Relaxed), 0);
+        let road = record(VehicleType::VEH_ROAD);
+        let _ = crate::train::Handle::from_vehicle(road);
+        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
+        delete(train);
+        delete(road);
+    }
+
+    /// `GetAdvanceDistance`: an odd (axial) direction needs 192 progress, an even (corner)
+    /// one 256.
+    #[test]
+    fn get_advance_distance_follows_the_direction_parity() {
+        let v = record(VehicleType::VEH_ROAD);
+        for (direction, distance) in [
+            (Direction::DIR_NE, 192),
+            (Direction::DIR_SW, 192),
+            (Direction::DIR_N, 256),
+            (Direction::DIR_E, 256),
+        ] {
+            v.set_direction(direction);
+            assert_eq!(v.get_advance_distance(), distance, "{direction:?}");
+        }
+        delete(v);
     }
 }
