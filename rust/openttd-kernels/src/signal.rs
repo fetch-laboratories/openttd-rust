@@ -1392,6 +1392,44 @@ mod tests {
     use std::cell::{Cell, RefCell};
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+    /// `GetRustSignalContext` is `{&GetRustSharedServices(), &GetRustRailMapServices(),
+    /// &GetRustSignalServices()}`; the Rust context takes the caller's shared table and the
+    /// rail map and signal tables the command services name, each from its own source.
+    #[test]
+    fn context_takes_each_table_from_its_source() {
+        thread_local! {
+            static RAIL_MAP: &'static RailMapServices =
+                Box::leak(Box::new(crate::test_tables::RAIL_MAP));
+            static SIGNALS: &'static SignalServices =
+                Box::leak(Box::new(crate::test_tables::SIGNALS));
+            static POST: &'static crate::command_post::Services =
+                Box::leak(Box::new(crate::command_post::Services {
+                    command,
+                    ..crate::test_tables::COMMAND_POST
+                }));
+            static COMMANDS: &'static crate::services::CommandServices =
+                Box::leak(Box::new(crate::services::CommandServices {
+                    rail_map: RAIL_MAP.with(|t| *t),
+                    signals: SIGNALS.with(|t| *t),
+                    ..crate::test_tables::COMMANDS
+                }));
+        }
+        extern "C" fn command() -> &'static crate::services::CommandServices {
+            COMMANDS.with(|t| *t)
+        }
+        extern "C" fn command_post() -> &'static crate::command_post::Services {
+            POST.with(|t| *t)
+        }
+        let shared = Services {
+            command_post,
+            ..crate::test_tables::SHARED
+        };
+        let context = context(&shared);
+        assert_eq!(context.shared, &raw const shared);
+        assert_eq!(context.rail, std::ptr::from_ref(RAIL_MAP.with(|t| *t)));
+        assert_eq!(context.native, std::ptr::from_ref(SIGNALS.with(|t| *t)));
+    }
+
     thread_local! {
         static ASSERTIONS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
         static COMPANY_READS: Cell<u32> = const { Cell::new(0) };
