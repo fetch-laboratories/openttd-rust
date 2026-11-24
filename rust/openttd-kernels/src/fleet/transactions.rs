@@ -604,7 +604,7 @@ unsafe fn new_engine(
         (w.cost_error)(
             cost,
             STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE.0 + u32::from(kind),
-        )
+        );
     };
     engine
 }
