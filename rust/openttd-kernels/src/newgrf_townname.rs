@@ -15,6 +15,7 @@ use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
 use crate::newgrf_loading::{self, Services};
 use crate::services::ByteSpan;
 use crate::strings_type::SPECSTR_TOWNNAME_START;
+use crate::table::strings::STR_UNDEFINED;
 use std::ffi::c_void;
 
 #[cfg(test)]
@@ -253,7 +254,7 @@ pub(crate) unsafe fn feature_town_name(
                     false,
                     name.0,
                     name.1,
-                    s.undefined,
+                    STR_UNDEFINED.0,
                 );
 
                 lang = buf.byte()?;

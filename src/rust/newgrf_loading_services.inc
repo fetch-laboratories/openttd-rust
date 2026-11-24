@@ -63,7 +63,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.error_name = [](GRFError *e, const GRFConfig *c) noexcept { e->data = c->GetName(); },
 		.error_property = RustGRFErrorProperty,
 		.error_after_translated_file = [](GRFError *error) noexcept { error->data = GetString(STR_NEWGRF_ERROR_AFTER_TRANSLATED_FILE); },
-		.load_after = STR_NEWGRF_ERROR_LOAD_AFTER,
 		.read_byte = [](SpriteFile *f) noexcept { return f->ReadByte(); },
 		.read_word = [](SpriteFile *f) noexcept { return f->ReadWord(); },
 		.read_dword = [](SpriteFile *f) noexcept { return f->ReadDword(); },
@@ -106,14 +105,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.inflation = RustInflation,
 		.starting_year = RustStartingYear,
 		.plane_speed = RustPlaneSpeed,
-		.read_bounds = STR_NEWGRF_ERROR_READ_BOUNDS,
-		.unexpected_sprite = STR_NEWGRF_ERROR_UNEXPECTED_SPRITE,
-		.multiple_action8 = STR_NEWGRF_ERROR_MULTIPLE_ACTION_8,
-		.grm_failed = STR_NEWGRF_ERROR_GRM_FAILED,
-		.static_desync = STR_NEWGRF_ERROR_STATIC_GRF_CAUSES_DESYNC,
-		.list_property_too_long = STR_NEWGRF_ERROR_LIST_PROPERTY_TOO_LONG,
-		.invalid_id = STR_NEWGRF_ERROR_INVALID_ID,
-		.force_disabled = STR_NEWGRF_ERROR_FORCEFULLY_DISABLED,
 		.colourmap_sprite = SPR_2CCMAP_BASE,
 		.slopes_sprite = SPR_SLOPES_BASE,
 		.shore_sprite = SPR_SHORE_BASE,
@@ -155,8 +146,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.newgrf_dir = NEWGRF_DIR,
 		.assert_override_size = []([[maybe_unused]] size_t actual, [[maybe_unused]] uint32_t expected) noexcept { assert(actual == expected); },
 		.assert_file_match = []([[maybe_unused]] const GRFConfig *c, [[maybe_unused]] const GRFFile *f) noexcept { assert(GetFileByGRFID(c->ident.grfid) == f); },
-		.null_error = STR_NULL,
-		.undefined = STR_UNDEFINED,
 	};
 	return services;
 }

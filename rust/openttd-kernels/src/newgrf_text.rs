@@ -20,6 +20,7 @@ use crate::debug::{Bytes, grf_msg};
 use crate::game_state::GameState;
 use crate::services::ByteSpan;
 use crate::strings_type::{TAB_SIZE_NEWGRF, grf_string_id};
+use crate::table::strings::{STR_EMPTY, STR_UNDEFINED};
 use std::ffi::c_void;
 #[cfg(test)]
 pub(crate) use translation::tests::services as test_services;
@@ -27,7 +28,6 @@ pub(crate) use translation::translate;
 
 #[repr(C)]
 pub struct Services {
-    empty: u32,
     language_map: unsafe extern "C" fn(u32, u8) -> *const c_void,
     legacy_string: unsafe extern "C" fn(u32) -> u32,
     mapping: unsafe extern "C" fn(*const c_void, i32, bool) -> i32,
@@ -36,7 +36,6 @@ pub struct Services {
     num_genders: unsafe extern "C" fn() -> u8,
     plural_form: unsafe extern "C" fn(*const c_void) -> i32,
     reverse_mapping: unsafe extern "C" fn(*const c_void, i32, bool) -> i32,
-    undefined: u32,
 }
 impl Services {
     /// `GrfMsg(1, text)` of the original string translation diagnostics.
@@ -47,7 +46,7 @@ impl Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfTextServices" ["grf_loading"] => Services { empty, language_map, legacy_string, mapping, max_plural_forms, num_cases, num_genders, plural_form, reverse_mapping, undefined };
+    "OpenTTDGrfTextServices" ["grf_loading"] => Services { language_map, legacy_string, mapping, max_plural_forms, num_cases, num_genders, plural_form, reverse_mapping };
 }
 
 #[unsafe(no_mangle)]
@@ -89,7 +88,7 @@ pub unsafe extern "C" fn openttd_rust_grf_text_add(
         if language & 3 != 0 {
             language = 1;
         } else {
-            let mut result = s.empty;
+            let mut result = STR_EMPTY.0;
             for (mask, language_id) in [(4, 2), (8, 3), (16, 4)] {
                 if language & mask != 0 {
                     result = unsafe {
@@ -112,7 +111,7 @@ pub unsafe extern "C" fn openttd_rust_grf_text_add(
     }
     let index = unsafe { prepare(grfid, stringid, default) };
     if index == usize::MAX {
-        return s.empty;
+        return STR_EMPTY.0;
     }
     let newtext = translate(
         s,
@@ -198,16 +197,17 @@ unsafe fn publish(index: usize, language: u8, bytes: *const u8, length: usize) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_text_id(
-    grfid: u32,
-    stringid: u32,
-    undefined: u32,
-) -> u32 {
+/// `GetGRFStringID`: returns the index for this stringid associated with its grfID.
+fn get_grf_string_id(grfid: u32, stringid: u32) -> u32 {
     unsafe { &*TEXTS.get() }
         .iter()
         .position(|t| t.grfid == grfid && t.stringid == stringid)
-        .map_or(undefined, grf_string_id)
+        .map_or(STR_UNDEFINED.0, grf_string_id)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_grf_text_id(grfid: u32, stringid: u32) -> u32 {
+    get_grf_string_id(grfid, stringid)
 }
 
 /// `MapGRFStringID`: native legacy mappings cannot reenter the GRF table.
@@ -220,7 +220,7 @@ pub unsafe extern "C" fn openttd_rust_grf_text_map(s: &Services, grfid: u32, str
         } else {
             stringid
         };
-        unsafe { openttd_rust_grf_text_id(grfid, stringid, s.undefined) }
+        get_grf_string_id(grfid, stringid)
     } else {
         unsafe { (s.legacy_string)(stringid) }
     }
@@ -400,8 +400,8 @@ mod tests {
             for (local, expected) in [
                 (0xd000, grf_string_id(0)),
                 (0xd400, grf_string_id(0)),
-                (0xd800, 2),
-                (0xffff, 2),
+                (0xd800, STR_UNDEFINED.0),
+                (0xffff, STR_UNDEFINED.0),
                 (0x10000, 0x30000),
                 (1, 0x20001),
             ] {
@@ -452,7 +452,7 @@ mod tests {
             let text = openttd_rust_grf_text_get(&shared(), 0, &raw mut default);
             assert_eq!(crate::utf8::borrow(text.data, text.size), b"Deutsch");
             clean_up_strings();
-            assert_eq!(openttd_rust_grf_text_id(123, 0xd000, 2), 2);
+            assert_eq!(openttd_rust_grf_text_id(123, 0xd000), STR_UNDEFINED.0);
             let mut movement = crate::train_reservation::tests::movement_table();
             movement.native_assert = returning_assert;
             let mut shared = shared();

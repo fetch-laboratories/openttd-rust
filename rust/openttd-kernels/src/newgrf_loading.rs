@@ -106,7 +106,7 @@ pub unsafe extern "C" fn openttd_rust_grf_set_size(feature: u8, set: u32) -> u32
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { clocks, finance, global, cargo, engine, houses, industry, airports, types, action2, text, bindings, stations, engine_range, config_md5, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, config_filename, config_palette, param_count, set_parameter, find_config, file_for_config, error, error_name, error_property, error_after_translated_file, load_after, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, static_grf_info, gradual_loading, signal_side, freight_trains, wagon_speed_limits, improved_load, inflation, starting_year, plane_speed, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite, generic, clock, set_clock, config_at, exists, init_file, too_many, clear_errors, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir, assert_override_size, assert_file_match, null_error, undefined };
+    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { clocks, finance, global, cargo, engine, houses, industry, airports, types, action2, text, bindings, stations, engine_range, config_md5, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, config_filename, config_palette, param_count, set_parameter, find_config, file_for_config, error, error_name, error_property, error_after_translated_file, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, static_grf_info, gradual_loading, signal_side, freight_trains, wagon_speed_limits, improved_load, inflation, starting_year, plane_speed, colourmap_sprite, slopes_sprite, shore_sprite, generic, clock, set_clock, config_at, exists, init_file, too_many, clear_errors, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir, assert_override_size, assert_file_match };
     "OpenTTDGrfEngineRange" ["grf_loading"] => EngineRange { offset, count };
     "OpenTTDGrfClock" ["grf_loading"] => Clock { ticks, display };
     "OpenTTDGrfExecution" ["grf_loading"] => Execution {
@@ -151,7 +151,6 @@ pub struct Services {
     error_name: unsafe extern "C" fn(*mut c_void, *const c_void),
     error_property: unsafe extern "C" fn(*mut c_void, u32),
     pub(crate) error_after_translated_file: unsafe extern "C" fn(*mut c_void),
-    pub(crate) load_after: u32,
     read_byte: unsafe extern "C" fn(*mut c_void) -> u8,
     read_word: unsafe extern "C" fn(*mut c_void) -> u16,
     read_dword: unsafe extern "C" fn(*mut c_void) -> u32,
@@ -194,14 +193,6 @@ pub struct Services {
     inflation: unsafe extern "C" fn() -> bool,
     starting_year: unsafe extern "C" fn() -> i32,
     plane_speed: unsafe extern "C" fn() -> u8,
-    read_bounds: u32,
-    unexpected_sprite: u32,
-    multiple_action8: u32,
-    grm_failed: u32,
-    static_desync: u32,
-    list_property_too_long: u32,
-    pub(crate) invalid_id: u32,
-    force_disabled: u32,
     colourmap_sprite: u32,
     slopes_sprite: u32,
     shore_sprite: u32,
@@ -243,8 +234,6 @@ pub struct Services {
     newgrf_dir: u8,
     assert_override_size: unsafe extern "C" fn(usize, u32),
     assert_file_match: unsafe extern "C" fn(*const c_void, *const c_void),
-    null_error: u32,
-    pub(crate) undefined: u32,
 }
 impl Services {
     pub(crate) fn shared(&self) -> &crate::services::Services {
@@ -260,6 +249,12 @@ use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
 use crate::newgrf_config::{
     GCS_ACTIVATED, GCS_DISABLED, GCS_INITIALISED, GCS_NOT_FOUND, GCS_UNKNOWN, GRFP_USE_MASK,
     INIT_ONLY, INVALID, RESERVED, STATIC, SYSTEM, UNSAFE,
+};
+use crate::table::strings::{
+    STR_NEWGRF_ERROR_FORCEFULLY_DISABLED, STR_NEWGRF_ERROR_GRM_FAILED, STR_NEWGRF_ERROR_INVALID_ID,
+    STR_NEWGRF_ERROR_LIST_PROPERTY_TOO_LONG, STR_NEWGRF_ERROR_MULTIPLE_ACTION_8,
+    STR_NEWGRF_ERROR_READ_BOUNDS, STR_NEWGRF_ERROR_STATIC_GRF_CAUSES_DESYNC,
+    STR_NEWGRF_ERROR_UNEXPECTED_SPRITE, STR_NULL,
 };
 #[derive(Clone, Copy)]
 struct Label {
@@ -356,7 +351,7 @@ pub unsafe extern "C" fn openttd_rust_grf_disable(
         if current {
             (*execution()).skip_sprites = -1;
         }
-        if message == s.null_error {
+        if message == STR_NULL.0 {
             return ptr::null_mut();
         }
         (s.error)(c, line(), message, current)
@@ -365,13 +360,17 @@ pub unsafe extern "C" fn openttd_rust_grf_disable(
 /// Disable the current file and retain the offending Action0 property.
 pub unsafe fn disable_list_property(s: &Services, property: u32) {
     unsafe {
-        let error = openttd_rust_grf_disable(s, s.list_property_too_long, ptr::null_mut());
+        let error = openttd_rust_grf_disable(
+            s,
+            STR_NEWGRF_ERROR_LIST_PROPERTY_TOO_LONG.0,
+            ptr::null_mut(),
+        );
         (s.error_property)(error, property);
     }
 }
 /// Disable the current file after an invalid feature ID.
 pub unsafe fn disable_invalid_id(s: &Services) {
-    unsafe { disable(s, s.invalid_id) }
+    unsafe { disable(s, STR_NEWGRF_ERROR_INVALID_ID.0) }
 }
 unsafe fn disable(s: &Services, message: u32) {
     unsafe {
@@ -380,7 +379,7 @@ unsafe fn disable(s: &Services, message: u32) {
 }
 unsafe fn static_desync(s: &Services, c: *mut c_void) {
     unsafe {
-        let e = openttd_rust_grf_disable(s, s.static_desync, c);
+        let e = openttd_rust_grf_disable(s, STR_NEWGRF_ERROR_STATIC_GRF_CAUSES_DESYNC.0, c);
         (s.error_name)(e, config());
     }
 }
@@ -666,7 +665,7 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
                     GCS_ACTIVATED
                 }
             {
-                disable(s, s.null_error);
+                disable(s, STR_NULL.0);
             }
         }
         Ok(())
@@ -711,7 +710,7 @@ unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), R
             (*execution()).skip_sprites = -1;
         } else {
             if stage() < GLS_RESERVE && (s.config_status)(config()) != GCS_UNKNOWN {
-                disable(s, s.multiple_action8);
+                disable(s, STR_NEWGRF_ERROR_MULTIPLE_ACTION_8.0);
                 return Ok(());
             }
             let old_id = (s.shared().grf_file_id)(file());
@@ -774,7 +773,7 @@ unsafe fn inhibit(s: &Services, b: &mut ByteReader, safe: bool) -> Result<(), Re
                         "GRFInhibit: Deactivating file '{}'",
                         Bytes(config_filename(s, c))
                     );
-                    let e = openttd_rust_grf_disable(s, s.force_disabled, c);
+                    let e = openttd_rust_grf_disable(s, STR_NEWGRF_ERROR_FORCEFULLY_DISABLED.0, c);
                     (s.error_name)(e, config());
                 }
             }
@@ -912,7 +911,7 @@ unsafe fn perform_grm(
             grf_msg!(1, "ParamSet: GRM: Unable to allocate {} {}", count, kind);
         }
         if op != 4 && op != 5 {
-            disable(s, s.grm_failed);
+            disable(s, STR_NEWGRF_ERROR_GRM_FAILED.0);
         }
         u32::MAX
     }
@@ -948,7 +947,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                                     "ParamSet: GRM: Unable to allocate {} sprites; try changing NewGRF order",
                                     count
                                 );
-                                disable(s, s.grm_failed);
+                                disable(s, STR_NEWGRF_ERROR_GRM_FAILED.0);
                                 return Ok(());
                             }
                             grf_msg!(
@@ -1320,7 +1319,7 @@ unsafe fn decode_special_sprite(s: &Services, allocator: &mut Vec<u8>, num: u32,
                 1,
                 "DecodeSpecialSprite: Tried to read past end of pseudo-sprite data"
             );
-            disable(s, s.read_bounds);
+            disable(s, STR_NEWGRF_ERROR_READ_BOUNDS.0);
         }
     }
 }
@@ -1385,7 +1384,7 @@ unsafe fn load_file_body(s: &Services, stage: u8, f: *mut c_void) {
                 if (*execution()).skip_sprites == 0 {
                     if num > 1024 * 1024 {
                         grf_msg!(0, "LoadNewGRFFile: Unexpectedly large sprite, disabling");
-                        disable(s, s.unexpected_sprite);
+                        disable(s, STR_NEWGRF_ERROR_UNEXPECTED_SPRITE.0);
                         break;
                     }
                     decode_special_sprite(s, &mut allocator, num, stage);
@@ -1398,7 +1397,7 @@ unsafe fn load_file_body(s: &Services, stage: u8, f: *mut c_void) {
             } else {
                 if (*execution()).skip_sprites == 0 {
                     grf_msg!(0, "LoadNewGRFFile: Unexpected sprite, disabling");
-                    disable(s, s.unexpected_sprite);
+                    disable(s, STR_NEWGRF_ERROR_UNEXPECTED_SPRITE.0);
                     break;
                 }
                 if version >= 2 && typ == 0xFD {
@@ -1754,7 +1753,6 @@ pub(crate) const TEST_TABLE: Services = Services {
     error_name: crate::test_tables::unreachable2,
     error_property: crate::test_tables::unreachable2,
     error_after_translated_file: crate::test_tables::unreachable1,
-    load_after: 0,
     read_byte: crate::test_tables::unreachable1,
     read_word: crate::test_tables::unreachable1,
     read_dword: crate::test_tables::unreachable1,
@@ -1797,14 +1795,6 @@ pub(crate) const TEST_TABLE: Services = Services {
     inflation: crate::test_tables::unreachable0,
     starting_year: crate::test_tables::unreachable0,
     plane_speed: crate::test_tables::unreachable0,
-    read_bounds: 0,
-    unexpected_sprite: 0,
-    multiple_action8: 0,
-    grm_failed: 0,
-    static_desync: 0,
-    list_property_too_long: 0,
-    invalid_id: 0,
-    force_disabled: 0,
     colourmap_sprite: 0,
     slopes_sprite: 0,
     shore_sprite: 0,
@@ -1846,6 +1836,4 @@ pub(crate) const TEST_TABLE: Services = Services {
     newgrf_dir: 0,
     assert_override_size: crate::test_tables::unreachable2,
     assert_file_match: crate::test_tables::unreachable2,
-    null_error: 0,
-    undefined: 0,
 };
