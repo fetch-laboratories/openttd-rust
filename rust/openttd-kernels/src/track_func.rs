@@ -237,9 +237,12 @@ pub fn diagdir_reaches_trackdirs(dir: u8) -> u16 {
     [0x1009, 0x16, 0x520, 0x2a00][usize::from(dir)]
 }
 
+/// `_track_crosses_trackdirs`: maps a track to all trackdirs that make 90 deg turns with it.
+const TRACK_CROSSES_TRACKDIRS: [u16; 6] = [0x202, 0x101, 0x3030, 0x3030, 0xc0c, 0xc0c];
+
 /// `TrackdirCrossesTrackdirs`.
 pub fn trackdir_crosses_trackdirs(td: u8) -> u16 {
-    [0x202, 0x101, 0x3030, 0x3030, 0xc0c, 0xc0c][usize::from(trackdir_to_track(td))]
+    TRACK_CROSSES_TRACKDIRS[usize::from(trackdir_to_track(td))]
 }
 
 /// `TrackOverlapsTracks`.
@@ -399,6 +402,125 @@ pub fn track_crosses_tracks(
         check(false);
     }
     TRACK_CROSSES_TRACKS[usize::from(track.0)]
+}
+
+/// `TrackdirToTrack` with the original's `assert(IsValidTrackdir(trackdir))` through the
+/// native assertion policy `check`: returns the track which is used in the trackdir.
+pub fn trackdir_to_track_asserted(
+    trackdir: crate::track_type::Trackdir,
+    check: impl Fn(bool),
+) -> crate::track_type::Track {
+    check(is_valid_trackdir(trackdir.0));
+    crate::track_type::Track(trackdir_to_track(trackdir.0))
+}
+
+/// `ReverseTrackdir` with the original's `assert(IsValidTrackdirForRoadVehicle(trackdir))`:
+/// returns the reverse trackdir, the same track with the other direction on it.
+pub fn reverse_trackdir_asserted(
+    trackdir: crate::track_type::Trackdir,
+    check: impl Fn(bool),
+) -> crate::track_type::Trackdir {
+    check(is_valid_trackdir_for_road_vehicle(trackdir));
+    crate::track_type::Trackdir(reverse_trackdir(trackdir.0))
+}
+
+/// `FindFirstTrackdir` with the original's `assert((trackdirs & ~TRACKDIR_BIT_MASK) ==
+/// TRACKDIR_BIT_NONE)`: returns the first trackdir of the bits, or `INVALID_TRACKDIR` on
+/// `TRACKDIR_BIT_NONE`. The bits must not be `INVALID_TRACKDIR_BIT`.
+pub fn find_first_trackdir_asserted(
+    trackdirs: crate::track_type::TrackdirBits,
+    check: impl Fn(bool),
+) -> crate::track_type::Trackdir {
+    use crate::track_type::TrackdirBits;
+    check(trackdirs & !TrackdirBits::TRACKDIR_BIT_MASK == TrackdirBits::TRACKDIR_BIT_NONE);
+    crate::track_type::Trackdir(find_first_trackdir(trackdirs.0))
+}
+
+/// `DiagdirReachesTrackdirs` with the original's `assert(IsValidDiagDirection(diagdir))`:
+/// returns all trackdirs that can be reached when entering a tile from a given (diagonal)
+/// direction. This will obviously include 90 degree turns, since no information is
+/// available about the exact angle of entering.
+pub fn diagdir_reaches_trackdirs_asserted(
+    diagdir: crate::direction_type::DiagDirection,
+    check: impl Fn(bool),
+) -> crate::track_type::TrackdirBits {
+    check(crate::direction_func::is_valid_diag_direction(diagdir));
+    crate::track_type::TrackdirBits(diagdir_reaches_trackdirs(diagdir.0))
+}
+
+/// `DiagdirReachesTracks`, through the asserting `DiagdirReachesTrackdirs`: returns all
+/// tracks that can be reached when entering a tile from a given (diagonal) direction. This
+/// will obviously include 90 degree turns, since no information is available about the
+/// exact angle of entering.
+pub fn diagdir_reaches_tracks_asserted(
+    diagdir: crate::direction_type::DiagDirection,
+    check: impl Fn(bool),
+) -> crate::track_type::TrackBits {
+    crate::track_type::TrackBits(trackdir_bits_to_track_bits(
+        diagdir_reaches_trackdirs_asserted(diagdir, check).0,
+    ))
+}
+
+/// `TrackdirCrossesTrackdirs` with the original's `assert(IsValidTrackdir(trackdir))` and its
+/// asserting `TrackdirToTrack`: maps a trackdir to all trackdirs that make 90 deg turns with
+/// it. For the diagonal tracks this returns the track direction bits of the other axis in
+/// both directions, which cannot be joined by the given track direction. For the straight
+/// tracks this returns all possible 90 deg turns either on the current tile (which no train
+/// can joined) or on the bordering tiles.
+pub fn trackdir_crosses_trackdirs_asserted(
+    trackdir: crate::track_type::Trackdir,
+    check: impl Fn(bool) + Copy,
+) -> crate::track_type::TrackdirBits {
+    check(is_valid_trackdir(trackdir.0));
+    crate::track_type::TrackdirBits(
+        TRACK_CROSSES_TRACKDIRS[usize::from(trackdir_to_track_asserted(trackdir, check).0)],
+    )
+}
+
+/// `TrackEnterdirToTrackdir`: maps a track and an (4-way) dir to the trackdir that represents
+/// the track with the entry in the given direction.
+///
+/// For the diagonal tracks the return value is clear, its either the matching track direction
+/// or `INVALID_TRACKDIR`. For the straight tracks this returns the track direction which
+/// results if you follow the `DiagDirection` and then turn by 45 deg left or right on the next
+/// tile. The new direction on the new track will be the returning `Trackdir` value. If the
+/// parameters makes no sense like the track `TRACK_UPPER` and the direction `DIAGDIR_NE`
+/// (target track cannot be reached) this function returns `INVALID_TRACKDIR`.
+pub fn track_enterdir_to_trackdir(
+    track: crate::track_type::Track,
+    diagdir: crate::direction_type::DiagDirection,
+    check: impl Fn(bool) + Copy,
+) -> crate::track_type::Trackdir {
+    use crate::track_type::Trackdir;
+    const I: Trackdir = Trackdir::INVALID_TRACKDIR;
+    /// `_track_enterdir_to_trackdir`.
+    const TRACK_ENTERDIR_TO_TRACKDIR: [[Trackdir;
+        crate::direction_type::DiagDirection::DIAGDIR_END.0 as usize];
+        crate::track_type::Track::TRACK_END.0 as usize] = [
+        [Trackdir::TRACKDIR_X_NE, I, Trackdir::TRACKDIR_X_SW, I],
+        [I, Trackdir::TRACKDIR_Y_SE, I, Trackdir::TRACKDIR_Y_NW],
+        [I, Trackdir::TRACKDIR_UPPER_E, Trackdir::TRACKDIR_UPPER_W, I],
+        [Trackdir::TRACKDIR_LOWER_E, I, I, Trackdir::TRACKDIR_LOWER_W],
+        [Trackdir::TRACKDIR_LEFT_N, Trackdir::TRACKDIR_LEFT_S, I, I],
+        [I, I, Trackdir::TRACKDIR_RIGHT_S, Trackdir::TRACKDIR_RIGHT_N],
+    ];
+    check(is_valid_track(track.0));
+    check(crate::direction_func::is_valid_diag_direction(diagdir));
+    TRACK_ENTERDIR_TO_TRACKDIR[usize::from(track.0)][usize::from(diagdir.0)]
+}
+
+/// `TrackdirReachesTrackdirs`: maps a trackdir to the trackdirs that can be reached from it
+/// (ie, when entering the next tile). This will include 90 degree turns!
+pub fn trackdir_reaches_trackdirs(
+    trackdir: crate::track_type::Trackdir,
+    check: impl Fn(bool) + Copy,
+) -> crate::track_type::TrackdirBits {
+    check(is_valid_trackdir(trackdir.0));
+    /* Note that there is no direct table for this function (there used to be),
+     * but it uses two simpler tables to achieve the result */
+    crate::track_type::TrackdirBits(diagdir_reaches_trackdirs(
+        trackdir_to_exitdir_asserted(trackdir, check).0,
+    ))
 }
 
 /// `TrackDirectionToTrackdir`: maps a track and a full (8-way) direction to the trackdir that
@@ -675,5 +797,185 @@ mod track_table_tests {
             super::track_direction_to_trackdir(Track(0), Direction(8), record)
         }));
         assert_eq!(failed.get(), 1, "the direction assertion");
+    }
+}
+
+/// The asserting `track_func.h` helpers against the original's tables over their whole
+/// domain, and each assertion on an invalid input: a check that stops at the failed
+/// assertion shows it precedes the table read the assertion guards.
+#[cfg(test)]
+mod asserting_helper_tests {
+    use crate::direction_type::DiagDirection;
+    use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
+    use std::cell::Cell;
+
+    /// `INVALID_TRACKDIR` and the reversing road trackdirs fail `IsValidTrackdir`.
+    fn valid_trackdirs() -> impl Iterator<Item = Trackdir> {
+        [0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13]
+            .into_iter()
+            .map(Trackdir)
+    }
+    /// A check that counts failed assertions.
+    fn counting(failures: &Cell<u32>) -> impl Fn(bool) + Copy + '_ {
+        |ok| failures.set(failures.get() + u32::from(!ok))
+    }
+    /// Run `f` with a check that stops at its first failed assertion, and return how
+    /// many assertions failed: one when `f` asserts before anything else can fail.
+    fn stopping_failures(f: impl FnOnce(&dyn Fn(bool))) -> u32 {
+        let failures = Cell::new(0);
+        let check = |ok: bool| {
+            failures.set(failures.get() + u32::from(!ok));
+            assert!(ok, "the failed native assertion");
+        };
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&check)));
+        failures.get()
+    }
+
+    #[test]
+    fn track_enterdir_to_trackdir_follows_the_original_table() {
+        const I: u8 = 0xFF;
+        // `_track_enterdir_to_trackdir[TRACK_END][DIAGDIR_END]`, rows by track, columns
+        // DIAGDIR_NE, DIAGDIR_SE, DIAGDIR_SW, DIAGDIR_NW.
+        let expected: [[u8; 4]; 6] = [
+            [0, I, 8, I],
+            [I, 1, I, 9],
+            [I, 2, 10, I],
+            [3, I, I, 11],
+            [12, 4, I, I],
+            [I, I, 5, 13],
+        ];
+        let failures = Cell::new(0);
+        for (track, row) in (0u8..).zip(expected.iter()) {
+            for (dir, &td) in (0u8..).zip(row.iter()) {
+                assert_eq!(
+                    super::track_enterdir_to_trackdir(
+                        Track(track),
+                        DiagDirection(dir),
+                        counting(&failures)
+                    ),
+                    Trackdir(td),
+                    "track {track}, direction {dir}"
+                );
+            }
+        }
+        assert_eq!(failures.get(), 0);
+        let invalid_track = stopping_failures(|check| {
+            super::track_enterdir_to_trackdir(Track::INVALID_TRACK, DiagDirection(0), check);
+        });
+        assert_eq!(invalid_track, 1, "the track assertion");
+        let invalid_dir = stopping_failures(|check| {
+            super::track_enterdir_to_trackdir(
+                Track::TRACK_X,
+                DiagDirection::INVALID_DIAGDIR,
+                check,
+            );
+        });
+        assert_eq!(invalid_dir, 1, "the direction assertion");
+    }
+
+    #[test]
+    fn trackdir_reaches_trackdirs_follows_the_exit_direction_table() {
+        // `_exitdir_reaches_trackdirs[_trackdir_to_exitdir[trackdir]]`: the exit directions
+        // NE, SE, NE, SE, SW, SE and SW, NW, NW, SW, NW, NE of the valid trackdirs, and
+        // `X_NE | LOWER_E | LEFT_N`, `Y_SE | LEFT_S | UPPER_E`, `X_SW | UPPER_W | RIGHT_S`,
+        // `Y_NW | RIGHT_N | LOWER_W` for those directions.
+        let reaches = [0x1009_u16, 0x0016, 0x0520, 0x2a00];
+        let exitdirs = [0, 1, 0, 1, 2, 1, 2, 3, 3, 2, 3, 0];
+        let failures = Cell::new(0);
+        for (td, exitdir) in valid_trackdirs().zip(exitdirs) {
+            assert_eq!(
+                super::trackdir_reaches_trackdirs(td, counting(&failures)),
+                TrackdirBits(reaches[exitdir])
+            );
+        }
+        assert_eq!(failures.get(), 0);
+        // `TRACKDIR_RVREV_NE` fails `IsValidTrackdir` but passes `TrackdirToExitdir`'s road
+        // assertion; `INVALID_TRACKDIR` fails both, and the first stops the lookup.
+        let rvrev = Cell::new(0);
+        super::trackdir_reaches_trackdirs(Trackdir::TRACKDIR_RVREV_NE, counting(&rvrev));
+        assert_eq!(rvrev.get(), 1);
+        let invalid = stopping_failures(|check| {
+            super::trackdir_reaches_trackdirs(Trackdir::INVALID_TRACKDIR, check);
+        });
+        assert_eq!(invalid, 1);
+    }
+
+    #[test]
+    fn asserting_trackdir_conversions_follow_their_raw_forms() {
+        let failures = Cell::new(0);
+        for td in valid_trackdirs() {
+            assert_eq!(
+                super::trackdir_to_track_asserted(td, counting(&failures)),
+                Track(td.0 & 7)
+            );
+            assert_eq!(
+                super::reverse_trackdir_asserted(td, counting(&failures)),
+                Trackdir(td.0 ^ 8)
+            );
+            // `_track_crosses_trackdirs[TrackdirToTrack(trackdir)]`.
+            assert_eq!(
+                super::trackdir_crosses_trackdirs_asserted(td, counting(&failures)),
+                TrackdirBits([0x202, 0x101, 0x3030, 0x3030, 0x0c0c, 0x0c0c][usize::from(td.0 & 7)])
+            );
+        }
+        // Every valid set of trackdir bits, including none.
+        for bits in (0..=u16::MAX).filter(|bits| bits & !0x3f3f == 0) {
+            let first = (0..16).find(|&td| bits & (1 << td) != 0).unwrap_or(0xff);
+            assert_eq!(
+                super::find_first_trackdir_asserted(TrackdirBits(bits), counting(&failures)),
+                Trackdir(first)
+            );
+        }
+        assert_eq!(failures.get(), 0);
+
+        // Each conversion asserts its precondition: `TrackdirToTrack` and
+        // `TrackdirCrossesTrackdirs` a valid rail trackdir, `ReverseTrackdir` a trackdir
+        // below `TRACKDIR_END`, `FindFirstTrackdir` no bits outside the mask.
+        let rvrev = Cell::new(0);
+        super::trackdir_to_track_asserted(Trackdir::TRACKDIR_RVREV_NE, counting(&rvrev));
+        assert_eq!(rvrev.get(), 1);
+        let reversed = Cell::new(0);
+        super::reverse_trackdir_asserted(Trackdir::TRACKDIR_RVREV_NE, counting(&reversed));
+        assert_eq!(reversed.get(), 0);
+        super::reverse_trackdir_asserted(Trackdir::INVALID_TRACKDIR, counting(&reversed));
+        assert_eq!(reversed.get(), 1);
+        let crossing = stopping_failures(|check| {
+            super::trackdir_crosses_trackdirs_asserted(Trackdir::INVALID_TRACKDIR, check);
+        });
+        assert_eq!(crossing, 1);
+        let masked = Cell::new(0);
+        assert_eq!(
+            super::find_first_trackdir_asserted(TrackdirBits(0x0040), counting(&masked)),
+            Trackdir(6)
+        );
+        super::find_first_trackdir_asserted(TrackdirBits::INVALID_TRACKDIR_BIT, counting(&masked));
+        assert_eq!(masked.get(), 2);
+    }
+
+    #[test]
+    fn asserting_diagdir_reaches_follow_the_original_table() {
+        // `_exitdir_reaches_trackdirs`, and its tracks.
+        let trackdirs = [0x1009_u16, 0x0016, 0x0520, 0x2a00];
+        let tracks = [0x19_u8, 0x16, 0x25, 0x2a];
+        let failures = Cell::new(0);
+        for dir in 0..4 {
+            assert_eq!(
+                super::diagdir_reaches_trackdirs_asserted(DiagDirection(dir), counting(&failures)),
+                TrackdirBits(trackdirs[usize::from(dir)])
+            );
+            assert_eq!(
+                super::diagdir_reaches_tracks_asserted(DiagDirection(dir), counting(&failures)),
+                TrackBits(tracks[usize::from(dir)])
+            );
+        }
+        assert_eq!(failures.get(), 0);
+        let trackdir_lookup = stopping_failures(|check| {
+            super::diagdir_reaches_trackdirs_asserted(DiagDirection::INVALID_DIAGDIR, check);
+        });
+        assert_eq!(trackdir_lookup, 1);
+        let track_lookup = stopping_failures(|check| {
+            super::diagdir_reaches_tracks_asserted(DiagDirection::INVALID_DIAGDIR, check);
+        });
+        assert_eq!(track_lookup, 1);
     }
 }

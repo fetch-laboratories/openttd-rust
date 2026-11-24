@@ -184,7 +184,6 @@ mod bodies {
                 ..*shared
             }));
             let leaves = Box::leak(Box::new(Leaves {
-                reservation: Box::leak(Box::new(crate::train_reservation::tests::leaves())),
                 vehicle: Box::leak(Box::new(crate::vehicle::VehicleServices {
                     newgrf,
                     ..*vehicle
@@ -464,10 +463,6 @@ mod bodies {
     extern "C" fn hidden() -> bool {
         false
     }
-    /// The reservation table's `TrackBitsToTrack(v->track)`.
-    extern "C" fn bits_track(_: *mut std::ffi::c_void, _: Handle, bits: u8) -> u64 {
-        u64::from(crate::track_func::find_first_track(bits))
-    }
 
     /// `TrainCrashed`: a train that is not crashed yet is crashed, then the owner's AI event
     /// and the game event report `CRASH_TRAIN` with the victims of `Crash()`; an already
@@ -490,15 +485,8 @@ mod bodies {
                 },
                 &VEHICLE,
             );
-            // SAFETY: The fixture's leaked reservation table.
-            let reservation = unsafe { *f.leaves.reservation };
             f.leaves = Box::leak(Box::new(Leaves {
                 physics,
-                reservation: Box::leak(Box::new(reservation::Leaves {
-                    bits_track,
-                    shared: f.shared,
-                    ..reservation
-                })),
                 ..*f.leaves
             }));
             PBS.with(|p| {
@@ -651,9 +639,6 @@ mod bodies {
             assert!(reserved);
             call(Call::Wormhole(tile));
         }
-        extern "C" fn diag_track(_: *mut std::ffi::c_void, _: Handle, dir: u8) -> u64 {
-            u64::from(dir & 1)
-        }
 
         /// Tile (5, 5): plain rail with `TRACK_BIT_X`.
         const RAIL: TileIndex = TileIndex(5 + 5 * 16);
@@ -681,18 +666,10 @@ mod bodies {
                     ..VEHICLE
                 },
             );
-            // SAFETY: The fixture's leaked reservation table.
-            let reservation = unsafe { *f.leaves.reservation };
             f.leaves = Box::leak(Box::new(Leaves {
                 physics: Box::leak(Box::new(crate::ground_vehicle::Services {
                     base_crash,
                     ..GROUND_VEHICLE
-                })),
-                reservation: Box::leak(Box::new(reservation::Leaves {
-                    bits_track,
-                    diag_track,
-                    shared: f.shared,
-                    ..reservation
                 })),
                 ..*f.leaves
             }));

@@ -241,7 +241,6 @@ pub struct CommandServicesTable {
     pub last_train:
         unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
     pub train: *const crate::train::Leaves,
-    pub reservation: *const crate::train_reservation::Leaves,
     pub custom_rail_index: extern "C" fn(u32) -> u32,
     pub make_rail_station: extern "C" fn(u32, u8, u16, u8, u8, u8),
     pub close_station_inspect: extern "C" fn(u32),
@@ -1541,18 +1540,18 @@ impl Ctx<'_> {
                 .0
                 != TileIndex::INVALID.0
     }
+    /// The path reservation context of the train table.
+    fn reservation(&self) -> crate::train_reservation::Game<'_> {
+        // SAFETY: The immutable train table outlives every synchronous entry.
+        crate::train_reservation::Game::new(unsafe { &*self.s.train }, self.shared)
+    }
     /// `FreeTrainReservation`: clear platform reservation during station
     /// building/removing.
     fn free_train_reservation(&self, v: *mut crate::services::Train) {
-        unsafe {
-            let handle = crate::pbs::Pbs::acquire(self.shared).handle(v);
-            crate::train_reservation::openttd_rust_train_reservation_free(
-                handle,
-                handle.vehicle(),
-                self.s.reservation,
-                std::ptr::null_mut(),
-            );
-        }
+        crate::train_reservation::free_train_track_reservation(
+            &self.reservation(),
+            crate::pbs::Pbs::acquire(self.shared).handle(v),
+        );
         self.set_platform_reservation_at(v, false, false);
         let v = unsafe { (self.s.last_train)(v) };
         self.set_platform_reservation_at(v, true, false);
@@ -1561,17 +1560,12 @@ impl Ctx<'_> {
     /// building/removing.
     fn restore_train_reservation(&self, v: *mut crate::services::Train) {
         self.set_platform_reservation_at(v, false, true);
-        unsafe {
-            let handle = crate::pbs::Pbs::acquire(self.shared).handle(v);
-            crate::train_reservation::openttd_rust_train_reservation_try_path(
-                handle,
-                handle.vehicle(),
-                1,
-                1,
-                self.s.reservation,
-                std::ptr::null_mut(),
-            );
-        }
+        crate::train_reservation::try_path_reserve(
+            &self.reservation(),
+            crate::pbs::Pbs::acquire(self.shared).handle(v),
+            true,
+            true,
+        );
         let v = unsafe { (self.s.last_train)(v) };
         self.set_platform_reservation_at(v, true, true);
     }
@@ -6126,7 +6120,6 @@ crate::abi::layouts! {
         set_train_area,
         last_train,
         train,
-        reservation,
         custom_rail_index,
         make_rail_station,
         close_station_inspect,

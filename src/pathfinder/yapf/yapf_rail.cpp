@@ -57,27 +57,6 @@ void YapfRailDumpState(const uint32_t *words, uint32_t length) noexcept
 	fwrite(dmp.m_out.data(), 1, dmp.m_out.size(), *file);
 }
 
-Track YapfTrainChooseTrack(const Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool &path_found, bool reserve_track, PBSTileInfo *target, TileIndex *dest)
-{
-	OpenTTDTrainReservationPbs record{};
-	if (target != nullptr) record = {target->tile.base(), {}, static_cast<uint8_t>(target->trackdir), static_cast<uint8_t>(target->okay)};
-	uint32_t dest_tile = dest != nullptr ? dest->base() : 0;
-	const Track track = static_cast<Track>(openttd_rust_yapf_train_choose_track(&GetRustSharedServices(), RustVehicle(v), tile.base(), enterdir, tracks, &path_found, reserve_track, target != nullptr ? &record : nullptr, dest != nullptr ? &dest_tile : nullptr));
-	if (target != nullptr) *target = {TileIndex{record.tile}, static_cast<Trackdir>(record.td), record.okay != 0};
-	if (dest != nullptr) *dest = TileIndex{dest_tile};
-	return track;
-}
-
-bool YapfTrainCheckReverse(const Train *v)
-{
-	return openttd_rust_yapf_train_check_reverse(&GetRustSharedServices(), RustVehicle(v)) != 0;
-}
-
-bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, bool override_railtype)
-{
-	return openttd_rust_yapf_train_find_nearest_safe_tile(&GetRustSharedServices(), RustVehicle(v), tile.base(), td, override_railtype) != 0;
-}
-
 void YapfNotifyTrackLayoutChange(TileIndex tile, Track track)
 {
 	openttd_rust_rail_invalidate(tile.base(), track);

@@ -1238,13 +1238,13 @@ impl Context {
     pub(crate) fn add_track(self, tile: u32, track: u8, owner: u8) {
         self.add_track_to_signal_buffer(TileIndex(tile), Track(track), CompanyID(owner));
     }
-    /// Temporary raw adapter of [`Self::add_side_to_signal_buffer`] for `rail_cmd.rs`,
-    /// `train_reservation.rs` and `tunnelbridge_cmd.rs` until their passes.
+    /// Temporary raw adapter of [`Self::add_side_to_signal_buffer`] for `rail_cmd.rs` and
+    /// `tunnelbridge_cmd.rs` until their passes.
     pub(crate) fn add_side(self, tile: u32, side: u8, owner: u8) {
         self.add_side_to_signal_buffer(TileIndex(tile), DiagDirection(side), CompanyID(owner));
     }
-    /// Temporary raw adapter of [`Self::update_signals_in_buffer`] for `train_reservation.rs`
-    /// and `water.rs` until their passes.
+    /// Temporary raw adapter of [`Self::update_signals_in_buffer`] for `water.rs` until its
+    /// pass.
     pub(crate) fn flush(self) {
         self.update_signals_in_buffer();
     }
@@ -1268,10 +1268,6 @@ pub(crate) fn acquire_context(get: extern "C" fn() -> Context) -> Context {
         std::mem::size_of::<Context>() as u64,
     );
     context
-}
-/// One actual native owner read at a direct signal-call branch (one byte).
-pub(crate) fn count_context_owner_read() {
-    crate::witness::hit(crate::witness::SIGNAL_CONTEXT_OWNER_READS);
 }
 /// Narrow unchanged-body probe trace for `SmallSet` operations not reachable from
 /// the stock rail layouts (not a production signal entry or second authority).

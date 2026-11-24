@@ -22,7 +22,6 @@
 #include "../depot_map.h"
 #include "../tunnelbridge.h"
 #include "../pbs.h"
-#include "train_reservation_ffi.h"
 #include "../pathfinder/follow_track.hpp"
 
 inline OpenTTDSignalContext GetRustSignalContext() noexcept
@@ -43,12 +42,7 @@ inline DiagDirection RustRailDepotDirection(uint32_t tile) noexcept { return Get
 inline TrackBits RustRailTracks(uint32_t tile) noexcept { return GetTrackBits(TileIndex(tile)); }
 inline bool RustRailHasSignals(uint32_t tile) noexcept { return HasSignals(TileIndex(tile)); }
 inline bool RustRailHasSignalTrack(uint32_t tile, uint8_t track) noexcept { return HasSignalOnTrack(TileIndex(tile), static_cast<Track>(track)); }
-inline SignalType RustRailSignalType(uint32_t tile, uint8_t track) noexcept { return GetSignalType(TileIndex(tile), static_cast<Track>(track)); }
-inline bool RustRailHasSignalTrackdir(uint32_t tile, uint8_t td) noexcept { return HasSignalOnTrackdir(TileIndex(tile), static_cast<Trackdir>(td)); }
-inline SignalState RustRailSignalState(uint32_t tile, uint8_t td) noexcept { return GetSignalStateByTrackdir(TileIndex(tile), static_cast<Trackdir>(td)); }
 inline void RustRailSetSignalState(uint32_t tile, uint8_t td, uint8_t state) noexcept { SetSignalStateByTrackdir(TileIndex(tile), static_cast<Trackdir>(td), static_cast<SignalState>(state)); }
-inline bool RustRailSignalIsGreen(uint32_t tile, uint8_t td) noexcept { return RustRailSignalState(tile, td) == SIGNAL_STATE_GREEN; }
-inline void RustRailSetSignalGreen(uint32_t tile, uint8_t td, uint8_t green) noexcept { RustRailSetSignalState(tile, td, green != 0 ? SIGNAL_STATE_GREEN : SIGNAL_STATE_RED); }
 inline Axis RustRailStationAxis(uint32_t tile) noexcept { return GetRailStationAxis(TileIndex(tile)); }
 inline Axis RustCrossingRoadAxis(uint32_t tile) noexcept { return GetCrossingRoadAxis(TileIndex(tile)); }
 inline TransportType RustTunnelBridgeTransport(uint32_t tile) noexcept { return GetTunnelBridgeTransportType(TileIndex(tile)); }
@@ -73,10 +67,7 @@ inline SignalVariant RustSignalVariant(uint32_t tile, uint8_t track) noexcept { 
 inline void RustSetSignalVariant(uint32_t tile, uint8_t track, uint8_t variant) noexcept { SetSignalVariant(TileIndex(tile), static_cast<Track>(track), static_cast<SignalVariant>(variant)); }
 inline void RustCycleSignalSide(uint32_t tile, uint8_t track) noexcept { CycleSignalSide(TileIndex(tile), static_cast<Track>(track)); }
 inline uint64_t RustAllCompatibleRailTypes(uint64_t types) noexcept { return GetAllCompatibleRailTypes(RailTypes{types}).base(); }
-inline RailType RustTileRailType(uint32_t tile) noexcept { return GetTileRailType(TileIndex{tile}); }
 inline bool RustRail90Disallowed(uint8_t a, uint8_t b, bool def) noexcept { return Rail90DegTurnDisallowed(static_cast<RailType>(a), static_cast<RailType>(b), def); }
-inline bool RustDefaultRail90Disallowed(uint8_t a, uint8_t b) noexcept { return RustRail90Disallowed(a, b, _settings_game.pf.forbid_90_deg); }
-inline bool RustTileRail90Disallowed(uint32_t a, uint32_t b) noexcept { return RustDefaultRail90Disallowed(RustTileRailType(a), RustTileRailType(b)); }
 inline bool RustOnewaySignalBlocking(uint32_t tile, uint8_t td) noexcept { return HasOnewaySignalBlockingTrackdir(TileIndex{tile}, static_cast<Trackdir>(td)); }
 inline bool RustHasPbsSignal(uint32_t tile, uint8_t td) noexcept { return HasPbsSignalOnTrackdir(TileIndex{tile}, static_cast<Trackdir>(td)); }
 inline bool RustShowTrackReservation() noexcept { return _settings_client.gui.show_track_reservation; }
@@ -87,7 +78,6 @@ inline void RustSetDepotReservation(uint32_t tile, bool reserved) noexcept { Set
 inline void RustSetDepotExit(uint32_t tile, uint8_t dir) noexcept { SetRailDepotExitDirection(TileIndex(tile), static_cast<DiagDirection>(dir)); }
 inline void RustMakeRailNormal(uint32_t tile, uint8_t owner, uint8_t bits, uint8_t rt) noexcept { MakeRailNormal(TileIndex(tile), Owner(owner), static_cast<TrackBits>(bits), static_cast<RailType>(rt)); }
 inline void RustMakeRailDepot(uint32_t tile, uint8_t owner, uint16_t depot, uint8_t dir, uint8_t rt) noexcept { MakeRailDepot(TileIndex(tile), Owner(owner), DepotID(depot), static_cast<DiagDirection>(dir), static_cast<RailType>(rt)); }
-inline bool RustIsRailStation(uint32_t tile) noexcept { return IsRailStationTile(TileIndex(tile)); }
 inline bool RustWormholeReserved(uint32_t tile) noexcept { return HasTunnelBridgeReservation(TileIndex(tile)); }
 inline void RustSetTunnelBridgeReservation(uint32_t tile, bool reserved) noexcept { SetTunnelBridgeReservation(TileIndex{tile}, reserved); }
 inline void RustSetTileOwner(uint32_t tile, uint8_t owner) noexcept { SetTileOwner(TileIndex(tile), Owner(owner)); }
@@ -104,15 +94,7 @@ Result OpenTTDLegacyMapQuery(Handle, Args... args) noexcept
 {
 	return static_cast<Result>(Query(args...));
 }
-template <typename Result, auto Query, typename Handle, typename... Args>
-Result OpenTTDLegacyContextMapQuery(void *, Handle, Args... args) noexcept
-{
-	return static_cast<Result>(Query(args...));
-}
 inline bool RustIsTunnel(uint32_t tile) noexcept { return IsTunnel(TileIndex{tile}); }
-inline bool RustMovementPlainRail(uint32_t tile) noexcept { return IsPlainRail(TileIndex{tile}); }
-inline bool RustRailDepotTile(uint32_t tile) noexcept { return IsRailDepotTile(TileIndex{tile}); }
 static_assert(TRACK_END == 6);
-inline bool RustRailOnewaySignal(uint32_t tile, uint8_t track) noexcept { return IsOnewaySignal(TileIndex{tile}, static_cast<Track>(track)); }
 inline bool RustCrossingBarred(uint32_t tile) noexcept { return IsCrossingBarred(TileIndex{tile}); }
 #endif /* RUST_SERVICES_RAIL_H */

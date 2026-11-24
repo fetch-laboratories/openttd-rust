@@ -467,7 +467,7 @@ mod tests {
     thread_local! {
         static ASSERTS: Cell<u32> = const { Cell::new(0) };
         static MOVEMENT: crate::movement::MovementServices = {
-            let mut movement = crate::train_reservation::tests::movement_table();
+            let mut movement = crate::test_tables::MOVEMENT;
             movement.native_assert = native_assert;
             movement
         };

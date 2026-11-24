@@ -62,7 +62,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.set_train_area = [](BaseStation *st, OpenTTDStationArea area) noexcept { st->train_station = TileArea(TileIndex{area.tile}, area.w, area.h); },
 		.last_train = RustVehicleLast<Train>,
 		.train = &GetTrainServices(),
-		.reservation = &GetTrainReservationServices(),
 
 		.custom_rail_index = RustCustomStationIndex,
 		.make_rail_station = [](uint32_t tile, uint8_t owner, uint16_t id, uint8_t axis, uint8_t gfx, uint8_t rt) noexcept { MakeRailStation(TileIndex{tile}, Owner(owner), StationID(id), static_cast<Axis>(axis), gfx, static_cast<RailType>(rt)); },
