@@ -388,7 +388,7 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
             pending_replace = true;
             let engine = crate::vehicle::EngineRef::of(svc!(C, capabilities.engine, new_engine.0));
             let cost = crate::engine_capabilities::get_cost(capabilities, engine);
-            needed_money = needed_money.saturating_add(cost.saturating_mul(2));
+            crate::overflowsafe_type::add_i64(&mut needed_money, cost.saturating_mul(2));
             branch!(C, VEHICLE_MAINT_REPLACE);
             if needed_money
                 > get_available_money(m.commands(), svc!(C, companies.company_id, c.cast_mut()))
