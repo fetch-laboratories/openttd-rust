@@ -923,9 +923,11 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_keep(l: *mut List) {
 pub(crate) unsafe fn keep_all(l: *mut List) {
     unsafe {
         let counts = &raw mut (*l).fields.action_counts;
-        (*counts)[MoveToAction::MTA_DELIVER.0 as usize] = 0;
-        (*counts)[MoveToAction::MTA_TRANSFER.0 as usize] = 0;
+        // `action_counts[MTA_DELIVER] = action_counts[MTA_TRANSFER] = action_counts[MTA_LOAD] = 0`
+        // stores right to left.
         (*counts)[MoveToAction::MTA_LOAD.0 as usize] = 0;
+        (*counts)[MoveToAction::MTA_TRANSFER.0 as usize] = 0;
+        (*counts)[MoveToAction::MTA_DELIVER.0 as usize] = 0;
         (*counts)[MoveToAction::MTA_KEEP.0 as usize] = (*l).fields.count;
     }
 }

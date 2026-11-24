@@ -499,11 +499,8 @@ impl Refresher {
             flags = flags.set(RefreshFlag::UseNext);
 
             if span.order(next).is_type(OrderType::OT_CONDITIONAL) {
-                let skip_to = o.decision(
-                    orderlist,
-                    span.order(next).condition_skip_to_order(),
-                    num_hops,
-                );
+                let skip_to =
+                    span.next_decision_node(span.order(next).condition_skip_to_order(), num_hops);
                 if skip_to != VehicleOrderID::INVALID_VEH_ORDER_ID
                     && num_hops < u32::from(span.count().0)
                 {
@@ -526,7 +523,7 @@ impl Refresher {
 
             /* Reassign next with the following stop. This can be a station or a
              * depot.*/
-            next = o.decision(orderlist, o.next(orderlist, next), num_hops);
+            next = span.next_decision_node(span.next(next), num_hops);
             num_hops = num_hops.wrapping_add(1);
         }
         next
@@ -754,7 +751,9 @@ pub(crate) fn refresh_links(v: VehicleRef, allow_merge: bool, is_full_loading: b
     }
 
     /* Make sure the first order is a useful order. */
-    let first = o.decision(orders(v), v.cur_implicit_order_index(), 0);
+    let first = o
+        .span(orders(v))
+        .next_decision_node(v.cur_implicit_order_index(), 0);
     if first == VehicleOrderID::INVALID_VEH_ORDER_ID {
         return;
     }

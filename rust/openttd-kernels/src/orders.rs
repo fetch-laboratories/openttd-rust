@@ -807,36 +807,12 @@ impl Game {
         store(slot(self.vector(list), usize::from(index)), order);
     }
     fn next_index(self, list: *mut c_void, index: u8) -> u8 {
-        let count = self.size(list);
-        if count == 0 {
-            u8::MAX
-        } else {
-            ((u16::from(index) + 1) % u16::from(count)) as u8
-        }
+        OrderSpan(self.vector(list)).next(VehicleOrderID(index)).0
     }
     fn decision(self, list: *mut c_void, next: u8, hops: u32) -> u8 {
-        if hops > u32::from(self.size(list)) || next >= self.size(list) {
-            return u8::MAX;
-        }
-        let order = self.order(list, next).unwrap();
-        if order.kind() == OT_CONDITIONAL {
-            if order.variable() != 5 {
-                return next;
-            }
-            return self.decision(list, order.flags, hops.wrapping_add(1));
-        }
-        if order.kind() == OT_GOTO_DEPOT {
-            if order.action() & 1 != 0 {
-                return u8::MAX;
-            }
-            if order.is_refit() {
-                return next;
-            }
-        }
-        if !order.can_load_unload() {
-            return self.decision(list, self.next_index(list, next), hops.wrapping_add(1));
-        }
-        next
+        OrderSpan(self.vector(list))
+            .next_decision_node(VehicleOrderID(next), hops)
+            .0
     }
     /// `OrderList::GetNextStoppingStation`, appending each station to `output`.
     fn stopping(
@@ -4917,6 +4893,41 @@ impl OrderSpan {
         // SAFETY: An index below `count` names a live stored order of the span.
         unsafe { OrderView::of(slot(self.0, usize::from(index.0))) }
     }
+    /// `OrderList::GetNext`: the order after `index`, wrapping to the first.
+    pub(crate) fn next(self, index: VehicleOrderID) -> VehicleOrderID {
+        let count = self.count().0;
+        if count == 0 {
+            VehicleOrderID::INVALID_VEH_ORDER_ID
+        } else {
+            VehicleOrderID(((u16::from(index.0) + 1) % u16::from(count)) as u8)
+        }
+    }
+    /// `OrderList::GetNextDecisionNode`: the next order which will make the given vehicle
+    /// stop at a station or refit at a depot or evaluate a non-trivial condition.
+    pub(crate) fn next_decision_node(self, next: VehicleOrderID, hops: u32) -> VehicleOrderID {
+        if hops > u32::from(self.count().0) || next >= self.count() {
+            return VehicleOrderID::INVALID_VEH_ORDER_ID;
+        }
+        let order = self.order(next).copied();
+        if order.kind() == OT_CONDITIONAL {
+            if order.variable() != 5 {
+                return next;
+            }
+            return self.next_decision_node(VehicleOrderID(order.flags), hops.wrapping_add(1));
+        }
+        if order.kind() == OT_GOTO_DEPOT {
+            if order.action() & 1 != 0 {
+                return VehicleOrderID::INVALID_VEH_ORDER_ID;
+            }
+            if order.is_refit() {
+                return next;
+            }
+        }
+        if !order.can_load_unload() {
+            return self.next_decision_node(self.next(next), hops.wrapping_add(1));
+        }
+        next
+    }
 }
 
 /// Direct access to the canonical orders owner for route prediction.
@@ -4934,16 +4945,6 @@ impl VisitOrders {
     pub(crate) fn list(self, v: VehicleRef) -> *mut c_void {
         self.0.orders(Self::shell(v))
     }
-    /// `OrderList::GetNumOrders()`.
-    pub(crate) fn count(self, list: *mut c_void) -> VehicleOrderID {
-        VehicleOrderID(self.0.size(list))
-    }
-    /// `orders[index]` for an index below `count`, read in place.
-    pub(crate) fn order(self, list: *mut c_void, index: VehicleOrderID) -> OrderView<'static> {
-        // SAFETY: An index below `count` names a live stored order, which no caller of a
-        // view changes while it reads it.
-        unsafe { OrderView::of(slot(self.0.vector(list), usize::from(index.0))) }
-    }
     /// `OrderList::GetOrders()` of `list`, resolved once.
     pub(crate) fn span(self, list: *mut c_void) -> OrderSpan {
         OrderSpan(self.0.vector(list))
@@ -4956,19 +4957,6 @@ impl VisitOrders {
     pub(crate) fn stored_order(self, list: *mut c_void, index: usize) -> Order {
         self.0.stored_order(list, index)
     }
-    /// `OrderList::GetNext`.
-    pub(crate) fn next(self, list: *mut c_void, index: VehicleOrderID) -> VehicleOrderID {
-        VehicleOrderID(self.0.next_index(list, index.0))
-    }
-    /// `OrderList::GetNextDecisionNode`.
-    pub(crate) fn decision(
-        self,
-        list: *mut c_void,
-        next: VehicleOrderID,
-        hops: u32,
-    ) -> VehicleOrderID {
-        VehicleOrderID(self.0.decision(list, next.0, hops))
-    }
     /// `OrderList::GetTotalDuration()`.
     pub(crate) fn total(self, list: *mut c_void) -> i32 {
         read_field!(self.0.list(list), total)
@@ -4980,7 +4968,11 @@ impl VisitOrders {
     /// `v->GetOrder(index)`: null without a list or beyond its orders, read in place.
     pub(crate) fn get(self, v: VehicleRef, index: VehicleOrderID) -> Option<OrderView<'static>> {
         let list = crate::vehicle_base::order_list(v.0.as_ptr());
-        (!list.is_null() && index < self.count(list)).then(|| self.order(list, index))
+        if list.is_null() {
+            return None;
+        }
+        let span = self.span(list);
+        (index < span.count()).then(|| span.order(index))
     }
     /// The implicit-order part of `Vehicle::BeginLoading`.
     pub(crate) fn begin_loading(self, v: VehicleRef) {
