@@ -129,8 +129,6 @@ pub struct VehicleServices {
     pub start_stop_dirty: extern "C" fn(VehicleRef),
     /// `delete v`; the handle and its owner are dead afterwards.
     pub destroy: extern "C" fn(VehicleRef),
-    /// Original virtual `SetDestTile`; may reenter the vehicle owner.
-    pub set_dest_tile: extern "C" fn(VehicleRef, u32),
     /// Only the current engine, for callers that do not consume its GRF version.
     pub engine: extern "C" fn(VehicleRef) -> EngineRef,
     pub write_profit: extern "C" fn(VehicleRef, i64),
@@ -270,7 +268,6 @@ crate::abi::layouts! {
         play_sound,
         start_stop_dirty,
         destroy,
-        set_dest_tile,
         engine,
         write_profit,
         write_economy_service,

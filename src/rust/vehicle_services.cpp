@@ -180,7 +180,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.play_sound = VehicleSvcPlaySound,
 	.start_stop_dirty = VehicleSvcStartStopDirty,
 	.destroy = VehicleSvcDestroy,
-	.set_dest_tile = RustVehicleSetDestTile,
 	.engine = RustVehicleGetEngine,
 	.write_profit = VehicleSvcWriteProfit,
 	.write_economy_service = VehicleSvcWriteEconomyService,

@@ -3758,7 +3758,7 @@ impl Ctx<'_> {
                         && v.dest_tile() == tile
                     {
                         let destination = (self.s.order_station_location)(v, station_id.0);
-                        (self.vehicle().set_dest_tile)(v, destination);
+                        crate::road::set_road_dest_tile(v, TileIndex(destination));
                     }
                 },
             );

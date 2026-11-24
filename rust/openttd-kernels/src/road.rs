@@ -2979,6 +2979,10 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
 pub unsafe extern "C" fn openttd_rust_road_set_dest(v: VehicleRef, state: *mut State, tile: u32) {
     set_dest_tile(Part::new(v, state), TileIndex(tile));
 }
+/// `RoadVehicle::SetDestTile` on a live road vehicle record and the road owner it stores.
+pub(crate) fn set_road_dest_tile(v: VehicleRef, tile: TileIndex) {
+    set_dest_tile(Part::of(v), tile);
+}
 /// The body of `CmdTurnRoadVeh` after its vehicle, primary and ownership checks; 0 for
 /// `CMD_ERROR`.
 /// # Safety

@@ -188,7 +188,6 @@ pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::Vehi
     play_sound: unreachable2,
     start_stop_dirty: unreachable1,
     destroy: unreachable1,
-    set_dest_tile: unreachable2,
     engine: unreachable1,
     write_profit: unreachable2,
     write_economy_service: unreachable2,

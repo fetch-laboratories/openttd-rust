@@ -1392,7 +1392,6 @@ pub(crate) mod tests {
             play_sound: unused(),
             start_stop_dirty: unused(),
             destroy: unused(),
-            set_dest_tile: unused(),
             engine: unused(),
             write_profit: unused(),
             write_economy_service: unused(),
