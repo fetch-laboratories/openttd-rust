@@ -1227,7 +1227,7 @@ impl<'a> House<'a> {
                 return;
             }
             // Houses cannot be built under bridges.
-            if crate::map_func::World::new(self.s).bridge_above(subtile.0) {
+            if crate::map_func::World::new(self.s).bridge_above(subtile) {
                 (c.error)(call.result, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                 return;
             }

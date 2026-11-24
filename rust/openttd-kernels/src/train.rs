@@ -399,7 +399,7 @@ impl Handle {
     }
     /// `GroundVehicleCache::cached_veh_length`.
     fn cached_veh_length(self) -> u8 {
-        read_field!(self.vehicle().ground_cache(), cached_veh_length)
+        self.vehicle().cached_veh_length()
     }
     /// `GroundVehicleCache::cached_total_length`.
     fn cached_total_length(self) -> u16 {
@@ -643,7 +643,7 @@ impl<'a> Game<'a> {
     }
     /// `IsRailDepotTile(tile)`.
     fn is_rail_depot_tile(&self, tile: TileIndex) -> bool {
-        self.world().rail_depot(tile.0)
+        self.world().rail_depot(tile)
     }
     /// `GetRailDepotDirection(tile)`.
     fn get_rail_depot_direction(&self, tile: TileIndex) -> DiagDirection {
@@ -900,7 +900,7 @@ impl Game<'_> {
             (self.vs.set_colourmap)(u.vehicle(), PAL_NONE);
 
             /* Update powered-wagon-status and visual effect */
-            crate::vehicle_effect::update_visual_effect(u.vehicle(), true);
+            crate::vehicle_effect::update_visual_effect(self.vs, self.services, u.vehicle(), true);
 
             if rvi_v.wagon_power() != 0
                 && e_u.rail_kind() == RailVehicleTypes::WAGON
@@ -1281,7 +1281,7 @@ impl Game<'_> {
             && self.is_rail_station_tile(this.vehicle().tile())
         {
             let sid = self.get_station_index(this.vehicle().tile());
-            if crate::movement::should_stop_at_station(self.services, this.vehicle(), sid) {
+            if crate::movement::should_stop_at_station(this.vehicle(), sid) {
                 let (stop_at, station_ahead, station_length) =
                     self.get_train_stop_location(sid, this.vehicle().tile(), this);
 
@@ -1369,7 +1369,7 @@ impl Game<'_> {
             if self.is_tile_type(vt, TileType::MP_TUNNELBRIDGE) {
                 self.vehicle_enter_tile(v, vt, v.vehicle().x_pos(), v.vehicle().y_pos());
                 if v.track() != TrackBits::TRACK_BIT_WORMHOLE
-                    && self.world().bridge_tile(v.vehicle().tile().0)
+                    && self.world().bridge_tile(v.vehicle().tile())
                 {
                     /* We have just left the wormhole, possibly set the
                      * "goingdown" bit. UpdateInclination() can be used
@@ -3032,7 +3032,7 @@ impl Game<'_> {
                                         /* Vehicles entering tunnels enter the wormhole earlier than for bridges.
                                          * However, just choose the track into the wormhole. */
                                         crate::services_assert::assert_with(|| {
-                                            self.world().tunnel(prev.vehicle().tile().0)
+                                            self.world().tunnel(prev.vehicle().tile())
                                         });
                                         chosen_track = bits;
                                     } else {
@@ -3841,11 +3841,10 @@ impl Game<'_> {
             return true;
         }
 
-        if !mode && crate::vehicle_effect::show_visual_effect_allowed(v.vehicle()) {
-            crate::vehicle_effect::show_visual_effect(
-                v.vehicle(),
-                self.get_current_max_speed(v) as u32,
-            );
+        if !mode {
+            crate::vehicle_effect::show_visual_effect(self.vs, self.services, v.vehicle(), || {
+                self.get_current_max_speed(v)
+            });
         }
 
         /* We had no order but have an order now, do look ahead. */

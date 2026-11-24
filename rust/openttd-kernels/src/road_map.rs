@@ -223,6 +223,7 @@ impl crate::map_func::World<'_> {
         Self::byte(self.types.m5(TileIndex(t))) & 1
     }
     /// `IsRoadDepot`: return whether a tile is a road depot.
+    #[inline]
     pub(crate) fn is_road_depot(&self, t: TileIndex) -> bool {
         self.road_tile_type(t.0).0 == ROAD_TILE_DEPOT
     }
@@ -259,9 +260,9 @@ impl crate::map_func::World<'_> {
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn road_depot(&self, t: u32) -> bool {
-        self.kind(TileIndex(t)) == TileType::MP_ROAD
-            && get_road_tile_type(&self.types, t).is_some_and(|kind| kind.0 == ROAD_TILE_DEPOT)
+    /// `IsRoadDepotTile`: return whether a tile is a road depot tile.
+    pub(crate) fn road_depot(&self, t: TileIndex) -> bool {
+        self.kind(t) == TileType::MP_ROAD && self.is_road_depot(t)
     }
     /// `GetRoadDepotDirection`: get the direction of the exit of a road depot. `IsRoadDepot`
     /// and its nested `GetRoadTileType` assertion are evaluated only where the native build
@@ -309,7 +310,7 @@ pub(crate) fn has_town_owned_road(world: &crate::map_func::World<'_>, tile: u32)
 /// `GetPresentRoadTypes` over the canonical map fields.
 pub(crate) fn get_present_road_types(world: &crate::map_func::World<'_>, tile: u32) -> u64 {
     let mut types = 0;
-    if may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile") {
+    if may_have_road(&world.types, TileIndex(tile)).expect("map tile") {
         for tram in [false, true] {
             if world.road_type(tile, tram) != crate::road_type::INVALID_ROADTYPE {
                 types |= 1_u64 << world.road_type(tile, tram);
@@ -324,7 +325,7 @@ pub(crate) fn has_tile_any_road_type(
     tile: u32,
     types: u64,
 ) -> bool {
-    may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile")
+    may_have_road(&world.types, TileIndex(tile)).expect("map tile")
         && get_present_road_types(world, tile) & types != 0
 }
 

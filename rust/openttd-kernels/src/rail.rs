@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `rail.h` helpers and complete rail introduction/construction availability.
 #![allow(unsafe_code)]
-use crate::rail_type::RAILTYPE_END;
+use crate::rail_type::{RAILTYPE_END, RailType};
 use crate::services::Services as Shared;
 use crate::tile_type::TileIndex;
 use crate::timer_game_common::MAX_DATE;
@@ -125,42 +125,45 @@ pub extern "C" fn openttd_rust_rail_types(s: &Services, introduces: bool) -> u64
 }
 
 impl crate::map_func::World<'_> {
-    pub(crate) fn tile_rail_type(&self, t: u32) -> u8 {
+    /// `GetTileRailType`: the rail type of a rail, crossing, rail station or waypoint, or
+    /// rail tunnel or bridge tile, read in place from this entry's map; `INVALID_RAILTYPE`
+    /// otherwise.
+    pub(crate) fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
         use crate::tile_type::TileType;
-        match self.kind(TileIndex(t)) {
-            TileType::MP_RAILWAY => return self.rail_type(t),
+        let t = tile.0;
+        match self.kind(tile) {
+            TileType::MP_RAILWAY => return RailType(self.rail_type(t)),
             TileType::MP_ROAD
                 if crate::road_map::get_road_tile_type(&self.types, t)
                     .expect("road tile")
                     .0
                     == crate::road_map::ROAD_TILE_CROSSING =>
             {
-                return self.rail_type(t);
+                return RailType(self.rail_type(t));
             }
-            TileType::MP_STATION if self.station_rail_raw(t) => return self.rail_type(t),
+            TileType::MP_STATION if self.station_rail_raw(t) => {
+                return RailType(self.rail_type(t));
+            }
             TileType::MP_TUNNELBRIDGE
-                if crate::tunnelbridge_map::get_tunnel_bridge_transport_type(
-                    &self.types,
-                    crate::tile_type::TileIndex(t),
-                )
-                .expect("tunnel or bridge tile")
-                .0 == crate::transport_type::TRANSPORT_RAIL =>
+                if crate::tunnelbridge_map::get_tunnel_bridge_transport_type(&self.types, tile)
+                    .expect("tunnel or bridge tile")
+                    .0
+                    == crate::transport_type::TRANSPORT_RAIL =>
             {
-                return self.rail_type(t);
+                return RailType(self.rail_type(t));
             }
             _ => {}
         }
-        crate::rail_type::INVALID_RAILTYPE
+        RailType::INVALID_RAILTYPE
     }
 }
 
-/// `GetTileRailType`: the rail type of a rail, crossing, rail station or waypoint, or rail
-/// tunnel or bridge tile, read in place from the canonical map; `INVALID_RAILTYPE` otherwise.
+/// `GetTileRailType` for an entry that holds no [`crate::map_func::World`].
 pub(crate) fn get_tile_rail_type(
     shared: &Shared,
     tile: crate::tile_type::TileIndex,
 ) -> crate::rail_type::RailType {
-    crate::rail_type::RailType(crate::map_func::World::new(shared).tile_rail_type(tile.0))
+    crate::map_func::World::new(shared).get_tile_rail_type(tile)
 }
 
 /// `IsCompatibleRail(RailType, RailType)`, retaining the canonical type table.
@@ -170,6 +173,16 @@ pub(crate) fn is_compatible_rail(s: &crate::services::Services, engine: u8, tile
 
 /// `RailTypeSpriteGroup::RTSG_END`.
 pub const RTSG_END: u8 = 13;
+
+/// `HasPowerOnRail(RailTypes, RailType)`: whether an engine of these rail types has power
+/// on a tile of rail type `tiletype`, retaining the canonical type table.
+pub(crate) fn has_power_on_rail(
+    shared: &Shared,
+    enginetype: crate::rail_type::RailTypes,
+    tiletype: crate::rail_type::RailType,
+) -> bool {
+    crate::rail_type::RailTypes((shared.all_powered_railtypes)(enginetype.0)).test(tiletype)
+}
 
 /// `IsCompatibleRail(RailTypes, RailType)`: whether an engine of these rail
 /// types can drive on the tile's rail type, retaining the canonical type table.

@@ -1,0 +1,13 @@
+[
+  {
+    "retires": [
+      "ctest:Road visual eligibility precedes maximum-speed lookup"
+    ],
+    "oracle": "Pinned original 14ec60f248547d4d062a1160f0fc26d742319888, src/vehicle.cpp:2787-2794: Vehicle::ShowVisualEffect returns before GetCurrentMaxSpeed when _settings_game.vehicle.smoke_amount is 0, when vehstatus has TrainSlowing or Stopped, or when cur_speed is below 2. The fork-only native case called the deleted VisualEffectEligible member over the same 45 combinations of smoke amount (0, 1, 2), status (0, 1, 2, 16, 128) and speed (0, 1, 2) on a front road vehicle. The Rust test runs show_visual_effect itself on a front road vehicle and counts the GetCurrentMaxSpeed closure's calls, which the C++ case could not observe. Not carried: the native shell's member dispatch, which no longer exists.",
+    "observations": {
+      "The smoke, status and speed gate decides before the maximum-speed lookup, over all 45 combinations": [
+        "rust:lib:vehicle_effect::tests::show_visual_effect_asks_for_the_maximum_speed_only_past_its_gate"
+      ]
+    }
+  }
+]

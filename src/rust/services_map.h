@@ -20,8 +20,6 @@
 
 inline uint8_t OpenTTDAnimationFrame(uint32_t tile) noexcept { return GetAnimationFrame(TileIndex(tile)); }
 inline uint RustClosestWaterDistance(uint32_t tile, bool water) noexcept { return GetClosestWaterDistance(TileIndex(tile), water); }
-inline bool RustIsTunnelTile(uint32_t tile) noexcept { return IsTunnelTile(TileIndex(tile)); }
-inline bool SharedIsDepotTile(uint32_t tile) noexcept { return IsDepotTile(TileIndex(tile)); }
 inline uint8_t SharedTileType(uint32_t tile) noexcept { return GetTileType(TileIndex{tile}); }
 inline uint32_t RustTileVirtXY(int32_t x, int32_t y) noexcept { return TileVirtXY(static_cast<uint>(x), static_cast<uint>(y)).base(); }
 inline uint16_t MapSvcStationIndex(uint32_t tile) noexcept { return GetStationIndex(TileIndex(tile)).base(); }

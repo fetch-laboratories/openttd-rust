@@ -161,6 +161,15 @@ impl crate::map_func::World<'_> {
         self.check(self.water_tile_type(t) == WATER_TILE_LOCK);
         Self::byte(self.types.m5(TileIndex(t))) & 3
     }
+    /// `IsShipDepot`: is it a water tile with a ship depot on it? Keeps `GetWaterTileType`'s
+    /// tile-type assertion.
+    pub(crate) fn is_ship_depot(&self, t: TileIndex) -> bool {
+        self.water_tile_type(t.0) == WATER_TILE_DEPOT
+    }
+    /// `IsShipDepotTile`: is it a ship depot tile?
+    pub(crate) fn is_ship_depot_tile(&self, t: TileIndex) -> bool {
+        self.is_tile_type(t, TileType::MP_WATER) && self.is_ship_depot(t)
+    }
     /// `GetShipDepotAxis`, with its `IsShipDepotTile` assertion.
     pub(crate) fn ship_depot_axis(&self, t: u32) -> u8 {
         self.check(

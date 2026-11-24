@@ -274,14 +274,3 @@ TEST_CASE("Road links - ground owners follow the current consist")
 	CHECK(front->record->next == nullptr);
 	_vehicle_pool.CleanPool();
 }
-TEST_CASE("Road visual eligibility precedes maximum-speed lookup")
-{
-	REQUIRE(Vehicle::CanAllocateItem());
-	auto *road = new RoadVehicle(); road->Record().subtype = 1 << GVSF_FRONT;
-	const auto saved_smoke = _settings_game.vehicle.smoke_amount;
-	for (uint8_t smoke : {0, 1, 2}) for (uint8_t status : {0, 1, 2, 16, 128}) for (uint16_t speed : {0, 1, 2}) {
-		_settings_game.vehicle.smoke_amount = smoke; road->SetVehStatus(VehStates{status}); road->Record().cur_speed = speed;
-		CHECK(road->VisualEffectEligible() == (smoke != 0 && (status & 18) == 0 && speed >= 2));
-	}
-	_settings_game.vehicle.smoke_amount = saved_smoke; _vehicle_pool.CleanPool();
-}

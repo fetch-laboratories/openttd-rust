@@ -191,10 +191,6 @@ pub fn axis_to_diag_dir_raw(axis: u8, check: impl Fn(bool)) -> u8 {
 pub fn reverse_diag_dir_raw(direction: u8, check: impl Fn(bool)) -> u8 {
     reverse_diag_dir(DiagDirection(direction), check).0
 }
-/// Raw adapter: `ReverseDir` over base values.
-pub fn reverse_dir_raw(d: u8, check: impl Fn(bool)) -> u8 {
-    reverse_dir(Direction(d), check).0
-}
 /// Raw adapter: `ChangeDiagDir` over base values.
 pub fn change_diag_dir_raw(direction: u8, difference: u8, check: impl Fn(bool)) -> u8 {
     change_diag_dir(DiagDirection(direction), DiagDirDiff(difference), check).0
@@ -210,10 +206,6 @@ pub fn dir_difference_raw(a: u8, b: u8, check: impl Fn(bool)) -> u8 {
 /// Raw adapter: `ChangeDirDiff` over base values.
 pub const fn change_dir_diff_raw(a: u8, b: u8) -> u8 {
     change_dir_diff(DirDiff(a), DirDiff(b)).0
-}
-/// Raw adapter: `ChangeDir` over base values.
-pub fn change_dir_raw(direction: u8, difference: u8, check: impl Fn(bool)) -> u8 {
-    change_dir(Direction(direction), DirDiff(difference), check).0
 }
 
 #[cfg(test)]

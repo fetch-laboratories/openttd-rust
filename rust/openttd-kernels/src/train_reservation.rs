@@ -146,10 +146,6 @@ impl<'a> Game<'a> {
     fn increment_real_order_index(&self, v: Handle) {
         crate::orders::increment_real_order_index(v.vehicle(), self.vs.orders());
     }
-    /// `v->current_order.ShouldStopAtStation(v, station)`.
-    fn should_stop_at_station(&self, v: Handle, station: StationID) -> bool {
-        crate::movement::should_stop_at_station(self.services, v.vehicle(), station)
-    }
     /// `Station::Get(station)`, resolving both the station and its base.
     fn station_get(&self, station: StationID) -> crate::station_service::LoadingStation {
         // SAFETY: The process-lifetime tables resolve the original `Station::Get` once.
@@ -218,7 +214,7 @@ impl<'a> Game<'a> {
     }
     /// `IsRailDepotTile(tile)`.
     fn is_rail_depot_tile(&self, tile: TileIndex) -> bool {
-        self.world.rail_depot(tile.0)
+        self.world.rail_depot(tile)
     }
     /// `IsPlainRail(tile)`.
     fn is_plain_rail(&self, tile: TileIndex) -> bool {
@@ -267,7 +263,7 @@ impl<'a> Game<'a> {
     }
     /// `GetTileRailType(tile)`.
     fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
-        RailType(self.world.tile_rail_type(tile.0))
+        self.world.get_tile_rail_type(tile)
     }
     /// `Rail90DegTurnDisallowed(rt1, rt2)` with the default `_settings_game.pf.forbid_90_deg`.
     fn rail_90_deg_turn_disallowed(&self, rt1: RailType, rt2: RailType) -> bool {
@@ -287,7 +283,7 @@ impl<'a> Game<'a> {
     }
     /// `IsBridge(tile)`.
     fn is_bridge(&self, tile: TileIndex) -> bool {
-        self.world.bridge(tile.0)
+        self.world.bridge(tile)
     }
     /// `GetTunnelBridgeDirection(tile)`.
     fn get_tunnel_bridge_direction(&self, tile: TileIndex) -> DiagDirection {
@@ -491,7 +487,10 @@ pub(crate) fn check_next_train_tile(g: &Game, v: Handle) {
     }
     /* Exit if we are on a station tile and are going to stop. */
     if g.is_rail_station_tile(v.vehicle().tile())
-        && g.should_stop_at_station(v, g.get_station_index(v.vehicle().tile()))
+        && crate::movement::should_stop_at_station(
+            v.vehicle(),
+            g.get_station_index(v.vehicle().tile()),
+        )
     {
         return;
     }

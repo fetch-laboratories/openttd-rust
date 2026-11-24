@@ -118,7 +118,7 @@ pub(crate) unsafe fn cmd_build_vehicle(
     let value = Cost(out, b.cost);
     let company = (b.shared.current_company)();
     /* Elementary check for valid location. */
-    if !(s.mass.is_depot)(tile)
+    if !crate::depot_map::is_depot_tile(&crate::map_func::World::new(b.shared), TileIndex(tile))
         || !crate::tile_map::is_tile_owner(
             b.shared,
             TileIndex(tile),

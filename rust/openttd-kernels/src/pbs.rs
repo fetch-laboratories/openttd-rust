@@ -453,7 +453,7 @@ impl<'a> Pbs<'a> {
                 break;
             }
             /* Depot tile? Can't continue. */
-            if w.rail_depot(tile.0) {
+            if w.rail_depot(tile) {
                 break;
             }
             /* Non-pbs signal? Reservation can't continue. */
@@ -519,7 +519,7 @@ impl<'a> Pbs<'a> {
         let tile = v.vehicle().tile();
         let trackdir = crate::train::get_vehicle_trackdir(self.train(), s, v);
 
-        if w.rail_depot(tile.0) && (self.0.depot_bits)(tile.0) == TrackBits::TRACK_BIT_NONE {
+        if w.rail_depot(tile) && (self.0.depot_bits)(tile.0) == TrackBits::TRACK_BIT_NONE {
             return PBSTileInfo {
                 tile,
                 trackdir,
@@ -601,7 +601,7 @@ impl<'a> Pbs<'a> {
         });
         let mut trackdir = Trackdir(track_to_trackdir(track.0));
 
-        let rts = RailTypes((self.0.compatible)(w.tile_rail_type(tile.0)));
+        let rts = RailTypes((self.0.compatible)(w.get_tile_rail_type(tile).0));
 
         /* Follow the path from tile to both ends, one of the end tiles should
          * have a train on it. We need FollowReservation to ignore one-way signals
@@ -674,8 +674,8 @@ impl<'a> Pbs<'a> {
         ft.new_td_bits &= TrackdirBits(diagdir_reaches_trackdirs(ft.exitdir.0));
         let w = World::new(self.shared());
         if (self.0.rail90)(
-            w.tile_rail_type(ft.old_tile.0),
-            w.tile_rail_type(ft.new_tile.0),
+            w.get_tile_rail_type(ft.old_tile).0,
+            w.get_tile_rail_type(ft.new_tile).0,
             forbid_90deg,
         ) {
             ft.new_td_bits &= !TrackdirBits(trackdir_crosses_trackdirs(trackdir.0));
@@ -695,7 +695,7 @@ impl<'a> Pbs<'a> {
     ) -> bool {
         let s = self.shared();
         let w = World::new(s);
-        if w.rail_depot(tile.0) {
+        if w.rail_depot(tile) {
             return true;
         }
 
@@ -772,7 +772,7 @@ impl<'a> Pbs<'a> {
         }
 
         /* Not reserved and depot or not a pbs signal -> free. */
-        if World::new(s).rail_depot(tile.0) {
+        if World::new(s).rail_depot(tile) {
             return true;
         }
         if self.has_non_pbs_signal(tile, trackdir) {

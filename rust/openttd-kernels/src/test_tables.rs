@@ -159,7 +159,6 @@ pub(crate) const GROUND_VEHICLE: crate::ground_vehicle::Services =
         capabilities: &crate::engine_capabilities::TEST_TABLE,
         cargo_weight: unreachable2,
         train_cargo_weight: unreachable2,
-        powered: unreachable2,
         rail_type: unreachable1,
         rail_acceleration: unreachable1,
         rail_speed: unreachable1,

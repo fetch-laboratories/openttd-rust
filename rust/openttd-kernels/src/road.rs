@@ -611,7 +611,7 @@ impl<'a> Game<'a> {
     }
     /// `IsRoadDepotTile(tile)`.
     fn is_road_depot_tile(&self, tile: TileIndex) -> bool {
-        self.world().road_depot(tile.0)
+        self.world().road_depot(tile)
     }
     /// `GetRoadDepotDirection(tile)`.
     fn get_road_depot_direction(&self, tile: TileIndex) -> DiagDirection {
@@ -752,7 +752,7 @@ impl<'a> Game<'a> {
             write_field!(v.v.ground_cache(), cached_total_length, total);
 
             /* Update visual effect */
-            crate::vehicle_effect::update_visual_effect(u, true);
+            crate::vehicle_effect::update_visual_effect(self.vs, self.ss, u, true);
 
             /* Update cargo aging period. */
             let cargo_age_period = service!(self.vs.engine)(u).cargo_age();
@@ -2288,7 +2288,6 @@ impl<'a> Game<'a> {
                         usize::from(RVSB_IN_DT_ROAD_STOP_END),
                     )
                     && crate::movement::should_stop_at_station(
-                        self.ss,
                         v.v,
                         self.world().get_station_index(v.v.tile()),
                     )
@@ -2349,7 +2348,6 @@ impl<'a> Game<'a> {
                     usize::from(RVSB_IN_DT_ROAD_STOP),
                     usize::from(RVSB_IN_DT_ROAD_STOP_END),
                 ) && crate::movement::should_stop_at_station(
-                    self.ss,
                     v.v,
                     self.world().get_station_index(v.v.tile()),
                 ) && v.v.owner() == self.world().owner(v.v.tile())
@@ -2500,12 +2498,9 @@ impl<'a> Game<'a> {
             }
         }
 
-        /* Vehicle::ShowVisualEffect */
-        if crate::vehicle_effect::show_visual_effect_allowed(v.v) {
-            /* Use the speed as limited by underground and orders. */
-            let max_speed = get_current_max_speed(self.ss, || self.world(), v) as u32;
-            crate::vehicle_effect::show_visual_effect(v.v, max_speed);
-        }
+        crate::vehicle_effect::show_visual_effect(self.vs, self.ss, v.v, || {
+            get_current_max_speed(self.ss, || self.world(), v)
+        });
 
         /* Check how far the vehicle needs to proceed */
         let mut j = self.update_speed(v);
