@@ -8,7 +8,7 @@ Read this brief; your work order's implementation plan, in the body of the issue
 
 ## Following the plan
 
-The plan holds the decisions; carry them out, in a PR that closes the plan's issue. Where the tree contradicts the plan or a decision proves wrong, take the better course and record the departure and its reason in the PR body. Ask root first only when the departure changes what the work order delivers.
+The plan holds the decisions; carry them out, in a PR that closes the plan's issue. Do the work yourself: start no agent but your PR's reviewers, since a helper that edits or builds is one more implementer than the [slots](team.md#slots) allow. Where the tree contradicts the plan or a decision proves wrong, take the better course and record the departure and its reason in the PR body. Ask root first only when the departure changes what the work order delivers.
 
 ## Finishing a file pass
 
