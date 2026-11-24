@@ -66,9 +66,6 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_RUST_CALL *destroy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	void (OPENTTD_RUST_CALL *set_dest_tile)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_dest_tile);
 	const OpenTTDEngine *(OPENTTD_RUST_CALL *engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);
-	uint8_t (OPENTTD_RUST_CALL *order_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_type);
-	uint16_t (OPENTTD_RUST_CALL *order_destination)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_destination);
-	uint8_t (OPENTTD_RUST_CALL *order_nonstop)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_nonstop);
 	void (OPENTTD_RUST_CALL *write_profit)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(write_profit);
 	void (OPENTTD_RUST_CALL *write_economy_service)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_economy_service);
 	void (OPENTTD_RUST_CALL *write_calendar_service)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_calendar_service);

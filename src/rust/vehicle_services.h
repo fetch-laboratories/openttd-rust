@@ -122,7 +122,6 @@ inline int64_t RustVehicleDisplayProfitLastYear(const Vehicle *v) noexcept { ret
 inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
 template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
 inline int32_t RustVehicleDisplaySpeed(OpenTTDVehicle *v) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(v)); }
-inline uint8_t RustVehicleOrderNonStop(const Vehicle *v) noexcept { return v->current_order.GetNonStopType().base(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
 bool RustVehiclePrimary(const Vehicle *v) noexcept;

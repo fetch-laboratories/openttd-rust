@@ -75,7 +75,6 @@ pub use crate::engine_type::OpenTTDEngine;
 pub struct EngineRef(pub NonNull<OpenTTDEngine>);
 
 pub use crate::newgrf_callbacks::CALLBACK_FAILED;
-pub use crate::order_type::{OT_GOTO_DEPOT, OT_LOADING};
 pub use crate::tile_type::MP_STATION;
 /// `VEHICLE_LENGTH`.
 #[allow(clippy::cast_possible_truncation)] // Native uint constant is 8; retain the u8 compatibility surface.
@@ -134,9 +133,6 @@ pub struct VehicleServices {
     pub set_dest_tile: extern "C" fn(VehicleRef, u32),
     /// Only the current engine, for callers that do not consume its GRF version.
     pub engine: extern "C" fn(VehicleRef) -> EngineRef,
-    pub order_type: extern "C" fn(VehicleRef) -> u8,
-    pub order_destination: extern "C" fn(VehicleRef) -> u16,
-    pub order_nonstop: extern "C" fn(VehicleRef) -> u8,
     pub write_profit: extern "C" fn(VehicleRef, i64),
     pub write_economy_service: extern "C" fn(VehicleRef, i32),
     pub write_calendar_service: extern "C" fn(VehicleRef, i32),
@@ -277,9 +273,6 @@ crate::abi::layouts! {
         destroy,
         set_dest_tile,
         engine,
-        order_type,
-        order_destination,
-        order_nonstop,
         write_profit,
         write_economy_service,
         write_calendar_service,

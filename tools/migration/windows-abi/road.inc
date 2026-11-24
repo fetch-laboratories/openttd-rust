@@ -221,7 +221,6 @@ static void RoadBoundary()
 
 	t.shared.station_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == 100); return 55; };
 	probe.stop->status = 0xFF; // Entering the bay frees its entrance, then the bay tile marks it busy again.
-	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent event) noexcept { CHECK(event == 1); return true; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	static OpenTTDFixtureMap map{6, 4096};
@@ -268,7 +267,6 @@ static void RoadBoundary()
 		auto &p = *road_abi_probe;
 		openttd_rust_road_set_dest(u, p.state, destination);
 	};
-	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept { return road_orders->vehicle->current.type; };
 	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	OpenTTDEffectLeaves emission_leaves = EffectTestLeaves();
 	auto *emission_owner = openttd_rust_effect_new();
@@ -515,7 +513,6 @@ static void RoadServiceBoundary()
 	service_capabilities.shared = &t.shared;
 	t.physics.capabilities = &service_capabilities;
 	t.shared.depot_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == road_service_probe->tile); return 55; };
-	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *v) noexcept {
 		CHECK((v->ground->flags & (1 << GVF_SUPPRESS_IMPLICIT_ORDERS)) != 0);
 		CHECK((v->orders->current.type & 15) == OT_GOTO_DEPOT && v->orders->current.destination == 55 && v->orders->current.refit_cargo == CARGO_NO_REFIT);

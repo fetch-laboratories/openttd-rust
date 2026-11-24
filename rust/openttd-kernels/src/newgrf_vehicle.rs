@@ -20,6 +20,7 @@ use crate::debug::debug;
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_VEHICLE_BUILD_PROBABILITY, CBID_VEHICLE_MODIFY_PROPERTY,
 };
+use crate::order_type::OrderType;
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleRef, VehicleServices};
 use crate::vehicle_base::{
     NCVV_COMPANY_INFORMATION, NCVV_CONSIST_CARGO_INFORMATION, NCVV_END,
@@ -995,7 +996,7 @@ unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
         }
     }
 }
-unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
+unsafe fn aircraft_movement_action(v: V) -> u32 {
     use crate::airport::{
         ENDLANDING, ENDTAKEOFF, FLYING, HANGAR, HELIENDLANDING, HELILANDING, HELIPAD1, HELIPAD2,
         HELIPAD3, HELITAKEOFF, LANDING, STARTTAKEOFF, TAKEOFF, TERM1, TERM2, TERM3, TERM4, TERM5,
@@ -1012,21 +1013,21 @@ unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
                 }
             }
             TERM1 | HELIPAD1 => {
-                if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_LOADING {
+                if handle(v).current_order().kind() == OrderType::OT_LOADING {
                     AMA_TTDP_ON_PAD1
                 } else {
                     AMA_TTDP_LANDING_TO_PAD1
                 }
             }
             TERM2 | HELIPAD2 => {
-                if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_LOADING {
+                if handle(v).current_order().kind() == OrderType::OT_LOADING {
                     AMA_TTDP_ON_PAD2
                 } else {
                     AMA_TTDP_LANDING_TO_PAD2
                 }
             }
             TERM3 | TERM4 | TERM5 | TERM6 | TERM7 | TERM8 | HELIPAD3 => {
-                if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_LOADING {
+                if handle(v).current_order().kind() == OrderType::OT_LOADING {
                     AMA_TTDP_ON_PAD3
                 } else {
                     AMA_TTDP_LANDING_TO_PAD3
@@ -1035,7 +1036,7 @@ unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
             TAKEOFF | STARTTAKEOFF | ENDTAKEOFF | HELITAKEOFF => AMA_TTDP_PAD1_TO_TAKEOFF,
             FLYING => AMA_TTDP_IN_FLIGHT,
             LANDING | ENDLANDING | HELILANDING | HELIENDLANDING => {
-                if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_GOTO_DEPOT {
+                if handle(v).current_order().kind() == OrderType::OT_GOTO_DEPOT {
                     AMA_TTDP_LANDING_TO_HANGAR
                 } else {
                     AMA_TTDP_LANDING_TO_PAD1
@@ -1412,11 +1413,11 @@ unsafe fn variable(
             0x81 => return old_subtype(s, v, kind()),
             0x84 | 0x85 => return high((s.id)(v)),
             0x8a => return u32::from((s.old_order)(v)),
-            0x8b => return u32::from((s.vehicle.order_destination)(h)),
+            0x8b => return u32::from(h.current_order().destination_raw()),
             0x8c => return u32::from((s.num_orders)(v)),
             0x8d => return u32::from((s.real_order)(v)),
             0x90 | 0x91 => {
-                let ticks = if (s.vehicle.order_type)(h) == crate::vehicle::OT_LOADING {
+                let ticks = if h.current_order().kind() == OrderType::OT_LOADING {
                     u32::from((s.load_ticks)(v))
                 } else {
                     match kind() {
@@ -1585,7 +1586,7 @@ unsafe fn variable(
                         (*crate::vehicle::VehicleRef::of(v).aircraft_state()).targetairport,
                     );
                 }
-                0xe6 => return aircraft_movement_action(s, v),
+                0xe6 => return aircraft_movement_action(v),
                 _ => {}
             },
             _ => {}

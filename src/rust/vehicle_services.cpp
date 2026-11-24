@@ -136,9 +136,6 @@ extern "C" void openttd_orders_set_destination(void *ctx, uint32_t tile) noexcep
 
 
 
-static uint8_t OPENTTD_RUST_CALL VehicleSvcOrderType(OpenTTDVehicle *v) noexcept { return RustVehicleOrderType(VehicleOf(v)); }
-static uint16_t OPENTTD_RUST_CALL VehicleSvcOrderDestination(OpenTTDVehicle *v) noexcept { return RustVehicleOrderDestination(VehicleOf(v)); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcOrderNonStop(OpenTTDVehicle *v) noexcept { return RustVehicleOrderNonStop(VehicleOf(v)); }
 
 
 static void OPENTTD_RUST_CALL VehicleSvcWriteProfit(OpenTTDVehicle *v, int64_t value) noexcept { VehicleOf(v)->profit_this_year = value; }
@@ -185,9 +182,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.destroy = VehicleSvcDestroy,
 	.set_dest_tile = RustVehicleSetDestTile,
 	.engine = RustVehicleGetEngine,
-	.order_type = VehicleSvcOrderType,
-	.order_destination = VehicleSvcOrderDestination,
-	.order_nonstop = VehicleSvcOrderNonStop,
 	.write_profit = VehicleSvcWriteProfit,
 	.write_economy_service = VehicleSvcWriteEconomyService,
 	.write_calendar_service = VehicleSvcWriteCalendarService,

@@ -3754,7 +3754,7 @@ impl Ctx<'_> {
                     order.kind == OrderType::OT_GOTO_STATION && order.destination == station_id.0
                 },
                 |v| {
-                    if OrderType((self.vehicle().order_type)(v)) == OrderType::OT_GOTO_STATION
+                    if v.current_order().kind() == OrderType::OT_GOTO_STATION
                         && v.dest_tile() == tile
                     {
                         let destination = (self.s.order_station_location)(v, station_id.0);
@@ -5183,14 +5183,14 @@ impl Ctx<'_> {
             from = identity.id + 1;
             /* Find all ships going to our dock. */
             if s.vehicle_type() != VehicleType::VEH_SHIP
-                || (self.vehicle().order_destination)(s) != index
+                || s.current_order().destination().to_station_id() != StationID(index)
             {
                 continue;
             }
             /* Find ships that are marked as "loading" but are no longer on a
              * docking tile. Force them to leave the station (as they were loading
              * on the removed dock). */
-            if OrderType((self.vehicle().order_type)(s)) == OrderType::OT_LOADING {
+            if s.current_order().kind() == OrderType::OT_LOADING {
                 let tile = s.tile().0;
                 if !((self.shared.docking_tile)(tile)
                     && unsafe {
@@ -5208,7 +5208,7 @@ impl Ctx<'_> {
             /* If we no longer have a dock, mark the order as invalid and send
              * the ship to the next order (or, if there is none, make it
              * wander the world). */
-            if OrderType((self.vehicle().order_type)(s)) == OrderType::OT_GOTO_STATION
+            if s.current_order().kind() == OrderType::OT_GOTO_STATION
                 && !StationFacilities((self.world().facilities)(st)).test(StationFacility::Dock)
             {
                 let dest = unsafe {
