@@ -940,14 +940,6 @@ void RemoveOrderFromAllVehicles(OrderType type, DestinationID destination, bool 
 	openttd_rust_remove_destination(type, destination.base(), hangar, &GetRustOrdersLeaves());
 }
 
-/**
- * Checks if a vehicle has a depot in its order list.
- * @return True iff at least one order is a depot order.
- */
-bool Vehicle::HasDepotOrder() const
-{
-	return openttd_rust_has_depot(const_cast<Vehicle *>(this), &GetRustOrdersLeaves()) != 0;
-}
 
 /**
  * Delete all orders from a vehicle

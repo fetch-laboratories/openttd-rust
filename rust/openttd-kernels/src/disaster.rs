@@ -571,7 +571,9 @@ impl<'a> World<'a> {
         {
             target.vehicle().set_breakdown_ctr(3);
             // SAFETY: The immutable shared table and current vehicle remain live.
-            unsafe { ((*self.v.maintenance).breakdown_delay_write)(target.vehicle(), 140) };
+            target
+                .vehicle()
+                .set_breakdown_delay(unsafe { &*self.v.maintenance }, 140);
         }
         (v.vehicle()).set_direction_raw((self.s.toward)(v.vehicle(), t.0, t.1));
         let gp = crate::vehicle::get_new_vehicle_pos(v.vehicle(), self.map());
@@ -750,9 +752,9 @@ impl<'a> World<'a> {
                     if distance(t.0, t.1, p.0, p.1) <= 12 * TILE_SIZE as i32 {
                         target.vehicle().set_breakdown_ctr(5);
                         // SAFETY: The immutable shared table and current vehicle remain live.
-                        unsafe {
-                            ((*self.v.maintenance).breakdown_delay_write)(target.vehicle(), 0xF0);
-                        };
+                        target
+                            .vehicle()
+                            .set_breakdown_delay(unsafe { &*self.v.maintenance }, 0xF0);
                     }
                 }
                 from = target.id + 1;

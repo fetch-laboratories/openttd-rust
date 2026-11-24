@@ -81,7 +81,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	AircraftTestAirportServices().get_station = [](uint16_t id) noexcept { return reinterpret_cast<Station *>(Station::GetIfValid(id)); };
 	leaves.airport_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
 	vehicle.maintenance = &maintenance;
-	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	range_orders = std::make_unique<ControllerOrders>(&vehicle);
 	/* Matching current/list station orders take the ordinary unchanged-order
 	 * path. This preserves the range reference's deliberate no-op orders; the

@@ -86,10 +86,6 @@ pub const AUTO_REFIT: u8 = EngineMiscFlags::from_element(EngineMiscFlag::AutoRef
 /// `EngineMiscFlag::RailTilts`.
 pub const RAIL_TILTS: u8 = EngineMiscFlags::from_element(EngineMiscFlag::RailTilts).0;
 
-/// `EngineMiscFlag::NoBreakdownSmoke`.
-pub const NO_BREAKDOWN_SMOKE: u8 =
-    EngineMiscFlags::from_element(EngineMiscFlag::NoBreakdownSmoke).0;
-
 /// Native `RailVehicleTypes : uint8_t`, with the same unrestricted byte domain.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

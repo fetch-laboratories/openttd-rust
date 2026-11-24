@@ -877,7 +877,6 @@ public:
 
 	bool IsEngineCountable() const;
 	bool HasEngineType() const;
-	bool HasDepotOrder() const;
 	void HandlePathfindingResult(bool path_found);
 
 	/**

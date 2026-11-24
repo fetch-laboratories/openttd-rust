@@ -209,6 +209,13 @@
 - Checks: `vehicle_base::record_tests`, `orders::order_view_tests`, source review and exact-head Full. Archive equivalence is unclaimed: signatures change.
 - PRs: #996. Workset 07 continues in #984 to #987.
 
+## Base vehicle maintenance file pass (#985)
+
+- `vehicle/maintenance.rs` is finished. Its nine bodies read each record member in place, each member the shell still stores through its `VehicleRef` accessor, the breakdown, servicing and old-vehicle settings through the shared settings addresses, and the dates, game mode and clock from Rust, where the original reads them. The maintenance table holds its five tables, `Vehicle::MarkDirty` and the shell members' slots; no per-call composite record crosses.
+- `EngineReplacementForCompany` and `EngineHasReplacementForCompany` are ported in `autoreplace_func.rs`; `GroupStatistics::VehicleReachedMinAge`, `Vehicle::HasDepotOrder`, `GetAvailableMoney`, the articulated refit and cargo queries and `Engine::GetCost` have Rust-internal forms the bodies call. `Vehicle::NeedsAutorenewing`'s owner assertion runs in Rust through the native assertion policy.
+- C++ keeps the seven facades of `vehicle.cpp`'s maintenance functions, `PlayVehicleSound` and `SndPlayVehicleFx`, and the shell members until the vehicle storage port.
+- Checks: `vehicle::maintenance::tests`, `autoreplace_func::tests`, the `windows-abi` maintenance, road, ship and aircraft probes, `vehicle_scheduler`'s native scalar test, the `vehicles-*` maintenance scenarios and exact-head Full. Archive equivalence is unclaimed: every body changes how it reaches its values.
+
 ## Original renewal and servicing vocabulary (#734)
 
 - Renewal, servicing and automatic-servicing bodies use the original helper names, canonical vehicle states, subtype flags, engine/cargo identities and economy-month constant. Scalar maintenance observations and record layouts remain unchanged.

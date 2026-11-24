@@ -129,14 +129,6 @@ uint16_t GroupStatistics::GetNumEngines(EngineID engine) const
 }
 
 /**
- * Add a vehicle to the profit sum of its group.
- */
-/* static */ void GroupStatistics::VehicleReachedMinAge(const Vehicle *v)
-{
-	openttd_rust_fleet_min_age(&FleetGroupServices(), const_cast<Vehicle *>(v));
-}
-
-/**
  * Recompute the profits for all groups.
  */
 /* static */ void GroupStatistics::UpdateProfits()

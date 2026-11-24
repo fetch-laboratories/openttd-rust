@@ -29,7 +29,7 @@ use crate::services::Services;
 use crate::tile_type::MP_TUNNELBRIDGE;
 use crate::track_type::TrackBits;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
-use crate::vehicle_base::VS_STOPPED;
+use crate::vehicle_base::VehState;
 use crate::water_regions::WaterRegionPatchDesc as Patch;
 use std::collections::{HashSet, VecDeque};
 #[unsafe(no_mangle)]
@@ -479,16 +479,11 @@ impl Game<'_> {
         best
     }
     fn service(&self, id: u32, v: VehicleRef) {
-        if (self.leaves.servint)(id) == 0
-            || !unsafe {
-                self.vs()
-                    .maintain(v, maintenance::needs_automatic_servicing)
-            }
-        {
+        if (self.leaves.servint)(id) == 0 || !maintenance::needs_automatic_servicing(v, self.vs()) {
             return;
         }
         if (self.leaves.chain_depot)(id) {
-            unsafe { self.vs().maintain(v, maintenance::service_in_depot) };
+            maintenance::vehicle_service_in_depot(v, self.vs());
             return;
         }
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
@@ -571,7 +566,7 @@ impl Game<'_> {
         self.vehicle().set_cur_speed(0);
         self.viewport(id);
         (self.leaves.depot_dirty)(id);
-        unsafe { self.vs().maintain(v, maintenance::service_in_depot) };
+        maintenance::vehicle_service_in_depot(v, self.vs());
         (self.leaves.leave_unbunch)(id);
         (self.leaves.play_sound)(id);
         (self.leaves.depot_invalidate)(id);
@@ -704,11 +699,10 @@ impl Game<'_> {
             .set_tick_counter(observed_tick.wrapping_add(1) as u8);
         self.vehicle()
             .set_current_order_time(observed_order_time.wrapping_add(1) as i32);
-        let breakdown = unsafe { self.vs().maintain(v, maintenance::handle_breakdown_status) };
-        if breakdown.broken {
+        if maintenance::handle_breakdown(v, self.vs()) {
             return;
         }
-        if breakdown.status & VS_STOPPED != 0 {
+        if v.vehstatus().test(VehState::Stopped) {
             return;
         }
         let orders_vehicle = v;
@@ -1003,7 +997,7 @@ pub unsafe extern "C" fn openttd_rust_ship_calendar_day(
     services: *const Services,
 ) {
     let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(vehicle));
-    unsafe { game.vs().maintain(vehicle, maintenance::age_vehicle) };
+    maintenance::age_vehicle(vehicle, game.vs());
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_economy_day(
@@ -1014,22 +1008,13 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
 ) {
     let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(vehicle));
     crate::witness::hit(crate::witness::SHIP_ECONOMY_DAY);
-    unsafe {
-        game.vs()
-            .maintain(vehicle, maintenance::economy_age_vehicle);
-    };
+    maintenance::economy_age_vehicle(vehicle, game.vs());
     let day = (u32::from(game.vehicle().day_counter())).wrapping_add(1);
     game.vehicle().set_day_counter(day as u8);
     if day & 7 == 0 {
-        unsafe {
-            game.vs()
-                .maintain(vehicle, maintenance::decrease_vehicle_value);
-        };
+        maintenance::decrease_vehicle_value(vehicle, game.vs());
     }
-    unsafe {
-        game.vs()
-            .maintain(vehicle, maintenance::check_vehicle_breakdown);
-    };
+    maintenance::check_vehicle_breakdown(vehicle, game.vs());
     game.service(id, vehicle);
     (game.leaves.check_orders)(id);
     let ticks = u32::from(game.vehicle().running_ticks());
@@ -1040,8 +1025,10 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
         (game.vs().write_profit)(vehicle, profit);
         game.vehicle().set_running_ticks(0);
         (game.leaves.pay_running)(id, cost);
-        // SAFETY: The base table names its immutable maintenance table.
-        (unsafe { &*game.vs().maintenance }.details_dirty)(vehicle);
+        crate::window_func::set_window_dirty(
+            crate::window_type::WindowClass::WC_VEHICLE_DETAILS,
+            crate::window_type::WindowNumber::from(vehicle.index(game.vs().newgrf())),
+        );
         (game.leaves.ships_dirty)();
     }
 }

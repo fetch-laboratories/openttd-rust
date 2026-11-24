@@ -106,11 +106,6 @@ static void ShipBoundary()
 	leaves.state_owner = [](uint32_t) noexcept { return ship_probe.owner; };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
 	ship_vehicle.tile_links = [](OpenTTDVehicle *) noexcept { ++ship_probe.positions; return &ship_probe.links; };
-	ship_maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept {
-		CHECK(ship_probe.stage++ == 0);
-		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
-		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0};
-	};
 	ControllerOrders orders(&ship_vehicle);
 	static ControllerOrders *ship_orders;
 	ship_orders = &orders;
@@ -121,13 +116,13 @@ static void ShipBoundary()
 	orders.services.vehicle = [](void *v) noexcept { CHECK(v == &ship_probe); return ship_orders->vehicle.get(); };
 	orders.services.consist = [](void *) noexcept { return &ship_orders->consist; };
 	orders.services.vehicle_type = [](void *) noexcept { return uint64_t{2}; };
-	orders.services.invalidate_order = [](void *, int32_t reason) noexcept { CHECK(reason == -2 && ship_probe.stage++ == 1); };
+	orders.services.invalidate_order = [](void *, int32_t reason) noexcept { CHECK(reason == -2 && ship_probe.stage++ == 0); };
 	leaves.yapf_reverse = [](uint32_t, bool trackdir) noexcept {
-		CHECK(ship_probe.stage++ == 2 && !trackdir);
+		CHECK(ship_probe.stage++ == 1 && !trackdir);
 		return OpenTTDShipReverseResult{true, 255};
 	};
 	leaves.viewport = [](uint32_t id, bool update_delta, bool force) noexcept {
-		CHECK(ship_probe.stage++ == 3 && update_delta && force);
+		CHECK(ship_probe.stage++ == 2 && update_delta && force);
 		CHECK(ship_probe.record.direction == 5 && ship_probe.record.cur_speed == 0 && ship_probe.paths == 1 && ship_probe.positions == 1);
 		CHECK(openttd_rust_ship_get_rotation_x(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.x_pos));
 		CHECK(openttd_rust_ship_get_rotation_y(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.y_pos));
@@ -136,8 +131,28 @@ static void ShipBoundary()
 		CHECK(ship_probe.record.dest_tile == 17 && ship_probe.paths == 2);
 		openttd_rust_ship_set_rotation(ship_probe.owner, 3);
 	};
+	/* An active breakdown: HandleBreakdown reads the delay with the tick's counters already
+	 * advanced and before any order runs, and the broken-down ship's tick ends there. */
+	static OpenTTDVehicleResolverServices ship_resolver{};
+	ship_resolver.breakdown_delay = [](OpenTTDVehicle *) noexcept -> uint8_t {
+		CHECK(ship_probe.stage == 0 && ship_probe.paths == 0 && ship_probe.positions == 0);
+		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
+		return 5;
+	};
+	ship_vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &ship_resolver; };
+	static uint8_t ship_delay;
+	ship_delay = 0;
+	ship_maintenance.set_breakdown_delay = [](OpenTTDVehicle *, uint8_t delay) noexcept { ship_delay = delay; };
+	ship_probe.record.breakdown_ctr = 1;
 	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
-	CHECK(ship_probe.stage == 4 && openttd_rust_ship_get_rotation(state.get()) == 3);
+	CHECK(ship_delay == 4 && ship_probe.stage == 0 && ship_probe.paths == 0);
+	/* The same tick state again, running normally: the reverse path. */
+	ship_probe.record.breakdown_ctr = 0;
+	ship_probe.record.tick_counter = 255;
+	ship_probe.record.running_ticks = 255;
+	ship_probe.consist.current_order_time = -1;
+	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
+	CHECK(ship_probe.stage == 3 && openttd_rust_ship_get_rotation(state.get()) == 3);
 	openttd_rust_occupancy_update(&ship_vehicle, nullptr, shell, true);
 	CHECK(!openttd_rust_ship_find_depot(4, 80, &leaves, &ship_probe.services).valid);
 	ship_probe.record.owner = 3;

@@ -22,6 +22,19 @@ impl VehicleFlag {
     pub const TIMETABLE_STARTED: Self = Self(3);
     /// Don't load anymore during the next load cycle.
     pub const STOP_LOADING: Self = Self(6);
+    /// Service interval is percent.
+    pub const SERVICE_INTERVAL_IS_PERCENT: Self = Self(9);
+}
+
+/// Native `VehicleFlags`: the set of `VehicleFlag`s over `uint16_t`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct VehicleFlags(pub u16);
+impl VehicleFlags {
+    /// `EnumBitSet::Test`: whether `element` is in the set.
+    pub const fn test(self, element: VehicleFlag) -> bool {
+        self.0 & (1 << element.0) != 0
+    }
 }
 
 /// `VehicleFlags` mask of `VehicleFlag::LoadingFinished`.

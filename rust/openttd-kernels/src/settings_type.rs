@@ -54,7 +54,9 @@ crate::abi::shared_records! {
         pub multiple_industry_per_town: *const bool,
         pub never_expire_airports: *const bool,
         pub never_expire_vehicles: *const bool,
+        pub no_servicing_if_no_breakdowns: *const bool,
         pub oil_refinery_limit: *const u8,
+        pub old_vehicle_warn: *const bool,
         pub order_review_system: *const u8,
         pub participate_survey: *const u8,
         pub pause_on_newgame: *const bool,
@@ -107,6 +109,7 @@ crate::abi::shared_records! {
         pub train_acceleration_model: *const u8,
         pub tree_placer: *const u8,
         pub used_liveries: *const u64,
+        pub vehicle_breakdowns: *const u8,
         pub wait_for_pbs_path: *const u8,
         pub wait_oneway_signal: *const u8,
         pub wait_twoway_signal: *const u8,
@@ -132,6 +135,26 @@ impl SettingAddresses {
         // SAFETY: The catalog addresses the process-wide setting, serialized by the
         // game-state mutex.
         unsafe { self.road_side.read() }
+    }
+    /// `_settings_game.game_creation.landscape`; one field-sized load.
+    pub(crate) fn landscape(&self) -> crate::landscape_type::LandscapeType {
+        // SAFETY: As `road_side`.
+        crate::landscape_type::LandscapeType(unsafe { self.climate.read() })
+    }
+    /// `_settings_game.order.no_servicing_if_no_breakdowns`; one field-sized load.
+    pub(crate) fn no_servicing_if_no_breakdowns(&self) -> bool {
+        // SAFETY: As `road_side`.
+        unsafe { self.no_servicing_if_no_breakdowns.read() }
+    }
+    /// `_settings_client.gui.old_vehicle_warn`; one field-sized load.
+    pub(crate) fn old_vehicle_warn(&self) -> bool {
+        // SAFETY: As `road_side`.
+        unsafe { self.old_vehicle_warn.read() }
+    }
+    /// `_settings_game.difficulty.vehicle_breakdowns`; one field-sized load.
+    pub(crate) fn vehicle_breakdowns(&self) -> u8 {
+        // SAFETY: As `road_side`.
+        unsafe { self.vehicle_breakdowns.read() }
     }
 }
 
@@ -172,7 +195,9 @@ impl SettingAddresses {
         multiple_industry_per_town: std::ptr::null(),
         never_expire_airports: std::ptr::null(),
         never_expire_vehicles: std::ptr::null(),
+        no_servicing_if_no_breakdowns: std::ptr::null(),
         oil_refinery_limit: std::ptr::null(),
+        old_vehicle_warn: std::ptr::null(),
         order_review_system: std::ptr::null(),
         participate_survey: std::ptr::null(),
         pause_on_newgame: std::ptr::null(),
@@ -225,6 +250,7 @@ impl SettingAddresses {
         train_acceleration_model: std::ptr::null(),
         tree_placer: std::ptr::null(),
         used_liveries: std::ptr::null(),
+        vehicle_breakdowns: std::ptr::null(),
         wait_for_pbs_path: std::ptr::null(),
         wait_oneway_signal: std::ptr::null(),
         wait_twoway_signal: std::ptr::null(),

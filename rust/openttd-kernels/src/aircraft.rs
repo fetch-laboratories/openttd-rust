@@ -619,13 +619,11 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `v->NeedsAutomaticServicing()`.
     fn needs_automatic_servicing(&self, v: Vehicle) -> bool {
-        // SAFETY: A live vehicle and its immutable maintenance table.
-        unsafe { maintenance::needs_automatic_servicing(v.base(), self.vs) }
+        maintenance::needs_automatic_servicing(v.base(), self.vs)
     }
     /// `VehicleServiceInDepot(v)`.
     fn service_in_depot(&self, v: Vehicle) {
-        // SAFETY: A live vehicle and its immutable maintenance table.
-        unsafe { maintenance::service_in_depot(v.base(), self.vs) };
+        maintenance::vehicle_service_in_depot(v.base(), self.vs);
     }
     /// `SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP)`.
     fn start_stop_dirty(&self, v: Vehicle) {
@@ -888,8 +886,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if !is_normal_aircraft(v.base().subtype()) {
             return;
         }
-        // SAFETY: A live vehicle and its immutable maintenance table.
-        unsafe { maintenance::age_vehicle(v.base(), self.vs) };
+        maintenance::age_vehicle(v.base(), self.vs);
     }
 
     /// Original `Aircraft::OnNewEconomyDay`: economy day handler.
@@ -902,20 +899,17 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if !is_normal_aircraft(b.subtype()) {
             return;
         }
-        // SAFETY: A live vehicle and its immutable maintenance table.
-        unsafe { maintenance::economy_age_vehicle(b, self.vs) };
+        maintenance::economy_age_vehicle(b, self.vs);
 
         let day_counter = b.day_counter().wrapping_add(1);
         b.set_day_counter(day_counter);
         if day_counter & 7 == 0 {
-            // SAFETY: As above.
-            unsafe { maintenance::decrease_vehicle_value(b, self.vs) };
+            maintenance::decrease_vehicle_value(b, self.vs);
         }
 
         crate::orders::check_orders(b, self.vs.orders());
 
-        // SAFETY: As above.
-        unsafe { maintenance::check_vehicle_breakdown(b, self.vs) };
+        maintenance::check_vehicle_breakdown(b, self.vs);
         self.check_if_aircraft_needs_service(v);
 
         if b.running_ticks() == 0 {
@@ -2328,19 +2322,23 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 let b = v.base();
                 /* an excerpt of ServiceAircraft, without the invisibility stuff */
                 Self::call(|| {
-                    (self.vs.write_economy_service)(b, crate::timer_game_common::economy_date().0);
+                    b.set_date_of_last_service(self.vs, crate::timer_game_common::economy_date());
                 });
                 Self::call(|| {
-                    (self.vs.write_calendar_service)(
-                        b,
-                        crate::timer_game_common::calendar_date().0,
+                    b.set_date_of_last_service_newgrf(
+                        self.vs,
+                        crate::timer_game_common::calendar_date(),
                     );
                 });
-                Self::call(|| (self.vs.write_breakdowns)(b, 0));
+                Self::call(|| b.set_breakdowns_since_last_service(self.vs, 0));
                 let reliability = Self::call(|| (self.vs.engine)(b)).reliability();
-                Self::call(|| (self.vs.write_reliability)(b, reliability));
-                // SAFETY: The base vehicle table names its immutable maintenance table.
-                Self::call(|| (unsafe { &*self.vs.maintenance }.details_dirty)(b));
+                Self::call(|| b.set_reliability(self.vs, reliability));
+                Self::call(|| {
+                    set_window_dirty(
+                        WindowClass::WC_VEHICLE_DETAILS,
+                        WindowNumber::from(v.index()),
+                    );
+                });
             }
             return;
         }
@@ -2928,8 +2926,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             return true;
         }
 
-        // SAFETY: A live vehicle and its immutable maintenance table.
-        unsafe { maintenance::handle_breakdown_status(b, self.vs) };
+        maintenance::handle_breakdown(b, self.vs);
 
         Self::handle_aircraft_smoke(v, r#loop != 0);
         let orders = Self::call(|| self.vs.orders());
