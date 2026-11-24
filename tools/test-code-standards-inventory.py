@@ -561,6 +561,17 @@ fn after_comment() { assert_ne!(a, b); }
         self.assertNotIn("src/checks.rs", tests)
         self.assertIn("src/outer/checks.rs", tests)
         self.assertIn("src/fixtures/table.rs", tests)
+        relative = {
+            "src/lib.rs": '#[cfg(test)]\nmod outer { #[path = "../checks.rs"] mod checks; }\n',
+            "src/checks.rs": "fn f() { assert!(a); }\n",
+        }
+        self.assertIn("src/checks.rs", INVENTORY.test_modules(relative))
+
+    def test_a_unicode_identifier_is_one_word(self) -> None:
+        source = 'fn f() { \u0100assert!(a); let s = "\u00e9"; assert!(b); }\n'
+        self.assertEqual(self.sites(source), [(1, "assertion macro", "assert!")])
+        later = "const \u00c9: () = { assert!(A) };\n"
+        self.assertEqual(self.sites(later), [(1, "const assertion", "assert!")])
 
     def test_parsed_bounds_decide_a_site_in_ordinary_code(self) -> None:
         source = """
@@ -615,14 +626,16 @@ class TestCodeTests(unittest.TestCase):
             commit = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit"]
             run(["git", "add", "-A"])
             run([*commit, "--quiet", "-m", "Add: lib"])
-            run(["git", "mv", "rust/demo/src/lib.rs", "rust/demo/src/main.rs"])
-            run([*commit, "--quiet", "-m", "Move: main"])
+            run(["git", "mv", "rust/demo/src/lib.rs", "rust/demo/src/t\u00e9st.rs"])
+            (root / "rust/demo/src/new.rs").write_text("fn g() {}\n")
+            run(["git", "add", "-A"])
+            run([*commit, "--quiet", "-m", "Move: test"])
             with patch.object(INVENTORY, "ROOT", root):
                 self.assertEqual(INVENTORY.renamed_from("HEAD~1", "HEAD"), {})
-                self.assertEqual(
-                    INVENTORY.renamed_from("HEAD~1", "HEAD", "rust"),
-                    {"rust/demo/src/main.rs": "rust/demo/src/lib.rs"},
-                )
+                renames = INVENTORY.renamed_from("HEAD~1", "HEAD", "rust")
+            self.assertEqual(
+                renames, {"rust/demo/src/t\u00e9st.rs": "rust/demo/src/lib.rs"}
+            )
 
     def test_a_comment_naming_a_test_attribute_is_not_one(self) -> None:
         source = b"// Unlike #[test] helpers:\nfn live(a: u8) {}\n#[cfg(all(test, unix))]\nfn probe() {}\n"

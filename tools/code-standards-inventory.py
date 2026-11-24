@@ -44,6 +44,7 @@ import argparse
 import importlib
 import io
 import json
+import posixpath
 import re
 import subprocess
 import sys
@@ -613,7 +614,7 @@ def module_files(path: str, node: Node, data: bytes) -> set[str]:
         if found := PATH_ATTRIBUTE.match(attribute):
             # Outside inline modules a path is relative to the file's own folder.
             base = directory if inline else file.parent
-            return {str(PurePosixPath(base, found[1]))}
+            return {posixpath.normpath(PurePosixPath(base, found[1]))}
     return {str(directory / f"{name}.rs"), str(directory / name / "mod.rs")}
 
 
@@ -805,19 +806,18 @@ def assertion_sites(path: str, source: str) -> list[Site]:
         return []
     data = source.encode()
     root = PARSERS["rust"].parse(data).root_node
-    code = assertion_code(data, root)
-    spans = contexts(root, code)
-    return [
-        Site(
-            path,
-            code.count("\n", 0, match.start()) + 1,
-            "const assertion"
-            if compile_time(spans, match.start())
-            else "assertion macro",
-            f"{match[1]}!",
-        )
-        for match in ASSERTION.finditer(code)
-    ]
+    blanked = assertion_code(data, root)
+    spans = contexts(root, blanked)
+    # Names match in decoded text, where a UTF-8 identifier stays one word; the
+    # class reads the span at the match's byte offset.
+    code = blanked.encode("latin-1").decode()
+    sites = []
+    for match in ASSERTION.finditer(code):
+        offset = len(code[: match.start()].encode())
+        kind = "const assertion" if compile_time(spans, offset) else "assertion macro"
+        line = code.count("\n", 0, match.start()) + 1
+        sites.append(Site(path, line, kind, f"{match[1]}!"))
+    return sites
 
 
 def assertion_class(site: Site) -> str:
@@ -960,16 +960,23 @@ def show(revision: str, path: str) -> str | None:
 
 def renamed_from(base: str, head: str, scope: str = RUST) -> dict[str, str]:
     """Head path to base path for files under scope that Git sees as renamed."""
-    names = subprocess.check_output(
-        ["git", "diff", "--name-status", "-M", base, head, "--", scope],
+    # NUL-delimited, so Git quotes no path: status, then one path or, for a
+    # rename or copy, the old path and the new one.
+    fields = subprocess.check_output(
+        ["git", "diff", "--name-status", "-z", "-M", base, head, "--", scope],
         cwd=ROOT,
         text=True,
-    )
-    return {
-        parts[2]: parts[1]
-        for parts in (line.split("\t") for line in names.splitlines())
-        if parts[0].startswith("R")
-    }
+    ).split("\0")
+    renames, index = {}, 0
+    while index < len(fields) and fields[index]:
+        status = fields[index]
+        if status[0] in "RC":
+            if status[0] == "R":
+                renames[fields[index + 2]] = fields[index + 1]
+            index += 3
+        else:
+            index += 2
+    return renames
 
 
 def growth(path: str, before: str, after: str) -> list[Site]:
