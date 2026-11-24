@@ -91,7 +91,7 @@ void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept { V
 void RustVehicleSetCargoKind(OpenTTDVehicle *v, uint8_t cargo, uint8_t subtype) noexcept { RustVehicleSetCargoType(v, cargo); RustVehicleSetCargoSubtype(v, subtype); }
 void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept { VehicleOf(v)->InvalidateNewGRFCacheOfChain(); }
 ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept { return VehicleOf(v)->GetExpenseType(income); }
-/* Values the Rust side names in rust/openttd-kernels/src/vehicle.rs. */
+/* Values the Rust vehicle ports name. */
 static_assert(MP_ROAD == 2 && MP_STATION == 5 && MP_TUNNELBRIDGE == 9);
 static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4);
 static_assert(VehStates{VehState::Hidden}.base() == 1 && VehStates{VehState::Stopped}.base() == 2 && VehStates{VehState::AircraftBroken}.base() == 64 && VehStates{VehState::Crashed}.base() == 128);
@@ -152,31 +152,31 @@ static OpenTTDVehicleTileLinks *OPENTTD_RUST_CALL VehicleSvcTileLinks(OpenTTDVeh
 static OpenTTDVehicle *VehicleRecordFromShell(void *shell) noexcept { return shell == nullptr ? nullptr : static_cast<Vehicle *>(shell)->record; }
 
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
-	.record_from_shell = VehicleRecordFromShell,
-	.tile_links = VehicleSvcTileLinks,
-	.pathfinding_result = VehicleSvcPathfindingResult,
 	.base_viewport = VehicleSvcBaseViewport,
-	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },
-	.set_max_age = RustVehicleSetMaxAge,
-	.length_changed = VehicleSvcLengthChanged,
-	.play_vehicle_sound = VehicleSvcPlayVehicleSound,
-	.play_sound = VehicleSvcPlaySound,
-	.start_stop_dirty = VehicleSvcStartStopDirty,
+	.can_allocate = RustVehicleCanAllocate,
 	.destroy = VehicleSvcDestroy,
 	.engine = RustVehicleGetEngine,
-	.write_profit = VehicleSvcWriteProfit,
-	.write_economy_service = VehicleSvcWriteEconomyService,
-	.write_calendar_service = VehicleSvcWriteCalendarService,
-	.write_breakdowns = VehicleSvcWriteBreakdowns,
-	.write_reliability = VehicleSvcWriteReliability,
-	.profit = VehicleSvcProfit,
-	.maintenance = &_rust_vehicle_maintenance_services,
-	.visits = RustVehicleVisits,
-	.orders = VehicleOrders,
-	.ship_get = RustShipGet,
 	.first_sprite = RustVehicleRead<uint32_t, RustVehicleFirstSprite>,
+	.length_changed = VehicleSvcLengthChanged,
+	.maintenance = &_rust_vehicle_maintenance_services,
+	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },
+	.orders = VehicleOrders,
+	.pathfinding_result = VehicleSvcPathfindingResult,
+	.play_sound = VehicleSvcPlaySound,
+	.play_vehicle_sound = VehicleSvcPlayVehicleSound,
+	.profit = VehicleSvcProfit,
+	.record_from_shell = VehicleRecordFromShell,
+	.set_max_age = RustVehicleSetMaxAge,
+	.ship_get = RustShipGet,
+	.start_stop_dirty = VehicleSvcStartStopDirty,
+	.tile_links = VehicleSvcTileLinks,
 	.update_delta = RustVehicleUpdateDelta<OpenTTDVehicle *>,
-	.can_allocate = RustVehicleCanAllocate,
+	.visits = RustVehicleVisits,
+	.write_breakdowns = VehicleSvcWriteBreakdowns,
+	.write_calendar_service = VehicleSvcWriteCalendarService,
+	.write_economy_service = VehicleSvcWriteEconomyService,
+	.write_profit = VehicleSvcWriteProfit,
+	.write_reliability = VehicleSvcWriteReliability,
 };
 
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept

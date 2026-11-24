@@ -76,43 +76,43 @@ pub struct EngineRef(pub NonNull<OpenTTDEngine>);
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
-    /// Resolve a legacy opaque native shell to its canonical record.
-    pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
-    pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
-    pub pathfinding_result: extern "C" fn(VehicleRef, bool),
     /// `Vehicle::UpdateViewport(true)`.
     pub base_viewport: extern "C" fn(VehicleRef),
-    /// Immutable process-wide vehicle resolver services.
-    pub newgrf: extern "C" fn() -> *const crate::newgrf_vehicle::Services,
-    /// Native `max_age` store after the Rust engine lifetime decision.
-    pub set_max_age: extern "C" fn(VehicleRef, i32),
-    pub length_changed: extern "C" fn(VehicleRef),
-    /// `PlayVehicleSound(v, event)`.
-    pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
-    pub play_sound: extern "C" fn(VehicleRef, u16),
-    pub start_stop_dirty: extern "C" fn(VehicleRef),
+    /// `Vehicle::CanAllocateItem(count)`.
+    pub can_allocate: extern "C" fn(usize) -> bool,
     /// `delete v`; the handle and its owner are dead afterwards.
     pub destroy: extern "C" fn(VehicleRef),
     /// Only the current engine, for callers that do not consume its GRF version.
     pub engine: extern "C" fn(VehicleRef) -> EngineRef,
-    pub write_profit: extern "C" fn(VehicleRef, i64),
-    pub write_economy_service: extern "C" fn(VehicleRef, i32),
-    pub write_calendar_service: extern "C" fn(VehicleRef, i32),
-    pub write_breakdowns: extern "C" fn(VehicleRef, u8),
-    pub write_reliability: extern "C" fn(VehicleRef, u16),
-    pub profit: extern "C" fn(VehicleRef) -> i64,
+    pub first_sprite: extern "C" fn(VehicleRef) -> u32,
+    pub length_changed: extern "C" fn(VehicleRef),
     pub maintenance: *const maintenance::Services,
-    /// The static station and depot visit table (`vehicle/visits.rs`), resolved on use.
-    pub visits: extern "C" fn() -> *const visits::Services,
+    /// Immutable process-wide vehicle resolver services.
+    pub newgrf: extern "C" fn() -> *const crate::newgrf_vehicle::Services,
     /// The same canonical orders table used by visits/refit.
     pub orders: extern "C" fn() -> *const crate::orders::Leaves,
+    pub pathfinding_result: extern "C" fn(VehicleRef, bool),
+    pub play_sound: extern "C" fn(VehicleRef, u16),
+    /// `PlayVehicleSound(v, event)`.
+    pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
+    pub profit: extern "C" fn(VehicleRef) -> i64,
+    /// Resolve a legacy opaque native shell to its canonical record.
+    pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
+    /// Native `max_age` store after the Rust engine lifetime decision.
+    pub set_max_age: extern "C" fn(VehicleRef, i32),
     /// Strict `Ship::Get`, never a nullable pool lookup.
     pub ship_get: extern "C" fn(u32) -> VehicleRef,
-    pub first_sprite: extern "C" fn(VehicleRef) -> u32,
+    pub start_stop_dirty: extern "C" fn(VehicleRef),
+    pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
     /// Virtual `UpdateDeltaXY()`.
     pub update_delta: extern "C" fn(VehicleRef),
-    /// `Vehicle::CanAllocateItem(count)`.
-    pub can_allocate: extern "C" fn(usize) -> bool,
+    /// The static station and depot visit table (`vehicle/visits.rs`), resolved on use.
+    pub visits: extern "C" fn() -> *const visits::Services,
+    pub write_breakdowns: extern "C" fn(VehicleRef, u8),
+    pub write_calendar_service: extern "C" fn(VehicleRef, i32),
+    pub write_economy_service: extern "C" fn(VehicleRef, i32),
+    pub write_profit: extern "C" fn(VehicleRef, i64),
+    pub write_reliability: extern "C" fn(VehicleRef, u16),
 }
 impl VehicleServices {
     /// `Vehicle::SetNext` on two native shells.
@@ -251,31 +251,31 @@ pub struct GroundServices {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
-        record_from_shell,
-        tile_links,
-        pathfinding_result,
         base_viewport,
-        newgrf,
-        set_max_age,
-        length_changed,
-        play_vehicle_sound,
-        play_sound,
-        start_stop_dirty,
+        can_allocate,
         destroy,
         engine,
-        write_profit,
-        write_economy_service,
-        write_calendar_service,
-        write_breakdowns,
-        write_reliability,
-        profit,
-        maintenance,
-        visits,
-        orders,
-        ship_get,
         first_sprite,
+        length_changed,
+        maintenance,
+        newgrf,
+        orders,
+        pathfinding_result,
+        play_sound,
+        play_vehicle_sound,
+        profit,
+        record_from_shell,
+        set_max_age,
+        ship_get,
+        start_stop_dirty,
+        tile_links,
         update_delta,
-        can_allocate,
+        visits,
+        write_breakdowns,
+        write_calendar_service,
+        write_economy_service,
+        write_profit,
+        write_reliability,
     };
     "OpenTTDGroundServices" ["probe"] => GroundServices {
         physics,
