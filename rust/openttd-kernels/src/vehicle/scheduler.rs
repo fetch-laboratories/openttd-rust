@@ -416,7 +416,7 @@ fn after_tick<const COUNTED: bool>(
     match kind {
         VehicleType::VEH_TRAIN => {
             // `Train::From(v)`.
-            assert_with(|| kind == VehicleType::VEH_TRAIN);
+            train::Handle::assert_from(|| kind);
             if !ground_vehicle::is_engine(load!(COUNTED, v.subtype())) {
                 return;
             }

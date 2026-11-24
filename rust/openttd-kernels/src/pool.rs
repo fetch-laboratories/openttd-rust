@@ -456,19 +456,9 @@ impl<I: PoolId, R, S> TypedPool<I, R, S> {
     }
     /// `PoolIterator::ValidateIndex`: reread live extent/slots, using the native end sentinel.
     #[must_use]
-    pub unsafe fn next_index(&self, mut index: usize, max_size: usize) -> usize {
-        unsafe {
-            while index < (*self.view).first_unused {
-                if !(*(*self.view).slots.as_mut_ptr().add(index))
-                    .shell
-                    .is_null()
-                {
-                    return index;
-                }
-                index += 1;
-            }
-            max_size
-        }
+    pub unsafe fn next_index(&self, index: usize, max_size: usize) -> usize {
+        // SAFETY: The caller's live descriptor.
+        unsafe { self.next_item(index) }.map_or(max_size, |(index, _, _)| index)
     }
 }
 

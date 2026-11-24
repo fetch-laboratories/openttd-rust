@@ -328,6 +328,13 @@ pub(crate) fn is_ship_destination_tile(
     }
     false
 }
+impl Leaves {
+    /// The base vehicle table.
+    fn vehicles(&self) -> &VehicleServices {
+        // SAFETY: The native table names the immutable process-wide base table.
+        unsafe { &*self.vehicle }
+    }
+}
 struct Game<'a> {
     leaves: &'a Leaves,
     services: &'a Services,
@@ -342,8 +349,7 @@ impl Game<'_> {
     }
 
     fn vs(&self) -> &VehicleServices {
-        // SAFETY: The native table names the immutable process-wide base table.
-        unsafe { &*self.leaves.vehicle }
+        self.leaves.vehicles()
     }
     fn state(&self) -> u16 {
         // SAFETY: Raw shell pointer stays live; field access ends before any service.
@@ -385,11 +391,11 @@ impl Game<'_> {
     fn path_clear(&self, id: u32) {
         (self.leaves.path_clear)(id);
     }
-    fn destination(&self, id: u32, tile: u32) {
+    fn destination(&self, id: VehicleID, tile: u32) {
         if tile == (self.vehicle().dest_tile_raw()) {
             return;
         }
-        self.path_clear(id);
+        self.path_clear(id.0);
         self.vehicle().set_dest_tile_raw(tile);
     }
     fn remember_rotation(&self) {
@@ -479,11 +485,12 @@ impl Game<'_> {
         }
         best
     }
-    fn service(&self, id: u32, v: VehicleRef) {
-        if (self.leaves.servint)(id) == 0 || !maintenance::needs_automatic_servicing(v, self.vs()) {
+    fn service(&self, id: VehicleID, v: VehicleRef) {
+        if (self.leaves.servint)(id.0) == 0 || !maintenance::needs_automatic_servicing(v, self.vs())
+        {
             return;
         }
-        if (self.leaves.chain_depot)(id) {
+        if (self.leaves.chain_depot)(id.0) {
             maintenance::vehicle_service_in_depot(v, self.vs());
             return;
         }
@@ -492,12 +499,12 @@ impl Game<'_> {
         let distance = penalty / crate::pathfinder_type::YAPF_TILE_LENGTH as u32;
         if let Some(depot) = self.depot(distance) {
             crate::witness::hit(crate::witness::SHIP_AUTO_SERVICE);
-            (self.leaves.order_depot)(id, depot.id);
+            (self.leaves.order_depot)(id.0, depot.id);
             self.destination(id, depot.tile);
-            (self.leaves.start_dirty)(id);
-        } else if (self.leaves.order_type)(id) == u32::from(OT_GOTO_DEPOT) {
-            (self.leaves.order_dummy)(id);
-            (self.leaves.start_dirty)(id);
+            (self.leaves.start_dirty)(id.0);
+        } else if (self.leaves.order_type)(id.0) == u32::from(OT_GOTO_DEPOT) {
+            (self.leaves.order_dummy)(id.0);
+            (self.leaves.start_dirty)(id.0);
         }
     }
     fn cache(&self, v: VehicleRef) {
@@ -993,8 +1000,7 @@ pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
 /// `Ship::OnNewCalendarDay`: calendar day handler, for the scheduler's dispatch over the live
 /// ship `vehicle`.
 pub(crate) fn on_new_calendar_day(vehicle: VehicleRef, leaves: &Leaves) {
-    // SAFETY: The native table names the immutable process-wide base table.
-    maintenance::age_vehicle(vehicle, unsafe { &*leaves.vehicle });
+    maintenance::age_vehicle(vehicle, leaves.vehicles());
 }
 /// `Ship::OnNewEconomyDay`: economy day handler, for the scheduler's dispatch over the live
 /// ship `vehicle` at pool index `index`.
@@ -1012,8 +1018,7 @@ pub(crate) fn on_new_economy_day(
         owner: std::ptr::null_mut(),
         vehicle: Some(vehicle),
     };
-    // `this->index.base()`, which the leaves take.
-    let id = index.0;
+
     crate::witness::hit(crate::witness::SHIP_ECONOMY_DAY);
     maintenance::economy_age_vehicle(vehicle, game.vs());
     let day = (u32::from(game.vehicle().day_counter())).wrapping_add(1);
@@ -1022,8 +1027,8 @@ pub(crate) fn on_new_economy_day(
         maintenance::decrease_vehicle_value(vehicle, game.vs());
     }
     maintenance::check_vehicle_breakdown(vehicle, game.vs());
-    game.service(id, vehicle);
-    (game.leaves.check_orders)(id);
+    game.service(index, vehicle);
+    (game.leaves.check_orders)(index.0);
     let ticks = u32::from(game.vehicle().running_ticks());
     if ticks != 0 {
         let cost = unsafe { game.vs().running_cost(vehicle) };
@@ -1031,7 +1036,7 @@ pub(crate) fn on_new_economy_day(
         let profit = (game.vs().profit)(vehicle).saturating_sub(cost);
         (game.vs().write_profit)(vehicle, profit);
         game.vehicle().set_running_ticks(0);
-        (game.leaves.pay_running)(id, cost);
+        (game.leaves.pay_running)(index.0, cost);
         crate::window_func::set_window_dirty(
             crate::window_type::WindowClass::WC_VEHICLE_DETAILS,
             crate::window_type::WindowNumber::from(vehicle.index(game.vs().newgrf())),
@@ -1062,7 +1067,7 @@ pub unsafe extern "C" fn openttd_rust_ship_destination(
         (leaves.state_owner)(id),
         Some((unsafe { &*leaves.vehicle }.ship_get)(id))
     );
-    game.destination(id, tile);
+    game.destination(VehicleID(id), tile);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_find_depot(

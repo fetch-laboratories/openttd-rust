@@ -247,10 +247,15 @@ impl Handle {
         // SAFETY: Entries and topology reads supply a live non-null train record.
         unsafe { VehicleRef(std::ptr::NonNull::new_unchecked(self.record)) }
     }
+    /// `Train::From`'s type assertion, `assert(v->type == VEH_TRAIN)`, over the type
+    /// `kind` reads.
+    pub(crate) fn assert_from(kind: impl FnOnce() -> VehicleType) {
+        crate::services_assert::assert_with(|| kind() == VehicleType::VEH_TRAIN);
+    }
     /// `Train::From(v)`: the handle of a vehicle that is a train, with `Train::From`'s type
     /// assertion.
     pub(crate) fn from_vehicle(v: VehicleRef) -> Self {
-        crate::services_assert::assert_with(|| v.vehicle_type() == VehicleType::VEH_TRAIN);
+        Self::assert_from(|| v.vehicle_type());
         Self {
             record: v.0.as_ptr(),
             owner: read_field!(v.0.as_ptr(), train),

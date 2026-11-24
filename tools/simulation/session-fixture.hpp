@@ -54,12 +54,14 @@ struct SessionFixture {
 	OpenTTDAnimationServices animation{};
 	std::optional<RustAnimationScope> animation_scope;
 	std::optional<RustAnimationSave> animation_queue;
-	/* An empty vehicle pool, and a resolver table that no vehicle reaches; its links name this
-	 * fixture's live tables. */
+	/* An empty vehicle pool, and a resolver table that no vehicle reaches. The tick entry
+	 * holds the resolver for the process, so it and the tables it links are static. */
 	static inline RustPoolDescriptor empty_pool{};
 	static inline const RustPoolDescriptor *const empty_pool_address = &empty_pool;
-	OpenTTDEngineCapabilitiesServices capabilities{};
-	OpenTTDVehicleResolverServices resolver{};
+	static inline const OpenTTDSharedServices resolver_shared{};
+	static inline const OpenTTDVehicleServices resolver_vehicles{};
+	static inline const OpenTTDEngineCapabilitiesServices resolver_capabilities{.vehicles = &resolver_vehicles, .shared = &resolver_shared};
+	static inline const OpenTTDVehicleResolverServices resolver{.vehicle = &resolver_vehicles, .shared = &resolver_shared, .capabilities = &resolver_capabilities};
 	static void Nothing() noexcept {}
 	static void FrameNothing(OpenTTDSessionFrame *) noexcept {}
 	SessionFixture()
@@ -89,12 +91,7 @@ struct SessionFixture {
 		shared.tick_counter = []() noexcept -> uint64_t { return 1; };
 		loop = {{.tick_counter = 0, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
 		scheduler.pool = &empty_pool_address;
-		capabilities.vehicles = &vehicles;
-		capabilities.shared = &shared;
-		resolver.vehicle = &vehicles;
-		resolver.shared = &shared;
-		resolver.capabilities = &capabilities;
-		vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &active->resolver; };
+		vehicles.newgrf = []() noexcept { return &resolver; };
 		scheduler.vehicle = &vehicles;
 		scheduler.shared = &shared;
 		shared.for_each_station = [](void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept {};
