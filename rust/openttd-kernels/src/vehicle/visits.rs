@@ -1006,7 +1006,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     }
     crate::window_func::set_window_dirty(
         crate::window_type::WindowClass::WC_VEHICLE_VIEW,
-        crate::window_type::WindowNumber::from(crate::vehicle_type::VehicleID(s.id(v))),
+        crate::window_type::WindowNumber::from(v.index(s.vehicles().newgrf())),
     );
 
     // Trains update the depot list when the first unit enters and call this
@@ -1034,7 +1034,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     }
     crate::window_func::set_window_dirty(
         crate::window_type::WindowClass::WC_VEHICLE_VIEW,
-        crate::window_type::WindowNumber::from(crate::vehicle_type::VehicleID(s.id(v))),
+        crate::window_type::WindowNumber::from(v.index(s.vehicles().newgrf())),
     );
 
     let real_order = o.get(v, o.real(v));

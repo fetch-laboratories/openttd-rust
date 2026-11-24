@@ -588,8 +588,7 @@ impl<'a> Game<'a> {
     }
     /// `v->index`.
     fn index(&self, v: VehicleRef) -> VehicleID {
-        // SAFETY: A live record and the immutable binding.
-        VehicleID(unsafe { ((*(self.vs.newgrf)()).id)(v.0.as_ptr()) })
+        v.index(self.vs.newgrf())
     }
     /// `HasTileAnyRoadType(tile, types)`.
     fn has_tile_any_road_type(&self, tile: TileIndex, types: RoadTypes) -> bool {
