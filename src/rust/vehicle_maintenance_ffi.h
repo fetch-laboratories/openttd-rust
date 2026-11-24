@@ -11,6 +11,7 @@
 #include "service_defaults.hpp"
 #include "vehicle_ffi.h"
 #include "services_ffi.h"
+struct Company;
 struct OpenTTDClockServices;
 struct OpenTTDCompanyIdentityServices;
 struct OpenTTDFleetGroupServices;
