@@ -1058,14 +1058,14 @@ pub(crate) const HOUSE_ANIMATION: crate::newgrf_animation_base::Binding<
 /// `crate::vehicle::scheduler::SchedulerServices` with every entry unreachable.
 pub(crate) const SCHEDULER: crate::vehicle::scheduler::SchedulerServices =
     crate::vehicle::scheduler::SchedulerServices {
-        pool: unreachable0,
-        assertions: false,
-        tick: unreachable1,
-        calendar_day: unreachable1,
-        economy_day: unreachable1,
-        cargo_owner: unreachable1,
-        vehicle: ptr::null(),
+        aircraft: ptr::null(),
+        pool: ptr::null(),
+        road: ptr::null(),
         shared: ptr::null(),
+        ship: ptr::null(),
+        tick: unreachable1,
+        train: ptr::null(),
+        vehicle: ptr::null(),
     };
 
 /// `crate::fleet::pending::Services` with every entry unreachable.
@@ -2453,7 +2453,6 @@ pub(crate) const REFIT: crate::vehicle_transactions::refit::Services =
         common: &VEHICLE_COMMON,
         selection: &VEHICLE_SELECTION,
         cargo: &CARGO_STORAGE,
-        scheduler: &SCHEDULER,
         train: &TRAIN_LEAVES,
         road: &ROAD_LEAVES,
         aircraft: &AIRCRAFT_LEAVES,

@@ -37,7 +37,6 @@ uint8_t OPENTTD_RUST_CALL openttd_rust_road_leave_depot_abi(OpenTTDVehicle *, Op
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_road_leave_depot(OpenTTDVehicle *a0, OpenTTDRoadState *a1, bool a2, const OpenTTDRoadLeaves *a3) { return openttd_rust_road_leave_depot_abi(a0, a1, a2, a3) != 0; }
 uint32_t OPENTTD_RUST_CALL openttd_rust_road_crash(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadLeaves *);
 void OPENTTD_RUST_CALL openttd_rust_road_update_cache(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadLeaves *);
-void OPENTTD_RUST_CALL openttd_rust_road_calendar_day(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadLeaves *);
 void OPENTTD_RUST_CALL openttd_rust_road_economy_day(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadLeaves *);
 int64_t OPENTTD_RUST_CALL openttd_rust_road_running_cost(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadLeaves *);
 int32_t OPENTTD_RUST_CALL openttd_rust_road_max_speed(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadLeaves *);

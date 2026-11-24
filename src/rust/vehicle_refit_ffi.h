@@ -26,7 +26,6 @@ struct OpenTTDVehicleRefitServices {
 	const OpenTTDVehicleCommonServices *common;
 	const OpenTTDVehicleSelectionServices *selection;
 	const OpenTTDCargoStorageServices *cargo;
-	const OpenTTDVehicleSchedulerServices *scheduler;
 	const OpenTTDTrainServices *train;
 	const OpenTTDRoadLeaves *road;
 	const OpenTTDAircraftLeaves *aircraft;

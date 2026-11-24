@@ -1216,9 +1216,6 @@ impl Links {
     ) -> *const crate::cargo_storage::List {
         unsafe { ((*self.station_resolver).cargo_owner)(st, cargo.0) }
     }
-    pub(crate) fn vehicle_cargo(&self, v: VehicleRef) -> *mut crate::cargo_storage::List {
-        unsafe { ((*self.vehicle_resolver).cargo_owner)(v.0.as_ptr()) }.cast_mut()
-    }
 }
 /// `RerouteCargo`: reroute cargo of type `cargo` at station `st` or in any vehicles unloading
 /// there. Make sure the cargo's new next hop is neither `avoid` nor `avoid2`.
@@ -1250,7 +1247,7 @@ pub(crate) unsafe fn reroute_cargo(
             if (l.cargo_type)(vehicle) == cargo.0 {
                 unsafe {
                     crate::cargo_storage::reroute_vehicle(
-                        l.vehicle_cargo(vehicle),
+                        vehicle.cargo(&*l.vehicle_resolver),
                         storage,
                         ge,
                         avoid.0,

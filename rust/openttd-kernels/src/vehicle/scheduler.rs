@@ -5,74 +5,106 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Live base-vehicle scheduling prototype. Owners stay opaque and call-local;
-//! no Rust world/owner reference survives a service that can mutate or reenter.
-#![allow(unsafe_code, clippy::verbose_bit_mask)]
+//! The vehicle scheduler of `vehicle.cpp`: `RunVehicleCalendarDayProc`,
+//! `RunEconomyVehicleDayProc` and `CallVehicleTicks` up to its autoreplace loop, which is
+//! [`fleet::pending::drain`], with the dispatch of the day virtuals `OnNewCalendarDay` and
+//! `OnNewEconomyDay`. The session's two entries take the record [`Tables`], whose
+//! [`SchedulerServices`] holds the vehicle pool's descriptor, the native `Tick` and the
+//! controllers' tables.
+//!
+//! The pool and the vehicle records are read in place: the pool through its descriptor, each
+//! member through the `VehicleRef` accessor named after it. No reference into a shell, a record
+//! or the pool survives a service that can mutate or reenter: a `VehicleRef` is a pointer, each
+//! member is loaded or stored at its use, and a walk rereads the pool's extent and slots at each
+//! step. The tables are immutable for the process, and no service an entry calls resets the
+//! pool, loads a game or yields the game-state mutex.
+
 use super::{CALLBACK_FAILED, VehicleRef, VehicleServices};
-use crate::aircraft::AIR_AIRCRAFT;
+use crate::bitmath_func::{gb, gb_u8, has_bit};
 use crate::framerate_type::{PerformanceAccumulator, PerformanceElement, PerformanceMeasurer};
 use crate::newgrf_callbacks::CBID_VEHICLE_32DAY_CALLBACK;
-use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16, VehicleSoundEvent};
+use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16};
+use crate::openttd::GameMode;
+use crate::pool::{PoolDescriptor, PoolId};
+use crate::services_assert::assert_with;
 use crate::timer_game_tick::DAY_TICKS;
-use crate::vehicle_base::{GVSF_ENGINE, GVSF_FRONT, VehState, VehStates};
-use crate::{cargo_storage, fleet, services, station_service};
+use crate::vehicle_base::{Pool, VehState, VehStates};
+use crate::vehicle_type::{VehicleID, VehicleType};
+use crate::{
+    aircraft, cargo_storage, fleet, ground_vehicle, newgrf_vehicle, road, services, session,
+    ship_control, station_service, timer_game_common, train, vehicle_base,
+};
 use std::mem::MaybeUninit;
 
-use super::VehicleType;
-const TRAIN: VehicleType = VehicleType::TRAIN;
-const ROAD: VehicleType = VehicleType::ROAD;
-const AIRCRAFT: VehicleType = VehicleType::AIRCRAFT;
-const FRONT: u8 = 1 << GVSF_FRONT;
-const ENGINE: u8 = 1 << GVSF_ENGINE;
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct PoolCursor {
-    pub slots: *const crate::pool::PoolSlot,
-    pub slots_len: usize,
-    pub first_unused: *const usize,
-}
-/// Field addresses in the surviving vehicle's and its front's canonical records.
-pub struct PostTick {
-    pub vehicle_type: VehicleType,
-    pub period: *const u16,
-    pub counter: *mut u16,
-    pub motion: *mut u32,
-    pub speed: *const u16,
-    pub front_type: *const VehicleType,
-    pub subtype: *const u8,
-    pub tick: *const u8,
-    pub front_status: *const crate::vehicle_base::VehStates,
-    pub status: *const crate::vehicle_base::VehStates,
-}
 #[repr(C)]
 pub struct SchedulerServices {
-    pub pool: extern "C" fn() -> PoolCursor,
-    pub assertions: bool,
+    /// The aircraft controller's table, immutable for the process.
+    pub aircraft: *const aircraft::Leaves,
+    /// `&_vehicle_pool.descriptor`: the vehicle pool's descriptor, Rust's own record.
+    pub pool: *const *const PoolDescriptor,
+    /// The road vehicle controller's table, immutable for the process.
+    pub road: *const road::Leaves,
+    /// The shared table, immutable for the process.
+    pub shared: *const services::Services,
+    /// The ship controller's table, immutable for the process.
+    pub ship: *const ship_control::Leaves,
     /// Runs the virtual Tick; true when the vehicle survives.
     pub tick: extern "C" fn(VehicleRef) -> bool,
-    pub calendar_day: extern "C" fn(VehicleRef),
-    pub economy_day: extern "C" fn(VehicleRef),
-    pub cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
-    /// Base vehicle and shared tables, immutable for the process.
+    /// The train controller's table, immutable for the process.
+    pub train: *const train::Leaves,
+    /// The base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
-    pub shared: *const services::Services,
 }
 #[repr(C)]
 pub struct Tables {
-    pub scheduler: *const SchedulerServices,
     pub cargo: *const cargo_storage::Services,
-    pub station: *const station_service::World,
+    pub group: *const fleet::GroupServices,
     pub loading: *const station_service::Loading,
     pub pending: *const fleet::pending::Services,
+    pub refit_cost: *mut services::CommandCost,
+    pub refit_temporary: *mut services::CommandCost,
+    pub scheduler: *const SchedulerServices,
+    pub station: *const station_service::World,
     pub transaction: *const fleet::transactions::Services,
-    pub group: *const fleet::GroupServices,
     pub visits: *const super::visits::Services,
-    pub refit_cost: *mut crate::services::CommandCost,
-    pub refit_temporary: *mut crate::services::CommandCost,
 }
+
+#[allow(unsafe_code)]
+impl SchedulerServices {
+    /// The vehicle pool, read in place.
+    pub(crate) fn pool(&self) -> Pool {
+        // SAFETY: The table's descriptor address and the descriptor live for the process.
+        unsafe { Pool::from_descriptor(*self.pool) }
+    }
+    fn aircraft(&self) -> &aircraft::Leaves {
+        // SAFETY: Each table link is a process-lifetime table.
+        unsafe { &*self.aircraft }
+    }
+    fn road(&self) -> &road::Leaves {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.road }
+    }
+    fn shared(&self) -> &services::Services {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.shared }
+    }
+    fn ship(&self) -> &ship_control::Leaves {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.ship }
+    }
+    fn train(&self) -> &train::Leaves {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.train }
+    }
+    pub(crate) fn vehicle(&self) -> &VehicleServices {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.vehicle }
+    }
+}
+
 // Select counted/plain implementations once at entry. In the plain monomorph,
-// COUNTED=false erases every new per-visit witness branch/load/update.
+// COUNTED=false erases every per-visit witness branch, load and update.
+/// One C call of this file: a `vehicle.crossings` hit and its result's size.
 macro_rules! svc {
     ($counted:ident, $function:expr $(, $arg:expr)*) => {
         crate::witness::counted!(
@@ -80,318 +112,168 @@ macro_rules! svc {
         )
     };
 }
-
-/// Refresh before ANY cached slot read after callbacks. `ResizeFor` grows only
-/// when allocating at/above old size; `AllocateItem` raises canonical `first_unused`
-/// above that size before return. `FreeItem` never lowers it. `CleanPool` is excluded
-/// during this entry; the descriptor ends before load/reset or fleet drain.
-unsafe fn extent<const COUNTED: bool>(s: &SchedulerServices, pool: &mut PoolCursor) -> usize {
-    let live = unsafe { scalar_read::<_, COUNTED>(pool.first_unused) };
-    if live > pool.slots_len {
-        *pool = svc!(COUNTED, s.pool);
-        if COUNTED {
-            crate::witness::hit(crate::witness::VEHICLE_POOL_GROWTH);
-        }
-    }
-    live
-}
-/// # Safety
-/// Call-scoped descriptor from `pool()`, serialized pool; no `CleanPool`/load/reset.
-unsafe fn next<const COUNTED: bool>(
-    s: &SchedulerServices,
-    pool: &mut PoolCursor,
-    from: &mut usize,
-) -> Option<VehicleRef> {
-    while *from < unsafe { extent::<COUNTED>(s, pool) } {
-        let vehicle = unsafe {
-            scalar_read::<_, COUNTED>(std::ptr::addr_of!((*pool.slots.add(*from)).record))
-        };
-        *from += 1;
-        if !vehicle.is_null() {
-            // SAFETY: The slot carries its live owner record directly.
-            return Some(VehicleRef::of(vehicle.cast()));
-        }
-    }
-    None
-}
-unsafe fn day<const COUNTED: bool>(
-    tables: &Tables,
-    s: &SchedulerServices,
-    calendar: bool,
-    mut id: usize,
-) {
-    let mut pool = svc!(COUNTED, s.pool);
-    while id < unsafe { extent::<COUNTED>(s, &mut pool) } {
-        let vehicle =
-            unsafe { scalar_read::<_, COUNTED>(std::ptr::addr_of!((*pool.slots.add(id)).record)) };
-        id += DAY_TICKS as usize;
-        if vehicle.is_null() {
-            continue;
-        }
-        // SAFETY: This published record remains live for its day callback.
-        let vehicle = VehicleRef::of(vehicle.cast());
-        if COUNTED {
-            crate::witness::hit(crate::witness::VEHICLE_DAYS);
-        }
-        if !calendar && vehicle.day_counter() & 0x1f == 0 && vehicle.has_engine_type() {
-            if COUNTED {
-                crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
-            }
-            let vs = unsafe { &*s.vehicle };
-            let callback = crate::newgrf_vehicle::get_vehicle_callback(
-                vs.newgrf(),
-                CBID_VEHICLE_32DAY_CALLBACK,
-                0,
-                0,
-                vehicle.engine_type(),
-                Some(vehicle),
+/// A record member the body after `Tick` loads; its size counts in `vehicle.scalar_read_bytes`.
+macro_rules! load {
+    ($counted:ident, $read:expr) => {{
+        let value = $read;
+        if $counted {
+            crate::witness::add(
+                crate::witness::VEHICLE_SCALAR_READ_BYTES,
+                ::std::mem::size_of_val(&value) as u64,
             );
-            if callback != CALLBACK_FAILED {
-                if callback & 1 != 0 {
-                    unsafe {
-                        crate::newgrf_vehicle::trigger(
-                            vs,
-                            vehicle,
-                            crate::newgrf_vehicle::Trigger::Callback32,
-                        );
-                    };
-                }
-                if callback != 0 {
-                    // SAFETY: The immutable maintenance table lives for this entry.
-                    let maintenance = unsafe { &*vs.maintenance };
-                    svc!(COUNTED, maintenance.mark_dirty, vehicle.first());
-                }
-                if callback & !3 != 0 {
-                    let engine = svc!(COUNTED, vs.engine, vehicle);
-                    vs.unknown_callback_result(engine, CBID_VEHICLE_32DAY_CALLBACK, callback);
-                }
-            }
         }
-        if calendar {
-            svc!(COUNTED, s.calendar_day, vehicle);
-        } else {
-            svc!(COUNTED, s.economy_day, vehicle);
+        value
+    }};
+}
+/// A record member the body after `Tick` stores; its size counts in
+/// `vehicle.scalar_write_bytes`.
+macro_rules! store {
+    ($counted:ident, $v:ident . $set:ident($value:expr)) => {{
+        let value = $value;
+        if $counted {
+            crate::witness::add(
+                crate::witness::VEHICLE_SCALAR_WRITE_BYTES,
+                ::std::mem::size_of_val(&value) as u64,
+            );
         }
-    }
-    let _ = tables;
-}
-impl PostTick {
-    /// `v->type` and `v->First()` after the survival assertion; motion types
-    /// address the record fields `CallVehicleTicks` reads and writes next.
-    fn after_tick(v: VehicleRef) -> Self {
-        let vehicle_type = v.vehicle_type_raw();
-        let record = v.0.as_ptr();
-        if VehicleType(vehicle_type).0 > AIRCRAFT.0 {
-            return Self {
-                vehicle_type: VehicleType(vehicle_type),
-                period: std::ptr::null(),
-                counter: std::ptr::null_mut(),
-                motion: std::ptr::null_mut(),
-                speed: std::ptr::null(),
-                front_type: std::ptr::null(),
-                subtype: std::ptr::null(),
-                tick: std::ptr::null(),
-                front_status: std::ptr::null(),
-                status: std::ptr::null(),
-            };
-        }
-        let front = v.first().0.as_ptr();
-        // SAFETY: Both canonical records live while their surviving shells do; only
-        // addresses are formed here, and post_tick loads each field at its use.
-        unsafe {
-            Self {
-                vehicle_type: VehicleType(vehicle_type),
-                period: &raw const (*record).cached_cargo_age_period,
-                counter: &raw mut (*record).cargo_age_counter,
-                motion: &raw mut (*record).motion_counter,
-                speed: &raw const (*front).cur_speed,
-                front_type: &raw const (*front).r#type,
-                subtype: &raw const (*record).subtype,
-                tick: &raw const (*record).tick_counter,
-                front_status: &raw const (*front).vehstatus,
-                status: &raw const (*record).vehstatus,
-            }
-        }
-    }
-}
-struct PostTickServices {
-    cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
-    sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
-    cargo: *const cargo_storage::Services,
-}
-/// A field-sized raw access ends before the next service. These functions never
-/// form references into the native shell. COUNTED=false removes accounting.
-unsafe fn scalar_read<T: Copy, const COUNTED: bool>(address: *const T) -> T {
-    if COUNTED {
-        crate::witness::add(
-            crate::witness::VEHICLE_SCALAR_READ_BYTES,
-            std::mem::size_of::<T>() as u64,
-        );
-    }
-    unsafe { address.read() }
-}
-unsafe fn scalar_write<T, const COUNTED: bool>(address: *mut T, value: T) {
-    if COUNTED {
-        crate::witness::add(
-            crate::witness::VEHICLE_SCALAR_WRITE_BYTES,
-            std::mem::size_of::<T>() as u64,
-        );
-    }
-    unsafe { address.write(value) };
-}
-macro_rules! post_svc {
-    ($counted:ident, $slot:expr, $function:expr $(, $arg:expr)*) => {{
-        if $counted { crate::witness::hit($slot); }
-        svc!($counted, $function $(, $arg)*)
+        $v.$set(value);
     }};
 }
 
-/// # Safety
-/// Tick survived. Shells are separately allocated, so pool growth cannot move their members;
-/// cargo packet lookup and `NewGRF` sound resolution may reenter but cannot destroy these
-/// shells, reset the pool or yield the mutex. Never retain a descriptor across Tick,
-/// traversal, loading, day or fleet work. `cargo` addresses the surviving records; only
-/// addresses span callbacks, and field loads and stores end first so subsequent values are fresh.
-unsafe fn post_tick<const COUNTED: bool>(
-    schedule: &PostTickServices,
-    vehicle: VehicleRef,
-    cargo: &PostTick,
-) {
-    if COUNTED {
-        crate::witness::hit(crate::witness::VEHICLE_POST_TICK);
-    }
-    let vehicle_type = cargo.vehicle_type;
-    if COUNTED {
-        crate::witness::hit(
-            crate::witness::VEHICLE_VISITS
-                + match vehicle_type.0 {
-                    0..=6 => usize::from(vehicle_type.0),
-                    _ => 7,
-                },
-        );
-    }
-    if vehicle_type.0 > AIRCRAFT.0 {
-        return;
-    }
-    if COUNTED {
-        crate::witness::add(
-            crate::witness::VEHICLE_DESCRIPTOR_BYTES,
-            std::mem::size_of::<PostTick>() as u64,
-        );
-    }
-    let period = unsafe { scalar_read::<_, COUNTED>(cargo.period) };
-    if period != 0 {
-        let counter = unsafe { scalar_read::<_, COUNTED>(cargo.counter) }.min(period);
-        // Preserve the original clamp store, then unsigned predecrement store.
-        unsafe { scalar_write::<_, COUNTED>(cargo.counter, counter) };
-        let counter = counter.wrapping_sub(1);
-        unsafe { scalar_write::<_, COUNTED>(cargo.counter, counter) };
-        if counter == 0 {
-            let owner = post_svc!(
-                COUNTED,
-                crate::witness::VEHICLE_CARGO_OWNER,
-                schedule.cargo_owner,
-                vehicle
-            );
-            if COUNTED {
-                crate::witness::hit(crate::witness::VEHICLE_CARGO_AGES);
-            }
-            unsafe { cargo_storage::age::<COUNTED>(owner, schedule.cargo) };
-            let period = unsafe { scalar_read::<_, COUNTED>(cargo.period) };
-            unsafe { scalar_write::<_, COUNTED>(cargo.counter, period) };
-        }
-    }
-    let front_status = unsafe { scalar_read::<_, COUNTED>(cargo.front_status) };
-    if front_status.test(VehState::Crashed) {
-        return;
-    }
-    if unsafe { scalar_read::<_, COUNTED>(cargo.status) }.test(VehState::Hidden) {
-        return;
-    }
-    let motion = cargo;
-    if unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.test(VehState::Stopped)
-        && (unsafe { scalar_read::<_, COUNTED>(motion.front_type) } != TRAIN
-            || unsafe { scalar_read::<_, COUNTED>(motion.speed) } == 0)
-    {
-        return;
-    }
-    if COUNTED {
-        crate::witness::hit(crate::witness::VEHICLE_MOTION);
-    }
-    let speed = unsafe { scalar_read::<_, COUNTED>(motion.speed) };
-    let counter =
-        unsafe { scalar_read::<_, COUNTED>(motion.motion) }.wrapping_add(u32::from(speed));
-    unsafe { scalar_write::<_, COUNTED>(motion.motion, counter) };
-    // Ship has no subtype gate; do not read its subtype.
-    match vehicle_type {
-        TRAIN if unsafe { scalar_read::<_, COUNTED>(motion.subtype) } & ENGINE == 0 => return,
-        ROAD if unsafe { scalar_read::<_, COUNTED>(motion.subtype) } & FRONT == 0 => return,
-        AIRCRAFT if unsafe { scalar_read::<_, COUNTED>(motion.subtype) } > AIR_AIRCRAFT => {
-            return;
+/// `v->OnNewCalendarDay()`: the virtual's dispatch. Effect and disaster vehicles keep the base
+/// class's empty body.
+fn on_new_calendar_day(s: &SchedulerServices, v: VehicleRef, id: VehicleID) {
+    match v.vehicle_type() {
+        VehicleType::VEH_TRAIN => train::on_new_calendar_day(
+            train::Handle::from_record(v.0.as_ptr()),
+            s.train(),
+            s.shared(),
+        ),
+        VehicleType::VEH_ROAD => road::on_new_calendar_day(v, s.road()),
+        VehicleType::VEH_SHIP => ship_control::on_new_calendar_day(id.0, v, s.ship(), s.shared()),
+        VehicleType::VEH_AIRCRAFT => {
+            aircraft::on_new_calendar_day(s.aircraft(), aircraft::Vehicle::of(v, id));
         }
         _ => {}
     }
-    // Only the motion counter was stored; no callback has changed this speed.
-    if unsafe { scalar_read::<_, COUNTED>(motion.motion) } & 0xff < u32::from(speed) {
-        post_svc!(
-            COUNTED,
-            crate::witness::VEHICLE_RUNNING_SOUND,
-            schedule.sound,
-            vehicle,
-            VSE_RUNNING
-        );
-    }
-    // Running sound can change the following observations; load after it returns.
-    if unsafe { scalar_read::<_, COUNTED>(motion.tick) } & 15 == 0 {
-        let running = unsafe { scalar_read::<_, COUNTED>(motion.speed) } > 0
-            && !unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }.any(
-                VehStates::from_element(VehState::Stopped)
-                    .with(VehStates::from_element(VehState::TrainSlowing)),
-            );
-        post_svc!(
-            COUNTED,
-            crate::witness::VEHICLE_PERIODIC_SOUND,
-            schedule.sound,
-            vehicle,
-            if running {
-                VSE_RUNNING_16
-            } else {
-                VSE_STOPPED_16
-            }
-        );
+}
+/// `v->OnNewEconomyDay()`: the virtual's dispatch. Effect and disaster vehicles keep the base
+/// class's empty body.
+fn on_new_economy_day(s: &SchedulerServices, v: VehicleRef, id: VehicleID) {
+    match v.vehicle_type() {
+        VehicleType::VEH_TRAIN => train::on_new_economy_day(
+            train::Handle::from_record(v.0.as_ptr()),
+            s.train(),
+            s.shared(),
+        ),
+        VehicleType::VEH_ROAD => road::on_new_economy_day(v, s.road()),
+        VehicleType::VEH_SHIP => ship_control::on_new_economy_day(id.0, v, s.ship(), s.shared()),
+        VehicleType::VEH_AIRCRAFT => {
+            aircraft::on_new_economy_day(s.aircraft(), aircraft::Vehicle::of(v, id));
+        }
+        _ => {}
     }
 }
 
-/// # Safety
-/// Immutable native tables and serialized pools remain valid until return.
-/// No selected callback resets pools, loads a game or yields the game-state mutex.
-pub(crate) unsafe fn calendar_day(tables: *const Tables, normal: bool, date_fract: usize) {
-    if !normal {
+/// `RunVehicleCalendarDayProc`: age all vehicles, spreading out the action using the current
+/// `TimerGameCalendar::date_fract`.
+#[allow(unsafe_code)]
+fn run_vehicle_calendar_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
+    if session::mode() != GameMode::GM_NORMAL {
         return;
     }
-    let tables = unsafe { &*tables };
-    if crate::witness::enabled() {
-        unsafe { day::<true>(tables, &*tables.scheduler, true, date_fract) };
-    } else {
-        unsafe { day::<false>(tables, &*tables.scheduler, true, date_fract) };
+
+    let pool = s.pool();
+    // Run the calendar day proc for every DAY_TICKS vehicle starting at
+    // TimerGameCalendar::date_fract.
+    let mut i = usize::from(timer_game_common::calendar_fraction());
+    // SAFETY, for the pool reads: the live descriptor, read afresh at each step.
+    while i < unsafe { pool.pool_size() } {
+        let id = vehicle_base::pool_id(i);
+        if let Some(v) = unsafe { vehicle_base::get(&pool, id) } {
+            if COUNTED {
+                crate::witness::hit(crate::witness::VEHICLE_DAYS);
+            }
+            on_new_calendar_day(s, v, id);
+        }
+        i += DAY_TICKS as usize;
     }
 }
-/// # Safety
-/// As calendar entry; cost is native stack storage valid through fleet drain.
-pub(crate) unsafe fn ticks(tables: *const Tables, normal: bool, date_fract: usize, cost: *mut ()) {
-    if crate::witness::enabled() {
-        unsafe { run_ticks::<true>(&*tables, normal, date_fract, cost) };
-    } else {
-        unsafe { run_ticks::<false>(&*tables, normal, date_fract, cost) };
+
+/// `RunEconomyVehicleDayProc`: increases the day counter for all vehicles and calls 1-day and
+/// 32-day handlers. Each tick, it processes vehicles with
+/// "index % DAY_TICKS == `TimerGameEconomy::date_fract`", so each day, all vehicles are
+/// processes in `DAY_TICKS` steps.
+#[allow(unsafe_code)]
+fn run_economy_vehicle_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
+    if session::mode() != GameMode::GM_NORMAL {
+        return;
+    }
+
+    let pool = s.pool();
+    let vs = s.vehicle();
+    // Run the economy day proc for every DAY_TICKS vehicle starting at
+    // TimerGameEconomy::date_fract.
+    let mut i = usize::from(timer_game_common::economy_fraction());
+    // SAFETY, for the pool reads: the live descriptor, read afresh at each step.
+    while i < unsafe { pool.pool_size() } {
+        let id = vehicle_base::pool_id(i);
+        if let Some(v) = unsafe { vehicle_base::get(&pool, id) } {
+            if COUNTED {
+                crate::witness::hit(crate::witness::VEHICLE_DAYS);
+            }
+
+            // Call the 32-day callback if needed
+            if (v.day_counter() & 0x1F) == 0 && v.has_engine_type() {
+                if COUNTED {
+                    crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
+                }
+                let callback = newgrf_vehicle::get_vehicle_callback(
+                    svc!(COUNTED, VehicleServices::newgrf, vs),
+                    CBID_VEHICLE_32DAY_CALLBACK,
+                    0,
+                    0,
+                    v.engine_type(),
+                    Some(v),
+                );
+                if callback != CALLBACK_FAILED {
+                    if has_bit(callback, 0) {
+                        // SAFETY: The live vehicle and table.
+                        unsafe {
+                            newgrf_vehicle::trigger(vs, v, newgrf_vehicle::Trigger::Callback32);
+                        } // Trigger vehicle trigger 10
+                    }
+
+                    // After a vehicle trigger, the graphics and properties of the vehicle could
+                    // change.
+                    // Note: MarkDirty also invalidates the palette, which is the meaning of bit 1.
+                    // So, nothing special there.
+                    if callback != 0 {
+                        // SAFETY: The process-lifetime maintenance table.
+                        let maintenance = unsafe { &*vs.maintenance };
+                        svc!(COUNTED, maintenance.mark_dirty, v.first());
+                    }
+
+                    if callback & !3 != 0 {
+                        let engine = svc!(COUNTED, vs.engine, v);
+                        vs.unknown_callback_result(engine, CBID_VEHICLE_32DAY_CALLBACK, callback);
+                    }
+                }
+            }
+
+            // This is called once per day for each vehicle, but not in the first tick of the day
+            on_new_economy_day(s, v, id);
+        }
+        i += DAY_TICKS as usize;
     }
 }
+
 /// `for (Station *st : Station::Iterate()) LoadUnloadStation(st);`. No world/owner borrow
 /// spans any station loading service.
-/// # Safety
-/// The caller supplies immutable live tables for this call.
-unsafe fn load_stations<const COUNTED: bool>(tables: &Tables) {
-    let s = unsafe { &*tables.scheduler };
-    let shared = unsafe { &*s.shared };
+#[allow(unsafe_code)]
+fn load_stations<const COUNTED: bool>(tables: &Tables) {
+    // SAFETY: The caller's live scheduler table.
+    let shared = unsafe { &*tables.scheduler }.shared();
     // The station iterator's crossing.
     if COUNTED {
         crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
@@ -400,6 +282,7 @@ unsafe fn load_stations<const COUNTED: bool>(tables: &Tables) {
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_STATIONS);
         }
+        // SAFETY: The live station and the caller's live tables.
         unsafe {
             station_service::load_station(
                 service,
@@ -412,17 +295,159 @@ unsafe fn load_stations<const COUNTED: bool>(tables: &Tables) {
         };
     });
 }
-unsafe fn run_ticks<const COUNTED: bool>(
+
+/// `CallVehicleTicks`'s loop body after `v->Tick()` returned true: its `switch (v->type)`.
+/// `newgrf` is the vehicle resolver, whose slot reads a vehicle's cargo list.
+#[allow(unsafe_code)]
+fn after_tick<const COUNTED: bool>(
     tables: &Tables,
-    normal: bool,
-    date_fract: usize,
-    cost: *mut (),
+    vs: &VehicleServices,
+    newgrf: &newgrf_vehicle::Services,
+    v: VehicleRef,
 ) {
-    let s = unsafe { &*tables.scheduler };
-    unsafe { fleet::pending::openttd_rust_fleet_pending_clear() };
-    if normal {
-        unsafe { day::<COUNTED>(tables, s, false, date_fract) };
+    if COUNTED {
+        crate::witness::hit(crate::witness::VEHICLE_POST_TICK);
     }
+    let kind = load!(COUNTED, v.vehicle_type());
+    if COUNTED {
+        crate::witness::hit(
+            crate::witness::VEHICLE_VISITS
+                + match kind.0 {
+                    0..=6 => usize::from(kind.0),
+                    _ => 7,
+                },
+        );
+    }
+    match kind {
+        VehicleType::VEH_TRAIN
+        | VehicleType::VEH_ROAD
+        | VehicleType::VEH_AIRCRAFT
+        | VehicleType::VEH_SHIP => {}
+        _ => return,
+    }
+    let front = load!(COUNTED, v.first());
+
+    if load!(COUNTED, v.cached_cargo_age_period()) != 0 {
+        let counter =
+            load!(COUNTED, v.cargo_age_counter()).min(load!(COUNTED, v.cached_cargo_age_period()));
+        store!(COUNTED, v.set_cargo_age_counter(counter));
+        let counter = counter.wrapping_sub(1);
+        store!(COUNTED, v.set_cargo_age_counter(counter));
+        if counter == 0 {
+            if COUNTED {
+                crate::witness::hit(crate::witness::VEHICLE_CARGO_OWNER);
+            }
+            let cargo = svc!(COUNTED, VehicleRef::cargo, v, newgrf);
+            if COUNTED {
+                crate::witness::hit(crate::witness::VEHICLE_CARGO_AGES);
+            }
+            // SAFETY: The surviving vehicle's live list and the process-lifetime cargo table.
+            unsafe { cargo_storage::age::<COUNTED>(cargo, tables.cargo) };
+            store!(
+                COUNTED,
+                v.set_cargo_age_counter(load!(COUNTED, v.cached_cargo_age_period()))
+            );
+        }
+    }
+
+    // Do not play any sound when crashed
+    if load!(COUNTED, front.vehstatus()).test(VehState::Crashed) {
+        return;
+    }
+
+    // Do not play any sound when in depot or tunnel
+    if load!(COUNTED, v.vehstatus()).test(VehState::Hidden) {
+        return;
+    }
+
+    // Do not play any sound when stopped
+    if load!(COUNTED, front.vehstatus()).test(VehState::Stopped)
+        && (load!(COUNTED, front.vehicle_type()) != VehicleType::VEH_TRAIN
+            || load!(COUNTED, front.cur_speed()) == 0)
+    {
+        return;
+    }
+
+    if COUNTED {
+        crate::witness::hit(crate::witness::VEHICLE_MOTION);
+    }
+    // Update motion counter for animation purposes.
+    store!(
+        COUNTED,
+        v.set_motion_counter(
+            load!(COUNTED, v.motion_counter())
+                .wrapping_add(u32::from(load!(COUNTED, front.cur_speed())))
+        )
+    );
+
+    // Check vehicle type specifics
+    match load!(COUNTED, v.vehicle_type()) {
+        VehicleType::VEH_TRAIN => {
+            let train = train::Handle::from_vehicle(v);
+            if !ground_vehicle::is_engine(load!(COUNTED, train.vehicle().subtype())) {
+                return;
+            }
+        }
+        VehicleType::VEH_ROAD => {
+            // `RoadVehicle::From(v)`.
+            assert_with(|| v.vehicle_type() == VehicleType::VEH_ROAD);
+            if !load!(COUNTED, v.is_front_engine()) {
+                return;
+            }
+        }
+        VehicleType::VEH_AIRCRAFT => {
+            // `Aircraft::From(v)`.
+            assert_with(|| v.vehicle_type() == VehicleType::VEH_AIRCRAFT);
+            if !aircraft::is_normal_aircraft(load!(COUNTED, v.subtype())) {
+                return;
+            }
+        }
+        _ => {}
+    }
+
+    // Play a running sound if the motion counter passes 256 (Do we not skip sounds?)
+    if gb(load!(COUNTED, v.motion_counter()), 0, 8) < u32::from(load!(COUNTED, front.cur_speed())) {
+        if COUNTED {
+            crate::witness::hit(crate::witness::VEHICLE_RUNNING_SOUND);
+        }
+        svc!(COUNTED, vs.play_vehicle_sound, v, VSE_RUNNING);
+    }
+
+    // Play an alternating running sound every 16 ticks
+    if gb_u8(load!(COUNTED, v.tick_counter()), 0, 4) == 0 {
+        // Play running sound when speed > 0 and not braking
+        let running = (load!(COUNTED, front.cur_speed()) > 0)
+            && !load!(COUNTED, front.vehstatus()).any(
+                VehStates::from_element(VehState::Stopped)
+                    .with(VehStates::from_element(VehState::TrainSlowing)),
+            );
+        if COUNTED {
+            crate::witness::hit(crate::witness::VEHICLE_PERIODIC_SOUND);
+        }
+        svc!(
+            COUNTED,
+            vs.play_vehicle_sound,
+            v,
+            if running {
+                VSE_RUNNING_16
+            } else {
+                VSE_STOPPED_16
+            }
+        );
+    }
+}
+
+/// `CallVehicleTicks` up to its autoreplace loop, which `fleet::pending::drain` ports; `cost`
+/// is the native frame's command cost storage.
+#[allow(unsafe_code)]
+fn call_vehicle_ticks<const COUNTED: bool>(tables: &Tables, cost: *mut ()) {
+    // SAFETY: The caller's live scheduler table.
+    let s = unsafe { &*tables.scheduler };
+    // SAFETY: Serial game thread; no pending entry is borrowed.
+    unsafe { fleet::pending::clear() };
+
+    run_economy_vehicle_day_proc::<COUNTED>(s);
+
     {
         let mut storage = MaybeUninit::uninit();
         // The measurer's begin and end are two counted crossings.
@@ -434,8 +459,7 @@ unsafe fn run_ticks<const COUNTED: bool>(
             crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
             crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
         }
-        // SAFETY: The caller's live tables.
-        unsafe { load_stations::<COUNTED>(tables) };
+        load_stations::<COUNTED>(tables);
     }
     // SAFETY: As the measurer's.
     unsafe {
@@ -460,183 +484,143 @@ unsafe fn run_ticks<const COUNTED: bool>(
             PerformanceElement::PFE_GL_AIRCRAFT
         );
     }
-    let post = PostTickServices {
-        cargo_owner: s.cargo_owner,
-        sound: unsafe { &*s.vehicle }.play_vehicle_sound,
-        cargo: tables.cargo,
-    };
-    {
-        let mut pool = svc!(COUNTED, s.pool);
-        let mut id = 0;
-        while let Some(vehicle) = unsafe { next::<COUNTED>(s, &mut pool, &mut id) } {
-            let current_id = id - 1;
-            let shell = vehicle.shell();
-            if COUNTED {
-                crate::witness::hit(crate::witness::VEHICLE_OUTER_VISITS);
-            }
-            // Native controller timing completes before the source survival assertion.
-            let survives = svc!(COUNTED, s.tick, vehicle);
-            if s.assertions {
-                let _ = unsafe { extent::<COUNTED>(s, &mut pool) };
-                let actual = unsafe {
-                    scalar_read::<_, COUNTED>(std::ptr::addr_of!(
-                        (*pool.slots.add(current_id)).shell
-                    ))
-                };
-                assert!(
-                    actual
-                        == if survives {
-                            shell.cast()
-                        } else {
-                            std::ptr::null_mut()
-                        }
-                );
-            }
-            if !survives {
-                if COUNTED {
-                    crate::witness::hit(crate::witness::VEHICLE_DELETED);
-                }
-                continue;
-            }
-            // The survivor's type and front are read after the source assertion.
-            let bundle = PostTick::after_tick(vehicle);
-            unsafe { post_tick::<COUNTED>(&post, vehicle, &bundle) };
+
+    let vs = s.vehicle();
+    let newgrf = svc!(COUNTED, VehicleServices::newgrf, vs);
+    let pool = s.pool();
+    // `Vehicle::Iterate()`: each step rereads the pool's extent and slot, so a vehicle that
+    // `Tick` allocates ahead of the walk, past the old extent included, is visited this tick.
+    let mut index = 0;
+    // SAFETY, for the pool reads: the live descriptor, read afresh at each step.
+    while let Some(id) = unsafe { vehicle_base::next_vehicle(&pool, index) } {
+        index = id.index() + 1;
+        let v = VehicleRef::of(unsafe { pool.record(id) });
+        // `v->index`, which the pool stores each vehicle at, so the walk's `id`; only the two
+        // assertions read it. The shell is read before `Tick`, which can delete the record.
+        let vehicle_index = id;
+        let shell = v.shell();
+        if COUNTED {
+            crate::witness::hit(crate::witness::VEHICLE_OUTER_VISITS);
         }
-    } // Every pool/scalar descriptor is discarded before commands in fleet drain.
+
+        // Vehicle could be deleted in this tick
+        if !svc!(COUNTED, s.tick, v) {
+            // `Vehicle::Get` also asserts `vehicle_index < first_unused`, where
+            // `TypedPool::shell` returns null instead. That assertion holds: the walk yielded
+            // the index below `first_unused`, `FreeItem` never lowers it, and `CleanPool` does
+            // not run during this entry.
+            assert_with(|| unsafe { pool.shell(vehicle_index) }.is_null());
+            if COUNTED {
+                crate::witness::hit(crate::witness::VEHICLE_DELETED);
+            }
+            continue;
+        }
+
+        assert_with(|| unsafe { pool.shell(vehicle_index) }.cast::<std::ffi::c_void>() == shell);
+
+        after_tick::<COUNTED>(tables, vs, newgrf, v);
+    }
+
+    // SAFETY: No pool or record borrow survives into the fleet commands.
     unsafe {
         fleet::pending::drain(tables.pending, tables.transaction, tables.group, cost);
     };
 }
 
+/// The session's calendar-day entry: `RunVehicleCalendarDayProc`.
+/// # Safety
+/// `tables` and the tables it links are live for this call.
+#[allow(unsafe_code)]
+pub(crate) unsafe fn calendar_day(tables: *const Tables) {
+    // SAFETY: The caller's live tables.
+    let s = unsafe { &*(*tables).scheduler };
+    if crate::witness::enabled() {
+        run_vehicle_calendar_day_proc::<true>(s);
+    } else {
+        run_vehicle_calendar_day_proc::<false>(s);
+    }
+}
+/// The session's tick entry: `CallVehicleTicks`.
+/// # Safety
+/// As [`calendar_day`]; `cost` is native stack storage valid through the fleet drain.
+#[allow(unsafe_code)]
+pub(crate) unsafe fn ticks(tables: *const Tables, cost: *mut ()) {
+    // SAFETY: The caller's live tables.
+    let tables = unsafe { &*tables };
+    if crate::witness::enabled() {
+        call_vehicle_ticks::<true>(tables, cost);
+    } else {
+        call_vehicle_ticks::<false>(tables, cost);
+    }
+}
+
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVehiclePoolCursor" ["scheduler"] => PoolCursor {
-        slots,
-        slots_len,
-        first_unused,
-    };
     "OpenTTDVehicleSchedulerServices" ["scheduler"] => SchedulerServices {
+        aircraft,
         pool,
-        assertions,
-        tick,
-        calendar_day,
-        economy_day,
-        cargo_owner,
-        vehicle,
+        road,
         shared,
+        ship,
+        tick,
+        train,
+        vehicle,
     };
     "OpenTTDVehicleSchedulerTables" ["scheduler"] => Tables {
-        scheduler,
         cargo,
-        station,
+        group,
         loading,
         pending,
-        transaction,
-        group,
-        visits,
         refit_cost,
         refit_temporary,
+        scheduler,
+        station,
+        transaction,
+        visits,
     };
 }
 
+/// The body after `Tick` over two live records, a part and its front, with recording sound,
+/// cargo-list and packet leaves. Each test asserts the stores and calls the original makes.
 #[cfg(test)]
+#[allow(unsafe_code)]
 mod tests {
     use super::*;
-    use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
+    use crate::newgrf_sound::VehicleSoundEvent;
+    use crate::vehicle_base::{VehStates, VehicleRecord};
+    use std::cell::RefCell;
     use std::ffi::c_void;
+    use std::ptr::{null, null_mut};
 
-    /// The survivor's own fields and its front's speed, type and status are the
-    /// canonical record members; types above aircraft address none of them.
-    #[test]
-    fn post_tick_addresses_survivor_and_front_records() {
-        let record = |kind| {
-            VehicleRef::of(crate::vehicle_base::openttd_rust_vehicle_record_new(
-                null_mut(),
-                kind,
-            ))
-        };
-        let (front, part) = (record(ROAD), record(ROAD));
-        // SAFETY: Both private records are live; `first` links the part to its front.
-        unsafe { (*part.0.as_ptr()).first = front.0.as_ptr() };
-        let post = PostTick::after_tick(part);
-        let (f, p) = (front.0.as_ptr(), part.0.as_ptr());
-        assert_eq!(post.vehicle_type.0, ROAD.0);
-        // SAFETY: Only addresses of the live private records are formed, then one store.
-        unsafe {
-            assert_eq!(post.period, &raw const (*p).cached_cargo_age_period);
-            assert_eq!(post.counter, &raw mut (*p).cargo_age_counter);
-            assert_eq!(post.motion, &raw mut (*p).motion_counter);
-            assert_eq!(post.speed, &raw const (*f).cur_speed);
-            assert_eq!(post.front_type, &raw const (*f).r#type);
-            assert_eq!(post.subtype, &raw const (*p).subtype);
-            assert_eq!(post.tick, &raw const (*p).tick_counter);
-            assert_eq!(post.front_status, &raw const (*f).vehstatus);
-            assert_eq!(post.status, &raw const (*p).vehstatus);
-            (*p).r#type = VehicleType::EFFECT;
-        }
-        let post = PostTick::after_tick(part);
-        assert!(
-            post.vehicle_type == VehicleType::EFFECT
-                && post.period.is_null()
-                && post.status.is_null()
-        );
-        for v in [front, part] {
-            // SAFETY: No traversal follows these private records after cleanup.
-            unsafe { crate::vehicle_base::openttd_rust_vehicle_record_delete(v.0.as_ptr()) };
-        }
-    }
-    const SHIP: VehicleType = VehicleType::SHIP;
-    use std::ptr::{NonNull, null, null_mut};
+    const TRAIN: VehicleType = VehicleType::VEH_TRAIN;
+    const ROAD: VehicleType = VehicleType::VEH_ROAD;
+    const SHIP: VehicleType = VehicleType::VEH_SHIP;
+    const AIRCRAFT: VehicleType = VehicleType::VEH_AIRCRAFT;
+    /// `GVSF_FRONT` and `GVSF_ENGINE` as subtype bits.
+    const FRONT: u8 = 1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_FRONT.0;
+    const ENGINE: u8 = 1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
+    const CRASHED: VehStates = VehStates::from_element(VehState::Crashed);
+    const HIDDEN: VehStates = VehStates::from_element(VehState::Hidden);
+    const STOPPED: VehStates = VehStates::from_element(VehState::Stopped);
 
-    // Test-owned scalar cells, not the native Vehicle layout.
-    #[allow(clippy::struct_excessive_bools)] // Independent inaccessible-field probes.
-    struct Cells {
-        period: u16,
-        counter: u16,
-        motion: u32,
-        speed: u16,
-        kind: VehicleType,
-        subtype: u8,
-        tick: u8,
-        front_status: u8,
-        status: u8,
-        post_type: VehicleType,
-        hide_counter: bool,
-        hide_motion: bool,
-        hide_speed: bool,
-        hide_subtype: bool,
-        hide_tick: bool,
-        hide_kind: bool,
-        sound_changes: u8,
-        packet_reloads: bool,
+    /// What the recording leaves saw, and how the running sound changes the records.
+    struct Observed {
         events: Vec<&'static str>,
         running: Option<bool>,
+        sound_changes: u8,
+        packet_reloads: bool,
         cargo: *mut cargo_storage::List,
         packet: cargo_storage::Packet,
+        part: *mut VehicleRecord,
+        front: *mut VehicleRecord,
     }
-    impl Cells {
-        fn new() -> Self {
-            Self {
-                period: 0,
-                counter: 9,
-                motion: 0,
-                speed: 0,
-                kind: ROAD,
-                subtype: FRONT,
-                tick: 1,
-                front_status: 0,
-                status: 0,
-                post_type: ROAD,
-                hide_counter: false,
-                hide_motion: false,
-                hide_speed: false,
-                hide_subtype: false,
-                hide_tick: false,
-                hide_kind: false,
-                sound_changes: 0,
-                packet_reloads: false,
+    thread_local! {
+        static OBSERVED: RefCell<Observed> = const {
+            RefCell::new(Observed {
                 events: Vec::new(),
                 running: None,
+                sound_changes: 0,
+                packet_reloads: false,
                 cargo: null_mut(),
                 packet: cargo_storage::Packet {
                     feeder_share: 0,
@@ -651,108 +635,141 @@ mod tests {
                     source_type: 0,
                     in_vehicle: 1,
                 },
+                part: null_mut(),
+                front: null_mut(),
+            })
+        };
+    }
+    fn observed<T>(f: impl FnOnce(&mut Observed) -> T) -> T {
+        OBSERVED.with(|o| f(&mut o.borrow_mut()))
+    }
+
+    /// A part of type `kind` and its front of type `front_kind`, with the original
+    /// constructor defaults; the part's own members start as the old fixture's cells did.
+    struct Pair {
+        part: *mut VehicleRecord,
+        front: *mut VehicleRecord,
+    }
+    impl Pair {
+        fn new(kind: VehicleType, front_kind: VehicleType) -> Self {
+            let part = VehicleRecord::new(null_mut(), kind);
+            let front = VehicleRecord::new(null_mut(), front_kind);
+            // SAFETY: Both fresh records; the part's chain starts at the front.
+            unsafe {
+                (*part).first = front;
+                (*part).cargo_age_counter = 9;
+                (*part).tick_counter = 1;
+                (*part).subtype = FRONT;
             }
+            observed(|o| {
+                o.events.clear();
+                o.running = None;
+                o.sound_changes = 0;
+                o.packet_reloads = false;
+                o.cargo = null_mut();
+                o.packet.periods_in_transit = 0;
+                o.part = part;
+                o.front = front;
+            });
+            Self { part, front }
         }
-        fn handle(&mut self) -> VehicleRef {
-            VehicleRef(NonNull::from(self).cast())
+        fn part(&self) -> &mut VehicleRecord {
+            // SAFETY: The pair's live record; no other reference to it is live.
+            unsafe { &mut *self.part }
         }
-        fn run(&mut self, kind: VehicleType) {
-            let handle = self.handle();
-            self.post_type = kind;
+        fn front(&self) -> &mut VehicleRecord {
+            // SAFETY: As `part`.
+            unsafe { &mut *self.front }
+        }
+        /// Run the body after `Tick` over the part.
+        fn run(&self) {
             let cargo_services = cargo_services();
-            let services = PostTickServices {
-                cargo_owner,
-                sound,
+            let tables = Tables {
                 cargo: &raw const cargo_services,
+                ..null_tables()
             };
-            // Stands in for the native survival fill inside the Tick facade.
-            let bundle = addresses(handle);
-            unsafe { post_tick::<false>(&services, handle, &bundle) };
+            let vs = VehicleServices {
+                play_vehicle_sound: sound,
+                ..crate::test_tables::VEHICLE
+            };
+            let newgrf = newgrf_vehicle::test_table_with(newgrf_vehicle::TestLeaves {
+                cargo_owner,
+                ..newgrf_vehicle::TestLeaves::UNREACHABLE
+            });
+            after_tick::<false>(&tables, &vs, &newgrf, VehicleRef::of(self.part));
         }
     }
-    unsafe fn cells(v: VehicleRef) -> *mut Cells {
-        v.0.as_ptr().cast()
-    }
-    fn addresses(v: VehicleRef) -> PostTick {
-        let c = unsafe { &mut *cells(v) };
-        c.events.push("post");
-        PostTick {
-            vehicle_type: c.post_type,
-            period: &raw const c.period,
-            counter: if c.hide_counter {
-                null_mut()
-            } else {
-                &raw mut c.counter
-            },
-            motion: if c.hide_motion {
-                null_mut()
-            } else {
-                &raw mut c.motion
-            },
-            speed: if c.hide_speed {
-                null()
-            } else {
-                &raw const c.speed
-            },
-            front_type: if c.hide_kind {
-                null()
-            } else {
-                &raw const c.kind
-            },
-            subtype: if c.hide_subtype {
-                null()
-            } else {
-                &raw const c.subtype
-            },
-            tick: if c.hide_tick {
-                null()
-            } else {
-                &raw const c.tick
-            },
-            front_status: (&raw const c.front_status).cast(),
-            status: (&raw const c.status).cast(),
+    impl Drop for Pair {
+        fn drop(&mut self) {
+            // SAFETY: The pair's records, released once.
+            unsafe {
+                VehicleRecord::delete(self.part);
+                VehicleRecord::delete(self.front);
+            }
         }
     }
-    extern "C" fn cargo_owner(v: VehicleRef) -> *mut cargo_storage::List {
-        let c = unsafe { &mut *cells(v) };
-        c.events.push("age-owner");
-        c.cargo
+    pub(super) fn null_tables() -> Tables {
+        Tables {
+            cargo: null(),
+            group: null(),
+            loading: null(),
+            pending: null(),
+            refit_cost: null_mut(),
+            refit_temporary: null_mut(),
+            scheduler: null(),
+            station: null(),
+            transaction: null(),
+            visits: null(),
+        }
     }
+
+    unsafe extern "C" fn cargo_owner(v: *mut VehicleRecord) -> *const cargo_storage::List {
+        observed(|o| {
+            assert_eq!(v, o.part);
+            o.events.push("age-owner");
+            o.cargo
+        })
+    }
+    /// `PlayVehicleSound`. The running sound applies the test's change to the records.
     extern "C" fn sound(v: VehicleRef, event: VehicleSoundEvent) -> bool {
-        if event != VSE_RUNNING {
-            let c = unsafe { &mut *cells(v) };
-            c.events.push("periodic-sound");
-            c.running = Some(event == VSE_RUNNING_16);
-            assert!(event == VSE_RUNNING_16 || event == VSE_STOPPED_16);
-            return false;
-        }
-        let c = unsafe { &mut *cells(v) };
-        c.events.push("running-sound");
-        match c.sound_changes {
-            1 => {
-                c.speed = 0;
-                c.tick = 0;
-                c.front_status = VS_STOPPED;
+        observed(|o| {
+            assert_eq!(v.0.as_ptr(), o.part);
+            if event != VSE_RUNNING {
+                assert!(event == VSE_RUNNING_16 || event == VSE_STOPPED_16);
+                o.events.push("periodic-sound");
+                o.running = Some(event == VSE_RUNNING_16);
+                return;
             }
-            2 => {
-                c.speed = 3;
-                c.tick = 0;
-                c.front_status = VS_STOPPED;
+            o.events.push("running-sound");
+            // SAFETY: The pair's live records; no reference to them is live.
+            let (part, front) = unsafe { (&mut *o.part, &mut *o.front) };
+            match o.sound_changes {
+                1 => {
+                    front.cur_speed = 0;
+                    part.tick_counter = 0;
+                    front.vehstatus = STOPPED;
+                }
+                2 => {
+                    front.cur_speed = 3;
+                    part.tick_counter = 0;
+                    front.vehstatus = STOPPED;
+                }
+                3 => part.tick_counter = 1,
+                _ => {}
             }
-            3 => {
-                c.tick = 1;
-            }
-            _ => {}
-        }
+        });
         false
     }
-    extern "C" fn packet(shell: *mut c_void) -> *mut cargo_storage::Packet {
-        let c = unsafe { &mut *shell.cast::<Cells>() };
-        if c.packet_reloads {
-            c.period = 17;
-            c.events.push("age-packet");
-        }
-        &raw mut c.packet
+    /// The cargo list's packet lookup; a reloading packet changes the part's period.
+    extern "C" fn packet(_: *mut c_void) -> *mut cargo_storage::Packet {
+        observed(|o| {
+            if o.packet_reloads {
+                // SAFETY: The pair's live part; no reference to it is live.
+                unsafe { (*o.part).cached_cargo_age_period = 17 };
+                o.events.push("age-packet");
+            }
+            &raw mut o.packet
+        })
     }
     extern "C" fn destroy(_: *mut c_void) {}
     extern "C" fn can_allocate() -> u8 {
@@ -784,156 +801,147 @@ mod tests {
             packet_next,
         }
     }
+    fn events() -> Vec<&'static str> {
+        observed(|o| o.events.clone())
+    }
 
     #[test]
     fn cargo_short_circuit_wrap_clamp_and_period_reload() {
-        let cargo_services = cargo_services();
-        let mut c = Cells::new();
-        c.front_status = VS_CRASHED;
-        c.hide_counter = true; // Source never accesses the counter when period=0.
-        c.run(ROAD);
-        assert_eq!(c.counter, 9);
-        assert_eq!(c.events, ["post"]);
+        let pair = Pair::new(ROAD, ROAD);
+        pair.front().vehstatus = CRASHED;
+        pair.run();
+        assert_eq!(pair.part().cargo_age_counter, 9);
+        assert_eq!(events(), [] as [&str; 0]);
         for (counter, expected) in [(0, u16::MAX), (9, 3)] {
-            let mut c = Cells::new();
-            c.period = 4;
-            c.counter = counter;
-            c.front_status = VS_CRASHED;
-            c.run(ROAD);
-            assert_eq!(c.counter, expected);
-            assert_eq!(c.events, ["post"]);
+            let pair = Pair::new(ROAD, ROAD);
+            pair.part().cached_cargo_age_period = 4;
+            pair.part().cargo_age_counter = counter;
+            pair.front().vehstatus = CRASHED;
+            pair.run();
+            assert_eq!(pair.part().cargo_age_counter, expected);
+            assert_eq!(events(), [] as [&str; 0]);
         }
-        let mut c = Cells::new();
-        c.period = 4;
-        c.counter = 1;
-        c.front_status = VS_CRASHED;
-        c.cargo = cargo_storage::openttd_rust_cargo_list_new(1);
-        let shell = c.handle().0.as_ptr().cast();
+        let pair = Pair::new(ROAD, ROAD);
+        pair.part().cached_cargo_age_period = 4;
+        pair.part().cargo_age_counter = 1;
+        pair.front().vehstatus = CRASHED;
+        let cargo_services = cargo_services();
+        let list = cargo_storage::openttd_rust_cargo_list_new(1);
+        // SAFETY: The fresh list; its one packet's shell is never dereferenced.
         unsafe {
             cargo_storage::openttd_rust_cargo_list_append(
-                c.cargo,
+                list,
                 &raw const cargo_services,
-                shell,
+                pair.part.cast(),
                 2, // Cargo keep action, as in the existing cargo-storage fixture.
             );
         };
-        c.packet_reloads = true;
-        c.run(ROAD);
-        assert_eq!(c.counter, 17); // Packet callback changes the later period read.
-        assert_eq!(c.packet.periods_in_transit, 1);
-        assert_eq!(c.events, ["post", "age-owner", "age-packet"]);
-        unsafe {
-            cargo_storage::openttd_rust_cargo_list_destroy(c.cargo, &raw const cargo_services);
-        };
+        observed(|o| {
+            o.cargo = list;
+            o.packet_reloads = true;
+        });
+        pair.run();
+        assert_eq!(pair.part().cargo_age_counter, 17); // The packet changes the later read.
+        assert_eq!(observed(|o| o.packet.periods_in_transit), 1);
+        assert_eq!(events(), ["age-owner", "age-packet"]);
+        // SAFETY: The test's list, destroyed once.
+        unsafe { cargo_storage::openttd_rust_cargo_list_destroy(list, &raw const cargo_services) };
     }
 
     #[test]
     fn non_transport_type_bytes_skip_all_transport_state() {
         for byte in 4..=u8::MAX {
-            let mut c = Cells::new();
-            c.period = 7;
-            c.counter = 3;
-            c.speed = 10;
-            c.motion = u32::MAX;
-            c.hide_counter = true;
-            c.hide_motion = true;
-            c.hide_speed = true;
-            c.hide_kind = true;
-            c.hide_subtype = true;
-            c.hide_tick = true;
-            c.run(VehicleType(byte));
-            assert_eq!(c.counter, 3);
-            assert_eq!(c.motion, u32::MAX);
-            assert_eq!(c.events, ["post"]);
+            let pair = Pair::new(VehicleType(byte), ROAD);
+            pair.part().cached_cargo_age_period = 7;
+            pair.part().cargo_age_counter = 3;
+            pair.part().motion_counter = u32::MAX;
+            pair.front().cur_speed = 10;
+            pair.run();
+            assert_eq!(pair.part().cargo_age_counter, 3);
+            assert_eq!(pair.part().motion_counter, u32::MAX);
+            assert_eq!(events(), [] as [&str; 0]);
         }
     }
 
     #[test]
-    fn hidden_stopped_and_type_gates_skip_inaccessible_members() {
-        let mut c = Cells::new();
-        c.status = VS_HIDDEN;
-        c.hide_motion = true;
-        c.run(ROAD);
-        assert_eq!(c.events, ["post"]);
+    fn hidden_stopped_and_type_gates() {
+        let pair = Pair::new(ROAD, ROAD);
+        pair.part().vehstatus = HIDDEN;
+        pair.run();
+        assert_eq!(pair.part().motion_counter, 0);
+        assert_eq!(events(), [] as [&str; 0]);
         for (kind, speed) in [(ROAD, 23), (TRAIN, 0)] {
-            let mut c = Cells::new();
-            c.kind = kind;
-            c.speed = speed;
-            c.front_status = VS_STOPPED;
-            c.hide_motion = true;
-            c.hide_subtype = true;
-            c.hide_tick = true;
-            c.hide_speed = kind == ROAD; // Native || skips speed on a stopped road.
-            c.run(kind);
-            assert_eq!(c.events, ["post"]);
+            let pair = Pair::new(kind, kind);
+            pair.front().cur_speed = speed;
+            pair.front().vehstatus = STOPPED;
+            pair.run();
+            assert_eq!(pair.part().motion_counter, 0);
+            assert_eq!(events(), [] as [&str; 0]);
         }
         for (kind, subtype) in [(ROAD, 0), (TRAIN, 0), (AIRCRAFT, 3)] {
-            let mut c = Cells::new();
-            c.speed = 5;
-            c.motion = u32::MAX;
-            c.subtype = subtype;
-            c.hide_kind = true;
-            c.hide_tick = true;
-            c.run(kind);
-            assert_eq!(c.motion, 4); // Original unsigned motion wraps.
-            assert_eq!(c.events, ["post"]);
+            let pair = Pair::new(kind, kind);
+            pair.front().cur_speed = 5;
+            pair.part().motion_counter = u32::MAX;
+            pair.part().subtype = subtype;
+            pair.run();
+            assert_eq!(pair.part().motion_counter, 4); // Original unsigned motion wraps.
+            assert_eq!(events(), [] as [&str; 0]);
         }
     }
 
     #[test]
     fn fresh_sound_observations_and_ship_subtype_short_circuit() {
-        let mut c = Cells::new();
-        c.speed = 8;
-        c.motion = 252;
-        c.sound_changes = 1;
-        c.run(ROAD);
-        assert_eq!(c.motion, 260);
-        assert_eq!(c.running, Some(false));
-        assert_eq!(c.events, ["post", "running-sound", "periodic-sound"]);
+        let pair = Pair::new(ROAD, ROAD);
+        pair.front().cur_speed = 8;
+        pair.part().motion_counter = 252;
+        observed(|o| o.sound_changes = 1);
+        pair.run();
+        assert_eq!(pair.part().motion_counter, 260);
+        assert_eq!(observed(|o| o.running), Some(false));
+        assert_eq!(events(), ["running-sound", "periodic-sound"]);
         for change in [2, 3] {
-            let mut c = Cells::new();
-            c.speed = 8;
-            c.motion = 252;
-            c.tick = 0;
-            c.sound_changes = change;
-            c.run(ROAD);
-            if change == 2 {
-                assert_eq!(c.running, Some(false));
-            } else {
-                assert_eq!(c.running, None); // Changed tick skips periodic observations.
-            }
+            let pair = Pair::new(ROAD, ROAD);
+            pair.front().cur_speed = 8;
+            pair.part().motion_counter = 252;
+            pair.part().tick_counter = 0;
+            observed(|o| o.sound_changes = change);
+            pair.run();
+            // The changed tick counter of change 3 skips the periodic sound.
+            let expected = if change == 2 { Some(false) } else { None };
+            assert_eq!(observed(|o| o.running), expected);
         }
-        let mut c = Cells::new();
-        c.speed = 5;
-        c.motion = 17;
-        c.tick = 0;
-        c.hide_subtype = true;
-        c.hide_kind = true;
-        c.run(SHIP);
-        assert_eq!(c.running, Some(true));
-        let mut c = Cells::new();
-        c.front_status = VS_STOPPED;
-        c.kind = TRAIN;
-        c.speed = 5;
-        c.subtype = ENGINE;
-        c.tick = 0;
-        c.motion = 17;
-        c.run(TRAIN); // A coasting stopped train still increments its motion.
-        assert_eq!(c.motion, 22);
-        assert_eq!(c.running, Some(false));
+        let pair = Pair::new(SHIP, SHIP);
+        pair.front().cur_speed = 5;
+        pair.part().motion_counter = 17;
+        pair.part().tick_counter = 0;
+        pair.part().subtype = 0; // A ship has no subtype gate.
+        pair.run();
+        assert_eq!(observed(|o| o.running), Some(true));
+        let pair = Pair::new(TRAIN, TRAIN);
+        pair.front().vehstatus = STOPPED;
+        pair.front().cur_speed = 5;
+        pair.part().subtype = ENGINE;
+        pair.part().tick_counter = 0;
+        pair.part().motion_counter = 17;
+        pair.run(); // A coasting stopped train still increments its motion.
+        assert_eq!(pair.part().motion_counter, 22);
+        assert_eq!(observed(|o| o.running), Some(false));
     }
+
 }
 
-/// Traversal on the real Rust pool owner: deletion, reuse and growth order; the live cursor;
+/// Traversal on the real Rust pool owner: deletion, reuse and growth order; the live walk;
 /// and Tick growth with a fresh type. Traces are checked against `scheduler/pool-oracle.txt`,
 /// captured from the unchanged original `PoolIterator`.
 #[cfg(test)]
+#[allow(unsafe_code)]
 mod pool_tests {
     use super::*;
     use crate::framerate_type::testing::{self as framerate, Effect};
     use crate::oracle;
     use crate::pool::{NativeOps, PoolConfig, PoolCore};
     use crate::test_tables::{FLEET_GROUPS, FLEET_PENDING, FLEET_TRANSACTIONS, SCHEDULER, VEHICLE};
+    use crate::vehicle_base::VehicleRecord;
     use std::cell::{Cell, RefCell};
     use std::ffi::c_void;
     use std::ptr::{null, null_mut};
@@ -951,7 +959,7 @@ mod pool_tests {
     thread_local! {
         static POOL: Cell<*mut PoolCore> = const { Cell::new(null_mut()) };
         static VISITS: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
-        static POOL_READS: Cell<u32> = const { Cell::new(0) };
+        static GROWN_VISITS: Cell<u32> = const { Cell::new(0) };
         static SURVIVORS: Cell<u32> = const { Cell::new(0) };
         static MUTATE: Cell<bool> = const { Cell::new(false) };
         static GROWTH: Cell<usize> = const { Cell::new(usize::MAX) };
@@ -1016,7 +1024,7 @@ mod pool_tests {
                 .record
                 .cast::<crate::vehicle_base::VehicleRecord>();
             PoolCore::retire_record(pool(), index);
-            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+            VehicleRecord::delete(record);
             PoolCore::free_item(pool(), SIZE, index);
         }
     }
@@ -1054,13 +1062,14 @@ mod pool_tests {
     }
     /// `new (VehicleID(index)) Vehicle(VEH_EFFECT)`: shell, then its fresh canonical record.
     fn new_vehicle(index: usize) -> *mut Shell {
+        new_vehicle_of(index, VehicleType::VEH_EFFECT)
+    }
+    /// `new (VehicleID(index)) Vehicle(kind)`.
+    fn new_vehicle_of(index: usize, kind: VehicleType) -> *mut Shell {
         // SAFETY: The test's live pool owner; the index is free.
         unsafe {
             let shell = PoolCore::allocate_at(pool(), SIZE, index).unwrap();
-            let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
-                shell.cast(),
-                VehicleType::EFFECT,
-            );
+            let record = VehicleRecord::new(shell.cast(), kind);
             PoolCore::bind_record(pool(), index, record.cast());
             shell.cast()
         }
@@ -1081,18 +1090,20 @@ mod pool_tests {
         unsafe { (*view()).slots.len() }
     }
 
-    extern "C" fn cursor() -> PoolCursor {
-        POOL_READS.set(POOL_READS.get() + 1);
-        let view = view();
-        // SAFETY: The test's live pool owner; the cursor is refreshed on growth.
-        unsafe {
-            PoolCursor {
-                slots: (*view).slots.as_mut_ptr(),
-                slots_len: (*view).slots.len(),
-                first_unused: &raw const (*view).first_unused,
-            }
-        }
+    /// The vehicle pool over the test's live owner, read in place.
+    fn typed_pool() -> Pool {
+        // SAFETY: The test's live pool owner outlives each walk.
+        unsafe { Pool::from_descriptor(view()) }
     }
+    /// The test's resolver table, which no vehicle of these tests reaches.
+    extern "C" fn resolver() -> *const newgrf_vehicle::Services {
+        &newgrf_vehicle::TEST_TABLE
+    }
+    /// `VEHICLE` with the resolver table the tick entry resolves before its loop.
+    const VEHICLES: VehicleServices = VehicleServices {
+        newgrf: resolver,
+        ..VEHICLE
+    };
     fn index_of(vehicle: VehicleRef) -> usize {
         // SAFETY: The live record's shell is this test's.
         unsafe { (*(*vehicle.0.as_ptr()).shell.cast::<Shell>()).index }
@@ -1194,11 +1205,11 @@ mod pool_tests {
         let _guard = crate::fleet::pending::TEST_LOCK.lock().unwrap();
         let mut shared = crate::services::fixture(null_mut(), draw, no_industry);
         shared.for_each_station = mark_stations;
+        let descriptor = view().cast_const();
         let mut scheduler = SCHEDULER;
-        scheduler.pool = cursor;
-        scheduler.assertions = true;
+        scheduler.pool = &raw const descriptor;
         scheduler.tick = tick;
-        scheduler.vehicle = &VEHICLE;
+        scheduler.vehicle = &VEHICLES;
         scheduler.shared = &raw const shared;
         let pending = FLEET_PENDING;
         let mut commands = crate::test_tables::COMMANDS;
@@ -1208,19 +1219,14 @@ mod pool_tests {
         let mut group = FLEET_GROUPS;
         group.shared = &raw const shared;
         let tables = Tables {
-            scheduler: &raw const scheduler,
-            cargo: null(),
-            station: null(),
-            loading: null(),
-            pending: &raw const pending,
-            transaction: &raw const transaction,
             group: &raw const group,
-            visits: null(),
-            refit_cost: null_mut(),
-            refit_temporary: null_mut(),
+            pending: &raw const pending,
+            scheduler: &raw const scheduler,
+            transaction: &raw const transaction,
+            ..super::tests::null_tables()
         };
         // SAFETY: The tables and the pool outlive the synchronous pass.
-        unsafe { ticks(&raw const tables, false, 0, null_mut()) };
+        unsafe { ticks(&raw const tables, null_mut()) };
     }
     extern "C" fn draw(_: *mut c_void) -> u32 {
         0
@@ -1252,21 +1258,22 @@ mod pool_tests {
     }
 
     /// "Base vehicle scheduler - live cursor equals unchanged PoolIterator": mutate the pool
-    /// after each visit of `next`.
+    /// after each visit of the walk.
     fn live_cursor(indexing_growth: bool) -> (String, String) {
         let _pool = new_pool();
         GROWTH.set(usize::MAX);
         for id in [0, 2, 4] {
             new_vehicle(id);
         }
-        let mut services = SCHEDULER;
-        services.pool = cursor;
-        let mut pool_cursor = cursor();
+        let walk = typed_pool();
         let mut visits = Vec::new();
         let mut first_unused = 0;
         let mut from = 0;
-        // SAFETY: The test's live pool; the cursor is refreshed by `next`.
-        while let Some(vehicle) = unsafe { next::<false>(&services, &mut pool_cursor, &mut from) } {
+        // SAFETY: The test's live pool, reread at each step.
+        while let Some(next) = unsafe { vehicle_base::next_vehicle(&walk, from) } {
+            from = next.index() + 1;
+            // SAFETY: As the walk's.
+            let vehicle = VehicleRef::of(unsafe { walk.record(next) });
             let id = index_of(vehicle);
             visits.push(id);
             if id == 0 {
@@ -1276,32 +1283,21 @@ mod pool_tests {
                 new_vehicle(2); // Reuse ahead must still be visited.
                 new_vehicle(3);
                 new_vehicle(6); // Raise extent without indexing growth.
-                // SAFETY: The cursor's canonical extent.
-                first_unused = unsafe { *pool_cursor.first_unused };
+                // SAFETY: The test's live pool owner.
+                first_unused = unsafe { (*view()).first_unused };
             } else if id == 2 {
                 delete_vehicle(4); // Hole ahead.
                 if indexing_growth {
                     let growth = slots_len();
                     GROWTH.set(growth);
-                    new_vehicle(growth); // Growth invalidates captured slots.
+                    new_vehicle(growth); // Growth reallocates the slots.
                     new_vehicle(growth + 1);
                 }
-                // SAFETY: The test's live pool owner.
-                assert_eq!(pool_cursor.first_unused, unsafe {
-                    &raw const (*view()).first_unused
-                });
             }
         }
-        // SAFETY: The test's live pool owner.
-        unsafe {
-            assert_eq!(pool_cursor.slots, (*view()).slots.as_mut_ptr().cast_const());
-            assert_eq!(pool_cursor.slots_len, (*view()).slots.len());
-        }
         clean();
-        pool_cursor = cursor(); // Fresh acquisition after reset; an empty pool ends.
-        from = 0;
-        // SAFETY: The cleaned live pool.
-        let empty = unsafe { next::<false>(&services, &mut pool_cursor, &mut from) }.is_none();
+        // SAFETY: The cleaned live pool; an empty pool ends the walk.
+        let empty = unsafe { vehicle_base::next_vehicle(&walk, 0) }.is_none();
         let inputs = format!("indexing growth {indexing_growth}");
         (
             inputs,
@@ -1356,14 +1352,27 @@ mod pool_tests {
     }
 
     /// "Base vehicle scheduler - Tick growth, timing return and fresh type": ID 0 grows the
-    /// pool and changes its own type during Tick; the newly discovered vehicle deletes itself.
+    /// pool past its old extent and becomes a crashed road vehicle whose cargo ages every 4
+    /// ticks during Tick; the newly discovered vehicle deletes itself.
     extern "C" fn growing_tick(vehicle: VehicleRef) -> bool {
         if index_of(vehicle) == 0 {
+            GROWTH.set(slots_len());
             new_vehicle(slots_len());
             // SAFETY: The visiting vehicle's live record.
-            unsafe { (*vehicle.0.as_ptr()).r#type = VehicleType::DISASTER };
+            unsafe {
+                let record = vehicle.0.as_ptr();
+                (*record).r#type = VehicleType::VEH_ROAD;
+                (*record).vehstatus = crate::vehicle_base::VehStates::from_element(
+                    crate::vehicle_base::VehState::Crashed,
+                );
+                (*record).cached_cargo_age_period = 4;
+                (*record).cargo_age_counter = 9;
+            }
             SURVIVORS.set(SURVIVORS.get() + 1);
             return true;
+        }
+        if index_of(vehicle) == GROWTH.get() {
+            GROWN_VISITS.set(GROWN_VISITS.get() + 1);
         }
         delete_vehicle(index_of(vehicle));
         false
@@ -1372,19 +1381,27 @@ mod pool_tests {
     fn tick_growth_rereads_the_pool_and_the_fresh_type() {
         let _pool = new_pool();
         new_vehicle(0);
-        POOL_READS.set(0);
+        GROWTH.set(usize::MAX);
+        GROWN_VISITS.set(0);
         SURVIVORS.set(0);
         run_ticks(growing_tick);
-        assert_eq!(POOL_READS.get(), 2, "pool reads: start and growth");
+        assert_eq!(
+            GROWN_VISITS.get(),
+            1,
+            "the walk visits the vehicle above the old extent"
+        );
         assert_eq!(
             SURVIVORS.get(),
             1,
             "only the survivor reaches its post-Tick reads"
         );
+        // The body after Tick read the fresh road type: it clamped the counter to the period,
+        // then decremented it, and the crashed front ended the body before any sound.
         // SAFETY: The surviving record.
-        assert_eq!(unsafe { (*record(0)).r#type }.0, VehicleType::DISASTER.0);
+        assert_eq!(unsafe { (*record(0)).cargo_age_counter }, 3);
         // SAFETY: The live pool owner.
         assert_eq!(unsafe { (*view()).items }, 1);
         clean();
     }
+
 }

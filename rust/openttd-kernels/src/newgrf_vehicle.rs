@@ -259,6 +259,69 @@ pub(crate) const fn test_table_with_callback(
     }
 }
 
+/// The resolver leaves a test outside this module supplies, for [`test_table_with`].
+#[cfg(test)]
+#[derive(Clone, Copy)]
+pub(crate) struct TestLeaves {
+    pub(crate) age: unsafe extern "C" fn(V) -> i32,
+    pub(crate) cache: unsafe extern "C" fn(V) -> *mut Cache,
+    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
+    pub(crate) cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List,
+    pub(crate) cargo_type: unsafe extern "C" fn(V) -> u8,
+    pub(crate) engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
+    pub(crate) resolve_callback:
+        unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
+    pub(crate) shared: &'static crate::services::Services,
+    /// `VehicleScopeResolver`'s store of the waiting random triggers.
+    pub(crate) write_waiting: unsafe extern "C" fn(V, u8),
+}
+#[cfg(test)]
+impl TestLeaves {
+    /// The leaves of [`TEST_TABLE`].
+    pub(crate) const UNREACHABLE: Self = Self {
+        age: TEST_TABLE.age,
+        cache: TEST_TABLE.cache,
+        capabilities: TEST_TABLE.capabilities,
+        cargo_owner: TEST_TABLE.cargo_owner,
+        cargo_type: TEST_TABLE.cargo_type,
+        engine_by_id: TEST_TABLE.engine_by_id,
+        resolve_callback: TEST_TABLE.resolve_callback,
+        shared: TEST_TABLE.shared,
+        write_waiting: TEST_TABLE.write_waiting,
+    };
+}
+/// `TEST_TABLE` over `leaves`, whose randomisation reads no waiting trigger, no random bits
+/// and no reseed, and stores no random bits.
+#[cfg(test)]
+pub(crate) const fn test_table_with(leaves: TestLeaves) -> Services {
+    unsafe extern "C" fn waiting(_: V) -> u8 {
+        0
+    }
+    unsafe extern "C" fn resolve_random(_: *mut State, _: u16, _: u8) -> RandomResult {
+        RandomResult { used: 0, reseed: 0 }
+    }
+    unsafe extern "C" fn random_bits(_: V) -> u16 {
+        0
+    }
+    unsafe extern "C" fn write_random(_: V, _: u16) {}
+    Services {
+        age: leaves.age,
+        cache: leaves.cache,
+        capabilities: leaves.capabilities,
+        cargo_owner: leaves.cargo_owner,
+        cargo_type: leaves.cargo_type,
+        engine_by_id: leaves.engine_by_id,
+        resolve_callback: leaves.resolve_callback,
+        shared: leaves.shared,
+        write_waiting: leaves.write_waiting,
+        waiting,
+        resolve_random,
+        random_bits,
+        write_random,
+        ..TEST_TABLE
+    }
+}
+
 /// Test-only table with every leaf unreachable; its private fields keep it in this module.
 #[cfg(test)]
 pub(crate) const TEST_TABLE: Services = Services {

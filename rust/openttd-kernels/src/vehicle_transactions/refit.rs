@@ -62,7 +62,6 @@ pub struct Services {
     pub common: &'static CommonServices,
     pub selection: &'static SelectionServices,
     pub cargo: &'static crate::cargo_storage::Services,
-    pub scheduler: &'static crate::vehicle::scheduler::SchedulerServices,
     pub train: &'static crate::train::Leaves,
     pub road: &'static crate::road::Leaves,
     pub aircraft: &'static crate::aircraft::Leaves,
@@ -226,7 +225,7 @@ pub(super) unsafe fn next(s: &Services, v: *mut ()) -> *mut () {
         .map_or(ptr::null_mut(), |v| v.shell().cast())
 }
 unsafe fn truncate(s: &Services, v: *mut (), cap: u16) {
-    let owner = (s.scheduler.cargo_owner)(unsafe { vehicle_ref(v, s.common.vehicles) });
+    let owner = unsafe { vehicle_ref(v, s.common.vehicles) }.cargo(s.common.vehicles.newgrf());
     if unsafe { crate::cargo_storage::openttd_rust_cargo_list_count(owner) } > u32::from(cap) {
         let amount = unsafe { crate::cargo_storage::openttd_rust_cargo_list_count(owner) }
             .wrapping_sub(u32::from(cap));
@@ -829,6 +828,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, aircraft_handle,
+        common, selection, cargo, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, aircraft_handle,
     };
 }

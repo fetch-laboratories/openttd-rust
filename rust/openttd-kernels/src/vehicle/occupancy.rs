@@ -128,15 +128,15 @@ unsafe fn update_vehicle_tile_hash(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::SchedulerServices) {
     crate::witness::hit(crate::witness::OCCUPANCY_RESET);
-    let pool = (s.pool)();
-    let vs = unsafe { &*s.vehicle };
-    for i in 0..unsafe { *pool.first_unused } {
-        let record = unsafe { (*pool.slots.add(i)).record };
-        if !record.is_null() {
-            unsafe {
-                let v = VehicleRef::of(record.cast());
-                (*((vs.tile_links)(v))).current = ptr::null_mut();
-            }
+    let pool = s.pool();
+    let vs = s.vehicle();
+    // `Vehicle::Iterate()`.
+    let mut index = 0;
+    while let Some(id) = unsafe { crate::vehicle_base::next_vehicle(&pool, index) } {
+        index = crate::pool::PoolId::index(id) + 1;
+        unsafe {
+            let v = VehicleRef::of(pool.record(id));
+            (*((vs.tile_links)(v))).current = ptr::null_mut();
         }
     }
     unsafe {
@@ -538,8 +538,6 @@ mod index_tests {
         static LINKS: Cell<[(*mut VehicleRecord, *mut Links); 2]> =
             const { Cell::new([(ptr::null_mut(), ptr::null_mut()); 2]) };
         static RESULT: Cell<Option<u32>> = const { Cell::new(None) };
-        static SLOTS: Cell<*const crate::pool::PoolSlot> = const { Cell::new(ptr::null()) };
-        static FIRST_UNUSED: Cell<usize> = const { Cell::new(0) };
     }
     extern "C" fn tile_links(v: VehicleRef) -> *mut Links {
         LINKS
@@ -558,13 +556,6 @@ mod index_tests {
     }
     extern "C" fn zero(_: *mut crate::services::CommandCost) {
         RESULT.set(None);
-    }
-    extern "C" fn pool() -> crate::vehicle::scheduler::PoolCursor {
-        crate::vehicle::scheduler::PoolCursor {
-            slots: SLOTS.get(),
-            slots_len: 2,
-            first_unused: FIRST_UNUSED.with(Cell::as_ptr),
-        }
     }
 
     fn road_vehicle(z: i32) -> *mut VehicleRecord {
@@ -683,21 +674,29 @@ mod index_tests {
             openttd_rust_occupancy_update(vehicles, ptr::null(), vb, true);
             assert!((*lb).current.is_null());
             assert_eq!((*lb).next, a);
-            // Reset clears current positions only, keeping stale links.
-            let slots = [
-                crate::pool::PoolSlot {
-                    shell: ptr::null_mut(),
-                    record: a.cast(),
-                },
-                crate::pool::PoolSlot {
-                    shell: ptr::null_mut(),
-                    record: b.cast(),
-                },
-            ];
-            SLOTS.set(slots.as_ptr());
-            FIRST_UNUSED.set(2);
+            // Reset clears current positions only, keeping stale links. Each slot holds a
+            // shell identity and its record, as a pooled vehicle's does.
+            let shells = [0_u8; 2];
+            let slot = |shell: &u8, record: *mut VehicleRecord| crate::pool::PoolSlot {
+                shell: (&raw const *shell).cast_mut().cast(),
+                record: record.cast(),
+            };
+            let descriptor = crate::pool::PoolDescriptor {
+                slots: crate::industrytype::NativeVec::from_vec(vec![
+                    slot(&shells[0], a),
+                    slot(&shells[1], b),
+                ]),
+                used_bitmap: crate::industrytype::NativeVec::new(),
+                first_free: 2,
+                first_unused: 2,
+                items: 2,
+                checked: 0,
+                cleaning: false,
+                alloc_cache: ptr::null_mut(),
+            };
+            let descriptor_address = &raw const descriptor;
             let mut scheduler = SCHEDULER;
-            scheduler.pool = pool;
+            scheduler.pool = &raw const descriptor_address;
             scheduler.vehicle = vehicles;
             openttd_rust_occupancy_reset(&scheduler);
             assert!((*la).current.is_null());

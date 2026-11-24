@@ -438,18 +438,6 @@ void RoadVehicle::SetDestTile(TileIndex tile)
 
 
 
-/** Calander day handler */
-void RoadVehicle::OnNewCalendarDay()
-{
-	openttd_rust_road_calendar_day(RustVehicle(this), this->GetRustState(), &GetRoadLeaves());
-}
-
-/** Economy day handler. */
-void RoadVehicle::OnNewEconomyDay()
-{
-	openttd_rust_road_economy_day(RustVehicle(this), this->GetRustState(), &GetRoadLeaves());
-}
-
 Trackdir RoadVehicle::GetVehicleTrackdir() const
 {
 	return static_cast<Trackdir>(openttd_rust_road_trackdir(RustVehicle(this), this->GetRustState(), &GetRoadLeaves()));

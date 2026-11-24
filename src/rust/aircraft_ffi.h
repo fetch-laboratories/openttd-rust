@@ -76,8 +76,6 @@ struct OpenTTDAircraftLeaves {
 };
 uint8_t OPENTTD_RUST_CALL openttd_rust_aircraft_tick_abi(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_aircraft_tick(const OpenTTDAircraftLeaves *a0, OpenTTDAircraftVehicle a1) { return openttd_rust_aircraft_tick_abi(a0, a1) != 0; }
-void OPENTTD_RUST_CALL openttd_rust_aircraft_calendar_day(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
-void OPENTTD_RUST_CALL openttd_rust_aircraft_economy_day(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_position(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, int32_t, int32_t, int32_t);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_cache(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, bool);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_flight_bounds(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, int32_t *, int32_t *);

@@ -989,24 +989,36 @@ pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
     game.controller(id, vehicle);
     u8::from(true)
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_calendar_day(
+/// `Ship::OnNewCalendarDay`: calendar day handler, for the scheduler's dispatch over the live
+/// ship `vehicle` at pool index `id`.
+pub(crate) fn on_new_calendar_day(
     id: u32,
     vehicle: VehicleRef,
-    leaves: *const Leaves,
-    services: *const Services,
+    leaves: &Leaves,
+    services: &Services,
 ) {
-    let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(vehicle));
+    let game = Game {
+        leaves,
+        services,
+        owner: (leaves.state_owner)(id),
+        vehicle: Some(vehicle),
+    };
     maintenance::age_vehicle(vehicle, game.vs());
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_economy_day(
+/// `Ship::OnNewEconomyDay`: economy day handler, for the scheduler's dispatch over the live
+/// ship `vehicle` at pool index `id`.
+pub(crate) fn on_new_economy_day(
     id: u32,
     vehicle: VehicleRef,
-    leaves: *const Leaves,
-    services: *const Services,
+    leaves: &Leaves,
+    services: &Services,
 ) {
-    let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(vehicle));
+    let game = Game {
+        leaves,
+        services,
+        owner: (leaves.state_owner)(id),
+        vehicle: Some(vehicle),
+    };
     crate::witness::hit(crate::witness::SHIP_ECONOMY_DAY);
     maintenance::economy_age_vehicle(vehicle, game.vs());
     let day = (u32::from(game.vehicle().day_counter())).wrapping_add(1);

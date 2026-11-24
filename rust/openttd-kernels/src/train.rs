@@ -2938,28 +2938,14 @@ pub unsafe extern "C" fn openttd_rust_train_tick(
     let g = entry_game!(leaves, services);
     u8::from(g.tick(id))
 }
-/// Invoke synchronous train policy with live serialized services.
-/// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_calendar_day(
-    id: Handle,
-    leaves: *const Leaves,
-    services: *const Services,
-) {
-    let g = entry_game!(leaves, services);
+/// `Train::OnNewCalendarDay`: calendar day handler.
+pub(crate) fn on_new_calendar_day(id: Handle, leaves: &Leaves, services: &Services) {
+    let g = Game::new(leaves, services);
     maintenance::age_vehicle(id.vehicle(), g.vs());
 }
-/// Invoke synchronous train policy with live serialized services.
-/// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_economy_day(
-    id: Handle,
-    leaves: *const Leaves,
-    services: *const Services,
-) {
-    let g = entry_game!(leaves, services);
+/// `Train::OnNewEconomyDay`: economy day handler.
+pub(crate) fn on_new_economy_day(id: Handle, leaves: &Leaves, services: &Services) {
+    let g = Game::new(leaves, services);
     g.economy_day(id);
 }
 /// Invoke synchronous train policy with live serialized services.

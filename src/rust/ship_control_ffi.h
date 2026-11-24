@@ -117,8 +117,6 @@ void openttd_rust_ship_set_rotation_y(OpenTTDShipState *, int16_t);
  * Depot search owns its inherent BFS scratch; neighbour output spans 320 entries. */
 uint8_t openttd_rust_ship_tick_abi(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 extern "C++" inline bool openttd_rust_ship_tick(uint32_t a0, OpenTTDVehicle *a1, const OpenTTDShipLeaves *a2, const OpenTTDSharedServices *a3) { return openttd_rust_ship_tick_abi(a0, a1, a2, a3) != 0; }
-void openttd_rust_ship_calendar_day(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
-void openttd_rust_ship_economy_day(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_cache(OpenTTDVehicle *, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 OpenTTDShipDepotResult openttd_rust_ship_find_depot(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
