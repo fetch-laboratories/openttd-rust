@@ -1128,8 +1128,8 @@ mod tests {
         }
     }
 
-    /// A bubble at (`x`, `y`, `z`) whose next movement entry is `_bubble_movement[spritenum
-    /// - 1][animation_state + 1]`, at a progress that moves it on this tick.
+    /// A bubble at (`x`, `y`, `z`) at a progress that moves it on this tick, whose next
+    /// movement entry is `_bubble_movement[spritenum - 1][animation_state + 1]`.
     fn bubble(x: i32, y: i32, z: i32, spritenum: u8, animation_state: u16) -> EffectVehicle {
         let record = VehicleRef::of(VehicleRecord::new(
             std::ptr::null_mut(),
@@ -1193,14 +1193,14 @@ mod tests {
         observe(|o| {
             assert_eq!(o.draws, 1);
             assert_eq!(o.spritenum, 5);
-            assert!(o.sounds.is_empty());
+            assert_eq!(o.sounds, Vec::<u16>::new());
         });
         // `_bubble_absorb[78]` is `ME(2)`.
         let v = bubble(10, 20, 100, 6, 77);
         assert!(bubble_tick(v, &t));
         observe(|o| {
             assert_eq!(o.draws, 0);
-            assert!(o.sounds.is_empty());
+            assert_eq!(o.sounds, Vec::<u16>::new());
         });
     }
 
