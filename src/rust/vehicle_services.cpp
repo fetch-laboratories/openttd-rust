@@ -165,7 +165,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 #else
 	.assertions = false,
 #endif
-	.enter_depot = openttd_rust_visit_enter_depot,
 	.pathfinding_result = VehicleSvcPathfindingResult,
 	.new_position = VehicleSvcNewPosition,
 	.base_viewport = VehicleSvcBaseViewport,

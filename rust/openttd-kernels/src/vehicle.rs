@@ -106,8 +106,6 @@ pub struct VehicleServices {
     pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
     pub map_log_x: extern "C" fn() -> u32,
     pub assertions: bool,
-    /// `VehicleEnterDepot`, owned by `visits` (`openttd_rust_visit_enter_depot`).
-    pub enter_depot: unsafe extern "C" fn(VehicleRef, *const visits::Services),
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
     pub new_position: extern "C" fn(VehicleRef) -> NewPosition,
     /// `Vehicle::UpdateViewport(true)`.
@@ -179,8 +177,7 @@ impl VehicleServices {
     }
     /// `VehicleEnterDepot(v)`.
     pub(crate) fn enter_depot(&self, v: VehicleRef) {
-        // SAFETY: a live front vehicle and the static visit table.
-        unsafe { (self.enter_depot)(v, (self.visits)()) }
+        visits::enter_depot(v, self.visits());
     }
     /// `v->HandleLoading(mode)`.
     #[allow(clippy::inline_always)]
@@ -253,7 +250,6 @@ crate::abi::layouts! {
         tile_links,
         map_log_x,
         assertions,
-        enter_depot,
         pathfinding_result,
         new_position,
         base_viewport,
