@@ -11,6 +11,7 @@
 #include "ground_vehicle.hpp"
 #include "industry.h"
 #include "misc/history_type.hpp"
+#include "table/strings.h"
 #include "rust/abi_ffi.h"
 #include "rust/auth_ffi.h"
 #include "rust/crypto_ffi.h"
@@ -116,7 +117,7 @@ static void Calls()
 	{
 		static OpenTTDTownState *owner = openttd_rust_town_new();
 		OpenTTDSharedServices shared{}; OpenTTDTownLeaves leaves{}; OpenTTDTownNameServices names{}; OpenTTDCommandCostServices costs{}; OpenTTDTownFoundingServices founding{};
-		names.shared = &shared; leaves.shared = &shared; founding.shared = &shared; founding.growth = &leaves; founding.names = &names; founding.cost = &costs; founding.close_error = 0x87654321;
+		names.shared = &shared; leaves.shared = &shared; founding.shared = &shared; founding.growth = &leaves; founding.names = &names; founding.cost = &costs;
 		costs.error = [](OpenTTDCommandCost *cost, uint32_t error) noexcept { *reinterpret_cast<uint32_t *>(cost) = error; };
 		leaves.environment.editor = []() noexcept { return false; };
 		leaves.environment.freeform_edges = []() noexcept { return false; };
@@ -138,7 +139,7 @@ static void Calls()
 		founding.resolve = [](uint16_t id) noexcept -> OpenTTDTownRef { CHECK(id == UINT16_MAX); return {nullptr, nullptr, id}; };
 		uint32_t error = 0; auto *cost = reinterpret_cast<OpenTTDCommandCost *>(&error); OpenTTDTownFoundingFrame frame; const uint8_t text = 'x';
 		openttd_rust_town_found(&founding, nullptr, &frame, &frame.names, cost, 2080, TSZ_SMALL, false, TL_ORIGINAL, false, 0, {&text, 1}, false);
-		CHECK(error == 0x87654321); openttd_rust_town_rename(&founding, cost, UINT16_MAX, {nullptr, 0}, false);
+		CHECK(error == STR_ERROR_TOO_CLOSE_TO_ANOTHER_TOWN); openttd_rust_town_rename(&founding, cost, UINT16_MAX, {nullptr, 0}, false);
 		CHECK(error == UINT16_MAX);
 		shared.town_count = []() noexcept -> size_t { return 0; };
 		shared.town_next_id = [](uint32_t) noexcept -> uint32_t { return UINT32_MAX; };

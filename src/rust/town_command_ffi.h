@@ -49,7 +49,6 @@ struct OpenTTDTownCommandServices {
 	void (*delete_storage)(Town *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_storage);
 	void (*clear_storage)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(clear_storage);
 	bool assertions;
-	uint32_t too_many_objects, no_statue_place;
 };
 const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept;
 extern "C" {

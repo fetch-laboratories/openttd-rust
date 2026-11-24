@@ -461,7 +461,7 @@ add_definitions_based_on_options()
 
 if(BUILD_TESTING)
     add_executable(openttd_rust_abi tools/migration/windows-abi.cpp)
-    target_include_directories(openttd_rust_abi PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/tools/migration")
+    target_include_directories(openttd_rust_abi PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/tools/migration" "${CMAKE_BINARY_DIR}/generated")
     target_link_libraries(openttd_rust_abi PRIVATE openttd_rust_native_test_support)
     add_dependencies(openttd_rust_abi openttd_rust_strings_check)
     if(NOT MSVC AND NOT APPLE)

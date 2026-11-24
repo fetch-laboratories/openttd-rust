@@ -42,7 +42,9 @@ use crate::strings_func::{get_encoded_string, get_string};
 use crate::strings_type::EncodedString;
 use crate::strings_type::StringParameterData::{self, Integer};
 use crate::table::strings::{
-    STR_COMPANY_NAME, STR_ERROR_COULD_NOT_CREATE_TOWN, STR_NEWS_NEW_TOWN,
+    STR_COMPANY_NAME, STR_ERROR_COULD_NOT_CREATE_TOWN, STR_ERROR_NAME_MUST_BE_UNIQUE,
+    STR_ERROR_NO_SPACE_FOR_TOWN, STR_ERROR_SITE_UNSUITABLE, STR_ERROR_TOO_CLOSE_TO_ANOTHER_TOWN,
+    STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB, STR_ERROR_TOO_MANY_TOWNS, STR_NEWS_NEW_TOWN,
     STR_NEWS_NEW_TOWN_UNSPONSORED,
 };
 pub use crate::tile_type::TileIndex as Tile;
@@ -93,12 +95,6 @@ pub struct FoundingServices {
     pub set_progress: extern "C" fn(*mut Frame, u32) -> bool,
     pub increase_progress: extern "C" fn(*mut Frame) -> bool,
     pub random: *mut names::Randomizer,
-    pub edge_error: u32,
-    pub close_error: u32,
-    pub unsuitable_error: u32,
-    pub unique_error: u32,
-    pub too_many_error: u32,
-    pub no_space_error: u32,
 }
 /// Arguments of `town_cmd.cpp::DoCreateTown` after the town itself.
 #[derive(Clone, Copy)]
@@ -203,18 +199,18 @@ impl<'a> Founding<'a> {
         w::hit(w::TOWN_PLACEMENT);
         // Check if too close to the edge of map.
         if self.map().distance_from_edge(tile, self.size_y()) < 12 {
-            return Some(crate::strings_type::StringID(self.s.edge_error));
+            return Some(STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB);
         }
         // Check distance to all other towns.
         if observed!(super::spatial::is_close_to_town(self.shared, tile, 20)) {
-            return Some(crate::strings_type::StringID(self.s.close_error));
+            return Some(STR_ERROR_TOO_CLOSE_TO_ANOTHER_TOWN);
         }
         // Can only build on clear flat areas, possibly with trees.
         let tile_type = TileType(observed!((self.shared.tile_type)(tile.0)));
         if (tile_type != TileType::MP_CLEAR && tile_type != TileType::MP_TREES)
             || !observed!((self.s.flat)(tile))
         {
-            return Some(crate::strings_type::StringID(self.s.unsuitable_error));
+            return Some(STR_ERROR_SITE_UNSUITABLE);
         }
         // We might want to make sure the town has enough room.
         if check_surrounding {
@@ -249,7 +245,7 @@ impl<'a> Founding<'a> {
                 spiral = spiral.advance(self.map().size_x(), self.size_y());
             }
             if counter < VALID_TILE_GOAL {
-                return Some(crate::strings_type::StringID(self.s.unsuitable_error));
+                return Some(STR_ERROR_SITE_UNSUITABLE);
             }
         }
         None
@@ -668,7 +664,7 @@ pub(crate) unsafe fn cmd_found_town(
             )
         } {
             w::hit(w::TOWN_DUPLICATE);
-            observed!((f.cost.error)(result, f.s.unique_error));
+            observed!((f.cost.error)(result, STR_ERROR_NAME_MUST_BE_UNIQUE.0));
             return;
         }
     } else {
@@ -681,13 +677,13 @@ pub(crate) unsafe fn cmd_found_town(
         }
         if !unsafe { names::is_unique_town_name(f.names, text) } {
             w::hit(w::TOWN_DUPLICATE);
-            observed!((f.cost.error)(result, f.s.unique_error));
+            observed!((f.cost.error)(result, STR_ERROR_NAME_MUST_BE_UNIQUE.0));
             return;
         }
     }
     // Allocate town struct.
     if !observed!((f.s.can_allocate)()) {
-        observed!((f.cost.error)(result, f.s.too_many_error));
+        observed!((f.cost.error)(result, STR_ERROR_TOO_MANY_TOWNS.0));
         return;
     }
     if !random_location {
@@ -738,7 +734,7 @@ pub(crate) unsafe fn cmd_found_town(
         }
         observed!((f.s.exchange_generating)(previous));
         let Some(town) = town else {
-            observed!((f.cost.error)(result, f.s.no_space_error));
+            observed!((f.cost.error)(result, STR_ERROR_NO_SPACE_FOR_TOWN.0));
             return;
         };
         observed!((f.s.set_result)(frame, town.id));
@@ -988,7 +984,7 @@ pub(crate) unsafe fn cmd_rename_town(
         }
         if !unsafe { names::is_unique_town_name(f.names, text) } {
             w::hit(w::TOWN_DUPLICATE);
-            observed!((f.cost.error)(result, f.s.unique_error));
+            observed!((f.cost.error)(result, STR_ERROR_NAME_MUST_BE_UNIQUE.0));
             return;
         }
     }
@@ -1054,12 +1050,6 @@ crate::abi::layouts! {
         set_progress,
         increase_progress,
         random,
-        edge_error,
-        close_error,
-        unsuitable_error,
-        unique_error,
-        too_many_error,
-        no_space_error,
     };
 }
 

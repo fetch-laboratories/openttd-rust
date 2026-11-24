@@ -22,7 +22,8 @@ use crate::strings_func::{get_encoded_string, get_string};
 use crate::strings_type::StringParameterData::{self, Integer};
 use crate::strings_type::{EncodedString, INVALID_STRING_ID};
 use crate::table::strings::{
-    STR_COMPANY_NAME, STR_ERROR_BRIBE_FAILED, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES,
+    STR_COMPANY_NAME, STR_ERROR_BRIBE_FAILED, STR_ERROR_STATUE_NO_SUITABLE_PLACE,
+    STR_ERROR_TOO_MANY_OBJECTS, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES,
     STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS, STR_NEWS_EXCLUSIVE_RIGHTS_TITLE,
     STR_NEWS_ROAD_REBUILDING_MINUTES, STR_NEWS_ROAD_REBUILDING_MONTHS,
 };
@@ -79,8 +80,6 @@ pub struct CommandServices {
     pub delete_storage: extern "C" fn(*mut TownHandle, usize),
     pub clear_storage: extern "C" fn(*mut TownHandle),
     pub assertions: bool,
-    pub too_many_objects: u32,
-    pub no_statue_place: u32,
 }
 /// `TownActionRoadRebuild`'s news and script events for `current`'s road works in `town`;
 /// `minutes` is `TimerGameEconomy::UsingWallclockUnits()`.
@@ -333,7 +332,7 @@ impl<'a> Commands<'a> {
         // Number of tiles in the center of the city, where we try to protect houses.
         const STATUE_NUMBER_INNER_TILES: u32 = 25;
         if !unsafe { (self.objects().can_allocate)() } {
-            (self.cost.error)(out, self.s.too_many_objects);
+            (self.cost.error)(out, STR_ERROR_TOO_MANY_OBJECTS.0);
             return false;
         }
         let center = unsafe { super::position(t.state) };
@@ -395,7 +394,7 @@ impl<'a> Commands<'a> {
             break;
         }
         if best_position == TileIndex::INVALID {
-            (self.cost.error)(out, self.s.no_statue_place);
+            (self.cost.error)(out, STR_ERROR_STATUE_NO_SUITABLE_PLACE.0);
             return false;
         }
         if flags.test(DoCommandFlag::Execute) {
@@ -1346,8 +1345,6 @@ crate::abi::layouts! {
         delete_storage,
         clear_storage,
         assertions,
-        too_many_objects,
-        no_statue_place,
     };
 }
 

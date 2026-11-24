@@ -68,7 +68,6 @@ struct OpenTTDTownFoundingServices {
 	bool (*set_progress)(OpenTTDTownFoundingFrame *, uint) noexcept OPENTTD_SERVICE_DEFAULT(set_progress);
 	bool (*increase_progress)(OpenTTDTownFoundingFrame *) noexcept OPENTTD_SERVICE_DEFAULT(increase_progress);
 	Randomizer *random;
-	StringID edge_error, close_error, unsuitable_error, unique_error, too_many_error, no_space_error;
 };
 const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept;
 extern "C" {

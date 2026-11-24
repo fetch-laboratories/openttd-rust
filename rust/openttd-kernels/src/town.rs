@@ -227,6 +227,7 @@ pub struct TownRef {
 }
 use crate::game_state::GameState;
 use crate::raw_field::{read_field, write_field};
+use crate::table::strings::STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS;
 use std::{cell::OnceCell, ffi::c_void};
 
 #[repr(C)]
@@ -843,7 +844,6 @@ pub struct HousePlacement {
 pub struct AuthorityServices {
     pub bulldozer: extern "C" fn() -> bool,
     pub town_index: extern "C" fn(*const crate::services::TownHandle) -> u16,
-    pub refusal: u32,
 }
 
 /// `_settings_game.difficulty.town_council_tolerance`, from the settings catalog.
@@ -891,7 +891,11 @@ pub(crate) unsafe fn check_if_authority_allows_new_station(
     if i32::from(rating) > RATING_VERYPOOR {
         (c.zero)(result);
     } else {
-        (c.error_param)(result, a.refusal, u64::from((a.town_index)(town)));
+        (c.error_param)(
+            result,
+            STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS.0,
+            u64::from((a.town_index)(town)),
+        );
     }
 }
 /// The command flags of a positional export's `NoTestTownRating` boolean.
@@ -978,7 +982,11 @@ pub(crate) unsafe fn check_for_town_rating(
     // SAFETY: Live owner, valid company; scratch/native rating access ends here.
     let rating = unsafe { get_rating(owner, town, CompanyID(company)) };
     if rating < needed {
-        (c.error_param)(result, a.refusal, u64::from((a.town_index)(town)));
+        (c.error_param)(
+            result,
+            STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS.0,
+            u64::from((a.town_index)(town)),
+        );
     } else {
         (c.zero)(result);
     }
@@ -3509,7 +3517,6 @@ crate::abi::layouts! {
     "OpenTTDTownAuthorityServices" ["probe"] => AuthorityServices {
         bulldozer,
         town_index,
-        refusal,
     };
     "OpenTTDTownRef" ["probe"] => TownRef {
         shell,
@@ -4153,6 +4160,12 @@ mod policy_tests {
         }
     }
     extern "C" fn error(out: *mut crate::services::CommandCost, error: u32, parameter: u64) {
+        /* The policy oracle records the authority refusal as its reference fixture's token 19. */
+        let error = if error == STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS.0 {
+            19
+        } else {
+            error
+        };
         // SAFETY: Same typed result lifetime as zero.
         unsafe {
             *out.cast::<Cost>() = Cost {
@@ -4274,7 +4287,6 @@ mod policy_tests {
         let authority = AuthorityServices {
             bulldozer,
             town_index,
-            refusal: 19,
         };
         COMPANY.set(company);
         COUNCIL.set(council);
@@ -5325,7 +5337,6 @@ mod protocol_tests {
         houses.authority = leak(AuthorityServices {
             bulldozer: unreachable0,
             town_index,
-            refusal: 0,
         });
         houses.entry = house_entry;
         houses.loop_tile = loop_tile;
