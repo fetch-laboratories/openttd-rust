@@ -734,6 +734,83 @@ pub(crate) unsafe fn resolve_real(s: &Services, state: *const State, group: Grou
         (s.real_at)(group, motion, set.min(total - 1))
     }
 }
+/// `VehicleResolverObject::WO_NONE`: no wagon override.
+const WO_NONE: u8 = 0;
+/// `VehicleResolverObject::WO_UNCACHED`: the uncached wagon override.
+const WO_UNCACHED: u8 = 1;
+
+/// The arguments of `GetVehicleCallback` and `GetVehicleCallbackParent`.
+pub(crate) struct VehicleCallback<'a> {
+    /// The callback to evaluate.
+    pub callback: CallbackID,
+    /// First parameter of the callback.
+    pub param1: u32,
+    /// Second parameter of the callback.
+    pub param2: u32,
+    /// Engine type of the vehicle to evaluate the callback for.
+    pub engine: EngineID,
+    /// The vehicle to evaluate the callback for, or `None` if it doesn't exist yet.
+    pub v: Option<VehicleRef>,
+    /// `GetVehicleCallbackParent`'s vehicle for the parent scope.
+    pub parent: Option<V>,
+    /// Additional result values from registers 100+.
+    pub regs100: &'a mut [i32],
+}
+
+/// `GetVehicleCallback`, or `GetVehicleCallbackParent` where `parent` is given: evaluate a
+/// newgrf callback for vehicles. Returns the value the callback returned, or
+/// `CALLBACK_FAILED` if it failed.
+pub(crate) fn resolve_vehicle_callback(s: &Services, args: VehicleCallback<'_>) -> u16 {
+    let v = args.v.map_or(null_mut(), |v| v.0.as_ptr());
+    let wagon = if args.parent.is_some() {
+        WO_NONE
+    } else {
+        WO_UNCACHED
+    };
+    // SAFETY: A handle names a live record of the serialized game state, and a parent is
+    // the caller's live vehicle.
+    unsafe {
+        let mut state = init(s, args.engine.0, v, wagon, false);
+        if let Some(parent) = args.parent {
+            state.parent.set_vehicle(parent);
+        }
+        // No Rust reference into state is retained while generic Action2 reenters.
+        (s.resolve_callback)(
+            &raw mut state,
+            args.engine.0,
+            args.callback.0,
+            args.param1,
+            args.param2,
+            args.regs100.as_mut_ptr(),
+            args.regs100.len(),
+        )
+    }
+}
+
+/// `GetVehicleCallback(callback, param1, param2, engine, v)` with no register output.
+pub(crate) fn get_vehicle_callback(
+    s: &Services,
+    callback: CallbackID,
+    param1: u32,
+    param2: u32,
+    engine: EngineID,
+    v: Option<VehicleRef>,
+) -> u16 {
+    resolve_vehicle_callback(
+        s,
+        VehicleCallback {
+            callback,
+            param1,
+            param2,
+            engine,
+            v,
+            parent: None,
+            regs100: &mut [],
+        },
+    )
+}
+
+/// The export of [`resolve_vehicle_callback`]; `regs` and `count` give the register output.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_callback(
     s: &Services,
@@ -747,42 +824,24 @@ pub unsafe extern "C" fn openttd_rust_vehicle_callback(
     regs: *mut i32,
     count: usize,
 ) -> u16 {
-    unsafe {
-        let mut state = init(s, id, v, u8::from(!override_parent), false);
-        if override_parent {
-            state.parent.set_vehicle(parent);
-        }
-        // No Rust reference into state is retained while generic Action2 reenters.
-        (s.resolve_callback)(&raw mut state, id, callback, p1, p2, regs, count)
-    }
-}
-/// `GetVehicleCallback`: evaluate a newgrf callback for vehicles. `v` is the vehicle to
-/// evaluate the callback for, or `None` if it doesn't exist yet. Returns the value the
-/// callback returned, or `CALLBACK_FAILED` if it failed.
-pub(crate) fn get_vehicle_callback(
-    s: &Services,
-    callback: CallbackID,
-    param1: u32,
-    param2: u32,
-    engine: EngineID,
-    v: Option<VehicleRef>,
-) -> u16 {
-    let v = v.map_or(null_mut(), |v| v.0.as_ptr());
-    // SAFETY: A handle names a live record of the serialized game state.
-    unsafe {
-        // `VehicleResolverObject::WO_UNCACHED`.
-        let mut state = init(s, engine.0, v, 1, false);
-        // No Rust reference into state is retained while generic Action2 reenters.
-        (s.resolve_callback)(
-            &raw mut state,
-            engine.0,
-            callback.0,
-            param1,
-            param2,
-            null_mut(),
-            0,
-        )
-    }
+    let regs100: &mut [i32] = if regs.is_null() {
+        &mut []
+    } else {
+        // SAFETY: The caller's span of `count` registers, live for the call.
+        unsafe { std::slice::from_raw_parts_mut(regs, count) }
+    };
+    resolve_vehicle_callback(
+        s,
+        VehicleCallback {
+            callback: CallbackID(callback),
+            param1: p1,
+            param2: p2,
+            engine: EngineID(id),
+            v: std::ptr::NonNull::new(v).map(VehicleRef),
+            parent: override_parent.then_some(parent),
+            regs100,
+        },
+    )
 }
 /// `GetEngineProperty`: callback 0x36 for `property` of `engine`, or `orig_value` if the
 /// callback fails. `v` is `None` for an engine without a vehicle.
@@ -849,24 +908,18 @@ pub unsafe extern "C" fn openttd_rust_vehicle_build_probability(
     id: u16,
     kind: u8,
 ) -> i8 {
-    unsafe {
-        let result = openttd_rust_vehicle_callback(
-            s,
-            CBID_VEHICLE_BUILD_PROBABILITY.0,
-            u32::from(kind),
-            0,
-            id,
-            v,
-            null_mut(),
-            false,
-            null_mut(),
-            0,
-        );
-        if result == CALLBACK_FAILED {
-            -1
-        } else {
-            i8::from(u32::from(result) + s.shared.random_range(100) >= 100)
-        }
+    let result = get_vehicle_callback(
+        s,
+        CBID_VEHICLE_BUILD_PROBABILITY,
+        u32::from(kind),
+        0,
+        EngineID(id),
+        std::ptr::NonNull::new(v).map(VehicleRef),
+    );
+    if result == CALLBACK_FAILED {
+        -1
+    } else {
+        i8::from(u32::from(result) + s.shared.random_range(100) >= 100)
     }
 }
 unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
@@ -1827,20 +1880,24 @@ pub(crate) unsafe fn callback(
     registers: *mut i32,
     count: usize,
 ) -> u16 {
-    unsafe {
-        openttd_rust_vehicle_callback(
-            &*(vs.newgrf)(),
-            callback,
-            parameter,
-            0,
-            engine,
-            v.map_or(null_mut(), |v| v.0.as_ptr()),
-            parent,
-            override_parent,
-            registers,
-            count,
-        )
-    }
+    let regs100: &mut [i32] = if registers.is_null() {
+        &mut []
+    } else {
+        // SAFETY: The caller's span of `count` registers, live for the call.
+        unsafe { std::slice::from_raw_parts_mut(registers, count) }
+    };
+    resolve_vehicle_callback(
+        vs.newgrf(),
+        VehicleCallback {
+            callback: CallbackID(callback),
+            param1: parameter,
+            param2: 0,
+            engine: EngineID(engine),
+            v,
+            parent: override_parent.then_some(parent),
+            regs100,
+        },
+    )
 }
 /// Direct signed property entry (unsigned users use the base vehicle table).
 pub(crate) unsafe fn signed_property(
