@@ -3400,10 +3400,11 @@ class EnqueueTests(unittest.TestCase):
             list[object],
             world.get("dispatched", [requested] if requested else []),
         )
+        commits = cast(list[str], world.get("commits", []))
         compare = {
             "behind_by": world.get("behind", 0),
-            "commits": [{"sha": sha} for sha in world.get("commits", [])],
-            "total_commits": world.get("total", len(world.get("commits", []))),
+            "commits": [{"sha": sha} for sha in commits],
+            "total_commits": world.get("total", len(commits)),
         }
         answers = {
             "pulls/170": dict(PULL, created_at="2026-11-11T00:00:00Z"),
@@ -3429,7 +3430,8 @@ class EnqueueTests(unittest.TestCase):
         }
         listings = {
             "event=workflow_dispatch": [
-                {"workflow_runs": page} for page in world.get("pages", [dispatched])
+                {"workflow_runs": page}
+                for page in cast(list[object], world.get("pages", [dispatched]))
             ],
             "event=pull_request": [{"workflow_runs": world.get("labeled", [])}],
             "pulls/170/files": [world.get("files", [{"filename": "tools/ci.py"}])],
@@ -4383,11 +4385,11 @@ class StateTests(unittest.TestCase):
     def test_newest_run_below_head_is_shown_as_enqueue_reads_it(self) -> None:
         # Equal creation times resolve by id, in the gate and here alike.
         created = "2026-11-12T03:00:00Z"
-        red = dict(requested("rust", "c" * 32, created, "failure"), id=7)
+        red = requested("rust", "c" * 32, created, "failure")
+        red["id"] = 7
         green = requested("native", "e" * 32, created, "success")
-        green = dict(
-            green, id=8, display_title=f"CI native PR 170 {'e' * 32}-{PREVIOUS}"
-        )
+        green["id"] = 8
+        green["display_title"] = f"CI native PR 170 {'e' * 32}-{PREVIOUS}"
         world = World(runs=[[red, green]], commits=[PREVIOUS, HEAD])
         _, output, _ = self.state(world=world)
         lines = output.splitlines()
@@ -4405,7 +4407,7 @@ class StateTests(unittest.TestCase):
             ("native", PREVIOUS, 1),
         )
         # With the ids swapped the red run at the head is the newest.
-        swapped = replace(world, runs=[[dict(red, id=9), green]])
+        swapped = replace(world, runs=[[{**red, "id": 9}, green]])
         _, output, _ = self.state(world=swapped)
         self.assertNotIn("Newest requested run", output)
         self.assertIn("enqueue checks: blocked: The newest requested run", output)

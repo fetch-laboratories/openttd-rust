@@ -1211,7 +1211,7 @@ def pr_requested_runs(
             and record.get("run_id")
             and record["run_id"] not in found
         ):
-            run = api(repository, f"actions/runs/{record['run_id']}")
+            run = cast(ci_log.Run, api(repository, f"actions/runs/{record['run_id']}"))
             profile = record.get("profile") or "requested"
             found[run["id"]] = TestedRun(profile, record["head"], run)
     return sorted(
