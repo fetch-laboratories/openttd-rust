@@ -883,7 +883,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             Self::call(|| unsafe { (self.leaves.service_order)(v, destination.0) });
             self.start_stop_dirty(v);
         } else if Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
-            crate::orders::VisitOrders::new(self.vs.orders()).make_dummy(v.base());
+            // SAFETY: The live vehicle's current order.
+            unsafe { crate::orders::make_dummy(v.base().current_order_pointer()) };
             self.start_stop_dirty(v);
         }
     }
@@ -3063,7 +3064,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 && Self::order_destination(v) == index
                 && (!Self::airport_has_hangar(st) || !Self::can_vehicle_use_station(v, st))
             {
-                crate::orders::VisitOrders::new(self.vs.orders()).make_dummy(v.base());
+                // SAFETY: The live vehicle's current order.
+                unsafe { crate::orders::make_dummy(v.base().current_order_pointer()) };
                 self.start_stop_dirty(v);
             }
             let pos = self.aircraft_get_entry_point(v, ap, rotation);

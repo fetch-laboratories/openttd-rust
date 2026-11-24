@@ -203,12 +203,11 @@ mod property_tests {
     }
 
     #[test]
-    #[allow(unsafe_code)]
     fn get_vehicle_property_returns_the_fallback_when_the_callback_fails() {
         let s = Services {
+            resolve_callback,
             engine_by_id,
             cargo_type,
-            resolve_callback,
             ..TEST_TABLE
         };
         let engine = crate::engine::openttd_rust_engine_new();
@@ -806,13 +805,12 @@ pub(crate) fn get_engine_property(
     if callback != CALLBACK_FAILED {
         if is_signed {
             /* Sign extend 15 bit integer */
-            i32::from((callback << 1) as i16) / 2
-        } else {
-            i32::from(callback)
+            return i32::from((callback << 1) as i16) / 2;
         }
-    } else {
-        orig_value
+        return i32::from(callback);
     }
+
+    orig_value
 }
 /// `GetVehicleProperty(v, property, orig_value)`, the unsigned form.
 pub(crate) fn get_vehicle_property(

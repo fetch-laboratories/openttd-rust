@@ -4925,11 +4925,6 @@ impl VisitOrders {
             self.0.vehicle(Self::shell(v))
         )));
     }
-    /// `v->current_order.MakeDummy()`.
-    pub(crate) fn make_dummy(self, v: VehicleRef) {
-        // SAFETY: The live vehicle's current order.
-        unsafe { make_dummy(v.current_order_pointer()) };
-    }
 }
 
 crate::abi::layouts! {
@@ -5105,7 +5100,6 @@ mod current_order_write_tests {
     }
 
     #[test]
-    #[allow(unsafe_code)]
     fn free_and_make_dummy_write_only_the_original_fields() {
         let owner: *mut VehicleOrders = openttd_rust_vehicle_orders_new();
         let record = crate::vehicle_base::openttd_rust_vehicle_record_new(

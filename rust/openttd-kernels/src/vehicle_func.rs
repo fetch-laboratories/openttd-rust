@@ -118,7 +118,6 @@ pub(crate) struct GetNewVehiclePosResult {
 /// `for (Vehicle *v : VehiclesOnTile(tile))`: iterate over all vehicles on a tile.
 /// The order is non-deterministic. You have to make sure, that your processing is not order
 /// dependant.
-#[allow(unsafe_code)]
 #[inline]
 pub(crate) fn vehicles_on_tile(
     vs: &VehicleServices,
@@ -126,14 +125,10 @@ pub(crate) fn vehicles_on_tile(
     tile: TileIndex,
     mut visit: impl FnMut(VehicleRef),
 ) {
-    // SAFETY: The module's iterator contract; no index borrow spans `visit`.
-    unsafe {
-        let mut it = OnTile::new(vs, map, tile.0);
-        while let Some(v) = it.get() {
-            visit(v);
-            it.advance(vs);
-        }
-    }
+    has_vehicle_on_tile(vs, map, tile, |v| {
+        visit(v);
+        false
+    });
 }
 /// [`vehicles_on_tile`] for callers in files no pass has finished.
 #[inline]
@@ -184,7 +179,6 @@ pub(crate) fn has_vehicle_on_tile_raw(
 /// This only works for vehicles with proper `Vehicle::Tile`, so only ground vehicles outside
 /// wormholes. The order is non-deterministic. You have to make sure, that your processing is
 /// not order dependant.
-#[allow(unsafe_code)]
 #[inline]
 pub(crate) fn vehicles_near_tile_xy(
     vs: &VehicleServices,
@@ -193,14 +187,10 @@ pub(crate) fn vehicles_near_tile_xy(
     max_dist: u32,
     mut visit: impl FnMut(VehicleRef),
 ) {
-    // SAFETY: The module's iterator contract; no index borrow spans `visit`.
-    unsafe {
-        let mut it = Near::new(vs, x, y, max_dist);
-        while let Some(v) = it.get() {
-            visit(v);
-            it.advance(vs);
-        }
-    }
+    has_vehicle_near_tile_xy(vs, x, y, max_dist, |v| {
+        visit(v);
+        false
+    });
 }
 
 /// `HasVehicleNearTileXY`: loop over vehicles near a given world coordinate, and check

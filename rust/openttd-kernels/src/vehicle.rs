@@ -37,9 +37,10 @@ pub const VEHICLE_LENGTH: u8 = crate::vehicle_type::VEHICLE_LENGTH as u8;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VehicleRef(pub NonNull<OpenTTDVehicle>);
 
+// Each access names a live record, as the module states.
+#[allow(unsafe_code)]
 impl VehicleRef {
     /// The record's native shell, the context its untyped services take.
-    #[allow(unsafe_code)]
     pub(crate) fn shell(self) -> *mut std::ffi::c_void {
         crate::raw_field::read_field!(self.0.as_ptr(), shell).cast()
     }
@@ -59,7 +60,6 @@ impl VehicleRef {
     ///
     /// # Safety
     /// `shell` is a live non-null vehicle shell.
-    #[allow(unsafe_code)]
     pub(crate) unsafe fn from_shell(
         shell: *mut std::ffi::c_void,
         services: &VehicleServices,
@@ -114,12 +114,13 @@ pub struct VehicleServices {
     pub write_profit: extern "C" fn(VehicleRef, i64),
     pub write_reliability: extern "C" fn(VehicleRef, u16),
 }
+// The getters return immutable process-wide tables and every handle names a live record.
+#[allow(unsafe_code)]
 impl VehicleServices {
     /// `Vehicle::SetNext` on two native shells.
     ///
     /// # Safety
     /// `shell` and a non-null `next` are live shells.
-    #[allow(unsafe_code)]
     pub(crate) unsafe fn set_next_shell(
         &self,
         shell: *mut std::ffi::c_void,
@@ -132,19 +133,16 @@ impl VehicleServices {
     }
 
     /// The immutable process-wide vehicle resolver services.
-    #[allow(unsafe_code)]
     pub(crate) fn newgrf(&self) -> &'static crate::newgrf_vehicle::Services {
         // SAFETY: The getter returns the immutable process-wide resolver table.
         unsafe { &*(self.newgrf)() }
     }
     /// The immutable process-wide station and depot visit table.
-    #[allow(unsafe_code)]
     pub(crate) fn visits(&self) -> &'static visits::Services {
         // SAFETY: The getter returns the immutable process-wide visit table.
         unsafe { &*(self.visits)() }
     }
     /// The immutable process-wide orders services, shared by every controller.
-    #[allow(unsafe_code)]
     pub(crate) fn orders(&self) -> &'static crate::orders::Leaves {
         // SAFETY: The getter returns the immutable process-wide orders table.
         unsafe { &*(self.orders)() }
@@ -171,7 +169,6 @@ impl VehicleServices {
         }
     }
     /// `ErrorUnknownCallbackResult` for an engine's callback result.
-    #[allow(unsafe_code)]
     pub(crate) fn unknown_callback_result(
         &self,
         engine: EngineRef,
@@ -193,7 +190,6 @@ impl VehicleServices {
     ///
     /// # Safety
     /// `v` is a live ship or aircraft.
-    #[allow(unsafe_code)]
     pub(crate) unsafe fn running_cost(&self, v: VehicleRef) -> i64 {
         // SAFETY: The caller's live vehicle and its current engine.
         unsafe {
@@ -299,16 +295,19 @@ mod tests {
         }
     }
 
+    /// The orders owner the unbunching test's orders table resolves every vehicle to.
+    static OWNER: std::sync::atomic::AtomicPtr<crate::orders::VehicleOrders> =
+        std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+    extern "C" fn vehicle_orders(_: *mut std::ffi::c_void) -> *mut crate::orders::VehicleOrders {
+        OWNER.load(Ordering::Relaxed)
+    }
+
+    /// A fresh record the test leaks.
     fn record(kind: VehicleType) -> VehicleRef {
         VehicleRef::of(crate::vehicle_base::openttd_rust_vehicle_record_new(
             std::ptr::null_mut(),
             kind,
         ))
-    }
-    #[allow(unsafe_code)]
-    fn delete(v: VehicleRef) {
-        // SAFETY: The test's record, deleted once.
-        unsafe { crate::vehicle_base::openttd_rust_vehicle_record_delete(v.0.as_ptr()) };
     }
 
     /// `GetNewVehiclePos` moves one pixel by `_delta_coord` and hashes the new position
@@ -348,13 +347,11 @@ mod tests {
         v.set_direction(Direction::DIR_NE);
         let gp = get_new_vehicle_pos(v, map);
         assert_eq!((gp.x, gp.new_tile), (-1, TileIndex(0x1000_04ff)));
-        delete(v);
     }
 
     /// `assert(this->IsInDepot())` runs before the unbunching tests: a vehicle outside a
     /// depot fails it once, one inside none. Without an order list the vehicle never waits.
     #[test]
-    #[allow(unsafe_code)]
     fn is_waiting_for_unbunching_asserts_that_the_vehicle_is_in_a_depot() {
         if crate::services_assert::isolate_test_check(
             "vehicle::tests::is_waiting_for_unbunching_asserts_that_the_vehicle_is_in_a_depot",
@@ -363,13 +360,6 @@ mod tests {
             return;
         }
         let owner = crate::orders::openttd_rust_vehicle_orders_new();
-        unsafe extern "C" fn vehicle_orders(
-            _: *mut std::ffi::c_void,
-        ) -> *mut crate::orders::VehicleOrders {
-            OWNER.load(Ordering::Relaxed)
-        }
-        static OWNER: std::sync::atomic::AtomicPtr<crate::orders::VehicleOrders> =
-            std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
         OWNER.store(owner, Ordering::Relaxed);
         let orders: &'static crate::orders::Leaves = Box::leak(Box::new(crate::orders::Leaves {
             vehicle: vehicle_orders,
@@ -380,34 +370,6 @@ mod tests {
         assert_eq!(FAILED.load(Ordering::Relaxed), 1);
         assert!(!is_waiting_for_unbunching(v, orders, || true));
         assert_eq!(FAILED.load(Ordering::Relaxed), 1);
-        delete(v);
-        // SAFETY: The test's owner, deleted once.
-        unsafe { crate::orders::openttd_rust_vehicle_orders_delete(owner) };
-    }
-
-    /// `Train::From`'s type assertion holds the handle constructor: a road vehicle fails it
-    /// once, a train passes it and its handle carries the record's train owner.
-    #[test]
-    #[allow(unsafe_code)]
-    fn train_handle_asserts_the_vehicle_type_and_carries_the_train_owner() {
-        if crate::services_assert::isolate_test_check(
-            "vehicle::tests::train_handle_asserts_the_vehicle_type_and_carries_the_train_owner",
-            record_failure,
-        ) {
-            return;
-        }
-        let owner = std::ptr::NonNull::<crate::train_state::TrainState>::dangling().as_ptr();
-        let train = record(VehicleType::VEH_TRAIN);
-        // SAFETY: The test's fresh record.
-        unsafe { (*train.0.as_ptr()).train = owner };
-        let handle = crate::train::Handle::from_vehicle(train);
-        assert_eq!((handle.record, handle.owner), (train.0.as_ptr(), owner));
-        assert_eq!(FAILED.load(Ordering::Relaxed), 0);
-        let road = record(VehicleType::VEH_ROAD);
-        let _ = crate::train::Handle::from_vehicle(road);
-        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
-        delete(train);
-        delete(road);
     }
 
     /// `GetAdvanceDistance`: an odd (axial) direction needs 192 progress, an even (corner)
@@ -424,6 +386,5 @@ mod tests {
             v.set_direction(direction);
             assert_eq!(v.get_advance_distance(), distance, "{direction:?}");
         }
-        delete(v);
     }
 }

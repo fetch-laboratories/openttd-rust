@@ -5,9 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! `newgrf_properties.h`: properties of NewGRF Action 0.
+//! `newgrf_properties.h`: properties of `NewGRF` Action 0.
 
-/// `PropertyID`: list of NewGRF properties used in Action 0 or Callback 0x36
+/// `PropertyID`: list of `NewGRF` properties used in Action 0 or Callback 0x36
 /// (`CBID_VEHICLE_MODIFY_PROPERTY`). Names are formatted as `PROP_<CLASS>_<NAME>`.
 /// The list only contains properties which are used more than once in the code, that is,
 /// those available for callback 0x36.

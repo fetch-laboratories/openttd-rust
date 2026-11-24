@@ -1077,7 +1077,8 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     // If we've entered our unbunching depot, record the round trip duration.
     o.measure_unbunching(v);
 
-    o.make_dummy(v);
+    // SAFETY: The live vehicle's current order.
+    unsafe { crate::orders::make_dummy(v.current_order_pointer()) };
 }
 
 /// The current order's depot refit, under the owner's company.

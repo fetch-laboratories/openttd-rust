@@ -3083,7 +3083,6 @@ mod set_dest_tile_tests {
     use crate::vehicle::{VehicleRef, VehicleType};
 
     #[test]
-    #[allow(unsafe_code)]
     fn set_dest_tile_clears_the_path_only_for_a_new_destination() {
         let state = openttd_rust_road_new();
         let record = crate::vehicle_base::openttd_rust_vehicle_record_new(

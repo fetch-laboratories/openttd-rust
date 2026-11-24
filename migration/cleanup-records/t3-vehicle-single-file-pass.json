@@ -1,0 +1,14 @@
+[
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices > fn any_on_tile | allow unsafe_code",
+    "to": "rust/openttd-kernels/src/vehicle_func.rs | fn has_vehicle_on_tile | allow unsafe_code"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices > fn any_near | allow unsafe_code",
+    "to": "rust/openttd-kernels/src/vehicle_func.rs | fn has_vehicle_near_tile_xy | allow unsafe_code"
+  }
+]
