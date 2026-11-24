@@ -1022,7 +1022,10 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
         }
         _ => unreachable!(),
     }
-    (m.view_dirty)(v);
+    crate::window_func::set_window_dirty(
+        crate::window_type::WindowClass::WC_VEHICLE_VIEW,
+        crate::window_type::WindowNumber::from(v.index(s.vehicles().newgrf())),
+    );
 
     // Trains update the depot list when the first unit enters and call this
     // when the last unit enters.
@@ -1031,8 +1034,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     (v).set_vehstatus_raw((v).vehstatus_raw() | VS_HIDDEN);
     (v).set_cur_speed(0);
 
-    // SAFETY: a live shell and the static vehicle table; callbacks may reenter.
-    unsafe { super::maintenance::service_in_depot(v, vs) };
+    super::maintenance::vehicle_service_in_depot(v, vs);
 
     entered_depot_this_tick(v, s);
 
@@ -1048,7 +1050,10 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     if o.current(v).kind() != OT_GOTO_DEPOT {
         return;
     }
-    (m.view_dirty)(v);
+    crate::window_func::set_window_dirty(
+        crate::window_type::WindowClass::WC_VEHICLE_VIEW,
+        crate::window_type::WindowNumber::from(v.index(s.vehicles().newgrf())),
+    );
 
     let real_order = o.get(v, o.real(v));
     let current = o.current(v);

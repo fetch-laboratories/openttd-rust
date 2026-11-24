@@ -167,9 +167,8 @@ impl Game<'_> {
         self.pbs().has_reserved_tracks_raw(tile, tracks)
     }
     fn needs_service(&self, id: Handle) -> bool {
-        // SAFETY: Live serialized train and immutable table; no owner borrow
-        // spans the direct `Vehicle::NeedsServicing` port.
-        unsafe { crate::vehicle::maintenance::needs_servicing(id.vehicle(), &*self.leaves.vehicle) }
+        // SAFETY: The leaves name the immutable process-wide base table.
+        crate::vehicle::maintenance::needs_servicing(id.vehicle(), unsafe { &*self.leaves.vehicle })
     }
     fn order_stop(&self, id: Handle, station: u16) -> bool {
         crate::movement::should_stop(self.shared(), id.vehicle(), station)

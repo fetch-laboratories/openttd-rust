@@ -876,8 +876,10 @@ impl<T: GroundVehicleType> GroundVehicle<T> {
 
             write_field!(o.state, cache.cached_power, total_power);
             write_field!(o.state, cache.cached_max_te, max_te);
-            // SAFETY: the vehicle table names the immutable process-lifetime maintenance table.
-            (unsafe { &*s.vehicle.maintenance }.details_dirty)(v);
+            crate::window_func::set_window_dirty(
+                crate::window_type::WindowClass::WC_VEHICLE_DETAILS,
+                crate::window_type::WindowNumber::from(v.index(s.vehicle.newgrf())),
+            );
             (s.vehicle.start_stop_dirty)(v);
         }
 

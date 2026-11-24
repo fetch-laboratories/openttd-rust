@@ -64,6 +64,8 @@ impl AdviceType {
     pub const AircraftDestinationTooFar: Self = Self(0);
     /// The train got stuck and needs to be unstuck manually.
     pub const TrainStuck: Self = Self(4);
+    /// The vehicle is starting to get old.
+    pub const VehicleOld: Self = Self(6);
     /// The vehicle is waiting in the depot.
     pub const VehicleWaiting: Self = Self(8);
     /// No advice type.

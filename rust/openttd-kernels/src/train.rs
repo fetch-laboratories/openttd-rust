@@ -813,11 +813,6 @@ impl<'a> Game<'a> {
         let defaults = ((company.settings)().company_vehicle_defaults)(owner);
         read_field!(defaults, servint_trains)
     }
-    /// Run one `vehicle::maintenance` entry on `v`.
-    fn maintain<R>(&self, v: Handle, entry: unsafe fn(VehicleRef, &VehicleServices) -> R) -> R {
-        // SAFETY: A live train shell; no owner borrow spans the maintenance services.
-        unsafe { self.vs.maintain(v.vehicle(), entry) }
-    }
 }
 
 impl Game<'_> {
@@ -2333,7 +2328,7 @@ impl Game<'_> {
         }
 
         crate::witness::hit(crate::witness::TRAIN_DEPOT_START);
-        self.maintain(v, maintenance::service_in_depot);
+        maintenance::vehicle_service_in_depot(v.vehicle(), self.vs);
         crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(v.vehicle());
         (self.vs.visits().leave_sound)(v.vehicle());
         set_window_classes_dirty(WindowClass::WC_TRAINS_LIST);
@@ -3789,7 +3784,7 @@ impl Game<'_> {
         }
 
         /* train is broken down? */
-        if self.maintain(v, maintenance::vehicle_handle_breakdown) {
+        if maintenance::handle_breakdown(v.vehicle(), self.vs) {
             return true;
         }
 
@@ -4070,13 +4065,13 @@ impl Game<'_> {
     /// depot or service it.
     fn check_if_train_needs_service(&self, v: Handle) {
         if self.servint_trains(v.vehicle().owner()) == 0
-            || !self.maintain(v, maintenance::needs_automatic_servicing)
+            || !maintenance::needs_automatic_servicing(v.vehicle(), self.vs)
         {
             return;
         }
         if self.is_chain_in_depot(v) {
             crate::witness::hit(crate::witness::TRAIN_DEPOT_SERVICE);
-            self.maintain(v, maintenance::service_in_depot);
+            maintenance::vehicle_service_in_depot(v.vehicle(), self.vs);
             return;
         }
 
@@ -4139,21 +4134,21 @@ impl Game<'_> {
 
     /// `Train::OnNewCalendarDay`: calendar day handler.
     fn on_new_calendar_day(&self, this: Handle) {
-        self.maintain(this, maintenance::age_vehicle);
+        maintenance::age_vehicle(this.vehicle(), self.vs);
     }
 
     /// `Train::OnNewEconomyDay`: economy day handler.
     fn on_new_economy_day(&self, this: Handle) {
-        self.maintain(this, maintenance::economy_age_vehicle);
+        maintenance::economy_age_vehicle(this.vehicle(), self.vs);
 
         this.vehicle()
             .set_day_counter(this.vehicle().day_counter().wrapping_add(1));
         if this.vehicle().day_counter().trailing_zeros() >= 3 {
-            self.maintain(this, maintenance::decrease_vehicle_value);
+            maintenance::decrease_vehicle_value(this.vehicle(), self.vs);
         }
 
         if this.is_front_engine() {
-            self.maintain(this, maintenance::check_vehicle_breakdown);
+            maintenance::check_vehicle_breakdown(this.vehicle(), self.vs);
 
             self.check_if_train_needs_service(this);
 

@@ -2035,7 +2035,10 @@ impl Game {
             let record = native_vehicle(u, self.0.base);
             if !stopped_or_crashed(record) {
                 write_field!(self.consist(u), next_departure, departure);
-                (self.maintenance().view_dirty)(record);
+                crate::window_func::set_window_dirty(
+                    crate::window_type::WindowClass::WC_VEHICLE_VIEW,
+                    crate::window_type::WindowNumber::from(record.index(self.0.base.newgrf())),
+                );
             }
             u = self.next(u);
         }
@@ -2101,12 +2104,6 @@ pub unsafe extern "C" fn openttd_rust_increment_real(
     let g = Game(leaves);
     g.increment_real(v);
     0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_has_depot(v: *mut c_void, leaves: &'static Leaves) -> u32 {
-    let g = Game(leaves);
-    u32::from(g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT))
 }
 
 #[unsafe(no_mangle)]
@@ -4543,7 +4540,12 @@ impl Control {
                 current.kind = OT_DUMMY;
                 current.flags = 0;
                 g.put_current(v, current);
-                (g.maintenance().view_dirty)(native_vehicle(v, g.0.base));
+                crate::window_func::set_window_dirty(
+                    crate::window_type::WindowClass::WC_VEHICLE_VIEW,
+                    crate::window_type::WindowNumber::from(
+                        native_vehicle(v, g.0.base).index(g.0.base.newgrf()),
+                    ),
+                );
             }
             if !g.orders(v).is_null() {
                 let mut index = 0u8;
@@ -4933,6 +4935,21 @@ impl VisitOrders {
     /// `Vehicle::LeaveUnbunchingDepot`.
     pub(crate) fn leave_unbunching_depot(self, v: VehicleRef) {
         self.0.leave_unbunching(Self::shell(v));
+    }
+    /// `Vehicle::HasDepotOrder`: checks if a vehicle has a depot in its order list.
+    /// True iff at least one order is a depot order.
+    pub(crate) fn has_depot_order(self, v: VehicleRef) -> bool {
+        let list = crate::vehicle_base::order_list(v.0.as_ptr());
+        if list.is_null() {
+            return false;
+        }
+        // `Vehicle::Orders()`: the list's one stored span, resolved once.
+        let vector = self.0.vector(list);
+        (0..read_field!(vector, length)).any(|i| {
+            // SAFETY: Each index below the span's length names a live stored order.
+            unsafe { OrderView::of(slot(vector, i)) }
+                .is_type(crate::order_type::OrderType::OT_GOTO_DEPOT)
+        })
     }
     /// `Vehicle::IsWaitingForUnbunching` after its `assert(this->IsInDepot())`, which
     /// `vehicle::is_waiting_for_unbunching` makes.

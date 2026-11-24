@@ -287,8 +287,6 @@ crate::abi::layouts! {
     "OpenTTDGroundServices" ["probe"] => GroundServices {
         physics,
     };
-    "OrderType" ["maintenance"] => crate::order_type::OrderType {
-    };
 }
 
 #[cfg(test)]

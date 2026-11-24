@@ -1,5 +1,5 @@
 name: Install apt packages
-description: Install system packages with bounded downloads and a second mirror
+description: Install system packages with bounded downloads and fallback mirrors
 inputs:
   packages:
     description: Space-separated package names
@@ -16,16 +16,19 @@ runs:
       PACKAGES: ${{ inputs.packages }}
       RECOMMENDS: ${{ inputs.recommends }}
     run: |
-      # Each mirror fails at times. Azure trickled at about 40 kB/s without timing out
-      # (#858's Full spent 6 minutes on 46 MB), and Canonical's archive timed out three
-      # times in 30 minutes (#833, #841). The first two attempts get 60 seconds per
-      # command, and a failed one retries without Azure. The last attempt has no bound
-      # of its own, as the plain install had none: a slow install beats a failed job.
-      # #862's first two Fulls lost their Emscripten job to bounded last attempts, with
-      # security.ubuntu.com timing out and the index arriving at 159 kB/s. So the two
-      # bounded attempts can cost four minutes, and nothing else is lost against the
-      # plain install; the calling job's own limit still applies. apt keeps what an
-      # interrupted attempt downloaded.
+      # A mirror can stall without failing: on 2026-11-24 GitHub's hosted runners
+      # installed from us-east-2.ec2.archive.ubuntu.com in a median 5.1 minutes, the
+      # longest 20.2, while Emscripten's jobs on the same pool, pointed at Azure, took
+      # at most 0.2. Azure and Canonical's archive have each stalled before too (#858,
+      # #833, #841). The first two attempts get 60 seconds per command, and each failed
+      # attempt moves to a host not yet tried: the configured mirror (a mirror list's
+      # first by priority), then Azure, then Canonical's archive. Every archive URL the
+      # sources name (mirror lists, `URIs:` and `deb` lines) moves to it, so no other
+      # entry of a list stays in front. With only two hosts the last attempt stays on
+      # the second, never returning to the one that stalled. The last attempt has no bound
+      # of its own, as the plain install had none: a slow install beats a failed job,
+      # and the calling job's own limit still applies. apt keeps what an interrupted
+      # attempt downloaded.
       sudo=$(command -v sudo || true)
       read -r -a packages <<< "$PACKAGES"
       options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
@@ -34,10 +37,56 @@ runs:
         # Recommended desktop packages (GTK, Vulkan drivers) only slow every job.
         install+=(--no-install-recommends)
       fi
-      sources() {
-        { cat /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; } | sha256sum
-      }
       $sudo rm -f /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/microsoft*.sources
+      shopt -s nullglob
+      files=(/etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list)
+      shopt -u nullglob
+      # The mirror lists the sources name, in order; Blacksmith's is not apt-mirrors.txt.
+      lists=()
+      while read -r list; do
+        if [ -f "$list" ] && [[ " ${lists[*]} " != *" $list "* ]]; then
+          lists+=("$list")
+        fi
+      done < <({ cat "${files[@]}" 2>/dev/null || true; } | grep -o 'mirror+file:[^[:space:]]*' | sed 's/^mirror+file://'; echo /etc/apt/apt-mirrors.txt)
+      sources() {
+        { cat "${lists[@]}" "${files[@]}" 2>/dev/null || true; } | sha256sum
+      }
+      # The configured mirror: a mirror list's first archive host by priority, else the
+      # sources' first.
+      configured=$({ cat "${lists[@]}" /dev/null 2>/dev/null || true; } | awk '
+        /^[[:space:]]*#/ { next }
+        match($0, /https?:\/\/[^\/[:space:]]+\/ubuntu/) {
+          host = substr($0, RSTART, RLENGTH)
+          sub(/^https?:\/\//, "", host)
+          sub(/\/ubuntu$/, "", host)
+          if (host == "security.ubuntu.com") next
+          rank = 1e9
+          if (match($0, /priority:[0-9]+/)) rank = substr($0, RSTART + 9, RLENGTH - 9) + 0
+          if (best == "" || rank < low) { best = host; low = rank }
+        }
+        END { print best }')
+      if [ -z "$configured" ]; then
+        configured=$({ cat "${files[@]}" 2>/dev/null || true; } |
+          sed -n 's|^\([^#]*[[:space:]]\)\{0,1\}https\{0,1\}://\([^/[:space:]]*\)/ubuntu.*|\2|p' |
+          grep -v '^security\.ubuntu\.com$' | head -n 1 || true)
+      fi
+      # The archive hosts a retry moves off: every one an active entry names, in any
+      # mirror list or source, and Ubuntu's.
+      archives="([a-z0-9-]+\\.)*archive\\.ubuntu\\.com"
+      while read -r host; do
+        archives+="|${host//./\\.}"
+      done < <({ cat "${lists[@]}" "${files[@]}" 2>/dev/null || true; } |
+        grep -v '^[[:space:]]*#' | grep -o 'https\{0,1\}://[^/[:space:]]*/ubuntu' |
+        sed 's|^https\{0,1\}://||; s|/ubuntu$||' | grep -v '^security\.ubuntu\.com$' | sort -u)
+      hosts=()
+      if [ -n "$configured" ]; then
+        for host in "$configured" azure.archive.ubuntu.com archive.ubuntu.com; do
+          if [[ " ${hosts[*]} " != *" $host "* ]]; then
+            hosts+=("$host")
+          fi
+        done
+      fi
+      current=0
       updated=false
       for attempt in 1 2 3; do
         bounded=($sudo timeout 60)
@@ -54,16 +103,17 @@ runs:
         if [ "$attempt" = 3 ]; then
           exit 1
         fi
-        echo "::warning::apt attempt $attempt failed or stalled; retrying without the Azure mirror"
         before=$(sources)
-        if [ -f /etc/apt/apt-mirrors.txt ]; then
-          $sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+        stalled=${hosts[current]:-the configured mirror}
+        if [ $((current + 1)) -lt "${#hosts[@]}" ]; then
+          current=$((current + 1))
+          for file in "${lists[@]}" "${files[@]}"; do
+            if [ -f "$file" ]; then
+              $sudo sed -E -i "s#https?://($archives)/ubuntu#http://${hosts[current]}/ubuntu#g" "$file"
+            fi
+          done
         fi
-        for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
-          if [ -f "$file" ]; then
-            $sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' "$file"
-          fi
-        done
+        echo "::warning::apt attempt $attempt failed or stalled on $stalled; retrying on ${hosts[current]:-the same sources}"
         # An index fetched from the sources still in use stays valid.
         if [ "$(sources)" != "$before" ]; then
           updated=false

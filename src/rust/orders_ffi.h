@@ -150,7 +150,6 @@ uint32_t openttd_rust_update_real(void *, const OpenTTDOrdersLeaves *);
 uint32_t openttd_rust_skip_real(void *, const OpenTTDOrdersLeaves *);
 uint32_t openttd_rust_increment_implicit(void *, const OpenTTDOrdersLeaves *);
 uint32_t openttd_rust_increment_real(void *, const OpenTTDOrdersLeaves *);
-uint32_t openttd_rust_has_depot(void *, const OpenTTDOrdersLeaves *);
 uint32_t openttd_rust_leave_unbunching(void *, const OpenTTDOrdersLeaves *);
 uint32_t openttd_rust_wait_unbunching(void *, const OpenTTDOrdersLeaves *);
 uint32_t openttd_rust_order_free(void *);

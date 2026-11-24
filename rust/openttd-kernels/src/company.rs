@@ -606,8 +606,7 @@ const MAX_INFLATION: u64 = (1_u64 << 31) - 1;
 const MAX_LOAN_LIMIT: i64 = 2_000_000_000;
 use crate::timer_game_common::{ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR};
 use crate::timer_game_tick::{DAY_TICKS, TICKS_PER_SECOND};
-/// `VEHICLE_PROFIT_MIN_AGE` in economy days.
-const PROFIT_MIN_AGE: i32 = 730;
+use crate::vehicle_func::VEHICLE_PROFIT_MIN_AGE;
 const EXPENSES_PROPERTY: usize = 6;
 const EXPENSES_LOAN_INTEREST: usize = 11;
 const EXPENSES_END: u8 = 13;
@@ -814,7 +813,9 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
             if x.profit_last_year > 0 {
                 count = count.wrapping_add(1);
             }
-            if x.economy_age > PROFIT_MIN_AGE && (first || min_profit > x.profit_last_year) {
+            if x.economy_age > VEHICLE_PROFIT_MIN_AGE.0
+                && (first || min_profit > x.profit_last_year)
+            {
                 min_profit = x.profit_last_year;
                 first = false;
             }
@@ -1951,6 +1952,18 @@ pub extern "C" fn openttd_rust_economy_price(index: u32, cost_factor: u32, shift
     } else {
         price >> (-shift)
     }
+}
+/// `GetAvailableMoney`: get the amount of money that a company has available, or `INT64_MAX`
+/// if there is no such valid company.
+pub(crate) fn get_available_money(
+    commands: &crate::services::CommandServices,
+    company: CompanyID,
+) -> i64 {
+    if (commands.infinite_money)() {
+        return i64::MAX;
+    }
+    // `company_finances` is null where `Company::IsValidID(company)` fails.
+    available((commands.finance.company_finances)(company.0), false)
 }
 /// `GetAvailableMoney`; `p` is null for an invalid company.
 /// # Safety

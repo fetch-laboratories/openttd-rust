@@ -45,7 +45,6 @@ static void AircraftDirectBoundary()
 	static OpenTTDFixtureMap disaster_map{6, 4096};
 	shared.map = &disaster_map.statics;
 	vehicle.maintenance = &_vehicle_maintenance_probe;
-	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * {
 		auto &o = *aircraft_probe.order_owner;
 		CHECK(o.vehicle->current.type == 3 || o.vehicle->current.type == 5);
@@ -192,7 +191,6 @@ static void AircraftPhaseBoundary()
 	resolver.id = [](OpenTTDVehicle *record) noexcept -> uint32_t { return record == &aircraft_probe.shadow ? 18 : 19; };
 	v.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	v.maintenance = &_vehicle_maintenance_probe;
-	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	p.order_owner = std::make_unique<ControllerOrders>(&v);
 	p.record.orders = p.order_owner->vehicle.get();
 	v.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &aircraft_probe.order_owner->services; };

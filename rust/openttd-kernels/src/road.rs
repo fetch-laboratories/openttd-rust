@@ -588,8 +588,7 @@ impl<'a> Game<'a> {
     }
     /// `v->index`.
     fn index(&self, v: VehicleRef) -> VehicleID {
-        // SAFETY: A live record and the immutable binding.
-        VehicleID(unsafe { ((*(self.vs.newgrf)()).id)(v.0.as_ptr()) })
+        v.index(self.vs.newgrf())
     }
     /// `HasTileAnyRoadType(tile, types)`.
     fn has_tile_any_road_type(&self, tile: TileIndex, types: RoadTypes) -> bool {
@@ -1685,8 +1684,7 @@ impl<'a> Game<'a> {
                 return true;
             }
 
-            // SAFETY: A live front shell; no owner borrow spans the servicing.
-            unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
+            maintenance::vehicle_service_in_depot(v.v, self.vs);
             crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(v.v);
 
             self.start_road_veh_sound(v.v);
@@ -2475,13 +2473,7 @@ impl<'a> Game<'a> {
         }
 
         /* road vehicle has broken down? */
-        // SAFETY: A live front shell; no owner borrow spans the breakdown services.
-        let broken = if crate::witness::enabled() {
-            unsafe { maintenance::handle_breakdown::<true>(v.v, self.vs) }
-        } else {
-            unsafe { maintenance::handle_breakdown::<false>(v.v, self.vs) }
-        };
-        if broken.broken {
+        if maintenance::handle_breakdown(v.v, self.vs) {
             return true;
         }
         if v.v.vehstatus().test(VehState::Stopped) {
@@ -2619,14 +2611,12 @@ impl<'a> Game<'a> {
         let defaults = ((company.settings)().company_vehicle_defaults)(v.v.owner());
         /* If we already got a slot at a stop, use that FIRST, and go to a depot later */
         if read_field!(defaults, servint_roadveh) == 0
-            // SAFETY: A live front shell; no owner borrow spans the maintenance services.
-            || !unsafe { self.vs.maintain(v.v, maintenance::needs_automatic_servicing) }
+            || !maintenance::needs_automatic_servicing(v.v, self.vs)
         {
             return;
         }
         if crate::ground_vehicle::is_chain_in_depot(self.gs.physics, v.v) {
-            // SAFETY: As above.
-            unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
+            maintenance::vehicle_service_in_depot(v.v, self.vs);
             return;
         }
 
@@ -2686,8 +2676,7 @@ impl<'a> Game<'a> {
         if !v.v.is_front_engine() {
             return;
         }
-        // SAFETY: A live front shell; no owner borrow spans the ageing services.
-        unsafe { self.vs.maintain(v.v, maintenance::age_vehicle) };
+        maintenance::age_vehicle(v.v, self.vs);
     }
 
     /// Economy day handler.
@@ -2696,17 +2685,14 @@ impl<'a> Game<'a> {
         if !v.v.is_front_engine() {
             return;
         }
-        // SAFETY: A live front shell; no owner borrow spans the maintenance services.
-        unsafe { self.vs.maintain(v.v, maintenance::economy_age_vehicle) };
+        maintenance::economy_age_vehicle(v.v, self.vs);
 
         v.v.set_day_counter(v.v.day_counter().wrapping_add(1));
         if (v.v.day_counter() & 7) == 0 {
-            // SAFETY: As above.
-            unsafe { self.vs.maintain(v.v, maintenance::decrease_vehicle_value) };
+            maintenance::decrease_vehicle_value(v.v, self.vs);
         }
         if v.blocked_ctr() == 0 {
-            // SAFETY: As above.
-            unsafe { self.vs.maintain(v.v, maintenance::check_vehicle_breakdown) };
+            maintenance::check_vehicle_breakdown(v.v, self.vs);
         }
 
         self.check_if_road_veh_needs_service(v);
@@ -2734,8 +2720,10 @@ impl<'a> Game<'a> {
             crate::economy_type::ExpensesType::EXPENSES_ROADVEH_RUN,
         );
 
-        // SAFETY: The static maintenance table outlives the call.
-        (unsafe { &*self.vs.maintenance }.details_dirty)(v.v);
+        crate::window_func::set_window_dirty(
+            crate::window_type::WindowClass::WC_VEHICLE_DETAILS,
+            crate::window_type::WindowNumber::from(v.v.index(self.vs.newgrf())),
+        );
         crate::window_func::set_window_classes_dirty(
             crate::window_type::WindowClass::WC_ROADVEH_LIST,
         );
