@@ -187,7 +187,7 @@ fn visits(
     edit(&mut shared, &mut station, &mut loading);
     let shared = leak(shared);
     let resolver = leak(crate::newgrf_vehicle::test_table_answering(
-        crate::newgrf_vehicle::test_table_with_members(
+        &crate::newgrf_vehicle::test_table_with_members(
             index,
             cargo_type,
             cargo_subtype,

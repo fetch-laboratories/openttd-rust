@@ -281,14 +281,14 @@ pub(crate) const fn test_table_with_members(
 /// `resolve_callback` answers, for tests outside this module.
 #[cfg(test)]
 pub(crate) const fn test_table_answering(
-    table: Services,
+    table: &Services,
     engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
 ) -> Services {
     Services {
         resolve_callback,
         engine_by_id,
-        ..table
+        ..*table
     }
 }
 
