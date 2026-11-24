@@ -164,8 +164,7 @@ pub(crate) fn is_hangar(tile: TileIndex, s: &crate::newgrf_airport::Services) ->
 }
 /// [`is_hangar`] over an entry's `World`: the assertion and `IsAirport` read the tile in
 /// place, in the original's order.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn is_hangar_in(
     world: &crate::map_func::World<'_>,
     tile: TileIndex,
@@ -199,8 +198,7 @@ pub(crate) fn is_hangar_tile(t: TileIndex, s: &crate::newgrf_airport::Services) 
     is_hangar_tile_in(&crate::map_func::World::new(s.shared()), t, s)
 }
 /// [`is_hangar_tile`] over an entry's `World`.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn is_hangar_tile_in(
     world: &crate::map_func::World<'_>,
     t: TileIndex,

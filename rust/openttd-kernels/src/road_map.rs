@@ -223,6 +223,7 @@ impl crate::map_func::World<'_> {
         Self::byte(self.types.m5(TileIndex(t))) & 1
     }
     /// `IsRoadDepot`: return whether a tile is a road depot.
+    #[inline]
     pub(crate) fn is_road_depot(&self, t: TileIndex) -> bool {
         self.road_tile_type(t.0).0 == ROAD_TILE_DEPOT
     }

@@ -36,6 +36,7 @@ pub const RAIL_TILE_DEPOT: u8 = RailTileType::Depot.0;
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
     /// `GetRailTileType`, retaining the native tile-type assertion.
+    #[inline]
     pub(crate) fn rail_tile_type(&self, tile: u32) -> u8 {
         self.asserted(|m| Some(m.require_type(TileIndex(tile), TileType::MP_RAILWAY)?.m5() >> 6))
     }
@@ -65,6 +66,7 @@ impl crate::map_func::World<'_> {
         self.rail_tile_type(t) == RAIL_TILE_SIGNALS
     }
     /// `IsRailDepot`, with `GetRailTileType`'s tile-type assertion.
+    #[inline]
     pub(crate) fn is_rail_depot(&self, t: u32) -> bool {
         self.rail_tile_type(t) == RAIL_TILE_DEPOT
     }
