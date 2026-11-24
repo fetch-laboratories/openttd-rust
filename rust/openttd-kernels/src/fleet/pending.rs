@@ -9,6 +9,10 @@
 use super::GroupServices;
 use super::transactions::Services as TransactionServices;
 use crate::game_state::GameState;
+use crate::table::strings::{
+    STR_ERROR_AUTOREPLACE_MONEY_LIMIT, STR_ERROR_AUTOREPLACE_NOTHING_TO_DO,
+    STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT,
+};
 use std::collections::BTreeMap;
 /// Tick-end-only services; vehicle, locality and cost reads reuse the group and
 /// transaction tables.
@@ -19,8 +23,6 @@ pub struct Services {
     pub(crate) command: unsafe extern "C" fn(*mut (), u32),
     pub(crate) length_news: unsafe extern "C" fn(u32),
     pub(crate) failed_news: unsafe extern "C" fn(u32, u32),
-    pub(crate) cash: u32,
-    pub(crate) limit: u32,
 }
 /// `INVALID_STRING_ID`.
 const INVALID_STRING: u32 = 0xFFFF;
@@ -107,13 +109,13 @@ pub(crate) unsafe fn drain(
             return;
         }
         let mut error = unsafe { (t.error)(cost) };
-        if error == t.nothing || error == INVALID_STRING {
+        if error == STR_ERROR_AUTOREPLACE_NOTHING_TO_DO.0 || error == INVALID_STRING {
             return;
         }
-        if error == w.cash {
-            error = w.limit;
+        if error == STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY.0 {
+            error = STR_ERROR_AUTOREPLACE_MONEY_LIMIT.0;
         }
-        if error == t.too_long_replacement {
+        if error == STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT.0 {
             unsafe { (w.length_news)(id) };
         } else {
             unsafe { (w.failed_news)(id, error) };
@@ -131,8 +133,6 @@ crate::abi::layouts! {
         command,
         length_news,
         failed_news,
-        cash,
-        limit,
     };
 }
 

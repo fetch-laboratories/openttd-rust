@@ -16,6 +16,10 @@ use crate::engine_type::INVALID_ENGINE;
 use crate::network_type::ClientID;
 use crate::order_type::CloneOptions;
 use crate::raw_field::read_field;
+use crate::table::strings::{
+    STR_ERROR_AUTOREPLACE_NOTHING_TO_DO, STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
+    STR_ERROR_TRAIN_TOO_LONG, STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT,
+};
 use crate::tile_type::TILE_SIZE;
 use std::ptr;
 #[repr(C)]
@@ -73,10 +77,6 @@ pub struct Services {
     pub(crate) restore_rng: unsafe extern "C" fn(*mut ()),
     pub(crate) rule_window: unsafe extern "C" fn(u16, u16),
     pub(crate) assertions: bool,
-    pub(crate) unavailable: u32,
-    pub(crate) too_long: u32,
-    pub(crate) too_long_replacement: u32,
-    pub(crate) nothing: u32,
 }
 impl Services {
     /// An original `assert` site, through the shared native assertion.
@@ -600,7 +600,12 @@ unsafe fn new_engine(
     if engine == INVALID_ENGINE || unsafe { (w.engine_buildable)(engine, kind, company) } {
         return engine;
     }
-    unsafe { (w.cost_error)(cost, w.unavailable + u32::from(kind)) };
+    unsafe {
+        (w.cost_error)(
+            cost,
+            STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE.0 + u32::from(kind),
+        )
+    };
     engine
 }
 unsafe fn build(
@@ -874,7 +879,7 @@ unsafe fn replace_chain(
                 && read_field!(record(w, new_head).ground_cache(), cached_total_length)
                     > old_total_length
             {
-                unsafe { (w.cost_error)(cost, w.too_long_replacement) };
+                unsafe { (w.cost_error)(cost, STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT.0) };
             }
             if unsafe { (w.success)(cost) } {
                 for item in replacements.iter().rev() {
@@ -899,7 +904,8 @@ unsafe fn replace_chain(
                                     cached_total_length
                                 )) > old_total_length
                             } else {
-                                (unsafe { (w.error)(costs.temporary) }) == w.too_long
+                                (unsafe { (w.error)(costs.temporary) })
+                                    == STR_ERROR_TRAIN_TOO_LONG.0
                             }
                         {
                             unsafe {
@@ -1211,7 +1217,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         }
     }
     if unsafe { (w.success)(cost) } && nothing {
-        unsafe { (w.cost_error)(cost, w.nothing) };
+        unsafe { (w.cost_error)(cost, STR_ERROR_AUTOREPLACE_NOTHING_TO_DO.0) };
     }
 }
 unsafe fn set_rule(
@@ -1347,10 +1353,6 @@ crate::abi::layouts! {
         restore_rng,
         rule_window,
         assertions,
-        unavailable,
-        too_long,
-        too_long_replacement,
-        nothing,
     };
     "OpenTTDFleetCosts" ["fleet"] => Costs {
         result,

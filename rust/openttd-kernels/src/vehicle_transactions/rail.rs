@@ -55,7 +55,7 @@ use crate::economy_type::ExpensesType;
 use crate::table::strings::{
     STR_ERROR_INCOMPATIBLE_RAIL_TYPES, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS,
     STR_ERROR_REAR_ENGINE_FOLLOW_FRONT, STR_ERROR_TOO_MANY_VEHICLES_IN_GAME,
-    STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT, STR_NULL,
+    STR_ERROR_TRAIN_TOO_LONG, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT, STR_NULL,
 };
 use crate::train::CCF_ARRANGE;
 
@@ -663,7 +663,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
             t = x.next(t);
         }
         if allowed_len < 0 {
-            return Some(StringID(x.w.too_long));
+            return Some(STR_ERROR_TRAIN_TOO_LONG);
         }
         return None;
     }
@@ -759,7 +759,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
         t = next;
     }
     if allowed_len < 0 {
-        return Some(StringID(x.w.too_long));
+        return Some(STR_ERROR_TRAIN_TOO_LONG);
     }
     None
 }

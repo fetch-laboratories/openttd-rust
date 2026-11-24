@@ -3,7 +3,6 @@
 #ifndef RUST_NEWGRF_CLASS_FFI_H
 #define RUST_NEWGRF_CLASS_FFI_H
 #include "service_defaults.hpp"
-#include "../strings_type.h"
 struct StationSpec;
 struct RoadStopSpec;
 struct AirportSpec;

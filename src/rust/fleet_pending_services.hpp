@@ -22,6 +22,4 @@ static const OpenTTDFleetPendingServices _fleet_pending_services{
 	.command = FleetPending_command,
 	.length_news = FleetPending_length_news,
 	.failed_news = FleetPending_failed_news,
-	.cash = STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY,
-	.limit = STR_ERROR_AUTOREPLACE_MONEY_LIMIT,
 };

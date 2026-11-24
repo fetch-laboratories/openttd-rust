@@ -1094,8 +1094,6 @@ pub(crate) const FLEET_PENDING: crate::fleet::pending::Services = crate::fleet::
     command: unreachable2,
     length_news: unreachable1,
     failed_news: unreachable2,
-    cash: 0,
-    limit: 0,
 };
 
 /// `crate::fleet::transactions::Services` with every entry unreachable.
@@ -1141,10 +1139,6 @@ pub(crate) const FLEET_TRANSACTIONS: crate::fleet::transactions::Services =
         restore_rng: unreachable1,
         rule_window: unreachable2,
         assertions: false,
-        unavailable: 0,
-        too_long: 0,
-        too_long_replacement: 0,
-        nothing: 0,
     };
 
 /// `crate::fleet::GroupServices` with every entry unreachable.

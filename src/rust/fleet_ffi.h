@@ -119,10 +119,6 @@ struct OpenTTDFleetTransactionServices {
 	void (*restore_rng)(void *seeds) noexcept OPENTTD_SERVICE_DEFAULT(restore_rng);
 	void (*rule_window)(uint16_t engine, uint16_t group) noexcept OPENTTD_SERVICE_DEFAULT(rule_window);
 	bool assertions;
-	uint32_t unavailable;
-	uint32_t too_long;
-	uint32_t too_long_replacement;
-	uint32_t nothing;
 };
 struct OpenTTDCompanyIdentityServices;
 struct OpenTTDFleetPendingServices {
@@ -131,8 +127,6 @@ struct OpenTTDFleetPendingServices {
 	void (*command)(void *out, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(command);
 	void (*length_news)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(length_news);
 	void (*failed_news)(uint32_t id, uint32_t error) noexcept OPENTTD_SERVICE_DEFAULT(failed_news);
-	uint32_t cash;
-	uint32_t limit;
 };
 const OpenTTDFleetGroupServices &FleetGroupServices();
 const OpenTTDFleetTransactionServices &FleetTransactionServices();

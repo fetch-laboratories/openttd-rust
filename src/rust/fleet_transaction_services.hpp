@@ -101,8 +101,4 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.restore_rng = FleetTransaction_restore_rng,
 	.rule_window = FleetTransaction_rule_window,
 	.assertions = FLEET_ASSERTIONS,
-	.unavailable = STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
-	.too_long = STR_ERROR_TRAIN_TOO_LONG,
-	.too_long_replacement = STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT,
-	.nothing = STR_ERROR_AUTOREPLACE_NOTHING_TO_DO,
 };
