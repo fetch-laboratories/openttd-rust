@@ -14,7 +14,6 @@ using OpenTTDStationSequence = std::vector<DrawTileSeqStruct>;
 struct OpenTTDAction2Services;
 struct OpenTTDGrfLoadingServices;
 struct OpenTTDStationDefinitionServices {
-	StringID empty_string;
 	const OpenTTDByteReaderServices *reader;
 	const OpenTTDSharedServices *shared;
 	void (*station_resize)(GRFFile *file, uint32_t count) noexcept OPENTTD_SERVICE_DEFAULT(station_resize);

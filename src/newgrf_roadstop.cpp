@@ -34,16 +34,6 @@
 
 #include "safeguards.h"
 
-template <>
-std::span<const OpenTTDGRFClassDefault> RoadStopClass::Defaults()
-{
-	static const OpenTTDGRFClassDefault defaults[]{
-		{ROADSTOP_CLASS_LABEL_DEFAULT, STR_STATION_CLASS_DFLT},
-		{ROADSTOP_CLASS_LABEL_WAYPOINT, STR_STATION_CLASS_WAYP},
-	};
-	return defaults;
-}
-
 
 /* Instantiate RoadStopClass. */
 template class NewGRFClass<RoadStopSpec, RoadStopClassID, ROADSTOP_CLASS_MAX>;

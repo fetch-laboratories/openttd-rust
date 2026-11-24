@@ -31,7 +31,6 @@ public:
 	uint32_t rust_index;
 private:
 	using Ops = RustGRFClassOps<Tspec>;
-	static std::span<const OpenTTDGRFClassDefault> Defaults();
 public:
 	using spec_type = Tspec;
 	using index_type = Tindex;

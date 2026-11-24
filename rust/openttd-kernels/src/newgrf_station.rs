@@ -20,6 +20,7 @@ use crate::game_state::GameState;
 use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
 use crate::slope_func::{SLOPE_E, SLOPE_EW, SLOPE_W};
 use crate::station_type::SRT_CARGO_TAKEN;
+use crate::table::strings::{STR_STATION_CLASS_DFLT, STR_STATION_CLASS_WAYP};
 use crate::tile_type::TileIndex;
 use crate::{
     map_func::Map,
@@ -1131,6 +1132,26 @@ impl StationClassID {
 
 /// Default station class label.
 pub const STATION_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
+
+/// `StationClass::InsertDefaults`.
+pub(crate) unsafe fn insert_defaults() {
+    use crate::newgrf_class::station::{allocate, get, insert};
+    /* Set up initial data */
+    unsafe {
+        (*get(allocate(STATION_CLASS_LABEL_DEFAULT, STAT_CLASS_MAX))).name =
+            STR_STATION_CLASS_DFLT.0;
+        insert(
+            (*get(allocate(STATION_CLASS_LABEL_DEFAULT, STAT_CLASS_MAX))).index(),
+            std::ptr::null_mut(),
+        );
+        (*get(allocate(STATION_CLASS_LABEL_WAYPOINT, STAT_CLASS_MAX))).name =
+            STR_STATION_CLASS_WAYP.0;
+        insert(
+            (*get(allocate(STATION_CLASS_LABEL_WAYPOINT, STAT_CLASS_MAX))).index(),
+            std::ptr::null_mut(),
+        );
+    }
+}
 
 /// Native station specification flag bit position.
 #[repr(transparent)]

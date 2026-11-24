@@ -16,6 +16,7 @@ use crate::cargo_type::NUM_CARGO;
 use crate::station_type::{
     ROAD_WAYPOINT, SRT_CARGO_TAKEN, SRT_NEW_CARGO, STATION_BUS, STATION_TRUCK,
 };
+use crate::table::strings::{STR_STATION_CLASS_DFLT, STR_STATION_CLASS_WAYP};
 use crate::tile_type::INVALID_TILE;
 use crate::tile_type::TileIndex;
 use crate::{
@@ -799,6 +800,26 @@ impl RoadStopClassID {
 pub const ROADSTOP_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
 /// Waypoint road-stop class label.
 pub const ROADSTOP_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
+
+/// `RoadStopClass::InsertDefaults`.
+pub(crate) unsafe fn insert_defaults() {
+    use crate::newgrf_class::roadstop::{allocate, get, insert};
+    /* Set up initial data */
+    unsafe {
+        (*get(allocate(ROADSTOP_CLASS_LABEL_DEFAULT, ROADSTOP_CLASS_MAX))).name =
+            STR_STATION_CLASS_DFLT.0;
+        insert(
+            (*get(allocate(ROADSTOP_CLASS_LABEL_DEFAULT, ROADSTOP_CLASS_MAX))).index(),
+            std::ptr::null_mut(),
+        );
+        (*get(allocate(ROADSTOP_CLASS_LABEL_WAYPOINT, ROADSTOP_CLASS_MAX))).name =
+            STR_STATION_CLASS_WAYP.0;
+        insert(
+            (*get(allocate(ROADSTOP_CLASS_LABEL_WAYPOINT, ROADSTOP_CLASS_MAX))).index(),
+            std::ptr::null_mut(),
+        );
+    }
+}
 
 /// Availability restriction in a road-stop spec; distinct from `RoadStopType`.
 #[repr(transparent)]

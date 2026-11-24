@@ -78,23 +78,6 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 	return services;
 }
 
-/**
- * Reset airport classes to their default state.
- * This includes initialising the defaults classes with an empty
- * entry, for standard airports.
- */
-template <>
-std::span<const OpenTTDGRFClassDefault> AirportClass::Defaults()
-{
-	static const OpenTTDGRFClassDefault defaults[]{
-		{'SMAL', STR_AIRPORT_CLASS_SMALL},
-		{'LARG', STR_AIRPORT_CLASS_LARGE},
-		{'HUB_', STR_AIRPORT_CLASS_HUB},
-		{'HELI', STR_AIRPORT_CLASS_HELIPORTS},
-	};
-	return defaults;
-}
-
 
 /* Instantiate AirportClass. */
 template class NewGRFClass<AirportSpec, AirportClassID, APC_MAX>;

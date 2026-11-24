@@ -24,6 +24,10 @@ use crate::airport::{AT_INVALID, INVALID_AIRPORTTILE, NEW_AIRPORT_OFFSET, NEW_AI
 use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
+use crate::table::strings::{
+    STR_AIRPORT_CLASS_HELIPORTS, STR_AIRPORT_CLASS_HUB, STR_AIRPORT_CLASS_LARGE,
+    STR_AIRPORT_CLASS_SMALL,
+};
 use crate::tile_type::{INVALID_TILE, TileIndex};
 use crate::{
     animated_tile::AirportSpec as TileSpec, station::BaseStation, station_cmd::AirportSpec,
@@ -651,4 +655,27 @@ pub unsafe extern "C" fn openttd_rust_can_vehicle_use_station_abi(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_is_hangar_abi(tile: u32, s: *const Services) -> u8 {
     u8::from(crate::station_map::is_hangar_raw(tile, unsafe { &*s }))
+}
+
+/// `AirportClassID`: list of default airport classes.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AirportClassID(pub u8);
+impl AirportClassID {
+    /// Maximum number of airport classes.
+    pub const APC_MAX: Self = Self(16);
+}
+
+/// `AirportClass::InsertDefaults`: reset airport classes to their default state.
+/// This includes initialising the defaults classes with an empty entry, for standard
+/// airports.
+pub(crate) unsafe fn insert_defaults() {
+    use crate::newgrf_class::airport::{allocate, get};
+    let max = u16::from(AirportClassID::APC_MAX.0);
+    unsafe {
+        (*get(allocate(u32::from_be_bytes(*b"SMAL"), max))).name = STR_AIRPORT_CLASS_SMALL.0;
+        (*get(allocate(u32::from_be_bytes(*b"LARG"), max))).name = STR_AIRPORT_CLASS_LARGE.0;
+        (*get(allocate(u32::from_be_bytes(*b"HUB_"), max))).name = STR_AIRPORT_CLASS_HUB.0;
+        (*get(allocate(u32::from_be_bytes(*b"HELI"), max))).name = STR_AIRPORT_CLASS_HELIPORTS.0;
+    }
 }

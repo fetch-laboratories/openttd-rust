@@ -11,6 +11,7 @@
 )]
 use crate::debug::grf_msg;
 use crate::game_state::GameState;
+use crate::table::strings::STR_EMPTY;
 use std::ptr;
 
 #[repr(C)]
@@ -19,16 +20,16 @@ pub struct Class {
     pub name: u32,
     pub rust_index: u32,
 }
+impl Class {
+    /// `NewGRFClass::Index`.
+    pub(crate) fn index(&self) -> u16 {
+        self.rust_index as u16
+    }
+}
 #[repr(C)]
 pub struct Identity {
     pub grfid: u32,
     pub local_id: u16,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct DefaultClass {
-    label: u32,
-    name: u32,
 }
 #[repr(C)]
 pub struct Services<T> {
@@ -36,11 +37,7 @@ pub struct Services<T> {
     pub set_index: unsafe extern "C" fn(*mut T, u16),
     pub identity: unsafe extern "C" fn(*const T) -> Identity,
     pub object: *const crate::objects::ObjectServices,
-    defaults: *const DefaultClass,
-    default_count: usize,
-    maximum: u16,
-    empty: u32,
-    insert_empty: bool,
+    shared: *const crate::services::Services,
 }
 struct Members<T> {
     specs: Vec<*mut T>,
@@ -58,7 +55,8 @@ impl<T> Registry<T> {
         }
     }
 }
-unsafe fn allocate<T>(state: *mut Registry<T>, global_id: u32, max: u16, empty: u32) -> u16 {
+/// `NewGRFClass::Allocate`: allocate a class with a given global class ID.
+unsafe fn allocate<T>(state: *mut Registry<T>, global_id: u32, max: u16) -> u16 {
     if let Some(i) = unsafe {
         (*state)
             .classes
@@ -72,7 +70,7 @@ unsafe fn allocate<T>(state: *mut Registry<T>, global_id: u32, max: u16, empty: 
         unsafe {
             (*state).classes.push(Class {
                 global_id,
-                name: empty,
+                name: STR_EMPTY.0,
                 rust_index: index as u32,
             });
             (*state).members.push(Members {
@@ -88,6 +86,18 @@ unsafe fn allocate<T>(state: *mut Registry<T>, global_id: u32, max: u16, empty: 
         max
     );
     0
+}
+/// `NewGRFClass::Get`: the class at `class_index`, after the original's bound assertion.
+unsafe fn get<T>(state: *mut Registry<T>, class_index: u16, s: &Services<T>) -> *mut Class {
+    let count = unsafe { (*state).classes.len() };
+    (crate::movement::table(unsafe { &*s.shared }).native_assert)(usize::from(class_index) < count);
+    // An assertion-free build indexes past the end, as the original's `classes[class_index]`.
+    unsafe {
+        (*state)
+            .classes
+            .as_mut_ptr()
+            .wrapping_add(usize::from(class_index))
+    }
 }
 unsafe fn get_spec<T>(state: *mut Registry<T>, class: u16, index: u32) -> *mut T {
     unsafe {
@@ -150,7 +160,7 @@ unsafe fn by_grf<T>(
     ptr::null()
 }
 macro_rules! registry {
-    ($module:ident, $spec:ty, $prefix:literal, [$($assign_export:meta),*] $(, $set_name:ident)?) => {
+    ($module:ident, $spec:ty, $prefix:literal, $insert_defaults:path, [$($assign_export:meta),*] $(, $set_name:ident)?) => {
         pub mod $module {
             use super::*;
             type Spec = $spec;
@@ -161,21 +171,20 @@ macro_rules! registry {
                 SERVICES.exchange(s);
                 unsafe {
                     *STATE.get() = Registry::new();
-                    let s = &*s;
-                    for i in 0..s.default_count {
-                        let default = s.defaults.add(i).read();
-                        let index = allocate(default.label, s.maximum, s.empty);
-                        (*classes().add(usize::from(index))).name = default.name;
-                        if s.insert_empty {
-                            let index = allocate(default.label, s.maximum, s.empty);
-                            insert(index, ptr::null_mut());
-                        }
-                    }
+                    $insert_defaults();
                 }
             }
+            /// `NewGRFClass::Allocate`.
+            pub unsafe fn allocate(id: u32, max: u16) -> u16 {
+                unsafe { super::allocate(STATE.get(), id, max) }
+            }
             #[unsafe(export_name = concat!($prefix, "_allocate"))]
-            pub unsafe extern "C" fn allocate(id: u32, max: u16, empty: u32) -> u16 {
-                unsafe { super::allocate(STATE.get(), id, max, empty) }
+            pub unsafe extern "C" fn allocate_export(id: u32, max: u16) -> u16 {
+                unsafe { allocate(id, max) }
+            }
+            /// `NewGRFClass::Get`.
+            pub unsafe fn get(class_index: u16) -> *mut Class {
+                unsafe { super::get(STATE.get(), class_index, SERVICES.table()) }
             }
             pub unsafe extern "C" fn insert(class: u16, spec: *mut Spec) {
                 unsafe {
@@ -242,6 +251,7 @@ registry!(
     station,
     crate::station_cmd::RailSpec,
     "openttd_rust_station_class",
+    crate::newgrf_station::insert_defaults,
     [unsafe(export_name = "openttd_rust_station_class_assign")],
     openttd_rust_station_class_set_name
 );
@@ -249,6 +259,7 @@ registry!(
     roadstop,
     crate::station_cmd::RoadSpec,
     "openttd_rust_roadstop_class",
+    crate::newgrf_roadstop::insert_defaults,
     [unsafe(export_name = "openttd_rust_roadstop_class_assign")],
     openttd_rust_roadstop_class_set_name
 );
@@ -256,12 +267,14 @@ registry!(
     airport,
     crate::station_cmd::AirportSpec,
     "openttd_rust_airport_class",
+    crate::newgrf_airport::insert_defaults,
     []
 );
 registry!(
     object,
     crate::objects::Spec,
     "openttd_rust_object_class",
+    crate::newgrf_object::insert_defaults,
     [unsafe(export_name = "openttd_rust_object_class_assign")]
 );
 
@@ -271,12 +284,11 @@ crate::abi::layouts! {
     "RoadStopClass" ["station_service"] => Class { global_id, name, rust_index };
     "AirportClass" ["station_service"] => Class { global_id, name, rust_index };
     "ObjectClass" ["station_service"] => Class { global_id, name, rust_index };
-    "OpenTTDGRFClassDefault" ["station_service"] => DefaultClass { label, name };
     "OpenTTDGRFClassIdentity" ["station_service"] => Identity { grfid, local_id };
-    "OpenTTDStationClassServices" ["station_service"] => Services<crate::station_cmd::RailSpec> { class_index, set_index, identity, object, defaults, default_count, maximum, empty, insert_empty };
-    "OpenTTDRoadStopClassServices" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, identity, object, defaults, default_count, maximum, empty, insert_empty };
-    "OpenTTDAirportClassServices" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, identity, object, defaults, default_count, maximum, empty, insert_empty };
-    "OpenTTDObjectClassServices" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, identity, object, defaults, default_count, maximum, empty, insert_empty };
+    "OpenTTDStationClassServices" ["station_service"] => Services<crate::station_cmd::RailSpec> { class_index, set_index, identity, object, shared };
+    "OpenTTDRoadStopClassServices" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, identity, object, shared };
+    "OpenTTDAirportClassServices" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, identity, object, shared };
+    "OpenTTDObjectClassServices" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, identity, object, shared };
 }
 
 pub(crate) unsafe fn station_identity(spec: *const crate::station_cmd::RailSpec) -> Identity {
@@ -288,4 +300,45 @@ pub(crate) fn station_label(class: u16) -> u32 {
 }
 pub(crate) fn roadstop_label(class: u16) -> u32 {
     unsafe { (*roadstop::classes().add(usize::from(class))).global_id }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    thread_local! {
+        static ASSERTIONS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+    }
+    extern "C" fn record_assertion(condition: bool) {
+        ASSERTIONS.with_borrow_mut(|a| a.push(condition));
+    }
+
+    /// `NewGRFClass::Get` asserts `class_index < classes.size()` through the native
+    /// assertion, for the default classes and for any other lookup. The kept C++ class test
+    /// sees only lookups that pass. The object registry is the one no other test resets.
+    #[test]
+    fn get_makes_the_original_bound_assertion() {
+        let mut movement = crate::test_tables::MOVEMENT;
+        movement.native_assert = record_assertion;
+        let mut shared = crate::test_tables::SHARED;
+        shared.movement = Box::leak(Box::new(movement));
+        let services: &'static Services<crate::objects::Spec> = Box::leak(Box::new(Services {
+            class_index: crate::test_tables::unreachable1,
+            set_index: crate::test_tables::unreachable2,
+            identity: crate::test_tables::unreachable1,
+            object: ptr::null(),
+            shared: Box::leak(Box::new(shared)),
+        }));
+        unsafe { object::reset(services) };
+        // ObjectClass::InsertDefaults looks up both default classes.
+        assert_eq!(ASSERTIONS.take(), [true, true]);
+        let count = object::count() as u16;
+        assert_eq!(count, 2);
+        unsafe {
+            object::get(count - 1);
+            object::get(count);
+        }
+        assert_eq!(ASSERTIONS.take(), [true, false]);
+    }
 }
