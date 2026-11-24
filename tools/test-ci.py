@@ -1600,6 +1600,196 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
             self.assertEqual(evaluate(predicate, github=github), expected)
 
 
+APT_STUB = r"""#!/bin/bash
+kind=install
+for arg; do
+  case $arg in
+    update) kind=update ;;
+    --download-only) kind=download ;;
+  esac
+done
+host=$(sed -n 's|.*://\([^/]*\)/ubuntu.*|\1|p' "$APT_IN_USE" | head -n 1)
+echo "$kind $host" >> "$APT_LOG"
+result=$(head -n 1 "$APT_RESULTS")
+sed -i 1d "$APT_RESULTS"
+exit "${result:-0}"
+"""
+
+SECURITY = "http://security.ubuntu.com/ubuntu/\tpriority:3\n"
+
+
+class AptInstallTests(unittest.TestCase):
+    """The apt-install action's script against stub apt-get, sudo and timeout
+    commands and temporary sources (#1026)."""
+
+    def install(
+        self, files: Mapping[str, str], in_use: str, results: Iterable[int]
+    ) -> tuple[int, list[str], dict[str, str], str]:
+        """Run the script with `files` under a temporary /etc/apt, apt-get
+        answering `results` in turn and logging the first host of `in_use`:
+        the exit code, apt-get's calls, the files afterwards and the warnings."""
+        (step,) = yaml.safe_load(
+            (ROOT / ".github/actions/apt-install/action.yml").read_text()
+        )["runs"]["steps"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            etc = root / "etc/apt"
+            (etc / "sources.list.d").mkdir(parents=True)
+            for name, text in files.items():
+                (etc / name).write_text(text.replace("ETC", str(etc)))
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            for name, text in (
+                ("apt-get", APT_STUB),
+                ("sudo", '#!/bin/bash\nexec "$@"\n'),
+                ("timeout", '#!/bin/bash\nshift\nexec "$@"\n'),
+            ):
+                (bin_dir / name).write_text(text)
+                (bin_dir / name).chmod(0o755)
+            (root / "results").write_text("".join(f"{r}\n" for r in results))
+            env = dict(
+                os.environ,
+                PATH=f"{bin_dir}:{os.environ['PATH']}",
+                PACKAGES="valgrind",
+                RECOMMENDS="false",
+                APT_IN_USE=str(etc / in_use),
+                APT_LOG=str(root / "log"),
+                APT_RESULTS=str(root / "results"),
+            )
+            script = step["run"].replace("/etc/apt", str(etc))
+            done = subprocess.run(
+                ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            log = (root / "log").read_text().splitlines()
+            after = {
+                name: (etc / name).read_text().replace(str(etc), "ETC")
+                for name in files
+            }
+        warnings = "\n".join(
+            line for line in done.stdout.splitlines() if line.startswith("::warning")
+        )
+        return done.returncode, log, after, warnings
+
+    HOSTED = {
+        "apt-mirrors.txt": "http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\t"
+        "priority:1\nhttp://archive.ubuntu.com/ubuntu/\tpriority:2\n" + SECURITY,
+        "sources.list.d/ubuntu.sources": "Types: deb\n"
+        "URIs: mirror+file:ETC/apt-mirrors.txt\nSuites: noble noble-updates\n",
+    }
+
+    def test_each_failed_attempt_moves_to_a_host_not_yet_tried(self) -> None:
+        # GitHub's hosted image: a mirror list, its EC2 host first.
+        # The index updates, the download stalls, then Azure's update stalls.
+        code, log, after, warnings = self.install(
+            self.HOSTED, "apt-mirrors.txt", [0, 1, 1, 0, 0, 0]
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            log,
+            [
+                "update us-east-2.ec2.archive.ubuntu.com",
+                "download us-east-2.ec2.archive.ubuntu.com",
+                # The changed mirror list invalidates the index: update again.
+                "update azure.archive.ubuntu.com",
+                "update archive.ubuntu.com",
+                "download archive.ubuntu.com",
+                "install archive.ubuntu.com",
+            ],
+        )
+        self.assertIn(
+            "attempt 1 failed or stalled on us-east-2.ec2.archive.ubuntu.com; "
+            "retrying on azure.archive.ubuntu.com",
+            warnings,
+        )
+        self.assertIn(
+            "attempt 2 failed or stalled on azure.archive.ubuntu.com; "
+            "retrying on archive.ubuntu.com",
+            warnings,
+        )
+        # The security source and the rest of the list keep their hosts.
+        self.assertTrue(after["apt-mirrors.txt"].endswith(SECURITY))
+        self.assertEqual(
+            after["sources.list.d/ubuntu.sources"],
+            self.HOSTED["sources.list.d/ubuntu.sources"],
+        )
+
+    def test_a_first_attempt_that_succeeds_rewrites_nothing(self) -> None:
+        code, log, after, warnings = self.install(
+            self.HOSTED, "apt-mirrors.txt", [0, 0, 0]
+        )
+        self.assertEqual(code, 0)
+        host = "us-east-2.ec2.archive.ubuntu.com"
+        self.assertEqual(log, [f"update {host}", f"download {host}", f"install {host}"])
+        self.assertEqual(after, self.HOSTED)
+        self.assertEqual(warnings, "")
+
+    def test_a_configured_azure_mirror_is_not_tried_twice(self) -> None:
+        # Emscripten's container: plain deb lines, pointed at Azure first.
+        files = {
+            "sources.list": "deb http://azure.archive.ubuntu.com/ubuntu noble main\n"
+            "deb http://security.ubuntu.com/ubuntu noble-security main\n"
+        }
+        azure, archive = "azure.archive.ubuntu.com", "archive.ubuntu.com"
+        for label, results, code, tail in (
+            ("to success", [0, 1, 0, 1, 0, 0], 0, [f"install {archive}"]),
+            ("to failure", [0, 1, 0, 1, 1], 1, []),
+        ):
+            with self.subTest(label):
+                status, log, after, warnings = self.install(
+                    files, "sources.list", results
+                )
+                self.assertEqual(status, code)
+                self.assertEqual(
+                    log,
+                    [
+                        f"update {azure}",
+                        f"download {azure}",
+                        f"update {archive}",
+                        f"download {archive}",
+                        # Sources unchanged since its update: the index is reused.
+                        f"download {archive}",
+                        *tail,
+                    ],
+                )
+                self.assertIn(
+                    f"attempt 2 failed or stalled on {archive}; retrying on {archive}",
+                    warnings,
+                )
+                self.assertEqual(
+                    after["sources.list"],
+                    files["sources.list"].replace(f"//{azure}/", f"//{archive}/"),
+                )
+
+    def test_another_mirror_list_a_source_names_is_rewritten(self) -> None:
+        # Blacksmith's runners name their own list, not apt-mirrors.txt.
+        files = {
+            "blacksmith-ubuntu-mirrors.txt": "http://mirror.example.net/ubuntu/\n",
+            "sources.list.d/ubuntu.sources": "Types: deb\n"
+            "URIs: mirror+file:ETC/blacksmith-ubuntu-mirrors.txt\n",
+        }
+        code, log, after, _ = self.install(
+            files, "blacksmith-ubuntu-mirrors.txt", [1, 0, 0, 0]
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            log,
+            [
+                "update mirror.example.net",
+                "update azure.archive.ubuntu.com",
+                "download azure.archive.ubuntu.com",
+                "install azure.archive.ubuntu.com",
+            ],
+        )
+        self.assertEqual(
+            after["blacksmith-ubuntu-mirrors.txt"],
+            "http://azure.archive.ubuntu.com/ubuntu/\n",
+        )
+
+
 class PolicyTests(unittest.TestCase):
     def test_platform_matrix_matches_profile_and_cadence(self) -> None:
         jobs = workflow("ci-build.yml")["jobs"]
