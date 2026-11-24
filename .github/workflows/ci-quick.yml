@@ -69,10 +69,11 @@ jobs:
         # longest 20.2, while Emscripten's jobs on the same pool, pointed at Azure, took
         # at most 0.2. Azure and Canonical's archive have each stalled before too (#858,
         # #833, #841). The first two attempts get 60 seconds per command, and each failed
-        # attempt moves to a host not yet tried: the configured mirror, then Azure, then
-        # Canonical's archive, rewritten wherever the sources name it (mirror lists,
-        # `URIs:` and `deb` lines). With only two hosts the last attempt stays on the
-        # second, never returning to the one that stalled. The last attempt has no bound
+        # attempt moves to a host not yet tried: the configured mirror (a mirror list's
+        # first by priority), then Azure, then Canonical's archive. Every archive URL the
+        # sources name (mirror lists, `URIs:` and `deb` lines) moves to it, so no other
+        # entry of a list stays in front. With only two hosts the last attempt stays on
+        # the second, never returning to the one that stalled. The last attempt has no bound
         # of its own, as the plain install had none: a slow install beats a failed job,
         # and the calling job's own limit still applies. apt keeps what an interrupted
         # attempt downloaded.
@@ -98,10 +99,27 @@ jobs:
         sources() {
           { cat "${lists[@]}" "${files[@]}" 2>/dev/null || true; } | sha256sum
         }
-        # The configured mirror: the first host of a mirror list, else of the sources.
-        configured=$(cat "${lists[@]}" "${files[@]}" 2>/dev/null |
-          sed -n 's|^\([^#]*[[:space:]]\)\{0,1\}https\{0,1\}://\([^/[:space:]]*\)/ubuntu.*|\2|p' |
-          grep -v '^security\.ubuntu\.com$' | head -n 1 || true)
+        # The configured mirror: a mirror list's first archive host by priority, else the
+        # sources' first.
+        configured=$({ cat "${lists[@]}" /dev/null 2>/dev/null || true; } | awk '
+          /^[[:space:]]*#/ { next }
+          match($0, /https?:\/\/[^\/[:space:]]+\/ubuntu/) {
+            host = substr($0, RSTART, RLENGTH)
+            sub(/^https?:\/\//, "", host)
+            sub(/\/ubuntu$/, "", host)
+            if (host == "security.ubuntu.com") next
+            rank = 1e9
+            if (match($0, /priority:[0-9]+/)) rank = substr($0, RSTART + 9, RLENGTH - 9) + 0
+            if (best == "" || rank < low) { best = host; low = rank }
+          }
+          END { print best }')
+        if [ -z "$configured" ]; then
+          configured=$({ cat "${files[@]}" 2>/dev/null || true; } |
+            sed -n 's|^\([^#]*[[:space:]]\)\{0,1\}https\{0,1\}://\([^/[:space:]]*\)/ubuntu.*|\2|p' |
+            grep -v '^security\.ubuntu\.com$' | head -n 1 || true)
+        fi
+        # The archive hosts a retry moves off: the configured one and Ubuntu's.
+        archives="${configured//./\\.}|([a-z0-9-]+\\.)*archive\\.ubuntu\\.com"
         hosts=()
         if [ -n "$configured" ]; then
           for host in "$configured" azure.archive.ubuntu.com archive.ubuntu.com; do
@@ -133,7 +151,7 @@ jobs:
             current=$((current + 1))
             for file in "${lists[@]}" "${files[@]}"; do
               if [ -f "$file" ]; then
-                $sudo sed -i "s|https\{0,1\}://${stalled//./\\.}/ubuntu|http://${hosts[current]}/ubuntu|g" "$file"
+                $sudo sed -E -i "s#https?://($archives)/ubuntu#http://${hosts[current]}/ubuntu#g" "$file"
               fi
             done
           fi

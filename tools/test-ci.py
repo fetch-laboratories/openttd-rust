@@ -1610,7 +1610,13 @@ for arg; do
     --download-only) kind=download ;;
   esac
 done
-host=$(sed -n 's|.*://\([^/]*\)/ubuntu.*|\1|p' "$APT_IN_USE" | head -n 1)
+# The host apt uses: the lowest priority of a list, else the first.
+host=$(awk 'match($0, /:\/\/[^\/]*\/ubuntu/) {
+  host = substr($0, RSTART + 3, RLENGTH - 10)
+  rank = 1e9
+  if (match($0, /priority:[0-9]+/)) rank = substr($0, RSTART + 9) + 0
+  if (best == "" || rank < low) { best = host; low = rank }
+} END { print best }' "$APT_IN_USE")
 echo "$kind $host" >> "$APT_LOG"
 result=$(head -n 1 "$APT_RESULTS")
 sed -i 1d "$APT_RESULTS"
@@ -1662,9 +1668,11 @@ class AptInstallTests(unittest.TestCase):
             done = subprocess.run(
                 ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
                 env=env,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=60,
             )
             log = (root / "log").read_text().splitlines()
             after = {
@@ -1717,6 +1725,38 @@ class AptInstallTests(unittest.TestCase):
         self.assertEqual(
             after["sources.list.d/ubuntu.sources"],
             self.HOSTED["sources.list.d/ubuntu.sources"],
+        )
+
+    def test_a_retry_moves_every_entry_off_the_stalled_host(self) -> None:
+        # apt takes a list's lowest priority first, whatever its line; a retry
+        # that left the stalled host in front would try it again.
+        files = dict(
+            self.HOSTED,
+            **{
+                "apt-mirrors.txt": "http://azure.archive.ubuntu.com/ubuntu/\t"
+                "priority:2\nhttp://us-east-2.ec2.archive.ubuntu.com/ubuntu/\t"
+                "priority:1\n" + SECURITY
+            },
+        )
+        code, log, after, warnings = self.install(
+            files, "apt-mirrors.txt", [0, 1, 0, 0, 0]
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            log,
+            [
+                "update us-east-2.ec2.archive.ubuntu.com",
+                "download us-east-2.ec2.archive.ubuntu.com",
+                "update azure.archive.ubuntu.com",
+                "download azure.archive.ubuntu.com",
+                "install azure.archive.ubuntu.com",
+            ],
+        )
+        self.assertIn("stalled on us-east-2.ec2.archive.ubuntu.com", warnings)
+        self.assertEqual(
+            after["apt-mirrors.txt"],
+            "http://azure.archive.ubuntu.com/ubuntu/\tpriority:2\n"
+            "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n" + SECURITY,
         )
 
     def test_a_first_attempt_that_succeeds_rewrites_nothing(self) -> None:
