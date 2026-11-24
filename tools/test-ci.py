@@ -2882,6 +2882,7 @@ class RequestPathTests(unittest.TestCase):
                 path = ci.request(args)
             finally:
                 self.output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+                self.calls, self.sleeps = calls, sleep.call_count
         return path, calls, self.output, sleep.call_count
 
     def test_pending_then_mergeable_dispatches_the_pinned_head(self) -> None:
@@ -2955,6 +2956,90 @@ class RequestPathTests(unittest.TestCase):
         with patch("sys.argv", ["ci.py", "request", "170", "--head", "main"]):
             with patch("sys.stderr"), self.assertRaises(SystemExit):
                 ci.main()
+
+    def checkout(self, branch: str = "feature", url: str = "") -> tuple[str, str]:
+        """A clone on BRANCH whose origin is URL, with origin/BRANCH at its HEAD,
+        as ci.py's own checkout; returns the HEAD and an earlier commit."""
+        root = self.directory / "checkout"
+        git = partial(subprocess.run, cwd=root, check=True, capture_output=True)
+        root.mkdir()
+        git(["git", "init", "--quiet", "-b", branch])
+        url = url or "https://github.com/example/fork.git"
+        git(["git", "remote", "add", "origin", url])
+        for message in ("Add: one", "Add: two"):
+            git(
+                ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit"]
+                + ["--quiet", "--allow-empty", "-m", message]
+            )
+        rev = partial(subprocess.check_output, cwd=root, text=True)
+        head = rev(["git", "rev-parse", "HEAD"]).strip()
+        git(["git", "update-ref", f"refs/remotes/origin/{branch}", head])
+        root_patch = patch.object(ci.vcs, "ROOT", root)
+        root_patch.start()
+        self.addCleanup(root_patch.stop)
+        self.git = git
+        return head, rev(["git", "rev-parse", "HEAD~1"]).strip()
+
+    def pull(self, sha: str, repository: str = "example/fork") -> dict:
+        return dict(
+            PULL, head={"sha": sha, "ref": "feature", "repo": {"full_name": repository}}
+        )
+
+    def test_the_prs_checkout_waits_for_its_pushed_head(self) -> None:
+        # The two cases of 2026-11-24: the first read still shows the old head.
+        local, previous = self.checkout()
+        stale, pushed = self.pull(previous), self.pull(local)
+        path, calls, output, sleeps = self.request(stale, pushed, pushed)
+        self.assertIsNotNone(path)
+        self.assertEqual(sleeps, 1)
+        ((dispatch),) = calls
+        self.assertIn(f"head={local}", dispatch)
+        self.assertIn(f"Requesting for this checkout's HEAD {local}", output)
+
+    def test_another_branch_or_a_detached_head_reads_github(self) -> None:
+        local, previous = self.checkout(branch="other")
+        path, calls, output, sleeps = self.request(self.pull(previous))
+        self.assertEqual((sleeps, len(calls)), (0, 1))
+        self.assertIn(f"head={previous}", calls[0])
+        self.git(["git", "switch", "--quiet", "--detach", "HEAD"])
+        path, calls, output, sleeps = self.request(self.pull(previous))
+        self.assertIsNotNone(path)
+        self.assertEqual(sleeps, 0)
+        self.assertIn(f"head={previous}", calls[0])
+        self.assertNotIn("this checkout", output)
+
+    def test_an_unpushed_or_stale_checkout_refuses_at_once(self) -> None:
+        local, previous = self.checkout()
+        commit = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit"]
+        # Ahead: a commit made after the last push.
+        self.git([*commit, "--quiet", "--allow-empty", "-m", "Add: unpushed"])
+        ahead = ci.checkout_git("rev-parse", "HEAD")
+        # Behind: origin has a commit this checkout lacks.
+        cases = {"ahead": (ahead, local), "behind": (previous, local)}
+        for name, (head, tracking) in cases.items():
+            with self.subTest(name=name):
+                self.git(["git", "reset", "--quiet", "--hard", head])
+                self.git(["git", "update-ref", "refs/remotes/origin/feature", tracking])
+                with self.assertRaisesRegex(
+                    ValueError, "push, update the checkout"
+                ) as caught:
+                    self.request(self.pull(local))
+                self.assertIn(head, str(caught.exception))
+                self.assertIn(tracking, str(caught.exception))
+                self.assertEqual((self.calls, self.sleeps), ([], 0))
+
+    def test_a_same_named_branch_of_another_repository_reads_github(self) -> None:
+        local, previous = self.checkout(url="git@github.com:example/other.git")
+        path, calls, _, sleeps = self.request(self.pull(previous))
+        self.assertEqual(sleeps, 0)
+        self.assertIn(f"head={previous}", calls[0])
+
+    def test_an_explicit_head_wins_over_the_checkout(self) -> None:
+        local, previous = self.checkout()
+        path, calls, output, sleeps = self.request(self.pull(previous), head=previous)
+        self.assertEqual(sleeps, 0)
+        self.assertIn(f"head={previous}", calls[0])
+        self.assertNotIn("this checkout", output)
 
     def test_request_with_wait_prints_no_separate_wait_command(self) -> None:
         _, _, output, _ = self.request(PULL, wait=True)

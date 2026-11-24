@@ -400,12 +400,65 @@ def label_request(repository: str, pr: int, pull: dict, head: str) -> None:
     gh("pr", "edit", str(pr), "--repo", repository, "--add-label", "ci:full")
 
 
+# An `origin` URL's GitHub repository, as `owner/name`.
+GITHUB_REMOTE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/*$")
+
+
+def checkout_git(*arguments: str) -> str:
+    """A Git query in this tool's checkout; empty when Git answers nothing."""
+    found = subprocess.run(
+        ["git", "-C", str(vcs.ROOT), *arguments], capture_output=True, text=True
+    )
+    return found.stdout.strip() if found.returncode == 0 else ""
+
+
+def checkout_head(pr: int, pull: dict) -> str | None:
+    """This checkout's HEAD when the checkout is the PR's own, else None.
+
+    It is the PR's when its `origin` is the PR's head repository and its branch,
+    or that branch's upstream, is the PR's head branch. There a tracking ref that
+    is not at HEAD, ahead or behind, is refused at once rather than waited for.
+    """
+    branch = pull["head"].get("ref")
+    repository = (pull["head"].get("repo") or {}).get("full_name")
+    local = checkout_git("symbolic-ref", "--quiet", "--short", "HEAD")
+    if not branch or not repository or not local:
+        return None
+    upstream = checkout_git("rev-parse", "--abbrev-ref", f"{local}@{{upstream}}")
+    remote = GITHUB_REMOTE.search(checkout_git("remote", "get-url", "origin"))
+    if branch not in (local, upstream.removeprefix("origin/")) or not (
+        remote and remote[1].lower() == repository.lower()
+    ):
+        return None
+    commit = checkout_git("rev-parse", "HEAD")
+    tracking = checkout_git(
+        "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"
+    )
+    if tracking != commit:
+        raise ValueError(
+            f"This checkout is PR #{pr}'s branch {branch} at {commit}, but "
+            f"origin/{branch} is at {tracking or 'no commit'}: push, update the "
+            "checkout, or pass --head"
+        )
+    print(
+        f"Requesting for this checkout's HEAD {commit}: it is PR #{pr}'s branch "
+        f"{branch}, and origin/{branch} is at it",
+        flush=True,
+    )
+    return commit
+
+
 def requestable(repository: str, args: argparse.Namespace) -> tuple[dict, str] | None:
-    """The PR and the head to request for, or None when Full already passed it."""
+    """The PR and the head to request for, or None when Full already passed it.
+
+    Without --head, the PR's own checkout names the head it pushed, so a read
+    that still shows the previous head waits for the push to show.
+    """
     pull = api(repository, f"pulls/{args.pr}")
-    if args.head:
-        pull = pushed_head(repository, args.pr, pull, args.head)
-    head = expected_head(pull, args.head)
+    expected = args.head or checkout_head(args.pr, pull)
+    if expected:
+        pull = pushed_head(repository, args.pr, pull, expected)
+    head = expected_head(pull, expected)
     require_stamp(args.pr, head, args.unstamped)
     if (
         args.profile == "full"
