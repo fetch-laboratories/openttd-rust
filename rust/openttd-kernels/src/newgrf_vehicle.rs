@@ -304,10 +304,10 @@ impl Services {
         }
         unsafe extern "C" fn write_random(_: V, _: u16) {}
         Self {
-            waiting,
-            resolve_random,
             random_bits,
+            waiting,
             write_random,
+            resolve_random,
             ..self
         }
     }
