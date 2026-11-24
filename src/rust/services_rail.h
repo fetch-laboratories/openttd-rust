@@ -50,8 +50,6 @@ inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOth
 
 /* Rail command, depot and crossing leaves (rail_cmd.rs). */
 inline RailType RustInvalidRailType() noexcept { return INVALID_RAILTYPE; }
-inline VehicleAccelerationModel RustRailAccelerationType(RailType type) noexcept { return GetRailTypeInfo(type)->acceleration_type; }
-inline uint16_t RustRailMaxSpeed(RailType type) noexcept { return GetRailTypeInfo(type)->max_speed; }
 inline void RustSetRailCostMultiplier(RailTypeInfo *info, uint16_t value) noexcept { info->cost_multiplier = value; }
 inline uint16_t RustRailCostMultiplier(RailType type) noexcept { return GetRailTypeInfo(type)->cost_multiplier; }
 inline RailType RustRailType(uint32_t tile) noexcept { return GetRailType(TileIndex(tile)); }

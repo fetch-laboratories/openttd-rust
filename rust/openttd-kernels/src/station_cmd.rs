@@ -1616,17 +1616,12 @@ impl Ctx<'_> {
                 return true;
             }
             /* The current rail type must have power on the to-be-built type (e.g. convert normal rail to electrified rail). */
-            if (self.rail().powered_rail)(
-                crate::map_func::World::new(self.shared)
-                    .get_rail_type(tile_cur)
-                    .0,
-                rt.0,
+            if crate::rail::has_power_on_rail(
+                self.shared,
+                crate::map_func::World::new(self.shared).get_rail_type(tile_cur),
+                rt,
             ) {
-                let mut tracks = TrackBits(
-                    crate::map_func::World::new(self.shared)
-                        .get_track_bits(tile_cur)
-                        .0,
-                );
+                let mut tracks = crate::map_func::World::new(self.shared).get_track_bits(tile_cur);
                 let track = crate::track_func::remove_first_track(&mut tracks, |ok| {
                     crate::movement::native_assert(self.shared, ok);
                 });

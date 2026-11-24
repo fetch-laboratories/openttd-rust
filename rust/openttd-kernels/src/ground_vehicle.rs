@@ -248,8 +248,6 @@ pub struct Services {
     pub train_cargo_weight: extern "C" fn(u8, u32) -> u64,
     pub powered: extern "C" fn(u64, RailType) -> bool,
     pub rail_type: extern "C" fn(u32) -> RailType,
-    pub rail_acceleration: extern "C" fn(RailType) -> u8,
-    pub rail_speed: extern "C" fn(RailType) -> u16,
     pub steepness: extern "C" fn(VehicleType) -> u32,
     pub viewport: extern "C" fn(VehicleRef, bool, bool),
     pub base_crash: extern "C" fn(VehicleRef, bool) -> u32,
@@ -504,11 +502,11 @@ impl GroundVehicleType for Train {
     /// Allows to know the acceleration type of a vehicle.
     #[inline]
     fn get_acceleration_type(
-        s: &Services,
+        _: &Services,
         w: &World<'_>,
         v: VehicleRef,
     ) -> VehicleAccelerationModel {
-        VehicleAccelerationModel((s.rail_acceleration)(w.get_rail_type(v.tile())))
+        crate::rail::get_rail_type_info(w.shared, w.get_rail_type(v.tile())).acceleration_type()
     }
     /// Returns the slope steepness used by this vehicle.
     #[inline]
@@ -522,8 +520,8 @@ impl GroundVehicleType for Train {
     }
     /// Gets the maximum speed allowed by the track for this vehicle.
     #[inline]
-    fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
-        (s.rail_speed)(w.get_rail_type(v.tile()))
+    fn get_max_track_speed(_: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
+        crate::rail::get_rail_type_info(w.shared, w.get_rail_type(v.tile())).max_speed()
     }
     /// Checks if the vehicle is at a tile that can be sloped.
     #[inline]
@@ -1422,7 +1420,7 @@ pub unsafe extern "C" fn openttd_rust_ground_acceleration_type(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, capabilities, cargo_weight, train_cargo_weight, powered, rail_type, rail_acceleration, rail_speed, steepness, viewport, base_crash, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, capabilities, cargo_weight, train_cargo_weight, powered, rail_type, steepness, viewport, base_crash, };
 }
 
 #[cfg(test)]

@@ -687,7 +687,8 @@ pub(crate) fn get_speed_limit_with_road(
     }
     /* Check for speed limit imposed by railtype */
     if mode == RAIL {
-        let rail_speed = (m.train().physics.rail_speed)(w.get_rail_type(old_tile));
+        let rail_speed =
+            crate::rail::get_rail_type_info(w.shared, w.get_rail_type(old_tile)).max_speed();
         if rail_speed > 0 {
             max_speed = max_speed.min(i32::from(rail_speed));
         }

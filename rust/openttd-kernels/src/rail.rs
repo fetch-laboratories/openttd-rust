@@ -102,7 +102,10 @@ impl RailTypeInfoRef<'_> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailTypeSpriteGroup(pub u8);
 
-#[allow(dead_code, reason = "the header's whole enum; Rust reads RTSG_END only")]
+#[allow(
+    dead_code,
+    reason = "the header's whole enum; Rust reads RTSG_END only"
+)]
 impl RailTypeSpriteGroup {
     /// Cursor and toolbar icon images
     pub const RTSG_CURSORS: Self = Self(0);

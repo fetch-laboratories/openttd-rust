@@ -15,7 +15,6 @@
 #include "../../signal_type.h"
 #include "../../station_type.h"
 #include "../../track_type.h"
-#include "../../rust/ground_vehicle_ffi.h"
 #include "../../rust/rail_command_ffi.h"
 #include "../../rust/script_rail_ffi.h"
 
@@ -498,7 +497,7 @@ public:
 	 *       This is mph / 1.6, which is roughly km/h.
 	 *       To get km/h multiply this number by 1.00584.
 	 */
-	static SQInteger GetMaxSpeed(RailType railtype) { return openttd_rust_script_rail_max_speed(&GetRustScriptHostServices(), &GetRustGroundPhysicsServices(), static_cast<uint32_t>(railtype)); }
+	static SQInteger GetMaxSpeed(RailType railtype) { return openttd_rust_script_rail_max_speed(&GetRustScriptHostServices(), static_cast<uint32_t>(railtype)); }
 
 	/**
 	 * Get the maintenance cost factor of a railtype.

@@ -180,20 +180,20 @@ pub extern "C" fn openttd_rust_script_rail_train_has_power(
     )
 }
 
-/// `ScriptRail::GetMaxSpeed`, using the integrated ground-physics table.
+/// `ScriptRail::GetMaxSpeed`.
 #[unsafe(no_mangle)]
 #[allow(clippy::cast_possible_truncation)]
-pub extern "C" fn openttd_rust_script_rail_max_speed(
-    s: &Services,
-    physics: &crate::ground_vehicle::Services,
-    rail_type: u32,
-) -> i64 {
+pub extern "C" fn openttd_rust_script_rail_max_speed(s: &Services, rail_type: u32) -> i64 {
     if !rail_type_available(s, rail_type) {
         return -1;
     }
-    i64::from((physics.rail_speed)(crate::services::RailType(
-        rail_type as u8,
-    )))
+    i64::from(
+        crate::rail::get_rail_type_info(
+            s.command.shared,
+            crate::services::RailType(rail_type as u8),
+        )
+        .max_speed(),
+    )
 }
 
 /// `ScriptRail::GetBuildCost`, retaining availability before build-type validation.

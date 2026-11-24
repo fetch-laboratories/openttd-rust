@@ -161,8 +161,6 @@ pub(crate) const GROUND_VEHICLE: crate::ground_vehicle::Services =
         train_cargo_weight: unreachable2,
         powered: unreachable2,
         rail_type: unreachable1,
-        rail_acceleration: unreachable1,
-        rail_speed: unreachable1,
         steepness: unreachable1,
         viewport: unreachable3,
         base_crash: unreachable2,
