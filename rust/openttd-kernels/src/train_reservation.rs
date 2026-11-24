@@ -146,10 +146,6 @@ impl<'a> Game<'a> {
     fn increment_real_order_index(&self, v: Handle) {
         crate::orders::increment_real_order_index(v.vehicle(), self.vs.orders());
     }
-    /// `v->current_order.ShouldStopAtStation(v, station)`.
-    fn should_stop_at_station(&self, v: Handle, station: StationID) -> bool {
-        crate::movement::should_stop_at_station(v.vehicle(), station)
-    }
     /// `Station::Get(station)`, resolving both the station and its base.
     fn station_get(&self, station: StationID) -> crate::station_service::LoadingStation {
         // SAFETY: The process-lifetime tables resolve the original `Station::Get` once.
@@ -491,7 +487,10 @@ pub(crate) fn check_next_train_tile(g: &Game, v: Handle) {
     }
     /* Exit if we are on a station tile and are going to stop. */
     if g.is_rail_station_tile(v.vehicle().tile())
-        && g.should_stop_at_station(v, g.get_station_index(v.vehicle().tile()))
+        && crate::movement::should_stop_at_station(
+            v.vehicle(),
+            g.get_station_index(v.vehicle().tile()),
+        )
     {
         return;
     }
