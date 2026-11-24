@@ -136,10 +136,6 @@ pub const VEHICLE_CARGO_SUFFIX: u16 =
 pub const VEHICLE_CUSTOM_REFIT: u16 =
     VehicleCallbackMasks::from_element(VehicleCallbackMask::CustomRefit).0;
 
-/// `VehicleCallbackMask::VisualEffect`.
-pub const VEHICLE_VISUAL_EFFECT: u16 =
-    VehicleCallbackMasks::from_element(VehicleCallbackMask::VisualEffect).0;
-
 /// `VehicleCallbackMask::Length`.
 pub const VEHICLE_LENGTH: u16 = VehicleCallbackMasks::from_element(VehicleCallbackMask::Length).0;
 

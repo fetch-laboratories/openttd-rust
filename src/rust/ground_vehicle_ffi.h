@@ -21,7 +21,6 @@ struct OpenTTDGroundPhysicsServices {
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	uint64_t (*cargo_weight)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_weight);
 	uint64_t (*train_cargo_weight)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(train_cargo_weight);
-	bool (*powered)(uint64_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered);
 	RailType (*rail_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type);
 	uint32_t (*steepness)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(steepness);
 	void (*viewport)(OpenTTDVehicle *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);

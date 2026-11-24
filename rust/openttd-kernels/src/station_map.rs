@@ -160,10 +160,19 @@ pub(crate) fn station_by_tile(
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_hangar(tile: TileIndex, s: &crate::newgrf_airport::Services) -> bool {
-    let world = crate::map_func::World::new(s.shared());
-    world.assert_with(|| (s.shared().tile_type)(tile.0) == MP_STATION);
+    is_hangar_in(&crate::map_func::World::new(s.shared()), tile, s)
+}
+/// [`is_hangar`] over an entry's `World`: the assertion and `IsAirport` read the tile in
+/// place, in the original's order.
+#[inline]
+pub(crate) fn is_hangar_in(
+    world: &crate::map_func::World<'_>,
+    tile: TileIndex,
+    s: &crate::newgrf_airport::Services,
+) -> bool {
+    world.assert_with(|| world.kind(tile) == TileType::MP_STATION);
     // If the tile isn't an airport there's no chance it's a hangar.
-    if !is_airport(tile, s.shared()) {
+    if !world.is_airport(tile) {
         return false;
     }
     let st = station_get_by_tile(tile, s).cast();
@@ -186,7 +195,16 @@ pub(crate) fn is_hangar_raw(tile: u32, s: &crate::newgrf_airport::Services) -> b
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_hangar_tile(t: TileIndex, s: &crate::newgrf_airport::Services) -> bool {
-    (s.shared().tile_type)(t.0) == MP_STATION && is_hangar(t, s)
+    is_hangar_tile_in(&crate::map_func::World::new(s.shared()), t, s)
+}
+/// [`is_hangar_tile`] over an entry's `World`.
+#[inline]
+pub(crate) fn is_hangar_tile_in(
+    world: &crate::map_func::World<'_>,
+    t: TileIndex,
+    s: &crate::newgrf_airport::Services,
+) -> bool {
+    world.kind(t) == TileType::MP_STATION && is_hangar_in(world, t, s)
 }
 /// Raw adapter for `orders.rs`, which #825 holds; delegates to `is_hangar_tile`.
 #[inline]

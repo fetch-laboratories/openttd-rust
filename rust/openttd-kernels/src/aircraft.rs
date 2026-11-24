@@ -3118,7 +3118,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 }
 
 /// `Aircraft::IsPrimaryVehicle`.
-const fn is_primary_vehicle(subtype: u8) -> bool {
+pub(crate) const fn is_primary_vehicle(subtype: u8) -> bool {
     is_normal_aircraft(subtype)
 }
 

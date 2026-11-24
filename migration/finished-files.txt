@@ -139,6 +139,7 @@ rust/openttd-kernels/src/trees.rs
 rust/openttd-kernels/src/utf8.rs
 rust/openttd-kernels/src/vehicle.rs
 rust/openttd-kernels/src/vehicle_base.rs
+rust/openttd-kernels/src/vehicle_effect.rs
 rust/openttd-kernels/src/vehicle_func.rs
 rust/openttd-kernels/src/vehicle/maintenance.rs
 rust/openttd-kernels/src/vehicle/scheduler.rs

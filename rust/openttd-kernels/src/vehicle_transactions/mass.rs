@@ -25,7 +25,6 @@ pub struct ListId {
 pub struct Services {
     pub common: &'static CommonServices,
     pub selection: &'static SelectionServices,
-    pub is_depot: extern "C" fn(u32) -> bool,
     pub send: extern "C" fn(*mut CommandCost, *mut (), u16, u8),
     pub service: u8,
     pub mass_send: u8,
@@ -66,7 +65,7 @@ unsafe fn generate(s: &Services, list: &mut List, vli: &VehicleListIdentifier) -
 }
 /// `IsDepotTile(tile) && IsTileOwner(tile, _current_company)`.
 fn depot(s: &Services, tile: TileIndex) -> bool {
-    (s.is_depot)(tile.0)
+    crate::depot_map::is_depot_tile(&crate::map_func::World::new(s.common.base.shared), tile)
         && crate::tile_map::is_tile_owner(
             s.common.base.shared,
             TileIndex(tile.0),
@@ -525,5 +524,5 @@ pub unsafe extern "C" fn openttd_rust_vehicle_send(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleListId" ["probe"] => ListId { kind, vehicle_type, company, index, valid, };
-    "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, is_depot, send, service, mass_send, dont_cancel, invalid_client, };
+    "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, send, service, mass_send, dont_cancel, invalid_client, };
 }

@@ -250,12 +250,12 @@ fn not_reached() -> ! {
 fn can_plant_trees_on_tile(w: &World, tile: TileIndex, allow_desert: bool) -> bool {
     match w.kind(tile) {
         TileType::MP_WATER => {
-            !w.bridge_above(tile.0)
+            !w.bridge_above(tile)
                 && w.asserted(|m| crate::water_map::is_coast(m, tile.0))
                 && !crate::slope_func::is_slope_with_one_corner_raised(w.tile_slope(tile))
         }
         TileType::MP_CLEAR => {
-            !w.bridge_above(tile.0)
+            !w.bridge_above(tile)
                 && !w.asserted(|m| is_clear_ground(m, tile, ClearGround::CLEAR_FIELDS))
                 && !w.asserted(|m| is_clear_ground(m, tile, ClearGround::CLEAR_ROCKS))
                 && (allow_desert
@@ -967,7 +967,7 @@ fn cmd_plant_tree(
                         break 'next;
                     }
 
-                    if w.bridge_above(current_tile.0) {
+                    if w.bridge_above(current_tile) {
                         msg = STR_ERROR_SITE_UNSUITABLE;
                         break 'next;
                     }

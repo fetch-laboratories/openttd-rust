@@ -163,7 +163,7 @@ impl World<'_> {
         (self.a.water_type)(t).0
     }
     fn flat(&self, t: u32) -> bool {
-        crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(t))
+        crate::map_func::World::new(self.s).tile_slope(TileIndex(t))
             == crate::slope_type::Slope::SLOPE_FLAT
     }
     fn canal(&self, t: u32) -> bool {
@@ -200,7 +200,7 @@ impl World<'_> {
         // SAFETY: Direct call; no borrow of native map data spans this entry.
         unsafe {
             crate::water::clear_neighbour_non_flooding_states(
-                crate::tile_type::TileIndex(tile),
+                TileIndex(tile),
                 self.size_x,
                 self.size_y,
                 self.water,
@@ -236,8 +236,8 @@ impl World<'_> {
             self.error(out, STR_ERROR_MUST_BE_BUILT_ON_WATER.0);
             return;
         }
-        if crate::map_func::World::new(self.s).bridge_above(tile)
-            || crate::map_func::World::new(self.s).bridge_above(tile2)
+        if crate::map_func::World::new(self.s).bridge_above(TileIndex(tile))
+            || crate::map_func::World::new(self.s).bridge_above(TileIndex(tile2))
         {
             self.error(out, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
             return;
@@ -385,7 +385,7 @@ impl World<'_> {
             };
         }
         for (part, t) in [tile, lower, upper].into_iter().enumerate() {
-            if crate::map_func::World::new(self.s).bridge_above(t)
+            if crate::map_func::World::new(self.s).bridge_above(TileIndex(t))
                 && self.bridge_height(t)
                     < (self.s.tile_max_z)(t) + get_lock_part_minimal_bridge_height(part)
             {
@@ -450,7 +450,7 @@ impl World<'_> {
     fn build_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         let dir = get_inclined_slope_direction_raw(
             crate::map_func::World::new(self.s)
-                .tile_slope(crate::tile_type::TileIndex(tile))
+                .tile_slope(TileIndex(tile))
                 .0,
         );
         if dir == INVALID_DIAGDIR {
@@ -460,7 +460,7 @@ impl World<'_> {
         let lower = self
             .map
             .tile_add_by_diag_dir(
-                crate::tile_type::TileIndex(tile),
+                TileIndex(tile),
                 crate::direction_func::reverse_diag_dir(
                     DiagDirection(dir),
                     crate::map_func::native_check,
@@ -554,15 +554,14 @@ impl World<'_> {
         let mut iter = crate::tilearea::TileIterator::create(
             self.map,
             size,
-            crate::tile_type::TileIndex(end),
-            crate::tile_type::TileIndex(start),
+            TileIndex(end),
+            TileIndex(start),
             diagonal,
             check,
         );
         while iter.tile().0 != INVALID_TILE {
             let tile = iter.tile().0;
-            let slope =
-                crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(tile));
+            let slope = crate::map_func::World::new(self.s).tile_slope(TileIndex(tile));
             if slope != crate::slope_type::Slope::SLOPE_FLAT
                 && (wc != crate::water_map::WaterClass::River || !is_inclined_slope_raw(slope.0))
             {
@@ -599,7 +598,7 @@ impl World<'_> {
                         }
                         0 if crate::tile_map::tile_height_in(
                             &crate::map_func::World::new(self.s),
-                            crate::tile_type::TileIndex(tile),
+                            TileIndex(tile),
                         ) == 0 =>
                         {
                             (self.water.make_sea)(tile);
@@ -666,8 +665,7 @@ impl World<'_> {
                 self.expense(out, price);
             }
             1 => {
-                let slope = crate::map_func::World::new(self.s)
-                    .tile_slope(crate::tile_type::TileIndex(tile));
+                let slope = crate::map_func::World::new(self.s).tile_slope(TileIndex(tile));
                 self.cost(ret).no_vehicle(self.cmd, tile);
                 if self.take_failure(out, ret) {
                     return;

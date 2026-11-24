@@ -11,7 +11,11 @@ At a revision (default HEAD) it counts, over rust/openttd-kernels/src:
 - literal sites that stand for a named value;
 - Rust functions with more than seven parameters, as FFI exports, commands
   (taking the command's `flags`, as `u16` or `DoCommandFlags`) and helpers (#874), outside test code
-  and `#[cfg(test)]` modules.
+  and `#[cfg(test)]` modules;
+- over every Rust file under rust/, #892's assertion macros (`debug_assert*!`,
+  `assert*!`, `unreachable!`) outside test code, comments and literals, as
+  runtime sites (`assertion macro`) and sites in a `const` item's initialiser
+  (`const assertion`), on a line of their own before the comment pairing.
 
 With file paths it prints those files' residue instead of the totals, including
 the finished-file residue classes (#901): calls to `*_raw` adapters and
@@ -30,13 +34,17 @@ over seven parameters, against the merge base; existing occurrences pass. The Ru
 and the candidate C++ come from the revision's archive, the original from the
 baseline commit that the revision's own migration/baseline.json pins. Counts are estimates for stocktakes,
 not a gate: matching is by facade, export and name, as the 2026-11-06 overhaul
-measured them.
+measured them. `--compare BASE_REF` prints, for the files given or else the
+finished files that the head lists and the base lacks or changed, a table of
+every row at the merge base and at the head, then each row new or grown at the
+head; it gates nothing.
 """
 
 import argparse
 import importlib
 import io
 import json
+import posixpath
 import re
 import subprocess
 import sys
@@ -110,6 +118,7 @@ class Function:
     comments: int
     doc: str
     calls: list[str] = field(default_factory=list)
+    scope: str = ""
 
     @property
     def size(self) -> int:
@@ -149,18 +158,63 @@ def leading(node: Node, data: bytes) -> str:
     return "\n".join(reversed(found))
 
 
+# `#[test]`, `#[cfg(test)]` and `#[cfg(all(test, ...))]`; `cfg(any(test, ...))`
+# also builds production code.
+TEST_ATTRIBUTE = re.compile(r"#\[\s*(?:test\s*\]|cfg\s*\(\s*(?:all\s*\(\s*)?test\b)")
+TEST_FILE_ATTRIBUTE = re.compile(r"#!\[\s*cfg\s*\(\s*test\s*\)\s*\]")
+
+
+def attributes(node: Node, data: bytes) -> list[str]:
+    """The attribute items directly before an item, past the comments among them."""
+    found = []
+    previous = node.prev_named_sibling
+    while previous and previous.type in (*COMMENTS, "attribute_item"):
+        if previous.type == "attribute_item":
+            found.append(text(previous, data))
+        previous = previous.prev_named_sibling
+    return found
+
+
+def test_path(path: str) -> bool:
+    return "/tests/" in path or path.endswith("/tests.rs")
+
+
+def test_item(node: Node, data: bytes) -> bool:
+    """A `mod tests` or `mod test`, or an item a test attribute marks."""
+    name = node.child_by_field_name("name")
+    if node.type == "mod_item" and text(name, data) in ("tests", "test"):
+        return True
+    return any(TEST_ATTRIBUTE.match(item) for item in attributes(node, data))
+
+
 def in_test(node: Node, data: bytes, path: str) -> bool:
-    if "/tests/" in path or path.endswith("/tests.rs"):
+    if test_path(path):
         return True
     current: Node | None = node
     while current:
-        name = current.child_by_field_name("name")
-        if current.type == "mod_item" and text(name, data) in ("tests", "test"):
-            return True
-        if re.search(r"#\[(?:cfg\(test\)|test\])", leading(current, data)):
+        if test_item(current, data):
             return True
         current = current.parent
     return False
+
+
+def scope(node: Node, data: bytes) -> str:
+    """A function's name inside its inline modules, functions and `impl` block,
+    such as `signal::impl Update for Train::update`."""
+    parts = [text(node.child_by_field_name("name"), data)]
+    current = node.parent
+    while current:
+        name = current.child_by_field_name("name")
+        if current.type == "impl_item":
+            kind = " ".join(text(current.child_by_field_name("type"), data).split())
+            trait = current.child_by_field_name("trait")
+            parts.append(
+                f"impl {text(trait, data)} for {kind}" if trait else f"impl {kind}"
+            )
+        elif current.type in ("mod_item", "function_item", "trait_item"):
+            parts.append(text(name, data))
+        current = current.parent
+    return "::".join(reversed(parts))
 
 
 def comment_lines(body: Node, data: bytes) -> int:
@@ -216,6 +270,7 @@ def functions(
                 comment_lines(body, data),
                 leading(node, data),
                 calls,
+                scope(node, data) if language == "rust" else name,
             )
         )
     return found
@@ -383,13 +438,16 @@ class Matcher:
         ]
 
 
-def comment_pairs(head: str) -> list[tuple[Function, Function]]:
+def comment_pairs(
+    head: str, tests: set[str] | None = None
+) -> list[tuple[Function, Function]]:
+    """Rust bodies paired with original ones; test files pair with nothing."""
     baseline = baseline_commit(head)
     candidate = archive(head, RUST, "src")
     rust = [
         function
         for path, data in sorted(candidate.items())
-        if path.startswith(RUST) and path.endswith(".rs")
+        if path.startswith(RUST) and path.endswith(".rs") and path not in (tests or ())
         for function in functions(path, data, "rust", tests=False)
     ]
     facades = [
@@ -493,10 +551,19 @@ def homonym(name: str, kind: str) -> bool:
 
 @dataclass
 class Site:
+    """One row; `key` names its occurrence for `--compare` where the detail
+    does not (a function in its scope), and `amount` is what can grow."""
+
     path: str
     line: int
     kind: str
     detail: str
+    key: str = ""
+    amount: int = 0
+
+    @property
+    def identity(self) -> str:
+        return self.key or self.detail
 
 
 def type_sites(path: str, source: str) -> list[Site]:
@@ -527,17 +594,65 @@ def type_sites(path: str, source: str) -> list[Site]:
 LONG_PARAMETERS = 7
 
 
+PATH_ATTRIBUTE = re.compile(r'#\[\s*path\s*=\s*"([^"]+)"\s*\]')
+
+
+def module_files(path: str, node: Node, data: bytes) -> set[str]:
+    """The files a `mod name;` item names: inside the inline modules around it,
+    or where its `#[path]` attribute points."""
+    file = PurePosixPath(path)
+    inline = []
+    current = node.parent
+    while current:
+        if current.type == "mod_item":
+            inline.append(text(current.child_by_field_name("name"), data))
+        current = current.parent
+    stem = [] if file.name in ("lib.rs", "mod.rs", "main.rs") else [file.stem]
+    directory = file.parent.joinpath(*stem, *reversed(inline))
+    name = text(node.child_by_field_name("name"), data)
+    for attribute in attributes(node, data):
+        if found := PATH_ATTRIBUTE.match(attribute):
+            # Outside inline modules a path is relative to the file's own folder.
+            base = directory if inline else file.parent
+            return {posixpath.normpath(PurePosixPath(base, found[1]))}
+    return {str(directory / f"{name}.rs"), str(directory / name / "mod.rs")}
+
+
+def declared_modules(path: str, source: str) -> tuple[bool, set[str], set[str]]:
+    """Whether a file is test code by its path or inner attribute, and the module
+    files its `mod name;` items declare, as (file, test modules, other modules)."""
+    data = source.encode()
+    root = PARSERS["rust"].parse(data).root_node
+    whole = test_path(path) or any(
+        child.type == "inner_attribute_item"
+        and TEST_FILE_ATTRIBUTE.fullmatch(text(child, data))
+        for child in root.children
+    )
+    tests: set[str] = set()
+    others: set[str] = set()
+    for node in walk(root):
+        if node.type != "mod_item" or node.child_by_field_name("body") is not None:
+            continue
+        files = module_files(path, node, data)
+        (tests if in_test(node, data, path) else others).update(files)
+    return whole, tests, others
+
+
 def test_modules(rust: dict[str, str]) -> set[str]:
-    """Paths of the module files that a `#[cfg(test)] mod name;` declares."""
-    found = set()
+    """Paths of the test files: those a test `mod name;` declares (`#[cfg(test)]`
+    or `in_test`'s other rules, read from the syntax tree), those `in_test`'s path
+    rule names, those opening with `#![cfg(test)]`, and the modules they declare."""
+    found: set[str] = set()
+    children: dict[str, set[str]] = {}
     for path, source in rust.items():
-        parent = PurePosixPath(path)
-        if parent.name not in ("lib.rs", "mod.rs"):
-            parent = parent.with_suffix("")
-        else:
-            parent = parent.parent
-        for name in re.findall(r"#\[cfg\(test\)\]\s*(?:pub\S*\s+)?mod (\w+);", source):
-            found |= {str(parent / f"{name}.rs"), str(parent / name / "mod.rs")}
+        whole, tests, others = declared_modules(path, source)
+        found |= tests | ({path} if whole else set())
+        children[path] = others
+    pending = list(found)
+    while pending:
+        for child in children.get(pending.pop(), set()) - found:
+            found.add(child)
+            pending.append(child)
     return found
 
 
@@ -572,9 +687,157 @@ def long_functions(path: str, source: str) -> list[Site]:
         else:
             kind = "helper"
         found.append(
-            Site(path, node.start_point[0] + 1, kind, f"{name}: {count} parameters")
+            Site(
+                path,
+                node.start_point[0] + 1,
+                kind,
+                f"{name}: {count} parameters",
+                scope(node, data),
+                count,
+            )
         )
     return found
+
+
+# #892's assertion macros, by class; a macro name must be followed by `!` and a
+# delimiter, so `assert != x`, `prefix_assert!` and `assert_matches!` are not sites.
+ASSERTION = re.compile(
+    r"(?<!\w)(debug_assert(?:_eq|_ne)?|assert(?:_eq|_ne)?|unreachable)\s*!\s*[(\[{]"
+)
+ASSERTION_CLASSES = ("debug_assert", "assert", "unreachable")
+LITERAL_NODES = ("string_literal", "raw_string_literal", "char_literal")
+CONST_ITEM = re.compile(r"\bconst\s+\$?\w+\s*:")
+
+
+def assertion_code(data: bytes, root: Node) -> str:
+    """The file's text with comments, literals and test items blanked, decoded
+    byte for byte so that string offsets are the parser's byte offsets."""
+    code = bytearray(data)
+
+    def visit(node: Node) -> None:
+        if node.type in (*COMMENTS, *LITERAL_NODES) or test_item(node, data):
+            code[node.start_byte : node.end_byte] = re.sub(
+                rb"[^\n]", b" ", code[node.start_byte : node.end_byte]
+            )
+            return
+        for child in node.children:
+            visit(child)
+
+    visit(root)
+    return code.decode("latin-1")
+
+
+def contexts(root: Node, code: str) -> list[tuple[int, int, bool]]:
+    """The spans that decide a site's class, as (start, end, compile time): each
+    parsed `const` item's value and each function, and in a `macro_rules!` body,
+    where the parser gives only tokens, the `const` initialisers of the token scan."""
+    spans = []
+    for node in walk(root):
+        value = node.child_by_field_name("value")
+        if node.type == "const_item" and value is not None:
+            spans.append((value.start_byte, value.end_byte, True))
+        elif node.type == "function_item":
+            spans.append((node.start_byte, node.end_byte, False))
+        elif node.type == "macro_definition":
+            start = node.start_byte
+            body = code[start : node.end_byte]
+            spans += [(start + a, start + b, True) for a, b in const_spans(body)]
+    return spans
+
+
+def compile_time(spans: list[tuple[int, int, bool]], offset: int) -> bool:
+    """Whether the innermost span around offset is a `const` initialiser."""
+    around = [span for span in spans if span[0] <= offset < span[1]]
+    return min(around, key=lambda s: s[1] - s[0], default=(0, 0, False))[2]
+
+
+def assignment(code: str, index: int) -> bool:
+    """A lone `=`, not part of `==`, `=>`, `<=`, `>=` or `!=`."""
+    return code[index - 1] not in "=!<>" and code[index + 1 : index + 2] not in "=>"
+
+
+def initialiser_start(code: str, start: int) -> int | None:
+    """The `=` of a `const NAME: TYPE = ...;` whose type starts at start, or None
+    for a declaration without one (a trait's `const X: u8;`)."""
+    depth = 0
+    for index in range(start, len(code)):
+        char = code[index]
+        if char == "=" and depth == 0 and assignment(code, index):
+            return index
+        if (char == ";" and depth == 0) or (char == "{" and depth == 0):
+            return None
+        depth += (char in "([{") - (char in ")]}")
+        if depth < 0:
+            return None
+    return None
+
+
+def initialiser(code: str, start: int) -> tuple[int, int] | None:
+    """The span of the initialiser of a `const` item whose type starts at start,
+    up to its `;` or the bracket that closes around it."""
+    begin = initialiser_start(code, start)
+    if begin is None:
+        return None
+    depth = 0
+    for index in range(begin, len(code)):
+        depth += (code[index] in "([{") - (code[index] in ")]}")
+        if depth < 0 or (code[index] == ";" and depth == 0):
+            return begin, index
+    return begin, len(code)
+
+
+def const_spans(code: str) -> list[tuple[int, int]]:
+    """Initialisers of `const` items in a macro body's tokens; a generic
+    `<const N: usize>` parameter and a `const fn` are not items with one."""
+    spans = []
+    for match in CONST_ITEM.finditer(code):
+        if code[: match.start()].rstrip()[-1:] in ("<", ","):
+            continue
+        if (span := initialiser(code, match.end())) is not None:
+            spans.append(span)
+    return spans
+
+
+def assertion_sites(path: str, source: str) -> list[Site]:
+    """#892's sites of one non-test file: `assertion macro` at run time, or
+    `const assertion` inside a `const` item's initialiser, the original's
+    `static_assert`."""
+    if test_path(path):
+        return []
+    data = source.encode()
+    root = PARSERS["rust"].parse(data).root_node
+    blanked = assertion_code(data, root)
+    spans = contexts(root, blanked)
+    # Names match in decoded text, where a UTF-8 identifier stays one word; the
+    # class reads the span at the match's byte offset.
+    code = blanked.encode("latin-1").decode()
+    sites = []
+    for match in ASSERTION.finditer(code):
+        offset = len(code[: match.start()].encode())
+        kind = "const assertion" if compile_time(spans, offset) else "assertion macro"
+        line = code.count("\n", 0, match.start()) + 1
+        sites.append(Site(path, line, kind, f"{match[1]}!"))
+    return sites
+
+
+def assertion_class(site: Site) -> str:
+    name = site.detail.removesuffix("!")
+    return next(c for c in ASSERTION_CLASSES if name.startswith(c))
+
+
+def assertion_line(revision: str, sites: list[Site]) -> str:
+    runtime = [s for s in sites if s.kind == "assertion macro"]
+    compile_time = [s for s in sites if s.kind == "const assertion"]
+    classes = ", ".join(
+        f"{sum(assertion_class(s) == c for s in runtime)} {c}"
+        for c in ASSERTION_CLASSES
+    )
+    return (
+        f"Assertion macros at {revision} (#892): {len(runtime)} runtime sites in "
+        f"{len({s.path for s in runtime})} files ({classes}), "
+        f"{len(compile_time)} const assertions, {len(sites)} in "
+        f"{len({s.path for s in sites})} files together"
+    )
 
 
 # Residue classes the finished-file gate checks (#901), keyed by identifier, never by line.
@@ -695,18 +958,25 @@ def show(revision: str, path: str) -> str | None:
     return shown.stdout.decode() if shown.returncode == 0 else None
 
 
-def renamed_from(base: str, head: str) -> dict[str, str]:
-    """Head path to base path for files Git sees as renamed."""
-    names = subprocess.check_output(
-        ["git", "diff", "--name-status", "-M", base, head, "--", RUST],
+def renamed_from(base: str, head: str, scope: str = RUST) -> dict[str, str]:
+    """Head path to base path for files under scope that Git sees as renamed."""
+    # NUL-delimited, so Git quotes no path: status, then one path or, for a
+    # rename or copy, the old path and the new one.
+    fields = subprocess.check_output(
+        ["git", "diff", "--name-status", "-z", "-M", base, head, "--", scope],
         cwd=ROOT,
         text=True,
-    )
-    return {
-        parts[2]: parts[1]
-        for parts in (line.split("\t") for line in names.splitlines())
-        if parts[0].startswith("R")
-    }
+    ).split("\0")
+    renames, index = {}, 0
+    while index < len(fields) and fields[index]:
+        status = fields[index]
+        if status[0] in "RC":
+            if status[0] == "R":
+                renames[fields[index + 2]] = fields[index + 1]
+            index += 3
+        else:
+            index += 2
+    return renames
 
 
 def growth(path: str, before: str, after: str) -> list[Site]:
@@ -951,18 +1221,26 @@ def candidate_rows(
     yield from one_call_services(services(rust, tests), paths)
 
 
-def print_residue(rust: dict[str, str], paths: set[str]) -> None:
-    """The residue classes of paths, except long commands, which print above."""
+def show_row(site: Site, prefix: str = "") -> None:
+    print(f"{site.path}:{site.line}: {prefix}{site.kind}: {site.detail}", flush=True)
+
+
+def listed_rows(
+    rust: dict[str, str], paths: set[str], tests: set[str], shown: bool
+) -> list[Site]:
+    """The residue classes of paths, except long commands, then the candidates."""
+    rows = []
     for path in sorted(paths):
         for site in residue(path, rust[path]):
             if site.kind != "long command":
-                print(
-                    f"{site.path}:{site.line}: {site.kind}: {site.detail}", flush=True
-                )
-
-
-def show_row(site: Site, prefix: str = "") -> None:
-    print(f"{site.path}:{site.line}: {prefix}{site.kind}: {site.detail}", flush=True)
+                rows.append(site)
+                if shown:
+                    show_row(site)
+    for site in candidate_rows(rust, paths, tests):
+        rows.append(site)
+        if shown:
+            show_row(site)
+    return rows
 
 
 def file_rows(
@@ -987,11 +1265,230 @@ def file_rows(
         long += found
         for site in found if shown else []:
             show_row(site, "long ")
-    if shown:
-        print_residue(rust, set(paths) - tests)
-        for site in candidate_rows(rust, set(paths) - tests, tests):
-            show_row(site)
     return sites, long
+
+
+@dataclass
+class Measure:
+    """One revision's rows for the measured files; `listed` (residue and
+    candidates) is filled only when files were named."""
+
+    revision: str
+    pairs: int
+    sites: list[Site]
+    long: list[Site]
+    listed: list[Site]
+    assertions: list[Site]
+    missing: list[Site]
+
+    def rows(self) -> list[Site]:
+        """Every row under the name --compare counts it by."""
+        long = [
+            Site(s.path, s.line, f"long {s.kind}", s.detail, s.key, s.amount)
+            for s in self.long
+        ]
+        return [*self.missing, *self.sites, *long, *self.listed, *self.assertions]
+
+
+def rust_sources(revision: str) -> dict[str, str]:
+    """Every tracked Rust file under rust/ at revision."""
+    return {
+        path: data.decode()
+        for path, data in archive(revision, "rust").items()
+        if path.endswith(".rs")
+    }
+
+
+def missing_rows(
+    revision: str, selected: set[str] | None, tests: set[str]
+) -> tuple[int, list[Site]]:
+    """The matched bodies' count and the bodies that lack original comment lines."""
+    pairs = [
+        (r, o)
+        for r, o in comment_pairs(revision, tests)
+        if selected is None or r.path in selected
+    ]
+    rows = [
+        Site(
+            r.path,
+            r.line,
+            "missing comment lines",
+            f"{o.comments - r.comments} ({r.name}; original {o.path}:{o.line} {o.name})",
+            r.scope,
+            o.comments - r.comments,
+        )
+        for r, o in pairs
+        if o.comments > r.comments
+    ]
+    return len(pairs), sorted(rows, key=lambda s: (s.path, s.line))
+
+
+def measure(
+    revision: str, tree: dict[str, str], selected: set[str] | None, shown: bool
+) -> Measure:
+    """The inventory of selected files (None for the whole tree) at revision.
+
+    Shown, it prints each named file's rows as they are found and the
+    assertion line before the slow comment pairing.
+    """
+    rust = {
+        path: source for path, source in tree.items() if path.startswith(f"{RUST}/")
+    }
+    measured = [path for path in sorted(rust) if selected is None or path in selected]
+    tests = test_modules(tree)
+    rows = shown and selected is not None
+    sites, long = file_rows(rust, measured, tests, rows)
+    listed = (
+        listed_rows(rust, set(measured) - tests, tests, rows)
+        if selected is not None
+        else []
+    )
+    assertions = [
+        site
+        for path in sorted(tree)
+        if (selected is None or path in selected) and path not in tests
+        for site in assertion_sites(path, tree[path])
+    ]
+    if shown:
+        for site in assertions if rows else []:
+            show_row(site)
+        print(assertion_line(revision, assertions), flush=True)
+    pairs, missing = missing_rows(revision, selected, tests)
+    if rows:
+        for site in missing:
+            show_row(site)
+    return Measure(revision, pairs, sites, long, listed, assertions, missing)
+
+
+def totals_line(found: Measure) -> str:
+    counts = {
+        kind: sum(s.kind == kind for s in found.sites)
+        for kind in ("bare integer", "wrapper", "constant", "literal")
+    }
+    long = found.long
+    return (
+        f"Code-standards inventory at {found.revision}: {found.pairs} matched bodies, "
+        f"{sum(s.amount for s in found.missing)} missing comment lines, "
+        f"{counts['bare integer']} bare-integer sites, {counts['wrapper']} wrappers, "
+        f"{counts['constant']} named constants, {counts['literal']} literal sites, "
+        f"{len(long)} functions over {LONG_PARAMETERS} parameters "
+        f"({sum(s.kind == 'ffi export' for s in long)} FFI exports, "
+        f"{sum(s.kind == 'helper' for s in long)} helpers, "
+        f"{sum(s.kind == 'command' for s in long)} commands)"
+    )
+
+
+# --compare's rows, in table order; missing comment lines count their lines.
+COMPARED = (
+    "missing comment lines",
+    "bare integer",
+    "wrapper",
+    "constant",
+    "literal",
+    "long ffi export",
+    "long helper",
+    "long command",
+    "raw adapter call",
+    "export call",
+    "execute flag",
+    "scratch pool",
+    "one-call service",
+    "unsuffixed adapter",
+    "hand-built flag bit",
+    "integer flag set",
+    "assertion macro",
+    "const assertion",
+)
+
+
+def count(rows: list[Site], kind: str) -> int:
+    chosen = [row for row in rows if row.kind == kind]
+    return (
+        sum(row.amount for row in chosen)
+        if kind == "missing comment lines"
+        else len(chosen)
+    )
+
+
+def changed_rows(
+    before: list[Site], after: list[Site]
+) -> list[tuple[Site, Site | None]]:
+    """Head rows of one file with no base row of the same kind and identity, and
+    those whose amount grew, paired with the base row they grew from.
+
+    Lines never pair rows, so an occurrence that only moved is not new, and one
+    replaced by another of a new name is new however the counts compare.
+    """
+    unpaired: dict[tuple[str, str], list[Site]] = defaultdict(list)
+    for row in before:
+        unpaired[row.kind, row.identity].append(row)
+    found: list[tuple[Site, Site | None]] = []
+    for row in after:
+        same = unpaired[row.kind, row.identity]
+        if not same:
+            found.append((row, None))
+            continue
+        base = same.pop(0)
+        if row.amount > base.amount:
+            found.append((row, base))
+    return found
+
+
+def compared_files(base: str, head: str, renames: dict[str, str]) -> list[str]:
+    """Finished files at head that the base list lacks or whose text changed."""
+    listed = set(finished_files(base))
+    return [
+        path
+        for path in finished_files(head)
+        if path not in listed or show(base, renames.get(path, path)) != show(head, path)
+    ]
+
+
+def compare(base_ref: str, head: str, files: list[str]) -> int:
+    """Print the inventory of a pass's files at the merge base and at head, and
+    the rows new or grown at head. It reports and gates nothing."""
+    base = subprocess.check_output(
+        ["git", "merge-base", base_ref, head], cwd=ROOT, text=True
+    ).strip()
+    renames = renamed_from(base, head, "rust")
+    selected = files or compared_files(base, head, renames)
+    after_tree = rust_sources(head)
+    if unknown := set(selected) - set(after_tree):
+        sys.exit(f"not a Rust source at {head}: {', '.join(sorted(unknown))}")
+    if not selected:
+        print(f"No finished file changed between {base} and {head}.")
+        return 0
+    paths = {path: renames.get(path, path) for path in selected}
+    before_tree = rust_sources(base)
+    before = measure(
+        base, before_tree, set(paths.values()) & set(before_tree), False
+    ).rows()
+    after = measure(head, after_tree, set(selected), False).rows()
+    print(f"Inventory at the merge base {base} and at {head} of:")
+    for path in sorted(paths):
+        renamed = f" (at the base {paths[path]})" if paths[path] != path else ""
+        print(f"- {path}{renamed}")
+    print("\n| Row | Base | Head |\n| --- | ---: | ---: |")
+    for kind in COMPARED:
+        old, new = count(before, kind), count(after, kind)
+        if old or new:
+            print(f"| {kind} | {old} | {new} |")
+    changed = [
+        pair
+        for path in sorted(paths)
+        for pair in sorted(
+            changed_rows(
+                [row for row in before if row.path == paths[path]],
+                [row for row in after if row.path == path],
+            ),
+            key=lambda pair: pair[0].line,
+        )
+    ]
+    print(f"\n{len(changed)} rows new or grown at the head:")
+    for row, grown in changed:
+        was = f" (grown from {grown.amount})" if grown else ""
+        print(f"{row.path}:{row.line}: {row.kind}: {row.detail}{was}")
+    return 0
 
 
 def main() -> int:
@@ -1009,48 +1506,22 @@ def main() -> int:
         metavar="BASE_REF",
         help=f"fail on new residue in the files {FINISHED} lists, against the merge base with BASE_REF",
     )
+    parser.add_argument(
+        "--compare",
+        metavar="BASE_REF",
+        help=f"compare the files given, or else the changed files {FINISHED} lists, at the merge base with BASE_REF and at the head",
+    )
     args = parser.parse_args()
+    files = [str(PurePosixPath(path)) for path in args.files]
     if args.gate:
         return gate(args.gate, args.head)
-    rust = {
-        path: data.decode()
-        for path, data in archive(args.head, RUST).items()
-        if path.endswith(".rs")
-    }
-    selected = {str(PurePosixPath(path)) for path in args.files}
-    unknown = selected - set(rust)
-    if unknown:
+    if args.compare:
+        return compare(args.compare, args.head, files)
+    tree = rust_sources(args.head)
+    if unknown := set(files) - set(tree):
         sys.exit(f"not a Rust source at {args.head}: {', '.join(sorted(unknown))}")
-    measured = [path for path in sorted(rust) if not selected or path in selected]
-    tests = test_modules(rust)
-    sites, long = file_rows(rust, measured, tests, bool(selected))
-    pairs = [
-        (r, o)
-        for r, o in comment_pairs(args.head)
-        if not selected or r.path in selected
-    ]
-    missing = [
-        (r, o, o.comments - r.comments) for r, o in pairs if o.comments > r.comments
-    ]
-    if selected:
-        for r, o, deficit in sorted(missing, key=lambda m: (m[0].path, m[0].line)):
-            print(
-                f"{r.path}:{r.line}: missing comment lines: {deficit} ({r.name}; original {o.path}:{o.line} {o.name})"
-            )
-    counts = {
-        kind: sum(s.kind == kind for s in sites)
-        for kind in ("bare integer", "wrapper", "constant", "literal")
-    }
-    print(
-        f"Code-standards inventory at {args.head}: {len(pairs)} matched bodies, "
-        f"{sum(m[2] for m in missing)} missing comment lines, "
-        f"{counts['bare integer']} bare-integer sites, {counts['wrapper']} wrappers, "
-        f"{counts['constant']} named constants, {counts['literal']} literal sites, "
-        f"{len(long)} functions over {LONG_PARAMETERS} parameters "
-        f"({sum(s.kind == 'ffi export' for s in long)} FFI exports, "
-        f"{sum(s.kind == 'helper' for s in long)} helpers, "
-        f"{sum(s.kind == 'command' for s in long)} commands)"
-    )
+    found = measure(args.head, tree, set(files) or None, True)
+    print(totals_line(found))
     return 0
 
 

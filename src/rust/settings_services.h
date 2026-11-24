@@ -110,7 +110,6 @@ inline int32_t RustStartingYear() noexcept { return _settings_game.game_creation
 /** Adapt legacy callback widths and unused context arguments to a canonical setting read. */
 template <typename Result, auto Read, typename... Args>
 inline Result RustSettingRead(Args...) noexcept { return Read(); }
-inline uint8_t RustVehicleSmokeAmount() noexcept { return _settings_game.vehicle.smoke_amount; }
 inline uint16_t RustMinutesPerCalendarYear() noexcept { return _settings_game.economy.minutes_per_calendar_year; }
 inline bool RustUsingWallclockUnits(bool newgame) noexcept { return (newgame ? _settings_newgame : _settings_game).economy.timekeeping_units == TKU_WALLCLOCK; }
 inline VehicleDefaultSettings *RustClientVehicleDefaults() noexcept { return &_settings_client.company.vehicle; }

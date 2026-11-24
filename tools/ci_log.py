@@ -20,7 +20,7 @@ from typing import NotRequired, TypedDict
 
 import vcs
 
-# The checkout's .local, unresolved: it is a symlink onto the output disk.
+# The checkout's .local, unresolved.
 LOGS = vcs.ROOT / ".local" / "ci-logs"
 # GitHub's envelope: an ISO timestamp with 7 fractional digits and one space.
 STAMP = re.compile(r"^\ufeff?(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.\d+)?Z ")

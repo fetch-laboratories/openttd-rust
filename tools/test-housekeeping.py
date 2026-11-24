@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -140,8 +140,10 @@ class HousekeepingTests(unittest.TestCase):
         self.branch("squashed")
         self.branch("fresh", commit=False)
         self.removable |= {self.top / "trees" / n for n in ("merged", "closed")}
-        self.removable |= {self.top / "trees" / n for n in ("closed-local", "squashed")}
-        self.kept |= {self.top / "trees" / n for n in ("merged-dirty", "open", "fresh")}
+        self.removable.add(self.top / "trees/squashed")
+        # A closed PR's checkout with a commit origin lacks holds unpushed work.
+        kept = ("merged-dirty", "open", "fresh", "closed-local")
+        self.kept |= {self.top / "trees" / n for n in kept}
         reference = self.main / ".local/reference/openttd"
         git(self.main, "worktree", "add", "--quiet", "--detach", str(reference))
         self.kept.add(reference)
@@ -197,11 +199,21 @@ class HousekeepingTests(unittest.TestCase):
         closed = self.review_checkout("recent-closed", "closed")
         unpushed = self.review_checkout("recent-unpushed", "closed-local")
         ambiguous = self.t3_tree("recent-ambiguous", detached=True)
+        # A checkout with no PR of its own at a merged head, such as a reviewer's
+        # once the reviewed PR merges, is not finished by that merge.
+        reviewing = self.review_checkout("recent-reviewing", "merged")
         protected = {
             name: self.review_checkout(f"recent-{name}", "merged")
             for name in ("dirty", "locked", "reference", "cwd", "writer")
         }
-        for tree in (merged, closed, unpushed, ambiguous, *protected.values()):
+        for tree in (
+            merged,
+            closed,
+            unpushed,
+            ambiguous,
+            reviewing,
+            *protected.values(),
+        ):
             admin = Path(git(tree, "rev-parse", "--absolute-git-dir").strip())
             os.utime(admin / "HEAD")
         write(protected["dirty"] / "untracked")
@@ -212,8 +224,10 @@ class HousekeepingTests(unittest.TestCase):
         output = write(protected["writer"] / ".local/output.log")
         references = str(protected["reference"])
         states = {
+            merged.name: "MERGED",
             closed.name: "CLOSED",
             unpushed.name: "CLOSED",
+            **{tree.name: "MERGED" for tree in protected.values()},
         }
         with patch.dict(PR_STATES, states), held_output(output) as child:
             (self.proc / str(child.pid)).symlink_to(Path("/proc") / str(child.pid))
@@ -239,7 +253,9 @@ class HousekeepingTests(unittest.TestCase):
                 late_cwd.unlink()
                 self.assertIsNone(housekeeping.remove(self.main, items[tree]))
                 self.assertFalse(tree.exists())
-            for tree in (unpushed, ambiguous, *protected.values()):
+            self.assertIn("active", items[reviewing].reason)
+            self.assertIn("unpushed", items[unpushed].reason)
+            for tree in (unpushed, ambiguous, reviewing, *protected.values()):
                 self.assertFalse(items[tree].remove, (tree, items[tree].reason))
                 self.assertTrue(tree.exists())
             child_write(child)
@@ -279,6 +295,139 @@ class HousekeepingTests(unittest.TestCase):
         self.assertEqual(
             git(self.main, "rev-parse", "origin/retained-detached").strip(), head
         )
+
+    def planned(self, tree: Path) -> housekeeping.Item:
+        return next(
+            item
+            for item in housekeeping.plan_worktrees(
+                self.main, housekeeping.list_worktrees(self.main)[1:], pr_state
+            )
+            if item.path == tree
+        )
+
+    def test_finished_prs_keep_unpushed_commits_until_pushed(self) -> None:
+        """A merged or closed PR's checkout with a commit origin lacks stays."""
+        closed = self.top / "trees/closed-local"
+        merged_later = self.branch("merged-later")
+        git(merged_later, "commit", "--quiet", "--allow-empty", "-m", "Add: later")
+        with patch.dict(PR_STATES, {"merged-later": "MERGED"}):
+            for tree, name in (
+                (closed, "closed-local"),
+                (merged_later, "merged-later"),
+            ):
+                with self.subTest(name=name):
+                    item = self.planned(tree)
+                    self.assertFalse(item.remove, item.reason)
+                    self.assertIn("unpushed", item.reason)
+                    git(
+                        tree,
+                        "push",
+                        "--quiet",
+                        "origin",
+                        f"HEAD:refs/heads/{name}-kept",
+                    )
+                    item = self.planned(tree)
+                    self.assertTrue(item.remove, item.reason)
+                    self.assertIsNone(housekeeping.remove(self.main, item))
+                    self.assertFalse(tree.exists())
+                    # Origin holds the commits under another name, so the branch stays.
+                    self.assertIn(name, self.branches())
+
+    def test_a_head_that_moves_after_planning_is_kept(self) -> None:
+        """A commit made after planning keeps the checkout and its branch."""
+        tree = self.top / "trees/merged"
+        with patch.dict(PR_STATES, {"merged": "MERGED"}):
+            item = self.planned(tree)
+        self.assertTrue(item.remove, item.reason)
+        self.assertEqual(item.branch, "merged")
+        git(tree, "commit", "--quiet", "--allow-empty", "-m", "Add: after planning")
+        head = git(tree, "rev-parse", "HEAD").strip()
+        self.assertIn("head moved", housekeeping.remove(self.main, item) or "")
+        self.assertTrue(tree.exists())
+        self.assertEqual(git(self.main, "rev-parse", "merged").strip(), head)
+        git(tree, "switch", "--quiet", "--detach", "HEAD~1")
+        self.assertIn("head moved", housekeeping.remove(self.main, item) or "")
+        self.assertTrue(tree.exists())
+
+    def test_a_head_that_moves_during_the_permission_walk_is_kept(self) -> None:
+        tree = self.top / "trees/merged"
+        # Its own merged PR makes it removable under .t3/worktrees/ too.
+        with patch.dict(PR_STATES, {"merged": "MERGED"}):
+            item = self.planned(tree)
+        self.assertTrue(item.remove, item.reason)
+        real = housekeeping.writable
+
+        def commit_during(path: Path) -> None:
+            real(path)
+            git(tree, "switch", "--quiet", "--detach")
+            git(tree, "commit", "--quiet", "--allow-empty", "-m", "Add: unpublished")
+
+        with patch.object(housekeeping, "writable", side_effect=commit_during):
+            self.assertIn("head moved", housekeeping.remove(self.main, item) or "")
+        self.assertTrue(tree.exists())
+
+    def closed_item(self) -> tuple[Path, housekeeping.Item]:
+        tree = self.top / "trees/closed"
+        with patch.dict(PR_STATES, {"closed": "CLOSED"}):
+            item = self.planned(tree)
+        self.assertTrue(item.remove, item.reason)
+        self.assertEqual(item.branch, "closed")
+        return tree, item
+
+    def after_checks(
+        self, action: Callable[[], object]
+    ) -> contextlib.AbstractContextManager[object]:
+        """Run ACTION after removal's last check, before the worktree goes."""
+        real = housekeeping.changed_refusal
+
+        def then(planned: housekeeping.Item) -> str | None:
+            refusal = real(planned)
+            action()
+            return refusal
+
+        return patch.object(housekeeping, "changed_refusal", side_effect=then)
+
+    def test_a_branch_that_moves_after_its_checkout_goes_is_kept(self) -> None:
+        tree, item = self.closed_item()
+        moved = git(
+            self.main, "commit-tree", "-m", "Add: elsewhere", f"{item.head}^{{tree}}"
+        ).strip()
+        update = ["update-ref", "refs/heads/closed", moved, item.head]
+        with self.after_checks(lambda: git(self.main, *update)):
+            refusal = housekeeping.remove(self.main, item)
+        self.assertIn("branch closed kept", refusal or "")
+        self.assertFalse(tree.exists())
+        self.assertEqual(git(self.main, "rev-parse", "closed").strip(), moved)
+
+    def test_a_removed_checkouts_branch_and_its_config_go(self) -> None:
+        _, item = self.closed_item()
+        self.assertIsNone(housekeeping.remove(self.main, item))
+        self.assertNotIn("closed", self.branches())
+        config = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.main),
+                "config",
+                "--get-regexp",
+                "^branch[.]closed[.]",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(config.stdout, "")
+
+    def test_a_branch_checked_out_again_elsewhere_is_kept(self) -> None:
+        """Reattached at the planned tip after its checkout went, the branch stays."""
+        tree, item = self.closed_item()
+        git(self.main, "worktree", "remove", str(tree))
+        again = self.top / "trees/closed-again"
+        git(self.main, "worktree", "add", "--quiet", str(again), "closed")
+        self.assertIn(
+            "branch closed kept", housekeeping.delete_branch(self.main, item) or ""
+        )
+        self.assertEqual(git(self.main, "rev-parse", "closed").strip(), item.head)
+        self.assertIn("origin", git(self.main, "config", "branch.closed.remote"))
 
     def test_finished_t3_and_protected_tasks(self) -> None:
         finished = self.t3_tree("t3-finished")
@@ -840,7 +989,7 @@ class HousekeepingTests(unittest.TestCase):
         target = write(self.top / "shared-build/CMakeCache.txt").parent
         (linked / "build-rust").symlink_to(target)
         self.age(linked, idle + 60)
-        # Listed by its resolved path, as main-local worktrees are on the HDD.
+        # Listed by its resolved path, outside the main checkout.
         # An idle non-T3 checkout under an open PR keeps its build (ruling B).
         plain = self.build(self.top / "trees/open", idle + 60)
         profile = self.top / "storage/worktrees/root-profile-824"

@@ -118,7 +118,7 @@ const OpenTTDVehicleMassServices &GetVehicleMassServices() noexcept
 {
 	static const OpenTTDVehicleMassServices services{
 		.common = &GetRustVehicleCommonServices(), .selection = &GetRustVehicleSelectionServices(),
-		.is_depot = SharedIsDepotTile, .send = VehicleTransactionSend,
+		.send = VehicleTransactionSend,
 		.service = DepotCommandFlags(DepotCommandFlag::Service).base(), .mass_send = DepotCommandFlags(DepotCommandFlag::MassSend).base(), .dont_cancel = DepotCommandFlags(DepotCommandFlag::DontCancel).base(), .invalid_client = INVALID_CLIENT_ID,
 	};
 	return services;

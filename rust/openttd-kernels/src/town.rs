@@ -1151,7 +1151,7 @@ impl Engine<'_> {
         (self.services.has_water_ground)(tile.0)
     }
     fn is_bridge_above(&self, tile: TileIndex) -> bool {
-        crate::map_func::World::new(self.services).bridge_above(tile.0)
+        crate::map_func::World::new(self.services).bridge_above(tile)
     }
     fn get_tunnel_bridge_transport_type(&self, tile: TileIndex) -> TransportType {
         TransportType((self.services.tunnel_transport)(tile.0))

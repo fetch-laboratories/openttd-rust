@@ -16,10 +16,12 @@ pub fn get_nth_set_bit(mut bits: u64, mut n: u32) -> Option<u8> {
 }
 
 /// `BaseBitSet::Test`: `(data & (1ULL << value)) != 0`, shifting at the original 64-bit
-/// width so that an element beyond a narrower storage tests false.
+/// width so that an element beyond a narrower storage tests false. A count of 64 or more,
+/// such as an invalid type's, is left to the processor, which masks it to six bits; the
+/// wrapping shift does the same.
 #[must_use]
 pub const fn test(data: u64, value: u8) -> bool {
-    data & (1_u64 << value) != 0
+    data & 1_u64.wrapping_shl(value as u32) != 0
 }
 
 /// Bitwise operators shared by native bit-mask enums and unmasked `EnumBitSet`s.

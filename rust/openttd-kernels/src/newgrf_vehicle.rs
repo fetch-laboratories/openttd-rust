@@ -165,6 +165,16 @@ pub struct Services {
     ground: unsafe extern "C" fn() -> *const crate::ground_vehicle::Services,
     cargo_services: unsafe extern "C" fn() -> *const crate::cargo_storage::Services,
 }
+
+impl Services {
+    /// `Engine::Get(id)`, through the resolver's `RustEngineByID` binding.
+    pub(crate) fn engine(&self, id: EngineID) -> crate::vehicle::EngineRef {
+        // SAFETY: The binding is `RustEngineByID`, which asserts the ID in the native engine
+        // pool and returns its live engine.
+        crate::vehicle::EngineRef::of(unsafe { (self.engine_by_id)(id.0) })
+    }
+}
+
 /// `GetVehicleProperty` returns the callback's result when callback 0x36 answers and the
 /// fallback when it fails. The properties and fallbacks are those the aircraft and road
 /// boundary fixtures supply, which those fixtures no longer see: the callback service is not

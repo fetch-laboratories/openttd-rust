@@ -570,7 +570,7 @@ impl<'a> World<'a> {
             }
             cost.add_money(south.money());
             for tile in [start, end] {
-                if !crate::map_func::World::new(self.s).bridge_above(tile) {
+                if !crate::map_func::World::new(self.s).bridge_above(TileIndex(tile)) {
                     continue;
                 }
                 if axis == (self.s.bridge_axis)(tile) {
@@ -597,7 +597,7 @@ impl<'a> World<'a> {
                 {
                     return cost.error(STR_ERROR_BRIDGE_TOO_HIGH_FOR_TERRAIN.0);
                 }
-                if crate::map_func::World::new(self.s).bridge_above(tile) {
+                if crate::map_func::World::new(self.s).bridge_above(TileIndex(tile)) {
                     return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                 }
                 self.build_above_tile(ret, tile, flags, axis, start_z.wrapping_add(1));

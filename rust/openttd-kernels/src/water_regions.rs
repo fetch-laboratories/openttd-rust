@@ -133,7 +133,7 @@ fn get_water_tracks(movement: &CachedTable<'_>, tile: TileIndex) -> TrackBits {
 /// asserts it) and then the transport type.
 fn is_aqueduct_tile(world: &World<'_>, tile: TileIndex) -> bool {
     world.kind(tile) == TileType::MP_TUNNELBRIDGE
-        && world.bridge(tile.0)
+        && world.bridge(tile)
         && TransportType(world.tunnel_bridge_transport(tile.0)) == TransportType::TRANSPORT_WATER
 }
 

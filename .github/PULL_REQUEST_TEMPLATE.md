@@ -14,10 +14,6 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 
 <!-- Name the remaining facade and callbacks. Explain why each is needed. -->
 
-## Review groups
-
-<!-- Above about 1,000 changed lines, a numbered list: each group's files or items, reviewed by its own behaviour and porting reviewers. Otherwise "Whole PR". -->
-
 ## Residue
 
 <!-- Each item this PR leaves for later, with its reason and owner issue, or "None". -->
@@ -39,7 +35,7 @@ Review report (reviewer posts it as a separate comment):
 Reviewed commit: <sha>
 Agent: <path> | Model: <exact model> | Reasoning effort: <effort>
 Findings: <one to three sentences each: file:line, what it departs from, how it was found, the remedy. A duplicate callback or an orphan body, export or declaration is a finding. Leave this line out when there are none.>
-Disposition: <accepted | findings to remediate>, <whole PR | group N>
+Disposition: <accepted | findings to remediate>, <whole PR behaviour | whole PR porting | re-check | the commits a scoped review covers>
 An acceptance is these three lines. A re-check gives one line per finding: resolved in <sha>, or what remains.
 Shared credentials require an attributed report, not a GitHub platform approval.
 -->

@@ -400,7 +400,7 @@ impl Engine<'_> {
                 if !self.succeeded() {
                     return false;
                 }
-                if crate::map_func::World::new(shared).bridge_above(cur_tile.0) {
+                if crate::map_func::World::new(shared).bridge_above(cur_tile) {
                     return self.fail(STR_ERROR_SITE_UNSUITABLE);
                 }
                 let its = get_industry_tile_spec(gfx);

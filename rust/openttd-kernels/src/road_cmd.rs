@@ -740,7 +740,7 @@ impl<'a> Ctx<'a> {
                     self.infrastructure(rt, self.owner(tile, rtt), -2);
                     let track = crate::road_map::get_crossing_rail_track(
                         &crate::map_func::World::new(self.shared),
-                        crate::tile_type::TileIndex(tile),
+                        TileIndex(tile),
                     )
                     .0;
                     if self.rt(tile, rtt ^ 1) == INVALID {
@@ -1573,7 +1573,7 @@ impl<'a> Ctx<'a> {
             if !cost.ok() {
                 return;
             }
-            if crate::map_func::World::new(self.shared).bridge_above(tile) {
+            if crate::map_func::World::new(self.shared).bridge_above(TileIndex(tile)) {
                 cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                 return;
             }
@@ -1819,7 +1819,7 @@ impl<'a> Ctx<'a> {
             if new == INVALID_OWNER {
                 let track = crate::road_map::get_crossing_rail_track(
                     &crate::map_func::World::new(self.shared),
-                    crate::tile_type::TileIndex(tile),
+                    TileIndex(tile),
                 )
                 .0;
                 self.command(
@@ -2188,8 +2188,8 @@ impl<'a> Ctx<'a> {
                         to,
                     );
                     crate::tunnelbridge::set_tunnel_bridge_owner(
-                        crate::tile_type::TileIndex(tile),
-                        crate::tile_type::TileIndex(other),
+                        TileIndex(tile),
+                        TileIndex(other),
                         crate::company_type::CompanyID((self.shared.current_company)()),
                         self.shared,
                     );

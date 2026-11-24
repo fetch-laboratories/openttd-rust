@@ -105,7 +105,7 @@ pub(crate) fn closest_town_from_tile(
     let world = crate::map_func::World::new(s);
     match world.kind(tile) {
         TileType::MP_ROAD => {
-            if world.road_depot(tile.0) {
+            if world.road_depot(tile) {
                 return calc_closest_town_from_tile(s, tile, threshold);
             }
             if !crate::road_map::has_town_owned_road(&world, tile.0) {

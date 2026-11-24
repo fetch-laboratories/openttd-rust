@@ -12,8 +12,14 @@ use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
 
 impl crate::map_func::World<'_> {
-    pub(crate) fn tunnel(&self, t: u32) -> bool {
-        self.check(self.kind(TileIndex(t)) == TileType::MP_TUNNELBRIDGE);
-        !crate::bitmath_func::has_bit(Self::byte(self.types.m5(TileIndex(t))), 7)
+    /// `IsTunnel`: is this a tunnel (entrance)? Keeps its tile-type assertion.
+    pub(crate) fn tunnel(&self, t: TileIndex) -> bool {
+        self.check(self.kind(t) == TileType::MP_TUNNELBRIDGE);
+        !crate::bitmath_func::has_bit(Self::byte(self.types.m5(t)), 7)
+    }
+    /// `IsTunnelTile`: is this a tunnel (entrance)?
+    #[inline]
+    pub(crate) fn tunnel_tile(&self, t: TileIndex) -> bool {
+        self.is_tile_type(t, TileType::MP_TUNNELBRIDGE) && self.tunnel(t)
     }
 }

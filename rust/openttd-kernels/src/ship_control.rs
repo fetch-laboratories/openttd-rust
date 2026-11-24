@@ -527,7 +527,7 @@ impl Game<'_> {
             period as i32,
         ) as u32;
         self.vehicle().set_cached_cargo_age_period(age as u16);
-        crate::vehicle_effect::openttd_rust_visual_update(v, true);
+        crate::vehicle_effect::update_visual_effect(self.vs(), self.services, v, true);
     }
     fn stay_depot(&self, id: u32, v: VehicleRef) -> bool {
         if !(self.leaves.chain_depot)(id) {
@@ -728,13 +728,12 @@ impl Game<'_> {
         if self.stay_depot(id, v) {
             return;
         }
-        if crate::vehicle_effect::openttd_rust_visual_eligible_abi(v) != 0 {
-            let maximum = current_max_speed(
+        crate::vehicle_effect::show_visual_effect(self.vs(), self.services, v, || {
+            current_max_speed(
                 (u32::from(self.vehicle().cached_max_speed())) as u16,
                 (self.leaves.order_max_speed)(id) as u16,
-            );
-            crate::vehicle_effect::show_visual_effect(v, maximum as u32);
-        }
+            )
+        });
         let observed_direction = u32::from(self.vehicle().direction_raw());
         let observed_tick = u32::from(self.vehicle().tick_counter());
         let rotation = u32::from(self.rotation());

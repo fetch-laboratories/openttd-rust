@@ -696,7 +696,7 @@ impl<'a> Ctx<'a> {
         allow_steep: bool,
         check_bridge: bool,
     ) {
-        if check_bridge && crate::map_func::World::new(self.shared).bridge_above(tile.0) {
+        if check_bridge && crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
         }
         // SAFETY: the native output is a live command slot for this entry.
@@ -794,7 +794,7 @@ impl<'a> Ctx<'a> {
         station_type: StationType,
         layout: StationGfx,
     ) {
-        if !crate::map_func::World::new(self.shared).bridge_above(tile.0) {
+        if !crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.zero();
         }
         let rampsouth = TileIndex((self.s.southern_bridge_end)(tile.0));
@@ -1905,7 +1905,7 @@ impl Ctx<'_> {
         station_type: StationType,
         layout: StationGfx,
     ) {
-        if !crate::map_func::World::new(self.shared).bridge_above(tile.0) {
+        if !crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.zero();
         }
         let rampsouth = TileIndex((self.s.southern_bridge_end)(tile.0));
@@ -2132,7 +2132,7 @@ impl Ctx<'_> {
                         .wrapping_add(u32::from(j).wrapping_mul(tile_delta)),
                 );
                 /* Don't check the layout if there's no bridge above anyway. */
-                if !crate::map_func::World::new(self.shared).bridge_above(tile.0) {
+                if !crate::map_func::World::new(self.shared).bridge_above(tile) {
                     continue;
                 }
                 let position = u32::from(i) * u32::from(plat_len) + u32::from(j);
@@ -2898,7 +2898,7 @@ impl Ctx<'_> {
         station_type: StationType,
         layout: StationGfx,
     ) {
-        if !crate::map_func::World::new(self.shared).bridge_above(tile.0) {
+        if !crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.zero();
         }
         let rampsouth = TileIndex((self.s.southern_bridge_end)(tile.0));

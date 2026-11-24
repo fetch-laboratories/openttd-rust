@@ -358,7 +358,7 @@ impl<'a> Commands<'a> {
                 continue;
             }
             // Don't build statues under bridges.
-            if crate::map_func::World::new(self.shared).bridge_above(tile.0) {
+            if crate::map_func::World::new(self.shared).bridge_above(tile) {
                 continue;
             }
             // A clear-able open space is always preferred.

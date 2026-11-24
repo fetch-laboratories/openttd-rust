@@ -246,7 +246,6 @@ pub struct Services {
     pub cargo_weight: extern "C" fn(u8, u32) -> u64,
     /// `CargoSpec::Get(cargo)->WeightOfNUnitsInTrain(n)`.
     pub train_cargo_weight: extern "C" fn(u8, u32) -> u64,
-    pub powered: extern "C" fn(u64, RailType) -> bool,
     pub rail_type: extern "C" fn(u32) -> RailType,
     pub steepness: extern "C" fn(VehicleType) -> u32,
     pub viewport: extern "C" fn(VehicleRef, bool, bool),
@@ -358,7 +357,12 @@ impl GroundVehicleType for Train {
     )]
     fn get_power(s: &Services, w: &World<'_>, v: VehicleRef, o: Owner) -> u16 {
         /* Power is not added for articulated parts */
-        if !v.is_articulated_part() && (s.powered)(o.train.railtypes().0, w.get_rail_type(v.tile()))
+        if !v.is_articulated_part()
+            && crate::rail::has_power_on_rail_types(
+                s.shared(),
+                o.train.railtypes(),
+                w.get_rail_type(v.tile()),
+            )
         {
             let engine = (s.vehicle.engine)(v);
             let mut power = s.property(
@@ -386,7 +390,11 @@ impl GroundVehicleType for Train {
     ) -> u16 {
         /* For powered wagons the engine defines the type of engine (i.e. railtype) */
         if o.train.flags().test(VehicleRailFlag::PoweredWagon)
-            && (s.powered)(head.train.railtypes().0, w.get_rail_type(v.tile()))
+            && crate::rail::has_power_on_rail_types(
+                s.shared(),
+                head.train.railtypes(),
+                w.get_rail_type(v.tile()),
+            )
         {
             return s.first_engine(o).wagon_power();
         }
@@ -1420,7 +1428,7 @@ pub unsafe extern "C" fn openttd_rust_ground_acceleration_type(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, capabilities, cargo_weight, train_cargo_weight, powered, rail_type, steepness, viewport, base_crash, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, capabilities, cargo_weight, train_cargo_weight, rail_type, steepness, viewport, base_crash, };
 }
 
 #[cfg(test)]

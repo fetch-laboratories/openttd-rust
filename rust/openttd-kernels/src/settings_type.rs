@@ -104,6 +104,7 @@ crate::abi::shared_records! {
         pub select_goods: *const bool,
         pub ship_curve45_penalty: *const u32,
         pub ship_curve90_penalty: *const u32,
+        pub smoke_amount: *const u8,
         pub starting_colour: *const u8,
         pub station_noise: *const bool,
         pub town_council_tolerance: *const u8,
@@ -153,6 +154,11 @@ impl SettingAddresses {
     pub(crate) fn old_vehicle_warn(&self) -> bool {
         // SAFETY: As `road_side`.
         unsafe { self.old_vehicle_warn.read() }
+    }
+    /// `_settings_game.vehicle.smoke_amount`; one field-sized load.
+    pub(crate) fn smoke_amount(&self) -> u8 {
+        // SAFETY: As `road_side`.
+        unsafe { self.smoke_amount.read() }
     }
     /// `_settings_game.difficulty.vehicle_breakdowns`; one field-sized load.
     pub(crate) fn vehicle_breakdowns(&self) -> u8 {
@@ -248,6 +254,7 @@ impl SettingAddresses {
         select_goods: std::ptr::null(),
         ship_curve45_penalty: std::ptr::null(),
         ship_curve90_penalty: std::ptr::null(),
+        smoke_amount: std::ptr::null(),
         starting_colour: std::ptr::null(),
         station_noise: std::ptr::null(),
         town_council_tolerance: std::ptr::null(),

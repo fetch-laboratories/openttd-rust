@@ -598,7 +598,7 @@ impl<'a> CYapfRoad<'a> {
             }
 
             /* stop if we have just entered the depot */
-            if self.world.road_depot(tile.0)
+            if self.world.road_depot(tile)
                 && trackdir
                     == diag_dir_to_diag_trackdir(
                         reverse_diag_dir(DiagDirection(self.world.road_depot_dir(tile.0)), |ok| {
@@ -765,7 +765,7 @@ impl<'a> CYapfRoad<'a> {
     #[inline]
     fn pf_detect_destination_tile(&self, tile: TileIndex, trackdir: Trackdir) -> bool {
         if self.depot {
-            return self.world.road_depot(tile.0);
+            return self.world.road_depot(tile);
         }
 
         if self.dest_station != StationID::INVALID {

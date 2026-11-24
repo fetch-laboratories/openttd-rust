@@ -76,7 +76,7 @@ impl RailTypes {
     /// Native `BaseBitSet::Test`, with an element rather than a set mask.
     #[must_use]
     pub const fn test(self, element: RailType) -> bool {
-        self.0 & (1_u64 << element.0) != 0
+        crate::base_bitset_type::test(self.0, element.0)
     }
     /// Native bit-set union.
     #[must_use]
@@ -106,4 +106,21 @@ impl RailTypeLabel {
     pub const RAILTYPE_LABEL_MONO: Self = Self(u32::from_be_bytes(*b"MONO"));
     /// Maglev label.
     pub const RAILTYPE_LABEL_MAGLEV: Self = Self(u32::from_be_bytes(*b"MGLV"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `BaseBitSet::Test` with `INVALID_RAILTYPE` (255) tests bit 63, as the original's
+    /// shift does on x86-64, where `GetTileRailType` hands it to `HasPowerOnRail` on a tile
+    /// with no rail; a checked shift would end the game instead.
+    #[test]
+    fn test_masks_an_out_of_range_rail_type_as_the_processor_does() {
+        let invalid = RailType(INVALID_RAILTYPE);
+        assert!(!RailTypes(0).test(invalid));
+        assert!(!RailTypes(u64::MAX >> 1).test(invalid));
+        assert!(RailTypes(1 << 63).test(invalid));
+        assert!(RailTypes(1 << 3).test(RailType(3)));
+    }
 }

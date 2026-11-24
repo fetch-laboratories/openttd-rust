@@ -255,7 +255,7 @@ impl Context<'_> {
             TileType::MP_STATION => flattening_foundation(tileh),
             // `GetFoundation_TunnelBridge`.
             TileType::MP_TUNNELBRIDGE => {
-                if self.world.tunnel(tile.0) {
+                if self.world.tunnel(tile) {
                     Foundation::FOUNDATION_NONE
                 } else {
                     Foundation(crate::bridge::get_bridge_foundation(
@@ -353,7 +353,7 @@ impl Context<'_> {
                     .cast_signed(),
             );
         } else if kind == TileType::MP_TUNNELBRIDGE {
-            if self.world.tunnel(tile.0) {
+            if self.world.tunnel(tile) {
                 /* In the tunnel entrance? */
                 if GROUND_VEHICLE {
                     return z;
@@ -1341,7 +1341,7 @@ impl MovementServices {
     ) -> VehicleEnterTileStates {
         if h.kind == VehicleType::VEH_TRAIN {
             let station_id = World::new(self.shared()).get_station_index(tile);
-            if !should_stop_at_station(self.shared(), v, station_id) {
+            if !should_stop_at_station(v, station_id) {
                 return VehicleEnterTileStates(0);
             }
             if !World::new(self.shared()).is_rail_station(tile) || !v.is_front_engine() {
@@ -1470,7 +1470,7 @@ impl MovementServices {
         };
         let visibility_frame = TUNNEL_VISIBILITY[usize::from(dir.0)];
 
-        if world.tunnel(tile.0) {
+        if world.tunnel(tile) {
             if h.kind == VehicleType::VEH_TRAIN {
                 let t = h.train;
 
@@ -1835,27 +1835,14 @@ pub extern "C" fn openttd_rust_movement_tunnel_visibility(direction: u8) -> u8 {
     TUNNEL_VISIBILITY[usize::from(direction)]
 }
 
-/// `v->current_order.ShouldStopAtStation(v, station)`. Acquires only the order
-/// owner's live alias and the source last-station scalar; no owner reference spans
-/// either native leaf.
-pub(crate) fn should_stop_at_station(shared: &Services, v: VehicleRef, station: StationID) -> bool {
-    let s = table(shared);
-    let last_station_visited = v.last_station_visited();
-    // SAFETY: Both native leaves resolve the same serialized surviving shell.
-    // The Order is owned by Rust and its facade aliases this stable allocation.
-    unsafe {
-        let owner = ((*s.orders).vehicle)(v.shell().cast());
-        crate::orders::should_stop_at_station(
-            std::ptr::addr_of!((*owner).current).cast(),
-            last_station_visited,
-            station,
-        )
-    }
-}
-/// Temporary raw adapter of [`should_stop_at_station`] for `vehicle_effect.rs` until its
-/// pass.
-pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> bool {
-    should_stop_at_station(shared, v, StationID(station))
+/// `v->current_order.ShouldStopAtStation(v, station)`: whether `v` should stop at
+/// `station` under its current order, read in place through the record's order link.
+pub(crate) fn should_stop_at_station(v: VehicleRef, station: StationID) -> bool {
+    crate::orders::should_stop_at_station(
+        v.current_order_pointer(),
+        v.last_station_visited(),
+        station,
+    )
 }
 
 /// Lazy handler for header preconditions. Valid inline helpers never resolve the

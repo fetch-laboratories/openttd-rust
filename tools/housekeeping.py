@@ -56,8 +56,7 @@ RUNNING_SECONDS = 12 * 3600
 # A kept worktree's build-rust is reclaimed once its activity is this old (#824).
 IDLE_HOURS = 2.0
 BUILD = "build-rust"
-# Retained profile checkouts; their builds are evidence, not cache. Under the main
-# checkout's .local/worktrees, git lists them by their resolved HDD path.
+# Retained profile checkouts; their builds are evidence, not cache.
 PROFILES = "root-profile-"
 # Session managers hide their cwd from their own user and never run agent work.
 SESSION_MANAGERS = {"systemd", "(sd-pam)"}
@@ -74,6 +73,8 @@ class Item:
     unlock: bool = False  # stale lock released by --apply before removal
     prune: bool = False  # missing folder; --apply prunes its record
     completed: bool = False  # pushed completion bypasses only the activity fallback
+    head: str = ""  # the commit planned for removal; a moved checkout is kept
+    checkout: str | None = None  # the branch checked out when planned
     owner: Path | None = None  # kept worktree whose build-rust this item reclaims
     idle_seconds: float | None = None  # idle reclaim rechecks activity at removal
     identity: tuple[int, int] | None = field(init=False, default=None)
@@ -204,16 +205,11 @@ def plan_worktrees(
             continue
         if merged:
             reason = f"merged into {BASE}"
-        elif state == "MERGED":
-            reason, branch = "PR merged; local branch has unmerged commits, kept", None
-        elif (
-            state == "CLOSED"
-            and tree.branch
-            and origin_head(main, tree.branch) == tree.head
-        ):
-            reason = "PR closed; origin keeps the branch"
-        elif state == "CLOSED":
-            reason, branch = "PR closed; origin lacks this head, branch kept", None
+        elif state in ("MERGED", "CLOSED"):
+            reason, branch, kept = finished_pr(main, tree, state)
+            if kept:
+                items.append(Item(tree.path, False, reason, True))
+                continue
         else:
             fresh = tree.head in first_parent
             if task and fresh:
@@ -242,9 +238,9 @@ def plan_worktrees(
             dirty = f"{reason}, but dirty"
             items.append(Item(tree.path, False, dirty, True, None, unlock))
         else:
-            completed = merged or (
-                state in ("MERGED", "CLOSED") and on_origin(main, tree.head)
-            )
+            # Only the checkout's own PR finishes its task: a checkout with no PR,
+            # such as a reviewer's at a head that has since merged, may be live.
+            completed = state in ("MERGED", "CLOSED") and on_origin(main, tree.head)
             refusal = worktree_refusal(main, tree.path, references, completed)
             remove = not refusal
             items.append(
@@ -256,9 +252,32 @@ def plan_worktrees(
                     branch,
                     unlock,
                     completed=completed,
+                    head=tree.head,
+                    checkout=tree.branch,
                 )
             )
     return protect_outputs(items)
+
+
+def finished_pr(main: Path, tree: Worktree, state: str) -> tuple[str, str | None, bool]:
+    """Why a checkout of a merged or closed PR whose head is not merged into the
+    base goes or stays, the branch to delete with it, and whether it stays: a
+    head that origin lacks holds unpushed commits, so the checkout stays."""
+    if (
+        state == "CLOSED"
+        and tree.branch
+        and origin_head(main, tree.branch) == tree.head
+    ):
+        return "PR closed; origin keeps the branch", tree.branch, False
+    if not on_origin(main, tree.head):
+        return (
+            f"PR {state.lower()}; origin lacks this head, commits unpushed",
+            None,
+            True,
+        )
+    if state == "MERGED":
+        return "PR merged; local branch has unmerged commits, kept", None, False
+    return "PR closed; head on origin under another branch, branch kept", None, False
 
 
 def with_builds(
@@ -675,7 +694,7 @@ def plan_local(local: Path, now: float, references: str = "") -> list[Item]:
         name = entry.name
         if name in OUTPUT and entry.is_dir():
             for run in sorted(entry.iterdir()):
-                # Bare names cover .local, HDD-target, inner-file and listed forms.
+                # Bare names cover .local, resolved, inner-file and listed forms.
                 if re.search(
                     r"(?<![\w.-])" + re.escape(run.name) + r"(?![\w.-])", references
                 ):
@@ -774,15 +793,58 @@ def remove(main: Path, item: Item, references: str = "") -> str | None:
     if not item.worktree:
         return delete_output(item)
     command = ["git", "-C", str(main), "worktree", "remove", str(item.path)]
-    if git(item.path, "status", "--porcelain").strip():
-        return "worktree became dirty"
     writable(item.path)
+    # Last, after the slow permission walk: only `worktree remove` itself follows.
+    if refusal := changed_refusal(item):
+        return refusal
     removed = subprocess.run(command, capture_output=True, text=True)
     if removed.returncode:
         return removed.stderr.strip()
-    if item.branch is not None:
-        # -d compares with the local HEAD or a pruned upstream; the plan checked origin.
-        git(main, "branch", "-D", item.branch)
+    return delete_branch(main, item)
+
+
+def changed_refusal(item: Item) -> str | None:
+    """A checkout that became dirty, or whose HEAD or branch is not the planned one."""
+    if git(item.path, "status", "--porcelain").strip():
+        return "worktree became dirty"
+    if not item.head:
+        return None
+    head = git(item.path, "rev-parse", "HEAD").strip()
+    checkout = subprocess.run(
+        ["git", "-C", str(item.path), "symbolic-ref", "--quiet", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if head != item.head or (checkout or None) != item.checkout:
+        return (
+            f"head moved since planning (now {head[:10]} on {checkout or 'no branch'})"
+        )
+    # Again here, last: a writer needs a process inside the tree.
+    return cwd_refusal(item.path)
+
+
+def delete_branch(main: Path, item: Item) -> str | None:
+    """Delete the removed checkout's branch while its tip is still the planned head.
+
+    `update-ref -d` with the planned head deletes only that tip, atomically. A
+    branch another worktree has checked out stays, as `branch -D` would keep it,
+    and the branch's configuration goes with it. The plan checked origin, so
+    there is no upstream comparison as `branch -d` makes.
+    """
+    if item.branch is None:
+        return None
+    if any(tree.branch == item.branch for tree in list_worktrees(main)):
+        return f"worktree removed; branch {item.branch} kept: checked out elsewhere"
+    deleted = subprocess.run(
+        ["git", "-C", str(main), "update-ref", "-d", f"refs/heads/{item.branch}"]
+        + ([item.head] if item.head else []),
+        capture_output=True,
+        text=True,
+    )
+    if deleted.returncode:
+        return f"worktree removed; branch {item.branch} kept: {deleted.stderr.strip()}"
+    section = ["config", "--remove-section", f"branch.{item.branch}"]
+    subprocess.run(["git", "-C", str(main), *section], capture_output=True)
     return None
 
 

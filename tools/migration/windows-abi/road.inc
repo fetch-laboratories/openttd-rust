@@ -16,7 +16,6 @@
 #include "rust/movement_ffi.h"
 #include "rust/road_yapf_ffi.h"
 #include "tests/effect_protocol.hpp"
-#include "rust/vehicle_effect_ffi.h"
 #include "rust/airport_resolver_ffi.h"
 
 #include "vehicle_tables.inc"
@@ -32,7 +31,9 @@ struct RoadAbiProbe {
 	/* The settings Rust reads through the catalog. */
 	uint8_t acceleration_model = 0, road_side = 0;
 	bool queue = false;
-	OpenTTDSettingAddresses settings = [this] { OpenTTDSettingAddresses s{}; s.road_side = &road_side; s.roadveh_acceleration_model = &acceleration_model; s.roadveh_queue = &queue; return s; }();
+	/* 2 where visual_eligible is set, 0 where it is cleared. */
+	uint8_t smoke_amount = 2;
+	OpenTTDSettingAddresses settings = [this] { OpenTTDSettingAddresses s{}; s.road_side = &road_side; s.roadveh_acceleration_model = &acceleration_model; s.roadveh_queue = &queue; s.smoke_amount = &smoke_amount; return s; }();
 	uint32_t &dest = road_abi_vehicle.dest_tile;
 	uint8_t &progress = road_abi_vehicle.progress;
 	uint32_t nested = 0, destroyed = 0;
@@ -94,11 +95,7 @@ static void RoadBoundary()
 		return road_abi_probe->engine_replaced ? road_abi_new_engine : road_abi_engine;
 	};
 	static uint8_t cache_visual_byte = 0;
-	OpenTTDVisualServices cache_visual{
-		.vehicle = &t.vehicle, .shared = &t.shared,
-	};
 	road_abi_vehicle.visual = road_abi_second.visual = road_abi_hidden.visual = &cache_visual_byte;
-	auto previous_visual = openttd_rust_visual_bind(&cache_visual);
 	probe.leaves = &t.leaves;
 	OpenTTDVehicle *v = RoadAbiHandle();
 
@@ -300,12 +297,12 @@ static void RoadBoundary()
 	static OpenTTDEffectState *current_emission_owner;
 	current_emission_owner = emission_owner;
 	OpenTTDEffectCreationServices creation{
-		.allocate = []() noexcept -> OpenTTDEffectAllocation { return {&effect_test_world->record, current_emission_owner}; },
+		/* Emission's effect allocation is its last call before the sound: it marks the stage. */
+		.allocate = []() noexcept -> OpenTTDEffectAllocation { road_abi_probe->visual_stage = 1; return {&effect_test_world->record, current_emission_owner}; },
 		.shared = &t.shared, .vehicles = &emission_effects,
 	};
 	auto previous_creation = openttd_rust_effect_bind(&creation);
-	auto emission_vehicle = t.vehicle;
-	emission_vehicle.play_vehicle_sound = [](OpenTTDVehicle *u, VehicleSoundEvent event) noexcept {
+	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *u, VehicleSoundEvent event) noexcept {
 		auto &p = *road_abi_probe;
 		CHECK(p.visual_stage == 1 && p.visual_eligible && event == VSE_VISUAL_EFFECT); p.visual_stage = 3;
 		p.state->overtaking = 1;
@@ -313,19 +310,13 @@ static void RoadBoundary()
 		p.speed = 0; road_abi_vehicle.subspeed = 0;
 		p.post_effect_max = 40; p.ground.state->cache.cached_max_track_speed = 40; ++p.nested; return false;
 	};
-	auto emission_shared = t.shared;
-	emission_shared.is_bridge = [](uint32_t) noexcept { return false; };
+	/* Tile 100 is a station tile, so IsDepotTile reaches IsHangarTile, which reads the
+	 * map in place: the bus stop is no airport. The tunnel and bridge tests read false
+	 * from the map. */
+	static OpenTTDAirportResolverServices emission_airports{};
+	emission_airports.shared = &t.shared;
+	auto previous_airports = openttd_rust_airport_exchange(&emission_airports);
 	static uint8_t emission_cache = 0x11;
-	OpenTTDVisualServices emission{
-		.vehicle = &emission_vehicle, .shared = &emission_shared,
-		/* Eligibility and emission both read the smoke setting before the sound. */
-		.smoke = []() noexcept -> uint8_t {
-			auto &p = *road_abi_probe; p.visual_stage = 1;
-			return p.visual_eligible ? 2 : 0;
-		},
-		.depot = [](uint32_t) noexcept { return false; }, .tunnel = [](uint32_t) noexcept { return false; },
-	};
-	openttd_rust_visual_bind(&emission);
 	road_abi_vehicle.visual = &emission_cache;
 
 
@@ -376,14 +367,14 @@ static void RoadBoundary()
 	t.physics_vehicle.start_stop_dirty = last_speed_dirty;
 
 	/* Skip effects with no lookup; realistic UpdateSpeed still observes post-effect inputs. */
-	probe.visual_eligible = false; probe.acceleration_model = 1;
+	probe.visual_eligible = false; probe.smoke_amount = 0; probe.acceleration_model = 1;
 	probe.speed = 0; road_abi_vehicle.subspeed = 0;
 	/* Hidden vehicles skip viewport callbacks, then use the direct canonical link. */
 	probe.status = 1;
 	probe.progress = 0;
 	CHECK(openttd_rust_road_tick(v, probe.state, &t.leaves, nullptr));
 	CHECK(probe.viewports == 1 && probe.progress == 3);
-	probe.visual_eligible = true; probe.acceleration_model = 0;
+	probe.visual_eligible = true; probe.smoke_amount = 2; probe.acceleration_model = 0;
 
 	/* Viewport reentry can add a later visible part. Its progress mutation is
 	 * observed only after that viewport and any hidden final part's Next read. */
@@ -441,7 +432,7 @@ static void RoadBoundary()
 	road_abi_vehicle.tick_counter = 31;
 	CHECK(!openttd_rust_road_tick(v, probe.state, &t.leaves, nullptr));
 	CHECK(probe.state == nullptr && probe.destroyed == 1 && world.draws == 1);
-	openttd_rust_visual_bind(previous_visual);
+	openttd_rust_airport_exchange(previous_airports);
 	openttd_rust_effect_bind(previous_creation);
 	openttd_rust_effect_destroy(emission_owner);
 	std::printf("road_native_typed_reentry_path_and_owner_destruction passed\n");

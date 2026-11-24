@@ -489,13 +489,6 @@
     "rust/openttd-kernels/src/vehicle/visits.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
-    "rust/openttd-kernels/src/vehicle_effect.rs | fn emit_part | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
-    ],
-    "rust/openttd-kernels/src/vehicle_effect.rs | fn emit_part::mod el | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1
-    ],
     "rust/openttd-kernels/src/vehicle_transactions/build.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       10
     ],
