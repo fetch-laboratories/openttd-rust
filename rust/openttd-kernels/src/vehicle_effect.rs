@@ -57,7 +57,7 @@ pub(crate) fn update_visual_effect(
     allow_power_change: bool,
 ) {
     let powered_before = has_bit(this.cached_vis_effect(), VE_DISABLE_WAGON_POWER);
-    let e = (vs.engine)(this);
+    let e = vs.newgrf().engine(this.engine_type());
 
     /* Evaluate properties */
     // `uint8_t visual_effect`, held widened for the bit helpers and stored truncated.
@@ -528,7 +528,6 @@ mod tests {
     use crate::engine_type::OpenTTDEngine;
     use crate::map_func::TileTypeAllocation;
     use crate::newgrf_vehicle::State;
-    use crate::vehicle::EngineRef;
     use crate::vehicle_base::{GroundVehicleSubtypeFlags, VehicleRecord};
     use std::cell::{Cell, RefCell};
     use std::ffi::c_void;
@@ -650,9 +649,6 @@ mod tests {
             resolve_callback,
         )))
     }
-    extern "C" fn engine(_: VehicleRef) -> EngineRef {
-        EngineRef::of(ENGINE.get())
-    }
     extern "C" fn show_newgrf_vehicle_error(
         engine: u16,
         part1: u32,
@@ -676,7 +672,6 @@ mod tests {
             VehicleCallbackMasks::from_element(VehicleCallbackMask::VisualEffect).0;
         ENGINE.set(Box::leak(Box::new(ship)));
         let vs = VehicleServices {
-            engine,
             newgrf,
             show_newgrf_vehicle_error,
             ..crate::test_tables::VEHICLE
