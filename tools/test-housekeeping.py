@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -348,27 +348,62 @@ class HousekeepingTests(unittest.TestCase):
         self.assertIn("head moved", housekeeping.remove(self.main, item) or "")
         self.assertTrue(tree.exists())
 
-    def test_a_branch_that_moves_after_its_checkout_goes_is_kept(self) -> None:
+    def test_a_head_that_moves_during_the_permission_walk_is_kept(self) -> None:
+        tree = self.top / "trees/merged"
+        item = self.planned(tree)
+        real = housekeeping.writable
+
+        def commit_during(path: Path) -> None:
+            real(path)
+            git(tree, "switch", "--quiet", "--detach")
+            git(tree, "commit", "--quiet", "--allow-empty", "-m", "Add: unpublished")
+
+        with patch.object(housekeeping, "writable", side_effect=commit_during):
+            self.assertIn("head moved", housekeeping.remove(self.main, item) or "")
+        self.assertTrue(tree.exists())
+
+    def closed_item(self) -> tuple[Path, housekeeping.Item]:
         tree = self.top / "trees/closed"
         with patch.dict(PR_STATES, {"closed": "CLOSED"}):
             item = self.planned(tree)
         self.assertTrue(item.remove, item.reason)
         self.assertEqual(item.branch, "closed")
-        moved = git(
-            self.main, "commit-tree", "-m", "Add: elsewhere", f"{item.head}^{{tree}}"
-        )
+        return tree, item
+
+    def after_checks(self, action: Callable[[], None]) -> object:
+        """Run ACTION after removal's last check, before the worktree goes."""
         real = housekeeping.changed_refusal
 
-        def move_branch(planned: housekeeping.Item) -> str | None:
+        def then(planned: housekeeping.Item) -> str | None:
             refusal = real(planned)
-            git(self.main, "update-ref", "refs/heads/closed", moved.strip(), item.head)
+            action()
             return refusal
 
-        with patch.object(housekeeping, "changed_refusal", side_effect=move_branch):
+        return patch.object(housekeeping, "changed_refusal", side_effect=then)
+
+    def test_a_branch_that_moves_after_its_checkout_goes_is_kept(self) -> None:
+        tree, item = self.closed_item()
+        moved = git(
+            self.main, "commit-tree", "-m", "Add: elsewhere", f"{item.head}^{{tree}}"
+        ).strip()
+        update = ["update-ref", "refs/heads/closed", moved, item.head]
+        with self.after_checks(lambda: git(self.main, *update)):
             refusal = housekeeping.remove(self.main, item)
         self.assertIn("branch closed kept", refusal or "")
         self.assertFalse(tree.exists())
-        self.assertEqual(git(self.main, "rev-parse", "closed").strip(), moved.strip())
+        self.assertEqual(git(self.main, "rev-parse", "closed").strip(), moved)
+
+    def test_a_branch_checked_out_again_elsewhere_is_kept(self) -> None:
+        """Reattached at the planned tip after its checkout went, the branch stays."""
+        tree, item = self.closed_item()
+        git(self.main, "worktree", "remove", str(tree))
+        again = self.top / "trees/closed-again"
+        git(self.main, "worktree", "add", "--quiet", str(again), "closed")
+        self.assertIn(
+            "branch closed kept", housekeeping.delete_branch(self.main, item) or ""
+        )
+        self.assertEqual(git(self.main, "rev-parse", "closed").strip(), item.head)
+        self.assertIn("origin", git(self.main, "config", "branch.closed.remote"))
 
     def test_finished_t3_and_protected_tasks(self) -> None:
         finished = self.t3_tree("t3-finished")
