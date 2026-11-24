@@ -423,7 +423,7 @@ impl<'a> Ctx<'a> {
         // SAFETY: Immutable shared tables outlive this synchronous command entry.
         if unsafe {
             crate::water::get_flooding_behaviour(
-                crate::tile_type::TileIndex(tile),
+                TileIndex(tile),
                 (self.shared.water_services)(),
                 self.shared,
             )
@@ -1205,7 +1205,7 @@ impl<'a> Ctx<'a> {
             if !cost.ok() {
                 return;
             }
-            if crate::map_func::World::new(self.shared).bridge_above(tile) {
+            if crate::map_func::World::new(self.shared).bridge_above(TileIndex(tile)) {
                 return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
             }
             if !(self.s.depot_available)() {
@@ -2161,7 +2161,7 @@ impl<'a> Ctx<'a> {
                     } else {
                         crate::road_map::get_crossing_rail_track(
                             &crate::map_func::World::new(self.shared),
-                            crate::tile_type::TileIndex(tile),
+                            TileIndex(tile),
                         )
                         .0
                     };

@@ -638,7 +638,7 @@ impl<'a> Game<'a> {
     }
     /// `IsRailDepotTile(tile)`.
     fn is_rail_depot_tile(&self, tile: TileIndex) -> bool {
-        self.world().rail_depot(tile.0)
+        self.world().rail_depot(tile)
     }
     /// `GetRailDepotDirection(tile)`.
     fn get_rail_depot_direction(&self, tile: TileIndex) -> DiagDirection {
@@ -1276,7 +1276,7 @@ impl Game<'_> {
             && self.is_rail_station_tile(this.vehicle().tile())
         {
             let sid = self.get_station_index(this.vehicle().tile());
-            if crate::movement::should_stop_at_station(self.services, this.vehicle(), sid) {
+            if crate::movement::should_stop_at_station(this.vehicle(), sid) {
                 let (stop_at, station_ahead, station_length) =
                     self.get_train_stop_location(sid, this.vehicle().tile(), this);
 
@@ -1364,7 +1364,7 @@ impl Game<'_> {
             if self.is_tile_type(vt, TileType::MP_TUNNELBRIDGE) {
                 self.vehicle_enter_tile(v, vt, v.vehicle().x_pos(), v.vehicle().y_pos());
                 if v.track() != TrackBits::TRACK_BIT_WORMHOLE
-                    && self.world().bridge_tile(v.vehicle().tile().0)
+                    && self.world().bridge_tile(v.vehicle().tile())
                 {
                     /* We have just left the wormhole, possibly set the
                      * "goingdown" bit. UpdateInclination() can be used
@@ -3027,7 +3027,7 @@ impl Game<'_> {
                                         /* Vehicles entering tunnels enter the wormhole earlier than for bridges.
                                          * However, just choose the track into the wormhole. */
                                         crate::services_assert::assert_with(|| {
-                                            self.world().tunnel(prev.vehicle().tile().0)
+                                            self.world().tunnel(prev.vehicle().tile())
                                         });
                                         chosen_track = bits;
                                     } else {

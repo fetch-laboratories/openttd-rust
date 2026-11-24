@@ -30,7 +30,9 @@ fn valid_bridge(tb: &TunnelBridgeServices, bridge_type: u32) -> bool {
 
 fn bridge_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE && w.bridge(tile)
+    valid(&w, tile)
+        && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE
+        && w.bridge(TileIndex(tile))
 }
 
 fn tunnel_tile(s: &Services, tile: u32) -> bool {

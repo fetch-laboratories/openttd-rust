@@ -124,8 +124,8 @@ impl<'a> World<'a> {
         let mut iter = crate::tilearea::TileIterator::create(
             self.map,
             self.size,
-            crate::tile_type::TileIndex(tile),
-            crate::tile_type::TileIndex(start),
+            TileIndex(tile),
+            TileIndex(start),
             diagonal,
             check,
         );
@@ -186,7 +186,7 @@ impl<'a> World<'a> {
             match kind {
                 MP_CLEAR => crate::ground::clear_tile_clear(
                     out,
-                    crate::tile_type::TileIndex(tile),
+                    TileIndex(tile),
                     crate::command_type::DoCommandFlags(flags),
                     self.s,
                 ),
@@ -230,7 +230,7 @@ impl<'a> World<'a> {
                 ),
                 MP_INDUSTRY => crate::industry::clear_tile_industry(
                     out.0.cast(),
-                    crate::tile_type::TileIndex(tile),
+                    TileIndex(tile),
                     crate::command_type::DoCommandFlags(flags),
                     owners.industry,
                     t.industry_policy,
@@ -298,7 +298,7 @@ impl<'a> World<'a> {
                 }
                 MP_INDUSTRY => crate::industry::terraform_tile_industry(
                     out.0.cast(),
-                    crate::tile_type::TileIndex(tile),
+                    TileIndex(tile),
                     crate::command_type::DoCommandFlags(flags),
                     z,
                     crate::slope_type::Slope(slope),
@@ -555,7 +555,7 @@ impl<'a> World<'a> {
                     }
                 }
                 if pass == 0 {
-                    if crate::map_func::World::new(self.s).bridge_above(t) {
+                    if crate::map_func::World::new(self.s).bridge_above(TileIndex(t)) {
                         let station = unsafe { &*(self.s.station_commands)() };
                         let height = crate::bridge_map::get_bridge_height(
                             (station.southern_bridge_end)(t),
@@ -684,7 +684,7 @@ impl<'a> World<'a> {
             let neighbour = self
                 .map
                 .add_diff_c_wrap(
-                    crate::tile_type::TileIndex(tile),
+                    TileIndex(tile),
                     crate::direction_type::DiagDirection(dir),
                     (self.s.map_max_y)() + 1,
                 )

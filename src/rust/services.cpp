@@ -551,7 +551,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.industry_gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(TileIndex(tile)); },
 	.is_bay_stop = Shared_is_bay_stop,
 	.is_bridge = Shared_is_bridge,
-	.is_depot_tile = SharedIsDepotTile,
 	.is_drive_through_stop = Shared_is_drive_through_stop,
 	.is_plain_rail = RustPlainRailTile,
 	.is_road_depot = Shared_is_road_depot,

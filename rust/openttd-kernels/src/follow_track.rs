@@ -361,7 +361,7 @@ impl CFollowTrackT {
             let enterdir = DiagDirection(w.tunnel_bridge_dir(self.old_tile.0));
             if enterdir == self.exitdir {
                 /* we are entering the tunnel / bridge */
-                if w.tunnel(self.old_tile.0) {
+                if w.tunnel(self.old_tile) {
                     self.is_tunnel = true;
                     self.new_tile = TileIndex((w.shared.other_tunnel_end)(self.old_tile.0));
                 } else {
@@ -540,7 +540,7 @@ impl CFollowTrackT {
 
         /* tunnel holes and bridge ramps can be entered only from proper direction */
         if w.kind(self.new_tile) == TileType::MP_TUNNELBRIDGE {
-            if w.tunnel(self.new_tile.0) {
+            if w.tunnel(self.new_tile) {
                 if !self.is_tunnel {
                     let tunnel_enterdir = DiagDirection(w.tunnel_bridge_dir(self.new_tile.0));
                     if tunnel_enterdir != self.exitdir {
@@ -682,7 +682,7 @@ pub(crate) fn get_speed_limit_with_road(
     let mut max_speed = i32::MAX; // no limit
 
     /* Check for on-bridge speed limit */
-    if mode != WATER && w.kind(old_tile) == TileType::MP_TUNNELBRIDGE && w.bridge(old_tile.0) {
+    if mode != WATER && w.kind(old_tile) == TileType::MP_TUNNELBRIDGE && w.bridge(old_tile) {
         let mut spd = i32::from((m.tunnel_bridge().speed)(w.bridge_type(old_tile.0)));
         if mode == ROAD {
             spd *= 2;

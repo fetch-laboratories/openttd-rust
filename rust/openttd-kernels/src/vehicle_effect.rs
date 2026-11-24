@@ -246,7 +246,7 @@ fn spawn_advanced_visual_effect(vs: &VehicleServices, shared: &Services, v: Vehi
 
 /// `IsBridgeAboveVehicle`: test if a bridge is above vehicle `v`.
 fn is_bridge_above_vehicle(world: &World<'_>, shared: &Services, v: VehicleRef) -> bool {
-    if world.bridge_tile(v.tile().0) {
+    if world.bridge_tile(v.tile()) {
         /* If the vehicle is 'on' a bridge tile, check the real position of the vehicle. If it's different then the
          * vehicle is on the middle of the bridge, which cannot have a bridge above. */
         let tile = shared
@@ -256,7 +256,7 @@ fn is_bridge_above_vehicle(world: &World<'_>, shared: &Services, v: VehicleRef) 
             return false;
         }
     }
-    world.bridge_above(v.tile().0)
+    world.bridge_above(v.tile())
 }
 
 // `static_assert`s beside `ShowVisualEffect`'s cast of the type bits to a spawning model.
@@ -413,7 +413,6 @@ pub(crate) fn show_visual_effect(
             || (world.is_rail_station_tile(t.vehicle().tile())
                 && t.vehicle().is_front_engine()
                 && crate::movement::should_stop_at_station(
-                    shared,
                     t.vehicle(),
                     world.get_station_index(t.vehicle().tile()),
                 )
@@ -464,7 +463,7 @@ pub(crate) fn show_visual_effect(
             if effect_model == VisualEffectSpawnModel::VESM_NONE
                 || v.vehstatus().test(VehState::Hidden)
                 || is_bridge_above_vehicle(&world, shared, v)
-                || crate::depot_map::is_depot_tile(shared, v.tile())
+                || crate::depot_map::is_depot_tile(&world, v.tile())
                 || world.tunnel_tile(v.tile())
                 || (v.vehicle_type() == VehicleType::VEH_TRAIN
                     && !crate::rail::has_power_on_rail(

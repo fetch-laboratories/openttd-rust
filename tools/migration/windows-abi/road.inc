@@ -309,12 +309,18 @@ static void RoadBoundary()
 		p.speed = 0; road_abi_vehicle.subspeed = 0;
 		p.post_effect_max = 40; p.ground.state->cache.cached_max_track_speed = 40; ++p.nested; return false;
 	};
-	/* Emission asks whether the part is on a depot tile before the sound. Tile 100 is a
-	 * station tile, so the tunnel and bridge tests read false from the map. */
-	t.shared.is_depot_tile = [](uint32_t) noexcept {
+	/* Emission asks whether the part is on a depot tile before the sound: tile 100 is a
+	 * station tile, so IsDepotTile reaches IsHangarTile, whose tile-type read marks the
+	 * stage. The bus stop is no airport, and the tunnel and bridge tests read false from
+	 * the map. */
+	t.shared.tile_type = [](uint32_t tile) noexcept -> uint8_t {
+		CHECK(tile == 100);
 		road_abi_probe->visual_stage = 1;
-		return false;
+		return MP_STATION;
 	};
+	static OpenTTDAirportResolverServices emission_airports{};
+	emission_airports.shared = &t.shared;
+	auto previous_airports = openttd_rust_airport_exchange(&emission_airports);
 	static uint8_t emission_cache = 0x11;
 	road_abi_vehicle.visual = &emission_cache;
 
@@ -431,6 +437,7 @@ static void RoadBoundary()
 	road_abi_vehicle.tick_counter = 31;
 	CHECK(!openttd_rust_road_tick(v, probe.state, &t.leaves, nullptr));
 	CHECK(probe.state == nullptr && probe.destroyed == 1 && world.draws == 1);
+	openttd_rust_airport_exchange(previous_airports);
 	openttd_rust_effect_bind(previous_creation);
 	openttd_rust_effect_destroy(emission_owner);
 	std::printf("road_native_typed_reentry_path_and_owner_destruction passed\n");

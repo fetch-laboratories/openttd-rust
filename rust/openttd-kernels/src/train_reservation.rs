@@ -148,7 +148,7 @@ impl<'a> Game<'a> {
     }
     /// `v->current_order.ShouldStopAtStation(v, station)`.
     fn should_stop_at_station(&self, v: Handle, station: StationID) -> bool {
-        crate::movement::should_stop_at_station(self.services, v.vehicle(), station)
+        crate::movement::should_stop_at_station(v.vehicle(), station)
     }
     /// `Station::Get(station)`, resolving both the station and its base.
     fn station_get(&self, station: StationID) -> crate::station_service::LoadingStation {
@@ -218,7 +218,7 @@ impl<'a> Game<'a> {
     }
     /// `IsRailDepotTile(tile)`.
     fn is_rail_depot_tile(&self, tile: TileIndex) -> bool {
-        self.world.rail_depot(tile.0)
+        self.world.rail_depot(tile)
     }
     /// `IsPlainRail(tile)`.
     fn is_plain_rail(&self, tile: TileIndex) -> bool {
@@ -287,7 +287,7 @@ impl<'a> Game<'a> {
     }
     /// `IsBridge(tile)`.
     fn is_bridge(&self, tile: TileIndex) -> bool {
-        self.world.bridge(tile.0)
+        self.world.bridge(tile)
     }
     /// `GetTunnelBridgeDirection(tile)`.
     fn get_tunnel_bridge_direction(&self, tile: TileIndex) -> DiagDirection {

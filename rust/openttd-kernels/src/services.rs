@@ -319,8 +319,6 @@ pub struct Services {
     pub is_bay_stop: extern "C" fn(u32) -> bool,
     /// Original native `is_bridge` map observation.
     pub is_bridge: extern "C" fn(u32) -> bool,
-    /// `IsDepotTile`.
-    pub is_depot_tile: extern "C" fn(u32) -> bool,
     /// Original native `is_drive_through_stop` map observation.
     pub is_drive_through_stop: extern "C" fn(u32) -> bool,
     /// Original native `is_plain_rail` map observation.
@@ -785,7 +783,6 @@ crate::abi::layouts! {
         industry_gfx,
         is_bay_stop,
         is_bridge,
-        is_depot_tile,
         is_drive_through_stop,
         is_plain_rail,
         is_road_depot,
@@ -938,9 +935,6 @@ extern "C" fn unexpected_base_station(_: u16) -> *mut crate::station::BaseStatio
 #[allow(clippy::too_many_lines)] // One field per shared service.
 pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) -> Services {
     extern "C" fn unused_industry_gfx(_: u32) -> u16 {
-        unreachable!()
-    }
-    extern "C" fn unused_is_depot_tile(_: u32) -> bool {
         unreachable!()
     }
     unsafe extern "C" fn unused_snow_line_destroy(_: *mut crate::snow_line::SnowLine) {
@@ -1139,7 +1133,6 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         industry_gfx: unused_industry_gfx,
         is_bay_stop: flag,
         is_bridge: flag,
-        is_depot_tile: unused_is_depot_tile,
         is_drive_through_stop: flag,
         is_plain_rail: flag,
         is_road_depot: flag,

@@ -46,11 +46,11 @@ impl crate::map_func::World<'_> {
             && gb(u32::from(Self::byte(self.types.m5(TileIndex(t)))), 6, 2)
                 <= u32::from(RAIL_TILE_SIGNALS)
     }
+    /// `IsRailDepotTile`: is this rail tile a rail depot?
     #[inline]
-    pub(crate) fn rail_depot(&self, t: u32) -> bool {
-        self.kind(TileIndex(t)) == TileType::MP_RAILWAY
-            && gb(u32::from(Self::byte(self.types.m5(TileIndex(t)))), 6, 2)
-                == u32::from(RAIL_TILE_DEPOT)
+    pub(crate) fn rail_depot(&self, t: TileIndex) -> bool {
+        self.kind(t) == TileType::MP_RAILWAY
+            && gb(u32::from(Self::byte(self.types.m5(t))), 6, 2) == u32::from(RAIL_TILE_DEPOT)
     }
     #[inline]
     pub(crate) fn rail_type(&self, t: u32) -> u8 {

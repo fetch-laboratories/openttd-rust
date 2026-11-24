@@ -19,7 +19,7 @@ use crate::track_type::Trackdir;
 #[inline]
 pub(crate) fn st_slope_cost(world: &World<'_>, tile: TileIndex, td: Trackdir) -> bool {
     if is_diagonal_trackdir(td.0) {
-        if world.kind(tile) == TileType::MP_TUNNELBRIDGE && world.bridge(tile.0) {
+        if world.kind(tile) == TileType::MP_TUNNELBRIDGE && world.bridge(tile) {
             /* it is bridge ramp, check if we are entering the bridge */
             if world.tunnel_bridge_dir(tile.0) != trackdir_to_exitdir(td.0) {
                 return false; // no, we are leaving it, no penalty

@@ -325,7 +325,6 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     industry_gfx: unreachable1,
     is_bay_stop: unreachable1,
     is_bridge: unreachable1,
-    is_depot_tile: unreachable1,
     is_drive_through_stop: unreachable1,
     is_plain_rail: unreachable1,
     is_road_depot: unreachable1,

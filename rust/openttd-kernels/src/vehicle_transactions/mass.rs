@@ -65,7 +65,7 @@ unsafe fn generate(s: &Services, list: &mut List, vli: &VehicleListIdentifier) -
 }
 /// `IsDepotTile(tile) && IsTileOwner(tile, _current_company)`.
 fn depot(s: &Services, tile: TileIndex) -> bool {
-    crate::depot_map::is_depot_tile(s.common.base.shared, tile)
+    crate::depot_map::is_depot_tile(&crate::map_func::World::new(s.common.base.shared), tile)
         && crate::tile_map::is_tile_owner(
             s.common.base.shared,
             TileIndex(tile.0),

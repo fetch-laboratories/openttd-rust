@@ -86,7 +86,7 @@ fn rail_tile(s: &Services, tile: u32) -> bool {
     if !valid(&w, tile) {
         return false;
     }
-    (w.kind(TileIndex(tile)) == TileType::MP_RAILWAY && !w.rail_depot(tile))
+    (w.kind(TileIndex(tile)) == TileType::MP_RAILWAY && !w.rail_depot(TileIndex(tile)))
         || (w.station_rail_raw(tile) && !w.station_blocked(tile))
         || w.level_crossing_tile(tile)
 }
@@ -98,7 +98,7 @@ fn level_crossing_tile(s: &Services, tile: u32) -> bool {
 
 fn rail_depot_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.rail_depot(tile)
+    valid(&w, tile) && w.rail_depot(TileIndex(tile))
 }
 
 fn rail_station_tile(s: &Services, tile: u32) -> bool {

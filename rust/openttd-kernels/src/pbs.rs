@@ -453,7 +453,7 @@ impl<'a> Pbs<'a> {
                 break;
             }
             /* Depot tile? Can't continue. */
-            if w.rail_depot(tile.0) {
+            if w.rail_depot(tile) {
                 break;
             }
             /* Non-pbs signal? Reservation can't continue. */
@@ -519,7 +519,7 @@ impl<'a> Pbs<'a> {
         let tile = v.vehicle().tile();
         let trackdir = crate::train::get_vehicle_trackdir(self.train(), s, v);
 
-        if w.rail_depot(tile.0) && (self.0.depot_bits)(tile.0) == TrackBits::TRACK_BIT_NONE {
+        if w.rail_depot(tile) && (self.0.depot_bits)(tile.0) == TrackBits::TRACK_BIT_NONE {
             return PBSTileInfo {
                 tile,
                 trackdir,
@@ -695,7 +695,7 @@ impl<'a> Pbs<'a> {
     ) -> bool {
         let s = self.shared();
         let w = World::new(s);
-        if w.rail_depot(tile.0) {
+        if w.rail_depot(tile) {
             return true;
         }
 
@@ -772,7 +772,7 @@ impl<'a> Pbs<'a> {
         }
 
         /* Not reserved and depot or not a pbs signal -> free. */
-        if World::new(s).rail_depot(tile.0) {
+        if World::new(s).rail_depot(tile) {
             return true;
         }
         if self.has_non_pbs_signal(tile, trackdir) {

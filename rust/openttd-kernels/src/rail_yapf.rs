@@ -415,7 +415,7 @@ impl<T: Types> PfDestination<T> for CYapfDestinationAnyDepotRailT {
     }
     #[inline]
     fn pf_detect_destination_tile(pf: &CYapfRailT<'_, T>, tile: TileIndex, _: Trackdir) -> bool {
-        pf.world.rail_depot(tile.0)
+        pf.world.rail_depot(tile)
     }
     #[inline]
     fn pf_calc_estimate(_: &CYapfRailT<'_, T>, n: &mut CYapfRailNode) -> bool {
@@ -527,7 +527,7 @@ impl<T: Types<PfDestination = Self>> PfDestination<T> for CYapfDestinationTileOr
         }
 
         if pf.dest.any_depot {
-            return pf.world.rail_depot(tile.0);
+            return pf.world.rail_depot(tile);
         }
 
         (tile == pf.dest.dest_tile)
@@ -1558,7 +1558,7 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                     .assert_with(|| self.world.is_rail_depot(cur.tile.0));
                 segment_cost =
                     segment_cost.wrapping_add(self.penalty(|s| s.rail_depot_reverse_penalty));
-            } else if self.world.rail_depot(cur.tile.0) {
+            } else if self.world.rail_depot(cur.tile) {
                 /* We will end in this pass (depot is possible target) */
                 end_segment_reason.set(EndSegmentReason::DEPOT);
             } else if cur.tile_type == TileType::MP_STATION && self.world.is_rail_waypoint(cur.tile)

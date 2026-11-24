@@ -611,7 +611,7 @@ impl<'a> Game<'a> {
     }
     /// `IsRoadDepotTile(tile)`.
     fn is_road_depot_tile(&self, tile: TileIndex) -> bool {
-        self.world().road_depot(tile.0)
+        self.world().road_depot(tile)
     }
     /// `GetRoadDepotDirection(tile)`.
     fn get_road_depot_direction(&self, tile: TileIndex) -> DiagDirection {
@@ -2288,7 +2288,6 @@ impl<'a> Game<'a> {
                         usize::from(RVSB_IN_DT_ROAD_STOP_END),
                     )
                     && crate::movement::should_stop_at_station(
-                        self.ss,
                         v.v,
                         self.world().get_station_index(v.v.tile()),
                     )
@@ -2349,7 +2348,6 @@ impl<'a> Game<'a> {
                     usize::from(RVSB_IN_DT_ROAD_STOP),
                     usize::from(RVSB_IN_DT_ROAD_STOP_END),
                 ) && crate::movement::should_stop_at_station(
-                    self.ss,
                     v.v,
                     self.world().get_station_index(v.v.tile()),
                 ) && v.v.owner() == self.world().owner(v.v.tile())
