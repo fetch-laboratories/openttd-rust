@@ -560,10 +560,8 @@ pub(crate) fn get_cargo_types_of_articulated_vehicle(
     while let Some(v) = part {
         let record = v.0.as_ptr();
         let cargo = (s.vehicle_cargo)(record);
-        // SAFETY: The live part's engine.
         if is_valid_cargo_type(cargo)
-            && unsafe { openttd_rust_engine_can_carry_abi(s, (s.vehicle_engine_object)(record)) }
-                != 0
+            && can_carry(EngineRef::of((s.vehicle_engine_object)(record)).carrying())
         {
             set_bit64(&mut cargoes, cargo);
             if !is_valid_cargo_type(first) {
