@@ -859,7 +859,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             (handle).set_cur_speed(0); // trains can stop 'slowly'
         }
         /* Unbunching data is no longer valid. */
-        crate::orders::VisitOrders::new(s.vehicles.orders()).reset_unbunching(handle);
+        crate::orders::reset_unbunching(handle);
         // Native presentation may reenter owners; no Rust owner borrow spans it.
         (unsafe { &*s.vehicles.maintenance }.mark_dirty)(handle);
         set_window_widget_dirty(

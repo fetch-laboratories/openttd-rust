@@ -848,7 +848,7 @@ impl<'a> Game<'a> {
             v.set_reverse_ctr(180);
 
             /* Unbunching data is no longer valid. */
-            crate::orders::VisitOrders::new(self.vs.orders()).reset_unbunching(v.v);
+            crate::orders::reset_unbunching(v.v);
         }
 
         true

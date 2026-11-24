@@ -4803,6 +4803,13 @@ impl Control {
     }
 }
 
+/// `BaseConsist::ResetDepotUnbunching` on the consist owner of a live vehicle record.
+pub(crate) fn reset_unbunching(v: VehicleRef) {
+    let consist = read_field!(v.0.as_ptr(), consist);
+    // SAFETY: The consist owner the live record stores.
+    unsafe { reset_depot_unbunching(consist) };
+}
+
 /// Direct access to the canonical orders owner for route prediction.
 /// Handles are live for the synchronous entry; no owner borrow crosses a leaf.
 #[derive(Clone, Copy)]
@@ -4897,12 +4904,6 @@ impl VisitOrders {
     /// The unbunching round-trip measurement of `VehicleEnterDepot`.
     pub(crate) fn measure_unbunching(self, v: VehicleRef) {
         self.0.measure_unbunching(Self::shell(v));
-    }
-    /// `BaseConsist::ResetDepotUnbunching`.
-    pub(crate) fn reset_unbunching(self, v: VehicleRef) {
-        let consist = read_field!(v.0.as_ptr(), consist);
-        // SAFETY: The consist owner the live record stores.
-        unsafe { reset_depot_unbunching(consist) };
     }
     /// `Vehicle::LeaveUnbunchingDepot`.
     pub(crate) fn leave_unbunching_depot(self, v: VehicleRef) {
@@ -5181,12 +5182,16 @@ mod unbunching_tests {
         let v = VehicleRef::of(record);
         let waiting = || crate::vehicle::is_waiting_for_unbunching(v, leaves, || true);
         assert!(waiting());
-        // SAFETY: As above; no other access is live.
+        // SAFETY: Each write below is to the test's leaked owners, with no other access live.
         unsafe { (*consist).next_departure = 100 };
         assert!(!waiting());
-        unsafe { (*consist).next_departure = 101 };
-        unsafe { (*shared).vehicles = 1 };
+        // SAFETY: As above.
+        unsafe {
+            (*consist).next_departure = 101;
+            (*shared).vehicles = 1;
+        };
         assert!(!waiting());
+        // SAFETY: As above.
         unsafe { (*shared).vehicles = 2 };
         assert!(waiting());
         assert_eq!(FAILED.load(Ordering::Relaxed), 0);

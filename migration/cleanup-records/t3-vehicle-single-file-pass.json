@@ -64,5 +64,19 @@
     "tool": "rust",
     "from": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices > fn for_each_on_tile | allow unsafe_code",
     "to": "rust/openttd-kernels/src/vehicle.rs | impl VehicleServices > fn set_next_shell | allow unsafe_code"
+  },
+  {
+    "kind": "growth",
+    "counter": "tools_cpp",
+    "added": {
+      "tools/migration/aircraft-range.cpp": 4,
+      "tools/migration/windows-abi/aircraft.inc": 15,
+      "tools/migration/windows-abi/road.inc": 14,
+      "tools/migration/windows-abi/ship.inc": 1
+    },
+    "reason": "Plan #984 decision 1 deletes the vehicle table's property, callback and map_log_x slots, so the kept native fixtures that stubbed them supply the same inputs through what Rust now reads: the production resolver's engine, cargo and callback services in aircraft-range.cpp, aircraft.inc and road.inc, and a fixture map in ship.inc. The behaviour review of #1031 (finding 1) requires the fixtures to observe each failed callback's fallback through the production caches and running cost, which adds the aircraft speed and road cargo-age and running-cost checks. 34 lines added against 17 removed in the same files, net 17.",
+    "existing_alternatives": "The retired property stubs observed their fallback arguments directly, but the resolver's callback service does not receive the fallback, and these fixtures are kept under #736's classification; newgrf_vehicle::property_tests covers get_vehicle_property's fallback rule in Rust, but only these native fixtures drive the production cache and running-cost callers with live engine records.",
+    "retiring_owner": "#736",
+    "retirement_condition": "Retires with the aircraft, road and ship ABI fixtures and the aircraft-range probe when #736 moves their observations to Rust tests or the harness."
   }
 ]

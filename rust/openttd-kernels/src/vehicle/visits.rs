@@ -1067,7 +1067,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
         // The link across this stop can't be predicted.
         (s.set_last_loading)(v, INVALID_STATION);
 
-        o.reset_unbunching(v);
+        crate::orders::reset_unbunching(v);
 
         (s.waiting_news)(v);
     }

@@ -762,8 +762,17 @@ pub(crate) struct VehicleCallback<'a> {
 /// newgrf callback for vehicles. Returns the value the callback returned, or
 /// `CALLBACK_FAILED` if it failed.
 pub(crate) fn resolve_vehicle_callback(s: &Services, args: VehicleCallback<'_>) -> u16 {
-    let v = args.v.map_or(null_mut(), |v| v.0.as_ptr());
-    let wagon = if args.parent.is_some() {
+    let VehicleCallback {
+        callback,
+        param1,
+        param2,
+        engine,
+        v,
+        parent,
+        regs100,
+    } = args;
+    let v = v.map_or(null_mut(), |v| v.0.as_ptr());
+    let wagon = if parent.is_some() {
         WO_NONE
     } else {
         WO_UNCACHED
@@ -771,19 +780,19 @@ pub(crate) fn resolve_vehicle_callback(s: &Services, args: VehicleCallback<'_>) 
     // SAFETY: A handle names a live record of the serialized game state, and a parent is
     // the caller's live vehicle.
     unsafe {
-        let mut state = init(s, args.engine.0, v, wagon, false);
-        if let Some(parent) = args.parent {
+        let mut state = init(s, engine.0, v, wagon, false);
+        if let Some(parent) = parent {
             state.parent.set_vehicle(parent);
         }
         // No Rust reference into state is retained while generic Action2 reenters.
         (s.resolve_callback)(
             &raw mut state,
-            args.engine.0,
-            args.callback.0,
-            args.param1,
-            args.param2,
-            args.regs100.as_mut_ptr(),
-            args.regs100.len(),
+            engine.0,
+            callback.0,
+            param1,
+            param2,
+            regs100.as_mut_ptr(),
+            regs100.len(),
         )
     }
 }
