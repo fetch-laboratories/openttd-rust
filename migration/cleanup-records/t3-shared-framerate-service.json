@@ -146,10 +146,11 @@
     "kind": "growth",
     "counter": "tests_cpp",
     "added": {
+      "src/tests/landscape_protocol.hpp": 1,
       "src/tests/session.cpp": 4
     },
-    "reason": "The native observation that the game binds the framerate table before main: no Rust test or scenario can see it, since Rust tests bind a recording table and the harness compares game state. It is the boundary exception of porting's tests in Rust and C++.",
-    "existing_alternatives": "None in Rust or the harness; the discarding table makes a missing bind silent.",
+    "reason": "The native observation that the game binds the framerate table before main: no Rust test or scenario can see it, since Rust tests bind a recording table and the harness compares game state. It is the boundary exception of porting's tests in Rust and C++. The landscape protocol's one added line is its `TimerGameTick::counter` callback: the tile loop now reads the counter through the shared table inside its timing scope, as the original does, and the fixture's default callback aborts.",
+    "existing_alternatives": "None in Rust or the harness; the discarding table makes a missing bind silent. For the tick callback: none, since fixtures specify the callbacks they use.",
     "retiring_owner": "#734",
     "retirement_condition": "With framerate_gui.cpp's port, when the table is removed."
   }
