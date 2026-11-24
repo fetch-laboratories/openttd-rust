@@ -33,18 +33,3 @@ impl EffectVehicleType {
     /// `EV_END`.
     pub const EV_END: Self = Self(12);
 }
-
-/// `EV_STEAM_SMOKE`.
-pub const EV_STEAM_SMOKE: u8 = EffectVehicleType::EV_STEAM_SMOKE.0;
-/// `EV_DIESEL_SMOKE`.
-pub const EV_DIESEL_SMOKE: u8 = EffectVehicleType::EV_DIESEL_SMOKE.0;
-/// `EV_ELECTRIC_SPARK`.
-pub const EV_ELECTRIC_SPARK: u8 = EffectVehicleType::EV_ELECTRIC_SPARK.0;
-/// `EV_CRASH_SMOKE`.
-pub const EV_CRASH_SMOKE: u8 = EffectVehicleType::EV_CRASH_SMOKE.0;
-/// `EV_EXPLOSION_LARGE`.
-pub const EV_EXPLOSION_LARGE: u8 = EffectVehicleType::EV_EXPLOSION_LARGE.0;
-/// `EV_EXPLOSION_SMALL`.
-pub const EV_EXPLOSION_SMALL: u8 = EffectVehicleType::EV_EXPLOSION_SMALL.0;
-/// `EV_BREAKDOWN_SMOKE_AIRCRAFT`.
-pub const EV_BREAKDOWN_SMOKE_AIRCRAFT: u8 = EffectVehicleType::EV_BREAKDOWN_SMOKE_AIRCRAFT.0;

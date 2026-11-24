@@ -359,14 +359,14 @@ impl<'a> World<'a> {
         let gp = crate::vehicle::get_new_vehicle_pos(v.vehicle(), self.map());
         self.update_position(v, gp.x, gp.y, self.flight(v));
     }
-    fn effect_rel(v: Vehicle, x: i32, y: i32, z: i32, kind: u8) {
-        let _ = crate::effect::create_effect_vehicle_rel(
-            v.vehicle(),
-            x,
-            y,
-            z,
-            crate::effectvehicle_func::EffectVehicleType(kind),
-        );
+    fn effect_rel(
+        v: Vehicle,
+        x: i32,
+        y: i32,
+        z: i32,
+        kind: crate::effectvehicle_func::EffectVehicleType,
+    ) {
+        let _ = crate::effect::create_effect_vehicle_rel(v.vehicle(), x, y, z, kind);
     }
     fn sound_vehicle(&self, v: Vehicle) {
         if (self.shared.disaster_sound)() {
@@ -420,7 +420,13 @@ impl<'a> World<'a> {
                     self.set_age(v, 0);
                 }
                 if Self::tick(v) & 7 == 0 {
-                    Self::effect_rel(v, 0, -17, 2, crate::effectvehicle_func::EV_CRASH_SMOKE);
+                    Self::effect_rel(
+                        v,
+                        0,
+                        -17,
+                        2,
+                        crate::effectvehicle_func::EffectVehicleType::EV_CRASH_SMOKE,
+                    );
                 }
             } else if v.state() == 0 {
                 let tile = Self::tile(v);
@@ -462,7 +468,13 @@ impl<'a> World<'a> {
         self.update_position(v, p.0, p.1, z);
         let age = self.increment_age(v);
         if age == 1 {
-            Self::effect_rel(v, 0, 7, 8, crate::effectvehicle_func::EV_EXPLOSION_LARGE);
+            Self::effect_rel(
+                v,
+                0,
+                7,
+                8,
+                crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE,
+            );
             self.sound_vehicle(v);
             v.set_image(SPR_BLIMP_CRASHING);
         } else if age == 70 {
@@ -475,7 +487,7 @@ impl<'a> World<'a> {
                     (r & 15).wrapping_sub(7) as i32,
                     ((r >> 4) & 15).wrapping_sub(7) as i32,
                     ((r >> 8) & 7) as i32 + 5,
-                    crate::effectvehicle_func::EV_EXPLOSION_SMALL,
+                    crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_SMALL,
                 );
             }
         } else if age == 350 {
@@ -587,7 +599,13 @@ impl<'a> World<'a> {
             }
         }
         if self.age(v) > 50 {
-            Self::effect_rel(v, 0, 7, 8, crate::effectvehicle_func::EV_EXPLOSION_LARGE);
+            Self::effect_rel(
+                v,
+                0,
+                7,
+                8,
+                crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE,
+            );
             self.sound_vehicle(v);
             return self.delete(v);
         }
@@ -832,7 +850,7 @@ impl<'a> World<'a> {
                 0,
                 7,
                 8,
-                crate::effectvehicle_func::EV_EXPLOSION_LARGE,
+                crate::effectvehicle_func::EffectVehicleType::EV_EXPLOSION_LARGE,
             );
             self.sound_vehicle(target);
             self.delete(target);

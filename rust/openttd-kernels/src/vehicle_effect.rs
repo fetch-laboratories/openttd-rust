@@ -19,9 +19,6 @@ use crate::direction_func::{change_dir_raw, reverse_dir_raw};
 use crate::direction_type::DIRDIFF_90RIGHT;
 use crate::effect::create_effect_vehicle_rel as create_rel;
 use crate::effectvehicle_func::EffectVehicleType;
-use crate::effectvehicle_func::{
-    EV_BREAKDOWN_SMOKE_AIRCRAFT, EV_DIESEL_SMOKE, EV_ELECTRIC_SPARK, EV_STEAM_SMOKE,
-};
 use crate::engine_type::{
     EC_MONORAIL, EC_STEAM, VE_ADVANCED_EFFECT, VE_DEFAULT, VE_DISABLE_EFFECT,
     VE_DISABLE_WAGON_POWER, VE_OFFSET_CENTRE, VE_OFFSET_COUNT, VE_OFFSET_START, VE_TYPE_COUNT,
@@ -249,10 +246,10 @@ fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate:
             y = (i32::from(b) * l - i32::from(a) * t) as i8;
         }
         let typ = match typ {
-            0xf1 => EV_STEAM_SMOKE,
-            0xf2 => EV_DIESEL_SMOKE,
-            0xf3 => EV_ELECTRIC_SPARK,
-            0xfa => EV_BREAKDOWN_SMOKE_AIRCRAFT,
+            0xf1 => EffectVehicleType::EV_STEAM_SMOKE,
+            0xf2 => EffectVehicleType::EV_DIESEL_SMOKE,
+            0xf3 => EffectVehicleType::EV_ELECTRIC_SPARK,
+            0xfa => EffectVehicleType::EV_BREAKDOWN_SMOKE_AIRCRAFT,
             _ => continue,
         };
         let _ = create_rel(
@@ -260,7 +257,7 @@ fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate:
             i32::from(x_center) + i32::from(x),
             i32::from(y_center) + i32::from(y),
             i32::from(z),
-            EffectVehicleType(typ),
+            typ,
         );
     }
 }
@@ -337,12 +334,12 @@ fn emit_part(
             y = y.wrapping_neg();
         }
         let kind = match model {
-            VESM_STEAM => EV_STEAM_SMOKE,
-            VESM_DIESEL => EV_DIESEL_SMOKE,
-            VESM_ELECTRIC => EV_ELECTRIC_SPARK,
+            VESM_STEAM => EffectVehicleType::EV_STEAM_SMOKE,
+            VESM_DIESEL => EffectVehicleType::EV_DIESEL_SMOKE,
+            VESM_ELECTRIC => EffectVehicleType::EV_ELECTRIC_SPARK,
             _ => unreachable!(),
         };
-        let _ = create_rel(v, x, y, 10, EffectVehicleType(kind));
+        let _ = create_rel(v, x, y, 10, kind);
     }
     true
 }
