@@ -1057,8 +1057,7 @@ mod tests {
     extern "C" fn write_spritenum(_: VehicleRef, sprite: u8) {
         observe(|o| o.spritenum = sprite);
     }
-    #[allow(unsafe_code)]
-    unsafe extern "C" fn spritenum(_: *mut OpenTTDVehicle) -> u8 {
+    extern "C" fn spritenum(_: *mut OpenTTDVehicle) -> u8 {
         observe(|o| o.spritenum)
     }
     extern "C" fn resolver() -> *const crate::newgrf_vehicle::Services {
@@ -1254,7 +1253,7 @@ mod tests {
     }
 
     /// `SetAnimationState` and `SetAnimationSubstate` on a created effect write the owner
-    /// its shell holds, which the shell's readers read. Binds the process-wide creation
+    /// the allocation returned for its shell. Binds the process-wide creation
     /// table, so it runs in a child process.
     #[test]
     fn created_effect_animation_setters_write_the_shell_owner() {
@@ -1285,11 +1284,11 @@ mod tests {
         assert_eq!(v.shell(), shell.cast());
         v.set_animation_state(0xBEEF);
         v.set_animation_substate(0xA5);
-        // SAFETY: The owner the allocation returned, live until the test ends.
-        #[allow(unsafe_code)]
-        unsafe {
-            assert_eq!(openttd_rust_effect_get_animation(owner), 0xBEEF);
-            assert_eq!(openttd_rust_effect_get_substate(owner), 0xA5);
-        }
+        let shell_owner = EffectVehicle {
+            record: v.record,
+            owner,
+        };
+        assert_eq!(shell_owner.animation_state(), 0xBEEF);
+        assert_eq!(shell_owner.animation_substate(), 0xA5);
     }
 }
