@@ -9,7 +9,7 @@
 //! Native pointers are opaque, synchronous and serialized by the game-state mutex.
 use super::{
     BaseStation, CommandCost, CommandServicesTable, Cost, Ctx, JoiningStation, RoadStopCost,
-    SignSearch, TileArea, sign_visit,
+    SignSearch, TileArea,
 };
 use crate::base_station_base::{self, StationRectMode};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
@@ -235,8 +235,8 @@ impl Ctx<'_> {
             tile,
             other: false,
         };
-        crate::station::spatial::for_all_stations_radius(self.shared, tile, 0, |st| unsafe {
-            sign_visit((&raw mut search).cast(), st);
+        crate::station::spatial::for_all_stations_radius(self.shared, tile, 0, |st| {
+            search.visit(st);
         });
         if search.other {
             out.error(STR_ERROR_SITE_UNSUITABLE.0);
