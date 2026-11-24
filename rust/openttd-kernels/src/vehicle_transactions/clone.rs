@@ -7,7 +7,7 @@ use crate::economy_type::ExpensesType;
 use crate::network_type::ClientID;
 use crate::order_type::CloneOptions;
 use crate::services::{ByteSpan, CommandCost, Cost};
-use crate::table::strings::STR_ERROR_VEHICLE_IS_DESTROYED;
+use crate::table::strings::{STR_ERROR_TOO_MANY_VEHICLES_IN_GAME, STR_ERROR_VEHICLE_IS_DESTROYED};
 use crate::tile_type::TileIndex;
 use crate::vehicle::VehicleType;
 use crate::vehicle_type::VehicleID;
@@ -206,7 +206,7 @@ unsafe fn cmd_clone_vehicle(
             }
         }
         if !(s.build.refit.common.vehicles.can_allocate)(count as usize) {
-            total.error(s.build.too_many);
+            total.error(STR_ERROR_TOO_MANY_VEHICLES_IN_GAME.0);
             return invalid;
         }
     }

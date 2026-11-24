@@ -480,8 +480,6 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.scale_cargo = OpenTTDScaleTownCargo,
 		.cargogen_mode = OpenTTDTownCargoGenMode,
 		.place_houses = OpenTTDPlaceHouses,
-		.errors = {STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_BUILDING_IS_PROTECTED, STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
-			STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_MUST_FOUND_TOWN_FIRST},
 	};
 	return services;
 }
@@ -598,12 +596,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.set_progress = [](OpenTTDTownFoundingFrame *frame, uint total) noexcept { return RunGenerationProgress(frame, [total] { RustSetGeneratingWorldProgress(GWP_TOWN, total); }); },
 		.increase_progress = [](OpenTTDTownFoundingFrame *frame) noexcept { return RunGenerationProgress(frame, [] { RustIncreaseGeneratingWorldProgress(GWP_TOWN); }); },
 		.random = &_random,
-		.edge_error = STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB,
-		.close_error = STR_ERROR_TOO_CLOSE_TO_ANOTHER_TOWN,
-		.unsuitable_error = STR_ERROR_SITE_UNSUITABLE,
-		.unique_error = STR_ERROR_NAME_MUST_BE_UNIQUE,
-		.too_many_error = STR_ERROR_TOO_MANY_TOWNS,
-		.no_space_error = STR_ERROR_NO_SPACE_FOR_TOWN,
 	};
 	return services;
 }
@@ -735,8 +727,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 #else
 		.assertions = false,
 #endif
-		.too_many_objects = STR_ERROR_TOO_MANY_OBJECTS,
-		.no_statue_place = STR_ERROR_STATUE_NO_SUITABLE_PLACE,
 	};
 	return services;
 }
@@ -858,7 +848,6 @@ const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept
 	static const OpenTTDTownAuthorityServices services{
 		.bulldozer = []() noexcept { return _cheats.magic_bulldozer.value; },
 		.town_index = RustTownAuthorityIndex,
-		.refusal = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 	};
 	return services;
 }

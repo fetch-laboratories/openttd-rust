@@ -20,6 +20,7 @@ use crate::game_state::GameState;
 use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
 use crate::slope_func::{SLOPE_E, SLOPE_EW, SLOPE_W};
 use crate::station_type::SRT_CARGO_TAKEN;
+use crate::table::strings::{STR_STATION_CLASS_DFLT, STR_STATION_CLASS_WAYP};
 use crate::tile_type::TileIndex;
 use crate::{
     map_func::Map,
@@ -1111,8 +1112,6 @@ pub(crate) const fn is_waypoint_class(global_id: u32) -> bool {
 
 /// Waypoint class label from `newgrf_station.h`.
 pub(crate) const STATION_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
-/// Class index limit from `newgrf_station.h`.
-pub(crate) const STAT_CLASS_MAX: u16 = StationClassID::STAT_CLASS_MAX.0;
 
 /// Native station class index, retaining every original uint16 value.
 #[repr(transparent)]
@@ -1131,6 +1130,39 @@ impl StationClassID {
 
 /// Default station class label.
 pub const STATION_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
+
+/// `StationClass::InsertDefaults`.
+pub(crate) unsafe fn insert_defaults() {
+    use crate::newgrf_class::index;
+    use crate::newgrf_class::station::{allocate, get, insert};
+    /* Set up initial data */
+    unsafe {
+        (*get(allocate(
+            STATION_CLASS_LABEL_DEFAULT,
+            StationClassID::STAT_CLASS_MAX,
+        )))
+        .name = STR_STATION_CLASS_DFLT.0;
+        insert(
+            index(get(allocate(
+                STATION_CLASS_LABEL_DEFAULT,
+                StationClassID::STAT_CLASS_MAX,
+            ))),
+            std::ptr::null_mut(),
+        );
+        (*get(allocate(
+            STATION_CLASS_LABEL_WAYPOINT,
+            StationClassID::STAT_CLASS_MAX,
+        )))
+        .name = STR_STATION_CLASS_WAYP.0;
+        insert(
+            index(get(allocate(
+                STATION_CLASS_LABEL_WAYPOINT,
+                StationClassID::STAT_CLASS_MAX,
+            ))),
+            std::ptr::null_mut(),
+        );
+    }
+}
 
 /// Native station specification flag bit position.
 #[repr(transparent)]

@@ -47,7 +47,6 @@ struct OpenTTDTownHousePlacement { int32_t min_year; int32_t max_year; };
 struct OpenTTDTownAuthorityServices {
 	bool (*bulldozer)() noexcept OPENTTD_SERVICE_DEFAULT(bulldozer);
 	uint16_t (*town_index)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
-	uint32_t refusal;
 };
 struct OpenTTDTownLeaves {
 	const OpenTTDSharedServices *shared;

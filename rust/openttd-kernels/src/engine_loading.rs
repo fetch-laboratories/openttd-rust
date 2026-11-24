@@ -10,6 +10,7 @@
 )]
 use crate::debug::{Bytes, grf_msg};
 use crate::raw_field::{read_field, write_field};
+use crate::table::strings::STR_NEWGRF_INVALID_ENGINE;
 use crate::{
     cargo_registry::{
         openttd_rust_cargo_by_label, openttd_rust_cargo_is_default_abi, openttd_rust_cargo_mask,
@@ -854,9 +855,11 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
                     })
             };
             if invalid {
-                write_field!(e.shell.cast_mut(), info.string_id, unsafe {
-                    (*s.resolver).capabilities.invalid_string_id
-                });
+                write_field!(
+                    e.shell.cast_mut(),
+                    info.string_id,
+                    STR_NEWGRF_INVALID_ENGINE.0
+                );
             }
         }
         let variant = read_field!(e.shell, info.variant_id).0;

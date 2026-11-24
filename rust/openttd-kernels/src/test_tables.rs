@@ -695,15 +695,6 @@ pub(crate) const HOUSES: crate::town::house::HouseServices = crate::town::house:
     scale_cargo: unreachable1,
     cargogen_mode: unreachable0,
     place_houses: unreachable0,
-    errors: crate::town::house::HouseErrors {
-        demolish: 0,
-        protected: 0,
-        refuses: 0,
-        sloped: 0,
-        bridge: 0,
-        flat: 0,
-        no_town: 0,
-    },
 };
 
 /// `crate::services::CommandServices` with every entry unreachable.
@@ -725,7 +716,6 @@ pub(crate) const COMMANDS: crate::services::CommandServices = crate::services::C
     shift_pressed: unreachable0,
     pause_level: unreachable0,
     last_build_coordinate: unreachable2,
-    not_enough_cash: 0,
     paused_error: unreachable3,
     error_message: unreachable4,
     estimate: unreachable3,
@@ -1104,8 +1094,6 @@ pub(crate) const FLEET_PENDING: crate::fleet::pending::Services = crate::fleet::
     command: unreachable2,
     length_news: unreachable1,
     failed_news: unreachable2,
-    cash: 0,
-    limit: 0,
 };
 
 /// `crate::fleet::transactions::Services` with every entry unreachable.
@@ -1151,10 +1139,6 @@ pub(crate) const FLEET_TRANSACTIONS: crate::fleet::transactions::Services =
         restore_rng: unreachable1,
         rule_window: unreachable2,
         assertions: false,
-        unavailable: 0,
-        too_long: 0,
-        too_long_replacement: 0,
-        nothing: 0,
     };
 
 /// `crate::fleet::GroupServices` with every entry unreachable.
@@ -1209,7 +1193,6 @@ pub(crate) const FLEET_GROUPS: crate::fleet::GroupServices = crate::fleet::Group
     renew_allocate: unreachable0,
     renew_can_allocate: unreachable0,
     renew_delete: unreachable1,
-    recursion_error: 0,
 };
 
 /// `crate::vehicle::maintenance::Services` with every entry unreachable.
@@ -1345,7 +1328,6 @@ pub(crate) const COMPANY: crate::company::Services = crate::company::Services {
     close_construction_windows: unreachable0,
     cost: &COMMAND_COSTS,
     objectives: unreachable0,
-    owned_by: 0,
     settings: unreachable0,
     company_next: unreachable1,
     company_count: unreachable0,
@@ -1546,10 +1528,6 @@ pub(crate) const SETTINGS: crate::settings_table::Services = crate::settings_tab
     change_game_setting: unreachable2,
     change_company_setting: unreachable3,
     error_message: unreachable1,
-    edges_not_empty: 0,
-    edges_not_water: 0,
-    dynamic_engines_existing_vehicles: 0,
-    too_high_mountain: 0,
 };
 
 /// `crate::timer_game_common::ClockServices` with every entry unreachable.
@@ -1840,7 +1818,6 @@ pub(crate) const SIGN_COMMANDS: crate::signs_cmd::Services = crate::signs_cmd::S
     rename: unreachable3,
     relocate: unreachable5,
     remove: unreachable1,
-    too_many_signs: 0,
 };
 
 /// `crate::session::Services` with every entry unreachable.
@@ -2487,7 +2464,6 @@ pub(crate) const VEHICLE_TRANSACTION: crate::vehicle_transactions::TransactionSe
         set_name: unreachable2,
         interval_clamp: unreachable2,
         set_interval: unreachable4,
-        unique_name: 0,
         max_name: 0,
     };
 

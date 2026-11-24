@@ -391,7 +391,6 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.close_construction_windows = Co_close_construction_windows,
 		.cost = &GetRustCommandCostServices(),
 		.objectives = GetRustObjectivesServices,
-		.owned_by = STR_ERROR_OWNED_BY,
 		.settings = GetRustSettingServices,
 		.company_next = RustCompanyRefNext,
 		.company_count = Co_company_count,

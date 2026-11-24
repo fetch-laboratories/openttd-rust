@@ -12,6 +12,7 @@ use crate::industry_type::{IndustryType, NUM_INDUSTRYTYPES};
 use crate::industrytype::{IndustryLifeType, IndustryLifeTypes};
 use crate::landscape_type::LandscapeType;
 use crate::map_func::TileTypeAccess;
+use crate::math::is_inside_mm;
 use crate::road_map::{ROADSIDE_BARREN, ROADSIDE_GRASS, ROADSIDE_PAVED};
 use crate::services::{Map, Services as Shared};
 use crate::station::BaseStation;
@@ -21,6 +22,15 @@ use crate::station_type::{
     StationFacility, StationID, StationType,
 };
 use crate::strings_type::StringID;
+use crate::table::strings::{
+    STR_NULL, STR_SV_STNAME, STR_SV_STNAME_AIRPORT, STR_SV_STNAME_ANNEXE, STR_SV_STNAME_BRANCH,
+    STR_SV_STNAME_CENTRAL, STR_SV_STNAME_DOCKS, STR_SV_STNAME_EAST, STR_SV_STNAME_EXCHANGE,
+    STR_SV_STNAME_FALLBACK, STR_SV_STNAME_FOREST, STR_SV_STNAME_HALT, STR_SV_STNAME_HEIGHTS,
+    STR_SV_STNAME_HELIPORT, STR_SV_STNAME_LAKESIDE, STR_SV_STNAME_LOWER, STR_SV_STNAME_MINES,
+    STR_SV_STNAME_NORTH, STR_SV_STNAME_OILFIELD, STR_SV_STNAME_SIDINGS, STR_SV_STNAME_SOUTH,
+    STR_SV_STNAME_TRANSFER, STR_SV_STNAME_UPPER, STR_SV_STNAME_VALLEY, STR_SV_STNAME_WEST,
+    STR_SV_STNAME_WOODS, STR_UNDEFINED,
+};
 use crate::tile_type::{MP_STATION, TileIndex, TileType};
 use crate::vehicle::VehicleRef;
 use crate::vehicle_type::VehicleID;
@@ -28,42 +38,10 @@ use crate::window_func::close_window_by_id;
 use crate::window_type::{WindowClass, WindowNumber};
 
 use crate::industrytype::{self, IndustrySpec};
-/// Process-lifetime string constants from `table/strings.h`.
-#[repr(C)]
-pub struct Names {
-    base: u32,
-    central: u32,
-    airport: u32,
-    oilfield: u32,
-    docks: u32,
-    heliport: u32,
-    mines: u32,
-    lakeside: u32,
-    woods: u32,
-    forest: u32,
-    valley: u32,
-    heights: u32,
-    north: u32,
-    south: u32,
-    east: u32,
-    west: u32,
-    transfer: u32,
-    halt: u32,
-    exchange: u32,
-    annexe: u32,
-    sidings: u32,
-    branch: u32,
-    upper: u32,
-    lower: u32,
-    fallback: u32,
-    undefined: u32,
-    null: u32,
-}
 #[repr(C)]
 pub struct Services {
     pub shared: &'static Shared,
     pub catchment: &'static crate::station::CatchmentServices,
-    names: Names,
     pub industry_type: extern "C" fn(*mut BaseStation) -> u8,
     pub set_industry_type: extern "C" fn(*mut BaseStation, u8),
     pub roadstop: *const crate::newgrf_roadstop::Services,
@@ -100,20 +78,27 @@ impl Services {
 /// `StationNameInformation`: information to handle station action 0 property 24
 /// correctly, with default-name and industry-type sets independent.
 struct NameInformation {
-    /// Used default station suffixes. The original's bitset spans
-    /// `STR_SV_STNAME_FALLBACK - STR_SV_STNAME`; the native names bound it below 256.
-    used_names: [bool; 256],
+    /// Used default station suffixes.
+    used_names: [bool; (STR_SV_STNAME_FALLBACK.0 - STR_SV_STNAME.0) as usize],
     /// Bit set indicating when an industry type has been found.
     indtypes: [bool; NUM_INDUSTRYTYPES as usize],
 }
 impl NameInformation {
     fn is_available(&self, str: StringID, s: &Services) -> bool {
-        (s.check())(str.0 >= s.names.base && str.0 < s.names.fallback);
-        !self.used_names[(str.0 - s.names.base) as usize]
+        (s.check())(is_inside_mm(
+            str.0 as usize,
+            STR_SV_STNAME.0 as usize,
+            STR_SV_STNAME_FALLBACK.0 as usize,
+        ));
+        !self.used_names[(str.0 - STR_SV_STNAME.0) as usize]
     }
     fn set_used(&mut self, str: StringID, s: &Services) {
-        (s.check())(str.0 >= s.names.base && str.0 < s.names.fallback);
-        self.used_names[(str.0 - s.names.base) as usize] = true;
+        (s.check())(is_inside_mm(
+            str.0 as usize,
+            STR_SV_STNAME.0 as usize,
+            STR_SV_STNAME_FALLBACK.0 as usize,
+        ));
+        self.used_names[(str.0 - STR_SV_STNAME.0) as usize] = true;
     }
 }
 /// `CountMapSquareAround`: count the tiles matching `cmp` in the area around
@@ -184,9 +169,8 @@ fn station_name_information(
     town: *const crate::services::TownHandle,
     s: &Services,
 ) -> NameInformation {
-    let n = &s.names;
     let mut sni = NameInformation {
-        used_names: [false; 256],
+        used_names: [false; (STR_SV_STNAME_FALLBACK.0 - STR_SV_STNAME.0) as usize],
         indtypes: [false; NUM_INDUSTRYTYPES as usize],
     };
     let mut from = 0;
@@ -203,7 +187,7 @@ fn station_name_information(
         if indtype != IndustryType::IT_INVALID {
             sni.indtypes[usize::from(indtype.0)] = true;
             let name = unsafe { (*Services::spec(indtype)).station_name };
-            if name != n.undefined {
+            if name != STR_UNDEFINED.0 {
                 /* Filter for other industrytypes with the same name */
                 for it in 0..NUM_INDUSTRYTYPES {
                     let indsp = Services::spec(IndustryType(it));
@@ -215,8 +199,16 @@ fn station_name_information(
             continue;
         }
         let str = (s.commands().string_id)(other);
-        if str >= n.base && str < n.fallback {
-            sni.set_used(StringID(if str == n.forest { n.woods } else { str }), s);
+        if is_inside_mm(
+            str as usize,
+            STR_SV_STNAME.0 as usize,
+            STR_SV_STNAME_FALLBACK.0 as usize,
+        ) {
+            let mut str = StringID(str);
+            if str == STR_SV_STNAME_FOREST {
+                str = STR_SV_STNAME_WOODS;
+            }
+            sni.set_used(str, s);
         }
     }
     sni
@@ -232,7 +224,6 @@ pub(crate) fn generate_station_name(
     let map = s.shared.map();
     let size_y = crate::map_func::World::new(s.shared).size_y();
     let freeform = (unsafe { &*s.catchment.station }.environment.freeform_edges)();
-    let n = &s.names;
     let town = (s.commands().station_town)(st);
     let mut sni = station_name_information(st, town, s);
     let mut spiral =
@@ -252,62 +243,62 @@ pub(crate) fn generate_station_name(
             s.check(),
         );
         let indsp = Services::spec(indtype);
-        if unsafe { (*indsp).station_name } == n.undefined {
+        if unsafe { (*indsp).station_name } == STR_UNDEFINED.0 {
             continue;
         }
         /* In all cases if an industry that provides a name is found two of
          * the standard names will be disabled. */
-        sni.set_used(StringID(n.oilfield), s);
-        sni.set_used(StringID(n.mines), s);
+        sni.set_used(STR_SV_STNAME_OILFIELD, s);
+        sni.set_used(STR_SV_STNAME_MINES, s);
         if sni.indtypes[usize::from(indtype.0)] {
             continue;
         }
         /* STR_NULL means it only disables oil rig/mines */
-        if unsafe { (*indsp).station_name } != n.null {
+        if unsafe { (*indsp).station_name } != STR_NULL.0 {
             (s.set_industry_type)(st, indtype.0);
-            return StringID(n.fallback);
+            return STR_SV_STNAME_FALLBACK;
         }
         break;
     }
     /* check default names
      * Oil rigs/mines name could be marked not free by looking for a near by industry. */
     let class_name = match name_class {
-        StationNaming::STATIONNAMING_AIRPORT => Some(n.airport),
-        StationNaming::STATIONNAMING_OILRIG => Some(n.oilfield),
-        StationNaming::STATIONNAMING_DOCK => Some(n.docks),
-        StationNaming::STATIONNAMING_HELIPORT => Some(n.heliport),
+        StationNaming::STATIONNAMING_AIRPORT => Some(STR_SV_STNAME_AIRPORT),
+        StationNaming::STATIONNAMING_OILRIG => Some(STR_SV_STNAME_OILFIELD),
+        StationNaming::STATIONNAMING_DOCK => Some(STR_SV_STNAME_DOCKS),
+        StationNaming::STATIONNAMING_HELIPORT => Some(STR_SV_STNAME_HELIPORT),
         _ => None,
     };
     if let Some(name) = class_name
-        && sni.is_available(StringID(name), s)
+        && sni.is_available(name, s)
     {
-        return StringID(name);
+        return name;
     }
     /* check mine? */
-    if sni.is_available(StringID(n.mines), s)
+    if sni.is_available(STR_SV_STNAME_MINES, s)
         && count_map_square_around(tile, map, size_y, freeform, |at| cmsa_mine(at, &m, s)) >= 2
     {
-        return StringID(n.mines);
+        return STR_SV_STNAME_MINES;
     }
     /* check close enough to town to get central as name? */
     let town_xy = unsafe { crate::town::position((s.shared.town_owner)(town)) };
     if map.distance_max(tile, town_xy) < 8 {
-        if sni.is_available(StringID(n.base), s) {
-            return StringID(n.base);
+        if sni.is_available(STR_SV_STNAME, s) {
+            return STR_SV_STNAME;
         }
-        if sni.is_available(StringID(n.central), s) {
-            return StringID(n.central);
+        if sni.is_available(STR_SV_STNAME_CENTRAL, s) {
+            return STR_SV_STNAME_CENTRAL;
         }
     }
     /* Check lakeside */
-    if sni.is_available(StringID(n.lakeside), s)
+    if sni.is_available(STR_SV_STNAME_LAKESIDE, s)
         && map.distance_from_edge(tile, size_y) < 20
         && count_map_square_around(tile, map, size_y, freeform, |at| cmsa_water(at, &m)) >= 5
     {
-        return StringID(n.lakeside);
+        return STR_SV_STNAME_LAKESIDE;
     }
     /* Check woods */
-    if sni.is_available(StringID(n.woods), s)
+    if sni.is_available(STR_SV_STNAME_WOODS, s)
         && (count_map_square_around(tile, map, size_y, freeform, |at| cmsa_tree(at, &m)) >= 8
             || count_map_square_around(tile, map, size_y, freeform, |at| {
                 crate::industry::policy::is_tile_forest_industry(at, unsafe {
@@ -315,47 +306,57 @@ pub(crate) fn generate_station_name(
                 })
             }) >= 2)
     {
-        return StringID(if s.landscape() == LandscapeType::Tropic {
-            n.forest
+        return if s.landscape() == LandscapeType::Tropic {
+            STR_SV_STNAME_FOREST
         } else {
-            n.woods
-        });
+            STR_SV_STNAME_WOODS
+        };
     }
     /* check elevation compared to town */
     let z = crate::tile_map::get_tile_z(&m, tile, map.size_x(), size_y).unwrap();
     let z2 = crate::tile_map::get_tile_z(&m, town_xy, map.size_x(), size_y).unwrap();
-    if z < z2 && sni.is_available(StringID(n.valley), s) {
-        return StringID(n.valley);
+    if z < z2 && sni.is_available(STR_SV_STNAME_VALLEY, s) {
+        return STR_SV_STNAME_VALLEY;
     }
-    if z > z2 && sni.is_available(StringID(n.heights), s) {
-        return StringID(n.heights);
+    if z > z2 && sni.is_available(STR_SV_STNAME_HEIGHTS, s) {
+        return STR_SV_STNAME_HEIGHTS;
     }
     /* check direction compared to town */
     for name in if map.tile_x(tile) < map.tile_x(town_xy) {
-        [n.south, n.west]
+        [STR_SV_STNAME_SOUTH, STR_SV_STNAME_WEST]
     } else {
-        [n.north, n.east]
+        [STR_SV_STNAME_NORTH, STR_SV_STNAME_EAST]
     } {
-        sni.set_used(StringID(name), s);
+        sni.set_used(name, s);
     }
     for name in if map.tile_y(tile) < map.tile_y(town_xy) {
-        [n.south, n.east]
+        [STR_SV_STNAME_SOUTH, STR_SV_STNAME_EAST]
     } else {
-        [n.north, n.west]
+        [STR_SV_STNAME_NORTH, STR_SV_STNAME_WEST]
     } {
-        sni.set_used(StringID(name), s);
+        sni.set_used(name, s);
     }
     /* Remaining station names that can be used when a more specific name has not been used. */
     let fallback_names = [
-        n.north, n.south, n.east, n.west, n.transfer, n.halt, n.exchange, n.annexe, n.sidings,
-        n.branch, n.upper, n.lower,
+        STR_SV_STNAME_NORTH,
+        STR_SV_STNAME_SOUTH,
+        STR_SV_STNAME_EAST,
+        STR_SV_STNAME_WEST,
+        STR_SV_STNAME_TRANSFER,
+        STR_SV_STNAME_HALT,
+        STR_SV_STNAME_EXCHANGE,
+        STR_SV_STNAME_ANNEXE,
+        STR_SV_STNAME_SIDINGS,
+        STR_SV_STNAME_BRANCH,
+        STR_SV_STNAME_UPPER,
+        STR_SV_STNAME_LOWER,
     ];
     for str in fallback_names {
-        if sni.is_available(StringID(str), s) {
-            return StringID(str);
+        if sni.is_available(str, s) {
+            return str;
         }
     }
-    StringID(n.fallback)
+    STR_SV_STNAME_FALLBACK
 }
 /// `Station::AddFacility`: called when a new facility is built on the station. If
 /// it is the first facility it also initializes the `xy` and `random_bits` members.
@@ -700,8 +701,7 @@ pub(crate) fn airport_maintenance_cost(s: &Services, owner: CompanyID) -> i64 {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, roadstop, cleaning_pool, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, industry_type, set_industry_type, roadstop, cleaning_pool, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }
 
 /// Test-only table for `crate::test_tables`; its private fields keep it in this module.
@@ -710,35 +710,6 @@ pub(crate) const TEST_TABLE: crate::station_lifecycle::Services =
     crate::station_lifecycle::Services {
         shared: &crate::test_tables::SHARED,
         catchment: &crate::test_tables::CATCHMENT,
-        names: crate::station_lifecycle::Names {
-            base: 0,
-            central: 0,
-            airport: 0,
-            oilfield: 0,
-            docks: 0,
-            heliport: 0,
-            mines: 0,
-            lakeside: 0,
-            woods: 0,
-            forest: 0,
-            valley: 0,
-            heights: 0,
-            north: 0,
-            south: 0,
-            east: 0,
-            west: 0,
-            transfer: 0,
-            halt: 0,
-            exchange: 0,
-            annexe: 0,
-            sidings: 0,
-            branch: 0,
-            upper: 0,
-            lower: 0,
-            fallback: 0,
-            undefined: 0,
-            null: 0,
-        },
         industry_type: crate::test_tables::unreachable1,
         set_industry_type: crate::test_tables::unreachable2,
         roadstop: std::ptr::null(),

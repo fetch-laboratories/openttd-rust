@@ -12,15 +12,9 @@ struct OpenTTDStationCommandServices;
 struct AirportSpec;
 struct OpenTTDOrdersLeaves;
 struct OpenTTDRoadStopResolverServices;
-struct OpenTTDStationNames {
-	uint32_t base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest;
-	uint32_t valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings;
-	uint32_t branch, upper, lower, fallback, undefined, null;
-};
 struct OpenTTDStationLifecycleServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStationCatchmentServices *catchment;
-	OpenTTDStationNames names;
 	uint8_t (*industry_type)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(industry_type);
 	void (*set_industry_type)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_industry_type);
 	const OpenTTDRoadStopResolverServices *roadstop;

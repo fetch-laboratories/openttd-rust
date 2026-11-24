@@ -14,6 +14,7 @@ use crate::services::{
     ByteSpan, CommandCost, CommandCostServices, CommandServices, Cost, Services as Shared,
 };
 use crate::strings_type::INVALID_STRING_ID;
+use crate::table::strings::STR_ERROR_NAME_MUST_BE_UNIQUE;
 
 #[repr(C)]
 pub struct Services {
@@ -31,12 +32,11 @@ pub struct Services {
     pub set_name: unsafe extern "C" fn(*mut Depot, ByteSpan),
     /// Refresh order, depot and depot-list windows after a rename.
     pub renamed: unsafe extern "C" fn(*mut Depot),
-    pub name_unique: u32,
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDDepotServices" ["probe"] => Services { shared, command, costs, rail, depot, pool_size, xy, name, set_name, renamed, name_unique };
+    "OpenTTDDepotServices" ["probe"] => Services { shared, command, costs, rail, depot, pool_size, xy, name, set_name, renamed };
 }
 
 /// `IsUniqueDepotName`, in `Depot::Iterate` order.
@@ -67,7 +67,7 @@ fn rename(s: &Services, out: Cost<'_>, flags: u16, id: DepotID, text: ByteSpan) 
             return out.error(INVALID_STRING_ID);
         }
         if !unique(s, text) {
-            return out.error(s.name_unique);
+            return out.error(STR_ERROR_NAME_MUST_BE_UNIQUE.0);
         }
     }
     if flags & DoCommandFlag::EXECUTE != 0 {

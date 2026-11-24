@@ -7,6 +7,9 @@ use crate::economy_type::ExpensesType;
 use crate::engine_type::EngineID;
 use crate::network_type::ClientID;
 use crate::services::{CommandCost, Cost, RandomServices};
+use crate::table::strings::{
+    STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE, STR_ERROR_TOO_MANY_VEHICLES_IN_GAME,
+};
 use crate::tile_type::TileIndex;
 use crate::vehicle::{RailVehicleTypes, VehicleType};
 use std::ptr;
@@ -38,8 +41,6 @@ pub struct Services {
     pub is_engine: extern "C" fn(*mut ()) -> bool,
     pub presentation: extern "C" fn(*mut (), VehicleType),
     pub use_unit: extern "C" fn(*mut ()),
-    pub too_many: u32,
-    pub unavailable: u32,
 }
 
 /// `CmdBuildVehicle`'s arguments.
@@ -129,7 +130,11 @@ pub(crate) unsafe fn cmd_build_vehicle(
     let kind = (s.depot_kind)(tile);
     /* Validate the engine type. */
     if !unsafe { (c.transactions.engine_buildable)(engine, kind.0, company) } {
-        value.error(s.unavailable.wrapping_add(u32::from(kind.0)));
+        value.error(
+            STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE
+                .0
+                .wrapping_add(u32::from(kind.0)),
+        );
         return Result::default();
     }
     /* Validate the cargo type. */
@@ -184,7 +189,7 @@ pub(crate) unsafe fn cmd_build_vehicle(
         }
     };
     if !(s.refit.common.vehicles.can_allocate)(count as usize) {
-        value.error(s.too_many);
+        value.error(STR_ERROR_TOO_MANY_VEHICLES_IN_GAME.0);
         return Result::default();
     }
     /* Check whether we can allocate a unit number. Autoreplace does not allocate
@@ -200,7 +205,7 @@ pub(crate) unsafe fn cmd_build_vehicle(
         (s.free_unit)(kind)
     };
     if unit == u16::MAX {
-        value.error(s.too_many);
+        value.error(STR_ERROR_TOO_MANY_VEHICLES_IN_GAME.0);
         return Result::default();
     }
     /* If we are refitting we need to temporarily purchase the vehicle to be able to
@@ -427,6 +432,6 @@ crate::abi::layouts! {
     "OpenTTDVehicleBuildServices" ["probe"] => Services {
         refit, mass, random, depot_kind,
         free_unit, construct, rail, ship_tile, new_ship, set_purchase,
-        is_engine, presentation, use_unit, too_many, unavailable,
+        is_engine, presentation, use_unit,
     };
 }

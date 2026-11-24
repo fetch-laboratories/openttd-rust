@@ -5,7 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared definitions from `newgrf_object.h`.
+//! Shared definitions from `newgrf_object.h`, and the default classes of `newgrf_object.cpp`.
+
+use crate::table::strings::{STR_OBJECT_CLASS_LTHS, STR_OBJECT_CLASS_TRNS};
 
 /// Native `ObjectFlag`: various object behaviours, retaining every underlying `u8`
 /// value.
@@ -56,5 +58,25 @@ impl ObjectFlags {
     #[must_use]
     pub const fn test(self, element: ObjectFlag) -> bool {
         (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+}
+
+/// Native `ObjectClassID`: class IDs for objects.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ObjectClassID(pub u16);
+impl ObjectClassID {
+    /// Maximum number of classes.
+    pub const OBJECT_CLASS_MAX: Self = Self(u16::MAX);
+}
+
+/// `ObjectClass::InsertDefaults`.
+#[allow(unsafe_code)]
+pub(crate) unsafe fn insert_defaults() {
+    use crate::newgrf_class::object::{allocate, get};
+    let max = ObjectClassID::OBJECT_CLASS_MAX;
+    unsafe {
+        (*get(allocate(u32::from_be_bytes(*b"LTHS"), max))).name = STR_OBJECT_CLASS_LTHS.0;
+        (*get(allocate(u32::from_be_bytes(*b"TRNS"), max))).name = STR_OBJECT_CLASS_TRNS.0;
     }
 }

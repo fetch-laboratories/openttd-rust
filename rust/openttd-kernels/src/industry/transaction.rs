@@ -34,8 +34,14 @@ use crate::slope_type::Slope;
 use crate::strings_func::get_encoded_string;
 use crate::strings_type::{EncodedString, StringID};
 use crate::table::strings::{
-    STR_ERROR_CAN_T_PROSPECT_INDUSTRY, STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING,
-    STR_ERROR_PROSPECTING_WAS_UNLUCKY,
+    STR_ERROR_CAN_ONLY_BE_BUILT_IN_DESERT, STR_ERROR_CAN_ONLY_BE_BUILT_IN_LOW_AREAS,
+    STR_ERROR_CAN_ONLY_BE_BUILT_IN_RAINFOREST, STR_ERROR_CAN_ONLY_BE_BUILT_IN_TOWNS,
+    STR_ERROR_CAN_ONLY_BE_BUILT_IN_TOWNS_WITH_POPULATION_OF_1200,
+    STR_ERROR_CAN_ONLY_BE_BUILT_NEAR_TOWN_CENTER, STR_ERROR_CAN_ONLY_BE_POSITIONED,
+    STR_ERROR_CAN_T_PROSPECT_INDUSTRY, STR_ERROR_FOREST_CAN_ONLY_BE_PLANTED,
+    STR_ERROR_INDUSTRY_TOO_CLOSE, STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING,
+    STR_ERROR_ONLY_ONE_ALLOWED_PER_TOWN, STR_ERROR_PROSPECTING_WAS_UNLUCKY,
+    STR_ERROR_SITE_UNSUITABLE, STR_ERROR_TOO_MANY_INDUSTRIES,
 };
 use crate::tile_type::{TileIndex, TileType, TropicZone};
 use crate::tilearea::TileArea;
@@ -50,21 +56,6 @@ pub struct Allocation {
     pub shell: *mut ShellHandle,
     pub owner: *mut Industry,
     pub id: u16,
-}
-#[repr(C)]
-pub struct ConstructionErrors {
-    pub site: u32,
-    pub forest: u32,
-    pub positioned: u32,
-    pub desert: u32,
-    pub rainforest: u32,
-    pub lowland: u32,
-    pub one_per_town: u32,
-    pub town: u32,
-    pub population: u32,
-    pub near_town: u32,
-    pub conflict: u32,
-    pub too_many: u32,
 }
 #[repr(C)]
 pub struct LocationResult {
@@ -110,7 +101,6 @@ pub struct TransactionContext {
     pub command_checks: *const crate::services::CommandServices,
     pub costs: *const IndustryCostServices,
     pub transaction: *const TransactionServices,
-    pub errors: *const ConstructionErrors,
 }
 /// The industry to be built, as `CreateNewIndustryHelper` and `CheckIfIndustryTileSlopes`
 /// pass it to the `NewGRF` checks: its north tile, type, layout index, the random bits it is
@@ -134,7 +124,6 @@ struct Engine<'a> {
     m: &'a IndustryCommandServices,
     cost: &'a IndustryCostServices,
     x: &'a TransactionServices,
-    e: &'a ConstructionErrors,
     out: *mut IndustryCost,
 }
 impl Engine<'_> {
@@ -237,7 +226,7 @@ impl Engine<'_> {
                 if self.arctic()
                     && (shared.tile_z)(tile.0) < i32::from(crate::snow_line::highest(shared)) + 2
                 {
-                    return self.fail(StringID(self.e.forest));
+                    return self.fail(STR_ERROR_FOREST_CAN_ONLY_BE_PLANTED);
                 }
             }
             // `CheckNewIndustry_OilRefinery`: industry should be positioned near the edge
@@ -249,7 +238,7 @@ impl Engine<'_> {
                         self.oil_refinery_limit(),
                     )
                 {
-                    return self.fail(StringID(self.e.positioned));
+                    return self.fail(STR_ERROR_CAN_ONLY_BE_POSITIONED);
                 }
             }
             // `CheckNewIndustry_Farm`: industry should be below the snow line in the arctic.
@@ -258,28 +247,28 @@ impl Engine<'_> {
                     && (shared.tile_z)(tile.0).wrapping_add(2)
                         >= i32::from(crate::snow_line::highest(shared))
                 {
-                    return self.fail(StringID(self.e.site));
+                    return self.fail(STR_ERROR_SITE_UNSUITABLE);
                 }
             }
             // `CheckNewIndustry_Plantation`: industry should NOT be in the desert.
             CheckProc::CHECK_PLANTATION
                 if self.tropic_zone(tile) == TropicZone::TROPICZONE_DESERT =>
             {
-                return self.fail(StringID(self.e.site));
+                return self.fail(STR_ERROR_SITE_UNSUITABLE);
             }
             // `CheckNewIndustry_Water`: industry should be in the desert.
             CheckProc::CHECK_WATER if self.tropic_zone(tile) != TropicZone::TROPICZONE_DESERT => {
-                return self.fail(StringID(self.e.desert));
+                return self.fail(STR_ERROR_CAN_ONLY_BE_BUILT_IN_DESERT);
             }
             // `CheckNewIndustry_Lumbermill`: industry should be in the rainforest.
             CheckProc::CHECK_LUMBERMILL
                 if self.tropic_zone(tile) != TropicZone::TROPICZONE_RAINFOREST =>
             {
-                return self.fail(StringID(self.e.rainforest));
+                return self.fail(STR_ERROR_CAN_ONLY_BE_BUILT_IN_RAINFOREST);
             }
             // `CheckNewIndustry_BubbleGen`: industry should be in low land.
             CheckProc::CHECK_BUBBLEGEN if (shared.tile_z)(tile.0) > 4 => {
-                return self.fail(StringID(self.e.lowland));
+                return self.fail(STR_ERROR_CAN_ONLY_BE_BUILT_IN_LOW_AREAS);
             }
             // `CheckNewIndustry_OilRig`: industries at sea should be positioned near the
             // edge of the map.
@@ -293,7 +282,7 @@ impl Engine<'_> {
                         self.oil_refinery_limit(),
                     )
                 {
-                    return self.fail(StringID(self.e.positioned));
+                    return self.fail(STR_ERROR_CAN_ONLY_BE_POSITIONED);
                 }
             }
             // `CheckNewIndustry_NULL` (`CHECK_NOTHING`) always succeeds.
@@ -333,7 +322,7 @@ impl Engine<'_> {
                 let position = TileIndex(unsafe { (*owner).metadata.tile });
                 // Within 14 tiles from another industry is considered close.
                 if self.distance_max(tile, position) <= 14 {
-                    return self.fail(StringID(self.e.conflict));
+                    return self.fail(STR_ERROR_INDUSTRY_TOO_CLOSE);
                 }
             }
         }
@@ -355,7 +344,7 @@ impl Engine<'_> {
             for n in 0..self.registry_count(kind) {
                 let shell = unsafe { (self.x.industry)(self.registry_id(kind, n).0) };
                 if unsafe { (self.x.town)(shell) } == town {
-                    self.fail(StringID(self.e.one_per_town));
+                    self.fail(STR_ERROR_ONLY_ONE_ALLOWED_PER_TOWN);
                     return None;
                 }
             }
@@ -375,13 +364,13 @@ impl Engine<'_> {
             .test(IndustryBehaviour::Town1200More)
             && unsafe { (self.x.population)(t) } < 1200
         {
-            return self.fail(StringID(self.e.population));
+            return self.fail(STR_ERROR_CAN_ONLY_BE_BUILT_IN_TOWNS_WITH_POPULATION_OF_1200);
         }
         if IndustryBehaviours(unsafe { (*get_industry_spec(kind)).behaviour })
             .test(IndustryBehaviour::OnlyNearTown)
             && self.distance_max(TileIndex(unsafe { (self.x.town_position)(t) }), tile) > 9
         {
-            return self.fail(StringID(self.e.near_town));
+            return self.fail(STR_ERROR_CAN_ONLY_BE_BUILT_NEAR_TOWN_CENTER);
         }
         self.success()
     }
@@ -400,11 +389,11 @@ impl Engine<'_> {
             let cur_tile = self.tile_add_wrap(tile, i32::from(it.x), i32::from(it.y));
             let world = crate::map_func::World::new(shared);
             if !world.is_valid_tile(cur_tile) {
-                return self.fail(StringID(self.e.site));
+                return self.fail(STR_ERROR_SITE_UNSUITABLE);
             }
             if gfx == IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
                 if !(shared.is_water_tile)(cur_tile.0) || !world.tile_flat(cur_tile) {
-                    return self.fail(StringID(self.e.site));
+                    return self.fail(STR_ERROR_SITE_UNSUITABLE);
                 }
             } else {
                 unsafe { (*self.context.command_checks).no_vehicle(self.out.cast(), cur_tile.0) };
@@ -412,7 +401,7 @@ impl Engine<'_> {
                     return false;
                 }
                 if crate::map_func::World::new(shared).bridge_above(cur_tile.0) {
-                    return self.fail(StringID(self.e.site));
+                    return self.fail(STR_ERROR_SITE_UNSUITABLE);
                 }
                 let its = get_industry_tile_spec(gfx);
                 // Perform land/water check if not disabled.
@@ -421,7 +410,7 @@ impl Engine<'_> {
                         && unsafe { (self.t.on_water)(cur_tile.0) })
                         != ind_behav.test(IndustryBehaviour::BuiltOnWater)
                 {
-                    return self.fail(StringID(self.e.site));
+                    return self.fail(STR_ERROR_SITE_UNSUITABLE);
                 }
                 let in_town = IndustryBehaviours::from_element(IndustryBehaviour::OnlyInTown).with(
                     IndustryBehaviours::from_element(IndustryBehaviour::Town1200More),
@@ -432,7 +421,7 @@ impl Engine<'_> {
                 // Tile is allowed to be a house (and it is a house)
                 {
                     if self.tile_type(cur_tile) != TileType::MP_HOUSE {
-                        return self.fail(StringID(self.e.town));
+                        return self.fail(STR_ERROR_CAN_ONLY_BE_BUILT_IN_TOWNS);
                     }
                     // Clear the tiles as OWNER_TOWN to not affect town rating, and to not
                     // clear protected buildings.
@@ -516,7 +505,7 @@ impl Engine<'_> {
         {
             return self.success();
         }
-        self.fail(StringID(self.e.site))
+        self.fail(STR_ERROR_SITE_UNSUITABLE)
     }
     /// `CheckCanTerraformSurroundingTiles`.
     fn check_can_terraform_surrounding_tiles(
@@ -776,10 +765,10 @@ impl Engine<'_> {
                 layout,
             )
         {
-            return self.fail(StringID(self.e.site));
+            return self.fail(STR_ERROR_SITE_UNSUITABLE);
         }
         if !unsafe { (self.x.can_allocate)() } {
-            return self.fail(StringID(self.e.too_many));
+            return self.fail(STR_ERROR_TOO_MANY_INDUSTRIES);
         }
         if flags.test(DoCommandFlag::Execute) {
             let allocation = unsafe { (self.x.allocate)(tile.0) };
@@ -894,7 +883,7 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
             e.tile_slope(call.ind_tile),
             Slope(unsafe { (*call.its).slopes_refused }),
         ) {
-            e.fail(StringID(e.e.site));
+            e.fail(STR_ERROR_SITE_UNSUITABLE);
         } else {
             e.success();
         }
@@ -902,7 +891,7 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
         if callback_res.callback != 0 {
             e.success();
         } else {
-            e.fail(StringID(e.e.site));
+            e.fail(STR_ERROR_SITE_UNSUITABLE);
         }
     } else {
         unsafe { (e.x.shape_error)(e.out, &raw const callback_res, call.its) };
@@ -946,7 +935,6 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
             m: &*context.commands,
             cost: &*context.costs,
             x: &*context.transaction,
-            e: &*context.errors,
             out,
         }
     }
@@ -1036,7 +1024,7 @@ pub(crate) unsafe fn cmd_build_industry(
     let random_initial_bits = gb(seed, 0, 16) as u16;
     let random_var8f = randomizer.next();
     let num_layouts = unsafe { (*indspec).layouts.len() };
-    e.fail(StringID(e.e.site));
+    e.fail(STR_ERROR_SITE_UNSUITABLE);
     let deity_prospect = e.company() == Owner::DEITY && !fund;
     let mut ind = ptr::null_mut();
     if deity_prospect
@@ -1344,7 +1332,6 @@ mod tests {
             command_checks: ptr::null(),
             costs: &raw const costs,
             transaction: ptr::null(),
-            errors: ptr::null(),
         };
         let mut message = 0;
         // Original CmdBuildIndustry rejects the type before any world observation.

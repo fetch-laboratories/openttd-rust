@@ -24,6 +24,7 @@
 use crate::company_type::{CompanyID, INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE};
 use crate::economy_type::EXPENSES_OTHER;
 use crate::raw_field::{read_field, write_field};
+use crate::table::strings::STR_ERROR_OWNED_BY;
 use crate::tile_owner::change_tile_owner;
 use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
@@ -225,7 +226,6 @@ pub struct Services {
     pub close_construction_windows: extern "C" fn(),
     pub cost: &'static crate::services::CommandCostServices,
     pub objectives: extern "C" fn() -> &'static crate::objectives::Services,
-    pub owned_by: u32,
     pub settings: extern "C" fn() -> &'static crate::settings_table::Services,
     pub company_next: extern "C" fn(u32) -> CompanyRef,
     pub company_count: extern "C" fn() -> usize,
@@ -372,7 +372,7 @@ pub(crate) fn check_ownership(
         out.zero();
         return;
     }
-    out.error(s.owned_by);
+    out.error(STR_ERROR_OWNED_BY.0);
     if (s.shared.local_company)() == (s.finance.current_company)() {
         (out.1.encode_owned_by)(out.0, owner, tile);
         if owner.0 != OWNER_TOWN {
@@ -2254,7 +2254,6 @@ crate::abi::layouts! {
         close_construction_windows,
         cost,
         objectives,
-        owned_by,
         settings,
         company_next,
         company_count,
@@ -2887,7 +2886,6 @@ mod control_tests {
         FAILED.with(|f| f.borrow_mut().push(condition));
     }
 
-    const OWNED_BY: u32 = 0x7001;
     fn leak<T>(value: T) -> &'static T {
         Box::leak(Box::new(value))
     }
@@ -2924,7 +2922,6 @@ mod control_tests {
         s.finance = leak(finance);
         s.cost = leak(costs);
         s.can_allocate_company = can_allocate;
-        s.owned_by = OWNED_BY;
         s
     }
     fn set(id: CompanyID, slot: Option<bool>) {
@@ -3087,7 +3084,7 @@ mod control_tests {
             LOCAL.set(observer);
             assert_eq!(check(&s, CompanyID(0), TileIndex(0)), ["zero"]);
             for owner in [CompanyID(3), Owner::NONE] {
-                let mut expected = vec![format!("error {OWNED_BY}")];
+                let mut expected = vec![format!("error {}", STR_ERROR_OWNED_BY.0)];
                 if observer == 0 {
                     expected.extend([
                         format!("encode {} 0", owner.0),
@@ -3109,7 +3106,10 @@ mod control_tests {
             (Owner::TOWN, TileIndex(0)),
         ] {
             FAILED.with(|f| f.borrow_mut().clear());
-            assert_eq!(check(&s, owner, tile), [format!("error {OWNED_BY}")]);
+            assert_eq!(
+                check(&s, owner, tile),
+                [format!("error {}", STR_ERROR_OWNED_BY.0)]
+            );
             assert_eq!(
                 FAILED.with(|f| f.borrow().clone()),
                 [false],

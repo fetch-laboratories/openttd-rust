@@ -57,7 +57,6 @@ pub struct Services {
     pub(crate) shared: &'static crate::services::Services,
     assertions: bool,
     pub(crate) life_extension: extern "C" fn() -> i32,
-    pub(crate) invalid_string_id: u32,
 }
 unsafe fn callback(s: &Services, cb: u16, p1: u32, engine: u16, v: V) -> u16 {
     // A null vehicle is the purchase context.
@@ -564,7 +563,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
-        vehicles, engine, engine_if_valid, id, loading, cargo_classes, multiplier, new_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, invalid_string_id,
+        vehicles, engine, engine_if_valid, id, loading, cargo_classes, multiplier, new_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension,
     };
 }
 
@@ -729,7 +728,6 @@ pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
         shared: &crate::test_tables::SHARED,
         assertions: false,
         life_extension: crate::test_tables::unreachable0,
-        invalid_string_id: 0,
     };
 /// `TEST_TABLE` over another shared table, for tests outside this module.
 #[cfg(test)]

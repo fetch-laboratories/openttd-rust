@@ -86,7 +86,6 @@ const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noe
 		.set_name = RustVehicleSetName,
 		.interval_clamp = VehicleTransactionClampInterval,
 		.set_interval = VehicleTransactionSetInterval,
-		.unique_name = STR_ERROR_NAME_MUST_BE_UNIQUE,
 		.max_name = MAX_LENGTH_VEHICLE_NAME_CHARS,
 	};
 	return services;

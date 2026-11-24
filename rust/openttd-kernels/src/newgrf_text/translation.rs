@@ -436,7 +436,6 @@ pub(super) mod tests {
     }
     pub(crate) fn services() -> Services {
         Services {
-            empty: 1,
             language_map,
             legacy_string,
             mapping,
@@ -445,7 +444,6 @@ pub(super) mod tests {
             num_genders: two,
             plural_form: plural,
             reverse_mapping,
-            undefined: 2,
         }
     }
     #[test]

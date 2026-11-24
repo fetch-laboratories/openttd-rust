@@ -17,17 +17,12 @@
 template <typename Tspec, typename Tindex, Tindex Tmax>
 const OpenTTDGRFClassServices<Tspec> &NewGRFClass<Tspec, Tindex, Tmax>::GetServices()
 {
-	static const auto defaults = NewGRFClass::Defaults();
 	static const OpenTTDGRFClassServices<Tspec> services{
 		.class_index = [](const Tspec *spec) noexcept { return static_cast<uint16_t>(spec->class_index); },
 		.set_index = [](Tspec *spec, uint16_t index) noexcept { spec->index = index; },
 		.identity = RustSpecIdentity<Tspec>,
 		.object = []() noexcept -> const OpenTTDObjectServices * { if constexpr (std::is_same_v<Tspec, ObjectSpec>) return &GetRustObjectServices(); else return nullptr; }(),
-		.defaults = defaults.data(),
-		.default_count = defaults.size(),
-		.maximum = Tmax,
-		.empty = STR_EMPTY,
-		.insert_empty = std::is_same_v<Tspec, StationSpec> || std::is_same_v<Tspec, RoadStopSpec>,
+		.shared = &GetRustSharedServices(),
 	};
 	return services;
 }
@@ -41,5 +36,5 @@ void NewGRFClass<Tspec, Tindex, Tmax>::Reset()
 template <typename Tspec, typename Tindex, Tindex Tmax>
 Tindex NewGRFClass<Tspec, Tindex, Tmax>::Allocate(uint32_t global_id)
 {
-	return static_cast<Tindex>(Ops::allocate(global_id, Tmax, STR_EMPTY));
+	return static_cast<Tindex>(Ops::allocate(global_id, Tmax));
 }

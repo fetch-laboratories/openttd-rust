@@ -8,12 +8,10 @@
 #include "../newgrf/newgrf_stringmapping.h"
 #include "services_newgrf.h"
 #include "services_station.h"
-#include "../table/strings.h"
 #include "../safeguards.h"
 const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 {
 	static const OpenTTDStationDefinitionServices services{
-		.empty_string = STR_EMPTY,
 		.reader = &GetRustByteReaderServices(),
 		.shared = &GetRustSharedServices(),
 		.station_resize = [](GRFFile *file, uint32_t count) noexcept -> void { file->stations.resize(count); },

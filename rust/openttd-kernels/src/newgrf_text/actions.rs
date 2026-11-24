@@ -6,6 +6,7 @@ use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
 use crate::newgrf_config::{GCS_ACTIVATED, GCS_INITIALISED};
 use crate::newgrf_loading::{self as loading, Services};
 use crate::string_validation::make_valid;
+use crate::table::strings::{STR_NEWGRF_ERROR_LOAD_AFTER, STR_UNDEFINED};
 use std::ffi::c_void;
 
 pub(crate) unsafe fn translate_grf_strings(
@@ -30,7 +31,11 @@ pub(crate) unsafe fn translate_grf_strings(
             return Ok(());
         }
         if status == Some(GCS_INITIALISED) {
-            let error = loading::openttd_rust_grf_disable(s, s.load_after, std::ptr::null_mut());
+            let error = loading::openttd_rust_grf_disable(
+                s,
+                STR_NEWGRF_ERROR_LOAD_AFTER.0,
+                std::ptr::null_mut(),
+            );
             (s.error_after_translated_file)(error);
             return Ok(());
         }
@@ -67,7 +72,7 @@ pub(crate) unsafe fn translate_grf_strings(
                 true,
                 string.0,
                 string.1,
-                s.undefined,
+                STR_UNDEFINED.0,
             );
         }
         Ok(())
@@ -154,7 +159,7 @@ pub(crate) unsafe fn feature_new_name(
                         true,
                         name.0,
                         name.1,
-                        s.undefined,
+                        STR_UNDEFINED.0,
                     );
                 } else {
                     let engine = crate::engine_loading::openttd_rust_engine_definition(
@@ -192,7 +197,7 @@ pub(crate) unsafe fn feature_new_name(
                         true,
                         name.0,
                         name.1,
-                        s.undefined,
+                        STR_UNDEFINED.0,
                     );
                 } else {
                     let string = (bindings.badge_name)(file, id);
@@ -211,7 +216,7 @@ pub(crate) unsafe fn feature_new_name(
                             false,
                             name.0,
                             name.1,
-                            s.undefined,
+                            STR_UNDEFINED.0,
                         );
                         string.write(translated);
                     }
@@ -226,7 +231,7 @@ pub(crate) unsafe fn feature_new_name(
                     true,
                     name.0,
                     name.1,
-                    s.undefined,
+                    STR_UNDEFINED.0,
                 );
             } else {
                 let local = u32::from(id & 0xff);
@@ -299,7 +304,7 @@ pub(crate) unsafe fn feature_new_name(
                         false,
                         name.0,
                         name.1,
-                        s.undefined,
+                        STR_UNDEFINED.0,
                     );
                     if class_spec.is_null() {
                         string.write(translated);

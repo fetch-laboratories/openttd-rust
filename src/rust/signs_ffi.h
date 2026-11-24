@@ -18,7 +18,6 @@ struct OpenTTDSignServices {
 	void (*rename)(Sign *, uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(rename);
 	void (*relocate)(Sign *, uint8_t, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(relocate);
 	void (*remove)(Sign *) noexcept OPENTTD_SERVICE_DEFAULT(remove);
-	uint32_t too_many_signs;
 };
 const OpenTTDSignServices &GetRustSignServices() noexcept;
 extern "C" {

@@ -1,0 +1,14 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "site": "rust/openttd-kernels/src/newgrf_object.rs | fn insert_defaults | allow unsafe_code",
+    "before": 0,
+    "after": 1,
+    "operation": "newgrf_object::insert_defaults",
+    "source_contract": "ObjectClass::InsertDefaults allocates each default class, looks it up with NewGRFClass::Get and sets its name; the class registry stays a process-wide Rust static that the game-state mutex serializes.",
+    "reason": "Writing the name through the class pointer that the shared NewGRFClass::Get port returns is a raw-pointer store, as in the three other registries' InsertDefaults ports, whose modules allow unsafe code; newgrf_object.rs denies it outside item-scoped allows.",
+    "retiring_owner": "#734",
+    "retirement_condition": "When newgrf_class.rs's pass gives the registry a safe class accessor, or newgrf_object.rs's pass places the body where unsafe code is allowed."
+  }
+]

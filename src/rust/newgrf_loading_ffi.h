@@ -82,7 +82,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*error_name)(GRFError *, const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(error_name);
 	void (*error_property)(GRFError *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_property);
 	void (*error_after_translated_file)(GRFError *) noexcept OPENTTD_SERVICE_DEFAULT(error_after_translated_file);
-	StringID load_after;
 	uint8_t (*read_byte)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(read_byte);
 	uint16_t (*read_word)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(read_word);
 	uint32_t (*read_dword)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(read_dword);
@@ -125,14 +124,6 @@ struct OpenTTDGrfLoadingServices {
 	bool (*inflation)() noexcept OPENTTD_SERVICE_DEFAULT(inflation);
 	int32_t (*starting_year)() noexcept OPENTTD_SERVICE_DEFAULT(starting_year);
 	uint8_t (*plane_speed)() noexcept OPENTTD_SERVICE_DEFAULT(plane_speed);
-	StringID read_bounds;
-	StringID unexpected_sprite;
-	StringID multiple_action8;
-	StringID grm_failed;
-	StringID static_desync;
-	StringID list_property_too_long;
-	StringID invalid_id;
-	StringID force_disabled;
 	SpriteID colourmap_sprite;
 	SpriteID slopes_sprite;
 	SpriteID shore_sprite;
@@ -174,8 +165,6 @@ struct OpenTTDGrfLoadingServices {
 	Subdirectory newgrf_dir;
 	void (*assert_override_size)(size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_override_size);
 	void (*assert_file_match)(const GRFConfig *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(assert_file_match);
-	StringID null_error;
-	StringID undefined;
 };
 extern "C" {
 void openttd_rust_grf_unsafe(const OpenTTDGrfLoadingServices *);

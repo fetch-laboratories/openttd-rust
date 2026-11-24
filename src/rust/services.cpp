@@ -230,7 +230,6 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 		.shift_pressed = CommandShiftPressed,
 		.pause_level = CommandPauseLevel,
 		.last_build_coordinate = CommandLastBuild,
-		.not_enough_cash = STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY,
 		.paused_error = CommandPausedError,
 		.error_message = CommandErrorMessage,
 		.estimate = CommandEstimate,

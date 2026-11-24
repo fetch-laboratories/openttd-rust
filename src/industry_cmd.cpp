@@ -652,7 +652,6 @@ const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcep
 		.shared = &GetRustSharedServices(),
 		.origin = _origin_industry_specs,
 		.origin_tiles = _origin_industry_tile_specs,
-		.invalid_name = STR_NEWGRF_INVALID_INDUSTRYTYPE,
 		.map_string = [](uint16_t source, uint32_t *target) noexcept { AddStringForMapping(GRFStringID{source}, target); },
 	};
 	return services;
@@ -922,20 +921,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 }
 static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 {
-	static const OpenTTDIndustryConstructionErrors errors = {
-		.site = STR_ERROR_SITE_UNSUITABLE,
-		.forest = STR_ERROR_FOREST_CAN_ONLY_BE_PLANTED,
-		.positioned = STR_ERROR_CAN_ONLY_BE_POSITIONED,
-		.desert = STR_ERROR_CAN_ONLY_BE_BUILT_IN_DESERT,
-		.rainforest = STR_ERROR_CAN_ONLY_BE_BUILT_IN_RAINFOREST,
-		.lowland = STR_ERROR_CAN_ONLY_BE_BUILT_IN_LOW_AREAS,
-		.one_per_town = STR_ERROR_ONLY_ONE_ALLOWED_PER_TOWN,
-		.town = STR_ERROR_CAN_ONLY_BE_BUILT_IN_TOWNS,
-		.population = STR_ERROR_CAN_ONLY_BE_BUILT_IN_TOWNS_WITH_POPULATION_OF_1200,
-		.near_town = STR_ERROR_CAN_ONLY_BE_BUILT_NEAR_TOWN_CENTER,
-		.conflict = STR_ERROR_INDUSTRY_TOO_CLOSE,
-		.too_many = STR_ERROR_TOO_MANY_INDUSTRIES,
-	};
 	return {
 		.map = {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)},
 		.builder = RustIndustryBuilderState(),
@@ -948,7 +933,6 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 		.command_checks = &GetRustCommandServices(),
 		.costs = &GetIndustryCostServices(),
 		.transaction = &GetIndustryTransactionServices(),
-		.errors = &errors,
 	};
 }
 

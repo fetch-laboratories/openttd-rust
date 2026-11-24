@@ -53,7 +53,6 @@ static_assert(SCC_UP_ARROW == 0xE2A0 && SCC_WHITE == 0xE04E && SCC_YELLOW == 0xE
 const OpenTTDGrfTextServices &GetRustGrfTextServices() noexcept
 {
 	static const OpenTTDGrfTextServices services{
-		.empty = STR_EMPTY,
 		.language_map = [](uint32_t grfid, uint8_t language) noexcept { return LanguageMap::GetLanguageMap(grfid, language); },
 		.legacy_string = [](uint32_t stringid) noexcept { return TTDPStringIDToOTTDStringIDMapping(GRFStringID{stringid}); },
 		.mapping = [](const LanguageMap *lm, int32_t id, bool gender) noexcept { return lm->GetMapping(id, gender); },
@@ -62,7 +61,6 @@ const OpenTTDGrfTextServices &GetRustGrfTextServices() noexcept
 		.num_genders = []() noexcept { return _current_language->num_genders; },
 		.plural_form = [](const LanguageMap *lm) noexcept { return lm->plural_form; },
 		.reverse_mapping = [](const LanguageMap *lm, int32_t id, bool gender) noexcept { return lm->GetReverseMapping(id, gender); },
-		.undefined = STR_UNDEFINED,
 	};
 	return services;
 }
@@ -180,7 +178,7 @@ StringID AddGRFString(uint32_t grfid, GRFStringID stringid, uint8_t langid_to_ad
  */
 StringID GetGRFStringID(uint32_t grfid, GRFStringID stringid)
 {
-	return openttd_rust_grf_text_id(grfid, stringid.base(), STR_UNDEFINED);
+	return openttd_rust_grf_text_id(grfid, stringid.base());
 }
 
 

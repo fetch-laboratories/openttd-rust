@@ -7,12 +7,11 @@
 #include "../industrytype.h"
 struct OpenTTDGrfLoadingServices;
 struct OpenTTDSharedServices;
-/** Rust owns the specs; the original tables and string ids stay native. Calls hold the game-state mutex. */
+/** Rust owns the specs; the original tables stay native. Calls hold the game-state mutex. */
 struct OpenTTDIndustryDefinitionServices {
 	const OpenTTDSharedServices *shared;
 	const IndustrySpec *origin;
 	const IndustryTileSpec *origin_tiles;
-	uint32_t invalid_name;
 	void (*map_string)(uint16_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(map_string);
 };
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept;

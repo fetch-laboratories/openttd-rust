@@ -11,6 +11,7 @@ use crate::company_type::CompanyID;
 use crate::engine_type::AIR_CTOL;
 use crate::services::CommandCost;
 use crate::station::Station;
+use crate::table::strings::STR_ERROR_DEPOT_WRONG_DEPOT_TYPE;
 use crate::tile_type::TileIndex;
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleType};
 use std::ptr;
@@ -36,7 +37,6 @@ pub struct Services {
     pub service_dates: extern "C" fn(*mut (), u16),
     pub build_stamp: extern "C" fn(*mut ()),
     pub service_flags: extern "C" fn(*mut (), bool, bool),
-    pub wrong_depot: u32,
 }
 /// Arguments of `CmdBuildRoadVehicle`.
 #[derive(Clone, Copy)]
@@ -68,7 +68,7 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
         tile,
         crate::vehicle::EngineRef::of(e).powered_roadtypes(b.shared),
     ) {
-        (b.cost.error)(out, k.wrong_depot);
+        (b.cost.error)(out, STR_ERROR_DEPOT_WRONG_DEPOT_TYPE.0);
         return ptr::null_mut();
     }
     (b.cost.zero)(out);
@@ -350,6 +350,6 @@ crate::abi::layouts! {
         articulated, new_road, road_front, station,
         hangar_tile, new_aircraft, aircraft_place, aircraft_properties,
         rotor, mail_capacity_address, road_capacity, set_cargo_type, engine_common, service_dates,
-        build_stamp, service_flags, wrong_depot,
+        build_stamp, service_flags,
     };
 }

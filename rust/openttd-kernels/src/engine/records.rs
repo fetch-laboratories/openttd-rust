@@ -5,6 +5,10 @@
 #![allow(unsafe_code, clippy::struct_field_names)]
 use crate::engine_type::EngineID;
 use crate::newgrf::CargoLabel;
+use crate::table::strings::{
+    STR_VEHICLE_NAME_AIRCRAFT_SAMPSON_U52, STR_VEHICLE_NAME_ROAD_VEHICLE_MPS_REGAL_BUS,
+    STR_VEHICLE_NAME_SHIP_MPS_OIL_TANKER, STR_VEHICLE_NAME_TRAIN_ENGINE_RAIL_KIRBY_PAUL_TANK_STEAM,
+};
 use crate::vehicle_type::VehicleType;
 crate::abi::shared_records! {
     fn abi_record;
@@ -109,7 +113,7 @@ crate::abi::shared_records! {
         pub ship: ShipVehicleInfo,
         pub aircraft: AircraftVehicleInfo,
     }
-    /// Borrowed original tables and string IDs, retained by native phase-4 data consumers.
+    /// Borrowed original tables, retained by native phase-4 data consumers.
     "OpenTTDEngineDefaults" ["engine_spec"] => pub struct Defaults {
         pub info: *const EngineInfo,
         pub rail: *const RailVehicleInfo,
@@ -118,7 +122,6 @@ crate::abi::shared_records! {
         pub aircraft: *const AircraftVehicleInfo,
         pub counts: [u8; 4] => "std::array<uint8_t, 4>",
         pub offsets: [u8; 4] => "std::array<uint8_t, 4>",
-        pub first_names: [u32; 4] => "std::array<StringID, 4>",
     }
 }
 impl Default for RailVehicleInfo {
@@ -277,7 +280,9 @@ pub unsafe extern "C" fn openttd_rust_engine_construct(
                 record.vehicle_info = VehicleInfo { rail };
                 record.vehicle_info_type = kind;
                 record.original_image_index = rail.image_index;
-                record.info.string_id = tables.first_names[index].wrapping_add(u32::from(local));
+                record.info.string_id = STR_VEHICLE_NAME_TRAIN_ENGINE_RAIL_KIRBY_PAUL_TANK_STEAM
+                    .0
+                    .wrapping_add(u32::from(local));
                 if rail.railveh_type == crate::vehicle::RailVehicleTypes::WAGON.0 {
                     record.info.base_life = 255;
                 }
@@ -287,21 +292,27 @@ pub unsafe extern "C" fn openttd_rust_engine_construct(
                 record.vehicle_info = VehicleInfo { road };
                 record.vehicle_info_type = kind;
                 record.original_image_index = road.image_index;
-                record.info.string_id = tables.first_names[index].wrapping_add(u32::from(local));
+                record.info.string_id = STR_VEHICLE_NAME_ROAD_VEHICLE_MPS_REGAL_BUS
+                    .0
+                    .wrapping_add(u32::from(local));
             }
             VehicleType::SHIP => {
                 let ship = *tables.ship.add(usize::from(local));
                 record.vehicle_info = VehicleInfo { ship };
                 record.vehicle_info_type = kind;
                 record.original_image_index = ship.image_index;
-                record.info.string_id = tables.first_names[index].wrapping_add(u32::from(local));
+                record.info.string_id = STR_VEHICLE_NAME_SHIP_MPS_OIL_TANKER
+                    .0
+                    .wrapping_add(u32::from(local));
             }
             VehicleType::AIRCRAFT => {
                 let aircraft = *tables.aircraft.add(usize::from(local));
                 record.vehicle_info = VehicleInfo { aircraft };
                 record.vehicle_info_type = kind;
                 record.original_image_index = aircraft.image_index;
-                record.info.string_id = tables.first_names[index].wrapping_add(u32::from(local));
+                record.info.string_id = STR_VEHICLE_NAME_AIRCRAFT_SAMPSON_U52
+                    .0
+                    .wrapping_add(u32::from(local));
             }
             _ => unreachable!(),
         }
@@ -327,7 +338,6 @@ mod tests {
             aircraft: std::ptr::null(),
             counts: [116, 88, 11, 41],
             offsets: [0, 116, 204, 215],
-            first_names: [0; 4],
         };
         let mut observed = String::new();
         for kind in [

@@ -1308,8 +1308,5 @@ pub unsafe extern "C" fn openttd_rust_engine_enabled_abi(
     s: &Services,
     e: *const OpenTTDEngine,
 ) -> u8 {
-    u8::from(unsafe {
-        crate::vehicle::EngineRef::of(e).valid_string(s.capabilities.invalid_string_id)
-            && climate(s, e)
-    })
+    u8::from(unsafe { crate::vehicle::EngineRef::of(e).valid_string() && climate(s, e) })
 }

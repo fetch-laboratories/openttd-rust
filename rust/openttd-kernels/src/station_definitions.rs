@@ -32,7 +32,6 @@ const GSF_STATIONS: u8 = crate::newgrf::GSF_STATIONS;
 const GSF_ROADSTOPS: u8 = crate::newgrf::GSF_ROADSTOPS;
 #[repr(C)]
 pub struct Services {
-    empty_string: u32,
     reader: *const crate::newgrf_bytereader::Services,
     shared: *const crate::services::Services,
     station_resize: unsafe extern "C" fn(*mut c_void, u32) -> (),
@@ -99,7 +98,7 @@ impl Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, reader, shared, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_cargo_triggers, station_callback_mask, station_flags, station_set_group, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_cargo_triggers, road_callback_mask, road_flags, road_set_group, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars };
+    "OpenTTDStationDefinitionServices" ["station_service"] => Services { reader, shared, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_cargo_triggers, station_callback_mask, station_flags, station_set_group, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_cargo_triggers, road_callback_mask, road_flags, road_set_group, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars };
 }
 
 /// The `_cur_gps` loading state that `StationChangeInfo` reads, with the
@@ -157,11 +156,10 @@ unsafe fn station_change_info(
                         spec = (s.station_new)(file, id);
                     }
                     // Swap classid because we read it in BE meaning WAYP or DFLT
-                    let class = StationClassID(crate::newgrf_class::station::allocate(
+                    let class = crate::newgrf_class::station::allocate(
                         reader.dword()?.swap_bytes(),
-                        crate::newgrf_station::STAT_CLASS_MAX,
-                        s.empty_string,
-                    ));
+                        StationClassID::STAT_CLASS_MAX,
+                    );
                     (s.station_class)(spec, class.0);
                 }
                 // Define sprite layout
@@ -497,11 +495,10 @@ unsafe fn road_stop_change_info(
                     }
                     // The class label is read with big-endian meaning: WAYP or DFLT.
                     let label = reader.dword()?.swap_bytes();
-                    let class = RoadStopClassID(crate::newgrf_class::roadstop::allocate(
+                    let class = crate::newgrf_class::roadstop::allocate(
                         label,
-                        crate::newgrf_roadstop::ROADSTOP_CLASS_MAX,
-                        s.empty_string,
-                    ));
+                        RoadStopClassID::ROADSTOP_CLASS_MAX,
+                    );
                     (s.road_class)(spec, class.0);
                 }
                 // Road stop type

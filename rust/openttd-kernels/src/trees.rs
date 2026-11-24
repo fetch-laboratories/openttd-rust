@@ -2002,7 +2002,6 @@ mod tests {
             authority: Box::leak(Box::new(crate::town::AuthorityServices {
                 bulldozer,
                 town_index,
-                refusal: 0,
             })),
             cos: trig,
             make_clear,

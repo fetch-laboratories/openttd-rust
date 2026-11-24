@@ -40,6 +40,12 @@ use crate::settings_type::PlaceHouses;
 use crate::slope_func::{flattening_foundation, get_slope_max_z, is_steep_slope};
 use crate::slope_type::{Foundation, Slope};
 use crate::strings_type::INVALID_STRING_ID;
+use crate::table::strings::{
+    STR_ERROR_BUILDING_IS_PROTECTED, STR_ERROR_BUILDING_MUST_BE_DEMOLISHED,
+    STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
+    STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
+    STR_ERROR_MUST_FOUND_TOWN_FIRST,
+};
 use crate::tile_map::is_tile_type;
 use crate::tile_type::{TileIndex, TileType};
 use crate::town_type::{
@@ -164,17 +170,6 @@ pub struct HouseReseed {
     pub reseed: u32,
     pub used: u8,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct HouseErrors {
-    pub demolish: u32,
-    pub protected: u32,
-    pub refuses: u32,
-    pub sloped: u32,
-    pub bridge: u32,
-    pub flat: u32,
-    pub no_town: u32,
-}
 /// Typed native house services; shared tables are referenced, not copied.
 #[repr(C)]
 pub struct HouseServices {
@@ -220,7 +215,6 @@ pub struct HouseServices {
     pub scale_cargo: extern "C" fn(u32) -> u32,
     pub cargogen_mode: extern "C" fn() -> u8,
     pub place_houses: extern "C" fn() -> u8,
-    pub errors: HouseErrors,
 }
 
 /// `TileLoop_Town`'s call-local `StationFinder`, computed on the first
@@ -1019,7 +1013,7 @@ impl<'a> House<'a> {
         let c = self.costs();
         if flags.test(DoCommandFlag::Auto) {
             witness::hit(W_CLEAR_AUTO);
-            (c.error)(result, self.h.errors.demolish);
+            (c.error)(result, STR_ERROR_BUILDING_MUST_BE_DEMOLISHED.0);
             return;
         }
         let entry = (self.h.entry)(tile.0);
@@ -1027,7 +1021,7 @@ impl<'a> House<'a> {
         let t = entry.town;
         if !self.can_delete_house(t, tile, house) {
             witness::hit(W_PROTECTED);
-            (c.error)(result, self.h.errors.protected);
+            (c.error)(result, STR_ERROR_BUILDING_IS_PROTECTED.0);
             return;
         }
         let hs = (self.h.removal)(house);
@@ -1045,7 +1039,7 @@ impl<'a> House<'a> {
         {
             // NewGRFs can add indestructible houses.
             if rating > RATING_MAXIMUM {
-                (c.error)(result, self.h.errors.protected);
+                (c.error)(result, STR_ERROR_BUILDING_IS_PROTECTED.0);
                 return;
             }
             // If town authority controls removal, check the company's rating.
@@ -1057,7 +1051,11 @@ impl<'a> House<'a> {
                     != TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
             {
                 witness::hit(W_CLEAR_REFUSED);
-                (c.error_param)(result, self.h.errors.refuses, u64::from(t.id.0));
+                (c.error_param)(
+                    result,
+                    STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS.0,
+                    u64::from(t.id.0),
+                );
                 return;
             }
         }
@@ -1186,7 +1184,7 @@ impl<'a> House<'a> {
             return;
         }
         if (self.s.town_count)() == 0 {
-            (c.error)(call.result, self.h.errors.no_town);
+            (c.error)(call.result, STR_ERROR_MUST_FOUND_TOWN_FIRST.0);
             return;
         }
         if u32::from(house) >= (self.l.house_count)() || !(self.l.house_availability)(house).enabled
@@ -1225,23 +1223,23 @@ impl<'a> House<'a> {
             // Houses cannot be built on steep slopes.
             let slope = crate::map_func::World::new(self.s).tile_slope(subtile);
             if is_steep_slope(slope) {
-                (c.error)(call.result, self.h.errors.sloped);
+                (c.error)(call.result, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
                 return;
             }
             // Houses cannot be built under bridges.
             if crate::map_func::World::new(self.s).bridge_above(subtile.0) {
-                (c.error)(call.result, self.h.errors.bridge);
+                (c.error)(call.result, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
                 return;
             }
             // Make sure there is no slope?
             let noslope = building_flags.test(BuildingFlag::NotSloped);
             if noslope && slope != Slope::SLOPE_FLAT {
-                (c.error)(call.result, self.h.errors.flat);
+                (c.error)(call.result, STR_ERROR_FLAT_LAND_REQUIRED.0);
                 return;
             }
             // All tiles of a multi-tile house must have the same z-level.
             if (self.s.tile_max_z)(subtile.0) != maxz {
-                (c.error)(call.result, self.h.errors.sloped);
+                (c.error)(call.result, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
                 return;
             }
             // We might be replacing an existing house, otherwise check if we can clear land.
@@ -1877,15 +1875,6 @@ crate::abi::layouts! {
         reseed,
         used,
     };
-    "OpenTTDHouseErrors" ["probe"] => HouseErrors {
-        demolish,
-        protected => is_protected,
-        refuses,
-        sloped,
-        bridge,
-        flat,
-        no_town,
-    };
     "OpenTTDHouseServices" ["probe"] => HouseServices {
         cost,
         commands,
@@ -1928,7 +1917,6 @@ crate::abi::layouts! {
         scale_cargo,
         cargogen_mode,
         place_houses,
-        errors,
     };
 }
 

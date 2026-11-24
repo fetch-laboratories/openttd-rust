@@ -147,16 +147,6 @@ void ResetObjects()
 	_object_specs[OBJECT_TRANSMITTER].class_index = ObjectClass::Allocate('TRNS');
 }
 
-template <>
-std::span<const OpenTTDGRFClassDefault> ObjectClass::Defaults()
-{
-	static const OpenTTDGRFClassDefault defaults[]{
-		{'LTHS', STR_OBJECT_CLASS_LTHS},
-		{'TRNS', STR_OBJECT_CLASS_TRNS},
-	};
-	return defaults;
-}
-
 
 /* Instantiate ObjectClass. */
 template class NewGRFClass<ObjectSpec, ObjectClassID, OBJECT_CLASS_MAX>;

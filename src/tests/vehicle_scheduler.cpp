@@ -187,8 +187,6 @@ TEST_CASE("Base vehicle scheduler - Tick timing scope returns before post-Tick r
 		.command = unused,
 		.length_news = unused,
 		.failed_news = unused,
-		.cash = 0,
-		.limit = 0,
 	};
 	auto transaction = FleetTransactionServices();
 	OpenTTDVehicleSchedulerTables tables{};

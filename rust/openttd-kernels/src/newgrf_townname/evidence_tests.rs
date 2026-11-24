@@ -10,12 +10,12 @@
 use super::*;
 use crate::newgrf_config::GCS_DISABLED;
 use crate::newgrf_loading::{Services as LoadingServices, TEST_TABLE};
+use crate::table::strings::STR_NEWGRF_ERROR_INVALID_ID;
 use crate::test_tables::SHARED;
 use std::mem::MaybeUninit;
 use std::ptr::{addr_of_mut, null_mut};
 use std::sync::Mutex;
 
-const INVALID_ID: u32 = 1234;
 static STATUSES: Mutex<Vec<u8>> = Mutex::new(Vec::new());
 static ERRORS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 /// GRFID, language, returned string ID and bytes of one text table row.
@@ -165,7 +165,6 @@ impl Fixture {
         f.loading.text = &raw const f.text;
         f.loading.set_status = set_status;
         f.loading.error = error;
-        f.loading.invalid_id = INVALID_ID;
         f
     }
     /// One file's actions in order; a read failure ends the file, as the loader's error frame.
@@ -268,7 +267,7 @@ fn action_0f_parsing_and_generation_match_the_original() {
     assert!(!unsafe { exists(tnx) });
     assert_eq!(f.name(tnx, 0, 0), b"");
     assert_eq!(*STATUSES.lock().unwrap(), [GCS_DISABLED]);
-    assert_eq!(*ERRORS.lock().unwrap(), [INVALID_ID]);
+    assert_eq!(*ERRORS.lock().unwrap(), [STR_NEWGRF_ERROR_INVALID_ID.0]);
     // The read failure of the truncated file keeps the parts read before it.
     assert_eq!(f.name(tns, 0, 0), b"Shortort");
 

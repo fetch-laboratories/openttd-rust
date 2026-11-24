@@ -3,24 +3,19 @@
 #ifndef RUST_NEWGRF_CLASS_FFI_H
 #define RUST_NEWGRF_CLASS_FFI_H
 #include "service_defaults.hpp"
-#include "../strings_type.h"
 struct StationSpec;
 struct RoadStopSpec;
 struct AirportSpec;
 struct ObjectSpec;
 struct OpenTTDObjectServices;
-struct OpenTTDGRFClassDefault { uint32_t label; StringID name; };
+struct OpenTTDSharedServices;
 struct OpenTTDGRFClassIdentity { uint32_t grfid; uint16_t local_id; };
 template <typename T> struct OpenTTDGRFClassServices {
 	uint16_t (*class_index)(const T *) noexcept OPENTTD_SERVICE_DEFAULT(class_index);
 	void (*set_index)(T *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_index);
 	OpenTTDGRFClassIdentity (*identity)(const T *) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	const OpenTTDObjectServices *object;
-	const OpenTTDGRFClassDefault *defaults;
-	size_t default_count;
-	uint16_t maximum;
-	StringID empty;
-	bool insert_empty;
+	const OpenTTDSharedServices *shared;
 };
 extern "C" uint16_t openttd_rust_station_layout_key(uint8_t, uint8_t);
 extern "C" uint8_t openttd_rust_is_waypoint_class_abi(uint32_t);
@@ -32,7 +27,7 @@ using OpenTTDObjectClassServices = OpenTTDGRFClassServices<ObjectSpec>;
 template <typename T> struct RustGRFClassOps;
 extern "C" {
 void openttd_rust_station_class_reset(const OpenTTDGRFClassServices<StationSpec> *);
-uint16_t openttd_rust_station_class_allocate(uint32_t, uint16_t, uint32_t);
+uint16_t openttd_rust_station_class_allocate(uint32_t, uint16_t);
 void openttd_rust_station_class_assign(StationSpec *);
 void * openttd_rust_station_class_classes();
 uint32_t openttd_rust_station_class_count();
@@ -58,7 +53,7 @@ template <> struct RustGRFClassOps<StationSpec> {
 };
 extern "C" {
 void openttd_rust_roadstop_class_reset(const OpenTTDGRFClassServices<RoadStopSpec> *);
-uint16_t openttd_rust_roadstop_class_allocate(uint32_t, uint16_t, uint32_t);
+uint16_t openttd_rust_roadstop_class_allocate(uint32_t, uint16_t);
 void openttd_rust_roadstop_class_assign(RoadStopSpec *);
 void * openttd_rust_roadstop_class_classes();
 uint32_t openttd_rust_roadstop_class_count();
@@ -84,7 +79,7 @@ template <> struct RustGRFClassOps<RoadStopSpec> {
 };
 extern "C" {
 void openttd_rust_airport_class_reset(const OpenTTDGRFClassServices<AirportSpec> *);
-uint16_t openttd_rust_airport_class_allocate(uint32_t, uint16_t, uint32_t);
+uint16_t openttd_rust_airport_class_allocate(uint32_t, uint16_t);
 void * openttd_rust_airport_class_classes();
 uint32_t openttd_rust_airport_class_count();
 uint32_t openttd_rust_airport_class_ui_count();
@@ -108,7 +103,7 @@ template <> struct RustGRFClassOps<AirportSpec> {
 };
 extern "C" {
 void openttd_rust_object_class_reset(const OpenTTDGRFClassServices<ObjectSpec> *);
-uint16_t openttd_rust_object_class_allocate(uint32_t, uint16_t, uint32_t);
+uint16_t openttd_rust_object_class_allocate(uint32_t, uint16_t);
 void openttd_rust_object_class_assign(ObjectSpec *);
 void * openttd_rust_object_class_classes();
 uint32_t openttd_rust_object_class_count();

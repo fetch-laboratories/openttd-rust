@@ -55,7 +55,6 @@ struct OpenTTDSequenceStorage {
 };
 struct OpenTTDAction2Services {
 	OpenTTDPalSpriteStorage (*pal_sprite_storage)(PalSpriteID *) noexcept OPENTTD_SERVICE_DEFAULT(pal_sprite_storage);
-	StringID invalid_layout, invalid_production;
 	const SpriteGroup * (*callback_new)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(callback_new);
 	uint32_t (*group_index)(const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(group_index);
 	const SpriteGroup * (*group_get)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(group_get);

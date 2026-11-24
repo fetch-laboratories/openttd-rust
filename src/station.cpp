@@ -234,21 +234,10 @@ Money AirportMaintenanceCost(Owner owner)
 
 const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcept
 {
-	static_assert(STR_SV_STNAME_FALLBACK - STR_SV_STNAME <= 256);
 	static const OpenTTDStationLifecycleServices services{
 		.shared = &GetRustSharedServices(),
 		.catchment = &GetRustStationCatchmentServices(),
-		.names = {
-			.base = STR_SV_STNAME, .central = STR_SV_STNAME_CENTRAL, .airport = STR_SV_STNAME_AIRPORT,
-			.oilfield = STR_SV_STNAME_OILFIELD, .docks = STR_SV_STNAME_DOCKS, .heliport = STR_SV_STNAME_HELIPORT,
-			.mines = STR_SV_STNAME_MINES, .lakeside = STR_SV_STNAME_LAKESIDE, .woods = STR_SV_STNAME_WOODS,
-			.forest = STR_SV_STNAME_FOREST, .valley = STR_SV_STNAME_VALLEY, .heights = STR_SV_STNAME_HEIGHTS,
-			.north = STR_SV_STNAME_NORTH, .south = STR_SV_STNAME_SOUTH, .east = STR_SV_STNAME_EAST, .west = STR_SV_STNAME_WEST,
-			.transfer = STR_SV_STNAME_TRANSFER, .halt = STR_SV_STNAME_HALT, .exchange = STR_SV_STNAME_EXCHANGE,
-			.annexe = STR_SV_STNAME_ANNEXE, .sidings = STR_SV_STNAME_SIDINGS, .branch = STR_SV_STNAME_BRANCH,
-			.upper = STR_SV_STNAME_UPPER, .lower = STR_SV_STNAME_LOWER, .fallback = STR_SV_STNAME_FALLBACK,
-			.undefined = STR_UNDEFINED, .null = STR_NULL,
-		},
+
 		.industry_type = RustStationIndustryType,
 		.set_industry_type = RustStationSetIndustryType,
 		.roadstop = &GetRoadStopResolverServices(),

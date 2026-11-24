@@ -20,6 +20,10 @@ use crate::order_func::{
 use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, CommandCost, EnvironmentServices};
 use crate::strings_type::INVALID_STRING_ID;
+use crate::table::strings::{
+    STR_CONFIG_SETTING_DYNAMIC_ENGINES_EXISTING_VEHICLES, STR_CONFIG_SETTING_EDGES_NOT_EMPTY,
+    STR_CONFIG_SETTING_EDGES_NOT_WATER, STR_CONFIG_SETTING_TOO_HIGH_MOUNTAIN,
+};
 use crate::tile_map::{set_tile_height, set_tile_type, tile_height_in};
 use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
@@ -94,10 +98,6 @@ pub struct Services {
     pub change_company_setting: extern "C" fn(*const SettingDesc, CompanyID, i32),
     /// `ShowErrorMessage(GetEncodedString(id), {}, WL_ERROR)`.
     pub error_message: extern "C" fn(u32),
-    pub edges_not_empty: u32,
-    pub edges_not_water: u32,
-    pub dynamic_engines_existing_vehicles: u32,
-    pub too_high_mountain: u32,
 }
 
 /// `Vehicle::Iterate()` in pool order; each step ends before the loop body runs.
@@ -387,7 +387,7 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
             let tile = (v).tile_raw();
             if map.tile_x(TileIndex(tile)) == 0 || map.tile_y(TileIndex(tile)) == 0 {
                 hit(witness::SETTINGS_EDGES_OCCUPIED);
-                return refuse(s, s.edges_not_empty);
+                return refuse(s, STR_CONFIG_SETTING_EDGES_NOT_EMPTY.0);
             }
         }
         // SAFETY: The shared registry returns the process-lifetime catchment table.
@@ -404,7 +404,7 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
             let xy = base_station_base::xy(st);
             if map.tile_x(xy) == 0 || map.tile_y(xy) == 0 {
                 hit(witness::SETTINGS_EDGES_OCCUPIED);
-                return refuse(s, s.edges_not_empty);
+                return refuse(s, STR_CONFIG_SETTING_EDGES_NOT_EMPTY.0);
             }
         }
         return true;
@@ -423,7 +423,7 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
         });
     if edges_land {
         hit(witness::SETTINGS_EDGES_NOT_WATER);
-        return refuse(s, s.edges_not_water);
+        return refuse(s, STR_CONFIG_SETTING_EDGES_NOT_WATER.0);
     }
     true
 }
@@ -473,7 +473,7 @@ fn check_dynamic_engines(s: &Services) -> bool {
     }
     if crate::engine_loading::openttd_rust_engine_reset_config_abi(s.engines) == 0 {
         hit(witness::SETTINGS_DYNAMIC_REFUSED);
-        return refuse(s, s.dynamic_engines_existing_vehicles);
+        return refuse(s, STR_CONFIG_SETTING_DYNAMIC_ENGINES_EXISTING_VEHICLES.0);
     }
     true
 }
@@ -492,7 +492,7 @@ fn check_max_height_level(s: &Services, new_value: i32) -> bool {
     let too_high = Map::iterate(w.types.count()).any(|t| tile_height_in(&w, t) as i32 > new_value);
     if too_high {
         hit(witness::SETTINGS_HEIGHT_REFUSED);
-        return refuse(s, s.too_high_mountain);
+        return refuse(s, STR_CONFIG_SETTING_TOO_HIGH_MOUNTAIN.0);
     }
     true
 }
@@ -705,8 +705,7 @@ crate::abi::layouts! {
         set_service_interval_percent, newgame_minutes_per_year,
         set_minutes_per_year, set_newgame_wallclock, setting, company_setting, setting_current,
         setting_int, setting_editable, change_game_setting, change_company_setting,
-        error_message, edges_not_empty,
-        edges_not_water, dynamic_engines_existing_vehicles, too_high_mountain,
+        error_message,
     };
 }
 

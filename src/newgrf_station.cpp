@@ -118,16 +118,6 @@ const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcep
 	return services;
 }
 
-template <>
-std::span<const OpenTTDGRFClassDefault> StationClass::Defaults()
-{
-	static const OpenTTDGRFClassDefault defaults[]{
-		{STATION_CLASS_LABEL_DEFAULT, STR_STATION_CLASS_DFLT},
-		{STATION_CLASS_LABEL_WAYPOINT, STR_STATION_CLASS_WAYP},
-	};
-	return defaults;
-}
-
 
 /* Instantiate StationClass. */
 template class NewGRFClass<StationSpec, StationClassID, STAT_CLASS_MAX>;
