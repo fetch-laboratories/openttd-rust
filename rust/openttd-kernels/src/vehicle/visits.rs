@@ -1405,6 +1405,6 @@ crate::abi::layouts! {
     };
 }
 
-#[cfg(test)]
 #[allow(unsafe_code)]
+#[cfg(test)]
 mod tests;
