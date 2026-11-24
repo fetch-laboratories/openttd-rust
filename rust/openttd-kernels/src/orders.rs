@@ -30,9 +30,9 @@ use crate::company_type::OWNER_NONE;
 use crate::depot_type::DepotID;
 use crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
 use crate::order_type::{
-    CloneOptions, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION,
-    OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OUFB_TRANSFER,
-    OUFB_UNLOAD, OrderType, VehicleOrderID,
+    CloneOptions, DestinationID, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT,
+    OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
+    OUFB_TRANSFER, OUFB_UNLOAD, OrderType, VehicleOrderID,
 };
 use crate::raw_field::{read_field, write_field};
 use crate::station_type::StationID;
@@ -795,13 +795,20 @@ impl Game {
             Some(load(slot(self.vector(list), usize::from(index))))
         }
     }
-    fn vehicle_order(self, v: *mut c_void, index: u8) -> Option<Order> {
+    /// `v->GetOrder(index)`: the address of the order, null without a list or beyond its
+    /// orders.
+    fn get_order(self, v: *mut c_void, index: u8) -> *const Order {
         let list = self.orders(v);
-        if list.is_null() {
-            None
+        if list.is_null() || index >= self.size(list) {
+            ptr::null()
         } else {
-            self.order(list, index)
+            slot(self.vector(list), usize::from(index)).cast_const()
         }
+    }
+    /// A copy of `v->GetOrder(index)`, or `None` where it is null.
+    fn vehicle_order(self, v: *mut c_void, index: u8) -> Option<Order> {
+        let order = self.get_order(v, index);
+        (!order.is_null()).then(|| load(order))
     }
     fn put_order(self, list: *mut c_void, index: u8, order: Order) {
         store(slot(self.vector(list), usize::from(index)), order);
@@ -2270,6 +2277,13 @@ pub(crate) unsafe fn make_dummy(p: *mut Order) {
     write_field!(p, kind, OT_DUMMY);
     write_field!(p, flags, 0);
 }
+/// `Order::SetDestination`: sets the destination of this order.
+///
+/// # Safety
+/// As [`make_dummy`].
+pub(crate) unsafe fn set_destination(p: *mut Order, destination: DestinationID) {
+    write_field!(p, destination, destination.0);
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_dummy(p: *mut Order) -> u32 {
     // SAFETY: As `make_dummy`.
@@ -2794,6 +2808,42 @@ pub unsafe extern "C" fn openttd_rust_order_destination(
 pub(crate) fn process_orders(v: VehicleRef, leaves: &'static Leaves) -> bool {
     let control = Control { g: Game(leaves) };
     control.process(v.shell())
+}
+
+/// `UpdateOrderDest`: update the vehicle's destination tile from an order. `order` is the
+/// order the vehicle currently has; `conditional_depth` the depth (amount of steps) to go
+/// with conditional orders, which prevents infinite loops; `pbs_look_ahead` whether we are
+/// forecasting orders for pbs reservations in advance, in which case the order indices and
+/// the vehicle's `dest_tile` are left alone. Returns true if the order was a new
+/// (non-implicit) order.
+pub(crate) fn update_order_dest(
+    v: VehicleRef,
+    order: *const Order,
+    conditional_depth: i32,
+    pbs_look_ahead: bool,
+    leaves: &'static Leaves,
+) -> bool {
+    let control = Control { g: Game(leaves) };
+    control.destination(v.shell(), load(order), conditional_depth, pbs_look_ahead)
+}
+
+/// `ProcessConditionalOrder`: process a conditional order and determine the next order.
+/// Returns the index of the next order to jump to, or `INVALID_VEH_ORDER_ID` to use the
+/// next order.
+pub(crate) fn process_conditional_order(
+    order: *const Order,
+    v: VehicleRef,
+    leaves: &'static Leaves,
+) -> VehicleOrderID {
+    VehicleOrderID(Game(leaves).conditional(load(order), v.shell()))
+}
+
+/// `Vehicle::IncrementRealOrderIndex`: advance `cur_real_order_index` to the next real order,
+/// keeps care of the wrap-around and invalidates the GUI. `cur_implicit_order_index` is
+/// incremented as well, if it was equal to `cur_real_order_index`, i.e. `cur_real_order_index`
+/// is skipped but not any implicit orders.
+pub(crate) fn increment_real_order_index(v: VehicleRef, leaves: &'static Leaves) {
+    Game(leaves).increment_real(v.shell());
 }
 
 #[unsafe(no_mangle)]
@@ -4895,6 +4945,15 @@ impl VisitOrders {
     /// `v->GetOrder(index)`: null without a list or beyond its orders.
     pub(crate) fn get(self, v: VehicleRef, index: u8) -> Option<Order> {
         self.0.vehicle_order(Self::shell(v), index)
+    }
+    /// `v->GetNumOrders()`: the number of orders, zero for a vehicle without an order list.
+    pub(crate) fn get_num_orders(self, v: VehicleRef) -> VehicleOrderID {
+        VehicleOrderID(self.0.count(Self::shell(v)))
+    }
+    /// `v->GetOrder(index)`: the address of the order, null without a list or beyond its
+    /// orders. It names a live order until the list changes.
+    pub(crate) fn get_order(self, v: VehicleRef, index: VehicleOrderID) -> *const Order {
+        self.0.get_order(Self::shell(v), index.0)
     }
     /// `v->cur_real_order_index`.
     pub(crate) fn real(self, v: VehicleRef) -> u8 {
