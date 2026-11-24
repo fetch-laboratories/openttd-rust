@@ -3373,7 +3373,9 @@ class EnqueueTests(unittest.TestCase):
         "html_url": "https://github.com/example/fork/runs/1",
     }
     REQUESTED = {
+        "id": 2,
         "display_title": f"CI native PR 170 {'c' * 32}-{HEAD}",
+        "head_branch": "rust-migration",
         "status": "completed",
         "conclusion": "success",
         "created_at": "2026-11-12T02:00:00Z",
@@ -3394,30 +3396,43 @@ class EnqueueTests(unittest.TestCase):
         (the run a pre-#922 request record names)."""
         world = {"quick": self.QUICK, "requested": self.REQUESTED, **world}
         quick, requested = world["quick"], world["requested"]
+        dispatched = cast(
+            list[object],
+            world.get("dispatched", [requested] if requested else []),
+        )
+        compare = {
+            "behind_by": world.get("behind", 0),
+            "commits": [{"sha": sha} for sha in world.get("commits", [])],
+            "total_commits": world.get("total", len(world.get("commits", []))),
+        }
         answers = {
-            "pulls/170": PULL,
+            "pulls/170": dict(PULL, created_at="2026-11-11T00:00:00Z"),
             "check-runs?check_name=Quick%20validation": {
                 "check_runs": [quick] if quick else []
             },
-            "event=workflow_dispatch": {
-                "workflow_runs": [requested] if requested else []
-            },
-            "event=pull_request": {"workflow_runs": world.get("labeled", [])},
             "actions/runs/4/jobs": {
                 "jobs": [{"name": "plan", "conclusion": "skipped"}]
             },
             "actions/runs/5/jobs": {
                 "jobs": [{"name": "plan", "conclusion": "success"}]
             },
+            "actions/runs/6/jobs": {"jobs": []},
             "event=merge_group": {
                 "workflow_runs": list(cast(Iterable[object], world.get("queue", ())))
             },
             f"commits/{MERGE}": {
                 "parents": [{"sha": PARENT}, {"sha": world.get("ejected", HEAD)}]
             },
-            f"compare/rust-migration...{HEAD}": {"behind_by": world.get("behind", 0)},
+            f"compare/rust-migration...{HEAD}": compare,
             f"compare/{HEAD}...rust-migration": {"files": world.get("base_files", [])},
             "actions/runs/9": world.get("recorded"),
+        }
+        listings = {
+            "event=workflow_dispatch": [
+                {"workflow_runs": page} for page in world.get("pages", [dispatched])
+            ],
+            "event=pull_request": [{"workflow_runs": world.get("labeled", [])}],
+            "pulls/170/files": [world.get("files", [{"filename": "tools/ci.py"}])],
         }
         calls: list[tuple[str, ...]] = []
         self.calls = calls
@@ -3427,6 +3442,9 @@ class EnqueueTests(unittest.TestCase):
             return cast(dict, answer)
 
         def gh(*args: str) -> str:
+            if args[:2] == ("api", "--paginate"):
+                (pages,) = [v for key, v in listings.items() if key in args[-1]]
+                return json.dumps(pages)
             calls.append(args)
             state = {
                 "mergeQueueEntry": world.get("entry"),
@@ -3507,7 +3525,7 @@ class EnqueueTests(unittest.TestCase):
     def test_request_before_922_is_found_through_its_record(self) -> None:
         # Its run name has no head; the newest of the record's run and the named
         # run decides.
-        old = dict(self.REQUESTED, display_title="CI native PR 170 r")
+        old = dict(self.REQUESTED, id=9, display_title="CI native PR 170 r")
         red = dict(old, conclusion="failure", created_at="2026-11-12T04:00:00Z")
         with self.assertRaisesRegex(ValueError, "runs/2"):
             self.enqueue(recorded=red)
@@ -3522,6 +3540,8 @@ class EnqueueTests(unittest.TestCase):
             "status": "completed",
             "conclusion": "success",
             "created_at": "2026-11-12T05:00:00Z",
+            "display_title": "CI full PR 170 bootstrap-1",
+            "head_sha": HEAD,
         }
         unrelated = dict(later, id=4, conclusion="skipped", html_url="unrelated label")
         entry = {"state": "QUEUED", "position": 1}
@@ -3530,6 +3550,170 @@ class EnqueueTests(unittest.TestCase):
         bootstrap = dict(later, id=5, conclusion="failure", html_url="bootstrap")
         with self.assertRaisesRegex(ValueError, "completed/failure: bootstrap"):
             self.enqueue(labeled=[unrelated, bootstrap])
+        # Another PR's bootstrap, or one at a commit outside the PR, is not its.
+        for other in (
+            dict(bootstrap, display_title="CI full PR 171 bootstrap-1"),
+            dict(bootstrap, head_sha=PREVIOUS),
+        ):
+            reported, _ = self.enqueue(labeled=[other], entry=entry)
+            self.assertTrue(reported.startswith("queued"))
+
+    def at(self, commit: str, run_id: int, created: str, **fields: object) -> dict:
+        """A dispatched native run of PR 170 testing `commit`."""
+        return dict(
+            self.REQUESTED,
+            id=run_id,
+            display_title=f"CI native PR 170 {'c' * 32}-{commit}",
+            created_at=created,
+            html_url=f"https://github.com/example/fork/actions/runs/{run_id}",
+            **fields,
+        )
+
+    def test_a_green_run_on_an_earlier_pr_commit_counts(self) -> None:
+        # #1026: a fix pushed after the passing run queues on Quick alone.
+        entry = {"state": "QUEUED", "position": 1}
+        earlier = self.at(PREVIOUS, 2, "2026-11-12T02:00:00Z")
+        reported, _ = self.enqueue(
+            requested=earlier, commits=[PREVIOUS, HEAD], entry=entry
+        )
+        self.assertTrue(reported.startswith("queued"))
+        # A green run at the head passes as before.
+        reported, _ = self.enqueue(commits=[PREVIOUS, HEAD], entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+
+    def test_the_newest_run_on_the_pr_commits_decides(self) -> None:
+        green = self.at(PARENT, 2, "2026-11-12T02:00:00Z")
+        commits = [PARENT, PREVIOUS, HEAD]
+        for label, newer, message in (
+            (
+                "failed on a later commit",
+                self.at(PREVIOUS, 7, "2026-11-12T03:00:00Z", conclusion="failure"),
+                f"native at {PREVIOUS}, is not green: completed/failure: .*runs/7",
+            ),
+            (
+                "running at the head",
+                self.at(
+                    HEAD,
+                    8,
+                    "2026-11-12T03:00:00Z",
+                    status="in_progress",
+                    conclusion=None,
+                ),
+                f"native at {HEAD}, is not green: in_progress/None: .*runs/8",
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.enqueue(dispatched=[newer, green], commits=commits)
+                self.assertEqual(self.calls, [])
+
+    def test_a_run_outside_the_pr_commits_is_no_run(self) -> None:
+        # A rebase or force-push drops the commits earlier runs tested.
+        outside = self.at(PREVIOUS, 2, "2026-11-12T02:00:00Z")
+        with self.assertRaisesRegex(ValueError, "no requested run.*--profile native"):
+            self.enqueue(requested=outside, commits=[PARENT, HEAD])
+
+    def test_a_bootstrap_not_yet_planned_is_pending(self) -> None:
+        # Its jobs list is empty until the plan job starts: it may be a
+        # bootstrap, so it holds the PR out like a running run.
+        planning = {
+            "id": 6,
+            "status": "queued",
+            "conclusion": None,
+            "created_at": "2026-11-12T05:00:00Z",
+            "display_title": "CI full PR 170 bootstrap-6",
+            "head_sha": HEAD,
+            "html_url": "planning",
+        }
+        with self.assertRaisesRegex(ValueError, "full bootstrap at .*queued/None"):
+            self.enqueue(labeled=[planning])
+        # Once finished without a plan job, it tested nothing.
+        done = dict(planning, status="completed", conclusion="success")
+        reported, _ = self.enqueue(
+            labeled=[dict(done, conclusion="startup_failure")],
+            entry={"state": "QUEUED", "position": 1},
+        )
+        self.assertTrue(reported.startswith("queued"))
+
+    def test_a_passing_run_past_the_first_hundred_dispatches_is_found(self) -> None:
+        others = [
+            dict(
+                self.REQUESTED,
+                id=100 + n,
+                display_title=f"CI native PR 171 {'c' * 32}-{HEAD}",
+                created_at="2026-11-13T00:00:00Z",
+            )
+            for n in range(100)
+        ]
+        entry = {"state": "QUEUED", "position": 1}
+        reported, _ = self.enqueue(
+            pages=[others, [self.REQUESTED]], requested=None, entry=entry
+        )
+        self.assertTrue(reported.startswith("queued"))
+
+    def test_equal_creation_times_resolve_by_id(self) -> None:
+        created = "2026-11-12T02:00:00Z"
+        red = self.at(HEAD, 7, created, conclusion="failure")
+        green = self.at(PREVIOUS, 8, created)
+        commits = [PREVIOUS, HEAD]
+        entry = {"state": "QUEUED", "position": 1}
+        for order in ([red, green], [green, red]):
+            reported, _ = self.enqueue(dispatched=order, commits=commits, entry=entry)
+            self.assertTrue(reported.startswith("queued"))
+        for order in ([red, dict(green, id=6)], [dict(green, id=6), red]):
+            with self.assertRaisesRegex(ValueError, "runs/7"):
+                self.enqueue(dispatched=order, commits=commits)
+
+    def test_a_truncated_comparison_counts_the_head_only(self) -> None:
+        earlier = self.at(PREVIOUS, 2, "2026-11-12T02:00:00Z")
+        commits = [PREVIOUS] + [f"{n:040x}" for n in range(248)] + [HEAD]
+        self.assertEqual(len(commits), 250)
+        reported, _ = self.enqueue(
+            requested=earlier,
+            commits=commits,
+            total=250,
+            entry={"state": "QUEUED", "position": 1},
+        )
+        self.assertTrue(reported.startswith("queued"))
+        with self.assertRaisesRegex(ValueError, "no requested run"):
+            self.enqueue(requested=earlier, commits=commits, total=251)
+        reported, _ = self.enqueue(
+            commits=commits, total=251, entry={"state": "QUEUED", "position": 1}
+        )
+        self.assertTrue(reported.startswith("queued"))
+
+    def test_a_workflow_change_needs_its_passing_run_at_the_head(self) -> None:
+        # ci-invalidate.yml can carry a bootstrap's Full status across an inert
+        # docs push; the bootstrap itself must be at the head (CI administration).
+        bootstrap = {
+            "id": 5,
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-11-12T05:00:00Z",
+            "display_title": "CI full PR 170 bootstrap-5",
+            "head_sha": PREVIOUS,
+            "html_url": "bootstrap",
+        }
+        workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
+        with self.assertRaisesRegex(
+            ValueError,
+            f"changes .github/workflows/.*full bootstrap bootstrap.*{PREVIOUS}",
+        ):
+            self.enqueue(labeled=[bootstrap], commits=[PREVIOUS, HEAD], files=workflow)
+        self.assertEqual(self.calls, [])
+        entry = {"state": "QUEUED", "position": 1}
+        reported, _ = self.enqueue(
+            labeled=[dict(bootstrap, head_sha=HEAD)],
+            commits=[PREVIOUS, HEAD],
+            files=workflow,
+            entry=entry,
+        )
+        self.assertTrue(reported.startswith("queued"))
+        # Without a workflow change the same ancestor bootstrap counts.
+        reported, _ = self.enqueue(
+            labeled=[bootstrap], commits=[PREVIOUS, HEAD], entry=entry
+        )
+        self.assertTrue(reported.startswith("queued"))
 
     def test_ejected_head_queues_again_once_only_with_retry(self) -> None:
         entry = {"state": "QUEUED", "position": 1}
@@ -3969,7 +4153,8 @@ def queue_state(
 class World:
     """Recorded answers for one PR: quick (its Quick check run), runs (pages of
     dispatched runs), queue (the GraphQL pull request), heads (successive reads
-    of the PR's head), comments (pages of comments) and group (merge-group runs)."""
+    of the PR's head), comments (pages of comments), group (merge-group runs),
+    commits (the PR's own, oldest first) and labeled (its bootstrap runs)."""
 
     quick: CheckRun = field(default_factory=quick_run)
     runs: list[list[ci_log.Run]] = field(default_factory=list)
@@ -3978,6 +4163,8 @@ class World:
     comments: list[list[review_report.Comment]] = field(default_factory=lambda: [[]])
     group: list[ci.QueueRun] = field(default_factory=list)
     records: list[dict[str, Any]] = field(default_factory=list)
+    commits: list[str] = field(default_factory=lambda: [HEAD])
+    labeled: list[ci_log.Run] = field(default_factory=list)
 
 
 class FakeGitHub:
@@ -3991,10 +4178,12 @@ class FakeGitHub:
     def api(self, _repository: str, path: str) -> object:
         answers = {
             "check-runs": {"check_runs": [self.world.quick]},
-            # enqueue's bounded window sees only the first page.
-            "event=workflow_dispatch": {"workflow_runs": self.world.runs[0]},
-            "event=pull_request": {"workflow_runs": []},
             "event=merge_group": {"workflow_runs": self.world.group},
+            "compare/rust-migration...": {
+                "commits": [{"sha": sha} for sha in self.world.commits],
+                "total_commits": len(self.world.commits),
+            },
+            "/jobs": {"jobs": [{"name": "plan", "conclusion": "success"}]},
             f"commits/{MERGE}": {"parents": [{"sha": PARENT}, {"sha": HEAD}]},
         }
         if path == "pulls/170":
@@ -4017,6 +4206,8 @@ class FakeGitHub:
             "/comments": self.world.comments,
             "/reviews": [[]],
             "event=workflow_dispatch": [{"workflow_runs": p} for p in self.world.runs],
+            "event=pull_request": [{"workflow_runs": self.world.labeled}],
+            "pulls/170/files": [[{"filename": "tools/ci.py"}]],
         }
         (answer,) = [value for key, value in answers.items() if key in args[-1]]
         return json.dumps(answer)
@@ -4127,10 +4318,9 @@ class StateTests(unittest.TestCase):
         self.assertIn(f"/root/r3: accepted at head {url}13", output)
         self.assertNotIn("/root/impl", output)
         self.assertEqual(len(lines), 14)
-        # enqueue's bounded window sees rust's red run as the newest request.
-        self.assertTrue(
-            lines[13].startswith("enqueue checks: blocked: The latest requested run")
-        )
+        # enqueue reads every page, as state does: native's green run on the
+        # second page is the newest.
+        self.assertEqual(lines[13], "enqueue checks: pass")
         # Every listing is paginated.
         self.assertTrue(
             all("--paginate" in call for call in calls if call[1] != "graphql")
@@ -4189,6 +4379,38 @@ class StateTests(unittest.TestCase):
         _, output, _ = self.state(world=replace(green, records=[growth]))
         self.assertIn("enqueue checks: blocked: PR #170 at", output)
         self.assertIn("growth tools_cpp", output)
+
+    def test_newest_run_below_head_is_shown_as_enqueue_reads_it(self) -> None:
+        # Equal creation times resolve by id, in the gate and here alike.
+        created = "2026-11-12T03:00:00Z"
+        red = dict(requested("rust", "c" * 32, created, "failure"), id=7)
+        green = requested("native", "e" * 32, created, "success")
+        green = dict(
+            green, id=8, display_title=f"CI native PR 170 {'e' * 32}-{PREVIOUS}"
+        )
+        world = World(runs=[[red, green]], commits=[PREVIOUS, HEAD])
+        _, output, _ = self.state(world=world)
+        lines = output.splitlines()
+        self.assertIn(f"rust at head: failure {red['html_url']}", lines)
+        self.assertIn(
+            f"Newest requested run, native at {PREVIOUS[:10]}, 1 commit(s) below "
+            f"head: success {green['html_url']}",
+            lines,
+        )
+        self.assertEqual(lines[-1], "enqueue checks: pass")
+        _, raw, _ = self.state("state", "170", "--json", world=world)
+        newest = json.loads(raw)["newest_request"]
+        self.assertEqual(
+            (newest["profile"], newest["commit"], newest["behind"]),
+            ("native", PREVIOUS, 1),
+        )
+        # With the ids swapped the red run at the head is the newest.
+        swapped = replace(world, runs=[[dict(red, id=9), green]])
+        _, output, _ = self.state(world=swapped)
+        self.assertNotIn("Newest requested run", output)
+        self.assertIn("enqueue checks: blocked: The newest requested run", output)
+        _, raw, _ = self.state("state", "170", "--json", world=swapped)
+        self.assertEqual(json.loads(raw)["newest_request"]["behind"], 0)
 
     def test_moved_head_prints_no_mixed_view(self) -> None:
         code, output, _ = self.state(
