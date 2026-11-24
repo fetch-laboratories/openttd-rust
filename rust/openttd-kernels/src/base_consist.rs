@@ -37,13 +37,9 @@ impl VehicleFlags {
     }
 }
 
-/// `VehicleFlags` mask of `VehicleFlag::LoadingFinished`.
-pub const VF_LOADING_FINISHED: u16 = 1 << VehicleFlag::LOADING_FINISHED.0;
 /// `VehicleFlags` mask of `VehicleFlag::CargoUnloading`.
 pub const VF_CARGO_UNLOADING: u16 = 1 << VehicleFlag::CARGO_UNLOADING.0;
 /// `VehicleFlags` mask of `VehicleFlag::BuiltAsPrototype`.
 pub const VF_BUILT_AS_PROTOTYPE: u16 = 1 << VehicleFlag::BUILT_AS_PROTOTYPE.0;
 /// `VehicleFlags` mask of `VehicleFlag::TimetableStarted`.
 pub const VF_TIMETABLE_STARTED: u16 = 1 << VehicleFlag::TIMETABLE_STARTED.0;
-/// `VehicleFlags` mask of `VehicleFlag::StopLoading`.
-pub const VF_STOP_LOADING: u16 = 1 << VehicleFlag::STOP_LOADING.0;

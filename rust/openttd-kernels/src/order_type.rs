@@ -282,6 +282,11 @@ impl VehicleOrderID {
 }
 
 impl OrderNonStopFlags {
+    /// Native `BaseBitSet::Any`: whether any element is set.
+    #[must_use]
+    pub const fn any(self) -> bool {
+        self.0 != 0
+    }
     /// Native `BaseBitSet::Test`, with an element rather than a set mask.
     #[must_use]
     pub const fn test(self, element: OrderNonStopFlag) -> bool {

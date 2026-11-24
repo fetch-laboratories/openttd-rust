@@ -121,7 +121,7 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 		.aircraft_place = VehicleConstructAircraftPlace,
 		.aircraft_properties = VehicleConstructAircraftProperties, .rotor = VehicleConstructRotor,
 		.mail_capacity_address = RustOpaqueVehicleInvoke<RustVehicleCargoCapacityAddress>, .road_capacity = VehicleConstructRoadCapacity,
-		.set_cargo_type = RustVehicleSetCargoType, .engine_common = VehicleConstructEngineCommon,
+		.engine_common = VehicleConstructEngineCommon,
 		.service_dates = VehicleConstructServiceDates, .build_stamp = VehicleConstructStamp,
 		.service_flags = VehicleConstructServiceFlags,
 	};

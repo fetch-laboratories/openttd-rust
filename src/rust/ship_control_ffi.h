@@ -71,9 +71,8 @@ struct OpenTTDShipLeaves {
 	uint32_t (*path_back)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_back);
 	void (*path_pop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_pop);
 	void (*path_clear)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_clear);
-	void (*viewport)(uint32_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
+	void (*viewport)(OpenTTDVehicle *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (*base_viewport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
-	void (*play_sound)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
 	OpenTTDShipReverseResult (*yapf_reverse)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(yapf_reverse);
 	OpenTTDShipTrackResult (*yapf_choose)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(yapf_choose);
 	void (*update_delta)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);

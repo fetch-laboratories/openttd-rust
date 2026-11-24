@@ -18,8 +18,8 @@ use crate::services::{Map, Services as Shared};
 use crate::station::BaseStation;
 use crate::station_cmd::StationNaming;
 use crate::station_type::{
-    AirportAnimationTrigger, INVALID_STATION, StationAnimationTrigger, StationFacilities,
-    StationFacility, StationID, StationType,
+    AirportAnimationTrigger, StationAnimationTrigger, StationFacilities, StationFacility,
+    StationID, StationType,
 };
 use crate::strings_type::StringID;
 use crate::table::strings::{
@@ -48,7 +48,6 @@ pub struct Services {
     pub cleaning_pool: extern "C" fn() -> bool,
     pub sign_valid: extern "C" fn(*mut BaseStation) -> bool,
     pub remove_sign: extern "C" fn(StationID),
-    pub last_loading: extern "C" fn(VehicleRef) -> StationID,
     pub airport_maintenance: extern "C" fn(*const crate::station_cmd::AirportSpec) -> u16,
     pub maintenance_price: usize,
 }
@@ -603,8 +602,8 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
         if v.last_station_visited() == id {
             v.set_last_station_visited(StationID::INVALID);
         }
-        if (s.last_loading)(v) == id {
-            (visits.set_last_loading)(v, INVALID_STATION);
+        if v.last_loading_station(visits) == id {
+            v.set_last_loading_station(visits, StationID::INVALID);
         }
     }
     /* Remove station from industries and towns that reference it. */
@@ -701,7 +700,7 @@ pub(crate) fn airport_maintenance_cost(s: &Services, owner: CompanyID) -> i64 {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, industry_type, set_industry_type, roadstop, cleaning_pool, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, industry_type, set_industry_type, roadstop, cleaning_pool, sign_valid, remove_sign, airport_maintenance, maintenance_price };
 }
 
 /// Test-only table for `crate::test_tables`; its private fields keep it in this module.
@@ -716,7 +715,6 @@ pub(crate) const TEST_TABLE: crate::station_lifecycle::Services =
         cleaning_pool: crate::test_tables::unreachable0,
         sign_valid: crate::test_tables::unreachable1,
         remove_sign: crate::test_tables::unreachable1,
-        last_loading: crate::test_tables::unreachable1,
         airport_maintenance: crate::test_tables::unreachable1,
         maintenance_price: 0,
     };

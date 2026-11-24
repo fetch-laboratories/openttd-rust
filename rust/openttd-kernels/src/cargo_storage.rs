@@ -749,15 +749,31 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_feeder(l: *const List) -> i64 {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_action_count(l: *const List, action: u8) -> u32 {
+    unsafe { action_count(l, MoveToAction(action)) }
+}
+/// `VehicleCargoList::ActionCount`: returns the amount of cargo designated for a given
+/// purpose.
+///
+/// # Safety
+/// `l` is a live list; the read ends before the caller's next callback.
+pub(crate) unsafe fn action_count(l: *const List, action: MoveToAction) -> u32 {
     unsafe {
         (&raw const (*l).fields.action_counts)
             .cast::<u32>()
-            .add(usize::from(action))
+            .add(usize::from(action.0))
             .read()
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_stored(l: *const List) -> u32 {
+    unsafe { stored_count(l) }
+}
+/// `VehicleCargoList::StoredCount`: returns sum of cargo on board the vehicle (ie not only
+/// reserved).
+///
+/// # Safety
+/// As [`action_count`].
+pub(crate) unsafe fn stored_count(l: *const List) -> u32 {
     unsafe {
         (*l).fields
             .count
@@ -898,8 +914,21 @@ pub(crate) unsafe fn age<const COUNTED: bool>(l: *mut List, s: *const Services) 
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_keep(l: *mut List) {
+    unsafe { keep_all(l) }
+}
+/// `VehicleCargoList::KeepAll`: marks all cargo in the vehicle as to be kept.
+///
+/// # Safety
+/// `l` is a live list; the write ends before the caller's next callback.
+pub(crate) unsafe fn keep_all(l: *mut List) {
     unsafe {
-        (*l).fields.action_counts = [0, 0, (*l).fields.count, 0];
+        let counts = &raw mut (*l).fields.action_counts;
+        // `action_counts[MTA_DELIVER] = action_counts[MTA_TRANSFER] = action_counts[MTA_LOAD] = 0`
+        // stores right to left.
+        (*counts)[MoveToAction::MTA_LOAD.0 as usize] = 0;
+        (*counts)[MoveToAction::MTA_TRANSFER.0 as usize] = 0;
+        (*counts)[MoveToAction::MTA_DELIVER.0 as usize] = 0;
+        (*counts)[MoveToAction::MTA_KEEP.0 as usize] = (*l).fields.count;
     }
 }
 
@@ -1502,9 +1531,20 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_move(
         }
         return amount.wrapping_sub(remaining);
     }
+    if mode == 0 {
+        return unsafe {
+            vehicle_return(
+                src,
+                dst,
+                s,
+                amount,
+                crate::station_type::StationID(avoid),
+                TileIndex(at),
+            )
+        };
+    }
     let f = unsafe { fields(src) };
     let amount = amount.min(match mode {
-        0 => f.action_counts[MoveToAction::MTA_LOAD.0 as usize],
         5 => f.action_counts[MoveToAction::MTA_TRANSFER.0 as usize],
         _ => f.count,
     });
@@ -1526,6 +1566,42 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_move(
         );
     }
     amount
+}
+
+/// `VehicleCargoList::Return`: returns reserved cargo to the station and removes it from the
+/// cache. `next` is the next station the cargo wants to go to and `current_tile` the tile the
+/// cargo handling is happening on; returns the amount of cargo actually returned.
+///
+/// # Safety
+/// `src` is a live vehicle list and `dest` a live station list, with the immutable services;
+/// no Rust borrow of either spans a callback.
+pub(crate) unsafe fn vehicle_return(
+    src: *mut List,
+    dest: *mut List,
+    s: Services,
+    max_move: u32,
+    next: crate::station_type::StationID,
+    current_tile: TileIndex,
+) -> u32 {
+    let max_move = unsafe { action_count(src, MoveToAction::MTA_LOAD) }.min(max_move);
+    let mut remaining = max_move;
+    unsafe {
+        walk(
+            src,
+            dest,
+            s,
+            0,
+            &mut remaining,
+            None,
+            next.0,
+            crate::station_type::StationID::INVALID.0,
+            std::ptr::null(),
+            0,
+            std::ptr::null_mut(),
+            current_tile.0,
+        );
+    }
+    max_move
 }
 
 /// Traverse the typed pool in ID order; the native hook supplies identity only.
