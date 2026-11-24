@@ -135,6 +135,8 @@ mod bodies {
     /// order, and the tables of one entry over this thread's 16 by 16 clear map.
     struct Fixture {
         record: *mut crate::vehicle_base::VehicleRecord,
+        /// The map's base tile layouts, which the fixture leaks.
+        base: *mut crate::map_func::BaseTileLayout,
         leaves: &'static Leaves,
         shared: &'static Services,
     }
@@ -163,9 +165,10 @@ mod bodies {
                     m8: 0,
                 })
                 .collect();
+            let base: *mut crate::map_func::BaseTileLayout = Box::into_raw(base).cast();
             crate::map_func::fixture::set(
                 crate::map_func::TileTypeAllocation {
-                    base: Box::into_raw(base).cast(),
+                    base,
                     extended: Box::into_raw(extended).cast(),
                     count: 256,
                     assertions: false,
@@ -220,6 +223,7 @@ mod bodies {
             }
             Self {
                 record,
+                base,
                 leaves,
                 shared,
             }
@@ -443,24 +447,79 @@ mod bodies {
         4
     }
 
+    thread_local! {
+        static PBS: Cell<*const crate::pbs::PbsServices> = const { Cell::new(std::ptr::null()) };
+        /// Each `TryReserveRailTrack` call's tile and track, with the effects recorded
+        /// before it.
+        static RESERVED: std::cell::RefCell<Vec<(u32, u8, Vec<Effect>)>> =
+            const { std::cell::RefCell::new(Vec::new()) };
+    }
+    extern "C" fn pbs_services(_: *const Services) -> *const crate::pbs::PbsServices {
+        PBS.with(Cell::get)
+    }
+    extern "C" fn try_track(tile: u32, track: u8) -> bool {
+        RESERVED.with(|r| r.borrow_mut().push((tile, track, take())));
+        true
+    }
+    extern "C" fn hidden() -> bool {
+        false
+    }
+    /// The reservation table's `TrackBitsToTrack(v->track)`.
+    extern "C" fn bits_track(_: *mut std::ffi::c_void, _: Handle, bits: u8) -> u64 {
+        u64::from(crate::track_func::find_first_track(bits))
+    }
+
     /// `TrainCrashed`: a train that is not crashed yet is crashed, then the owner's AI event
     /// and the game event report `CRASH_TRAIN` with the victims of `Crash()`; an already
     /// crashed train gets neither and counts no victims. Both then re-reserve the track
-    /// under the consist, which a part in a depot leaves alone.
+    /// under the consist: the part on a plain rail tile's `TRACK_X` reserves that track,
+    /// after the events.
     #[test]
-    fn train_crashed_reports_the_crash_once() {
+    fn train_crashed_reports_the_crash_once_and_re_reserves_the_track() {
         let physics = Box::leak(Box::new(crate::ground_vehicle::Services {
             base_crash,
             ..GROUND_VEHICLE
         }));
         for owner in [LOCAL, LOCAL + 1] {
-            let mut f = Fixture::new(owner, 0, &SHARED, &VEHICLE);
+            let mut f = Fixture::new(
+                owner,
+                0,
+                &Services {
+                    pbs_services,
+                    ..SHARED
+                },
+                &VEHICLE,
+            );
+            // SAFETY: The fixture's leaked reservation table.
+            let reservation = unsafe { *f.leaves.reservation };
             f.leaves = Box::leak(Box::new(Leaves {
                 physics,
+                reservation: Box::leak(Box::new(reservation::Leaves {
+                    bits_track,
+                    shared: f.shared,
+                    ..reservation
+                })),
                 ..*f.leaves
             }));
-            f.train().set_track(TrackBits::TRACK_BIT_DEPOT);
+            PBS.with(|p| {
+                p.set(Box::leak(Box::new(crate::pbs::PbsServices {
+                    shared: f.shared,
+                    try_track,
+                    show_reservation: hidden,
+                    assertions: false,
+                    ..crate::test_tables::PBS
+                })));
+            });
+            // SAFETY: The fixture's map; no reference into it is live. `MP_RAILWAY` in the
+            // type nibble, `RAIL_TILE_NORMAL` with `TRACK_BIT_X` in m5.
+            unsafe {
+                let tile = &mut *f.base.add(TILE.0 as usize);
+                tile.kind = crate::tile_type::TileType::MP_RAILWAY.0 << 4;
+                tile.m5 = TrackBits::TRACK_BIT_X.0;
+            }
+            f.train().set_track(TrackBits::TRACK_BIT_X);
             take();
+            RESERVED.with(|r| r.borrow_mut().clear());
             assert_eq!(f.game().train_crashed(f.train()), 4);
             assert_eq!(f.train().crash_anim_pos(), 1);
             // `new ScriptEventVehicleCrashed(v->index, v->tile, CRASH_TRAIN, victims,
@@ -478,18 +537,27 @@ mod bodies {
                 company: owner,
             };
             assert_eq!(
-                take(),
-                vec![
-                    Effect::AiNewEvent(owner, crashed),
-                    Effect::GameNewEvent(crashed)
-                ]
+                RESERVED.with(|r| r.take()),
+                vec![(
+                    TILE.0,
+                    Track::TRACK_X.0,
+                    vec![
+                        Effect::AiNewEvent(owner, crashed),
+                        Effect::GameNewEvent(crashed)
+                    ]
+                )]
             );
+            assert_eq!(take(), Vec::new());
 
-            // Already crashed: no events, no victims.
+            // Already crashed: no events, no victims, and the track is reserved again.
             f.train()
                 .vehicle()
                 .set_vehstatus(f.train().vehicle().vehstatus().set(VehState::Crashed));
             assert_eq!(f.game().train_crashed(f.train()), 0);
+            assert_eq!(
+                RESERVED.with(|r| r.take()),
+                vec![(TILE.0, Track::TRACK_X.0, Vec::new())]
+            );
             assert_eq!(take(), Vec::new());
         }
     }

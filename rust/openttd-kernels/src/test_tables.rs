@@ -579,6 +579,34 @@ pub(crate) const HOUSES: crate::town::house::HouseServices = crate::town::house:
     place_houses: unreachable0,
 };
 
+/// `crate::pbs::PbsServices` with every entry unreachable.
+pub(crate) const PBS: crate::pbs::PbsServices = crate::pbs::PbsServices {
+    shared: ptr::null(),
+    rail: ptr::null(),
+    train: ptr::null(),
+    depot_bits: unreachable1,
+    crossing_bits: unreachable1,
+    station_bits: unreachable1,
+    wormhole_bits: unreachable1,
+    set_depot: unreachable2,
+    set_station: unreachable2,
+    set_wormhole: unreachable2,
+    try_track: unreachable2,
+    unreserve_track: unreachable2,
+    show_reservation: unreachable0,
+    station: unreachable1,
+    is_crossing: unreachable1,
+    read_train_on_res: unreachable1,
+    write_train_on_res: unreachable2,
+    assertions: false,
+    handle: unreachable1,
+    compatible: unreachable1,
+    rail90: unreachable3,
+    blocking: unreachable2,
+    has_pbs: unreachable2,
+    index: unreachable1,
+};
+
 /// `crate::services::CommandServices` with every entry unreachable.
 pub(crate) const COMMANDS: crate::services::CommandServices = crate::services::CommandServices {
     command_flags: unreachable1,
