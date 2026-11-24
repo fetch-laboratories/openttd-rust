@@ -595,7 +595,7 @@ extern "C" fn town_by_id(id: u32) -> *mut crate::services::TownHandle {
 }
 extern "C" fn town_owner(t: *const crate::services::TownHandle) -> *mut crate::town::State {
     assert_eq!(t.addr(), 64);
-    TOWN.with(|t| t.get())
+    TOWN.get()
 }
 extern "C" fn authority_town_index(t: *const crate::services::TownHandle) -> u16 {
     assert_eq!(t.addr(), 64);
