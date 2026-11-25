@@ -1403,21 +1403,29 @@ COMPARED = (
 )
 
 
-MODULE_ALLOW = re.compile(r"(?m)^[ \t]*#!\[\s*allow\s*\(([^\]]*)\)\s*\]")
-
-
 def module_unsafe_allows(path: str, source: str) -> list[Site]:
-    """Each file-level `#![allow(...)]` of a file that names `unsafe_code`."""
-    return [
-        Site(
-            path,
-            source.count("\n", 0, found.start()) + 1,
-            "module unsafe_code allow",
-            "",
+    """Each `#![allow(...)]` at the top level of a file that names `unsafe_code`.
+
+    The parser reads the attributes, so comments and the inner attributes of
+    an inline `mod` do not count, and spacing such as `# ! [allow(...)]` does.
+    """
+    data = source.encode()
+    rows = []
+    for node in PARSERS["rust"].parse(data).root_node.named_children:
+        attribute = (
+            node.named_children[0] if node.type == "inner_attribute_item" else None
         )
-        for found in MODULE_ALLOW.finditer(code_only(source))
-        if re.search(r"\bunsafe_code\b", found[1])
-    ]
+        if attribute is None or attribute.type != "attribute":
+            continue
+        name, *arguments = attribute.named_children
+        if text(name, data) == "allow" and any(
+            re.search(r"\bunsafe_code\b", text(argument, data))
+            for argument in arguments
+        ):
+            rows.append(
+                Site(path, node.start_point[0] + 1, "module unsafe_code allow", "")
+            )
+    return rows
 
 
 def count(rows: list[Site], kind: str) -> int:
