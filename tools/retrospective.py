@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only PR readiness, milestone latency, stocktakes and base-update checks."""
+"""Read-only PR readiness, milestone latency, stocktakes, base-update checks and rebuild counts."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 
 import base_update
 import ci
+import rebuild_reach
 from review_report import Comment, Review, ReviewReport, review_reports
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -300,9 +301,12 @@ def main() -> None:
     command.add_argument("end")
     command.add_argument("--json", action="store_true")
     base_update.add_parser(commands)
+    rebuild_reach.add_parser(commands)
     args = parser.parse_args()
     if args.command == "base-update":
         sys.exit(base_update.run(args, Path.cwd()))
+    if args.command == "rebuilds":
+        sys.exit(rebuild_reach.run(args, Path.cwd()))
     result: dict[str, Any]
     if args.command == "stocktake":
         result = stocktake(args.start, args.end)

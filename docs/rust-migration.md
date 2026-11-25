@@ -97,6 +97,8 @@ A change's carries and exception proposals go in `migration/cleanup-records/<bra
 
 Cache build outputs only when the key covers everything that determines them; do not cache test results. Worktrees share the main checkout's reference, reference build and `.local/compiler-cache/`. After a configure-time environment change, such as a dependency prefix, use a fresh build directory: the driver skips CMake configure when the cached `-D` values match.
 
+A build compiles again every object whose source, header or generated ABI header differs from what a local build last compiled, in any worktree. So a new worktree costs about a minute more than a warm one, while a change to a header that core headers include recompiles most of the 575 objects in either: port merges in late November recompiled a median of 377, about seven minutes at five jobs on an idle host ([#1070](https://github.com/fetch-laboratories/openttd-rust/issues/1070)). `python3 tools/retrospective.py rebuilds [REV ... | --since DATE]` counts the objects each merge recompiles and `--reach HEADER` the objects that include a header, from a built tree's `ninja -t deps`.
+
 ## Output disk
 
 All output lives on the SSD in ordinary folders, and each worktree's `.local` is a real folder ([ADR 0050](adr/0050-output-on-the-ssd.md)). No Git hook makes links.
