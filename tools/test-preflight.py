@@ -15,7 +15,7 @@ import threading
 import time
 import unittest
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from functools import partial
 from pathlib import Path
 from subprocess import CompletedProcess
@@ -1074,6 +1074,101 @@ class CompileCheckTests(unittest.TestCase):
         self.assertEqual(sorted(seen), sorted(name for name, _ in listed))
         for env in seen.values():
             self.assertNotIn("PROBE_COMPILE_ONLY", env)
+
+    def fixture_build(self, root: Path, defined: bool) -> Path:
+        """A one-object game whose ninja link line the adapter reads, and a
+        console that calls a definition the game may have removed."""
+        build = root / "build-rust"
+        (build / "src").mkdir(parents=True)
+        body = "void Removed() {}\n" if defined else ""
+        (build / "src/game.cpp").write_text(body + "int main() { return 0; }\n")
+        (build / "src/console.cpp").write_text("")
+        (build / "build.ninja").write_text(
+            "rule cxx\n  command = c++ -c $in -o $out\n"
+            "rule link\n  command = c++ $in -o $out\n"
+            "build game.o: cxx src/game.cpp\n"
+            "build openttd-rust: link game.o\n"
+        )
+        subprocess.run(["ninja", "-C", str(build)], check=True, capture_output=True)
+        entry = {
+            "file": str(build / "src/console.cpp"),
+            "directory": str(build),
+            "command": f"c++ -std=c++20 -I{root} -o console.o -c {build / 'src/console.cpp'}",
+        }
+        (build / "compile_commands.json").write_text(json.dumps([entry]))
+        (root / "abi.h").write_text("void Removed();\n")
+        source = root / "fixture-console.cpp"
+        source.write_text(
+            '#include "abi.h"\n'
+            'extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { Removed(); }\n'
+        )
+        return source
+
+    def adapter_check(self, root: Path, source: Path, compile_only: str = "") -> int:
+        """The check's child for one adapter whose build is the fixture."""
+        check = tool("compile-check")
+        import simulation.console_adapter as consoles
+
+        def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
+            return consoles.console_adapter(build, folder, env, source, "fixture")
+
+        module = SimpleNamespace(__name__="simulation.fixture", adapter=adapter)
+        environ = {k: v for k, v in os.environ.items() if k != "PROBE_COMPILE_ONLY"}
+        if compile_only:
+            environ["PROBE_COMPILE_ONLY"] = compile_only
+        with (
+            patch("simulation.registry.adapter_modules", return_value=[module]),
+            patch.object(check, "BUILD", root / "build-rust"),
+            patch.object(check, "OUT", root / "out"),
+            patch.object(check.migration, "candidate_lock", return_value=nullcontext()),
+            patch.object(check.migration, "environment", return_value=environ),
+            patch.dict(os.environ, environ, clear=True),
+            patch.object(sys, "addaudithook"),
+            patch("sys.stderr"),
+        ):
+            return check.child(None, "fixture", "candidate")
+
+    def test_an_adapter_calling_a_removed_definition_fails_at_its_link(self) -> None:
+        # #1072: engines-console.cpp declared ClearEnginesHiddenFlagOfCompany
+        # itself, so only CI's link of the adapter failed on #1056.
+        if not shutil.which("ninja"):
+            self.skipTest("no ninja on this host")
+        check = tool("compile-check")
+        for defined, code in ((True, 0), (False, check.FAILED)):
+            with self.subTest(defined=defined), tempfile.TemporaryDirectory() as d:
+                root = Path(d).resolve()
+                source = self.fixture_build(root, defined)
+                self.assertEqual(self.adapter_check(root, source), code)
+                # A linked adapter is deleted, pass or fail.
+                self.assertFalse(
+                    (
+                        root / "out/adapters/candidate/linked/fixture/openttd-fixture"
+                    ).exists()
+                )
+
+    def test_a_fresh_abi_header_still_fails_the_compile_only_adapter_build(
+        self,
+    ) -> None:
+        # Review of #1079: a build older than the Rust declarations links
+        # against its old header, so the fresh one must still compile.
+        if not shutil.which("ninja"):
+            self.skipTest("no ninja on this host")
+        check = tool("compile-check")
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d).resolve()
+            source = self.fixture_build(root, defined=True)
+            self.assertEqual(self.adapter_check(root, source), 0)
+            fresh = root / "fresh"
+            fresh.mkdir()
+            (fresh / "abi.h").write_text("void Renamed();\n")
+            source.write_text(source.read_text().replace('"abi.h"', '"fresh/abi.h"'))
+            self.assertEqual(self.adapter_check(root, source, str(fresh)), check.FAILED)
+        modules = [SimpleNamespace(__name__="simulation.a")]
+        with patch("simulation.registry.adapter_modules", return_value=modules):
+            names = [n for n, _ in check.jobs(False, ("candidate",), True, True)]
+        self.assertEqual(
+            names, ["adapter a candidate", "adapter a candidate, compile only"]
+        )
 
     def test_a_link_names_changed_sources_newer_than_the_candidate_game(self) -> None:
         check = tool("compile-check")

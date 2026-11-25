@@ -15,7 +15,10 @@ CI's "Freeze runtime and scenario adapters" step builds it: compiled and linked
 against both games' built objects, the candidate's `build-rust` and the
 reference build, with no debug info, then deleted (#1072). Against the pinned
 reference, whose objects never change, an adapter links only when a harness
-source under tools/simulation/ changed, and is otherwise compiled for syntax. A console that only the candidate's
+source under tools/simulation/ changed, and is otherwise compiled for syntax.
+When the fresh ABI headers differ from the build's, each candidate adapter
+also compiles for syntax against the fresh ones. An adapter's missing input
+fails the check; only a comparison's is a named skip. A console that only the candidate's
 headers declare, or that calls a definition the change removed, fails here as
 it would on CI. A link reads the build as it is, so the check names any changed
 source newer than the candidate game: build again before trusting that result. Where `clang++` is installed, the build's compiles of
@@ -27,6 +30,7 @@ or a read of the repository and build, and a refusal fails the check.
 """
 
 import argparse
+import fcntl
 import filecmp
 import json
 import os
@@ -37,7 +41,9 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
 import probe
@@ -136,7 +142,9 @@ def build_adapter(adapter: str, role: str) -> None:
 
     names = registry.adapter_modules()
     (module,) = [m for m in names if m.__name__.rsplit(".", 1)[-1] == adapter]
-    folder = OUT / "adapters" / role / adapter
+    # A compile-only build of the same adapter can run beside its link.
+    mode = "compile-only" if os.environ.get("PROBE_COMPILE_ONLY") else "linked"
+    folder = OUT / "adapters" / role / mode / adapter
     shutil.rmtree(folder, ignore_errors=True)
     lock = (
         migration.candidate_lock(BUILD, shared=True)
@@ -163,15 +171,21 @@ def child(comparison: str | None, adapter: str | None, role: str = "candidate") 
         return FAILED
     except FileNotFoundError as error:
         print(f"compile-only: stopped at {error.filename}", file=sys.stderr)
-        return MISSING
+        # Only a comparison reads inputs a full run generates; an adapter's
+        # inputs all come from a build, as on CI.
+        return MISSING if comparison else FAILED
     return 0
 
 
 def jobs(
-    probes: bool, roles: tuple[str, ...], link_reference: bool = True
+    probes: bool,
+    roles: tuple[str, ...],
+    link_reference: bool = True,
+    fresh_candidate: bool = False,
 ) -> list[tuple[str, list[str]]]:
     """Comparison compiles when ``probes``, then each adapter's build per role:
-    the reference's compiled only, unless ``link_reference``."""
+    the reference's compiled only, unless ``link_reference``, and the
+    candidate's also compiled against the fresh ABI when ``fresh_candidate``."""
     from simulation import registry
 
     python = sys.executable
@@ -185,6 +199,8 @@ def jobs(
             command = [python, __file__, "--adapter", name, "--role", role]
             only = role == "reference" and not link_reference
             listed.append((f"adapter {name} {role}{COMPILE_ONLY * only}", command))
+            if role == "candidate" and fresh_candidate:
+                listed.append((f"adapter {name} candidate{COMPILE_ONLY}", command))
     return listed
 
 
@@ -266,7 +282,25 @@ def workers() -> int:
     return max(2, (os.cpu_count() or 2) - round(os.getloadavg()[0]))
 
 
+@contextmanager
+def exclusive() -> Generator[None]:
+    """One check at a time per worktree: each clears and fills the same tree."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    with (OUT.parent / "compile-check.lock").open("w") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("waiting for another compile check in this worktree")
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
+
+
 def check(base: str) -> int:
+    with exclusive():
+        return checked(base)
+
+
+def checked(base: str) -> int:
     if (
         not (BUILD / "CMakeCache.txt").is_file()
         or not (BUILD / "compile_commands.json").is_file()
@@ -294,7 +328,8 @@ def check(base: str) -> int:
     if not (migration.REFERENCE_BUILD / "compile_commands.json").is_file():
         print(
             f"SKIP reference adapters: no built reference at {migration.REFERENCE_BUILD}; "
-            "run python3 tools/migration.py build to check them as CI does"
+            "candidate adapters that read it, such as network_protocol, fail. Run "
+            "python3 tools/migration.py build to check them as CI does"
         )
         roles = ("candidate",)
     stale = str(BUILD / "generated-abi")
@@ -309,7 +344,9 @@ def check(base: str) -> int:
         (OUT / folder).mkdir()
     started = time.monotonic()
     harness = any(HARNESS.match(path) for path in paths)
-    listed = jobs(probes, roles, harness) if links else []
+    # A build older than the Rust declarations links against its old headers;
+    # the fresh ones must still compile, as preflight checked before #1072.
+    listed = jobs(probes, roles, harness, bool(abi)) if links else []
     with ThreadPoolExecutor(workers()) as pool:
         results = list(
             pool.map(
