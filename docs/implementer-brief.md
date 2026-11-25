@@ -19,7 +19,14 @@ A pass is ready for review when a reviewer would have nothing left on the [porti
 - Run the fixtures that call the pass's functions: the comparison probes and the ABI probe fixtures under `tools/migration/windows-abi/`. Preflight only compiles them, so only a run shows a fixture that relied on a service read the pass replaced. Your plan names them.
 - Write each test the plan's Evidence names. One you cannot build from the fixtures the pass's files have is a departure: record it in the PR body and put its gap on #156's list.
 - Add each file the pass finishes to `migration/finished-files.txt`.
-- Where the plan has a speed check, measure base and head at the commits the PR finally compares, and keep both Callgrind outputs until it merges. If a count rises, attribute the rise to functions from the two outputs before review and put the largest movers in the PR body: a count that only stays under the plan's bound is not explained. Reads repeated with no write, call or random draw between them may share one lookup ([fidelity](porting.md#fidelity)). Measure again after a review fix or base update that touches the measured path.
+
+### Speed check
+
+Where the plan has a speed check, count instructions at the base and the head ([ADR 0054](adr/0054-per-pass-counts-run-beside-review.md)):
+
+- Start the count as a background job when you mark the PR ready, and start the reviewers without waiting for it. Run only the plan's scenarios: `python3 tools/migration.py simulate SCENARIO... --instructions`. The line in [speed](speed.md) is the stocktake's, which runs all seven. A base already counted at the same commit, by you or in root's retained stocktake profile, needs no second count. The run exits 1 on the anchor identity check (#275); read each candidate's count from its report.
+- Keep both Callgrind outputs until the PR merges. If a count rises, attribute the rise to functions from the two outputs and put the largest movers in the PR body before merge: a count that only stays under the plan's bound is not explained. A rise worth removing is a finding for the fix round then running. Reads repeated with no write, call or random draw between them may share one lookup ([fidelity](porting.md#fidelity)).
+- Count again only at the final head, and only when a fix or base update since the last count touches the measured path. Start that count beside the final head's preflight, and enqueue once both pass. Do not wait on a count anywhere else.
 
 ## Messaging root
 
