@@ -1399,7 +1399,7 @@ class MergeQueueTests(unittest.TestCase):
                 draft,
                 expected,
             ) in itertools.product(
-                zip(conditions, names),
+                zip(conditions, names, strict=True),
                 (
                     ("pull_request", "", False, True),
                     # A draft's checkpoint runs no Quick; ready_for_review runs it (#920).
