@@ -263,10 +263,10 @@ pub struct Services {
     pub rail_type_cost_multiplier: extern "C" fn(*const crate::rail::RailTypeInfo) -> u16,
     /// `RailTypeInfo::curve_speed`.
     pub rail_type_curve_speed: extern "C" fn(*const crate::rail::RailTypeInfo) -> u8,
-    /// `GetRailTypeInfo`, retaining its assertion.
-    pub rail_type_info: extern "C" fn(RailType) -> *const crate::rail::RailTypeInfo,
     /// `RailTypeInfo::flags`.
     pub rail_type_flags: extern "C" fn(*const crate::rail::RailTypeInfo) -> u8,
+    /// `GetRailTypeInfo`, retaining its assertion.
+    pub rail_type_info: extern "C" fn(RailType) -> *const crate::rail::RailTypeInfo,
     /// `RailTypeInfo::introduces_railtypes`.
     pub rail_type_introduces_railtypes: extern "C" fn(*const crate::rail::RailTypeInfo) -> u64,
     /// `RailTypeInfo::introduction_date`.
