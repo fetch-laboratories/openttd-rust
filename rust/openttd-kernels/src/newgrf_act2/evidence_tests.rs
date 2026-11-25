@@ -145,13 +145,13 @@ extern "C" fn layout_new(_: u32) -> Handle {
         consistent_max_offset: 0,
     })))
 }
-extern "C" fn group_layout(group: Handle) -> *mut Layout {
+extern "C" fn group_layout(group: Handle) -> *mut NewGRFSpriteLayout {
     std::ptr::from_mut(layout_of(group)).cast()
 }
-extern "C" fn layout_allocate(layout: *mut Layout, count: u32) {
+extern "C" fn layout_allocate(layout: *mut NewGRFSpriteLayout, count: u32) {
     unsafe { (*layout.cast::<LayoutNode>()).sequence = count };
 }
-extern "C" fn layout_storage(layout: *mut Layout) -> LayoutStorage {
+extern "C" fn layout_storage(layout: *mut NewGRFSpriteLayout) -> LayoutStorage {
     let layout = layout.cast::<LayoutNode>();
     unsafe {
         LayoutStorage {
@@ -160,7 +160,7 @@ extern "C" fn layout_storage(layout: *mut Layout) -> LayoutStorage {
         }
     }
 }
-extern "C" fn pal_sprite_storage(image: *mut PalSprite) -> PalSpriteStorage {
+extern "C" fn pal_sprite_storage(image: *mut PalSpriteID) -> PalSpriteStorage {
     let image = image.cast::<u32>();
     PalSpriteStorage {
         sprite: image,

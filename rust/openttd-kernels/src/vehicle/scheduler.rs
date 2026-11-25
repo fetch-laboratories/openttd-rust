@@ -23,7 +23,7 @@ use super::{VehicleRef, VehicleServices};
 use crate::bitmath_func::{gb, gb_u8, has_bit};
 use crate::framerate_type::{PerformanceAccumulator, PerformanceElement, PerformanceMeasurer};
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
-use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16};
+use crate::newgrf_sound::VehicleSoundEvent;
 use crate::openttd::GameMode;
 use crate::pool::{PoolDescriptor, PoolId};
 use crate::services_assert::assert_with;
@@ -450,7 +450,12 @@ fn after_tick<const COUNTED: bool>(
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_RUNNING_SOUND);
         }
-        svc!(COUNTED, vs.play_vehicle_sound, v, VSE_RUNNING);
+        svc!(
+            COUNTED,
+            vs.play_vehicle_sound,
+            v,
+            VehicleSoundEvent::VSE_RUNNING
+        );
     }
 
     // Play an alternating running sound every 16 ticks
@@ -469,9 +474,9 @@ fn after_tick<const COUNTED: bool>(
             vs.play_vehicle_sound,
             v,
             if running {
-                VSE_RUNNING_16
+                VehicleSoundEvent::VSE_RUNNING_16
             } else {
-                VSE_STOPPED_16
+                VehicleSoundEvent::VSE_STOPPED_16
             }
         );
     }
@@ -773,10 +778,13 @@ mod tests {
         extern "C" fn sound(v: VehicleRef, event: VehicleSoundEvent) -> bool {
             observed(|o| {
                 assert_eq!(v.0.as_ptr(), o.part);
-                if event != VSE_RUNNING {
-                    assert!(event == VSE_RUNNING_16 || event == VSE_STOPPED_16);
+                if event != VehicleSoundEvent::VSE_RUNNING {
+                    assert!(
+                        event == VehicleSoundEvent::VSE_RUNNING_16
+                            || event == VehicleSoundEvent::VSE_STOPPED_16
+                    );
                     o.events.push("periodic-sound");
-                    o.running = Some(event == VSE_RUNNING_16);
+                    o.running = Some(event == VehicleSoundEvent::VSE_RUNNING_16);
                     return;
                 }
                 o.events.push("running-sound");

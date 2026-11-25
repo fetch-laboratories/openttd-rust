@@ -1476,10 +1476,12 @@ impl MovementServices {
                 if t.track() != TrackBits::TRACK_BIT_WORMHOLE && dir == vdir {
                     if v.is_front_engine() && frame == TUNNEL_SOUND_FRAME {
                         w::hit(w::MOVE_TRAIN_TUNNEL_SOUND);
-                        if !(self.vehicle().play_vehicle_sound)(v, crate::newgrf_sound::VSE_TUNNEL)
-                            && crate::engine_type::EngineClass(
-                                (self.vehicle().engine)(v).train_class(),
-                            ) == crate::engine_type::EngineClass::EC_STEAM
+                        if !(self.vehicle().play_vehicle_sound)(
+                            v,
+                            crate::newgrf_sound::VehicleSoundEvent::VSE_TUNNEL,
+                        ) && crate::engine_type::EngineClass(
+                            (self.vehicle().engine)(v).train_class(),
+                        ) == crate::engine_type::EngineClass::EC_STEAM
                         {
                             (self.vehicle().play_sound)(
                                 v,

@@ -749,7 +749,7 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
                 } else {
                     (s.cargo_type)(v)
                 };
-                state.root = crate::newgrf_commons::first_sprite_group_of(
+                state.root = crate::newgrf_commons::get_first_sprite_group_of(
                     [cargo, crate::newgrf_commons::SG_DEFAULT],
                     |cargo| crate::engine::bindings::sprite_group((s.engine_by_id)(id), cargo),
                 );

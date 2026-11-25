@@ -5,9 +5,6 @@ use crate::industry::tile::ShellHandle;
 use crate::industry_type::{IndustryGfx, IndustryID, IndustryType};
 use crate::tile_type::{TileIndex, TileType};
 
-/// Raw compatibility value for the water check marker.
-pub const GFX_WATERTILE_SPECIALCHECK: u16 = IndustryGraphics::GFX_WATERTILE_SPECIALCHECK.0 as u16;
-
 /// `GetIndustryIndex`: get the industry ID of the given tile, including its tile-type
 /// assertion policy.
 pub(crate) fn get_industry_index(

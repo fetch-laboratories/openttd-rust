@@ -19,7 +19,7 @@ use crate::debug::grf_msg;
 use crate::newgrf_act2::{self, Services as Action2Services};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
 use crate::newgrf_internal::ChangeInfoResult;
-use crate::newgrf_layout::{Layout, LayoutSequence, Sequence};
+use crate::newgrf_layout::{DrawTileSeqStruct, NewGRFSpriteLayout, Sequence};
 use crate::newgrf_loading::Services as LoadingServices;
 use crate::newgrf_roadstop::{RoadStopAvailabilityType, RoadStopClassID, RoadStopDrawModes};
 use crate::newgrf_station::{StationClassID, StationSpecFlags};
@@ -66,13 +66,13 @@ pub struct Services {
     station_render_clear: unsafe extern "C" fn(*mut RailSpec) -> (),
     station_render_reserve: unsafe extern "C" fn(*mut RailSpec, u16) -> (),
     station_render_size: unsafe extern "C" fn(*const RailSpec) -> usize,
-    station_render_append: unsafe extern "C" fn(*mut RailSpec) -> *mut Layout,
+    station_render_append: unsafe extern "C" fn(*mut RailSpec) -> *mut NewGRFSpriteLayout,
     station_render_pop: unsafe extern "C" fn(*mut RailSpec) -> (),
     station_render_copy_append: unsafe extern "C" fn(*mut RailSpec, *const RailSpec, usize) -> (),
     sequence_reset: unsafe extern "C" fn(*mut Sequence),
-    sequence_append: unsafe extern "C" fn(*mut Sequence) -> *mut LayoutSequence,
-    layout_sequence_move: unsafe extern "C" fn(*mut Layout, *mut Sequence),
-    layout_original: unsafe extern "C" fn(*mut Layout, u32) -> (),
+    sequence_append: unsafe extern "C" fn(*mut Sequence) -> *mut DrawTileSeqStruct,
+    layout_sequence_move: unsafe extern "C" fn(*mut NewGRFSpriteLayout, *mut Sequence),
+    layout_original: unsafe extern "C" fn(*mut NewGRFSpriteLayout, u32) -> (),
     station_custom_assign: unsafe extern "C" fn(*mut RailSpec, u16, *const u8, usize) -> (),
     station_custom_tile: unsafe extern "C" fn(*mut RailSpec, u16, usize, u8) -> (),
     station_custom_copy: unsafe extern "C" fn(*mut RailSpec, *const RailSpec) -> (),
@@ -666,7 +666,11 @@ pub(crate) unsafe fn station_map_default(
         grf_msg!(1, "MapSpriteGroup: {} mapped multiple times, skipping", id);
     } else {
         unsafe {
-            (s.station_set_group)(spec, crate::newgrf_commons::SG_DEFAULT, group);
+            (s.station_set_group)(
+                spec,
+                crate::newgrf_commons::CargoGRFFileProps::SG_DEFAULT.0,
+                group,
+            );
             (s.shared().specs().station().set_file)(spec, file);
             (s.shared().specs().station().set_local_id)(spec, id);
             crate::newgrf_class::station::assign(spec);
@@ -712,7 +716,11 @@ pub(crate) unsafe fn roadstop_map_default(
         grf_msg!(1, "MapSpriteGroup: {} mapped multiple times, skipping", id);
     } else {
         unsafe {
-            (s.road_set_group)(spec, crate::newgrf_commons::SG_DEFAULT, group);
+            (s.road_set_group)(
+                spec,
+                crate::newgrf_commons::CargoGRFFileProps::SG_DEFAULT.0,
+                group,
+            );
             (s.shared().specs().road_stop().set_file)(spec, file);
             (s.shared().specs().road_stop().set_local_id)(spec, id);
             crate::newgrf_class::roadstop::assign(spec);

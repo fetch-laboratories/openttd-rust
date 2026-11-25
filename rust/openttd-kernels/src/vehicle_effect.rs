@@ -35,7 +35,7 @@ use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CallbackID, VehicleCallbackMask, VehicleCallbackMasks,
 };
 use crate::newgrf_config::GRFBug;
-use crate::newgrf_sound::VSE_VISUAL_EFFECT;
+use crate::newgrf_sound::VehicleSoundEvent;
 use crate::newgrf_vehicle::{VehicleCallback, get_vehicle_callback, resolve_vehicle_callback};
 use crate::random_func::chance16;
 use crate::services::Services;
@@ -492,7 +492,7 @@ pub(crate) fn show_visual_effect(
     }
 
     if sound {
-        (vs.play_vehicle_sound)(this, VSE_VISUAL_EFFECT);
+        (vs.play_vehicle_sound)(this, VehicleSoundEvent::VSE_VISUAL_EFFECT);
     }
 }
 
