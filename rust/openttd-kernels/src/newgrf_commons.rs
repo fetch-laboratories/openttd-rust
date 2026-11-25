@@ -91,11 +91,11 @@ pub(crate) fn airport_tile_check_valid_new_id(testid: u16) -> bool {
 }
 
 /// `FixedGRFFileProps::GetFirstSpriteGroupOf` and `VariableGRFFileProps::GetFirstSpriteGroupOf`:
-/// get the first existing `SpriteGroup` from a list of options, or null if none exists. `get`
-/// is the props' `GetSpriteGroup`, called in the order of `indices`.
-pub(crate) fn get_first_sprite_group_of<const N: usize>(
-    indices: [u8; N],
-    mut get: impl FnMut(u8) -> *const c_void,
+/// get the first existing `SpriteGroup` from a list of options, or null if none exists. `Tkey`
+/// is the props' key type and `get` its `GetSpriteGroup`, called in the order of `indices`.
+pub(crate) fn get_first_sprite_group_of<Tkey: Copy, const N: usize>(
+    indices: [Tkey; N],
+    mut get: impl FnMut(Tkey) -> *const c_void,
 ) -> *const c_void {
     for key in indices {
         let result = get(key);

@@ -6,7 +6,7 @@
 //! Both lists are the original's file statics, process-wide; every access holds the
 //! game-state mutex. Borrows of the lists end before each native string or log service, none
 //! of which reenters this module.
-use crate::bitmath_func::{gb, has_bit};
+use crate::bitmath_func::{clr_bit8, gb, has_bit};
 use crate::control_codes::SCC_NEWGRF_PRINT_WORD_STRING_ID;
 use crate::debug::{Bytes, grf_msg};
 use crate::game_state::GameState;
@@ -337,14 +337,14 @@ pub(crate) unsafe fn feature_town_name(
 
         if has_bit(id, 7) {
             // Final definition
-            id &= 0x7F;
+            clr_bit8(&mut id, 7);
             let new_scheme = grffile.grf_version() >= 7;
 
             let mut lang = buf.byte()?;
             let mut style;
 
             loop {
-                lang &= 0x7F;
+                clr_bit8(&mut lang, 7);
 
                 let name = buf.string();
                 let name = crate::utf8::borrow(name.0, name.1);

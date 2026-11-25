@@ -142,11 +142,13 @@ pub(crate) mod tests {
         shared
     }
 
-    /// A file handle for a table whose multiplier reader never dereferences it.
-    #[allow(unsafe_code)] // A dangling record the stub readers never read.
+    /// The record the multiplier stubs stand for; they receive only its address.
+    static RECORD: u8 = 0;
+    /// The handle of `RECORD` over a table whose multiplier reader is a stub.
+    #[allow(unsafe_code)] // A live stand-in record the stub readers never read.
     fn stub_file(shared: &Services) -> GRFFileRef<'_> {
-        // SAFETY: No reader of `shared` dereferences the file.
-        unsafe { GRFFileRef::of(shared, std::ptr::NonNull::dangling().as_ptr()) }
+        // SAFETY: `RECORD` lives for the process, and no reader of `shared` dereferences it.
+        unsafe { GRFFileRef::of(shared, (&raw const RECORD).cast()) }
     }
 
     /// Store `_price[index]` and return its earlier value, under `GLOBAL_LOCK`.

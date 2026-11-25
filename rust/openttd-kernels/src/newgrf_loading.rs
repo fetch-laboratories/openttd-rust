@@ -141,7 +141,6 @@ pub struct Services {
     config_version: unsafe extern "C" fn(*const c_void) -> u32,
     /// `GRFConfig::filename`, live while the config is.
     config_filename: unsafe extern "C" fn(*const c_void) -> crate::services::ByteSpan,
-    /// `GRFConfig::palette`.
     param_count: unsafe extern "C" fn(*const c_void) -> usize,
     set_parameter: unsafe extern "C" fn(*mut c_void, u8, u32),
     file_for_config: unsafe extern "C" fn(*const c_void) -> *mut c_void,

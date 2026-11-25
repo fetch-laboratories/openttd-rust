@@ -541,10 +541,6 @@ pub struct Services {
     ) -> usize,
     /// `GRFFile::grf_version` of a non-null file.
     pub grf_file_version: extern "C" fn(*const c_void) -> u8,
-    /// `GRFFile::traininfo_vehicle_pitch` of a non-null file.
-    pub grf_file_traininfo_vehicle_pitch: extern "C" fn(*const c_void) -> i32,
-    /// `GRFFile::traininfo_vehicle_width` of a non-null file.
-    pub grf_file_traininfo_vehicle_width: extern "C" fn(*const c_void) -> u32,
     /// `RustGRFPriceShift`: the live file multiplier, including its null-file default.
     pub grf_price_shift: extern "C" fn(*const c_void, u32) -> i32,
     /// `GRFFile::cargo_map` entry of a non-null file.
@@ -557,6 +553,10 @@ pub struct Services {
     pub grf_file_id: extern "C" fn(*const c_void) -> u32,
     /// `GRFFile::filename` of a non-null file, live while the file is.
     pub grf_file_name: extern "C" fn(*const c_void) -> ByteSpan,
+    /// `GRFFile::traininfo_vehicle_pitch` of a non-null file.
+    pub grf_file_traininfo_vehicle_pitch: extern "C" fn(*const c_void) -> i32,
+    /// `GRFFile::traininfo_vehicle_width` of a non-null file.
+    pub grf_file_traininfo_vehicle_width: extern "C" fn(*const c_void) -> u32,
     /// Canonical native `GRFFile::GetParam` shared by loaders and resolvers.
     pub grf_parameter: extern "C" fn(*const c_void, u32) -> u32,
     /// `_rust_newgrf_specs`; read through `specs`.
@@ -907,14 +907,14 @@ crate::abi::layouts! {
         terrain_type,
         copyable_badges,
         grf_file_version,
-        grf_file_traininfo_vehicle_pitch,
-        grf_file_traininfo_vehicle_width,
         grf_price_shift,
         grf_cargo_map,
         grf_boolean_callback,
         grf_file_at_or_null,
         grf_file_id,
         grf_file_name,
+        grf_file_traininfo_vehicle_pitch,
+        grf_file_traininfo_vehicle_width,
         grf_parameter,
         newgrf_specs,
         resolver_grf_file,
@@ -1126,14 +1126,14 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         rail_type_powered_railtypes: unexpected_rail_type_info,
         command_post: unexpected_post,
         grf_file_version: unexpected_version,
-        grf_file_traininfo_vehicle_pitch: unexpected_pitch,
-        grf_file_traininfo_vehicle_width: unexpected_width,
         grf_price_shift: unexpected_price_shift,
         grf_cargo_map: unexpected_cargo_map,
         grf_boolean_callback: unexpected_boolean,
         grf_file_at_or_null: unexpected_file_at,
         grf_file_id: unexpected_file_id,
         grf_file_name: unexpected_file_name,
+        grf_file_traininfo_vehicle_pitch: unexpected_pitch,
+        grf_file_traininfo_vehicle_width: unexpected_width,
         grf_parameter: unexpected_parameter,
         newgrf_specs: std::ptr::null(),
         resolver_grf_file: unexpected_file,

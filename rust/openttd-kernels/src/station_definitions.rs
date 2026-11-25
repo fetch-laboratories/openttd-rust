@@ -90,7 +90,7 @@ pub struct Services {
     road_bridge_pillars: unsafe extern "C" fn(*mut RoadSpec, usize, u8) -> (),
 }
 impl Services {
-    fn shared(&self) -> &crate::services::Services {
+    pub(crate) fn shared(&self) -> &crate::services::Services {
         // SAFETY: `GetStationDefinitionServices` points at the process-lifetime shared table.
         unsafe { &*self.shared }
     }
@@ -648,7 +648,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_change_info_abi(
 /// `CargoTypeMapSpriteGroupHandler<GSF_STATIONS>::MapSpecific`.
 pub(crate) unsafe fn station_map_specific(
     s: *const Services,
-    file: *mut c_void,
+    grffile: GRFFileRef<'_>,
     id: u16,
     cid: u8,
     group: *const c_void,
@@ -658,12 +658,12 @@ pub(crate) unsafe fn station_map_specific(
     let cargo = CargoType(crate::newgrf_act3::translate_cargo(
         GrfSpecFeature::GSF_STATIONS.0,
         cid,
-        file,
+        grffile.as_ptr().cast_mut().cast(),
     ));
     if !crate::cargo_type::is_valid_cargo_type(cargo.0) {
         return;
     }
-    let spec = unsafe { (s.station_get)(file, u32::from(id)) };
+    let spec = unsafe { (s.station_get)(grffile.as_ptr().cast_mut().cast(), u32::from(id)) };
     if spec.is_null() {
         grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else {
@@ -675,12 +675,12 @@ pub(crate) unsafe fn station_map_specific(
 /// `CargoTypeMapSpriteGroupHandler<GSF_STATIONS>::MapDefault`.
 pub(crate) unsafe fn station_map_default(
     s: *const Services,
-    file: *mut c_void,
+    grffile: GRFFileRef<'_>,
     id: u16,
     group: *const c_void,
 ) {
     let s = unsafe { &*s };
-    let spec = unsafe { (s.station_get)(file, u32::from(id)) };
+    let spec = unsafe { (s.station_get)(grffile.as_ptr().cast_mut().cast(), u32::from(id)) };
     if spec.is_null() {
         grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else if (s.shared().specs().station().has_file)(spec) {
@@ -692,7 +692,7 @@ pub(crate) unsafe fn station_map_default(
                 crate::newgrf_commons::CargoGRFFileProps::SG_DEFAULT.0,
                 group,
             );
-            (s.shared().specs().station().set_file)(spec, file);
+            (s.shared().specs().station().set_file)(spec, grffile.as_ptr().cast_mut().cast());
             (s.shared().specs().station().set_local_id)(spec, id);
             crate::newgrf_class::station::assign(spec);
         }
@@ -702,7 +702,7 @@ pub(crate) unsafe fn station_map_default(
 /// `CargoTypeMapSpriteGroupHandler<GSF_ROADSTOPS>::MapSpecific`.
 pub(crate) unsafe fn roadstop_map_specific(
     s: *const Services,
-    file: *mut c_void,
+    grffile: GRFFileRef<'_>,
     id: u16,
     cid: u8,
     group: *const c_void,
@@ -712,12 +712,12 @@ pub(crate) unsafe fn roadstop_map_specific(
     let cargo = CargoType(crate::newgrf_act3::translate_cargo(
         GrfSpecFeature::GSF_STATIONS.0,
         cid,
-        file,
+        grffile.as_ptr().cast_mut().cast(),
     ));
     if !crate::cargo_type::is_valid_cargo_type(cargo.0) {
         return;
     }
-    let spec = unsafe { (s.road_get)(file, u32::from(id)) };
+    let spec = unsafe { (s.road_get)(grffile.as_ptr().cast_mut().cast(), u32::from(id)) };
     if spec.is_null() {
         grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else {
@@ -729,12 +729,12 @@ pub(crate) unsafe fn roadstop_map_specific(
 /// `CargoTypeMapSpriteGroupHandler<GSF_ROADSTOPS>::MapDefault`.
 pub(crate) unsafe fn roadstop_map_default(
     s: *const Services,
-    file: *mut c_void,
+    grffile: GRFFileRef<'_>,
     id: u16,
     group: *const c_void,
 ) {
     let s = unsafe { &*s };
-    let spec = unsafe { (s.road_get)(file, u32::from(id)) };
+    let spec = unsafe { (s.road_get)(grffile.as_ptr().cast_mut().cast(), u32::from(id)) };
     if spec.is_null() {
         grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else if (s.shared().specs().road_stop().has_file)(spec) {
@@ -746,7 +746,7 @@ pub(crate) unsafe fn roadstop_map_default(
                 crate::newgrf_commons::CargoGRFFileProps::SG_DEFAULT.0,
                 group,
             );
-            (s.shared().specs().road_stop().set_file)(spec, file);
+            (s.shared().specs().road_stop().set_file)(spec, grffile.as_ptr().cast_mut().cast());
             (s.shared().specs().road_stop().set_local_id)(spec, id);
             crate::newgrf_class::roadstop::assign(spec);
         }

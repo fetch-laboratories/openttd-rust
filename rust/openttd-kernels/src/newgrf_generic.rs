@@ -14,11 +14,13 @@ use crate::game_state::GameState;
 use crate::industry_type::IndustryType;
 use crate::industrytype::get_industry_spec;
 use crate::map_func::World;
+use crate::math::clamp;
 use crate::newgrf::{GRFFile, GRFFileRef, GrfSpecFeature};
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
-use crate::newgrf_spritegroup::VSG_SCOPE_SELF;
+use crate::newgrf_spritegroup::VarSpriteGroupScope;
 use crate::random_func::chance16r;
 use crate::services::Services as Shared;
+use crate::services_assert::native_check;
 use crate::tile_type::{TileIndex, TileType};
 use std::ffi::c_void;
 use std::ptr;
@@ -135,10 +137,10 @@ impl GenericResolverObject {
     pub(crate) fn get_scope(
         generic_scope: *mut c_void,
         default_scope: *mut c_void,
-        scope: u8,
+        scope: VarSpriteGroupScope,
     ) -> *mut c_void {
         match scope {
-            VSG_SCOPE_SELF => generic_scope,
+            VarSpriteGroupScope::VSG_SCOPE_SELF => generic_scope,
             _ => default_scope,
         }
     }
@@ -354,7 +356,7 @@ pub extern "C" fn openttd_rust_generic_scope(
     default_scope: *mut c_void,
     scope: u8,
 ) -> *mut c_void {
-    GenericResolverObject::get_scope(generic_scope, default_scope, scope)
+    GenericResolverObject::get_scope(generic_scope, default_scope, VarSpriteGroupScope(scope))
 }
 
 /// `ResolverObject::ResolveCallback` of the native frame `callback_frame` built for `object`.
@@ -512,8 +514,9 @@ pub extern "C" fn openttd_rust_generic_ai(
 /// sound effect should be generated for.
 #[inline(never)]
 #[allow(
+    clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    reason = "GetTileZ's int, shifted into the uint32_t param1_v8 (newgrf_generic.cpp)"
+    reason = "Clamp's int overload over TileHeight's uint, and GetTileZ's int, shifted into the uint32_t param1_v7 and param1_v8 (newgrf_generic.cpp)"
 )]
 fn ambient_sound_effect_callback(tile: TileIndex) {
     let s = services();
@@ -537,7 +540,13 @@ fn ambient_sound_effect_callback(tile: TileIndex) {
 
     let tile_type = || u32::from(map.asserted(|m| crate::tile_map::get_tile_type(m, tile)).0);
     let param1_v7 = tile_type() << 28
-        | crate::tile_map::tile_height_in(&map, tile).clamp(0, 15) << 24
+        | (clamp(
+            crate::tile_map::tile_height_in(&map, tile) as i32,
+            0,
+            15,
+            native_check,
+        ) as u32)
+            << 24
         | gb(r, 16, 8) << 16
         | (shared.terrain_type)(tile.0);
     let param1_v8 = tile_type() << 24

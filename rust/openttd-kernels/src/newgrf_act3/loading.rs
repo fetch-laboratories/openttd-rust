@@ -263,22 +263,26 @@ unsafe fn map_binding(
                 group,
             ),
             GSF_STATIONS => {
+                let grffile = crate::newgrf::GRFFileRef::of((*s.stations).shared(), file.cast());
                 if let Some(cargo) = cargo {
                     crate::station_definitions::station_map_specific(
-                        s.stations, file, local, cargo, group,
+                        s.stations, grffile, local, cargo, group,
                     );
                 } else {
-                    crate::station_definitions::station_map_default(s.stations, file, local, group);
+                    crate::station_definitions::station_map_default(
+                        s.stations, grffile, local, group,
+                    );
                 }
             }
             GSF_ROADSTOPS => {
+                let grffile = crate::newgrf::GRFFileRef::of((*s.stations).shared(), file.cast());
                 if let Some(cargo) = cargo {
                     crate::station_definitions::roadstop_map_specific(
-                        s.stations, file, local, cargo, group,
+                        s.stations, grffile, local, cargo, group,
                     );
                 } else {
                     crate::station_definitions::roadstop_map_default(
-                        s.stations, file, local, group,
+                        s.stations, grffile, local, group,
                     );
                 }
             }

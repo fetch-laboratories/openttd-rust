@@ -111,29 +111,75 @@ pub(crate) struct AddGRFString<'a> {
     pub(crate) def_string: StringID,
 }
 
+/// `GRFBaseLanguages`: explains the newgrf shift bit positioning. The grf base will not be
+/// used in order to find the string, but rather for jumping from standard langID scheme to the
+/// new one.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct GRFBaseLanguages(u8);
+impl GRFBaseLanguages {
+    const GRFLB_AMERICAN: Self = Self(0x01);
+    const GRFLB_ENGLISH: Self = Self(0x02);
+    const GRFLB_GERMAN: Self = Self(0x04);
+    const GRFLB_FRENCH: Self = Self(0x08);
+    const GRFLB_SPANISH: Self = Self(0x10);
+}
+
+/// `GRFExtendedLanguages`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct GRFExtendedLanguages(u8);
+impl GRFExtendedLanguages {
+    const GRFLX_ENGLISH: Self = Self(0x01);
+    const GRFLX_GERMAN: Self = Self(0x02);
+    const GRFLX_FRENCH: Self = Self(0x03);
+    const GRFLX_SPANISH: Self = Self(0x04);
+}
+
 /// `AddGRFString`.
 pub(crate) fn add_grf_string(s: &Services, args: &AddGRFString<'_>) -> StringID {
-    let mut language = args.langid_to_add;
+    let mut langid_to_add = args.langid_to_add;
+    // When working with the old language scheme (grf_version is less than 7) and
+    // English or American is among the set bits, simply add it as English in
+    // the new scheme, i.e. as langid = 1.
+    // If English is set, it is pretty safe to assume the translations are not
+    // actually translated.
     if !args.new_scheme {
-        if language & 3 != 0 {
-            language = 1;
+        if langid_to_add & (GRFBaseLanguages::GRFLB_AMERICAN.0 | GRFBaseLanguages::GRFLB_ENGLISH.0)
+            != 0
+        {
+            langid_to_add = GRFExtendedLanguages::GRFLX_ENGLISH.0;
         } else {
-            let mut result = STR_EMPTY;
-            for (mask, language_id) in [(4, 2), (8, 3), (16, 4)] {
-                if language & mask != 0 {
-                    result = add_grf_string(
+            let mut ret = STR_EMPTY;
+            for (base, extended) in [
+                (
+                    GRFBaseLanguages::GRFLB_GERMAN,
+                    GRFExtendedLanguages::GRFLX_GERMAN,
+                ),
+                (
+                    GRFBaseLanguages::GRFLB_FRENCH,
+                    GRFExtendedLanguages::GRFLX_FRENCH,
+                ),
+                (
+                    GRFBaseLanguages::GRFLB_SPANISH,
+                    GRFExtendedLanguages::GRFLX_SPANISH,
+                ),
+            ] {
+                if langid_to_add & base.0 != 0 {
+                    ret = add_grf_string(
                         s,
                         &AddGRFString {
-                            langid_to_add: language_id,
+                            langid_to_add: extended.0,
                             new_scheme: true,
                             ..*args
                         },
                     );
                 }
             }
-            return result;
+            return ret;
         }
     }
+    let language = langid_to_add;
     let (grfid, stringid) = (args.grfid, args.stringid.0);
     let index = unsafe { prepare(grfid, stringid, args.def_string.0) };
     if index == usize::MAX {
@@ -196,9 +242,12 @@ unsafe fn prepare(grfid: u32, stringid: u32, default: u32) -> usize {
     {
         return index;
     }
+    // Too many strings allocated, return empty.
     if texts.len() == TAB_SIZE_NEWGRF {
         return usize::MAX;
     }
+
+    // We didn't find our stringid and grfid in the list, allocate a new id.
     let index = texts.len();
     texts.push(Entry {
         grfid,

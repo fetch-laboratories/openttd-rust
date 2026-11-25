@@ -627,8 +627,7 @@ fn place_tree_at_same_height(c: &Trees, w: &World, tile: TileIndex, height: i32)
 /// abort.
 pub(crate) fn place_trees_randomly(c: &Trees) -> bool {
     let s = c.s;
-    // SAFETY: The module's settings contract.
-    let max_height: u8 = unsafe { s.settings().height_limit.read() };
+    let max_height: u8 = s.settings().map_height_limit();
 
     let w = World::new(s);
     let mut i = w

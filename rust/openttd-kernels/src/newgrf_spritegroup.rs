@@ -22,7 +22,15 @@ use crate::newgrf_storage::{
 };
 use std::ffi::c_void;
 use std::ptr;
-pub const VSG_SCOPE_SELF: u8 = 0;
+/// `VarSpriteGroupScope`, shared by deterministic and random groups.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VarSpriteGroupScope(pub u8);
+impl VarSpriteGroupScope {
+    /// Resolved object itself
+    pub const VSG_SCOPE_SELF: Self = Self(0);
+}
+pub const VSG_SCOPE_SELF: u8 = VarSpriteGroupScope::VSG_SCOPE_SELF.0;
 pub const VSG_SCOPE_PARENT: u8 = 1;
 pub const VSG_SCOPE_RELATIVE: u8 = 2;
 // Header enum values stay byte carriers: unnamed adjustment operations retain
@@ -305,7 +313,7 @@ impl<'a> Invocation<'a> {
                 11 => crate::newgrf_generic::GenericResolverObject::get_scope(
                     b.own,
                     b.default_scope,
-                    kind,
+                    VarSpriteGroupScope(kind),
                 ),
                 12 => crate::objects::openttd_rust_object_scope(
                     b.state.cast(),

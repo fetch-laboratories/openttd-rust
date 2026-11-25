@@ -2369,8 +2369,7 @@ impl<'a> Ctx<'a> {
 
                 /* Converting to the same type or converting 'hidden' elrail -> rail */
                 if r#type == totype
-                    // SAFETY: the setting address names a live native setting.
-                    || (unsafe { self.shared.settings().disable_elrails.read() }
+                    || (self.shared.settings().disable_elrails()
                         && totype == RailType::RAILTYPE_RAIL
                         && r#type == RailType::RAILTYPE_ELECTRIC)
                 {

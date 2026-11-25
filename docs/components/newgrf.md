@@ -107,3 +107,10 @@
 - C++ keeps: Formatting-time text-stack/control-code processing (phase 4), GRFConfig text lists and native string tails, legacy TTD string mapping, language-map payloads, engine binding operations and storage (#637), ObjectSpec payloads (#638), and other spec payloads accessed through the shared spec table and named binding operations.
 - Limits: #156 tracks remaining malformed-choice/control combinations, table and engine-pool exhaustion, historical saves, rendering, external GRFs and GUI/network scheduling. Text views retain the original invalidation rules.
 - PRs: #655.
+
+## NewGRF vocabulary, global variables, generic callbacks and town names (#1062 part 1)
+
+- Rust owns: `newgrf.h`, `newgrf_callbacks.h`, `newgrf_commons.h`, `newgrf_config.h`, `newgrf_engine.h` and `newgrf_sound.h` vocabulary as wrappers; `GetGlobalVariable`, `HasGrfMiscBit` and `GetActiveCargoLabel`; the generic callback registry `_gcl` and every `newgrf_generic.cpp` body; the town-name lists `_grf_townnames` and `_grf_townname_names`, every `newgrf_townname.cpp` body and Action 0F. `newgrf::GRFFileRef` is the handle through which Rust reads a C++-stored `GRFFile`'s members, over the shared table's member readers.
+- C++ keeps: `GRFFile` and `GRFConfig` storage and their member readers (#669), `PlayTileSound` (#669), the generic resolver's native frame (#1064), `CargoSpec::bitnum` (#1057) and the facades `AddGenericCallback`, `GetAiPurchaseCallbackResult`, `GRFTownNameGenerate` and `GetGRFTownNameList` for C++ callers.
+- Limits: #156 tracks Action D's target `0x9E` and `GetActiveCargoLabel`'s `NOT_REACHED` arm, which no scenario reaches. The other files' `GRFFile` member slots move to the handle in this workset's later parts and those files' passes (#734).
+- PRs: #1080.

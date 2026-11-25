@@ -9,11 +9,13 @@ use crate::bitmath_func::{gb, sb};
 use crate::cargo_registry::get_cargo_type_by_label;
 use crate::cargo_type::{CargoLabel, CargoType, MixedCargoType};
 use crate::landscape_type::LandscapeType;
+use crate::math::clamp;
 use crate::newgrf_config::GRFPalette;
 use crate::newgrf_engine::VEHICLEINFO_FULL_VEHICLE_WIDTH;
 use crate::rail::get_rail_type_info;
 use crate::rail_type::RailType;
 use crate::services::Services as Shared;
+use crate::services_assert::native_check;
 use crate::settings_type::SP_CUSTOM;
 use crate::tile_type::TILE_HEIGHT;
 use crate::timer_game_common::{
@@ -305,8 +307,9 @@ pub(crate) fn has_grf_misc_bit(s: &Services, bit: GrfMiscBit) -> bool {
 /// dereference `grffile`, as the original does.
 #[allow(
     clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    reason = "the uint32_t stores and GB(TimerGameTick::counter, 0, 16) of GetGlobalVariable (newgrf/newgrf_act0_globalvar.cpp)"
+    reason = "Clamp's int overload over a uint product, the uint32_t stores and GB(TimerGameTick::counter, 0, 16) of GetGlobalVariable (newgrf/newgrf_act0_globalvar.cpp)"
 )]
 pub(crate) fn get_global_variable(
     s: &Services,
@@ -325,10 +328,12 @@ pub(crate) fn get_global_variable(
 
         // current year
         0x01 => {
-            (calendar_year()
-                .0
-                .clamp(ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR)
-                - ORIGINAL_BASE_YEAR) as u32
+            (clamp(
+                calendar_year().0,
+                ORIGINAL_BASE_YEAR,
+                ORIGINAL_MAX_YEAR,
+                native_check,
+            ) - ORIGINAL_BASE_YEAR) as u32
         }
 
         // detailed date information: month of year (bit 0-7), day of month (bit 8-12), leap year (bit 15), day of year (bit 16-24)
@@ -439,13 +444,14 @@ pub(crate) fn get_global_variable(
             if shared.settings().landscape() == LandscapeType::Arctic
                 && snowline <= shared.settings().map_height_limit()
             {
-                (u32::from(snowline)
+                let height = u32::from(snowline)
                     * if file().grf_version() >= 8 {
                         1
                     } else {
                         TILE_HEIGHT
-                    })
-                .clamp(0, 0xFE)
+                    };
+                // `Clamp`'s `int` overload takes the `uint` product.
+                clamp(height as i32, 0, 0xFE, native_check) as u32
             } else {
                 // No snow
                 0xFF
@@ -656,7 +662,7 @@ mod tests {
     /// `newgrf/newgrf_act0_globalvar.cpp`'s variable `0x1E` asserts that the stored bits lack
     /// `TrainWidth32Pixels` and then sets it only for a file of the full width, 32.
     #[test]
-    #[allow(unsafe_code)] // A dangling file record that only the width stub receives.
+    #[allow(unsafe_code)] // A live stand-in record that only the width stub receives.
     fn misc_grf_features_assert_the_local_bit_and_add_the_file_width() {
         if crate::services_assert::isolate_test_check(
             "newgrf::tests::misc_grf_features_assert_the_local_bit_and_add_the_file_width",
@@ -669,8 +675,11 @@ mod tests {
         let mut global = TEST_TABLE;
         global.misc_grf_features = misc_grf_features;
         global.shared = &raw const shared;
-        // SAFETY: Only the width stub receives the record, and it does not read it.
-        let file = unsafe { GRFFileRef::of(&shared, std::ptr::NonNull::dangling().as_ptr()) };
+        // The record the installed stubs stand for: only the width stub receives its address.
+        let record = 0_u8;
+        // SAFETY: `record` is live for the test, and no reader of `shared` but the width stub
+        // receives it, which does not read it.
+        let file = unsafe { GRFFileRef::of(&shared, (&raw const record).cast()) };
         let local = GrfMiscBits(1 << GrfMiscBit::TrainWidth32Pixels.0).0;
         let ambient = GrfMiscBits(1 << GrfMiscBit::AmbientSoundCallback.0).0;
 
