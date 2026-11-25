@@ -25,6 +25,7 @@ use crate::house::{
 };
 use crate::house_type::HouseID;
 use crate::landscape_type::LandscapeType;
+use crate::newgrf::GRFFileRef;
 use crate::newgrf_animation_type::AnimationStatus;
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
 use crate::newgrf_callbacks::HouseCallbackMasks;
@@ -115,6 +116,13 @@ pub struct Services {
     set_minimum_life: extern "C" fn(Spec, u8),
     set_watched: extern "C" fn(Spec, u64),
 }
+impl Services {
+    /// The shared table.
+    fn shared(&self) -> &crate::services::Services {
+        // SAFETY: The resolver table and its shared table are process-lifetime.
+        unsafe { (*self.resolver).shared() }
+    }
+}
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDHouseDefinitionIdentity" ["house_definition"] => Identity { grfid, local, substitute };
@@ -160,7 +168,7 @@ fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<ChangeInfoResul
 fn property(
     s: &Services,
     loading: &newgrf_loading::Services,
-    file: File,
+    grffile: GRFFileRef<'_>,
     first: u32,
     last: u32,
     prop: i32,
@@ -179,12 +187,12 @@ fn property(
         return Ok(ChangeInfoResult::CIR_DISABLED);
     }
     // Allocate house specs if they have not been allocated already.
-    if (s.local_count)(file) < last as usize {
-        (s.resize_local)(file, last as usize);
+    if (s.local_count)(grffile.as_ptr().cast_mut().cast()) < last as usize {
+        (s.resize_local)(grffile.as_ptr().cast_mut().cast(), last as usize);
     }
     let mut result = ChangeInfoResult::CIR_SUCCESS;
     for id in first..last {
-        let spec = (s.local)(file, id as usize);
+        let spec = (s.local)(grffile.as_ptr().cast_mut().cast(), id as usize);
         if prop != 0x08 && spec.is_null() {
             // If property 08 is not yet set, ignore this property.
             result = result.max(ignore_property(prop, reader)?);
@@ -216,9 +224,18 @@ fn property(
                     // Only the first property 08 setting copies properties; later changes
                     // leave the properties in place.
                     let source = (s.get)(u16::from(substitute));
-                    let spec = (s.copy_substitute)(file, id as HouseID, source);
+                    let spec = (s.copy_substitute)(
+                        grffile.as_ptr().cast_mut().cast(),
+                        id as HouseID,
+                        source,
+                    );
                     (s.set_enabled)(spec, true);
-                    (s.set_identity)(spec, file, id as HouseID, HouseID::from(substitute));
+                    (s.set_identity)(
+                        spec,
+                        grffile.as_ptr().cast_mut().cast(),
+                        id as HouseID,
+                        HouseID::from(substitute),
+                    );
                     // Default randomization colours, used if not overridden.
                     for (index, colour) in [COLOUR_RED, COLOUR_BLUE, COLOUR_ORANGE, COLOUR_GREEN]
                         .into_iter()
@@ -327,7 +344,7 @@ fn property(
                     override_manager::openttd_rust_override_add(
                         override_manager::house(),
                         id as HouseID,
-                        ((*s.resolver).shared().grf_file_id)(file),
+                        grffile.grfid(),
                         u32::from(target),
                     );
                 }
@@ -361,10 +378,8 @@ fn property(
             0x1b => (s.set_animation_speed)(spec, reader.byte()?.clamp(2, 16)),
             // Class of the building type.
             0x1c => {
-                let class = crate::town::resolver::allocate_house_class_id(
-                    reader.byte()?,
-                    (unsafe { &*s.resolver }.shared().grf_file_id)(file),
-                );
+                let class =
+                    crate::town::resolver::allocate_house_class_id(reader.byte()?, grffile.grfid());
                 (s.set_class_id)(spec, class);
             }
             // Callback mask part 2.
@@ -382,8 +397,12 @@ fn property(
                 }
                 for index in 0..HOUSE_ORIGINAL_NUM_ACCEPTS {
                     // Get the cargo number from the list.
-                    let cargo =
-                        get_cargo_translation(gb(cargos, 8 * index, 8) as u8, file, false).0;
+                    let cargo = get_cargo_translation(
+                        gb(cargos, 8 * index, 8) as u8,
+                        grffile.as_ptr().cast(),
+                        false,
+                    )
+                    .0;
                     if is_valid_cargo_type(cargo) {
                         (s.set_cargo)(spec, index, cargo);
                     } else {
@@ -399,7 +418,8 @@ fn property(
             0x20 => {
                 let count = reader.byte()?;
                 for _ in 0..count {
-                    let cargo = get_cargo_translation(reader.byte()?, file, false).0;
+                    let cargo =
+                        get_cargo_translation(reader.byte()?, grffile.as_ptr().cast(), false).0;
                     if is_valid_cargo_type(cargo) {
                         (s.set_watched)(spec, set_bit64(&mut (s.watched)(spec), cargo));
                     }
@@ -435,7 +455,7 @@ fn property(
                         (s.set_cargo)(
                             spec,
                             index,
-                            get_cargo_translation(reader.byte()?, file, false).0,
+                            get_cargo_translation(reader.byte()?, grffile.as_ptr().cast(), false).0,
                         );
                         (s.set_acceptance)(spec, index, reader.byte()?);
                     } else {
@@ -449,7 +469,10 @@ fn property(
             }
             // Badge list.
             0x24 => unsafe {
-                reader.badges(crate::newgrf::GSF_HOUSES, (s.badges)(spec))?;
+                reader.badges(
+                    crate::newgrf::GrfSpecFeature::GSF_HOUSES.0,
+                    (s.badges)(spec),
+                )?;
             },
             _ => result = ChangeInfoResult::CIR_UNKNOWN,
         }
@@ -468,10 +491,12 @@ pub unsafe extern "C" fn openttd_rust_house_definition_property(
     native: *mut ByteReader,
 ) -> u8 {
     let mut reader = unsafe { Reader::new(native, &*reads) };
+    let s = unsafe { &*s };
     property(
-        unsafe { &*s },
+        s,
         unsafe { &*loading },
-        file,
+        // SAFETY: The loader's current file.
+        unsafe { GRFFileRef::of(s.shared(), file.cast()) },
         first,
         last,
         prop,
@@ -481,7 +506,7 @@ pub unsafe extern "C" fn openttd_rust_house_definition_property(
 }
 
 /// Check a house spec and disable it when invalid; following specs validate multitile houses.
-fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
+fn valid(s: &Services, spec: Spec, next: [Spec; 3], grffile: Option<GRFFileRef<'_>>) -> bool {
     let info = (s.validity)(spec);
     let flags = BuildingFlags(info.flags);
     let two = flags.any(BuildingFlags::BUILDING_HAS_2_TILES);
@@ -502,11 +527,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
         })
     };
     // The original passes an empty name for files without one, and reports only nonempty names.
-    let filename = if file.is_null() {
-        &[][..]
-    } else {
-        unsafe { ((*s.resolver).shared().grf_file_name)(file.cast()).bytes() }
-    };
+    let filename = grffile.as_ref().map_or(&[][..], GRFFileRef::filename);
     let report = !filename.is_empty();
     if (two && missing(&next1)) || (four && (missing(&next2) || missing(&next3))) {
         (s.set_enabled)(spec, false);
@@ -676,7 +697,10 @@ pub fn finalise(s: &Services) {
                     std::ptr::null()
                 }
             });
-            if !valid(s, spec, next, file) {
+            // SAFETY: A loaded file, live until the loader's next reset.
+            if !valid(s, spec, next, unsafe {
+                GRFFileRef::new(s.shared(), file.cast())
+            }) {
                 continue;
             }
             publish(s, spec);
@@ -696,7 +720,7 @@ pub fn finalise(s: &Services) {
         });
         // Recheck all houses to ensure multitile parts have consecutive IDs and none
         // are missing.
-        if !valid(s, spec, next, std::ptr::null_mut()) {
+        if !valid(s, spec, next, None) {
             // GetHouseNorthPart checks the three preceding houses for multitile flags.
             // Disabled invalid houses must not influence valid following tiles: clear
             // their flags so the following house is handled correctly as a 1x1 house.

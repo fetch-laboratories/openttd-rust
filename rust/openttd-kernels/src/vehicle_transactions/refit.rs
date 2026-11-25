@@ -129,8 +129,14 @@ unsafe fn get_refit_cost_factor(
     /* Is this vehicle a NewGRF vehicle? */
     if !crate::vehicle::EngineRef::of(e).grf().is_null() {
         let classes = (s.capabilities.cargo_classes)(cargo);
-        let local =
-            (s.common.base.shared.grf_cargo_map)(crate::vehicle::EngineRef::of(e).grf(), cargo);
+        // SAFETY: An engine's file is live until the loader's next reset.
+        let grffile = unsafe {
+            crate::newgrf::GRFFileRef::of(
+                &s.common.base.shared,
+                crate::vehicle::EngineRef::of(e).grf().cast(),
+            )
+        };
+        let local = grffile.cargo_map(crate::cargo_type::CargoType(cargo));
         let param = (u32::from(classes) << 16) | (u32::from(subtype) << 8) | u32::from(local);
         let result = unsafe {
             crate::newgrf_vehicle::callback(
@@ -201,7 +207,13 @@ pub(super) unsafe fn get_refit_cost(
         s.capabilities.shared,
         price,
         factor.unsigned_abs(),
-        crate::vehicle::EngineRef::of(e).grf(),
+        // SAFETY: An engine's file is live until the loader's next reset.
+        unsafe {
+            crate::newgrf::GRFFileRef::new(
+                s.capabilities.shared,
+                crate::vehicle::EngineRef::of(e).grf().cast(),
+            )
+        },
         -10,
     );
     (s.common.base.cost.expense_money)(

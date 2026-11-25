@@ -14,6 +14,7 @@ use crate::industrytype::{
     IndustryBehaviour, get_industry_spec, get_industry_tile_spec, spec_behaviour,
     spec_callback_mask,
 };
+use crate::newgrf::GRFFileRef;
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CallbackID, IndustryCallbackMask, IndustryCallbackMasks,
 };
@@ -86,6 +87,11 @@ pub struct ResolverServices {
 impl ResolverServices {
     fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
+    }
+    /// `ro.grffile`, the file of a resolver the original dereferences.
+    fn resolver_grffile(&self, ro: *const c_void) -> GRFFileRef<'_> {
+        // SAFETY: A resolver's file is live while it resolves.
+        unsafe { GRFFileRef::of(self.shared(), (self.shared().resolver_grf_file)(ro).cast()) }
     }
     pub(crate) fn lifecycle(&self) -> &LifecycleServices {
         unsafe { &*self.lifecycle }
@@ -450,7 +456,7 @@ fn industries_get_variable(
             // Lowest height of the tile
             0x8A => {
                 return (s.shared().tile_z)(c.tile().0)
-                    .wrapping_mul(if (s.shared().resolver_grf_version)(ro) >= 8 {
+                    .wrapping_mul(if s.resolver_grffile(ro).grf_version() >= 8 {
                         1
                     } else {
                         TILE_HEIGHT as i32
@@ -530,7 +536,7 @@ fn industries_get_variable(
         0x60 => get_industry_id_at_offset(
             s.get_nearby_tile(parameter as u8, location_tile(i), false),
             c.index(),
-            (s.shared().resolver_grf_file_id)(ro),
+            s.resolver_grffile(ro).grfid(),
             s,
         ),
         // Get random tile bits at offset param
@@ -548,7 +554,7 @@ fn industries_get_variable(
             c.tile(),
             IndustryID::INVALID,
             false,
-            (s.shared().resolver_grf_version)(ro) >= 8,
+            s.resolver_grffile(ro).grf_version() >= 8,
             s,
         ),
         // Animation stage of nearby tiles
@@ -614,8 +620,11 @@ fn industries_get_variable(
             )
         }
         0x69..=0x6D | 0x70 | 0x71 => {
-            let cargo: CargoType =
-                get_cargo_translation(parameter as u8, (s.shared().resolver_grf_file)(ro), false);
+            let cargo: CargoType = get_cargo_translation(
+                parameter as u8,
+                s.resolver_grffile(ro).as_ptr().cast(),
+                false,
+            );
             let Some(it) = (unsafe { super::get_cargo_produced(i, cargo) }) else {
                 return 0; // invalid cargo
             };
@@ -631,8 +640,11 @@ fn industries_get_variable(
             }
         }
         0x6E | 0x6F => {
-            let cargo: CargoType =
-                get_cargo_translation(parameter as u8, (s.shared().resolver_grf_file)(ro), false);
+            let cargo: CargoType = get_cargo_translation(
+                parameter as u8,
+                s.resolver_grffile(ro).as_ptr().cast(),
+                false,
+            );
             let Some(it) = (unsafe { super::get_cargo_accepted(i, cargo) }) else {
                 return 0; // invalid cargo
             };
@@ -805,7 +817,7 @@ fn industry_tile_get_variable(
             c.tile(),
             c.index(),
             true,
-            (s.shared().resolver_grf_version)(ro) >= 8,
+            s.resolver_grffile(ro).grf_version() >= 8,
             s,
         ),
         // Animation stage of nearby tiles
@@ -823,7 +835,7 @@ fn industry_tile_get_variable(
         0x62 => get_industry_id_at_offset(
             s.get_nearby_tile(parameter as u8, c.tile(), true),
             c.index(),
-            (s.shared().resolver_grf_file_id)(ro),
+            s.resolver_grffile(ro).grfid(),
             s,
         ),
         0x7A => {
@@ -1082,7 +1094,11 @@ pub(crate) fn get_industry_probability_callback(
             )
         };
         if res != CALLBACK_FAILED {
-            if (s.shared().grf_file_version)(unsafe { (*indspec).grf_prop.grffile }) < 8 {
+            // SAFETY: A spec's file is live until the loader's next reset.
+            if unsafe { GRFFileRef::of(s.shared(), (*indspec).grf_prop.grffile.cast()) }
+                .grf_version()
+                < 8
+            {
                 // Disallow if result != 0
                 if res != 0 {
                     default_prob = 0;
@@ -1141,8 +1157,9 @@ pub(crate) unsafe fn industry_temporarily_refuses_cargo(
     let kind = IndustryType(unsafe { (*owner).metadata.kind });
     let indspec = get_industry_spec(kind);
     if spec_callback_mask(indspec).test(IndustryCallbackMask::RefuseCargo) {
-        let file = unsafe { (*indspec).grf_prop.grffile };
-        let parameter = (s.shared().grf_cargo_map)(file, cargo_type.0);
+        // SAFETY: A spec's file is live until the loader's next reset.
+        let grffile = unsafe { GRFFileRef::of(s.shared(), (*indspec).grf_prop.grffile.cast()) };
+        let parameter = grffile.cargo_map(cargo_type);
         let tile = location_tile(owner);
         let res = unsafe {
             (s.callback)(
@@ -1156,7 +1173,7 @@ pub(crate) unsafe fn industry_temporarily_refuses_cargo(
         };
         if res != CALLBACK_FAILED {
             return !(s.shared().grf_boolean_callback)(
-                file,
+                grffile.as_ptr().cast(),
                 CallbackID::CBID_INDUSTRY_REFUSE_CARGO.0,
                 res,
             );

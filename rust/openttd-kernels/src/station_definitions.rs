@@ -16,6 +16,7 @@
 use crate::bitmath_func::has_bit;
 use crate::cargo_type::{CargoType, CargoTypes};
 use crate::debug::grf_msg;
+use crate::newgrf::{GRFFileRef, GrfSpecFeature};
 use crate::newgrf_act2::{self, Services as Action2Services};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
 use crate::newgrf_internal::ChangeInfoResult;
@@ -28,8 +29,6 @@ use std::ffi::c_void;
 /// `NUM_STATIONS_PER_GRF`: the maximum number of stations a single GRF is
 /// allowed to add.
 const NUM_STATIONS_PER_GRF: u32 = u16::MAX as u32 - 1;
-const GSF_STATIONS: u8 = crate::newgrf::GSF_STATIONS;
-const GSF_ROADSTOPS: u8 = crate::newgrf::GSF_ROADSTOPS;
 #[repr(C)]
 pub struct Services {
     reader: *const crate::newgrf_bytereader::Services,
@@ -108,7 +107,7 @@ struct StationChangeCtx<'a> {
     action2: &'a Action2Services,
     loading: &'a LoadingServices,
     /// `_cur_gps.grffile`.
-    file: *mut c_void,
+    grffile: GRFFileRef<'a>,
     /// Scratch `std::vector<DrawTileSeqStruct> tmp_layout` of property 0x09.
     sequence: *mut Sequence,
 }
@@ -121,7 +120,8 @@ unsafe fn station_change_info(
     prop: u32,
     reader: &mut Reader<'_>,
 ) -> Result<ChangeInfoResult, ReadError> {
-    let (s, action2, loading, file, sequence) = (c.s, c.action2, c.loading, c.file, c.sequence);
+    let (s, action2, loading, grffile, sequence) =
+        (c.s, c.action2, c.loading, c.grffile, c.sequence);
     unsafe {
         if last > NUM_STATIONS_PER_GRF {
             grf_msg!(
@@ -133,12 +133,12 @@ unsafe fn station_change_info(
             return Ok(ChangeInfoResult::CIR_INVALID_ID);
         }
         // Allocate station specs if necessary
-        if (s.station_count)(file) < last as usize {
-            (s.station_resize)(file, last);
+        if (s.station_count)(grffile.as_ptr().cast_mut().cast()) < last as usize {
+            (s.station_resize)(grffile.as_ptr().cast_mut().cast(), last);
         }
         let mut result = ChangeInfoResult::CIR_SUCCESS;
         for id in first..last {
-            let mut spec = (s.station_get)(file, id);
+            let mut spec = (s.station_get)(grffile.as_ptr().cast_mut().cast(), id);
             // Check that the station we are modifying is defined.
             if spec.is_null() && prop != 0x08 {
                 grf_msg!(
@@ -153,7 +153,7 @@ unsafe fn station_change_info(
                 0x08 => {
                     // Property 0x08 is special; it is where the station is allocated
                     if spec.is_null() {
-                        spec = (s.station_new)(file, id);
+                        spec = (s.station_new)(grffile.as_ptr().cast_mut().cast(), id);
                     }
                     // Swap classid because we read it in BE meaning WAYP or DFLT
                     let class = crate::newgrf_class::station::allocate(
@@ -185,7 +185,7 @@ unsafe fn station_change_info(
                             false,
                             false,
                             false,
-                            GSF_STATIONS,
+                            GrfSpecFeature::GSF_STATIONS.0,
                             fields.ground,
                             std::ptr::null_mut(),
                             std::ptr::null_mut(),
@@ -216,7 +216,7 @@ unsafe fn station_change_info(
                                 false,
                                 true,
                                 false,
-                                GSF_STATIONS,
+                                GrfSpecFeature::GSF_STATIONS.0,
                                 fields.image,
                                 std::ptr::null_mut(),
                                 std::ptr::null_mut(),
@@ -242,7 +242,8 @@ unsafe fn station_change_info(
                 // Copy sprite layout
                 0x0a => {
                     let source_id = reader.extended()?;
-                    let source = (s.station_get)(file, u32::from(source_id));
+                    let source =
+                        (s.station_get)(grffile.as_ptr().cast_mut().cast(), u32::from(source_id));
                     if source.is_null() {
                         grf_msg!(
                             1,
@@ -300,7 +301,8 @@ unsafe fn station_change_info(
                 // Copy custom layout
                 0x0f => {
                     let source_id = reader.extended()?;
-                    let source = (s.station_get)(file, u32::from(source_id));
+                    let source =
+                        (s.station_get)(grffile.as_ptr().cast_mut().cast(), u32::from(source_id));
                     if source.is_null() {
                         grf_msg!(
                             1,
@@ -332,8 +334,11 @@ unsafe fn station_change_info(
                 // Cargo types for random triggers
                 0x12 => {
                     let value = reader.dword()?;
-                    let cargo = if ((*s.shared).grf_file_version)(file) >= 7 {
-                        crate::engine_loading::translate_refit_mask(value, file)
+                    let cargo = if grffile.grf_version() >= 7 {
+                        crate::engine_loading::translate_refit_mask(
+                            value,
+                            grffile.as_ptr().cast_mut().cast(),
+                        )
                     } else {
                         CargoTypes(u64::from(value))
                     };
@@ -368,7 +373,7 @@ unsafe fn station_change_info(
                             reader,
                             u32::from(count),
                             false,
-                            GSF_STATIONS,
+                            GrfSpecFeature::GSF_STATIONS.0,
                             true,
                             false,
                             layout,
@@ -404,7 +409,7 @@ unsafe fn station_change_info(
                 }
                 // Badge list
                 0x1f => reader.badges(
-                    GSF_STATIONS,
+                    GrfSpecFeature::GSF_STATIONS.0,
                     (s.shared().specs().station().badge_list)(spec),
                 )?,
                 // Minimum bridge height (extended) and disallowed bridge pillars
@@ -456,7 +461,7 @@ fn ignore_road_stop_property(
 /// `RoadStopChangeInfo`: define properties for road stops.
 unsafe fn road_stop_change_info(
     s: &Services,
-    file: *mut c_void,
+    grffile: GRFFileRef<'_>,
     first: u32,
     last: u32,
     prop: u32,
@@ -472,12 +477,12 @@ unsafe fn road_stop_change_info(
             );
             return Ok(ChangeInfoResult::CIR_INVALID_ID);
         }
-        if (s.road_count)(file) < last as usize {
-            (s.road_resize)(file, last);
+        if (s.road_count)(grffile.as_ptr().cast_mut().cast()) < last as usize {
+            (s.road_resize)(grffile.as_ptr().cast_mut().cast(), last);
         }
         let mut result = ChangeInfoResult::CIR_SUCCESS;
         for id in first..last {
-            let mut spec = (s.road_get)(file, id);
+            let mut spec = (s.road_get)(grffile.as_ptr().cast_mut().cast(), id);
             if spec.is_null() && prop != 0x08 {
                 grf_msg!(
                     1,
@@ -491,7 +496,7 @@ unsafe fn road_stop_change_info(
                 // Road Stop Class ID
                 0x08 => {
                     if spec.is_null() {
-                        spec = (s.road_new)(file, id);
+                        spec = (s.road_new)(grffile.as_ptr().cast_mut().cast(), id);
                     }
                     // The class label is read with big-endian meaning: WAYP or DFLT.
                     let label = reader.dword()?.swap_bytes();
@@ -511,7 +516,10 @@ unsafe fn road_stop_change_info(
                 0x0c => (s.road_draw_mode)(spec, RoadStopDrawModes(reader.byte()?).0),
                 // Cargo types for random triggers
                 0x0d => {
-                    let cargo = crate::engine_loading::translate_refit_mask(reader.dword()?, file);
+                    let cargo = crate::engine_loading::translate_refit_mask(
+                        reader.dword()?,
+                        grffile.as_ptr().cast_mut().cast(),
+                    );
                     (s.road_cargo_triggers)(spec, cargo.0);
                 }
                 // Animation info
@@ -553,7 +561,7 @@ unsafe fn road_stop_change_info(
                 }
                 // Badge list
                 0x16 => reader.badges(
-                    GSF_ROADSTOPS,
+                    GrfSpecFeature::GSF_ROADSTOPS.0,
                     (s.shared().specs().road_stop().badge_list)(spec),
                 )?,
                 _ => result = ChangeInfoResult::CIR_UNKNOWN,
@@ -584,7 +592,7 @@ pub unsafe extern "C" fn openttd_rust_station_change_info_abi(
                     s,
                     action2: &*action2,
                     loading: &*loading,
-                    file,
+                    grffile: GRFFileRef::of(s.shared(), file.cast()),
                     sequence,
                 },
                 first,
@@ -616,7 +624,16 @@ pub unsafe extern "C" fn openttd_rust_roadstop_change_info_abi(
     let s = unsafe { &*s };
     let mut reader = unsafe { Reader::new(native, &*s.reader) };
     u8::from(
-        match unsafe { road_stop_change_info(s, file, first, last, prop, &mut reader) } {
+        match unsafe {
+            road_stop_change_info(
+                s,
+                GRFFileRef::of(s.shared(), file.cast()),
+                first,
+                last,
+                prop,
+                &mut reader,
+            )
+        } {
             Ok(value) => {
                 unsafe {
                     output.write(value.0);
@@ -638,7 +655,11 @@ pub(crate) unsafe fn station_map_specific(
 ) {
     let s = unsafe { &*s };
     // CargoTypeMapSpriteGroupHandler uses GSF_STATIONS for both native spec types.
-    let cargo = CargoType(crate::newgrf_act3::translate_cargo(GSF_STATIONS, cid, file));
+    let cargo = CargoType(crate::newgrf_act3::translate_cargo(
+        GrfSpecFeature::GSF_STATIONS.0,
+        cid,
+        file,
+    ));
     if !crate::cargo_type::is_valid_cargo_type(cargo.0) {
         return;
     }
@@ -688,7 +709,11 @@ pub(crate) unsafe fn roadstop_map_specific(
 ) {
     let s = unsafe { &*s };
     // CargoTypeMapSpriteGroupHandler uses GSF_STATIONS for both native spec types.
-    let cargo = CargoType(crate::newgrf_act3::translate_cargo(GSF_STATIONS, cid, file));
+    let cargo = CargoType(crate::newgrf_act3::translate_cargo(
+        GrfSpecFeature::GSF_STATIONS.0,
+        cid,
+        file,
+    ));
     if !crate::cargo_type::is_valid_cargo_type(cargo.0) {
         return;
     }

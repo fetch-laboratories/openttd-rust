@@ -583,13 +583,8 @@ impl<'a> Invocation<'a> {
                 0x1C => (*self.state).last_value,
                 0x5F => self.random_bits(scope).wrapping_shl(8) | self.random_triggers(scope),
                 0x7D => openttd_rust_storage_temp_get(parameter) as u32,
-                0x7F => {
-                    if self.file.is_null() {
-                        0
-                    } else {
-                        ((*(*self.s.global).shared).grf_parameter)(self.file, parameter)
-                    }
-                }
+                0x7F => crate::newgrf::GRFFileRef::new(&*(*self.s.global).shared, self.file.cast())
+                    .map_or(0, |grffile| grffile.get_param(parameter)),
                 _ => {
                     let global = &*self.s.global;
                     let value = if variable < 0x40 {

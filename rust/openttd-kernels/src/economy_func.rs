@@ -8,6 +8,7 @@
 //! `GetPrice` of `economy.cpp` and `ScaleByInverseCargoScale` of `economy_func.h`.
 //! A setting address is a process-lifetime native field, read under the game-state mutex.
 use crate::economy_type::Price;
+use crate::newgrf::GRFFileRef;
 use crate::services::Services;
 use crate::settings_type::SettingAddresses;
 use std::ffi::c_void;
@@ -20,15 +21,18 @@ pub(crate) fn get_price(
     shared: &Services,
     index: Price,
     cost_factor: u32,
-    grf_file: *const c_void,
+    grf_file: Option<GRFFileRef<'_>>,
     mut shift: i32,
 ) -> i64 {
     if index >= Price::PR_END {
         return 0;
     }
     let cost = multiply_price(index, cost_factor);
-    if !grf_file.is_null() {
-        shift = shift.wrapping_add((shared.grf_price_shift)(grf_file, u32::from(index.0)));
+    if let Some(grf_file) = grf_file {
+        shift = shift.wrapping_add((shared.grf_price_shift)(
+            grf_file.as_ptr().cast(),
+            u32::from(index.0),
+        ));
     }
     shift_price(cost, shift)
 }
@@ -69,7 +73,7 @@ fn shift_price(cost: i64, shift: i32) -> i64 {
 
 /// `GetPrice` for its native callers.
 #[unsafe(no_mangle)]
-#[allow(unsafe_code)] // Export attribute only.
+#[allow(unsafe_code)] // Export attribute and the caller's file.
 pub extern "C" fn openttd_rust_economy_get_price(
     shared: &Services,
     index: u8,
@@ -77,6 +81,8 @@ pub extern "C" fn openttd_rust_economy_get_price(
     grf_file: *const c_void,
     shift: i32,
 ) -> i64 {
+    // SAFETY: A native caller's file is live for the call.
+    let grf_file = unsafe { GRFFileRef::new(shared, grf_file.cast()) };
     get_price(shared, Price(index), cost_factor, grf_file, shift)
 }
 
@@ -136,6 +142,13 @@ pub(crate) mod tests {
         shared
     }
 
+    /// A file handle for a table whose multiplier reader never dereferences it.
+    #[allow(unsafe_code)] // A dangling record the stub readers never read.
+    fn stub_file(shared: &Services) -> GRFFileRef<'_> {
+        // SAFETY: No reader of `shared` dereferences the file.
+        unsafe { GRFFileRef::of(shared, std::ptr::NonNull::dangling().as_ptr()) }
+    }
+
     /// Store `_price[index]` and return its earlier value, under `GLOBAL_LOCK`.
     #[allow(unsafe_code)] // One store to the process-lifetime price array.
     pub(crate) fn set_price(index: Price, value: i64) -> i64 {
@@ -153,12 +166,10 @@ pub(crate) mod tests {
     #[test]
     fn get_price_end_returns_zero_without_the_file() {
         let shared = shared(no_shift);
-        let file = std::ptr::NonNull::<u8>::dangling()
-            .as_ptr()
-            .cast::<c_void>();
-        assert_eq!(get_price(&shared, Price::PR_END, 1, file, 0), 0);
+        let file = stub_file(&shared);
+        assert_eq!(get_price(&shared, Price::PR_END, 1, Some(file), 0), 0);
         assert_eq!(
-            get_price(&shared, Price(Price::PR_END.0 + 1), 1, file, 0),
+            get_price(&shared, Price(Price::PR_END.0 + 1), 1, Some(file), 0),
             0
         );
         assert_eq!(get_price_raw(u32::from(Price::PR_END.0), 1, 0, 0), 0);
@@ -171,19 +182,14 @@ pub(crate) mod tests {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let earlier = set_price(Price::PR_BUILD_OBJECT, -800);
         let none = shared(no_shift);
-        assert_eq!(
-            get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), 2),
-            -9600
-        );
-        assert_eq!(
-            get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), -4),
-            -150
-        );
-        let file = std::ptr::NonNull::<u8>::dangling()
-            .as_ptr()
-            .cast::<c_void>();
+        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, None, 2), -9600);
+        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, None, -4), -150);
         let with = shared(file_shift);
-        assert_eq!(get_price(&with, Price::PR_BUILD_OBJECT, 3, file, 2), -1200);
+        let file = stub_file(&with);
+        assert_eq!(
+            get_price(&with, Price::PR_BUILD_OBJECT, 3, Some(file), 2),
+            -1200
+        );
         assert_eq!(
             get_price_raw(u32::from(Price::PR_BUILD_OBJECT.0), 3, -3, 2),
             -1200
@@ -198,12 +204,12 @@ pub(crate) mod tests {
         let earlier = set_price(Price::PR_BUILD_OBJECT, i64::MAX / 2);
         let none = shared(no_shift);
         assert_eq!(
-            get_price(&none, Price::PR_BUILD_OBJECT, 3, std::ptr::null(), 0),
+            get_price(&none, Price::PR_BUILD_OBJECT, 3, None, 0),
             i64::MAX
         );
         set_price(Price::PR_BUILD_OBJECT, 5);
         assert_eq!(
-            get_price(&none, Price::PR_BUILD_OBJECT, u32::MAX, std::ptr::null(), 0),
+            get_price(&none, Price::PR_BUILD_OBJECT, u32::MAX, None, 0),
             -5
         );
         set_price(Price::PR_BUILD_OBJECT, earlier);

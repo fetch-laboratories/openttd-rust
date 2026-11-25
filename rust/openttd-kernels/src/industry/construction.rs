@@ -169,7 +169,10 @@ fn cargo_callbacks(
         if res == CALLBACK_FAILED || gb(u32::from(res), 0, 8) == u32::from(u8::MAX) {
             break;
         }
-        if (shared.grf_file_version)(unsafe { (*indspec).grf_prop.grffile }) >= 8 && res >= 0x100 {
+        // SAFETY: A spec's file is live until the loader's next reset.
+        let grffile =
+            unsafe { crate::newgrf::GRFFileRef::of(shared, (*indspec).grf_prop.grffile.cast()) };
+        if grffile.grf_version() >= 8 && res >= 0x100 {
             unsafe { (c.callback_error)(indspec, callback.0, res) };
             break;
         }

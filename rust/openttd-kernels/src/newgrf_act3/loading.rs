@@ -222,7 +222,7 @@ unsafe fn map_binding(
                 bind_standard(specs.house(), spec, local, cargo, group);
             }
             GSF_INDUSTRIES => {
-                let specs = industrytype::file_specs(file);
+                let specs = industrytype::file_specs(file.cast());
                 let spec = specs.industries.get_mut(usize::from(local));
                 let props = spec
                     .and_then(|spec| spec.as_deref_mut())
@@ -230,7 +230,7 @@ unsafe fn map_binding(
                 bind_record(props, local, cargo, group, s.shared());
             }
             GSF_INDUSTRYTILES => {
-                let specs = industrytype::file_specs(file);
+                let specs = industrytype::file_specs(file.cast());
                 let spec = specs.tiles.get_mut(usize::from(local));
                 let props = spec
                     .and_then(|spec| spec.as_deref_mut())

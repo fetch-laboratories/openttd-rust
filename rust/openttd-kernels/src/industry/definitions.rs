@@ -9,7 +9,7 @@ use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::industry_type::{
     INDUSTRY_ORIGINAL_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryGfx, IndustryType,
 };
-use crate::newgrf::CargoLabelChoice;
+use crate::newgrf::{CargoLabelChoice, GRFFile};
 use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
 use crate::override_manager::{self, Mapping};
 use crate::table::strings::STR_NEWGRF_INVALID_INDUSTRYTYPE;
@@ -186,7 +186,7 @@ fn translate_cargo(cargo: &mut [u8], labels: &[CargoLabelChoice]) {
 pub unsafe fn finalise(s: &Services) {
     let mut file_index = 0;
     loop {
-        let file = (s.shared().grf_file_at_or_null)(file_index);
+        let file: *const GRFFile = (s.shared().grf_file_at_or_null)(file_index).cast();
         if file.is_null() {
             break;
         }
