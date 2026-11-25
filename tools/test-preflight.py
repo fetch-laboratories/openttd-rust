@@ -364,6 +364,8 @@ class RunTests(unittest.TestCase):
                     "real = preflight.subprocess.Popen\n"
                     "def late(*args, **kwargs):\n"
                     "    process = real(*args, **kwargs)\n"
+                    "    if args[0] != ['sleep', '60']:\n"
+                    "        return process\n"
                     "    (root / 'pid').write_text(str(process.pid))\n"
                     "    os.kill(os.getpid(), signal.SIGTERM)\n"
                     "    time.sleep(0.5)\n"
@@ -382,6 +384,7 @@ class RunTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(child.returncode, 130, child.stderr)
+                self.assertIn(b"--> zzq", child.stdout)  # the stop came in the launch
                 with self.assertRaises(ProcessLookupError):
                     os.kill(int((root / "pid").read_text()), 0)
 
