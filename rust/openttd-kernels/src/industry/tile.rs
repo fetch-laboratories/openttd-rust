@@ -98,7 +98,7 @@ impl TileServices {
         unsafe { (self.set_completed)(tile.0) };
     }
     /// `ResetIndustryConstructionStage`.
-    fn reset_industry_construction_stage(&self, tile: TileIndex) {
+    pub(crate) fn reset_industry_construction_stage(&self, tile: TileIndex) {
         unsafe { (self.reset_construction)(tile.0) };
     }
     /// `SetIndustryAnimationLoop`.
@@ -918,5 +918,5 @@ pub(crate) unsafe fn terraform_tile_industry(
             }
         }
     }
-    crate::landscape_cmd::clear_command(unsafe { &*p.command_checks }, out.cast(), tile.0, flags.0);
+    crate::landscape_cmd::clear_command(unsafe { &*p.command_checks }, out.cast(), tile, flags);
 }

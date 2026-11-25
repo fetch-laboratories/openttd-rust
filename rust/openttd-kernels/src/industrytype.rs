@@ -855,15 +855,3 @@ impl IndustryTileSpecialFlags {
 
 /// Industries like power plants and banks.
 pub const INDUSTRYLIFE_BLACK_HOLE: IndustryLifeTypes = IndustryLifeTypes::EMPTY;
-
-/// Raw compatibility mask for `IndustryBehaviour::AirplaneAttacks`.
-pub const AIRPLANE_ATTACKS: u32 =
-    IndustryBehaviours::from_element(IndustryBehaviour::AirplaneAttacks).0;
-
-/// Raw compatibility mask for `IndustryBehaviour::ChopperAttacks`.
-pub const CHOPPER_ATTACKS: u32 =
-    IndustryBehaviours::from_element(IndustryBehaviour::ChopperAttacks).0;
-
-/// Raw compatibility mask for `IndustryBehaviour::CanSubsidence`.
-pub const CAN_SUBSIDENCE: u32 =
-    IndustryBehaviours::from_element(IndustryBehaviour::CanSubsidence).0;

@@ -1776,26 +1776,6 @@ pub(crate) fn foundation_slope(shared: &Services, tile: u32) -> FoundationSlope 
     let (slope, z) = get_foundation_slope(shared, TileIndex(tile));
     FoundationSlope { z, slope }
 }
-/// Temporary raw adapter for `disaster.rs` until its pass:
-/// `TrackStatusToTrackBits(GetTileTrackStatus(tile, TRANSPORT_WATER, 0, side))`.
-pub(crate) fn water_tracks(shared: &Services, tile: u32, side: u8) -> u32 {
-    table(shared).water_tracks(tile, side)
-}
-impl MovementServices {
-    /// Temporary raw adapter: see [`water_tracks`].
-    pub(crate) fn water_tracks(&self, tile: u32, side: u8) -> u32 {
-        u32::from(
-            crate::track_func::track_status_to_track_bits(self.get_tile_track_status(
-                TileIndex(tile),
-                TransportType::TRANSPORT_WATER,
-                0,
-                DiagDirection(side),
-            ))
-            .0,
-        )
-    }
-}
-
 /// `TicksToLeaveDepot`, through the registry.
 pub(crate) fn ticks_to_leave_depot(shared: &Services, v: crate::train::Handle) -> i32 {
     table(shared).ticks_to_leave_depot(v)

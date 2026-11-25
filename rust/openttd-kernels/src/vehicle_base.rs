@@ -243,8 +243,6 @@ pub(crate) fn is_ground_vehicle(kind: VehicleType) -> bool {
 /// Raw compatibility names for files no pass has finished; #734's closure removes them.
 pub const VS_HIDDEN: u8 = VehStates::from_element(VehState::Hidden).0;
 pub const VS_STOPPED: u8 = VehStates::from_element(VehState::Stopped).0;
-pub const VS_UNCLICKABLE: u8 = VehStates::from_element(VehState::Unclickable).0;
-pub const VS_SHADOW: u8 = VehStates::from_element(VehState::Shadow).0;
 pub const VS_CRASHED: u8 = VehStates::from_element(VehState::Crashed).0;
 pub const NCVV_POSITION_CONSIST_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_CONSIST_LENGTH.0;
 pub const NCVV_POSITION_SAME_ID_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_SAME_ID_LENGTH.0;
@@ -324,6 +322,7 @@ crate::abi::shared_records! {
         pub road: *mut crate::road::OpenTTDRoadState,
         pub aircraft: *mut crate::aircraft::AircraftState,
         pub ship: *mut crate::ship_control::ShipState => "struct OpenTTDShipState *",
+        pub disaster: *mut crate::disaster::State => "struct OpenTTDDisasterState *",
         pub consist: *mut crate::orders::Consist,
         pub orders: *mut crate::orders::VehicleOrders,
         pub visual: *mut u8,
@@ -411,6 +410,7 @@ impl VehicleRecord {
             road: std::ptr::null_mut(),
             aircraft: std::ptr::null_mut(),
             ship: std::ptr::null_mut(),
+            disaster: std::ptr::null_mut(),
             consist: std::ptr::null_mut(),
             orders: std::ptr::null_mut(),
             visual: std::ptr::null_mut(),
@@ -846,6 +846,10 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn ship(self) -> *mut crate::ship_control::ShipState {
         read_field!(self.0.as_ptr(), ship)
     }
+    /// The disaster owner link; the record is a live disaster vehicle.
+    pub(crate) fn disaster(self) -> *mut crate::disaster::State {
+        read_field!(self.0.as_ptr(), disaster)
+    }
     /// Store `Vehicle::acceleration`.
     pub(crate) fn set_acceleration(self, value: u8) {
         write_field!(self.0.as_ptr(), acceleration, value);
@@ -1191,24 +1195,12 @@ impl crate::vehicle::VehicleRef {
         write_field!(self.0.as_ptr(), tile, value);
     }
     #[inline]
-    pub(crate) fn set_tile_raw(self, value: u32) {
-        self.set_tile(TileIndex(value));
-    }
-    #[inline]
     pub(crate) fn dest_tile(self) -> TileIndex {
         read_field!(self.0.as_ptr(), dest_tile)
     }
     #[inline]
-    pub(crate) fn dest_tile_raw(self) -> u32 {
-        self.dest_tile().0
-    }
-    #[inline]
     pub(crate) fn set_dest_tile(self, value: TileIndex) {
         write_field!(self.0.as_ptr(), dest_tile, value);
-    }
-    #[inline]
-    pub(crate) fn set_dest_tile_raw(self, value: u32) {
-        self.set_dest_tile(TileIndex(value));
     }
     #[inline]
     pub(crate) fn motion_counter(self) -> u32 {
@@ -1373,10 +1365,6 @@ impl crate::vehicle::VehicleRef {
     #[inline]
     pub(crate) fn set_direction(self, value: Direction) {
         write_field!(self.0.as_ptr(), direction, value);
-    }
-    #[inline]
-    pub(crate) fn set_direction_raw(self, value: u8) {
-        self.set_direction(Direction(value));
     }
     #[inline]
     pub(crate) fn vehstatus(self) -> VehStates {

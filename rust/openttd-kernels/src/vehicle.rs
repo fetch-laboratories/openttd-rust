@@ -18,6 +18,8 @@ pub(crate) mod occupancy;
 pub(crate) mod scheduler;
 pub(crate) mod visits;
 
+use crate::direction_func::{change_dir, dir_difference};
+use crate::direction_type::{DirDiff, Direction};
 use crate::gfx_type::SpriteID;
 use crate::map_func::Map;
 use crate::newgrf_callbacks::CallbackID;
@@ -252,6 +254,60 @@ pub(crate) fn get_new_vehicle_pos(v: VehicleRef, map: Map) -> GetNewVehiclePosRe
     }
 }
 
+static NEW_DIRECTION_TABLE: [Direction; 9] = [
+    Direction::DIR_N,
+    Direction::DIR_NW,
+    Direction::DIR_W,
+    Direction::DIR_NE,
+    Direction::DIR_SE,
+    Direction::DIR_SW,
+    Direction::DIR_E,
+    Direction::DIR_SE,
+    Direction::DIR_S,
+];
+
+/// `GetDirectionTowards`: the direction a vehicle at its position turns to on its way to
+/// `(x, y)`, at most 45 degrees from the direction it faces. `check` is the native
+/// assertion of `DirDifference` and `ChangeDir`.
+pub(crate) fn get_direction_towards(
+    v: VehicleRef,
+    x: i32,
+    y: i32,
+    check: impl Fn(bool) + Copy,
+) -> Direction {
+    let mut i = 0;
+
+    if y >= v.y_pos() {
+        if y != v.y_pos() {
+            i += 3;
+        }
+        i += 3;
+    }
+
+    if x >= v.x_pos() {
+        if x != v.x_pos() {
+            i += 1;
+        }
+        i += 1;
+    }
+
+    let dir = v.direction();
+
+    let dirdiff = dir_difference(NEW_DIRECTION_TABLE[i], dir, check);
+    if dirdiff == DirDiff::DIRDIFF_SAME {
+        return dir;
+    }
+    change_dir(
+        dir,
+        if dirdiff > DirDiff::DIRDIFF_REVERSE {
+            DirDiff::DIRDIFF_45LEFT
+        } else {
+            DirDiff::DIRDIFF_45RIGHT
+        },
+        check,
+    )
+}
+
 /// `Vehicle::IsWaitingForUnbunching`: check whether a vehicle inside a depot is waiting
 /// for unbunching. True if the vehicle must continue waiting, or false if it may try to
 /// leave the depot. `is_in_depot` is the vehicle type's `IsInDepot()`.
@@ -322,6 +378,52 @@ mod tests {
             std::ptr::null_mut(),
             kind,
         ))
+    }
+
+    /// `GetDirectionTowards` over each cell of `_new_direction_table` (`vehicle.cpp`): the
+    /// target above, level with and below the vehicle on each axis. A vehicle facing the
+    /// cell's direction keeps it; one facing a direction up to and including a reversal
+    /// to the cell's right turns 45 degrees right; beyond that it turns 45 degrees left.
+    #[test]
+    fn get_direction_towards_turns_by_the_new_direction_table() {
+        // The cells in table order, with the target's offset from (100, 100).
+        let cells: [(i32, i32, Direction); 9] = [
+            (-5, -5, Direction::DIR_N),
+            (0, -5, Direction::DIR_NW),
+            (5, -5, Direction::DIR_W),
+            (-5, 0, Direction::DIR_NE),
+            (0, 0, Direction::DIR_SE),
+            (5, 0, Direction::DIR_SW),
+            (-5, 5, Direction::DIR_E),
+            (0, 5, Direction::DIR_SE),
+            (5, 5, Direction::DIR_S),
+        ];
+        let v = record(VehicleType::VEH_AIRCRAFT);
+        v.set_xy(100, 100);
+        let failed = std::cell::Cell::new(0);
+        let check = |ok: bool| {
+            if !ok {
+                failed.set(failed.get() + 1);
+            }
+        };
+        for (dx, dy, want) in cells {
+            for facing in 0..8_u8 {
+                v.set_direction(Direction(facing));
+                // DirDifference(want, facing) = (want - facing) mod 8.
+                let diff = want.0.wrapping_sub(facing) & 7;
+                let expected = match diff {
+                    0 => want,
+                    1..=4 => Direction((facing + 1) & 7),
+                    _ => Direction((facing + 7) & 7),
+                };
+                assert_eq!(
+                    get_direction_towards(v, 100 + dx, 100 + dy, check),
+                    expected,
+                    "target ({dx}, {dy}) facing {facing}"
+                );
+            }
+        }
+        assert_eq!(failed.get(), 0);
     }
 
     /// `GetNewVehiclePos` moves one pixel by `_delta_coord` and hashes the new position

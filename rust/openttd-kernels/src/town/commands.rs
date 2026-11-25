@@ -229,7 +229,7 @@ impl<'a> Commands<'a> {
     /// `Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile)`, returning whether it succeeded.
     fn clear(&self, out: *mut CommandCost, tile: TileIndex, flags: DoCommandFlags) -> bool {
         // SAFETY: Native command table and caller-owned result remain live.
-        crate::landscape_cmd::clear_command(unsafe { &*self.f.command }, out, tile.0, flags.0);
+        crate::landscape_cmd::clear_command(unsafe { &*self.f.command }, out, tile, flags);
         (self.cost.success)(out)
     }
     /// Clear the land as `OWNER_NONE`, restoring the current company afterwards; with empty

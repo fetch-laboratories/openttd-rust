@@ -1333,7 +1333,7 @@ impl Engine<'_> {
                         commands, out.0, tile.0, edges.0, dir, flags.0,
                     );
                 } else {
-                    crate::landscape_cmd::clear_command(commands, out.0, tile.0, flags.0);
+                    crate::landscape_cmd::clear_command(commands, out.0, tile, flags);
                 }
                 CommandResult {
                     cost: out.money(),

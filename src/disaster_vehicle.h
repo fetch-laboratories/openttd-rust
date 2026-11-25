@@ -40,15 +40,14 @@ struct DisasterVehicle final : public SpecializedVehicle<DisasterVehicle, VEH_DI
 	struct RustStateDeleter {
 		void operator()(OpenTTDDisasterState *state) const { openttd_rust_disaster_state_destroy(state); }
 	};
-	std::unique_ptr<OpenTTDDisasterState, RustStateDeleter> rust_state{openttd_rust_disaster_state_create(VehicleID::Invalid().base())};
+	std::unique_ptr<OpenTTDDisasterState, RustStateDeleter> rust_state{openttd_rust_disaster_state_create()};
 	SpriteID &ImageOverride() { return this->rust_state->image_override; }
-	uint32_t &DestroyerTarget() { return this->rust_state->target; }
+	uint32_t &DestroyerTarget() { return this->rust_state->big_ufo_destroyer_target; }
 	uint8_t &Flags() { return this->rust_state->flags; }
 	uint16_t &State() { return this->rust_state->state; }
 
-	/** For use by saveload. */
-	DisasterVehicle() : SpecializedVehicleBase() {}
-	DisasterVehicle(int x, int y, Direction direction, DisasterSubType subtype, VehicleID big_ufo_destroyer_target = VehicleID::Invalid());
+	/** For use by saveload, and by Rust, which runs the original constructor's body. */
+	DisasterVehicle() : SpecializedVehicleBase() { this->record->disaster = this->rust_state.get(); }
 	/** We want to 'destruct' the right class. */
 	virtual ~DisasterVehicle() = default;
 

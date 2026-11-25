@@ -398,7 +398,7 @@ impl<'a> Ctx<'a> {
         });
     }
     fn clear(&self, c: Cost<'_>, flags: u16, tile: u32) {
-        crate::landscape_cmd::clear_command(self.commands, c.0, tile, flags);
+        crate::landscape_cmd::clear_command_raw(self.commands, c.0, tile, flags);
     }
     unsafe fn collect_vehicles(&self, frame: *mut ConvertFrame, tile: u32) {
         crate::vehicle_func::vehicles_on_tile_raw(self.map, tile, |v| {

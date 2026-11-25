@@ -134,7 +134,7 @@ impl World<'_> {
         }
     }
     fn clear_command(&self, ret: *mut CommandCost, tile: u32, flags: u16) {
-        crate::landscape_cmd::clear_command(self.cmd, ret, tile, flags);
+        crate::landscape_cmd::clear_command_raw(self.cmd, ret, tile, flags);
     }
     fn cost(&self, ret: *mut CommandCost) -> Cost<'_> {
         Cost(ret, self.c)

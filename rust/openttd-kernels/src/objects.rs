@@ -1024,7 +1024,7 @@ impl<'a> World<'a> {
                 }
             }
             if kind == OWNED {
-                crate::landscape_cmd::clear_command(self.commands(), tmp.0, tile, flags);
+                crate::landscape_cmd::clear_command_raw(self.commands(), tmp.0, tile, flags);
                 out.add(tmp);
             } else {
                 let water = shape.flags & (BUILT_ON_WATER | NOT_ON_LAND) != 0;
@@ -1036,7 +1036,7 @@ impl<'a> World<'a> {
                             return;
                         }
                         if !(self.shared.is_water_tile)(t) {
-                            crate::landscape_cmd::clear_command(
+                            crate::landscape_cmd::clear_command_raw(
                                 self.commands(),
                                 tmp.0,
                                 t,
@@ -1080,7 +1080,7 @@ impl<'a> World<'a> {
                             )
                             && self.object_type_is(t, HQ))
                         {
-                            crate::landscape_cmd::clear_command(
+                            crate::landscape_cmd::clear_command_raw(
                                 self.commands(),
                                 tmp.0,
                                 t,
@@ -1154,7 +1154,7 @@ impl<'a> World<'a> {
                     for t in self.tiles(area) {
                         if (self.shared.has_water_ground)(t) {
                             if !(self.shared.is_water_tile)(t) {
-                                crate::landscape_cmd::clear_command(
+                                crate::landscape_cmd::clear_command_raw(
                                     self.commands(),
                                     tmp.0,
                                     t,
@@ -1162,7 +1162,12 @@ impl<'a> World<'a> {
                                 );
                             }
                         } else {
-                            crate::landscape_cmd::clear_command(self.commands(), tmp.0, t, flags);
+                            crate::landscape_cmd::clear_command_raw(
+                                self.commands(),
+                                tmp.0,
+                                t,
+                                flags,
+                            );
                         }
                     }
                 }
@@ -1406,7 +1411,7 @@ impl World<'_> {
                     }
                 }
             }
-            crate::landscape_cmd::clear_command(self.commands(), out.0, tile, flags);
+            crate::landscape_cmd::clear_command_raw(self.commands(), out.0, tile, flags);
         }
     }
     fn build_above(&self, out: Cost<'_>, tile: u32, flags: u16, height: i32) {
@@ -1419,7 +1424,7 @@ impl World<'_> {
                 out.zero();
                 return;
             }
-            crate::landscape_cmd::clear_command(self.commands(), out.0, tile, flags);
+            crate::landscape_cmd::clear_command_raw(self.commands(), out.0, tile, flags);
         }
     }
     fn change_owner(&self, ownership: &crate::tile_owner::Context, tile: u32, old: u8, new: u8) {

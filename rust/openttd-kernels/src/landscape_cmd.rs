@@ -13,6 +13,7 @@
     clippy::if_not_else
 )]
 use crate::command_type::DoCommandFlag as F;
+use crate::command_type::DoCommandFlags;
 use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
 use crate::map_type::{LM_LEVEL, LM_LOWER, LM_RAISE};
@@ -822,17 +823,27 @@ impl TerraformerState {
     }
 }
 
-/// Shared `Command<CMD_LANDSCAPE_CLEAR>::Do` path for every Rust owner.
+/// Shared `Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile)` path for every Rust owner.
 pub(crate) fn clear_command(
+    commands: &CommandServices,
+    out: *mut CommandCost,
+    tile: TileIndex,
+    flags: DoCommandFlags,
+) {
+    // SAFETY: the getter lends immutable process-lifetime tables; the calling
+    // command owns its native result and serialized map for this invocation.
+    let world = unsafe { World::new(&*(commands.landscape_commands)()) };
+    world.clear_do(world.cost(out), tile.0, flags.0);
+}
+/// Temporary raw adapter of [`clear_command`] for `objects.rs`, `road_cmd.rs`,
+/// `tunnelbridge_cmd.rs`, `water.rs` and `water_cmd.rs` until their passes.
+pub(crate) fn clear_command_raw(
     commands: &CommandServices,
     out: *mut CommandCost,
     tile: u32,
     flags: u16,
 ) {
-    // SAFETY: the getter lends immutable process-lifetime tables; the calling
-    // command owns its native result and serialized map for this invocation.
-    let world = unsafe { World::new(&*(commands.landscape_commands)()) };
-    world.clear_do(world.cost(out), tile, flags);
+    clear_command(commands, out, TileIndex(tile), DoCommandFlags(flags));
 }
 
 /// Direct native facade for the command body; the native dispatcher owns lifecycle.

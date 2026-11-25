@@ -343,8 +343,6 @@ pub struct Leaves {
     pub airport_width: unsafe extern "C" fn(*const Station) -> u8,
     /// `u->sprite_cache.sprite_seq.CopyWithoutPalette(v->sprite_cache.sprite_seq)`.
     pub copy_sprite: unsafe extern "C" fn(VehicleRef, VehicleRef),
-    /// `GetDirectionTowards`.
-    pub direction_towards: unsafe extern "C" fn(Vehicle, i32, i32) -> u8,
     /// `AirportFTA::blocks`.
     pub fta_blocks: unsafe extern "C" fn(*const c_void) -> AirportBlocks,
     /// `AirportFTA::heading`.
@@ -398,6 +396,24 @@ pub struct Leaves {
     pub vehicle_crash: unsafe extern "C" fn(Vehicle, bool) -> u32,
     /// `v->UpdateViewport(true, false)`.
     pub viewport: unsafe extern "C" fn(Vehicle),
+}
+
+impl Leaves {
+    /// `st->airport.tile` of a live station.
+    pub(crate) fn airport_tile(&self, st: *const Station) -> TileIndex {
+        // SAFETY: The caller's live station; the leaf reads one field.
+        TileIndex(unsafe { (self.airport_tile)(st) })
+    }
+    /// `st->airport.type` of a live station.
+    pub(crate) fn airport_type(&self, st: *const Station) -> u8 {
+        // SAFETY: As `airport_tile`.
+        unsafe { (self.airport_type)(st) }
+    }
+    /// `&st->airport.blocks` of a live station, which lives as long as the station.
+    pub(crate) fn airport_blocks(&self, st: *const Station) -> *mut AirportBlocks {
+        // SAFETY: As `airport_tile`.
+        unsafe { (self.airport_blocks)(st) }
+    }
 }
 
 /// The tables and entry-local map descriptor the helpers share.
@@ -490,13 +506,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         })
     }
     fn airport_tile(&self, st: *const Station) -> TileIndex {
-        TileIndex(Self::call(|| unsafe { (self.leaves.airport_tile)(st) }))
+        Self::call(|| self.leaves.airport_tile(st))
     }
     fn airport_rotation(&self, st: *const Station) -> Direction {
         Direction(Self::call(|| unsafe { (self.leaves.rotation)(st) }))
     }
     fn airport_type(&self, st: *const Station) -> u8 {
-        Self::call(|| unsafe { (self.leaves.airport_type)(st) })
+        Self::call(|| self.leaves.airport_type(st))
     }
     fn airport_w(&self, st: *const Station) -> u8 {
         Self::call(|| unsafe { (self.leaves.airport_width)(st) })
@@ -509,13 +525,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `st->airport.blocks`, read in place.
     fn airport_blocks(&self, st: *const Station) -> AirportBlocks {
-        let blocks = Self::call(|| unsafe { (self.leaves.airport_blocks)(st) });
+        let blocks = Self::call(|| self.leaves.airport_blocks(st));
         // SAFETY: One field-sized load of the live mask, ending before any callback.
         unsafe { blocks.read() }
     }
     /// `st->airport.blocks.Set(set)` or `Reset(set)` in place.
     fn airport_blocks_update(&self, st: *const Station, update: impl FnOnce(&mut AirportBlocks)) {
-        let blocks = Self::call(|| unsafe { (self.leaves.airport_blocks)(st) });
+        let blocks = Self::call(|| self.leaves.airport_blocks(st));
         // SAFETY: One field-sized load and store of the live mask, with no callback between.
         unsafe {
             let mut value = blocks.read();
@@ -664,9 +680,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `GetDirectionTowards(v, x, y)`.
     fn get_direction_towards(&self, v: Vehicle, x: i32, y: i32) -> Direction {
-        Direction(Self::call(|| unsafe {
-            (self.leaves.direction_towards)(v, x, y)
-        }))
+        crate::vehicle::get_direction_towards(v.base(), x, y, |c| self.check(c))
     }
     fn random(&self) -> u32 {
         Self::call(|| self.ss.random())
@@ -3297,7 +3311,39 @@ pub unsafe extern "C" fn openttd_rust_aircraft_cache(
 ) {
     unsafe { update_aircraft_cache(leaves, id, range) };
 }
-/// `GetAircraftFlightLevelBounds`.
+/// `GetAircraftFlightLevelBounds(v, min_level, max_level)`, for Rust callers: an aircraft,
+/// or a disaster vehicle, whose record has no aircraft link.
+pub(crate) fn get_aircraft_flight_level_bounds(
+    leaves: &Leaves,
+    v: VehicleRef,
+    min_level: Option<&mut i32>,
+    max_level: Option<&mut i32>,
+) {
+    if v.aircraft_state().is_null() {
+        crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
+    }
+    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
+    with_world!(leaves, |w| {
+        w.get_aircraft_flight_level_bounds(v, min_level, max_level);
+    });
+}
+/// `GetAircraftFlightLevel(v, takeoff)`, for Rust callers, over the vehicle's `flags`: an
+/// aircraft's, or a disaster vehicle's, whose record has no aircraft link.
+pub(crate) fn get_aircraft_flight_level(
+    leaves: &Leaves,
+    v: VehicleRef,
+    flags: *mut u8,
+    takeoff: bool,
+) -> i32 {
+    if v.aircraft_state().is_null() {
+        crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
+    }
+    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
+    with_world!(leaves, |w| {
+        w.get_aircraft_flight_level(v, flags, takeoff)
+    })
+}
+/// `GetAircraftFlightLevelBounds`, for C++ callers.
 /// # Safety
 /// See the shared export contract; each non-null bound is writable.
 #[unsafe(no_mangle)]
@@ -3307,18 +3353,12 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_bounds(
     min: *mut i32,
     max: *mut i32,
 ) {
-    if id.state.is_null() {
-        crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
+    // SAFETY: The caller supplies the live table and null or writable bounds.
+    unsafe {
+        get_aircraft_flight_level_bounds(&*leaves, id.base(), min.as_mut(), max.as_mut());
     }
-    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    with_world!(leaves, |w| {
-        // SAFETY: The caller supplies null or writable bounds.
-        w.get_aircraft_flight_level_bounds(id.base(), unsafe { min.as_mut() }, unsafe {
-            max.as_mut()
-        });
-    });
 }
-/// `GetAircraftFlightLevel`.
+/// `GetAircraftFlightLevel`, for C++ callers.
 /// # Safety
 /// See the shared export contract; `flags` is the vehicle's live flags.
 #[unsafe(no_mangle)]
@@ -3328,13 +3368,8 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
     flags: *mut u8,
     takeoff: bool,
 ) -> i32 {
-    if id.state.is_null() {
-        crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
-    }
-    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    with_world!(leaves, |w| {
-        w.get_aircraft_flight_level(id.base(), flags, takeoff)
-    })
+    // SAFETY: The caller supplies the live table.
+    get_aircraft_flight_level(unsafe { &*leaves }, id.base(), flags, takeoff)
 }
 /// `HandleMissingAircraftOrders`.
 /// # Safety
@@ -3427,7 +3462,6 @@ crate::abi::layouts! {
         airport_type,
         airport_width,
         copy_sprite,
-        direction_towards,
         fta_blocks,
         fta_heading,
         fta_next,

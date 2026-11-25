@@ -943,8 +943,8 @@ impl Ctx<'_> {
             crate::landscape_cmd::clear_command(
                 self.command,
                 ret.0,
-                tile.0,
-                (flags | DoCommandFlags(DoCommandFlag::AUTO)).0,
+                tile,
+                flags | DoCommandFlags(DoCommandFlag::AUTO),
             );
             if !ret.ok() {
                 return cost.take(ret);

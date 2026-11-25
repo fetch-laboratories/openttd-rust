@@ -53,7 +53,6 @@ pub struct LifecycleServices {
     pub clear_docking: unsafe extern "C" fn(u32),
     pub industry_field: unsafe extern "C" fn(u32, u16) -> bool,
     pub disassociate_field: unsafe extern "C" fn(u32),
-    pub release_disasters: unsafe extern "C" fn(u16),
     pub delete_storage: unsafe extern "C" fn(*mut c_void),
     pub subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub invalidate_cargo: unsafe extern "C" fn(u16),
@@ -200,7 +199,7 @@ pub(crate) unsafe fn industry_destruct(d: IndustryDestruct, s: &Services, w: &Li
     }
     unsafe {
         // don't let any disaster vehicle target invalid industry
-        (w.release_disasters)(id.0);
+        crate::disaster::release_disasters_targeting_industry(s.shared(), id);
         // Clear the persistent storage.
         (w.delete_storage)(industry);
         let kind = ptr::read(ptr::addr_of!((*owner).metadata.kind));
