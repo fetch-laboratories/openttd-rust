@@ -813,6 +813,14 @@ impl B { fn update(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {} }
         )
         rows = INVENTORY.module_unsafe_allows(RUST, source)
         self.assertEqual([row.line for row in rows], [4])
+        lints = (
+            "#![/* lead */ allow(unsafe_code)]\n"
+            "#![allow(dead_code /* unsafe_code */)]\n"
+            '#![allow(dead_code, reason = "unsafe_code is checked elsewhere")]\n'
+            "#![allow(clippy::unsafe_code)]\n"
+        )
+        rows = INVENTORY.module_unsafe_allows(RUST, lints)
+        self.assertEqual([row.line for row in rows], [1])
 
     def test_no_selected_file_prints_the_notice(self) -> None:
         trees = {"base": {RUST: self.BASE}, "head": {RUST: self.BASE}}
