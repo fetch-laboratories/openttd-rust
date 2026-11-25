@@ -55,7 +55,7 @@ Full is the merge gate; its builds are set by [ADR 0018](adr/0018-builds-before-
 | `python3 tools/ci.py failures --since DATE` | Count failed runs. |
 | `python3 tools/ci.py macos-fallback RUN [RUN ...] [--pr N]` | Root's macOS fallback ([CI administration](root-workflow.md#ci-administration)). |
 
-- Reads through `ci.py` (REST GETs, variable lists, the queue-state query) are tried three times on HTTP 502, 503 or 504. A dispatch, rerun, variable change or comment is not repeated; `enqueue` reads the queue after a failed merge call and tries once more only when the PR is not queued.
+- Reads through `ci.py` (REST GETs, variable lists, the queue-state query) are tried three times on HTTP 502, 503 or 504, and on the `Bad credentials (HTTP 401)` GitHub sometimes gives a healthy login. A dispatch, rerun, variable change or comment is not repeated; `enqueue` reads the queue after a failed merge call and tries once more only when the PR is not queued.
 
 - Which profile to request, and when, is in [checks](workflow.md#checks).
 - `request --profile full` is an optional pre-check; the queue's Full is the merge gate. A failing pre-check holds the PR out of the queue until a newer requested run on its commits passes.

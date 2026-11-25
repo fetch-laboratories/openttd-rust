@@ -66,9 +66,12 @@ RUN_URL = re.compile(
 # A read that GitHub answers with a gateway error is tried this many times.
 READ_ATTEMPTS = 3
 RETRY_PAUSE = 2
-# gh reports a gateway error as `HTTP 502: Bad Gateway (URL)`.
+# gh reports a gateway error as `HTTP 502: Bad Gateway (URL)`. GitHub also
+# answers a healthy login's read with `Bad credentials (HTTP 401)` now and then:
+# a wait stopped twice on it in one job (#1063).
 TRANSIENT = re.compile(
     r"\bHTTP 50[234]\b|\b50[234] (?:Bad Gateway|Service Unavailable|Gateway Time-?out)"
+    r"|Bad credentials \(HTTP 401\)"
 )
 # gh api flags that make a request other than a GET.
 WRITES = ("-X", "--method", "-f", "--raw-field", "-F", "--field", "--input")
@@ -88,12 +91,13 @@ def read_only(args: tuple[str, ...]) -> bool:
 
 
 def transient(error: subprocess.CalledProcessError) -> bool:
-    """A gateway error, which GitHub returns now and then under load."""
+    """A gateway error or a false 401, which GitHub returns now and then."""
     return bool(TRANSIENT.search(f"{error.stderr or ''} {error.output or ''}"))
 
 
 def gh(*args: str) -> str:
-    """Run gh; a read that fails with HTTP 502, 503 or 504 is tried again."""
+    """Run gh; a read that fails with HTTP 502, 503, 504 or a `Bad credentials`
+    401 is tried again."""
     attempts = READ_ATTEMPTS if read_only(args) else 1
     for attempt in range(1, attempts + 1):
         try:

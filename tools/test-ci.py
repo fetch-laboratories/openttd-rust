@@ -3413,9 +3413,37 @@ class RetryTests(unittest.TestCase):
             ("error: 503 Service Unavailable", True),
             ("gh: Pull request #502 is already merged", False),
             ("run 503 not found (HTTP 404)", False),
+            ("gh: Bad credentials (HTTP 401)", True),
+            ("gh: Requires authentication (HTTP 401)", False),
+            ("gh: Not Found (HTTP 404)", False),
         ):
             error = subprocess.CalledProcessError(1, "gh", stderr=text)
             self.assertEqual(ci.transient(error), expected, text)
+
+    def test_a_read_answered_bad_credentials_twice_returns_the_third_answer(
+        self,
+    ) -> None:
+        calls: list[tuple[str, ...]] = []
+
+        def unauthorized(*arguments: str, **_: object) -> str:
+            calls.append(arguments)
+            if len(calls) <= 2 or arguments[1] == "-X":
+                raise subprocess.CalledProcessError(
+                    1, ["gh", *arguments], stderr="gh: Bad credentials (HTTP 401)"
+                )
+            return "answer\n"
+
+        with (
+            patch.object(ci.vcs, "gh", side_effect=unauthorized),
+            patch.object(ci.time, "sleep"),
+            patch("sys.stderr"),
+        ):
+            self.assertEqual(ci.gh("api", "repos/x/y/pulls/1"), "answer")
+            self.assertEqual(len(calls), 3)
+            calls.clear()
+            with self.assertRaises(subprocess.CalledProcessError):
+                ci.gh("api", "-X", "PATCH", "repos/x/y/issues/comments/1")
+            self.assertEqual(len(calls), 1)
 
     def test_writes_and_other_errors_are_not_repeated(self) -> None:
         for write in (
