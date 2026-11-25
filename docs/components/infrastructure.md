@@ -27,7 +27,7 @@
 ## Rail track, depot and signal commands (#265)
 
 - Rust owns: Rail track build/remove/drag, depot construction/removal, signal commands and autofill, rail conversion and tile clear, owner-change, autoslope/terraform and build-above policy.
-- C++ keeps: Map reads, crossing/depot writes, nested commands, conversion iterator, affected-train list and drawing.
+- C++ keeps: crossing and depot writes and drawing. Map reads, the nested commands, the conversion iterator and the affected-train list are Rust since #1046 (below).
 - Checks: `python3 tools/migration.py simulate signals-rail-commands --jobs 2`.
 - Limits: These remain #156 gaps: coast/half-tile water and PBS path-end removal.
 - PRs: #270.
