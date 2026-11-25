@@ -1,13 +1,175 @@
 [
   {
-    "kind": "growth",
-    "counter": "generated_records",
     "added": {
       "abi-record-vehicle.h": 3
     },
-    "reason": "#1003 decision 1: the original's NOSAVE members hash_tile_next, hash_tile_prev and hash_tile_current (vehicle_base.h:245-247) join VehicleRecord, where Rust, their only writer, reads and writes them in place. They replace OpenTTDVehicleTileLinks, Vehicle::tile_links, VehicleServices::tile_links and its C++ function, which cost one native call per position update, iterator step and relinked neighbour.",
+    "counter": "generated_records",
     "existing_alternatives": "The links had no record field: the C++ shell stored them and Rust reached them through the tile_links service, a moved field behind a service (porting.md, design faults).",
-    "retiring_owner": "#734",
-    "retirement_condition": "The fields are the members' one definition; they stay with the vehicle record."
+    "kind": "growth",
+    "reason": "#1003 decision 1: the original's NOSAVE members hash_tile_next, hash_tile_prev and hash_tile_current (vehicle_base.h:245-247) join VehicleRecord, where Rust, their only writer, reads and writes them in place. They replace OpenTTDVehicleTileLinks, Vehicle::tile_links, VehicleServices::tile_links and its C++ function, which cost one native call per position update, iterator step and relinked neighbour.",
+    "retirement_condition": "The fields are the members' one definition; they stay with the vehicle record.",
+    "retiring_owner": "#734"
+  },
+  {
+    "from": "rust/openttd-kernels/src/vehicle/occupancy.rs | module | allow unsafe_code",
+    "kind": "carry",
+    "to": "rust/openttd-kernels/src/vehicle/occupancy.rs | mod index_tests | allow unsafe_code",
+    "tool": "rust"
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and the tile hash and its records are reached as Rust references.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn tile_hash_head | allow unsafe_code",
+    "operation": "occupancy::tile_hash_head",
+    "source_contract": "`_vehicle_tile_hash[hash]` (src/vehicle.cpp:426), the process-wide bucket array; `hash` is below TOTAL_TILE_HASH_SIZE.",
+    "reason": "One field-sized load of a bucket of the process-wide static, which Rust reaches through a raw pointer as the GameState pattern requires."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and the tile hash and its records are reached as Rust references.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn update_vehicle_tile_hash | allow unsafe_code",
+    "operation": "occupancy::update_vehicle_tile_hash",
+    "source_contract": "`UpdateVehicleTileHash` (src/vehicle.cpp:592-621): `*v->hash_tile_prev = v->hash_tile_next`, `v->hash_tile_next = *new_hash` and `*new_hash = v`, through a predecessor's link or a bucket of the hash.",
+    "reason": "#1003 decision 1 moves the links into VehicleRecord; the original's stores through `Vehicle **` need raw pointer writes. The base reached the same stores through the tile_links service under the module's allowance."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and the tile hash and its records are reached as Rust references.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn reset_vehicle_tile_hash | allow unsafe_code",
+    "operation": "occupancy::reset_vehicle_tile_hash",
+    "source_contract": "`ResetVehicleHash`'s `Vehicle::Iterate()` and `_vehicle_tile_hash.fill(nullptr)` (src/vehicle.cpp:649-654), over the live pool descriptor.",
+    "reason": "#1003 decision 8: the pool walk calls the unsafe `vehicle_base::next_vehicle`, and the fill clears the static array in place."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and the tile hash and its records are reached as Rust references.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | impl OnTile > fn advance | allow unsafe_code",
+    "operation": "occupancy::OnTile::advance",
+    "source_contract": "`VehiclesOnTile::Iterator::operator++` (src/vehicle_func.h, src/vehicle.cpp:509-520), which dereferences the current vehicle.",
+    "reason": "Porting review of #1055: the advancement reads the current record's `hash_tile_next`, so its caller states that the visitor deleted no vehicle; the declaration is unsafe, as at the base."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool and its shells move to Rust and the tile hash and its records are reached as Rust references.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | impl Near > fn advance | allow unsafe_code",
+    "operation": "occupancy::Near::advance",
+    "source_contract": "`VehiclesNearTileXY::Iterator::operator++` (src/vehicle.cpp:462-493), which dereferences the current vehicle.",
+    "reason": "Porting review of #1055: as OnTile::advance."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires with the export's last C++ caller: the native iterator classes, EnsureNoVehicleOnGround, TunnelBridgeIsFree, Vehicle::~Vehicle, Vehicle::UpdatePosition and ResetVehicleHash move to Rust.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn openttd_rust_occupancy_update | allow unsafe_code",
+    "operation": "openttd_rust_occupancy_update",
+    "source_contract": "`UpdateVehicleTileHash(v, remove)` for `Vehicle::~Vehicle` and `Vehicle::UpdatePosition` (src/vehicle.cpp).",
+    "reason": "An `extern \"C\"` export needs `no_mangle`, and an insertion dereferences the caller's shared table; the base's export of the same name was under the module allowance."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires with the export's last C++ caller: the native iterator classes, EnsureNoVehicleOnGround, TunnelBridgeIsFree, Vehicle::~Vehicle, Vehicle::UpdatePosition and ResetVehicleHash move to Rust.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn openttd_rust_occupancy_reset | allow unsafe_code",
+    "operation": "openttd_rust_occupancy_reset",
+    "source_contract": "`ResetVehicleHash`'s tile part for its C++ caller (src/vehicle.cpp).",
+    "reason": "`no_mangle` export over the unsafe reset; the base's export of the same name was under the module allowance."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires with the export's last C++ caller: the native iterator classes, EnsureNoVehicleOnGround, TunnelBridgeIsFree, Vehicle::~Vehicle, Vehicle::UpdatePosition and ResetVehicleHash move to Rust.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn openttd_rust_occupancy_on_tile | allow unsafe_code",
+    "operation": "openttd_rust_occupancy_on_tile",
+    "source_contract": "`VehiclesOnTile::Iterator(tile)` for the native iterator class (src/vehicle.cpp).",
+    "reason": "`no_mangle` export; the base's export of the same name was under the module allowance."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires with the export's last C++ caller: the native iterator classes, EnsureNoVehicleOnGround, TunnelBridgeIsFree, Vehicle::~Vehicle, Vehicle::UpdatePosition and ResetVehicleHash move to Rust.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn openttd_rust_occupancy_on_advance | allow unsafe_code",
+    "operation": "openttd_rust_occupancy_on_advance",
+    "source_contract": "`VehiclesOnTile::Iterator::operator++` for the native iterator class (src/vehicle.cpp).",
+    "reason": "`no_mangle` export over the unsafe advancement; the base's export of the same name was under the module allowance."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires with the export's last C++ caller: the native iterator classes, EnsureNoVehicleOnGround, TunnelBridgeIsFree, Vehicle::~Vehicle, Vehicle::UpdatePosition and ResetVehicleHash move to Rust.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn openttd_rust_occupancy_near | allow unsafe_code",
+    "operation": "openttd_rust_occupancy_near",
+    "source_contract": "`VehiclesNearTileXY::Iterator(x, y, max_dist)` for the native iterator class (src/vehicle.cpp).",
+    "reason": "`no_mangle` export; the base's export of the same name was under the module allowance."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires with the export's last C++ caller: the native iterator classes, EnsureNoVehicleOnGround, TunnelBridgeIsFree, Vehicle::~Vehicle, Vehicle::UpdatePosition and ResetVehicleHash move to Rust.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn openttd_rust_occupancy_near_advance | allow unsafe_code",
+    "operation": "openttd_rust_occupancy_near_advance",
+    "source_contract": "`VehiclesNearTileXY::Iterator::operator++` for the native iterator class (src/vehicle.cpp).",
+    "reason": "`no_mangle` export over the unsafe advancement; the base's export of the same name was under the module allowance."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#736",
+    "retirement_condition": "Retires with the export's last C++ caller: the native iterator classes, EnsureNoVehicleOnGround, TunnelBridgeIsFree, Vehicle::~Vehicle, Vehicle::UpdatePosition and ResetVehicleHash move to Rust.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn openttd_rust_occupancy_ground | allow unsafe_code",
+    "operation": "openttd_rust_occupancy_ground",
+    "source_contract": "`EnsureNoVehicleOnGround(tile)` for the C++ function the consoles and native test call (src/vehicle.cpp).",
+    "reason": "`no_mangle` export; the base's export of the same name was under the module allowance."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#736",
+    "retirement_condition": "Retires with the export's last C++ caller: the native iterator classes, EnsureNoVehicleOnGround, TunnelBridgeIsFree, Vehicle::~Vehicle, Vehicle::UpdatePosition and ResetVehicleHash move to Rust.",
+    "site": "rust/openttd-kernels/src/vehicle/occupancy.rs | fn openttd_rust_occupancy_wormhole | allow unsafe_code",
+    "operation": "openttd_rust_occupancy_wormhole",
+    "source_contract": "`TunnelBridgeIsFree(tile, endtile, ignore)` for the C++ function the consoles call (src/vehicle.cpp).",
+    "reason": "`no_mangle` export; the base's export of the same name was under the module allowance."
   }
 ]

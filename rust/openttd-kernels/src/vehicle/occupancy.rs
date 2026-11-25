@@ -19,7 +19,6 @@
 //! An iterator's visitor may change links but not delete the current vehicle, so an iterator
 //! reads the current vehicle's `hash_tile_next` after the visitor returns and never carries it
 //! across a visitor.
-#![allow(unsafe_code)]
 use crate::aircraft::AircraftSubType;
 use crate::game_state::GameState;
 use crate::map_func::{Map, World};
@@ -69,6 +68,7 @@ fn tile_hash_bucket(hash: usize) -> *mut *mut VehicleRecord {
         .wrapping_add(hash)
 }
 /// `_vehicle_tile_hash[hash]`.
+#[allow(unsafe_code)]
 fn tile_hash_head(hash: usize) -> *mut VehicleRecord {
     // SAFETY: `hash` is below `TOTAL_TILE_HASH_SIZE`; the module's serialized access.
     unsafe { tile_hash_bucket(hash).read() }
@@ -87,6 +87,7 @@ pub(crate) fn update_position(v: VehicleRef, map: Map) {
 }
 /// `UpdateVehicleTileHash` from `old_hash == new_hash` on, with the `new_hash` its `remove`
 /// selects: null to remove the vehicle, or its tile's bucket.
+#[allow(unsafe_code)]
 #[inline]
 fn update_vehicle_tile_hash(v: VehicleRef, new_hash: *mut *mut VehicleRecord) {
     let old_hash = v.hash_tile_current();
@@ -127,6 +128,7 @@ fn update_vehicle_tile_hash(v: VehicleRef, new_hash: *mut *mut VehicleRecord) {
 ///
 /// # Safety
 /// `v` is a live record; an insertion's `shared` is the process-lifetime shared table.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_update(
     shared: *const crate::services::Services,
@@ -146,6 +148,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_update(
 ///
 /// # Safety
 /// `pool`'s descriptor is live, and nothing allocates, deletes or yields during the reset.
+#[allow(unsafe_code)]
 pub(crate) unsafe fn reset_vehicle_tile_hash(pool: &crate::vehicle_base::Pool) {
     crate::witness::hit(crate::witness::OCCUPANCY_RESET);
     // `for (Vehicle *v : Vehicle::Iterate())`.
@@ -162,6 +165,7 @@ pub(crate) unsafe fn reset_vehicle_tile_hash(pool: &crate::vehicle_base::Pool) {
 ///
 /// # Safety
 /// As [`reset_vehicle_tile_hash`], for the scheduler table's pool.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::SchedulerServices) {
     // SAFETY: The caller's contract.
@@ -174,8 +178,8 @@ pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::Sche
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct OnTile {
-    pub tile: TileIndex,
-    pub current: *mut VehicleRecord,
+    tile: TileIndex,
+    current: *mut VehicleRecord,
 }
 impl OnTile {
     /// Iterator constructor. Find first vehicle on tile.
@@ -199,10 +203,19 @@ impl OnTile {
             self.increment();
         }
     }
-    /// `operator++`: increment, then skip false matches.
-    pub(crate) fn advance(&mut self) {
+    /// `operator++`: increment, then skip false matches, for this module's checks, whose
+    /// bodies delete no vehicle.
+    fn step(&mut self) {
         self.increment();
         self.skip_false_matches();
+    }
+    /// `operator++`: increment, then skip false matches.
+    ///
+    /// # Safety
+    /// The current vehicle is live: the visitor deleted no vehicle since the cursor reached it.
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn advance(&mut self) {
+        self.step();
     }
     /// `operator*`: the current vehicle, or `None` at the end.
     pub(crate) fn get(&self) -> Option<VehicleRef> {
@@ -210,6 +223,7 @@ impl OnTile {
     }
 }
 /// `VehiclesOnTile::Iterator(tile)` for the native iterator class.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_on_tile(
     shared: &crate::services::Services,
@@ -218,9 +232,14 @@ pub extern "C" fn openttd_rust_occupancy_on_tile(
     OnTile::new(shared.map(), TileIndex(tile))
 }
 /// `VehiclesOnTile::Iterator::operator++` for the native iterator class.
+///
+/// # Safety
+/// As [`OnTile::advance`].
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_occupancy_on_advance(it: &mut OnTile) {
-    it.advance();
+pub unsafe extern "C" fn openttd_rust_occupancy_on_advance(it: &mut OnTile) {
+    // SAFETY: The caller's contract.
+    unsafe { it.advance() };
 }
 
 /// `VehiclesNearTileXY::Iterator`: iterate over all vehicles near a given world coordinate.
@@ -230,17 +249,17 @@ pub extern "C" fn openttd_rust_occupancy_on_advance(it: &mut OnTile) {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Near {
-    pub left: i32,
-    pub top: i32,
-    pub right: i32,
-    pub bottom: i32,
-    pub hxmin: u32,
-    pub hxmax: u32,
-    pub hymin: u32,
-    pub hymax: u32,
-    pub hx: u32,
-    pub hy: u32,
-    pub current_veh: *mut VehicleRecord,
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+    hxmin: u32,
+    hxmax: u32,
+    hymin: u32,
+    hymax: u32,
+    hx: u32,
+    hy: u32,
+    current_veh: *mut VehicleRecord,
 }
 impl Near {
     /// Iterator constructor. Find first vehicle near (x, y).
@@ -333,8 +352,12 @@ impl Near {
         }
     }
     /// `operator++`: increment, then skip false matches.
+    ///
+    /// # Safety
+    /// The current vehicle is live: the visitor deleted no vehicle since the cursor reached it.
+    #[allow(unsafe_code)]
     #[inline]
-    pub(crate) fn advance(&mut self) {
+    pub(crate) unsafe fn advance(&mut self) {
         self.increment();
         self.skip_false_matches();
     }
@@ -345,14 +368,20 @@ impl Near {
     }
 }
 /// `VehiclesNearTileXY::Iterator(x, y, max_dist)` for the native iterator class.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_near(x: i32, y: i32, max_dist: u32) -> Near {
     Near::new(x, y, max_dist)
 }
 /// `VehiclesNearTileXY::Iterator::operator++` for the native iterator class.
+///
+/// # Safety
+/// As [`Near::advance`].
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_occupancy_near_advance(it: &mut Near) {
-    it.advance();
+pub unsafe extern "C" fn openttd_rust_occupancy_near_advance(it: &mut Near) {
+    // SAFETY: The caller's contract.
+    unsafe { it.advance() };
 }
 crate::abi::layouts! {
     fn abi_layout;
@@ -375,11 +404,11 @@ pub(crate) fn ensure_no_vehicle_on_ground(world: &World, tile: TileIndex) -> Opt
             || (v.vehicle_type() == VehicleType::VEH_AIRCRAFT
                 && AircraftSubType(v.subtype()) == AircraftSubType::AIR_SHADOW)
         {
-            it.advance();
+            it.step();
             continue;
         }
         if v.z_pos() > z {
-            it.advance();
+            it.step();
             continue;
         }
 
@@ -407,11 +436,11 @@ pub(crate) fn tunnel_bridge_is_free(
                 && v.vehicle_type() != VehicleType::VEH_ROAD
                 && v.vehicle_type() != VehicleType::VEH_SHIP
             {
-                it.advance();
+                it.step();
                 continue;
             }
             if Some(v) == ignore {
-                it.advance();
+                it.step();
                 continue;
             }
             return Some(v.vehicle_type());
@@ -434,14 +463,14 @@ pub(crate) fn ensure_no_train_on_track_bits(
     let mut it = OnTile::new(map, tile);
     while let Some(v) = it.get() {
         if v.vehicle_type() != VehicleType::VEH_TRAIN {
-            it.advance();
+            it.step();
             continue;
         }
 
         let t = crate::train::Handle::from_vehicle(v);
         if t.track() != track_bits && !crate::track_func::tracks_overlap(t.track().0 | track_bits.0)
         {
-            it.advance();
+            it.step();
             continue;
         }
 
@@ -458,6 +487,7 @@ fn command_cost(cost: Cost<'_>, blocker: Option<VehicleType>) {
     }
 }
 /// `EnsureNoVehicleOnGround(tile)` for the native function, into `out`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_ground(
     command: &CommandServices,
@@ -467,6 +497,7 @@ pub extern "C" fn openttd_rust_occupancy_ground(
     command.no_vehicle(out, TileIndex(tile));
 }
 /// `TunnelBridgeIsFree(tile, endtile, ignore)` for the native function, into `out`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_occupancy_wormhole(
     command: &CommandServices,
@@ -526,6 +557,7 @@ impl CommandServices {
 /// that indexes a record holds `town::tests::GLOBAL_LOCK`, which the train swap oracle also
 /// holds, from its setup to the end of its cleanup, since the hash is process-wide.
 #[cfg(test)]
+#[allow(unsafe_code)]
 mod index_tests {
     use super::*;
     use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
@@ -646,7 +678,8 @@ mod index_tests {
             hy: 0,
             current_veh: ptr::null_mut(),
         };
-        it.advance();
+        // SAFETY: The failed assertion ends the child before any record is read.
+        unsafe { it.advance() };
         unreachable!("the failed native assertion ends the child");
     }
 

@@ -148,6 +148,7 @@ pub(crate) fn vehicles_on_tile_raw(map: Map, tile: u32, visit: impl FnMut(Vehicl
 
 /// `HasVehicleOnTile`: loop over vehicles on a tile, and check whether a predicate is true
 /// for any of them.
+#[allow(unsafe_code)]
 #[inline]
 pub(crate) fn has_vehicle_on_tile(
     map: Map,
@@ -159,7 +160,8 @@ pub(crate) fn has_vehicle_on_tile(
         if predicate(v) {
             return true;
         }
-        it.advance();
+        // SAFETY: The module's iterator contract: a predicate deletes no vehicle.
+        unsafe { it.advance() };
     }
     false
 }
@@ -195,6 +197,7 @@ pub(crate) fn vehicles_near_tile_xy(
 /// whether a predicate is true for any of them.
 /// This only works for vehicles with proper `Vehicle::Tile`, so only ground vehicles outside
 /// wormholes.
+#[allow(unsafe_code)]
 #[inline]
 pub(crate) fn has_vehicle_near_tile_xy(
     x: i32,
@@ -207,7 +210,8 @@ pub(crate) fn has_vehicle_near_tile_xy(
         if predicate(v) {
             return true;
         }
-        it.advance();
+        // SAFETY: The module's iterator contract: a predicate deletes no vehicle.
+        unsafe { it.advance() };
     }
     false
 }
