@@ -98,5 +98,12 @@
 
 - `track_func.rs`, `rail_map.rs` and `rail.rs` are finished files. Each `track_func.h` helper but `TrackToOppositeTrack` (#1027 part 3) and the uncalled `TrackExitdirToTrackdir` has one definition under its original name, with the original's wrapper types and assertions through the caller's `check`; `rail_map.h`'s readers are `World` methods over `TileIndex`; `rail.cpp`'s bodies and `rail.h`'s unions and compatibility and power tests are Rust ports.
 - `RailTypeInfo` stays a C++ record in `_railtypes`: `rail::get_rail_type_info` resolves a rail type once to a `RailTypeInfoRef`, whose methods read one member each through the shared table's `rail_type_*` readers.
-- `_raw` adapters with integer signatures serve the files no pass has finished. The rail command table's and the NewGRF resolver's rail type readers stay for their files' passes.
+- `_raw` adapters with integer signatures serve the files no pass has finished. The NewGRF resolver's rail type readers stay for its pass.
+- `rail.h`'s cost helpers (`RailBuildCost`, `RailClearCost`, `RailConvertCost`) and `RailNoLevelCrossings` are `rail.rs` ports over the `cost_multiplier` and `flags` readers.
 - PRs: #1054.
+
+## Rail track, depot and signal commands (#1046)
+
+- `rail_cmd.rs` is a finished file: the 17 command and tile-proc bodies of `rail_cmd.cpp` are `Ctx` methods under the original's names, over one map view and one PBS context per entry, each command taking an argument struct with the original's parameters. The single-rail, single-signal and conversion commands nest in Rust under `command::nested`; reservations, YAPF notification, level crossing updates and `Train::ConsistChanged` are direct calls to their Rust owners.
+- C++ keeps: the command facades and `CmdBuildRailroadTrack`, `CmdRemoveRailroadTrack`, `CmdBuildSignalTrack` and `CmdRemoveSignalTrack` (until the command table is ported), the map writers, the reservation and signal-variant readers, depots, company pools and every `CommandCost`. `RailCommandServices` keeps 13 slots, most for the road, tunnel, water, depot and station commands.
+- PRs: the workset 10 part 2 PR.

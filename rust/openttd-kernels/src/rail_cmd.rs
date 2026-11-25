@@ -898,7 +898,7 @@ impl<'a> Ctx<'a> {
                         }
                     }
 
-                    if self.world.level_crossing_tile(tile.0)
+                    if self.world.level_crossing(tile.0)
                         && TrackBits(self.world.crossing_rail_bits(tile.0)) == trackbit
                     {
                         return cost.error(STR_ERROR_ALREADY_BUILT.0);
