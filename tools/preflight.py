@@ -141,7 +141,7 @@ def step_env(name: str, env: dict[str, Any], base: str) -> dict[str, str]:
     return resolved
 
 
-def workflow_steps(workflow: dict[str, Any], base: str) -> list[Step]:
+def workflow_steps(workflow: quick_workflow.Workflow, base: str) -> list[Step]:
     """Quick's `run:` steps that preflight runs, in workflow order."""
     steps = []
     for entry in quick_workflow.steps(workflow):

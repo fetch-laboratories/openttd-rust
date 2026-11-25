@@ -17,19 +17,20 @@ from functools import partial
 from pathlib import Path
 from subprocess import CompletedProcess
 from types import ModuleType
-from typing import Any
+from typing import cast
 from unittest.mock import patch
 
 import git_hooks
 import preflight
 import preflight_stamp
+import quick_workflow
 import vcs
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 
 
-def workflow(*steps: dict[str, Any]) -> dict[str, Any]:
+def workflow(*steps: quick_workflow.Step) -> quick_workflow.Workflow:
     return {"jobs": {"quick": {"steps": list(steps)}}}
 
 
@@ -69,7 +70,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_workflow_steps_read_every_job_in_file_order(self) -> None:
         """The Rust job's steps first, the reporting job's step skipped (#1063)."""
-        quick = {
+        quick: quick_workflow.Workflow = {
             "jobs": {
                 "rust": {"steps": [{"name": "a", "run": "true"}]},
                 "python": {"steps": [{"uses": "x"}, {"name": "b", "run": "true"}]},
@@ -211,7 +212,9 @@ class WorkflowTests(unittest.TestCase):
             {"name": "Gate", "run": "true", "if": "github.event_name == 'push'"},
         ):
             with self.assertRaisesRegex(ValueError, "step 'Gate'"):
-                preflight.workflow_steps(workflow(entry), "base")
+                preflight.workflow_steps(
+                    workflow(cast(quick_workflow.Step, entry)), "base"
+                )
 
     def test_step_selection(self) -> None:
         names = ["Rust checks", "Ruff ratchet", "Strings"]
@@ -443,8 +446,8 @@ class StampTests(unittest.TestCase):
     def preflight(self, repo: Path, event: str) -> int:
         quick = yaml.safe_load(preflight.WORKFLOW.read_text())
         (entry,) = [
-            dict(step)
-            for step in preflight.quick_workflow.steps(quick)
+            quick_workflow.Step(**step)
+            for step in quick_workflow.steps(quick)
             if "tools/lint-policy.py" in step.get("run", "")
         ]
         entry["run"] = next(

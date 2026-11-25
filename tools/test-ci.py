@@ -1654,7 +1654,8 @@ SECURITY = "http://security.ubuntu.com/ubuntu/\tpriority:3\n"
 
 # An unfinished pull_request run of ci-quick.yml at the head: the Quick
 # validation check reports the other jobs and appears only when they end (#1063).
-QUICK_RUNNING = {
+QUICK_RUNNING: ci_log.Run = {
+    "id": 77,
     "status": "in_progress",
     "conclusion": None,
     "run_started_at": "2026-11-12T01:00:00Z",
@@ -2090,7 +2091,9 @@ class PolicyTests(unittest.TestCase):
     def test_quick_uses_no_local_action(self) -> None:
         """On a pull request Quick checks out the PR head, and a branch older
         than a local action does not contain it (#862 broke Quick that way)."""
-        steps = quick_workflow.steps(workflow("ci-quick.yml"))
+        steps = quick_workflow.steps(
+            cast(quick_workflow.Workflow, workflow("ci-quick.yml"))
+        )
         for step in steps:
             self.assertFalse(str(step.get("uses", "")).startswith("./"), step)
         # Its package install is the shared action's script, copied, so the two
@@ -2156,7 +2159,7 @@ class PolicyTests(unittest.TestCase):
                         "-c",
                         step["run"],
                     ],
-                    env=dict(os.environ, RESULTS=results),
+                    env=dict(os.environ, RESULTS=str(results)),
                     capture_output=True,
                     text=True,
                     check=False,
@@ -2655,7 +2658,7 @@ class RequestTests(unittest.TestCase):
     def ready(
         self,
         quick: list[QuickCheck],
-        runs: list[dict[str, Any]] | None = None,
+        runs: list[ci_log.Run] | None = None,
         **pull: object,
     ) -> list[tuple]:
         """Run ready on PULL with pull's changes, `quick` as the head's checks and
@@ -2694,7 +2697,7 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(self.ready([skipped], [QUICK_RUNNING], draft=False), [mark])
         self.assertEqual(
             self.ready(
-                [skipped], [dict(QUICK_RUNNING, status="completed")], draft=False
+                [skipped], [{**QUICK_RUNNING, "status": "completed"}], draft=False
             ),
             [(*mark, "--undo"), mark],
         )
@@ -3772,7 +3775,7 @@ class RunWaitTests(unittest.TestCase):
         checks: list[dict[str, object] | None],
         draft: bool = True,
         heads: list[str] | None = None,
-        runs: list[dict[str, Any]] | None = None,
+        runs: list[ci_log.Run] | None = None,
     ) -> tuple[int, str, list[tuple[str, ...]]]:
         """Run argv against successive Quick check runs of the PR's head; the PR
         is a draft until marked ready, its head follows `heads`, and `runs` are
@@ -3885,7 +3888,7 @@ class RunWaitTests(unittest.TestCase):
             ["wait", "170", "--quick"],
             [*[skipped] * reads, done],
             draft=False,
-            runs=[dict(QUICK_RUNNING, status="completed")],
+            runs=[{**QUICK_RUNNING, "status": "completed"}],
         )
         self.assertEqual(status, 1)
         self.assertIn("ready 170 --wait", output)
@@ -4087,7 +4090,7 @@ class EnqueueWorld:
 
     quick: ci.CheckRun | None = field(default_factory=lambda: EnqueueTests.QUICK)
     # The head's pull_request runs of ci-quick.yml.
-    quick_runs: list[dict[str, Any]] = field(default_factory=list)
+    quick_runs: list[ci_log.Run] = field(default_factory=list)
     requested: ci_log.Run | None = field(default_factory=lambda: EnqueueTests.REQUESTED)
     dispatched: list[ci_log.Run] | None = None
     pages: list[list[ci_log.Run]] | None = None
@@ -5003,7 +5006,7 @@ class World:
     labeled: list[ci_log.Run] = field(default_factory=list)
     later_runs: list[list[ci_log.Run]] | None = None
     requests: list[dict[str, object]] = field(default_factory=list)
-    quick_runs: list[dict[str, Any]] = field(default_factory=list)
+    quick_runs: list[ci_log.Run] = field(default_factory=list)
 
 
 class FakeGitHub:

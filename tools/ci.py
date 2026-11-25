@@ -1280,7 +1280,7 @@ def running_quick(repository: str, head: str) -> CheckRun | None:
     progress. The Quick validation check reports Quick's other jobs and appears
     only once they end, so for most of a run the head has no such check, or only
     the skip its draft push left (#1063)."""
-    runs = api(
+    runs: list[ci_log.Run] = api(
         repository,
         f"actions/workflows/{QUICK_WORKFLOW}/runs?event=pull_request"
         f"&head_sha={head}&per_page=100",
