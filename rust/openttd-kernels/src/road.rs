@@ -2919,9 +2919,10 @@ pub unsafe extern "C" fn openttd_rust_road_leave_depot_abi(
 ) -> u8 {
     u8::from(entry!(leaves).road_veh_leave_depot(Part::new(v, state), first))
 }
-/// `RoadVehicle::Crash(flooded)`, for Rust callers: `v` is a live road vehicle record.
-pub(crate) fn crash(leaves: &Leaves, v: VehicleRef, flooded: bool) -> u32 {
-    entry!(leaves).crash(Part::of(v), flooded)
+/// `RoadVehicle::Crash(flooded)`, for Rust callers: `v` is a live road vehicle record and
+/// `s` the road owner its record names, which the caller has resolved.
+pub(crate) fn crash(leaves: &Leaves, v: VehicleRef, s: *mut State, flooded: bool) -> u32 {
+    entry!(leaves).crash(Part::new(v, s), flooded)
 }
 /// `RoadVehicle::Crash`.
 /// # Safety

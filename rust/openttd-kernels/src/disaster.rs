@@ -838,9 +838,10 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
                 n = n.wrapping_sub(1);
                 old == 0
             } {
+                let road = u.road();
                 // SAFETY: A live road vehicle's owner; one scalar access each.
-                if unsafe { crate::road::crashed_ctr(u.road()) } != 0
-                    || unsafe { crate::road::disaster_vehicle(u.road()) } != VehicleID::INVALID
+                if unsafe { crate::road::crashed_ctr(road) } != 0
+                    || unsafe { crate::road::disaster_vehicle(road) } != VehicleID::INVALID
                 {
                     /* Targetted vehicle is crashed or already a target, destroy the UFO. */
                     t.delete(ufo.v);
@@ -850,7 +851,7 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
                 ufo.v.set_dest_tile(TileIndex(u.index(t.newgrf()).0));
                 t.reset_age(ufo.v);
                 // SAFETY: As above.
-                unsafe { crate::road::set_disaster_vehicle(u.road(), ufo.v.index(t.newgrf())) };
+                unsafe { crate::road::set_disaster_vehicle(road, ufo.v.index(t.newgrf())) };
                 break;
             }
         }
@@ -866,6 +867,7 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
         })
     });
     let target = target.expect("RoadVehicle::Get of the targeted road vehicle");
+    let road = target.road();
 
     let dist = delta_sum(ufo.v.x_pos(), target.x_pos(), ufo.v.y_pos(), target.y_pos()) as u32;
 
@@ -895,11 +897,11 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
         t.increment_age(ufo.v);
         // SAFETY: The target is a live road vehicle; one scalar access.
         if !target.vehstatus().test(VehState::Hidden)
-            && unsafe { crate::road::crashed_ctr(target.road()) } == 0
+            && unsafe { crate::road::crashed_ctr(road) } == 0
         {
-            let victims = crate::road::crash(t.road(), target, false);
+            let victims = crate::road::crash(t.road(), target, road, false);
             // SAFETY: As above.
-            unsafe { crate::road::set_disaster_vehicle(target.road(), VehicleID::INVALID) };
+            unsafe { crate::road::set_disaster_vehicle(road, VehicleID::INVALID) };
 
             add_tile_news_item(
                 &get_encoded_string(STR_NEWS_DISASTER_SMALL_UFO, &[]),
