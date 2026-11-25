@@ -37,7 +37,9 @@ not a gate: matching is by facade, export and name, as the 2026-11-06 overhaul
 measured them. `--compare BASE_REF` prints, for the files given or else the
 finished files that the head lists and the base lacks or changed, a table of
 every row at the merge base and at the head, then each row new or grown at the
-head; it gates nothing.
+head; it gates nothing. It also lists, whether new or not, each file-level
+`#![allow(...)]` naming `unsafe_code` in a file that the head lists as finished
+and the base does not: a pass scopes `unsafe_code` to the items that need it.
 """
 
 import argparse
@@ -91,6 +93,7 @@ class Node(Protocol):
     children: list["Node"]
     named_children: list["Node"]
     prev_named_sibling: "Node | None"
+    prev_sibling: "Node | None"
     parent: "Node | None"
 
     def child_by_field_name(self, name: str) -> "Node | None": ...
@@ -1401,6 +1404,40 @@ COMPARED = (
 )
 
 
+def allowed_lints(attribute: Node, data: bytes) -> set[str]:
+    """The lints an `allow(...)` attribute names: its argument list's own
+    identifiers, not those inside comments, strings or a `reason`, and not
+    the second half of a tool path such as `clippy::x`."""
+    kinds = [child for child in attribute.named_children if child.type not in COMMENTS]
+    if len(kinds) != 2 or text(kinds[0], data) != "allow":
+        return set()
+    names = set()
+    for child in kinds[1].children:
+        before = child.prev_sibling
+        if child.type == "identifier" and (before is None or before.type != "::"):
+            names.add(text(child, data))
+    return names
+
+
+def module_unsafe_allows(path: str, source: str) -> list[Site]:
+    """Each `#![allow(...)]` at the top level of a file that names `unsafe_code`.
+
+    The parser reads the attributes, so comments and the inner attributes of
+    an inline `mod` do not count, and spacing such as `# ! [allow(...)]` does.
+    """
+    data = source.encode()
+    rows = []
+    for node in PARSERS["rust"].parse(data).root_node.named_children:
+        if node.type != "inner_attribute_item":
+            continue
+        attributes = [c for c in node.named_children if c.type == "attribute"]
+        if attributes and "unsafe_code" in allowed_lints(attributes[0], data):
+            rows.append(
+                Site(path, node.start_point[0] + 1, "module unsafe_code allow", "")
+            )
+    return rows
+
+
 def count(rows: list[Site], kind: str) -> int:
     chosen = [row for row in rows if row.kind == kind]
     return (
@@ -1473,6 +1510,18 @@ def compare(base_ref: str, head: str, files: list[str]) -> int:
         old, new = count(before, kind), count(after, kind)
         if old or new:
             print(f"| {kind} | {old} | {new} |")
+    finishing = set(finished_files(head)) - set(finished_files(base))
+    allows = [
+        row
+        for path in sorted(set(selected) & finishing)
+        for row in module_unsafe_allows(path, after_tree[path])
+    ]
+    if allows:
+        print(
+            f"\n{len(allows)} module-scope `unsafe_code` allows in files this branch finishes:"
+        )
+        for row in allows:
+            print(f"{row.path}:{row.line}: {row.kind}")
     changed = [
         pair
         for path in sorted(paths)

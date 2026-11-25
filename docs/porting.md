@@ -64,7 +64,7 @@ A pass owns the faults in the files it finishes, and every call those files make
 - A crate that `openttd-kernels` builds with cannot import a kernels port. Until #998's shared crate exists, it keeps its own copy, named after the original, only where a test in `openttd-kernels` holds the copy to the port; the copy's comment names the port and #998.
 - Before adding a binding, search `src/` for its callee, including macros and compound callbacks such as `CheckOwnership` and `GetRoadOwner`.
 - Each shared accessor (vehicle field, map predicate, setting or constant) has one typed definition; command ports share one set of command-check services. A PR adding one deletes the integrated copies.
-- Delete the C++ a change replaces in the same change, with its exports, declarations and service fields. An orphan export, declaration or callback field in the lines a PR has in scope is a finding, baselined or not. An export whose only consumer is a native fixture that [#736's classification](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013) keeps is not an orphan; it leaves with that fixture.
+- Delete the C++ a change replaces in the same change, with its exports, declarations and service fields. An orphan export, declaration or callback field in the lines a PR has in scope is a finding, baselined or not, and `orphan-exports.py` refuses a C++ free function the change leaves uncalled. An export whose only consumer is a native fixture that [#736's classification](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013) keeps is not an orphan; it leaves with that fixture.
 - A typed accessor replaces its raw form. A raw `_raw` adapter delegates to the typed definition and serves only callers in files no pass has finished, until its last caller goes or #734 closes. A pass converts callers in already-finished files itself. Rust code calls the typed form, not a raw adapter or an `openttd_rust_*` export, where a typed form exists.
 
 ## Map access
@@ -100,6 +100,7 @@ A pass owns the faults in the files it finishes, and every call those files make
 ## Code standards
 
 - A file pass applies these standards to every line left in its files; every other PR to every line it changes or adds. Later PRs touch a finished file only for a mechanical shared-file edit, for a caller adopting a changed signature, or for a repair the roadmap selects, which applies these standards to every line it changes.
+- In the files it finishes, a pass allows `unsafe_code` only on the items that need it, each with its suppression record, as [lint policy](rust-migration.md#quick-cleanup-checks) requires of a new suppression; a file-level `#![allow(unsafe_code)]` does not stay. The module still states its safety contract once ([comments](#comments)).
 - Python tools use typed records (`dataclass`, `TypedDict`) for fixed-shape data, not bare dicts.
 - Group shared append lists by component and sort entries by name: includes after stdafx and before safeguards, ABI probe calls, and shared table fields, mirrors, initializers and layouts (one field per line). Alphabetize witness blocks.
 
