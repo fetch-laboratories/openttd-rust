@@ -368,7 +368,6 @@ impl<'a> Ctx<'a> {
     /// # Safety
     /// The table and its nested tables are valid for the synchronous call.
     unsafe fn new(s: *const RailCommandServices) -> Self {
-        w::hit(w::RAIL_CMD_ENTRIES);
         // SAFETY: native immutable process-lifetime tables.
         let s = unsafe { &*s };
         let shared = unsafe { &*s.shared };
@@ -440,6 +439,8 @@ impl<'a> Ctx<'a> {
         mut body: impl FnMut(DoCommandFlags),
     ) {
         crate::command::nested(self.command, self.shared, out, tile.0, flags.0, |flags| {
+            // Each run of a nested body is a command entry, as the native dispatch's was.
+            w::hit(w::RAIL_CMD_ENTRIES);
             body(DoCommandFlags(flags));
         });
     }
@@ -3050,6 +3051,7 @@ pub(crate) unsafe fn remove_single_rail_command(
     flags: DoCommandFlags,
     args: CmdRemoveSingleRail,
 ) {
+    // Each nested body run counts the entry.
     let x = unsafe { Ctx::new(s) };
     x.remove_single_rail_command(out, flags, args);
 }
@@ -3065,6 +3067,7 @@ pub(crate) unsafe fn clear_tile_track(
     flags: DoCommandFlags,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.clear_tile_track(x.c(cost), x.c(ret), tile, flags);
 }
 /// [`clear_tile_track`] for `landscape_cmd.rs` until its pass.
@@ -3090,6 +3093,7 @@ pub(crate) unsafe fn change_tile_owner_track(
     new_owner: Owner,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.change_tile_owner_track(x.c(ret), tile, old_owner, new_owner);
 }
 /// `TerraformTile_Track`.
@@ -3104,6 +3108,7 @@ pub(crate) unsafe fn terraform_tile_track(
     tileh_new: Slope,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.terraform_tile_track(x.c(cost), tile, flags, z_new, tileh_new);
 }
 /// [`terraform_tile_track`] for `landscape_cmd.rs` until its pass.
@@ -3138,6 +3143,7 @@ pub(crate) unsafe fn check_build_above_track(
     flags: DoCommandFlags,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.check_build_above_track(x.c(cost), tile, flags);
 }
 
@@ -3161,6 +3167,7 @@ pub unsafe extern "C" fn openttd_rust_rail_build_single(
     auto_remove_signals: bool,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.cmd_build_single_rail(
         x.c(out),
         x.c(a),
@@ -3187,6 +3194,7 @@ pub unsafe extern "C" fn openttd_rust_rail_remove_single(
     track: u8,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.cmd_remove_single_rail(
         x.c(out),
         x.c(a),
@@ -3216,6 +3224,7 @@ pub unsafe extern "C" fn openttd_rust_rail_track_drag(
     fail_on_obstacle: bool,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.cmd_rail_track_helper(
         x.c(out),
         x.c(a),
@@ -3246,6 +3255,7 @@ pub unsafe extern "C" fn openttd_rust_rail_build_depot(
     dir: u8,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.cmd_build_train_depot(
         x.c(out),
         x.c(a),
@@ -3279,6 +3289,7 @@ pub unsafe extern "C" fn openttd_rust_rail_build_signal(
     signals_copy: u8,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.cmd_build_single_signal(
         x.c(out),
         x.c(a),
@@ -3320,6 +3331,7 @@ pub unsafe extern "C" fn openttd_rust_rail_signal_drag(
     signal_density: i32,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.cmd_signal_track_helper(
         x.c(out),
         x.c(a),
@@ -3351,6 +3363,7 @@ pub unsafe extern "C" fn openttd_rust_rail_remove_signal(
     track: u8,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.cmd_remove_single_signal(
         x.c(out),
         DoCommandFlags(flags),
@@ -3376,6 +3389,7 @@ pub unsafe extern "C" fn openttd_rust_rail_convert(
     diagonal: bool,
 ) {
     let x = unsafe { Ctx::new(s) };
+    w::hit(w::RAIL_CMD_ENTRIES);
     x.cmd_convert_rail(
         x.c(out),
         x.c(a),
