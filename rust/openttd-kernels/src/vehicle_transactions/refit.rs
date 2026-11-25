@@ -132,7 +132,7 @@ unsafe fn get_refit_cost_factor(
         // SAFETY: An engine's file is live until the loader's next reset.
         let grffile = unsafe {
             crate::newgrf::GRFFileRef::of(
-                &s.common.base.shared,
+                s.common.base.shared,
                 crate::vehicle::EngineRef::of(e).grf().cast(),
             )
         };

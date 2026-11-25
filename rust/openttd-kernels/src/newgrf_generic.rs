@@ -28,7 +28,7 @@ pub const IT_AI_UNKNOWN: IndustryType = IndustryType(0xFE);
 /// The AI actually wants to transport to/from a town, not an industry.
 pub const IT_AI_TOWN: IndustryType = IndustryType(0xFF);
 
-/// `AIConstructionEvent`: AI events for asking the NewGRF for information.
+/// `AIConstructionEvent`: AI events for asking the `NewGRF` for information.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AIConstructionEvent(pub u8);

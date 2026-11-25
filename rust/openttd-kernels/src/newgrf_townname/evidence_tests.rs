@@ -196,7 +196,7 @@ impl Fixture {
         assert!(!self.load(b"TNS5", &actions_short()));
         unsafe { init_grf_town_generator_names() };
     }
-    fn name(&self, id: u32, gen_: u16, seed: u32) -> Vec<u8> {
+    fn name(id: u32, gen_: u16, seed: u32) -> Vec<u8> {
         let mut out = Vec::new();
         unsafe {
             grf_town_name_generate(&mut |part| out.extend_from_slice(part), id, gen_, seed);
@@ -234,14 +234,14 @@ fn action_0f_parsing_and_generation_match_the_original() {
     // Style order, then the fallback past the last style.
     assert_eq!(first.len(), 4);
     let ids = [*b"TNA5", *b"TNA5", *b"TNB5", *b"TNS5"].map(grfid);
-    for (gen_, id) in ids.into_iter().enumerate() {
-        assert_eq!(unsafe { get_grf_town_name_id(gen_ as u16) }, id);
+    for (gen_, id) in (0_u16..).zip(ids) {
+        assert_eq!(unsafe { get_grf_town_name_id(gen_) }, id);
     }
     assert_eq!(unsafe { get_grf_town_name_type(1) }, 1);
     assert_eq!(unsafe { get_grf_town_name_id(4) }, 0);
     assert_eq!(
-        unsafe { get_grf_town_name_type(4) },
-        SPECSTR_TOWNNAME_START.0 as u16
+        u32::from(unsafe { get_grf_town_name_type(4) }),
+        SPECSTR_TOWNNAME_START.0
     );
 
     let (tna, tnb, tns, tnx) = (
@@ -251,29 +251,29 @@ fn action_0f_parsing_and_generation_match_the_original() {
         grfid(*b"TNX5"),
     );
     // A repeated definition, the recursive final definition and the second file.
-    assert_eq!(f.name(tna, 0, 0), b"Y Hill");
-    assert_eq!(f.name(tna, 0, u32::MAX), b"Alton Hill");
-    assert_eq!(f.name(tna, 0, 0x0003_0000), b"Beton Hill");
-    assert_eq!(f.name(tna, 1, 0), b"Q");
-    assert_eq!(f.name(tna, 1, 0xFFFF), b"Y Hill");
-    assert_eq!(f.name(tnb, 0, 0), "Gam\u{20ac}".as_bytes());
+    assert_eq!(Fixture::name(tna, 0, 0), b"Y Hill");
+    assert_eq!(Fixture::name(tna, 0, u32::MAX), b"Alton Hill");
+    assert_eq!(Fixture::name(tna, 0, 0x0003_0000), b"Beton Hill");
+    assert_eq!(Fixture::name(tna, 1, 0), b"Q");
+    assert_eq!(Fixture::name(tna, 1, 0xFFFF), b"Y Hill");
+    assert_eq!(Fixture::name(tnb, 0, 0), "Gam\u{20ac}".as_bytes());
     // The invalid reference deleted its entry and disabled its file.
     assert!(unsafe { get_grf_town_name(tnx) }.is_null());
-    assert_eq!(f.name(tnx, 0, 0), b"");
+    assert_eq!(Fixture::name(tnx, 0, 0), b"");
     assert_eq!(*STATUSES.lock().unwrap(), [GCS_DISABLED]);
     assert_eq!(*ERRORS.lock().unwrap(), [STR_NEWGRF_ERROR_INVALID_ID.0]);
     // The read failure of the truncated file keeps the parts read before it.
-    assert_eq!(f.name(tns, 0, 0), b"Shortort");
+    assert_eq!(Fixture::name(tns, 0, 0), b"Shortort");
 
-    check_oracle(&f, &first);
+    check_oracle(&first);
 
     // The second load of `ReloadNewGRFData` behaves as the first.
     f.load_all();
     assert_eq!(names().len(), first.len());
-    check_oracle(&f, &names());
+    check_oracle(&names());
 }
 
-fn check_oracle(f: &Fixture, list: &[StringID]) {
+fn check_oracle(list: &[StringID]) {
     let builtin = crate::services::fixture(null_mut(), random);
     let mut styles = 0;
     let mut samples = 0;
@@ -312,7 +312,7 @@ fn check_oracle(f: &Fixture, list: &[StringID]) {
             let actual = if usize::from(gen_) < list.len() {
                 let id = unsafe { get_grf_town_name_id(gen_) };
                 let kind = unsafe { get_grf_town_name_type(gen_) };
-                hex(&f.name(id, kind, seed))
+                hex(&Fixture::name(id, kind, seed))
             } else {
                 // The built-in English generator, which the fallback selects.
                 let owner = unsafe {

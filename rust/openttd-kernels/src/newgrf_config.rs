@@ -21,7 +21,7 @@ impl GRFConfigFlag {
     pub const InitOnly: Self = Self(5);
     /// GRF file passed `GLS_RESERVE` stage
     pub const Reserved: Self = Self(6);
-    /// GRF is unusable with this version of OpenTTD
+    /// GRF is unusable with this version of `OpenTTD`
     pub const Invalid: Self = Self(7);
 }
 
