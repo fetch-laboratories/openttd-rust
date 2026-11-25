@@ -15,7 +15,6 @@
 #include "gfx_type.h"
 #include "vehicle_type.h"
 
-bool CheckTakeoverVehicleLimit(CompanyID cbig, CompanyID small);
 void ChangeOwnershipOfCompanyItems(Owner old_owner, Owner new_owner);
 std::array<StringParameter, 2> GetParamsForOwnedBy(Owner owner, TileIndex tile);
 void SetLocalCompany(CompanyID new_company);

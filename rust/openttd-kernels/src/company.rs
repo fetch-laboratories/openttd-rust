@@ -1117,21 +1117,6 @@ pub(crate) unsafe fn check_takeover_vehicle_limit(
         })
 }
 
-/// `CheckTakeoverVehicleLimit`, for the native function.
-///
-/// # Safety
-/// As [`check_takeover_vehicle_limit`]: the native callers pass live companies' IDs.
-#[unsafe(no_mangle)]
-#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
-pub unsafe extern "C" fn openttd_rust_company_takeover_allowed_abi(
-    s: &Services,
-    cbig: CompanyID,
-    csmall: CompanyID,
-) -> u8 {
-    // SAFETY: As this function's contract.
-    u8::from(unsafe { check_takeover_vehicle_limit(s, cbig, csmall) })
-}
-
 /// `HandleBankruptcyTakeover`: handle the bankruptcy take over of a company. Companies going
 /// bankrupt will ask the other companies in order of their performance rating, so better
 /// performing companies get the 'do you want to merge with Y' question earlier. The question
@@ -3445,8 +3430,10 @@ pub(crate) fn cmd_buy_company(
     }
 
     // Do not allow takeover if the resulting company would have too many vehicles.
-    // SAFETY: `Company::GetIfValid` found the target above, and the current company is the
-    // live company running the command.
+    // SAFETY: `Company::GetIfValid` found the target above. The command has neither the
+    // spectator nor the deity flag, so in a normal game `ExecuteCommand` (`command.cpp:280`)
+    // runs it only for a valid current company; outside one no company exists for the
+    // target lookup to find.
     if !unsafe { check_takeover_vehicle_limit(s, current, target_company) } {
         out.error(STR_ERROR_TOO_MANY_VEHICLES_IN_GAME.0);
         return;
