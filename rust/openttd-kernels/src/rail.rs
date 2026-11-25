@@ -131,7 +131,7 @@ impl RailTypeFlags {
     /// `BaseBitSet::Test`.
     #[must_use]
     pub const fn test(self, flag: RailTypeFlag) -> bool {
-        self.0 & (1 << flag.0) != 0
+        crate::base_bitset_type::test(self.0 as u64, flag.0)
     }
 }
 
