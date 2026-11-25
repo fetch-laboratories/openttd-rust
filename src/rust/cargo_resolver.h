@@ -5,9 +5,9 @@
 #include "../newgrf_spritegroup.h"
 #include "cargo_registry_ffi.h"
 struct CargoResolverObject final : ResolverObject {
-	const OpenTTDCargoInvocation &invocation;
-	CargoResolverObject(const OpenTTDCargoInvocation &invocation) : ResolverObject(invocation.file, static_cast<CallbackID>(invocation.callback), invocation.param1, invocation.param2), invocation(invocation) { this->root_spritegroup = invocation.root; }
+	const CargoSpec *cargospec;
+	CargoResolverObject(const CargoSpec *cs, CallbackID callback = CBID_NO_CALLBACK, uint32_t callback_param1 = 0, uint32_t callback_param2 = 0) : ResolverObject(cs->grffile, callback, callback_param1, callback_param2), cargospec(cs) { this->root_spritegroup = cs->group; }
 	GrfSpecFeature GetFeature() const override { return static_cast<GrfSpecFeature>(openttd_rust_cargo_feature()); }
-	uint32_t GetDebugID() const override { return openttd_rust_cargo_debug_id(&this->invocation); }
+	uint32_t GetDebugID() const override { return openttd_rust_cargo_debug_id(this->cargospec); }
 };
 #endif

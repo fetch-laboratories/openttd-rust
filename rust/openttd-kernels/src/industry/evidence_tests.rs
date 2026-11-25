@@ -688,6 +688,10 @@ fn builtin_animation_matches_original() {
     assert_eq!(oracle::check(&sections, "builtin", cases), 400_224);
 }
 
+/// A stand-in `GRFFile` for the tile spec, which the label fixture's `GRFFile` stubs answer
+/// for without reading it (`GRFFileRef::of`'s stand-in case).
+static STAND_IN_FILE: u8 = 0;
+
 /// One acceptance case on tile 2, spec 2: `[flags, pattern]` select the spec's flags,
 /// masks and accepted cargoes, `[accept, amounts]` the two callback results.
 fn acceptance_case(
@@ -721,7 +725,7 @@ fn acceptance_case(
             };
             (*spec).acceptance[usize::from(n)] = amount;
         }
-        (*spec).grf_prop.grffile = ptr::null();
+        (*spec).grf_prop.grffile = (&raw const STAND_IN_FILE).cast();
     }
     let initial = u32::MAX - 4;
     let mut acceptance: CargoArray = [initial; 64];

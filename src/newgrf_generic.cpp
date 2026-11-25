@@ -36,7 +36,6 @@ const OpenTTDGenericServices &GetRustGenericServices() noexcept
 {
 	static const OpenTTDGenericServices services{
 		.callback_frame = EvaluateGeneric,
-		.cargo_bitnum = RustCargoBitnum,
 		.common = &GetRustSpriteGroupServices(),
 		.global = &GetRustGlobalVariableServices(),
 		.play_tile_sound = RustGRFPlayTileSound,

@@ -810,10 +810,10 @@ pub(crate) fn get_engine_livery_scheme(
     use crate::vehicle::EngineRef;
     use crate::vehicle_type::VehicleType;
     let resolver = s.capabilities().vehicles.newgrf();
-    let passengers = CargoClasses::from_element(CargoClass::Passengers).0;
     // `IsCargoInClass(cargo_type, CargoClass::Passengers)`.
-    let is_passengers =
-        |cargo: CargoType| is_cargo_in_class((s.capabilities().cargo_classes)(cargo.0), passengers);
+    let is_passengers = |cargo: CargoType| {
+        is_cargo_in_class(cargo, CargoClasses::from_element(CargoClass::Passengers))
+    };
 
     let mut cargo_type = v.map_or(CargoType::INVALID_CARGO, |v| v.cargo_type(resolver));
     let mut e = (s.capabilities().engine)(engine_type.0);

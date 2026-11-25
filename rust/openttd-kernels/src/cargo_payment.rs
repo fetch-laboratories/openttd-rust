@@ -17,7 +17,6 @@
     clippy::too_many_arguments
 )]
 use crate::cargo_type::CargoType;
-use crate::cargotype::TownAcceptanceEffect;
 use crate::company_type::{CompanyID, Owner};
 use crate::industry_type::{Industry as ShellHandle, IndustryID};
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_CARGO_PROFIT_CALC};
@@ -104,15 +103,13 @@ fn get_transported_goods_income(
         let var18 = dist.min(65535)
             | (num_pieces.min(255) << 16)
             | (u32::from(transit_periods).min(255) << 24);
-        let callback = unsafe {
-            crate::cargo_registry::get_cargo_callback(
-                &*s.registry,
-                cargo_type.0,
-                CBID_CARGO_PROFIT_CALC.0,
-                0,
-                var18,
-            )
-        };
+        let callback = crate::cargo_registry::get_cargo_callback(
+            CBID_CARGO_PROFIT_CALC,
+            0,
+            var18,
+            crate::cargotype::cargo_spec_get(unsafe { &*s.registry }, cargo_type),
+            &mut [],
+        );
         if callback != CALLBACK_FAILED {
             let mut result = i32::from(callback & 0x3fff);
             // Simulate a 15-bit signed value.
@@ -266,7 +263,8 @@ fn deliver_goods(
     let finances = (finance.company_finances)(company.0);
     unsafe { crate::company::record_delivery(finances, cargo_type, accepted_total) };
     // Increase the town counter for town effects.
-    let effect = TownAcceptanceEffect(crate::cargo_registry::town_acceptance(cargo_type.0));
+    let effect = crate::cargotype::cargo_spec_get(unsafe { &*s.registry }, cargo_type)
+        .town_acceptance_effect();
     let town = (s.station_town)(st);
     let town = (subsidies.shared().town_owner)(town);
     unsafe { crate::town::add_received(town, effect, accepted_total) };
@@ -560,11 +558,10 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod income_tests {
     use super::*;
-    use crate::cargo_registry::Invocation;
+    use crate::cargotype::CargoSpec;
     use crate::oracle;
     use crate::test_tables::CARGO;
     use std::cell::Cell;
-    use std::ffi::c_void;
     use std::ptr;
 
     const ORACLE: &str = include_str!("cargo_payment/income-oracle.txt");
@@ -608,14 +605,19 @@ mod income_tests {
             });
         }
     }
-    extern "C" fn registry_spec(_: u8) -> *const c_void {
+    extern "C" fn registry_spec(_: u8) -> *const CargoSpec {
         ptr::null()
     }
-    extern "C" fn invocation(_: *const c_void, _: *mut Invocation) {}
-    extern "C" fn callback_frame(invocation: *const Invocation, _: *mut i32, _: usize) -> u16 {
+    extern "C" fn callback_frame(
+        _: *const CargoSpec,
+        _: u16,
+        _: u32,
+        callback_param2: u32,
+        _: *mut i32,
+        _: usize,
+    ) -> u16 {
         CALLS.set(CALLS.get() + 1);
-        // SAFETY: The callback's live invocation.
-        ARGUMENT.set(unsafe { (*invocation).param2 });
+        ARGUMENT.set(callback_param2);
         CALLBACK.get()
     }
     extern "C" fn feeder_payment_share() -> u8 {
@@ -774,7 +776,6 @@ mod income_tests {
     fn income_and_transfer_match_original() {
         let mut registry = crate::cargo_registry::TEST_TABLE;
         registry.spec = registry_spec;
-        registry.invocation = invocation;
         registry.callback_frame = callback_frame;
         let mut s = CARGO;
         s.spec = spec;

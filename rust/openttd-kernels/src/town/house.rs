@@ -785,19 +785,19 @@ impl<'a> House<'a> {
         rate: u8,
         stations: &StationFinder<'a>,
     ) {
+        let town_production_cargoes = crate::cargo_registry::town_production_cargoes(tpe);
         let mut at = 0;
-        loop {
-            let cs = crate::cargo_registry::production(tpe.0, at);
-            if cs.cargo == CargoType::INVALID_CARGO.0 {
-                break;
-            }
+        while at < town_production_cargoes.len() {
+            let cs = town_production_cargoes.get(at);
             at += 1;
             let r = self.s.random();
             if gb(r, 0, 8) < u32::from(rate) {
                 witness::hit(W_ORIGINAL);
-                let cargo_type = CargoType(cs.cargo);
-                let amt =
-                    (gb(r, 0, 8) * u32::from(cs.multiplier) / TOWN_PRODUCTION_DIVISOR) / 8 + 1;
+                let cargo_type = cs.index();
+                let amt = (gb(r, 0, 8) * u32::from(cs.town_production_multiplier())
+                    / TOWN_PRODUCTION_DIVISOR)
+                    / 8
+                    + 1;
                 self.town_generate_cargo(town, cargo_type, amt, stations, true);
             }
         }
@@ -810,14 +810,12 @@ impl<'a> House<'a> {
         rate: u8,
         stations: &StationFinder<'a>,
     ) {
+        let town_production_cargoes = crate::cargo_registry::town_production_cargoes(tpe);
         let mut at = 0;
-        loop {
-            let cs = crate::cargo_registry::production(tpe.0, at);
-            if cs.cargo == CargoType::INVALID_CARGO.0 {
-                break;
-            }
+        while at < town_production_cargoes.len() {
+            let cs = town_production_cargoes.get(at);
             at += 1;
-            let cargo_type = CargoType(cs.cargo);
+            let cargo_type = cs.index();
             let r = self.s.random();
             // Make a bitmask with up to 32 bits set, one for each potential pax.
             let genmax = u32::from(rate).div_ceil(8);
@@ -828,8 +826,8 @@ impl<'a> House<'a> {
             };
             witness::hit(W_BINOMIAL);
             // Mask random value by potential pax and count number of actual pax.
-            let amt =
-                (r & genmask).count_ones() * u32::from(cs.multiplier) / TOWN_PRODUCTION_DIVISOR;
+            let amt = (r & genmask).count_ones() * u32::from(cs.town_production_multiplier())
+                / TOWN_PRODUCTION_DIVISOR;
             self.town_generate_cargo(town, cargo_type, amt, stations, true);
         }
     }
@@ -1440,13 +1438,10 @@ impl<'a> House<'a> {
                 if rate == 0 {
                     continue;
                 }
+                let town_production_cargoes = crate::cargo_registry::town_production_cargoes(tpe);
                 let mut at = 0;
-                loop {
-                    let cs = crate::cargo_registry::production(tpe.0, at);
-                    if cs.cargo == CargoType::INVALID_CARGO.0 {
-                        break;
-                    }
-                    add_one(produced, CargoType(cs.cargo));
+                while at < town_production_cargoes.len() {
+                    add_one(produced, town_production_cargoes.get(at).index());
                     at += 1;
                 }
             }

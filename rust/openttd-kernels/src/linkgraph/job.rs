@@ -55,12 +55,12 @@ crate::abi::shared_records! {
 impl SnapshotSettings {
     /// `LinkGraphSettings::GetDistributionType`, with source class precedence.
     fn distribution(self, classes: u16) -> u8 {
-        use crate::cargotype::{CC_ARMOURED, CC_MAIL, PASSENGERS, is_cargo_in_class};
-        if is_cargo_in_class(classes, PASSENGERS) {
+        use crate::cargotype::{CC_ARMOURED, CC_MAIL, PASSENGERS, is_cargo_in_class_raw};
+        if is_cargo_in_class_raw(classes, PASSENGERS) {
             self.distribution_pax
-        } else if is_cargo_in_class(classes, CC_MAIL) {
+        } else if is_cargo_in_class_raw(classes, CC_MAIL) {
             self.distribution_mail
-        } else if is_cargo_in_class(classes, CC_ARMOURED) {
+        } else if is_cargo_in_class_raw(classes, CC_ARMOURED) {
             self.distribution_armoured
         } else {
             self.distribution_default

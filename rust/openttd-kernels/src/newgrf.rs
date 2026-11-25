@@ -6,7 +6,7 @@
 //! through a [`GRFFileRef`], whose methods call the shared table's member readers.
 use crate::base_bitset_type;
 use crate::bitmath_func::{gb, sb};
-use crate::cargo_registry::get_cargo_type_by_label;
+use crate::cargo_registry::{Labels, get_cargo_type_by_label};
 use crate::cargo_type::{CargoLabel, CargoType, MixedCargoType};
 use crate::landscape_type::LandscapeType;
 use crate::math::clamp;
@@ -231,6 +231,12 @@ impl<'a> GRFFileRef<'a> {
         self.grffile.as_ptr().cast()
     }
 
+    /// The record, for a member writer. The loader writes the file it is loading
+    /// (`_cur_gps.grffile`, a `GRFFile *`).
+    fn file_mut(self) -> *mut c_void {
+        self.grffile.as_ptr().cast()
+    }
+
     /// `GRFFile::grfid`.
     pub(crate) fn grfid(self) -> u32 {
         (self.shared.grf_file_id)(self.file())
@@ -252,6 +258,48 @@ impl<'a> GRFFileRef<'a> {
     /// `GRFFile::cargo_map`: inverse cargo translation table (`CargoType` -> local ID).
     pub(crate) fn cargo_map(self, cargo: CargoType) -> u8 {
         (self.shared.grf_cargo_map)(self.file(), cargo.0)
+    }
+
+    /// `GRFFile::cargo_list`: cargo translation table (local ID -> label), live until the
+    /// next write to it.
+    pub(crate) fn cargo_list(self) -> Labels {
+        (self.shared.grf_file_cargo_list)(self.file())
+    }
+
+    /// `GRFFile::cargo_list.assign(labels.begin(), labels.end())`.
+    pub(crate) fn cargo_list_assign(self, labels: Labels) {
+        (self.shared.grf_file_cargo_list_assign)(self.file_mut(), labels);
+    }
+
+    /// `GRFFile::cargo_list.resize(size, label)`.
+    pub(crate) fn cargo_list_resize(self, size: usize, label: CargoLabel) {
+        (self.shared.grf_file_cargo_list_resize)(self.file_mut(), size, label.0);
+    }
+
+    /// Store `GRFFile::cargo_list[id]`.
+    pub(crate) fn set_cargo_list(self, id: u32, label: CargoLabel) {
+        (self.shared.grf_file_set_cargo_list)(self.file_mut(), id, label.0);
+    }
+
+    /// `GRFFile::cargo_list_is_fallback`: set if cargo types have been created but a cargo
+    /// list has not been installed.
+    pub(crate) fn cargo_list_is_fallback(self) -> bool {
+        (self.shared.grf_file_cargo_list_is_fallback)(self.file())
+    }
+
+    /// Store `GRFFile::cargo_list_is_fallback`.
+    pub(crate) fn set_cargo_list_is_fallback(self, cargo_list_is_fallback: bool) {
+        (self.shared.grf_file_set_cargo_list_is_fallback)(self.file_mut(), cargo_list_is_fallback);
+    }
+
+    /// `GRFFile::cargo_map.fill(value)`.
+    pub(crate) fn cargo_map_fill(self, value: u8) {
+        (self.shared.grf_file_cargo_map_fill)(self.file_mut(), value);
+    }
+
+    /// Store `GRFFile::cargo_map[cargo]`.
+    pub(crate) fn set_cargo_map(self, cargo: CargoType, value: u8) {
+        (self.shared.grf_file_set_cargo_map)(self.file_mut(), cargo.0, value);
     }
 
     /// `GRFFile::GetParam`: get GRF Parameter with range checking.

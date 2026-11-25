@@ -222,7 +222,8 @@ pub(crate) fn is_tile_forest_industry(tile: TileIndex, s: &Services) -> bool {
     (0..produced_count(ind)).any(|slot| {
         let cargo = CargoType(unsafe { (*produced(ind, slot)).cargo });
         is_valid_cargo_type(cargo.0)
-            && CargoLabel(crate::cargo_registry::cargo_label(cargo.0)) == CargoLabel::CT_WOOD
+            && crate::cargotype::cargo_spec_get(crate::cargo_registry::services(), cargo).label()
+                == CargoLabel::CT_WOOD
     })
 }
 /// # Safety

@@ -180,19 +180,18 @@ std::optional<std::string> BuildCargoAcceptanceString(const CargoArray &acceptan
 	return std::nullopt;
 }
 
-extern uint16_t CargoCallbackFrame(const OpenTTDCargoInvocation *, int32_t *, size_t) noexcept;
-extern uint32_t CargoSpriteFrame(const OpenTTDCargoInvocation *) noexcept;
+extern uint16_t CargoCallbackFrame(const CargoSpec *, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept;
+extern uint32_t CargoSpriteFrame(const CargoSpec *) noexcept;
 const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 {
 	static_assert(sizeof(CargoLabel) == sizeof(uint32_t) && alignof(CargoLabel) == alignof(uint32_t));
-	static_assert(INVALID_TPE == 4 && NUM_TPE == 3 && INVALID_CARGO_BITNUM == 255);
 	static const OpenTTDCargoRegistryServices services{
-		.shared = &GetRustSharedServices(),
 		.common = &GetRustSpriteGroupServices(),
+		.shared = &GetRustSharedServices(),
+
 		.spec = RustCargoSpec,
-		.copy_default = [](uint8_t climate, uint8_t slot) noexcept {
-			auto *cs = RustCargoSpec(slot);
-			std::visit([cs](const auto &entry) {
+		.copy_default_cargo = [](uint8_t climate, uint8_t slot) noexcept {
+			std::visit([cs = RustCargoSpec(slot)](const auto &entry) {
 				if constexpr (std::is_same_v<std::decay_t<decltype(entry)>, int>) {
 					*cs = _default_cargo[entry];
 				} else {
@@ -202,36 +201,33 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 				}
 			}, _default_climate_cargo[climate][slot]);
 		},
-		.clear_specs = [](uint8_t first) noexcept { std::fill(RustCargoSpec(first), RustCargoSpec(0) + CargoSpec::GetArraySize(), CargoSpec{}); },
-		.label_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoLabelSpec { return {RustCargoSpecLabel(cs), RustCargoSpecBitnum(cs)}; },
+		.fill_default = [](uint8_t first) noexcept { std::fill(RustCargoSpec(first), RustCargoSpec(0) + CargoSpec::GetArraySize(), CargoSpec{}); },
+
 		.bitnum = RustCargoSpecBitnum,
-		.town_acceptance_effect = RustCargoTownAcceptanceEffect,
-		.finalise_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoFinaliseSpec { return {RustCargoSpecLabel(cs), RustCargoSpecBitnum(cs), cs->town_production_effect}; },
-		.order_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoOrderSpec { return {RustCargoSpecIndex(cs), cs->town_production_effect, cs->classes.Test(CargoClass::Special)}; },
+		.classes = RustCargoSpecClasses,
 		.index = RustCargoSpecIndex,
-		.production = [](const CargoSpec *cs) noexcept -> OpenTTDCargoProduction { return {RustCargoSpecIndex(cs), cs->town_production_multiplier}; },
+		.label = RustCargoSpecLabel,
+		.town_acceptance_effect = [](const CargoSpec *cs) noexcept -> uint8_t { return cs->town_acceptance_effect; },
+		.town_production_effect = [](const CargoSpec *cs) noexcept -> uint8_t { return cs->town_production_effect; },
+		.town_production_multiplier = [](const CargoSpec *cs) noexcept { return cs->town_production_multiplier; },
+
+		.set_abbrev = [](CargoSpec *cs, uint32_t abbrev) noexcept { cs->abbrev = abbrev; },
+		.set_grffile = [](CargoSpec *cs, const GRFFile *grffile) noexcept { cs->grffile = grffile; },
+		.set_name = [](CargoSpec *cs, uint32_t name) noexcept { cs->name = name; },
+		.set_name_single = [](CargoSpec *cs, uint32_t name_single) noexcept { cs->name_single = name_single; },
+		.set_quantifier = [](CargoSpec *cs, uint32_t quantifier) noexcept { cs->quantifier = quantifier; },
+		.set_town_production_effect = [](CargoSpec *cs, uint8_t effect) noexcept { cs->town_production_effect = static_cast<TownProductionEffect>(effect); },
+		.set_units_volume = [](CargoSpec *cs, uint32_t units_volume) noexcept { cs->units_volume = units_volume; },
+
+		.set_sorted_cargo_specs = [](const CargoSpec **data, size_t count) noexcept { _sorted_cargo_specs = {data, count}; },
+		.set_sorted_standard_cargo_specs = [](const CargoSpec **data, size_t count) noexcept { _sorted_standard_cargo_specs = {data, count}; },
+		.set_town_production_cargoes = [](uint8_t tpe, const CargoSpec **data, size_t count) noexcept { CargoSpec::town_production_cargoes[tpe] = {data, count}; },
 		.sort = [](const CargoSpec **data, size_t count) noexcept { std::sort(data, data + count, &CargoSpecClassSorter); },
-		.publish_sorted = [](const CargoSpec **data, size_t count) noexcept { _sorted_cargo_specs = {data, count}; },
-		.publish_standard = [](const CargoSpec **data, size_t count) noexcept { _sorted_standard_cargo_specs = {data, count}; },
-		.publish_town = [](uint8_t effect, const CargoSpec **data, size_t count) noexcept { CargoSpec::town_production_cargoes[effect] = {data, count}; },
-		.set_file = [](const CargoSpec *cs, const GRFFile *file) noexcept { const_cast<CargoSpec *>(cs)->grffile = file; },
-		.set_effect = [](const CargoSpec *cs, uint8_t effect) noexcept { const_cast<CargoSpec *>(cs)->town_production_effect = static_cast<TownProductionEffect>(effect); },
-		.invalidate_strings = [](const CargoSpec *spec) noexcept {
-			auto cs = const_cast<CargoSpec *>(spec);
-			cs->name = cs->name_single = cs->units_volume = STR_NEWGRF_INVALID_CARGO;
-			cs->quantifier = STR_NEWGRF_INVALID_CARGO_QUANTITY;
-			cs->abbrev = STR_NEWGRF_INVALID_CARGO_ABBREV;
-		},
-		.file = [](const GRFFile *file) noexcept -> OpenTTDCargoFile { return {{reinterpret_cast<const uint32_t *>(file->cargo_list.data()), file->cargo_list.size()}, RustGRFFileVersion(file), file->cargo_list_is_fallback}; },
-		.assign_fallback = [](GRFFile *file, OpenTTDCargoLabels labels) noexcept { auto data = reinterpret_cast<const CargoLabel *>(labels.data); file->cargo_list.assign(data, data + labels.size); file->cargo_list_is_fallback = true; },
-		.resize_fallback = [](GRFFile *file, size_t size) noexcept { file->cargo_list.resize(size, CT_INVALID); },
-		.set_fallback = [](GRFFile *file, uint32_t id, uint32_t label) noexcept { file->cargo_list[id] = CargoLabel{label}; },
-		.clear_inverse = [](GRFFile *file) noexcept { file->cargo_map.fill(UINT8_MAX); },
-		.set_inverse = [](GRFFile *file, uint8_t cargo, uint8_t index) noexcept { file->cargo_map[cargo] = index; },
-		.invocation = [](const CargoSpec *cs, OpenTTDCargoInvocation *out) noexcept { out->label = RustCargoSpecLabel(cs); out->file = cs->grffile; out->root = cs->group; },
+
 		.callback_frame = CargoCallbackFrame,
+		.num_sprites = [](const SpriteGroup *group) noexcept { return static_cast<const ResultSpriteGroup *>(group)->num_sprites; },
+		.sprite = [](const SpriteGroup *group) noexcept { return static_cast<const ResultSpriteGroup *>(group)->sprite; },
 		.sprite_frame = CargoSpriteFrame,
-		.sprite = [](const SpriteGroup *group) noexcept -> OpenTTDCargoSprite { auto result = static_cast<const ResultSpriteGroup *>(group); return {result->sprite, result->num_sprites}; },
 	};
 	return services;
 }

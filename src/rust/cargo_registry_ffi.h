@@ -8,57 +8,45 @@
 #define RUST_CARGO_REGISTRY_FFI_H
 #include "services_ffi.h"
 #include "cargo_registry_lookup.h"
-enum TownAcceptanceEffect : uint8_t;
 struct CargoSpec;
 struct GRFFile;
 struct SpriteGroup;
 struct ResolverObject;
 struct OpenTTDResolverState;
 struct OpenTTDSpriteGroupServices;
-struct OpenTTDCargoSprite { uint32_t sprite; uint16_t count; };
-struct OpenTTDCargoProduction { uint8_t cargo; uint16_t multiplier; };
-struct OpenTTDCargoLabelSpec { uint32_t label; uint8_t bitnum; };
-struct OpenTTDCargoFinaliseSpec { uint32_t label; uint8_t bitnum, effect; };
-struct OpenTTDCargoOrderSpec { uint8_t cargo, effect; bool special; };
-struct OpenTTDCargoLabels { const uint32_t *data; size_t size; };
-struct OpenTTDCargoFile { OpenTTDCargoLabels labels; uint8_t version; bool fallback; };
-struct OpenTTDCargoInvocation {
-	uint32_t label;
-	const GRFFile *file;
-	const SpriteGroup *root;
-	uint16_t callback;
-	uint32_t param1, param2;
-};
 struct OpenTTDCargoRegistryServices {
-	const OpenTTDSharedServices *shared;
 	const OpenTTDSpriteGroupServices *common;
+	const OpenTTDSharedServices *shared;
+
 	CargoSpec *(*spec)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spec);
-	void (*copy_default)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_default);
-	void (*clear_specs)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_specs);
-	OpenTTDCargoLabelSpec (*label_spec)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(label_spec);
+	void (*copy_default_cargo)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_default_cargo);
+	void (*fill_default)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(fill_default);
+
 	uint8_t (*bitnum)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(bitnum);
-	TownAcceptanceEffect (*town_acceptance_effect)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(town_acceptance_effect);
-	OpenTTDCargoFinaliseSpec (*finalise_spec)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(finalise_spec);
-	OpenTTDCargoOrderSpec (*order_spec)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(order_spec);
+	uint16_t (*classes)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(classes);
 	uint8_t (*index)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(index);
-	OpenTTDCargoProduction (*production)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(production);
+	uint32_t (*label)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(label);
+	uint8_t (*town_acceptance_effect)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(town_acceptance_effect);
+	uint8_t (*town_production_effect)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(town_production_effect);
+	uint16_t (*town_production_multiplier)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(town_production_multiplier);
+
+	void (*set_abbrev)(CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_abbrev);
+	void (*set_grffile)(CargoSpec *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(set_grffile);
+	void (*set_name)(CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
+	void (*set_name_single)(CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_name_single);
+	void (*set_quantifier)(CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_quantifier);
+	void (*set_town_production_effect)(CargoSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town_production_effect);
+	void (*set_units_volume)(CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_units_volume);
+
+	void (*set_sorted_cargo_specs)(const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(set_sorted_cargo_specs);
+	void (*set_sorted_standard_cargo_specs)(const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(set_sorted_standard_cargo_specs);
+	void (*set_town_production_cargoes)(uint8_t, const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town_production_cargoes);
 	void (*sort)(const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(sort);
-	void (*publish_sorted)(const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(publish_sorted);
-	void (*publish_standard)(const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(publish_standard);
-	void (*publish_town)(uint8_t, const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(publish_town);
-	void (*set_file)(const CargoSpec *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(set_file);
-	void (*set_effect)(const CargoSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_effect);
-	void (*invalidate_strings)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_strings);
-	OpenTTDCargoFile (*file)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file);
-	void (*assign_fallback)(GRFFile *, OpenTTDCargoLabels) noexcept OPENTTD_SERVICE_DEFAULT(assign_fallback);
-	void (*resize_fallback)(GRFFile *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resize_fallback);
-	void (*set_fallback)(GRFFile *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_fallback);
-	void (*clear_inverse)(GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(clear_inverse);
-	void (*set_inverse)(GRFFile *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_inverse);
-	void (*invocation)(const CargoSpec *, OpenTTDCargoInvocation *) noexcept OPENTTD_SERVICE_DEFAULT(invocation);
-	uint16_t (*callback_frame)(const OpenTTDCargoInvocation *, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(callback_frame);
-	uint32_t (*sprite_frame)(const OpenTTDCargoInvocation *) noexcept OPENTTD_SERVICE_DEFAULT(sprite_frame);
-	OpenTTDCargoSprite (*sprite)(const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(sprite);
+
+	uint16_t (*callback_frame)(const CargoSpec *, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(callback_frame);
+	uint16_t (*num_sprites)(const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(num_sprites);
+	uint32_t (*sprite)(const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(sprite);
+	uint32_t (*sprite_frame)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(sprite_frame);
 };
 const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept;
 extern "C" {
@@ -74,13 +62,13 @@ OpenTTDCargoLabels openttd_rust_cargo_climate_labels();
 void openttd_rust_cargo_sort(const OpenTTDCargoRegistryServices *);
 void openttd_rust_cargo_finalise();
 uint8_t openttd_rust_cargo_translate(uint8_t, const GRFFile *, bool);
-void openttd_rust_cargo_build_inverse(GRFFile *);
-void openttd_rust_cargo_fallback(GRFFile *, uint32_t, uint32_t, uint32_t);
+void openttd_rust_cargo_build_inverse(const GRFFile *);
+void openttd_rust_cargo_fallback(const GRFFile *, uint32_t, uint32_t, uint32_t);
 uint32_t openttd_rust_cargo_custom_sprite(const CargoSpec *);
 uint16_t openttd_rust_cargo_callback(uint16_t, uint32_t, uint32_t, const CargoSpec *, int32_t *, size_t);
-uint16_t openttd_rust_cargo_evaluate_callback(const OpenTTDCargoInvocation *, ResolverObject *, OpenTTDResolverState *, int32_t *, size_t);
-uint32_t openttd_rust_cargo_evaluate_sprite(const OpenTTDCargoInvocation *, ResolverObject *, OpenTTDResolverState *);
+uint16_t openttd_rust_cargo_evaluate_callback(const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *, int32_t *, size_t);
+uint32_t openttd_rust_cargo_evaluate_sprite(const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *);
 uint8_t openttd_rust_cargo_feature();
-uint32_t openttd_rust_cargo_debug_id(const OpenTTDCargoInvocation *);
+uint32_t openttd_rust_cargo_debug_id(const CargoSpec *);
 }
 #endif

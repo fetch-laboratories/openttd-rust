@@ -17,6 +17,7 @@
 #include <cstddef>
 struct OpenTTDTownState;
 struct Town;
+struct CargoSpec;
 /** Pool IDs cross as their uint16_t wire value; native PoolID classes stay native. */
 struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
 
@@ -89,7 +90,7 @@ const OpenTTDTownHandle *openttd_rust_town_calc_closest(const OpenTTDSharedServi
 const OpenTTDTownHandle *openttd_rust_town_closest(const OpenTTDSharedServices *, uint32_t, uint32_t);
 void openttd_rust_town_update_max_pass(const OpenTTDTownLeaves *, OpenTTDTownState *);
 uint8_t openttd_rust_town_radius_group(const OpenTTDTownState *, const OpenTTDSharedServices *, uint32_t);
-uint8_t openttd_rust_town_first_cargo(uint8_t);
+const CargoSpec *openttd_rust_town_first_cargo(uint8_t);
 uint16_t openttd_rust_town_climate_mask(uint8_t);
 OpenTTDByteSpan openttd_rust_town_text(const OpenTTDTownState *);
 void openttd_rust_town_set_text(OpenTTDTownState *, OpenTTDByteSpan);

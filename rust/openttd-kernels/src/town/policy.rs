@@ -1,8 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Remaining town policies over canonical owners and shared native operations.
 use super::{Leaves, State};
-use crate::cargo_type::{CargoType, INVALID_CARGO};
-use crate::cargotype::TownProductionEffect;
+use crate::cargotype::{CargoSpec, CargoSpecRef, TownAcceptanceEffect, TownProductionEffect};
 use crate::company_type::CompanyID;
 use crate::error::{WarningLevel, show_error_message};
 use crate::road_type::RoadTramType;
@@ -25,12 +24,13 @@ pub(crate) fn update_town_max_pass(leaves: &Leaves, owner: *mut State) {
         (TownProductionEffect::TPE_PASSENGERS, 3),
         (TownProductionEffect::TPE_MAIL, 4),
     ] {
+        let town_production_cargoes = cargo_registry::town_production_cargoes(effect);
         let mut i = 0;
-        while i < cargo_registry::town_count(effect.0) {
+        while i < town_production_cargoes.len() {
             let population = unsafe { super::population(owner) };
             let production = (unsafe { &*leaves.houses }.scale_cargo)(population >> shift);
             if production != 0 {
-                let cargo = CargoType(cargo_registry::town_cargo(effect.0, i));
+                let cargo = town_production_cargoes.get(i).index();
                 // GetOrCreateCargoSupplied can relocate the vector; no borrow spans scaling.
                 let entry = unsafe { super::supplied_entry(owner, cargo) };
                 unsafe {
@@ -125,8 +125,9 @@ pub unsafe extern "C" fn openttd_rust_town_radius_group(
     unsafe { super::get_town_radius_group(owner, TileIndex(tile), (&*s).map()) }.0
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_town_first_cargo(effect: u8) -> u8 {
-    cargo_registry::first_town_acceptance(effect).unwrap_or(INVALID_CARGO)
+pub extern "C" fn openttd_rust_town_first_cargo(effect: u8) -> *const CargoSpec {
+    cargo_registry::find_first_cargo_with_town_acceptance_effect(TownAcceptanceEffect(effect))
+        .map_or(std::ptr::null(), CargoSpecRef::as_ptr)
 }
 
 #[unsafe(no_mangle)]

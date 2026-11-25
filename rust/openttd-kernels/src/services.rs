@@ -541,6 +541,22 @@ pub struct Services {
     ) -> usize,
     /// `GRFFile::grf_version` of a non-null file.
     pub grf_file_version: extern "C" fn(*const c_void) -> u8,
+    /// `GRFFile::cargo_list` of a non-null file, live until the next write to it.
+    pub grf_file_cargo_list: extern "C" fn(*const c_void) -> crate::cargo_registry::Labels,
+    /// `GRFFile::cargo_list.assign(...)` of a non-null file, from a span.
+    pub grf_file_cargo_list_assign: extern "C" fn(*mut c_void, crate::cargo_registry::Labels),
+    /// `GRFFile::cargo_list_is_fallback` of a non-null file.
+    pub grf_file_cargo_list_is_fallback: extern "C" fn(*const c_void) -> bool,
+    /// `GRFFile::cargo_list.resize(size, label)` of a non-null file.
+    pub grf_file_cargo_list_resize: extern "C" fn(*mut c_void, usize, u32),
+    /// `GRFFile::cargo_map.fill(value)` of a non-null file.
+    pub grf_file_cargo_map_fill: extern "C" fn(*mut c_void, u8),
+    /// Store `GRFFile::cargo_list[id]` of a non-null file.
+    pub grf_file_set_cargo_list: extern "C" fn(*mut c_void, u32, u32),
+    /// Store `GRFFile::cargo_list_is_fallback` of a non-null file.
+    pub grf_file_set_cargo_list_is_fallback: extern "C" fn(*mut c_void, bool),
+    /// Store `GRFFile::cargo_map[cargo]` of a non-null file.
+    pub grf_file_set_cargo_map: extern "C" fn(*mut c_void, u8, u8),
     /// `RustGRFPriceShift`: the live file multiplier, including its null-file default.
     pub grf_price_shift: extern "C" fn(*const c_void, u32) -> i32,
     /// `GRFFile::cargo_map` entry of a non-null file.
@@ -907,6 +923,14 @@ crate::abi::layouts! {
         terrain_type,
         copyable_badges,
         grf_file_version,
+        grf_file_cargo_list,
+        grf_file_cargo_list_assign,
+        grf_file_cargo_list_is_fallback,
+        grf_file_cargo_list_resize,
+        grf_file_cargo_map_fill,
+        grf_file_set_cargo_list,
+        grf_file_set_cargo_list_is_fallback,
+        grf_file_set_cargo_map,
         grf_price_shift,
         grf_cargo_map,
         grf_boolean_callback,
@@ -1072,6 +1096,30 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
     extern "C" fn unexpected_cargo_map(_: *const c_void, _: u8) -> u8 {
         std::process::abort()
     }
+    extern "C" fn unexpected_cargo_list(_: *const c_void) -> crate::cargo_registry::Labels {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_cargo_list_assign(_: *mut c_void, _: crate::cargo_registry::Labels) {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_cargo_list_is_fallback(_: *const c_void) -> bool {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_cargo_list_resize(_: *mut c_void, _: usize, _: u32) {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_cargo_map_fill(_: *mut c_void, _: u8) {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_set_cargo_list(_: *mut c_void, _: u32, _: u32) {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_set_cargo_list_is_fallback(_: *mut c_void, _: bool) {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_set_cargo_map(_: *mut c_void, _: u8, _: u8) {
+        std::process::abort()
+    }
     extern "C" fn unexpected_boolean(_: *const c_void, _: u16, _: u16) -> bool {
         std::process::abort()
     }
@@ -1126,6 +1174,14 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         rail_type_powered_railtypes: unexpected_rail_type_info,
         command_post: unexpected_post,
         grf_file_version: unexpected_version,
+        grf_file_cargo_list: unexpected_cargo_list,
+        grf_file_cargo_list_assign: unexpected_cargo_list_assign,
+        grf_file_cargo_list_is_fallback: unexpected_cargo_list_is_fallback,
+        grf_file_cargo_list_resize: unexpected_cargo_list_resize,
+        grf_file_cargo_map_fill: unexpected_cargo_map_fill,
+        grf_file_set_cargo_list: unexpected_set_cargo_list,
+        grf_file_set_cargo_list_is_fallback: unexpected_set_cargo_list_is_fallback,
+        grf_file_set_cargo_map: unexpected_set_cargo_map,
         grf_price_shift: unexpected_price_shift,
         grf_cargo_map: unexpected_cargo_map,
         grf_boolean_callback: unexpected_boolean,

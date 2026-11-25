@@ -31,7 +31,7 @@ pub(crate) fn translate_cargo(feature: u8, cargo: u8, file: *const c_void) -> u8
         );
         return INVALID_CARGO;
     }
-    let label = unsafe { table.data.add(usize::from(cargo)).read() };
+    let label = table.as_slice()[usize::from(cargo)].0;
     if label == crate::cargo_type::CT_INVALID {
         grf_msg!(
             5,

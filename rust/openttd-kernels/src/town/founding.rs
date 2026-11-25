@@ -330,8 +330,10 @@ impl<'a> Founding<'a> {
         // Set the default cargo requirement for town growth.
         match LandscapeType(observed!((self.leaves.climate)())) {
             LandscapeType::Arctic => {
-                if crate::cargo_registry::first_town_acceptance(TownAcceptanceEffect::TAE_FOOD.0)
-                    .is_some()
+                if crate::cargo_registry::find_first_cargo_with_town_acceptance_effect(
+                    TownAcceptanceEffect::TAE_FOOD,
+                )
+                .is_some()
                 {
                     unsafe {
                         (*town.state).simulation.goal
@@ -340,16 +342,20 @@ impl<'a> Founding<'a> {
                 }
             }
             LandscapeType::Tropic => {
-                if crate::cargo_registry::first_town_acceptance(TownAcceptanceEffect::TAE_FOOD.0)
-                    .is_some()
+                if crate::cargo_registry::find_first_cargo_with_town_acceptance_effect(
+                    TownAcceptanceEffect::TAE_FOOD,
+                )
+                .is_some()
                 {
                     unsafe {
                         (*town.state).simulation.goal
                             [usize::from(TownAcceptanceEffect::TAE_FOOD.0)] = TOWN_GROWTH_DESERT;
                     }
                 }
-                if crate::cargo_registry::first_town_acceptance(TownAcceptanceEffect::TAE_WATER.0)
-                    .is_some()
+                if crate::cargo_registry::find_first_cargo_with_town_acceptance_effect(
+                    TownAcceptanceEffect::TAE_WATER,
+                )
+                .is_some()
                 {
                     unsafe {
                         (*town.state).simulation.goal

@@ -17,15 +17,15 @@
 
 #include "safeguards.h"
 
-uint16_t CargoCallbackFrame(const OpenTTDCargoInvocation *invocation, int32_t *regs, size_t count) noexcept
+uint16_t CargoCallbackFrame(const CargoSpec *cs, uint16_t callback, uint32_t callback_param1, uint32_t callback_param2, int32_t *regs, size_t count) noexcept
 {
-	CargoResolverObject object(*invocation);
-	return openttd_rust_cargo_evaluate_callback(invocation, &object, object.CommonState(), regs, count);
+	CargoResolverObject object(cs, static_cast<CallbackID>(callback), callback_param1, callback_param2);
+	return openttd_rust_cargo_evaluate_callback(object.root_spritegroup, &object, object.CommonState(), object.grffile, regs, count);
 }
-uint32_t CargoSpriteFrame(const OpenTTDCargoInvocation *invocation) noexcept
+uint32_t CargoSpriteFrame(const CargoSpec *cs) noexcept
 {
-	CargoResolverObject object(*invocation);
-	return openttd_rust_cargo_evaluate_sprite(invocation, &object, object.CommonState());
+	CargoResolverObject object(cs);
+	return openttd_rust_cargo_evaluate_sprite(object.root_spritegroup, &object, object.CommonState(), object.grffile);
 }
 
 /**

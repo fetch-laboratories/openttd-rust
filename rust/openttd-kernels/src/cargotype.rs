@@ -1,9 +1,13 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Town cargo acceptance effects from `cargotype.h`.
-/// Native `TAE_WATER`.
-pub const TAE_WATER: u8 = TownAcceptanceEffect::TAE_WATER.0;
-/// Native `TAE_FOOD`.
-pub const TAE_FOOD: u8 = TownAcceptanceEffect::TAE_FOOD.0;
+//! `cargotype.h`: the cargo vocabulary, and `CargoSpec` read through [`CargoSpecRef`].
+//!
+//! `CargoSpec` stays a C++ record in the static `CargoSpec::array` until its port (#1058).
+//! Each member is read or written through its own slot of the cargo registry table.
+use crate::cargo_registry::Services;
+use crate::cargo_type::{CargoLabel, CargoType};
+use crate::newgrf::GRFFile;
+use crate::strings_type::StringID;
+
 /// `CargoClass::Mail` mask.
 pub const CC_MAIL: u16 = CargoClasses::from_element(CargoClass::Mail).0;
 /// `CargoClass::Express` mask.
@@ -18,50 +22,158 @@ pub const CC_PIECEGOODS: u16 = CargoClasses::from_element(CargoClass::PieceGoods
 pub const CC_LIQUID: u16 = CargoClasses::from_element(CargoClass::Liquid).0;
 /// `CargoClass::Refrigerated` mask.
 pub const CC_REFRIGERATED: u16 = CargoClasses::from_element(CargoClass::Refrigerated).0;
-
-/// Invalid specification bit number.
-pub const INVALID_CARGO_BITNUM: u8 = 255;
-/// Town production effect from `cargotype.h`.
-pub const TPE_NONE: u8 = TownProductionEffect::TPE_NONE.0;
-/// Town production effect from `cargotype.h`.
-pub const TPE_PASSENGERS: u8 = TownProductionEffect::TPE_PASSENGERS.0;
-/// Town production effect from `cargotype.h`.
-pub const TPE_MAIL: u8 = TownProductionEffect::TPE_MAIL.0;
-/// Town production effect from `cargotype.h`.
-pub const NUM_TPE: u8 = TownProductionEffect::NUM_TPE.0;
-/// Town production effect from `cargotype.h`.
-pub const INVALID_TPE: u8 = TownProductionEffect::INVALID_TPE.0;
-
-/// Tests for validity of this cargospec (`CargoSpec::IsValid`).
-/// `assert(cs->IsValid())` can be triggered when GRF config is modified.
-#[must_use]
-pub const fn is_cargo_spec_valid(bitnum: u8) -> bool {
-    bitnum != INVALID_CARGO_BITNUM
-}
-
-/// Returns an iterable ensemble of all valid `CargoSpec` (`CargoSpec::Iterate`).
-/// The default first slot is zero; each slot is observed when advancing, without a world borrow.
-pub(crate) fn iterate<T>(
-    mut load: impl FnMut(u8) -> T,
-    mut valid: impl FnMut(&T) -> bool,
-) -> impl Iterator<Item = (u8, T)> {
-    (0..crate::cargo_type::NUM_CARGO)
-        .map(move |cargo| {
-            let cargo = crate::cargo_type::CargoType(cargo);
-            (cargo.0, load(cargo.0))
-        })
-        .filter(move |(_, spec)| valid(spec))
-}
-
-/// `CargoClass::Passengers`.
+/// `CargoClass::Passengers` mask.
 pub const PASSENGERS: u16 = CargoClasses::from_element(CargoClass::Passengers).0;
-/// Does cargo have cargo class `cc`? (`IsCargoInClass`).
-/// Classes are read from the canonical native cargo spec; `requested` is a mask.
+
+/// Constant representing invalid cargo.
+pub const INVALID_CARGO_BITNUM: u8 = 0xFF;
+
+/// `CargoSpec`: specification of a cargo type; opaque, and read through a [`CargoSpecRef`].
+#[repr(C)]
+pub struct CargoSpec {
+    _private: [u8; 0],
+}
+
+/// A `const CargoSpec *`, with the registry table whose member slots its methods call.
+///
+/// Every spec is an element of the static `CargoSpec::array`, which lives for the process;
+/// a handle may be kept across any call. What a member holds is read again at each call.
+#[derive(Clone, Copy)]
+pub(crate) struct CargoSpecRef<'a> {
+    s: &'a Services,
+    cs: *const CargoSpec,
+}
+
+/// `CargoSpec::Get`: retrieve the cargo specification for `cargo_type`, through the
+/// table's `spec` slot, which keeps the native `assert(index < lengthof(CargoSpec::array))`.
+pub(crate) fn cargo_spec_get(s: &Services, cargo_type: CargoType) -> CargoSpecRef<'_> {
+    CargoSpecRef {
+        s,
+        cs: (s.spec)(cargo_type.0),
+    }
+}
+
+/// `CargoSpec::Iterate`: each valid spec in cargo order. Each slot is looked up and tested
+/// with `IsValid` as the iteration advances, as `Iterator::ValidateIndex` does.
+pub(crate) fn iterate(s: &Services) -> impl Iterator<Item = CargoSpecRef<'_>> {
+    (0..CargoType::NUM_CARGO.0)
+        .map(move |index| cargo_spec_get(s, CargoType(index)))
+        .filter(|cs| cs.is_valid())
+}
+
+impl<'a> CargoSpecRef<'a> {
+    /// The handle of a spec the C++ caller passes, which is an element of `CargoSpec::array`.
+    pub(crate) fn of(s: &'a Services, cs: *const CargoSpec) -> Self {
+        Self { s, cs }
+    }
+
+    /// The record itself, for a service that takes the spec.
+    pub(crate) fn as_ptr(self) -> *const CargoSpec {
+        self.cs
+    }
+
+    /// The registry table this handle reads through.
+    pub(crate) fn services(self) -> &'a Services {
+        self.s
+    }
+
+    fn spec_mut(self) -> *mut CargoSpec {
+        self.cs.cast_mut()
+    }
+
+    /// `CargoSpec::label`: unique label of the cargo type.
+    pub(crate) fn label(self) -> CargoLabel {
+        CargoLabel((self.s.label)(self.cs))
+    }
+
+    /// `CargoSpec::bitnum`: cargo bit number, is `INVALID_CARGO_BITNUM` for a non-used spec.
+    pub(crate) fn bitnum(self) -> u8 {
+        (self.s.bitnum)(self.cs)
+    }
+
+    /// `CargoSpec::classes`: classes of this cargo type.
+    pub(crate) fn classes(self) -> CargoClasses {
+        CargoClasses((self.s.classes)(self.cs))
+    }
+
+    /// `CargoSpec::town_acceptance_effect`: the effect that delivering this cargo type has
+    /// on towns. Also affects destination of subsidies.
+    pub(crate) fn town_acceptance_effect(self) -> TownAcceptanceEffect {
+        TownAcceptanceEffect((self.s.town_acceptance_effect)(self.cs))
+    }
+
+    /// `CargoSpec::town_production_effect`: the effect on town cargo production.
+    pub(crate) fn town_production_effect(self) -> TownProductionEffect {
+        TownProductionEffect((self.s.town_production_effect)(self.cs))
+    }
+
+    /// `CargoSpec::town_production_multiplier`: town production multiplier, if commanded by
+    /// `TownProductionEffect`.
+    pub(crate) fn town_production_multiplier(self) -> u16 {
+        (self.s.town_production_multiplier)(self.cs)
+    }
+
+    /// `CargoSpec::Index`: determines index of this cargospec (in the `CargoSpec::array`
+    /// array).
+    pub(crate) fn index(self) -> CargoType {
+        CargoType((self.s.index)(self.cs))
+    }
+
+    /// `CargoSpec::IsValid`: tests for validity of this cargospec.
+    /// `assert(cs->IsValid())` can be triggered when GRF config is modified.
+    pub(crate) fn is_valid(self) -> bool {
+        self.bitnum() != INVALID_CARGO_BITNUM
+    }
+
+    /// Store `CargoSpec::grffile`: `NewGRF` where `group` belongs to.
+    pub(crate) fn set_grffile(self, grffile: *const GRFFile) {
+        (self.s.set_grffile)(self.spec_mut(), grffile);
+    }
+
+    /// Store `CargoSpec::town_production_effect`: the effect on town cargo production.
+    pub(crate) fn set_town_production_effect(self, effect: TownProductionEffect) {
+        (self.s.set_town_production_effect)(self.spec_mut(), effect.0);
+    }
+
+    /// Store `CargoSpec::name`: name of this type of cargo.
+    pub(crate) fn set_name(self, name: StringID) {
+        (self.s.set_name)(self.spec_mut(), name.0);
+    }
+
+    /// Store `CargoSpec::name_single`: name of a single entity of this type of cargo.
+    pub(crate) fn set_name_single(self, name_single: StringID) {
+        (self.s.set_name_single)(self.spec_mut(), name_single.0);
+    }
+
+    /// Store `CargoSpec::units_volume`: name of a single unit of cargo of this type.
+    pub(crate) fn set_units_volume(self, units_volume: StringID) {
+        (self.s.set_units_volume)(self.spec_mut(), units_volume.0);
+    }
+
+    /// Store `CargoSpec::quantifier`: text for multiple units of cargo of this type.
+    pub(crate) fn set_quantifier(self, quantifier: StringID) {
+        (self.s.set_quantifier)(self.spec_mut(), quantifier.0);
+    }
+
+    /// Store `CargoSpec::abbrev`: two letter abbreviation for this cargo type.
+    pub(crate) fn set_abbrev(self, abbrev: StringID) {
+        (self.s.set_abbrev)(self.spec_mut(), abbrev.0);
+    }
+}
+
+/// `IsCargoInClass`: does cargo `cargo` have cargo class `cc`?
 #[must_use]
-pub const fn is_cargo_in_class(classes: u16, requested: u16) -> bool {
-    let classes = CargoClasses(classes);
-    let cc = CargoClasses(requested);
-    classes.0 & cc.0 != CargoClasses::EMPTY.0
+pub(crate) fn is_cargo_in_class(cargo: CargoType, cc: CargoClasses) -> bool {
+    cargo_spec_get(crate::cargo_registry::services(), cargo)
+        .classes()
+        .any(cc)
+}
+
+/// [`is_cargo_in_class`] over classes the caller has read and a class mask, for files no
+/// pass has finished.
+#[must_use]
+pub const fn is_cargo_in_class_raw(classes: u16, requested: u16) -> bool {
+    CargoClasses(classes).any(CargoClasses(requested))
 }
 
 /// Native `TownAcceptanceEffect`, retaining every underlying `u8` value.
@@ -157,11 +269,10 @@ pub struct CargoClasses(pub u16);
 impl CargoClasses {
     /// Empty native bit set.
     pub const EMPTY: Self = Self(0);
-    /// Native `EnumBitSet` construction from one element (a bit position).
+    /// Native `EnumBitSet` construction from one element: `BaseBitSet::Set` on an empty set.
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     pub const fn from_element(element: CargoClass) -> Self {
-        Self((1_u64 << element.0) as u16)
+        Self(crate::base_bitset_type::set_u16(0, element.0))
     }
 }
 
@@ -169,7 +280,7 @@ impl CargoClasses {
     /// Native `BaseBitSet::Test`, with an element rather than a set mask.
     #[must_use]
     pub const fn test(self, element: CargoClass) -> bool {
-        (self.0 as u64) & (1_u64 << element.0) != 0
+        crate::base_bitset_type::test(self.0 as u64, element.0)
     }
     /// Native bit-set union.
     #[must_use]
