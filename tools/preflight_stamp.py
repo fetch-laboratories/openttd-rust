@@ -14,8 +14,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 # Docs-only files, which no build, test or check reads: AGENTS.md, GitHub's
 # PR and issue forms, the Codex host's settings, and docs/ except scripts and
-# what CMake packages. The workflows' `inert` rule; tools/test-ci.py checks
-# both against CMake.
+# what a build reads there: the files CMake packages and the images Doxygen
+# takes. The workflows' `inert` rule; tools/test-preflight.py checks this list
+# against CMake and the Doxygen image commands.
 BUILT_DOCS = (
     "admin_network.md",
     "debugging_desyncs.md",
@@ -33,6 +34,8 @@ BUILT_DOCS = (
     "obm_format.txt",
     "obs_format.txt",
     "openttd.6",
+    "elrail_tile.png",
+    "elrail_track.png",
 )
 # Stamps older than the newest this many are not compared for a docs-only match.
 RECENT = 50
@@ -62,8 +65,13 @@ def inert(path: str) -> bool:
 
 def changed(old: str, new: str) -> list[str]:
     """Paths that differ between two commits or trees, both sides of a rename."""
-    output = git("diff", "--no-renames", "--name-only", old, new, "--")
-    return output.splitlines()
+    # NUL-delimited: Git quotes a name with a non-ASCII byte in line output.
+    output = subprocess.check_output(
+        ["git", "diff", "--no-renames", "--name-only", "-z", old, new, "--"],
+        cwd=ROOT,
+        text=True,
+    )
+    return [name for name in output.split("\0") if name]
 
 
 def tree(commit: str) -> str:

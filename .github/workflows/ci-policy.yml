@@ -57,11 +57,12 @@ jobs:
           };
           try {
             // Docs-only files, which no build, test or check reads: AGENTS.md, GitHub's PR and issue
-            // forms, the Codex host's settings, and docs/ except scripts and what CMake packages
-            // (tools/test-ci.py checks this list against CMake).
+            // forms, the Codex host's settings, and docs/ except scripts and what a build reads there:
+            // CMake's packages and Doxygen's images (tools/test-preflight.py checks this list).
             const builtDocs = ['admin_network.md', 'debugging_desyncs.md', 'desync.md', 'directory_structure.md', 'eints.md',
               'fonts.md', 'game_coordinator.md', 'linkgraph.md', 'logging_and_performance_metrics.md', 'multiplayer.md',
-              'savegame_format.md', 'symbol_server.md', 'obg_format.txt', 'obm_format.txt', 'obs_format.txt', 'openttd.6'];
+              'savegame_format.md', 'symbol_server.md', 'obg_format.txt', 'obm_format.txt', 'obs_format.txt', 'openttd.6',
+              'elrail_tile.png', 'elrail_track.png'];
             const inert = path => typeof path === 'string' && (path === 'AGENTS.md' ||
               path === '.github/PULL_REQUEST_TEMPLATE.md' || path.startsWith('.github/ISSUE_TEMPLATE/') ||
               path.startsWith('.codex/') || path.startsWith('docs/') && !path.endsWith('.py') &&

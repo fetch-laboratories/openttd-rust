@@ -54,6 +54,62 @@ PULL = {
 }
 
 
+# Paths the docs-only rule must judge so, beside every tracked path near them.
+DOCS_ONLY_CASES = {
+    "AGENTS.md": True,
+    "docs/roadmap.md": True,
+    "docs/skills/x/SKILL.md": True,
+    "docs/skills/x/agents/openai.yaml": True,
+    "docs/elrail.svg": True,
+    "docs/landscape.html": True,
+    "docs/x/data.json": True,
+    "docs/fonts.md.txt": True,
+    ".github/PULL_REQUEST_TEMPLATE.md": True,
+    ".github/ISSUE_TEMPLATE/bug.yaml": True,
+    ".codex/config.toml": True,
+    "docs/fonts.md": False,
+    "docs/obg_format.txt": False,
+    "docs/openttd.6": False,
+    "docs/skills/steer/issues.py": False,
+    "docs/skills/x/run.sh": False,
+    "docs.md": False,
+    "docsx/a.md": False,
+    "README.md": False,
+    "tools/ci.py": False,
+    "migration/baseline.json": False,
+    ".github/workflows/ci-quick.yml": False,
+    ".github/dependabot.yml": False,
+    ".github/PULL_REQUEST_TEMPLATE.md.py": False,
+    ".codexx/config.toml": False,
+    "docs/elrail_tile.png": False,
+    "docs/x/caf\u00e9.yaml": True,
+}
+
+
+def near_docs_only_paths() -> set[str]:
+    """Tracked root-level files and every tracked file under the docs-only trees."""
+    tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT, text=True)
+    return {
+        path
+        for path in tracked.split("\0")
+        if path
+        and ("/" not in path or path.startswith(("docs/", ".github/", ".codex/")))
+    }
+
+
+def starts_workflow(patterns: list[str], path: str) -> bool:
+    """GitHub's `paths` filter for one path: the last pattern that matches decides."""
+    started = False
+    for pattern in patterns:
+        glob = "".join(
+            ".*" if part == "**" else "[^/]*" if part == "*" else re.escape(part)
+            for part in re.split(r"(\*\*|\*)", pattern.removeprefix("!"))
+        )
+        if re.fullmatch(glob, path):
+            started = not pattern.startswith("!")
+    return started
+
+
 def workflow(filename: str) -> dict[str, Any]:
     return yaml.safe_load((WORKFLOWS / filename).read_text())
 
@@ -586,40 +642,8 @@ class GateTests(unittest.TestCase):
             )
         # Indentation follows each script's nesting; the code itself must match.
         self.assertEqual(len({" ".join(block.split()) for block in blocks}), 1)
-        expected = {
-            "AGENTS.md": True,
-            "docs/roadmap.md": True,
-            "docs/skills/x/SKILL.md": True,
-            "docs/skills/x/agents/openai.yaml": True,
-            "docs/elrail.svg": True,
-            "docs/landscape.html": True,
-            "docs/x/data.json": True,
-            "docs/fonts.md.txt": True,
-            ".github/PULL_REQUEST_TEMPLATE.md": True,
-            ".github/ISSUE_TEMPLATE/bug.yaml": True,
-            ".codex/config.toml": True,
-            "docs/fonts.md": False,
-            "docs/obg_format.txt": False,
-            "docs/openttd.6": False,
-            "docs/skills/steer/issues.py": False,
-            "docs/skills/x/run.sh": False,
-            "docs.md": False,
-            "docsx/a.md": False,
-            "README.md": False,
-            "tools/ci.py": False,
-            "migration/baseline.json": False,
-            ".github/workflows/ci-quick.yml": False,
-            ".github/dependabot.yml": False,
-            ".github/PULL_REQUEST_TEMPLATE.md.py": False,
-            ".codexx/config.toml": False,
-        }
-        # Every tracked path outside the code trees, so that the list stays short.
-        near = {
-            path
-            for path in tracked
-            if "/" not in path or path.startswith(("docs/", ".github/", ".codex/"))
-        }
-        paths = sorted(built | near | set(expected))
+        expected = DOCS_ONLY_CASES
+        paths = sorted(built | near_docs_only_paths() | set(expected))
         verdicts = cast(
             dict[str, bool],
             node(
@@ -634,6 +658,24 @@ class GateTests(unittest.TestCase):
         # The hook's rule and the workflows' rule are one rule.
         for path, verdict in verdicts.items():
             self.assertEqual(verdict, preflight_stamp.inert(path), path)
+
+    def test_a_docs_only_push_starts_no_heavy_workflow(self) -> None:
+        # A push that starts these would take the pending slot of their
+        # branch-wide concurrency group from a code push, then skip its builds.
+        filters = []
+        for filename in ("ci-build.yml", "rust-migration.yml"):
+            # YAML reads the key `on` as the boolean true.
+            push = cast(dict[Any, Any], workflow(filename))[True]["push"]
+            self.assertNotIn("paths-ignore", push)
+            filters.append(push["paths"])
+        self.assertEqual(filters[0], filters[1])
+        for path in sorted(near_docs_only_paths() | set(DOCS_ONLY_CASES)):
+            started = starts_workflow(filters[0], path)
+            if preflight_stamp.inert(path):
+                self.assertFalse(started, path)
+            elif not path.endswith(".md"):
+                # No Markdown-only push started them before this rule either.
+                self.assertTrue(started, path)
 
     def test_checker_only_publisher_needs_quick_and_marks_no_tree(self) -> None:
         def needs(quick: str) -> dict[str, dict[str, Any]]:

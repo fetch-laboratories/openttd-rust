@@ -356,7 +356,32 @@ class StampTests(unittest.TestCase):
                 r"\$\{CMAKE_SOURCE_DIR\}/docs/([^\s\"@)]+)", path.read_text()
             )
         }
-        self.assertEqual(set(preflight_stamp.BUILT_DOCS), built)
+        # Doxygen's docs target takes each `@image` a source names from IMAGE_PATH.
+        self.assertIn(
+            "IMAGE_PATH             = ./docs/\n", (root / "Doxyfile.in").read_text()
+        )
+        images = subprocess.run(
+            [
+                "git",
+                "grep",
+                "-h",
+                "-o",
+                "-I",
+                "-E",
+                r"[@\\]image[[:space:]]+.*",
+                "--",
+                "src",
+            ],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+        named = {line.split()[2].strip('"') for line in images.splitlines()}
+        self.assertTrue(named)
+        for name in named:
+            self.assertTrue((root / "docs" / name).is_file(), name)
+        self.assertEqual(set(preflight_stamp.BUILT_DOCS), built | named)
         plan = (root / ".github/workflows/ci-request.yml").read_text()
         listed = re.search(r"const builtDocs = \[(.*?)\];", plan, re.S)
         assert listed
@@ -378,6 +403,8 @@ class StampTests(unittest.TestCase):
                     ".github/PULL_REQUEST_TEMPLATE.md": "## Checks\n",
                     ".github/ISSUE_TEMPLATE/bug.yaml": "name: Bug\n",
                     ".codex/config.toml": 'model = "m"\n',
+                    # Git quotes this name in line output; the stamp reads it raw.
+                    "docs/skills/caf\u00e9/agents/openai.yaml": "interface: {}\n",
                 },
             )
             self.assertEqual((preflight_stamp.stamp_for(docs) or {}).get("head"), code)
@@ -385,6 +412,7 @@ class StampTests(unittest.TestCase):
                 ("docs/fonts.md", "built\n"),
                 ("docs/obg_format.txt", "built\n"),
                 ("docs/openttd.6", "built\n"),
+                ("docs/elrail_tile.png", "built\n"),
                 ("docs/skills/x/issues.py", "x = 1\n"),
                 ("docs/skills/x/run.sh", "true\n"),
                 (".github/workflows/x.yml", "on: push\n"),
