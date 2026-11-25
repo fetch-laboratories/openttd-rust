@@ -801,7 +801,6 @@ public:
 
 	inline void SetServiceIntervalIsPercent(bool on) { this->vehicle_flags.Set(VehicleFlag::ServiceIntervalIsPercent, on); }
 
-	void LeaveUnbunchingDepot();
 	bool IsWaitingForUnbunching() const;
 
 private:

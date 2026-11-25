@@ -8,3 +8,5 @@ openttd_rust_ship_path_clear | src/tests/ship_yapf_protocol.hpp | #725
 openttd_rust_train_reservation_check_next | src/tests/train.cpp | #725
 openttd_rust_visual_show | tools/simulation/fleet-console.cpp | #656
 openttd_rust_visual_update | tools/simulation/fleet-console.cpp | #656
+openttd_rust_water_label | src/tests/water_regions_protocol.hpp | #725
+openttd_rust_water_visit_next | src/tests/water_regions_protocol.hpp | #725

@@ -12,7 +12,7 @@
 //! holds. Both stay live and serialized by the game-state mutex for the synchronous call.
 //! Every field is read and written in place at the original's observation point, and no
 //! reference into the record or the owner lives across a service.
-#![allow(unsafe_code)]
+#![allow(unsafe_code, clippy::verbose_bit_mask, clippy::if_not_else)]
 
 use crate::cargo_type::is_valid_cargo_type;
 use crate::command_type::DoCommandFlag;
@@ -75,7 +75,7 @@ pub extern "C" fn openttd_rust_ship_control_reload_rotation() {
 }
 
 /// The Rust owner of one ship shell: the `Ship` members Rust reads and writes.
-pub struct State {
+pub struct ShipState {
     /// The "track" the ship is following.
     state: TrackBits,
     /// Visible direction.
@@ -88,8 +88,8 @@ pub struct State {
     path: ShipPathCache,
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_ship_state_new() -> *mut State {
-    Box::into_raw(Box::new(State {
+pub extern "C" fn openttd_rust_ship_state_new() -> *mut ShipState {
+    Box::into_raw(Box::new(ShipState {
         state: TrackBits::TRACK_BIT_NONE,
         rotation: Direction::INVALID_DIR,
         rotation_x_pos: 0,
@@ -100,7 +100,7 @@ pub extern "C" fn openttd_rust_ship_state_new() -> *mut State {
 /// # Safety
 /// One shell transfers its live owner exactly once, after `PreDestructor`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_state_destroy(state: *mut State) {
+pub unsafe extern "C" fn openttd_rust_ship_state_destroy(state: *mut ShipState) {
     // SAFETY: As this function's contract.
     unsafe {
         drop(Box::from_raw(state));
@@ -111,42 +111,42 @@ pub unsafe extern "C" fn openttd_rust_ship_state_destroy(state: *mut State) {
 /// # Safety
 /// A live owner; the path lives as long as the owner.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_state_path(state: *mut State) -> *mut ShipPathCache {
+pub unsafe extern "C" fn openttd_rust_ship_state_path(state: *mut ShipState) -> *mut ShipPathCache {
     // SAFETY: As this function's contract; no reference is formed.
     unsafe { std::ptr::addr_of_mut!((*state).path) }
 }
 // The scalar accessors of the shell and save/load. SAFETY for each: a live owner, accessed
 // on the game thread with no Rust reference into it.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_get_state(state: *const State) -> u8 {
+pub unsafe extern "C" fn openttd_rust_ship_get_state(state: *const ShipState) -> u8 {
     read_field!(state, state).0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_set_state(state: *mut State, value: u8) {
+pub unsafe extern "C" fn openttd_rust_ship_set_state(state: *mut ShipState, value: u8) {
     write_field!(state, state, TrackBits(value));
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_get_rotation(state: *const State) -> u8 {
+pub unsafe extern "C" fn openttd_rust_ship_get_rotation(state: *const ShipState) -> u8 {
     read_field!(state, rotation).0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_set_rotation(state: *mut State, value: u8) {
+pub unsafe extern "C" fn openttd_rust_ship_set_rotation(state: *mut ShipState, value: u8) {
     write_field!(state, rotation, Direction(value));
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_get_rotation_x(state: *const State) -> i16 {
+pub unsafe extern "C" fn openttd_rust_ship_get_rotation_x(state: *const ShipState) -> i16 {
     read_field!(state, rotation_x_pos)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_set_rotation_x(state: *mut State, value: i16) {
+pub unsafe extern "C" fn openttd_rust_ship_set_rotation_x(state: *mut ShipState, value: i16) {
     write_field!(state, rotation_x_pos, value);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_get_rotation_y(state: *const State) -> i16 {
+pub unsafe extern "C" fn openttd_rust_ship_get_rotation_y(state: *const ShipState) -> i16 {
     read_field!(state, rotation_y_pos)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_set_rotation_y(state: *mut State, value: i16) {
+pub unsafe extern "C" fn openttd_rust_ship_set_rotation_y(state: *mut ShipState, value: i16) {
     write_field!(state, rotation_y_pos, value);
 }
 
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn openttd_rust_ship_set_rotation_y(state: *mut State, val
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Ship {
     pub(crate) v: VehicleRef,
-    s: NonNull<State>,
+    s: NonNull<ShipState>,
 }
 impl Ship {
     /// The ship whose record is `v`, a live ship's, as a `Ship` member's `this` is.
@@ -494,6 +494,11 @@ fn check_if_ship_needs_service(t: &Tables<'_>, v: Ship) {
 }
 
 /// `Ship::UpdateCache`: update the caches of this ship.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "UpdateCache's uint raw_speed and the uint16_t cache members of GetVehicleProperty's int"
+)]
 pub(crate) fn update_cache(t: &Tables<'_>, v: Ship) {
     let svi = (t.vs.engine)(v.v);
 
@@ -697,6 +702,10 @@ fn check_ship_stay_in_depot(t: &Tables<'_>, v: Ship) -> bool {
 
 /// `ShipAccelerate`: accelerates the ship towards its target speed. Returns the number of
 /// steps to move the ship.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ShipAccelerate's uint speed stored to cur_speed, and static_cast<uint8_t>(remainder)"
+)]
 fn ship_accelerate(t: &Tables<'_>, v: VehicleRef) -> u32 {
     let mut speed: u32;
     speed = (u32::from(v.cur_speed()) + u32::from(v.acceleration()))
@@ -713,7 +722,7 @@ fn ship_accelerate(t: &Tables<'_>, v: VehicleRef) -> u32 {
     let number_of_steps =
         advance_speed.wrapping_add(u32::from(v.progress())) / v.get_advance_distance();
     let remainder = advance_speed.wrapping_add(u32::from(v.progress())) % v.get_advance_distance();
-    t.world().assert_with(|| remainder <= u32::from(u8::MAX));
+    t.world().assert_with(|| u8::try_from(remainder).is_ok());
     v.set_progress(remainder as u8);
     number_of_steps
 }
@@ -869,6 +878,10 @@ const SHIP_SUBCOORD: [[ShipSubcoordData; Track::TRACK_END.0 as usize];
 
 /// `ShipTestUpDownOnLock`: test if a ship is in the centre of a lock and should move up or
 /// down. Returns 0 if ship is not moving in lock, or -1 to move down, 1 to move up.
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "ShipTestUpDownOnLock's (int)TILE_HEIGHT"
+)]
 fn ship_test_up_down_on_lock(t: &Tables<'_>, v: VehicleRef) -> i32 {
     let world = t.world();
     /* Suitable tile? */
@@ -962,6 +975,10 @@ pub(crate) fn is_ship_destination_tile(
 }
 
 /// `ReverseShipIntoTrackdir`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the int16_t rotation_x_pos and rotation_y_pos of the int positions"
+)]
 fn reverse_ship_into_trackdir(t: &Tables<'_>, v: Ship, trackdir: Trackdir) {
     use Direction as D;
     const TRACKDIR_TO_DIRECTION: [Direction; 16] = [
@@ -1003,6 +1020,10 @@ fn reverse_ship_into_trackdir(t: &Tables<'_>, v: Ship, trackdir: Trackdir) {
 }
 
 /// `ReverseShip`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the int16_t rotation_x_pos and rotation_y_pos of the int positions"
+)]
 fn reverse_ship(t: &Tables<'_>, v: Ship) {
     crate::witness::hit(crate::witness::SHIP_REVERSE);
     v.v.set_direction(reverse_dir(v.v.direction(), t.check()));
@@ -1023,7 +1044,11 @@ pub(crate) fn get_current_max_speed(v: VehicleRef) -> i32 {
 }
 
 /// `ShipController`.
-#[allow(clippy::too_many_lines, reason = "the original's one body")]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    reason = "the original's one body; the int16_t rotation_x_pos and rotation_y_pos of the int positions"
+)]
 fn ship_controller(t: &Tables<'_>, v: Ship) {
     let check = t.check();
     v.v.set_tick_counter(v.v.tick_counter().wrapping_add(1));
@@ -1303,6 +1328,11 @@ pub(crate) struct CmdBuildShip {
 /// # Safety
 /// Live native cost and engine; the new shell stays live, and no owner access spans a
 /// callback.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    reason = "CmdBuildShip's int x and y of TileX and TileY, Random()'s uint16_t random_bits and DetermineCapacity's uint stored to cargo_cap"
+)]
 pub(crate) unsafe fn cmd_build_ship(
     s: &crate::vehicle_transactions::build::Services,
     out: *mut crate::services::CommandCost,
@@ -1310,42 +1340,39 @@ pub(crate) unsafe fn cmd_build_ship(
     cmd: CmdBuildShip,
 ) -> *mut () {
     let CmdBuildShip { tile, e } = cmd;
-    let k = s.construct;
-    let a = k.articulated;
-    let r = s.refit;
-    let b = r.common.base;
+    let construct = s.construct;
+    let articulated = construct.articulated;
+    let refit = s.refit;
+    let base = refit.common.base;
     let mut shell = std::ptr::null_mut();
     let tile = TileIndex((s.ship_tile)(tile.0));
     if flags.test(DoCommandFlag::Execute) {
-        let x: i32;
-        let y: i32;
-
         let svi = crate::vehicle::EngineRef::of(e);
 
         shell = (s.new_ship)();
         // SAFETY: The new shell's record.
-        let v = Ship::of(unsafe { VehicleRef::from_shell(shell.cast(), r.common.vehicles) });
-        let t = Tables::new(r.ship, b.shared);
-        let check = t.check();
+        let v = Ship::of(unsafe { VehicleRef::from_shell(shell.cast(), refit.common.vehicles) });
+        let tables = Tables::new(refit.ship, base.shared);
+        let check = tables.check();
         crate::witness::hit(crate::witness::SHIP_BUILD);
 
-        let company = crate::company_type::CompanyID((b.shared.current_company)());
+        let company = crate::company_type::CompanyID((base.shared.current_company)());
         v.v.set_owner(company);
         v.v.set_tile(tile);
-        x = (t.map().tile_x(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
-        y = (t.map().tile_y(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
+        let x = (tables.map().tile_x(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
+        let y = (tables.map().tile_y(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
         v.v.set_x_pos(x);
         v.v.set_y_pos(y);
-        v.v.set_z_pos(crate::movement::get_slope_pixel_z(b.shared, x, y, false));
+        v.v.set_z_pos(crate::movement::get_slope_pixel_z(base.shared, x, y, false));
 
         v.v.set_direction(diag_dir_to_dir(
-            t.world().get_ship_depot_direction(tile),
+            tables.world().get_ship_depot_direction(tile),
             check,
         ));
 
         /* UpdateDeltaXY() requires rotation to be initialised as well. */
         v.set_rotation(v.v.direction());
-        (t.vs.update_delta)(v.v);
+        (tables.vs.update_delta)(v.v);
 
         v.v.set_vehstatus(
             VehStates::from_element(VehState::Hidden)
@@ -1353,49 +1380,49 @@ pub(crate) unsafe fn cmd_build_ship(
                 .with(VehStates::from_element(VehState::DefaultPalette)),
         );
 
-        (t.vs.write_spritenum)(v.v, svi.ship_image());
-        v.v.set_cargo_type(t.vs, crate::cargo_type::CargoType(svi.default_cargo()));
+        (tables.vs.write_spritenum)(v.v, svi.ship_image());
+        v.v.set_cargo_type(tables.vs, crate::cargo_type::CargoType(svi.default_cargo()));
         crate::services_assert::assert_with(|| {
-            is_valid_cargo_type(v.v.cargo_type(t.vs.newgrf()).0)
+            is_valid_cargo_type(v.v.cargo_type(tables.vs.newgrf()).0)
         });
         v.v.set_cargo_cap(svi.ship_capacity());
         v.v.set_refit_cap(0);
 
         v.v.set_last_station_visited(StationID::INVALID);
-        v.v.set_last_loading_station(t.vs.visits(), StationID::INVALID);
-        v.v.set_engine_type(crate::engine_type::EngineID((r.capabilities.id)(e)));
+        v.v.set_last_loading_station(tables.vs.visits(), StationID::INVALID);
+        v.v.set_engine_type(crate::engine_type::EngineID((refit.capabilities.id)(e)));
 
-        v.v.set_reliability(t.vs, svi.reliability());
+        v.v.set_reliability(tables.vs, svi.reliability());
         // SAFETY: The base table names the static maintenance table.
-        v.v.set_reliability_spd_dec(unsafe { &*t.vs.maintenance }, svi.reliability_decay());
-        (t.vs.set_max_age)(
+        v.v.set_reliability_spd_dec(unsafe { &*tables.vs.maintenance }, svi.reliability_decay());
+        (tables.vs.set_max_age)(
             v.v,
-            crate::engine_capabilities::get_life_length_in_days(r.capabilities, e),
+            crate::engine_capabilities::get_life_length_in_days(refit.capabilities, e),
         );
 
         v.set_state(TrackBits::TRACK_BIT_DEPOT);
 
-        let defaults = ((t.company().settings)().company_vehicle_defaults)(company);
-        (k.service_dates)(shell, read_field!(defaults, servint_ships));
-        (k.build_stamp)(shell);
-        (a.random_bits)(shell, b.shared.random() as u16);
+        let defaults = ((tables.company().settings)().company_vehicle_defaults)(company);
+        (construct.service_dates)(shell, read_field!(defaults, servint_ships));
+        (construct.build_stamp)(shell);
+        (articulated.random_bits)(shell, base.shared.random() as u16);
 
         v.v.set_acceleration(svi.ship_acceleration());
-        update_cache(&t, v);
+        update_cache(&tables, v);
 
-        (k.service_flags)(
+        (construct.service_flags)(
             shell,
             svi.exclusive_preview(),
-            b.interval_is_percent(company),
+            base.interval_is_percent(company),
         );
 
         // SAFETY: The live new shell; no reference spans the invalidation.
-        unsafe { crate::newgrf_vehicle::invalidate_newgrf_cache_of_chain(t.vs.newgrf(), v.v) };
+        unsafe { crate::newgrf_vehicle::invalidate_newgrf_cache_of_chain(tables.vs.newgrf(), v.v) };
 
         // SAFETY: The build transaction retains the new shell across the capacity callbacks.
         v.v.set_cargo_cap(unsafe {
             crate::engine_capabilities::determine_capacity(
-                r.capabilities,
+                refit.capabilities,
                 e,
                 v.v.0.as_ptr(),
                 std::ptr::null_mut(),
@@ -1403,12 +1430,12 @@ pub(crate) unsafe fn cmd_build_ship(
         } as u16);
 
         // SAFETY: As above.
-        unsafe { crate::newgrf_vehicle::invalidate_newgrf_cache_of_chain(t.vs.newgrf(), v.v) };
+        unsafe { crate::newgrf_vehicle::invalidate_newgrf_cache_of_chain(tables.vs.newgrf(), v.v) };
 
-        t.update_position(v.v);
+        tables.update_position(v.v);
     }
 
-    (b.cost.zero)(out);
+    (base.cost.zero)(out);
     shell
 }
 

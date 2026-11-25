@@ -323,7 +323,7 @@ crate::abi::shared_records! {
         pub train: *mut crate::train_state::TrainState,
         pub road: *mut crate::road::OpenTTDRoadState,
         pub aircraft: *mut crate::aircraft::AircraftState,
-        pub ship: *mut crate::ship_control::State => "struct OpenTTDShipState *",
+        pub ship: *mut crate::ship_control::ShipState => "struct OpenTTDShipState *",
         pub consist: *mut crate::orders::Consist,
         pub orders: *mut crate::orders::VehicleOrders,
         pub visual: *mut u8,
@@ -798,7 +798,7 @@ impl crate::vehicle::VehicleRef {
         self.gcache().cached_veh_length()
     }
     /// The ship owner link; the record is a live ship.
-    pub(crate) fn ship(self) -> *mut crate::ship_control::State {
+    pub(crate) fn ship(self) -> *mut crate::ship_control::ShipState {
         read_field!(self.0.as_ptr(), ship)
     }
     /// Store `Vehicle::acceleration`.

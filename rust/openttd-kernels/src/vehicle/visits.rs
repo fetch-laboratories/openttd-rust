@@ -36,6 +36,7 @@ use crate::orders::VisitOrders;
 use crate::script_event_types::ScriptEvent;
 use crate::services::Services as SharedServices;
 use crate::services_assert::{assert_with, not_reached};
+use crate::ship_control::{Ship, Tables, update_cache};
 use crate::station::{BaseStation, Station};
 use crate::station_service::{Links, Loading, World, has_rating, prepare_unload};
 use crate::station_type::StationID;
@@ -1154,13 +1155,10 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
 
         VehicleType::VEH_SHIP => {
             set_window_classes_dirty(WindowClass::WC_SHIPS_LIST);
-            let ship = crate::ship_control::Ship::from_vehicle(v);
+            let (ship, leaves) = (Ship::from_vehicle(v), s.refit.ship);
             ship.set_state(TrackBits::TRACK_BIT_DEPOT);
-            crate::ship_control::update_cache(
-                &crate::ship_control::Tables::new(s.refit.ship, s.shared),
-                ship,
-            );
-            (s.refit.ship.update_viewport)(v, true, true);
+            update_cache(&Tables::new(leaves, s.shared), ship);
+            (leaves.update_viewport)(v, true, true);
             set_window_dirty(WindowClass::WC_VEHICLE_DEPOT, WindowNumber::from(v.tile()));
         }
 

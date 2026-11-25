@@ -35,24 +35,9 @@ WaterRegionDesc GetWaterRegionInfo(TileIndex tile)
 	return WaterRegionDesc{static_cast<int>(TileX(tile) / WATER_REGION_EDGE_LENGTH), static_cast<int>(TileY(tile) / WATER_REGION_EDGE_LENGTH)};
 }
 
-WaterRegionPatchDesc GetWaterRegionPatchInfo(TileIndex tile)
-{
-	const auto region = GetWaterRegionInfo(tile);
-	return WaterRegionPatchDesc{region.x, region.y, WaterRegionPatchLabel{openttd_rust_water_label(_water_regions.get(), &GetRustSharedServices(), tile.base())}};
-}
-
 void InvalidateWaterRegion(TileIndex tile)
 {
 	openttd_rust_water_invalidate(_water_regions.get(), &GetRustSharedServices(), tile.base());
-}
-
-void VisitWaterRegionPatchNeighbours(const WaterRegionPatchDesc &patch, VisitWaterRegionPatchCallback &callback)
-{
-	OpenTTDWaterVisit visit{};
-	OpenTTDWaterPatch next{};
-	while (openttd_rust_water_visit_next(_water_regions.get(), &GetRustSharedServices(), &visit, {patch.x, patch.y, patch.label.base()}, &next)) {
-		callback(WaterRegionPatchDesc{next.x, next.y, WaterRegionPatchLabel{next.label}});
-	}
 }
 
 void AllocateWaterRegions()

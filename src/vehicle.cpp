@@ -1321,14 +1321,6 @@ void Vehicle::ReleaseUnitNumber()
  */
 
 /**
- * Leave an unbunching depot and calculate the next departure time for shared order vehicles.
- */
-void Vehicle::LeaveUnbunchingDepot()
-{
-	openttd_rust_leave_unbunching(this, &GetRustOrdersLeaves());
-}
-
-/**
  * Check whether a vehicle inside a depot is waiting for unbunching.
  * @return True if the vehicle must continue waiting, or false if it may try to leave the depot.
  */

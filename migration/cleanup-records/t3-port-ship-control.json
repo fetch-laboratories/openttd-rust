@@ -1,0 +1,14 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when function length leaves the Clippy configuration under ADR 0024, which does not measure it, or when the closure sweep of #734 removes the remaining item-level length allowances.",
+    "site": "rust/openttd-kernels/src/ship_control.rs | fn ship_controller | allow clippy::too_many_lines",
+    "operation": "ship_control::ship_controller",
+    "source_contract": "`ShipController` (src/ship_cmd.cpp), one body of about 150 lines in the original.",
+    "reason": "Decision 1 of plan #1027 part 3 ports each original body as one function with its comments at each branch; splitting ShipController would invent function boundaries the original lacks. The base's module-wide `too_many_lines` allowance goes, leaving this one item."
+  }
+]

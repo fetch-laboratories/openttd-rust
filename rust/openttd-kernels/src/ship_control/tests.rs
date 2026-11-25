@@ -240,8 +240,9 @@ fn reverse_ship_into_trackdir_turns_onto_the_trackdir_and_stops() {
                 && ship.state() == TrackBits::TRACK_BIT_LOWER
                 && v.cur_speed() == 0
                 && ship.path_empty()
-                && read_field!(state, rotation_x_pos) == 70_000_u32 as i16
-                && read_field!(state, rotation_y_pos) == -40_000_i32 as i16,
+                // The `int16_t` narrowings of 70,000 and -40,000.
+                && read_field!(state, rotation_x_pos) == 4_464
+                && read_field!(state, rotation_y_pos) == 25_536,
             "every write precedes the viewport call"
         );
         // SAFETY: The thread's links cell; no reference to it is live.
