@@ -37,7 +37,8 @@ not a gate: matching is by facade, export and name, as the 2026-11-06 overhaul
 measured them. `--compare BASE_REF` prints, for the files given or else the
 finished files that the head lists and the base lacks or changed, a table of
 every row at the merge base and at the head, then each row new or grown at the
-head; it gates nothing.
+head; it gates nothing. `--worksets` prints #734's counts over docs/worksets.md
+and the finished list at the head; it gates nothing either.
 """
 
 import argparse
@@ -1029,6 +1030,115 @@ def gate(base_ref: str, head: str) -> int:
     return int(bool(failures or missing))
 
 
+WORKSETS = "docs/worksets.md"
+# `- **04 Cargo**: `cargo_flow.rs`, ...`: a workset and its files under RUST.
+WORKSET_LINE = re.compile(r"- \*\*([^*]+)\*\*: ((?:`[^`]+`(?:, )?)+)")
+
+
+@dataclass
+class WorksetRow:
+    """One workset's count: its files on disk, those finished and their lines,
+    the lines left and each unfinished file with its lines."""
+
+    name: str
+    files: int = 0
+    finished: int = 0
+    finished_lines: int = 0
+    left: int = 0
+    unfinished: list[str] = field(default_factory=list)
+
+
+def workset_manifest(text: str) -> tuple[dict[str, list[str]], list[str]]:
+    """Each workset's entries in order, and a problem line per malformed line."""
+    worksets: dict[str, list[str]] = {}
+    problems = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not line.startswith("- "):
+            continue
+        if found := WORKSET_LINE.fullmatch(line.strip()):
+            worksets.setdefault(found[1], []).extend(re.findall(r"`([^`]+)`", found[2]))
+        else:
+            problems.append(f"{WORKSETS}:{number}: not a workset line: {line}")
+    return worksets, problems
+
+
+def worksets(head: str) -> int:
+    """#734's count: each workset's finished files and lines left, over the
+    manifest and the finished list at head, and every Rust file there (#1063).
+    A file's lines are its newline count. It gates nothing."""
+    text = show(head, WORKSETS)
+    if text is None:
+        print(f"{WORKSETS} is not at {head}; reading the checkout's")
+        text = (ROOT / WORKSETS).read_text()
+    manifest, problems = workset_manifest(text)
+    for problem in problems:
+        print(problem)
+    finished = set(finished_files(head))
+    lines = {
+        path: data.count(b"\n")
+        for path, data in archive(head, RUST).items()
+        if path.endswith(".rs")
+    }
+    seen: set[str] = set()
+    twice, missing = [], []
+    rows = []
+    for name, entries in manifest.items():
+        row = WorksetRow(name)
+        for entry in entries:
+            path = f"{RUST}/{entry}"
+            if path in seen:
+                twice.append(f"{name}: {entry}")
+                continue
+            seen.add(path)
+            if path not in lines:
+                missing.append(f"{name}: {entry}")
+                continue
+            row.files += 1
+            if path in finished:
+                row.finished += 1
+                row.finished_lines += lines[path]
+            else:
+                row.left += lines[path]
+                row.unfinished.append(f"{entry} ({lines[path]})")
+        rows.append(row)
+    entries = sum(row.files for row in rows)
+    done = sum(row.finished for row in rows)
+    done_lines = sum(row.finished_lines for row in rows)
+    left = sum(row.left for row in rows)
+    print(
+        f"Worksets at {head}: {entries} entries, {done} finished with {done_lines} "
+        f"lines, {left} lines left in the other {entries - done}, "
+        f"{done_lines + left} together"
+    )
+    print(
+        "| Workset | Files | Finished | Finished lines | Lines left | Unfinished files |"
+    )
+    print("| --- | ---: | ---: | ---: | ---: | --- |")
+    for row in rows:
+        print(
+            f"| {row.name} | {row.files} | {row.finished} | {row.finished_lines} | "
+            f"{row.left} | {', '.join(row.unfinished)} |"
+        )
+    outside = sorted(finished - seen)
+    unplaced = sorted(path for path in lines if path not in seen | finished)
+    for title, paths in (
+        ("Finished files in no workset", outside),
+        ("Rust files in no workset and not finished", unplaced),
+    ):
+        total = sum(lines.get(path, 0) for path in paths)
+        print(f"{title}: {len(paths)}, {total} lines")
+        for path in paths:
+            print(f"  {path} ({lines.get(path, 'no file')})")
+    for title, found in (
+        ("Manifest entries without a file", missing),
+        ("Manifest entries listed twice", twice),
+    ):
+        print(f"{title}: {len(found)}")
+        for entry in found:
+            print(f"  {entry}")
+    return 0
+
+
 # Candidate rows: listed for the implementer and reviewer
 # to judge, outside RESIDUE, the totals and --gate.
 SERVICE = re.compile(r'\bextern\s*"C"\s*fn\b')
@@ -1511,8 +1621,15 @@ def main() -> int:
         metavar="BASE_REF",
         help=f"compare the files given, or else the changed files {FINISHED} lists, at the merge base with BASE_REF and at the head",
     )
+    parser.add_argument(
+        "--worksets",
+        action="store_true",
+        help=f"print #734's counts from {WORKSETS}: each workset's finished files and lines left, and the files in no workset",
+    )
     args = parser.parse_args()
     files = [str(PurePosixPath(path)) for path in args.files]
+    if args.worksets:
+        return worksets(args.head)
     if args.gate:
         return gate(args.gate, args.head)
     if args.compare:
