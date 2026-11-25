@@ -237,8 +237,9 @@ pub(crate) fn has_rail_type_avail(s: &Services, company: CompanyID, railtype: Ra
 
 /// `HasAnyRailTypesAvail`: test if any buildable rail type is available for a company.
 pub(crate) fn has_any_rail_types_avail(s: &Services, company: CompanyID) -> bool {
-    let avail = (s.company_railtypes)(company.0) & !crate::type_registry::rail_hidden();
-    RailTypes(avail).any()
+    let mut avail = RailTypes((s.company_railtypes)(company.0));
+    avail = avail.reset(RailTypes(crate::type_registry::rail_hidden()));
+    avail.any()
 }
 
 /// `ValParamRailType`: validate functions for rail building.
@@ -286,6 +287,16 @@ fn engine_available(e: crate::engine::EngineRef, company: CompanyID) -> bool {
     unsafe { company_available(e, company.0) }
 }
 
+/// `IsInsideMM(introduction_date, 0, CalendarTime::MAX_DATE.base())`, with the date
+/// converted to `size_t` as the original's call converts it.
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "IsInsideMM converts the signed introduction_date to size_t"
+)]
+fn is_introduction_date(date: CalendarDate) -> bool {
+    crate::math::is_inside_mm(date.0 as usize, 0, MAX_DATE as usize)
+}
+
 /// `AddDateIntroducedRailTypes`: add the rail types that are to be introduced at the given
 /// date.
 pub(crate) fn add_date_introduced_rail_types(
@@ -305,7 +316,7 @@ pub(crate) fn add_date_introduced_rail_types(
 
         /* Not date introduced. */
         let introduction_date = rti.introduction_date();
-        if !(0..MAX_DATE).contains(&introduction_date.0) {
+        if !is_introduction_date(introduction_date) {
             continue;
         }
 
@@ -316,7 +327,7 @@ pub(crate) fn add_date_introduced_rail_types(
 
         /* Have we introduced all required railtypes? */
         let required = rti.introduction_required_railtypes();
-        if rts.0 & required.0 != required.0 {
+        if !rts.all(required) {
             continue;
         }
 
