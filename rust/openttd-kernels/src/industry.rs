@@ -238,7 +238,7 @@ pub(crate) fn tile_belongs_to_industry(
     tile: TileIndex,
     index: IndustryID,
 ) -> bool {
-    world.kind(tile) == TileType::MP_INDUSTRY
+    world.is_tile_type(tile, TileType::MP_INDUSTRY)
         && world.asserted(|m| crate::industry_map::get_industry_index(m, tile)) == index
 }
 /// `Industry::IsCargoAccepted()`: any slot holds a valid cargo.

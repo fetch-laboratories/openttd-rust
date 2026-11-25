@@ -1055,7 +1055,7 @@ fn disaster_tick_aircraft(
         }
 
         let tile = map.tile_virt_xy(x as u32, y as u32);
-        if world.kind(tile) != TileType::MP_INDUSTRY {
+        if !world.is_tile_type(tile, TileType::MP_INDUSTRY) {
             return true;
         }
 
