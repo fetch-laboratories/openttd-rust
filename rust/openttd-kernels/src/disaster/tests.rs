@@ -429,20 +429,18 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
     airplane.v.set_dest_tile(TileIndex(7));
     AIRPLANE.set(Some(airplane));
 
-    // A block queued for company 5 on clear ground, before each clear.
-    let queue_block = || {
-        crate::signal::context(shared).add_track_to_signal_buffer(
-            block,
-            crate::track_type::Track::TRACK_X,
-            CompanyID(5),
-        );
-    };
+    // One block queued for company 5 on clear ground, before the house clear. The house's
+    // clear leaves it queued, and the rail's clear updates it.
+    crate::signal::context(shared).add_track_to_signal_buffer(
+        block,
+        crate::track_type::Track::TRACK_X,
+        CompanyID(5),
+    );
     let saved = CompanyID(3);
 
     for (tile, company) in [(house, Owner::NONE), (rail, Owner::WATER)] {
         CURRENT.set(saved.0);
         airplane.set_state(1);
-        queue_block();
         super::disaster_clear_square(&t, tile);
         let mut expected = vec![
             Event::SetCompany(company),
@@ -459,7 +457,7 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
             Event::SetCompany(saved),
         ];
         if tile == rail {
-            // The house's block is still queued; the rail's clear updates it.
+            // The block queued before the house's clear is still queued.
             expected.push(Event::SignalUpdate(CompanyID(5)));
         }
         assert_eq!(take_events(), expected, "tile {}", tile.0);
