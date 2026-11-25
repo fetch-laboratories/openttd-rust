@@ -85,6 +85,7 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.set_president_name = Identity_set_president_name,
 	.set_president_name_1 = Identity_set_president_name_1,
 	.set_president_name_2 = Identity_set_president_name_2,
+	.vehicle_defaults = Identity_vehicle_defaults,
 	};
 	return services;
 }

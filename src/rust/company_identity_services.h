@@ -32,6 +32,7 @@ inline void OPENTTD_RUST_CALL Identity_set_name_2(Company *c, uint32_t value) no
 inline void OPENTTD_RUST_CALL Identity_set_president_name(Company *c, OpenTTDByteSpan text) noexcept { c->president_name.assign(reinterpret_cast<const char *>(text.data), text.size); }
 inline void OPENTTD_RUST_CALL Identity_set_president_name_1(Company *c, uint32_t value) noexcept { c->president_name_1 = value; }
 inline void OPENTTD_RUST_CALL Identity_set_president_name_2(Company *c, uint32_t value) noexcept { c->president_name_2 = value; }
+inline VehicleDefaultSettings *OPENTTD_RUST_CALL Identity_vehicle_defaults(Company *c) noexcept { return &c->settings.vehicle; }
 inline uint8_t OPENTTD_RUST_CALL Face_offset(const FaceVar *v) noexcept { return v->offset; }
 inline uint8_t OPENTTD_RUST_CALL Face_length(const FaceVar *v) noexcept { return v->length; }
 inline uint8_t OPENTTD_RUST_CALL Face_valid_values(const FaceVar *v) noexcept { return v->valid_values; }

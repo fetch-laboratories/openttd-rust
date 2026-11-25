@@ -1666,12 +1666,13 @@ pub extern "C" fn openttd_rust_company_allow_list(
 /// `None` for the client-default settings.
 pub(crate) fn company_service_interval(
     settings: &crate::settings_table::Services,
-    c: Option<CompanyID>,
+    identity: &crate::company_identity::Services,
+    c: Option<*mut OpenTTDCompany>,
     kind: VehicleType,
 ) -> i32 {
     let vds = match c {
         None => (settings.client_vehicle_defaults)(),
-        Some(c) => (settings.company_vehicle_defaults)(c),
+        Some(c) => (identity.vehicle_defaults)(c),
     };
     i32::from(match kind {
         VehicleType::VEH_TRAIN => read_field!(vds, servint_trains),
@@ -1689,8 +1690,12 @@ pub extern "C" fn openttd_rust_company_service_interval(
     c: *mut OpenTTDCompany,
     kind: VehicleType,
 ) -> i32 {
-    let c = (!c.is_null()).then(|| (s.identity.index)(c));
-    company_service_interval((s.settings)(), c, kind)
+    company_service_interval(
+        (s.settings)(),
+        s.identity,
+        (!c.is_null()).then_some(c),
+        kind,
+    )
 }
 
 /// Arguments of `CmdGiveMoney`, in command order.
@@ -2317,9 +2322,9 @@ pub(crate) fn change_ownership_of_company_items(
         // Override company settings to new company defaults in case we need to convert them.
         // This is required as the CmdChangeServiceInt doesn't copy the supplied value when it
         // is non-custom
-        if new_owner != Owner::INVALID {
-            let old_company = (settings.company_vehicle_defaults)(old_owner);
-            let new_company = (settings.company_vehicle_defaults)(new_owner);
+        if let Some(new_company) = new_company {
+            let old_company = (s.identity.vehicle_defaults)((s.identity.company)(old_owner));
+            let new_company = (s.identity.vehicle_defaults)(new_company);
 
             write_field!(
                 old_company,
@@ -2362,10 +2367,14 @@ pub(crate) fn change_ownership_of_company_items(
                 if !v.service_interval_is_custom() {
                     // Technically, passing the interval is not needed as the command will
                     // query the default value itself. However, do not rely on that behaviour.
-                    let interval =
-                        company_service_interval(settings, Some(new_owner), v.vehicle_type());
+                    let interval = company_service_interval(
+                        settings,
+                        s.identity,
+                        Some(new_company),
+                        v.vehicle_type(),
+                    );
                     let is_percent = read_field!(
-                        (settings.company_vehicle_defaults)(new_owner),
+                        (s.identity.vehicle_defaults)(new_company),
                         servint_ispercent
                     );
                     let transactions = settings.transactions;

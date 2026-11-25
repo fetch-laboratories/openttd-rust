@@ -118,6 +118,9 @@ pub struct Services {
     pub set_president_name_1: extern "C" fn(*mut OpenTTDCompany, StringID) -> (),
     /// `Company::president_name_2 = value`.
     pub set_president_name_2: extern "C" fn(*mut OpenTTDCompany, u32) -> (),
+    /// `&c->settings.vehicle`.
+    pub vehicle_defaults:
+        extern "C" fn(*mut OpenTTDCompany) -> *mut crate::settings_table::VehicleDefaults,
 }
 
 impl Services {
@@ -1122,5 +1125,6 @@ crate::abi::layouts! {
         set_president_name,
         set_president_name_1,
         set_president_name_2,
+        vehicle_defaults,
     };
 }

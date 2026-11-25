@@ -751,8 +751,10 @@ mod control_tests {
     extern "C" fn client_defaults() -> *mut VehicleDefaults {
         VEHICLE_DEFAULTS.get()[1]
     }
-    extern "C" fn company_defaults(c: CompanyID) -> *mut VehicleDefaults {
-        assert_eq!(c, CompanyID(2));
+    /// The company record the test passes; only its address is compared.
+    const COMPANY_TWO: *mut OpenTTDCompany = std::ptr::dangling_mut();
+    extern "C" fn company_defaults(c: *mut OpenTTDCompany) -> *mut VehicleDefaults {
+        assert_eq!(c, COMPANY_TWO);
         VEHICLE_DEFAULTS.get()[0]
     }
 
@@ -762,8 +764,11 @@ mod control_tests {
     fn service_intervals_read_the_type_field() {
         let settings = crate::settings_table::Services {
             client_vehicle_defaults: client_defaults,
-            company_vehicle_defaults: company_defaults,
             ..crate::test_tables::SETTINGS
+        };
+        let identity = crate::company_identity::Services {
+            vehicle_defaults: company_defaults,
+            ..crate::test_tables::COMPANY_IDENTITY
         };
         for percent in [false, true] {
             let mut company = VehicleDefaults {
@@ -788,11 +793,11 @@ mod control_tests {
                 (crate::vehicle_type::VehicleType::VEH_SHIP, 423, 65535),
             ] {
                 assert_eq!(
-                    company_service_interval(&settings, Some(CompanyID(2)), kind),
+                    company_service_interval(&settings, &identity, Some(COMPANY_TWO), kind),
                     company_interval
                 );
                 assert_eq!(
-                    company_service_interval(&settings, None, kind),
+                    company_service_interval(&settings, &identity, None, kind),
                     client_interval
                 );
             }
@@ -1972,6 +1977,12 @@ mod evidence_tests {
     ) -> *mut crate::settings_table::VehicleDefaults {
         DEFAULTS.get()[usize::from(c.0)]
     }
+    /// `&c->settings.vehicle` of a resolved company.
+    extern "C" fn vehicle_defaults(
+        c: *mut OpenTTDCompany,
+    ) -> *mut crate::settings_table::VehicleDefaults {
+        DEFAULTS.get()[usize::from(index(c).0)]
+    }
     extern "C" fn none_waypoint(_: u32) -> *mut crate::station::BaseStation {
         std::ptr::null_mut()
     }
@@ -2077,6 +2088,7 @@ mod evidence_tests {
                 is_ai,
                 admin_update,
                 renewal_head,
+                vehicle_defaults,
                 ..COMPANY_IDENTITY
             }),
             subsidies,

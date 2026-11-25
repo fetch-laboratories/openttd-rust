@@ -15,6 +15,7 @@ struct OpenTTDEngineCapabilitiesServices;
 struct OpenTTDObjectServices;
 struct OpenTTDTownAuthorityServices;
 struct CompanyFinances;
+struct VehicleDefaultSettings;
 struct OpenTTDCompanyIdentityServices {
 	const OpenTTDTownAuthorityServices *authority;
 	const OpenTTDEngineCapabilitiesServices *capabilities;
@@ -55,6 +56,7 @@ struct OpenTTDCompanyIdentityServices {
 	void (OPENTTD_RUST_CALL *set_president_name)(Company *c, OpenTTDByteSpan text) noexcept OPENTTD_SERVICE_DEFAULT(set_president_name);
 	void (OPENTTD_RUST_CALL *set_president_name_1)(Company *c, uint32_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_president_name_1);
 	void (OPENTTD_RUST_CALL *set_president_name_2)(Company *c, uint32_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_president_name_2);
+	VehicleDefaultSettings *(OPENTTD_RUST_CALL *vehicle_defaults)(Company *c) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_defaults);
 };
 const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept;
 extern "C" {

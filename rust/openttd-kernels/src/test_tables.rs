@@ -1191,6 +1191,7 @@ pub(crate) const COMPANY_IDENTITY: crate::company_identity::Services =
         set_president_name: unreachable2,
         set_president_name_1: unreachable2,
         set_president_name_2: unreachable2,
+        vehicle_defaults: unreachable1,
     };
 
 /// `crate::company::Services` with every entry unreachable.

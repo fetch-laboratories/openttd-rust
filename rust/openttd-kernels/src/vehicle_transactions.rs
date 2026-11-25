@@ -973,7 +973,12 @@ impl TransactionServices {
     /// vehicles of `kind`.
     pub(crate) fn interval_default(&self, owner: CompanyID, kind: VehicleType) -> i32 {
         let company = unsafe { &*(self.commands.company)() };
-        crate::company::company_service_interval((company.settings)(), Some(owner), kind)
+        crate::company::company_service_interval(
+            (company.settings)(),
+            company.identity,
+            Some((company.identity.company)(owner)),
+            kind,
+        )
     }
     /// Raw adapter: the service interval default over base values, for
     /// `settings_table.rs` until its pass.
