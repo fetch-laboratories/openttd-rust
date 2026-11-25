@@ -8,13 +8,6 @@ use crate::road::RoadTypeFlags;
 use crate::road_type::{RoadType, RoadTypeLabel, RoadTypes};
 use crate::services::Services as Shared;
 use crate::timer_game_calendar::CalendarDate;
-#[repr(C)]
-pub struct Introduction {
-    pub label: u32,
-    pub date: i32,
-    pub required: u64,
-    pub introduces: u64,
-}
 /// Native `RoadTypeInfo`, opaque: Rust holds the `GetRoadTypeInfo` result only through the
 /// call that resolved it and reads its fields through the accessors below.
 #[repr(C)]
@@ -28,8 +21,6 @@ pub struct Services {
     pub company_roadtypes: extern "C" fn(u8) -> u64,
     pub editor: extern "C" fn() -> bool,
     pub next: unsafe extern "C" fn(u32) -> EngineRef,
-    pub rail_introduces: extern "C" fn(u8) -> u64,
-    pub rail_introduction: extern "C" fn(u8) -> Introduction,
     /// `RoadTypeInfo::flags`.
     pub road_flags: extern "C" fn(*const RoadTypeInfo) -> RoadTypeFlags,
     /// `GetRoadTypeInfo`, retaining its assertion.
@@ -62,15 +53,12 @@ pub unsafe fn company_available(e: EngineRef, company: u8) -> bool {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDTypeIntroduction" ["engine"] => Introduction { label, date, required, introduces };
     "OpenTTDTypeAvailabilityServices" ["engine"] => Services {
         assertions,
         company_railtypes,
         company_roadtypes,
         editor,
         next,
-        rail_introduces,
-        rail_introduction,
         road_flags,
         road_info,
         road_introduces,

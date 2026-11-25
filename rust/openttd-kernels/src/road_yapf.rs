@@ -510,7 +510,7 @@ impl<'a> CYapfRoad<'a> {
     fn one_tile_cost(&self, tile: TileIndex, trackdir: Trackdir) -> i32 {
         let mut cost: i32 = 0;
         /* set base cost */
-        if is_diagonal_trackdir(trackdir.0) {
+        if is_diagonal_trackdir(trackdir, |ok| self.check(ok)) {
             cost = cost.wrapping_add(YAPF_TILE_LENGTH);
             match self.world.kind(tile) {
                 TileType::MP_ROAD => {
@@ -529,7 +529,7 @@ impl<'a> CYapfRoad<'a> {
                     if self.world.is_drive_through_stop_tile(tile) {
                         /* Increase the cost for drive-through road stops */
                         cost = cost.wrapping_add(self.settings.stop);
-                        let dir = DiagDirection(trackdir_to_exitdir(trackdir.0));
+                        let dir = trackdir_to_exitdir(trackdir, |ok| self.check(ok));
                         let offset = self
                             .world
                             .dimensions
@@ -599,12 +599,11 @@ impl<'a> CYapfRoad<'a> {
 
             /* stop if we have just entered the depot */
             if self.world.road_depot(tile)
-                && trackdir.0
+                && trackdir
                     == diag_dir_to_diag_trackdir(
                         reverse_diag_dir(DiagDirection(self.world.road_depot_dir(tile.0)), |ok| {
                             self.check(ok);
-                        })
-                        .0,
+                        }),
                         |ok| self.check(ok),
                     )
             {
@@ -730,7 +729,7 @@ impl<'a> CYapfRoad<'a> {
         } else {
             self.dest_station = StationID::INVALID;
             self.dest_tile = TileIndex(self.settings.dest_tile);
-            self.dest_trackdirs = TrackdirBits(track_status_to_trackdir_bits(
+            self.dest_trackdirs = track_status_to_trackdir_bits(
                 crate::movement::table(self.s).get_tile_track_status_in_world(
                     &self.world,
                     self.dest_tile,
@@ -738,7 +737,7 @@ impl<'a> CYapfRoad<'a> {
                     u32::from(self.road_tram_type().0),
                     DiagDirection::INVALID_DIAGDIR,
                 ),
-            ));
+            );
         }
     }
     fn station_commands(&self) -> &'a crate::station_cmd::CommandServicesTable {
@@ -776,8 +775,7 @@ impl<'a> CYapfRoad<'a> {
                 && (self.non_artic || self.world.is_drive_through_stop_tile(tile));
         }
 
-        tile == self.dest_tile
-            && has_trackdir(self.dest_trackdirs.0, trackdir.0, |ok| self.check(ok))
+        tile == self.dest_tile && has_trackdir(self.dest_trackdirs, trackdir, |ok| self.check(ok))
     }
     /// `PfCalcEstimate`: called by YAPF to calculate cost estimate. Calculates
     /// distance to the destination adds it to the actual cost from origin and
@@ -839,7 +837,7 @@ impl<'a> CYapfRoad<'a> {
             && OrderType(self.settings.order_type) != OrderType::OT_GOTO_STATION
         {
             /* choose diagonal trackdir reachable from enterdir */
-            return Trackdir(diag_dir_to_diag_trackdir(enterdir.0, |ok| self.check(ok)));
+            return diag_dir_to_diag_trackdir(enterdir, |ok| self.check(ok));
         }
         /* our source tile will be the next vehicle tile (should be the given one) */
         let src_tile = tile;
@@ -847,7 +845,7 @@ impl<'a> CYapfRoad<'a> {
         let mut src_trackdirs =
             get_trackdir_bits_for_road(crate::movement::table(self.s), tile, self.road_tram_type());
         /* select reachable trackdirs only */
-        src_trackdirs &= TrackdirBits(diagdir_reaches_trackdirs(enterdir.0));
+        src_trackdirs &= diagdir_reaches_trackdirs(enterdir, |ok| self.check(ok));
 
         /* set origin and destination nodes */
         self.set_origin(src_tile, src_trackdirs);
@@ -943,7 +941,7 @@ impl<'a> CYapfRoad<'a> {
         max_distance: i32,
     ) -> FindDepotData {
         /* Set origin. */
-        self.set_origin(tile, TrackdirBits(trackdir_to_trackdir_bits(td.0)));
+        self.set_origin(tile, trackdir_to_trackdir_bits(td, |ok| self.check(ok)));
         self.max_cost = max_distance;
 
         /* Find the best path and return if no depot is found. */
@@ -1081,8 +1079,8 @@ fn find_nearest_depot(pf: &mut CYapfRoad<'_>, max_distance: i32) -> (FindDepotDa
     let trackdir = Trackdir(pf.settings.trackdir);
 
     if !has_trackdir(
-        get_trackdir_bits_for_road(crate::movement::table(pf.s), tile, pf.road_tram_type()).0,
-        trackdir.0,
+        get_trackdir_bits_for_road(crate::movement::table(pf.s), tile, pf.road_tram_type()),
+        trackdir,
         |ok| pf.check(ok),
     ) {
         return (

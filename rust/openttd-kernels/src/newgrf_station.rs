@@ -404,13 +404,14 @@ fn continuation(native: &Services, tile: u32) -> u32 {
         let neighbour = (TileIndex(tile)
             + map.tile_offs_by_dir(Direction(dirs[i]), crate::map_func::native_check))
         .0;
-        let bits = crate::track_func::track_status_to_track_bits(crate::movement::track_status(
-            native.shared(),
-            neighbour,
-            crate::transport_type::TRANSPORT_RAIL,
-            0,
-            INVALID_DIAGDIR,
-        ));
+        let bits =
+            crate::track_func::track_status_to_track_bits_raw(crate::movement::track_status(
+                native.shared(),
+                neighbour,
+                crate::transport_type::TRANSPORT_RAIL,
+                0,
+                INVALID_DIAGDIR,
+            ));
         if bits != 0 {
             result |= 1 << (i + 8);
             if (native.shared().tile_type)(neighbour) == crate::tile_type::MP_TUNNELBRIDGE
@@ -418,7 +419,7 @@ fn continuation(native: &Services, tile: u32) -> u32 {
             {
                 continue;
             }
-            if bits & crate::track_func::diagdir_reaches_tracks(exits[i]) != 0 {
+            if bits & crate::track_func::diagdir_reaches_tracks_raw(exits[i]) != 0 {
                 result |= 1 << i;
             }
         }
@@ -737,7 +738,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         0x42 => {
             (native.shared().terrain_type)(tile)
                 | (u32::from(crate::type_registry::openttd_rust_rail_reverse(
-                    crate::map_func::World::new(native.shared()).rail_type(tile),
+                    crate::map_func::World::new(native.shared()).get_rail_type_raw(tile),
                     (native.shared().specs().station().file)(spec),
                 )) << 8)
         }

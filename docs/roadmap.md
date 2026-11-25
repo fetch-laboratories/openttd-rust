@@ -279,24 +279,17 @@ Provisional, for steering 39 to judge:
 
 Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. Root's status comment on #3 holds the queue's state between commits to this section.
 
-Two slots ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)); both are held by the open drafts in the [resume checkpoint](#resume-checkpoint). Each slot works one chain, and a pass planned on an open PR's head is dispatched when that PR merges. Residue that passes left in files they did not finish is on #734, one comment for each pass since [merges 66 to 75](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6976329602); two small porting points from #1000 wait on `residue/1000-porting-points` ([record](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6992168925)).
+Three slots for the session that began on 2026-11-24 at about 21:00Z, at the user's allowance; the standing limit is two ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). At merge 93 (`fe9e973700`) they are held by #1055 (#1003, `vehicle/occupancy.rs`, in review), draft #1056 (#1048, `company.rs`) and #1027's third part (`ship_control.rs`, dispatched at merge 93). Each slot works one chain, and a pass planned on an open PR's head is dispatched when that PR merges. Residue that passes left in files they did not finish is on #734, one comment for each pass since [merges 66 to 75](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6976329602); two small porting points from #1000 wait on `residue/1000-porting-points` ([record](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6992168925)).
 
-**The vehicle chain** (worksets 07 and 08, then 10), behind draft #1051 (#1027's second part, `vehicle_effect.rs`):
+1. **#1046's second part**, the single-file pass for `rail_cmd.rs` (2,856 lines): part 1 merged as #1054 (merge 93). Its planner runs on `rust-migration`; it waits on nothing and takes the next slot to free. It retires #1054's callback-slot growth record.
+2. **#1057: workset 04 (cargo)**, six files and 6,405 lines, of which `cargo_storage.rs` (2,892) has its own pass. Its planner runs on #1056's head; it waits on #1056's merge and follows it in the company chain. Workset 05 (orders and fleet, with `orders.rs` at 5,879 lines) comes after it by the [work order](#cleanup-work-order).
+3. **#1027's fourth part**, `disaster.rs` (1,446 lines): planned when part 3 has a PR; it waits on that PR's merge. #1011, which moves `Vehicle::Tick`'s dispatch into Rust with the four controllers' accumulators, also waits on part 3.
 
-1. #1003: 7r-4b, the pass for `vehicle/occupancy.rs`: about 1,350 changed lines by its plan and −50 fork C++, planned and reviewed on #1045's head, which has merged. Waits on the chain's slot.
-2. #1027's third part, `ship_control.rs` (1,461 lines): planned and reviewed. Waits on #1051's merge. Part 4 (`disaster.rs`) is planned when part 3 has a PR, and #1011, which moves `Vehicle::Tick`'s dispatch into Rust with the four controllers' accumulators, waits on part 3.
-3. #1046: workset 10 (rail). Not planned; it waits on nothing, so root starts its planner at resume. It follows workset 08's last part in this chain, or opens a third chain if the user allows a third slot.
-
-**The company chain** (workset 06), behind draft #1052 (#1047, 6a: `company_identity.rs`, `company_manager_face.rs`, `economy_func.rs` and `livery.rs`):
-
-1. #1048: 6c, the single-file pass for `company.rs` (3,910 lines). Not planned: its planner was stopped at the pause, and [#1052's implementer left it notes](https://github.com/fetch-laboratories/openttd-rust/issues/1048#issuecomment-7139060871). #1052 has its PR, so root starts the planner at resume. It takes the second `Company::Get` that #1047's plan left in workset 06's finished files.
-2. The rest of workset 06, then 04 and 05 by the [work order](#cleanup-work-order).
-
-**Either slot:** #1037, the tools batch, with a reviewed plan. It waits on nothing and goes before merge 95.
+Workset 06 finishes with #1056, and workset 10 with #1046's second part. The next tools batch is picked at the merge-95 stocktake; #1037's merged as #1053 (merge 90).
 
 The train passes take their sites of #999 (order destination reads at the original's observation point). #998 is the work order for one host-buildable crate below `openttd-kernels`, which removes the copies of three kernels ports that `openttd-strgen` keeps under [root's ruling](https://github.com/fetch-laboratories/openttd-rust/pull/995#issuecomment-6975789181); no second build-time consumer has appeared and it removes no fork C++, so it stays behind the passes, selected no later than strgen's port in phase 4. #997 (the native assertion service reports neither the Rust site nor its predicate) is on #892's checklist and rides the closure residue sweep.
 
-Full phase-3 planning remains untriggered: most of the 170 files still to pass are in no entry.
+Full phase-3 planning remains untriggered: most of the files still to pass are in no entry.
 
 ## Resume checkpoint
 

@@ -211,7 +211,7 @@ impl crate::map_func::World<'_> {
         self.check(self.level_crossing(t));
         let check = |ok| self.check(ok);
         let axis = crate::direction_func::other_axis_raw(self.crossing_road_axis(t), check);
-        crate::track_func::axis_to_track_bits(axis, check)
+        crate::track_func::axis_to_track_bits_raw(axis, check)
     }
     /// `GetAllRoadBits`.
     pub(crate) fn all_road_bits(&self, t: u32) -> u8 {
@@ -534,7 +534,7 @@ mod crossing_tests {
             let shared = map([0, 0xC0 | dir, 0, 0], [0, rail, 0, 0]);
             let world = World::new(shared);
             assert_eq!(
-                crate::rail_map::get_rail_depot_track(&world, TileIndex(1)),
+                world.get_rail_depot_track(TileIndex(1)),
                 crate::track_type::Track(track),
                 "direction {dir}"
             );

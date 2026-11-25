@@ -85,3 +85,18 @@ pub(crate) unsafe fn elapsed(
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CalendarDate(pub i32);
+
+/// `IsInsideMM(introduction_date, 0, CalendarTime::MAX_DATE.base())`, the rail and road type
+/// introduction-date gate, with the date converted to `size_t` as the originals' call
+/// converts it.
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "IsInsideMM converts the signed introduction_date to size_t"
+)]
+pub(crate) fn is_introduction_date(date: CalendarDate) -> bool {
+    crate::math::is_inside_mm(
+        date.0 as usize,
+        0,
+        crate::timer_game_common::MAX_DATE as usize,
+    )
+}

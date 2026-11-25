@@ -93,3 +93,10 @@
 - Map/pool storage, commands, rendering and native facades remain in C++; no service or interface is added.
 - Limits: Existing raw-domain and overflow qualifications, arbitrary mod layouts and threaded play remain on #156. Other signal/rail vocabulary remains in the cleanup workset.
 - PRs: #772, integrated in #776; #956.
+
+## Track helpers, rail map readers and rail type readers (#1046)
+
+- `track_func.rs`, `rail_map.rs` and `rail.rs` are finished files. Each `track_func.h` helper but `TrackToOppositeTrack` (#1027 part 3) and the uncalled `TrackExitdirToTrackdir` has one definition under its original name, with the original's wrapper types and assertions through the caller's `check`; `rail_map.h`'s readers are `World` methods over `TileIndex`; `rail.cpp`'s bodies and `rail.h`'s unions and compatibility and power tests are Rust ports.
+- `RailTypeInfo` stays a C++ record in `_railtypes`: `rail::get_rail_type_info` resolves a rail type once to a `RailTypeInfoRef`, whose methods read one member each through the shared table's `rail_type_*` readers.
+- `_raw` adapters with integer signatures serve the files no pass has finished. The rail command table's and the NewGRF resolver's rail type readers stay for their files' passes.
+- PRs: #1054.

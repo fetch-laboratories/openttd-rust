@@ -87,14 +87,12 @@ pub(crate) fn get_trackdir_bits_for_road_in_world(
     tile: TileIndex,
     rtt: RoadTramType,
 ) -> TrackdirBits {
-    let mut bits = TrackdirBits(track_status_to_trackdir_bits(
-        movement.get_tile_track_status_in_world(
-            map,
-            tile,
-            TransportType::TRANSPORT_ROAD,
-            u32::from(rtt.0),
-            DiagDirection::INVALID_DIAGDIR,
-        ),
+    let mut bits = track_status_to_trackdir_bits(movement.get_tile_track_status_in_world(
+        map,
+        tile,
+        TransportType::TRANSPORT_ROAD,
+        u32::from(rtt.0),
+        DiagDirection::INVALID_DIAGDIR,
     ));
 
     if rtt == RoadTramType::RTT_TRAM

@@ -152,7 +152,11 @@ impl EngineRef {
         read_field!(Lifecycle::rail(self.0.as_ptr()), pow_wag_weight)
     }
     pub(crate) fn compatible_railtypes(self, shared: &crate::services::Services) -> u64 {
-        (shared.all_compatible_railtypes)(self.railtypes())
+        crate::rail::get_all_compatible_rail_types(
+            shared,
+            crate::rail_type::RailTypes(self.railtypes()),
+        )
+        .0
     }
     pub(crate) fn powered_roadtypes(self, shared: &crate::services::Services) -> u64 {
         (shared.powered_roadtypes)(crate::services::RoadType(self.roadtype()))

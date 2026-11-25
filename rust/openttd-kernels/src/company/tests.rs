@@ -1164,13 +1164,13 @@ mod startup_tests {
             kind: crate::vehicle::VehicleType::TRAIN,
         }
     }
-    extern "C" fn no_rail_type(_: u8) -> crate::type_availability::Introduction {
-        crate::type_availability::Introduction {
-            label: 0,
-            date: 0,
-            required: 0,
-            introduces: 0,
-        }
+    extern "C" fn no_rail_type_info(
+        _: crate::rail_type::RailType,
+    ) -> *const crate::rail::RailTypeInfo {
+        std::ptr::null()
+    }
+    extern "C" fn no_rail_label(_: *const crate::rail::RailTypeInfo) -> u32 {
+        0
     }
     extern "C" fn no_road_info(
         _: crate::road_type::RoadType,
@@ -1267,6 +1267,8 @@ mod startup_tests {
             command_post,
             network_client_info: no_client,
             type_availability,
+            rail_type_info: no_rail_type_info,
+            rail_type_label: no_rail_label,
             movement: leak(crate::movement::MovementServices {
                 native_assert: holds,
                 ..MOVEMENT
@@ -1319,7 +1321,7 @@ mod startup_tests {
         ENGINES.set(leak(crate::engine::Services {
             types: leak(crate::type_availability::Services {
                 next: no_engine,
-                rail_introduction: no_rail_type,
+                shared,
                 road_info: no_road_info,
                 road_label: no_road_label,
                 ..TYPE_AVAILABILITY

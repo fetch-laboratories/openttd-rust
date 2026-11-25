@@ -2451,15 +2451,15 @@ pub(crate) fn change_ownership_of_company_items(
                 let index = TileIndex(tile);
                 if world.kind(index) == TileType::MP_RAILWAY
                     && world.is_tile_owner(index, new_owner)
-                    && world.has_signals(tile)
+                    && world.has_signals(index)
                 {
-                    let mut tracks = TrackBits(world.tracks(tile));
+                    let mut tracks = world.get_track_bits(index);
                     // there may be two tracks with signals for TRACK_BIT_HORZ and TRACK_BIT_VERT
                     loop {
                         let track = crate::track_func::remove_first_track(&mut tracks, |ok| {
                             crate::services_assert::check(ok);
                         });
-                        if world.has_signal_on_track(tile, track.0) {
+                        if world.has_signal_on_track(index, track) {
                             signals.add_track_to_signal_buffer(index, track, new_owner);
                         }
                         if tracks == TrackBits::TRACK_BIT_NONE {

@@ -635,7 +635,7 @@ impl<'a> Game<'a> {
     }
     /// `GetTileRailType(tile)`.
     fn get_tile_rail_type(&self, tile: TileIndex) -> RailType {
-        crate::rail::get_tile_rail_type(self.services, tile)
+        self.world().get_tile_rail_type(tile)
     }
     /// `IsTileType(tile, type)`.
     fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
@@ -643,11 +643,11 @@ impl<'a> Game<'a> {
     }
     /// `IsRailDepotTile(tile)`.
     fn is_rail_depot_tile(&self, tile: TileIndex) -> bool {
-        self.world().rail_depot(tile)
+        self.world().is_rail_depot_tile(tile)
     }
     /// `GetRailDepotDirection(tile)`.
     fn get_rail_depot_direction(&self, tile: TileIndex) -> DiagDirection {
-        DiagDirection(self.world().rail_depot_dir(tile.0))
+        self.world().get_rail_depot_direction(tile)
     }
     /// `IsLevelCrossingTile(tile)`.
     fn is_level_crossing_tile(&self, tile: TileIndex) -> bool {
@@ -671,11 +671,11 @@ impl<'a> Game<'a> {
     }
     /// `HasSignalOnTrackdir(tile, trackdir)`.
     fn has_signal_on_trackdir(&self, tile: TileIndex, trackdir: Trackdir) -> bool {
-        self.world().has_signal_on_trackdir(tile.0, trackdir.0)
+        self.world().has_signal_on_trackdir(tile, trackdir)
     }
     /// `GetSignalType(tile, track)`.
     fn get_signal_type(&self, tile: TileIndex, track: Track) -> SignalType {
-        SignalType(self.world().signal_type(tile.0, track.0))
+        self.world().get_signal_type(tile, track)
     }
     /// `GetTunnelBridgeDirection(tile)`.
     fn get_tunnel_bridge_direction(&self, tile: TileIndex) -> DiagDirection {
@@ -920,9 +920,9 @@ impl Game<'_> {
                 /* Do not count powered wagons for the compatible railtypes, as wagons always
                 have railtype normal */
                 if e_u.ground_power(VehicleType::VEH_TRAIN) > 0 {
-                    this.set_compatible_railtypes(this.compatible_railtypes().with(RailTypes(
-                        (self.services.all_powered_railtypes)(u.railtypes().0),
-                    )));
+                    this.set_compatible_railtypes(this.compatible_railtypes().with(
+                        crate::rail::get_all_powered_rail_types(self.services, u.railtypes()),
+                    ));
                 }
 
                 /* Some electric engines can be allowed to run on normal rail. It happens to all
@@ -1243,9 +1243,11 @@ impl Game<'_> {
 
         if max_speed != ABSOLUTE_MAX_SPEED {
             /* Apply the current railtype's curve speed advantage */
-            let curve_speed = (self.services.rail_type_curve_speed)(RailType(
-                self.world().rail_type(this.vehicle().tile().0),
-            ));
+            let curve_speed = crate::rail::get_rail_type_info(
+                self.services,
+                self.world().get_rail_type(this.vehicle().tile()),
+            )
+            .curve_speed();
             max_speed =
                 max_speed.wrapping_add((max_speed / 2).wrapping_mul(i32::from(curve_speed)));
 
@@ -1702,10 +1704,10 @@ impl Game<'_> {
 
             if d <= 0 {
                 leave.vehicle().set_hidden(false); // move it out of the depot
-                leave.set_track(TrackBits(crate::track_func::track_to_track_bits(
-                    crate::rail_map::get_rail_depot_track(self.world(), leave.vehicle().tile()).0,
+                leave.set_track(crate::track_func::track_to_track_bits(
+                    self.world().get_rail_depot_track(leave.vehicle().tile()),
                     self.check(),
-                )));
+                ));
                 let mut i = 0;
                 while i >= d {
                     self.train_controller(leave, Handle::NONE, true); // maybe move it, and maybe let another wagon leave
@@ -1857,16 +1859,12 @@ impl Game<'_> {
             let mut first_tile_okay = !(self.is_tile_type(tile, TileType::MP_RAILWAY)
                 && self.has_signal_on_trackdir(tile, self.get_vehicle_trackdir(v))
                 && !crate::rail_map::is_pbs_signal(
-                    self.get_signal_type(
-                        tile,
-                        Track(crate::track_func::find_first_track(v.track().0)),
-                    )
-                    .0,
+                    self.get_signal_type(tile, crate::track_func::find_first_track(v.track())),
                 ));
 
             /* If we are on a depot tile facing outwards, do not treat the current tile as safe. */
             if self.is_rail_depot_tile(tile)
-                && crate::track_func::trackdir_to_exitdir_asserted(
+                && crate::track_func::trackdir_to_exitdir(
                     self.get_vehicle_trackdir(v),
                     self.check(),
                 ) == self.get_rail_depot_direction(tile)
@@ -1877,7 +1875,7 @@ impl Game<'_> {
             if self.is_rail_station_tile(tile) {
                 self.pbs().set_rail_station_platform_reservation(
                     tile,
-                    crate::track_func::trackdir_to_exitdir_asserted(
+                    crate::track_func::trackdir_to_exitdir(
                         self.get_vehicle_trackdir(v),
                         self.check(),
                     ),
@@ -2154,31 +2152,22 @@ impl Game<'_> {
 
         let next_tile = self.tile_add_by_diag_dir(
             t.vehicle().tile(),
-            crate::track_func::trackdir_to_exitdir_asserted(
-                self.get_vehicle_trackdir(t),
-                self.check(),
-            ),
+            crate::track_func::trackdir_to_exitdir(self.get_vehicle_trackdir(t), self.check()),
         );
         if next_tile == TileIndex(INVALID_TILE)
             || !self.is_tile_type(next_tile, TileType::MP_RAILWAY)
-            || !self.world().has_signals(next_tile.0)
+            || !self.world().has_signals(next_tile)
         {
             return TrainForceProceeding::TFP_STUCK;
         }
-        let new_tracks = TrackBits(
-            crate::track_func::diagdir_reaches_tracks(
-                crate::track_func::trackdir_to_exitdir_asserted(
-                    self.get_vehicle_trackdir(t),
-                    self.check(),
-                )
-                .0,
-            ) & self.world().tracks(next_tile.0),
-        );
+        let new_tracks = crate::track_func::diagdir_reaches_tracks(
+            crate::track_func::trackdir_to_exitdir(self.get_vehicle_trackdir(t), self.check()),
+            self.check(),
+        ) & self.world().get_track_bits(next_tile);
         if new_tracks != TrackBits::TRACK_BIT_NONE
-            && self.world().has_signal_on_track(
-                next_tile.0,
-                crate::track_func::find_first_track(new_tracks.0),
-            )
+            && self
+                .world()
+                .has_signal_on_track(next_tile, crate::track_func::find_first_track(new_tracks))
         {
             TrainForceProceeding::TFP_SIGNAL
         } else {
@@ -2469,7 +2458,7 @@ impl Game<'_> {
         crate::tile_map::is_tile_owner(self.services, tile, v.vehicle().owner())
             && (!v.is_front_engine()
                 || v.compatible_railtypes()
-                    .test(RailType(self.world().rail_type(tile.0))))
+                    .test(self.world().get_rail_type(tile)))
     }
 
     /// `AffectSpeedByZChange`: modify the speed of the vehicle due to a change in altitude.
@@ -2499,27 +2488,24 @@ impl Game<'_> {
     /// `TrainMovedChangeSignals`.
     fn train_moved_change_signals(&self, tile: TileIndex, dir: DiagDirection) -> bool {
         if self.is_tile_type(tile, TileType::MP_RAILWAY)
-            && self.world().rail_tile_type(tile.0) == crate::rail_map::RailTileType::Signals.0
+            && self.world().get_rail_tile_type(tile) == crate::rail_map::RailTileType::Signals
         {
             let tracks =
-                crate::track_func::track_bits_to_trackdir_bits(self.world().tracks(tile.0))
-                    & crate::track_func::diagdir_reaches_trackdirs(dir.0);
-            let trackdir = Trackdir(crate::track_func::find_first_trackdir(tracks));
+                crate::track_func::track_bits_to_trackdir_bits(self.world().get_track_bits(tile))
+                    & crate::track_func::diagdir_reaches_trackdirs(dir, self.check());
+            let trackdir = crate::track_func::find_first_trackdir(tracks, self.check());
             if self.update_signals_on_segment(
                 tile,
-                crate::track_func::trackdir_to_exitdir_asserted(trackdir, self.check()),
+                crate::track_func::trackdir_to_exitdir(trackdir, self.check()),
                 self.world().owner(tile),
             ) == SigSegState::SIGSEG_PBS
                 && self.has_signal_on_trackdir(tile, trackdir)
             {
                 /* A PBS block with a non-PBS signal facing us? */
-                if !crate::rail_map::is_pbs_signal(
-                    self.get_signal_type(
-                        tile,
-                        Track(crate::track_func::trackdir_to_track(trackdir.0)),
-                    )
-                    .0,
-                ) {
+                if !crate::rail_map::is_pbs_signal(self.get_signal_type(
+                    tile,
+                    crate::track_func::trackdir_to_track(trackdir, self.check()),
+                )) {
                     return true;
                 }
             }
@@ -2807,23 +2793,20 @@ impl Game<'_> {
                                 gp.new_tile,
                                 reverse_diag_dir(enterdir, self.check()),
                             );
-                            let reachable_trackdirs = TrackdirBits(
-                                crate::track_func::diagdir_reaches_trackdirs(enterdir.0),
+                            let reachable_trackdirs = crate::track_func::diagdir_reaches_trackdirs(
+                                enterdir,
+                                self.check(),
                             );
 
-                            let trackdirbits =
-                                TrackdirBits(crate::track_func::track_status_to_trackdir_bits(ts))
-                                    & reachable_trackdirs;
-                            let red_signals =
-                                TrackBits(crate::track_func::trackdir_bits_to_track_bits(
-                                    (crate::track_func::track_status_to_red_signals(ts)
-                                        & reachable_trackdirs)
-                                        .0,
-                                ));
-
-                            let mut bits = TrackBits(
-                                crate::track_func::trackdir_bits_to_track_bits(trackdirbits.0),
+                            let trackdirbits = crate::track_func::track_status_to_trackdir_bits(ts)
+                                & reachable_trackdirs;
+                            let red_signals = crate::track_func::trackdir_bits_to_track_bits(
+                                crate::track_func::track_status_to_red_signals(ts)
+                                    & reachable_trackdirs,
                             );
+
+                            let mut bits =
+                                crate::track_func::trackdir_bits_to_track_bits(trackdirbits);
                             if self.rail_90_deg_turn_disallowed(
                                 self.get_tile_rail_type(gp.old_tile),
                                 self.get_tile_rail_type(gp.new_tile),
@@ -2832,7 +2815,7 @@ impl Game<'_> {
                                 /* We allow wagons to make 90 deg turns, because forbid_90_deg
                                  * can be switched on halfway a turn */
                                 bits.0 &= !crate::track_func::track_crosses_tracks(
-                                    Track(crate::track_func::find_first_track(v.track().0)),
+                                    crate::track_func::find_first_track(v.track()),
                                     self.check(),
                                 )
                                 .0;
@@ -2861,10 +2844,8 @@ impl Game<'_> {
                                     false,
                                     true,
                                 );
-                                chosen_track = TrackBits(crate::track_func::track_to_track_bits(
-                                    track.0,
-                                    self.check(),
-                                ));
+                                chosen_track =
+                                    crate::track_func::track_to_track_bits(track, self.check());
                                 crate::services_assert::assert_with(|| {
                                     chosen_track.0
                                         & (bits.0
@@ -2873,23 +2854,24 @@ impl Game<'_> {
                                 });
 
                                 if v.force_proceed() != TrainForceProceeding::TFP_NONE
-                                    && self.world().plain_rail(gp.new_tile.0)
-                                    && self.world().has_signals(gp.new_tile.0)
+                                    && self.world().is_plain_rail_tile(gp.new_tile)
+                                    && self.world().has_signals(gp.new_tile)
                                 {
                                     /* For each signal we find decrease the counter by one.
                                      * We start at two, so the first signal we pass decreases
                                      * this to one, then if we reach the next signal it is
                                      * decreased to zero and we won't pass that new signal. */
-                                    let dir = Trackdir(crate::track_func::find_first_trackdir(
-                                        trackdirbits.0,
-                                    ));
+                                    let dir = crate::track_func::find_first_trackdir(
+                                        trackdirbits,
+                                        self.check(),
+                                    );
                                     if self.has_signal_on_trackdir(gp.new_tile, dir)
                                         || (self.has_signal_on_trackdir(
                                             gp.new_tile,
-                                            Trackdir(crate::track_func::reverse_trackdir(dir.0)),
+                                            crate::track_func::reverse_trackdir(dir, self.check()),
                                         ) && self.get_signal_type(
                                             gp.new_tile,
-                                            Track(crate::track_func::trackdir_to_track(dir.0)),
+                                            crate::track_func::trackdir_to_track(dir, self.check()),
                                         ) != SignalType::SIGTYPE_PBS)
                                     {
                                         /* However, we do not want to be stopped by PBS signals
@@ -2912,9 +2894,10 @@ impl Game<'_> {
                                     && v.force_proceed() == TrainForceProceeding::TFP_NONE
                                 {
                                     /* In front of a red signal */
-                                    let i = Trackdir(crate::track_func::find_first_trackdir(
-                                        trackdirbits.0,
-                                    ));
+                                    let i = crate::track_func::find_first_trackdir(
+                                        trackdirbits,
+                                        self.check(),
+                                    );
 
                                     /* Don't handle stuck trains here. */
                                     if v.flags().test(VehicleRailFlag::Stuck) {
@@ -2923,7 +2906,7 @@ impl Game<'_> {
 
                                     if !self.has_signal_on_trackdir(
                                         gp.new_tile,
-                                        Trackdir(crate::track_func::reverse_trackdir(i.0)),
+                                        crate::track_func::reverse_trackdir(i, self.check()),
                                     ) {
                                         v.vehicle().set_cur_speed(0);
                                         v.vehicle().set_subspeed(0);
@@ -2951,7 +2934,7 @@ impl Game<'_> {
                                                     * 2
                                         } {
                                             let mut exitdir =
-                                                crate::track_func::trackdir_to_exitdir_asserted(
+                                                crate::track_func::trackdir_to_exitdir(
                                                     i,
                                                     self.check(),
                                                 );
@@ -3018,10 +3001,10 @@ impl Game<'_> {
                                 }
                                 self.try_reserve_rail_track(
                                     gp.new_tile,
-                                    Track(crate::track_func::track_bits_to_track(
-                                        chosen_track.0,
+                                    crate::track_func::track_bits_to_track(
+                                        chosen_track,
                                         self.check(),
-                                    )),
+                                    ),
                                     false,
                                 );
                             } else {
@@ -3117,8 +3100,7 @@ impl Game<'_> {
                                 if v.is_front_engine() {
                                     crate::witness::hit(crate::witness::TRAIN_FIRST_TILE_RAIL);
                                 }
-                                let track =
-                                    Track(crate::track_func::find_first_track(chosen_track.0));
+                                let track = crate::track_func::find_first_track(chosen_track);
                                 let tdir = crate::track_func::track_direction_to_trackdir(
                                     track,
                                     chosen_dir,
@@ -3222,10 +3204,10 @@ impl Game<'_> {
                             crate::witness::hit(crate::witness::TRAIN_WORMHOLE_EXIT);
                             self.try_reserve_rail_track(
                                 gp.new_tile,
-                                Track(crate::track_func::diag_dir_to_diag_track(
-                                    self.get_tunnel_bridge_direction(gp.new_tile).0,
+                                crate::track_func::diag_dir_to_diag_track(
+                                    self.get_tunnel_bridge_direction(gp.new_tile),
                                     self.check(),
-                                )),
+                                ),
                                 true,
                             );
                             reservation::check_next_train_tile(&self.reservation(), v);
@@ -3275,7 +3257,7 @@ impl Game<'_> {
                             if (!self.pbs().has_reserved_tracks(gp.new_tile, v.track())
                                 && !self.try_reserve_rail_track(
                                     gp.new_tile,
-                                    Track(crate::track_func::find_first_track(v.track().0)),
+                                    crate::track_func::find_first_track(v.track()),
                                     true,
                                 ))
                                 || !reservation::try_path_reserve(
@@ -3411,16 +3393,13 @@ impl Game<'_> {
 
         if trackbits == TrackBits::TRACK_BIT_WORMHOLE {
             /* Vehicle is inside a wormhole, v->track contains no useful value then. */
-            trackbits = TrackBits(crate::track_func::diag_dir_to_diag_track_bits(
-                self.get_tunnel_bridge_direction(tile).0,
+            trackbits = crate::track_func::diag_dir_to_diag_track_bits(
+                self.get_tunnel_bridge_direction(tile),
                 self.check(),
-            ));
+            );
         }
 
-        let track = Track(crate::track_func::track_bits_to_track(
-            trackbits.0,
-            self.check(),
-        ));
+        let track = crate::track_func::track_bits_to_track(trackbits, self.check());
         if self.pbs().has_reserved_tracks(tile, trackbits) {
             self.pbs().unreserve_rail_track(tile, track);
 
@@ -3435,8 +3414,8 @@ impl Game<'_> {
                 let train_tbits = Handle::from_vehicle(u).track();
                 if train_tbits == TrackBits::TRACK_BIT_WORMHOLE {
                     /* Vehicle is inside a wormhole, u->track contains no useful value then. */
-                    remaining_trackbits.0 |= crate::track_func::diag_dir_to_diag_track_bits(
-                        self.get_tunnel_bridge_direction(u.tile()).0,
+                    remaining_trackbits |= crate::track_func::diag_dir_to_diag_track_bits(
+                        self.get_tunnel_bridge_direction(u.tile()),
                         self.check(),
                     );
                 } else if train_tbits != TrackBits::TRACK_BIT_DEPOT {
@@ -3720,24 +3699,22 @@ impl Game<'_> {
 
         /* Determine the track status on the next tile */
         let ts = self.get_tile_track_status(tile, reverse_diag_dir(dir, self.check()));
-        let reachable_trackdirs = TrackdirBits(crate::track_func::diagdir_reaches_trackdirs(dir.0));
+        let reachable_trackdirs = crate::track_func::diagdir_reaches_trackdirs(dir, self.check());
 
-        let trackdirbits = TrackdirBits(crate::track_func::track_status_to_trackdir_bits(ts))
-            & reachable_trackdirs;
+        let trackdirbits =
+            crate::track_func::track_status_to_trackdir_bits(ts) & reachable_trackdirs;
         let red_signals = crate::track_func::track_status_to_red_signals(ts) & reachable_trackdirs;
 
         /* We are sure the train is not entering a depot, it is detected above */
 
         /* mask unreachable track bits if we are forbidden to do 90deg turns */
-        let mut bits = TrackBits(crate::track_func::trackdir_bits_to_track_bits(
-            trackdirbits.0,
-        ));
+        let mut bits = crate::track_func::trackdir_bits_to_track_bits(trackdirbits);
         if self.rail_90_deg_turn_disallowed(
             self.get_tile_rail_type(v.vehicle().tile()),
             self.get_tile_rail_type(tile),
         ) {
             bits.0 &= !crate::track_func::track_crosses_tracks(
-                Track(crate::track_func::find_first_track(v.track().0)),
+                crate::track_func::find_first_track(v.track()),
                 self.check(),
             )
             .0;
@@ -4208,22 +4185,22 @@ impl Game<'_> {
 
         if this.track() == TrackBits::TRACK_BIT_DEPOT {
             /* We'll assume the train is facing outwards */
-            return Trackdir(crate::track_func::diag_dir_to_diag_trackdir(
-                self.get_rail_depot_direction(this.vehicle().tile()).0,
+            return crate::track_func::diag_dir_to_diag_trackdir(
+                self.get_rail_depot_direction(this.vehicle().tile()),
                 self.check(),
-            )); // Train in depot
+            ); // Train in depot
         }
 
         if this.track() == TrackBits::TRACK_BIT_WORMHOLE {
             /* train in tunnel or on bridge, so just use its direction and assume a diagonal track */
-            return Trackdir(crate::track_func::diag_dir_to_diag_trackdir(
-                dir_to_diag_dir(this.vehicle().direction(), self.check()).0,
+            return crate::track_func::diag_dir_to_diag_trackdir(
+                dir_to_diag_dir(this.vehicle().direction(), self.check()),
                 self.check(),
-            ));
+            );
         }
 
         crate::track_func::track_direction_to_trackdir(
-            Track(crate::track_func::find_first_track(this.track().0)),
+            crate::track_func::find_first_track(this.track()),
             this.vehicle().direction(),
             self.check(),
         )

@@ -531,9 +531,16 @@ static void RustFatalError(const uint8_t *message, size_t size) noexcept { Fatal
 static uint8_t *StationHadVehicleOfTypeField(Station *st) noexcept { return reinterpret_cast<uint8_t *>(&st->had_vehicle_of_type); }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
-	.all_compatible_railtypes = RustAllCompatibleRailTypes,
-	.all_powered_railtypes = [](uint64_t types) noexcept { return GetAllPoweredRailTypes(RailTypes{types}).base(); },
-	.rail_type_curve_speed = [](RailType rt) noexcept { return GetRailTypeInfo(rt)->curve_speed; },
+	.rail_type_acceleration_type = [](const RailTypeInfo *rti) noexcept { return to_underlying(rti->acceleration_type); },
+	.rail_type_compatible_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->compatible_railtypes.base(); },
+	.rail_type_curve_speed = [](const RailTypeInfo *rti) noexcept { return rti->curve_speed; },
+	.rail_type_info = [](RailType rt) noexcept { return GetRailTypeInfo(rt); },
+	.rail_type_introduces_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->introduces_railtypes.base(); },
+	.rail_type_introduction_date = [](const RailTypeInfo *rti) noexcept { return rti->introduction_date.base(); },
+	.rail_type_introduction_required_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->introduction_required_railtypes.base(); },
+	.rail_type_label = [](const RailTypeInfo *rti) noexcept { return rti->label; },
+	.rail_type_max_speed = [](const RailTypeInfo *rti) noexcept { return rti->max_speed; },
+	.rail_type_powered_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->powered_railtypes.base(); },
 	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,

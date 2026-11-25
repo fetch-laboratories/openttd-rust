@@ -55,7 +55,6 @@ pub struct PbsServices {
     pub write_train_on_res: extern "C" fn(*mut TrainOutput, Handle),
     pub assertions: bool,
     pub handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
-    pub compatible: extern "C" fn(u8) -> u64,
     pub rail90: extern "C" fn(u8, u8, bool) -> bool,
     pub blocking: extern "C" fn(u32, u8) -> bool,
     pub has_pbs: extern "C" fn(u32, u8) -> bool,
@@ -164,10 +163,10 @@ impl<'a> Pbs<'a> {
         let w = World::new(self.shared());
         match w.kind(t) {
             TileType::MP_RAILWAY => {
-                if w.is_rail_depot(t.0) {
+                if w.is_rail_depot(t) {
                     return (self.0.depot_bits)(t.0);
                 }
-                if w.is_plain_rail(t.0) {
+                if w.is_plain_rail(t) {
                     return (self.rail().rail_reservation)(t.0);
                 }
             }
@@ -235,7 +234,7 @@ impl<'a> Pbs<'a> {
                 0,
                 DiagDirection::INVALID_DIAGDIR,
             ));
-            has_track(bits, t.0, |ok| self.check(ok))
+            has_track(bits, t, |ok| self.check(ok))
         });
     }
 
@@ -269,10 +268,10 @@ impl<'a> Pbs<'a> {
         let w = World::new(s);
         match w.kind(tile) {
             TileType::MP_RAILWAY => {
-                if w.is_plain_rail(tile.0) {
+                if w.is_plain_rail(tile) {
                     return (self.0.try_track)(tile.0, t.0);
                 }
-                if w.is_rail_depot(tile.0) && !(self.rail().depot_reserved)(tile.0) {
+                if w.is_rail_depot(tile) && !(self.rail().depot_reserved)(tile.0) {
                     (self.0.set_depot)(tile.0, true);
                     (s.mark_dirty)(tile.0); // some GRFs change their appearance when tile is reserved
                     return true;
@@ -323,10 +322,10 @@ impl<'a> Pbs<'a> {
         let w = World::new(s);
         match w.kind(tile) {
             TileType::MP_RAILWAY => {
-                if w.is_rail_depot(tile.0) {
+                if w.is_rail_depot(tile) {
                     (self.0.set_depot)(tile.0, false);
                     (s.mark_dirty)(tile.0);
-                } else if w.is_plain_rail(tile.0) {
+                } else if w.is_plain_rail(tile) {
                     (self.0.unreserve_track)(tile.0, t.0);
                 }
             }
@@ -355,11 +354,12 @@ impl<'a> Pbs<'a> {
     /// `IsTileType(tile, MP_RAILWAY) && HasSignalOnTrackdir(tile, trackdir) &&
     /// !IsPbsSignal(GetSignalType(tile, TrackdirToTrack(trackdir)))`: a non-PBS
     /// signal on the trackdir.
-    fn has_non_pbs_signal(self, tile: TileIndex, trackdir: Trackdir) -> bool {
-        let w = World::new(self.shared());
-        is_tile_type(self.shared(), tile, TileType::MP_RAILWAY)
-            && w.has_signal_on_trackdir(tile.0, trackdir.0)
-            && !crate::rail_map::is_pbs_signal(w.signal_type(tile.0, trackdir_to_track(trackdir.0)))
+    fn has_non_pbs_signal(self, w: &World<'_>, tile: TileIndex, trackdir: Trackdir) -> bool {
+        w.is_tile_type(tile, TileType::MP_RAILWAY)
+            && w.has_signal_on_trackdir(tile, trackdir)
+            && !crate::rail_map::is_pbs_signal(
+                w.get_signal_type(tile, trackdir_to_track(trackdir, |ok| self.check(ok))),
+            )
     }
 
     /// Follow a reservation starting from a specific tile to the end.
@@ -382,9 +382,9 @@ impl<'a> Pbs<'a> {
          * is not ours in this case, so exit. */
         if !self.has_reserved_tracks(
             tile,
-            TrackBits(track_to_track_bits(trackdir_to_track(trackdir.0), |ok| {
+            track_to_track_bits(trackdir_to_track(trackdir, |ok| self.check(ok)), |ok| {
                 self.check(ok);
-            })),
+            }),
         ) {
             crate::witness::hit(crate::witness::PBS_START_UNRESERVED);
             return PBSTileInfo {
@@ -398,9 +398,7 @@ impl<'a> Pbs<'a> {
         let mut ft = CFollowTrackT::rail(s, Handle::NONE, o, rts);
         while ft.follow(s, tile, trackdir) {
             let reserved = ft.new_td_bits
-                & TrackdirBits(track_bits_to_trackdir_bits(
-                    self.get_reserved_trackbits(ft.new_tile).0,
-                ));
+                & track_bits_to_trackdir_bits(self.get_reserved_trackbits(ft.new_tile));
 
             /* No reservation --> path end found */
             if reserved == TrackdirBits::TRACKDIR_BIT_NONE {
@@ -415,9 +413,9 @@ impl<'a> Pbs<'a> {
                         ft.new_tile = ft.new_tile - diff;
                         if w.has_station_reservation(ft.new_tile) {
                             tile = ft.new_tile;
-                            trackdir = Trackdir(diag_dir_to_diag_trackdir(ft.exitdir.0, |ok| {
+                            trackdir = diag_dir_to_diag_trackdir(ft.exitdir, |ok| {
                                 self.check(ok);
-                            }));
+                            });
                             crate::witness::hit(crate::witness::PBS_PLATFORM_INTERIOR);
                             break;
                         }
@@ -427,7 +425,7 @@ impl<'a> Pbs<'a> {
             }
 
             /* Can't have more than one reserved trackdir */
-            let new_trackdir = Trackdir(find_first_trackdir(reserved.0));
+            let new_trackdir = find_first_trackdir(reserved, |ok| self.check(ok));
 
             /* One-way signal against us. The reservation can't be ours as it is not
              * a safe position from our direction and we can never pass the signal. */
@@ -453,11 +451,11 @@ impl<'a> Pbs<'a> {
                 break;
             }
             /* Depot tile? Can't continue. */
-            if w.rail_depot(tile) {
+            if w.is_rail_depot_tile(tile) {
                 break;
             }
             /* Non-pbs signal? Reservation can't continue. */
-            if self.has_non_pbs_signal(tile, trackdir) {
+            if self.has_non_pbs_signal(&w, tile, trackdir) {
                 break;
             }
         }
@@ -483,7 +481,10 @@ impl<'a> Pbs<'a> {
 
             let t = crate::train::Handle::from_vehicle(v);
             if t.track() == TrackBits::TRACK_BIT_WORMHOLE
-                || has_bit(t.track().0, trackdir_to_track(info.res.trackdir.0))
+                || has_bit(
+                    t.track().0,
+                    trackdir_to_track(info.res.trackdir, |ok| self.check(ok)).0,
+                )
             {
                 let t = t.first();
 
@@ -519,7 +520,7 @@ impl<'a> Pbs<'a> {
         let tile = v.vehicle().tile();
         let trackdir = crate::train::get_vehicle_trackdir(self.train(), s, v);
 
-        if w.rail_depot(tile) && (self.0.depot_bits)(tile.0) == TrackBits::TRACK_BIT_NONE {
+        if w.is_rail_depot_tile(tile) && (self.0.depot_bits)(tile.0) == TrackBits::TRACK_BIT_NONE {
             return PBSTileInfo {
                 tile,
                 trackdir,
@@ -530,7 +531,7 @@ impl<'a> Pbs<'a> {
         let mut ftoti = FindTrainOnTrackInfo {
             res: self.follow_reservation(
                 v.vehicle().owner(),
-                RailTypes((s.all_compatible_railtypes)(v.railtypes().0)),
+                crate::rail::get_all_compatible_rail_types(s, v.railtypes()),
                 tile,
                 trackdir,
                 false,
@@ -556,7 +557,10 @@ impl<'a> Pbs<'a> {
                  * found a train. Also check all previous platform tiles
                  * for a possible train. */
                 let diff = self.map().tile_offs_by_diag_dir(
-                    DiagDirection(trackdir_to_exitdir(reverse_trackdir(ftoti.res.trackdir.0))),
+                    trackdir_to_exitdir(
+                        reverse_trackdir(ftoti.res.trackdir, |ok| self.check(ok)),
+                        |ok| self.check(ok),
+                    ),
                     native_check,
                 );
                 let mut st_tile = res_tile + diff;
@@ -594,14 +598,12 @@ impl<'a> Pbs<'a> {
         let s = self.shared();
         let w = World::new(s);
         self.assert_with(|| {
-            self.has_reserved_tracks(
-                tile,
-                TrackBits(track_to_track_bits(track.0, |ok| self.check(ok))),
-            )
+            self.has_reserved_tracks(tile, track_to_track_bits(track, |ok| self.check(ok)))
         });
-        let mut trackdir = Trackdir(track_to_trackdir(track.0));
+        let mut trackdir = track_to_trackdir(track, |ok| self.check(ok));
 
-        let rts = RailTypes((self.0.compatible)(w.get_tile_rail_type(tile).0));
+        let rts =
+            crate::rail::get_rail_type_info(s, w.get_tile_rail_type(tile)).compatible_railtypes();
 
         /* Follow the path from tile to both ends, one of the end tiles should
          * have a train on it. We need FollowReservation to ignore one-way signals
@@ -610,12 +612,12 @@ impl<'a> Pbs<'a> {
             // The original's loop increment, `trackdir = ReverseTrackdir(trackdir)`,
             // which also runs after the `continue` below.
             if i == 1 {
-                trackdir = Trackdir(reverse_trackdir(trackdir.0));
+                trackdir = reverse_trackdir(trackdir, |ok| self.check(ok));
                 crate::witness::hit(crate::witness::PBS_SECOND_DIRECTION);
             }
             /* If the tile has a one-way block signal in the current trackdir, skip the
              * search in this direction as the reservation can't come from this side.*/
-            if (self.0.blocking)(tile.0, reverse_trackdir(trackdir.0))
+            if (self.0.blocking)(tile.0, reverse_trackdir(trackdir, |ok| self.check(ok)).0)
                 && !(self.0.has_pbs)(tile.0, trackdir.0)
             {
                 crate::witness::hit(crate::witness::PBS_SEARCH_ONEWAY_SKIP);
@@ -636,7 +638,10 @@ impl<'a> Pbs<'a> {
             /* Special case for stations: check the whole platform for a vehicle. */
             if w.is_rail_station_tile(res_tile) {
                 let diff = self.map().tile_offs_by_diag_dir(
-                    DiagDirection(trackdir_to_exitdir(reverse_trackdir(ftoti.res.trackdir.0))),
+                    trackdir_to_exitdir(
+                        reverse_trackdir(ftoti.res.trackdir, |ok| self.check(ok)),
+                        |ok| self.check(ok),
+                    ),
                     native_check,
                 );
                 let mut st_tile = res_tile + diff;
@@ -671,14 +676,14 @@ impl<'a> Pbs<'a> {
     /// `if (Rail90DegTurnDisallowed(..)) ft.new_td_bits &= ~TrackdirCrossesTrackdirs(trackdir)`:
     /// the reachable tracks of `IsSafeWaitingPosition` and `IsWaitingPositionFree`.
     fn mask_reachable_tracks(self, ft: &mut CFollowTrackT, trackdir: Trackdir, forbid_90deg: bool) {
-        ft.new_td_bits &= TrackdirBits(diagdir_reaches_trackdirs(ft.exitdir.0));
+        ft.new_td_bits &= diagdir_reaches_trackdirs(ft.exitdir, |ok| self.check(ok));
         let w = World::new(self.shared());
         if (self.0.rail90)(
             w.get_tile_rail_type(ft.old_tile).0,
             w.get_tile_rail_type(ft.new_tile).0,
             forbid_90deg,
         ) {
-            ft.new_td_bits &= !TrackdirBits(trackdir_crosses_trackdirs(trackdir.0));
+            ft.new_td_bits &= !trackdir_crosses_trackdirs(trackdir, |ok| self.check(ok));
         }
     }
 
@@ -695,12 +700,12 @@ impl<'a> Pbs<'a> {
     ) -> bool {
         let s = self.shared();
         let w = World::new(s);
-        if w.rail_depot(tile) {
+        if w.is_rail_depot_tile(tile) {
             return true;
         }
 
         /* For non-pbs signals, stop on the signal tile. */
-        if self.has_non_pbs_signal(tile, trackdir) {
+        if self.has_non_pbs_signal(&w, tile, trackdir) {
             return true;
         }
 
@@ -709,7 +714,7 @@ impl<'a> Pbs<'a> {
             s,
             TransportType::TRANSPORT_RAIL,
             Some(v.vehicle()),
-            RailTypes((s.all_compatible_railtypes)(v.railtypes().0)),
+            crate::rail::get_all_compatible_rail_types(s, v.railtypes()),
             true,
         );
 
@@ -732,7 +737,7 @@ impl<'a> Pbs<'a> {
             && kill_first_bit_u32(u32::from(ft.new_td_bits.0))
                 == u32::from(TrackdirBits::TRACKDIR_BIT_NONE.0)
         {
-            let td = Trackdir(find_first_trackdir(ft.new_td_bits.0));
+            let td = find_first_trackdir(ft.new_td_bits, |ok| self.check(ok));
             /* PBS signal on next trackdir? Safe position. */
             if (self.0.has_pbs)(ft.new_tile.0, td.0) {
                 crate::witness::hit(crate::witness::PBS_SAFE_PBS);
@@ -740,8 +745,8 @@ impl<'a> Pbs<'a> {
             }
             /* One-way PBS signal against us? Safe if end-of-line is allowed. */
             if is_tile_type(s, ft.new_tile, TileType::MP_RAILWAY)
-                && w.has_signal_on_trackdir(ft.new_tile.0, reverse_trackdir(td.0))
-                && SignalType(w.signal_type(ft.new_tile.0, trackdir_to_track(td.0)))
+                && w.has_signal_on_trackdir(ft.new_tile, reverse_trackdir(td, |ok| self.check(ok)))
+                && w.get_signal_type(ft.new_tile, trackdir_to_track(td, |ok| self.check(ok)))
                     == SignalType::SIGTYPE_PBS_ONEWAY
             {
                 crate::witness::hit(crate::witness::PBS_SAFE_OPPOSING_PBS);
@@ -762,20 +767,24 @@ impl<'a> Pbs<'a> {
         forbid_90deg: bool,
     ) -> bool {
         let s = self.shared();
-        let track = Track(trackdir_to_track(trackdir.0));
+        let track = trackdir_to_track(trackdir, |ok| self.check(ok));
         let reserved = self.get_reserved_trackbits(tile);
 
         /* Tile reserved? Can never be a free waiting position. */
-        if track_overlaps_tracks(reserved.0, track.0, |ok| self.check(ok)) {
+        if track_overlaps_tracks(reserved, track, |ok| self.check(ok)) {
             crate::witness::hit(crate::witness::PBS_OVERLAP);
             return false;
         }
 
         /* Not reserved and depot or not a pbs signal -> free. */
-        if World::new(s).rail_depot(tile) {
+        let w = World::new(s);
+        if w.is_rail_depot_tile(tile) {
             return true;
         }
-        if self.has_non_pbs_signal(tile, trackdir) {
+        if w.is_tile_type(tile, TileType::MP_RAILWAY)
+            && w.has_signal_on_trackdir(tile, trackdir)
+            && !crate::rail_map::is_pbs_signal(w.get_signal_type(tile, track))
+        {
             return true;
         }
 
@@ -796,10 +805,7 @@ impl<'a> Pbs<'a> {
         /* Check for reachable tracks. */
         self.mask_reachable_tracks(&mut ft, trackdir, forbid_90deg);
 
-        !self.has_reserved_tracks(
-            ft.new_tile,
-            TrackBits(trackdir_bits_to_track_bits(ft.new_td_bits.0)),
-        )
+        !self.has_reserved_tracks(ft.new_tile, trackdir_bits_to_track_bits(ft.new_td_bits))
     }
 }
 
@@ -1013,7 +1019,6 @@ crate::abi::layouts! {
         write_train_on_res,
         assertions,
         handle,
-        compatible,
         rail90,
         blocking,
         has_pbs,
