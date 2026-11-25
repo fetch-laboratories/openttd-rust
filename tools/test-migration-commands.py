@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from functools import partial
 from pathlib import Path
 from unittest import mock
 
@@ -339,6 +340,28 @@ class SimulateListTests(unittest.TestCase):
                 self.assertEqual(code, 2)
                 self.assertEqual(commands, [])
                 self.assertIn(refusal, errors)
+
+    def test_a_sanitized_listing_gets_the_sanitized_childs_refusals(self) -> None:
+        """The real child, which lists without building: sanitized games take no
+        --benchmark or --frozen-runtimes (review of #1065)."""
+        for argv in (
+            ["--jobs", "2", "--benchmark", "1"],
+            ["--frozen-runtimes", "foo"],
+        ):
+            with self.subTest(argv):
+                quiet = mock.Mock(
+                    side_effect=partial(subprocess.run, capture_output=True)
+                )
+                with (
+                    mock.patch.dict(os.environ, {migration.SANITIZE_VARIABLE: ""}),
+                    mock.patch.object(migration.subprocess, "run", quiet),
+                ):
+                    plain = migration.run_listing(["simulate", *argv, "--list"])
+                    sanitized = migration.run_listing(
+                        ["simulate", "--sanitize", *argv, "--list"]
+                    )
+                self.assertEqual((plain, sanitized), (0, 2))
+                self.assertEqual(self.built, [])
 
     def test_other_commands_are_left_to_main(self) -> None:
         for argv in (["simulate", "NAME"], ["coverage", "--list"], ["build"]):

@@ -1290,7 +1290,12 @@ def run_listing(argv: Sequence[str]) -> int | None:
         parser.error(
             "--list lists tools/simulate.py's scenarios; drop --threaded/--multiplayer"
         )
-    return subprocess.run(simulate_command(args, simulate_args), check=False).returncode
+    # The sanitizer setting a run's restart would export, so the child refuses
+    # what it refuses for sanitized games; the driver does not restart.
+    env = os.environ | ({SANITIZE_VARIABLE: "1"} if args.sanitize else {})
+    return subprocess.run(
+        simulate_command(args, simulate_args), env=env, check=False
+    ).returncode
 
 
 def main() -> None:
