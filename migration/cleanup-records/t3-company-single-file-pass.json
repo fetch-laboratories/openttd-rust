@@ -3,11 +3,12 @@
     "kind": "growth",
     "counter": "generated_records",
     "added": {
+      "abi-record-company.h": 12,
       "abi-record-script_event.h": 2,
       "abi-record-settings.h": 14
     },
-    "reason": "Plan #1048 decisions 5 and 7: the five company events are built in Rust, so the shared event record gains `other_company` and `value` (ET_COMPANY_ASK_MERGER and ET_COMPANY_MERGER carry them), and the bodies read fourteen game settings in place through the settings catalog (construction_cost, economy, give_money, infinite_money, inflation, infrastructure_maintenance, initial_interest, max_aircraft, max_loan, max_roadveh, max_ships, new_year, show_finances, vehicle_costs) where C++ carriers passed them as parameters. The declarations are generated from the Rust records.",
-    "existing_alternatives": "The events were built in C++ by seven carrier slots and the settings passed by the `EconomySettings`, `Month` and `Year` carriers and `CommandInfiniteMoney`, all of which the design-fault rule removes and this pass deletes; no other event field or setting address holds these values.",
+    "reason": "Plan #1048 decisions 5 and 7: the five company events are built in Rust, so the shared event record gains `other_company` and `value` (ET_COMPANY_ASK_MERGER and ET_COMPANY_MERGER carry them), and the bodies read fourteen game settings in place through the settings catalog (construction_cost, economy, give_money, infinite_money, inflation, infrastructure_maintenance, initial_interest, max_aircraft, max_loan, max_roadveh, max_ships, new_year, show_finances, vehicle_costs) where C++ carriers passed them as parameters. The declarations are generated from the Rust records. The porting review of #1056 (findings 4 and 7) moves the `CmdCompanyCtrl` argument record, which crosses the boundary inside the control frame, from a handwritten declaration in `company_ffi.h` to `abi-record-company.h`, and adds the pool cursor `{item, index}` that the waypoint, sign, goal and story page walks of `ChangeOwnershipOfCompanyItems` read their resolved items through.",
+    "existing_alternatives": "The events were built in C++ by seven carrier slots and the settings passed by the `EconomySettings`, `Month` and `Year` carriers and `CommandInfiniteMoney`, all of which the design-fault rule removes and this pass deletes; no other event field or setting address holds these values. The handwritten `OpenTTDCmdCompanyCtrl` in `company_ffi.h` is deleted; the walks used index-returning iterators that made the owner reads and deletions resolve each item again.",
     "retiring_owner": "#734",
     "retirement_condition": "The event fields retire with the script event port, which constructs events in Rust; the setting addresses retire when the game settings move to Rust."
   },
@@ -21,5 +22,41 @@
     "existing_alternatives": "The fixture copied no identity table before; its `company_next` stub and `OpenTTDCompanyRef` record are gone with the slot they stubbed.",
     "retiring_owner": "#734",
     "retirement_condition": "Retires with the native session fixture, when the session loop's company services are Rust calls."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
+    "site": "rust/openttd-kernels/src/company.rs | fn cmd_company_ctrl | allow clippy::too_many_lines",
+    "operation": "company::cmd_company_ctrl",
+    "source_contract": "`CmdCompanyCtrl` (src/company_cmd.cpp)",
+    "reason": "Plan #1048 decision 14: the module's `too_many_lines` allow is scoped to the three bodies it still fires on; the body follows its four actions, with their network, AI and admin side effects, in one body, so splitting it would separate branches the original keeps together."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
+    "site": "rust/openttd-kernels/src/company.rs | fn update_company_rating_and_value | allow clippy::too_many_lines",
+    "operation": "company::update_company_rating_and_value",
+    "source_contract": "`UpdateCompanyRatingAndValue` (src/economy.cpp)",
+    "reason": "Plan #1048 decision 14: the module's `too_many_lines` allow is scoped to the three bodies it still fires on; the body follows its score parts and their statistics in the original's order, so splitting it would separate branches the original keeps together."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
+    "site": "rust/openttd-kernels/src/company.rs | fn change_ownership_of_company_items | allow clippy::too_many_lines",
+    "operation": "company::change_ownership_of_company_items",
+    "source_contract": "`ChangeOwnershipOfCompanyItems` (src/economy.cpp)",
+    "reason": "Plan #1048 decision 14: the module's `too_many_lines` allow is scoped to the three bodies it still fires on; the body follows the original's item walks in its order, so splitting it would separate branches the original keeps together."
   }
 ]
