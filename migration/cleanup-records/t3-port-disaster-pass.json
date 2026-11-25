@@ -646,5 +646,53 @@
     "site": "rust/openttd-kernels/src/disaster.rs | impl<'a> Tables<'a> > fn get_aircraft_flight_level | allow unsafe_code",
     "source_contract": "`GetAircraftFlightLevel(v)` in `DisasterTick_Aircraft` and `DisasterTick_Zeppeliner`.",
     "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::disaster_tick_aircraft",
+    "reason": "Calls the unsafe `industry::location_tile` with the owner of an industry that `Industry::Get` or the industry walk returned, for `i->location.tile`. The base's module-wide allowance goes.",
+    "retirement_condition": "Retires when the industry pool is Rust storage with a typed owner handle (#635).",
+    "retiring_owner": "#635",
+    "site": "rust/openttd-kernels/src/disaster.rs | fn disaster_tick_aircraft | allow unsafe_code",
+    "source_contract": "`i->location.tile` in `DisasterTick_Aircraft`.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::disaster_airplane_init",
+    "reason": "Calls the unsafe `industry::location_tile` with the owner of an industry that `Industry::Get` or the industry walk returned, for `i->location.tile`. The base's module-wide allowance goes.",
+    "retirement_condition": "Retires when the industry pool is Rust storage with a typed owner handle (#635).",
+    "retiring_owner": "#635",
+    "site": "rust/openttd-kernels/src/disaster.rs | fn disaster_airplane_init | allow unsafe_code",
+    "source_contract": "`i->location.tile` in `Disaster_Airplane_Init`.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::disaster_helicopter_init",
+    "reason": "Calls the unsafe `industry::location_tile` with the owner of an industry that `Industry::Get` or the industry walk returned, for `i->location.tile`. The base's module-wide allowance goes.",
+    "retirement_condition": "Retires when the industry pool is Rust storage with a typed owner handle (#635).",
+    "retiring_owner": "#635",
+    "site": "rust/openttd-kernels/src/disaster.rs | fn disaster_helicopter_init | allow unsafe_code",
+    "source_contract": "`i->location.tile` in `Disaster_Helicopter_Init`.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::disaster_coal_mine_init",
+    "reason": "Calls the unsafe `industry::location_tile` with the owner of an industry that `Industry::Get` or the industry walk returned, for `i->location.tile`. The base's module-wide allowance goes.",
+    "retirement_condition": "Retires when the industry pool is Rust storage with a typed owner handle (#635).",
+    "retiring_owner": "#635",
+    "site": "rust/openttd-kernels/src/disaster.rs | fn disaster_coal_mine_init | allow unsafe_code",
+    "source_contract": "`i->location.tile` in `Disaster_CoalMine_Init`.",
+    "tool": "rust"
   }
 ]

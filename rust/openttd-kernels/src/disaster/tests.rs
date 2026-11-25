@@ -111,7 +111,7 @@ fn install_map(kind: TileType, m1: u8) -> (Vec<BaseTileLayout>, Vec<ExtendedTile
 /// The tables a test's leaked service table names.
 #[allow(unsafe_code)]
 fn tables(services: &'static Services) -> Tables<'static> {
-    // SAFETY: Every link of a test's table is null or a leaked table.
+    // SAFETY: Each test leaks every table its paths reach, as `Tables::new` requires.
     unsafe { Tables::new(services) }
 }
 

@@ -212,8 +212,13 @@ impl<'a> Tables<'a> {
     /// The tables `s` names.
     ///
     /// # Safety
-    /// Each of `s`'s table links is null or names a table that outlives `'a`, and the shared
-    /// and vehicle links are not null: the process-lifetime tables, or a test's leaked ones.
+    /// Each table link of `s` that the entry's path reaches, and each link those tables hold
+    /// that it reaches in turn, names a live table that outlives `'a`; the shared and vehicle
+    /// links always do. The process-lifetime tables hold every link. A test's partial table
+    /// may leave null only the links its paths do not reach: the submarine test reaches the
+    /// shared and vehicle tables and the vehicle table's resolver and maintenance links, and
+    /// the clear test also reaches the identity table and the shared table's command,
+    /// landscape, station and movement links.
     #[allow(unsafe_code)]
     pub(crate) unsafe fn new(s: &'a Services) -> Self {
         // SAFETY: As this function's contract.
@@ -693,9 +698,8 @@ fn disaster_tick_zeppeliner(t: &Tables<'_>, v: DisasterVehicle) -> bool {
     }
 
     if world.is_valid_tile(v.v.tile()) && world.is_airport_tile(v.v.tile()) {
-        airport_blocks_update(t, v.v.tile(), |blocks| {
-            blocks.set(zeppeliner_runway());
-        });
+        t.aircraft()
+            .airport_blocks_set(station_get_by_tile(t, v.v.tile()), zeppeliner_runway());
     }
 
     if v.state() > 2 {
@@ -705,9 +709,7 @@ fn disaster_tick_zeppeliner(t: &Tables<'_>, v: DisasterVehicle) -> bool {
 
         if world.is_valid_tile(v.v.tile()) && world.is_airport_tile(v.v.tile()) {
             let st = station_get_by_tile(t, v.v.tile());
-            t.aircraft().airport_blocks_update(st, |blocks| {
-                blocks.reset(zeppeliner_runway());
-            });
+            t.aircraft().airport_blocks_reset(st, zeppeliner_runway());
             crate::ai::new_event(
                 world.owner(v.v.tile()),
                 &ScriptEvent::disaster_zeppeliner_cleared(station_index(t, st)),
@@ -776,12 +778,6 @@ fn airport_services<'a>(t: &Tables<'a>) -> &'a crate::newgrf_airport::Services {
 /// `st->index`.
 fn station_index(t: &Tables<'_>, st: *mut crate::station::Station) -> StationID {
     airport_services(t).station_index(st.cast_const().cast())
-}
-
-/// `Station::GetByTile(tile)->airport.blocks`, updated in place.
-fn airport_blocks_update(t: &Tables<'_>, tile: TileIndex, update: impl FnOnce(&mut AirportBlocks)) {
-    t.aircraft()
-        .airport_blocks_update(station_get_by_tile(t, tile), update);
 }
 
 /// `DisasterTick_Ufo`: (Small) Ufo handling, `v->state` states:
@@ -906,7 +902,8 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
         if !target.vehstatus().test(VehState::Hidden)
             && unsafe { crate::road::crashed_ctr(road) } == 0
         {
-            let victims = crate::road::crash(t.road(), target, road, false);
+            // SAFETY: `road` is the road owner `target`'s record names.
+            let victims = unsafe { crate::road::crash(t.road(), target, road, false) };
             // SAFETY: As above.
             unsafe { crate::road::set_disaster_vehicle(road, VehicleID::INVALID) };
 
@@ -977,6 +974,7 @@ fn destruct_industry(t: &Tables<'_>, i: *mut crate::industry::tile::ShellHandle)
     clippy::many_single_char_names,
     reason = "DisasterTick_Aircraft's v, i, x, y and r"
 )]
+#[allow(unsafe_code)]
 fn disaster_tick_aircraft(
     t: &Tables<'_>,
     v: DisasterVehicle,
@@ -1006,7 +1004,8 @@ fn disaster_tick_aircraft(
     if v.state() == 2 {
         if gb(u32::from(v.v.tick_counter()), 0, 2) == 0 {
             let i = t.industry_get(v.v.dest_tile().0); // Industry destructor calls ReleaseDisastersTargetingIndustry, so this is valid
-            let location = crate::industry::location_tile(t.industry_owner(i));
+            // SAFETY: The owner of an industry `Industry::Get` or the industry walk returned.
+            let location = unsafe { crate::industry::location_tile(t.industry_owner(i)) };
             let x = map.tile_x(location) * TILE_SIZE;
             let y = map.tile_y(location) * TILE_SIZE;
             let r = t.shared.random();
@@ -1042,7 +1041,8 @@ fn disaster_tick_aircraft(
             );
             if (t.shared.disaster_sound)() {
                 (t.shared.play_sound)(
-                    crate::industry::location_tile(t.industry_owner(i)).0,
+                    // SAFETY: The owner of an industry `Industry::Get` or the industry walk returned.
+                    unsafe { crate::industry::location_tile(t.industry_owner(i)) }.0,
                     SoundID::from(SoundFx::SND_12_EXPLOSION).0,
                 );
             }
@@ -1514,6 +1514,7 @@ fn industries<'a>(t: &Tables<'a>) -> impl Iterator<Item = crate::industry::Entry
     clippy::many_single_char_names,
     reason = "Disaster_Airplane_Init's i, x, y, v and u"
 )]
+#[allow(unsafe_code)]
 fn disaster_airplane_init(t: &Tables<'_>) {
     if !(t.vehicles.can_allocate)(2) {
         return;
@@ -1537,7 +1538,9 @@ fn disaster_airplane_init(t: &Tables<'_>) {
 
     /* Start from the bottom (south side) of the map */
     let x = ((map.size_x() + 9) * TILE_SIZE - 1) as i32;
-    let y = (map.tile_y(crate::industry::location_tile(found.owner)) * TILE_SIZE + 37) as i32;
+    // SAFETY: The owner of an industry `Industry::Get` or the industry walk returned.
+    let y = (map.tile_y(unsafe { crate::industry::location_tile(found.owner) }) * TILE_SIZE + 37)
+        as i32;
 
     let v = disaster_vehicle_new(
         t,
@@ -1563,6 +1566,7 @@ fn disaster_airplane_init(t: &Tables<'_>) {
     clippy::many_single_char_names,
     reason = "Disaster_Helicopter_Init's i, x, y, v, u and w"
 )]
+#[allow(unsafe_code)]
 fn disaster_helicopter_init(t: &Tables<'_>) {
     if !(t.vehicles.can_allocate)(3) {
         return;
@@ -1585,7 +1589,9 @@ fn disaster_helicopter_init(t: &Tables<'_>) {
     let map = t.world().dimensions;
 
     let x = -16 * TILE_SIZE as i32;
-    let y = (map.tile_y(crate::industry::location_tile(found.owner)) * TILE_SIZE + 37) as i32;
+    // SAFETY: The owner of an industry `Industry::Get` or the industry walk returned.
+    let y = (map.tile_y(unsafe { crate::industry::location_tile(found.owner) }) * TILE_SIZE + 37)
+        as i32;
 
     let v = disaster_vehicle_new(
         t,
@@ -1696,6 +1702,7 @@ fn disaster_big_submarine_init(t: &Tables<'_>) {
 }
 
 /// `Disaster_CoalMine_Init`: coal mine catastrophe, destroys a stretch of 30 tiles of land in a certain direction
+#[allow(unsafe_code)]
 fn disaster_coal_mine_init(t: &Tables<'_>) {
     let mut index = gb(t.shared.random(), 0, 4) as i32;
 
@@ -1718,12 +1725,14 @@ fn disaster_coal_mine_init(t: &Tables<'_>) {
                         ))],
                     ),
                     NewsType::Accident,
-                    crate::industry::location_tile(i.owner) + map.diff(1, 1),
+                    // SAFETY: The owner of an industry `Industry::Get` or the industry walk returned.
+                    unsafe { crate::industry::location_tile(i.owner) } + map.diff(1, 1),
                     StationID::INVALID,
                 ); // keep the news, even when the mine closes
 
                 {
-                    let mut tile = crate::industry::location_tile(i.owner);
+                    // SAFETY: The owner of an industry `Industry::Get` or the industry walk returned.
+                    let mut tile = unsafe { crate::industry::location_tile(i.owner) };
                     let step = map.tile_offs_by_diag_dir(
                         DiagDirection(gb(t.shared.random(), 0, 2) as u8),
                         t.check(),

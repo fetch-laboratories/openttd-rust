@@ -2577,8 +2577,11 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_clear(owner: *mut Builde
 }
 
 /// `Industry::location.tile`, the one field of the location a caller reads.
-pub(crate) fn location_tile(owner: *const Industry) -> TileIndex {
-    // SAFETY: Live owner supplied by the caller's resolved shell; an immediate field read.
+///
+/// # Safety
+/// `owner` is a live industry's Rust owner, with no callback running during the read.
+pub(crate) unsafe fn location_tile(owner: *const Industry) -> TileIndex {
+    // SAFETY: As this function's contract; an immediate field read.
     TileIndex(unsafe { (*owner).metadata.tile })
 }
 /// SAFETY: Live serialized owner; no callback occurs while reading its cargoes.
