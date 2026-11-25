@@ -281,8 +281,7 @@ impl<'a> Tables<'a> {
     }
     /// `v->UpdatePosition()`.
     fn update_position(&self, v: VehicleRef) {
-        // SAFETY: The live shell survives the synchronous index update.
-        unsafe { crate::vehicle::occupancy::update_position(self.vs, v, self.map()) }
+        crate::vehicle::occupancy::update_position(v, self.map());
     }
     /// `VehicleEnterTile(v, tile, x, y)`.
     fn vehicle_enter_tile(
@@ -650,7 +649,7 @@ fn check_ship_stay_in_depot(t: &Tables<'_>, v: Ship) -> bool {
 
     /* Don't leave depot if another vehicle is already entering/leaving */
     /* This helps avoid CPU load if many ships are set to start at the same time */
-    if crate::vehicle_func::has_vehicle_on_tile(t.vs, t.map(), v.v.tile(), |u| {
+    if crate::vehicle_func::has_vehicle_on_tile(t.map(), v.v.tile(), |u| {
         u.vehicle_type() == VehicleType::VEH_SHIP && u.cur_speed() != 0
     }) {
         return true;

@@ -14,7 +14,7 @@
 //! - The export `openttd_rust_train_reverse_swap`, as the probe did, for the reversal.
 //!
 //! The live services are the probe's and no more: the curve advantage, the viewport, the
-//! virtual tile, the vehicle table's tile links and map width, the acceleration model, a 256
+//! virtual tile, the vehicle records' tile links and map width, the acceleration model, a 256
 //! by 256 map and the movement table's vehicle resolution. Every other entry is an
 //! `unreachable` stub, so a call to any other service fails the test.
 //!
@@ -34,7 +34,7 @@ use crate::test_tables::{MOVEMENT, SHARED, TRAIN_LEAVES, VEHICLE};
 use crate::tile_type::TileIndex;
 use crate::track_type::TrackBits;
 use crate::train_state::{State, openttd_rust_train_state_destroy, openttd_rust_train_state_new};
-use crate::vehicle::occupancy::{Links, openttd_rust_occupancy_update};
+use crate::vehicle::occupancy::openttd_rust_occupancy_update;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices};
 use crate::vehicle_base::{openttd_rust_vehicle_record_delete, openttd_rust_vehicle_record_new};
 use crate::vehicle_type::VehicleType;
@@ -110,7 +110,8 @@ impl Draws {
 /// The probe's world: the recorded events, the live inputs of its leaves and the map.
 struct World {
     records: [*mut OpenTTDVehicle; VEHICLES],
-    links: *mut [Links; VEHICLES],
+    /// Whether each vehicle was in the tile index at the last observation.
+    indexed: [bool; VEHICLES],
     /// `(kind, vehicle)`: 1 `UpdatePosition`, 2 `UpdateViewport`, 3 `VehicleEnterTile`.
     events: Vec<(u8, usize)>,
     curve_speed: u8,
@@ -122,7 +123,7 @@ struct World {
 /// Process-wide, as the probe's globals were; the test holds `GLOBAL_LOCK`.
 static WORLD: GameState<World> = GameState::new(World {
     records: [null_mut(); VEHICLES],
-    links: null_mut(),
+    indexed: [false; VEHICLES],
     events: Vec::new(),
     curve_speed: 0,
     base: null_mut(),
@@ -139,6 +140,19 @@ fn with<R>(f: impl FnOnce(&mut World) -> R) -> R {
 
 fn index(v: *const OpenTTDVehicle) -> usize {
     with(|w| w.records.iter().position(|&r| ptr::eq(r, v))).expect("a fixture vehicle")
+}
+/// Record `UpdatePosition` for each vehicle that entered the tile index since the last
+/// observation. Every trial starts with all vehicles outside the index, and the original
+/// updates a swapped vehicle's position once, between its tile entry and its viewport update,
+/// so each insertion is seen at the callback or the return that follows it.
+fn observe_positions(w: &mut World) {
+    for i in 0..VEHICLES {
+        let indexed = !VehicleRef::of(w.records[i]).hash_tile_current().is_null();
+        if indexed && !w.indexed[i] {
+            w.events.push((1, i));
+        }
+        w.indexed[i] = indexed;
+    }
 }
 fn set_kind(tile: TileIndex, kind: u8) {
     with(|w| {
@@ -157,19 +171,15 @@ extern "C" fn curve_speed(_: *const crate::rail::RailTypeInfo) -> u8 {
 extern "C" fn viewport(v: VehicleRef, force_update: bool, update_delta: bool) {
     assert!(force_update && update_delta, "UpdateViewport(true, true)");
     let i = index(v.0.as_ptr());
-    with(|w| w.events.push((2, i)));
-}
-extern "C" fn tile_links(v: VehicleRef) -> *mut Links {
-    let i = index(v.0.as_ptr());
     with(|w| {
-        w.events.push((1, i));
-        // SAFETY: The links array lives for the test; no reference to it is held.
-        unsafe { (&raw mut (*w.links)[i]) }
-    })
+        observe_positions(w);
+        w.events.push((2, i));
+    });
 }
 extern "C" fn resolve(v: VehicleRef) -> MovementVehicle {
     let i = index(v.0.as_ptr());
     let (entered, next) = with(|w| {
+        observe_positions(w);
         w.events.push((3, i));
         let entered = w.entries.get(w.next_entry).copied();
         w.next_entry += 1;
@@ -196,7 +206,6 @@ struct Fixture {
     records: [*mut OpenTTDVehicle; VEHICLES],
     grounds: [*mut GroundState; VEHICLES],
     states: [*mut State; VEHICLES],
-    links: *mut [Links; VEHICLES],
     base: *mut [BaseTileLayout],
     extended: *mut [ExtendedTileLayout],
     vehicle: *mut VehicleServices,
@@ -212,11 +221,6 @@ impl Fixture {
         });
         let grounds = std::array::from_fn(|_| Box::into_raw(Box::new(GroundState::default())));
         let states = std::array::from_fn(|_| openttd_rust_train_state_new());
-        let links = Box::into_raw(Box::new(std::array::from_fn(|_| Links {
-            next: null_mut(),
-            prev: null_mut(),
-            current: null_mut(),
-        })));
         let base: Box<[BaseTileLayout]> = (0..MAP_SIZE)
             .map(|_| BaseTileLayout {
                 kind: 0,
@@ -245,10 +249,7 @@ impl Fixture {
             },
             MAP_LOG_X,
         );
-        let vehicle = Box::into_raw(Box::new(VehicleServices {
-            tile_links,
-            ..VEHICLE
-        }));
+        let vehicle = Box::into_raw(Box::new(VEHICLE));
         let physics = Box::leak(Box::new(crate::ground_vehicle::Services {
             viewport,
             ..crate::test_tables::GROUND_VEHICLE
@@ -278,14 +279,12 @@ impl Fixture {
         unsafe { (*movement).shared = shared };
         with(|w| {
             w.records = records;
-            w.links = links;
             w.base = base.cast::<BaseTileLayout>();
         });
         Self {
             records,
             grounds,
             states,
-            links,
             base,
             extended,
             vehicle,
@@ -360,7 +359,6 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         with(|w| {
             w.records = [null_mut(); VEHICLES];
-            w.links = null_mut();
             w.base = null_mut();
         });
         // SAFETY: Each allocation was made by `Fixture::new` and is released once; the
@@ -371,7 +369,6 @@ impl Drop for Fixture {
                 drop(Box::from_raw(self.grounds[i]));
                 openttd_rust_train_state_destroy(self.states[i]);
             }
-            drop(Box::from_raw(self.links));
             drop(Box::from_raw(self.base));
             drop(Box::from_raw(self.extended));
             drop(Box::from_raw(self.vehicle));
@@ -467,6 +464,7 @@ fn run() -> (Cases, Cases) {
         }
         with(|w| {
             w.events.clear();
+            w.indexed = [false; VEHICLES];
             w.entries.clone_from(&entries);
             w.next_entry = 0;
         });
@@ -483,18 +481,16 @@ fn run() -> (Cases, Cases) {
         for &tile in &entries {
             set_kind(tile, 0);
         }
-        let events = with(|w| std::mem::take(&mut w.events));
+        let events = with(|w| {
+            observe_positions(w);
+            std::mem::take(&mut w.events)
+        });
         let line = swap_line(&events, &fixture.fields(), &t);
         lines.push((format!("{inputs} l {} r {}", t.l, t.r), line));
         for &record in &fixture.records {
-            // SAFETY: The vehicle table and the record are live for the call.
+            // SAFETY: A removal reads no shared table; the record is live.
             unsafe {
-                openttd_rust_occupancy_update(
-                    &*fixture.vehicle,
-                    std::ptr::null(),
-                    VehicleRef::of(record),
-                    true,
-                );
+                openttd_rust_occupancy_update(std::ptr::null(), VehicleRef::of(record), true);
             }
         }
     }

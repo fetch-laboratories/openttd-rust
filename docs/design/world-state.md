@@ -89,9 +89,7 @@ Later pool records sit beside their shells, as #570's do. The decision and its m
 **Per family:**
 - Station, waypoint, `GoodsEntry`, airport, road stop, town, industry and subsidy: beside.
 - Cargo packet and payment: beside now. Co-allocating the record in the same pool slot is decided at #634's pool-completion checkpoint.
-- Vehicles stay beside, with no conversion. Two out-of-line hops go to #656 or a #275 repair batch:
-  - `VehicleSvcTileLinks`: move `tile_links` into the record.
-  - `VehicleRecordFromShell`: give the scheduler and the station loading queue record pointers.
+- Vehicles stay beside, with no conversion. One out-of-line hop goes to #656 or a #275 repair batch: `VehicleRecordFromShell`, which the scheduler and the station loading queue need record pointers to retire. The tile hash links are record members (#1003).
 
 **If inside placement is ever chosen**, use allocation in the pool slot just before the shell, not a C++ member or base class. A base class can reuse tail padding on Itanium and not on MSVC, and the vehicle record has 4 bytes of it.
 

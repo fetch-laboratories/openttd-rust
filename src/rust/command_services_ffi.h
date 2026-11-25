@@ -10,7 +10,6 @@
 #define RUST_COMMAND_SERVICES_FFI_H
 #include "service_defaults.hpp"
 #include "command_cost_ffi.h"
-struct OpenTTDOccupancyCommands;
 struct OpenTTDCompanyFinanceServices;
 struct OpenTTDCompanyServices;
 struct OpenTTDLandscapeCommandServices;
@@ -27,7 +26,6 @@ struct OpenTTDCommandServices {
 	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
 	const OpenTTDLandscapeCommandServices *(*landscape_commands)() noexcept OPENTTD_SERVICE_DEFAULT(landscape_commands);
 	const OpenTTDCompanyServices *(*company)() noexcept OPENTTD_SERVICE_DEFAULT(company);
-	const OpenTTDOccupancyCommands *(*occupancy)() noexcept OPENTTD_SERVICE_DEFAULT(occupancy);
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCommandCostServices *cost;
 	const OpenTTDRailMapServices *rail_map;

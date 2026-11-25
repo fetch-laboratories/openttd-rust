@@ -215,17 +215,8 @@ fn reverse_ship_into_trackdir_turns_onto_the_trackdir_and_stops() {
         return;
     }
     thread_local! {
-        static LINKS: Cell<crate::vehicle::occupancy::Links> =
-            const { Cell::new(crate::vehicle::occupancy::Links {
-                next: std::ptr::null_mut(),
-                prev: std::ptr::null_mut(),
-                current: std::ptr::null_mut(),
-            }) };
         static VIEWPORTS: Cell<u32> = const { Cell::new(0) };
         static SHIP: Cell<Option<Ship>> = const { Cell::new(None) };
-    }
-    extern "C" fn tile_links(_: VehicleRef) -> *mut crate::vehicle::occupancy::Links {
-        LINKS.with(Cell::as_ptr)
     }
     extern "C" fn update_viewport(v: VehicleRef, force_update: bool, update_delta: bool) {
         let ship = SHIP.get().unwrap();
@@ -245,22 +236,16 @@ fn reverse_ship_into_trackdir_turns_onto_the_trackdir_and_stops() {
                 && read_field!(state, rotation_y_pos) == 25_536,
             "every write precedes the viewport call"
         );
-        // SAFETY: The thread's links cell; no reference to it is live.
         assert!(
-            !unsafe { (*LINKS.with(Cell::as_ptr)).current }.is_null(),
+            !read_field!(v.0.as_ptr(), hash_tile_current).is_null(),
             "the position update precedes the viewport call"
         );
         VIEWPORTS.set(VIEWPORTS.get() + 1);
     }
     let _map = install_map();
     let s = shared(record_failure);
-    let vehicles = Box::leak(Box::new(VehicleServices {
-        tile_links,
-        ..crate::test_tables::VEHICLE
-    }));
     let leaves = Leaves {
         update_viewport,
-        vehicle: &raw const *vehicles,
         ..crate::test_tables::SHIP_LEAVES
     };
     let v = ship(6);
@@ -283,14 +268,9 @@ fn reverse_ship_into_trackdir_turns_onto_the_trackdir_and_stops() {
     assert_eq!(VIEWPORTS.get(), 1, "one viewport call");
     assert_eq!(FAILED.load(Ordering::Relaxed), 0, "no failed assertion");
 
-    // SAFETY: The test's live record and links; the removal reads no map.
+    // SAFETY: The test's live record; the removal reads no map.
     unsafe {
-        crate::vehicle::occupancy::openttd_rust_occupancy_update(
-            vehicles,
-            std::ptr::null(),
-            v.v,
-            true,
-        );
+        crate::vehicle::occupancy::openttd_rust_occupancy_update(std::ptr::null(), v.v, true);
     }
     free(v);
 }

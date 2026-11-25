@@ -151,6 +151,7 @@ rust/openttd-kernels/src/vehicle_base.rs
 rust/openttd-kernels/src/vehicle_effect.rs
 rust/openttd-kernels/src/vehicle_func.rs
 rust/openttd-kernels/src/vehicle/maintenance.rs
+rust/openttd-kernels/src/vehicle/occupancy.rs
 rust/openttd-kernels/src/vehicle/scheduler.rs
 rust/openttd-kernels/src/vehicle/visits.rs
 rust/openttd-kernels/src/vehicle/visits/tests.rs

@@ -15,8 +15,7 @@ struct ShipProbe {
 	OpenTTDVehicle record{};
 	ShipProbe() { record.type = VEH_SHIP; record.x_pos = 32768; record.y_pos = -32769; record.tick_counter = 255; record.running_ticks = 255; record.direction = DIR_NE; record.cur_speed = 33; }
 	OpenTTDConsistState consist{};
-	uint32_t stage = 0, positions = 0;
-	OpenTTDVehicleTileLinks links;
+	uint32_t stage = 0;
 	OpenTTDShipState *owner = nullptr;
 	const OpenTTDShipLeaves *leaves = nullptr;
 	OpenTTDSharedServices services{};
@@ -103,7 +102,6 @@ static void ShipBoundary()
 	openttd_rust_engine_construct(ship_engine, &defaults, VEH_SHIP, UINT16_MAX);
 	ship_engine->vehicle_info.ship.max_speed = 100;
 
-	ship_vehicle.tile_links = [](OpenTTDVehicle *) noexcept { ++ship_probe.positions; return &ship_probe.links; };
 	/* The list's one order is a plain depot order, whose tile is the ship's destination. */
 	ControllerOrders orders(&ship_vehicle, {.type = OT_GOTO_DEPOT, .flags = 0, .destination = 0x1234, .refit_cargo = 254, .wait_time = 0, .travel_time = 0, .max_speed = UINT16_MAX});
 	static ControllerOrders *ship_orders;
@@ -123,7 +121,7 @@ static void ShipBoundary()
 	};
 	leaves.update_viewport = [](OpenTTDVehicle *v, bool force_update, bool update_delta) noexcept {
 		CHECK(ship_probe.stage++ == 2 && v == &ship_probe.record && force_update && update_delta);
-		CHECK(ship_probe.record.direction == DIR_SW && ship_probe.record.cur_speed == 0 && ship_probe.positions == 1);
+		CHECK(ship_probe.record.direction == DIR_SW && ship_probe.record.cur_speed == 0 && ship_probe.record.hash_tile_current != nullptr);
 		CHECK(openttd_rust_ship_path_size(openttd_rust_ship_state_path(ship_probe.owner)) == 0);
 		CHECK(openttd_rust_ship_get_rotation_x(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.x_pos));
 		CHECK(openttd_rust_ship_get_rotation_y(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.y_pos));
@@ -137,7 +135,7 @@ static void ShipBoundary()
 	 * advanced and before any order runs, and the broken-down ship's tick ends there. */
 	static OpenTTDVehicleResolverServices ship_resolver{};
 	ship_resolver.breakdown_delay = [](OpenTTDVehicle *) noexcept -> uint8_t {
-		CHECK(ship_probe.stage == 0 && ship_probe.positions == 0);
+		CHECK(ship_probe.stage == 0 && ship_probe.record.hash_tile_current == nullptr);
 		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
 		return 5;
 	};
@@ -148,7 +146,8 @@ static void ShipBoundary()
 	ship_maintenance.set_breakdown_delay = [](OpenTTDVehicle *, uint8_t delay) noexcept { ship_delay = delay; };
 	ship_probe.record.breakdown_ctr = 1;
 	CHECK(openttd_rust_ship_tick(shell, &leaves, &ship_probe.services));
-	CHECK(ship_delay == 4 && ship_probe.stage == 0 && ship_probe.positions == 0);
+	/* The broken-down ship's tick ends before any position update. */
+	CHECK(ship_delay == 4 && ship_probe.stage == 0 && ship_probe.record.hash_tile_current == nullptr);
 	/* The same tick state again, running normally: the reverse path, with a cached path. */
 	ship_probe.record.breakdown_ctr = 0;
 	ship_probe.record.tick_counter = 255;
@@ -157,7 +156,7 @@ static void ShipBoundary()
 	openttd_rust_ship_path_push(openttd_rust_ship_state_path(state.get()), TRACKDIR_X_NE);
 	CHECK(openttd_rust_ship_tick(shell, &leaves, &ship_probe.services));
 	CHECK(ship_probe.stage == 3 && openttd_rust_ship_get_rotation(state.get()) == 3);
-	openttd_rust_occupancy_update(&ship_vehicle, nullptr, shell, true);
+	openttd_rust_occupancy_update(nullptr, shell, true);
 
 	/* The depot search: no depot, then the ship's own tile as a depot of its owner. */
 	OpenTTDOrdersClosest closest{};

@@ -245,7 +245,7 @@ fn get_free_wagons_in_depot(x: Ctx, tile: TileIndex) -> Vec<VehicleID> {
         free: Vec::new(),
     };
     unsafe {
-        crate::vehicle_func::vehicles_on_tile(x.c.vehicles, x.t.shared.map(), tile, |v| {
+        crate::vehicle_func::vehicles_on_tile(x.t.shared.map(), tile, |v| {
             visit(ptr::from_mut(&mut ctx).cast(), v);
         });
     }

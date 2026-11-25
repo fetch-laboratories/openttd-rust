@@ -13,12 +13,10 @@ struct DisasterProbe {
 	uint8_t tile_type = 0, clear_owner = 0;
 	std::vector<uint32_t> script{};
 	size_t scripted = 0;
-	OpenTTDVehicleTileLinks links{};
 	const OpenTTDDisasterServices *services = nullptr;
 	OpenTTDDisasterState *state = nullptr;
 };
 static DisasterProbe *_disaster_probe = nullptr;
-static std::vector<int> _disaster_cost_calls;
 static uint32_t DisasterProbeRandom(void *context) noexcept
 {
 	auto *p = static_cast<DisasterProbe *>(context);
@@ -54,27 +52,19 @@ static void Disasters()
 	CHECK(!openttd_rust_disaster_tick(&services, vehicle));
 	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 1);
 
-	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v->shell)->links; };
 	/* The tile index hashes the vehicle's tile with the 64-wide map's dimensions. */
 	static OpenTTDFixtureMap map{6, 4096};
 	shared.map = &map.statics;
 
-	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->links.current != nullptr); p->viewports++; };
+	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->record.hash_tile_current != nullptr); p->viewports++; };
 	vehicles.first_sprite = [](OpenTTDVehicle *) noexcept { return 3904U; };
 	services.write_first_sprite = [](OpenTTDVehicle *, uint32_t image) noexcept { CHECK(image == 3902); };
 	probe.record.tick_counter = 1; probe.record.subtype = 8;
 	CHECK(openttd_rust_disaster_tick(&services, vehicle));
 	CHECK(probe.record.tick_counter == 2 && probe.viewports == 1 && probe.draws == 1 && probe.deletes == 1);
 
-	/* Coal mine subsidence reaches DisasterClearSquare through the daily entry. */
-	OpenTTDCommandCostServices costs{};
-	costs.construct = [](OpenTTDCommandCostStorage *p) noexcept { _disaster_cost_calls.push_back(1); return reinterpret_cast<OpenTTDCommandCost *>(p); };
-	costs.destroy = [](OpenTTDCommandCost *) noexcept { _disaster_cost_calls.push_back(5); };
-	costs.zero = [](OpenTTDCommandCost *p) noexcept { _disaster_cost_calls.push_back(3); *reinterpret_cast<uint32_t *>(p) = 0; };
-	costs.error = [](OpenTTDCommandCost *p, uint32_t error) noexcept { CHECK(error == 0x87654321); _disaster_cost_calls.push_back(3); *reinterpret_cast<uint32_t *>(p) = error; };
-	costs.success = [](const OpenTTDCommandCost *p) noexcept { _disaster_cost_calls.push_back(4); return *reinterpret_cast<const uint32_t *>(p) == 0; };
-	const OpenTTDOccupancyCommands commands{.vehicles = &vehicles, .shared = &shared, .max_pixel_z = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_cost_calls.push_back(2); return 0; }, .costs = &costs, .vehicle_error = 0x87654321};
-	services.occupancy = &commands;
+	/* Coal mine subsidence reaches DisasterClearSquare through the daily entry. Its ground
+	 * check reads tile 0's height, 0, from the fixture map. */
 	services.disasters_enabled = []() noexcept { return true; };
 	services.next_industry = [](uint32_t from) noexcept -> OpenTTDDisasterIndustryTarget {
 		return from <= 7 ? OpenTTDDisasterIndustryTarget{.industry = _disaster_probe, .id = 7, .kind = 0} : OpenTTDDisasterIndustryTarget{.industry = nullptr, .id = 0xFFFF, .kind = IT_INVALID};
@@ -105,15 +95,13 @@ static void Disasters()
 	/* Reset delay, choose the third of three disasters, the first subsidence industry and north-east. */
 	auto subside = [&]() {
 		probe.script = {0, UINT32_MAX, 0, 0}; probe.scripted = 0; probe.draws = 0; *delay = 1;
-		_disaster_cost_calls.clear();
 		openttd_rust_clock_disaster_daily(&services, nullptr);
 		CHECK(probe.draws == 4 && probe.scripted == 4 && *delay == 730);
-		CHECK(_disaster_cost_calls == std::vector<int>({1, 2, 3, 4, 5}));
 	};
 	probe.record.type = VEH_TRAIN;
 	subside();
 	CHECK(probe.news == 1 && probe.tile_types == 0 && probe.clears == 0);
-	openttd_rust_occupancy_update(&vehicles, nullptr, vehicle.handle, true);
+	openttd_rust_occupancy_update(nullptr, vehicle.handle, true);
 	probe.record.subtype = 4; state->state = 1;
 	probe.tile_type = MP_HOUSE;
 	subside();

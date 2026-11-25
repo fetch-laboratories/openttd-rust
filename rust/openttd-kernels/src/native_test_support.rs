@@ -86,6 +86,17 @@ pub unsafe extern "C" fn openttd_test_linkgraph_edge_release(
     unsafe { &mut *edge }.release();
 }
 
+/// `CommandCost(message)` into `out` through the production cost writer, for the native
+/// observation that the `error` callback receives all 32 bits of a string.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_command_cost_error(
+    costs: &crate::services::CommandCostServices,
+    out: *mut crate::services::CommandCost,
+    message: u32,
+) {
+    crate::services::Cost(out, costs).error(message);
+}
+
 /// Compare production industry removal arithmetic with native `Money` operators.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_test_industry_removal_cost(multiplier: u32) -> i64 {

@@ -462,7 +462,7 @@ impl<'a> World<'a> {
     fn vehicles_on_tile(&self, tile: u32, z: i32) {
         // Original traversal reads hash_tile_next only after Crash, event queues,
         // news and explosion creation return. Crash preserves the current shell.
-        crate::vehicle_func::vehicles_on_tile_raw(self.v(), self.s.map(), tile, |v| {
+        crate::vehicle_func::vehicles_on_tile_raw(self.s.map(), tile, |v| {
             self.victim(v, z);
         });
     }
