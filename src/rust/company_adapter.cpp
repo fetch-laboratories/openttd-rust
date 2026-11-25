@@ -70,10 +70,8 @@ static CompanyFinances *Fin_company_finances(uint8_t id) noexcept
 	Company *c = Company::GetIfValid(id);
 	return c == nullptr ? nullptr : &c->Finances();
 }
-extern CompanyMask _dirty_company_finances;
-/* InvalidateCompanyWindows(Company::Get(id)) by the company's ID, without the pool lookup:
- * it reads only the index. */
-static void Fin_invalidate_company_windows(uint8_t id) noexcept { _dirty_company_finances.Set(CompanyID(id)); }
+/* InvalidateCompanyWindows by the company's ID, without the pool lookup: it reads only the index. */
+static void Fin_invalidate_company_windows(uint8_t id) noexcept { InvalidateCompanyWindows(CompanyID(id)); }
 
 const OpenTTDCompanyFinanceServices &GetRustCompanyFinanceServices() noexcept
 {

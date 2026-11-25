@@ -164,16 +164,15 @@ void DrawCompanyIcon(CompanyID c, int x, int y)
  * @return true if and only if the face is valid
  */
 
-CompanyMask _dirty_company_finances{}; ///< Bitmask of company finances that should be marked dirty.
+static CompanyMask _dirty_company_finances{}; ///< Bitmask of company finances that should be marked dirty.
 
 /**
  * Mark all finance windows owned by a company as needing a refresh.
  * The actual refresh is deferred until the end of the gameloop to reduce duplicated work.
- * @param company Company that changed, and needs its windows refreshed.
+ * @param cid Company that changed, and needs its windows refreshed.
  */
-void InvalidateCompanyWindows(const Company *company)
+void InvalidateCompanyWindows(CompanyID cid)
 {
-	CompanyID cid = company->index;
 	_dirty_company_finances.Set(cid);
 }
 

@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! The company and economy bodies against `company_cmd.cpp`, `economy.cpp` and `misc_cmd.cpp`.
 
-/// The five financial commands against the original's recorded observations.
 /// The event record the native factory reads, written field by field from the original's
 /// event arguments (`src/rust/services.cpp`'s factory: `company`, `other_company`, `value`),
 /// so no expectation goes through the constructor it checks.
@@ -20,6 +19,7 @@ fn company_event(
     }
 }
 
+/// The five financial commands against the original's recorded observations.
 #[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 mod financial_command_tests {
     use crate::company::*;
