@@ -1,11 +1,5 @@
 [
   {
-    "from": "rust/openttd-kernels/src/disaster.rs | module | allow unsafe_code",
-    "kind": "carry",
-    "to": "rust/openttd-kernels/src/disaster/tests.rs | module | allow unsafe_code",
-    "tool": "rust"
-  },
-  {
     "after": 1,
     "before": 0,
     "kind": "suppression",
@@ -375,6 +369,66 @@
     "retiring_owner": "#656",
     "site": "rust/openttd-kernels/src/disaster.rs | struct State | allow clippy::struct_field_names",
     "source_contract": "`DisasterVehicle::state` (src/disaster_vehicle.h), the member's name.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::tests::disaster_vehicle",
+    "reason": "Sets the fresh record's `disaster` link, as the C++ default constructor does, on a record only the test holds. The base's module-wide allowance in `disaster.rs` goes.",
+    "retirement_condition": "Retires when the fixture's tables and command costs are Rust storage the test builds safely (#656).",
+    "retiring_owner": "#656",
+    "site": "rust/openttd-kernels/src/disaster/tests.rs | fn disaster_vehicle | allow unsafe_code",
+    "source_contract": "`DisasterVehicle::DisasterVehicle()` (src/disaster_vehicle.h).",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::tests::disaster_delay_is_process_wide_across_serialized_threads",
+    "reason": "Reads and writes `_disaster_delay` through the address its export gives save/load, from two serialized threads. The base's module-wide allowance in `disaster.rs` goes.",
+    "retirement_condition": "Retires when the fixture's tables and command costs are Rust storage the test builds safely (#656).",
+    "retiring_owner": "#656",
+    "site": "rust/openttd-kernels/src/disaster/tests.rs | fn disaster_delay_is_process_wide_across_serialized_threads | allow unsafe_code",
+    "source_contract": "`_disaster_delay` (src/disaster_vehicle.cpp), the address save/load reads.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::tests::clear",
+    "reason": "Reaches the test's leaked shared table from the clear procedure the fixture calls through a C ABI pointer, which has no parameter to carry it. The base's module-wide allowance in `disaster.rs` goes.",
+    "retirement_condition": "Retires when the fixture's tables and command costs are Rust storage the test builds safely (#656).",
+    "retiring_owner": "#656",
+    "site": "rust/openttd-kernels/src/disaster/tests.rs | fn clear | allow unsafe_code",
+    "source_contract": "`DisasterClearSquare` (src/disaster_vehicle.cpp), the clear it runs.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::tests::cost_flag",
+    "reason": "Reads the fixture command cost's one success flag from its storage. The base's module-wide allowance in `disaster.rs` goes.",
+    "retirement_condition": "Retires when the fixture's tables and command costs are Rust storage the test builds safely (#656).",
+    "retiring_owner": "#656",
+    "site": "rust/openttd-kernels/src/disaster/tests.rs | fn cost_flag | allow unsafe_code",
+    "source_contract": "`CommandCost::Succeeded` (src/command_type.h).",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::tests::set_cost_flag",
+    "reason": "Stores the fixture command cost's one success flag into its storage. The base's module-wide allowance in `disaster.rs` goes.",
+    "retirement_condition": "Retires when the fixture's tables and command costs are Rust storage the test builds safely (#656).",
+    "retiring_owner": "#656",
+    "site": "rust/openttd-kernels/src/disaster/tests.rs | fn set_cost_flag | allow unsafe_code",
+    "source_contract": "`CommandCost` (src/command_type.h).",
     "tool": "rust"
   }
 ]

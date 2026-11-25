@@ -4,8 +4,8 @@
  * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
-#![allow(unsafe_code)]
-
+//! Tests of `disaster.rs`. Their unsafe items reach the fixture tables the tests leak, which
+//! live for the process, and the costs the command builds in its own storage.
 use super::{DisasterVehicle, Services, Tables};
 use crate::company_type::{CompanyID, Owner};
 use crate::direction_type::{DiagDirection, Direction};
@@ -107,6 +107,7 @@ fn install_map(kind: TileType, m1: u8) -> (Vec<BaseTileLayout>, Vec<ExtendedTile
 }
 
 /// A disaster vehicle record with its owner, which the test leaks.
+#[allow(unsafe_code)]
 fn disaster_vehicle() -> DisasterVehicle {
     let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
         ptr::null_mut(),
@@ -168,6 +169,7 @@ fn submarine_leaves_row_zero_without_assertion_under_native_debug() {
 /// `_disaster_delay` is one process-wide counter: a serialized worker thread sees and
 /// writes the same storage as the thread that started it.
 #[test]
+#[allow(unsafe_code)]
 fn disaster_delay_is_process_wide_across_serialized_threads() {
     let address = super::openttd_rust_disaster_delay() as usize;
     // SAFETY: The worker runs after this access and is joined before the next.
@@ -248,6 +250,7 @@ extern "C" fn landscape_tile_type(_: u32) -> u8 {
 }
 /// The tile's clear procedure. In the execute phase it releases the disasters targeting
 /// industry 7, as an industry deletion nested in a clear would.
+#[allow(unsafe_code)]
 extern "C" fn clear(cost: *mut CommandCost, tile: u32, flags: u16) {
     let execute = flags & crate::command_type::DoCommandFlag::EXECUTE != 0;
     event(Event::Clear {
@@ -255,8 +258,7 @@ extern "C" fn clear(cost: *mut CommandCost, tile: u32, flags: u16) {
         execute,
         company: CompanyID(CURRENT.get()),
     });
-    // SAFETY: A live fixture cost.
-    unsafe { *flag(cost) = true };
+    set_cost_flag(cost, true);
     if execute {
         // SAFETY: The test's shared table outlives the command.
         let shared = unsafe { &*SHARED_TABLE.get() };
@@ -271,31 +273,36 @@ extern "C" fn vehicle_next(from: u32) -> Option<VehicleRef> {
     }
 }
 
-/// The fixture's command cost: one success flag.
-fn flag(cost: *const CommandCost) -> *mut bool {
-    cost.cast_mut().cast()
+/// The fixture's command cost: one success flag, read from a live fixture cost.
+#[allow(unsafe_code)]
+fn cost_flag(cost: *const CommandCost) -> bool {
+    // SAFETY: A live fixture cost, or storage `construct` has written.
+    unsafe { *cost.cast::<bool>() }
 }
-unsafe extern "C" fn construct(storage: *mut CommandCostStorage) -> *mut CommandCost {
-    let cost = storage.cast::<bool>();
-    // SAFETY: The storage is the command's own aligned stack capacity.
-    unsafe { cost.write(true) };
-    cost.cast()
+/// Store the fixture cost's success flag. The storage is the command's own aligned stack
+/// capacity or a live fixture cost.
+#[allow(unsafe_code)]
+fn set_cost_flag(cost: *mut CommandCost, value: bool) {
+    // SAFETY: As above; a `bool` store needs no initialized old value.
+    unsafe { cost.cast::<bool>().write(value) };
 }
-unsafe extern "C" fn destroy(_: *mut CommandCost) {}
+extern "C" fn construct(storage: *mut CommandCostStorage) -> *mut CommandCost {
+    let cost = storage.cast::<CommandCost>();
+    set_cost_flag(cost, true);
+    cost
+}
+extern "C" fn destroy(_: *mut CommandCost) {}
 extern "C" fn expense_money(cost: *mut CommandCost, _: u8, _: i64) {
-    // SAFETY: A live fixture cost.
-    unsafe { *flag(cost) = true };
+    set_cost_flag(cost, true);
 }
 extern "C" fn add(cost: *mut CommandCost, other: *mut CommandCost) {
-    // SAFETY: Two live fixture costs.
-    unsafe { *flag(cost) &= *flag(other) };
+    set_cost_flag(cost, cost_flag(cost) & cost_flag(other));
 }
 extern "C" fn money(_: *const CommandCost) -> i64 {
     0
 }
 extern "C" fn success(cost: *const CommandCost) -> bool {
-    // SAFETY: A live fixture cost.
-    unsafe { *flag(cost) }
+    cost_flag(cost)
 }
 
 /// `DisasterClearSquare` through the real `Command<CMD_LANDSCAPE_CLEAR>::Do`, its nesting and
@@ -311,14 +318,14 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
     ) {
         return;
     }
-    const HOUSE: TileIndex = TileIndex(100);
-    const RAIL: TileIndex = TileIndex(200);
-    const DEPOT: TileIndex = TileIndex(300);
-    const AI_RAIL: TileIndex = TileIndex(400);
-    const BLOCK: TileIndex = TileIndex(1000);
+    let house = TileIndex(100);
+    let rail = TileIndex(200);
+    let depot = TileIndex(300);
+    let ai_rail = TileIndex(400);
+    let block = TileIndex(1000);
     let (mut base, _extended) = install_map(TileType::MP_CLEAR, 0);
-    base[HOUSE.0 as usize].kind = TileType::MP_HOUSE.0 << 4;
-    for (tile, owner, m5) in [(RAIL, 1, 0x01), (DEPOT, 1, 0xC0), (AI_RAIL, 2, 0x01)] {
+    base[house.0 as usize].kind = TileType::MP_HOUSE.0 << 4;
+    for (tile, owner, m5) in [(rail, 1, 0x01), (depot, 1, 0xC0), (ai_rail, 2, 0x01)] {
         let tile = tile.0 as usize;
         base[tile].kind = TileType::MP_RAILWAY.0 << 4;
         base[tile].m1 = owner;
@@ -368,7 +375,7 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
             shared: landscape_shared,
             cost: costs,
             signals,
-            landscape_commands: landscape_commands,
+            landscape_commands,
             ..crate::test_tables::COMMANDS
         });
     COMMANDS.set(commands);
@@ -415,15 +422,15 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
     // A block queued for company 5 on clear ground, before each clear.
     let queue_block = || {
         crate::signal::context(shared).add_track_to_signal_buffer(
-            BLOCK,
+            block,
             crate::track_type::Track::TRACK_X,
             CompanyID(5),
         );
     };
-    const SAVED: CompanyID = CompanyID(3);
+    let saved = CompanyID(3);
 
-    for (tile, company) in [(HOUSE, Owner::NONE), (RAIL, Owner::WATER)] {
-        CURRENT.set(SAVED.0);
+    for (tile, company) in [(house, Owner::NONE), (rail, Owner::WATER)] {
+        CURRENT.set(saved.0);
         airplane.set_state(1);
         queue_block();
         super::disaster_clear_square(&t, tile);
@@ -439,18 +446,18 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
                 execute: true,
                 company,
             },
-            Event::SetCompany(SAVED),
+            Event::SetCompany(saved),
         ];
-        if tile == RAIL {
+        if tile == rail {
             // The house's block is still queued; the rail's clear updates it.
             expected.push(Event::SignalUpdate(CompanyID(5)));
         }
         assert_eq!(take_events(), expected, "tile {}", tile.0);
         assert_eq!(airplane.state(), 3, "the nested release, tile {}", tile.0);
-        assert_eq!(CURRENT.get(), SAVED.0);
+        assert_eq!(CURRENT.get(), saved.0);
     }
 
-    for tile in [DEPOT, AI_RAIL] {
+    for tile in [depot, ai_rail] {
         super::disaster_clear_square(&t, tile);
         assert_eq!(take_events(), [], "tile {}", tile.0);
     }
