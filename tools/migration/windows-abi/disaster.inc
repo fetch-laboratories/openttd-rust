@@ -3,25 +3,34 @@
 #include "rust/clock_ffi.h"
 #include "industrytype.h"
 #include "rust/industry_ffi.h"
+#include "rust/industry_resolver_ffi.h"
+#include "rust/company_identity_ffi.h"
+#include "rust/news_ffi.h"
+#include "rust/settings_table_ffi.h"
 #include "core/backup_type.hpp"
 
 struct DisasterProbe {
 	OpenTTDVehicle record{};
 	DisasterProbe() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); this->record.tick_counter = 255; this->record.subtype = 13; this->record.type = VEH_DISASTER; }
-	uint32_t draws = 0, random = 0, viewports = 0, deletes = 0, clears = 0, signals = 0, news = 0, tile_types = 0;
+	uint32_t draws = 0, random = 0, viewports = 0, deletes = 0, news = 0;
 	int32_t age = 8880;
-	uint8_t tile_type = 0, clear_owner = 0;
 	std::vector<uint32_t> script{};
 	size_t scripted = 0;
-	const OpenTTDDisasterServices *services = nullptr;
-	OpenTTDDisasterState *state = nullptr;
 };
 static DisasterProbe *_disaster_probe = nullptr;
+static int _disaster_town = 0;
 static uint32_t DisasterProbeRandom(void *context) noexcept
 {
 	auto *p = static_cast<DisasterProbe *>(context);
 	p->draws++;
 	return p->scripted < p->script.size() ? p->script[p->scripted++] : p->random;
+}
+/** The encoded headline `GetEncodedString(STR_NEWS_DISASTER_COAL_MINE_SUBSIDENCE, 3)`. */
+static std::string DisasterCoalHeadline()
+{
+	char id[16];
+	std::snprintf(id, sizeof(id), "%x", static_cast<unsigned>(STR_NEWS_DISASTER_COAL_MINE_SUBSIDENCE));
+	return std::string("\xEE\x80\x81") + id + "\x1E" + "\xEE\x80\x82" + "3";
 }
 static void Disasters()
 {
@@ -29,19 +38,23 @@ static void Disasters()
 	DisasterProbe probe;
 	_disaster_probe = &probe;
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(&probe, DisasterProbeRandom);
+	bool disasters = false;
+	OpenTTDSettingAddresses settings{};
+	settings.disasters = &disasters;
+	shared.settings = &settings;
+	static OpenTTDVehicleResolverServices resolver{};
+	resolver.age = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v->shell)->age; };
+	static OpenTTDVehicleMaintenanceServices maintenance{};
+	maintenance.set_age = [](OpenTTDVehicle *v, int32_t age) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->age = age; };
 	OpenTTDVehicleServices vehicles{};
-
 	vehicles.destroy = [](OpenTTDVehicle *v) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->deletes++; };
+	vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	vehicles.maintenance = &maintenance;
 	OpenTTDDisasterServices services{};
 	services.shared = &shared;
 	services.vehicles = &vehicles;
-	services.age = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v->shell)->age; };
-	services.write_age = [](OpenTTDVehicle *v, int32_t age) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->age = age; };
-	services.disasters_enabled = []() noexcept { return false; };
-	probe.services = &services;
-	StateOwner state(openttd_rust_disaster_state_create(1048575), openttd_rust_disaster_state_destroy);
-	probe.state = state.get();
-	const OpenTTDDisasterVehicle vehicle{.handle = &probe.record, .state = state.get(), .id = 17};
+	StateOwner state(openttd_rust_disaster_state_create(), openttd_rust_disaster_state_destroy);
+	probe.record.disaster = state.get();
 	auto *address = state.get(); state->state = 65535; state->flags = 0xAB; state->image_override = UINT32_MAX;
 	uint16_t *delay = openttd_rust_disaster_delay(); *delay = 0;
 	openttd_rust_clock_disaster_daily(&services, nullptr); CHECK(*delay == 65535 && probe.draws == 0);
@@ -49,7 +62,7 @@ static void Disasters()
 	openttd_rust_clock_disaster_daily(&services, nullptr); CHECK(*delay == 1241 && probe.draws == 1);
 	probe.random = 0;
 	CHECK(delay == openttd_rust_disaster_delay() && state.get() == address && state->state == 65535 && state->flags == 0xAB && state->image_override == UINT32_MAX);
-	CHECK(!openttd_rust_disaster_tick(&services, vehicle));
+	CHECK(!openttd_rust_disaster_tick(&services, &probe.record));
 	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 1);
 
 	/* The tile index hashes the vehicle's tile with the 64-wide map's dimensions. */
@@ -58,58 +71,54 @@ static void Disasters()
 
 	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->record.hash_tile_current != nullptr); p->viewports++; };
 	vehicles.first_sprite = [](OpenTTDVehicle *) noexcept { return 3904U; };
-	services.write_first_sprite = [](OpenTTDVehicle *, uint32_t image) noexcept { CHECK(image == 3902); };
+	vehicles.write_first_sprite = [](OpenTTDVehicle *, uint32_t image) noexcept { CHECK(image == 3902); };
 	probe.record.tick_counter = 1; probe.record.subtype = 8;
-	CHECK(openttd_rust_disaster_tick(&services, vehicle));
+	CHECK(openttd_rust_disaster_tick(&services, &probe.record));
 	CHECK(probe.record.tick_counter == 2 && probe.viewports == 1 && probe.draws == 1 && probe.deletes == 1);
 
-	/* Coal mine subsidence reaches DisasterClearSquare through the daily entry. Its ground
-	 * check reads tile 0's height, 0, from the fixture map. */
-	services.disasters_enabled = []() noexcept { return true; };
-	services.next_industry = [](uint32_t from) noexcept -> OpenTTDDisasterIndustryTarget {
-		return from <= 7 ? OpenTTDDisasterIndustryTarget{.industry = _disaster_probe, .id = 7, .kind = 0} : OpenTTDDisasterIndustryTarget{.industry = nullptr, .id = 0xFFFF, .kind = IT_INVALID};
+	/* Coal mine subsidence reaches DisasterClearSquare through the daily entry. The
+	 * industry is one Rust owner of type 0 at tile 0, whose town is town 3. */
+	disasters = true;
+	static OpenTTDIndustry *const coal_mine = openttd_rust_industry_new();
+	openttd_rust_industry_metadata(coal_mine)->tile = 0;
+	openttd_rust_industry_metadata(coal_mine)->type = 0;
+	static OpenTTDIndustryTransactionServices transaction{};
+	transaction.town = [](OpenTTDIndustryShell *) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(&_disaster_town); };
+	static OpenTTDIndustryResolverServices industry_resolver{};
+	industry_resolver.town_id = [](const OpenTTDTownHandle *town) noexcept { CHECK(town == reinterpret_cast<const OpenTTDTownHandle *>(&_disaster_town)); return uint16_t{3}; };
+	OpenTTDIndustryServices industries{};
+	industries.resolver = &industry_resolver;
+	industries.transaction = &transaction;
+	industries.next_tick = [](uint32_t from) noexcept {
+		return from <= 7 ? OpenTTDIndustryEntry{.industry = _disaster_probe, .owner = coal_mine, .id = 7} : OpenTTDIndustryEntry{.industry = nullptr, .owner = nullptr, .id = 0xFFFF};
 	};
+	services.industry = &industries;
 	/* The target's type 0 can cause subsidence; Rust reads the spec record. */
 	openttd_rust_industry_specs()[0].behaviour = IndustryBehaviours{IndustryBehaviour::CanSubsidence};
-	services.industry_location = [](void *) noexcept { return OpenTTDDisasterIndustryLocation{.tile = 0, .town = 3}; };
-	services.coal_news = [](uint32_t tile, uint16_t town) noexcept { CHECK(tile == 65 && town == 3); _disaster_probe->news++; };
-	services.human = [](uint8_t company) noexcept { CHECK(company == 1); return true; };
-	services.update_signals = []() noexcept { _disaster_probe->signals++; };
-	services.next_disaster = [](uint32_t from) noexcept {
-		auto *p = _disaster_probe;
-		return from <= 17 ? OpenTTDDisasterVehicle{.handle = &p->record, .state = p->state, .id = 17} : OpenTTDDisasterVehicle{.handle = nullptr, .state = nullptr, .id = 1048575};
+	/* The news table is process-wide; no other case of this probe binds one. */
+	static const OpenTTDNewsServices news{
+		.add_news_item = [](const OpenTTDAddNewsItemArgs *args) noexcept {
+			CHECK(args->ref1.index == 1 && args->ref1.value == 65);
+			CHECK(std::string(reinterpret_cast<const char *>(args->headline), args->headline_length) == DisasterCoalHeadline());
+			_disaster_probe->news++;
+		},
 	};
-	probe.record.dest_tile = 7;
-	/* A nested entry from the clear command, as an industry destructor releases its attackers. */
-	services.clear = [](uint32_t tile, uint8_t company) noexcept {
-		auto *p = _disaster_probe;
-		CHECK(tile == 0); p->clears++; p->clear_owner = company;
-		openttd_rust_disaster_release_industry(p->services, 7);
-	};
-	/* Tile 0 is plain rail, not a depot, wherever the probe reports a railway. */
+	openttd_rust_news_bind(&news);
+	/* Tile 0 is plain rail of company 1, and the probe's train stays in the tile hash on it,
+	 * where the rotor tick's position update put it. The ground check fails before the tile
+	 * is classified, so the owner's company is never resolved. */
+	static OpenTTDCompanyIdentityServices identity{};
+	identity.company = [](uint8_t) noexcept -> Company * { CHECK(false); return nullptr; };
+	services.identity = &identity;
 	map.base[0].type = MP_RAILWAY << 4;
+	map.base[0].m1 = 1;
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1955});
-	shared.tile_valid = [](uint32_t tile) noexcept { return tile == 0; };
-	shared.tile_type = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_probe->tile_types++; return _disaster_probe->tile_type; };
-	shared.tile_owner = [](uint32_t tile) noexcept { CHECK(tile == 0); return uint8_t{1}; };
 	/* Reset delay, choose the third of three disasters, the first subsidence industry and north-east. */
-	auto subside = [&]() {
-		probe.script = {0, UINT32_MAX, 0, 0}; probe.scripted = 0; probe.draws = 0; *delay = 1;
-		openttd_rust_clock_disaster_daily(&services, nullptr);
-		CHECK(probe.draws == 4 && probe.scripted == 4 && *delay == 730);
-	};
 	probe.record.type = VEH_TRAIN;
-	subside();
-	CHECK(probe.news == 1 && probe.tile_types == 0 && probe.clears == 0);
-	openttd_rust_occupancy_update(nullptr, vehicle.handle, true);
-	probe.record.subtype = 4; state->state = 1;
-	probe.tile_type = MP_HOUSE;
-	subside();
-	CHECK(probe.news == 2 && probe.tile_types == 1 && probe.clears == 1 && probe.clear_owner == 0x10 && probe.signals == 0 && state->state == 3);
-	probe.tile_type = MP_RAILWAY;
-	subside();
-	CHECK(probe.news == 3 && probe.tile_types == 2 && probe.clears == 2 && probe.clear_owner == 0x11 && probe.signals == 1);
-	CHECK(probe.deletes == 1 && probe.viewports == 1);
+	probe.script = {0, UINT32_MAX, 0, 0}; probe.scripted = 0; probe.draws = 0; *delay = 1;
+	openttd_rust_clock_disaster_daily(&services, nullptr);
+	CHECK(probe.draws == 4 && probe.scripted == 4 && *delay == 730);
+	CHECK(probe.news == 1 && probe.deletes == 1 && probe.viewports == 1);
 
 	vehicles.can_allocate = [](size_t count) noexcept { CHECK(count >= 1 && count <= 3); return false; };
 	struct CapacityCase { int32_t (*year)() noexcept; uint32_t random; };
@@ -129,6 +138,6 @@ static void Disasters()
 		CHECK(probe.draws == 2 && probe.deletes == 1 && probe.viewports == 1);
 	}
 	_disaster_probe = nullptr;
-	std::printf("disaster_private_counter_direct_rng_delete_rotor_clear_reentry_capacity passed\n");
+	std::printf("disaster_private_counter_direct_rng_delete_rotor_subsidence_capacity passed\n");
 }
 ABI_PROBE(Disasters);

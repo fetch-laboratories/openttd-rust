@@ -193,40 +193,57 @@ pub struct Services {
     pub vehicles: *const VehicleServices,
 }
 
-/// The tables one disaster entry runs in.
+/// The tables one disaster entry runs in. The shared and vehicle tables are taken at the
+/// entry; the others are reached when a body first calls into them.
 pub(crate) struct Tables<'a> {
-    aircraft: &'a aircraft::Leaves,
-    environment: &'a crate::services::EnvironmentServices,
-    identity: &'a crate::company_identity::Services,
-    industry: &'a crate::industry::Services,
-    road: &'a crate::road::Leaves,
-    road_count: extern "C" fn(*const OpenTTDCompany) -> u16,
-    allocate: extern "C" fn() -> VehicleRef,
-    scheduler: &'a SchedulerServices,
+    s: &'a Services,
     shared: &'a Shared,
     vehicles: &'a VehicleServices,
 }
 
+#[allow(unsafe_code)]
 impl<'a> Tables<'a> {
     /// The tables `s` names.
-    #[allow(unsafe_code)]
     pub(crate) fn new(s: &'a Services) -> Self {
         // SAFETY: Each table link is a process-lifetime table, or a test's that outlives the
-        // entry.
+        // entry; every entry has the shared and vehicle tables.
         unsafe {
             Self {
-                aircraft: &*s.aircraft,
-                environment: &*s.environment,
-                identity: &*s.identity,
-                industry: &*s.industry,
-                road: &*s.road,
-                road_count: s.road_count,
-                allocate: s.allocate,
-                scheduler: &*s.scheduler,
+                s,
                 shared: &*s.shared,
                 vehicles: &*s.vehicles,
             }
         }
+    }
+    /// The aircraft controller's table.
+    fn aircraft(&self) -> &'a aircraft::Leaves {
+        // SAFETY: As `new`, for the bodies that reach this table.
+        unsafe { &*self.s.aircraft }
+    }
+    /// The environment table.
+    fn environment(&self) -> &'a crate::services::EnvironmentServices {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.s.environment }
+    }
+    /// The company identity table.
+    fn identity(&self) -> &'a crate::company_identity::Services {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.s.identity }
+    }
+    /// The industry production table.
+    fn industry(&self) -> &'a crate::industry::Services {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.s.industry }
+    }
+    /// The road vehicle controller's table.
+    fn road(&self) -> &'a crate::road::Leaves {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.s.road }
+    }
+    /// The vehicle scheduler's table.
+    fn scheduler(&self) -> &'a SchedulerServices {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.s.scheduler }
     }
     /// The map, read in place. Disaster callbacks cannot load or reset the map or yield the
     /// game-state mutex, so the descriptor holds for the entry.
@@ -259,13 +276,13 @@ impl<'a> Tables<'a> {
     }
     /// `GetAircraftFlightLevel(v)`.
     fn get_aircraft_flight_level(&self, v: DisasterVehicle) -> i32 {
-        aircraft::get_aircraft_flight_level(self.aircraft, v.v, v.flags(), false)
+        aircraft::get_aircraft_flight_level(self.aircraft(), v.v, v.flags(), false)
     }
     /// `GetAircraftFlightLevelBounds(v, &v->z_pos, nullptr)`: the bounds function reads no
     /// `z_pos`, so the minimum is stored after it returns.
     fn set_z_pos_to_flight_level_minimum(&self, v: VehicleRef) {
         let mut z_pos = 0;
-        aircraft::get_aircraft_flight_level_bounds(self.aircraft, v, Some(&mut z_pos), None);
+        aircraft::get_aircraft_flight_level_bounds(self.aircraft(), v, Some(&mut z_pos), None);
         v.set_z_pos(z_pos);
     }
     /// `v->UpdatePositionAndViewport()`.
@@ -306,7 +323,7 @@ impl<'a> Tables<'a> {
     /// slot's record, which a free slot leaves null.
     #[allow(unsafe_code)]
     fn vehicle_get(&self, index: u32) -> Option<VehicleRef> {
-        let pool = self.scheduler.pool();
+        let pool = self.scheduler().pool();
         // SAFETY: The scheduler's live descriptor; nothing mutates the pool during the read.
         crate::services_assert::assert_with(|| (index as usize) < unsafe { pool.pool_size() });
         // SAFETY: As above.
@@ -316,7 +333,7 @@ impl<'a> Tables<'a> {
     #[allow(unsafe_code)]
     fn industry_get(&self, index: u32) -> *mut crate::industry::tile::ShellHandle {
         // SAFETY: The industry table names the process-lifetime transaction table.
-        unsafe { ((*self.industry.transaction).industry)(index) }
+        unsafe { ((*self.industry().transaction).industry)(index) }
     }
     /// The Rust owner of a live industry shell.
     fn industry_owner(
@@ -362,7 +379,7 @@ fn disaster_clear_square(t: &Tables<'_>, tile: TileIndex) {
 
     match world.kind(tile) {
         TileType::MP_RAILWAY => {
-            if is_human_id(t.identity, world.owner(tile)) && !world.is_rail_depot(tile) {
+            if is_human_id(t.identity(), world.owner(tile)) && !world.is_rail_depot(tile) {
                 landscape_clear_as(t, tile, Owner::WATER);
 
                 /* update signals in buffer */
@@ -480,7 +497,7 @@ fn disaster_vehicle_new(
     subtype: DisasterSubType,
     big_ufo_destroyer_target: VehicleID,
 ) -> DisasterVehicle {
-    let this = DisasterVehicle::of((t.allocate)());
+    let this = DisasterVehicle::of((t.s.allocate)());
     this.set_big_ufo_destroyer_target(big_ufo_destroyer_target);
     let v = this.v;
     let world = t.world();
@@ -754,7 +771,7 @@ fn airport_blocks_update_station(
     st: *mut crate::station::Station,
     update: impl FnOnce(&mut AirportBlocks),
 ) {
-    let blocks = t.aircraft.airport_blocks(st);
+    let blocks = t.aircraft().airport_blocks(st);
     // SAFETY: One field-sized load and store of the live mask, with no callback between.
     unsafe {
         let mut value = blocks.read();
@@ -807,12 +824,12 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
         let mut n: u32 = 0; // Total number of targetable road vehicles.
         let mut from = 0;
         loop {
-            let c = (t.identity.next_company)(from);
+            let c = (t.identity().next_company)(from);
             if c.is_null() {
                 break;
             }
-            from = u32::from((t.identity.index)(c).0) + 1;
-            n = n.wrapping_add(u32::from((t.road_count)(c.cast_const())));
+            from = u32::from((t.identity().index)(c).0) + 1;
+            n = n.wrapping_add(u32::from((t.s.road_count)(c.cast_const())));
         }
 
         if n == 0 {
@@ -888,7 +905,7 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
         if !target.vehstatus().test(VehState::Hidden)
             && unsafe { crate::road::crashed_ctr(target.road()) } == 0
         {
-            let victims = crate::road::crash(t.road, target, false);
+            let victims = crate::road::crash(t.road(), target, false);
             // SAFETY: As above.
             unsafe { crate::road::set_disaster_vehicle(target.road(), VehicleID::INVALID) };
 
@@ -934,9 +951,9 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
 #[allow(unsafe_code)]
 fn destruct_industry(t: &Tables<'_>, i: *mut crate::industry::tile::ShellHandle) {
     let world = t.world();
-    let index = crate::industry::industry_index(i.cast(), t.industry);
+    let index = crate::industry::industry_index(i.cast(), t.industry());
     // SAFETY: The industry table names the process-lifetime resolver table.
-    let tiles = unsafe { (*t.industry.resolver).tile() };
+    let tiles = unsafe { (*t.industry().resolver).tile() };
     for tile in Map::iterate(world.types.count()) {
         if crate::industry::tile_belongs_to_industry(&world, tile, index) {
             tiles.reset_industry_construction_stage(tile);
@@ -1016,11 +1033,11 @@ fn disaster_tick_aircraft(
                 &get_encoded_string(
                     news_message,
                     &[Integer(u64::from(
-                        crate::industry::town_index(i.cast(), t.industry).0,
+                        crate::industry::town_index(i.cast(), t.industry()).0,
                     ))],
                 ),
                 NewsType::Accident,
-                crate::industry::industry_index(i.cast(), t.industry),
+                crate::industry::industry_index(i.cast(), t.industry()),
             );
             if (t.shared.disaster_sound)() {
                 (t.shared.play_sound)(
@@ -1211,7 +1228,7 @@ fn disaster_tick_big_ufo(t: &Tables<'_>, v: DisasterVehicle) -> bool {
 
         let is_valid_target = |u: VehicleRef| {
             u.is_front_engine() // Only the engines
-                && is_human_id(t.identity, u.owner()) // Don't break AIs
+                && is_human_id(t.identity(), u.owner()) // Don't break AIs
                 && world.is_plain_rail_tile(u.tile()) // No tunnels
                 && !u.vehstatus().test(VehState::Crashed) // Not crashed
         };
@@ -1255,7 +1272,7 @@ fn town_index(
     town: *const crate::services::TownHandle,
 ) -> crate::town_type::TownID {
     // SAFETY: The industry table names the process-lifetime resolver table.
-    crate::industry::resolver::town_index(town, unsafe { &*t.industry.resolver })
+    crate::industry::resolver::town_index(town, unsafe { &*t.industry().resolver })
 }
 
 /// `u->SetNext(w)` of two disaster vehicles.
@@ -1309,7 +1326,7 @@ fn disaster_tick_big_ufo_destroyer(t: &Tables<'_>, v: DisasterVehicle) -> bool {
 
         for dy in -3..3 {
             for dx in -3..3 {
-                let freeform_edges = (t.environment.freeform_edges)();
+                let freeform_edges = (t.environment().freeform_edges)();
                 let tile = map.tile_add_wrap(v.v.tile(), dx, dy, world.size_y(), freeform_edges);
                 if tile != TileIndex::INVALID {
                     disaster_clear_square(t, tile);
@@ -1417,11 +1434,11 @@ fn disaster_zeppeliner_init(t: &Tables<'_>) {
     let mut st = (catchment.c.next_station)(u32::from(StationID::BEGIN.0));
     while !st.is_null() {
         let station = st.cast_const().cast::<crate::station::Station>();
-        if t.aircraft.airport_tile(station) != TileIndex::INVALID
-            && (t.aircraft.airport_type(station) == AT_SMALL
-                || t.aircraft.airport_type(station) == AT_LARGE)
+        if t.aircraft().airport_tile(station) != TileIndex::INVALID
+            && (t.aircraft().airport_type(station) == AT_SMALL
+                || t.aircraft().airport_type(station) == AT_LARGE)
         {
-            x = ((map.tile_x(t.aircraft.airport_tile(station)) + 2) * TILE_SIZE) as i32;
+            x = ((map.tile_x(t.aircraft().airport_tile(station)) + 2) * TILE_SIZE) as i32;
             break;
         }
         st = (catchment.c.next_station)(u32::from((catchment.c.id)(st).0) + 1);
@@ -1483,7 +1500,7 @@ fn disaster_small_ufo_init(t: &Tables<'_>) {
 /// order.
 #[allow(unsafe_code)]
 fn industries<'a>(t: &Tables<'a>) -> impl Iterator<Item = crate::industry::Entry> + use<'a> {
-    let services = t.industry;
+    let services = t.industry();
     let mut from = u32::from(IndustryID::BEGIN.0);
     std::iter::from_fn(move || {
         // SAFETY: The process-lifetime industry table's walk.
@@ -1658,7 +1675,7 @@ fn disaster_submarine_init(t: &Tables<'_>, subtype: DisasterSubType) {
         )
     } else {
         let mut y = (TILE_SIZE / 2) as i32;
-        if (t.environment.freeform_edges)() {
+        if (t.environment().freeform_edges)() {
             y += TILE_SIZE as i32;
         }
         (y, Direction::DIR_SE)
@@ -1696,7 +1713,7 @@ fn disaster_coal_mine_init(t: &Tables<'_>) {
                     &get_encoded_string(
                         STR_NEWS_DISASTER_COAL_MINE_SUBSIDENCE,
                         &[Integer(u64::from(
-                            crate::industry::town_index(i.industry, t.industry).0,
+                            crate::industry::town_index(i.industry, t.industry()).0,
                         ))],
                     ),
                     NewsType::Accident,
