@@ -744,14 +744,15 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
                 };
             }
             if state.root.is_null() {
+                use crate::newgrf_commons::CargoGRFFileProps;
                 let cargo = if v.is_null() {
-                    crate::newgrf_commons::SG_PURCHASE
+                    CargoGRFFileProps::SG_PURCHASE
                 } else {
-                    (s.cargo_type)(v)
+                    crate::cargo_type::CargoType((s.cargo_type)(v))
                 };
                 state.root = crate::newgrf_commons::get_first_sprite_group_of(
-                    [cargo, crate::newgrf_commons::SG_DEFAULT],
-                    |cargo| crate::engine::bindings::sprite_group((s.engine_by_id)(id), cargo),
+                    [cargo, CargoGRFFileProps::SG_DEFAULT],
+                    |cargo| crate::engine::bindings::sprite_group((s.engine_by_id)(id), cargo.0),
                 );
             }
         }

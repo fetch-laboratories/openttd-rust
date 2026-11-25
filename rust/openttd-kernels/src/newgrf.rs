@@ -52,6 +52,8 @@ impl GrfLoadingStage {
     pub const GLS_RESERVE: Self = Self(4);
     /// `GLS_ACTIVATION`.
     pub const GLS_ACTIVATION: Self = Self(5);
+    /// `GLS_END`.
+    pub const GLS_END: Self = Self(6);
 }
 
 /// `GrfMiscBit`.
@@ -198,7 +200,9 @@ impl<'a> GRFFileRef<'a> {
     /// The handle of a file the original dereferences without a test.
     ///
     /// # Safety
-    /// `grffile` is a live record, as the type states.
+    /// `grffile` is a live record, as the type states. In a test, it may instead be live
+    /// stand-in storage when every `GRFFile` reader of `shared` the handle reaches is a stub that
+    /// receives only the address and never reads it.
     #[allow(unsafe_code, reason = "declares the caller's liveness contract")]
     pub(crate) unsafe fn of(shared: &'a Shared, grffile: *const GRFFile) -> Self {
         // A null file is a broken caller contract, as the native dereference would be.
@@ -677,8 +681,9 @@ mod tests {
         global.shared = &raw const shared;
         // The record the installed stubs stand for: only the width stub receives its address.
         let record = 0_u8;
-        // SAFETY: `record` is live for the test, and no reader of `shared` but the width stub
-        // receives it, which does not read it.
+        // SAFETY: `record` is live for the test, and the only `GRFFile` reader of `shared` the
+        // body reaches is the width stub, which does not read it (`GRFFileRef::of`'s stand-in
+        // case).
         let file = unsafe { GRFFileRef::of(&shared, (&raw const record).cast()) };
         let local = GrfMiscBits(1 << GrfMiscBit::TrainWidth32Pixels.0).0;
         let ambient = GrfMiscBits(1 << GrfMiscBit::AmbientSoundCallback.0).0;

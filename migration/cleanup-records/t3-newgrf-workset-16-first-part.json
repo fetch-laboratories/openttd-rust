@@ -79,7 +79,7 @@
     "site": "rust/openttd-kernels/src/newgrf.rs | mod tests > fn misc_grf_features_assert_the_local_bit_and_add_the_file_width | allow unsafe_code",
     "operation": "newgrf::tests",
     "source_contract": "`grffile->traininfo_vehicle_width` of variable `0x1E` (newgrf/newgrf_act0_globalvar.cpp).",
-    "reason": "The test's handle of a live stand-in record on its stack, over a table whose width reader is a stub that receives only its address.",
+    "reason": "The test's handle of a live stand-in record on its stack, over a table whose only reached `GRFFile` reader is the width stub, which receives the address and never reads it, as `GRFFileRef::of`'s stand-in case permits.",
     "retiring_owner": "#669",
     "retirement_condition": "Retires when `GRFFile` moves to Rust (#669) and the handle reads its members in place."
   },
@@ -91,7 +91,7 @@
     "site": "rust/openttd-kernels/src/economy_func.rs | mod tests > fn stub_file | allow unsafe_code",
     "operation": "economy_func::tests",
     "source_contract": "`grf_file->price_base_multipliers[index]` of `GetPrice` (economy.cpp).",
-    "reason": "The tests' handle of a live stand-in record, `RECORD`, over a table whose multiplier reader is a stub that receives only its address.",
+    "reason": "The tests' handle of the live stand-in record `RECORD` over a `StubTable`, whose only `GRFFile` reader is a stub that receives the address and never reads it, as `GRFFileRef::of`'s stand-in case permits.",
     "retiring_owner": "#669",
     "retirement_condition": "Retires when `GRFFile` moves to Rust (#669) and the handle reads its members in place."
   },
