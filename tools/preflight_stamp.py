@@ -1,9 +1,9 @@
-"""Preflight pass stamps, the inert-Markdown rule and the override log (#920).
+"""Preflight pass stamps, the docs-only rule and the override log (#920).
 
 A stamp records that `tools/preflight.py` passed every step on a clean tree
 against a base. Stamps live in the main checkout's `.local`, so every worktree
 on this host, and root's checkout, reads the same ones. A tree that differs
-from a stamped tree only in inert Markdown counts as stamped.
+from a stamped tree only in docs-only files counts as stamped.
 """
 
 import json
@@ -12,24 +12,29 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-# Markdown that no build reads: AGENTS.md and docs/, except the docs CMake
-# packages for the in-game viewer. The workflows' `inert` rule; tools/test-ci.py
-# checks both against CMake.
+# Docs-only files, which no build, test or check reads: AGENTS.md, GitHub's
+# PR and issue forms, the Codex host's settings, and docs/ except scripts and
+# what CMake packages. The workflows' `inert` rule; tools/test-ci.py checks
+# both against CMake.
 BUILT_DOCS = (
-    "admin_network",
-    "debugging_desyncs",
-    "desync",
-    "directory_structure",
-    "eints",
-    "fonts",
-    "game_coordinator",
-    "linkgraph",
-    "logging_and_performance_metrics",
-    "multiplayer",
-    "savegame_format",
-    "symbol_server",
+    "admin_network.md",
+    "debugging_desyncs.md",
+    "desync.md",
+    "directory_structure.md",
+    "eints.md",
+    "fonts.md",
+    "game_coordinator.md",
+    "linkgraph.md",
+    "logging_and_performance_metrics.md",
+    "multiplayer.md",
+    "savegame_format.md",
+    "symbol_server.md",
+    "obg_format.txt",
+    "obm_format.txt",
+    "obs_format.txt",
+    "openttd.6",
 )
-# Stamps older than the newest this many are not compared for a Markdown-only match.
+# Stamps older than the newest this many are not compared for a docs-only match.
 RECENT = 50
 
 
@@ -44,10 +49,14 @@ def common_local() -> Path:
 
 
 def inert(path: str) -> bool:
-    return path == "AGENTS.md" or (
-        path.startswith("docs/")
-        and path.endswith(".md")
-        and path not in {f"docs/{name}.md" for name in BUILT_DOCS}
+    return (
+        path in ("AGENTS.md", ".github/PULL_REQUEST_TEMPLATE.md")
+        or path.startswith((".github/ISSUE_TEMPLATE/", ".codex/"))
+        or (
+            path.startswith("docs/")
+            and not path.endswith((".py", ".sh"))
+            and path not in {f"docs/{name}" for name in BUILT_DOCS}
+        )
     )
 
 

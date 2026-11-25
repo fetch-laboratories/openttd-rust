@@ -1395,7 +1395,7 @@ COMPARE_FILES = 300
 
 
 def uninert_base_changes(repository: str, head: str) -> list[str]:
-    """Paths the base changed since head forked that are not inert Markdown.
+    """Paths the base changed since head forked that are not docs-only.
 
     Root's docs-only commits move the base several times an hour; a head behind
     only by them needs no base merge, preflight and native run to requeue. Both

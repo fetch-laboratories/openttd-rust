@@ -350,10 +350,10 @@ class StampTests(unittest.TestCase):
         root = REPO
         sources = [root / "CMakeLists.txt", *sorted((root / "cmake").glob("*.cmake"))]
         built = {
-            match.removeprefix("docs/").removesuffix(".md")
+            match
             for path in sources
             for match in re.findall(
-                r"\$\{CMAKE_SOURCE_DIR\}/(docs/[^\s\"@/]+\.md)", path.read_text()
+                r"\$\{CMAKE_SOURCE_DIR\}/docs/([^\s\"@)]+)", path.read_text()
             )
         }
         self.assertEqual(set(preflight_stamp.BUILT_DOCS), built)
@@ -364,17 +364,40 @@ class StampTests(unittest.TestCase):
             re.findall(r"'([^']+)'", listed[1]), list(preflight_stamp.BUILT_DOCS)
         )
 
-    def test_a_stamp_covers_its_tree_and_markdown_only_differences(self) -> None:
+    def test_a_stamp_covers_its_tree_and_docs_only_differences(self) -> None:
         with scratch_repo() as repo:
             code = commit(repo, "Add: Code", {"tools/x.py": "x = 1\n"})
             preflight_stamp.record("base", code)
             docs = commit(
-                repo, "Doc: Note", {"docs/note.md": "note\n", "AGENTS.md": "a\n"}
+                repo,
+                "Doc: Note",
+                {
+                    "docs/note.md": "note\n",
+                    "AGENTS.md": "a\n",
+                    "docs/skills/x/agents/openai.yaml": "interface: {}\n",
+                    ".github/PULL_REQUEST_TEMPLATE.md": "## Checks\n",
+                    ".github/ISSUE_TEMPLATE/bug.yaml": "name: Bug\n",
+                    ".codex/config.toml": 'model = "m"\n',
+                },
             )
             self.assertEqual((preflight_stamp.stamp_for(docs) or {}).get("head"), code)
-            built = commit(repo, "Doc: Fonts", {"docs/fonts.md": "built\n"})
-            self.assertIsNone(preflight_stamp.stamp_for(built))
-            subprocess.run(["git", "reset", "-q", "--hard", docs], cwd=repo, check=True)
+            for name, text in (
+                ("docs/fonts.md", "built\n"),
+                ("docs/obg_format.txt", "built\n"),
+                ("docs/openttd.6", "built\n"),
+                ("docs/skills/x/issues.py", "x = 1\n"),
+                ("docs/skills/x/run.sh", "true\n"),
+                (".github/workflows/x.yml", "on: push\n"),
+                (".github/dependabot.yml", "version: 2\n"),
+            ):
+                with self.subTest(name):
+                    read = commit(
+                        repo, "Change: Read by a build or check", {name: text}
+                    )
+                    self.assertIsNone(preflight_stamp.stamp_for(read))
+                    subprocess.run(
+                        ["git", "reset", "-q", "--hard", docs], cwd=repo, check=True
+                    )
             tooling = commit(repo, "Change: Tool", {"tools/x.py": "x = 2\n"})
             self.assertIsNone(preflight_stamp.stamp_for(tooling))
 

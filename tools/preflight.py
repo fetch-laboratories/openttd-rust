@@ -174,7 +174,7 @@ def commit_step(base: str, head: str, hooks: Path) -> Step:
 
 
 def fast_tier(base: str, head: str, inert: bool, hooks: Path) -> list[Step]:
-    """The pre-push hook's seconds-long checks; inert Markdown needs only the first."""
+    """The pre-push hook's seconds-long checks; a docs-only change needs only the first."""
     steps = [commit_step(base, head, hooks)]
     if not inert:
         steps.append(Step(RUST_FORMAT, ["cargo", "fmt", "--all", "--", "--check"]))

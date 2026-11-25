@@ -26,6 +26,7 @@ from urllib.parse import unquote
 
 import ci
 import ci_log
+import preflight_stamp
 import review_report
 import source_fixture
 import status_comment
@@ -555,19 +556,23 @@ class GateTests(unittest.TestCase):
                 needs = {"plan": {"result": "success", "outputs": outputs}}
                 self.assertEqual(evaluate(condition, needs=needs), expected)
 
-    def test_inert_markdown_excludes_every_markdown_build_input(self) -> None:
+    def test_inert_files_exclude_every_build_input(self) -> None:
         sources = [ROOT / "CMakeLists.txt", *sorted((ROOT / "cmake").glob("*.cmake"))]
+        tracked = set(
+            subprocess.check_output(
+                ["git", "ls-files", "-z"], cwd=ROOT, text=True
+            ).split("\0")
+        ) - {""}
         built = {
             match
             for path in sources
             for match in re.findall(
-                r"\$\{CMAKE_SOURCE_DIR\}/([^\s\"@]+\.md)", path.read_text()
+                r"\$\{CMAKE_SOURCE_DIR\}/([^\s\"@)]+)", path.read_text()
             )
-        }
-        self.assertIn("docs/fonts.md", built)
-        tracked = subprocess.check_output(
-            ["git", "ls-files", "*.md"], cwd=ROOT, text=True
-        ).split()
+        } & tracked
+        for name in ("README.md", "docs/fonts.md", "docs/obg_format.txt"):
+            self.assertIn(name, built)
+        self.assertIn("docs/openttd.6", built)
         blocks = []
         for filename, name in (
             ("ci-request.yml", "plan"),
@@ -575,15 +580,46 @@ class GateTests(unittest.TestCase):
             ("ci-policy.yml", "policy"),
         ):
             script = script_for(filename, name)
-            start = script.index("// Markdown that no build reads")
+            start = script.index("// Docs-only files, which no build")
             blocks.append(
                 script[start : script.index(");", script.index("const inert")) + 2]
             )
         # Indentation follows each script's nesting; the code itself must match.
         self.assertEqual(len({" ".join(block.split()) for block in blocks}), 1)
-        paths = sorted(
-            built | set(tracked) | {"docs/skills/x/SKILL.md", "docs/fonts.md.txt"}
-        )
+        expected = {
+            "AGENTS.md": True,
+            "docs/roadmap.md": True,
+            "docs/skills/x/SKILL.md": True,
+            "docs/skills/x/agents/openai.yaml": True,
+            "docs/elrail.svg": True,
+            "docs/landscape.html": True,
+            "docs/x/data.json": True,
+            "docs/fonts.md.txt": True,
+            ".github/PULL_REQUEST_TEMPLATE.md": True,
+            ".github/ISSUE_TEMPLATE/bug.yaml": True,
+            ".codex/config.toml": True,
+            "docs/fonts.md": False,
+            "docs/obg_format.txt": False,
+            "docs/openttd.6": False,
+            "docs/skills/steer/issues.py": False,
+            "docs/skills/x/run.sh": False,
+            "docs.md": False,
+            "docsx/a.md": False,
+            "README.md": False,
+            "tools/ci.py": False,
+            "migration/baseline.json": False,
+            ".github/workflows/ci-quick.yml": False,
+            ".github/dependabot.yml": False,
+            ".github/PULL_REQUEST_TEMPLATE.md.py": False,
+            ".codexx/config.toml": False,
+        }
+        # Every tracked path outside the code trees, so that the list stays short.
+        near = {
+            path
+            for path in tracked
+            if "/" not in path or path.startswith(("docs/", ".github/", ".codex/"))
+        }
+        paths = sorted(built | near | set(expected))
         verdicts = cast(
             dict[str, bool],
             node(
@@ -593,14 +629,11 @@ class GateTests(unittest.TestCase):
         )
         for path in built:
             self.assertFalse(verdicts[path], path)
+        for path, verdict in expected.items():
+            self.assertEqual(verdicts[path], verdict, path)
+        # The hook's rule and the workflows' rule are one rule.
         for path, verdict in verdicts.items():
-            expected = (
-                path == "AGENTS.md"
-                or path.startswith("docs/")
-                and path.endswith(".md")
-                and path not in built
-            )
-            self.assertEqual(verdict, expected, path)
+            self.assertEqual(verdict, preflight_stamp.inert(path), path)
 
     def test_checker_only_publisher_needs_quick_and_marks_no_tree(self) -> None:
         def needs(quick: str) -> dict[str, dict[str, Any]]:
