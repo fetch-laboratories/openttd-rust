@@ -10,12 +10,13 @@ Each role has a fixed model and effort, in the table below ([ADR 0011](adr/0011-
 | Planning | `claude-fable-5-2`, medium | `gpt-6-astra`, high |
 | Independent review | `gpt-6.2-sol`, high | `gpt-6.2-sol`, high |
 | Routine runs, measurements and tracker edits | `claude-sonnet-5-5`, medium | `gpt-6.1-terra`, high |
+| [Fathom](skills/fathom/SKILL.md) | `claude-opus-5-5`, high | `claude-opus-5-5`, high |
 
 Under a Claude Code root, Opus handles all code-touching work; Sonnet handles only non-code work. Under a Codex root, Sol handles substantive implementation and analysis; Terra handles bounded mechanical work.
 
 ## Slots
 
-At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). An implementer holds its slot from dispatch until its PR merges or root stops it, including while it waits on CI, review or the merge queue, and root gives it no new work meanwhile. A running profile counts as one. Reviews, planning and research do not count.
+At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). An implementer holds its slot from dispatch until its PR merges or root stops it, including while it waits on CI, review or the merge queue, and root gives it no new work meanwhile. A running profile counts as one. Reviews, planning and research do not count, and neither does a fathom agent or the PR it opens ([ADR 0053](adr/0053-a-fathom-takes-no-slot.md)).
 
 ## Spawning
 
@@ -23,6 +24,7 @@ At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-wai
   > Plan the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/planner-brief.md`. You are <name>. Root's thread is <thread ID>.
 - Root starts each implementer with this fixed message, and adds only facts the plan and the docs do not hold, such as a base change since the plan was written:
   > Implement the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/implementer-brief.md`. You are <name>. Complete the whole task. Root's thread is <thread ID>.
+- Root, a steering review or a navigation review starts a [fathom](skills/fathom/SKILL.md) agent for a case as a thread of its own and does not wait on it: `t3_thread_launch` with the role table's model and effort as `modelSelection`, `workspaceStrategy: {type: "root"}`, a title that names the case, a stable `clientRequestId` and the prompt `/fathom <case issue URL>`.
 - Spawn a fresh agent named for each task; its name is its attribution.
 - The host does not report a child's model or effort to it. Root's spawn message names both, and the child signs with them; a planner or implementer names them to the reviewers it starts.
 - Root writes no summary of a child's waiting notice.

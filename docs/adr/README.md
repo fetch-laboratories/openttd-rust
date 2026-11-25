@@ -100,3 +100,4 @@ By number and header, with a link to the file, for example [ADR 0049](0049-two-i
 | [0043](0043-docs-only-changes-need-no-pr.md) | Docs-only changes are committed straight to the main branch without a PR |
 | [0051](0051-review-whole-pr.md) | A pull request is reviewed whole, by two reviewers and one re-check |
 | [0052](0052-speed-on-the-merged-branch-and-per-pass-counts.md) | Speed is judged on the merged branch, and a pass on a hot path compares instruction counts at its base and head |
+| [0053](0053-a-fathom-takes-no-slot.md) | A fathom agent and the pull request it opens take no implementer slot |
