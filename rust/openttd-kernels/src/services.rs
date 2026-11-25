@@ -132,8 +132,6 @@ pub struct CommandServices {
     pub landscape_commands: extern "C" fn() -> *const crate::landscape_cmd::LandscapeServices,
     /// Company owner for direct ownership checks.
     pub company: extern "C" fn() -> *const crate::company::Services,
-    /// Direct Rust occupancy owner, shared by every command.
-    pub occupancy: extern "C" fn() -> *const crate::vehicle::occupancy::Commands,
     /// Shared map, company and generation observations of the invocation lifecycle.
     pub shared: &'static Services,
     /// Native result storage of every invocation.
@@ -725,7 +723,6 @@ crate::abi::layouts! {
         infrastructure_dirty,
         landscape_commands,
         company,
-        occupancy,
         shared,
         cost,
         rail_map,
@@ -1451,18 +1448,15 @@ impl Cost<'_> {
     }
     /// `EnsureNoVehicleOnGround`.
     pub(crate) fn no_vehicle(self, command: &CommandServices, tile: u32) {
-        // SAFETY: The impl contract above.
-        unsafe { command.no_vehicle(self.0, tile) };
+        command.no_vehicle_raw(self.0, tile);
     }
     /// `EnsureNoTrainOnTrackBits`.
     pub(crate) fn no_train(self, command: &CommandServices, tile: u32, bits: u8) {
-        // SAFETY: The impl contract above.
-        unsafe { command.no_train(self.0, tile, bits) };
+        command.no_train_raw(self.0, tile, bits);
     }
     /// `TunnelBridgeIsFree` with no ignored vehicle.
     pub(crate) fn wormhole_free(self, command: &CommandServices, tile: u32, end: u32) {
-        // SAFETY: The impl contract above; a null `ignore` names no vehicle.
-        unsafe { command.wormhole_free(self.0, tile, end, std::ptr::null()) };
+        command.wormhole_free_raw(self.0, tile, end);
     }
 }
 

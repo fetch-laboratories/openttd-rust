@@ -396,7 +396,7 @@ impl Ctx<'_> {
         let owner = CompanyID((self.shared.tile_owner)(tile.0));
         unsafe { self.command.ownership(out.0, owner.0, 0) };
         if out.ok() {
-            unsafe { self.command.no_vehicle(out.0, tile.0) };
+            self.command.no_vehicle(out.0, tile);
         }
         if !out.ok() {
             return;
@@ -1012,7 +1012,7 @@ impl Ctx<'_> {
         }
         /* remove the buoy if there is a ship on tile when company goes bankrupt... */
         if !flags.test(DoCommandFlag::Bankrupt) {
-            unsafe { self.command.no_vehicle(cost.0, tile.0) };
+            self.command.no_vehicle(cost.0, tile);
             if !cost.ok() {
                 return;
             }

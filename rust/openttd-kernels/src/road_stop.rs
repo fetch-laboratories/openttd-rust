@@ -23,7 +23,7 @@ use crate::services::{Map, Services};
 use crate::station::BaseStation;
 use crate::station_type::{RoadStopID, RoadStopType};
 use crate::tile_type::{MP_STATION, TILE_SIZE, TileIndex};
-use crate::vehicle::{VehicleRef, VehicleServices};
+use crate::vehicle::VehicleRef;
 use crate::vehicle_base::VehState;
 use crate::vehicle_type::VehicleType;
 
@@ -76,8 +76,6 @@ fn total_length(v: VehicleRef) -> u16 {
 /// Native road stop services, reached through the shared table.
 #[repr(C)]
 pub struct RoadStopServices {
-    /// Shared vehicle table; Rebuild uses its tile hash traversal.
-    pub vehicle: *const VehicleServices,
     /// `Station::GetByTile(tile)->GetPrimaryRoadStop(type)`.
     pub primary: extern "C" fn(u32, RoadStopType) -> *mut Stop,
     /// The station's bus or truck stop list head.
@@ -488,9 +486,6 @@ fn entry_direction(east: bool, axis: Axis) -> DiagDirection {
 /// from the vehicles' cached lengths after the traversal.
 fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool, this: *mut Entry) {
     World::new(s).assert_with(|| status(state).test(StatusFlag::BaseEntry));
-    let t = table(s);
-    // SAFETY: The shared vehicle table is static.
-    let vehicle = unsafe { &*t.vehicle };
     let axis = crate::map_func::World::new(s).get_drive_through_stop_axis(xy);
     let entry_dir = entry_direction(east, axis);
     let mut vehicles: Vec<VehicleRef> = Vec::new();
@@ -503,7 +498,7 @@ fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool, thi
     while is_drive_through_road_stop_continuation(s, xy, tile) {
         // SAFETY: As above; the read and write end before the vehicle traversal.
         unsafe { (*this).length = (*this).length.wrapping_add(TILE_UNITS) };
-        crate::vehicle_func::vehicles_on_tile(vehicle, map(s), tile, |v| {
+        crate::vehicle_func::vehicles_on_tile(map(s), tile, |v| {
             // Not a RV or not in the right direction or crashed :(
             if v.vehicle_type() != VehicleType::ROAD
                 || dir_to_diag_dir(v.direction(), |ok| {
@@ -843,7 +838,6 @@ crate::abi::layouts! {
     "OpenTTDRoadStopEntries" ["probe"] => crate::road_stop::Entries { east, west, };
     "OpenTTDRoadStopState" ["probe"] => crate::road_stop::State { status, entries, };
     "OpenTTDRoadStopServices" ["probe"] => crate::road_stop::RoadStopServices {
-        vehicle,
         primary,
         head,
         is_bus,

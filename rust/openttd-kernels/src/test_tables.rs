@@ -189,7 +189,6 @@ pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::Vehi
     ship_get: unreachable1,
     show_newgrf_vehicle_error: unreachable5,
     start_stop_dirty: unreachable1,
-    tile_links: unreachable1,
     update_delta: unreachable1,
     visits: unreachable0,
     write_breakdowns: unreachable2,
@@ -625,7 +624,6 @@ pub(crate) const COMMANDS: crate::services::CommandServices = crate::services::C
     infrastructure_dirty: unreachable1,
     landscape_commands: unreachable0,
     company: unreachable0,
-    occupancy: unreachable0,
     shared: &SHARED,
     cost: &COMMAND_COSTS,
     rail_map: &RAIL_MAP,
@@ -678,7 +676,6 @@ pub(crate) const RAIL_MAP: crate::services::RailMapServices = crate::services::R
 pub(crate) const SIGNALS: crate::signal::SignalServices = crate::signal::SignalServices {
     assertions: false,
     assert_condition: unreachable1,
-    vehicles: ptr::null(),
 };
 
 /// `crate::landscape_cmd::LandscapeServices` with every entry unreachable.
@@ -2017,7 +2014,6 @@ pub(crate) const STATION_COMMANDS: crate::station_cmd::CommandServicesTable =
 pub(crate) const DISASTER: crate::disaster::Services = crate::disaster::Services {
     shared: ptr::null(),
     vehicles: ptr::null(),
-    occupancy: ptr::null(),
     environment: ptr::null(),
     aircraft: ptr::null(),
     road: ptr::null(),

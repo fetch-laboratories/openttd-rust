@@ -32,7 +32,6 @@ struct OpenTTDGroundLoopServices {
 	const OpenTTDRoadCommandContext *road_command;
 	const OpenTTDTunnelServices *tunnel;
 	const OpenTTDWaterGroundServices *water;
-	const OpenTTDGroundCostServices *costs;
 	OpenTTDGroundCall *call;
 	LandscapeType climate;
 	bool editor;

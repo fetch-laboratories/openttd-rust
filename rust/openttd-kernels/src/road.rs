@@ -633,8 +633,7 @@ impl<'a> Game<'a> {
     }
     /// `v->UpdatePosition()`.
     fn update_position(&self, v: VehicleRef) {
-        // SAFETY: The live shell survives the synchronous index update.
-        unsafe { crate::vehicle::occupancy::update_position(self.vs, v, self.map()) }
+        crate::vehicle::occupancy::update_position(v, self.map());
     }
     /// `v->UpdateInclination(new_tile, update_delta)`.
     fn update_inclination(&self, v: Part, new_tile: bool, update_delta: bool) -> i32 {
@@ -1012,16 +1011,10 @@ impl<'a> Game<'a> {
                     break 'next;
                 }
 
-                if crate::vehicle_func::has_vehicle_near_tile_xy(
-                    self.vs,
-                    v.v.x_pos(),
-                    v.v.y_pos(),
-                    4,
-                    |t| {
-                        t.vehicle_type() == VehicleType::VEH_TRAIN
-                            && t.z_pos().wrapping_sub(u.v.z_pos()).wrapping_abs() <= 6
-                    },
-                ) {
+                if crate::vehicle_func::has_vehicle_near_tile_xy(v.v.x_pos(), v.v.y_pos(), 4, |t| {
+                    t.vehicle_type() == VehicleType::VEH_TRAIN
+                        && t.z_pos().wrapping_sub(u.v.z_pos()).wrapping_abs() <= 6
+                }) {
                     self.road_veh_crash(v);
                     return true;
                 }
@@ -1120,11 +1113,10 @@ impl<'a> Game<'a> {
         };
 
         if front.state() == RVSB_WORMHOLE {
-            crate::vehicle_func::vehicles_on_tile(self.vs, self.map(), v.v.tile(), |u| {
+            crate::vehicle_func::vehicles_on_tile(self.map(), v.v.tile(), |u| {
                 self.find_closest_blocking_road_veh(u, &mut rvf);
             });
             crate::vehicle_func::vehicles_on_tile(
-                self.vs,
                 self.map(),
                 TileIndex(service!(self.ss.other_tunnel_end)(v.v.tile().0)),
                 |u| {
@@ -1132,7 +1124,7 @@ impl<'a> Game<'a> {
                 },
             );
         } else {
-            crate::vehicle_func::vehicles_near_tile_xy(self.vs, x, y, 8, |u| {
+            crate::vehicle_func::vehicles_near_tile_xy(x, y, 8, |u| {
                 self.find_closest_blocking_road_veh(u, &mut rvf);
             });
         }
@@ -1344,7 +1336,7 @@ impl<'a> Game<'a> {
         }
 
         /* Are there more vehicles on the tile except the two vehicles involved in overtaking */
-        crate::vehicle_func::has_vehicle_on_tile(self.vs, self.map(), od.tile, |v| {
+        crate::vehicle_func::has_vehicle_on_tile(self.map(), od.tile, |v| {
             v.vehicle_type() == VehicleType::VEH_ROAD && v.first() == v && v != od.u && v != od.v.v
         })
     }

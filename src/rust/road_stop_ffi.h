@@ -30,7 +30,6 @@ struct OpenTTDRoadStopState { uint8_t status; OpenTTDRoadStopEntries *entries; }
 struct OpenTTDRoadStopPoolItem { OpenTTDRoadStopState *state; uint32_t xy, index; };
 /* Typed noexcept services; none reenters a road stop, runs scripts or throws. */
 struct OpenTTDRoadStopServices {
-	const OpenTTDVehicleServices *vehicle;
 	RoadStop *(*primary)(uint32_t, RoadStopType) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	RoadStop *(*head)(BaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(head);
 	bool (*is_bus)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_bus);

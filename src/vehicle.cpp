@@ -317,10 +317,10 @@ Vehicle::Vehicle(VehicleType type) : BaseVehicle(type, this, this->index)
 	this->last_loading_station = StationID::Invalid();
 }
 
-VehiclesOnTile::Iterator::Iterator(TileIndex tile) : cursor(openttd_rust_occupancy_on_tile(&GetRustVehicleServices(), &GetRustSharedServices(), tile.base())) {}
-void VehiclesOnTile::Iterator::Increment() { openttd_rust_occupancy_on_advance(&GetRustVehicleServices(), &this->cursor); }
-VehiclesNearTileXY::Iterator::Iterator(int32_t x, int32_t y, uint max_dist) : cursor(openttd_rust_occupancy_near(&GetRustVehicleServices(), x, y, max_dist)) {}
-void VehiclesNearTileXY::Iterator::Increment() { openttd_rust_occupancy_near_advance(&GetRustVehicleServices(), &this->cursor); }
+VehiclesOnTile::Iterator::Iterator(TileIndex tile) : cursor(openttd_rust_occupancy_on_tile(&GetRustSharedServices(), tile.base())) {}
+void VehiclesOnTile::Iterator::Increment() { openttd_rust_occupancy_on_advance(&this->cursor); }
+VehiclesNearTileXY::Iterator::Iterator(int32_t x, int32_t y, uint max_dist) : cursor(openttd_rust_occupancy_near(x, y, max_dist)) {}
+void VehiclesNearTileXY::Iterator::Increment() { openttd_rust_occupancy_near_advance(&this->cursor); }
 
 /**
  * Ensure there is no vehicle at the ground at the given position.
@@ -330,7 +330,7 @@ void VehiclesNearTileXY::Iterator::Increment() { openttd_rust_occupancy_near_adv
 CommandCost EnsureNoVehicleOnGround(TileIndex tile)
 {
 	CommandCost out;
-	openttd_rust_occupancy_ground(GetRustOccupancyCommands(), RustCommandCost(&out), tile.base());
+	openttd_rust_occupancy_ground(&GetRustCommandServices(), RustCommandCost(&out), tile.base());
 	return out;
 }
 
@@ -344,7 +344,7 @@ CommandCost EnsureNoVehicleOnGround(TileIndex tile)
 CommandCost TunnelBridgeIsFree(TileIndex tile, TileIndex endtile, const Vehicle *ignore)
 {
 	CommandCost out;
-	openttd_rust_occupancy_wormhole(GetRustOccupancyCommands(), RustCommandCost(&out), tile.base(), endtile.base(), RustVehicle(ignore));
+	openttd_rust_occupancy_wormhole(&GetRustCommandServices(), RustCommandCost(&out), tile.base(), endtile.base(), RustVehicle(ignore));
 	return out;
 }
 
@@ -601,7 +601,7 @@ Vehicle::~Vehicle()
 
 	delete v;
 
-	openttd_rust_occupancy_update(&GetRustVehicleServices(), &GetRustSharedServices(), RustVehicle(this), true);
+	openttd_rust_occupancy_update(&GetRustSharedServices(), RustVehicle(this), true);
 	UpdateVehicleViewportHash(this, INVALID_COORD, 0, this->sprite_cache.old_coord.left, this->sprite_cache.old_coord.top);
 	if (this->GetType() != VEH_EFFECT) {
 		DeleteVehicleNews(this->index);
@@ -878,7 +878,7 @@ void VehicleEnterDepot(Vehicle *v)
  */
 void Vehicle::UpdatePosition()
 {
-	openttd_rust_occupancy_update(&GetRustVehicleServices(), &GetRustSharedServices(), RustVehicle(this), false);
+	openttd_rust_occupancy_update(&GetRustSharedServices(), RustVehicle(this), false);
 }
 
 /**

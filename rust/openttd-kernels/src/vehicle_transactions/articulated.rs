@@ -27,7 +27,6 @@ impl Services {
     pub(crate) unsafe fn position(&self, v: *mut ()) {
         unsafe {
             crate::vehicle::occupancy::update_position(
-                self.refit.common.vehicles,
                 super::vehicle_ref(v, self.refit.common.vehicles),
                 self.refit.common.base.shared.map(),
             );

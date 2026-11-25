@@ -135,7 +135,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 	static const OpenTTDDisasterServices services{
 		.shared = &GetRustSharedServices(),
 		.vehicles = &GetRustVehicleServices(),
-		.occupancy = GetRustOccupancyCommands(),
 		.environment = &GetRustEnvironmentServices(),
 		.aircraft = &GetRustAircraftLeaves(),
 		.road = &GetRustRoadLeaves(),

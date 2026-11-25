@@ -38,4 +38,6 @@ struct OpenTTDCommandCostServices {
 	void (*error_owner)(OpenTTDCommandCost *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(error_owner);
 };
 const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept;
+/* Native test support: CommandCost(message) through the production cost writer. */
+extern "C" void openttd_test_command_cost_error(const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint32_t);
 #endif /* RUST_COMMAND_COST_FFI_H */

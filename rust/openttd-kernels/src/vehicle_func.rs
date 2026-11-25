@@ -11,7 +11,7 @@ use crate::map_func::Map;
 use crate::station_type::{StationFacilities, StationFacility};
 use crate::tile_type::TileIndex;
 use crate::vehicle::occupancy::{Near, OnTile};
-use crate::vehicle::{EngineRef, VehicleRef, VehicleServices};
+use crate::vehicle::{EngineRef, VehicleRef};
 use crate::vehicle_type::VehicleType;
 
 /// `VEHICLE_PROFIT_MIN_AGE`: only vehicles older than this have a meaningful profit.
@@ -134,26 +134,16 @@ pub(crate) struct GetNewVehiclePosResult {
 /// The order is non-deterministic. You have to make sure, that your processing is not order
 /// dependant.
 #[inline]
-pub(crate) fn vehicles_on_tile(
-    vs: &VehicleServices,
-    map: Map,
-    tile: TileIndex,
-    mut visit: impl FnMut(VehicleRef),
-) {
-    has_vehicle_on_tile(vs, map, tile, |v| {
+pub(crate) fn vehicles_on_tile(map: Map, tile: TileIndex, mut visit: impl FnMut(VehicleRef)) {
+    has_vehicle_on_tile(map, tile, |v| {
         visit(v);
         false
     });
 }
 /// [`vehicles_on_tile`] for callers in files no pass has finished.
 #[inline]
-pub(crate) fn vehicles_on_tile_raw(
-    vs: &VehicleServices,
-    map: Map,
-    tile: u32,
-    visit: impl FnMut(VehicleRef),
-) {
-    vehicles_on_tile(vs, map, TileIndex(tile), visit);
+pub(crate) fn vehicles_on_tile_raw(map: Map, tile: u32, visit: impl FnMut(VehicleRef)) {
+    vehicles_on_tile(map, TileIndex(tile), visit);
 }
 
 /// `HasVehicleOnTile`: loop over vehicles on a tile, and check whether a predicate is true
@@ -161,32 +151,28 @@ pub(crate) fn vehicles_on_tile_raw(
 #[allow(unsafe_code)]
 #[inline]
 pub(crate) fn has_vehicle_on_tile(
-    vs: &VehicleServices,
     map: Map,
     tile: TileIndex,
     mut predicate: impl FnMut(VehicleRef) -> bool,
 ) -> bool {
-    // SAFETY: The module's iterator contract; no index borrow spans `predicate`.
-    unsafe {
-        let mut it = OnTile::new(vs, map, tile.0);
-        while let Some(v) = it.get() {
-            if predicate(v) {
-                return true;
-            }
-            it.advance(vs);
+    let mut it = OnTile::new(map, tile);
+    while let Some(v) = it.get() {
+        if predicate(v) {
+            return true;
         }
+        // SAFETY: The module's iterator contract: a predicate deletes no vehicle.
+        unsafe { it.advance() };
     }
     false
 }
 /// [`has_vehicle_on_tile`] for callers in files no pass has finished.
 #[inline]
 pub(crate) fn has_vehicle_on_tile_raw(
-    vs: &VehicleServices,
     map: Map,
     tile: u32,
     predicate: impl FnMut(VehicleRef) -> bool,
 ) -> bool {
-    has_vehicle_on_tile(vs, map, TileIndex(tile), predicate)
+    has_vehicle_on_tile(map, TileIndex(tile), predicate)
 }
 
 /// `for (Vehicle *v : VehiclesNearTileXY(x, y, max_dist))`: iterate over all vehicles near a
@@ -196,13 +182,12 @@ pub(crate) fn has_vehicle_on_tile_raw(
 /// not order dependant.
 #[inline]
 pub(crate) fn vehicles_near_tile_xy(
-    vs: &VehicleServices,
     x: i32,
     y: i32,
     max_dist: u32,
     mut visit: impl FnMut(VehicleRef),
 ) {
-    has_vehicle_near_tile_xy(vs, x, y, max_dist, |v| {
+    has_vehicle_near_tile_xy(x, y, max_dist, |v| {
         visit(v);
         false
     });
@@ -215,21 +200,18 @@ pub(crate) fn vehicles_near_tile_xy(
 #[allow(unsafe_code)]
 #[inline]
 pub(crate) fn has_vehicle_near_tile_xy(
-    vs: &VehicleServices,
     x: i32,
     y: i32,
     max_dist: u32,
     mut predicate: impl FnMut(VehicleRef) -> bool,
 ) -> bool {
-    // SAFETY: The module's iterator contract; no index borrow spans `predicate`.
-    unsafe {
-        let mut it = Near::new(vs, x, y, max_dist);
-        while let Some(v) = it.get() {
-            if predicate(v) {
-                return true;
-            }
-            it.advance(vs);
+    let mut it = Near::new(x, y, max_dist);
+    while let Some(v) = it.get() {
+        if predicate(v) {
+            return true;
         }
+        // SAFETY: The module's iterator contract: a predicate deletes no vehicle.
+        unsafe { it.advance() };
     }
     false
 }
