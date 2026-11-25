@@ -1,7 +1,6 @@
 # Exports whose only C++ user is a native fixture that #736's classification keeps
 # (https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013).
 # Each leaves with its fixture: export | fixture | issue that retires the fixture.
-openttd_rust_generic_add | tools/simulation/landscape-console.hpp | #565
 openttd_rust_generic_reset | tools/simulation/landscape-console.hpp | #565
 openttd_rust_leave_unbunching | tools/simulation/orders-console.cpp | #906
 openttd_rust_road_economy_day | tools/migration/windows-abi/road.inc | #736
