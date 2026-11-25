@@ -138,7 +138,7 @@ unsafe fn get_refit_cost_factor(
                 std::ptr::NonNull::new((s.common.vehicles.record_from_shell)(v.cast()))
                     .map(crate::vehicle::VehicleRef),
                 engine,
-                crate::newgrf_callbacks::CBID_VEHICLE_REFIT_COST.0,
+                crate::newgrf_callbacks::CallbackID::CBID_VEHICLE_REFIT_COST.0,
                 param,
                 std::ptr::null_mut(),
                 false,

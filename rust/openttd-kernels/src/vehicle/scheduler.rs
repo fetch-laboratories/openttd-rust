@@ -22,7 +22,7 @@
 use super::{VehicleRef, VehicleServices};
 use crate::bitmath_func::{gb, gb_u8, has_bit};
 use crate::framerate_type::{PerformanceAccumulator, PerformanceElement, PerformanceMeasurer};
-use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_32DAY_CALLBACK};
+use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
 use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16};
 use crate::openttd::GameMode;
 use crate::pool::{PoolDescriptor, PoolId};
@@ -247,7 +247,7 @@ fn run_economy_vehicle_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
                 }
                 let callback = newgrf_vehicle::get_vehicle_callback(
                     resolver::<COUNTED>(vs),
-                    CBID_VEHICLE_32DAY_CALLBACK,
+                    CallbackID::CBID_VEHICLE_32DAY_CALLBACK,
                     0,
                     0,
                     v.engine_type(),
@@ -272,7 +272,11 @@ fn run_economy_vehicle_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
 
                     if callback & !3 != 0 {
                         let engine = svc!(COUNTED, vs.engine, v);
-                        vs.unknown_callback_result(engine, CBID_VEHICLE_32DAY_CALLBACK, callback);
+                        vs.unknown_callback_result(
+                            engine,
+                            CallbackID::CBID_VEHICLE_32DAY_CALLBACK,
+                            callback,
+                        );
                     }
                 }
             }
@@ -1569,7 +1573,7 @@ mod tests {
         ) -> u16 {
             assert_eq!(
                 (callback, param1, param2),
-                (CBID_VEHICLE_32DAY_CALLBACK.0, 0, 0)
+                (CallbackID::CBID_VEHICLE_32DAY_CALLBACK.0, 0, 0)
             );
             day(Day::Callback(EngineID(id)));
             ANSWER.get()
@@ -1787,7 +1791,7 @@ mod tests {
                         Day::Callback(EngineID(7)),
                         Day::Dirty(front),
                         Day::Engine,
-                        Day::Unknown(CBID_VEHICLE_32DAY_CALLBACK.0, 4),
+                        Day::Unknown(CallbackID::CBID_VEHICLE_32DAY_CALLBACK.0, 4),
                     ],
                 ),
                 (0, vec![Day::Callback(EngineID(7))]),

@@ -7,9 +7,7 @@ use crate::debug::{debug, grf_msg};
 use crate::game_state::GameState;
 use crate::industry_type::IT_INVALID;
 use crate::newgrf::{GSF_END, GSF_SOUNDFX};
-use crate::newgrf_callbacks::{
-    CALLBACK_FAILED, CBID_GENERIC_AI_PURCHASE_SELECTION, CBID_SOUNDS_AMBIENT_EFFECT,
-};
+use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
 use crate::newgrf_spritegroup::VSG_SCOPE_SELF;
 use crate::random_func::chance16_i;
 use crate::services::{Services as Shared, WaterClass};
@@ -245,7 +243,7 @@ pub extern "C" fn openttd_rust_generic_ai(
             feature,
             ai: true,
         },
-        callback: CBID_GENERIC_AI_PURCHASE_SELECTION.0,
+        callback: CallbackID::CBID_GENERIC_AI_PURCHASE_SELECTION.0,
         param1: 0,
         file: ptr::null(),
         root: ptr::null(),
@@ -308,7 +306,7 @@ fn ambient_callback(tile: u32) {
             feature: GSF_SOUNDFX,
             ..Scope::default()
         },
-        callback: CBID_SOUNDS_AMBIENT_EFFECT.0,
+        callback: CallbackID::CBID_SOUNDS_AMBIENT_EFFECT.0,
         param1: 0,
         file: ptr::null(),
         root: ptr::null(),

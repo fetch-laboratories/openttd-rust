@@ -19,7 +19,6 @@ use crate::newgrf_callbacks::CallbackID;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
 
 use crate::house::{HOUSE_NO_CLASS, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, TOWN_HOUSE_COMPLETED};
-use crate::newgrf_callbacks::CBID_HOUSE_ALLOW_CONSTRUCTION;
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -892,13 +891,17 @@ pub(super) unsafe fn allow_construction(
         tile: tile.0,
         view: 0,
         house,
-        callback: CBID_HOUSE_ALLOW_CONSTRUCTION.0,
+        callback: CallbackID::CBID_HOUSE_ALLOW_CONSTRUCTION.0,
         initial_random: random_bits,
         prospective: true,
     };
     let result = unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) };
     result == crate::newgrf_callbacks::CALLBACK_FAILED
-        || (unsafe { &*l.houses }.convert_8bit)(house, CBID_HOUSE_ALLOW_CONSTRUCTION.0, result)
+        || (unsafe { &*l.houses }.convert_8bit)(
+            house,
+            CallbackID::CBID_HOUSE_ALLOW_CONSTRUCTION.0,
+            result,
+        )
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_root(scope: *const HouseScope) -> *const c_void {

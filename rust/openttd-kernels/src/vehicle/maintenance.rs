@@ -1060,7 +1060,7 @@ mod tests {
         assert_eq!(id, NEW_ID, "the new engine's callback");
         assert_eq!(
             callback,
-            crate::newgrf_callbacks::CBID_VEHICLE_MODIFY_PROPERTY.0
+            crate::newgrf_callbacks::CallbackID::CBID_VEHICLE_MODIFY_PROPERTY.0
         );
         assert_eq!(
             property,

@@ -794,7 +794,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
                 s.vehicles,
                 Some(handle),
                 handle.engine_type().0,
-                crate::newgrf_callbacks::CBID_VEHICLE_START_STOP_CHECK.0,
+                crate::newgrf_callbacks::CallbackID::CBID_VEHICLE_START_STOP_CHECK.0,
                 0,
                 std::ptr::null_mut(),
                 false,

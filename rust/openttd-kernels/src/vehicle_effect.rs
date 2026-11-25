@@ -32,8 +32,7 @@ use crate::engine_type::{
 };
 use crate::map_func::World;
 use crate::newgrf_callbacks::{
-    CALLBACK_FAILED, CBID_VEHICLE_SPAWN_VISUAL_EFFECT, CBID_VEHICLE_VISUAL_EFFECT,
-    VehicleCallbackMask, VehicleCallbackMasks,
+    CALLBACK_FAILED, CallbackID, VehicleCallbackMask, VehicleCallbackMasks,
 };
 use crate::newgrf_config::GRFBug;
 use crate::newgrf_sound::VSE_VISUAL_EFFECT;
@@ -67,7 +66,7 @@ pub(crate) fn update_visual_effect(
     if VehicleCallbackMasks(e.callbacks()).test(VehicleCallbackMask::VisualEffect) {
         let callback = get_vehicle_callback(
             vs.newgrf(),
-            CBID_VEHICLE_VISUAL_EFFECT,
+            CallbackID::CBID_VEHICLE_VISUAL_EFFECT,
             0,
             0,
             this.engine_type(),
@@ -76,7 +75,7 @@ pub(crate) fn update_visual_effect(
 
         if callback != CALLBACK_FAILED {
             if callback >= 0x100 && e.grf_version(shared) >= 8 {
-                vs.unknown_callback_result(e, CBID_VEHICLE_VISUAL_EFFECT, callback);
+                vs.unknown_callback_result(e, CallbackID::CBID_VEHICLE_VISUAL_EFFECT, callback);
             }
 
             let mut callback = gb(u32::from(callback), 0, 8);
@@ -157,7 +156,7 @@ fn spawn_advanced_visual_effect(vs: &VehicleServices, shared: &Services, v: Vehi
     let callback = resolve_vehicle_callback(
         vs.newgrf(),
         VehicleCallback {
-            callback: CBID_VEHICLE_SPAWN_VISUAL_EFFECT,
+            callback: CallbackID::CBID_VEHICLE_SPAWN_VISUAL_EFFECT,
             param1: 0,
             param2: shared.random(),
             engine: v.engine_type(),
@@ -619,7 +618,7 @@ mod tests {
         _: *mut i32,
         _: usize,
     ) -> u16 {
-        assert_eq!(callback, CBID_VEHICLE_VISUAL_EFFECT.0);
+        assert_eq!(callback, CallbackID::CBID_VEHICLE_VISUAL_EFFECT.0);
         ANSWER.get()
     }
     extern "C" fn unused_member(_: *mut crate::vehicle::OpenTTDVehicle) -> u32 {

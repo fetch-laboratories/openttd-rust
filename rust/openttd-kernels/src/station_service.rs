@@ -845,7 +845,7 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World) {
                 crate::cargo_registry::get_cargo_callback(
                     &*w.cargo_registry,
                     cargo.0,
-                    crate::newgrf_callbacks::CBID_CARGO_STATION_RATING_CALC.0,
+                    crate::newgrf_callbacks::CallbackID::CBID_CARGO_STATION_RATING_CALC.0,
                     var10,
                     var18,
                 )
@@ -1749,11 +1749,13 @@ fn get_load_amount(
                 crate::newgrf_properties::PropertyID::PROP_VEHICLE_LOAD_AMOUNT,
                 i32::from(crate::newgrf_callbacks::CALLBACK_FAILED),
             ) as u16;
-        } else if e.callbacks() & crate::newgrf_callbacks::VEHICLE_LOAD_AMOUNT != 0 {
+        } else if crate::newgrf_callbacks::VehicleCallbackMasks(e.callbacks())
+            .test(crate::newgrf_callbacks::VehicleCallbackMask::LoadAmount)
+        {
             /* Use callback 12 */
             cb_load_amount = crate::newgrf_vehicle::get_vehicle_callback(
                 vehicle.newgrf(),
-                crate::newgrf_callbacks::CBID_VEHICLE_LOAD_AMOUNT,
+                crate::newgrf_callbacks::CallbackID::CBID_VEHICLE_LOAD_AMOUNT,
                 0,
                 0,
                 v.engine_type(),
@@ -1767,7 +1769,7 @@ fn get_load_amount(
             if cb_load_amount >= 0x100 {
                 vehicle.unknown_callback_result(
                     e,
-                    crate::newgrf_callbacks::CBID_VEHICLE_LOAD_AMOUNT,
+                    crate::newgrf_callbacks::CallbackID::CBID_VEHICLE_LOAD_AMOUNT,
                     cb_load_amount,
                 );
             } else if cb_load_amount != 0 {
