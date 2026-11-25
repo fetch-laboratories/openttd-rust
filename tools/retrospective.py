@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only PR readiness, milestone latency, stocktakes, base-update checks and rebuild counts."""
+"""Read-only PR readiness, milestone latency, stocktakes, base-update checks, rebuild counts and ready waits."""
 
 from __future__ import annotations
 
@@ -288,6 +288,53 @@ def stocktake(start: str, end: str) -> dict[str, Any]:
     }
 
 
+def ready_wait(ready: list[str], native: list[dict[str, str]]) -> float | None:
+    """Minutes the first ready mark came after the last `native` run requested
+    before it finished; None when it came while that run ran, or before any
+    request (#1072). The brief starts reviewers at the ready mark."""
+    if not ready:
+        raise ValueError("never marked ready")
+    mark = min(timestamp(at) for at in ready)
+    before = [run for run in native if timestamp(run["createdAt"]) <= mark]
+    if not before:
+        return None
+    finished = timestamp(max(before, key=lambda run: run["createdAt"])["updatedAt"])
+    return (mark - finished).total_seconds() / 60 if finished <= mark else None
+
+
+def ready_waits(repository: str, since: str) -> int:
+    """Print, per PR with a `native` request since SINCE, whether its ready mark
+    waited for that run to finish, then the count."""
+    runs = json.loads(
+        ci.gh(
+            "run", "list", "--repo", repository, "--workflow", "Requested validation",
+            "--limit", "1000", "--created", f">={since}",
+            "--json", "displayTitle,createdAt,updatedAt",
+        )
+    )
+    by_pull: dict[int, list[dict[str, str]]] = {}
+    for run in runs:
+        words = run["displayTitle"].split()
+        if words[:3] == ["CI", "native", "PR"] and words[3].isdigit():
+            by_pull.setdefault(int(words[3]), []).append(run)
+    waited = counted = 0
+    for number in sorted(by_pull):
+        events = pages(repository, f"issues/{number}/timeline?per_page=100")
+        ready = [e["created_at"] for e in events if e.get("event") == "ready_for_review"]
+        if not ready:
+            print(f"#{number}: not marked ready")
+            continue
+        minutes = ready_wait(ready, by_pull[number])
+        counted += 1
+        if minutes is None:
+            print(f"#{number}: ready with or before native")
+        else:
+            waited += 1
+            print(f"#{number}: WAITED, ready {minutes:.1f} min after native finished")
+    print(f"ready after native finished: {waited} of {counted}")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -302,7 +349,24 @@ def main() -> None:
     command.add_argument("--json", action="store_true")
     base_update.add_parser(commands)
     rebuild_reach.add_parser(commands)
+    command = commands.add_parser(
+        "ready-wait",
+        help="PRs marked ready only after their native run finished",
+        description=(
+            "For each PR with a requested native run since SINCE, whether its first"
+            " ready mark came after the last native run requested before it had"
+            " finished: reviewers start at the ready mark, so that wait holds them"
+            " (#1072)."
+        ),
+    )
+    command.add_argument("--since", required=True, help="first day, YYYY-MM-DD")
+    command.add_argument("--repo")
     args = parser.parse_args()
+    if args.command == "ready-wait":
+        repository = args.repo or json.loads(
+            ci.gh("repo", "view", "--json", "nameWithOwner")
+        )["nameWithOwner"]
+        sys.exit(ready_waits(repository, args.since))
     if args.command == "base-update":
         sys.exit(base_update.run(args, Path.cwd()))
     if args.command == "rebuilds":
