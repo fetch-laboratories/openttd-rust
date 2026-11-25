@@ -1876,7 +1876,6 @@ pub(crate) const DISASTER: crate::disaster::Services = crate::disaster::Services
     identity: ptr::null(),
     industry: ptr::null(),
     road: ptr::null(),
-    road_count: unreachable1,
     scheduler: ptr::null(),
     shared: ptr::null(),
     vehicles: ptr::null(),

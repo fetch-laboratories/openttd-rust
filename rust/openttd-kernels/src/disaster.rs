@@ -41,7 +41,7 @@ use crate::airport::{AirportBlock, AirportBlocks, AirportTypes};
 use crate::bitmath_func::{gb, has_bit};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_base::is_human_id;
-use crate::company_type::{CompanyID, OpenTTDCompany, Owner};
+use crate::company_type::{CompanyID, Owner};
 use crate::direction_func::{change_dir, dir_to_diag_dir};
 use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::disaster_vehicle::DisasterSubType;
@@ -190,8 +190,6 @@ pub struct Services {
     pub industry: *const crate::industry::Services,
     /// The road vehicle controller's table, immutable for the process.
     pub road: *const crate::road::Leaves,
-    /// `c->group_all[VEH_ROAD].num_vehicle` of a live company.
-    pub road_count: extern "C" fn(*const OpenTTDCompany) -> u16,
     /// The vehicle scheduler's table, whose descriptor names the vehicle pool.
     pub scheduler: *const SchedulerServices,
     /// The shared table, immutable for the process.
@@ -284,6 +282,13 @@ impl<'a> Tables<'a> {
     fn maintenance(&self) -> &crate::vehicle::maintenance::Services {
         // SAFETY: The base table names the process-lifetime maintenance table.
         unsafe { &*self.vehicles.maintenance }
+    }
+    /// The company table, through the base vehicle table's maintenance link.
+    #[allow(unsafe_code)]
+    fn company(&self) -> &'a crate::company::Services {
+        // SAFETY: Base maintenance names the process-lifetime transaction, command and company
+        // tables.
+        unsafe { &*((*(*(*self.vehicles.maintenance).transaction).commands).company)() }
     }
     /// `RandomTile()`: `RandomTileSeed(Random())`.
     fn random_tile(&self, world: &World<'_>) -> TileIndex {
@@ -828,8 +833,13 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
         ufo.set_state(1);
 
         let mut n: u32 = 0; // Total number of targetable road vehicles.
+        let company = t.company();
         crate::company_identity::companies(t.identity(), |c| {
-            n = n.wrapping_add(u32::from((t.s.road_count)(c.cast_const())));
+            n = n.wrapping_add(u32::from(crate::company::num_vehicle(
+                company,
+                c,
+                VehicleType::VEH_ROAD,
+            )));
             true
         });
 
@@ -1974,7 +1984,6 @@ crate::abi::layouts! {
         identity,
         industry,
         road,
-        road_count,
         scheduler,
         shared,
         vehicles,

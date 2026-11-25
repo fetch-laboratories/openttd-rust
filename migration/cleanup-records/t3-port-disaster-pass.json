@@ -718,5 +718,17 @@
     "site": "rust/openttd-kernels/src/disaster/tests.rs | fn disaster_clear_square_clears_house_and_human_rail_as_its_owner | allow unsafe_code",
     "source_contract": "The tables one disaster entry reaches.",
     "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::Tables::company",
+    "reason": "Dereferences the base vehicle table's maintenance link to the transaction, command and company tables, all process-lifetime, as `ship_control.rs`'s `company` does. The base's module-wide allowance goes.",
+    "retirement_condition": "Retires when the tables are typed references (#656, #635).",
+    "retiring_owner": "#656",
+    "site": "rust/openttd-kernels/src/disaster.rs | impl<'a> Tables<'a> > fn company | allow unsafe_code",
+    "source_contract": "`c->group_all[VEH_ROAD].num_vehicle` in `DisasterTick_Ufo`.",
+    "tool": "rust"
   }
 ]

@@ -417,8 +417,10 @@ impl Leaves {
     /// `st->airport.blocks.Set(set)`, in place.
     ///
     /// # Safety
-    /// `st` is a live station with an airport, and nothing else touches its blocks during
-    /// the call.
+    /// `st` is a handle the installed `airport_blocks` leaf accepts, and the mask that leaf
+    /// returns is initialized, writable and live through the update, which accesses it
+    /// serially. In the game `st` is a live station with an airport and the mask its
+    /// `airport.blocks`; the native ABI probe passes its opaque handle and its own mask.
     pub(crate) unsafe fn airport_blocks_set(&self, st: *const Station, set: AirportBlocks) {
         // SAFETY: As this function's contract; the leaf returns that station's field.
         unsafe { set_airport_blocks(self.airport_blocks(st), set) };
@@ -436,7 +438,8 @@ impl Leaves {
 /// `blocks.Set(set)` on the `airport.blocks` that `blocks` addresses.
 ///
 /// # Safety
-/// `blocks` is a live station's `airport.blocks`, which nothing else touches during the call.
+/// `blocks` is an initialized, writable mask, live through the call and accessed serially:
+/// the one `Leaves::airport_blocks` returned.
 unsafe fn set_airport_blocks(blocks: *mut AirportBlocks, set: AirportBlocks) {
     // SAFETY: As this function's contract: one field-sized load and store.
     unsafe {
@@ -1975,7 +1978,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
              * but they all share the same number */
             if !st.is_null() {
                 // The three resets of the one mask are its reset of their union.
-                // SAFETY: The crashed aircraft's non-null target airport is a live station.
+                // SAFETY: The crashed aircraft's non-null target airport handle (a live station,
+                // or the probe's), whose mask nothing else touches during the update.
                 unsafe {
                     self.airport_blocks_reset(
                         st,
@@ -2547,8 +2551,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                          * they all have heading LANDING). And also occupy that block! */
                         v.set_pos(self.next_position(current));
                         let blocks = self.blocks(self.layout(apc, v.pos()));
-                        // SAFETY: The controller's airport station `st` is live, and nothing runs during
-                        // the update.
+                        // SAFETY: `st` is the handle the controller resolved for its
+                        // airport (a live station, or the probe's handle), whose mask
+                        // nothing else touches during the update.
                         unsafe { self.airport_blocks_set(st, blocks) };
                         return;
                     }
@@ -2663,8 +2668,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 return;
             }
 
-            // SAFETY: The controller's airport station `st` is live, and nothing runs during
-            // the update.
+            // SAFETY: `st` is the handle the controller resolved for its airport (a live
+            // station, or the probe's handle), whose mask nothing else touches during the
+            // update.
             unsafe { self.airport_blocks_reset(st, previous_blocks) };
         }
     }
@@ -2835,8 +2841,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             }
 
             if next_blocks != AirportBlocks::from_element(AirportBlock::NOTHING) {
-                // SAFETY: The controller's airport station `st` is live, and nothing runs during
-                // the update.
+                // SAFETY: `st` is the handle the controller resolved for its airport (a live
+                // station, or the probe's handle), whose mask nothing else touches during the
+                // update.
                 unsafe { self.airport_blocks_set(st, blocks) }; // occupy next block
             }
         }
@@ -2855,8 +2862,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             if !self.airport_blocks(st).any(blocks) {
                 /* TERMINAL# HELIPAD# */
                 v.set_state(mapping.state); // start moving to that terminal/helipad
-                // SAFETY: The controller's airport station `st` is live, and nothing runs during
-                // the update.
+                // SAFETY: `st` is the handle the controller resolved for its airport (a live
+                // station, or the probe's handle), whose mask nothing else touches during the
+                // update.
                 unsafe { self.airport_blocks_set(st, blocks) }; // occupy terminal/helipad
                 return true;
             }
@@ -3178,8 +3186,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             let layout = Self::airport_get_fta(st);
             let mut blocks = self.blocks(self.layout(layout, a.previous_pos()));
             blocks.set(self.blocks(self.layout(layout, a.pos())));
-            // SAFETY: The controller's airport station `st` is live, and nothing runs during
-            // the update.
+            // SAFETY: `st` is the handle the controller resolved for its airport (a live
+            // station, or the probe's handle), whose mask nothing else touches during the
+            // update.
             unsafe { self.airport_blocks_reset(st, blocks) };
         }
     }

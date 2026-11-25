@@ -24,7 +24,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.identity = &GetRustCompanyIdentityServices(),
 		.industry = &GetIndustryRustServices(),
 		.road = &GetRustRoadLeaves(),
-		.road_count = RustCompanyRoadVehicleCount,
 		.scheduler = &GetRustVehicleSchedulerServices(),
 		.shared = &GetRustSharedServices(),
 		.vehicles = &GetRustVehicleServices(),

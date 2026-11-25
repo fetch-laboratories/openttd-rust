@@ -1076,7 +1076,7 @@ pub extern "C" fn openttd_rust_company_competitor_timeout_abi(s: &Services) -> u
 }
 
 /// `group_all[type].num_vehicle` of the company `c`.
-fn num_vehicle(s: &Services, c: *mut OpenTTDCompany, kind: VehicleType) -> u16 {
+pub(crate) fn num_vehicle(s: &Services, c: *mut OpenTTDCompany, kind: VehicleType) -> u16 {
     crate::fleet::num_vehicle((s.group_all)(c, kind))
 }
 
