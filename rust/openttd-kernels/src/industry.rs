@@ -2576,9 +2576,9 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_clear(owner: *mut Builde
     unsafe { (*owner).registry[usize::from(kind)].clear() };
 }
 
-/// `Industry::location.tile`, the only industry location the subsidy search reads.
-/// SAFETY: Live serialized industry owner, immediate read with no callbacks.
-pub(crate) unsafe fn subsidy_position(owner: *const Industry) -> TileIndex {
+/// `Industry::location.tile`, the one field of the location a caller reads.
+pub(crate) fn location_tile(owner: *const Industry) -> TileIndex {
+    // SAFETY: Live owner supplied by the caller's resolved shell; an immediate field read.
     TileIndex(unsafe { (*owner).metadata.tile })
 }
 /// SAFETY: Live serialized owner; no callback occurs while reading its cargoes.

@@ -49,7 +49,7 @@ use crate::effect::{create_effect_vehicle_above, create_effect_vehicle_rel};
 use crate::effectvehicle_func::EffectVehicleType;
 use crate::gfx_type::SpriteID;
 use crate::industry_type::IndustryID;
-use crate::industrytype::{IndustryBehaviour, IndustryBehaviours, get_industry_spec};
+use crate::industrytype::{IndustryBehaviour, get_industry_spec, spec_behaviour};
 use crate::map_func::{Map, World};
 use crate::math::{clamp, delta};
 use crate::news_func::{add_industry_news_item, add_tile_news_item};
@@ -1003,7 +1003,7 @@ fn disaster_tick_aircraft(
     if v.state() == 2 {
         if gb(u32::from(v.v.tick_counter()), 0, 2) == 0 {
             let i = t.industry_get(v.v.dest_tile().0); // Industry destructor calls ReleaseDisastersTargetingIndustry, so this is valid
-            let location = crate::industry::location(t.industry_owner(i)).tile;
+            let location = crate::industry::location_tile(t.industry_owner(i));
             let x = map.tile_x(location) * TILE_SIZE;
             let y = map.tile_y(location) * TILE_SIZE;
             let r = t.shared.random();
@@ -1039,7 +1039,7 @@ fn disaster_tick_aircraft(
             );
             if (t.shared.disaster_sound)() {
                 (t.shared.play_sound)(
-                    crate::industry::location(t.industry_owner(i)).tile.0,
+                    crate::industry::location_tile(t.industry_owner(i)).0,
                     SoundID::from(SoundFx::SND_12_EXPLOSION).0,
                 );
             }
@@ -1062,22 +1062,17 @@ fn disaster_tick_aircraft(
         let ind: IndustryID = world.asserted(|m| crate::industry_map::get_industry_index(m, tile));
         v.v.set_dest_tile(TileIndex(u32::from(ind.0)));
 
-        if industry_behaviour(t.industry_owner(t.industry_get(u32::from(ind.0)))).test(behaviour) {
+        if spec_behaviour(get_industry_spec(crate::industry::industry_type(
+            t.industry_owner(t.industry_get(u32::from(ind.0))),
+        )))
+        .test(behaviour)
+        {
             v.set_state(1);
             t.reset_age(v.v);
         }
     }
 
     true
-}
-
-/// `GetIndustrySpec(i->type)->behaviour` of a live industry owner.
-#[allow(unsafe_code)]
-fn industry_behaviour(owner: *mut crate::industry::Industry) -> IndustryBehaviours {
-    // SAFETY: `GetIndustrySpec` returns a live spec record for the industry's type.
-    IndustryBehaviours(unsafe {
-        (*get_industry_spec(crate::industry::industry_type(owner))).behaviour
-    })
 }
 
 /// `DisasterTick_Airplane`: airplane handling.
@@ -1524,7 +1519,8 @@ fn disaster_airplane_init(t: &Tables<'_>) {
     let mut found: Option<crate::industry::Entry> = None;
 
     for i in industries(t) {
-        if industry_behaviour(i.owner).test(IndustryBehaviour::AirplaneAttacks)
+        if spec_behaviour(get_industry_spec(crate::industry::industry_type(i.owner)))
+            .test(IndustryBehaviour::AirplaneAttacks)
             && (found.is_none() || crate::random_func::chance16(t.shared, 1, 2))
         {
             found = Some(i);
@@ -1538,7 +1534,7 @@ fn disaster_airplane_init(t: &Tables<'_>) {
 
     /* Start from the bottom (south side) of the map */
     let x = ((map.size_x() + 9) * TILE_SIZE - 1) as i32;
-    let y = (map.tile_y(crate::industry::location(found.owner).tile) * TILE_SIZE + 37) as i32;
+    let y = (map.tile_y(crate::industry::location_tile(found.owner)) * TILE_SIZE + 37) as i32;
 
     let v = disaster_vehicle_new(
         t,
@@ -1572,7 +1568,8 @@ fn disaster_helicopter_init(t: &Tables<'_>) {
     let mut found: Option<crate::industry::Entry> = None;
 
     for i in industries(t) {
-        if industry_behaviour(i.owner).test(IndustryBehaviour::ChopperAttacks)
+        if spec_behaviour(get_industry_spec(crate::industry::industry_type(i.owner)))
+            .test(IndustryBehaviour::ChopperAttacks)
             && (found.is_none() || crate::random_func::chance16(t.shared, 1, 2))
         {
             found = Some(i);
@@ -1585,7 +1582,7 @@ fn disaster_helicopter_init(t: &Tables<'_>) {
     let map = t.world().dimensions;
 
     let x = -16 * TILE_SIZE as i32;
-    let y = (map.tile_y(crate::industry::location(found.owner).tile) * TILE_SIZE + 37) as i32;
+    let y = (map.tile_y(crate::industry::location_tile(found.owner)) * TILE_SIZE + 37) as i32;
 
     let v = disaster_vehicle_new(
         t,
@@ -1701,10 +1698,13 @@ fn disaster_coal_mine_init(t: &Tables<'_>) {
 
     for _m in 0..15 {
         for i in industries(t) {
-            if industry_behaviour(i.owner).test(IndustryBehaviour::CanSubsidence) && {
-                index -= 1;
-                index < 0
-            } {
+            if spec_behaviour(get_industry_spec(crate::industry::industry_type(i.owner)))
+                .test(IndustryBehaviour::CanSubsidence)
+                && {
+                    index -= 1;
+                    index < 0
+                }
+            {
                 let world = t.world();
                 let map = world.dimensions;
                 add_tile_news_item(
@@ -1715,12 +1715,12 @@ fn disaster_coal_mine_init(t: &Tables<'_>) {
                         ))],
                     ),
                     NewsType::Accident,
-                    crate::industry::location(i.owner).tile + map.diff(1, 1),
+                    crate::industry::location_tile(i.owner) + map.diff(1, 1),
                     StationID::INVALID,
                 ); // keep the news, even when the mine closes
 
                 {
-                    let mut tile = crate::industry::location(i.owner).tile;
+                    let mut tile = crate::industry::location_tile(i.owner);
                     let step = map.tile_offs_by_diag_dir(
                         DiagDirection(gb(t.shared.random(), 0, 2) as u8),
                         t.check(),

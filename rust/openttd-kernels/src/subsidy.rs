@@ -194,7 +194,7 @@ impl Services {
             if source.kind == Source::TOWN {
                 town::position((self.shared().town_owner_by_id)(u32::from(source.id)))
             } else {
-                industry::subsidy_position((self.industry_owner)((self.industry().get)(source.id)))
+                industry::location_tile((self.industry_owner)((self.industry().get)(source.id)))
             }
         }
     }

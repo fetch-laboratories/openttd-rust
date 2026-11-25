@@ -183,18 +183,6 @@
     "after": 1,
     "before": 0,
     "kind": "suppression",
-    "operation": "disaster::industry_behaviour",
-    "reason": "Reads one field of the spec record `GetIndustrySpec` returns. The base's module-wide allowance goes.",
-    "retirement_condition": "Retires when `industrytype.rs` gives the spec record a safe accessor (#734's closure sweep).",
-    "retiring_owner": "#734",
-    "site": "rust/openttd-kernels/src/disaster.rs | fn industry_behaviour | allow unsafe_code",
-    "source_contract": "`GetIndustrySpec(i->type)->behaviour`.",
-    "tool": "rust"
-  },
-  {
-    "after": 1,
-    "before": 0,
-    "kind": "suppression",
     "operation": "disaster::landscape_clear_as",
     "reason": "`command::with_cost` constructs the native result the nested command writes. The base's module-wide allowance goes.",
     "retirement_condition": "Retires when `CommandCost` is Rust storage (#734).",
