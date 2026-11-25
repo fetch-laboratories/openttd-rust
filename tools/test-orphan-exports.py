@@ -353,6 +353,26 @@ class OrphanTests(unittest.TestCase):
             )
             self.assertEqual(check(), 1)  # A new row is growth against the base.
 
+    def test_operator_default_argument_and_objective_cpp_calls_are_uses(
+        self,
+    ) -> None:
+        self.assertFalse(ORPHANS.declares("\n\tres << Cost(e);", "Cost", typed=True))
+        self.assertTrue(
+            ORPHANS.declares("\nstd::vector<int> Cost(int e);", "Cost", typed=True)
+        )
+        files = {
+            "src/engine_gui.cpp": "static std::string Cost(const Engine &e) { return {}; }\n"
+            "void Preview(std::ostream &res)\n{\n\tres << Cost(e);\n}\n"
+            "int Default() { return 1; }\n"
+            "int Caller(int value = Default())\n{\n\treturn value;\n}\n"
+            "void Hotkey(int key) {}\n"
+            "int main() { Preview(out); Caller(); }\n",
+            "src/video/cocoa/cocoa_wnd.mm": "- (void)touch:(id)item\n{\n"
+            "\tHotkey(item.hotkey);\n}\n",
+        }
+        uncalled, _, _ = ORPHANS.uncalled_free_functions(files)
+        self.assertEqual(uncalled, {})
+
     def test_the_gate_exempts_abi_checks_and_platform_entries(self) -> None:
         found = {
             "Dead": "src/a.cpp:1",

@@ -10,9 +10,9 @@ that list against tools/uncalled-export-baseline.txt, which only shrinks: each
 row names the owner issue that retires the fixture calling those members (#737).
 
 Free functions get the same treatment: a file-scope definition with no
-`Class::` qualifier is uncalled when its name appears nowhere outside its own
-definition heads and declarations, in any tracked C++ file under src/ or tools/
-(tests and consoles included), in a src/ `.ini` table, or anywhere in a tools/
+`Class::` qualifier is uncalled when its name appears nowhere but as the name
+of its own definition heads and in declarations, in any tracked C++ or
+Objective-C++ file under src/ or tools/ (tests and consoles included), in a src/ `.ini` table, or anywhere in a tools/
 Python file, which may embed a console's C++. --report-uncalled lists
 those, and those that only tests and tools call. An export whose only production
 references sit in uncalled free functions is a row in
@@ -22,8 +22,9 @@ An uncalled free function is itself refused: deleting a function's last caller
 deletes the function too (docs/porting.md, callees and shared accessors). Each
 one that stands uncalled is a row in tools/uncalled-free-function-baseline.txt,
 which follows the member baseline's rules. Two kinds are exempt: the
-`CheckAbi_*` service-table completeness checks, which no code calls and which
-each new owner file adds, and the entries the platform calls by name.
+`CheckAbi_*` service-table completeness checks, which src/tests/service_tables.cpp
+calls by token pasting where the scan cannot see the name, and the entries the
+platform calls by name.
 
 An export whose only C++ user is a native fixture that #736's classification keeps
 is not an orphan; it leaves with that fixture (docs/porting.md, callees and shared
@@ -51,6 +52,7 @@ UNCALLED_FREE = "tools/uncalled-free-function-baseline.txt"
 # Called by name from outside C++: Windows starts the program at WinMain, and
 # os/emscripten/pre.js calls em_openttd_add_server.
 ENTRY_POINTS = {"WinMain", "em_openttd_add_server"}
+# src/tests/service_tables.cpp calls each CheckAbi_<unit> by token pasting.
 ABI_CHECK = re.compile(r"CheckAbi_\w+")
 KEPT_FIXTURES = "tools/kept-fixture-exports.txt"
 # Neither defines functions this fork calls by name: vendored code, and the
@@ -117,19 +119,21 @@ def declares(statement: str, member: str, typed: bool = False) -> bool:
 
     With typed, a word must precede the name: whitespace alone satisfies the
     member form, which would read an unqualified call such as `\n\tName(x);`
-    as a declaration.
+    as a declaration. A type balances its angle brackets, so a call after an
+    operator, such as `out << Name(x);`, is not one.
     """
     words = statement.split()
     kind = r"[\w:<>,\s*&]*\w[\w:<>,\s*&]*?" if typed else r"[\w:<>,\s*&]+?"
+    found = re.fullmatch(
+        rf"\s*(?:template\s*<[^;{{}}]*>\s*)?({kind})[\s*&]{member}\s*"
+        rf"\([^;{{}}]*\)[\w\s=]*;\s*",
+        statement,
+    )
     return (
         bool(words)
         and words[0] not in CALL_FREE
-        and re.fullmatch(
-            rf"\s*(?:template\s*<[^;{{}}]*>\s*)?{kind}[\s*&]{member}\s*"
-            rf"\([^;{{}}]*\)[\w\s=]*;\s*",
-            statement,
-        )
-        is not None
+        and found is not None
+        and found[1].count("<") == found[1].count(">")
     )
 
 
@@ -193,8 +197,11 @@ def free_uses(sources: dict[str, str], names: set[str]) -> dict[str, set[str]]:
     for path, source in sources.items():
         raw = path.endswith((".ini", ".py"))
         if not raw:
-            for _, start, body, _ in free_definitions(source):
-                source = source[:start] + " " * (body - start) + source[body:]
+            for name, start, body, _ in free_definitions(source):
+                own = re.search(rf"\b{name}\s*\(", source[start:body])
+                if own is not None:
+                    at = start + own.start()
+                    source = source[:at] + " " * len(name) + source[at + len(name) :]
         for statement in re.split(r"(?<=[;{}])", source):
             for name in names.intersection(re.findall(r"\b\w+\b", statement)):
                 if raw or not declares(statement, name, typed=True):
@@ -215,7 +222,11 @@ def free_function_sites(sources: dict[str, str]) -> dict[str, str]:
     """Each free function src/ defines, with its first definition's `path:line`."""
     defined: dict[str, str] = {}
     for path, source in sources.items():
-        if not production_cpp(path) or path.startswith(NO_FREE_DEFINITIONS):
+        if (
+            not production_cpp(path)
+            or path.startswith(NO_FREE_DEFINITIONS)
+            or path.endswith(".mm")
+        ):
             continue
         for name, start, _, _ in free_definitions(source):
             line = source.count("\n", 0, start) + 1
@@ -260,7 +271,7 @@ def uncalled_free_functions(
         )
         for path, text in files.items()
         if path.startswith(("src/", "tools/"))
-        and Path(path).suffix in {".cpp", ".h", ".hpp", ".inc", ".ini", ".py"}
+        and Path(path).suffix in {".cpp", ".h", ".hpp", ".inc", ".mm", ".ini", ".py"}
         and not path.startswith("src/3rdparty/")
     }
     defined = free_function_sites(sources)
@@ -437,7 +448,8 @@ def tracked_sources(*folders: str) -> dict[str, str]:
     return {
         path: (ROOT / path).read_text(errors="replace")
         for path in paths
-        if Path(path).suffix in {".cpp", ".h", ".hpp", ".inc", ".rs", ".ini", ".py"}
+        if Path(path).suffix
+        in {".cpp", ".h", ".hpp", ".inc", ".mm", ".rs", ".ini", ".py"}
     }
 
 
