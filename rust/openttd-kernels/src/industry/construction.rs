@@ -8,8 +8,8 @@
 //! Industry initialization, tile planting and nearby-station policy. World callbacks can
 //! inspect partially initialized owners.
 use super::{
-    Accepted, GenerationServices, Industry, LifecycleServices, Produced, Services, SpecHandle,
-    TransactionContext, accepted, fields, produced,
+    Accepted, GenerationServices, Industry, Produced, Services, SpecHandle, TransactionContext,
+    accepted, fields, produced,
 };
 use crate::bitmath_func::gb;
 use crate::cargo_type::{CargoType, is_valid_cargo_type};
@@ -87,13 +87,7 @@ pub struct ConstructionServices {
 }
 /// `PopulateStationsNearby`: populate an industry's list of nearby stations, and the
 /// stations' lists of nearby industries.
-fn populate(
-    industry: *mut c_void,
-    id: IndustryID,
-    owner: *mut Industry,
-    s: &Services,
-    l: &LifecycleServices,
-) {
+fn populate(industry: *mut c_void, id: IndustryID, owner: *mut Industry, s: &Services) {
     let cc = crate::station::Ctx::from_shared(s.shared());
     let shell = industry.cast::<crate::industry::tile::ShellHandle>();
     let neutral = (cc.c.industry_neutral)(shell);
@@ -107,7 +101,7 @@ fn populate(
         return;
     }
     crate::station::for_all_stations_around_tiles(super::location(owner), &cc, |st, tile| {
-        if !unsafe { (l.belongs)(tile.0, id.0) } {
+        if !super::tile_belongs_to_industry(&crate::map_func::World::new(s.shared()), tile, id) {
             return false;
         }
         // SAFETY: Live owner; immediate mutation.
@@ -494,7 +488,11 @@ pub(crate) unsafe fn do_create_new_industry(
     }
     // Call callbacks after all tiles have been created.
     super::lifecycle::tiles(super::location(owner), req.size_x, |cur_tile| unsafe {
-        if (life.belongs)(cur_tile.0, id.0) {
+        if super::tile_belongs_to_industry(
+            &crate::map_func::World::new(prod.shared()),
+            cur_tile,
+            id,
+        ) {
             // There are no shared random bits, consistent with "MakeIndustryTileBigger"
             // in tile loop. So, trigger tiles individually; `first_call` adds 0x100.
             super::trigger_industry_tile_animation(
@@ -525,7 +523,7 @@ pub(crate) unsafe fn do_create_new_industry(
         set_window_dirty(WindowClass::WC_BUILD_INDUSTRY, WindowNumber(0));
     }
     if !(prod.shared().clear_square_services.generating_world)() {
-        populate(industry, id, owner, prod, life);
+        populate(industry, id, owner, prod);
     }
 }
 /// Write `location` back to `Industry::location`.

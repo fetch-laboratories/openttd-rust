@@ -788,7 +788,6 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.delete_storage = [](void *shell) noexcept { delete static_cast<Industry *>(shell)->psa; },
 	.subsidies = RustSubsidyServices,
 	.invalidate_cargo = [](uint16_t industry) noexcept { CargoPacket::InvalidateAllFrom({IndustryID(industry), SourceType::Industry}); },
-	.belongs = [](uint32_t tile, uint16_t industry) noexcept -> bool { return IsTileType(TileIndex(tile), MP_INDUSTRY) && RustIndustryTileIndex(tile) == industry; },
 	.randomisation_spec = IndustryRandomisationSpec,
 	.random_triggers = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryRandomTriggers(TileIndex(tile)).base(); },
 	.set_random_triggers = [](uint32_t tile, uint8_t bits) noexcept { SetIndustryRandomTriggers(TileIndex(tile), IndustryRandomTriggers(bits)); },

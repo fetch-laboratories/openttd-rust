@@ -56,7 +56,6 @@ pub struct LifecycleServices {
     pub delete_storage: unsafe extern "C" fn(*mut c_void),
     pub subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub invalidate_cargo: unsafe extern "C" fn(u16),
-    pub belongs: unsafe extern "C" fn(u32, u16) -> bool,
     pub randomisation_spec: unsafe extern "C" fn(u32) -> RandomisationSpec,
     pub random_triggers: unsafe extern "C" fn(u32) -> u8,
     pub set_random_triggers: unsafe extern "C" fn(u32, u8),
@@ -337,7 +336,7 @@ pub(crate) unsafe fn trigger_industry_randomisation(
 ) {
     let mut reseed_industry = 0;
     tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
-        if (w.belongs)(tile.0, id.0) {
+        if super::tile_belongs_to_industry(&crate::map_func::World::new(s.shared()), tile, id) {
             reseed_industry |=
                 do_trigger_industry_tile_randomisation(tile, trigger, industry, s, w);
         }
@@ -444,7 +443,7 @@ pub(crate) unsafe fn trigger_industry_animation(
     let mut ret = true;
     let mut random = s.shared().random();
     tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
-        if (w.belongs)(tile.0, id.0) {
+        if super::tile_belongs_to_industry(&crate::map_func::World::new(s.shared()), tile, id) {
             if do_trigger_industry_tile_animation(tile, iat, random, 0, w) {
                 // SB does not mask its input, so the draw can set high bits too.
                 crate::bitmath_func::sb(&mut random, 0, 16, s.shared().random());

@@ -2807,7 +2807,6 @@ crate::abi::layouts! {
         delete_storage,
         subsidies,
         invalidate_cargo,
-        belongs,
         randomisation_spec,
         random_triggers,
         set_random_triggers,

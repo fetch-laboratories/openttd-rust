@@ -173,7 +173,6 @@ typedef struct OpenTTDIndustryLifecycleServices {
 	void (*delete_storage)(void *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_storage);
 	const OpenTTDSubsidyServices *(*subsidies)() OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(subsidies);
 	void (*invalidate_cargo)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(invalidate_cargo);
-	bool (*belongs)(uint32_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(belongs);
 	OpenTTDIndustryRandomisationSpec (*randomisation_spec)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(randomisation_spec);
 	uint8_t (*random_triggers)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(random_triggers);
 	void (*set_random_triggers)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_random_triggers);

@@ -1964,7 +1964,6 @@ pub(crate) const INDUSTRY_LIFECYCLE: crate::industry::LifecycleServices =
         delete_storage: unreachable1,
         subsidies: unreachable0,
         invalidate_cargo: unreachable1,
-        belongs: unreachable2,
         randomisation_spec: unreachable1,
         random_triggers: unreachable1,
         set_random_triggers: unreachable2,
