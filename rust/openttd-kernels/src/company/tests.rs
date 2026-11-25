@@ -2,6 +2,7 @@
 //! The company and economy bodies against `company_cmd.cpp`, `economy.cpp` and `misc_cmd.cpp`.
 
 /// The five financial commands against the original's recorded observations.
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 mod financial_command_tests {
     use crate::company::*;
     use crate::company_type::{CompanyID, OpenTTDCompany, Owner};
@@ -398,6 +399,7 @@ mod financial_command_tests {
 
 /// Road build, clear and convert price saturation, rounding and independent type masks, with
 /// unclassified `NewGRF` masks and extreme prices that the default maps never load.
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 mod road_price_tests {
     use crate::economy_type::Price;
     use crate::road_cost::{build_cost, clear_cost, convert_cost};
@@ -472,6 +474,7 @@ mod road_price_tests {
 /// Company control: the first playable company and its allocation check, service intervals,
 /// ownership errors with both original assertions before error selection, and the
 /// special-owner takeover mask.
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 mod control_tests {
     use crate::company::*;
     use crate::company_type::{CompanyID, CompanyMask, OWNER_END, OpenTTDCompany, Owner};
@@ -842,6 +845,7 @@ mod control_tests {
 
 /// Competitor posts return to the caller before each post: `on_tick_companies`' return
 /// protocol, driven by a loop of the native caller's form (`while on_tick(..) { Post }`).
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 mod competitor_tests {
     use crate::company::*;
     use crate::company_type::{CompanyID, OpenTTDCompany};
@@ -957,6 +961,7 @@ mod competitor_tests {
 /// Company startup and control continuations: the AI startup continuation and abandoned
 /// frames, and a network client's local switch before the face and settings sync. Company 2
 /// is the slot every allocation takes.
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 mod startup_tests {
     use crate::company::*;
     use crate::company_type::{CompanyCtrlAction, CompanyID, CompanyManagerFace, OpenTTDCompany};
@@ -1574,6 +1579,7 @@ mod startup_tests {
 
 /// A network client never deletes a company bankrupt for a tenth month; it updates each one's
 /// admin state and keeps both companies.
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 mod bankruptcy_tests {
     use crate::company::*;
     use crate::company_type::{CompanyID, OpenTTDCompany};
@@ -1682,6 +1688,7 @@ mod bankruptcy_tests {
 /// The plan's new tests (#1048, Evidence): news, events, windows and native assertions, which
 /// the harness's game-state comparison cannot see. Companies 0 to 2 are handles carrying their
 /// index over owned finance records; each observed call joins one trace in order.
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 mod evidence_tests {
     use crate::company::*;
     use crate::company_type::{CompanyID, CompanyMask, OpenTTDCompany, Owner};
@@ -1710,6 +1717,9 @@ mod evidence_tests {
             const { Cell::new([std::ptr::null_mut(); COUNT]) };
         static DEFAULTS: Cell<[*mut crate::settings_table::VehicleDefaults; COUNT]> =
             const { Cell::new([std::ptr::null_mut(); COUNT]) };
+        /// The vehicle pool: each record, null once destroyed.
+        static VEHICLES: RefCell<Vec<*mut crate::vehicle_base::VehicleRecord>> =
+            const { RefCell::new(Vec::new()) };
     }
     fn trace(entry: impl Into<String>) {
         TRACE.with_borrow_mut(|t| t.push(entry.into()));
@@ -1787,8 +1797,34 @@ mod evidence_tests {
     extern "C" fn town_owner_by_id(id: u32) -> *mut crate::town::State {
         TOWNS.with_borrow(|t| t[id as usize])
     }
-    extern "C" fn no_vehicle(_: u32) -> Option<crate::vehicle::VehicleRef> {
-        None
+    extern "C" fn vehicle_next(from: u32) -> Option<crate::vehicle::VehicleRef> {
+        VEHICLES.with_borrow(|v| {
+            v.iter()
+                .skip(from as usize)
+                .find(|p| !p.is_null())
+                .map(|&p| crate::vehicle::VehicleRef(std::ptr::NonNull::new(p.cast()).unwrap()))
+        })
+    }
+    unsafe extern "C" fn vehicle_id(v: *mut crate::vehicle::OpenTTDVehicle) -> u32 {
+        VEHICLES.with_borrow(|all| all.iter().position(|&p| p.cast() == v).unwrap() as u32)
+    }
+    extern "C" fn destroy_vehicle(v: crate::vehicle::VehicleRef) {
+        // SAFETY: A live record of the fixture's pool.
+        let id = unsafe { vehicle_id(v.0.as_ptr()) };
+        trace(format!("destroy vehicle {id}"));
+        // `delete v` of a head frees its chain: each part leaves the pool.
+        let mut part = v.0.as_ptr().cast::<crate::vehicle_base::VehicleRecord>();
+        while !part.is_null() {
+            let next = read_field!(part, next);
+            VEHICLES.with_borrow_mut(|all| {
+                for slot in all.iter_mut().filter(|p| **p == part) {
+                    *slot = std::ptr::null_mut();
+                }
+            });
+            // SAFETY: The test's own record, out of the pool and no longer referenced.
+            unsafe { crate::vehicle_base::VehicleRecord::delete(part) };
+            part = next;
+        }
     }
     extern "C" fn screen_dirty() {
         trace("screen");
@@ -1837,7 +1873,9 @@ mod evidence_tests {
         std::ptr::from_ref(&TABLE)
     }
     extern "C" fn newgrf() -> *const crate::newgrf_vehicle::Services {
-        std::ptr::from_ref(&crate::newgrf_vehicle::TEST_TABLE)
+        const TABLE: crate::newgrf_vehicle::Services =
+            crate::newgrf_vehicle::TEST_TABLE.with_id(vehicle_id);
+        std::ptr::from_ref(&TABLE)
     }
     unsafe extern "C" fn next_group(from: u32) -> crate::fleet::NextGroup {
         let group = GROUP.get();
@@ -1944,7 +1982,7 @@ mod evidence_tests {
                 local_company,
                 town_next_id,
                 town_owner_by_id,
-                vehicle_next: no_vehicle,
+                vehicle_next,
                 screen_dirty,
                 company_infrastructure: infrastructure,
                 station_catchment: catchment,
@@ -1959,7 +1997,11 @@ mod evidence_tests {
                     ..crate::settings_type::SettingAddresses::NULL
                 }),
                 movement: leak(crate::movement::MovementServices {
-                    vehicle: leak(crate::vehicle::VehicleServices { newgrf, ..VEHICLE }),
+                    vehicle: leak(crate::vehicle::VehicleServices {
+                        newgrf,
+                        destroy: destroy_vehicle,
+                        ..VEHICLE
+                    }),
                     train: &crate::test_tables::TRAIN_LEAVES,
                     ..MOVEMENT
                 }),
@@ -2097,6 +2139,12 @@ mod evidence_tests {
             GROUP.set(std::ptr::null_mut());
             STATS.set(std::ptr::null_mut());
             TOWNS.set(Vec::new());
+            for v in VEHICLES.take() {
+                if !v.is_null() {
+                    // SAFETY: Created by the test; no access is live.
+                    unsafe { crate::vehicle_base::VehicleRecord::delete(v) };
+                }
+            }
             // SAFETY: Created by `World::new`; no access is live.
             unsafe { crate::fleet::openttd_rust_fleet_stats_destroy(self.stats) };
         }
@@ -2348,10 +2396,22 @@ mod evidence_tests {
         drop(world);
 
         // A deletion: no ratings move, the rights end, the group goes and the station is
-        // nobody's; the company holds the jackpot while its property is removed.
+        // nobody's; the company holds the jackpot while its property is removed. Of its
+        // two-part train, only the part with no previous link, the head, is deleted.
         let mut world = World::new();
         world.town(0b010, [0, 500, 0], 1, 3);
         world.town(0b011, [100, 700, 0], 2, 5);
+        let parts = [0, 1].map(|_| {
+            let v = crate::vehicle_base::VehicleRecord::new(
+                std::ptr::null_mut(),
+                crate::vehicle_type::VehicleType::VEH_TRAIN,
+            );
+            write_field!(v, owner, CompanyID(1));
+            v
+        });
+        // SAFETY: Both records are the test's own.
+        unsafe { crate::vehicle_base::set_next(parts[0], parts[1]) };
+        VEHICLES.set(parts.to_vec());
         let s = services();
         change_ownership_of_company_items(&s, &ownership(), CompanyID(1), Owner::INVALID);
         let towns: Vec<_> = world
@@ -2376,7 +2436,13 @@ mod evidence_tests {
         );
         assert_eq!(
             traced(),
-            ["delete group 0", "station owner 16", "screen"].map(str::to_owned)
+            [
+                "destroy vehicle 0",
+                "delete group 0",
+                "station owner 16",
+                "screen"
+            ]
+            .map(str::to_owned)
         );
         assert_eq!(STATION_OWNER.get(), Owner::NONE.0);
         assert_eq!(world.finances[1].money, (u64::MAX >> 2) as i64);
