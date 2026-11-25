@@ -405,6 +405,8 @@ class StampTests(unittest.TestCase):
                     ".codex/config.toml": 'model = "m"\n',
                     # Git quotes this name in line output; the stamp reads it raw.
                     "docs/skills/caf\u00e9/agents/openai.yaml": "interface: {}\n",
+                    # A name that is not UTF-8, as Git and this filesystem allow.
+                    os.fsdecode(b"docs/caf\xe9.yaml"): "interface: {}\n",
                 },
             )
             self.assertEqual((preflight_stamp.stamp_for(docs) or {}).get("head"), code)

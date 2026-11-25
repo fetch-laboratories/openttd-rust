@@ -7,6 +7,7 @@ from a stamped tree only in docs-only files counts as stamped.
 """
 
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -65,13 +66,13 @@ def inert(path: str) -> bool:
 
 def changed(old: str, new: str) -> list[str]:
     """Paths that differ between two commits or trees, both sides of a rename."""
-    # NUL-delimited: Git quotes a name with a non-ASCII byte in line output.
+    # NUL-delimited bytes: Git quotes a name with a non-ASCII byte in line
+    # output, and a name need not be UTF-8.
     output = subprocess.check_output(
         ["git", "diff", "--no-renames", "--name-only", "-z", old, new, "--"],
         cwd=ROOT,
-        text=True,
     )
-    return [name for name in output.split("\0") if name]
+    return [os.fsdecode(name) for name in output.split(b"\0") if name]
 
 
 def tree(commit: str) -> str:

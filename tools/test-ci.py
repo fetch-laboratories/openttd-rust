@@ -669,13 +669,23 @@ class GateTests(unittest.TestCase):
             self.assertNotIn("paths-ignore", push)
             filters.append(push["paths"])
         self.assertEqual(filters[0], filters[1])
+        # The filter is the rule: a path starts them unless it is docs-only.
         for path in sorted(near_docs_only_paths() | set(DOCS_ONLY_CASES)):
-            started = starts_workflow(filters[0], path)
-            if preflight_stamp.inert(path):
-                self.assertFalse(started, path)
-            elif not path.endswith(".md"):
-                # No Markdown-only push started them before this rule either.
-                self.assertTrue(started, path)
+            self.assertEqual(
+                starts_workflow(filters[0], path), not preflight_stamp.inert(path), path
+            )
+        # A push starts them when any one of its files does: Markdown that a
+        # build packages beside a docs-only file still validates.
+        mixed = ("docs/fonts.md", "docs/skills/x/agents/openai.yaml")
+        self.assertEqual(
+            [starts_workflow(filters[0], path) for path in mixed], [True, False]
+        )
+        built = [
+            pattern.removeprefix("docs/")
+            for pattern in filters[0]
+            if pattern.startswith("docs/") and "*" not in pattern
+        ]
+        self.assertEqual(built, list(preflight_stamp.BUILT_DOCS))
 
     def test_checker_only_publisher_needs_quick_and_marks_no_tree(self) -> None:
         def needs(quick: str) -> dict[str, dict[str, Any]]:
