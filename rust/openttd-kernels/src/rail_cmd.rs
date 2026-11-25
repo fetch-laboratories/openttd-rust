@@ -15,7 +15,8 @@
 //! `CommandCost` pointer is a distinct live native object for the synchronous call.
 #![allow(
     unsafe_code,
-    reason = "the native command tables, cost slots and train records"
+    clippy::too_many_lines,
+    reason = "the native command tables, cost slots and train records; the original's long command bodies"
 )]
 use crate::bitmath_func::{has_bit, has_exactly_one_bit, kill_first_bit};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
@@ -283,6 +284,10 @@ struct CmdBuildSingleSignal {
 
 /// `CmdSignalTrackHelper`'s parameters.
 #[derive(Clone, Copy)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "CmdSignalTrackHelper's four bool parameters"
+)]
 struct SignalTrackHelper {
     /// Start tile of the drag.
     tile: TileIndex,
@@ -654,17 +659,18 @@ impl<'a> Ctx<'a> {
                         }
 
                         w::hit(w::RAIL_CMD_BUILD_REMOVE_SIGNALS);
-                        for track_it in Track::TRACK_BEGIN.0..Track::TRACK_END.0 {
-                            let track_it = Track(track_it);
-                            if self.world.has_track(tile, track_it)
-                                && self.world.has_signal_on_track(tile, track_it)
+                        for track_iter in Track::TRACK_BEGIN.0..Track::TRACK_END.0 {
+                            // The original's `track_it`.
+                            let track_iter = Track(track_iter);
+                            if self.world.has_track(tile, track_iter)
+                                && self.world.has_signal_on_track(tile, track_iter)
                             {
                                 self.remove_single_signal_command(
                                     ret_remove_signals,
                                     flags,
                                     CmdRemoveSingleSignal {
                                         tile,
-                                        track: track_it,
+                                        track: track_iter,
                                     },
                                 );
                                 if !ret_remove_signals.ok() {
@@ -800,10 +806,10 @@ impl<'a> Ctx<'a> {
                                 }
                             }
 
-                            let num_new_road_pieces = if road != RoadBits::ROAD_NONE {
-                                2_u32.wrapping_sub(road.0.count_ones())
-                            } else {
+                            let num_new_road_pieces = if road == RoadBits::ROAD_NONE {
                                 0
+                            } else {
+                                2_u32.wrapping_sub(road.0.count_ones())
                             };
                             if num_new_road_pieces > 0 {
                                 cost.add_money(
@@ -812,10 +818,10 @@ impl<'a> Ctx<'a> {
                                 );
                             }
 
-                            let num_new_tram_pieces = if tram != RoadBits::ROAD_NONE {
-                                2_u32.wrapping_sub(tram.0.count_ones())
-                            } else {
+                            let num_new_tram_pieces = if tram == RoadBits::ROAD_NONE {
                                 0
+                            } else {
+                                2_u32.wrapping_sub(tram.0.count_ones())
                             };
                             if num_new_tram_pieces > 0 {
                                 cost.add_money(
@@ -1215,37 +1221,37 @@ impl<'a> Ctx<'a> {
         let dy = ey.wrapping_sub(y);
 
         /* calculate delta x,y for the first direction */
-        let mut trdx = i32::from(TRACKDELTA[usize::from(trackdir.0)].x);
-        let mut trdy = i32::from(TRACKDELTA[usize::from(trackdir.0)].y);
+        // The original's `trdx` and `trdy`.
+        let mut delta_x = i32::from(TRACKDELTA[usize::from(trackdir.0)].x);
+        let mut delta_y = i32::from(TRACKDELTA[usize::from(trackdir.0)].y);
 
         if !is_diagonal_trackdir(*trackdir, self.check()) {
-            trdx += i32::from(TRACKDELTA[usize::from(trackdir.0 ^ 1)].x);
-            trdy += i32::from(TRACKDELTA[usize::from(trackdir.0 ^ 1)].y);
+            delta_x += i32::from(TRACKDELTA[usize::from(trackdir.0 ^ 1)].x);
+            delta_y += i32::from(TRACKDELTA[usize::from(trackdir.0 ^ 1)].y);
         }
 
         /* validate the direction */
-        while (trdx <= 0 && dx > 0)
-            || (trdx >= 0 && dx < 0)
-            || (trdy <= 0 && dy > 0)
-            || (trdy >= 0 && dy < 0)
+        while (delta_x <= 0 && dx > 0)
+            || (delta_x >= 0 && dx < 0)
+            || (delta_y <= 0 && dy > 0)
+            || (delta_y >= 0 && dy < 0)
         {
-            if !has_bit(trackdir.0, 3) {
-                // first direction is invalid, try the other
-                trackdir.0 |= 1 << 3; // reverse the direction
-                trdx = -trdx;
-                trdy = -trdy;
-            } else {
+            if has_bit(trackdir.0, 3) {
                 // other direction is invalid too, invalid drag
                 return false;
             }
+            // first direction is invalid, try the other
+            trackdir.0 |= 1 << 3; // reverse the direction
+            delta_x = -delta_x;
+            delta_y = -delta_y;
         }
 
         /* (for diagonal tracks, this is already made sure of by above test), but:
          * for non-diagonal tracks, check if the start and end tile are on 1 line */
         if !is_diagonal_trackdir(*trackdir, self.check()) {
-            trdx = i32::from(TRACKDELTA[usize::from(trackdir.0)].x);
-            trdy = i32::from(TRACKDELTA[usize::from(trackdir.0)].y);
-            if dx.abs() != dy.abs() && dx.abs() + trdy.abs() != dy.abs() + trdx.abs() {
+            delta_x = i32::from(TRACKDELTA[usize::from(trackdir.0)].x);
+            delta_y = i32::from(TRACKDELTA[usize::from(trackdir.0)].y);
+            if dx.abs() != dy.abs() && dx.abs() + delta_y.abs() != dy.abs() + delta_x.abs() {
                 return false;
             }
         }
@@ -1319,7 +1325,10 @@ impl<'a> Ctx<'a> {
                 had_success = true;
             }
 
-            if !ret.ok() {
+            if ret.ok() {
+                had_success = true;
+                total_cost.add_money(ret.money());
+            } else {
                 last_error.take(ret);
                 if last_error.message() != STR_ERROR_ALREADY_BUILT.0 && !remove {
                     if fail_on_obstacle {
@@ -1335,9 +1344,6 @@ impl<'a> Ctx<'a> {
                 if last_error.message() == STR_ERROR_OWNED_BY.0 && remove {
                     break;
                 }
-            } else {
-                had_success = true;
-                total_cost.add_money(ret.money());
             }
 
             if tile == end_tile {
@@ -2796,7 +2802,15 @@ impl<'a> Ctx<'a> {
             return;
         }
 
-        if new_owner != Owner::INVALID {
+        if new_owner == Owner::INVALID {
+            w::hit(w::RAIL_CMD_OWNER_CLEAR);
+            self.landscape_clear(
+                ret,
+                DoCommandFlags::from_element(DoCommandFlag::Execute)
+                    .with(DoCommandFlags::from_element(DoCommandFlag::Bankrupt)),
+                tile,
+            );
+        } else {
             w::hit(w::RAIL_CMD_OWNER_TRANSFER);
             /* Update company infrastructure counts. No need to dirty windows here, we'll redraw the whole screen anyway. */
             let mut num_pieces = 1;
@@ -2823,14 +2837,6 @@ impl<'a> Ctx<'a> {
             }
 
             (self.shared.set_tile_owner)(tile.0, new_owner.0);
-        } else {
-            w::hit(w::RAIL_CMD_OWNER_CLEAR);
-            self.landscape_clear(
-                ret,
-                DoCommandFlags::from_element(DoCommandFlag::Execute)
-                    .with(DoCommandFlags::from_element(DoCommandFlag::Bankrupt)),
-                tile,
-            );
         }
     }
 

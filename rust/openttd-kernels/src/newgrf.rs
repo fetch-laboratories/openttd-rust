@@ -70,33 +70,15 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
             0x0E => (s.pitch)(file) as u32,
             0x0F => {
                 let mut costs = 0;
-                sb(
-                    &mut costs,
-                    0,
-                    8,
-                    u32::from(
-                        get_rail_type_info(shared, RailType::RAILTYPE_RAIL).cost_multiplier(),
-                    ),
-                );
+                let cost = |rt| u32::from(get_rail_type_info(shared, rt).cost_multiplier());
+                sb(&mut costs, 0, 8, cost(RailType::RAILTYPE_RAIL));
                 let middle = if shared.settings().disable_elrails.read() {
                     RailType::RAILTYPE_MONO
                 } else {
                     RailType::RAILTYPE_ELECTRIC
                 };
-                sb(
-                    &mut costs,
-                    8,
-                    8,
-                    u32::from(get_rail_type_info(shared, middle).cost_multiplier()),
-                );
-                sb(
-                    &mut costs,
-                    16,
-                    8,
-                    u32::from(
-                        get_rail_type_info(shared, RailType::RAILTYPE_MAGLEV).cost_multiplier(),
-                    ),
-                );
+                sb(&mut costs, 8, 8, cost(middle));
+                sb(&mut costs, 16, 8, cost(RailType::RAILTYPE_MAGLEV));
                 costs
             }
             0x11 => 0,
