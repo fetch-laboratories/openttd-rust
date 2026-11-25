@@ -145,15 +145,17 @@ static void ShipBoundary()
 	ship_delay = 0;
 	ship_maintenance.set_breakdown_delay = [](OpenTTDVehicle *, uint8_t delay) noexcept { ship_delay = delay; };
 	ship_probe.record.breakdown_ctr = 1;
+	/* A cached path element, which the broken-down tick keeps and the reverse tick clears. */
+	openttd_rust_ship_path_push(openttd_rust_ship_state_path(state.get()), TRACKDIR_X_NE);
 	CHECK(openttd_rust_ship_tick(shell, &leaves, &ship_probe.services));
+	CHECK(openttd_rust_ship_path_size(openttd_rust_ship_state_path(state.get())) == 1);
 	/* The broken-down ship's tick ends before any position update. */
 	CHECK(ship_delay == 4 && ship_probe.stage == 0 && ship_probe.record.hash_tile_current == nullptr);
-	/* The same tick state again, running normally: the reverse path, with a cached path. */
+	/* The same tick state again, running normally: the reverse path, with the cached path. */
 	ship_probe.record.breakdown_ctr = 0;
 	ship_probe.record.tick_counter = 255;
 	ship_probe.record.running_ticks = 255;
 	ship_probe.consist.current_order_time = -1;
-	openttd_rust_ship_path_push(openttd_rust_ship_state_path(state.get()), TRACKDIR_X_NE);
 	CHECK(openttd_rust_ship_tick(shell, &leaves, &ship_probe.services));
 	CHECK(ship_probe.stage == 3 && openttd_rust_ship_get_rotation(state.get()) == 3);
 	openttd_rust_occupancy_update(nullptr, shell, true);
