@@ -1076,7 +1076,12 @@ pub extern "C" fn openttd_rust_company_competitor_timeout_abi(s: &Services) -> u
 }
 
 /// `group_all[type].num_vehicle` of the company `c`.
-pub(crate) fn num_vehicle(s: &Services, c: *mut OpenTTDCompany, kind: VehicleType) -> u16 {
+///
+/// # Safety
+/// `c` is a live company and `kind` a company vehicle type, below `VEH_COMPANY_END`, which
+/// the binding indexes `group_all` with.
+#[allow(unsafe_code)] // The contract the binding's dereference and index require.
+pub(crate) unsafe fn num_vehicle(s: &Services, c: *mut OpenTTDCompany, kind: VehicleType) -> u16 {
     crate::fleet::num_vehicle((s.group_all)(c, kind))
 }
 
@@ -1091,7 +1096,9 @@ pub(crate) fn check_takeover_vehicle_limit(
     let c1 = (s.identity.company)(cbig);
     let c2 = (s.identity.company)(csmall);
     let settings = s.shared.settings();
-    let within = |kind: VehicleType, max: u16| {
+    // SAFETY: `Company::Get` of both companies is live, and each `kind` below is a company
+    // vehicle type.
+    let within = |kind: VehicleType, max: u16| unsafe {
         i32::from(num_vehicle(s, c1, kind)) + i32::from(num_vehicle(s, c2, kind)) <= i32::from(max)
     };
 

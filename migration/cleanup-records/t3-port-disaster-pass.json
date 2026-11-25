@@ -724,11 +724,23 @@
     "before": 0,
     "kind": "suppression",
     "operation": "disaster::Tables::company",
-    "reason": "Dereferences the base vehicle table's maintenance link to the transaction, command and company tables, all process-lifetime, as `ship_control.rs`'s `company` does. The base's module-wide allowance goes.",
+    "reason": "Calls the identity table's command table's `company` slot and dereferences the process-lifetime company table it returns. The base's module-wide allowance goes.",
     "retirement_condition": "Retires when the tables are typed references (#656, #635).",
     "retiring_owner": "#656",
     "site": "rust/openttd-kernels/src/disaster.rs | impl<'a> Tables<'a> > fn company | allow unsafe_code",
     "source_contract": "`c->group_all[VEH_ROAD].num_vehicle` in `DisasterTick_Ufo`.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "company::num_vehicle",
+    "reason": "Declares `num_vehicle` unsafe: the `group_all` binding dereferences the company and indexes its `VEH_COMPANY_END`-sized array with the vehicle type, which callers vouch for.",
+    "retirement_condition": "Retires when the company pool and its group statistics are Rust storage (#716).",
+    "retiring_owner": "#716",
+    "site": "rust/openttd-kernels/src/company.rs | fn num_vehicle | allow unsafe_code",
+    "source_contract": "`c->group_all[type].num_vehicle` in `CheckTakeoverVehicleLimit` and `DisasterTick_Ufo`.",
     "tool": "rust"
   }
 ]

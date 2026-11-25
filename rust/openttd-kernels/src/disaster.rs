@@ -283,12 +283,11 @@ impl<'a> Tables<'a> {
         // SAFETY: The base table names the process-lifetime maintenance table.
         unsafe { &*self.vehicles.maintenance }
     }
-    /// The company table, through the base vehicle table's maintenance link.
+    /// The company table, through the identity table's command table.
     #[allow(unsafe_code)]
     fn company(&self) -> &'a crate::company::Services {
-        // SAFETY: Base maintenance names the process-lifetime transaction, command and company
-        // tables.
-        unsafe { &*((*(*(*self.vehicles.maintenance).transaction).commands).company)() }
+        // SAFETY: The command table names the process-lifetime company table.
+        unsafe { &*(self.identity().commands.company)() }
     }
     /// `RandomTile()`: `RandomTileSeed(Random())`.
     fn random_tile(&self, world: &World<'_>) -> TileIndex {
@@ -835,11 +834,9 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
         let mut n: u32 = 0; // Total number of targetable road vehicles.
         let company = t.company();
         crate::company_identity::companies(t.identity(), |c| {
-            n = n.wrapping_add(u32::from(crate::company::num_vehicle(
-                company,
-                c,
-                VehicleType::VEH_ROAD,
-            )));
+            // SAFETY: The walk yields live companies, and `VEH_ROAD` is a company vehicle type.
+            let count = unsafe { crate::company::num_vehicle(company, c, VehicleType::VEH_ROAD) };
+            n = n.wrapping_add(u32::from(count));
             true
         });
 
