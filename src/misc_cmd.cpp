@@ -26,6 +26,7 @@
 #include "table/strings.h"
 
 #include "rust/company_adapter.h"
+#include "rust/command_cost_services.h"
 #include "rust/session_ffi.h"
 
 #include "safeguards.h"
@@ -41,7 +42,9 @@
  */
 CommandCost CmdIncreaseLoan(DoCommandFlags flags, LoanCommand cmd, Money amount)
 {
-	return RustCompanyCost(openttd_rust_company_increase_loan(&GetRustCompanyFinanceServices(), static_cast<uint8_t>(cmd), amount.base(), _settings_game.difficulty.infinite_money, flags.Test(DoCommandFlag::Execute)));
+	CommandCost result;
+	openttd_rust_company_increase_loan(&GetRustCompanyServices(), RustCommandCost(&result), flags.base(), to_underlying(cmd), amount.base());
+	return result;
 }
 
 /**
@@ -55,7 +58,9 @@ CommandCost CmdIncreaseLoan(DoCommandFlags flags, LoanCommand cmd, Money amount)
  */
 CommandCost CmdDecreaseLoan(DoCommandFlags flags, LoanCommand cmd, Money amount)
 {
-	return RustCompanyCost(openttd_rust_company_decrease_loan(&GetRustCompanyFinanceServices(), static_cast<uint8_t>(cmd), amount.base(), _settings_game.difficulty.infinite_money, flags.Test(DoCommandFlag::Execute)));
+	CommandCost result;
+	openttd_rust_company_decrease_loan(&GetRustCompanyServices(), RustCommandCost(&result), flags.base(), to_underlying(cmd), amount.base());
+	return result;
 }
 
 /**
@@ -66,7 +71,9 @@ CommandCost CmdDecreaseLoan(DoCommandFlags flags, LoanCommand cmd, Money amount)
  */
 CommandCost CmdSetCompanyMaxLoan(DoCommandFlags flags, CompanyID company, Money amount)
 {
-	return RustCompanyCost(openttd_rust_company_set_max_loan(&GetRustCompanyFinanceServices(), company.base(), amount.base(), flags.Test(DoCommandFlag::Execute)));
+	CommandCost result;
+	openttd_rust_company_set_max_loan(&GetRustCompanyServices(), RustCommandCost(&result), flags.base(), company.base(), amount.base());
+	return result;
 }
 
 /**
@@ -117,7 +124,9 @@ CommandCost CmdMoneyCheat(DoCommandFlags, Money amount)
  */
 CommandCost CmdChangeBankBalance(DoCommandFlags flags, TileIndex tile, Money delta, CompanyID company, ExpensesType expenses_type)
 {
-	return RustCompanyCost(openttd_rust_company_change_bank_balance(&GetRustCompanyFinanceServices(), tile.base(), delta.base(), company.base(), expenses_type, flags.Test(DoCommandFlag::Execute)));
+	CommandCost result;
+	openttd_rust_company_change_bank_balance(&GetRustCompanyServices(), RustCommandCost(&result), flags.base(), tile.base(), delta.base(), company.base(), expenses_type);
+	return result;
 }
 
 void RustAskUnsafeUnpause() noexcept

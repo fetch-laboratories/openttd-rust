@@ -58,7 +58,7 @@ Go through the plan one decision at a time, then its Done, Files, Size and Evide
 
 Do not redo the planner's design or propose a different approach where the plan's own meets the rules.
 
-Post one report as a comment on the issue, starting `Reviewed plan: #<issue> at <commit>` and attributed as every report is.
+Post one report as a comment on the issue, starting `Reviewed plan: #<issue> at <commit>` and attributed as every report is. Write it to a file under your worktree's `.local` and post or correct it with `python3 tools/ci.py report --issue <issue> --agent <your name> --body-file FILE`; run no hand-written `gh api` for it.
 
 - **Findings.** One to three sentences each: the decision or section, what is wrong, the command and result that show it, and the remedy.
 - **Claims tested.** One line for every claim you tested, true or false: the claim in a few words, the command, the result. List the claims you could not test.
@@ -79,7 +79,7 @@ To confirm a suspected difference, run the narrowest check: a focused test throu
 
 ## Report
 
-Post one report on the PR as a separate comment, with the PR template's review skeleton, starting `Reviewed commit: <sha>` and attributed exactly as `Agent: <your name> | Model: <model> | Reasoning effort: <effort>`. The lint gates parse this exact form.
+Post one report on the PR as a separate comment, with the PR template's review skeleton, starting `Reviewed commit: <sha>` and attributed exactly as `Agent: <your name> | Model: <model> | Reasoning effort: <effort>`. The lint gates parse this exact form. Write it to a file under your worktree's `.local` and post or correct it with `python3 tools/ci.py report <PR> --agent <your name> --body-file FILE`, which refuses a body the gates cannot read; run no hand-written `gh api` for it.
 
 - Write only findings; every later reviewer and the implementer reads each report in full. Leave out what you compared, what you found unchanged and the checks that passed.
 - A point about text alone (the PR body, a record's wording, a status comment) is not a finding and does not change the disposition: give it one line under the disposition.

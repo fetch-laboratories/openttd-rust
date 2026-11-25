@@ -331,7 +331,7 @@ impl<'a> Session<'a> {
             if dedicated {
                 CompanyID::SPECTATOR
             } else {
-                crate::company::first_playable(unsafe { &*s.company })
+                crate::company::get_first_playable_company_id(unsafe { &*s.company })
             },
         );
         crate::network_lifecycle::on_game_start(self.network().lifecycle, self.network(), s);
@@ -654,10 +654,7 @@ impl<'a> Session<'a> {
         }
     }
     fn landscaping(&self) {
-        crate::company::update_landscaping_limits(
-            unsafe { &*self.s.company },
-            unsafe { &*self.s.shared }.settings().construction_limits,
-        );
+        crate::company::update_landscaping_limits(unsafe { &*self.s.company });
     }
     fn storage(&self, mode: u8) {
         let world = self.world();
@@ -718,7 +715,7 @@ impl<'a> Session<'a> {
             }
         }
         let mut company = crate::company::Tick::default();
-        while unsafe { crate::company::on_tick(&*s.company, &mut company) } {
+        while crate::company::on_tick_companies(unsafe { &*s.company }, &mut company) {
             complete((s.post_ai)(self.frame))?;
         }
         crate::linkgraph_schedule::tick(unsafe { &*s.schedule }, unsafe { &*s.shared }, unsafe {

@@ -100,6 +100,8 @@ pub struct VehicleServices {
     /// `PlayVehicleSound(v, event)`.
     pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
     pub profit: extern "C" fn(VehicleRef) -> i64,
+    /// `Vehicle::profit_last_year`.
+    pub profit_last_year: extern "C" fn(VehicleRef) -> i64,
     /// The record of a native shell.
     pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
     /// `v->cargo_subtype = subtype`.
@@ -343,6 +345,7 @@ crate::abi::layouts! {
         play_sound,
         play_vehicle_sound,
         profit,
+        profit_last_year,
         record_from_shell,
         set_cargo_subtype,
         set_cargo_type,

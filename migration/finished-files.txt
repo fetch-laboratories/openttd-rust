@@ -20,6 +20,8 @@ rust/openttd-kernels/src/clear_map.rs
 rust/openttd-kernels/src/company_identity.rs
 rust/openttd-kernels/src/company_identity/tests.rs
 rust/openttd-kernels/src/company_manager_face.rs
+rust/openttd-kernels/src/company.rs
+rust/openttd-kernels/src/company/tests.rs
 rust/openttd-kernels/src/consumer.rs
 rust/openttd-kernels/src/container_func.rs
 rust/openttd-kernels/src/control_codes.rs

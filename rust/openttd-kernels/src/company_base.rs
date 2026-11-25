@@ -8,10 +8,14 @@
 //! Live native company infrastructure from `company_base.h`.
 //! The company pool owns this record. Raw accesses are serialized and finish before callbacks;
 //! neither a Rust reference nor a copy of the record is retained across reentry.
+
 use crate::company_type::CompanyID;
 use crate::rail_type::{RAILTYPE_END, RailType};
 use crate::raw_field::read_field;
 use crate::road_type::{ROADTYPE_END, RoadTramType};
+
+/// `COMPANY_MAX_LOAN_DEFAULT`: the max loan of a company that follows the economy's.
+pub const COMPANY_MAX_LOAN_DEFAULT: i64 = i64::MIN;
 
 /// Counts of company-owned infrastructure, at its original native address.
 #[repr(C)]

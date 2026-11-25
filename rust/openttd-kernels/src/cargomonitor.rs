@@ -224,11 +224,21 @@ pub extern "C" fn openttd_rust_monitor_town(key: u32) -> u16 {
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_monitor_clear_pickups(company: u8) {
-    PICKUPS.clear(CompanyID(company));
+    clear_cargo_pickup_monitoring(CompanyID(company));
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_monitor_clear_deliveries(company: u8) {
-    DELIVERIES.clear(CompanyID(company));
+    clear_cargo_delivery_monitoring(CompanyID(company));
+}
+/// `ClearCargoPickupMonitoring`: clear all pick-up cargo monitors of `company`, or of every
+/// company for `INVALID_OWNER`.
+pub(crate) fn clear_cargo_pickup_monitoring(company: CompanyID) {
+    PICKUPS.clear(company);
+}
+/// `ClearCargoDeliveryMonitoring`: clear all delivery cargo monitors of `company`, or of every
+/// company for `INVALID_OWNER`.
+pub(crate) fn clear_cargo_delivery_monitoring(company: CompanyID) {
+    DELIVERIES.clear(company);
 }
 #[unsafe(no_mangle)]
 /// Pickup is counted on final delivery, so pickup without delivery earns no credit.

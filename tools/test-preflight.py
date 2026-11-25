@@ -20,20 +20,21 @@ from functools import partial
 from pathlib import Path
 from subprocess import CompletedProcess
 from types import ModuleType, SimpleNamespace
-from typing import Any
+from typing import cast
 from unittest.mock import patch
 
 import git_hooks
 import preflight
 import preflight_stamp
+import quick_workflow
 import vcs
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 
 
-def workflow(*steps: dict[str, Any]) -> dict[str, Any]:
-    return {"jobs": {preflight.JOB: {"steps": list(steps)}}}
+def workflow(*steps: quick_workflow.Step) -> quick_workflow.Workflow:
+    return {"jobs": {"quick": {"steps": list(steps)}}}
 
 
 def fixture_commit(root: Path, title: str) -> str:
@@ -56,17 +57,47 @@ def fixture_commit(root: Path, title: str) -> str:
 
 class WorkflowTests(unittest.TestCase):
     def test_every_quick_run_step_is_run_or_skipped(self) -> None:
+        # Every job's steps, so preflight still runs each gate after the split (#1063).
         quick = yaml.safe_load(preflight.WORKFLOW.read_text())
-        names = [
+        names = {
             step.get("name", "")
-            for step in quick["jobs"][preflight.JOB]["steps"]
+            for job in quick["jobs"].values()
+            for step in job["steps"]
             if "run" in step
-        ]
+        }
         ran = [step.name for step in preflight.workflow_steps(quick, "base")]
-        self.assertEqual(
-            sorted(ran + list(preflight.SKIPPED)), sorted(names), "unlisted step"
-        )
+        self.assertEqual(len(ran), len(set(ran)), "a step runs twice")
+        self.assertEqual(set(ran) | set(preflight.SKIPPED), names, "unlisted step")
+        self.assertFalse(set(ran) & set(preflight.SKIPPED))
         self.assertIn("Python complexity debt and lint policy", ran)
+
+    def test_workflow_steps_read_every_job_in_file_order(self) -> None:
+        """The Rust job's steps first, the reporting job's step skipped (#1063)."""
+        quick: quick_workflow.Workflow = {
+            "jobs": {
+                "rust": {"steps": [{"name": "a", "run": "true"}]},
+                "python": {"steps": [{"uses": "x"}, {"name": "b", "run": "true"}]},
+                "quick": {
+                    "needs": ["rust", "python"],
+                    "steps": [
+                        {
+                            "name": "Require every Quick job to succeed",
+                            "if": "needs.rust.result != 'success'",
+                            "env": {"RESULTS": "${{ needs.rust.result }}"},
+                            "run": "exit 1",
+                        }
+                    ],
+                },
+            }
+        }
+        ran = [step.name for step in preflight.workflow_steps(quick, "base")]
+        self.assertEqual(ran, ["a", "b"])
+        real = yaml.safe_load(preflight.WORKFLOW.read_text())
+        ran = [step.name for step in preflight.workflow_steps(real, "base")]
+        self.assertLess(
+            ran.index("Rust formatting, check, warnings and tests"),
+            ran.index("Python formatting, lint and maintenance regression checks"),
+        )
 
     def test_a_pending_suppression_passes_quicks_lint_policy_step(self) -> None:
         """Preflight runs Quick's lint-policy line with no event set, so a
@@ -184,7 +215,9 @@ class WorkflowTests(unittest.TestCase):
             {"name": "Gate", "run": "true", "if": "github.event_name == 'push'"},
         ):
             with self.assertRaisesRegex(ValueError, "step 'Gate'"):
-                preflight.workflow_steps(workflow(entry), "base")
+                preflight.workflow_steps(
+                    workflow(cast(quick_workflow.Step, entry)), "base"
+                )
 
     def test_step_selection(self) -> None:
         names = ["Rust checks", "Ruff ratchet", "Strings"]
@@ -765,8 +798,8 @@ class StampTests(unittest.TestCase):
     def preflight(self, repo: Path, event: str) -> int:
         quick = yaml.safe_load(preflight.WORKFLOW.read_text())
         (entry,) = [
-            dict(step)
-            for step in quick["jobs"][preflight.JOB]["steps"]
+            quick_workflow.Step(**step)
+            for step in quick_workflow.steps(quick)
             if "tools/lint-policy.py" in step.get("run", "")
         ]
         entry["run"] = next(

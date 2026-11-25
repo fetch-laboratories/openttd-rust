@@ -29,7 +29,7 @@ def command_gap() -> None:
     import evidence_replacements
 
     evidence_replacements.run_rust(
-        "rust:lib:company::financial_command_tests::all_financial_commands_match_original"
+        "rust:lib:company::tests::financial_command_tests::all_financial_commands_match_original"
     )
     # The exact Rust test verifies the complete input matrix and this count.
     print("company financial command gap: 40320 unchanged-reference cases passed")
@@ -210,7 +210,7 @@ def prepare(
     # Start immediately before the monthly boundary; same calendar/economy input
     # and RNG go to both roles. Pending joins stay beyond the short windows.
     changes: dict[str, dict[int, dict[str, Any]]] = {
-        "PLYR": finances,
+        "PLYR": acquire_defaults(operation, finances),
         "DATE": {
             0: {
                 "date": day.toordinal() + 365,
@@ -383,6 +383,44 @@ def prepare(
             "console": ["fleet_scenario company-control-observe"] + scenario["console"],
         }
     return {**scenario, "save": str(prepared)}
+
+
+def acquire_defaults(
+    operation: str, finances: dict[int, dict[str, Any]]
+) -> dict[int, dict[str, Any]]:
+    """Give the buyers a road vehicle default the acquired company's vehicles lack.
+
+    The takeover's nested CMD_CHANGE_SERVICE_INT then changes each non-custom interval,
+    and a skipped or failed one shows in the compared vehicles (#1048).
+    """
+    if operation == "acquire":
+        for buyer in (0, 2):
+            finances[buyer]["settings[0]/settings.vehicle.servint_roadveh"] = 170
+    return finances
+
+
+def service_commands(
+    run: core.Run, mode: core.Mode | Literal["capture"], role: str, result: core.Result
+) -> None:
+    """Require the reference's nested service-interval lines; compare neither log's.
+
+    The console sees the nested CMD_CHANGE_SERVICE_INT at the original's C++ command;
+    the candidate runs it in Rust (#1048), where
+    company::tests::evidence_tests::takeover_resets_each_non_custom_service_interval
+    observes its arguments. The reference's lines show that the input reaches the
+    nested command; they leave both logs before the logs are compared, and the
+    resulting intervals are compared as game state.
+    """
+    prefix = "COMPANY-CONTROL nested "
+    nested = [line for line in run["log"] if line.startswith(prefix)]
+    run["log"][:] = [line for line in run["log"] if not line.startswith(prefix)]
+    if role == "reference":
+        if not nested:
+            raise RuntimeError(
+                "company acquire: company acquisition nested service-interval "
+                "arguments absent"
+            )
+        core.findings(result)[f"{mode}_{role}_service_commands"] = nested
 
 
 def check_competitors(
@@ -680,13 +718,7 @@ def check(
             "fractional running costs absent",
         )
     if operation == "acquire":
-        nested = [
-            line for line in run["log"] if line.startswith("COMPANY-CONTROL nested ")
-        ]
-        require(
-            bool(nested), "company acquisition nested service-interval arguments absent"
-        )
-        core.findings(result)[f"{mode}_{role}_service_commands"] = nested
+        service_commands(run, mode, role, result)
     if operation == "reload":
         require(
             set(after) == {0, 1, 2}

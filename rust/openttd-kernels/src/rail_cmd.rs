@@ -583,7 +583,7 @@ impl<'a> Ctx<'a> {
         out.set(if f_new == f_old {
             0
         } else {
-            crate::company::price(usize::from(Price::PR_BUILD_FOUNDATION.0))
+            crate::company::price(Price::PR_BUILD_FOUNDATION)
         });
     }
 
@@ -933,10 +933,8 @@ impl<'a> Ctx<'a> {
             cost.add_money(ret.money());
 
             if water_ground {
-                cost.add_money(
-                    crate::company::price(usize::from(Price::PR_CLEAR_WATER.0)).saturating_neg(),
-                );
-                cost.add_money(crate::company::price(usize::from(Price::PR_CLEAR_ROUGH.0)));
+                cost.add_money(crate::company::price(Price::PR_CLEAR_WATER).saturating_neg());
+                cost.add_money(crate::company::price(Price::PR_CLEAR_ROUGH));
             }
 
             if flags.test(DoCommandFlag::Execute) {
@@ -1402,9 +1400,7 @@ impl<'a> Ctx<'a> {
             if !(self.shared.build_on_slopes)() || !can_build_depot_by_tileh(dir, tileh) {
                 return cost.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
             }
-            cost.add_money(crate::company::price(usize::from(
-                Price::PR_BUILD_FOUNDATION.0,
-            )));
+            cost.add_money(crate::company::price(Price::PR_BUILD_FOUNDATION));
         }
 
         /* Allow the user to rotate the depot instead of having to destroy it and build it again */
@@ -1475,9 +1471,7 @@ impl<'a> Ctx<'a> {
             yapf_notify_track_layout_change(tile, diag_dir_to_diag_track(dir, self.check()));
         }
 
-        cost.add_money(crate::company::price(usize::from(
-            Price::PR_BUILD_DEPOT_TRAIN.0,
-        )));
+        cost.add_money(crate::company::price(Price::PR_BUILD_DEPOT_TRAIN));
         cost.add_money(rail_build_cost(self.shared, railtype));
     }
 
@@ -1554,25 +1548,19 @@ impl<'a> Ctx<'a> {
             return cost.error(STR_ERROR_THERE_ARE_NO_SIGNALS.0);
         }
 
-        let build_signals = crate::company::price(usize::from(Price::PR_BUILD_SIGNALS.0));
+        let build_signals = crate::company::price(Price::PR_BUILD_SIGNALS);
         if !self.world.has_signal_on_track(tile, track) {
             /* build new signals */
             cost.set(build_signals);
         } else if signals_copy != 0 && sigvar != (self.rail.signal_variant)(tile.0, track.0) {
             /* convert signals <-> semaphores */
-            cost.set(
-                build_signals.saturating_add(crate::company::price(usize::from(
-                    Price::PR_CLEAR_SIGNALS.0,
-                ))),
-            );
+            cost.set(build_signals.saturating_add(crate::company::price(Price::PR_CLEAR_SIGNALS)));
         } else if convert_signal {
             /* convert button pressed */
             if ctrl_pressed || (self.rail.signal_variant)(tile.0, track.0) != sigvar {
                 /* it costs money to change signal variant (light or semaphore) */
                 cost.set(
-                    build_signals.saturating_add(crate::company::price(usize::from(
-                        Price::PR_CLEAR_SIGNALS.0,
-                    ))),
+                    build_signals.saturating_add(crate::company::price(Price::PR_CLEAR_SIGNALS)),
                 );
             } else {
                 /* it is free to change signal type (block, exit, entry, combo, path, etc) */
@@ -2285,9 +2273,7 @@ impl<'a> Ctx<'a> {
             self.mark_tile_dirty_by_tile(tile);
         }
 
-        cost.set(crate::company::price(usize::from(
-            Price::PR_CLEAR_SIGNALS.0,
-        )));
+        cost.set(crate::company::price(Price::PR_CLEAR_SIGNALS));
     }
 
     /// `CmdConvertRail`: convert one rail type to the other. You can convert normal rail to
@@ -2717,9 +2703,7 @@ impl<'a> Ctx<'a> {
             }
         }
 
-        cost.set(crate::company::price(usize::from(
-            Price::PR_CLEAR_DEPOT_TRAIN.0,
-        )));
+        cost.set(crate::company::price(Price::PR_CLEAR_DEPOT_TRAIN));
     }
 
     /// `ClearTile_Track`.
@@ -2782,7 +2766,7 @@ impl<'a> Ctx<'a> {
                         w::hit(w::RAIL_CMD_CLEAR_WATER);
                         crate::ground::do_clear_square(tile, self.shared);
                     }
-                    cost.add_money(crate::company::price(usize::from(Price::PR_CLEAR_WATER.0)));
+                    cost.add_money(crate::company::price(Price::PR_CLEAR_WATER));
                 }
             }
 
@@ -2888,9 +2872,7 @@ impl<'a> Ctx<'a> {
                 if z_old != z_new || tileh_old != tileh_new {
                     return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
                 }
-                return cost.set(crate::company::price(usize::from(
-                    Price::PR_BUILD_FOUNDATION.0,
-                )));
+                return cost.set(crate::company::price(Price::PR_BUILD_FOUNDATION));
             }
         };
 
@@ -2909,16 +2891,14 @@ impl<'a> Ctx<'a> {
             return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
         }
 
-        cost.set(crate::company::price(usize::from(
-            Price::PR_BUILD_FOUNDATION.0,
-        )));
+        cost.set(crate::company::price(Price::PR_BUILD_FOUNDATION));
         /* Make the ground dirty, if surface slope has changed */
         if tileh_old != tileh_new {
             /* If there is flat water on the lower halftile add the cost for clearing it */
             if self.world.get_rail_ground_type(tile) == RailGroundType::HalfTileWater
                 && is_slope_with_one_corner_raised(tileh_old)
             {
-                cost.add_money(crate::company::price(usize::from(Price::PR_CLEAR_WATER.0)));
+                cost.add_money(crate::company::price(Price::PR_CLEAR_WATER));
             }
             if flags.test(DoCommandFlag::Execute) {
                 (self.ground.set_ground)(tile.0, RailGroundType::Barren);
@@ -3011,7 +2991,7 @@ impl<'a> Ctx<'a> {
 
             /* allow terraforming */
             return cost.set(if was_water {
-                crate::company::price(usize::from(Price::PR_CLEAR_WATER.0))
+                crate::company::price(Price::PR_CLEAR_WATER)
             } else {
                 0
             });
@@ -3025,9 +3005,7 @@ impl<'a> Ctx<'a> {
             )
         {
             w::hit(w::RAIL_CMD_TERRAFORM_DEPOT);
-            return cost.set(crate::company::price(usize::from(
-                Price::PR_BUILD_FOUNDATION.0,
-            )));
+            return cost.set(crate::company::price(Price::PR_BUILD_FOUNDATION));
         }
         self.landscape_clear(cost, flags, tile);
     }

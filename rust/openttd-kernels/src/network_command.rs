@@ -673,7 +673,7 @@ pub(crate) fn receive_client(
     frame: *mut crate::session::Frame,
     work: crate::network_action::Actions,
 ) -> NetworkRecvStatus {
-    use crate::company_type::{CCA_NEW, COMPANY_SPECTATOR};
+    use crate::company_type::{COMPANY_SPECTATOR, CompanyCtrlAction};
     use crate::network_type::{ClientID, DestType, NetworkAction};
     let send_error = |error| {
         crate::network_connection::send_error(
@@ -765,12 +765,12 @@ pub(crate) fn receive_client(
      * something pretty naughty (or a bug), and will be kicked
      */
     let cca = if Commands(cp.cmd) == Commands::CMD_COMPANY_CTRL {
-        (s.control_action)(cp.data.span())
+        CompanyCtrlAction((s.control_action)(cp.data.span()))
     } else {
-        CCA_NEW
+        CompanyCtrlAction::CCA_NEW
     };
     if !(Commands(cp.cmd) == Commands::CMD_COMPANY_CTRL
-        && cca == CCA_NEW
+        && cca == CompanyCtrlAction::CCA_NEW
         && client_playas(ci) == CompanyID::NEW_COMPANY)
         && client_playas(ci) != CompanyID(cp.company)
     {
@@ -786,7 +786,7 @@ pub(crate) fn receive_client(
     }
 
     if Commands(cp.cmd) == Commands::CMD_COMPANY_CTRL {
-        if cca != CCA_NEW || cp.company != COMPANY_SPECTATOR {
+        if cca != CompanyCtrlAction::CCA_NEW || cp.company != COMPANY_SPECTATOR {
             return send_error(NetworkErrorCode::NETWORK_ERROR_CHEATER);
         }
 

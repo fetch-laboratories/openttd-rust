@@ -18,14 +18,10 @@ int32_t RustGRFPriceShift(const GRFFile *, uint32_t) noexcept;
 #include "../vehicle_base.h"
 
 inline UnitID RustCompanyUseVehicleUnit(CompanyID owner, VehicleType type, UnitID unit) noexcept { return Company::Get(owner)->freeunits[type].UseID(unit); }
-inline void RustCompanyAssignVehicleUnit(uint32_t id, uint8_t company) noexcept
-{
-	Vehicle *v = Vehicle::Get(id);
-	auto &units = Company::Get(CompanyID(company))->freeunits[v->GetType()];
-	v->unitnumber = RustCompanyUseVehicleUnit(CompanyID(company), v->GetType(), units.NextID());
-}
 inline bool OpenTTDCompanyIsValid(uint8_t company) noexcept { return Company::IsValidID(CompanyID(company)); }
 inline uint16_t OPENTTD_RUST_CALL RustCompanyRoadVehicleCount(const Company *company) noexcept { return company->group_all[VEH_ROAD].num_vehicle; }
+inline void *RustCompanyGroupAll(Company *company, uint8_t type) noexcept { return company->group_all[static_cast<VehicleType>(type)].state.state; }
+inline uint32_t RustCompanyLocationOfHQ(Company *company) noexcept { return company->location_of_HQ.base(); }
 inline bool RustCompanyAllowsPublicKey(uint8_t company, std::string_view public_key) noexcept { return Company::Get(company)->allow_list.Contains(public_key); }
 inline bool OpenTTDCompanyIsValidHuman(uint8_t company) noexcept { return Company::IsValidHumanID(CompanyID(company)); }
 inline CompanyID OpenTTDCurrentCompany() noexcept { return _current_company; }
@@ -36,13 +32,14 @@ inline int16_t RustCompanyEngineRenewMonths(const Company *company) noexcept { r
 inline EngineRenew **RustCompanyRenewalHead(const Company *company) noexcept { return company->renewal_head.state; }
 inline bool RustCompanyServiceIntervalPercent(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->settings.vehicle.servint_ispercent; }
 inline CompanySettings *RustCompanySettings(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings; }
-inline VehicleDefaultSettings *RustCompanyVehicleDefaults(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings.vehicle; }
+/** `&c->settings.vehicle`, the one member accessor of the company's vehicle defaults. */
+inline VehicleDefaultSettings *OPENTTD_RUST_CALL RustCompanyVehicleDefaultsOf(Company *c) noexcept { return &c->settings.vehicle; }
+inline VehicleDefaultSettings *RustCompanyVehicleDefaults(uint8_t owner) noexcept { return RustCompanyVehicleDefaultsOf(Company::Get(CompanyID(owner))); }
 inline uint16_t RustCompanyAircraftServiceInterval(CompanyID owner) noexcept { return Company::Get(owner)->settings.vehicle.servint_aircraft; }
 inline uint8_t RustCurrentCompanyID() noexcept { return OpenTTDCurrentCompany().base(); }
 inline void RustSetCurrentCompanyID(uint8_t company) noexcept { OpenTTDSetCurrentCompany(CompanyID(company)); }
 inline void RustInfrastructureDirty(uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); }
 inline bool RustIsLocalCompany() noexcept { return IsLocalCompany(); }
-inline void RustRestoreGenerationCompanies(uint8_t company) noexcept { _local_company = CompanyID(company); OpenTTDSetCurrentCompany(CompanyID(company)); }
 inline uint8_t RustLocalCompanyID() noexcept { return _local_company.base(); }
 /** Shared pool traversal preserves the native ascending ID order. */
 inline Company *RustCompanyNext(uint32_t from) noexcept
@@ -52,11 +49,6 @@ inline Company *RustCompanyNext(uint32_t from) noexcept
 }
 /** `&Company::Get(id)->Finances()`: the pool asserts the ID is below its first unused index. */
 inline CompanyFinances *RustCompanyGetFinances(uint8_t id) noexcept { return &Company::Get(id)->Finances(); }
-inline OpenTTDCompanyRef RustCompanyRefNext(uint32_t from) noexcept
-{
-	Company *c = RustCompanyNext(from);
-	return c == nullptr ? OpenTTDCompanyRef{nullptr, UINT32_MAX} : OpenTTDCompanyRef{&c->Finances(), c->index.base()};
-}
 inline uint32_t RustNextCompanyID(uint32_t from) noexcept
 {
 	Company *c = RustCompanyNext(from);
@@ -68,7 +60,6 @@ inline void RustSetCompanyRailTypes(uint8_t id, uint64_t types) noexcept { Compa
 inline void RustSetCompanyRoadTypes(uint8_t id, uint64_t types) noexcept { Company::Get(CompanyID{id})->avail_roadtypes = RoadTypes{types}; }
 inline bool RustIsInteractiveCompany(uint8_t id) noexcept { return IsInteractiveCompany(CompanyID{id}); }
 inline CompanyInfrastructure *RustCompanyInfrastructure(uint8_t owner) noexcept { return &Company::Get(CompanyID{owner})->infrastructure; }
-inline uint32_t RustCompanyHQ(uint8_t id) noexcept { return Company::Get(CompanyID(id))->location_of_HQ.base(); }
 inline uint8_t RustCompanyRecolour(const Company *company, bool two) noexcept { return company->GetCompanyRecolourOffset(LS_DEFAULT, two); }
 inline uint8_t RustObjectRecolour(uint8_t owner, bool two) noexcept { return RustCompanyRecolour(Company::Get(CompanyID(owner)), two); }
 #endif /* RUST_COMPANY_SERVICES_H */

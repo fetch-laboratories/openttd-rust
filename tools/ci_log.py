@@ -78,6 +78,7 @@ class Run(TypedDict):
     event: NotRequired[str]
     head_branch: NotRequired[str | None]
     head_sha: NotRequired[str]
+    run_started_at: NotRequired[str | None]
 
 
 @dataclass

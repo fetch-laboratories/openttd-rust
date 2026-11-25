@@ -25,24 +25,6 @@
 #include "../rust/session_ffi.h"
 #include "../safeguards.h"
 
-/* A hidden effect shell for the native glue checks below. */
-struct SchedulerShellVehicle final : Vehicle {
-	SchedulerShellVehicle() : Vehicle(VEH_EFFECT) { this->SetVehStatus(this->GetVehStatus().Set(VehState::Hidden)); }
-	bool Tick() override { return true; }
-};
-TEST_CASE("Vehicle maintenance previous ID preserves the company sentinel")
-{
-	struct Restore { ~Restore() { _vehicle_pool.CleanPool(); } } restore;
-	_vehicle_pool.CleanPool();
-	REQUIRE(Vehicle::CanAllocateItem(2));
-	auto *head = new (VehicleID(0)) SchedulerShellVehicle();
-	auto *part = new (VehicleID(1)) SchedulerShellVehicle();
-	head->SetNext(part);
-	const auto &services = GetRustCompanyServices();
-	CHECK(services.vehicle_previous(head->index.base()) == UINT32_MAX);
-	CHECK(services.vehicle_previous(part->index.base()) == head->index.base());
-}
-
 TEST_CASE("Base vehicle scheduler - consumed boundary layouts")
 {
 	ABI_LAYOUT_CHECK;

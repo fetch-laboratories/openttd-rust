@@ -304,6 +304,7 @@ test_leaves! {
     with_cargo_owner: cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List;
     with_cargo_type: cargo_type: unsafe extern "C" fn(V) -> u8;
     with_engine_by_id: engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine;
+    with_id: id: unsafe extern "C" fn(V) -> u32;
     with_resolve_callback: resolve_callback:
         unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16;
     with_shared: shared: &'static crate::services::Services;

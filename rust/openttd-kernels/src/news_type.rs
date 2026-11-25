@@ -205,16 +205,18 @@ pub struct NewsAllocatedData {
 pub(crate) struct CompanyNewsInformation(*mut NewsAllocatedData);
 
 impl CompanyNewsInformation {
-    /// `std::make_unique<CompanyNewsInformation>(title, Company::Get(c), other)`; `None` is
-    /// the original's default `other = nullptr`.
+    /// `std::make_unique<CompanyNewsInformation>(title, c, other)`, `c` being the current
+    /// company and `other` the other company; `None` is the original's default
+    /// `other = nullptr`. Each is a live native company.
     pub(crate) fn new(
         title: crate::strings_type::StringID,
-        c: crate::company_type::CompanyID,
-        other: Option<crate::company_type::CompanyID>,
+        c: *const crate::company_type::OpenTTDCompany,
+        other: Option<*const crate::company_type::OpenTTDCompany>,
     ) -> Self {
-        let other = other.unwrap_or(crate::company_type::CompanyID::INVALID);
         Self((crate::news_func::services().company_news_information)(
-            title.0, c.0, other.0,
+            title.0,
+            c,
+            other.unwrap_or(std::ptr::null()),
         ))
     }
 
@@ -223,6 +225,14 @@ impl CompanyNewsInformation {
         let mut name = Vec::new();
         let (sink, target) = crate::strings_func::sink_into(&mut name);
         (crate::news_func::services().company_news_company_name)(self.0, sink, target);
+        name
+    }
+
+    /// `other_company_name`: the name of the other company.
+    pub(crate) fn other_company_name(&self) -> Vec<u8> {
+        let mut name = Vec::new();
+        let (sink, target) = crate::strings_func::sink_into(&mut name);
+        (crate::news_func::services().company_news_other_company_name)(self.0, sink, target);
         name
     }
 

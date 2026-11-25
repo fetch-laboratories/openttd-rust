@@ -253,7 +253,7 @@ impl World<'_> {
         }
         let wc1 = self.class(tile);
         let wc2 = self.class(tile2);
-        self.expense(out, crate::company::price(7));
+        self.expense(out, crate::company::price_raw(7));
         for t in [tile, tile2] {
             let add = !(self.s.is_water_tile)(t);
             self.clear_command(ret, t, flags | DoCommandFlag::AUTO);
@@ -332,7 +332,7 @@ impl World<'_> {
                 w::hit(w::WATER_CMD_FORCE);
             }
         }
-        self.expense(out, crate::company::price(32));
+        self.expense(out, crate::company::price_raw(32));
     }
     fn do_build_lock(
         &self,
@@ -373,7 +373,7 @@ impl World<'_> {
                     return;
                 }
                 (self.c.amount)(out, (self.c.money)(ret));
-                (self.c.amount)(out, crate::company::price(60));
+                (self.c.amount)(out, crate::company::price_raw(60));
             }
             if !self.flat(t) {
                 self.error(out, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
@@ -446,7 +446,7 @@ impl World<'_> {
             }
             w::hit(w::WATER_CMD_LOCK);
         }
-        (self.c.amount)(out, crate::company::price(64));
+        (self.c.amount)(out, crate::company::price_raw(64));
     }
     fn build_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         let dir = get_inclined_slope_direction_raw(
@@ -513,7 +513,7 @@ impl World<'_> {
             }
             w::hit(w::WATER_CMD_REMOVE_LOCK);
         }
-        self.expense(out, crate::company::price(65));
+        self.expense(out, crate::company::price_raw(65));
     }
     fn desert(&self, tile: u32) {
         let mut iter = crate::spiral::square(
@@ -617,7 +617,7 @@ impl World<'_> {
                     self.check_docking(tile);
                     w::hit(w::WATER_CMD_CANAL);
                 }
-                (self.c.amount)(out, crate::company::price(60));
+                (self.c.amount)(out, crate::company::price_raw(60));
             } else {
                 w::hit(w::WATER_CMD_SKIP);
             }
@@ -635,9 +635,9 @@ impl World<'_> {
                     return;
                 }
                 let price = if self.canal(tile) {
-                    crate::company::price(61)
+                    crate::company::price_raw(61)
                 } else {
-                    crate::company::price(34)
+                    crate::company::price_raw(34)
                 };
                 if !(self.a.environment.freeform_edges)() && self.edge(tile) {
                     self.error(out, STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP.0);
@@ -679,9 +679,9 @@ impl World<'_> {
                 self.expense(
                     out,
                     if is_slope_with_one_corner_raised_raw(slope.0) {
-                        crate::company::price(34)
+                        crate::company::price_raw(34)
                     } else {
-                        crate::company::price(23)
+                        crate::company::price_raw(23)
                     },
                 );
             }

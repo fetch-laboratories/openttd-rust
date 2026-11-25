@@ -1057,7 +1057,7 @@ pub(crate) fn receive_identify(
     /* Make sure companies to which people try to join are not autocleaned */
     let c = (f.command.company.finance.company_finances)(playas.0);
     if !c.is_null() {
-        write_field!(c, empty, 0);
+        write_field!(c, months_empty, 0);
     }
 
     send_newgrf_check(s, f, socket, work)

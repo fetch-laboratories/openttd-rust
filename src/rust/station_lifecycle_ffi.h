@@ -22,7 +22,6 @@ struct OpenTTDStationLifecycleServices {
 	bool (*sign_valid)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(sign_valid);
 	void (*remove_sign)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_sign);
 	uint16_t (*airport_maintenance)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_maintenance);
-	size_t maintenance_price;
 };
 const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcept;
 inline const OpenTTDStationLifecycleServices *RustStationLifecycleServices() noexcept { return &GetRustStationLifecycleServices(); }

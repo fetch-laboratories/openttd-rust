@@ -17,11 +17,6 @@
 
 void AddNewsItem(EncodedString &&headline, NewsType type, NewsStyle style, NewsFlags flags, NewsReference ref1 = {}, NewsReference ref2 = {}, std::unique_ptr<NewsAllocatedData> &&data = nullptr, AdviceType advice_type = AdviceType::Invalid);
 
-inline void AddCompanyNewsItem(EncodedString &&headline, std::unique_ptr<CompanyNewsInformation> cni)
-{
-	AddNewsItem(std::move(headline), NewsType::CompanyInfo, NewsStyle::Company, {}, {}, {}, std::move(cni));
-}
-
 /**
  * Adds a newsitem referencing a vehicle.
  *

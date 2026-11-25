@@ -2446,7 +2446,11 @@ pub unsafe extern "C" fn openttd_rust_industry_daily_start(
 ///
 /// # Safety
 /// Live builder; native map-size preconditions constrain the original shift.
-unsafe fn startup_industry_daily_changes(builder: *mut Builder, map_bits: u32, init_counter: bool) {
+pub(crate) unsafe fn startup_industry_daily_changes(
+    builder: *mut Builder,
+    map_bits: u32,
+    init_counter: bool,
+) {
     let fields = build_fields(builder);
     unsafe {
         // After getting map size, it needs to be scaled appropriately and divided by 31,

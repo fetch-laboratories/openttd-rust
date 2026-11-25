@@ -60,8 +60,6 @@
 
 #include "safeguards.h"
 
-void ClearEnginesHiddenFlagOfCompany(CompanyID cid);
-
 CompanyID _local_company;   ///< Company controlled by the human player at this client. Can also be #COMPANY_SPECTATOR.
 CompanyID _current_company; ///< Company currently doing an action.
 static_assert(sizeof(TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID>) == MAX_COMPANIES);
@@ -171,11 +169,10 @@ static CompanyMask _dirty_company_finances{}; ///< Bitmask of company finances t
 /**
  * Mark all finance windows owned by a company as needing a refresh.
  * The actual refresh is deferred until the end of the gameloop to reduce duplicated work.
- * @param company Company that changed, and needs its windows refreshed.
+ * @param cid Company that changed, and needs its windows refreshed.
  */
-void InvalidateCompanyWindows(const Company *company)
+void InvalidateCompanyWindows(CompanyID cid)
 {
-	CompanyID cid = company->index;
 	_dirty_company_finances.Set(cid);
 }
 
@@ -207,8 +204,7 @@ static const IntervalTimer<TimerWindow> invalidate_company_windows_interval(std:
  */
 Money GetAvailableMoney(CompanyID company)
 {
-	const Company *c = Company::GetIfValid(company);
-	return openttd_rust_company_available_money(c == nullptr ? nullptr : &c->Finances(), _settings_game.difficulty.infinite_money);
+	return openttd_rust_company_available_money(&GetRustCompanyServices(), company.base());
 }
 
 
@@ -228,7 +224,7 @@ void SubtractMoneyFromCompany(const CommandCost &cost)
  */
 void SubtractMoneyFromCompanyFract(CompanyID company, const CommandCost &cst)
 {
-	openttd_rust_company_subtract_fraction(&GetRustCompanyFinanceServices(), RustCompanyGetFinances(company.base()), company.base(), cst.GetCost().base(), cst.GetExpensesType());
+	openttd_rust_company_subtract_fraction(&GetRustCompanyFinanceServices(), company.base(), cst.GetCost().base(), cst.GetExpensesType());
 }
 
 
@@ -303,9 +299,9 @@ void ResetCompanyLivery(Company *c)
 Company *DoStartupNewCompany(bool is_ai, CompanyID company = CompanyID::Invalid())
 {
 	/* Rust returns before AI::StartNew, whose script memory policy can throw. */
-	OpenTTDCompanyStartup frame{.company = UINT32_MAX, .requested = company.base(), .is_ai = is_ai, .stage = 0};
-	while (openttd_rust_company_startup(&GetRustCompanyServices(), &frame)) AI::StartNew(CompanyID(frame.company));
-	return frame.company == UINT32_MAX ? nullptr : Company::Get(frame.company);
+	OpenTTDCompanyStartup frame{.is_ai = is_ai, .company = company.base(), .stage = 0, .index = UINT32_MAX, .created = nullptr};
+	while (openttd_rust_company_startup(&GetRustCompanyServices(), &frame)) AI::StartNew(CompanyID(frame.index));
+	return frame.created;
 }
 
 /** Start a new competitor company if possible. */
@@ -341,12 +337,6 @@ bool CheckTakeoverVehicleLimit(CompanyID cbig, CompanyID csmall)
 
 /** Called every tick for updating some company info. */
 
-OpenTTDCompanyYear RustCompanyClockYear() noexcept
-{
-	Company *local = Company::GetIfValid(_local_company);
-	return {.local_finances = local == nullptr ? nullptr : &local->Finances(), .local = _local_company.base(),
-		.show_finances = _settings_client.gui.show_finances, .new_year_sound = _settings_client.sound.new_year};
-}
 
 /**
  * A year has passed, update the economic data of all companies, and perhaps show the
@@ -407,13 +397,14 @@ void CompanyAdminRemove(CompanyID company_id, CompanyRemoveReason reason)
 CommandCost CmdCompanyCtrl(DoCommandFlags flags, CompanyCtrlAction cca, CompanyID company_id, CompanyRemoveReason reason, ClientID client_id)
 {
 	OpenTTDCompanyControl frame{
-		.result = {}, .startup = {}, .client = static_cast<uint32_t>(client_id), .action = static_cast<uint8_t>(cca),
-		.target = company_id.base(), .reason = static_cast<uint8_t>(reason), .execute = flags.Test(DoCommandFlag::Execute), .stage = 0,
+		.args = {.cca = static_cast<uint8_t>(cca), .company_id = company_id.base(), .reason = static_cast<uint8_t>(reason), .client_id = static_cast<uint32_t>(client_id)},
+		.flags = flags.base(), .stage = 0, .startup = {.is_ai = true, .company = CompanyID::Invalid().base(), .stage = 0, .index = UINT32_MAX, .created = nullptr},
 	};
+	CommandCost result;
 	RustTileOwnerContext ownership;
 	/* Rust returns before AI::StartNew, whose script memory policy can throw. */
-	while (openttd_rust_company_control(&GetRustCompanyServices(), &ownership.view, &frame)) AI::StartNew(CompanyID(frame.startup.company));
-	return RustCompanyCost(frame.result);
+	while (openttd_rust_company_control(&GetRustCompanyServices(), &ownership.view, RustCommandCost(&result), &frame)) AI::StartNew(CompanyID(frame.startup.index));
+	return result;
 }
 
 /**
@@ -534,7 +525,9 @@ uint32_t CompanyInfrastructure::GetRoadTramTotal(RoadTramType rtt) const
  */
 CommandCost CmdGiveMoney(DoCommandFlags flags, Money money, CompanyID dest_company)
 {
-	return RustCompanyCost(openttd_rust_company_give_money(&GetRustCompanyFinanceServices(), _settings_game.economy.give_money, money.base(), dest_company.base(), flags.Test(DoCommandFlag::Execute)));
+	CommandCost result;
+	openttd_rust_company_give_money(&GetRustCompanyServices(), RustCommandCost(&result), flags.base(), money.base(), dest_company.base());
+	return result;
 }
 
 /**
@@ -692,70 +685,4 @@ std::optional<CompanyManagerFace> ParseCompanyManagerFaceCode(std::string_view s
 	cmf.bits = MaskCompanyManagerFaceBits(cmf, vars);
 
 	return cmf;
-}
-
-/* Native startup and networking operations used by the Rust company owner. */
-/** Prepare company infrastructure and return whether startup needs a random face. */
-bool OPENTTD_RUST_CALL RustCompanyPrepare(uint8_t id, bool is_ai) noexcept
-{
-	Company *c = Company::Get(id);
-	c->avail_railtypes = GetCompanyRailTypes(c->index);
-	c->avail_roadtypes = GetCompanyRoadTypes(c->index);
-	c->inaugurated_year = TimerGameEconomy::year;
-	c->inaugurated_year_calendar = TimerGameCalendar::year;
-
-	bool randomise_face = true;
-	if (!_company_manager_face.empty() && !is_ai && !_networking) {
-		auto cmf = ParseCompanyManagerFaceCode(_company_manager_face);
-		if (cmf.has_value()) {
-			randomise_face = false;
-			c->face = std::move(*cmf);
-		}
-	}
-	return randomise_face;
-}
-void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t id) noexcept
-{
-	Company *c = Company::Get(id);
-
-	SetDefaultCompanySettings(c->index);
-	ClearEnginesHiddenFlagOfCompany(c->index);
-}
-void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept
-{
-	SetWindowDirty(WC_GRAPH_LEGEND, 0);
-	InvalidateWindowData(WC_CLIENT_LIST, 0);
-	InvalidateWindowData(WC_LINKGRAPH_LEGEND, 0);
-	BuildOwnerLegend();
-	InvalidateWindowData(WC_SMALLMAP, 0, 1);
-}
-/** CCA_NEW failure: the client reverts to spectating. */
-void RustCompanyNetworkSpectate(uint32_t client) noexcept
-{
-	NetworkClientInfo *ci = NetworkClientInfo::GetByClientID(ClientID(client));
-	if (_network_server && ci != nullptr) {
-		ci->client_playas = COMPANY_SPECTATOR;
-		NetworkUpdateClientInfo(ci->client_id);
-	}
-}
-void RustCompanyAdminNew(uint8_t id) noexcept
-{
-	NetworkAdminCompanyNew(Company::Get(id));
-}
-/** CCA_NEW: the requesting client takes control of its new company. */
-Company *RustCompanyNetworkOwn(uint8_t id, uint32_t client) noexcept
-{
-	if (ClientID(client) != _network_own_client_id) return nullptr;
-	Company *c = Company::Get(id);
-	assert(_local_company == COMPANY_SPECTATOR);
-	return c;
-}
-void RustCompanyNetworkOwnSettings(Company *c) noexcept
-{
-	if (!_company_manager_face.empty()) {
-		auto cmf = ParseCompanyManagerFaceCode(_company_manager_face);
-		if (cmf.has_value()) Command<CMD_SET_COMPANY_MANAGER_FACE>::SendNet(STR_NULL, c->index, cmf->style, cmf->bits);
-	}
-	SyncCompanySettings();
-	MarkWholeScreenDirty();
 }

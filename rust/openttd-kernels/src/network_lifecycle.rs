@@ -221,7 +221,14 @@ pub(crate) fn disconnect_send(
 }
 
 fn disconnect_close(s: &Services, f: &FrameServices, close_admins: bool, work: Actions) {
-    (f.command.company.close_network_status)();
+    crate::window_func::close_window_by_id(
+        crate::window_type::WindowClass::WC_NETWORK_STATUS_WINDOW,
+        crate::window_type::WindowNumber::from(
+            crate::window_type::WindowNumberEnum::WN_NETWORK_STATUS_WINDOW_JOIN,
+        ),
+        true,
+        0,
+    );
     close(s, f, close_admins, work);
     if work.pending() {
         work.push(Resume::DisconnectEnd);
@@ -465,7 +472,7 @@ pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionSe
         (s.admins_welcome)();
     } else {
         let company_services = f.command.company;
-        let id = crate::company::first_playable(company_services);
+        let id = crate::company::get_first_playable_company_id(company_services);
         let company = if (company_services.shared.company_valid)(id.0) {
             (company_services.identity.company)(id)
         } else {

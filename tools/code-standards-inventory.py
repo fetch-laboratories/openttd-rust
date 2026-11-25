@@ -40,6 +40,8 @@ every row at the merge base and at the head, then each row new or grown at the
 head; it gates nothing. It also lists, whether new or not, each file-level
 `#![allow(...)]` naming `unsafe_code` in a file that the head lists as finished
 and the base does not: a pass scopes `unsafe_code` to the items that need it.
+`--worksets` prints #734's counts over docs/worksets.md and the finished list
+at the head; it gates nothing either.
 """
 
 import argparse
@@ -1032,6 +1034,133 @@ def gate(base_ref: str, head: str) -> int:
     return int(bool(failures or missing))
 
 
+WORKSETS = "docs/worksets.md"
+# `- **04 Cargo**: `cargo_flow.rs`, ...`: a workset and its files under RUST.
+WORKSET_LINE = re.compile(r"- \*\*([^*]+)\*\*: (`[^`]+`(?:, `[^`]+`)*)")
+
+
+@dataclass
+class WorksetRow:
+    """One workset's count: its files on disk, those finished and their lines,
+    the lines left and each unfinished file with its lines."""
+
+    name: str
+    files: int = 0
+    finished: int = 0
+    finished_lines: int = 0
+    left: int = 0
+    unfinished: list[str] = field(default_factory=list)
+
+
+def workset_manifest(text: str) -> tuple[dict[str, list[str]], list[str]]:
+    """Each workset's entries in order, and a problem line per malformed line."""
+    worksets: dict[str, list[str]] = {}
+    problems = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not line.startswith("- "):
+            continue
+        if found := WORKSET_LINE.fullmatch(line.strip()):
+            worksets.setdefault(found[1], []).extend(re.findall(r"`([^`]+)`", found[2]))
+        else:
+            problems.append(f"{WORKSETS}:{number}: not a workset line: {line}")
+    return worksets, problems
+
+
+@dataclass
+class WorksetCount:
+    """The manifest counted against a tree: a row per workset, the files the
+    manifest names, and its entries without a file or listed twice."""
+
+    rows: list[WorksetRow] = field(default_factory=list)
+    seen: set[str] = field(default_factory=set)
+    missing: list[str] = field(default_factory=list)
+    twice: list[str] = field(default_factory=list)
+
+
+def count_worksets(
+    manifest: dict[str, list[str]], finished: set[str], lines: dict[str, int]
+) -> WorksetCount:
+    """Each entry counted once, in its first workset."""
+    count = WorksetCount()
+    for name, entries in manifest.items():
+        row = WorksetRow(name)
+        for entry in entries:
+            path = f"{RUST}/{entry}"
+            if path in count.seen:
+                count.twice.append(f"{name}: {entry}")
+                continue
+            count.seen.add(path)
+            if path not in lines:
+                count.missing.append(f"{name}: {entry}")
+                continue
+            row.files += 1
+            if path in finished:
+                row.finished += 1
+                row.finished_lines += lines[path]
+            else:
+                row.left += lines[path]
+                row.unfinished.append(f"{entry} ({lines[path]})")
+        count.rows.append(row)
+    return count
+
+
+def worksets(head: str) -> int:
+    """#734's count: each workset's finished files and lines left, over the
+    manifest and the finished list at head, and every Rust file there (#1063).
+    A file's lines are its newline count. It gates nothing."""
+    text = show(head, WORKSETS)
+    if text is None:
+        print(f"{WORKSETS} is not at {head}; reading the checkout's")
+        text = (ROOT / WORKSETS).read_text()
+    manifest, problems = workset_manifest(text)
+    for problem in problems:
+        print(problem)
+    finished = set(finished_files(head))
+    lines = {
+        path: data.count(b"\n")
+        for path, data in archive(head, RUST).items()
+        if path.endswith(".rs")
+    }
+    count = count_worksets(manifest, finished, lines)
+    rows = count.rows
+    entries = sum(row.files for row in rows)
+    done = sum(row.finished for row in rows)
+    done_lines = sum(row.finished_lines for row in rows)
+    left = sum(row.left for row in rows)
+    print(
+        f"Worksets at {head}: {entries} entries, {done} finished with {done_lines} "
+        f"lines, {left} lines left in the other {entries - done}, "
+        f"{done_lines + left} together"
+    )
+    print(
+        "| Workset | Files | Finished | Finished lines | Lines left | Unfinished files |"
+    )
+    print("| --- | ---: | ---: | ---: | ---: | --- |")
+    for row in rows:
+        print(
+            f"| {row.name} | {row.files} | {row.finished} | {row.finished_lines} | "
+            f"{row.left} | {', '.join(row.unfinished)} |"
+        )
+    outside = sorted(finished - count.seen)
+    unplaced = sorted(path for path in lines if path not in count.seen | finished)
+    for title, paths in (
+        ("Finished files in no workset", outside),
+        ("Rust files in no workset and not finished", unplaced),
+    ):
+        total = sum(lines.get(path, 0) for path in paths)
+        print(f"{title}: {len(paths)}, {total} lines")
+        for path in paths:
+            print(f"  {path} ({lines.get(path, 'no file')})")
+    for title, found in (
+        ("Manifest entries without a file", count.missing),
+        ("Manifest entries listed twice", count.twice),
+    ):
+        print(f"{title}: {len(found)}")
+        for entry in found:
+            print(f"  {entry}")
+    return 0
+
+
 # Candidate rows: listed for the implementer and reviewer
 # to judge, outside RESIDUE, the totals and --gate.
 SERVICE = re.compile(r'\bextern\s*"C"\s*fn\b')
@@ -1560,8 +1689,15 @@ def main() -> int:
         metavar="BASE_REF",
         help=f"compare the files given, or else the changed files {FINISHED} lists, at the merge base with BASE_REF and at the head",
     )
+    parser.add_argument(
+        "--worksets",
+        action="store_true",
+        help=f"print #734's counts from {WORKSETS}: each workset's finished files and lines left, and the files in no workset",
+    )
     args = parser.parse_args()
     files = [str(PurePosixPath(path)) for path in args.files]
+    if args.worksets:
+        return worksets(args.head)
     if args.gate:
         return gate(args.gate, args.head)
     if args.compare:

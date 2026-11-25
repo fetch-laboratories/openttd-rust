@@ -1,0 +1,35 @@
+[
+  {
+    "retires": [
+      "ctest:Company economy - offline and server bankrupt deletion posts"
+    ],
+    "oracle": "PARTIAL TRANSFER of src/tests/company_economy.cpp (#1048, plan decision 12). The native case's two modes split. Its server mode stays as the native case \"Company economy - server bankrupt deletion posts\", with its expectations (post 1, post 2, current company 18, both companies kept) unchanged and its inputs repaired for the new paths. Its offline mode, whose posted CCA_DELETE executes, could only run against the company_bankrupt_news carrier this pass removes, since the executed deletion now builds a CompanyNewsInformation through the process-wide news table on the fixture's non-pool companies. Its whole observation moves to a Rust test over recording tables that runs the real command::post and cmd_company_ctrl: one economy month callback, both companies bankrupt for a tenth month deleted in ID order with CRR_BANKRUPT, no admin update after either, and the incoming current company 18 restored. Every expected value is the native case's own literal, not regenerated. No platform field: the observations use fixed-width values only.",
+    "observations": {
+      "Offline, one economy month deletes both companies bankrupt for a tenth month in ID order through Command::Post and CmdCompanyCtrl, with no admin update after either and the current company restored": [
+        "rust:lib:company::tests::evidence_tests::offline_bankrupt_deletion_executes_in_id_order"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "ctest:Vehicle maintenance previous ID preserves the company sentinel"
+    ],
+    "oracle": "RETIRED WITH ITS BINDING (#1048, plan decision 6). The native case called the company table's vehicle_previous slot, the C++ carrier that returned a vehicle's previous part's ID with UINT32_MAX for none, which ChangeOwnershipOfCompanyItems used to delete only chain heads. The pass deletes the slot: the walk reads v->Previous() through the typed VehicleRef::previous accessor over the record's stored link. The Rust walk test deletes a company with a two-part train and observes that only the part with no previous link, the head, is deleted, its chain with it. No native body is left for the case to call.",
+    "observations": {
+      "A deleted company's vehicles are deleted only at their first part, by the stored previous link": [
+        "rust:lib:company::tests::evidence_tests::change_ownership_moves_ratings_rights_groups_and_stations"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "target:industry-company-acquire candidate COMPANY-CONTROL nested lines"
+    ],
+    "oracle": "MOVED OBSERVATION (#1048, root's ruling https://github.com/fetch-laboratories/openttd-rust/pull/1056#issuecomment-7152060635). tools/simulation/company-control-console.inc observes the nested CMD_CHANGE_SERVICE_INT of ChangeOwnershipOfCompanyItems by link-wrapping the C++ CmdChangeServiceInt and printing its arguments. Plan decision 6 runs the candidate's nested command in Rust (vehicle_transactions::cmd_change_service_int under command::nested), so the candidate passes no wrapped symbol. companies.py now requires the lines of the reference only, where they show that the scenario's input reaches the nested command, and drops them from both logs before the logs are compared; the resulting service intervals stay compared as game state, and a candidate that skips the nested command fails that comparison. The Rust test runs the production walk with expectations from economy.cpp:447-453 at the pin: a vehicle with a custom interval runs no nested command; each other vehicle of the old owner runs it once, executed, with its own index, the old owner as the current company and custom false, and gets the buyer's default and percent flag. The interval, percent and Bankrupt arguments the callee does not read on this path are on #156.",
+    "observations": {
+      "A takeover's nested CMD_CHANGE_SERVICE_INT runs for each non-custom vehicle of the old owner with its index, executed, not custom, under the old owner as the current company, and for no custom one": [
+        "rust:lib:company::tests::evidence_tests::takeover_resets_each_non_custom_service_interval"
+      ]
+    }
+  }
+]

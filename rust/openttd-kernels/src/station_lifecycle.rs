@@ -49,7 +49,6 @@ pub struct Services {
     pub sign_valid: extern "C" fn(*mut BaseStation) -> bool,
     pub remove_sign: extern "C" fn(StationID),
     pub airport_maintenance: extern "C" fn(*const crate::station_cmd::AirportSpec) -> u16,
-    pub maintenance_price: usize,
 }
 impl Services {
     fn commands(&self) -> &crate::station_cmd::CommandServicesTable {
@@ -668,10 +667,6 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
 pub unsafe extern "C" fn openttd_rust_station_airport_maintenance(s: &Services, owner: u8) -> i64 {
     airport_maintenance_cost(s, CompanyID(owner))
 }
-/// Raw adapter for `company.rs`, outside this pass; delegates to `airport_maintenance_cost`.
-pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
-    airport_maintenance_cost(s, CompanyID(owner))
-}
 /// `AirportMaintenanceCost`: the maintenance cost of all airports of a company.
 pub(crate) fn airport_maintenance_cost(s: &Services, owner: CompanyID) -> i64 {
     let c = s.commands();
@@ -689,7 +684,7 @@ pub(crate) fn airport_maintenance_cost(s: &Services, owner: CompanyID) -> i64 {
         {
             let spec = crate::newgrf_airport::station_spec(st, crate::newgrf_airport::runtime());
             total = total.saturating_add(
-                crate::company::price(s.maintenance_price)
+                crate::company::price(crate::economy_type::Price::PR_INFRASTRUCTURE_AIRPORT)
                     .saturating_mul(i64::from((s.airport_maintenance)(spec))),
             );
         }
@@ -700,7 +695,7 @@ pub(crate) fn airport_maintenance_cost(s: &Services, owner: CompanyID) -> i64 {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, industry_type, set_industry_type, roadstop, cleaning_pool, sign_valid, remove_sign, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, industry_type, set_industry_type, roadstop, cleaning_pool, sign_valid, remove_sign, airport_maintenance };
 }
 
 /// Test-only table for `crate::test_tables`; its private fields keep it in this module.
@@ -716,5 +711,4 @@ pub(crate) const TEST_TABLE: crate::station_lifecycle::Services =
         sign_valid: crate::test_tables::unreachable1,
         remove_sign: crate::test_tables::unreachable1,
         airport_maintenance: crate::test_tables::unreachable1,
-        maintenance_price: 0,
     };

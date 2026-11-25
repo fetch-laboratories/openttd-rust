@@ -22,6 +22,8 @@ impl VehicleFlag {
     pub const TIMETABLE_STARTED: Self = Self(3);
     /// Don't load anymore during the next load cycle.
     pub const STOP_LOADING: Self = Self(6);
+    /// Service interval is custom.
+    pub const SERVICE_INTERVAL_IS_CUSTOM: Self = Self(8);
     /// Service interval is percent.
     pub const SERVICE_INTERVAL_IS_PERCENT: Self = Self(9);
 }

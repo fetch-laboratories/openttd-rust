@@ -42,9 +42,14 @@ pub struct Services {
     pub assert_encoded: extern "C" fn(u32, usize),
     /// Sink `CompanyNewsInformation::company_name`.
     pub company_news_company_name: extern "C" fn(*const NewsAllocatedData, Sink, *mut c_void),
-    /// `new CompanyNewsInformation(title, Company::Get(company), other)`; an invalid
-    /// `other` passes `nullptr`.
-    pub company_news_information: extern "C" fn(u32, u8, u8) -> *mut NewsAllocatedData,
+    /// `new CompanyNewsInformation(title, c, other)`; `other` is null when not relevant.
+    pub company_news_information: extern "C" fn(
+        u32,
+        *const crate::company_type::OpenTTDCompany,
+        *const crate::company_type::OpenTTDCompany,
+    ) -> *mut NewsAllocatedData,
+    /// Sink `CompanyNewsInformation::other_company_name`.
+    pub company_news_other_company_name: extern "C" fn(*const NewsAllocatedData, Sink, *mut c_void),
     /// `DeleteIndustryNews`.
     pub delete_industry_news: extern "C" fn(u16),
     /// `DeleteStationNews`.
@@ -82,6 +87,7 @@ crate::abi::layouts! {
         assert_encoded,
         company_news_company_name,
         company_news_information,
+        company_news_other_company_name,
         delete_industry_news,
         delete_station_news,
         delete_vehicle_news,
@@ -158,7 +164,11 @@ extern "C" fn unbound_company_news_company_name(
 ) {
     std::process::abort()
 }
-extern "C" fn unbound_company_news_information(_: u32, _: u8, _: u8) -> *mut NewsAllocatedData {
+extern "C" fn unbound_company_news_information(
+    _: u32,
+    _: *const crate::company_type::OpenTTDCompany,
+    _: *const crate::company_type::OpenTTDCompany,
+) -> *mut NewsAllocatedData {
     std::process::abort()
 }
 extern "C" fn unbound_delete_id(_: u16) {
@@ -218,6 +228,7 @@ static UNBOUND: Services = Services {
     assert_encoded: unbound_assert_encoded,
     company_news_company_name: unbound_company_news_company_name,
     company_news_information: unbound_company_news_information,
+    company_news_other_company_name: unbound_company_news_company_name,
     delete_industry_news: unbound_delete_id,
     delete_station_news: unbound_delete_id,
     delete_vehicle_news: unbound_delete_vehicle_news,
@@ -321,6 +332,23 @@ pub(crate) fn add_tile_news_item(
     });
 }
 
+/// `AddCompanyNewsItem`: add a company news item with the company information `cni`, which
+/// passes to the news item.
+pub(crate) fn add_company_news_item(
+    headline: &EncodedString,
+    cni: crate::news_type::CompanyNewsInformation,
+) {
+    add_news_item(&AddNewsItemArgs {
+        data: cni.into_data(),
+        ..AddNewsItemArgs::new(
+            headline,
+            NewsType::CompanyInfo,
+            NewsStyle::Company,
+            NewsFlags::default(),
+        )
+    });
+}
+
 /// `AddIndustryNewsItem`.
 pub(crate) fn add_industry_news_item(
     headline: &EncodedString,
@@ -414,8 +442,13 @@ pub(crate) mod testing {
             extra_msg: Vec<u8>,
             company: u8,
         },
-        /// `new CompanyNewsInformation(title, Company::Get(company), other)`.
-        CompanyNewsInformation(u32, u8, u8),
+        /// `new CompanyNewsInformation(title, c, other)`, with the companies' handles; `other`
+        /// is null when not relevant.
+        CompanyNewsInformation(
+            u32,
+            *const crate::company_type::OpenTTDCompany,
+            *const crate::company_type::OpenTTDCompany,
+        ),
         AiNewEvent(u8, ScriptEvent),
         AiBroadcastNewEvent(ScriptEvent, u8),
         GameNewEvent(ScriptEvent),
@@ -465,9 +498,21 @@ pub(crate) mod testing {
         let params: Vec<String> = params.iter().map(u64::to_string).collect();
         format!("S{string}:{}", params.join(",")).into_bytes()
     }
-    /// The company name of recorded `CompanyNewsInformation` data.
-    pub(crate) fn company_news_name(company: u8) -> Vec<u8> {
-        format!("company {company}").into_bytes()
+    /// The test handle of company `id`: a pointer no test dereferences, unique per company.
+    pub(crate) fn company(id: u8) -> *mut crate::company_type::OpenTTDCompany {
+        std::ptr::without_provenance_mut(usize::from(id) + 1)
+    }
+    /// The company name of recorded `CompanyNewsInformation` data for the handle `c`.
+    pub(crate) fn company_news_name(c: *const crate::company_type::OpenTTDCompany) -> Vec<u8> {
+        format!("company {}", c.addr() - 1).into_bytes()
+    }
+    /// The recorded data of a `CompanyNewsInformation`: the company name first, as
+    /// `add_news_item` reads it.
+    #[repr(C)]
+    #[derive(Clone)]
+    struct Information {
+        company_name: Vec<u8>,
+        other_company_name: Vec<u8>,
     }
 
     fn reference(record: crate::news_type::NewsReferenceRecord) -> crate::news_type::NewsReference {
@@ -516,11 +561,29 @@ pub(crate) mod testing {
     }
     extern "C" fn company_news_information(
         title: u32,
-        company: u8,
-        other: u8,
+        c: *const crate::company_type::OpenTTDCompany,
+        other: *const crate::company_type::OpenTTDCompany,
     ) -> *mut NewsAllocatedData {
-        push(Effect::CompanyNewsInformation(title, company, other));
-        Box::into_raw(Box::new(company_news_name(company))).cast()
+        push(Effect::CompanyNewsInformation(title, c, other));
+        Box::into_raw(Box::new(Information {
+            company_name: company_news_name(c),
+            other_company_name: if other.is_null() {
+                Vec::new()
+            } else {
+                company_news_name(other)
+            },
+        }))
+        .cast()
+    }
+    extern "C" fn company_news_other_company_name(
+        data: *const NewsAllocatedData,
+        sink: Sink,
+        target: *mut c_void,
+    ) {
+        let name = copied(data.cast::<Information>(), 1)
+            .remove(0)
+            .other_company_name;
+        sink(target, name.as_ptr(), name.len());
     }
     extern "C" fn delete_industry_news(id: u16) {
         push(Effect::DeleteIndustryNews(id));
@@ -654,6 +717,7 @@ pub(crate) mod testing {
         assert_encoded,
         company_news_company_name,
         company_news_information,
+        company_news_other_company_name,
         delete_industry_news,
         delete_station_news,
         delete_vehicle_news,

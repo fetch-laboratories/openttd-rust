@@ -122,8 +122,6 @@ pub struct CommandServices {
     pub command_valid: extern "C" fn(u8) -> bool,
     /// Canonical native finance owner resolution and presentation leaves.
     pub finance: &'static crate::company::FinanceServices,
-    /// Current infinite-money difficulty setting.
-    pub infinite_money: extern "C" fn() -> bool,
     /// Native error storage and local encoded currency formatting only.
     pub money_error: unsafe extern "C" fn(*mut CommandCost, i64),
     /// Canonical infrastructure window invalidation.
@@ -346,6 +344,8 @@ pub struct Services {
     pub is_water_tile: extern "C" fn(u32) -> bool,
     /// `_local_company`, read at the original's observation point.
     pub local_company: extern "C" fn() -> u8,
+    /// `_local_company = company`.
+    pub set_local_company_id: extern "C" fn(u8),
     /// Canonical `Tile` and `Map` statics, loaded at each observation.
     pub map: *const crate::map_func::MapStatics,
     /// Shared addresses of canonical settings; field values are loaded at their source branches.
@@ -720,7 +720,6 @@ crate::abi::layouts! {
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
         command_flags, command_type, command_valid,
         finance,
-        infinite_money,
         money_error,
         infrastructure_dirty,
         landscape_commands,
@@ -811,6 +810,7 @@ crate::abi::layouts! {
         is_road_depot,
         is_water_tile,
         local_company,
+        set_local_company_id,
         map,
         settings,
         map_max_x,
@@ -1169,6 +1169,7 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         is_road_depot: flag,
         is_water_tile: flag,
         local_company: unused_current_company,
+        set_local_company_id: unused_set_local_company_id,
         map: crate::map_func::fixture::statics(),
         settings: std::ptr::null(),
         map_max_x: word0,
@@ -1273,6 +1274,10 @@ extern "C" fn fixture_train_trackdir(_: *const Train) -> Trackdir {
     Trackdir(0)
 }
 
+#[cfg(test)]
+pub(crate) extern "C" fn unused_set_local_company_id(_: u8) {
+    unreachable!("the fixture does not write the local company");
+}
 #[cfg(test)]
 pub(crate) extern "C" fn unused_company_valid(_: u8) -> bool {
     false

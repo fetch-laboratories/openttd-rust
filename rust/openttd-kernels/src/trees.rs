@@ -24,7 +24,7 @@ use crate::bitmath_func::gb;
 use crate::clear_map::{ClearGround, get_clear_density, get_clear_ground, is_clear_ground};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
-use crate::economy_type::{ExpensesType, PR_BUILD_TREES, PR_CLEAR_TREES};
+use crate::economy_type::ExpensesType;
 use crate::geometry_type::Point;
 use crate::landscape_type::LandscapeType;
 use crate::map_func::{Map, TileTypeAccess, World};
@@ -902,7 +902,7 @@ fn cmd_plant_tree(
     } else {
         // SAFETY: A valid company's finances; one field-sized load.
         gb(
-            unsafe { std::ptr::addr_of!((*company).tree).read() },
+            unsafe { std::ptr::addr_of!((*company).tree_limit).read() },
             16,
             16,
         )
@@ -913,7 +913,7 @@ fn cmd_plant_tree(
         if !company.is_null() {
             // SAFETY: As above; one field-sized load and store with no call between.
             unsafe {
-                let field = std::ptr::addr_of_mut!((*company).tree);
+                let field = std::ptr::addr_of_mut!((*company).tree_limit);
                 field.write(field.read().wrapping_sub(1 << 16));
             }
         }
@@ -951,7 +951,8 @@ fn cmd_plant_tree(
                         }
                         // 2x as expensive to add more trees to an existing tile
                         cost = cost.saturating_add(
-                            crate::company::price(PR_BUILD_TREES).saturating_mul(2),
+                            crate::company::price(crate::economy_type::Price::PR_BUILD_TREES)
+                                .saturating_mul(2),
                         );
                     }
                 }
@@ -1080,7 +1081,9 @@ fn cmd_plant_tree(
                                 );
                             }
                         }
-                        cost = cost.saturating_add(crate::company::price(PR_BUILD_TREES));
+                        cost = cost.saturating_add(crate::company::price(
+                            crate::economy_type::Price::PR_BUILD_TREES,
+                        ));
                     }
                 }
 
@@ -1136,7 +1139,9 @@ pub(crate) fn clear_tile_trees(c: &Trees, tile: TileIndex, flags: DoCommandFlags
         crate::ground::do_clear_square(tile, s);
     }
 
-    i64::from(num).saturating_mul(crate::company::price(PR_CLEAR_TREES))
+    i64::from(num).saturating_mul(crate::company::price(
+        crate::economy_type::Price::PR_CLEAR_TREES,
+    ))
 }
 
 /// `TileLoopTreesDesert`.
@@ -2069,12 +2074,8 @@ mod tests {
     }
     /// Set `_price[PR_BUILD_TREES]` and `_price[PR_CLEAR_TREES]` for the guarded test.
     fn set_prices(build: i64, clear: i64) {
-        let prices = crate::company::openttd_rust_economy_prices();
-        // SAFETY: The process-wide price table, serialized by the global test lock.
-        unsafe {
-            *prices.add(PR_BUILD_TREES) = build;
-            *prices.add(PR_CLEAR_TREES) = clear;
-        }
+        crate::company::testing::set_price(crate::economy_type::Price::PR_BUILD_TREES, build);
+        crate::company::testing::set_price(crate::economy_type::Price::PR_CLEAR_TREES, clear);
     }
     /// Set `_game_mode`, returning the previous mode.
     fn set_mode(mode: GameMode) -> GameMode {
@@ -2087,8 +2088,8 @@ mod tests {
     fn finances(tree_limit: u32, clear_limit: u32) -> Box<crate::company::Finances> {
         // SAFETY: Every field of the finance record is an integer or an array of integers.
         let mut finances: Box<crate::company::Finances> = Box::new(unsafe { std::mem::zeroed() });
-        finances.tree = tree_limit;
-        finances.clear = clear_limit;
+        finances.tree_limit = tree_limit;
+        finances.clear_limit = clear_limit;
         finances
     }
     fn loop_settings(climate: LandscapeType, extra: ExtraTreePlacement) -> LoopSettings {
@@ -2500,7 +2501,7 @@ mod tests {
             events(),
             [Event::Expense(ExpensesType::EXPENSES_OTHER.0, 30)]
         );
-        assert_eq!(company.tree, 3 << 16);
+        assert_eq!(company.tree_limit, 3 << 16);
         plant(
             &trees(),
             DoCommandFlags(DoCommandFlag::EXECUTE),
@@ -2519,7 +2520,7 @@ mod tests {
                 Event::Expense(ExpensesType::EXPENSES_OTHER.0, 30),
             ]
         );
-        assert_eq!(company.tree, 1 << 16);
+        assert_eq!(company.tree_limit, 1 << 16);
         plant(
             &trees(),
             DoCommandFlags(DoCommandFlag::EXECUTE),
@@ -2597,7 +2598,7 @@ mod tests {
                 Event::Error(STR_ERROR_CLEARING_LIMIT_REACHED.0)
             ]
         );
-        assert_eq!(company.tree, 5 << 16);
+        assert_eq!(company.tree_limit, 5 << 16);
         COMPANY.set(std::ptr::null_mut());
         set_mode(saved);
     }

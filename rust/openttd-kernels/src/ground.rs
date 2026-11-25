@@ -54,7 +54,7 @@ pub(crate) fn clear_tile_clear(
         Price::PR_CLEAR_ROUGH,
         Price::PR_CLEAR_ROUGH,
     ];
-    let price = |p: Price| crate::company::price(usize::from(p.0));
+    let price = |p: Price| crate::company::price(p);
     out.set(0);
 
     let world = World::new(s);
