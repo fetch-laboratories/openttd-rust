@@ -213,18 +213,21 @@ class RetrospectiveTests(unittest.TestCase):
 
 
 class ReadyWaitTests(unittest.TestCase):
+    def native(self, created: str, *attempts: tuple[str, str, str]) -> facts.NativeRun:
+        return facts.NativeRun(created, tuple(facts.Attempt(*a) for a in attempts))
+
     def test_a_ready_mark_waits_only_after_its_native_run_finished(self) -> None:
         # #1072: #1055 marked ready 0.4 minutes after its native run finished.
-        run = facts.NativeRun(
-            "2026-11-25T00:11:00Z", "2026-11-25T00:26:40Z", "completed"
-        )
+        first = ("2026-11-25T00:11:05Z", "2026-11-25T00:26:40Z", "completed")
+        run = self.native("2026-11-25T00:11:00Z", first)
         wait = facts.ready_wait
         self.assertAlmostEqual(wait(["2026-11-25T00:27:04Z"], [run]) or 0, 0.4)
         self.assertIsNone(wait(["2026-11-25T00:12:00Z"], [run]))
         self.assertIsNone(wait(["2026-11-25T00:10:00Z"], [run]))
         # The first mark counts; a later run requested after it does not.
-        later = facts.NativeRun(
-            "2026-11-25T01:00:00Z", "2026-11-25T01:15:00Z", "completed"
+        later = self.native(
+            "2026-11-25T01:00:00Z",
+            ("2026-11-25T01:00:05Z", "2026-11-25T01:15:00Z", "completed"),
         )
         self.assertIsNone(
             wait(["2026-11-25T01:20:00Z", "2026-11-25T00:12:00Z"], [run, later])
@@ -234,12 +237,54 @@ class ReadyWaitTests(unittest.TestCase):
 
     def test_a_run_still_active_at_the_ready_mark_is_not_a_wait(self) -> None:
         # Review of #1079: an active run's last update is not its finish.
-        active = facts.NativeRun(
-            "2026-11-25T00:11:00Z", "2026-11-25T00:26:10Z", "in_progress"
+        active = ("2026-11-25T00:11:05Z", "2026-11-25T00:26:10Z", "in_progress")
+        run = self.native("2026-11-25T00:11:00Z", active)
+        self.assertIsNone(facts.ready_wait(["2026-11-25T00:27:00Z"], [run]))
+
+    def test_a_rerun_after_the_mark_keeps_the_first_attempts_finish(self) -> None:
+        # Re-check of #1079: attempt 2 started at 00:30, after the 00:27 mark.
+        run = self.native(
+            "2026-11-25T00:11:00Z",
+            ("2026-11-25T00:11:05Z", "2026-11-25T00:26:40Z", "completed"),
+            ("2026-11-25T00:30:00Z", "2026-11-25T00:45:00Z", "completed"),
         )
-        self.assertIsNone(facts.ready_wait(["2026-11-25T00:27:00Z"], [active]))
-        row = {"createdAt": "a", "updatedAt": "b", "status": "queued"}
-        self.assertEqual(facts.NativeRun.read(row), facts.NativeRun("a", "b", "queued"))
+        self.assertAlmostEqual(
+            facts.ready_wait(["2026-11-25T00:27:00Z"], [run]) or 0, 20 / 60
+        )
+
+    def test_native_run_reads_each_attempt_at_the_json_boundary(self) -> None:
+        row: facts.RunRow = {
+            "databaseId": 7,
+            "displayTitle": "CI native PR 1 x",
+            "createdAt": "c",
+            "attempt": 2,
+        }
+        attempts = {
+            "actions/runs/7/attempts/1": {
+                "run_started_at": "s1",
+                "updated_at": "u1",
+                "status": "completed",
+            },
+            "actions/runs/7/attempts/2": {
+                "run_started_at": "s2",
+                "updated_at": "u2",
+                "status": "queued",
+            },
+        }
+        with mock.patch.object(
+            facts.ci, "api", side_effect=lambda _r, path: attempts[path]
+        ):
+            run = facts.native_run("o/r", row)
+        self.assertEqual(
+            run,
+            facts.NativeRun(
+                "c",
+                (
+                    facts.Attempt("s1", "u1", "completed"),
+                    facts.Attempt("s2", "u2", "queued"),
+                ),
+            ),
+        )
 
 
 class BaseUpdateTests(unittest.TestCase):

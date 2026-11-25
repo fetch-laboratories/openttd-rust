@@ -10,7 +10,7 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 from urllib.parse import urlencode
 
 import base_update
@@ -288,17 +288,45 @@ def stocktake(start: str, end: str) -> dict[str, Any]:
     }
 
 
-@dataclass(frozen=True)
-class NativeRun:
-    """One requested `native` run, as `gh run list` reports it."""
+class RunRow(TypedDict):
+    """The fields `ready-wait` reads from `gh run list`."""
 
+    databaseId: int
+    displayTitle: str
+    createdAt: str
+    attempt: int
+
+
+class AttemptRow(TypedDict):
+    """The fields `ready-wait` reads from one run attempt."""
+
+    run_started_at: str
+    updated_at: str
+    status: str
+
+
+class TimelineEvent(TypedDict, total=False):
+    event: str
     created_at: str
+
+
+@dataclass(frozen=True)
+class Attempt:
+    started_at: str
     updated_at: str
     status: str
 
     @classmethod
-    def read(cls, row: dict[str, str]) -> NativeRun:
-        return cls(row["createdAt"], row["updatedAt"], row["status"])
+    def read(cls, row: AttemptRow) -> Attempt:
+        return cls(row["run_started_at"], row["updated_at"], row["status"])
+
+
+@dataclass(frozen=True)
+class NativeRun:
+    """One requested `native` run and each of its attempts, oldest first."""
+
+    created_at: str
+    attempts: tuple[Attempt, ...]
 
 
 def ready_wait(ready: list[str], native: list[NativeRun]) -> float | None:
@@ -306,8 +334,8 @@ def ready_wait(ready: list[str], native: list[NativeRun]) -> float | None:
     before it finished; None when it came while that run ran, or before any
     request (#1072). The brief starts reviewers at the ready mark.
 
-    A completed run's last update is its finish; a rerun moves it later, which
-    can only hide a wait."""
+    The run's state at the mark is its latest attempt started by then: a
+    rerun started after the mark does not move the earlier attempt's finish."""
     if not ready:
         raise ValueError("never marked ready")
     mark = min(timestamp(at) for at in ready)
@@ -315,45 +343,70 @@ def ready_wait(ready: list[str], native: list[NativeRun]) -> float | None:
     if not before:
         return None
     last = max(before, key=lambda run: run.created_at)
-    if last.status != "completed" or timestamp(last.updated_at) > mark:
+    started = [a for a in last.attempts if timestamp(a.started_at) <= mark]
+    if not started:
         return None
-    return (mark - timestamp(last.updated_at)).total_seconds() / 60
+    attempt = started[-1]
+    finished = timestamp(attempt.updated_at)
+    if attempt.status != "completed" or finished > mark:
+        return None
+    return (mark - finished).total_seconds() / 60
+
+
+def native_run(repository: str, row: RunRow) -> NativeRun:
+    attempts = [
+        Attempt.read(
+            cast(
+                AttemptRow,
+                ci.api(repository, f"actions/runs/{row['databaseId']}/attempts/{n}"),
+            )
+        )
+        for n in range(1, row["attempt"] + 1)
+    ]
+    return NativeRun(row["createdAt"], tuple(attempts))
 
 
 def ready_waits(repository: str, since: str) -> int:
     """Print, per PR with a `native` request since SINCE, whether its ready mark
     waited for that run to finish, then the count."""
-    rows = json.loads(
-        ci.gh(
-            "run",
-            "list",
-            "--repo",
-            repository,
-            "--workflow",
-            "Requested validation",
-            "--limit",
-            "1000",
-            "--created",
-            f">={since}",
-            "--json",
-            "displayTitle,createdAt,updatedAt,status",
-        )
+    rows = cast(
+        list[RunRow],
+        json.loads(
+            ci.gh(
+                "run",
+                "list",
+                "--repo",
+                repository,
+                "--workflow",
+                "Requested validation",
+                "--limit",
+                "1000",
+                "--created",
+                f">={since}",
+                "--json",
+                "databaseId,displayTitle,createdAt,attempt",
+            )
+        ),
     )
-    by_pull: dict[int, list[NativeRun]] = {}
+    by_pull: dict[int, list[RunRow]] = {}
     for row in rows:
         words = row["displayTitle"].split()
         if words[:3] == ["CI", "native", "PR"] and words[3].isdigit():
-            by_pull.setdefault(int(words[3]), []).append(NativeRun.read(row))
+            by_pull.setdefault(int(words[3]), []).append(row)
     waited = counted = 0
     for number in sorted(by_pull):
-        events = pages(repository, f"issues/{number}/timeline?per_page=100")
+        path = f"issues/{number}/timeline?per_page=100"
+        events = cast(list[TimelineEvent], pages(repository, path))
         ready = [
-            e["created_at"] for e in events if e.get("event") == "ready_for_review"
+            e["created_at"]
+            for e in events
+            if e.get("event") == "ready_for_review" and "created_at" in e
         ]
         if not ready:
             print(f"#{number}: not marked ready")
             continue
-        minutes = ready_wait(ready, by_pull[number])
+        runs = [native_run(repository, row) for row in by_pull[number]]
+        minutes = ready_wait(ready, runs)
         counted += 1
         if minutes is None:
             print(f"#{number}: ready with or before native")
