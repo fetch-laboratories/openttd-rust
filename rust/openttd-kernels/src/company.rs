@@ -3432,8 +3432,8 @@ pub(crate) fn cmd_buy_company(
     // Do not allow takeover if the resulting company would have too many vehicles.
     // SAFETY: `Company::GetIfValid` found the target above. The command has neither the
     // spectator nor the deity flag, so in a normal game `ExecuteCommand` (`command.cpp:280`)
-    // runs it only for a valid current company; outside one no company exists for the
-    // target lookup to find.
+    // runs it only for a valid current company. Outside a normal game the buyer is not
+    // checked, as the original's `Company::Get(_current_company)` is not (#734).
     if !unsafe { check_takeover_vehicle_limit(s, current, target_company) } {
         out.error(STR_ERROR_TOO_MANY_VEHICLES_IN_GAME.0);
         return;
