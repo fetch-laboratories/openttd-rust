@@ -15,11 +15,9 @@
  * entries, including calls from main and game threads. Each native service is
  * synchronous and noexcept. Rust releases every state borrow before a callback;
  * map, occupancy and dirtying cannot unwind ordinary-play exceptions. */
-struct OpenTTDVehicleServices;
 struct OpenTTDSignalServices {
 	bool assertions;
 	void (*assert_condition)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_condition);
-	const OpenTTDVehicleServices *vehicles;
 };
 
 struct OpenTTDSignalItem { uint32_t tile; uint8_t dir; };

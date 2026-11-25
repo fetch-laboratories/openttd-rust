@@ -563,7 +563,6 @@ mod bodies {
     /// sound. Each case runs in an isolated child because the tile index is process-wide.
     mod collision {
         use super::*;
-        use crate::vehicle::occupancy::Links;
         use std::cell::RefCell;
 
         /// What the child observes, in call order.
@@ -580,8 +579,6 @@ mod bodies {
         }
         thread_local! {
             static CALLS: RefCell<Vec<Call>> = const { RefCell::new(Vec::new()) };
-            static LINKS: RefCell<Vec<(*mut crate::vehicle_base::VehicleRecord, *mut Links)>> =
-                const { RefCell::new(Vec::new()) };
             static FAILED: Cell<u32> = const { Cell::new(0) };
         }
         extern "C" fn record_failure(ok: bool) {
@@ -599,22 +596,6 @@ mod bodies {
             call(Call::Crash(v.0.as_ptr().cast()));
             v.set_vehstatus(v.vehstatus().set(VehState::Crashed));
             4
-        }
-        extern "C" fn tile_links(v: VehicleRef) -> *mut Links {
-            let record = v.0.as_ptr().cast();
-            LINKS.with(|links| {
-                let mut links = links.borrow_mut();
-                if let Some(&(_, l)) = links.iter().find(|(r, _)| *r == record) {
-                    return l;
-                }
-                let l = Box::leak(Box::new(Links {
-                    next: std::ptr::null_mut(),
-                    prev: std::ptr::null_mut(),
-                    current: std::ptr::null_mut(),
-                }));
-                links.push((record, l));
-                l
-            })
         }
         extern "C" fn yes() -> bool {
             true
@@ -670,7 +651,6 @@ mod bodies {
                 },
                 &crate::vehicle::VehicleServices {
                     play_sound,
-                    tile_links,
                     ..VEHICLE
                 },
             );
@@ -735,14 +715,7 @@ mod bodies {
             }
             let h = Handle::from_record(record.cast());
             h.set_track(track);
-            // SAFETY: The test's live record; the fixture's map.
-            unsafe {
-                crate::vehicle::occupancy::update_position(
-                    f.game().vs,
-                    h.vehicle(),
-                    f.shared.map(),
-                );
-            }
+            crate::vehicle::occupancy::update_position(h.vehicle(), f.shared.map());
             h
         }
         fn new_part(f: &Fixture, tile: TileIndex, x: i32, y: i32, track: TrackBits) -> Handle {

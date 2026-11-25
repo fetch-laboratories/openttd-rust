@@ -382,7 +382,7 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
         emit: &mut emit,
     };
     unsafe {
-        crate::vehicle_func::vehicles_on_tile(s.vehicles, s.shared.map(), tile, |v| {
+        crate::vehicle_func::vehicles_on_tile(s.shared.map(), tile, |v| {
             visit::<&mut F>(std::ptr::from_mut(&mut ctx).cast(), v);
         });
     };

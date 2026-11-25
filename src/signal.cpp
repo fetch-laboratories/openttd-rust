@@ -29,7 +29,6 @@
 #include "rust/services_rail.h"
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
-#include "rust/vehicle_services.h"
 
 static const OpenTTDSignalServices _signal_services{
 #ifdef WITH_ASSERT
@@ -38,7 +37,6 @@ static const OpenTTDSignalServices _signal_services{
 	.assertions = false,
 #endif
 	.assert_condition = RustAssertCondition,
-	.vehicles = &_rust_vehicle_services,
 };
 
 const OpenTTDSignalServices &GetRustSignalServices() noexcept

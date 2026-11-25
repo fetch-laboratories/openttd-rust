@@ -139,14 +139,7 @@ static void OPENTTD_RUST_CALL VehicleSvcWriteReliability(OpenTTDVehicle *v, uint
 static int64_t OPENTTD_RUST_CALL VehicleSvcProfit(OpenTTDVehicle *v) noexcept { return RustVehicleProfit(VehicleOf(v)); }
 
 
-const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
-{
-	static const OpenTTDOccupancyCommands services{.vehicles = &GetRustVehicleServices(), .shared = &GetRustSharedServices(), .max_pixel_z = OpenTTDTileMaxPixelZ, .costs = &GetRustCommandCostServices(), .vehicle_error = STR_ERROR_TRAIN_IN_THE_WAY};
-	return &services;
-}
 static_assert(AIR_SHADOW == 4);
-
-static OpenTTDVehicleTileLinks *OPENTTD_RUST_CALL VehicleSvcTileLinks(OpenTTDVehicle *v) noexcept { return RustVehicleTileLinks(VehicleOf(v)); }
 
 static OpenTTDVehicle *VehicleRecordFromShell(void *shell) noexcept { return shell == nullptr ? nullptr : static_cast<Vehicle *>(shell)->record; }
 
@@ -174,7 +167,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.ship_get = RustShipGet,
 	.show_newgrf_vehicle_error = [](uint16_t engine, uint32_t part1, uint32_t part2, GRFBug bug, bool critical) noexcept { RustVehicleShowNewGRFError(EngineID(engine), StringID(part1), StringID(part2), bug, critical); },
 	.start_stop_dirty = VehicleSvcStartStopDirty,
-	.tile_links = VehicleSvcTileLinks,
 	.update_delta = RustVehicleUpdateDelta<OpenTTDVehicle *>,
 	.visits = RustVehicleVisits,
 	.write_breakdowns = VehicleSvcWriteBreakdowns,

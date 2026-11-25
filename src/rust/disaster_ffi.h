@@ -45,7 +45,6 @@ struct OpenTTDDisasterStationTarget {
 struct OpenTTDDisasterServices {
 	const OpenTTDSharedServices * shared;
 	const OpenTTDVehicleServices * vehicles;
-	const OpenTTDOccupancyCommands * occupancy;
 	const OpenTTDEnvironmentServices * environment;
 	const OpenTTDAircraftLeaves * aircraft;
 	const OpenTTDRoadLeaves * road;

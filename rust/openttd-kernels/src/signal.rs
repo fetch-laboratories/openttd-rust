@@ -28,7 +28,7 @@ use crate::track_func::{
 };
 use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
-use crate::vehicle::{VehicleRef, VehicleServices};
+use crate::vehicle::VehicleRef;
 use crate::vehicle_type::VehicleType;
 use std::{cell::OnceCell, ffi::c_uint};
 
@@ -331,8 +331,6 @@ pub struct SignalServices {
     pub assertions: bool,
     /// Native `assert`, for the assertions of `signal.cpp`.
     pub assert_condition: extern "C" fn(bool),
-    /// Direct Rust occupancy traversal, shared with the train controller.
-    pub vehicles: *const VehicleServices,
 }
 
 /// One entry's service tables and its map view.
@@ -370,16 +368,10 @@ impl<'a> Signals<'a> {
             .dimensions
             .tile_offs_by_diag_dir(dir, self.check())
     }
-    fn vehicles(&self) -> &VehicleServices {
-        // SAFETY: Static services; signal scans delete no vehicle.
-        unsafe { &*self.native.vehicles }
-    }
     /// `if (!flags.Test(SigFlag::Train) && HasVehicleOnTile(tile, IsTrainAndNotInDepot)) flags.Set(SigFlag::Train);`
     fn train_on_tile(&self, tile: TileIndex, flags: &mut SigFlags) {
-        let vehicles = self.vehicles();
         if !flags.test(SigFlag::TRAIN)
             && crate::vehicle_func::has_vehicle_on_tile(
-                vehicles,
                 self.shared.map(),
                 tile,
                 is_train_and_not_in_depot,
@@ -492,7 +484,6 @@ impl<'a> Signals<'a> {
                             // If no train detected yet, and there is not no train -> there is a train -> set the flag
                             if !flags.test(SigFlag::TRAIN)
                                 && crate::vehicle::occupancy::ensure_no_train_on_track_bits(
-                                    self.vehicles(),
                                     self.shared.map(),
                                     tile,
                                     tracks,
@@ -1164,7 +1155,6 @@ crate::abi::layouts! {
     "OpenTTDSignalServices" ["probe"] => SignalServices {
         assertions,
         assert_condition,
-        vehicles,
     };
     "OpenTTDSignalContext" ["probe"] => Context {
         shared,

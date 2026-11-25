@@ -178,7 +178,7 @@
 ## Vehicle tile occupancy and live spatial queries (#377)
 
 - Rust owns: tile buckets, on-tile/near cursors, hash update/reset and ground/track/tunnel occupancy checks.
-- C++ keeps: pools, IDs, shell link records, viewport indexing and command costs. Lifetime rules: [world state](../design/world-state.md).
+- C++ keeps: pools, IDs, viewport indexing and command costs. Lifetime rules: [world state](../design/world-state.md).
 - Checks: default road/crash/flood/reload, train collision, road-stop and fleet scenarios; fleet console against unchanged public iterator bodies.
 - Limits: Gaps remain in GUI and external articulated GRFs (#156).
 - PRs: #384, integrated in #391.
@@ -222,7 +222,15 @@
 - `vehicle/scheduler.rs` is finished. `RunVehicleCalendarDayProc`, `RunEconomyVehicleDayProc` and `CallVehicleTicks` read the vehicle pool through its descriptor and each member through its `VehicleRef` accessor, where the original reads it; the survival assertions and the three subtype casts run through the native assertion policy. Each day procedure reads the game mode and day fraction itself and dispatches `OnNewCalendarDay` and `OnNewEconomyDay` on the vehicle's type to the controllers' bodies, so the eight C++ overrides and the two base virtuals are gone; `SchedulerServices` links the four controller tables.
 - The vehicle's cargo list has one binding, `VehicleRef::cargo` over the resolver's slot. C++ keeps the virtual `Tick` with its controllers' timing scopes (#1011), `PlayVehicleSound`, `MarkDirty` and the pool and shells.
 - Checks: `vehicle::scheduler::tests` (post-Tick bodies over live records, the pool walk against `scheduler/pool-oracle.txt`, survival assertions, day procedures, the 32-day callback's results and the day dispatch), the native `Tick` timing-scope test, `RoadServiceBoundary`, source review and exact-head Full. Archive equivalence is unclaimed: every body changes how it reaches its values.
-- PRs: this pass. `vehicle/occupancy.rs` follows in #1003.
+- PRs: #1045. `vehicle/occupancy.rs` follows in #1003.
+
+## Vehicle tile hash file pass (#1003)
+
+- `vehicle/occupancy.rs` is finished. The tile hash links `hash_tile_next`, `hash_tile_prev` and `hash_tile_current` are members of `VehicleRecord`, read and written in place; `UpdateVehicleTileHash`, the tile part of `ResetVehicleHash` and both iterators follow the originals member for member, and `Increment` keeps its assertion.
+- `EnsureNoVehicleOnGround`, `TunnelBridgeIsFree` and `EnsureNoTrainOnTrackBits` are Rust functions that return the type of the vehicle in the way; `CommandServices::no_vehicle`, `no_train` and `wormhole_free` write it into a command's cost as `STR_ERROR_TRAIN_IN_THE_WAY` plus the type. Callers that test only success, such as the road tile loop and `DisasterClearSquare`, build no native cost.
+- C++ keeps the iterator classes `VehiclesOnTile` and `VehiclesNearTileXY`, the functions `EnsureNoVehicleOnGround` and `TunnelBridgeIsFree` for the train GUI and the harness consoles (#736), and the viewport hash.
+- Checks: `vehicle::occupancy::index_tests`, the train swap oracle, the aircraft, ship and disaster ABI fixtures, `vehicle_scheduler`'s copied-cursor test, the six `occupancy.*` branch witnesses and the fleet console's native probes, and exact-head Full. A native case observes the cost `error` callback receiving all 32 bits of a string; it retires with `CommandCostServices`.
+- PRs: this pass.
 
 ## Original renewal and servicing vocabulary (#734)
 

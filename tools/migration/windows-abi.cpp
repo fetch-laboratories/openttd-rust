@@ -146,6 +146,14 @@ static void Calls()
 		openttd_rust_town_rebuild_index(&shared);
 		openttd_rust_town_destroy(owner);
 	}
+	{
+		/* A string above 16 bits, as a NewGRF supplies, reaches the cost's error callback whole. */
+		OpenTTDCommandCostServices costs{};
+		costs.error = [](OpenTTDCommandCost *cost, uint32_t error) noexcept { *reinterpret_cast<uint32_t *>(cost) = error; };
+		uint32_t error = 0;
+		openttd_test_command_cost_error(&costs, reinterpret_cast<OpenTTDCommandCost *>(&error), 0x87654321);
+		CHECK(error == 0x87654321);
+	}
 	std::unique_ptr<OpenTTDRoadState, decltype(&openttd_rust_road_destroy)> road(openttd_rust_road_new(), openttd_rust_road_destroy);
 	const auto check_road_field = [](auto &field) {
 		CHECK(field == 0);

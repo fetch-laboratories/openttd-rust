@@ -115,7 +115,6 @@ pub struct VehicleServices {
     /// `ShowNewGrfVehicleError(engine, part1, part2, bug, critical)`.
     pub show_newgrf_vehicle_error: extern "C" fn(u16, u32, u32, crate::newgrf_config::GRFBug, bool),
     pub start_stop_dirty: extern "C" fn(VehicleRef),
-    pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
     /// Virtual `UpdateDeltaXY()`.
     pub update_delta: extern "C" fn(VehicleRef),
     /// The static station and depot visit table (`vehicle/visits.rs`), resolved on use.
@@ -174,11 +173,9 @@ impl VehicleServices {
     }
     /// `v->UpdatePositionAndViewport()`: update the position of the vehicle, and update the
     /// viewport. `map` gives the entry's map, which only the position update reads.
-    #[allow(unsafe_code)]
     pub(crate) fn update_position_and_viewport(&self, v: VehicleRef, map: impl FnOnce() -> Map) {
         if v.vehicle_type() != VehicleType::VEH_EFFECT {
-            // SAFETY: A live vehicle; the tile hash ends before the viewport callback.
-            unsafe { occupancy::update_position(self, v, map()) };
+            occupancy::update_position(v, map());
         }
         (self.base_viewport)(v);
     }
@@ -303,7 +300,6 @@ crate::abi::layouts! {
         ship_get,
         show_newgrf_vehicle_error,
         start_stop_dirty,
-        tile_links,
         update_delta,
         visits,
         write_breakdowns,

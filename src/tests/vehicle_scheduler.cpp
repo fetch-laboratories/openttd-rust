@@ -231,8 +231,7 @@ TEST_CASE("Vehicle maintenance - native scalar reads and stores")
 
 
 /* The native VehiclesOnTile iterator copies its cursor, and the ground check reads the real map
- * height. Retires with the native iterator, the native tile_links member and the native map
- * height. */
+ * height. Retires with the native iterator and the native map height. */
 TEST_CASE("Vehicle occupancy - native tile links and copied cursors")
 {
 	Map::Allocate(64, 64);
@@ -248,12 +247,9 @@ TEST_CASE("Vehicle occupancy - native tile links and copied cursors")
 	CHECK(EnsureNoVehicleOnGround(a->GetTile()).Failed());
 	a->Record().z_pos = b->Record().z_pos = 9;
 	CHECK(EnsureNoVehicleOnGround(a->GetTile()).Succeeded());
-	const auto &s = GetRustVehicleServices();
-	CHECK(s.tile_links(RustVehicle(a)) == &a->tile_links);
-	CHECK(s.tile_links(RustVehicle(b)) == &b->tile_links);
 	auto it = VehiclesOnTile(a->GetTile()).begin(), copy = it;
 	CHECK(*it == b);
-	openttd_rust_occupancy_update(&s, nullptr, RustVehicle(b), true);
+	openttd_rust_occupancy_update(nullptr, RustVehicle(b), true);
 	++it; ++copy;
 	CHECK(*it == a); CHECK(it == copy);
 	ResetVehicleHash();

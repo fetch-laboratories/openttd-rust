@@ -470,9 +470,7 @@ impl<'a> Pbs<'a> {
 
     /// Find the best matching vehicle on a tile.
     fn check_trains_on_track(self, info: &mut FindTrainOnTrackInfo, tile: TileIndex) {
-        // SAFETY: the serialized query keeps shells and service tables live.
-        let vs = unsafe { &*self.train().vehicle };
-        crate::vehicle_func::has_vehicle_on_tile(vs, self.map(), tile, |v| {
+        crate::vehicle_func::has_vehicle_on_tile(self.map(), tile, |v| {
             if v.vehicle_type() != crate::vehicle_type::VehicleType::VEH_TRAIN
                 || v.vehstatus().test(VehState::Crashed)
             {

@@ -1,8 +1,0 @@
-[
-  {
-    "kind": "carry",
-    "tool": "rust",
-    "from": "rust/openttd-kernels/src/train_reservation.rs | fn free | allow clippy::nonminimal_bool",
-    "to": "rust/openttd-kernels/src/train_reservation.rs | fn free_train_track_reservation | allow clippy::nonminimal_bool"
-  }
-]
