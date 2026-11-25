@@ -868,13 +868,18 @@ class WorksetTests(unittest.TestCase):
         self.assertTrue(lines[1].startswith("Worksets at head: 3 entries"))
 
     def test_a_malformed_line_is_reported_with_its_number(self) -> None:
-        manifest = self.MANIFEST + "- **03 Broken** town.rs\n"
+        manifest = (
+            self.MANIFEST + "- **03 Broken** town.rs\n- **04 Joined**: `a.rs``b.rs`\n"
+        )
         lines = self.worksets(manifest)
         self.assertEqual(
-            lines[0],
-            f"{INVENTORY.WORKSETS}:7: not a workset line: - **03 Broken** town.rs",
+            lines[:2],
+            [
+                f"{INVENTORY.WORKSETS}:7: not a workset line: - **03 Broken** town.rs",
+                f"{INVENTORY.WORKSETS}:8: not a workset line: - **04 Joined**: `a.rs``b.rs`",
+            ],
         )
-        self.assertTrue(lines[1].startswith("Worksets at head: 3 entries"))
+        self.assertTrue(lines[2].startswith("Worksets at head: 3 entries"))
 
 
 if __name__ == "__main__":

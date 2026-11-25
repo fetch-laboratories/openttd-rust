@@ -1032,7 +1032,7 @@ def gate(base_ref: str, head: str) -> int:
 
 WORKSETS = "docs/worksets.md"
 # `- **04 Cargo**: `cargo_flow.rs`, ...`: a workset and its files under RUST.
-WORKSET_LINE = re.compile(r"- \*\*([^*]+)\*\*: ((?:`[^`]+`(?:, )?)+)")
+WORKSET_LINE = re.compile(r"- \*\*([^*]+)\*\*: (`[^`]+`(?:, `[^`]+`)*)")
 
 
 @dataclass
