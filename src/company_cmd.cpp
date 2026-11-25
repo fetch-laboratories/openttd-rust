@@ -398,7 +398,7 @@ CommandCost CmdCompanyCtrl(DoCommandFlags flags, CompanyCtrlAction cca, CompanyI
 {
 	OpenTTDCompanyControl frame{
 		.args = {.cca = static_cast<uint8_t>(cca), .company_id = company_id.base(), .reason = static_cast<uint8_t>(reason), .client_id = static_cast<uint32_t>(client_id)},
-		.flags = flags.base(), .stage = 0, .startup = {.is_ai = true, .company = CompanyID::Invalid().base(), .stage = 0, .index = UINT32_MAX},
+		.flags = flags.base(), .stage = 0, .startup = {.is_ai = true, .company = CompanyID::Invalid().base(), .stage = 0, .index = UINT32_MAX, .created = nullptr},
 	};
 	CommandCost result;
 	RustTileOwnerContext ownership;
