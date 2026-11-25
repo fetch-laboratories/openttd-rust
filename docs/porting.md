@@ -100,6 +100,7 @@ A pass owns the faults in the files it finishes, and every call those files make
 ## Code standards
 
 - A file pass applies these standards to every line left in its files; every other PR to every line it changes or adds. Later PRs touch a finished file only for a mechanical shared-file edit, for a caller adopting a changed signature, or for a repair the roadmap selects, which applies these standards to every line it changes.
+- In the files it finishes, a pass allows `unsafe_code` only on the items that need it, each with its suppression record, as [lint policy](rust-migration.md#quick-cleanup-checks) requires of a new suppression; a file-level `#![allow(unsafe_code)]` does not stay. The module still states its safety contract once ([comments](#comments)).
 - Python tools use typed records (`dataclass`, `TypedDict`) for fixed-shape data, not bare dicts.
 - Group shared append lists by component and sort entries by name: includes after stdafx and before safeguards, ABI probe calls, and shared table fields, mirrors, initializers and layouts (one field per line). Alphabetize witness blocks.
 

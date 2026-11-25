@@ -37,7 +37,9 @@ not a gate: matching is by facade, export and name, as the 2026-11-06 overhaul
 measured them. `--compare BASE_REF` prints, for the files given or else the
 finished files that the head lists and the base lacks or changed, a table of
 every row at the merge base and at the head, then each row new or grown at the
-head; it gates nothing.
+head; it gates nothing. It also lists, whether new or not, each file-level
+`#![allow(...)]` naming `unsafe_code` in a file that the head lists as finished
+and the base does not: a pass scopes `unsafe_code` to the items that need it.
 """
 
 import argparse
@@ -1401,6 +1403,23 @@ COMPARED = (
 )
 
 
+MODULE_ALLOW = re.compile(r"(?m)^[ \t]*#!\[\s*allow\s*\(([^\]]*)\)\s*\]")
+
+
+def module_unsafe_allows(path: str, source: str) -> list[Site]:
+    """Each file-level `#![allow(...)]` of a file that names `unsafe_code`."""
+    return [
+        Site(
+            path,
+            source.count("\n", 0, found.start()) + 1,
+            "module unsafe_code allow",
+            "",
+        )
+        for found in MODULE_ALLOW.finditer(code_only(source))
+        if re.search(r"\bunsafe_code\b", found[1])
+    ]
+
+
 def count(rows: list[Site], kind: str) -> int:
     chosen = [row for row in rows if row.kind == kind]
     return (
@@ -1473,6 +1492,18 @@ def compare(base_ref: str, head: str, files: list[str]) -> int:
         old, new = count(before, kind), count(after, kind)
         if old or new:
             print(f"| {kind} | {old} | {new} |")
+    finishing = set(finished_files(head)) - set(finished_files(base))
+    allows = [
+        row
+        for path in sorted(set(selected) & finishing)
+        for row in module_unsafe_allows(path, after_tree[path])
+    ]
+    if allows:
+        print(
+            f"\n{len(allows)} module-scope `unsafe_code` allows in files this branch finishes:"
+        )
+        for row in allows:
+            print(f"{row.path}:{row.line}: {row.kind}")
     changed = [
         pair
         for path in sorted(paths)

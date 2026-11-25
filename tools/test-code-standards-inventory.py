@@ -778,6 +778,31 @@ impl B { fn update(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {} }
             [line for line in lines if line.startswith("- ")], [f"- {same}"]
         )
 
+    def test_a_module_unsafe_allow_is_listed_in_a_file_the_branch_finishes(
+        self,
+    ) -> None:
+        crate = INVENTORY.RUST
+        finishing, finished = f"{crate}/finishing.rs", f"{crate}/finished.rs"
+        allowed = (
+            "//! Module.\n#![allow(\n    unsafe_code,\n    clippy::cast_sign_loss\n)]\n"
+        )
+        quoted = "// #![allow(unsafe_code)]\n#![allow(clippy::cast_sign_loss)]\n"
+        trees = {
+            "base": {finishing: self.BASE, finished: self.BASE},
+            "head": {finishing: allowed + self.BASE, finished: allowed + self.BASE},
+            "base-list": {finished: ""},
+            "head-list": {finished: "", finishing: ""},
+        }
+        lines = self.compare(trees)
+        self.assertIn(
+            "1 module-scope `unsafe_code` allows in files this branch finishes:", lines
+        )
+        self.assertIn(f"{finishing}:2: module unsafe_code allow", lines)
+        self.assertNotIn(f"{finished}:2: module unsafe_code allow", lines)
+        trees["head"][finishing] = quoted + self.BASE
+        lines = self.compare(trees)
+        self.assertFalse([line for line in lines if "module unsafe_code" in line])
+
     def test_no_selected_file_prints_the_notice(self) -> None:
         trees = {"base": {RUST: self.BASE}, "head": {RUST: self.BASE}}
         trees["base-list"] = trees["head-list"] = {RUST: ""}
