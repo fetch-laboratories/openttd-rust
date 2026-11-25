@@ -131,8 +131,7 @@ unsafe fn get_town_name(
     }
     text.clear();
     unsafe {
-        crate::newgrf_townname::generate(
-            &*s.shared,
+        crate::newgrf_townname::grf_town_name_generate(
             &mut |part| text.extend_from_slice(part),
             params.grfid,
             params.kind,

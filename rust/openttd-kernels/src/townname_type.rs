@@ -14,8 +14,8 @@ pub(crate) unsafe fn from_style(style: u8) -> NameParams {
     if u32::from(style) >= BUILTIN_TOWNNAME_GENERATOR_COUNT {
         let gen_ = u16::from(style) - BUILTIN_TOWNNAME_GENERATOR_COUNT as u16;
         NameParams {
-            grfid: unsafe { crate::newgrf_townname::get_id(gen_) },
-            kind: unsafe { crate::newgrf_townname::get_type(gen_) },
+            grfid: unsafe { crate::newgrf_townname::get_grf_town_name_id(gen_) },
+            kind: unsafe { crate::newgrf_townname::get_grf_town_name_type(gen_) },
         }
     } else {
         NameParams {
@@ -32,7 +32,9 @@ pub(crate) unsafe fn from_town(town: &crate::town::State) -> NameParams {
         grfid: simulation.townnamegrfid,
         kind: simulation.townnametype,
     };
-    if params.grfid != 0 && !unsafe { crate::newgrf_townname::exists(params.grfid) } {
+    if params.grfid != 0
+        && unsafe { crate::newgrf_townname::get_grf_town_name(params.grfid) }.is_null()
+    {
         params.grfid = 0;
         params.kind = SPECSTR_TOWNNAME_START.0 as u16;
     }

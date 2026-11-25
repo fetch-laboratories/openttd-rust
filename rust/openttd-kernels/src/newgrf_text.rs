@@ -78,48 +78,73 @@ pub unsafe extern "C" fn openttd_rust_grf_text_add(
     s: &Services,
     grfid: u32,
     stringid: u32,
-    mut language: u8,
+    language: u8,
     new_scheme: bool,
     allow_newlines: bool,
     text: *const u8,
     length: usize,
     default: u32,
 ) -> u32 {
-    if !new_scheme {
+    add_grf_string(
+        s,
+        &AddGRFString {
+            grfid,
+            stringid: GRFStringID(stringid),
+            langid_to_add: language,
+            new_scheme,
+            allow_newlines,
+            text_to_add: unsafe { crate::utf8::borrow(text, length) },
+            def_string: StringID(default),
+        },
+    )
+    .0
+}
+
+/// The parameters of `AddGRFString`, in its order.
+pub(crate) struct AddGRFString<'a> {
+    pub(crate) grfid: u32,
+    pub(crate) stringid: GRFStringID,
+    pub(crate) langid_to_add: u8,
+    pub(crate) new_scheme: bool,
+    pub(crate) allow_newlines: bool,
+    pub(crate) text_to_add: &'a [u8],
+    pub(crate) def_string: StringID,
+}
+
+/// `AddGRFString`.
+pub(crate) fn add_grf_string(s: &Services, args: &AddGRFString<'_>) -> StringID {
+    let mut language = args.langid_to_add;
+    if !args.new_scheme {
         if language & 3 != 0 {
             language = 1;
         } else {
-            let mut result = STR_EMPTY.0;
+            let mut result = STR_EMPTY;
             for (mask, language_id) in [(4, 2), (8, 3), (16, 4)] {
                 if language & mask != 0 {
-                    result = unsafe {
-                        openttd_rust_grf_text_add(
-                            s,
-                            grfid,
-                            stringid,
-                            language_id,
-                            true,
-                            allow_newlines,
-                            text,
-                            length,
-                            default,
-                        )
-                    };
+                    result = add_grf_string(
+                        s,
+                        &AddGRFString {
+                            langid_to_add: language_id,
+                            new_scheme: true,
+                            ..*args
+                        },
+                    );
                 }
             }
             return result;
         }
     }
-    let index = unsafe { prepare(grfid, stringid, default) };
+    let (grfid, stringid) = (args.grfid, args.stringid.0);
+    let index = unsafe { prepare(grfid, stringid, args.def_string.0) };
     if index == usize::MAX {
-        return STR_EMPTY.0;
+        return STR_EMPTY;
     }
     let newtext = translate(
         s,
         grfid,
         language,
-        allow_newlines,
-        unsafe { crate::utf8::borrow(text, length) },
+        args.allow_newlines,
+        args.text_to_add,
         SCC_NEWGRF_PRINT_WORD_STRING_ID,
     );
     unsafe { publish(index, language, newtext.as_ptr(), newtext.len()) };
@@ -134,7 +159,7 @@ pub unsafe extern "C" fn openttd_rust_grf_text_add(
         Bytes(&newtext),
         id
     );
-    id
+    StringID(id)
 }
 
 struct Text {

@@ -1483,7 +1483,7 @@ impl SavedClock {
 pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
     unsafe {
         crate::newgrf_text::clean_up_strings();
-        crate::newgrf_townname::clean_up();
+        crate::newgrf_townname::clean_up_grf_town_names();
         (s.reset_badges)();
         crate::engine_loading::openttd_rust_engine_setup(&*s.engine);
         (s.reset_bridges)();
@@ -1553,7 +1553,7 @@ unsafe fn after_load(s: &Services) {
         (s.linkstats_legend)();
         crate::airport_definitions::finalise_airports_array(&*s.airports);
         crate::airport_definitions::bind_airport_specs(s.airports);
-        crate::newgrf_townname::init_generator_names();
+        crate::newgrf_townname::init_grf_town_generator_names();
         crate::engine_loading::openttd_rust_vehicle_order_commit(&*s.engine);
         (s.activate_shore)();
         (s.activate_tram_depot)();
