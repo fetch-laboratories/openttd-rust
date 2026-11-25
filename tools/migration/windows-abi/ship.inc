@@ -142,9 +142,8 @@ static void ShipBoundary()
 	ship_maintenance.set_breakdown_delay = [](OpenTTDVehicle *, uint8_t delay) noexcept { ship_delay = delay; };
 	ship_probe.record.breakdown_ctr = 1;
 	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
-	CHECK(ship_delay == 4 && ship_probe.stage == 0 && ship_probe.paths == 0);
-	/* The reverse path starts with the ship outside the tile index. */
-	openttd_rust_occupancy_update(nullptr, shell, true);
+	/* The broken-down ship's tick ends before any position update. */
+	CHECK(ship_delay == 4 && ship_probe.stage == 0 && ship_probe.paths == 0 && ship_probe.record.hash_tile_current == nullptr);
 	/* The same tick state again, running normally: the reverse path. */
 	ship_probe.record.breakdown_ctr = 0;
 	ship_probe.record.tick_counter = 255;
