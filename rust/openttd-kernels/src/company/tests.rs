@@ -987,7 +987,6 @@ mod startup_tests {
     use crate::livery::{Livery, LiveryScheme};
     use crate::network_type::ClientID;
     use crate::news_func::testing::Effect;
-    use crate::script_event_types::ScriptEvent;
     use crate::strings_type::StringID;
     use crate::test_tables::{
         COMMAND_COSTS, COMMAND_POST, COMPANY, COMPANY_IDENTITY, ENGINE, FACES, FINANCE,
@@ -1730,7 +1729,6 @@ mod evidence_tests {
     use crate::company_type::{CompanyID, CompanyMask, OpenTTDCompany, Owner};
     use crate::economy_type::{ExpensesType, Price, PriceCategory};
     use crate::news_func::testing::{Effect, Param, company_news_name, encoded};
-    use crate::script_event_types::ScriptEvent;
     use crate::test_tables::{
         CATCHMENT, COMMANDS, COMPANY, COMPANY_IDENTITY, FINANCE, FLEET_GROUPS, MOVEMENT,
         OBJECTIVES, SETTINGS, SHARED, STATION_COMMANDS, STATION_WORLD, SUBSIDY, VEHICLE,
