@@ -257,6 +257,8 @@ impl<'a> GRFFileRef<'a> {
 
     /// `GRFFile::GetParam`: get GRF Parameter with range checking.
     pub(crate) fn get_param(self, number: u32) -> u32 {
+        // Note: We implicitly test for number < this->param.size() and return 0 for invalid
+        // parameters. In fact this is the more important test, as param is zeroed anyway.
         (self.shared.grf_parameter)(self.file(), number)
     }
 
@@ -636,3 +638,67 @@ pub(crate) const TEST_TABLE: Services = Services {
     palette: crate::test_tables::unreachable1,
     shared: std::ptr::null(),
 };
+
+#[cfg(test)]
+mod tests {
+    use super::{GRFFileRef, GrfMiscBit, GrfMiscBits, TEST_TABLE, get_global_variable};
+    use std::ffi::c_void;
+    use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
+
+    static MISC_GRF_FEATURES: AtomicU8 = AtomicU8::new(0);
+    static TRAININFO_VEHICLE_WIDTH: AtomicU32 = AtomicU32::new(0);
+    static FAILED_ASSERTIONS: AtomicU32 = AtomicU32::new(0);
+
+    extern "C" fn misc_grf_features() -> u8 {
+        MISC_GRF_FEATURES.load(Ordering::Relaxed)
+    }
+    extern "C" fn traininfo_vehicle_width(_: *const c_void) -> u32 {
+        TRAININFO_VEHICLE_WIDTH.load(Ordering::Relaxed)
+    }
+    extern "C" fn record_assertion(condition: bool) {
+        if !condition {
+            FAILED_ASSERTIONS.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// `newgrf/newgrf_act0_globalvar.cpp`'s variable `0x1E` asserts that the stored bits lack
+    /// `TrainWidth32Pixels` and then sets it only for a file of the full width, 32.
+    #[test]
+    #[allow(unsafe_code)] // A dangling file record that only the width stub receives.
+    fn misc_grf_features_assert_the_local_bit_and_add_the_file_width() {
+        if crate::services_assert::isolate_test_check(
+            "newgrf::tests::misc_grf_features_assert_the_local_bit_and_add_the_file_width",
+            record_assertion,
+        ) {
+            return;
+        }
+        let mut shared = crate::test_tables::SHARED;
+        shared.grf_file_traininfo_vehicle_width = traininfo_vehicle_width;
+        let mut global = TEST_TABLE;
+        global.misc_grf_features = misc_grf_features;
+        global.shared = &raw const shared;
+        // SAFETY: Only the width stub receives the record, and it does not read it.
+        let file = unsafe { GRFFileRef::of(&shared, std::ptr::NonNull::dangling().as_ptr()) };
+        let local = GrfMiscBits(1 << GrfMiscBit::TrainWidth32Pixels.0).0;
+        let ambient = GrfMiscBits(1 << GrfMiscBit::AmbientSoundCallback.0).0;
+
+        // A stored local bit fails the assertion, and the body goes on as the original's does.
+        MISC_GRF_FEATURES.store(ambient | local, Ordering::Relaxed);
+        TRAININFO_VEHICLE_WIDTH.store(29, Ordering::Relaxed);
+        let value = get_global_variable(&global, 0x1E, Some(file));
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 1);
+        assert_eq!(value, Some(u32::from(ambient | local)));
+
+        MISC_GRF_FEATURES.store(ambient, Ordering::Relaxed);
+        assert_eq!(
+            get_global_variable(&global, 0x1E, Some(file)),
+            Some(u32::from(ambient))
+        );
+        TRAININFO_VEHICLE_WIDTH.store(32, Ordering::Relaxed);
+        assert_eq!(
+            get_global_variable(&global, 0x1E, Some(file)),
+            Some(u32::from(ambient | local))
+        );
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 1);
+    }
+}

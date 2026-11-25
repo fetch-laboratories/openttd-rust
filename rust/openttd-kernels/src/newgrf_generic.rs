@@ -12,6 +12,7 @@ use crate::cargo_type::CargoType;
 use crate::debug::{debug, grf_msg};
 use crate::game_state::GameState;
 use crate::industry_type::IndustryType;
+use crate::industrytype::get_industry_spec;
 use crate::map_func::World;
 use crate::newgrf::{GRFFile, GRFFileRef, GrfSpecFeature};
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
@@ -407,27 +408,13 @@ pub(crate) struct AiPurchaseCallback {
     pub(crate) station_size: u8,
 }
 
-/// `GetIndustrySpec(industry)->grf_prop.subst_id` where it is not `IT_INVALID`: if this is no
-/// original industry, use the substitute type.
-#[allow(unsafe_code, reason = "the live industry spec")]
+/// `GetAiPurchaseCallbackResult`: 'execute' an AI purchase selection callback. Returns the
+/// answering file and callback value if successful, or `CALLBACK_FAILED`.
+#[allow(unsafe_code, reason = "the live industry specs")]
 #[allow(
     clippy::cast_possible_truncation,
     reason = "the uint16_t subst_id stored to an IndustryType (newgrf_generic.cpp)"
 )]
-fn substitute_type(industry: IndustryType) -> IndustryType {
-    let is = crate::industrytype::get_industry_spec(industry);
-    // SAFETY: `GetIndustrySpec` returns a live spec of the table.
-    let subst_id = unsafe { (*is).grf_prop.subst_id };
-    // If this is no original industry, use the substitute type
-    if subst_id != u16::from(IndustryType::IT_INVALID.0) {
-        IndustryType(subst_id as u8)
-    } else {
-        industry
-    }
-}
-
-/// `GetAiPurchaseCallbackResult`: 'execute' an AI purchase selection callback. Returns the
-/// answering file and callback value if successful, or `CALLBACK_FAILED`.
 pub(crate) fn get_ai_purchase_callback_result(
     args: &AiPurchaseCallback,
 ) -> (Option<GRFFileRef<'static>>, u16) {
@@ -438,11 +425,23 @@ pub(crate) fn get_ai_purchase_callback_result(
     let mut dst_industry = args.dst_industry;
 
     if src_industry != IT_AI_UNKNOWN && src_industry != IT_AI_TOWN {
-        src_industry = substitute_type(src_industry);
+        let is = get_industry_spec(src_industry);
+        // If this is no original industry, use the substitute type
+        // SAFETY: `GetIndustrySpec` returns a live spec of the table.
+        let subst_id = unsafe { (*is).grf_prop.subst_id };
+        if subst_id != u16::from(IndustryType::IT_INVALID.0) {
+            src_industry = IndustryType(subst_id as u8);
+        }
     }
 
     if dst_industry != IT_AI_UNKNOWN && dst_industry != IT_AI_TOWN {
-        dst_industry = substitute_type(dst_industry);
+        let is = get_industry_spec(dst_industry);
+        // If this is no original industry, use the substitute type
+        // SAFETY: `GetIndustrySpec` returns a live spec of the table.
+        let subst_id = unsafe { (*is).grf_prop.subst_id };
+        if subst_id != u16::from(IndustryType::IT_INVALID.0) {
+            dst_industry = IndustryType(subst_id as u8);
+        }
     }
 
     object.generic_scope.cargo_type = args.cargo_type;
