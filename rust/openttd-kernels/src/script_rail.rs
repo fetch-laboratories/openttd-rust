@@ -180,20 +180,28 @@ pub extern "C" fn openttd_rust_script_rail_train_has_power(
     )
 }
 
-/// `ScriptRail::GetMaxSpeed`.
-#[unsafe(no_mangle)]
-#[allow(clippy::cast_possible_truncation)]
-pub extern "C" fn openttd_rust_script_rail_max_speed(s: &Services, rail_type: u32) -> i64 {
-    if !rail_type_available(s, rail_type) {
+/// `ScriptRail::GetMaxSpeed`: the availability check on the script rail type, then the
+/// native rail type's `max_speed`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GetMaxSpeed's (::RailType)railtype cast"
+)]
+fn get_max_speed(s: &Services, railtype: u32) -> i32 {
+    if !rail_type_available(s, railtype) {
         return -1;
     }
-    i64::from(
+    i32::from(
         crate::rail::get_rail_type_info(
             s.command.shared,
-            crate::services::RailType(rail_type as u8),
+            crate::services::RailType(railtype as u8),
         )
         .max_speed(),
     )
+}
+/// `ScriptRail::GetMaxSpeed`'s export.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_rail_max_speed(s: &Services, rail_type: u32) -> i64 {
+    i64::from(get_max_speed(s, rail_type))
 }
 
 /// `ScriptRail::GetBuildCost`, retaining availability before build-type validation.
