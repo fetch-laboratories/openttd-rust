@@ -1,12 +1,12 @@
 ---
 name: steer
-description: Steering review of root's autonomous migration work since the last steering commit; audits, corrects docs/issues, refreshes /start-development, and can restart root.
+description: Steering review of root's autonomous migration work since the last steering commit; surveys, ranks problems by cost, corrects course, opens fathom cases, and can restart root.
 disable-model-invocation: true
 ---
 
 # Steer the OpenTTD-Rust migration
 
-Review root's autonomous work since the last steering commit. Find what root cannot see and correct rules, roadmap order, issues and PR comments; leave code to root's PR process. [Navigate](../navigate/SKILL.md) owns the goal and the roadmap's "Phases"; work within that course. Root acts on corrections literally.
+Review root's autonomous work since the last steering commit. Find what root cannot see, rank it by what it cost, and correct the roadmap's order, issues and PR comments. A problem whose fix needs its cause found goes to [fathom](../fathom/SKILL.md) as a case; code stays with root's PR process. [Navigate](../navigate/SKILL.md) owns the goal and the roadmap's "Phases"; work within that course. Root acts on corrections literally.
 
 User focus: $ARGUMENTS (in Codex, any text sent with `$steer`). Answer a focused question first, to its root cause, and tell the user which of steps 2 and 3 still run.
 
@@ -36,10 +36,11 @@ Done when you can list each standing correction and the issue or ADR that tracks
 1. `git fetch`; read `git log` from the steering commit to `origin/rust-migration`, `git diff <steer>..origin/rust-migration -- AGENTS.md docs/ .github/` and the whole roadmap.
 2. Inspect `gh run list --branch rust-migration`, cancelled runs, open PRs with their checks and latest reviews, and open issues.
 3. Run `python3 tools/port-metrics.py --whole-fork`; progress is the fall in the fork C++ census ([ADR 0022](../../adr/0022-progress-is-net-cpp-removed.md)), and original C++ retired is the share of it that ports deliver. Re-measure the roadmap's stream inventory rows that steering owns with `python3 tools/code-standards-inventory.py`.
-4. Inspect `git worktree list` and disk use. Run `python3 docs/skills/steer/issues.py`; give every unplaced or excluded issue and every exclusion line a verdict on its merits against [selection](../../planning.md#selection): selected, queued behind a named event, excluded with its return condition, or closed.
+4. Inspect `git worktree list` and disk use. Run `python3 docs/skills/steer/issues.py`: an unplaced issue, or an exclusion with no return condition, is a problem to rank.
 5. Post a short status line to the user and continue.
-6. Judge each standing correction from the last two reviews and each rule changed outside steering: applied, slipped, reinterpreted or harmful, with its cost in agent hours, CI runs and parked PRs against what it caught. A rule loosened without an ADR is a red flag.
-7. Trace each problem to its rule, roadmap action or user message. A harmful rule resting on an ADR marked `may change: user` goes back to the user with evidence and cost ([ADRs](../../adr/README.md#who-may-change-one)).
+6. Judge each standing correction from the last two reviews and each rule changed outside steering: applied, slipped, reinterpreted or harmful, with its cost in agent hours, CI runs and parked PRs against what it caught, and whether the problem it was written for still occurs. A rule loosened without an ADR is a red flag.
+7. Read the fathom tracker, #1067. For each case whose fix has landed, read its number with the command the case gives: tick and close a case whose number held, and send back one whose number reached its failure value, with the new figures.
+8. Trace each problem to its rule, roadmap action or user message. A harmful rule resting on an ADR marked `may change: user` goes back to the user with evidence and cost ([ADRs](../../adr/README.md#who-may-change-one)).
 
 Watch for:
 
@@ -52,30 +53,35 @@ Watch for:
 - **Artificial hurdles**: gates or circular deferrals park work without catching defects.
 - **Shell workarounds**: `cd <worktree> &&`, hand-made agent worktrees, `sleep`, polling or hand-written environment prefixes point to a missing permanent fix.
 - **Running dry**: planning selects ever smaller items while some area lacks queued work.
-- **Debt recurrence**: new code lacks the original's types, named constants, comments or argument structs, or a stream inventory rises above its end state. Fix it where it got through: the implementer brief, the review brief, or a CI check.
+- **Debt recurrence**: new code lacks the original's types, named constants, comments or argument structs, or a stream inventory rises above its end state. Why review and CI passed it is a case (step 4).
 
-Done when every standing correction and every issue `issues.py` reports has a verdict.
+Done when every standing correction and every case with a landed fix has a verdict.
 
 ## 3. Audit independently
 
-1. Launch fresh audits together under the host's orchestration rules, on the parent's model family (Opus under Claude Code). They leave root's worktrees, branches and `.local/` output unchanged.
-2. Assign up to four fidelity audits, one per large port integrated since steering or about to integrate, largest first, and one or two targeted audits where the survey found most cost or risk: blockers, process time against port time, or speed.
-3. Give every agent `AGENTS.md` and the roadmap. Give fidelity agents the worktree, commit, merge base and `.local/reference/openttd`, and have them compare original bodies line by line, including fallback bodies under `#ifndef WITH_RUST`, against [fidelity](../../porting.md#fidelity), [boundary](../../porting.md#boundary) and [code standards](../../porting.md#code-standards).
+1. Launch fresh audits together under the host's orchestration rules, on the parent's model family (Opus under Claude Code). They leave root's worktrees, branches and `.local/` output unchanged. Give every agent `AGENTS.md` and the roadmap.
+2. Assign audits where the survey found most cost or risk: blockers, process time against port time, review findings against the code, or speed.
+3. A fidelity audit compares a merged pass with the original line by line. Assign one only where one of these holds:
+   - the review rules, the review model or the kind of work changed since a fidelity audit last measured what review leaves behind: one or two passes merged under the change;
+   - a phase's first ports merged: each of its first three (provisional);
+   - a behaviour difference reached `rust-migration` since the last steering: the passes that changed the same code.
+
+   Give the agent the worktree, commit, merge base and `.local/reference/openttd`, and have it compare original bodies, including fallback bodies under `#ifndef WITH_RUST`, against [fidelity](../../porting.md#fidelity), [boundary](../../porting.md#boundary) and [code standards](../../porting.md#code-standards). Report what review left behind for each 1,000 changed lines, beside the last measured figure.
 4. For speed, compare candidate and reference on play saves and `generate-tgp-256-1` with callgrind instruction counts (`.local/valgrind`), attribute the gap by port and remeasure each speed-parked PR at its head. A wall-clock median comes with the machine-wide compiler, linker and `openttd` processes from `ps -eo pid,pcpu,comm,args` and the 1-minute load average.
 5. Require findings tagged REACHABLE-DIVERGENCE, UNREACHABLE, RULE-VIOLATION, COVERAGE-GAP, PERF or HURDLE, with `file:line` in Rust and original. Verify each claim you will act on.
 
 Done when every audit has reported.
 
-## 4. Correct course
+## 4. Correct course and open cases
 
-Choose a few corrections, favoring systemic patterns.
+Rank the problems by what each cost since the last steering, in hours, runs or changed lines.
 
-- Prune before adding: remove each rule an agent would follow correctly without, or whose wrong action a tool already catches, and relax a harmful rule before adding a counter-rule.
+- **Correct what needs no diagnosis.** That is the work order, a wrong figure, an issue's placement, a PR's findings and text to prune. Remove a rule an agent would follow correctly without, or whose wrong action a tool already catches, and relax or remove one whose measured cost exceeds what it caught.
+- **Every other problem is a case.** Where the fix would add or rewrite a rule, a brief, a tool or a CI step, write the case ([fathom](../fathom/SKILL.md#1-write-the-case)) and start a fathom agent ([spawning](../../team.md#spawning)) for the one or two that cost most. The rest stay open on the tracker with their figures.
 - Put a standing rule once in the doc that owns it ([routing](../../../AGENTS.md#routing)), and a correction that is a real decision in an ADR ([ADRs](../../adr/README.md)).
 - Give new work an issue with problem, measurements, scope and acceptance; label it `roadmap` when ordered there. Put PR findings in a PR comment that separates what blocks integration from what can follow. Put new coverage gaps on #156.
 - Rewrite "Where the fork stands" and the work order. Replace "Latest steering actions" with this review's current actions and their issues, plus provisional items to judge at the next review; first move each earlier action that still stands into its owning doc or an ADR. Findings go in the commit message and issues, not the roadmap.
 - Prune completed rows and superseded text, and move per-PR plans to PRs or issues.
-- A gate says what happens on a miss: a profile-guided fix round, not deferral. Base a new threshold on measured noise under root's conditions and mark it provisional.
 - Commit guidance, ADRs, roadmap and any step 5 edit as one docs-only commit on `rust-migration`, such as `Doc: Steer migration toward <corrections> [skip ci]`, and push once settled.
 
 ## 5. Check /start-development
@@ -84,7 +90,7 @@ Edit `docs/skills/start-development/SKILL.md` only for an early stop, a misreadi
 
 ## 6. Report and hand off
 
-1. Report root's track, audit findings with numbers, changes with issue, ADR and commit links, any user ADR returned, and anything only the user can supply.
+1. Report root's track, audit findings with numbers, changes with issue, ADR and commit links, each case opened, started or judged with its link, any user ADR returned, and anything only the user can supply.
 2. If the focus asks for a restart, wait until `origin/rust-migration` has the commit, then launch one thread with `t3_thread_launch`:
    - `modelSelection`: the previous development root's provider, exact model, options and other launch settings ([team](../../team.md#roles-and-models)), read from that root's thread, not this one, with the user's overrides;
    - `workspaceStrategy: {type: "root"}`, a title and a stable `clientRequestId`;
