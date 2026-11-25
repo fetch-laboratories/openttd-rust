@@ -6087,12 +6087,16 @@ class CommentTests(unittest.TestCase):
         self.assertIn("on issue #171", out)
 
     def test_a_plan_review_is_not_adopted_as_a_status_comment(self) -> None:
-        """`Reviewed plan:` is a report header too (#1063)."""
+        """`Reviewed plan:` is a report header too (#1063), in every form the
+        report writer accepts."""
         plan = (
             "Reviewed plan: #171 at 1007aa96f8\n\n"
             + attribution("/root/rev")
             + "\n\nplan accepted"
         )
+        bold = plan.replace("Reviewed plan:", "**Reviewed plan:**")
+        self.assertEqual(review_report.reviewed_plan(bold), (171, "1007aa96f8"))
+        self.assertTrue(status_comment.is_report(bold))
         github = FakeComments([])
         github.store.append(FakeComments.comment(1000, plan, issue=171))
         code, _, err = self.run_comment(
@@ -6201,6 +6205,14 @@ class ReportTests(unittest.TestCase):
                 "has ['/root/other']",
             ),
             (fenced, "has none"),
+            # An attribution inside a sentence or a four-backtick fence is none
+            # (review of #1065).
+            (
+                f"Reviewed commit: {HEAD}\nAs {attribution('/root/rev')} said.\n"
+                "Disposition: accepted, whole PR",
+                "has none",
+            ),
+            (fenced.replace("```", "````"), "has none"),
             (review(HEAD, "/root/rev", "Looks fine."), "gives no disposition"),
             (
                 f"Reviewed plan: #170 at {HEAD}\n{attribution('/root/rev')}\nplan accepted",
@@ -6232,6 +6244,7 @@ class ReportTests(unittest.TestCase):
         for body in (
             plan.replace("#171", "#170"),
             plan.replace("plan accepted", "accepted"),
+            plan.replace("plan accepted", "plan acceptedly"),
         ):
             code, _, _ = self.run_report(
                 FakeComments([]), "--issue", "171", "--agent", "/root/rev", body=body

@@ -18,7 +18,6 @@ import sys
 
 import review_report
 import status_comment
-from cleanup_contract import ATTRIBUTION
 from review_report import Comment
 from status_comment import Target
 
@@ -52,7 +51,7 @@ def refusal(target: Target, agent: str, body: str) -> str | None:
                 "a review report opens with `Reviewed commit: <sha>` on its first line"
             )
         names = review_report.DISPOSITIONS
-    found = [line[1] for line in ATTRIBUTION.finditer(review_report.own_text(body))]
+    found = review_report.attributions(body)
     if found != [agent]:
         return (
             f"the report needs exactly one attribution line for {agent} outside "

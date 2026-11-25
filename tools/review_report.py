@@ -24,11 +24,15 @@ HEADER = re.compile(
 )
 # A plan review's header, `Reviewed plan: #<issue> at <commit>`: anywhere, as
 # REVIEWED marks a PR report, and where the report has it (#1063).
-PLANNED = re.compile(r"\bReviewed\s+plan:\s*#\d+", re.I)
-PLAN_HEADER = re.compile(
-    r"\A\s*[*_]*Reviewed\s+plan:[*_]*\s*#(\d+)\s+at\s+`?([0-9a-f]{7,40})\b", re.I
+PLAN = r"Reviewed\s+plan:[*_]*\s*#(\d+)\s+at\s+`?([0-9a-f]{7,40})\b"
+PLANNED = re.compile(r"\b" + PLAN, re.I)
+PLAN_HEADER = re.compile(r"\A\s*[*_]*" + PLAN, re.I)
+# A fence of three or more backticks or tildes, closed by one at least as long.
+FENCE = re.compile(r"^\s*(`{3,}|~{3,}).*?^\s*\1[`~]*\s*$", re.M | re.S)
+# An attribution is a line of its own, emphasis or a list marker aside.
+ATTRIBUTION_LINE = re.compile(
+    r"^\s*(?:[-*]\s+)?[*_`]*(" + ATTRIBUTION.pattern + r")[*_`]*\s*$", re.M
 )
-FENCE = re.compile(r"^\s*(```|~~~).*?^\s*\1\s*$", re.M | re.S)
 QUOTED = re.compile(r"^\s*>.*\n?", re.M)
 DISPOSITIONS = ("accepted", "findings to remediate")
 PLAN_DISPOSITIONS = ("plan accepted", "findings to remediate")
@@ -91,10 +95,15 @@ def reviewed_plan(body: str) -> tuple[int, str] | None:
     return (int(header[1]), header[2]) if header else None
 
 
+def attributions(body: str) -> list[str]:
+    """The agent path of each attribution line outside fences and quotations."""
+    return [line[2] for line in ATTRIBUTION_LINE.finditer(own_text(body))]
+
+
 def agent(body: str) -> str:
     """The report's attributed agent path."""
-    attribution = ATTRIBUTION.search(own_text(body))
-    return attribution[1] if attribution else UNKNOWN
+    found = attributions(body)
+    return found[0] if found else UNKNOWN
 
 
 def disposition(
@@ -114,7 +123,7 @@ def disposition(
     closing = lines[-1].strip().strip("*_`-> ").strip()
     closing = re.sub(r"^\**disposition\**\s*:\**\s*", "", closing, flags=re.I)
     for name in names:
-        if closing.lower().startswith(name):
+        if re.match(re.escape(name) + r"\b", closing.lower()):
             scope = closing[len(name) :].strip(" ,.;:*_`")
             return name, scope or None
     return UNKNOWN, None
