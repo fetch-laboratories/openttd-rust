@@ -40,32 +40,11 @@
 #include <unordered_set>
 
 #include "rust/engine_capabilities_ffi.h"
+#include "rust/orders_ffi.h"
 #include "rust/services_ffi.h"
 #include "rust/industry_shell_services.h"
 #include "rust/vehicle_services.h"
 #include "safeguards.h"
-
-/** Max distance in tiles (as the crow flies) to search for depots when user clicks "go to depot". */
-constexpr int MAX_SHIP_DEPOT_SEARCH_DISTANCE = 80;
-
-/**
- * Determine the effective #WaterClass for a ship travelling on a tile.
- * @param tile Tile of interest
- * @return the waterclass to be used by the ship.
- */
-WaterClass GetEffectiveWaterClass(TileIndex tile)
-{
-	if (HasTileWaterClass(tile)) return GetWaterClass(tile);
-	if (IsTileType(tile, MP_TUNNELBRIDGE)) {
-		assert(GetTunnelBridgeTransportType(tile) == TRANSPORT_WATER);
-		return WaterClass::Canal;
-	}
-	if (IsTileType(tile, MP_RAILWAY)) {
-		assert(GetRailGroundType(tile) == RailGroundType::HalfTileWater);
-		return WaterClass::Sea;
-	}
-	NOT_REACHED();
-}
 
 static const uint16_t _ship_sprites[] = {0x0E5D, 0x0E55, 0x0E65, 0x0E6D};
 
@@ -152,17 +131,12 @@ void Ship::GetImage(Direction direction, EngineImageType image_type, VehicleSpri
  */
 void Ship::UpdateCache()
 {
-	openttd_rust_ship_cache(RustVehicle(this), this->index.base(), &GetRustShipServices(), &GetRustSharedServices());
+	openttd_rust_ship_cache(RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices());
 }
 
 Money Ship::GetRunningCost() const
 {
 	return openttd_rust_engine_vehicle_running_cost(&GetRustEngineCapabilitiesServices(), RustEngine(this->GetEngine()), RustVehicle(this));
-}
-
-Trackdir Ship::GetVehicleTrackdir() const
-{
-	return static_cast<Trackdir>(openttd_rust_ship_trackdir(this->index.base(), &GetRustShipServices(), &GetRustSharedServices()));
 }
 
 void Ship::MarkDirty()
@@ -180,7 +154,7 @@ void Ship::PlayLeaveStationSound(bool force) const
 
 TileIndex Ship::GetOrderStationLocation(StationID station)
 {
-	return TileIndex(static_cast<uint32_t>(openttd_rust_ship_station_destination(this->index.base(), station.base(), RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices())));
+	return TileIndex(openttd_rust_ship_station_destination(RustVehicle(this), station.base(), &GetRustShipServices(), &GetRustSharedServices()));
 }
 
 void Ship::UpdateDeltaXY()
@@ -209,24 +183,28 @@ void Ship::UpdateDeltaXY()
 }
 
 
-bool IsShipDestinationTile(TileIndex tile, StationID station) { return openttd_rust_ship_is_destination( tile.base(), station.base(), &GetRustShipServices(), &GetRustSharedServices()); }
-
 bool Ship::Tick()
 {
 	PerformanceAccumulator framerate(PFE_GL_SHIPS);
-	return openttd_rust_ship_tick(this->index.base(), RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices());
+	return openttd_rust_ship_tick(RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices());
 }
 
 void Ship::SetDestTile(TileIndex tile)
 {
-	openttd_rust_ship_destination(this->index.base(), tile.base(), &GetRustShipServices(), &GetRustSharedServices());
+	openttd_rust_ship_destination(RustVehicle(this), tile.base());
 }
 
 
 ClosestDepot Ship::FindClosestDepot()
 {
-	auto depot = openttd_rust_ship_find_depot(this->index.base(), MAX_SHIP_DEPOT_SEARCH_DISTANCE, &GetRustShipServices(), &GetRustSharedServices());
-	return depot.valid ? ClosestDepot(TileIndex(depot.tile), DepotID(depot.id)) : ClosestDepot();
+	OpenTTDOrdersClosest closest;
+	openttd_rust_ship_find_depot(RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices(), &closest);
+	ClosestDepot result;
+	result.location = TileIndex{closest.tile};
+	result.destination = DestinationID(closest.destination);
+	result.reverse = closest.reverse != 0;
+	result.found = closest.found != 0;
+	return result;
 }
 
 #include "rust/ship_control_services.h"

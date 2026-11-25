@@ -469,9 +469,10 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
         let company = (x.t.shared.current_company)();
         // The native allocation clears gcache.first_engine: needs to be set before first callback.
         v = x.rec((s.new_engine)(tile.0, e));
-        (x.c.vehicles.set_max_age)(Ctx::vref(v), unsafe {
-            crate::engine_capabilities::openttd_rust_engine_life_days(x.r.capabilities, e)
-        });
+        (x.c.vehicles.set_max_age)(
+            Ctx::vref(v),
+            crate::engine_capabilities::get_life_length_in_days(x.r.capabilities, e),
+        );
         (s.engine_dates)(Ctx::sh(v), e);
         (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
         (k.service_flags)(

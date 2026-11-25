@@ -27,5 +27,4 @@ inline bool RustOnWater(uint32_t tile) noexcept { return IsTileOnWater(TileIndex
 inline bool RustIsRiver(uint32_t tile) noexcept { return IsRiver(TileIndex{tile}); }
 inline bool RustIsCanal(uint32_t tile) noexcept { return IsCanal(TileIndex{tile}); }
 
-inline Axis RustShipDepotAxis(uint32_t tile) noexcept { return GetShipDepotAxis(TileIndex{tile}); }
 #endif /* RUST_SERVICES_WATER_H */

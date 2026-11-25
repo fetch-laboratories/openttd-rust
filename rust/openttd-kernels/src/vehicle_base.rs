@@ -323,6 +323,7 @@ crate::abi::shared_records! {
         pub train: *mut crate::train_state::TrainState,
         pub road: *mut crate::road::OpenTTDRoadState,
         pub aircraft: *mut crate::aircraft::AircraftState,
+        pub ship: *mut crate::ship_control::State => "struct OpenTTDShipState *",
         pub consist: *mut crate::orders::Consist,
         pub orders: *mut crate::orders::VehicleOrders,
         pub visual: *mut u8,
@@ -371,6 +372,8 @@ crate::abi::shared_records! {
         pub owner: CompanyID,
         /// Facing.
         pub direction: Direction,
+        /// `Vehicle::sprite_cache.last_direction`: last direction we obtained sprites for.
+        pub sprite_cache_last_direction: Direction,
         /// Status.
         pub vehstatus: VehStates,
         /// Fractional speed.
@@ -401,6 +404,7 @@ impl VehicleRecord {
             train: std::ptr::null_mut(),
             road: std::ptr::null_mut(),
             aircraft: std::ptr::null_mut(),
+            ship: std::ptr::null_mut(),
             consist: std::ptr::null_mut(),
             orders: std::ptr::null_mut(),
             visual: std::ptr::null_mut(),
@@ -424,6 +428,7 @@ impl VehicleRecord {
             subtype: 0,
             owner: CompanyID::INVALID,
             direction: Direction::INVALID_DIR,
+            sprite_cache_last_direction: Direction::INVALID_DIR,
             vehstatus: VehStates(0),
             subspeed: 0,
             acceleration: 0,
@@ -791,6 +796,18 @@ impl crate::vehicle::VehicleRef {
     /// `GroundVehicle::gcache.cached_veh_length` of a live train or road vehicle.
     pub(crate) fn cached_veh_length(self) -> u8 {
         self.gcache().cached_veh_length()
+    }
+    /// The ship owner link; the record is a live ship.
+    pub(crate) fn ship(self) -> *mut crate::ship_control::State {
+        read_field!(self.0.as_ptr(), ship)
+    }
+    /// Store `Vehicle::acceleration`.
+    pub(crate) fn set_acceleration(self, value: u8) {
+        write_field!(self.0.as_ptr(), acceleration, value);
+    }
+    /// Store `Vehicle::sprite_cache.last_direction`.
+    pub(crate) fn set_sprite_cache_last_direction(self, value: Direction) {
+        write_field!(self.0.as_ptr(), sprite_cache_last_direction, value);
     }
     /// The aircraft owner link; the record is a live aircraft.
     pub(crate) fn aircraft_state(self) -> *mut crate::aircraft::AircraftState {

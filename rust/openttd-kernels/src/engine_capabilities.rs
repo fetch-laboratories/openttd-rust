@@ -620,13 +620,18 @@ pub unsafe extern "C" fn openttd_rust_engine_grfid(s: &Services, e: E) -> u32 {
         unsafe { ((*(*((s.loading)())).shared).grf_file_id)(file) }
     }
 }
-/// `Engine::GetLifeLengthInDays`; calendar Year and Date arithmetic is signed int32.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_life_days(s: &Services, e: E) -> i32 {
+/// `Engine::GetLifeLengthInDays`: the lifetime of the engine in days, as a calendar date
+/// difference. Calendar `Year` and `Date` arithmetic is signed `int32`.
+pub(crate) fn get_life_length_in_days(s: &Services, e: E) -> i32 {
     EngineRef::of(e)
         .life_years()
         .wrapping_add((s.life_extension)())
         .wrapping_mul(crate::timer_game_common::DAYS_IN_LEAP_YEAR)
+}
+/// [`get_life_length_in_days`] for `Engine::GetLifeLengthInDays` in C++.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_engine_life_days(s: &Services, e: E) -> i32 {
+    get_life_length_in_days(s, e)
 }
 unsafe fn invalid_kind(s: &Services) -> ! {
     (s.shared.not_reached)();

@@ -431,8 +431,6 @@ pub struct Services {
     pub station_commands: extern "C" fn() -> *const crate::station_cmd::CommandServicesTable,
     /// Canonical native station catchment table.
     pub station_catchment: extern "C" fn() -> *const crate::station::CatchmentServices,
-    /// Original docking flag.
-    pub docking_tile: extern "C" fn(u32) -> bool,
     /// Canonical shared `station_gfx` service.
     pub station_gfx: extern "C" fn(u32) -> u8,
     /// Canonical shared `station_serve_neutral` service.
@@ -853,7 +851,6 @@ crate::abi::layouts! {
         kdtree_partition,
         station_commands,
         station_catchment,
-        docking_tile,
         station_gfx,
         station_serve_neutral,
         station_type,
@@ -1213,7 +1210,6 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         kdtree_partition: fixture_kdtree_partition,
         station_commands: fixture_station_commands,
         station_catchment: fixture_station_catchment,
-        docking_tile: flag,
         station_gfx: byte,
         station_serve_neutral: flag0,
         station_type: fixture_station_type,

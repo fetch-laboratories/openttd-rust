@@ -13,7 +13,6 @@ use crate::table::strings::{
 };
 use crate::tile_type::TileIndex;
 use crate::vehicle_type::VehicleType;
-use std::ptr;
 #[repr(C)]
 pub struct Result {
     pub id: u32,
@@ -37,7 +36,7 @@ pub struct Services {
     pub construct: &'static construct::Services,
     pub rail: &'static rail::Services,
     pub ship_tile: extern "C" fn(u32) -> u32,
-    pub new_ship: extern "C" fn(u32) -> *mut (),
+    pub new_ship: extern "C" fn() -> *mut (),
     pub set_purchase: extern "C" fn(*mut (), u16, i64),
     pub is_engine: extern "C" fn(*mut ()) -> bool,
     pub presentation: extern "C" fn(*mut (), VehicleType),
@@ -238,27 +237,14 @@ pub(crate) unsafe fn cmd_build_vehicle(
                 construct::CmdBuildRoadVehicle { tile: cmd.tile, e },
             )
         },
-        VehicleType::SHIP => {
-            let north = (s.ship_tile)(tile);
-            let v = if subflags.test(DoCommandFlag::Execute) {
-                let v = (s.new_ship)(north);
-                let id = unsafe { (b.groups.vehicle_id)(v) };
-                unsafe {
-                    crate::ship_control::ship_build(
-                        id,
-                        super::vehicle_ref(v, r.common.vehicles),
-                        u32::from(engine),
-                        r.ship,
-                        b.shared,
-                    );
-                };
-                v
-            } else {
-                ptr::null_mut()
-            };
-            (b.cost.zero)(temporary);
-            v
-        }
+        VehicleType::SHIP => unsafe {
+            crate::ship_control::cmd_build_ship(
+                s,
+                temporary,
+                subflags,
+                crate::ship_control::CmdBuildShip { tile: cmd.tile, e },
+            )
+        },
         VehicleType::AIRCRAFT => unsafe {
             construct::cmd_build_aircraft(
                 s,

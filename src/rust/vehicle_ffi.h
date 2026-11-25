@@ -60,7 +60,6 @@ struct OpenTTDVehicleServices {
 	void (*set_cargo_type)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_type);
 	void (*set_colourmap)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_colourmap);
 	void (*set_max_age)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_max_age);
-	OpenTTDVehicle *(*ship_get)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_get);
 	void (*show_newgrf_vehicle_error)(uint16_t, uint32_t, uint32_t, GRFBug, bool) noexcept OPENTTD_SERVICE_DEFAULT(show_newgrf_vehicle_error);
 	void (OPENTTD_RUST_CALL *start_stop_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(start_stop_dirty);
 	OpenTTDVehicleTileLinks *(OPENTTD_RUST_CALL *tile_links)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tile_links);

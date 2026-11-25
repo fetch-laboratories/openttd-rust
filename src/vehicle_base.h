@@ -179,7 +179,6 @@ struct VehicleSpriteSeq {
  * or calculating the viewport.
  */
 struct MutableSpriteCache {
-	Direction last_direction = INVALID_DIR; ///< Last direction we obtained sprites for
 	bool revalidate_before_draw = false; ///< We need to do a GetImage() and check bounds before drawing this sprite
 	bool is_viewport_candidate = false; ///< This vehicle can potentially be drawn on a viewport
 	Rect old_coord{}; ///< Co-ordinates from the last valid bounding box
@@ -257,6 +256,10 @@ public:
 	inline TileIndex GetDestTile() const { return TileIndex{this->record->dest_tile}; }
 	inline void StoreDestTile(TileIndex tile) { this->record->dest_tile = tile.base(); } ///< Raw store, without the type's SetDestTile.
 	inline Direction GetDirection() const { return static_cast<Direction>(this->record->direction); } ///< Facing.
+	/** @return The sprite cache's last direction we obtained sprites for. */
+	inline Direction GetSpriteCacheLastDirection() const { return static_cast<Direction>(this->record->sprite_cache_last_direction); }
+	/** Store the sprite cache's last direction we obtained sprites for. */
+	inline void SetSpriteCacheLastDirection(Direction direction) { this->record->sprite_cache_last_direction = direction; }
 	inline void SetDirection(Direction direction) { this->record->direction = direction; }
 	inline Owner GetOwner() const { return Owner{this->record->owner}; } ///< Which company owns the vehicle?
 	inline void SetOwner(Owner owner) { this->record->owner = owner.base(); }
@@ -1128,7 +1131,7 @@ struct SpecializedVehicle : public Vehicle {
 		 * there won't be enough change in bounding box or offsets to need
 		 * to resolve a new sprite.
 		 */
-		if (this->GetDirection() != this->sprite_cache.last_direction || this->sprite_cache.is_viewport_candidate) {
+		if (this->GetDirection() != this->GetSpriteCacheLastDirection() || this->sprite_cache.is_viewport_candidate) {
 			VehicleSpriteSeq seq;
 
 			((T*)this)->T::GetImage(this->GetDirection(), EIT_ON_MAP, &seq);
@@ -1137,7 +1140,7 @@ struct SpecializedVehicle : public Vehicle {
 				this->sprite_cache.sprite_seq = seq;
 			}
 
-			this->sprite_cache.last_direction = this->GetDirection();
+			this->SetSpriteCacheLastDirection(this->GetDirection());
 			this->sprite_cache.revalidate_before_draw = false;
 		} else {
 			/*

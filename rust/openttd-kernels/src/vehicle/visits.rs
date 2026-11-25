@@ -1154,12 +1154,13 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
 
         VehicleType::VEH_SHIP => {
             set_window_classes_dirty(WindowClass::WC_SHIPS_LIST);
-            let leaves = s.refit.ship;
-            let ship = (leaves.state_owner)(index.0);
-            // SAFETY: The live ship's state owner.
-            unsafe { crate::ship_control::set_state(ship, TrackBits::TRACK_BIT_DEPOT) };
-            crate::ship_control::update_cache(leaves, s.shared, ship, v);
-            (leaves.viewport)(v, true, true);
+            let ship = crate::ship_control::Ship::from_vehicle(v);
+            ship.set_state(TrackBits::TRACK_BIT_DEPOT);
+            crate::ship_control::update_cache(
+                &crate::ship_control::Tables::new(s.refit.ship, s.shared),
+                ship,
+            );
+            (s.refit.ship.update_viewport)(v, true, true);
             set_window_dirty(WindowClass::WC_VEHICLE_DEPOT, WindowNumber::from(v.tile()));
         }
 

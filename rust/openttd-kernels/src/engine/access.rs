@@ -236,6 +236,9 @@ impl EngineRef {
     pub(crate) fn aircraft_acceleration(self) -> u8 {
         read_field!(Lifecycle::aircraft(self.0.as_ptr()), acceleration)
     }
+    pub(crate) fn ship_image(self) -> u8 {
+        read_field!(Lifecycle::ship(self.0.as_ptr()), image_index)
+    }
     pub(crate) fn ship_acceleration(self) -> u8 {
         read_field!(Lifecycle::ship(self.0.as_ptr()), acceleration)
     }

@@ -775,17 +775,12 @@ pub struct ShipYapfProbe {
     pub best_origin_dir: u8,
 }
 impl ShipYapfProbe {
-    fn vehicle<'a>(
-        &self,
-        s: &'a Services,
-        leaves: &'a crate::ship_control::Leaves,
-    ) -> crate::ship_yapf::Vehicle<'a> {
+    fn vehicle<'a>(&self, s: &'a Services) -> crate::ship_yapf::Vehicle<'a> {
         crate::ship_yapf::Vehicle::new(
             s,
             self.input,
             crate::track_type::TrackBits(self.state),
             Trackdir(self.trackdir),
-            leaves,
         )
     }
 }
@@ -796,16 +791,14 @@ impl ShipYapfProbe {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_ship_choose_ship_track(
     shared: *const Services,
-    leaves: *const crate::ship_control::Leaves,
     probe: *mut ShipYapfProbe,
     tile: u32,
     forward_dirs: u16,
     reverse_dirs: u16,
     path_cache: *mut crate::ship_yapf::ShipPathCache,
 ) -> u8 {
-    let (s, leaves, probe, path_cache) =
-        unsafe { (&*shared, &*leaves, &mut *probe, &mut *path_cache) };
-    let v = probe.vehicle(s, leaves);
+    let (s, probe, path_cache) = unsafe { (&*shared, &mut *probe, &mut *path_cache) };
+    let v = probe.vehicle(s);
     let mut path_found = false;
     let mut best_origin_dir = Trackdir::INVALID_TRACKDIR;
     let td = crate::ship_yapf::choose_ship_track(
@@ -829,12 +822,11 @@ pub unsafe extern "C" fn openttd_test_ship_choose_ship_track(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_ship_check_ship_reverse(
     shared: *const Services,
-    leaves: *const crate::ship_control::Leaves,
     probe: *const ShipYapfProbe,
     trackdir: *mut u8,
 ) -> u8 {
-    let (s, leaves, probe) = unsafe { (&*shared, &*leaves, &*probe) };
-    let v = probe.vehicle(s, leaves);
+    let (s, probe) = unsafe { (&*shared, &*probe) };
+    let v = probe.vehicle(s);
     let mut out = Trackdir::INVALID_TRACKDIR;
     let reverse =
         crate::ship_yapf::check_ship_reverse(&v, (!trackdir.is_null()).then_some(&mut out));
@@ -851,15 +843,14 @@ pub unsafe extern "C" fn openttd_test_ship_check_ship_reverse(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_ship_find_water_region_path(
     shared: *const Services,
-    leaves: *const crate::ship_control::Leaves,
     probe: *const ShipYapfProbe,
     start_tile: u32,
     max_returned_path_length: i32,
     out: *mut crate::water_regions::WaterRegionPatchDesc,
     capacity: usize,
 ) -> usize {
-    let (s, leaves, probe) = unsafe { (&*shared, &*leaves, &*probe) };
-    let v = probe.vehicle(s, leaves);
+    let (s, probe) = unsafe { (&*shared, &*probe) };
+    let v = probe.vehicle(s);
     let path = crate::ship_yapf::find_water_region_path(
         &v,
         TileIndex(start_tile),

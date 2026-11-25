@@ -187,7 +187,6 @@ extern "C" fn resolve(v: VehicleRef) -> MovementVehicle {
     MovementVehicle {
         train: Handle { record, owner },
         road: null_mut(),
-        ship: null_mut(),
         kind: VehicleType::VEH_TRAIN,
     }
 }

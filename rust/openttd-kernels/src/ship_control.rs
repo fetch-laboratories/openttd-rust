@@ -5,276 +5,340 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete ship controller and canonical private scalars. Shared path stays in `ship_yapf`.
-//! Entries keep vehicle shells and their service tables live and serialized through
-//! maintenance calls; no owner borrow spans a callback that can reenter or mutate it.
-#![allow(
-    unsafe_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::too_many_lines,
-    clippy::too_many_arguments,
-    clippy::similar_names,
-    clippy::items_after_statements,
-    clippy::verbose_bit_mask,
-    clippy::needless_late_init,
-    clippy::if_not_else
-)]
-use crate::game_state::GameState;
-use crate::order_type::{
-    OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
+//! `ship_cmd.cpp`: handling of ships, with the `Ship` members of `ship.h` whose state Rust
+//! owns: `state`, `rotation`, the rotation coordinates and the cached `path`.
+//!
+//! Each entry receives a live ship record, whose `ship` link names the ship owner its shell
+//! holds. Both stay live and serialized by the game-state mutex for the synchronous call.
+//! Every field is read and written in place at the original's observation point, and no
+//! reference into the record or the owner lives across a service.
+#![allow(unsafe_code)]
+
+use crate::cargo_type::is_valid_cargo_type;
+use crate::command_type::DoCommandFlag;
+use crate::direction_func::{
+    change_dir, diag_dir_to_dir, dir_difference, dir_to_diag_dir, is_valid_diag_direction,
+    reverse_dir,
 };
+use crate::direction_type::{DiagDirection, DirDiff, Direction};
+use crate::economy_type::ExpensesType;
+use crate::game_state::GameState;
+use crate::map_func::{Map, World};
+use crate::movement::CachedTable;
+use crate::newgrf_properties::PropertyID;
+use crate::newgrf_vehicle::get_vehicle_property;
+use crate::news_func::add_vehicle_news_item;
+use crate::news_type::NewsType;
+use crate::order_type::{
+    DestinationID, OrderDepotActionFlags, OrderDepotTypeFlag, OrderDepotTypeFlags,
+    OrderNonStopFlag, OrderNonStopFlags, OrderType,
+};
+use crate::raw_field::{read_field, write_field};
+use crate::script_event_types::ScriptEvent;
 use crate::services::Services;
-use crate::tile_type::MP_TUNNELBRIDGE;
-use crate::track_type::TrackBits;
+use crate::ship_yapf::ShipPathCache;
+use crate::slope_func::get_inclined_slope_direction;
+use crate::station_type::{StationFacility, StationHadVehicleOfType, StationID};
+use crate::strings_func::get_encoded_string;
+use crate::strings_type::StringParameterData::Integer;
+use crate::table::strings::STR_NEWS_FIRST_SHIP_ARRIVAL;
+use crate::tile_cmd::VehicleEnterTileState;
+use crate::tile_type::{TILE_HEIGHT, TILE_SIZE, TileIndex, TileType};
+use crate::track_func::{
+    axis_to_track_bits, diag_dir_to_diag_trackdir, diagdir_reaches_tracks, find_first_track,
+    is_diagonal_track, track_bits_to_track, track_direction_to_trackdir,
+    track_status_to_track_bits, track_to_opposite_track, track_to_track_bits,
+    trackdir_bits_to_track_bits, trackdir_to_exitdir, trackdir_to_track, trackdir_to_trackdir_bits,
+    vehicle_exit_dir,
+};
+use crate::track_type::{Track, TrackBits, Trackdir};
+use crate::transport_type::TransportType;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
-use crate::vehicle_base::VehState;
-use crate::vehicle_type::VehicleID;
-use crate::water_regions::WaterRegionPatchDesc as Patch;
+use crate::vehicle_base::{ClosestDepot, VehState, VehStates};
+use crate::vehicle_type::VehicleType;
+use crate::water_map::WaterClass;
+use crate::water_regions::{
+    WATER_REGION_EDGE_LENGTH, WaterRegionPatchDesc, WaterVisit, calculate_water_region_patch_hash,
+    get_water_region_patch_info, visit_water_region_patch_neighbours,
+};
+use crate::window_func::{invalidate_window_data, set_window_classes_dirty, set_window_dirty};
+use crate::window_type::{WindowClass, WindowNumber};
 use std::collections::{HashSet, VecDeque};
+use std::ptr::NonNull;
+
+/// Max distance in tiles (as the crow flies) to search for depots when user clicks "go to depot".
+const MAX_SHIP_DEPOT_SEARCH_DISTANCE: u32 = 80;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_ship_control_reload_rotation() {
     crate::witness::hit(crate::witness::SHIP_ROTATION_RELOAD);
 }
 
-const INVALID: u32 = u32::MAX;
-const DEPOT: u16 = crate::track_type::TRACK_BIT_DEPOT as u16;
-const WORMHOLE: u16 = crate::track_type::TRACK_BIT_WORMHOLE as u16;
-// Match FindFirstBit and FindFirstTrack, including their distinct zero results.
-fn first_bit(bits: u32) -> u32 {
-    u32::from(crate::bitmath_func::find_first_bit(u64::from(bits)))
-}
-fn first_track(bits: u32) -> u32 {
-    u32::from(crate::track_func::find_first_track_u32_raw(bits))
-}
-/// One private allocation per shell, including indexed load construction.
+/// The Rust owner of one ship shell: the `Ship` members Rust reads and writes.
 pub struct State {
-    track: u8,
-    rotation: u8,
-    rotation_x: i16,
-    rotation_y: i16,
+    /// The "track" the ship is following.
+    state: TrackBits,
+    /// Visible direction.
+    rotation: Direction,
+    /// NOSAVE: X Position before rotation.
+    rotation_x_pos: i16,
+    /// NOSAVE: Y Position before rotation.
+    rotation_y_pos: i16,
+    /// Cached path.
+    path: ShipPathCache,
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_ship_state_new() -> *mut State {
     Box::into_raw(Box::new(State {
-        track: 0,
-        rotation: 255,
-        rotation_x: 0,
-        rotation_y: 0,
+        state: TrackBits::TRACK_BIT_NONE,
+        rotation: Direction::INVALID_DIR,
+        rotation_x_pos: 0,
+        rotation_y_pos: 0,
+        path: ShipPathCache::default(),
     }))
 }
+/// # Safety
+/// One shell transfers its live owner exactly once, after `PreDestructor`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_state_destroy(state: *mut State) {
-    // SAFETY: The shell transfers its live allocation once after PreDestructor.
+    // SAFETY: As this function's contract.
     unsafe {
         drop(Box::from_raw(state));
     }
 }
-/// `Ship::state`: the ship's current track bits.
+/// The owner's cached path, which the C++ `ShipPathCache` view reaches for save/load.
+///
 /// # Safety
-/// `state` is the live shell allocation of a ship.
-pub(crate) unsafe fn get_state(state: *const State) -> TrackBits {
-    // SAFETY: Live shell allocation; field-sized read retains no owner reference.
-    TrackBits(unsafe { (*state).track })
+/// A live owner; the path lives as long as the owner.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_ship_state_path(state: *mut State) -> *mut ShipPathCache {
+    // SAFETY: As this function's contract; no reference is formed.
+    unsafe { std::ptr::addr_of_mut!((*state).path) }
 }
-/// Store `Ship::state`.
-/// # Safety
-/// `state` is the live, serialized shell allocation of a ship.
-pub(crate) unsafe fn set_state(state: *mut State, value: TrackBits) {
-    // SAFETY: Serialized game-thread write; no borrow survives a service callback.
-    unsafe {
-        (*state).track = value.0;
-    }
-}
+// The scalar accessors of the shell and save/load. SAFETY for each: a live owner, accessed
+// on the game thread with no Rust reference into it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_state(state: *const State) -> u8 {
-    unsafe { get_state(state) }.0
+    read_field!(state, state).0
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_set_state(state: *mut State, value: u8) {
-    unsafe { set_state(state, TrackBits(value)) }
+    write_field!(state, state, TrackBits(value));
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_rotation(state: *const State) -> u8 {
-    // SAFETY: Live shell allocation; field-sized read retains no owner reference.
-    unsafe { (*state).rotation }
+    read_field!(state, rotation).0
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_set_rotation(state: *mut State, value: u8) {
-    // SAFETY: Serialized game-thread write; no borrow survives a service callback.
-    unsafe {
-        (*state).rotation = value;
-    }
+    write_field!(state, rotation, Direction(value));
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_rotation_x(state: *const State) -> i16 {
-    // SAFETY: Live shell allocation; field-sized read retains no owner reference.
-    unsafe { (*state).rotation_x }
+    read_field!(state, rotation_x_pos)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_set_rotation_x(state: *mut State, value: i16) {
-    // SAFETY: Serialized game-thread write; no borrow survives a service callback.
-    unsafe {
-        (*state).rotation_x = value;
-    }
+    write_field!(state, rotation_x_pos, value);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_rotation_y(state: *const State) -> i16 {
-    // SAFETY: Live shell allocation; field-sized read retains no owner reference.
-    unsafe { (*state).rotation_y }
+    read_field!(state, rotation_y_pos)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_set_rotation_y(state: *mut State, value: i16) {
-    // SAFETY: Serialized game-thread write; no borrow survives a service callback.
-    unsafe {
-        (*state).rotation_y = value;
+    write_field!(state, rotation_y_pos, value);
+}
+
+/// A ship: its live record and the live ship owner its record names.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Ship {
+    pub(crate) v: VehicleRef,
+    s: NonNull<State>,
+}
+impl Ship {
+    /// The ship whose record is `v`, a live ship's, as a `Ship` member's `this` is.
+    pub(crate) fn of(v: VehicleRef) -> Self {
+        // SAFETY: Every ship shell's constructor links its non-null owner.
+        Self {
+            v,
+            s: unsafe { NonNull::new_unchecked(v.ship()) },
+        }
+    }
+    /// `Ship::From(v)`: the ship `v` is, with `Ship::From`'s type assertion.
+    pub(crate) fn from_vehicle(v: VehicleRef) -> Self {
+        crate::services_assert::assert_with(|| v.vehicle_type() == VehicleType::VEH_SHIP);
+        Self::of(v)
+    }
+    /// `Ship::state`.
+    pub(crate) fn state(self) -> TrackBits {
+        read_field!(self.s.as_ptr(), state)
+    }
+    /// Store `Ship::state`.
+    pub(crate) fn set_state(self, state: TrackBits) {
+        write_field!(self.s.as_ptr(), state, state);
+    }
+    /// `Ship::rotation`.
+    fn rotation(self) -> Direction {
+        read_field!(self.s.as_ptr(), rotation)
+    }
+    fn set_rotation(self, rotation: Direction) {
+        write_field!(self.s.as_ptr(), rotation, rotation);
+    }
+    fn set_rotation_x_pos(self, rotation_x_pos: i16) {
+        write_field!(self.s.as_ptr(), rotation_x_pos, rotation_x_pos);
+    }
+    fn set_rotation_y_pos(self, rotation_y_pos: i16) {
+        write_field!(self.s.as_ptr(), rotation_y_pos, rotation_y_pos);
+    }
+    /// `Ship::path`, for a search that holds the only reference to it for its call.
+    fn path(self) -> *mut ShipPathCache {
+        // SAFETY: A live owner; no reference is formed.
+        unsafe { std::ptr::addr_of_mut!((*self.s.as_ptr()).path) }
+    }
+    /// `path.empty()`.
+    fn path_empty(self) -> bool {
+        // SAFETY: A live owner; the borrow ends here.
+        unsafe { (*self.path()).empty() }
+    }
+    /// `path.back()`, under the original's nonempty precondition.
+    fn path_back(self) -> Trackdir {
+        // SAFETY: A live owner; the copy ends the borrow.
+        unsafe { (*self.path()).back() }
+    }
+    /// `path.pop_back()`.
+    fn path_pop_back(self) {
+        // SAFETY: A live owner on the game thread.
+        unsafe { (*self.path()).pop_back() }
+    }
+    /// `path.clear()`.
+    fn path_clear(self) {
+        // SAFETY: A live owner on the game thread.
+        unsafe { (*self.path()).clear() }
+    }
+    /// `Ship::IsInDepot`, which is also a ship's `Vehicle::IsChainInDepot`.
+    pub(crate) fn is_in_depot(self) -> bool {
+        self.state() == TrackBits::TRACK_BIT_DEPOT
     }
 }
+
+/// `Depot`, as one step of `Depot::Iterate` returns it.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Depot {
-    pub id: u32,
-    pub tile: u32,
-    pub owner: u32,
-    pub ship: u32,
+    /// `Depot::index`.
+    pub index: u16,
+    /// `Depot::xy`.
+    pub xy: u32,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Position {
-    pub x: i32,
-    pub y: i32,
-    pub old_tile: u32,
-    pub new_tile: u32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct ReverseResult {
-    pub reverse: bool,
-    pub trackdir: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TrackResult {
-    pub track: u8,
-    pub found: bool,
-}
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct DepotResult {
-    pub tile: u32,
-    pub id: u16,
-    pub valid: bool,
-}
-/// Synchronous typed shared services. No borrow into the owner or world spans a call.
+
+/// The services a ship entry calls that C++ still owns.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub depot_dir: extern "C" fn(u32) -> u32,
-    pub depot_axis: extern "C" fn(u32) -> u32,
-    pub is_depot: extern "C" fn(u32) -> bool,
-    pub depot_index: extern "C" fn(u32) -> u32,
-    pub wait_unbunch: extern "C" fn(u32) -> bool,
-    pub chain_depot: extern "C" fn(u32) -> bool,
-    pub servint: extern "C" fn(u32) -> u32,
-    pub tile_valid: extern "C" fn(u32) -> bool,
-    pub tile_type: extern "C" fn(u32) -> u32,
-    pub water_class: extern "C" fn(u32) -> u32,
-    pub lock_dir: extern "C" fn(u32) -> u32,
-    pub tile_min_z: extern "C" fn(u32) -> u32,
-    pub tile_max_z: extern "C" fn(u32) -> u32,
-    pub offset: extern "C" fn(u32) -> u32,
-    pub diag_between: extern "C" fn(u32, u32) -> u32,
-    pub dist_square: extern "C" fn(u32, u32) -> u32,
-    pub dist_manhattan: extern "C" fn(u32, u32) -> u32,
-    pub station: extern "C" fn(u32) -> u32,
-    pub industry_station: extern "C" fn(u32) -> u32,
-    pub arrival: extern "C" fn(u32, u32),
-    pub leave_unbunch: extern "C" fn(u32),
-    pub order_free: extern "C" fn(u32),
-    pub order_dummy: extern "C" fn(u32),
-    pub order_depot: extern "C" fn(u32, u32),
-    pub order_leave: extern "C" fn(u32),
-    pub order_increment: extern "C" fn(u32),
-    pub timetable: extern "C" fn(u32),
-    pub start_dirty: extern "C" fn(u32),
-    pub depot_dirty: extern "C" fn(u32),
-    pub depot_invalidate: extern "C" fn(u32),
-    pub ships_dirty: extern "C" fn(),
-    pub check_orders: extern "C" fn(u32),
-    pub cost_divisor: extern "C" fn() -> u32,
-    pub pay_running: extern "C" fn(u32, i64),
-    pub cache_invalidate: extern "C" fn(u32),
-    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
-    pub sprite_direction: extern "C" fn(u32),
-    pub tile_x: extern "C" fn(u32) -> u32,
-    pub tile_y: extern "C" fn(u32) -> u32,
-    pub build_random: extern "C" fn(u32, u16),
-    pub new_position: extern "C" fn(u32) -> Position,
-    pub exit_dir: extern "C" fn(u32, u32) -> u32,
-    pub track_direction: extern "C" fn(u32, u32) -> u32,
-    pub tracks_reach: extern "C" fn(u32) -> u32,
-    pub path_size: extern "C" fn(u32) -> usize,
-    pub path_back: extern "C" fn(u32) -> u32,
-    pub path_pop: extern "C" fn(u32),
-    pub path_clear: extern "C" fn(u32),
-    pub viewport: extern "C" fn(VehicleRef, bool, bool),
-    pub base_viewport: extern "C" fn(u32),
-    pub yapf_reverse: extern "C" fn(u32, bool) -> ReverseResult,
-    pub yapf_choose: extern "C" fn(u32, u32) -> TrackResult,
-    pub update_delta: extern "C" fn(u32),
-    pub build_owner: extern "C" fn(u32),
-    pub build_z: extern "C" fn(u32),
-    pub build_properties: extern "C" fn(u32, u32),
-    pub build_dates: extern "C" fn(u32),
-    pub build_prototype: extern "C" fn(u32),
-    pub build_interval_percent: extern "C" fn(u32),
-    pub order_destination: extern "C" fn(u32) -> u32,
-    pub order_type: extern "C" fn(u32) -> u32,
-    pub order_max_speed: extern "C" fn(u32) -> u32,
-    pub state_owner: extern "C" fn(u32) -> *mut State,
-    pub patch: extern "C" fn(u32) -> Patch,
-    pub neighbours: extern "C" fn(Patch, *mut Patch) -> usize,
+    /// `SpecializedVehicle<Ship>::UpdateViewport(force_update, update_delta)`, which calls the
+    /// ship's drawing members.
+    pub update_viewport: extern "C" fn(VehicleRef, bool, bool),
+    /// One step of `Depot::Iterate(first)`: writes the first depot at or after index `first`
+    /// to `out`, or returns false when there is none.
     pub next_depot: extern "C" fn(u32, *mut Depot) -> bool,
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
 }
-/// The original reuses one process-wide BFS set/deque. Field-sized scratch borrows
-/// end before water-region callbacks under the game-state mutex.
-struct DepotScratch {
-    visited: HashSet<(i32, i32, u8)>,
-    queue: VecDeque<Patch>,
+
+/// The tables one ship entry runs in, and its map descriptor.
+pub(crate) struct Tables<'a> {
+    l: &'a Leaves,
+    vs: &'a VehicleServices,
+    ss: &'a Services,
+    movement: CachedTable<'a>,
 }
-static DEPOT_SCRATCH: GameState<Option<DepotScratch>> = GameState::new(None);
-// The caller serializes scratch access; every borrow ends before a service call.
-unsafe fn depot_scratch() -> *mut DepotScratch {
-    // SAFETY: Serialized initialization; the short borrow ends before returning.
-    unsafe {
-        std::ptr::from_mut((*DEPOT_SCRATCH.get()).get_or_insert_with(|| DepotScratch {
-            visited: HashSet::new(),
-            queue: VecDeque::new(),
-        }))
+impl<'a> Tables<'a> {
+    /// The tables of an entry. Orders, loading, sound, `NewGRF`, movement, window, news,
+    /// script, depot and viewport callbacks cannot load or reset the map or yield the
+    /// game-state mutex, so the descriptor holds for the entry; nested entries build their
+    /// own.
+    pub(crate) fn new(l: &'a Leaves, ss: &'a Services) -> Self {
+        Self {
+            l,
+            // SAFETY: The native table names the immutable process-wide base table.
+            vs: unsafe { &*l.vehicle },
+            ss,
+            // SAFETY: As this function's contract.
+            movement: unsafe { CachedTable::audited(ss) },
+        }
+    }
+    /// The entry's map descriptor, loaded at its first use.
+    fn world(&self) -> &World<'a> {
+        self.movement.world()
+    }
+    fn map(&self) -> Map {
+        self.world().dimensions
+    }
+    /// The native assertion handler, as a header helper's precondition check.
+    fn check(&self) -> impl Fn(bool) + Copy + '_ {
+        |ok| crate::movement::native_assert(self.ss, ok)
+    }
+    /// `v->UpdateViewport(true, true)`.
+    fn update_viewport(&self, v: Ship) {
+        (self.l.update_viewport)(v.v, true, true);
+    }
+    /// `v->UpdatePosition()`.
+    fn update_position(&self, v: VehicleRef) {
+        // SAFETY: The live shell survives the synchronous index update.
+        unsafe { crate::vehicle::occupancy::update_position(self.vs, v, self.map()) }
+    }
+    /// `VehicleEnterTile(v, tile, x, y)`.
+    fn vehicle_enter_tile(
+        &self,
+        v: VehicleRef,
+        tile: TileIndex,
+        x: i32,
+        y: i32,
+    ) -> crate::tile_cmd::VehicleEnterTileStates {
+        // SAFETY: The same live serialized shell as the original callback; no owner borrow
+        // spans it.
+        unsafe { self.movement.get().vehicle_enter_tile(v, tile, x, y) }
+    }
+    /// `TrackStatusToTrackBits(GetTileTrackStatus(tile, TRANSPORT_WATER, 0, side))`.
+    fn water_track_bits(&self, tile: TileIndex, side: DiagDirection) -> TrackBits {
+        track_status_to_track_bits(self.movement.get().get_tile_track_status_in_world(
+            self.world(),
+            tile,
+            TransportType::TRANSPORT_WATER,
+            0,
+            side,
+        ))
+    }
+    /// `SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP)`.
+    fn start_stop_dirty(&self, v: VehicleRef) {
+        (self.vs.start_stop_dirty)(v);
+    }
+    /// `v->index`.
+    fn index(&self, v: VehicleRef) -> crate::vehicle_type::VehicleID {
+        v.index(self.vs.newgrf())
+    }
+    /// The company table, through base maintenance.
+    fn company(&self) -> &crate::company::Services {
+        // SAFETY: Base maintenance names the shared static command and company tables.
+        unsafe { &*((*(*(*self.vs.maintenance).transaction).commands).company)() }
     }
 }
-/// `GetEffectiveWaterClass`: determine the effective `WaterClass` for a ship
-/// travelling on a tile.
+
+/// `GetEffectiveWaterClass`: determine the effective `WaterClass` for a ship travelling on
+/// a tile.
 #[inline]
-pub(crate) fn get_effective_water_class(
-    world: &crate::map_func::World<'_>,
-    tile: crate::tile_type::TileIndex,
-) -> crate::water_map::WaterClass {
-    use crate::water_map::WaterClass;
+pub(crate) fn get_effective_water_class(world: &World<'_>, tile: TileIndex) -> WaterClass {
     if world.asserted(|m| crate::water_map::has_tile_water_class(m, tile.0)) {
         return WaterClass(world.water_class(tile.0));
     }
-    if world.kind(tile) == crate::tile_type::TileType::MP_TUNNELBRIDGE {
+    if world.kind(tile) == TileType::MP_TUNNELBRIDGE {
         world.assert_with(|| {
-            crate::transport_type::TransportType(world.tunnel_bridge_transport(tile.0))
-                == crate::transport_type::TransportType::TRANSPORT_WATER
+            TransportType(world.tunnel_bridge_transport(tile.0)) == TransportType::TRANSPORT_WATER
         });
         return WaterClass::Canal;
     }
-    if world.kind(tile) == crate::tile_type::TileType::MP_RAILWAY {
+    if world.kind(tile) == TileType::MP_RAILWAY {
         world.assert_with(|| {
             crate::rail_map::RailGroundType(world.get_rail_ground_type_raw(tile.0))
                 == crate::rail_map::RailGroundType::HalfTileWater
@@ -283,27 +347,594 @@ pub(crate) fn get_effective_water_class(
     }
     crate::services_assert::not_reached()
 }
-/// `IsShipDestinationTile`: whether a docking tile serves `station`. The map
-/// is read through `world`; only the industry arm's
-/// `Industry::GetByTile(t)->neutral_station` stays behind the controller's
-/// leaves, since no shared accessor reaches the industry record (this file's
-/// pass ports it).
+
+/// `visited_patch_hashes` and `patches_to_search`, the original's two function statics of
+/// `FindClosestShipDepot`.
+#[derive(Default)]
+struct DepotSearch {
+    visited_patch_hashes: HashSet<i32>,
+    patches_to_search: VecDeque<WaterRegionPatchDesc>,
+}
+static DEPOT_SEARCH: GameState<Option<DepotSearch>> = GameState::new(None);
+impl DepotSearch {
+    /// The statics, out of their slot for one search. The caller holds the game-state mutex.
+    fn take() -> Self {
+        // SAFETY: Native entries serialize access; the slot borrow ends here.
+        unsafe { (*DEPOT_SEARCH.get()).take().unwrap_or_default() }
+    }
+    /// Return the statics to their slot, keeping their capacity.
+    fn put_back(self) {
+        // SAFETY: As `take`.
+        unsafe { *DEPOT_SEARCH.get() = Some(self) };
+    }
+}
+
+/// `FindClosestShipDepot`.
+fn find_closest_ship_depot(t: &Tables<'_>, v: VehicleRef, max_distance: u32) -> Option<Depot> {
+    crate::witness::hit(crate::witness::SHIP_DEPOT_SEARCH);
+    let world = t.world();
+    let map = world.dimensions;
+    // `int max_region_distance = (max_distance / WATER_REGION_EDGE_LENGTH) + 1`, in `uint`.
+    let max_region_distance = (max_distance / WATER_REGION_EDGE_LENGTH.cast_unsigned())
+        .wrapping_add(1)
+        .cast_signed();
+    // SAFETY: The shared table returns the static water table, whose service returns the
+    // current map's region owner. `&mut` is formed only for each `water_regions` call.
+    let regions = unsafe { ((*(t.ss.water_services)()).water_regions)() };
+    let mut search = DepotSearch::take();
+    search.visited_patch_hashes.clear();
+    search.patches_to_search.clear();
+
+    /* Step 1: find a set of reachable Water Region Patches using BFS. */
+    // SAFETY: As `regions`.
+    let start_patch = get_water_region_patch_info(unsafe { &mut *regions }, world, t.ss, v.tile());
+    search.patches_to_search.push_back(start_patch);
+    search
+        .visited_patch_hashes
+        .insert(calculate_water_region_patch_hash(map, start_patch));
+
+    while let Some(current_node) = search.patches_to_search.pop_front() {
+        /* Remove first patch from the queue and make it the current patch. */
+
+        /* Add neighbours of the current patch to the search queue. */
+        let mut visit = WaterVisit::new();
+        // SAFETY: As `regions`.
+        while let Some(water_region_patch) = visit_water_region_patch_neighbours(
+            unsafe { &mut *regions },
+            world,
+            t.ss,
+            &mut visit,
+            current_node,
+        ) {
+            /* Note that we check the max distance per axis, not the total distance. */
+            if (water_region_patch.x - start_patch.x).abs() > max_region_distance
+                || (water_region_patch.y - start_patch.y).abs() > max_region_distance
+            {
+                continue;
+            }
+
+            let hash = calculate_water_region_patch_hash(map, water_region_patch);
+            if !search.visited_patch_hashes.contains(&hash) {
+                search.visited_patch_hashes.insert(hash);
+                search.patches_to_search.push_back(water_region_patch);
+            }
+        }
+    }
+
+    /* Step 2: Find the closest depot within the reachable Water Region Patches. */
+    let mut best_depot = None;
+    let mut best_dist_sq = u32::MAX;
+    let mut first = 0;
+    let mut depot = Depot::default();
+    while (t.l.next_depot)(first, &raw mut depot) {
+        first = u32::from(depot.index) + 1;
+        let tile = TileIndex(depot.xy);
+        if world.is_ship_depot_tile(tile) && world.is_tile_owner(tile, v.owner()) {
+            let dist_sq = map.distance_square(tile, v.tile());
+            if dist_sq < best_dist_sq
+                && dist_sq <= max_distance.wrapping_mul(max_distance)
+                && search
+                    .visited_patch_hashes
+                    .contains(&calculate_water_region_patch_hash(
+                        map,
+                        // SAFETY: As `regions`.
+                        get_water_region_patch_info(unsafe { &mut *regions }, world, t.ss, tile),
+                    ))
+            {
+                best_dist_sq = dist_sq;
+                best_depot = Some(depot);
+            }
+        }
+    }
+    search.put_back();
+
+    best_depot
+}
+
+/// `CheckIfShipNeedsService`.
+fn check_if_ship_needs_service(t: &Tables<'_>, v: Ship) {
+    let defaults = ((t.company().settings)().company_vehicle_defaults)(v.v.owner());
+    if read_field!(defaults, servint_ships) == 0
+        || !maintenance::needs_automatic_servicing(v.v, t.vs)
+    {
+        return;
+    }
+    if v.is_in_depot() {
+        maintenance::vehicle_service_in_depot(v.v, t.vs);
+        return;
+    }
+
+    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+    let max_distance = unsafe { t.ss.settings().maximum_go_to_depot_penalty.read() }
+        / crate::pathfinder_type::YAPF_TILE_LENGTH.cast_unsigned();
+
+    let Some(depot) = find_closest_ship_depot(t, v.v, max_distance) else {
+        if v.v.current_order().is_type(OrderType::OT_GOTO_DEPOT) {
+            // SAFETY: The current order belongs to this live serialized record.
+            unsafe { crate::orders::make_dummy(v.v.current_order_pointer()) };
+            t.start_stop_dirty(v.v);
+        }
+        return;
+    };
+    crate::witness::hit(crate::witness::SHIP_AUTO_SERVICE);
+
+    // SAFETY: The current order belongs to this live serialized record.
+    unsafe {
+        crate::orders::make_go_to_depot(
+            v.v.current_order_pointer(),
+            DestinationID(depot.index),
+            OrderDepotTypeFlags::from_element(OrderDepotTypeFlag::Service),
+            OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate),
+            OrderDepotActionFlags::EMPTY,
+            crate::cargo_type::CargoType::CARGO_NO_REFIT,
+        );
+    }
+    set_dest_tile(v, TileIndex(depot.xy));
+    t.start_stop_dirty(v.v);
+}
+
+/// `Ship::UpdateCache`: update the caches of this ship.
+pub(crate) fn update_cache(t: &Tables<'_>, v: Ship) {
+    let svi = (t.vs.engine)(v.v);
+
+    /* Get speed fraction for the current water type. Aqueducts are always canals. */
+    let is_ocean = get_effective_water_class(t.world(), v.v.tile()) == WaterClass::Sea;
+    let raw_speed = get_vehicle_property(
+        t.vs.newgrf(),
+        v.v,
+        PropertyID::PROP_SHIP_SPEED,
+        i32::from(svi.ship_speed()),
+    ) as u32;
+    v.v.set_cached_max_speed(crate::engine_type::apply_water_class_speed_frac(
+        raw_speed,
+        is_ocean,
+        svi.ship_speed_fraction(true),
+        svi.ship_speed_fraction(false),
+    ) as u16);
+
+    /* Update cargo aging period. */
+    v.v.set_cached_cargo_age_period(get_vehicle_property(
+        t.vs.newgrf(),
+        v.v,
+        PropertyID::PROP_SHIP_CARGO_AGE_PERIOD,
+        i32::from((t.vs.engine)(v.v).cargo_age()),
+    ) as u16);
+
+    crate::vehicle_effect::update_visual_effect(t.vs, t.ss, v.v, true);
+}
+
+/// `Ship::OnNewCalendarDay`: calendar day handler.
+pub(crate) fn on_new_calendar_day(v: VehicleRef, leaves: &Leaves) {
+    // SAFETY: The native table names the immutable process-wide base table.
+    maintenance::age_vehicle(v, unsafe { &*leaves.vehicle });
+}
+
+/// `Ship::OnNewEconomyDay`: economy day handler.
+pub(crate) fn on_new_economy_day(v: VehicleRef, leaves: &Leaves, shared: &Services) {
+    let t = Tables::new(leaves, shared);
+    let v = Ship::of(v);
+    crate::witness::hit(crate::witness::SHIP_ECONOMY_DAY);
+    maintenance::economy_age_vehicle(v.v, t.vs);
+
+    v.v.set_day_counter(v.v.day_counter().wrapping_add(1));
+    if (v.v.day_counter() & 7) == 0 {
+        maintenance::decrease_vehicle_value(v.v, t.vs);
+    }
+
+    maintenance::check_vehicle_breakdown(v.v, t.vs);
+    check_if_ship_needs_service(&t, v);
+
+    crate::orders::check_orders(v.v, t.vs.orders());
+
+    if v.v.running_ticks() == 0 {
+        return;
+    }
+
+    // SAFETY: The live ship and its engine; the cost callbacks retain no reference.
+    let cost = unsafe { t.vs.running_cost(v.v) }.saturating_mul(i64::from(v.v.running_ticks()))
+        / i64::from(crate::timer_game_common::DAYS_IN_YEAR * crate::timer_game_tick::DAY_TICKS);
+
+    v.v.set_profit_this_year(t.vs, v.v.profit_this_year(t.vs).saturating_sub(cost));
+    v.v.set_running_ticks(0);
+
+    crate::company::subtract_money_from_company_fract(
+        t.company().finance,
+        v.v.owner(),
+        cost,
+        ExpensesType::EXPENSES_SHIP_RUN,
+    );
+
+    set_window_dirty(
+        WindowClass::WC_VEHICLE_DETAILS,
+        WindowNumber::from(t.index(v.v)),
+    );
+    /* we need this for the profit */
+    set_window_classes_dirty(WindowClass::WC_SHIPS_LIST);
+}
+
+/// `Ship::GetVehicleTrackdir`.
+pub(crate) fn get_vehicle_trackdir(world: &World<'_>, v: Ship) -> Trackdir {
+    let check = |ok| world.check(ok);
+    if v.v.vehstatus().test(VehState::Crashed) {
+        return Trackdir::INVALID_TRACKDIR;
+    }
+
+    if v.is_in_depot() {
+        /* We'll assume the ship is facing outwards */
+        return diag_dir_to_diag_trackdir(world.get_ship_depot_direction(v.v.tile()), check);
+    }
+
+    if v.state() == TrackBits::TRACK_BIT_WORMHOLE {
+        /* ship on aqueduct, so just use its direction and assume a diagonal track */
+        return diag_dir_to_diag_trackdir(dir_to_diag_dir(v.v.direction(), check), check);
+    }
+
+    track_direction_to_trackdir(find_first_track(v.state()), v.v.direction(), check)
+}
+
+/// `Ship::GetOrderStationLocation`.
+pub(crate) fn get_order_station_location(
+    vs: &VehicleServices,
+    ss: &Services,
+    v: Ship,
+    station: StationID,
+) -> TileIndex {
+    if station == v.v.last_station_visited() {
+        v.v.set_last_station_visited(StationID::INVALID);
+    }
+
+    let runtime = crate::newgrf_airport::runtime();
+    let st = crate::newgrf_airport::station_by_id(station.0, runtime);
+    if crate::vehicle_func::can_vehicle_use_station(v.v, st, runtime) {
+        TileIndex((ss.station_xy)(station.0))
+    } else {
+        crate::orders::increment_real_order_index(v.v, vs.orders());
+        TileIndex(0)
+    }
+}
+
+/// `CheckReverseShip`.
+fn check_reverse_ship(t: &Tables<'_>, v: Ship, trackdir: Option<&mut Trackdir>) -> bool {
+    /* Ask pathfinder for best direction */
+    crate::ship_yapf::yapf_ship_check_reverse(t.ss, v, trackdir)
+}
+
+/// `CheckShipStayInDepot`: checks whether a ship should stay in the depot. True if the ship
+/// should stay in the depot, false if it has to leave.
+fn check_ship_stay_in_depot(t: &Tables<'_>, v: Ship) -> bool {
+    let world = t.world();
+    let check = t.check();
+    if !v.is_in_depot() {
+        return false;
+    }
+
+    /* Check if we should wait here for unbunching. */
+    if crate::vehicle::is_waiting_for_unbunching(v.v, t.vs.orders(), || v.is_in_depot()) {
+        return true;
+    }
+
+    /* We are leaving a depot, but have to go to the exact same one; re-enter */
+    if v.v.current_order().is_type(OrderType::OT_GOTO_DEPOT)
+        && world.is_ship_depot_tile(v.v.tile())
+        && DestinationID((t.ss.depot_index)(v.v.tile().0)) == v.v.current_order().destination()
+    {
+        crate::vehicle::visits::enter_depot(v.v, t.vs.visits());
+        return true;
+    }
+
+    /* Don't leave depot if no destination set */
+    if v.v.dest_tile() == TileIndex(0) {
+        return true;
+    }
+
+    /* Don't leave depot if another vehicle is already entering/leaving */
+    /* This helps avoid CPU load if many ships are set to start at the same time */
+    if crate::vehicle_func::has_vehicle_on_tile(t.vs, t.map(), v.v.tile(), |u| {
+        u.vehicle_type() == VehicleType::VEH_SHIP && u.cur_speed() != 0
+    }) {
+        return true;
+    }
+
+    world.assert_with(|| {
+        get_vehicle_trackdir(world, v) == Trackdir::TRACKDIR_X_NE
+            || get_vehicle_trackdir(world, v) == Trackdir::TRACKDIR_Y_NW
+    });
+    v.v.set_direction(diag_dir_to_dir(
+        trackdir_to_exitdir(get_vehicle_trackdir(world, v), check),
+        check,
+    ));
+    if check_reverse_ship(t, v, None) {
+        v.v.set_direction(reverse_dir(v.v.direction(), check));
+    }
+    crate::witness::hit(crate::witness::SHIP_DEPOT_LEAVE);
+
+    v.set_state(axis_to_track_bits(
+        world.get_ship_depot_axis(v.v.tile()),
+        check,
+    ));
+    v.set_rotation(v.v.direction());
+    v.v.set_hidden(false);
+    v.v.set_cur_speed(0);
+    t.update_viewport(v);
+    set_window_dirty(
+        WindowClass::WC_VEHICLE_DEPOT,
+        WindowNumber::from(v.v.tile()),
+    );
+
+    maintenance::vehicle_service_in_depot(v.v, t.vs);
+    crate::orders::VisitOrders::new(t.vs.orders()).leave_unbunching_depot(v.v);
+    (t.vs.play_leave_station_sound)(v.v);
+    invalidate_window_data(
+        WindowClass::WC_VEHICLE_DEPOT,
+        WindowNumber::from(v.v.tile()),
+        0,
+        false,
+    );
+    set_window_classes_dirty(WindowClass::WC_SHIPS_LIST);
+
+    false
+}
+
+/// `ShipAccelerate`: accelerates the ship towards its target speed. Returns the number of
+/// steps to move the ship.
+fn ship_accelerate(t: &Tables<'_>, v: VehicleRef) -> u32 {
+    let mut speed: u32;
+    speed = (u32::from(v.cur_speed()) + u32::from(v.acceleration()))
+        .min(u32::from(v.cached_max_speed()));
+    speed = speed.min(u32::from(v.current_order().max_speed()) * 2);
+
+    /* updates statusbar only if speed have changed to save CPU time */
+    if speed != u32::from(v.cur_speed()) {
+        v.set_cur_speed(speed as u16);
+        t.start_stop_dirty(v);
+    }
+
+    let advance_speed = VehicleRef::get_advance_speed(speed);
+    let number_of_steps =
+        advance_speed.wrapping_add(u32::from(v.progress())) / v.get_advance_distance();
+    let remainder = advance_speed.wrapping_add(u32::from(v.progress())) % v.get_advance_distance();
+    t.world().assert_with(|| remainder <= u32::from(u8::MAX));
+    v.set_progress(remainder as u8);
+    number_of_steps
+}
+
+/// `ShipArrivesAt`: ship arrives at a dock. If it is the first time, send out a news item.
+fn ship_arrives_at(t: &Tables<'_>, v: VehicleRef, st: *mut crate::station::BaseStation) {
+    let index = crate::newgrf_airport::runtime().station_index(st);
+    // The live station's field, resolved in this serialized entry; byte-sized loads and
+    // stores below.
+    let had_vehicle_of_type = (t.ss.station_had_vehicle_of_type_field)(st.cast());
+    /* Check if station was ever visited before */
+    // SAFETY: As `had_vehicle_of_type`.
+    if unsafe { *had_vehicle_of_type } & StationHadVehicleOfType::HVOT_SHIP.0 == 0 {
+        // SAFETY: As `had_vehicle_of_type`.
+        unsafe { *had_vehicle_of_type |= StationHadVehicleOfType::HVOT_SHIP.0 };
+
+        add_vehicle_news_item(
+            &get_encoded_string(STR_NEWS_FIRST_SHIP_ARRIVAL, &[Integer(u64::from(index.0))]),
+            if v.owner().0 == (t.ss.local_company)() {
+                NewsType::ArrivalCompany
+            } else {
+                NewsType::ArrivalOther
+            },
+            t.index(v),
+            index,
+        );
+        crate::ai::new_event(
+            v.owner(),
+            &ScriptEvent::station_first_vehicle(index, t.index(v)),
+        );
+        crate::game::new_event(&ScriptEvent::station_first_vehicle(index, t.index(v)));
+    }
+}
+
+/// `ChooseShipTrack`: runs the pathfinder to choose a track to continue along on `tile`,
+/// the tile the ship is about to enter, from the available track choices `tracks`. Returns
+/// the track to choose, or `INVALID_TRACK` when to reverse.
+fn choose_ship_track(t: &Tables<'_>, v: Ship, tile: TileIndex, tracks: TrackBits) -> Track {
+    let check = t.check();
+    let mut path_found = true;
+    let mut track;
+
+    if v.v.dest_tile() == TileIndex(0) {
+        /* No destination, don't invoke pathfinder. */
+        track = track_bits_to_track(v.state(), check);
+        if !is_diagonal_track(track, check) {
+            track = track_to_opposite_track(track, check);
+        }
+        if !crate::bitmath_func::has_bit(tracks.0, track.0) {
+            track = find_first_track(tracks);
+        }
+        path_found = false;
+    } else {
+        /* Attempt to follow cached path. */
+        if !v.path_empty() {
+            crate::witness::hit(crate::witness::SHIP_PATH_CACHE);
+            track = trackdir_to_track(v.path_back(), check);
+
+            if crate::bitmath_func::has_bit(tracks.0, track.0) {
+                v.path_pop_back();
+                /* HandlePathfindResult() is not called here because this is not a new pathfinder result. */
+                return track;
+            }
+
+            /* Cached path is invalid so continue with pathfinder. */
+            v.path_clear();
+        }
+
+        // SAFETY: The search holds the only reference to the path for its call: it calls no
+        // service that reaches the controller or a ship's owner.
+        track = crate::ship_yapf::yapf_ship_choose_track(t.ss, v, tile, &mut path_found, unsafe {
+            &mut *v.path()
+        });
+    }
+
+    (t.vs.pathfinding_result)(v.v, path_found);
+    track
+}
+
+/// `GetAvailShipTracks`: get the available water tracks on `tile`, the tile about to enter,
+/// for a ship entering it in direction `dir`.
+#[inline]
+fn get_avail_ship_tracks(t: &Tables<'_>, tile: TileIndex, dir: DiagDirection) -> TrackBits {
+    t.water_track_bits(tile, DiagDirection::INVALID_DIAGDIR)
+        & diagdir_reaches_tracks(dir, t.check())
+}
+
+/// `ShipSubcoordData`: ship sub-coordinate data for moving into a new tile via a `Diagdir`
+/// onto a `Track`.
+#[derive(Clone, Copy)]
+struct ShipSubcoordData {
+    /// New X sub-coordinate on the new tile.
+    x_subcoord: u8,
+    /// New Y sub-coordinate on the new tile.
+    y_subcoord: u8,
+    /// New Direction to move in on the new track.
+    dir: Direction,
+}
+const fn subcoord(x_subcoord: u8, y_subcoord: u8, dir: Direction) -> ShipSubcoordData {
+    ShipSubcoordData {
+        x_subcoord,
+        y_subcoord,
+        dir,
+    }
+}
+/// Ship sub-coordinate data for moving into a new tile via a `Diagdir` onto a `Track`.
+/// Array indexes are `Diagdir`, `Track`.
+/// There will always be three possible tracks going into an adjacent tile via a `Diagdir`,
+/// so each `Diagdir` sub-array will have three valid and three invalid structures per `Track`.
+#[rustfmt::skip]
+const SHIP_SUBCOORD: [[ShipSubcoordData; Track::TRACK_END.0 as usize];
+    DiagDirection::DIAGDIR_END.0 as usize] = {
+    use Direction as D;
+    [
+        /* DIAGDIR_NE */
+        [
+            subcoord(15,  8, D::DIR_NE),      // TRACK_X
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_Y
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_UPPER
+            subcoord(15,  8, D::DIR_E),       // TRACK_LOWER
+            subcoord(15,  7, D::DIR_N),       // TRACK_LEFT
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_RIGHT
+        ],
+        /* DIAGDIR_SE */
+        [
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_X
+            subcoord( 8,  0, D::DIR_SE),      // TRACK_Y
+            subcoord( 7,  0, D::DIR_E),       // TRACK_UPPER
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_LOWER
+            subcoord( 8,  0, D::DIR_S),       // TRACK_LEFT
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_RIGHT
+        ],
+        /* DIAGDIR_SW */
+        [
+            subcoord( 0,  8, D::DIR_SW),      // TRACK_X
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_Y
+            subcoord( 0,  7, D::DIR_W),       // TRACK_UPPER
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_LOWER
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_LEFT
+            subcoord( 0,  8, D::DIR_S),       // TRACK_RIGHT
+        ],
+        /* DIAGDIR_NW */
+        [
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_X
+            subcoord( 8, 15, D::DIR_NW),      // TRACK_Y
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_UPPER
+            subcoord( 8, 15, D::DIR_W),       // TRACK_LOWER
+            subcoord( 0,  0, D::INVALID_DIR), // TRACK_LEFT
+            subcoord( 7, 15, D::DIR_N),       // TRACK_RIGHT
+        ],
+    ]
+};
+
+/// `ShipTestUpDownOnLock`: test if a ship is in the centre of a lock and should move up or
+/// down. Returns 0 if ship is not moving in lock, or -1 to move down, 1 to move up.
+fn ship_test_up_down_on_lock(t: &Tables<'_>, v: VehicleRef) -> i32 {
+    let world = t.world();
+    /* Suitable tile? */
+    if !(t.ss.water_middle_lock)(v.tile().0) {
+        return 0;
+    }
+
+    /* Must be at the centre of the lock */
+    if (v.x_pos() & 0xF) != 8 || (v.y_pos() & 0xF) != 8 {
+        return 0;
+    }
+
+    let diagdir = get_inclined_slope_direction(world.tile_slope(v.tile()));
+    world.assert_with(|| is_valid_diag_direction(diagdir));
+
+    if dir_to_diag_dir(v.direction(), t.check()) == diagdir {
+        /* Move up */
+        i32::from(v.z_pos() < world.tile_max_z(v.tile()) * TILE_HEIGHT as i32)
+    } else {
+        /* Move down */
+        -i32::from(v.z_pos() > world.tile_z(v.tile()) * TILE_HEIGHT as i32)
+    }
+}
+
+/// `ShipMoveUpDownOnLock`: test and move a ship up or down in a lock. Returns true iff the
+/// ship is moving up or down in a lock.
+fn ship_move_up_down_on_lock(t: &Tables<'_>, v: Ship) -> bool {
+    /* Moving up/down through lock */
+    let dz = ship_test_up_down_on_lock(t, v.v);
+    if dz == 0 {
+        return false;
+    }
+    if dz > 0 {
+        crate::witness::hit(crate::witness::SHIP_LOCK_UP);
+    } else {
+        crate::witness::hit(crate::witness::SHIP_LOCK_DOWN);
+    }
+
+    if v.v.cur_speed() != 0 {
+        v.v.set_cur_speed(0);
+        t.start_stop_dirty(v.v);
+    }
+
+    if (v.v.tick_counter() & 7) == 0 {
+        v.v.set_z_pos(v.v.z_pos().wrapping_add(dz));
+        t.update_position(v.v);
+        t.update_viewport(v);
+    }
+
+    true
+}
+
+/// `IsShipDestinationTile`: test if `tile`, a docking tile, is a docking tile for `station`.
+/// True iff the docking tile is next to the station.
 pub(crate) fn is_ship_destination_tile(
-    world: &crate::map_func::World<'_>,
-    leaves: &Leaves,
-    tile: crate::tile_type::TileIndex,
-    station: crate::station_type::StationID,
+    world: &World<'_>,
+    tile: TileIndex,
+    station: StationID,
 ) -> bool {
     world.assert_with(|| world.is_docking_tile(tile));
     /* Check each tile adjacent to docking tile. */
-    for d in crate::direction_type::DiagDirection::DIAGDIR_BEGIN.0
-        ..crate::direction_type::DiagDirection::DIAGDIR_END.0
-    {
+    for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
         let t = tile
-            + world.dimensions.tile_offs_by_diag_dir(
-                crate::direction_type::DiagDirection(d),
-                crate::map_func::native_check,
-            );
+            + world
+                .dimensions
+                .tile_offs_by_diag_dir(DiagDirection(d), |ok| world.check(ok));
         if !world.is_valid_tile(t) {
             continue;
         }
@@ -313,12 +944,14 @@ pub(crate) fn is_ship_destination_tile(
         {
             return true;
         }
-        if world.kind(t) == crate::tile_type::TileType::MP_INDUSTRY
-            && (leaves.industry_station)(t.0) == u32::from(station.0)
-        {
-            return true;
+        if world.kind(t) == TileType::MP_INDUSTRY {
+            let runtime = crate::newgrf_airport::runtime();
+            let neutral_station = (runtime.commands().neutral_for_tile)(t.0);
+            if !neutral_station.is_null() && runtime.station_index(neutral_station) == station {
+                return true;
+            }
         }
-        if world.kind(t) == crate::tile_type::TileType::MP_STATION
+        if world.kind(t) == TileType::MP_STATION
             && world.is_oil_rig(t)
             && world.get_station_index(t) == station
         {
@@ -327,1134 +960,546 @@ pub(crate) fn is_ship_destination_tile(
     }
     false
 }
-impl Leaves {
-    /// The base vehicle table.
-    fn vehicles(&self) -> &VehicleServices {
-        // SAFETY: The native table names the immutable process-wide base table.
-        unsafe { &*self.vehicle }
-    }
+
+/// `ReverseShipIntoTrackdir`.
+fn reverse_ship_into_trackdir(t: &Tables<'_>, v: Ship, trackdir: Trackdir) {
+    use Direction as D;
+    const TRACKDIR_TO_DIRECTION: [Direction; 16] = [
+        D::DIR_NE,
+        D::DIR_SE,
+        D::DIR_E,
+        D::DIR_E,
+        D::DIR_S,
+        D::DIR_S,
+        D::INVALID_DIR,
+        D::INVALID_DIR,
+        D::DIR_SW,
+        D::DIR_NW,
+        D::DIR_W,
+        D::DIR_W,
+        D::DIR_N,
+        D::DIR_N,
+        D::INVALID_DIR,
+        D::INVALID_DIR,
+    ];
+    crate::witness::hit(crate::witness::SHIP_REVERSE);
+
+    v.v.set_direction(TRACKDIR_TO_DIRECTION[usize::from(trackdir.0)]);
+    t.world()
+        .assert_with(|| v.v.direction() != Direction::INVALID_DIR);
+    v.set_state(trackdir_bits_to_track_bits(trackdir_to_trackdir_bits(
+        trackdir,
+        t.check(),
+    )));
+
+    /* Remember our current location to avoid movement glitch */
+    v.set_rotation_x_pos(v.v.x_pos() as i16);
+    v.set_rotation_y_pos(v.v.y_pos() as i16);
+    v.v.set_cur_speed(0);
+    v.path_clear();
+
+    t.update_position(v.v);
+    t.update_viewport(v);
 }
-struct Game<'a> {
-    leaves: &'a Leaves,
-    services: &'a Services,
-    owner: *mut State,
-    vehicle: Option<VehicleRef>,
+
+/// `ReverseShip`.
+fn reverse_ship(t: &Tables<'_>, v: Ship) {
+    crate::witness::hit(crate::witness::SHIP_REVERSE);
+    v.v.set_direction(reverse_dir(v.v.direction(), t.check()));
+
+    /* Remember our current location to avoid movement glitch */
+    v.set_rotation_x_pos(v.v.x_pos() as i16);
+    v.set_rotation_y_pos(v.v.y_pos() as i16);
+    v.v.set_cur_speed(0);
+    v.path_clear();
+
+    t.update_position(v.v);
+    t.update_viewport(v);
 }
-impl Game<'_> {
-    fn vehicle(&self) -> VehicleRef {
-        // SAFETY: Stateful entries retain one live record; stateless destination
-        // queries never access it. No record borrow survives a callback.
-        unsafe { self.vehicle.unwrap_unchecked() }
+
+/// `Ship::GetCurrentMaxSpeed`.
+pub(crate) fn get_current_max_speed(v: VehicleRef) -> i32 {
+    i32::from(v.cached_max_speed()).min(i32::from(v.current_order().max_speed()) * 2)
+}
+
+/// `ShipController`.
+#[allow(clippy::too_many_lines, reason = "the original's one body")]
+fn ship_controller(t: &Tables<'_>, v: Ship) {
+    let check = t.check();
+    v.v.set_tick_counter(v.v.tick_counter().wrapping_add(1));
+    v.v.set_current_order_time(v.v.current_order_time().wrapping_add(1));
+
+    if maintenance::handle_breakdown(v.v, t.vs) {
+        return;
     }
 
-    fn vs(&self) -> &VehicleServices {
-        self.leaves.vehicles()
+    if v.v.vehstatus().test(VehState::Stopped) {
+        return;
     }
-    fn state(&self) -> u16 {
-        // SAFETY: Raw shell pointer stays live; field access ends before any service.
-        unsafe { u16::from((*self.owner).track) }
+
+    if crate::orders::process_orders(v.v, t.vs.orders()) && check_reverse_ship(t, v, None) {
+        return reverse_ship(t, v);
     }
-    fn set_state(&self, value: u16) {
-        // SAFETY: Serialized field-sized write, no owner borrow spans reentry.
-        unsafe {
-            (*self.owner).track = value as u8;
-        }
+
+    t.vs.handle_loading(v.v, false);
+
+    if v.v.current_order().is_type(OrderType::OT_LOADING) {
+        return;
     }
-    fn rotation(&self) -> u16 {
-        // SAFETY: Raw shell pointer stays live; field access ends before any service.
-        unsafe { u16::from((*self.owner).rotation) }
+
+    if check_ship_stay_in_depot(t, v) {
+        return;
     }
-    fn set_rotation(&self, value: u16) {
-        // SAFETY: Serialized field-sized write, no owner borrow spans reentry.
-        unsafe {
-            (*self.owner).rotation = value as u8;
-        }
-    }
-    fn set_rotation_x(&self, value: u16) {
-        // SAFETY: Serialized field-sized write, no owner borrow spans reentry.
-        unsafe {
-            (*self.owner).rotation_x = value as i16;
-        }
-    }
-    fn set_rotation_y(&self, value: u16) {
-        // SAFETY: Serialized field-sized write, no owner borrow spans reentry.
-        unsafe {
-            (*self.owner).rotation_y = value as i16;
-        }
-    }
-}
-impl Game<'_> {
-    fn viewport(&self) {
-        (self.leaves.viewport)(self.vehicle(), true, true);
-    }
-    fn path_clear(&self, id: u32) {
-        (self.leaves.path_clear)(id);
-    }
-    fn destination(&self, id: VehicleID, tile: u32) {
-        if tile == (self.vehicle().dest_tile_raw()) {
-            return;
-        }
-        self.path_clear(id.0);
-        self.vehicle().set_dest_tile_raw(tile);
-    }
-    fn remember_rotation(&self) {
-        let observed_x = self.vehicle().x_pos() as u32;
-        let observed_y = self.vehicle().y_pos() as u32;
-        self.set_rotation_x(observed_x as u16);
-        self.set_rotation_y(observed_y as u16);
-    }
-    fn reverse(&self, id: u32, v: VehicleRef, trackdir: u32) {
-        crate::witness::hit(crate::witness::SHIP_REVERSE);
-        if trackdir == INVALID {
-            self.vehicle()
-                .set_direction_raw((((u32::from(self.vehicle().direction_raw())) + 4) & 7) as u8);
-        } else {
-            const DIRS: [u32; 16] = [1, 3, 2, 2, 4, 4, 255, 255, 5, 7, 6, 6, 0, 0, 255, 255];
-            self.vehicle()
-                .set_direction_raw(DIRS[trackdir as usize] as u8);
-            self.set_state(1 << (trackdir & 7));
-        }
-        self.remember_rotation();
-        self.vehicle().set_cur_speed(0);
-        self.path_clear(id);
-        // SAFETY: Caller retains the live shell across this index update.
-        unsafe {
-            crate::vehicle::occupancy::update_position(self.vs(), v, self.services.map());
-        }
-        self.viewport();
-    }
-    fn depot(&self, max_distance: u32) -> Option<Depot> {
-        crate::witness::hit(crate::witness::SHIP_DEPOT_SEARCH);
-        // SAFETY: The native game-state mutex serializes depot searches.
-        let scratch = unsafe { depot_scratch() };
-        let observed_tile = self.vehicle().tile_raw();
-        let observed_owner = u32::from(self.vehicle().owner_raw());
-        let start = (self.leaves.patch)(observed_tile);
-        // SAFETY: The serialized game-thread entry owns scratch access. No reference crosses a service call.
-        unsafe {
-            (*scratch).visited.clear();
-            (*scratch).queue.clear();
-        }
-        let key = |p: Patch| (p.x, p.y, p.label.0);
-        // SAFETY: Scratch borrows end before the neighbour callback below.
-        unsafe {
-            (*scratch).visited.insert(key(start));
-            (*scratch).queue.push_back(start);
-        }
-        let max_region = (max_distance / 16 + 1) as i32;
-        // SAFETY: Pop copies the patch and ends the scratch borrow before visiting neighbours.
-        while let Some(current) = unsafe { (*scratch).queue.pop_front() } {
-            let mut neighbours = [Patch {
-                x: 0,
-                y: 0,
-                label: crate::water_regions::WaterRegionPatchLabel(0),
-            }; 320];
-            let count = (self.leaves.neighbours)(current, neighbours.as_mut_ptr());
-            for patch in &neighbours[..count] {
-                if (patch.x - start.x).abs() > max_region || (patch.y - start.y).abs() > max_region
-                {
-                    continue;
-                }
-                // SAFETY: Only scratch changes; no reference survives the next callback.
-                unsafe {
-                    if (*scratch).visited.insert(key(*patch)) {
-                        (*scratch).queue.push_back(*patch);
-                    }
-                }
-            }
-        }
-        let mut best = None;
-        let mut best_distance = u32::MAX;
-        let mut first = 0;
-        let mut depot = Depot::default();
-        while (self.leaves.next_depot)(first, &raw mut depot) {
-            first = depot.id + 1;
-            if depot.ship == 0 || depot.owner != observed_owner {
-                continue;
-            }
-            let distance = (self.leaves.dist_square)(depot.tile, observed_tile);
-            if distance < best_distance && distance <= max_distance.wrapping_mul(max_distance) && {
-                let patch = (self.leaves.patch)(depot.tile);
-                // SAFETY: The callback has returned before taking this short scratch borrow.
-                unsafe { (*scratch).visited.contains(&key(patch)) }
-            } {
-                best_distance = distance;
-                best = Some(depot);
-            }
-        }
-        best
-    }
-    fn service(&self, id: VehicleID, v: VehicleRef) {
-        if (self.leaves.servint)(id.0) == 0 || !maintenance::needs_automatic_servicing(v, self.vs())
-        {
-            return;
-        }
-        if (self.leaves.chain_depot)(id.0) {
-            maintenance::vehicle_service_in_depot(v, self.vs());
-            return;
-        }
-        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        let penalty = unsafe { self.services.settings().maximum_go_to_depot_penalty.read() };
-        let distance = penalty / crate::pathfinder_type::YAPF_TILE_LENGTH as u32;
-        if let Some(depot) = self.depot(distance) {
-            crate::witness::hit(crate::witness::SHIP_AUTO_SERVICE);
-            (self.leaves.order_depot)(id.0, depot.id);
-            self.destination(id, depot.tile);
-            (self.leaves.start_dirty)(id.0);
-        } else if (self.leaves.order_type)(id.0) == u32::from(OT_GOTO_DEPOT) {
-            (self.leaves.order_dummy)(id.0);
-            (self.leaves.start_dirty)(id.0);
-        }
-    }
-    fn cache(&self, v: VehicleRef) {
-        let observed_tile = self.vehicle().tile_raw();
-        let sea = (self.leaves.water_class)(observed_tile) == 0;
-        let speed = u32::from((self.vs().engine)(v).ship_speed());
-        let raw = crate::newgrf_vehicle::get_vehicle_property_raw(
-            self.vs().newgrf(),
-            v,
-            crate::newgrf_properties::PROP_SHIP_SPEED,
-            speed as i32,
-        ) as u32;
-        let frac = u32::from((self.vs().engine)(v).ship_speed_fraction(sea));
-        self.vehicle()
-            .set_cached_max_speed((raw.wrapping_mul(256 - frac) / 256) as u16);
-        let period = u32::from((self.vs().engine)(v).cargo_age());
-        let age = crate::newgrf_vehicle::get_vehicle_property_raw(
-            self.vs().newgrf(),
-            v,
-            crate::newgrf_properties::PROP_SHIP_CARGO_AGE_PERIOD,
-            period as i32,
-        ) as u32;
-        self.vehicle().set_cached_cargo_age_period(age as u16);
-        crate::vehicle_effect::update_visual_effect(self.vs(), self.services, v, true);
-    }
-    fn stay_depot(&self, id: u32, v: VehicleRef) -> bool {
-        if !(self.leaves.chain_depot)(id) {
-            return false;
-        }
-        if (self.leaves.wait_unbunch)(id) {
-            return true;
-        }
-        let observed_tile = self.vehicle().tile_raw();
-        let observed_dest = self.vehicle().dest_tile_raw();
-        let observed_order_destination = (self.leaves.order_destination)(id);
-        let observed_order_type = (self.leaves.order_type)(id);
-        if observed_order_type == u32::from(OT_GOTO_DEPOT)
-            && (self.leaves.is_depot)(observed_tile)
-            && (self.leaves.depot_index)(observed_tile) == observed_order_destination
-        {
-            self.vs().enter_depot(v);
-            return true;
-        }
-        if observed_dest == 0
-            || crate::vehicle_func::has_vehicle_on_tile_raw(
-                self.vs(),
-                self.services.map(),
-                self.vehicle().tile_raw(),
-                |u| {
-                    u.vehicle_type_raw() == crate::vehicle::VehicleType::SHIP.0
-                        && (u).cur_speed() != 0
+
+    crate::vehicle_effect::show_visual_effect(t.vs, t.ss, v.v, || get_current_max_speed(v.v));
+
+    /* Rotating on spot */
+    if v.v.direction() != v.rotation() {
+        crate::witness::hit(crate::witness::SHIP_ROTATE);
+        if (v.v.tick_counter() & 7) == 0 {
+            let diff = dir_difference(v.v.direction(), v.rotation(), check);
+            v.set_rotation(change_dir(
+                v.rotation(),
+                if diff > DirDiff::DIRDIFF_REVERSE {
+                    DirDiff::DIRDIFF_45LEFT
+                } else {
+                    DirDiff::DIRDIFF_45RIGHT
                 },
-            )
-        {
-            return true;
+                check,
+            ));
+            /* Invalidate the sprite cache direction to force recalculation of viewport */
+            v.v.set_sprite_cache_last_direction(Direction::INVALID_DIR);
+            t.update_viewport(v);
         }
-        let mut direction = (self.leaves.depot_dir)(observed_tile) * 2 + 1;
-        self.vehicle().set_direction_raw(direction as u8);
-        if (self.leaves.yapf_reverse)(id, false).reverse {
-            direction = (direction + 4) & 7;
-            self.vehicle().set_direction_raw(direction as u8);
-        }
-        crate::witness::hit(crate::witness::SHIP_DEPOT_LEAVE);
-        self.set_state(1 << (self.leaves.depot_axis)(observed_tile));
-        self.set_rotation(direction as u16);
-        self.vehicle().set_hidden(false);
-        self.vehicle().set_cur_speed(0);
-        self.viewport();
-        (self.leaves.depot_dirty)(id);
-        maintenance::vehicle_service_in_depot(v, self.vs());
-        (self.leaves.leave_unbunch)(id);
-        (self.vs().play_leave_station_sound)(self.vehicle());
-        (self.leaves.depot_invalidate)(id);
-        (self.leaves.ships_dirty)();
-        false
+        return;
     }
-    fn lock_delta(&self) -> i32 {
-        let tile = self.vehicle().tile_raw();
-        if !(self.services.water_middle_lock)(tile)
-            || (self.vehicle().x_pos() as u32) & 15 != 8
-            || (self.vehicle().y_pos() as u32) & 15 != 8
-        {
-            return 0;
-        }
-        let diag = (self.leaves.lock_dir)(tile);
-        if (u32::from(self.vehicle().direction_raw())) / 2 == diag {
-            i32::from(
-                ((self.vehicle().z_pos() as u32) as i32)
-                    < (self.leaves.tile_max_z)(tile) as i32 * 8,
-            )
-        } else {
-            -i32::from(
-                ((self.vehicle().z_pos() as u32) as i32)
-                    > (self.leaves.tile_min_z)(tile) as i32 * 8,
-            )
-        }
+
+    if ship_move_up_down_on_lock(t, v) {
+        return;
     }
-    fn move_lock(&self, id: u32, v: VehicleRef) -> bool {
-        let delta = self.lock_delta();
-        if delta > 0 {
-            crate::witness::hit(crate::witness::SHIP_LOCK_UP);
-        } else if delta < 0 {
-            crate::witness::hit(crate::witness::SHIP_LOCK_DOWN);
-        }
-        if delta == 0 {
-            return false;
-        }
-        let observed_z = self.vehicle().z_pos() as u32;
-        let observed_speed = u32::from(self.vehicle().cur_speed());
-        let observed_tick = u32::from(self.vehicle().tick_counter());
-        if observed_speed != 0 {
-            self.vehicle().set_cur_speed(0);
-            (self.leaves.start_dirty)(id);
-        }
-        if observed_tick & 7 == 0 {
-            self.vehicle()
-                .set_z_pos(observed_z.wrapping_add(delta as u32) as i32);
-            // SAFETY: Caller retains the live shell across this index update.
-            unsafe {
-                crate::vehicle::occupancy::update_position(self.vs(), v, self.services.map());
-            }
-            self.viewport();
-        }
-        true
-    }
-    fn accelerate(&self, id: u32) -> u32 {
-        let observed_direction = u32::from(self.vehicle().direction_raw());
-        let observed_speed = u32::from(self.vehicle().cur_speed());
-        let observed_progress = u32::from(self.vehicle().progress());
-        let observed_order_max_speed = (self.leaves.order_max_speed)(id);
-        let observed_acceleration = u32::from(self.vehicle().acceleration());
-        let observed_max_speed = u32::from(self.vehicle().cached_max_speed());
-        let speed = observed_speed
-            .wrapping_add(observed_acceleration)
-            .min(observed_max_speed)
-            .min(observed_order_max_speed.wrapping_mul(2));
-        if speed != observed_speed {
-            self.vehicle().set_cur_speed(speed as u16);
-            (self.leaves.start_dirty)(id);
-        }
-        let advance = speed.wrapping_mul(3) / 4;
-        let distance = if observed_direction & 1 != 0 {
-            192
-        } else {
-            256
-        };
-        let progress = advance.wrapping_add(observed_progress);
-        self.vehicle().set_progress((progress % distance) as u8);
-        progress / distance
-    }
-    fn choose(&self, id: u32, tile: u32, tracks: u32) -> u32 {
-        let found;
-        let track;
-        if (self.vehicle().dest_tile_raw()) == 0 {
-            let mut choice = first_bit(u32::from(self.state()) & 63);
-            if choice >= 2 {
-                choice ^= 1;
-            }
-            if tracks & (1 << choice) == 0 {
-                choice = first_track(tracks);
-            }
-            track = choice;
-            found = false;
-        } else {
-            if (self.leaves.path_size)(id) != 0 {
-                crate::witness::hit(crate::witness::SHIP_PATH_CACHE);
-                let cached = (self.leaves.path_back)(id) & 7;
-                if tracks & (1 << cached) != 0 {
-                    (self.leaves.path_pop)(id);
-                    return cached;
-                }
-                self.path_clear(id);
-            }
-            let result = (self.leaves.yapf_choose)(id, tile);
-            track = u32::from(result.track);
-            found = result.found;
-        }
-        (self.vs().pathfinding_result)(self.vehicle(), found);
-        track
-    }
-    fn destination_station(&self, tile: u32, station: u32) -> bool {
-        is_ship_destination_tile(
-            &crate::map_func::World::new(self.services),
-            self.leaves,
-            crate::tile_type::TileIndex(tile),
-            crate::station_type::StationID(station as u16),
-        )
-    }
-    fn arrives(&self, id: u32, station: u32) {
-        let hvot_ship = crate::station_type::StationHadVehicleOfType::HVOT_SHIP.0;
-        if (self.services.station_had_vehicle_of_type)(station as u16) & hvot_ship == 0 {
-            (self.services.station_add_vehicle_of_type)(station as u16, hvot_ship);
-            (self.leaves.arrival)(id, station);
-        }
-    }
-    fn controller(&self, id: u32, v: VehicleRef) {
-        let observed_tick = u32::from(self.vehicle().tick_counter());
-        let observed_order_time = self.vehicle().current_order_time() as u32;
-        self.vehicle()
-            .set_tick_counter(observed_tick.wrapping_add(1) as u8);
-        self.vehicle()
-            .set_current_order_time(observed_order_time.wrapping_add(1) as i32);
-        if maintenance::handle_breakdown(v, self.vs()) {
+
+    let number_of_steps = ship_accelerate(t, v.v);
+    for _ in 0..number_of_steps {
+        if ship_move_up_down_on_lock(t, v) {
             return;
         }
-        if v.vehstatus().test(VehState::Stopped) {
-            return;
-        }
-        let orders_vehicle = v;
-        let orders = self.vs().orders();
-        let reverse = unsafe {
-            crate::orders::openttd_rust_process_orders(orders_vehicle.shell().cast(), orders)
-        } != 0;
-        if reverse && (self.leaves.yapf_reverse)(id, false).reverse {
-            self.reverse(id, v, INVALID);
-            return;
-        }
-        self.vs().handle_loading(v, false);
-        if (self.leaves.order_type)(id) == u32::from(OT_LOADING) {
-            return;
-        }
-        if self.stay_depot(id, v) {
-            return;
-        }
-        crate::vehicle_effect::show_visual_effect(self.vs(), self.services, v, || {
-            current_max_speed(
-                (u32::from(self.vehicle().cached_max_speed())) as u16,
-                (self.leaves.order_max_speed)(id) as u16,
-            )
-        });
-        let observed_direction = u32::from(self.vehicle().direction_raw());
-        let observed_tick = u32::from(self.vehicle().tick_counter());
-        let rotation = u32::from(self.rotation());
-        if observed_direction != rotation {
-            crate::witness::hit(crate::witness::SHIP_ROTATE);
-            if observed_tick & 7 == 0 {
-                let diff = observed_direction.wrapping_sub(rotation) & 7;
-                self.set_rotation(((rotation + if diff > 4 { 7 } else { 1 }) & 7) as u16);
-                (self.leaves.sprite_direction)(id);
-                self.viewport();
-            }
-            return;
-        }
-        if self.move_lock(id, v) {
-            return;
-        }
-        let steps = self.accelerate(id);
-        for _ in 0..steps {
-            if self.move_lock(id, v) {
-                return;
-            }
-            let position = (self.leaves.new_position)(id);
-            let mut x = position.x as u32;
-            let mut y = position.y as u32;
-            let old_tile = position.old_tile;
-            let new_tile = position.new_tile;
-            if self.state() != WORMHOLE {
-                if old_tile == new_tile {
-                    if self.state() == DEPOT {
-                        x = self.vehicle().x_pos() as u32;
-                        y = self.vehicle().y_pos() as u32;
-                    } else {
-                        if u32::from(unsafe {
-                            crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
-                        }) & 4
-                            != 0
-                        {
-                            self.reverse(id, v, INVALID);
-                            return;
+
+        let mut gp = crate::vehicle::get_new_vehicle_pos(v.v, t.map());
+        if v.state() != TrackBits::TRACK_BIT_WORMHOLE {
+            /* Not on a bridge */
+            if gp.old_tile == gp.new_tile {
+                /* Staying in tile */
+                if v.is_in_depot() {
+                    gp.x = v.v.x_pos();
+                    gp.y = v.v.y_pos();
+                } else {
+                    /* Not inside depot */
+                    let vets = t.vehicle_enter_tile(v.v, gp.new_tile, gp.x, gp.y);
+                    if vets.test(VehicleEnterTileState::CannotEnter) {
+                        return reverse_ship(t, v);
+                    }
+
+                    /* A leave station order only needs one tick to get processed, so we can
+                     * always skip ahead. */
+                    if v.v.current_order().is_type(OrderType::OT_LEAVESTATION) {
+                        crate::orders::free(v.v);
+                        t.start_stop_dirty(v.v);
+                        /* Test if continuing forward would lead to a dead-end, moving into the dock. */
+                        let exitdir = vehicle_exit_dir(v.v.direction(), v.state(), check);
+                        let tile = t.map().tile_add_by_diag_dir(v.v.tile(), exitdir, check);
+                        if t.water_track_bits(tile, exitdir) == TrackBits::TRACK_BIT_NONE {
+                            return reverse_ship(t, v);
                         }
-                        let observed_tile = self.vehicle().tile_raw();
-                        let observed_dest = self.vehicle().dest_tile_raw();
-                        let observed_direction = u32::from(self.vehicle().direction_raw());
-                        let observed_order_destination = (self.leaves.order_destination)(id);
-                        let observed_order_type = (self.leaves.order_type)(id);
-                        if observed_order_type == u32::from(OT_LEAVESTATION) {
-                            (self.leaves.order_free)(id);
-                            (self.leaves.start_dirty)(id);
-                            let exit =
-                                (self.leaves.exit_dir)(observed_direction, u32::from(self.state()));
-                            let tile = observed_tile.wrapping_add((self.leaves.offset)(exit));
-                            if crate::movement::water_tracks(self.services, tile, exit as u8) == 0 {
-                                self.reverse(id, v, INVALID);
+                    } else if v.v.dest_tile() != TileIndex(0) {
+                        /* We have a target, let's see if we reached it... */
+                        if v.v.current_order().is_type(OrderType::OT_GOTO_WAYPOINT)
+                            && t.map().distance_manhattan(v.v.dest_tile(), gp.new_tile) <= 3
+                        {
+                            /* We got within 3 tiles of our target buoy, so let's skip to our
+                             * next order */
+                            crate::witness::hit(crate::witness::SHIP_BUOY);
+                            crate::orders::VisitOrders::new(t.vs.orders())
+                                .update_timetable(v.v, true);
+                            crate::orders::increment_real_order_index(v.v, t.vs.orders());
+                            // SAFETY: The current order belongs to this live serialized record.
+                            unsafe { crate::orders::make_dummy(v.v.current_order_pointer()) };
+                        } else if v.v.current_order().is_type(OrderType::OT_GOTO_DEPOT)
+                            && v.v.dest_tile() == gp.new_tile
+                        {
+                            /* Depot orders really need to reach the tile */
+                            if (gp.x & 0xF) == 8 && (gp.y & 0xF) == 8 {
+                                crate::witness::hit(crate::witness::SHIP_DEPOT_ENTER);
+                                crate::vehicle::visits::enter_depot(v.v, t.vs.visits());
                                 return;
                             }
-                        } else if observed_dest != 0 {
-                            if observed_order_type == u32::from(OT_GOTO_WAYPOINT)
-                                && (self.leaves.dist_manhattan)(observed_dest, new_tile) <= 3
+                        } else if v.v.current_order().is_type(OrderType::OT_GOTO_STATION)
+                            && t.world().is_docking_tile(gp.new_tile)
+                        {
+                            /* Process station in the orderlist. */
+                            let runtime = crate::newgrf_airport::runtime();
+                            let st = crate::newgrf_airport::station_by_id(
+                                v.v.current_order().destination().to_station_id().0,
+                                runtime,
+                            );
+                            let index = runtime.station_index(st);
+                            // SAFETY: The live station's docking area, read in place.
+                            let docking_station = unsafe { *(runtime.commands().docking_area)(st) };
+                            if docking_station.contains(gp.new_tile, t.map(), check)
+                                && is_ship_destination_tile(t.world(), gp.new_tile, index)
                             {
-                                crate::witness::hit(crate::witness::SHIP_BUOY);
-                                (self.leaves.timetable)(id);
-                                (self.leaves.order_increment)(id);
-                                (self.leaves.order_dummy)(id);
-                            } else if observed_order_type == u32::from(OT_GOTO_DEPOT)
-                                && observed_dest == new_tile
-                            {
-                                if x & 15 == 8 && y & 15 == 8 {
-                                    crate::witness::hit(crate::witness::SHIP_DEPOT_ENTER);
-                                    self.vs().enter_depot(v);
-                                    return;
-                                }
-                            } else if observed_order_type == u32::from(OT_GOTO_STATION)
-                                && (self.services.docking_tile)(new_tile)
-                            {
-                                let station = observed_order_destination;
-                                // SAFETY: The shared table is immutable; `Station::Get` names a
-                                // live station whose docking area is read in place.
-                                let docking = unsafe {
-                                    let table = &*(self.services.station_commands)();
-                                    let st = ((*table.station).get)(station as u16);
-                                    *(table.docking_area)(st)
-                                };
-                                if docking.contains(
-                                    crate::tile_type::TileIndex(new_tile),
-                                    self.services.map(),
-                                    |ok| {
-                                        crate::movement::native_assert(self.services, ok);
-                                    },
-                                ) && self.destination_station(new_tile, station)
+                                v.v.set_last_station_visited(index);
+                                if runtime
+                                    .commands()
+                                    .facilities(st)
+                                    .test(StationFacility::Dock)
                                 {
-                                    self.vehicle().set_last_station_visited_raw(station as u16);
-                                    if (self.services.station_facilities)(station as u16)
-                                        & crate::station_type::FACILITY_DOCK
-                                        != 0
-                                    {
-                                        crate::witness::hit(crate::witness::SHIP_LOADING);
-                                        self.arrives(id, station);
-                                        crate::vehicle::visits::begin_loading(
-                                            v,
-                                            self.vs().visits(),
-                                        );
-                                    } else {
-                                        (self.leaves.order_leave)(id);
-                                        (self.leaves.order_increment)(id);
-                                    }
+                                    // ugly, ugly workaround for problem with ships able to drop off cargo at wrong stations
+                                    crate::witness::hit(crate::witness::SHIP_LOADING);
+                                    ship_arrives_at(t, v.v, st);
+                                    crate::vehicle::visits::begin_loading(v.v, t.vs.visits());
+                                } else {
+                                    // leave stations without docks right away
+                                    crate::orders::VisitOrders::new(t.vs.orders())
+                                        .make_leave_station(v.v);
+                                    crate::orders::increment_real_order_index(v.v, t.vs.orders());
                                 }
                             }
                         }
-                    }
-                } else {
-                    if !(self.leaves.tile_valid)(new_tile) {
-                        self.reverse(id, v, INVALID);
-                        return;
-                    }
-                    let diag = (self.leaves.diag_between)(old_tile, new_tile);
-                    let tracks = crate::movement::water_tracks(self.services, new_tile, 255)
-                        & (self.leaves.tracks_reach)(diag);
-                    if tracks == 0 {
-                        let result = (self.leaves.yapf_reverse)(id, true);
-                        let trackdir = u32::from(result.trackdir);
-                        self.reverse(id, v, if trackdir == 255 { INVALID } else { trackdir });
-                        return;
-                    }
-                    let track = self.choose(id, new_tile, tracks);
-                    if track == 255 {
-                        self.reverse(id, v, INVALID);
-                        return;
-                    }
-                    let (sx, sy, direction) = SUBCOORD[diag as usize][track as usize];
-                    x = (x & !15) | u32::from(sx);
-                    y = (y & !15) | u32::from(sy);
-                    let entered = u32::from(unsafe {
-                        crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
-                    });
-                    if entered & 4 != 0 {
-                        self.reverse(id, v, INVALID);
-                        return;
-                    }
-                    if entered & 2 == 0 {
-                        self.vehicle().set_tile_raw(new_tile);
-                        self.set_state(1 << track);
-                        if (self.leaves.water_class)(old_tile)
-                            != (self.leaves.water_class)(new_tile)
-                        {
-                            crate::witness::hit(crate::witness::SHIP_WATER_CHANGE);
-                            self.cache(v);
-                        }
-                    }
-                    let diff = u32::from(direction)
-                        .wrapping_sub(u32::from(self.vehicle().direction_raw()))
-                        & 7;
-                    if diff == 0 || diff == 1 || diff == 7 {
-                        self.set_rotation(u16::from(direction));
-                        self.vehicle().set_direction_raw(direction);
-                    } else {
-                        self.vehicle().set_cur_speed(0);
-                        self.vehicle().set_direction_raw(direction);
-                        self.remember_rotation();
                     }
                 }
             } else {
-                crate::witness::hit(crate::witness::SHIP_AQUEDUCT);
-                if (self.leaves.tile_type)(new_tile) != u32::from(MP_TUNNELBRIDGE)
-                    || u32::from(unsafe {
-                        crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
-                    }) & 2
-                        == 0
-                {
-                    self.vehicle().set_x_pos(x as i32);
-                    self.vehicle().set_y_pos(y as i32);
-                    // SAFETY: Caller retains the live shell across this index update.
-                    unsafe {
-                        crate::vehicle::occupancy::update_position(
-                            self.vs(),
-                            v,
-                            self.services.map(),
-                        );
-                    }
-                    if (u32::from(self.vehicle().vehstatus_raw())) & 1 == 0 {
-                        (self.leaves.base_viewport)(id);
-                    }
-                    continue;
+                /* New tile */
+                if !t.world().is_valid_tile(gp.new_tile) {
+                    return reverse_ship(t, v);
                 }
-                if (self.leaves.path_size)(id) != 0 {
-                    (self.leaves.path_pop)(id);
+
+                let diagdir = t.map().diagdir_between_tiles(gp.old_tile, gp.new_tile);
+                t.world()
+                    .assert_with(|| diagdir != DiagDirection::INVALID_DIAGDIR);
+                let tracks = get_avail_ship_tracks(t, gp.new_tile, diagdir);
+                if tracks == TrackBits::TRACK_BIT_NONE {
+                    let mut trackdir = Trackdir::INVALID_TRACKDIR;
+                    check_reverse_ship(t, v, Some(&mut trackdir));
+                    if trackdir == Trackdir::INVALID_TRACKDIR {
+                        return reverse_ship(t, v);
+                    }
+                    return reverse_ship_into_trackdir(t, v, trackdir);
+                }
+
+                /* Choose a direction, and continue if we find one */
+                let track = choose_ship_track(t, v, gp.new_tile, tracks);
+                if track == Track::INVALID_TRACK {
+                    return reverse_ship(t, v);
+                }
+
+                let b = SHIP_SUBCOORD[usize::from(diagdir.0)][usize::from(track.0)];
+
+                gp.x = (gp.x & !0xF) | i32::from(b.x_subcoord);
+                gp.y = (gp.y & !0xF) | i32::from(b.y_subcoord);
+
+                /* Call the landscape function and tell it that the vehicle entered the tile */
+                let vets = t.vehicle_enter_tile(v.v, gp.new_tile, gp.x, gp.y);
+                if vets.test(VehicleEnterTileState::CannotEnter) {
+                    return reverse_ship(t, v);
+                }
+
+                if !vets.test(VehicleEnterTileState::EnteredWormhole) {
+                    v.v.set_tile(gp.new_tile);
+                    v.set_state(track_to_track_bits(track, check));
+
+                    /* Update ship cache when the water class changes. Aqueducts are always canals. */
+                    if get_effective_water_class(t.world(), gp.old_tile)
+                        != get_effective_water_class(t.world(), gp.new_tile)
+                    {
+                        crate::witness::hit(crate::witness::SHIP_WATER_CHANGE);
+                        update_cache(t, v);
+                    }
+                }
+
+                let new_direction = b.dir;
+                let diff = dir_difference(new_direction, v.v.direction(), check);
+                match diff {
+                    DirDiff::DIRDIFF_SAME | DirDiff::DIRDIFF_45RIGHT | DirDiff::DIRDIFF_45LEFT => {
+                        /* Continue at speed */
+                        v.v.set_direction(new_direction);
+                        v.set_rotation(new_direction);
+                    }
+
+                    _ => {
+                        /* Stop for rotation */
+                        v.v.set_cur_speed(0);
+                        v.v.set_direction(new_direction);
+                        /* Remember our current location to avoid movement glitch */
+                        v.set_rotation_x_pos(v.v.x_pos() as i16);
+                        v.set_rotation_y_pos(v.v.y_pos() as i16);
+                    }
                 }
             }
-            self.vehicle().set_x_pos(x as i32);
-            self.vehicle().set_y_pos(y as i32);
-            // SAFETY: Caller retains the live shell across this index update.
-            unsafe {
-                crate::vehicle::occupancy::update_position(self.vs(), v, self.services.map());
+        } else {
+            /* On a bridge */
+            crate::witness::hit(crate::witness::SHIP_AQUEDUCT);
+            if !t
+                .world()
+                .is_tile_type(gp.new_tile, TileType::MP_TUNNELBRIDGE)
+                || !t
+                    .vehicle_enter_tile(v.v, gp.new_tile, gp.x, gp.y)
+                    .test(VehicleEnterTileState::EnteredWormhole)
+            {
+                v.v.set_x_pos(gp.x);
+                v.v.set_y_pos(gp.y);
+                t.update_position(v.v);
+                if !v.v.vehstatus().test(VehState::Hidden) {
+                    (t.vs.base_viewport)(v.v);
+                }
+                continue;
             }
-            self.viewport();
+
+            /* Ship is back on the bridge head, we need to consume its path
+             * cache entry here as we didn't have to choose a ship track. */
+            if !v.path_empty() {
+                v.path_pop_back();
+            }
         }
+
+        /* update image of ship, as well as delta XY */
+        v.v.set_x_pos(gp.x);
+        v.v.set_y_pos(gp.y);
+
+        t.update_position(v.v);
+        t.update_viewport(v);
     }
 }
-const SUBCOORD: [[(u8, u8, u8); 6]; 4] = [
-    [
-        (15, 8, 1),
-        (0, 0, 255),
-        (0, 0, 255),
-        (15, 8, 2),
-        (15, 7, 0),
-        (0, 0, 255),
-    ],
-    [
-        (0, 0, 255),
-        (8, 0, 3),
-        (7, 0, 2),
-        (0, 0, 255),
-        (8, 0, 4),
-        (0, 0, 255),
-    ],
-    [
-        (0, 8, 5),
-        (0, 0, 255),
-        (0, 7, 6),
-        (0, 0, 255),
-        (0, 0, 255),
-        (0, 8, 4),
-    ],
-    [
-        (0, 0, 255),
-        (8, 15, 7),
-        (0, 0, 255),
-        (8, 15, 6),
-        (0, 0, 255),
-        (7, 15, 0),
-    ],
-];
-/// The `Game` of an entry's tables; `owner` may read the bound `leaves` table.
-macro_rules! entry_game {
-    ($leaves:ident, $services:ident, $owner:expr, $vehicle:expr) => {{
-        // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-        let $leaves = unsafe { &*$leaves };
-        Game {
-            leaves: $leaves,
-            services: unsafe { &*$services },
-            owner: $owner,
-            vehicle: $vehicle,
-        }
-    }};
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
-    id: u32,
-    vehicle: VehicleRef,
-    leaves: *const Leaves,
-    services: *const Services,
-) -> u8 {
-    let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(vehicle));
-    let observed_running = u32::from(game.vehicle().running_ticks());
-    let observed_status = u32::from(game.vehicle().vehstatus_raw());
-    if observed_status & 2 == 0 {
-        game.vehicle()
-            .set_running_ticks(observed_running.wrapping_add(1) as u8);
+
+/// `Ship::Tick`, without its `PerformanceAccumulator`, which the C++ shell keeps.
+pub(crate) fn tick(t: &Tables<'_>, v: Ship) -> bool {
+    if !v.v.vehstatus().test(VehState::Stopped) {
+        v.v.set_running_ticks(v.v.running_ticks().wrapping_add(1));
     }
-    game.controller(id, vehicle);
-    u8::from(true)
+
+    ship_controller(t, v);
+
+    true
 }
-/// `Ship::OnNewCalendarDay`: calendar day handler, for the scheduler's dispatch over the live
-/// ship `vehicle`.
-pub(crate) fn on_new_calendar_day(vehicle: VehicleRef, leaves: &Leaves) {
-    maintenance::age_vehicle(vehicle, leaves.vehicles());
+
+/// `Ship::SetDestTile`.
+pub(crate) fn set_dest_tile(v: Ship, tile: TileIndex) {
+    if tile == v.v.dest_tile() {
+        return;
+    }
+    v.path_clear();
+    v.v.set_dest_tile(tile);
 }
-/// `Ship::OnNewEconomyDay`: economy day handler, for the scheduler's dispatch over the live
-/// ship `vehicle` at pool index `index`.
-pub(crate) fn on_new_economy_day(
-    index: VehicleID,
-    vehicle: VehicleRef,
-    leaves: &Leaves,
-    services: &Services,
-) {
-    // The handler reads no ship owner: servicing, the depot search and the destination
-    // read the vehicle record and the leaves.
-    let game = Game {
-        leaves,
-        services,
-        owner: std::ptr::null_mut(),
-        vehicle: Some(vehicle),
+
+/// Arguments of `CmdBuildShip`.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdBuildShip {
+    pub tile: TileIndex,
+    pub e: *const crate::engine_type::OpenTTDEngine,
+}
+
+/// `CmdBuildShip`: build a ship at the depot `tile`; returns the new ship, or null when
+/// only testing.
+///
+/// # Safety
+/// Live native cost and engine; the new shell stays live, and no owner access spans a
+/// callback.
+pub(crate) unsafe fn cmd_build_ship(
+    s: &crate::vehicle_transactions::build::Services,
+    out: *mut crate::services::CommandCost,
+    flags: crate::command_type::DoCommandFlags,
+    cmd: CmdBuildShip,
+) -> *mut () {
+    let CmdBuildShip { tile, e } = cmd;
+    let k = s.construct;
+    let a = k.articulated;
+    let r = s.refit;
+    let b = r.common.base;
+    let mut shell = std::ptr::null_mut();
+    let tile = TileIndex((s.ship_tile)(tile.0));
+    if flags.test(DoCommandFlag::Execute) {
+        let x: i32;
+        let y: i32;
+
+        let svi = crate::vehicle::EngineRef::of(e);
+
+        shell = (s.new_ship)();
+        // SAFETY: The new shell's record.
+        let v = Ship::of(unsafe { VehicleRef::from_shell(shell.cast(), r.common.vehicles) });
+        let t = Tables::new(r.ship, b.shared);
+        let check = t.check();
+        crate::witness::hit(crate::witness::SHIP_BUILD);
+
+        let company = crate::company_type::CompanyID((b.shared.current_company)());
+        v.v.set_owner(company);
+        v.v.set_tile(tile);
+        x = (t.map().tile_x(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
+        y = (t.map().tile_y(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
+        v.v.set_x_pos(x);
+        v.v.set_y_pos(y);
+        v.v.set_z_pos(crate::movement::get_slope_pixel_z(b.shared, x, y, false));
+
+        v.v.set_direction(diag_dir_to_dir(
+            t.world().get_ship_depot_direction(tile),
+            check,
+        ));
+
+        /* UpdateDeltaXY() requires rotation to be initialised as well. */
+        v.set_rotation(v.v.direction());
+        (t.vs.update_delta)(v.v);
+
+        v.v.set_vehstatus(
+            VehStates::from_element(VehState::Hidden)
+                .with(VehStates::from_element(VehState::Stopped))
+                .with(VehStates::from_element(VehState::DefaultPalette)),
+        );
+
+        (t.vs.write_spritenum)(v.v, svi.ship_image());
+        v.v.set_cargo_type(t.vs, crate::cargo_type::CargoType(svi.default_cargo()));
+        crate::services_assert::assert_with(|| {
+            is_valid_cargo_type(v.v.cargo_type(t.vs.newgrf()).0)
+        });
+        v.v.set_cargo_cap(svi.ship_capacity());
+        v.v.set_refit_cap(0);
+
+        v.v.set_last_station_visited(StationID::INVALID);
+        v.v.set_last_loading_station(t.vs.visits(), StationID::INVALID);
+        v.v.set_engine_type(crate::engine_type::EngineID((r.capabilities.id)(e)));
+
+        v.v.set_reliability(t.vs, svi.reliability());
+        // SAFETY: The base table names the static maintenance table.
+        v.v.set_reliability_spd_dec(unsafe { &*t.vs.maintenance }, svi.reliability_decay());
+        (t.vs.set_max_age)(
+            v.v,
+            crate::engine_capabilities::get_life_length_in_days(r.capabilities, e),
+        );
+
+        v.set_state(TrackBits::TRACK_BIT_DEPOT);
+
+        let defaults = ((t.company().settings)().company_vehicle_defaults)(company);
+        (k.service_dates)(shell, read_field!(defaults, servint_ships));
+        (k.build_stamp)(shell);
+        (a.random_bits)(shell, b.shared.random() as u16);
+
+        v.v.set_acceleration(svi.ship_acceleration());
+        update_cache(&t, v);
+
+        (k.service_flags)(
+            shell,
+            svi.exclusive_preview(),
+            b.interval_is_percent(company),
+        );
+
+        // SAFETY: The live new shell; no reference spans the invalidation.
+        unsafe { crate::newgrf_vehicle::invalidate_newgrf_cache_of_chain(t.vs.newgrf(), v.v) };
+
+        // SAFETY: The build transaction retains the new shell across the capacity callbacks.
+        v.v.set_cargo_cap(unsafe {
+            crate::engine_capabilities::determine_capacity(
+                r.capabilities,
+                e,
+                v.v.0.as_ptr(),
+                std::ptr::null_mut(),
+            )
+        } as u16);
+
+        // SAFETY: As above.
+        unsafe { crate::newgrf_vehicle::invalidate_newgrf_cache_of_chain(t.vs.newgrf(), v.v) };
+
+        t.update_position(v.v);
+    }
+
+    (b.cost.zero)(out);
+    shell
+}
+
+/// `Ship::FindClosestDepot`.
+pub(crate) fn find_closest_depot(t: &Tables<'_>, v: Ship) -> ClosestDepot {
+    let Some(depot) = find_closest_ship_depot(t, v.v, MAX_SHIP_DEPOT_SEARCH_DISTANCE) else {
+        return ClosestDepot::default();
     };
 
-    crate::witness::hit(crate::witness::SHIP_ECONOMY_DAY);
-    maintenance::economy_age_vehicle(vehicle, game.vs());
-    let day = (u32::from(game.vehicle().day_counter())).wrapping_add(1);
-    game.vehicle().set_day_counter(day as u8);
-    if day & 7 == 0 {
-        maintenance::decrease_vehicle_value(vehicle, game.vs());
-    }
-    maintenance::check_vehicle_breakdown(vehicle, game.vs());
-    game.service(index, vehicle);
-    (game.leaves.check_orders)(index.0);
-    let ticks = u32::from(game.vehicle().running_ticks());
-    if ticks != 0 {
-        let cost = unsafe { game.vs().running_cost(vehicle) };
-        let cost = cost.saturating_mul(i64::from(ticks)) / i64::from((game.leaves.cost_divisor)());
-        let profit = (game.vs().profit)(vehicle).saturating_sub(cost);
-        (game.vs().write_profit)(vehicle, profit);
-        game.vehicle().set_running_ticks(0);
-        (game.leaves.pay_running)(index.0, cost);
-        crate::window_func::set_window_dirty(
-            crate::window_type::WindowClass::WC_VEHICLE_DETAILS,
-            crate::window_type::WindowNumber::from(vehicle.index(game.vs().newgrf())),
-        );
-        (game.leaves.ships_dirty)();
-    }
+    ClosestDepot::new(TileIndex(depot.xy), DestinationID(depot.index), false)
 }
+
+// The C++ shell's entries. SAFETY for each: the caller holds the game-state mutex and passes
+// a live ship record and the immutable process-lifetime tables.
+
+/// `Ship::Tick`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
+    v: VehicleRef,
+    leaves: *const Leaves,
+    shared: *const Services,
+) -> u8 {
+    // SAFETY: As the entries' contract.
+    let t = unsafe { Tables::new(&*leaves, &*shared) };
+    u8::from(tick(&t, Ship::of(v)))
+}
+/// `Ship::UpdateCache`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_cache(
     v: VehicleRef,
-    id: u32,
     leaves: *const Leaves,
-    services: *const Services,
+    shared: *const Services,
 ) {
-    // SAFETY: The service tables remain immutable and live for this entry.
-    let (leaves, services) = unsafe { (&*leaves, &*services) };
-    update_cache(leaves, services, (leaves.state_owner)(id), v);
+    // SAFETY: As the entries' contract.
+    let t = unsafe { Tables::new(&*leaves, &*shared) };
+    update_cache(&t, Ship::of(v));
 }
-/// `Ship::UpdateCache`: update the caches of this ship, whose state owner `owner` the
-/// caller has resolved.
-pub(crate) fn update_cache(leaves: &Leaves, services: &Services, owner: *mut State, v: VehicleRef) {
-    Game {
-        leaves,
-        services,
-        owner,
-        vehicle: Some(v),
-    }
-    .cache(v);
-}
+/// `Ship::SetDestTile`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_destination(
-    id: u32,
-    tile: u32,
-    leaves: *const Leaves,
-    services: *const Services,
-) {
-    let game = entry_game!(
-        leaves,
-        services,
-        (leaves.state_owner)(id),
-        Some((unsafe { &*leaves.vehicle }.ship_get)(id))
-    );
-    game.destination(VehicleID(id), tile);
+pub unsafe extern "C" fn openttd_rust_ship_destination(v: VehicleRef, tile: u32) {
+    set_dest_tile(Ship::of(v), TileIndex(tile));
 }
+/// `Ship::FindClosestDepot`, written to `closest`.
+///
+/// # Safety
+/// As the entries' contract; `closest` is a writable record.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_find_depot(
-    id: u32,
-    max_distance: u32,
+    v: VehicleRef,
     leaves: *const Leaves,
-    services: *const Services,
-) -> DepotResult {
-    let game = entry_game!(
-        leaves,
-        services,
-        (leaves.state_owner)(id),
-        Some((unsafe { &*leaves.vehicle }.ship_get)(id))
-    );
-    game.depot(max_distance)
-        .map_or_else(DepotResult::default, |d| DepotResult {
-            tile: d.tile,
-            id: d.id as u16,
-            valid: true,
-        })
+    shared: *const Services,
+    closest: *mut crate::orders::Closest,
+) {
+    // SAFETY: As this function's contract.
+    let t = unsafe { Tables::new(&*leaves, &*shared) };
+    let result = find_closest_depot(&t, Ship::of(v));
+    // SAFETY: As this function's contract.
+    unsafe {
+        closest.write(crate::orders::Closest {
+            tile: result.location.0,
+            destination: result.destination.0,
+            reverse: u8::from(result.reverse),
+            found: u8::from(result.found),
+        });
+    };
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_is_destination_abi(
-    tile: u32,
-    station: u32,
-    leaves: *const Leaves,
-    services: *const Services,
-) -> u8 {
-    let game = entry_game!(leaves, services, std::ptr::null_mut(), None);
-    u8::from(game.destination_station(tile, station))
-}
+/// `Ship::GetOrderStationLocation`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_station_destination(
-    id: u32,
-    station: u32,
-    vehicle: *const crate::vehicle::OpenTTDVehicle,
-    leaves: *const Leaves,
-    services: *const Services,
-) -> u32 {
-    let game = entry_game!(
-        leaves,
-        services,
-        (leaves.state_owner)(id),
-        Some(VehicleRef(unsafe {
-            std::ptr::NonNull::new_unchecked(vehicle.cast_mut())
-        }))
-    );
-    {
-        if station == (u32::from(game.vehicle().last_station_visited_raw())) {
-            game.vehicle().set_last_station_visited_raw(65535);
-        }
-        if crate::vehicle_func::can_vehicle_use_station(
-            crate::vehicle::VehicleRef::of(vehicle.cast_mut()),
-            crate::newgrf_airport::station_by_id(station as u16, crate::newgrf_airport::runtime()),
-            crate::newgrf_airport::runtime(),
-        ) {
-            (game.services.station_xy)(station as u16)
-        } else {
-            (game.leaves.order_increment)(id);
-            0
-        }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_trackdir(
-    id: u32,
-    leaves: *const Leaves,
-    services: *const Services,
-) -> u8 {
-    let game = entry_game!(
-        leaves,
-        services,
-        (leaves.state_owner)(id),
-        Some((unsafe { &*leaves.vehicle }.ship_get)(id))
-    );
-    (if (u32::from(game.vehicle().vehstatus_raw())) & 128 != 0 {
-        255
-    } else if game.state() == DEPOT {
-        let tile = game.vehicle().tile_raw();
-        [0_u32, 1, 8, 9][(game.leaves.depot_dir)(tile) as usize]
-    } else if game.state() == WORMHOLE {
-        [0_u32, 1, 8, 9][((u32::from(game.vehicle().direction_raw())) / 2) as usize]
-    } else {
-        (game.leaves.track_direction)(
-            first_track(u32::from(game.state())),
-            u32::from(game.vehicle().direction_raw()),
-        )
-    }) as u8
-}
-/// Only the Rust vehicle build transaction calls this.
-pub(crate) unsafe fn ship_build(
-    id: u32,
     v: VehicleRef,
-    engine: u32,
+    station: u16,
     leaves: *const Leaves,
-    services: *const Services,
-) {
-    let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(v));
-    crate::witness::hit(crate::witness::SHIP_BUILD);
-    let tile = game.vehicle().tile_raw();
-    let x = (game.leaves.tile_x)(tile).wrapping_mul(16) + 8;
-    let y = (game.leaves.tile_y)(tile).wrapping_mul(16) + 8;
-    (game.leaves.build_owner)(id);
-    game.vehicle().set_x_pos(x as i32);
-    game.vehicle().set_y_pos(y as i32);
-    (game.leaves.build_z)(id);
-    let direction = (game.leaves.depot_dir)(tile) * 2 + 1;
-    game.vehicle().set_direction_raw(direction as u8);
-    game.set_rotation(direction as u16);
-    (game.leaves.update_delta)(id);
-    (game.leaves.build_properties)(id, engine);
-    let cap = unsafe { (&*(game.vs().newgrf)()).capabilities };
-    (game.vs().set_max_age)(v, unsafe {
-        crate::engine_capabilities::openttd_rust_engine_life_days(cap, (cap.engine)(engine as u16))
-    });
-    game.set_state(DEPOT);
-    (game.leaves.build_dates)(id);
-    (game.leaves.build_random)(id, game.services.random() as u16);
-    crate::raw_field::write_field!(
-        v.0.as_ptr(),
-        acceleration,
-        crate::vehicle::EngineRef::of((cap.engine)(engine as u16)).ship_acceleration()
-    );
-    game.cache(v);
-    if crate::vehicle::EngineRef::of((cap.engine)(engine as u16)).exclusive_preview() {
-        (game.leaves.build_prototype)(id);
-    }
-    (game.leaves.build_interval_percent)(id);
-    (game.leaves.cache_invalidate)(id);
-    // SAFETY: the build transaction retains the new shell across capacity callbacks.
-    let capacity = unsafe {
-        crate::engine_capabilities::openttd_rust_engine_capacity(
-            game.leaves.capabilities,
-            (game.vs().engine)(v).0.as_ptr(),
-            v.0.as_ptr(),
-            std::ptr::null_mut(),
-        )
-    };
-    game.vehicle().set_cargo_cap(capacity as u16);
-    (game.leaves.cache_invalidate)(id);
-    // SAFETY: The build transaction retains the new shell.
-    unsafe {
-        crate::vehicle::occupancy::update_position(game.vs(), v, game.services.map());
-    }
+    shared: *const Services,
+) -> u32 {
+    // SAFETY: As the entries' contract.
+    let t = unsafe { Tables::new(&*leaves, &*shared) };
+    get_order_station_location(t.vs, t.ss, Ship::of(v), StationID(station)).0
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDShipPosition" ["probe"] => Position {
-        x,
-        y,
-        old_tile,
-        new_tile,
-    };
     "OpenTTDShipLeaves" ["probe"] => Leaves {
-        depot_dir,
-        depot_axis,
-        is_depot,
-        depot_index,
-        wait_unbunch,
-        chain_depot,
-        servint,
-        tile_valid,
-        tile_type,
-        water_class,
-        lock_dir,
-        tile_min_z,
-        tile_max_z,
-        offset,
-        diag_between,
-        dist_square,
-        dist_manhattan,
-        station,
-        industry_station,
-        arrival,
-        leave_unbunch,
-        order_free,
-        order_dummy,
-        order_depot,
-        order_leave,
-        order_increment,
-        timetable,
-        start_dirty,
-        depot_dirty,
-        depot_invalidate,
-        ships_dirty,
-        check_orders,
-        cost_divisor,
-        pay_running,
-        cache_invalidate,
-        capabilities,
-        sprite_direction,
-        tile_x,
-        tile_y,
-        build_random,
-        new_position,
-        exit_dir,
-        track_direction,
-        tracks_reach,
-        path_size,
-        path_back,
-        path_pop,
-        path_clear,
-        viewport,
-        base_viewport,
-        yapf_reverse,
-        yapf_choose,
-        update_delta,
-        build_owner,
-        build_z,
-        build_properties,
-        build_dates,
-        build_prototype,
-        build_interval_percent,
-        order_destination,
-        order_type,
-        order_max_speed,
-        state_owner,
-        patch,
-        neighbours,
+        update_viewport,
         next_depot,
         vehicle,
     };
-    "OpenTTDShipReverseResult" ["probe"] => ReverseResult {
-        reverse,
-        trackdir,
-    };
     "OpenTTDShipDepot" ["probe"] => Depot {
-        id,
-        tile,
-        owner,
-        ship,
+        index,
+        xy,
     };
-    "OpenTTDShipTrackResult" ["probe"] => TrackResult {
-        track,
-        found,
-    };
-    "OpenTTDShipDepotResult" ["probe"] => DepotResult {
-        tile,
-        id,
-        valid,
-    };
-}
-
-/// `Ship::GetCurrentMaxSpeed`, from `ship.h`.
-pub(crate) fn current_max_speed(cached: u16, order: u16) -> i32 {
-    i32::from(cached).min(i32::from(order) * 2)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn get_effective_water_class_takes_each_arm_and_records_each_assertion() {
-        use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, World};
-        use crate::tile_type::{TileIndex, TileType};
-        use crate::water_map::WaterClass;
-        use std::cell::Cell;
-        thread_local! {
-            static FAILED_ASSERTIONS: Cell<u32> = const { Cell::new(0) };
-        }
-        extern "C" fn record_assertion(okay: bool) {
-            if !okay {
-                FAILED_ASSERTIONS.set(FAILED_ASSERTIONS.get() + 1);
-            }
-        }
-        extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
-            unreachable!()
-        }
-        // An 8 by 1 map: canal water, an aqueduct head, a rail bridge head, a
-        // half-tile water rail tile and a barren rail tile.
-        let tiles = [
-            (TileType::MP_WATER, WaterClass::Canal.0 << 5, 0, 0),
-            (
-                TileType::MP_TUNNELBRIDGE,
-                0,
-                0,
-                crate::transport_type::TransportType::TRANSPORT_WATER.0 << 2,
-            ),
-            (
-                TileType::MP_TUNNELBRIDGE,
-                0,
-                0,
-                crate::transport_type::TransportType::TRANSPORT_RAIL.0 << 2,
-            ),
-            (
-                TileType::MP_RAILWAY,
-                0,
-                crate::rail_map::RailGroundType::HalfTileWater.0,
-                0,
-            ),
-            (
-                TileType::MP_RAILWAY,
-                0,
-                crate::rail_map::RailGroundType::Barren.0,
-                0,
-            ),
-            (TileType::MP_CLEAR, 0, 0, 0),
-            (TileType::MP_CLEAR, 0, 0, 0),
-            (TileType::MP_CLEAR, 0, 0, 0),
-        ];
-        let base: Vec<BaseTileLayout> = tiles
-            .iter()
-            .map(|&(kind, m1, m4, m5)| BaseTileLayout {
-                kind: kind.0 << 4,
-                height: 0,
-                m2: 0,
-                m1,
-                m3: 0,
-                m4,
-                m5,
-            })
-            .collect();
-        let extended: Vec<ExtendedTileLayout> = (0..8)
-            .map(|_| ExtendedTileLayout {
-                m6: 0,
-                m7: 0,
-                m8: 0,
-            })
-            .collect();
-        crate::map_func::fixture::set(
-            TileTypeAllocation {
-                base: base.as_ptr(),
-                extended: extended.as_ptr(),
-                count: 8,
-                assertions: true,
-            },
-            3,
-        );
-        let movement = crate::movement::MovementServices {
-            native_assert: record_assertion,
-            ..crate::test_tables::MOVEMENT
-        };
-        let s = Services {
-            movement: &raw const movement,
-            ..crate::services::fixture(std::ptr::null_mut(), random)
-        };
-        let world = World::new(&s);
-        let class = |tile| get_effective_water_class(&world, TileIndex(tile));
-        assert!(
-            class(0) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 0,
-            "the tile's own class"
-        );
-        assert!(
-            class(1) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 0,
-            "an aqueduct"
-        );
-        assert!(
-            class(2) == WaterClass::Canal && FAILED_ASSERTIONS.get() == 1,
-            "a rail bridge breaks the transport assertion"
-        );
-        assert!(
-            class(3) == WaterClass::Sea && FAILED_ASSERTIONS.get() == 1,
-            "half-tile water rail"
-        );
-        assert!(
-            class(4) == WaterClass::Sea && FAILED_ASSERTIONS.get() == 2,
-            "barren rail breaks the ground assertion"
-        );
-    }
-
-    #[test]
-    fn depot_capacity_is_reused_across_serialized_game_threads() {
-        // Spawn/join provides the same ordering as the native game-state mutex.
-        let (address, capacity) = std::thread::spawn(|| unsafe {
-            let scratch = depot_scratch();
-            (*scratch).queue.reserve(64);
-            (scratch as usize, (*scratch).queue.capacity())
-        })
-        .join()
-        .unwrap();
-        unsafe {
-            let scratch = depot_scratch();
-            assert_eq!(scratch as usize, address);
-            assert_eq!((*scratch).queue.capacity(), capacity);
-            *DEPOT_SCRATCH.get() = None;
-        }
-    }
-}
+mod tests;
