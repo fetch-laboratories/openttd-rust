@@ -10,43 +10,10 @@
 #ifndef WATER_REGIONS_H
 #define WATER_REGIONS_H
 
-#include "../core/strong_typedef_type.hpp"
 #include "../tile_type.h"
 #include "../map_func.h"
 
-using WaterRegionIndex = StrongType::Typedef<uint, struct TWaterRegionIndexTag, StrongType::Compare>;
-using WaterRegionPatchLabel = StrongType::Typedef<uint8_t, struct TWaterRegionPatchLabelTag, StrongType::Compare, StrongType::Integer>;
-
 constexpr int WATER_REGION_EDGE_LENGTH = 16;
-constexpr int WATER_REGION_NUMBER_OF_TILES = WATER_REGION_EDGE_LENGTH * WATER_REGION_EDGE_LENGTH;
-constexpr WaterRegionPatchLabel INVALID_WATER_REGION_PATCH{0};
-
-/**
- * Describes a single interconnected patch of water within a particular water region.
- */
-struct WaterRegionPatchDesc {
-	int x; ///< The X coordinate of the water region, i.e. X=2 is the 3rd water region along the X-axis
-	int y; ///< The Y coordinate of the water region, i.e. Y=2 is the 3rd water region along the Y-axis
-	WaterRegionPatchLabel label; ///< Unique label identifying the patch within the region
-
-	bool operator==(const WaterRegionPatchDesc &other) const { return x == other.x && y == other.y && label == other.label; }
-};
-
-
-/**
- * Describes a single square water region.
- */
-struct WaterRegionDesc {
-	int x; ///< The X coordinate of the water region, i.e. X=2 is the 3rd water region along the X-axis
-	int y; ///< The Y coordinate of the water region, i.e. Y=2 is the 3rd water region along the Y-axis
-
-	WaterRegionDesc(const int x, const int y) : x(x), y(y) {}
-	WaterRegionDesc(const WaterRegionPatchDesc &water_region_patch) : x(water_region_patch.x), y(water_region_patch.y) {}
-
-	bool operator==(const WaterRegionDesc &other) const { return x == other.x && y == other.y; }
-};
-
-WaterRegionDesc GetWaterRegionInfo(TileIndex tile);
 
 void InvalidateWaterRegion(TileIndex tile);
 

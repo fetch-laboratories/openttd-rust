@@ -1008,7 +1008,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
         }
     }
 
-    o.make_leave_station(v);
+    crate::orders::make_leave_station(v);
     let st = (s.station.station)(v.last_station_visited().0);
     cancel_reservation(v, StationID::INVALID, st.native, s);
     // SAFETY: The live station's queue owner; the vehicle shell is its key.

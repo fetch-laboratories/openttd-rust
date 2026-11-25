@@ -81,17 +81,13 @@ static void ShipBoundary()
 	ship_probe.services.tile_type = [](uint32_t t) noexcept -> uint8_t { return t < SHIP_MAP_SIZE ? ship_map.base[t].type >> 4 : MP_VOID; };
 	/* No fixture tile is a lock. */
 	ship_probe.services.water_middle_lock = [](uint32_t) noexcept { return false; };
-	static OpenTTDWaterGroundServices ship_water{};
-	ship_water.water_regions = []() noexcept { return ship_probe.regions; };
+	static const OpenTTDWaterGroundServices ship_water = [] { OpenTTDWaterGroundServices w{}; w.water_regions = []() noexcept { return ship_probe.regions; }; return w; }();
 	ship_probe.services.water_services = []() noexcept -> const OpenTTDWaterGroundServices * { return &ship_water; };
-	ship_probe.movement.shared = &ship_probe.services;
-	ship_probe.movement.vehicle = &ship_vehicle;
+	ship_probe.movement.shared = &ship_probe.services; ship_probe.movement.vehicle = &ship_vehicle;
 	ship_probe.movement.native_assert = [](bool okay) noexcept { CHECK(okay); };
 	ship_probe.services.movement = &ship_probe.movement;
 	static const uint32_t ship_curve45_penalty = 20, ship_curve90_penalty = 100;
-	static OpenTTDSettingAddresses ship_settings{};
-	ship_settings.ship_curve45_penalty = &ship_curve45_penalty;
-	ship_settings.ship_curve90_penalty = &ship_curve90_penalty;
+	static const OpenTTDSettingAddresses ship_settings = [] { OpenTTDSettingAddresses s{}; s.ship_curve45_penalty = &ship_curve45_penalty; s.ship_curve90_penalty = &ship_curve90_penalty; return s; }();
 	ship_probe.services.settings = &ship_settings;
 	using RegionOwner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
 	RegionOwner regions(openttd_rust_water_new(&ship_probe.services, SHIP_MAP_WIDTH, SHIP_MAP_SIZE / SHIP_MAP_WIDTH), openttd_rust_water_destroy);

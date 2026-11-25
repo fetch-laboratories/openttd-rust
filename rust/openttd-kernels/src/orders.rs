@@ -2140,6 +2140,12 @@ pub(crate) fn free(v: VehicleRef) {
     // SAFETY: The live vehicle's current order.
     unsafe { free_order(v.current_order_pointer()) };
 }
+/// `Order::MakeLeaveStation` on `v->current_order`: makes this order a Leave Station order.
+pub(crate) fn make_leave_station(v: VehicleRef) {
+    let p = v.current_order_pointer();
+    write_field!(p, kind, OT_LEAVESTATION);
+    write_field!(p, flags, 0);
+}
 /// `Order::Free` on `p`.
 ///
 /// # Safety
@@ -2259,19 +2265,6 @@ pub unsafe extern "C" fn openttd_rust_order_loading(p: *mut Order, ordered: u8) 
     };
     store(p, order);
     0
-}
-
-/// `Order::MakeLeaveStation`: makes this order a Leave Station order.
-///
-/// # Safety
-/// `p` is a live, properly constructed order of the serialized game state.
-unsafe fn make_leave_station(p: *mut Order) {
-    let mut order = load(p);
-    {
-        order.kind = OT_LEAVESTATION;
-        order.flags = 0;
-    };
-    store(p, order);
 }
 
 /// `Order::MakeDummy`: makes this order a Dummy order.
@@ -5061,12 +5054,6 @@ impl VisitOrders {
         }
 
         read_field!(consist, next_departure) > (self.0.0.tick_counter)()
-    }
-    /// `v->current_order.MakeLeaveStation()`.
-    pub(crate) fn make_leave_station(self, v: VehicleRef) {
-        reenter!(make_leave_station(current_order(
-            self.0.vehicle(Self::shell(v))
-        )));
     }
 }
 

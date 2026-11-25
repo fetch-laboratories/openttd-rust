@@ -30,11 +30,6 @@ static WaterOwner _water_regions{nullptr, openttd_rust_water_destroy};
 
 OpenTTDWaterRegions *GetRustWaterRegions() noexcept { return _water_regions.get(); }
 
-WaterRegionDesc GetWaterRegionInfo(TileIndex tile)
-{
-	return WaterRegionDesc{static_cast<int>(TileX(tile) / WATER_REGION_EDGE_LENGTH), static_cast<int>(TileY(tile) / WATER_REGION_EDGE_LENGTH)};
-}
-
 void InvalidateWaterRegion(TileIndex tile)
 {
 	openttd_rust_water_invalidate(_water_regions.get(), &GetRustSharedServices(), tile.base());

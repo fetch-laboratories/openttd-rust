@@ -12,7 +12,7 @@
 //! holds. Both stay live and serialized by the game-state mutex for the synchronous call.
 //! Every field is read and written in place at the original's observation point, and no
 //! reference into the record or the owner lives across a service.
-#![allow(unsafe_code, clippy::verbose_bit_mask, clippy::if_not_else)]
+#![allow(clippy::verbose_bit_mask, clippy::if_not_else)]
 
 use crate::cargo_type::is_valid_cargo_type;
 use crate::command_type::DoCommandFlag;
@@ -69,6 +69,7 @@ use std::ptr::NonNull;
 /// Max distance in tiles (as the crow flies) to search for depots when user clicks "go to depot".
 const MAX_SHIP_DEPOT_SEARCH_DISTANCE: u32 = 80;
 
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_ship_control_reload_rotation() {
     crate::witness::hit(crate::witness::SHIP_ROTATION_RELOAD);
@@ -87,6 +88,7 @@ pub struct ShipState {
     /// Cached path.
     path: ShipPathCache,
 }
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_ship_state_new() -> *mut ShipState {
     Box::into_raw(Box::new(ShipState {
@@ -99,6 +101,7 @@ pub extern "C" fn openttd_rust_ship_state_new() -> *mut ShipState {
 }
 /// # Safety
 /// One shell transfers its live owner exactly once, after `PreDestructor`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_state_destroy(state: *mut ShipState) {
     // SAFETY: As this function's contract.
@@ -110,6 +113,7 @@ pub unsafe extern "C" fn openttd_rust_ship_state_destroy(state: *mut ShipState) 
 ///
 /// # Safety
 /// A live owner; the path lives as long as the owner.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_state_path(state: *mut ShipState) -> *mut ShipPathCache {
     // SAFETY: As this function's contract; no reference is formed.
@@ -117,34 +121,42 @@ pub unsafe extern "C" fn openttd_rust_ship_state_path(state: *mut ShipState) -> 
 }
 // The scalar accessors of the shell and save/load. SAFETY for each: a live owner, accessed
 // on the game thread with no Rust reference into it.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_state(state: *const ShipState) -> u8 {
     read_field!(state, state).0
 }
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_set_state(state: *mut ShipState, value: u8) {
     write_field!(state, state, TrackBits(value));
 }
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_rotation(state: *const ShipState) -> u8 {
     read_field!(state, rotation).0
 }
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_set_rotation(state: *mut ShipState, value: u8) {
     write_field!(state, rotation, Direction(value));
 }
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_rotation_x(state: *const ShipState) -> i16 {
     read_field!(state, rotation_x_pos)
 }
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_set_rotation_x(state: *mut ShipState, value: i16) {
     write_field!(state, rotation_x_pos, value);
 }
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_rotation_y(state: *const ShipState) -> i16 {
     read_field!(state, rotation_y_pos)
 }
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_set_rotation_y(state: *mut ShipState, value: i16) {
     write_field!(state, rotation_y_pos, value);
@@ -158,6 +170,7 @@ pub(crate) struct Ship {
 }
 impl Ship {
     /// The ship whose record is `v`, a live ship's, as a `Ship` member's `this` is.
+    #[allow(unsafe_code)]
     pub(crate) fn of(v: VehicleRef) -> Self {
         // SAFETY: Every ship shell's constructor links its non-null owner.
         Self {
@@ -171,50 +184,54 @@ impl Ship {
         Self::of(v)
     }
     /// `Ship::state`.
+    #[allow(unsafe_code)]
     pub(crate) fn state(self) -> TrackBits {
         read_field!(self.s.as_ptr(), state)
     }
     /// Store `Ship::state`.
+    #[allow(unsafe_code)]
     pub(crate) fn set_state(self, state: TrackBits) {
         write_field!(self.s.as_ptr(), state, state);
     }
     /// `Ship::rotation`.
+    #[allow(unsafe_code)]
     fn rotation(self) -> Direction {
         read_field!(self.s.as_ptr(), rotation)
     }
+    #[allow(unsafe_code)]
     fn set_rotation(self, rotation: Direction) {
         write_field!(self.s.as_ptr(), rotation, rotation);
     }
+    #[allow(unsafe_code)]
     fn set_rotation_x_pos(self, rotation_x_pos: i16) {
         write_field!(self.s.as_ptr(), rotation_x_pos, rotation_x_pos);
     }
+    #[allow(unsafe_code)]
     fn set_rotation_y_pos(self, rotation_y_pos: i16) {
         write_field!(self.s.as_ptr(), rotation_y_pos, rotation_y_pos);
     }
-    /// `Ship::path`, for a search that holds the only reference to it for its call.
-    fn path(self) -> *mut ShipPathCache {
-        // SAFETY: A live owner; no reference is formed.
-        unsafe { std::ptr::addr_of_mut!((*self.s.as_ptr()).path) }
+    /// `f` over `Ship::path`, which `f` holds the only reference to for its call: it calls
+    /// no service that reaches the controller or a ship's owner.
+    #[allow(unsafe_code)]
+    fn with_path<R>(self, f: impl FnOnce(&mut ShipPathCache) -> R) -> R {
+        // SAFETY: A live owner on the game thread, which no other reference names during `f`.
+        f(unsafe { &mut (*self.s.as_ptr()).path })
     }
     /// `path.empty()`.
     fn path_empty(self) -> bool {
-        // SAFETY: A live owner; the borrow ends here.
-        unsafe { (*self.path()).empty() }
+        self.with_path(|path| path.empty())
     }
     /// `path.back()`, under the original's nonempty precondition.
     fn path_back(self) -> Trackdir {
-        // SAFETY: A live owner; the copy ends the borrow.
-        unsafe { (*self.path()).back() }
+        self.with_path(|path| path.back())
     }
     /// `path.pop_back()`.
     fn path_pop_back(self) {
-        // SAFETY: A live owner on the game thread.
-        unsafe { (*self.path()).pop_back() }
+        self.with_path(ShipPathCache::pop_back);
     }
     /// `path.clear()`.
     fn path_clear(self) {
-        // SAFETY: A live owner on the game thread.
-        unsafe { (*self.path()).clear() }
+        self.with_path(ShipPathCache::clear);
     }
     /// `Ship::IsInDepot`, which is also a ship's `Vehicle::IsChainInDepot`.
     pub(crate) fn is_in_depot(self) -> bool {
@@ -246,6 +263,15 @@ pub struct Leaves {
     pub vehicle: *const VehicleServices,
 }
 
+impl Leaves {
+    /// The base vehicle table.
+    #[allow(unsafe_code)]
+    fn vehicles(&self) -> &VehicleServices {
+        // SAFETY: The native table names the immutable process-wide base table.
+        unsafe { &*self.vehicle }
+    }
+}
+
 /// The tables one ship entry runs in, and its map descriptor.
 pub(crate) struct Tables<'a> {
     l: &'a Leaves,
@@ -258,11 +284,11 @@ impl<'a> Tables<'a> {
     /// script, depot and viewport callbacks cannot load or reset the map or yield the
     /// game-state mutex, so the descriptor holds for the entry; nested entries build their
     /// own.
+    #[allow(unsafe_code)]
     pub(crate) fn new(l: &'a Leaves, ss: &'a Services) -> Self {
         Self {
             l,
-            // SAFETY: The native table names the immutable process-wide base table.
-            vs: unsafe { &*l.vehicle },
+            vs: l.vehicles(),
             ss,
             // SAFETY: As this function's contract.
             movement: unsafe { CachedTable::audited(ss) },
@@ -284,6 +310,7 @@ impl<'a> Tables<'a> {
         crate::vehicle::occupancy::update_position(v, self.map());
     }
     /// `VehicleEnterTile(v, tile, x, y)`.
+    #[allow(unsafe_code)]
     fn vehicle_enter_tile(
         &self,
         v: VehicleRef,
@@ -314,6 +341,7 @@ impl<'a> Tables<'a> {
         v.index(self.vs.newgrf())
     }
     /// The company table, through base maintenance.
+    #[allow(unsafe_code)]
     fn company(&self) -> &crate::company::Services {
         // SAFETY: Base maintenance names the shared static command and company tables.
         unsafe { &*((*(*(*self.vs.maintenance).transaction).commands).company)() }
@@ -335,8 +363,7 @@ pub(crate) fn get_effective_water_class(world: &World<'_>, tile: TileIndex) -> W
     }
     if world.kind(tile) == TileType::MP_RAILWAY {
         world.assert_with(|| {
-            crate::rail_map::RailGroundType(world.get_rail_ground_type_raw(tile.0))
-                == crate::rail_map::RailGroundType::HalfTileWater
+            world.get_rail_ground_type(tile) == crate::rail_map::RailGroundType::HalfTileWater
         });
         return WaterClass::Sea;
     }
@@ -353,11 +380,13 @@ struct DepotSearch {
 static DEPOT_SEARCH: GameState<Option<DepotSearch>> = GameState::new(None);
 impl DepotSearch {
     /// The statics, out of their slot for one search. The caller holds the game-state mutex.
+    #[allow(unsafe_code)]
     fn take() -> Self {
         // SAFETY: Native entries serialize access; the slot borrow ends here.
         unsafe { (*DEPOT_SEARCH.get()).take().unwrap_or_default() }
     }
     /// Return the statics to their slot, keeping their capacity.
+    #[allow(unsafe_code)]
     fn put_back(self) {
         // SAFETY: As `take`.
         unsafe { *DEPOT_SEARCH.get() = Some(self) };
@@ -365,6 +394,7 @@ impl DepotSearch {
 }
 
 /// `FindClosestShipDepot`.
+#[allow(unsafe_code)]
 fn find_closest_ship_depot(t: &Tables<'_>, v: VehicleRef, max_distance: u32) -> Option<Depot> {
     crate::witness::hit(crate::witness::SHIP_DEPOT_SEARCH);
     let world = t.world();
@@ -447,6 +477,7 @@ fn find_closest_ship_depot(t: &Tables<'_>, v: VehicleRef, max_distance: u32) -> 
 }
 
 /// `CheckIfShipNeedsService`.
+#[allow(unsafe_code)]
 fn check_if_ship_needs_service(t: &Tables<'_>, v: Ship) {
     let defaults = ((t.company().settings)().company_vehicle_defaults)(v.v.owner());
     if read_field!(defaults, servint_ships) == 0
@@ -525,11 +556,11 @@ pub(crate) fn update_cache(t: &Tables<'_>, v: Ship) {
 
 /// `Ship::OnNewCalendarDay`: calendar day handler.
 pub(crate) fn on_new_calendar_day(v: VehicleRef, leaves: &Leaves) {
-    // SAFETY: The native table names the immutable process-wide base table.
-    maintenance::age_vehicle(v, unsafe { &*leaves.vehicle });
+    maintenance::age_vehicle(v, leaves.vehicles());
 }
 
 /// `Ship::OnNewEconomyDay`: economy day handler.
+#[allow(unsafe_code)]
 pub(crate) fn on_new_economy_day(v: VehicleRef, leaves: &Leaves, shared: &Services) {
     let t = Tables::new(leaves, shared);
     let v = Ship::of(v);
@@ -595,7 +626,6 @@ pub(crate) fn get_vehicle_trackdir(world: &World<'_>, v: Ship) -> Trackdir {
 /// `Ship::GetOrderStationLocation`.
 pub(crate) fn get_order_station_location(
     vs: &VehicleServices,
-    ss: &Services,
     v: Ship,
     station: StationID,
 ) -> TileIndex {
@@ -606,7 +636,7 @@ pub(crate) fn get_order_station_location(
     let runtime = crate::newgrf_airport::runtime();
     let st = crate::newgrf_airport::station_by_id(station.0, runtime);
     if crate::vehicle_func::can_vehicle_use_station(v.v, st, runtime) {
-        TileIndex((ss.station_xy)(station.0))
+        crate::base_station_base::xy(st)
     } else {
         crate::orders::increment_real_order_index(v.v, vs.orders());
         TileIndex(0)
@@ -723,6 +753,7 @@ fn ship_accelerate(t: &Tables<'_>, v: VehicleRef) -> u32 {
 }
 
 /// `ShipArrivesAt`: ship arrives at a dock. If it is the first time, send out a news item.
+#[allow(unsafe_code)]
 fn ship_arrives_at(t: &Tables<'_>, v: VehicleRef, st: *mut crate::station::BaseStation) {
     let index = crate::newgrf_airport::runtime().station_index(st);
     // The live station's field, resolved in this serialized entry; byte-sized loads and
@@ -786,10 +817,8 @@ fn choose_ship_track(t: &Tables<'_>, v: Ship, tile: TileIndex, tracks: TrackBits
             v.path_clear();
         }
 
-        // SAFETY: The search holds the only reference to the path for its call: it calls no
-        // service that reaches the controller or a ship's owner.
-        track = crate::ship_yapf::yapf_ship_choose_track(t.ss, v, tile, &mut path_found, unsafe {
-            &mut *v.path()
+        track = v.with_path(|path| {
+            crate::ship_yapf::yapf_ship_choose_track(t.ss, v, tile, &mut path_found, path)
         });
     }
 
@@ -1044,6 +1073,7 @@ pub(crate) fn get_current_max_speed(v: VehicleRef) -> i32 {
     clippy::cast_possible_truncation,
     reason = "the original's one body; the int16_t rotation_x_pos and rotation_y_pos of the int positions"
 )]
+#[allow(unsafe_code)]
 fn ship_controller(t: &Tables<'_>, v: Ship) {
     let check = t.check();
     v.v.set_tick_counter(v.v.tick_counter().wrapping_add(1));
@@ -1179,8 +1209,7 @@ fn ship_controller(t: &Tables<'_>, v: Ship) {
                                     crate::vehicle::visits::begin_loading(v.v, t.vs.visits());
                                 } else {
                                     // leave stations without docks right away
-                                    crate::orders::VisitOrders::new(t.vs.orders())
-                                        .make_leave_station(v.v);
+                                    crate::orders::make_leave_station(v.v);
                                     crate::orders::increment_real_order_index(v.v, t.vs.orders());
                                 }
                             }
@@ -1328,6 +1357,7 @@ pub(crate) struct CmdBuildShip {
     clippy::cast_possible_wrap,
     reason = "CmdBuildShip's int x and y of TileX and TileY, Random()'s uint16_t random_bits and DetermineCapacity's uint stored to cargo_cap"
 )]
+#[allow(unsafe_code)]
 pub(crate) unsafe fn cmd_build_ship(
     s: &crate::vehicle_transactions::build::Services,
     out: *mut crate::services::CommandCost,
@@ -1375,7 +1405,7 @@ pub(crate) unsafe fn cmd_build_ship(
                 .with(VehStates::from_element(VehState::DefaultPalette)),
         );
 
-        (tables.vs.write_spritenum)(v.v, svi.ship_image());
+        (tables.vs.write_spritenum)(v.v, svi.ship_image_index());
         v.v.set_cargo_type(tables.vs, crate::cargo_type::CargoType(svi.default_cargo()));
         crate::services_assert::assert_with(|| {
             is_valid_cargo_type(v.v.cargo_type(tables.vs.newgrf()).0)
@@ -1447,6 +1477,7 @@ pub(crate) fn find_closest_depot(t: &Tables<'_>, v: Ship) -> ClosestDepot {
 // a live ship record and the immutable process-lifetime tables.
 
 /// `Ship::Tick`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
     v: VehicleRef,
@@ -1458,6 +1489,7 @@ pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
     u8::from(tick(&t, Ship::of(v)))
 }
 /// `Ship::UpdateCache`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_cache(
     v: VehicleRef,
@@ -1469,6 +1501,7 @@ pub unsafe extern "C" fn openttd_rust_ship_cache(
     update_cache(&t, Ship::of(v));
 }
 /// `Ship::SetDestTile`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_destination(v: VehicleRef, tile: u32) {
     set_dest_tile(Ship::of(v), TileIndex(tile));
@@ -1477,6 +1510,7 @@ pub unsafe extern "C" fn openttd_rust_ship_destination(v: VehicleRef, tile: u32)
 ///
 /// # Safety
 /// As the entries' contract; `closest` is a writable record.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_find_depot(
     v: VehicleRef,
@@ -1498,6 +1532,7 @@ pub unsafe extern "C" fn openttd_rust_ship_find_depot(
     };
 }
 /// `Ship::GetOrderStationLocation`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_station_destination(
     v: VehicleRef,
@@ -1507,7 +1542,7 @@ pub unsafe extern "C" fn openttd_rust_ship_station_destination(
 ) -> u32 {
     // SAFETY: As the entries' contract.
     let t = unsafe { Tables::new(&*leaves, &*shared) };
-    get_order_station_location(t.vs, t.ss, Ship::of(v), StationID(station)).0
+    get_order_station_location(t.vs, Ship::of(v), StationID(station)).0
 }
 
 crate::abi::layouts! {

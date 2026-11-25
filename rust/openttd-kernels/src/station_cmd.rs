@@ -5203,7 +5203,6 @@ impl Ctx<'_> {
                     ship,
                     crate::ship_control::get_order_station_location(
                         self.vehicle(),
-                        self.shared,
                         ship,
                         StationID(index),
                     ),

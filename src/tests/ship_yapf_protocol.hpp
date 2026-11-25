@@ -116,6 +116,9 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	OpenTTDShipPath *path = openttd_rust_ship_state_path(state.get());
 	openttd_rust_ship_path_push(path, 255); openttd_rust_ship_path_push(path, 13);
 	check(openttd_rust_ship_path_size(path) == 2 && openttd_rust_ship_path_get(path, 0) == 255 && openttd_rust_ship_path_get(path, 1) == 13);
+	/* Save/load's staging writes one element by index, and only that element changes. */
+	openttd_rust_ship_path_set(path, 0, 2);
+	check(openttd_rust_ship_path_size(path) == 2 && openttd_rust_ship_path_get(path, 0) == 2 && openttd_rust_ship_path_get(path, 1) == 13);
 	openttd_rust_ship_path_clear(path);
 
 	/* The searches read the map, a real water region owner and the probe's input. */

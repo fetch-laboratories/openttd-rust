@@ -620,9 +620,10 @@ pub unsafe extern "C" fn openttd_rust_engine_grfid(s: &Services, e: E) -> u32 {
         unsafe { ((*(*((s.loading)())).shared).grf_file_id)(file) }
     }
 }
-/// `Engine::GetLifeLengthInDays`: the lifetime of the engine in days, as a calendar date
-/// difference. Calendar `Year` and `Date` arithmetic is signed `int32`.
+/// `Engine::GetLifeLengthInDays`: returns the vehicle's (not model's!) life length in days.
+/// Calendar `Year` and `Date` arithmetic is signed `int32`.
 pub(crate) fn get_life_length_in_days(s: &Services, e: E) -> i32 {
+    /* Assume leap years; this gives the player a bit more than the given amount of years, but never less. */
     EngineRef::of(e)
         .life_years()
         .wrapping_add((s.life_extension)())

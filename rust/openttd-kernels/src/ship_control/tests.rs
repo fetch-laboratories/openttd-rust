@@ -101,6 +101,7 @@ fn shared(native_assert: extern "C" fn(bool)) -> Services {
     }
 }
 /// A ship record with a fresh owner on its `ship` link, on `tile`.
+#[allow(unsafe_code)]
 fn ship(tile: u32) -> Ship {
     let record = VehicleRecord::new(std::ptr::null_mut(), VehicleType::VEH_SHIP);
     // SAFETY: The test's fresh record.
@@ -111,6 +112,7 @@ fn ship(tile: u32) -> Ship {
     Ship::from_vehicle(VehicleRef::of(record))
 }
 /// Free a ship of [`ship`].
+#[allow(unsafe_code)]
 fn free(v: Ship) {
     // SAFETY: The test's record and owner, each freed once.
     unsafe {
@@ -203,6 +205,7 @@ fn get_vehicle_trackdir_takes_each_arm() {
 /// from the position, all before the position update and the one viewport call. The
 /// scenarios cannot show it ran: a blocked search that finds no trackdir takes `ReverseShip`.
 #[test]
+#[allow(unsafe_code)]
 fn reverse_ship_into_trackdir_turns_onto_the_trackdir_and_stops() {
     const NAME: &str =
         "ship_control::tests::reverse_ship_into_trackdir_turns_onto_the_trackdir_and_stops";
@@ -279,6 +282,7 @@ fn reverse_ship_into_trackdir_turns_onto_the_trackdir_and_stops() {
 
 /// `FindClosestShipDepot`'s two function statics are one process-wide slot, which the
 /// game thread and the GUI thread share under the game-state mutex.
+#[allow(unsafe_code)]
 #[test]
 fn depot_search_statics_are_reused_across_serialized_game_threads() {
     // Spawn/join provides the same ordering as the native game-state mutex.

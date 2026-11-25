@@ -1133,7 +1133,7 @@ impl Context<'_> {
             }
             WaterTileType::Depot => {
                 w::hit(w::MOVE_SHIP_DEPOT);
-                axis_to_track_bits(Axis(self.world.ship_depot_axis(tile.0)), self.check())
+                axis_to_track_bits(self.world.get_ship_depot_axis(tile), self.check())
             }
             _ => return 0,
         };
