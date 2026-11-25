@@ -27,8 +27,10 @@ HEADER = re.compile(
 PLAN = r"Reviewed\s+plan:[*_]*\s*#(\d+)\s+at\s+`?([0-9a-f]{7,40})\b"
 PLANNED = re.compile(r"\b" + PLAN, re.I)
 PLAN_HEADER = re.compile(r"\A\s*[*_]*" + PLAN, re.I)
-# A fence of three or more backticks or tildes, closed by one at least as long.
-FENCE = re.compile(r"^\s*(`{3,}|~{3,}).*?^\s*\1[`~]*\s*$", re.M | re.S)
+# A fence opens with three or more backticks or tildes (a backtick fence's info
+# string has no backtick) and closes with the same character, at least as many,
+# alone on its line; an unclosed fence runs to the end (GitHub Flavored Markdown).
+FENCE_OPEN = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
 # An attribution is a line of its own, emphasis or a list marker aside.
 ATTRIBUTION_LINE = re.compile(
     r"^\s*(?:[-*]\s+)?[*_`]*(" + ATTRIBUTION.pattern + r")[*_`]*\s*$", re.M
@@ -76,9 +78,28 @@ class ReviewReport:
     scope: str | None = None
 
 
+def unfenced(body: str) -> str:
+    """The body without its fenced blocks."""
+    kept: list[str] = []
+    fence = ""
+    for line in body.splitlines(keepends=True):
+        text = line.rstrip("\r\n")
+        if fence:
+            closing = re.fullmatch(r" {0,3}(`+|~+)\s*", text)
+            if closing and closing[1][0] == fence[0] and len(closing[1]) >= len(fence):
+                fence = ""
+        elif (found := FENCE_OPEN.fullmatch(text)) and not (
+            found[1][0] == "`" and "`" in found[2]
+        ):
+            fence = found[1]
+        else:
+            kept.append(line)
+    return "".join(kept)
+
+
 def own_text(body: str) -> str:
     """The body without fenced blocks or quoted lines."""
-    return QUOTED.sub("", FENCE.sub("", body))
+    return QUOTED.sub("", unfenced(body))
 
 
 def reviewed_sha(body: str) -> str | None:

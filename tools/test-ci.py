@@ -6279,6 +6279,18 @@ class ReportTests(unittest.TestCase):
                 "has none",
             ),
             (fenced.replace("```", "````"), "has none"),
+            # A mixed closer does not close a fence, and an unclosed fence runs
+            # to the end (re-check of #1065).
+            (
+                f"Reviewed commit: {HEAD}\n````\n````~\n{attribution('/root/rev')}\n"
+                "````\nDisposition: accepted, whole PR",
+                "has none",
+            ),
+            (
+                f"Reviewed commit: {HEAD}\n```\n{attribution('/root/rev')}\n"
+                "Disposition: accepted, whole PR",
+                "has none",
+            ),
             (review(HEAD, "/root/rev", "Looks fine."), "gives no disposition"),
             (
                 f"Reviewed plan: #170 at {HEAD}\n{attribution('/root/rev')}\nplan accepted",
