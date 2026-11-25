@@ -64,6 +64,10 @@ impl CompanyMask {
     pub const MASK: u16 = u16::MAX;
     /// The bit `BaseBitSet` shifts in for a company: `1ULL << value`, truncated to the
     /// `uint16_t` storage, so an owner of 16 or more has no bit.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "`BaseBitSet`'s store of the shifted bit in its `uint16_t`"
+    )]
     const fn bit(company: CompanyID) -> u16 {
         match 1_u64.checked_shl(company.0 as u32) {
             Some(bit) => bit as u16,

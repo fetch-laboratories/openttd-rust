@@ -723,6 +723,24 @@ pub(crate) fn install_test_labels(labels: &'static [u32], cargos: &[u8]) {
         }
     }
 }
+/// Test-only: the registry holds no valid cargo spec, so [`cargo_specs`] visits none. Forget it
+/// with [`clear_test_labels`].
+#[cfg(test)]
+pub(crate) fn install_test_no_cargo() {
+    static TABLE: GameState<Services> = GameState::new(TEST_TABLE);
+    extern "C" fn spec(_: u8) -> Handle {
+        ptr::null()
+    }
+    extern "C" fn bitnum(_: Handle) -> u8 {
+        crate::cargotype::INVALID_CARGO_BITNUM
+    }
+    // SAFETY: Serialized by the caller's test lock.
+    unsafe {
+        (*TABLE.get()).spec = spec;
+        (*TABLE.get()).bitnum = bitnum;
+        (*REGISTRY.get()).services = TABLE.get();
+    }
+}
 /// Test-only: forget [`install_test_labels`].
 #[cfg(test)]
 pub(crate) fn clear_test_labels() {

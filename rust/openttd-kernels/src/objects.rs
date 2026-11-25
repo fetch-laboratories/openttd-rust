@@ -2285,7 +2285,7 @@ pub unsafe extern "C" fn openttd_rust_object_update_hq(
     update_company_hq(s, crate::tile_type::TileIndex(tile), score);
 }
 
-/// `UpdateCompanyHQ`: update the CompanyHQ to the state associated with the given score.
+/// `UpdateCompanyHQ`: update the `CompanyHQ` to the state associated with the given score.
 /// `s` is the process-lifetime object table.
 pub(crate) fn update_company_hq(
     s: *const ObjectServices,

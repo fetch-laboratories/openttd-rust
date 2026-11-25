@@ -2422,3 +2422,29 @@ pub(crate) const TYPE_AVAILABILITY: crate::type_availability::Services =
         set_company_roadtypes: unreachable2,
         shared: ptr::null(),
     };
+
+/// `crate::subsidy::Services` with every entry unreachable.
+pub(crate) const SUBSIDY: crate::subsidy::Services = crate::subsidy::Services {
+    shared: ptr::null(),
+    town: ptr::null(),
+    industry: ptr::null(),
+    industry_owner: unreachable1,
+    industry_id: unreachable1,
+    next_industry: unreachable1,
+    has_source_flag: unreachable2,
+    set_source_flag: unreachable2,
+    clear_source_flags: unreachable1,
+    valid_source: unreachable1,
+    can_allocate: unreachable0,
+    allocate: unreachable4,
+    destroy: unreachable1,
+    duration: unreachable0,
+    multiplier: unreachable0,
+    cargo_valid: unreachable1,
+    manual: unreachable1,
+    manual_pax: unreachable0,
+    any_manual: unreachable0,
+    dirty: unreachable0,
+    station: unreachable1,
+    assert_destination: unreachable1,
+};

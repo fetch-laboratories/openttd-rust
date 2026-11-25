@@ -21,6 +21,9 @@
 //! `on_tick_companies` return to a caller-owned C++ frame before them.
 #![allow(
     unsafe_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
     clippy::too_many_lines,
     clippy::struct_field_names,
     clippy::struct_excessive_bools
@@ -463,7 +466,7 @@ const SCORE_INFO: [ScoreInfo; ScoreID::SCORE_END.0 as usize] = [
         score: 50,
     }, // SCORE_MIN_INCOME
     ScoreInfo {
-        needed: 100000,
+        needed: 100_000,
         score: 100,
     }, // SCORE_MAX_INCOME
     ScoreInfo {
@@ -475,11 +478,11 @@ const SCORE_INFO: [ScoreInfo; ScoreID::SCORE_END.0 as usize] = [
         score: 50,
     }, // SCORE_CARGO
     ScoreInfo {
-        needed: 10000000,
+        needed: 10_000_000,
         score: 50,
     }, // SCORE_MONEY
     ScoreInfo {
-        needed: 250000,
+        needed: 250_000,
         score: 50,
     }, // SCORE_LOAN
     ScoreInfo {
@@ -904,15 +907,14 @@ pub(crate) fn do_startup_new_company(s: &Services, frame: &mut Startup) -> bool 
     // we have to generate colour before this company is valid
     let colour = crate::company_identity::generate_company_colour(s.identity);
 
-    let c;
-    if frame.company == CompanyID::INVALID {
-        c = (s.allocate_company)(CompanyID::INVALID, frame.is_ai);
+    let c = if frame.company == CompanyID::INVALID {
+        (s.allocate_company)(CompanyID::INVALID, frame.is_ai)
     } else {
         if (s.shared.company_valid)(frame.company.0) {
             return false;
         }
-        c = (s.allocate_company)(frame.company, frame.is_ai);
-    }
+        (s.allocate_company)(frame.company, frame.is_ai)
+    };
     let c = CompanyRef::new(s.identity, c);
     frame.index = u32::from(c.index.0);
 
@@ -1219,6 +1221,10 @@ pub(crate) fn on_tick_companies(s: &Services, t: &mut Tick) -> bool {
     if t.stage == TICK_POSTING {
         // One iteration of `for (auto i = 0; i < max_no_competitors; i++)`; the increment of
         // a resumed iteration has run before this check.
+        #[expect(
+            clippy::never_loop,
+            reason = "one iteration of the original's loop per call; the caller posts between them"
+        )]
         while t.i < i32::from(unsafe { settings.max_competitors.read() }) {
             if (s.finance.networking)() {
                 let num_companies = t.num_companies;
@@ -2241,6 +2247,7 @@ pub(crate) fn change_ownership_of_company_items(
         if read_field!(t, simulation.exclusive_counter) > 0
             && read_field!(t, simulation.exclusivity) == old_owner.0
         {
+            #[expect(clippy::if_not_else, reason = "the original's branch order")]
             if new_owner != Owner::INVALID {
                 write_field!(t, simulation.exclusivity, new_owner.0);
             } else {
@@ -2421,8 +2428,8 @@ pub(crate) fn change_ownership_of_company_items(
                     TileIndex(tile),
                     old_owner,
                     new_owner,
-                )
-            };
+                );
+            }
         }
 
         let commands = s.identity.commands;
@@ -2820,7 +2827,7 @@ pub(crate) fn add_inflation(check_year: bool) -> bool {
     // doesn't add anything after that either; it even makes playing it impossible due to the
     // diverging cost and income rates.
     let year = crate::timer_game_common::calendar_year().0;
-    if check_year && (year < ORIGINAL_BASE_YEAR || year >= ORIGINAL_MAX_YEAR) {
+    if check_year && !(ORIGINAL_BASE_YEAR..ORIGINAL_MAX_YEAR).contains(&year) {
         return true;
     }
 
@@ -3071,7 +3078,7 @@ pub extern "C" fn openttd_rust_economy_reset_price_multipliers() {
 }
 
 /// `SetPriceBaseMultiplier`: change a price base by the given factor. The price base is
-/// altered by factors of two. NewBaseCost = OldBaseCost * 2^n. `price` is the index of the
+/// altered by factors of two. `NewBaseCost = OldBaseCost * 2^n`. `price` is the index of the
 /// price base to change, `factor` the amount to change by.
 pub(crate) fn set_price_base_multiplier(price: Price, factor: i32) {
     assert_with(|| price < Price::PR_END);
@@ -3521,7 +3528,7 @@ pub(crate) fn cmd_set_company_max_loan(
         crate::command_func::cmd_error(out);
         return;
     }
-    if amount != COMPANY_MAX_LOAN_DEFAULT && (amount < 0 || amount > MAX_LOAN_LIMIT) {
+    if amount != COMPANY_MAX_LOAN_DEFAULT && !(0..=MAX_LOAN_LIMIT).contains(&amount) {
         crate::command_func::cmd_error(out);
         return;
     }

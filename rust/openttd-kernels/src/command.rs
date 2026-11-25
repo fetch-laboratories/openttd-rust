@@ -757,10 +757,14 @@ mod money_tests {
     static FINITE: bool = false;
     static INFINITE: bool = true;
     /// The shared table whose settings catalog holds `infinite_money` at `value`.
-    fn with_infinite_money(value: &'static bool) -> &'static crate::services::Services {
+    fn with_infinite_money(value: bool) -> &'static crate::services::Services {
         leak(crate::services::Services {
             settings: leak(crate::settings_type::SettingAddresses {
-                infinite_money: value,
+                infinite_money: if value {
+                    &raw const INFINITE
+                } else {
+                    &raw const FINITE
+                },
                 ..crate::settings_type::SettingAddresses::NULL
             }),
             ..crate::test_tables::SHARED
@@ -882,7 +886,7 @@ mod money_tests {
             // SAFETY: The fixture's live result.
             assert!(unsafe { check_money(&command, costs, cost(&mut result)) });
         }
-        command.shared = with_infinite_money(&INFINITE);
+        command.shared = with_infinite_money(true);
         let mut huge = Result {
             ok: true,
             money: i64::MAX,
@@ -892,7 +896,7 @@ mod money_tests {
         assert!(unsafe { check_money(&command, costs, cost(&mut huge)) });
 
         // Company 0 holds 20: a cost of 21 fails once through the cash error, unchanged.
-        command.shared = with_infinite_money(&FINITE);
+        command.shared = with_infinite_money(false);
         command.money_error = money_error;
         let mut finance = FINANCE;
         finance.current_company = current_company;

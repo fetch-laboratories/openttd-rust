@@ -381,7 +381,7 @@ impl ScoreID {
 }
 
 /// The max score that can be in the performance history.
-/// The scores together of score_info is allowed to be more!
+/// The scores together of `score_info` is allowed to be more!
 pub const SCORE_MAX: i32 = 1000;
 
 /// `ScoreInfo`: how the score is computed for a single score id.
@@ -413,16 +413,16 @@ pub const INITIAL_LOAN: i64 = 100_000;
 /// The max amount possible to configure for a max loan of a company.
 pub const MAX_LOAN_LIMIT: i64 = 2_000_000_000;
 
-/// Maximum inflation (including fractional part) without causing overflows in int64_t price
+/// Maximum inflation (including fractional part) without causing overflows in `int64_t` price
 /// computations.
 /// This allows for 32 bit base prices (21 are currently needed).
 /// Considering the sign bit and 16 fractional bits, there are 15 bits left.
 /// 170 years of 4% inflation result in a inflation of about 822, so 10 bits are actually enough.
-/// Note that NewGRF multipliers share the 16 fractional bits.
+/// Note that `NewGRF` multipliers share the 16 fractional bits.
 /// See `MAX_PRICE_MODIFIER`.
 pub const MAX_INFLATION: u64 = (1_u64 << (63 - 32)) - 1;
 
-/// Maximum NewGRF price modifiers.
+/// Maximum `NewGRF` price modifiers.
 /// Increasing base prices by factor 65536 should be enough.
 /// See `MAX_INFLATION`.
 pub const MIN_PRICE_MODIFIER: i32 = -8;

@@ -83,8 +83,8 @@ mod financial_command_tests {
     const COSTS: CommandCostServices = CommandCostServices {
         zero,
         error,
-        error_param,
         expense_money,
+        error_param,
         ..crate::test_tables::COMMAND_COSTS
     };
 
@@ -162,8 +162,8 @@ mod financial_command_tests {
     };
     const IDENTITY: crate::company_identity::Services = crate::company_identity::Services {
         company,
-        index,
         finances,
+        index,
         ..crate::test_tables::COMPANY_IDENTITY
     };
     fn leak<T>(value: T) -> &'static T {
@@ -1629,6 +1629,7 @@ mod bankruptcy_tests {
 
     #[test]
     fn network_client_never_deletes_bankrupt_companies() {
+        static FINITE: bool = false;
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let economy = openttd_rust_economy_state();
         let saved = read_field!(economy, max_loan);
@@ -1640,7 +1641,6 @@ mod bankruptcy_tests {
                 owner(-500_000, 100_000, 9),
             ];
         });
-        static FINITE: bool = false;
         let s = Services {
             identity: leak(crate::company_identity::Services {
                 admin_update,
@@ -1652,7 +1652,7 @@ mod bankruptcy_tests {
             shared: leak(crate::services::Services {
                 local_company: local,
                 settings: leak(crate::settings_type::SettingAddresses {
-                    infinite_money: &FINITE,
+                    infinite_money: &raw const FINITE,
                     ..crate::settings_type::SettingAddresses::NULL
                 }),
                 ..SHARED
@@ -1676,5 +1676,862 @@ mod bankruptcy_tests {
             }
         });
         write_field!(economy, max_loan, saved);
+    }
+}
+
+/// The plan's new tests (#1048, Evidence): news, events, windows and native assertions, which
+/// the harness's game-state comparison cannot see. Companies 0 to 2 are handles carrying their
+/// index over owned finance records; each observed call joins one trace in order.
+mod evidence_tests {
+    use crate::company::*;
+    use crate::company_type::{CompanyID, CompanyMask, OpenTTDCompany, Owner};
+    use crate::economy_type::{ExpensesType, Price, PriceCategory};
+    use crate::news_func::testing::{Effect, Param, company_news_name, encoded};
+    use crate::script_event_types::ScriptEvent;
+    use crate::test_tables::{
+        CATCHMENT, COMMANDS, COMPANY, COMPANY_IDENTITY, FINANCE, FLEET_GROUPS, MOVEMENT,
+        OBJECTIVES, SETTINGS, SHARED, STATION_COMMANDS, STATION_WORLD, SUBSIDY, VEHICLE,
+    };
+    use std::cell::{Cell, RefCell};
+
+    const COUNT: usize = 3;
+    thread_local! {
+        static FINANCES: Cell<[*mut Finances; COUNT]> = const { Cell::new([std::ptr::null_mut(); COUNT]) };
+        static AI: Cell<[bool; COUNT]> = const { Cell::new([false; COUNT]) };
+        static TRACE: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static CURRENT: Cell<u8> = const { Cell::new(0) };
+        static LOCAL: Cell<u8> = const { Cell::new(0) };
+        static TOWNS: RefCell<Vec<*mut crate::town::State>> = const { RefCell::new(Vec::new()) };
+        static GROUP: Cell<*mut crate::fleet::GroupFields> = const { Cell::new(std::ptr::null_mut()) };
+        static STATION_OWNER: Cell<u8> = const { Cell::new(0) };
+        static RENEWALS: Cell<*mut ()> = const { Cell::new(std::ptr::null_mut()) };
+        static STATS: Cell<*mut ()> = const { Cell::new(std::ptr::null_mut()) };
+        static INFRASTRUCTURE: Cell<[*mut crate::company_base::CompanyInfrastructure; COUNT]> =
+            const { Cell::new([std::ptr::null_mut(); COUNT]) };
+        static DEFAULTS: Cell<[*mut crate::settings_table::VehicleDefaults; COUNT]> =
+            const { Cell::new([std::ptr::null_mut(); COUNT]) };
+    }
+    fn trace(entry: impl Into<String>) {
+        TRACE.with_borrow_mut(|t| t.push(entry.into()));
+    }
+    fn traced() -> Vec<String> {
+        TRACE.with_borrow_mut(std::mem::take)
+    }
+    fn handle(id: CompanyID) -> *mut OpenTTDCompany {
+        std::ptr::without_provenance_mut(usize::from(id.0) + 1)
+    }
+    fn finances_of(id: usize) -> *mut Finances {
+        FINANCES.get()[id]
+    }
+    fn valid(id: u8) -> bool {
+        usize::from(id) < COUNT && !finances_of(usize::from(id)).is_null()
+    }
+    extern "C" fn company(id: CompanyID) -> *mut OpenTTDCompany {
+        assert!(valid(id.0), "Company::Get({})", id.0);
+        handle(id)
+    }
+    extern "C" fn company_if_valid(id: CompanyID) -> *mut OpenTTDCompany {
+        if valid(id.0) {
+            handle(id)
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn index(c: *mut OpenTTDCompany) -> CompanyID {
+        CompanyID((c.addr() - 1) as u8)
+    }
+    extern "C" fn finances(c: *mut OpenTTDCompany) -> *mut Finances {
+        finances_of(usize::from(index(c).0))
+    }
+    extern "C" fn next_company(from: u32) -> *mut OpenTTDCompany {
+        (from as usize..COUNT)
+            .find(|&id| !finances_of(id).is_null())
+            .map_or(std::ptr::null_mut(), |id| handle(CompanyID(id as u8)))
+    }
+    extern "C" fn is_ai(c: *mut OpenTTDCompany) -> bool {
+        AI.get()[usize::from(index(c).0)]
+    }
+    extern "C" fn company_valid(id: u8) -> bool {
+        valid(id)
+    }
+    extern "C" fn company_finances(id: u8) -> *mut Finances {
+        if valid(id) {
+            finances_of(usize::from(id))
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn current_company() -> u8 {
+        CURRENT.get()
+    }
+    extern "C" fn set_current_company(id: u8) {
+        CURRENT.set(id);
+    }
+    extern "C" fn local_company() -> u8 {
+        LOCAL.get()
+    }
+    extern "C" fn no() -> bool {
+        false
+    }
+    extern "C" fn invalidate(_: u8) {}
+    extern "C" fn admin_update(c: *mut OpenTTDCompany) {
+        trace(format!("admin {}", index(c).0));
+    }
+    extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut *mut () {
+        RENEWALS.with(Cell::as_ptr)
+    }
+    extern "C" fn town_next_id(from: u32) -> u32 {
+        let count = TOWNS.with_borrow(Vec::len) as u32;
+        if from < count { from } else { u32::MAX }
+    }
+    extern "C" fn town_owner_by_id(id: u32) -> *mut crate::town::State {
+        TOWNS.with_borrow(|t| t[id as usize])
+    }
+    extern "C" fn no_vehicle(_: u32) -> Option<crate::vehicle::VehicleRef> {
+        None
+    }
+    extern "C" fn screen_dirty() {
+        trace("screen");
+    }
+    extern "C" fn infrastructure(id: u8) -> *mut crate::company_base::CompanyInfrastructure {
+        INFRASTRUCTURE.get()[usize::from(id)]
+    }
+    extern "C" fn next_station(from: u32) -> *mut crate::station::BaseStation {
+        if from == 0 {
+            std::ptr::without_provenance_mut(1)
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn station_id(
+        _: *mut crate::station::BaseStation,
+    ) -> crate::station_type::StationID {
+        crate::station_type::StationID(0)
+    }
+    extern "C" fn station_owner(_: *mut crate::station::BaseStation) -> u8 {
+        STATION_OWNER.get()
+    }
+    extern "C" fn set_station_owner(_: *mut crate::station::BaseStation, owner: u8) {
+        STATION_OWNER.set(owner);
+        trace(format!("station owner {owner}"));
+    }
+    extern "C" fn catchment() -> *const crate::station::CatchmentServices {
+        const TABLE: crate::station::CatchmentServices = crate::station::CatchmentServices {
+            next_station,
+            id: station_id,
+            ..CATCHMENT
+        };
+        std::ptr::from_ref(&TABLE)
+    }
+    extern "C" fn station_commands() -> *const crate::station_cmd::CommandServicesTable {
+        const WORLD: crate::station_service::World = crate::station_service::World {
+            station_owner,
+            ..STATION_WORLD
+        };
+        const TABLE: crate::station_cmd::CommandServicesTable =
+            crate::station_cmd::CommandServicesTable {
+                station: std::ptr::from_ref(&WORLD),
+                set_station_owner,
+                ..STATION_COMMANDS
+            };
+        std::ptr::from_ref(&TABLE)
+    }
+    extern "C" fn newgrf() -> *const crate::newgrf_vehicle::Services {
+        std::ptr::from_ref(&crate::newgrf_vehicle::TEST_TABLE)
+    }
+    unsafe extern "C" fn next_group(from: u32) -> crate::fleet::NextGroup {
+        let group = GROUP.get();
+        if from == 0 && !group.is_null() {
+            crate::fleet::NextGroup { group, index: 0 }
+        } else {
+            crate::fleet::NextGroup {
+                group: std::ptr::null_mut(),
+                index: u32::MAX,
+            }
+        }
+    }
+    unsafe extern "C" fn delete_group(id: u16) {
+        trace(format!("delete group {id}"));
+        GROUP.set(std::ptr::null_mut());
+    }
+    unsafe extern "C" fn stats(_: u8, _: u16, _: u8) -> *mut () {
+        STATS.get()
+    }
+    unsafe extern "C" fn head(_: u8) -> *mut () {
+        RENEWALS.with(Cell::as_ptr).cast()
+    }
+    extern "C" fn group_all(
+        _: *mut OpenTTDCompany,
+        _: crate::vehicle_type::VehicleType,
+    ) -> *mut () {
+        STATS.get()
+    }
+    extern "C" fn use_free_group(c: *mut OpenTTDCompany) -> u16 {
+        trace(format!("free group of {}", index(c).0));
+        7
+    }
+    extern "C" fn subsidies() -> *const crate::subsidy::Services {
+        thread_local! {
+            static TABLE: &'static crate::subsidy::Services = leak(crate::subsidy::Services {
+                shared: shared(),
+                next_industry,
+                clear_source_flags,
+                ..SUBSIDY
+            });
+        }
+        TABLE.with(|t| *t)
+    }
+    extern "C" fn next_industry(_: u32) -> u32 {
+        u32::MAX
+    }
+    extern "C" fn clear_source_flags(_: crate::subsidy::Source) {}
+    extern "C" fn settings() -> &'static crate::settings_table::Services {
+        const TABLE: crate::settings_table::Services = crate::settings_table::Services {
+            company_vehicle_defaults,
+            ..SETTINGS
+        };
+        &TABLE
+    }
+    extern "C" fn company_vehicle_defaults(
+        c: CompanyID,
+    ) -> *mut crate::settings_table::VehicleDefaults {
+        DEFAULTS.get()[usize::from(c.0)]
+    }
+    extern "C" fn none_waypoint(_: u32) -> *mut crate::station::BaseStation {
+        std::ptr::null_mut()
+    }
+    extern "C" fn end(_: u32) -> u32 {
+        u32::MAX
+    }
+    extern "C" fn objectives() -> &'static crate::objectives::Services {
+        &OBJECTIVES
+    }
+    extern "C" fn change_window_owner(old: Owner, new: Owner) {
+        trace(format!("window owner {} {}", old.0, new.0));
+    }
+    extern "C" fn ai_stop(c: CompanyID) {
+        trace(format!("ai stop {}", c.0));
+    }
+    extern "C" fn close_company_windows(c: CompanyID) {
+        trace(format!("close windows {}", c.0));
+    }
+    extern "C" fn delete_company(c: *mut OpenTTDCompany) {
+        trace(format!("delete {}", index(c).0));
+    }
+    extern "C" fn show_buy_company_dialog(c: CompanyID, hostile: bool) {
+        trace(format!("buy dialog {} {hostile}", c.0));
+    }
+    /// The news and event effects in the trace, by their recorded form.
+    fn news_call(effect: &Effect) {
+        if !matches!(effect, Effect::GetString(..)) {
+            trace(format!("{effect:?}"));
+        }
+    }
+    fn window_call(effect: &crate::window_func::testing::Effect) {
+        trace(format!("{effect:?}"));
+    }
+
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    fn shared() -> &'static crate::services::Services {
+        static MAX: u16 = 500;
+        static FINITE: bool = false;
+        thread_local! {
+            static TABLE: &'static crate::services::Services = leak(crate::services::Services {
+                company_valid,
+                current_company,
+                local_company,
+                town_next_id,
+                town_owner_by_id,
+                vehicle_next: no_vehicle,
+                screen_dirty,
+                company_infrastructure: infrastructure,
+                station_catchment: catchment,
+                station_commands,
+                map: crate::map_func::fixture::statics(),
+                settings: leak(crate::settings_type::SettingAddresses {
+                    infinite_money: &raw const FINITE,
+                    max_trains: &raw const MAX,
+                    max_roadveh: &raw const MAX,
+                    max_ships: &raw const MAX,
+                    max_aircraft: &raw const MAX,
+                    ..crate::settings_type::SettingAddresses::NULL
+                }),
+                movement: leak(crate::movement::MovementServices {
+                    vehicle: leak(crate::vehicle::VehicleServices { newgrf, ..VEHICLE }),
+                    train: &crate::test_tables::TRAIN_LEAVES,
+                    ..MOVEMENT
+                }),
+                ..SHARED
+            });
+        }
+        TABLE.with(|t| *t)
+    }
+    fn services() -> Services {
+        let shared = shared();
+        Services {
+            shared,
+            finance: leak(FinanceServices {
+                current_company,
+                set_current_company,
+                networking: no,
+                company_finances,
+                invalidate_company_windows: invalidate,
+                ..FINANCE
+            }),
+            identity: leak(crate::company_identity::Services {
+                shared,
+                commands: leak(crate::services::CommandServices { shared, ..COMMANDS }),
+                groups: leak(crate::fleet::GroupServices {
+                    next_group,
+                    stats,
+                    head,
+                    delete_group,
+                    ..FLEET_GROUPS
+                }),
+                company,
+                company_if_valid,
+                index,
+                finances,
+                next_company,
+                is_ai,
+                admin_update,
+                renewal_head,
+                ..COMPANY_IDENTITY
+            }),
+            subsidies,
+            settings,
+            objectives,
+            group_all,
+            use_free_group,
+            next_waypoint: none_waypoint,
+            next_sign: end,
+            next_goal: end,
+            next_story_page: end,
+            change_window_owner,
+            ai_stop,
+            close_company_windows,
+            delete_company,
+            show_buy_company_dialog,
+            network_server: no,
+            ..COMPANY
+        }
+    }
+
+    /// The world's records, owned for one test; dropped in place.
+    struct World {
+        finances: Vec<Finances>,
+        /// Boxed, so a town keeps its address across later pushes.
+        #[expect(clippy::vec_box, reason = "a town's address is its owner handle")]
+        towns: Vec<Box<crate::town::State>>,
+        group: Box<crate::fleet::GroupFields>,
+        stats: *mut (),
+        infrastructure: Vec<crate::company_base::CompanyInfrastructure>,
+        defaults: Vec<crate::settings_table::VehicleDefaults>,
+    }
+    impl World {
+        fn new() -> Self {
+            // SAFETY: Plain integer records.
+            let mut world = Self {
+                finances: (0..COUNT).map(|_| unsafe { std::mem::zeroed() }).collect(),
+                towns: Vec::new(),
+                group: Box::new(crate::fleet::GroupFields {
+                    owner: 1,
+                    vehicle_type: 0,
+                    flags: 0,
+                    livery: crate::livery::Livery::default(),
+                    parent: u16::MAX,
+                    number: 3,
+                }),
+                stats: crate::fleet::openttd_rust_fleet_stats_create(),
+                infrastructure: (0..COUNT).map(|_| unsafe { std::mem::zeroed() }).collect(),
+                defaults: (0..COUNT)
+                    .map(|id| crate::settings_table::VehicleDefaults {
+                        servint_ispercent: id == 0,
+                        servint_trains: 100 + id as u16,
+                        servint_roadveh: 200 + id as u16,
+                        servint_aircraft: 300 + id as u16,
+                        servint_ships: 400 + id as u16,
+                    })
+                    .collect(),
+            };
+            FINANCES.set(std::array::from_fn(|i| &raw mut world.finances[i]));
+            INFRASTRUCTURE.set(std::array::from_fn(|i| &raw mut world.infrastructure[i]));
+            DEFAULTS.set(std::array::from_fn(|i| &raw mut world.defaults[i]));
+            GROUP.set(&raw mut *world.group);
+            STATS.set(world.stats);
+            AI.set([false; COUNT]);
+            RENEWALS.set(std::ptr::null_mut());
+            STATION_OWNER.set(1);
+            CURRENT.set(0);
+            LOCAL.set(0);
+            for (owner, value) in world.infrastructure.iter_mut().zip([4, 5, 6]) {
+                owner.airport = value;
+            }
+            crate::map_func::fixture::set_dimensions(0, 0);
+            crate::news_func::testing::take();
+            crate::news_func::testing::observe(Some(news_call));
+            crate::window_func::testing::take();
+            crate::window_func::testing::observe(Some(window_call));
+            TRACE.with_borrow_mut(Vec::clear);
+            world
+        }
+        fn town(&mut self, have: u16, ratings: [i16; 3], exclusivity: u8, counter: u8) {
+            let mut t = Box::new(crate::town::State::default());
+            t.simulation.have_ratings = have;
+            t.simulation.ratings[..3].copy_from_slice(&ratings);
+            t.simulation.exclusivity = exclusivity;
+            t.simulation.exclusive_counter = counter;
+            self.towns.push(t);
+            TOWNS.set(self.towns.iter_mut().map(|t| &raw mut **t).collect());
+        }
+    }
+    impl Drop for World {
+        fn drop(&mut self) {
+            crate::news_func::testing::observe(None);
+            crate::news_func::testing::take();
+            crate::window_func::testing::observe(None);
+            crate::window_func::testing::take();
+            FINANCES.set([std::ptr::null_mut(); COUNT]);
+            INFRASTRUCTURE.set([std::ptr::null_mut(); COUNT]);
+            DEFAULTS.set([std::ptr::null_mut(); COUNT]);
+            GROUP.set(std::ptr::null_mut());
+            STATS.set(std::ptr::null_mut());
+            TOWNS.set(Vec::new());
+            // SAFETY: Created by `World::new`; no access is live.
+            unsafe { crate::fleet::openttd_rust_fleet_stats_destroy(self.stats) };
+        }
+    }
+    fn ownership() -> crate::tile_owner::Context {
+        crate::tile_owner::Context {
+            services: std::ptr::null(),
+            cost: std::ptr::null_mut(),
+            ret: std::ptr::null_mut(),
+            error: std::ptr::null_mut(),
+            road: std::ptr::null(),
+        }
+    }
+    fn get(s: &Services, id: u8) -> CompanyRef {
+        CompanyRef::get(s.identity, CompanyID(id))
+    }
+    fn effect(e: &Effect) -> String {
+        format!("{e:?}")
+    }
+    fn window(e: crate::window_func::testing::Effect) -> String {
+        format!("{e:?}")
+    }
+
+    /// Evidence 1: At the fourth month of a bad balance, `CompanyCheckBankrupt` warns: the company's
+    /// news with its headline, then the AI and Game events, and only then the admin update.
+    #[test]
+    fn bankrupt_month_four_warns_before_the_admin_update() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let _world = World::new();
+        let s = services();
+        let f = finances_of(1);
+        write_field!(f, money, -500_000);
+        write_field!(f, current_loan, 100_000);
+        write_field!(f, months_of_bankruptcy, 3);
+        write_field!(f, max_loan, crate::company_base::COMPANY_MAX_LOAN_DEFAULT);
+        let saved = read_field!(economy(), max_loan);
+        write_field!(economy(), max_loan, 300_000);
+        company_check_bankrupt(&s, get(&s, 1));
+        write_field!(economy(), max_loan, saved);
+        let c = handle(CompanyID(1));
+        let name = company_news_name(c);
+        assert_eq!(
+            traced(),
+            [
+                effect(&Effect::CompanyNewsInformation(
+                    crate::table::strings::STR_NEWS_COMPANY_IN_TROUBLE_TITLE.0,
+                    c,
+                    std::ptr::null()
+                )),
+                effect(&Effect::News {
+                    headline: encoded(
+                        crate::table::strings::STR_NEWS_COMPANY_IN_TROUBLE_DESCRIPTION.0,
+                        &[Param::S(&name)]
+                    ),
+                    r#type: crate::news_type::NewsType::CompanyInfo,
+                    style: crate::news_type::NewsStyle::Company,
+                    flags: crate::news_type::NewsFlags::default(),
+                    ref1: crate::news_type::NewsReference::None,
+                    ref2: crate::news_type::NewsReference::None,
+                    data: Some(name.clone()),
+                    advice_type: crate::news_type::AdviceType::Invalid,
+                }),
+                effect(&Effect::AiBroadcastNewEvent(
+                    ScriptEvent::company_in_trouble(CompanyID(1)),
+                    CompanyID::INVALID.0
+                )),
+                effect(&Effect::GameNewEvent(ScriptEvent::company_in_trouble(
+                    CompanyID(1)
+                ))),
+                "admin 1".to_owned(),
+            ]
+        );
+        assert_eq!(read_field!(f, months_of_bankruptcy), 4);
+    }
+
+    /// The walk's calls of a takeover of company 1 by company 0 after its towns, in order.
+    fn takeover_walk() -> Vec<String> {
+        [
+            "free group of 0",
+            "station owner 0",
+            "window owner 1 0",
+            "screen",
+        ]
+        .map(str::to_owned)
+        .to_vec()
+    }
+
+    /// Evidence 3: `DoAcquireCompany`, hostile and not: the merger news with both names and, when not
+    /// hostile, the value; the two merger events of the old company and the buyer; the
+    /// transfer; `AI::Stop` only for an AI; the windows; and the deletion last.
+    #[test]
+    fn acquire_company_news_events_transfer_and_deletion_in_order() {
+        use crate::window_func::testing::Effect as W;
+        use crate::window_type::{WindowClass, WindowNumber};
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        for (hostile, ai) in [(false, false), (true, true)] {
+            let mut world = World::new();
+            world.town(0, [0; 3], 0, 0);
+            let s = services();
+            AI.set([false, ai, false]);
+            write_field!(finances_of(1), bankrupt_value, 12_345);
+            do_acquire_company(&s, &ownership(), get(&s, 1), hostile);
+            let (c, other) = (handle(CompanyID(1)), handle(CompanyID(0)));
+            let (name, other_name) = (company_news_name(c), company_news_name(other));
+            let mut params = vec![Param::S(&name), Param::S(&other_name)];
+            let string = if hostile {
+                crate::table::strings::STR_NEWS_MERGER_TAKEOVER_TITLE
+            } else {
+                params.push(Param::N(12_345));
+                crate::table::strings::STR_NEWS_COMPANY_MERGER_DESCRIPTION
+            };
+            let mut expected = vec![
+                effect(&Effect::CompanyNewsInformation(
+                    crate::table::strings::STR_NEWS_COMPANY_MERGER_TITLE.0,
+                    c,
+                    other,
+                )),
+                effect(&Effect::News {
+                    headline: encoded(string.0, &params),
+                    r#type: crate::news_type::NewsType::CompanyInfo,
+                    style: crate::news_type::NewsStyle::Company,
+                    flags: crate::news_type::NewsFlags::default(),
+                    ref1: crate::news_type::NewsReference::None,
+                    ref2: crate::news_type::NewsReference::None,
+                    data: Some(name.clone()),
+                    advice_type: crate::news_type::AdviceType::Invalid,
+                }),
+                effect(&Effect::AiBroadcastNewEvent(
+                    ScriptEvent::company_merger(CompanyID(1), CompanyID(0)),
+                    CompanyID::INVALID.0,
+                )),
+                effect(&Effect::GameNewEvent(ScriptEvent::company_merger(
+                    CompanyID(1),
+                    CompanyID(0),
+                ))),
+            ];
+            expected.extend(takeover_walk());
+            if ai {
+                expected.push("ai stop 1".to_owned());
+            }
+            expected.push("close windows 1".to_owned());
+            for class in [
+                WindowClass::WC_TRAINS_LIST,
+                WindowClass::WC_SHIPS_LIST,
+                WindowClass::WC_ROADVEH_LIST,
+                WindowClass::WC_AIRCRAFT_LIST,
+            ] {
+                expected.push(window(W::InvalidateWindowClassesData(class, 0, false)));
+            }
+            expected.push(window(W::InvalidateWindowData(
+                WindowClass::WC_CLIENT_LIST,
+                WindowNumber(0),
+                0,
+                false,
+            )));
+            expected.push("delete 1".to_owned());
+            assert_eq!(traced(), expected, "hostile {hostile}");
+            assert_eq!(CURRENT.get(), 0);
+            drop(world);
+        }
+    }
+
+    /// Evidence 4: `HandleBankruptcyTakeover` asks the best-performing company that has not been
+    /// asked, with the value, and shows the dialog only to the local company.
+    #[test]
+    fn bankruptcy_takeover_asks_the_best_company() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        for local in [0, 2] {
+            let world = World::new();
+            let s = services();
+            LOCAL.set(local);
+            write_field!(finances_of(0), old_economy[1].performance_history, 10);
+            write_field!(finances_of(2), old_economy[1].performance_history, 20);
+            let f = finances_of(1);
+            let mut asked = CompanyMask::default();
+            asked.set(CompanyID(1));
+            write_field!(f, bankrupt_asked, asked);
+            write_field!(f, bankrupt_value, 777);
+            handle_bankruptcy_takeover(&s, get(&s, 1));
+            let mut expected = vec![effect(&Effect::AiNewEvent(
+                2,
+                ScriptEvent::company_ask_merger(CompanyID(1), 777),
+            ))];
+            if local == 2 {
+                expected.push("buy dialog 1 false".to_owned());
+            }
+            assert_eq!(traced(), expected, "local {local}");
+            assert!(read_field!(f, bankrupt_asked).test(CompanyID(2)));
+            assert_eq!(
+                i32::from(read_field!(f, bankrupt_timeout)),
+                3 * 30 * crate::timer_game_tick::DAY_TICKS / 14
+            );
+            drop(world);
+        }
+    }
+
+    /// Evidence 4: With no bit of `bankrupt_asked` set, `HandleBankruptcyTakeover` ends at the native
+    /// assertion.
+    #[test]
+    fn bankruptcy_takeover_without_an_offer_fails_the_assertion() {
+        if crate::services_assert::isolate_test_exit(
+            "company::tests::evidence_tests::bankruptcy_takeover_without_an_offer_fails_the_assertion",
+        ) {
+            return;
+        }
+        let world = World::new();
+        let s = services();
+        handle_bankruptcy_takeover(&s, get(&s, 1));
+        drop(world);
+        unreachable!("the assertion ends the child");
+    }
+
+    /// Evidence 5: `ChangeOwnershipOfCompanyItems` for a takeover and for a deletion over two towns, one
+    /// group, one station and a map of no tiles.
+    #[test]
+    fn change_ownership_moves_ratings_rights_groups_and_stations() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let initial = RATING_INITIAL as i16;
+        // A takeover: the new owner gets the old ratings, or the better of both, and the old
+        // owner's exclusivity.
+        let mut world = World::new();
+        world.town(0b010, [0, 500, 0], 1, 3);
+        world.town(0b011, [100, 700, 0], 2, 5);
+        let s = services();
+        change_ownership_of_company_items(&s, &ownership(), CompanyID(1), CompanyID(0));
+        let towns: Vec<_> = world
+            .towns
+            .iter()
+            .map(|t| {
+                (
+                    t.simulation.have_ratings,
+                    t.simulation.ratings[0],
+                    t.simulation.ratings[1],
+                    t.simulation.exclusivity,
+                    t.simulation.exclusive_counter,
+                )
+            })
+            .collect();
+        assert_eq!(
+            towns,
+            [(0b001, 500, initial, 0, 3), (0b001, 700, initial, 2, 5)]
+        );
+        assert_eq!((world.group.owner, world.group.number), (0, 7));
+        assert_eq!(STATION_OWNER.get(), 0);
+        assert_eq!(world.infrastructure[0].airport, 4 + 5);
+        assert_eq!(world.defaults[1].servint_trains, 100);
+        assert!(world.defaults[1].servint_ispercent);
+        assert_eq!(traced(), takeover_walk());
+        drop(world);
+
+        // A deletion: no ratings move, the rights end, the group goes and the station is
+        // nobody's; the company holds the jackpot while its property is removed.
+        let mut world = World::new();
+        world.town(0b010, [0, 500, 0], 1, 3);
+        world.town(0b011, [100, 700, 0], 2, 5);
+        let s = services();
+        change_ownership_of_company_items(&s, &ownership(), CompanyID(1), Owner::INVALID);
+        let towns: Vec<_> = world
+            .towns
+            .iter()
+            .map(|t| {
+                (
+                    t.simulation.have_ratings,
+                    t.simulation.ratings[0],
+                    t.simulation.ratings[1],
+                    t.simulation.exclusivity,
+                    t.simulation.exclusive_counter,
+                )
+            })
+            .collect();
+        assert_eq!(
+            towns,
+            [
+                (0b000, 0, initial, CompanyID::INVALID.0, 0),
+                (0b001, 100, initial, 2, 5)
+            ]
+        );
+        assert_eq!(
+            traced(),
+            ["delete group 0", "station owner 16", "screen"].map(str::to_owned)
+        );
+        assert_eq!(STATION_OWNER.get(), Owner::NONE.0);
+        assert_eq!(world.finances[1].money, (u64::MAX >> 2) as i64);
+        assert_eq!(world.infrastructure[0].airport, 4);
+        drop(world);
+    }
+
+    /// Evidence 5: `ChangeOwnershipOfCompanyItems` with the same old and new owner ends at the native
+    /// assertion.
+    #[test]
+    fn change_ownership_to_the_same_owner_fails_the_assertion() {
+        if crate::services_assert::isolate_test_exit(
+            "company::tests::evidence_tests::change_ownership_to_the_same_owner_fails_the_assertion",
+        ) {
+            return;
+        }
+        let world = World::new();
+        let s = services();
+        LOCAL.set(2);
+        change_ownership_of_company_items(&s, &ownership(), CompanyID(1), CompanyID(1));
+        drop(world);
+        unreachable!("the assertion ends the child");
+    }
+
+    extern "C" fn start_price(p: Price) -> i64 {
+        match p.0 {
+            0 => 1,
+            1 => -1,
+            _ => 1_000,
+        }
+    }
+    extern "C" fn category(_: Price) -> PriceCategory {
+        PriceCategory::PCAT_RUNNING
+    }
+    fn price_services(costs: &'static u8) -> Services {
+        static LOAN: u32 = 300_000;
+        static CONSTRUCTION: u8 = 1;
+        Services {
+            shared: leak(crate::services::Services {
+                settings: leak(crate::settings_type::SettingAddresses {
+                    max_loan: &raw const LOAN,
+                    vehicle_costs: costs,
+                    construction_cost: &raw const CONSTRUCTION,
+                    ..crate::settings_type::SettingAddresses::NULL
+                }),
+                ..SHARED
+            }),
+            price_base_start_price: start_price,
+            price_base_category: category,
+            ..COMPANY
+        }
+    }
+
+    /// Evidence 6: `RecomputePrices` never stores a zero price: a start price of 1 shifted to zero
+    /// stores 1, and one of −1 stores −1.
+    #[test]
+    fn recompute_prices_keeps_each_price_off_zero() {
+        static COSTS: u8 = 1;
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let s = price_services(&COSTS);
+        let e = economy();
+        let saved = (
+            read_field!(e, max_loan),
+            read_field!(e, inflation_prices),
+            read_field!(e, inflation_payment),
+        );
+        let prices: Vec<i64> = (0..Price::PR_END.0).map(|i| price(Price(i))).collect();
+        write_field!(e, inflation_prices, 1 << 16);
+        write_field!(e, inflation_payment, 1 << 16);
+        reset_price_base_multipliers();
+        set_price_base_multiplier(Price(0), -2);
+        set_price_base_multiplier(Price(1), -2);
+        crate::window_func::testing::take();
+        crate::cargo_registry::install_test_no_cargo();
+        recompute_prices(&s);
+        crate::cargo_registry::clear_test_labels();
+        crate::window_func::testing::take();
+        assert_eq!(
+            (price(Price(0)), price(Price(1)), price(Price(2))),
+            (1, -1, 1_000)
+        );
+        assert_eq!(read_field!(e, max_loan), 300_000);
+        reset_price_base_multipliers();
+        for (i, value) in prices.into_iter().enumerate() {
+            set_price(Price(i as u8), value);
+        }
+        write_field!(e, max_loan, saved.0);
+        write_field!(e, inflation_prices, saved.1);
+        write_field!(e, inflation_payment, saved.2);
+    }
+
+    const ENDED: i32 = 87;
+    const ENDED_MARKER: &str = "openttd-rust test: NOT_REACHED";
+    /// Evidence 6: A difficulty of 3 ends at the native unreachable path.
+    #[test]
+    fn recompute_prices_of_an_unknown_difficulty_is_not_reached() {
+        static COSTS: u8 = 3;
+        extern "C" fn not_reached() {
+            eprintln!("{ENDED_MARKER}");
+            std::process::exit(ENDED);
+        }
+        extern "C" fn holds(condition: bool) {
+            assert!(condition);
+        }
+        if crate::services_assert::isolate_test_ends(
+            "company::tests::evidence_tests::recompute_prices_of_an_unknown_difficulty_is_not_reached",
+            ENDED,
+            ENDED_MARKER,
+        ) {
+            return;
+        }
+        let mut s = price_services(&COSTS);
+        s.shared = leak(crate::services::Services {
+            not_reached,
+            map: crate::map_func::fixture::statics(),
+            ..*s.shared
+        });
+        // SAFETY: The leaked shared table and this thread's map statics live through the child.
+        unsafe { crate::services_assert::bind_test_policy(holds, s.shared) };
+        recompute_prices(&s);
+        unreachable!("NOT_REACHED ends the child");
+    }
+
+    /// Evidence 7: `SubtractMoneyFromAnyCompany` returns at a zero cost before its assertion, and ends
+    /// at the assertion for `INVALID_EXPENSES` with a cost.
+    #[test]
+    fn subtracting_an_invalid_expense_fails_the_assertion() {
+        if crate::services_assert::isolate_test_exit(
+            "company::tests::evidence_tests::subtracting_an_invalid_expense_fails_the_assertion",
+        ) {
+            return;
+        }
+        let world = World::new();
+        let s = services();
+        let f = finances_of(1);
+        // SAFETY: The world's live record of company 1.
+        unsafe {
+            subtract_money_from_any_company(
+                s.finance,
+                f,
+                CompanyID(1),
+                0,
+                ExpensesType::INVALID_EXPENSES,
+            );
+            subtract_money_from_any_company(
+                s.finance,
+                f,
+                CompanyID(1),
+                5,
+                ExpensesType::INVALID_EXPENSES,
+            );
+        }
+        drop(world);
+        unreachable!("the assertion ends the child");
     }
 }
