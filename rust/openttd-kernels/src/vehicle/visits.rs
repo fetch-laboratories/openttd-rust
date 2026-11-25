@@ -1155,6 +1155,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
 
         VehicleType::VEH_SHIP => {
             set_window_classes_dirty(WindowClass::WC_SHIPS_LIST);
+            // `Ship::From(v)`, whose owner the record's `ship` link names.
             let (ship, leaves) = (Ship::from_vehicle(v), s.refit.ship);
             ship.set_state(TrackBits::TRACK_BIT_DEPOT);
             update_cache(&Tables::new(leaves, s.shared), ship);
