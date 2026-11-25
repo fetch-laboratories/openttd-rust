@@ -317,30 +317,6 @@
     "rust/openttd-kernels/src/rail.rs | fn engine_types | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn build_crossing | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
-    ],
-    "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn build_signal | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      15
-    ],
-    "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn build_single_rail | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
-    ],
-    "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn convert_rail | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      10
-    ],
-    "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn convert_tile | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      11
-    ],
-    "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn rail_track_helper | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      12
-    ],
-    "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn signal_track_helper | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      15
-    ],
-    "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn test_autoslope | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
-    ],
     "rust/openttd-kernels/src/rail_yapf.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
     ],

@@ -108,29 +108,18 @@ impl RailTypeInfoRef<'_> {
     }
 }
 
-/// `RailTypeFlag`: enum holding the rail type flags.
+/// `RailTypeFlag`: enum holding the rail type flags. Rust reads `NoLevelCrossing` only.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailTypeFlag(pub u8);
 
-#[allow(non_upper_case_globals)]
-#[allow(
-    dead_code,
-    reason = "rail.h's whole enum; Rust reads NoLevelCrossing only"
-)]
 impl RailTypeFlag {
-    /// Bit number for drawing a catenary.
-    pub const Catenary: Self = Self(0);
     /// Bit number for disallowing level crossings.
+    #[allow(
+        non_upper_case_globals,
+        reason = "rail.h's RailTypeFlag::NoLevelCrossing"
+    )]
     pub const NoLevelCrossing: Self = Self(1);
-    /// Bit number for hiding from selection.
-    pub const Hidden: Self = Self(2);
-    /// Bit number for using non-combined junctions.
-    pub const NoSpriteCombine: Self = Self(3);
-    /// Bit number for always allowed 90 degree turns, regardless of setting.
-    pub const Allow90Deg: Self = Self(4);
-    /// Bit number for never allowed 90 degree turns, regardless of setting.
-    pub const Disallow90Deg: Self = Self(5);
 }
 
 /// `RailTypeFlags`: the set of [`RailTypeFlag`]s.
@@ -744,19 +733,6 @@ mod tests {
         assert!(!has_power_on_rail_types(shared, both, RailType(0)));
     }
 
-    /// Store `_price[index]` and return its earlier value; the caller holds `GLOBAL_LOCK`.
-    #[allow(unsafe_code, reason = "one store to the process-lifetime price array")]
-    fn set_price(index: Price, value: i64) -> i64 {
-        let earlier = crate::company::price(usize::from(index.0));
-        // SAFETY: The caller holds `GLOBAL_LOCK`, which serializes the price array.
-        unsafe {
-            crate::company::openttd_rust_economy_prices()
-                .add(usize::from(index.0))
-                .write(value);
-        }
-        earlier
-    }
-
     /// `rail.h`'s cost helpers: the build cost scales `PR_BUILD_RAIL` by the type's
     /// multiplier in eighths; the clear cost is `PR_CLEAR_RAIL` unless three quarters of the
     /// negated build cost is larger; conversion between types with power one way takes the
@@ -790,6 +766,7 @@ mod tests {
                 },
             ),
         ];
+        let set_price = crate::economy_func::tests::set_price;
         let shared = shared_of(tables(&types));
         let build = set_price(Price::PR_BUILD_RAIL, 800);
         let clear = set_price(Price::PR_CLEAR_RAIL, -100);
