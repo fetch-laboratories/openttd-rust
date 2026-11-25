@@ -1390,19 +1390,31 @@ class MergeQueueTests(unittest.TestCase):
             self.assertIn("merge_group", triggers, filename)
             if quick := filename == "ci-quick.yml":
                 self.assertIn("ready_for_review", triggers["pull_request"]["types"])
-            condition = job(filename, name)["if"]
-            for event, checkout, draft, expected in (
-                ("pull_request", "", False, True),
-                # A draft's checkpoint runs no Quick; ready_for_review runs it (#920).
-                ("pull_request", "", True, not quick),
-                ("push", "", False, True),
-                ("merge_group", "", False, False),
-                # Full calls Quick inside the merge group.
-                ("merge_group", MERGE, False, quick),
-                # A requested profile or bootstrap calls Quick, draft or not.
-                ("pull_request", MERGE, True, True),
+            # Quick's gate jobs share the reporting job's condition (#1063).
+            names = [name, *(("rust", "python", "cleanup") if quick else ())]
+            conditions = [job(filename, each)["if"] for each in names]
+            for (condition, each), (
+                event,
+                checkout,
+                draft,
+                expected,
+            ) in itertools.product(
+                zip(conditions, names),
+                (
+                    ("pull_request", "", False, True),
+                    # A draft's checkpoint runs no Quick; ready_for_review runs it (#920).
+                    ("pull_request", "", True, not quick),
+                    ("push", "", False, True),
+                    ("merge_group", "", False, False),
+                    # Full calls Quick inside the merge group.
+                    ("merge_group", MERGE, False, quick),
+                    # A requested profile or bootstrap calls Quick, draft or not.
+                    ("pull_request", MERGE, True, True),
+                ),
             ):
-                with self.subTest(filename=filename, event=event, draft=draft):
+                with self.subTest(
+                    filename=filename, job=each, event=event, draft=draft
+                ):
                     observed = evaluate(
                         condition,
                         github={
@@ -1676,10 +1688,13 @@ class AptInstallTests(unittest.TestCase):
                 timeout=60,
             )
             log = (root / "log").read_text().splitlines()
+            # Every file, so a test can read a source the script wrote.
             after = {
-                name: (etc / name).read_text().replace(str(etc), "ETC")
-                for name in files
+                str(path.relative_to(etc)): path.read_text().replace(str(etc), "ETC")
+                for path in sorted(etc.rglob("*"))
+                if path.is_file()
             }
+        self.stdout = done.stdout
         warnings = "\n".join(
             line for line in done.stdout.splitlines() if line.startswith("::warning")
         )
@@ -1835,6 +1850,88 @@ class AptInstallTests(unittest.TestCase):
                     files["sources.list"].replace(f"//{azure}/", f"//{archive}/"),
                 )
 
+    FALLBACK = "sources.list.d/apt-install-fallback.sources"
+    # Sources that name no Ubuntu archive in an active line (run 45526257014).
+    UNNAMED = {
+        "empty sources.list.d": {},
+        "an unused mirror list": {
+            "apt-mirrors.txt": HOSTED["apt-mirrors.txt"],
+            "sources.list.d/ubuntu.sources": "# Types: deb\n"
+            "# URIs: mirror+file:ETC/apt-mirrors.txt\n# Suites: noble\n",
+        },
+        "a mirror list with no active line": {
+            "apt-mirrors.txt": "# http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n",
+            "sources.list.d/ubuntu.sources": "Types: deb\n"
+            "URIs: mirror+file:ETC/apt-mirrors.txt\nSuites: noble\n",
+        },
+    }
+
+    def test_sources_naming_no_archive_get_azure_then_canonicals_archive(
+        self,
+    ) -> None:
+        codename = subprocess.run(
+            ["bash", "-c", ". /etc/os-release && echo $VERSION_CODENAME"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        azure, archive = "azure.archive.ubuntu.com", "archive.ubuntu.com"
+        for (label, files), (results, hosts) in itertools.product(
+            self.UNNAMED.items(),
+            (
+                # The first download fails: Azure on the second attempt.
+                ([0, 1, 0, 0, 0], [azure, azure, azure]),
+                # Azure's update fails too: Canonical's archive on the third.
+                ([0, 1, 1, 0, 0, 0], [azure, archive, archive, archive]),
+            ),
+        ):
+            with self.subTest(label, attempts=len(hosts)):
+                code, log, after, warnings = self.install(files, self.FALLBACK, results)
+                self.assertEqual(code, 0)
+                # The first attempt runs on the sources as found.
+                self.assertEqual(
+                    log,
+                    [
+                        "update ",
+                        "download ",
+                        *(f"update {host}" for host in hosts[:-2]),
+                        f"download {hosts[-1]}",
+                        f"install {hosts[-1]}",
+                    ],
+                )
+                self.assertIn(
+                    "attempt 1 failed or stalled on the sources as found; "
+                    f"retrying on {azure}",
+                    warnings,
+                )
+                self.assertEqual(
+                    after.pop(self.FALLBACK),
+                    "Types: deb\n"
+                    f"URIs: http://{hosts[-1]}/ubuntu\n"
+                    f"Suites: {codename} {codename}-updates {codename}-backports "
+                    f"{codename}-security\n"
+                    "Components: main restricted universe multiverse\n"
+                    "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n",
+                )
+                if len(hosts) == 4:
+                    self.assertIn(
+                        f"attempt 2 failed or stalled on {azure}; retrying on {archive}",
+                        warnings,
+                    )
+
+    def test_a_failed_attempt_prints_the_sources_active_lines(self) -> None:
+        files = self.UNNAMED["an unused mirror list"]
+        _, _, _, _ = self.install(files, self.FALLBACK, [0, 1, 0, 0, 0])
+        group = self.stdout.split("::group::apt sources after attempt 1\n")[1]
+        group = group.split("::endgroup::")[0]
+        self.assertIn("/sources.list.d/ubuntu.sources:\n", group)
+        self.assertIn(
+            "/apt-mirrors.txt:\nhttp://us-east-2.ec2.archive.ubuntu.com/ubuntu/", group
+        )
+        # Commented lines are left out: they are what apt does not read.
+        self.assertNotIn("# URIs", group)
+        self.assertNotIn("attempt 2", self.stdout)
+
     def test_another_mirror_list_a_source_names_is_rewritten(self) -> None:
         # Blacksmith's runners name their own list, not apt-mirrors.txt.
         files = {
@@ -1916,18 +2013,61 @@ class PolicyTests(unittest.TestCase):
     def test_quick_uses_no_local_action(self) -> None:
         """On a pull request Quick checks out the PR head, and a branch older
         than a local action does not contain it (#862 broke Quick that way)."""
-        steps = workflow("ci-quick.yml")["jobs"]["quick"]["steps"]
-        self.assertTrue(steps)
+        jobs = workflow("ci-quick.yml")["jobs"]
+        steps = [step for body in jobs.values() for step in body["steps"]]
+        self.assertEqual(len(jobs), 4)
         for step in steps:
             self.assertFalse(str(step.get("uses", "")).startswith("./"), step)
         # Its package install is the shared action's script, copied, so the two
         # cannot drift: the copy once lost the action's index and dpkg handling.
+        # Exactly one step across the jobs carries it.
         (shared,) = yaml.safe_load(
             (ROOT / ".github/actions/apt-install/action.yml").read_text()
         )["runs"]["steps"]
         (inline,) = (step for step in steps if "PACKAGES" in step.get("env", {}))
         self.assertEqual(inline["run"], shared["run"])
         self.assertEqual(set(inline["env"]), set(shared["env"]))
+
+    def test_quick_validation_needs_every_other_quick_job(self) -> None:
+        """The required check reports the split jobs, so a job added later
+        cannot be left out of it (#1063)."""
+        jobs = workflow("ci-quick.yml")["jobs"]
+        self.assertEqual(jobs["quick"]["name"], "Quick validation")
+        self.assertEqual(set(jobs["quick"]["needs"]), set(jobs) - {"quick"})
+        for name, body in jobs.items():
+            if name != "quick":
+                self.assertNotIn("needs", body, name)
+                self.assertEqual(body["runs-on"], "ubuntu-24.04", name)
+                # Each job keys its own uv cache on Quick's own pins (#940).
+                (uv,) = (s for s in body["steps"] if "setup-uv" in s.get("uses", ""))
+                self.assertEqual(
+                    uv["with"]["cache-dependency-glob"],
+                    ".github/workflows/ci-quick.yml",
+                )
+                self.assertEqual(uv["with"]["cache-suffix"], name)
+
+    def test_quick_validation_fails_unless_every_job_succeeded(self) -> None:
+        """A skipped required check passes, so the reporting job always runs
+        and its one step fails on any other result (#1063)."""
+        body = job("ci-quick.yml", "quick")
+        (step,) = body["steps"]
+        self.assertIn("exit 1", step["run"])
+        needed = body["needs"]
+        contexts = {"inputs": {"checkout-ref": MERGE}, "github": {}}
+        for failed, result in itertools.product(
+            needed, ("failure", "cancelled", "skipped", "success")
+        ):
+            needs = {
+                name: {"result": result if name == failed else "success"}
+                for name in needed
+            }
+            with self.subTest(job=failed, result=result):
+                # always(): the job runs whatever the others did.
+                self.assertTrue(evaluate(body["if"], needs=needs, **contexts))
+                self.assertEqual(
+                    evaluate(step["if"], needs=needs, **contexts),
+                    result != "success",
+                )
 
     def test_semantic_subset_requires_the_protected_cadence(self) -> None:
         jobs = workflow("ci-build.yml")["jobs"]

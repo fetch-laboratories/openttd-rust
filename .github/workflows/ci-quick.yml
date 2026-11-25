@@ -28,8 +28,13 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/rust-migration' }}
 
 jobs:
-  quick:
-    name: Quick validation
+  # Three parallel jobs, which the fourth reports as Quick validation (#1063). Each keeps
+  # the full-history checkout, uv and the pinned compiler: every gate compares with its
+  # base commit, and a gate may start itself under uv or run cargo. Each job's uv cache
+  # has its own key, since the jobs install different tools. Preflight runs the jobs'
+  # steps serially in file order (tools/quick_workflow.py), the Rust job first.
+  rust:
+    name: Rust checks
     if: >-
       inputs.checkout-ref != '' || github.event_name == 'push' ||
       github.event_name == 'pull_request' && !github.event.pull_request.draft
@@ -43,6 +48,9 @@ jobs:
     - uses: astral-sh/setup-uv@v10.2.0
       with:
         version: "0.12.18"
+        cache-dependency-glob: .github/workflows/ci-quick.yml
+        cache-suffix: rust
+        ignore-nothing-to-cache: true
     - name: Install pinned Rust compiler
       run: |
         channel=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
@@ -54,6 +62,29 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/lint-ratchet.py clippy --base-ref "$BASE_REF"
+
+  python:
+    name: Python checks
+    if: >-
+      inputs.checkout-ref != '' || github.event_name == 'push' ||
+      github.event_name == 'pull_request' && !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.checkout-ref || github.event.pull_request.head.sha || github.sha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: astral-sh/setup-uv@v10.2.0
+      with:
+        version: "0.12.18"
+        cache-dependency-glob: .github/workflows/ci-quick.yml
+        cache-suffix: python
+        ignore-nothing-to-cache: true
+    - name: Install pinned Rust compiler
+      run: |
+        channel=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+        rustup toolchain install "$channel" --profile minimal --component rustfmt,clippy
     # The shared apt-install action's script, inline: on a pull request this job checks
     # out the PR head, and a branch older than a local action does not contain it. #862
     # used the action here, and Quick then failed on every such branch (#863).
@@ -95,9 +126,9 @@ jobs:
           if [ -f "$list" ] && [[ " ${lists[*]} " != *" $list "* ]]; then
             lists+=("$list")
           fi
-        done < <({ cat "${files[@]}" 2>/dev/null || true; } | grep -o 'mirror+file:[^[:space:]]*' | sed 's/^mirror+file://'; echo /etc/apt/apt-mirrors.txt)
+        done < <({ cat "${files[@]}" /dev/null 2>/dev/null || true; } | grep -o 'mirror+file:[^[:space:]]*' | sed 's/^mirror+file://'; echo /etc/apt/apt-mirrors.txt)
         sources() {
-          { cat "${lists[@]}" "${files[@]}" 2>/dev/null || true; } | sha256sum
+          { cat "${lists[@]}" "${files[@]}" /dev/null 2>/dev/null || true; } | sha256sum
         }
         # The configured mirror: a mirror list's first archive host by priority, else the
         # sources' first.
@@ -114,7 +145,7 @@ jobs:
           }
           END { print best }')
         if [ -z "$configured" ]; then
-          configured=$({ cat "${files[@]}" 2>/dev/null || true; } |
+          configured=$({ cat "${files[@]}" /dev/null 2>/dev/null || true; } |
             sed -n 's|^\([^#]*[[:space:]]\)\{0,1\}https\{0,1\}://\([^/[:space:]]*\)/ubuntu.*|\2|p' |
             grep -v '^security\.ubuntu\.com$' | head -n 1 || true)
         fi
@@ -123,7 +154,7 @@ jobs:
         archives="([a-z0-9-]+\\.)*archive\\.ubuntu\\.com"
         while read -r host; do
           archives+="|${host//./\\.}"
-        done < <({ cat "${lists[@]}" "${files[@]}" 2>/dev/null || true; } |
+        done < <({ cat "${lists[@]}" "${files[@]}" /dev/null 2>/dev/null || true; } |
           grep -v '^[[:space:]]*#' | grep -o 'https\{0,1\}://[^/[:space:]]*/ubuntu' |
           sed 's|^https\{0,1\}://||; s|/ubuntu$||' | grep -v '^security\.ubuntu\.com$' | sort -u)
         hosts=()
@@ -134,6 +165,39 @@ jobs:
             fi
           done
         fi
+        # Run 45526257014's runner had sources that named no archive: apt-get update read
+        # nothing, every package was "Unable to locate" and no host was left to move to.
+        # Only active lines count: a source's own archive URL, or one in a mirror list an
+        # active source uses (apt-mirrors.txt is in `lists` whether or not one does).
+        used=()
+        while read -r list; do
+          if [ -f "$list" ]; then
+            used+=("$list")
+          fi
+        done < <({ cat "${files[@]}" /dev/null 2>/dev/null || true; } | grep -v '^[[:space:]]*#' |
+          grep -o 'mirror+file:[^[:space:]]*' | sed 's/^mirror+file://' || true)
+        named=$({ cat "${used[@]}" "${files[@]}" /dev/null 2>/dev/null || true; } |
+          grep -v '^[[:space:]]*#' | grep -o 'https\{0,1\}://[^/[:space:]]*/ubuntu' |
+          grep -v '//security\.ubuntu\.com/' | head -n 1 || true)
+        # With none, the first attempt still runs on the sources as found; each failed one
+        # then writes the script's own source for the next host, which a later move rewrites.
+        fallback=
+        if [ -z "$named" ]; then
+          hosts=("" azure.archive.ubuntu.com archive.ubuntu.com)
+          fallback=/etc/apt/sources.list.d/apt-install-fallback.sources
+          codename=$(. /etc/os-release && echo "${VERSION_CODENAME:-$UBUNTU_CODENAME}")
+        fi
+        # The sources and mirror lists as apt reads them, for the log of a failed attempt.
+        show() {
+          echo "::group::apt sources after attempt $1"
+          for file in "${files[@]}" "${lists[@]}"; do
+            if [ -f "$file" ]; then
+              echo "$file:"
+              grep -v '^[[:space:]]*\(#\|$\)' "$file" || true
+            fi
+          done
+          echo "::endgroup::"
+        }
         current=0
         updated=false
         for attempt in 1 2 3; do
@@ -151,10 +215,20 @@ jobs:
           if [ "$attempt" = 3 ]; then
             exit 1
           fi
+          show "$attempt"
           before=$(sources)
-          stalled=${hosts[current]:-the configured mirror}
+          stalled=${hosts[current]:-the sources as found}
           if [ $((current + 1)) -lt "${#hosts[@]}" ]; then
             current=$((current + 1))
+            if [ -n "$fallback" ] && [[ " ${files[*]} " != *" $fallback "* ]]; then
+              $sudo mkdir -p "${fallback%/*}"
+              printf '%s\n' 'Types: deb' "URIs: http://${hosts[current]}/ubuntu" \
+                "Suites: $codename $codename-updates $codename-backports $codename-security" \
+                'Components: main restricted universe multiverse' \
+                'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' |
+                $sudo tee "$fallback" > /dev/null
+              files+=("$fallback")
+            fi
             for file in "${lists[@]}" "${files[@]}"; do
               if [ -f "$file" ]; then
                 $sudo sed -E -i "s#https?://($archives)/ubuntu#http://${hosts[current]}/ubuntu#g" "$file"
@@ -180,6 +254,29 @@ jobs:
             print(f'Running {test}', flush=True)
             subprocess.run(['python3', str(test)], check=True)
         PY
+
+  cleanup:
+    name: Cleanup gates
+    if: >-
+      inputs.checkout-ref != '' || github.event_name == 'push' ||
+      github.event_name == 'pull_request' && !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.checkout-ref || github.event.pull_request.head.sha || github.sha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: astral-sh/setup-uv@v10.2.0
+      with:
+        version: "0.12.18"
+        cache-dependency-glob: .github/workflows/ci-quick.yml
+        cache-suffix: cleanup
+        ignore-nothing-to-cache: true
+    - name: Install pinned Rust compiler
+      run: |
+        channel=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+        rustup toolchain install "$channel" --profile minimal --component rustfmt,clippy
     - name: Python complexity debt and lint policy
       env:
         GH_TOKEN: ${{ github.token }}
@@ -246,3 +343,27 @@ jobs:
         echo "::add-matcher::$hooks/action/check-diff-matcher.json"
         echo "::add-matcher::$hooks/action/check-message-matcher.json"
         HOOKS_DIR="$hooks/hooks" GIT_DIR="$(git rev-parse --absolute-git-dir)" sh "$hooks/hooks/check-commits.sh" "$BASE..$HEAD"
+
+  # Quick validation is the required check, and GitHub passes a skipped required check:
+  # a job that only needed the others would be skipped, so passed, when one failed.
+  # always() runs it then, and its step fails unless each job succeeded. On a draft and
+  # the direct merge_group trigger every job skips, and so does this check, as before.
+  quick:
+    name: Quick validation
+    needs: [rust, python, cleanup]
+    if: >-
+      always() && (inputs.checkout-ref != '' || github.event_name == 'push' ||
+      github.event_name == 'pull_request' && !github.event.pull_request.draft)
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Require every Quick job to succeed
+      if: >-
+        needs.rust.result != 'success' || needs.python.result != 'success' ||
+        needs.cleanup.result != 'success'
+      env:
+        RESULTS: >-
+          Rust checks ${{ needs.rust.result }}, Python checks ${{ needs.python.result }},
+          Cleanup gates ${{ needs.cleanup.result }}
+      run: |
+        echo "::error::A Quick job did not succeed: $RESULTS"
+        exit 1

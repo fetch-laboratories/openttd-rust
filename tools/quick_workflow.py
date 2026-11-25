@@ -5,11 +5,16 @@ migration can all use it without an import cycle.
 """
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/ci-quick.yml"
-JOB = "quick"
+
+
+def steps(workflow: dict[str, Any]) -> list[dict[str, Any]]:
+    """Quick's steps across its jobs, in file order (#1063)."""
+    return [step for job in workflow["jobs"].values() for step in job["steps"]]
 
 
 def run_lines(prefix: str) -> list[str]:
@@ -17,7 +22,7 @@ def run_lines(prefix: str) -> list[str]:
     quick = yaml.safe_load(WORKFLOW.read_text())
     lines = [
         line.strip()
-        for step in quick["jobs"][JOB]["steps"]
+        for step in steps(quick)
         for line in step.get("run", "").splitlines()
         if line.strip().startswith(prefix)
     ]

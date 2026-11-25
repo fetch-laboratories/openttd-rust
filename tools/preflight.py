@@ -31,7 +31,6 @@ import migration
 HOOKS_REVISION = "eeb3791aadf0aded5a7cd634c80823f17e87af9c"
 HOOKS_URL = "https://github.com/OpenTTD/OpenTTD-git-hooks.git"
 WORKFLOW = quick_workflow.WORKFLOW
-JOB = quick_workflow.JOB
 COMMITS = "Check introduced commits with the pinned inherited checker"
 # Preflight's own step after Quick's (#923): CI compiles these in its native jobs.
 PROBES = "Compile comparison probes and runtime adapters without linking"
@@ -43,6 +42,7 @@ SKIPPED = {
     "Check every introduced commit against captured base": (
         f"preflight runs the same pinned checker as {COMMITS!r}"
     ),
+    "Require every Quick job to succeed": "reports the other jobs on GitHub",
 }
 # BASE_REF becomes --base only when its expression is an `||` chain of these
 # base-commit sources; any other expression stops preflight.
@@ -144,7 +144,7 @@ def step_env(name: str, env: dict[str, Any], base: str) -> dict[str, str]:
 def workflow_steps(workflow: dict[str, Any], base: str) -> list[Step]:
     """Quick's `run:` steps that preflight runs, in workflow order."""
     steps = []
-    for entry in workflow["jobs"][JOB]["steps"]:
+    for entry in quick_workflow.steps(workflow):
         name = entry.get("name", "")
         if "run" not in entry or name in SKIPPED:
             continue
