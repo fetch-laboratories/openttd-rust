@@ -47,9 +47,9 @@ runs:
         if [ -f "$list" ] && [[ " ${lists[*]} " != *" $list "* ]]; then
           lists+=("$list")
         fi
-      done < <({ cat "${files[@]}" 2>/dev/null || true; } | grep -o 'mirror+file:[^[:space:]]*' | sed 's/^mirror+file://'; echo /etc/apt/apt-mirrors.txt)
+      done < <({ cat "${files[@]}" /dev/null 2>/dev/null || true; } | grep -o 'mirror+file:[^[:space:]]*' | sed 's/^mirror+file://'; echo /etc/apt/apt-mirrors.txt)
       sources() {
-        { cat "${lists[@]}" "${files[@]}" 2>/dev/null || true; } | sha256sum
+        { cat "${lists[@]}" "${files[@]}" /dev/null 2>/dev/null || true; } | sha256sum
       }
       # The configured mirror: a mirror list's first archive host by priority, else the
       # sources' first.
@@ -66,7 +66,7 @@ runs:
         }
         END { print best }')
       if [ -z "$configured" ]; then
-        configured=$({ cat "${files[@]}" 2>/dev/null || true; } |
+        configured=$({ cat "${files[@]}" /dev/null 2>/dev/null || true; } |
           sed -n 's|^\([^#]*[[:space:]]\)\{0,1\}https\{0,1\}://\([^/[:space:]]*\)/ubuntu.*|\2|p' |
           grep -v '^security\.ubuntu\.com$' | head -n 1 || true)
       fi
@@ -75,7 +75,7 @@ runs:
       archives="([a-z0-9-]+\\.)*archive\\.ubuntu\\.com"
       while read -r host; do
         archives+="|${host//./\\.}"
-      done < <({ cat "${lists[@]}" "${files[@]}" 2>/dev/null || true; } |
+      done < <({ cat "${lists[@]}" "${files[@]}" /dev/null 2>/dev/null || true; } |
         grep -v '^[[:space:]]*#' | grep -o 'https\{0,1\}://[^/[:space:]]*/ubuntu' |
         sed 's|^https\{0,1\}://||; s|/ubuntu$||' | grep -v '^security\.ubuntu\.com$' | sort -u)
       hosts=()
@@ -86,6 +86,61 @@ runs:
           fi
         done
       fi
+      # Run 45526257014's runner had sources that named no archive: apt-get update read
+      # nothing, every package was "Unable to locate" and no host was left to move to.
+      # Only active entries count: a source's own archive URL, or one in a mirror list an
+      # active source uses (apt-mirrors.txt is in `lists` whether or not one does). A
+      # deb822 stanza that apt reads as disabled (`Enabled: no`, `false`, `off`,
+      # `without` or `disable`) is not active.
+      active() {
+        local file
+        for file; do
+          if [ ! -f "$file" ]; then
+            continue
+          fi
+          case $file in
+            *.sources)
+              awk 'BEGIN { RS = ""; FS = "\n" }
+                {
+                  on = 1
+                  for (i = 1; i <= NF; i++)
+                    if (tolower($i) ~ /^[[:space:]]*enabled:[[:space:]]*(no|false|off|without|disable)[[:space:]]*$/) on = 0
+                  if (on) for (i = 1; i <= NF; i++) if ($i !~ /^[[:space:]]*#/) print $i
+                }' "$file" ;;
+            *) grep -v '^[[:space:]]*\(#\|$\)' "$file" || true ;;
+          esac
+        done
+      }
+      used=()
+      while read -r list; do
+        if [ -f "$list" ]; then
+          used+=("$list")
+        fi
+      done < <(active "${files[@]}" | grep -o 'mirror+file:[^[:space:]]*' | sed 's/^mirror+file://' || true)
+      named=$(active "${used[@]}" "${files[@]}" | grep -o 'https\{0,1\}://[^/[:space:]]*/ubuntu' |
+        grep -v '//security\.ubuntu\.com/' | head -n 1 || true)
+      # With none, the first attempt still runs on the sources as found. Each failed one
+      # then writes the script's own source for the next host, which a later move
+      # rewrites, and sets aside each source entry that uses a mirror list: that list
+      # names no archive, and apt fails its whole update on a list it cannot read. A
+      # deb822 stanza is disabled on its own, so the file's other stanzas stay.
+      fallback=
+      if [ -z "$named" ]; then
+        hosts=("" azure.archive.ubuntu.com archive.ubuntu.com)
+        fallback=/etc/apt/sources.list.d/apt-install-fallback.sources
+        codename=$(. /etc/os-release && echo "${VERSION_CODENAME:-$UBUNTU_CODENAME}")
+      fi
+      # The sources and mirror lists as apt reads them, for the log of a failed attempt.
+      show() {
+        echo "::group::apt sources after attempt $1"
+        for file in "${files[@]}" "${lists[@]}"; do
+          if [ -f "$file" ]; then
+            echo "$file:"
+            active "$file"
+          fi
+        done
+        echo "::endgroup::"
+      }
       current=0
       updated=false
       for attempt in 1 2 3; do
@@ -100,13 +155,41 @@ runs:
            "${bounded[@]}" apt-get "${options[@]}" "${install[@]}" --download-only "${packages[@]}"; then
           break
         fi
+        show "$attempt"
         if [ "$attempt" = 3 ]; then
           exit 1
         fi
         before=$(sources)
-        stalled=${hosts[current]:-the configured mirror}
+        stalled=${hosts[current]:-the sources as found}
         if [ $((current + 1)) -lt "${#hosts[@]}" ]; then
           current=$((current + 1))
+          if [ -n "$fallback" ] && [[ " ${files[*]} " != *" $fallback "* ]]; then
+            $sudo mkdir -p "${fallback%/*}"
+            printf '%s\n' 'Types: deb' "URIs: http://${hosts[current]}/ubuntu" \
+              "Suites: $codename $codename-updates $codename-backports $codename-security" \
+              'Components: main restricted universe multiverse' \
+              'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' |
+              $sudo tee "$fallback" > /dev/null
+            for file in "${files[@]}"; do
+              if ! active "$file" | grep -q 'mirror+file:'; then
+                continue
+              elif [[ $file == *.sources ]]; then
+                awk 'BEGIN { RS = ""; FS = "\n"; ORS = "\n\n" }
+                  {
+                    off = 0
+                    for (i = 1; i <= NF; i++) if ($i !~ /^[[:space:]]*#/ && $i ~ /mirror\+file:/) off = 1
+                    if (!off) { print; next }
+                    stanza = ""
+                    for (i = 1; i <= NF; i++) if (tolower($i) !~ /^[[:space:]]*enabled:/) stanza = stanza $i "\n"
+                    print stanza "Enabled: no"
+                  }' "$file" | $sudo tee "$file.apt-install" > /dev/null
+                $sudo mv "$file.apt-install" "$file"
+              else
+                $sudo sed -i '/^[[:space:]]*[^#[:space:]].*mirror+file:/s/^/# /' "$file"
+              fi
+            done
+            files+=("$fallback")
+          fi
           for file in "${lists[@]}" "${files[@]}"; do
             if [ -f "$file" ]; then
               $sudo sed -E -i "s#https?://($archives)/ubuntu#http://${hosts[current]}/ubuntu#g" "$file"

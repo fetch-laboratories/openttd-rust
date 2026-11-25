@@ -22,6 +22,7 @@ import ci_log
 import cleanup_contract
 import preflight_stamp
 import review_report
+import review_report_comment
 import status_comment
 import vcs
 
@@ -41,6 +42,8 @@ MERGEABLE_WAIT = 300
 MERGEABLE_INTERVAL = 3
 # Quick's required check on a PR head, from its pull_request run.
 QUICK = "Quick validation"
+# The workflow whose reporting job is the Quick validation check (#1063).
+QUICK_WORKFLOW = "ci-quick.yml"
 # The one branch prefix of deliberate negative controls; `failures` leaves them out.
 CONTROL = "control/"
 FAILED = ("failure", "timed_out", "startup_failure")
@@ -66,9 +69,12 @@ RUN_URL = re.compile(
 # A read that GitHub answers with a gateway error is tried this many times.
 READ_ATTEMPTS = 3
 RETRY_PAUSE = 2
-# gh reports a gateway error as `HTTP 502: Bad Gateway (URL)`.
+# gh reports a gateway error as `HTTP 502: Bad Gateway (URL)`. GitHub also
+# answers a healthy login's read with `Bad credentials (HTTP 401)` now and then:
+# a wait stopped twice on it in one job (#1063).
 TRANSIENT = re.compile(
     r"\bHTTP 50[234]\b|\b50[234] (?:Bad Gateway|Service Unavailable|Gateway Time-?out)"
+    r"|Bad credentials \(HTTP 401\)"
 )
 # gh api flags that make a request other than a GET.
 WRITES = ("-X", "--method", "-f", "--raw-field", "-F", "--field", "--input")
@@ -88,12 +94,13 @@ def read_only(args: tuple[str, ...]) -> bool:
 
 
 def transient(error: subprocess.CalledProcessError) -> bool:
-    """A gateway error, which GitHub returns now and then under load."""
+    """A gateway error or a false 401, which GitHub returns now and then."""
     return bool(TRANSIENT.search(f"{error.stderr or ''} {error.output or ''}"))
 
 
 def gh(*args: str) -> str:
-    """Run gh; a read that fails with HTTP 502, 503 or 504 is tried again."""
+    """Run gh; a read that fails with HTTP 502, 503, 504 or a `Bad credentials`
+    401 is tried again."""
     attempts = READ_ATTEMPTS if read_only(args) else 1
     for attempt in range(1, attempts + 1):
         try:
@@ -1253,7 +1260,8 @@ def latest_quick(repository: str, head: str) -> CheckRun | None:
 
     A skipped run carries no verdict: one left from the PR's draft can be stamped
     after the run that validated the same head, so it counts only when no other
-    run exists.
+    run exists. With no check or only a skip, an unfinished Quick run at the head
+    answers as a check in progress.
     """
     checks = api(
         repository, f"commits/{head}/check-runs?check_name={quote(QUICK)}&filter=latest"
@@ -1262,7 +1270,32 @@ def latest_quick(repository: str, head: str) -> CheckRun | None:
         checks["check_runs"],
         key=lambda run: (run["conclusion"] != "skipped", run["started_at"] or ""),
     )
-    return runs[-1] if runs else None
+    if runs and runs[-1]["conclusion"] != "skipped":
+        return runs[-1]
+    return running_quick(repository, head) or (runs[-1] if runs else None)
+
+
+def running_quick(repository: str, head: str) -> CheckRun | None:
+    """The head's unfinished pull_request run of Quick's workflow, as a check in
+    progress. The Quick validation check reports Quick's other jobs and appears
+    only once they end, so for most of a run the head has no such check, or only
+    the skip its draft push left (#1063)."""
+    runs: list[ci_log.Run] = api(
+        repository,
+        f"actions/workflows/{QUICK_WORKFLOW}/runs?event=pull_request"
+        f"&head_sha={head}&per_page=100",
+    )["workflow_runs"]
+    running = [run for run in runs if run["status"] != "completed"]
+    if not running:
+        return None
+    run = max(running, key=lambda run: run.get("run_started_at") or "")
+    return CheckRun(
+        status=run["status"],
+        conclusion=None,
+        started_at=run.get("run_started_at"),
+        html_url=run["html_url"],
+        details_url=run["html_url"],
+    )
 
 
 def bootstrap_runs(
@@ -1519,7 +1552,14 @@ def enqueue_checks(
         state = (
             quick and f"{quick['status']}/{quick['conclusion']}: {quick['html_url']}"
         )
-        raise ValueError(f"{QUICK} at {head} is not green: {state or 'no run'}")
+        raise ValueError(
+            f"{QUICK} at {head} is not green: {state}"
+            if state
+            else f"{QUICK} at {head} is not green: no run. If the push was just "
+            f"now, its run has not appeared yet: wait with python3 tools/ci.py wait "
+            f"{pr} --quick. If no Quick started, as after a [skip ci] push, push a "
+            "commit without [skip ci]"
+        )
     if read is None:
         read = read_pr_runs(repository, pr, pull["created_at"], head)
     gate_run(repository, pr, head, read)
@@ -2390,6 +2430,7 @@ HANDLERS = {
     "log": show_log,
     "logs": show_log,
     "comment": lambda args: status_comment.run(args, repository_of(args.repo)),
+    "report": lambda args: review_report_comment.run(args, repository_of(args.repo)),
     "queue-wait": queue_wait_command,
     "ready": ready_command,
     "enqueue": lambda args: print(f"PR #{args.pr}: {enqueue(args)}"),
@@ -2577,6 +2618,7 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     log_parser(commands)
     status_comment.register(commands)
+    review_report_comment.register(commands)
     request_parser(commands)
     pr_parsers(commands)
     args = parser.parse_args()

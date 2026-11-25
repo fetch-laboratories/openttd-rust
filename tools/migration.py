@@ -739,28 +739,30 @@ def command_verify(execution: Execution) -> None:
         raise RuntimeError("\n".join(errors))
 
 
+def simulate_command(args: argparse.Namespace, simulate_args: list[str]) -> list[str]:
+    """The simulation child's command line; the games get half of --jobs, since
+    a worker runs a scenario's reference and candidate games in turn."""
+    return [
+        sys.executable,
+        str(
+            ROOT
+            / (
+                "tools/simulation/threaded.py"
+                if args.threaded
+                else "tools/simulation/multiplayer.py"
+                if args.multiplayer
+                else "tools/simulate.py"
+            )
+        ),
+        "--jobs",
+        str(max(1, args.jobs // 2)),
+        *simulate_args,
+    ]
+
+
 def command_simulate(execution: Execution) -> None:
     build_games(execution)
-    args, run, simulate_args = execution.args, execution.run, execution.simulate_args
-    run(
-        "simulate",
-        [
-            sys.executable,
-            str(
-                ROOT
-                / (
-                    "tools/simulation/threaded.py"
-                    if args.threaded
-                    else "tools/simulation/multiplayer.py"
-                    if args.multiplayer
-                    else "tools/simulate.py"
-                )
-            ),
-            "--jobs",
-            str(max(1, args.jobs // 2)),
-            *simulate_args,
-        ],
-    )
+    execution.run("simulate", simulate_command(execution.args, execution.simulate_args))
 
 
 def command_coverage(execution: Execution) -> None:
@@ -1127,7 +1129,9 @@ def command_deep(
     sys.exit(code)
 
 
-def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]:
+def arguments(
+    argv: list[str] | None = None,
+) -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]:
     parser = argparse.ArgumentParser(
         description=__doc__,
         epilog=AGENT_EPILOG,
@@ -1150,7 +1154,13 @@ def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]
         default="verify",
     )
     parser.add_argument(
-        "--jobs", type=int, default=free_cores(), help="default: free cores"
+        "--jobs",
+        type=int,
+        default=free_cores(),
+        help=(
+            "default: free cores; simulate and coverage give the games half, "
+            "a scenario's two games running in turn"
+        ),
     )
     parser.add_argument(
         "--ccache",
@@ -1194,13 +1204,17 @@ def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]
         ),
     )
     # simulate forwards any further arguments to tools/simulate.py; deep, scenario selectors.
-    args, simulate_args = parser.parse_known_args()
+    args, simulate_args = parser.parse_known_args(argv)
     if args.action in AGENT_COMMANDS:
         parser.error(
             f"put {args.action} first, without the options above; see "
             f"python3 tools/migration.py {args.action} --help"
         )
-    if simulate_args and args.action not in ("simulate", "coverage", "deep"):
+    if (
+        simulate_args
+        and args.action not in ("simulate", "coverage", "deep")
+        and (args.action != "build" or simulate_args != ["--instructions"])
+    ):
         parser.error(f"unrecognized arguments: {' '.join(simulate_args)}")
     if args.member and args.action != "deep":
         parser.error("--member applies only to deep")
@@ -1232,11 +1246,10 @@ def sanitizer_exec(args: argparse.Namespace) -> None:
         os.execvpe(argv[0], argv, exported)
 
 
-def main() -> None:
-    parser, args, simulate_args = arguments()
-    if args.action == "env":
-        command_env()
-        return
+def check_options(
+    parser: argparse.ArgumentParser, args: argparse.Namespace, simulate_args: list[str]
+) -> None:
+    """Refuse conflicting options, before any build or sanitizer restart."""
     args.sanitize = args.sanitize or SANITIZE
     args.tsan = args.tsan or TSAN
     if args.multiplayer and (
@@ -1257,6 +1270,40 @@ def main() -> None:
         parser.error("sanitizer/threaded options apply to build and simulate")
     if args.action == "simulate" and args.tsan and not args.threaded:
         parser.error("--tsan simulation requires --threaded")
+    if "--instructions" in simulate_args:
+        if args.tsan or args.threaded:
+            parser.error("--tsan/--threaded conflicts with --instructions")
+        if args.sanitize:
+            parser.error("--sanitize conflicts with --instructions")
+
+
+def run_listing(argv: Sequence[str]) -> int | None:
+    """List simulate's scenarios without building anything; None leaves argv to
+    main(). The listing gets a run's options, refusals and child command line."""
+    if "--list" not in argv:
+        return None
+    parser, args, simulate_args = arguments(list(argv))
+    if args.action != "simulate" or "--list" not in simulate_args:
+        return None
+    check_options(parser, args, simulate_args)
+    if args.threaded or args.multiplayer:
+        parser.error(
+            "--list lists tools/simulate.py's scenarios; drop --threaded/--multiplayer"
+        )
+    # The sanitizer setting a run's restart would export, so the child refuses
+    # what it refuses for sanitized games; the driver does not restart.
+    env = os.environ | ({SANITIZE_VARIABLE: "1"} if args.sanitize else {})
+    return subprocess.run(
+        simulate_command(args, simulate_args), env=env, check=False
+    ).returncode
+
+
+def main() -> None:
+    parser, args, simulate_args = arguments()
+    if args.action == "env":
+        command_env()
+        return
+    check_options(parser, args, simulate_args)
     sanitizer_exec(args)
     if args.action == "deep":
         command_deep(args, simulate_args, parser)
@@ -1265,12 +1312,11 @@ def main() -> None:
         with reference_lock():
             ensure_reference()
     env = environment()
-    instruction_mode = args.action == "simulate" and "--instructions" in simulate_args
-    if (args.tsan or args.threaded) and instruction_mode:
-        parser.error("--tsan/--threaded conflicts with --instructions")
+    # `build --instructions` builds the instruction games without profiling.
+    instruction_mode = args.action in ("simulate", "build") and (
+        "--instructions" in simulate_args
+    )
     if args.sanitize:
-        if instruction_mode:
-            parser.error("--sanitize conflicts with --instructions")
         env |= {
             "RUSTFLAGS": RUST_SANITIZER_FLAGS,
             "RUSTC_BOOTSTRAP": "1",
@@ -1423,6 +1469,8 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         if (code := run_agent_command(sys.argv[1:])) is not None:
+            sys.exit(code)
+        if (code := run_listing(sys.argv[1:])) is not None:
             sys.exit(code)
         main()
     except (RuntimeError, subprocess.CalledProcessError) as error:

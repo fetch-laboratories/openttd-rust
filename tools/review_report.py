@@ -22,9 +22,22 @@ REVIEWED = re.compile(r"\bReviewed\s+(?:commit|head):\s*`?([0-9a-f]{7,40})\b", r
 HEADER = re.compile(
     r"\A\s*[*_]*Reviewed\s+(?:commit|head):[*_]*\s*`?([0-9a-f]{7,40})\b", re.I
 )
-FENCE = re.compile(r"^\s*(```|~~~).*?^\s*\1\s*$", re.M | re.S)
+# A plan review's header, `Reviewed plan: #<issue> at <commit>`: anywhere, as
+# REVIEWED marks a PR report, and where the report has it (#1063).
+PLAN = r"Reviewed\s+plan:[*_]*\s*#(\d+)\s+at\s+`?([0-9a-f]{7,40})\b"
+PLANNED = re.compile(r"\b" + PLAN, re.I)
+PLAN_HEADER = re.compile(r"\A\s*[*_]*" + PLAN, re.I)
+# A fence opens with three or more backticks or tildes (a backtick fence's info
+# string has no backtick) and closes with the same character, at least as many,
+# alone on its line; an unclosed fence runs to the end (GitHub Flavored Markdown).
+FENCE_OPEN = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
+# An attribution is a line of its own, emphasis or a list marker aside.
+ATTRIBUTION_LINE = re.compile(
+    r"^\s*(?:[-*]\s+)?[*_`]*(" + ATTRIBUTION.pattern + r")[*_`]*\s*$", re.M
+)
 QUOTED = re.compile(r"^\s*>.*\n?", re.M)
 DISPOSITIONS = ("accepted", "findings to remediate")
+PLAN_DISPOSITIONS = ("plan accepted", "findings to remediate")
 UNKNOWN = "unknown"
 
 
@@ -65,9 +78,28 @@ class ReviewReport:
     scope: str | None = None
 
 
+def unfenced(body: str) -> str:
+    """The body without its fenced blocks."""
+    kept: list[str] = []
+    fence = ""
+    for line in body.splitlines(keepends=True):
+        text = line.rstrip("\r\n")
+        if fence:
+            closing = re.fullmatch(r" {0,3}(`+|~+)\s*", text)
+            if closing and closing[1][0] == fence[0] and len(closing[1]) >= len(fence):
+                fence = ""
+        elif (found := FENCE_OPEN.fullmatch(text)) and not (
+            found[1][0] == "`" and "`" in found[2]
+        ):
+            fence = found[1]
+        else:
+            kept.append(line)
+    return "".join(kept)
+
+
 def own_text(body: str) -> str:
     """The body without fenced blocks or quoted lines."""
-    return QUOTED.sub("", FENCE.sub("", body))
+    return QUOTED.sub("", unfenced(body))
 
 
 def reviewed_sha(body: str) -> str | None:
@@ -78,16 +110,30 @@ def reviewed_sha(body: str) -> str | None:
     return header[1] if header else None
 
 
+def reviewed_plan(body: str) -> tuple[int, str] | None:
+    """The issue and commit a plan review's opening header names."""
+    header = PLAN_HEADER.match(body)
+    return (int(header[1]), header[2]) if header else None
+
+
+def attributions(body: str) -> list[str]:
+    """The agent path of each attribution line outside fences and quotations."""
+    return [line[2] for line in ATTRIBUTION_LINE.finditer(own_text(body))]
+
+
 def agent(body: str) -> str:
     """The report's attributed agent path."""
-    attribution = ATTRIBUTION.search(own_text(body))
-    return attribution[1] if attribution else UNKNOWN
+    found = attributions(body)
+    return found[0] if found else UNKNOWN
 
 
-def disposition(body: str) -> tuple[str, str | None]:
+def disposition(
+    body: str, names: tuple[str, ...] = DISPOSITIONS
+) -> tuple[str, str | None]:
     """The disposition its closing line gives, and the scope after it, such as
     `whole PR` or `group 2`. A fenced block (a cleanup acceptance) or the
-    attribution line after the disposition does not hide it."""
+    attribution line after the disposition does not hide it. A plan review's
+    names are PLAN_DISPOSITIONS."""
     lines = [
         line
         for line in own_text(body).splitlines()
@@ -97,8 +143,8 @@ def disposition(body: str) -> tuple[str, str | None]:
         return UNKNOWN, None
     closing = lines[-1].strip().strip("*_`-> ").strip()
     closing = re.sub(r"^\**disposition\**\s*:\**\s*", "", closing, flags=re.I)
-    for name in DISPOSITIONS:
-        if closing.lower().startswith(name):
+    for name in names:
+        if re.match(re.escape(name) + r"\b", closing.lower()):
             scope = closing[len(name) :].strip(" ,.;:*_`")
             return name, scope or None
     return UNKNOWN, None

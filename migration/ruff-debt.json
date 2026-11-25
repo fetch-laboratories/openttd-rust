@@ -58,13 +58,10 @@
       11
     ],
     "tools/migration.py | main | C901": [
-      21
-    ],
-    "tools/migration.py | main | PLR0912": [
-      17
+      15
     ],
     "tools/migration.py | main | PLR0915": [
-      80
+      67
     ],
     "tools/port-metrics.py | area | PLR0911": [
       9

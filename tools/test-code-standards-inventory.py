@@ -829,5 +829,102 @@ impl B { fn update(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {} }
         self.assertEqual(lines, ["No finished file changed between base and head."])
 
 
+class WorksetTests(unittest.TestCase):
+    """--worksets: #734's count over a seeded manifest, finished list and tree."""
+
+    SRC = INVENTORY.RUST
+    MANIFEST = (
+        "# Worksets\n\nA sentence about the file.\n\n"
+        "- **01 Town**: `town.rs`, `town/names.rs`\n"
+        "- **02 Cargo**: `cargo.rs`, `gone.rs`, `town.rs`\n"
+    )
+    TREE = {
+        f"{SRC}/town.rs": "a\nb\n",
+        f"{SRC}/town/names.rs": "a\n",
+        f"{SRC}/cargo.rs": "a\nb\nc\n",
+        f"{SRC}/done_alone.rs": "a\nb\nc\nd\n",
+        f"{SRC}/loose.rs": "a\nb\nc\nd\ne\n",
+        f"{SRC}/README.md": "not counted\n",
+    }
+    FINISHED = [f"{SRC}/town.rs", f"{SRC}/town/names.rs", f"{SRC}/done_alone.rs"]
+
+    def worksets(self, manifest: str | None, root: Path | None = None) -> list[str]:
+        printed: list[str] = []
+
+        def show(revision: str, path: str) -> str | None:
+            self.assertEqual(revision, "head")
+            if path == INVENTORY.FINISHED:
+                return "# comment\n" + "".join(f"{p}\n" for p in self.FINISHED)
+            self.assertEqual(path, INVENTORY.WORKSETS)
+            return manifest
+
+        def archive(revision: str, *paths: str) -> dict[str, bytes]:
+            self.assertEqual((revision, paths), ("head", (INVENTORY.RUST,)))
+            return {p: t.encode() for p, t in self.TREE.items()}
+
+        with (
+            patch.object(INVENTORY, "show", side_effect=show),
+            patch.object(INVENTORY, "archive", side_effect=archive),
+            patch.object(INVENTORY, "ROOT", root or Path("/nonexistent")),
+            patch("builtins.print", side_effect=lambda *a, **_: printed.append(*a)),
+        ):
+            self.assertEqual(INVENTORY.worksets("head"), 0)
+        return "\n".join(printed).splitlines()
+
+    def test_totals_and_rows_for_a_finished_and_an_unfinished_workset(self) -> None:
+        lines = self.worksets(self.MANIFEST)
+        self.assertEqual(
+            lines[0],
+            "Worksets at head: 3 entries, 2 finished with 3 lines, "
+            "3 lines left in the other 1, 6 together",
+        )
+        self.assertIn("| 01 Town | 2 | 2 | 3 | 0 |  |", lines)
+        self.assertIn("| 02 Cargo | 1 | 0 | 0 | 3 | cargo.rs (3) |", lines)
+
+    def test_files_outside_the_worksets_and_bad_entries_have_their_own_lists(
+        self,
+    ) -> None:
+        lines = self.worksets(self.MANIFEST)
+        tail = lines[lines.index("Finished files in no workset: 1, 4 lines") :]
+        self.assertEqual(
+            tail,
+            [
+                "Finished files in no workset: 1, 4 lines",
+                f"  {self.SRC}/done_alone.rs (4)",
+                "Rust files in no workset and not finished: 1, 5 lines",
+                f"  {self.SRC}/loose.rs (5)",
+                "Manifest entries without a file: 1",
+                "  02 Cargo: gone.rs",
+                "Manifest entries listed twice: 1",
+                "  02 Cargo: town.rs",
+            ],
+        )
+
+    def test_a_revision_without_a_manifest_reads_the_checkouts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            (root / INVENTORY.WORKSETS).write_text(self.MANIFEST)
+            lines = self.worksets(None, root)
+        self.assertEqual(
+            lines[0], f"{INVENTORY.WORKSETS} is not at head; reading the checkout's"
+        )
+        self.assertTrue(lines[1].startswith("Worksets at head: 3 entries"))
+
+    def test_a_malformed_line_is_reported_with_its_number(self) -> None:
+        manifest = (
+            self.MANIFEST + "- **03 Broken** town.rs\n- **04 Joined**: `a.rs``b.rs`\n"
+        )
+        lines = self.worksets(manifest)
+        self.assertEqual(
+            lines[:2],
+            [
+                f"{INVENTORY.WORKSETS}:7: not a workset line: - **03 Broken** town.rs",
+                f"{INVENTORY.WORKSETS}:8: not a workset line: - **04 Joined**: `a.rs``b.rs`",
+            ],
+        )
+        self.assertTrue(lines[2].startswith("Worksets at head: 3 entries"))
+
+
 if __name__ == "__main__":
     unittest.main()
