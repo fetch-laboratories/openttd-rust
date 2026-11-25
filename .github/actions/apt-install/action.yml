@@ -133,10 +133,10 @@ runs:
            "${bounded[@]}" apt-get "${options[@]}" "${install[@]}" --download-only "${packages[@]}"; then
           break
         fi
+        show "$attempt"
         if [ "$attempt" = 3 ]; then
           exit 1
         fi
-        show "$attempt"
         before=$(sources)
         stalled=${hosts[current]:-the sources as found}
         if [ $((current + 1)) -lt "${#hosts[@]}" ]; then

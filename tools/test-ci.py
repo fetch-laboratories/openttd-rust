@@ -1940,6 +1940,9 @@ class AptInstallTests(unittest.TestCase):
         # Commented lines are left out: they are what apt does not read.
         self.assertNotIn("# URIs", group)
         self.assertNotIn("attempt 2", self.stdout)
+        # The last attempt's failure prints them too.
+        self.install(files, self.FALLBACK, [0, 1, 1, 1, 1])
+        self.assertIn("::group::apt sources after attempt 3\n", self.stdout)
 
     def test_another_mirror_list_a_source_names_is_rewritten(self) -> None:
         # Blacksmith's runners name their own list, not apt-mirrors.txt.
