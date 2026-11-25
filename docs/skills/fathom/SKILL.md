@@ -12,7 +12,7 @@ The problem: $ARGUMENTS (in Codex, any text sent with `$fathom`), a case issue o
 If you hold other work (root, or a steering or navigation review), hand this off: write the case (step 1), start a fathom agent as [spawning](../../team.md#spawning) says and return to your work. Any other agent reports the problem to root.
 
 Attribution on everything you write:
-`Agent: /fathom-<case issue> | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host"> | Host: <host>`. The path is one word: `ci.py ready` and the merge group's growth gate read the author from it, and refuse a PR whose line has none.
+`Agent: /fathom-<case issue> | Model: <your exact model ID> | Reasoning effort: <as the host reports it, else not-reported-by-host> | Host: <host>`. The path, model and effort are one word each, because the tools read each up to its first space: `ci.py ready` and the merge group's growth gate refuse a PR whose path is more, and `ci.py comment` refuses an `--effort` that is more.
 
 Root may be running. Work in your own worktree under `.local/worktrees/`, take no wall-clock timings while it builds, and after pushing a rule that a running agent follows, send root the commit (`t3_thread_send`, mode `queue`).
 
