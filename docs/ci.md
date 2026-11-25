@@ -36,7 +36,7 @@ Full is the merge gate; its builds are set by [ADR 0018](adr/0018-builds-before-
 - `Full validation` is published only after every selected job succeeds.
 - Keep a warm-cache Full within about 15 minutes, because every merge waits on it: add parallel jobs or shards, not steps on one job's critical path.
 - A draft PR runs no Quick until it is marked ready or a profile is requested.
-- A PR whose merge commit changes only Quick's checker scripts, the Clippy and Ruff debt files, `migration/lints/clippy.toml` and inert Markdown runs Quick alone in Full.
+- A PR whose merge commit changes only Quick's checker scripts, the Clippy and Ruff debt files, `migration/lints/clippy.toml` and [docs-only](workflow.md#change-types) files runs Quick alone in Full.
 
 ## Requesting CI
 
@@ -75,12 +75,12 @@ Every merge goes through GitHub's merge queue ([ADR 0019](adr/0019-merge-queue.m
 
 ### Carried validation
 
-When a new commit's tree, outside inert Markdown, matches one that already passed Full, the result is copied instead of run again: on a PR push within seconds, provided the new head contains the current base, and in a rebuilt merge group from the earlier group run of the same PR head. A carry waits up to 45 minutes for that earlier run, so the queue's check timeout must exceed 45 minutes plus a Full.
+When a new commit's tree, outside docs-only files, matches one that already passed Full, the result is copied instead of run again: on a PR push within seconds, provided the new head contains the current base, and in a rebuilt merge group from the earlier group run of the same PR head. A carry waits up to 45 minutes for that earlier run, so the queue's check timeout must exceed 45 minutes plus a Full.
 
 ## Protected pushes
 
-- A Markdown-only push starts no build; Quick still runs.
-- A push whose non-Markdown tree already passed Full only refreshes compiler caches; any other push runs the heavy jobs.
+- A [docs-only](workflow.md#change-types) push starts no build; Quick still runs.
+- A push whose tree outside docs-only files already passed Full only refreshes compiler caches; any other push runs the heavy jobs.
 
 ## Runners and variables
 
