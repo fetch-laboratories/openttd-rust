@@ -62,6 +62,8 @@ pub struct Services {
     pub colour: extern "C" fn(*mut OpenTTDCompany) -> Colours,
     /// `Company::Get(index)`.
     pub company: extern "C" fn(CompanyID) -> *mut OpenTTDCompany,
+    /// `Company::GetIfValid(index)`; null for an invalid index.
+    pub company_if_valid: extern "C" fn(CompanyID) -> *mut OpenTTDCompany,
     /// `CompanySettings::engine_renew`.
     pub engine_renew: extern "C" fn(*const OpenTTDCompany) -> bool,
     /// `CompanySettings::engine_renew_money`.
@@ -70,6 +72,8 @@ pub struct Services {
     pub engine_renew_months: extern "C" fn(*const OpenTTDCompany) -> i16,
     /// `&Company::face`.
     pub face: extern "C" fn(*mut OpenTTDCompany) -> *mut CompanyManagerFace,
+    /// `&c->Finances()`: the company's finance members, stored in Rust.
+    pub finances: extern "C" fn(*mut OpenTTDCompany) -> *mut crate::company::Finances,
     /// `Company::index`.
     pub index: extern "C" fn(*mut OpenTTDCompany) -> CompanyID,
     /// `Company::is_ai`.
@@ -114,6 +118,9 @@ pub struct Services {
     pub set_president_name_1: extern "C" fn(*mut OpenTTDCompany, StringID) -> (),
     /// `Company::president_name_2 = value`.
     pub set_president_name_2: extern "C" fn(*mut OpenTTDCompany, u32) -> (),
+    /// `&c->settings.vehicle`.
+    pub vehicle_defaults:
+        extern "C" fn(*mut OpenTTDCompany) -> *mut crate::settings_table::VehicleDefaults,
 }
 
 impl Services {
@@ -343,8 +350,7 @@ pub(crate) fn generate_company_name(s: &Services, c: *mut OpenTTDCompany) {
     crate::game::new_text_event(&ScriptTextEvent::company_renamed((s.index)(c), &name));
 
     if (s.is_ai)(c) {
-        // `CompanyNewsInformation` resolves the company by its index (#1048).
-        let cni = CompanyNewsInformation::new(STR_NEWS_COMPANY_LAUNCH_TITLE, (s.index)(c), None);
+        let cni = CompanyNewsInformation::new(STR_NEWS_COMPANY_LAUNCH_TITLE, c, None);
         let company_name = cni.company_name();
         let headline = get_encoded_string(
             STR_NEWS_COMPANY_LAUNCH_DESCRIPTION,
@@ -1091,10 +1097,12 @@ crate::abi::layouts! {
         build_owner_legend,
         colour,
         company,
+        company_if_valid,
         engine_renew,
         engine_renew_money,
         engine_renew_months,
         face,
+        finances,
         index,
         is_ai,
         is_freight,
@@ -1117,5 +1125,6 @@ crate::abi::layouts! {
         set_president_name,
         set_president_name_1,
         set_president_name_2,
+        vehicle_defaults,
     };
 }

@@ -40,14 +40,15 @@ pub(crate) fn before(s: &CommandServices, top_level: bool, test: bool) {
     }
 }
 
+/// `GetAvailableMoneyForCommand`: the money which can be used to execute a command. This is
+/// either the money of the current company, or `INT64_MAX` if infinite money is enabled or
+/// there is no such a company "at the moment" like the server itself.
 pub(crate) fn available_money(s: &CommandServices) -> i64 {
-    if (s.infinite_money)() {
-        return i64::MAX;
-    }
-    let id = (s.finance.current_company)();
-    let owner = (s.finance.company_finances)(id);
-    // SAFETY: the canonical resolver returns null or the live finance owner.
-    unsafe { crate::company::openttd_rust_company_available_money(owner, false) }
+    crate::company::get_available_money(
+        s.shared,
+        s.finance,
+        crate::company_type::CompanyID((s.finance.current_company)()),
+    )
 }
 
 /// # Safety
@@ -58,12 +59,13 @@ pub(crate) unsafe fn check_money(
     result: *mut CommandCost,
 ) -> bool {
     let amount = (c.money)(result);
-    if amount <= 0 || (s.infinite_money)() {
+    // SAFETY: The catalog's address of a live setting.
+    if amount <= 0 || unsafe { s.shared.settings().infinite_money.read() } {
         return true;
     }
     let owner = (s.finance.company_finances)((s.finance.current_company)());
-    // SAFETY: the canonical resolver returns null or a live finance owner.
-    if unsafe { crate::company::has_money(owner, false, amount) } {
+    // `c != nullptr && cost.GetCost() > c->money` fails.
+    if owner.is_null() || amount <= crate::raw_field::read_field!(owner, money) {
         return true;
     }
     // SAFETY: the caller supplies exclusive live native result storage.
@@ -121,7 +123,13 @@ pub(crate) unsafe fn subtract_money(
     let expense = (c.expense)(result);
     // SAFETY: resolver returned the live owner; no borrow crosses invalidation.
     unsafe {
-        crate::company::subtract_money(s.finance, owner, id, amount, expense.0);
+        crate::company::subtract_money_from_any_company(
+            s.finance,
+            owner,
+            crate::company_type::CompanyID(id),
+            amount,
+            expense,
+        );
     }
 }
 
@@ -225,7 +233,16 @@ fn flush_signals(s: &CommandServices) {
 pub(crate) fn is_local_company(s: &CommandServices) -> bool {
     // SAFETY: the company table is immutable for the process lifetime.
     let company = unsafe { &*(s.company)() };
-    (company.shared.local_company)() == (s.finance.current_company)()
+    is_local_company_of(company.shared.local_company, s.finance.current_company)
+}
+
+/// `IsLocalCompany` over the reads of `_local_company` and `_current_company` a caller's
+/// tables bind: `_local_company == _current_company`.
+pub(crate) fn is_local_company_of(
+    local_company: extern "C" fn() -> u8,
+    current_company: extern "C" fn() -> u8,
+) -> bool {
+    local_company() == current_company()
 }
 
 /// `IsCommandAllowedWhilePaused`, over the command's `CommandType`.
@@ -746,11 +763,21 @@ mod money_tests {
     extern "C" fn expense(cost: *const CommandCost) -> ExpensesType {
         of(cost).expense
     }
-    extern "C" fn finite() -> bool {
-        false
-    }
-    extern "C" fn infinite() -> bool {
-        true
+    static FINITE: bool = false;
+    static INFINITE: bool = true;
+    /// The shared table whose settings catalog holds `infinite_money` at `value`.
+    fn with_infinite_money(value: bool) -> &'static crate::services::Services {
+        leak(crate::services::Services {
+            settings: leak(crate::settings_type::SettingAddresses {
+                infinite_money: if value {
+                    &raw const INFINITE
+                } else {
+                    &raw const FINITE
+                },
+                ..crate::settings_type::SettingAddresses::NULL
+            }),
+            ..crate::test_tables::SHARED
+        })
     }
 
     thread_local! {
@@ -868,7 +895,7 @@ mod money_tests {
             // SAFETY: The fixture's live result.
             assert!(unsafe { check_money(&command, costs, cost(&mut result)) });
         }
-        command.infinite_money = infinite;
+        command.shared = with_infinite_money(true);
         let mut huge = Result {
             ok: true,
             money: i64::MAX,
@@ -878,7 +905,7 @@ mod money_tests {
         assert!(unsafe { check_money(&command, costs, cost(&mut huge)) });
 
         // Company 0 holds 20: a cost of 21 fails once through the cash error, unchanged.
-        command.infinite_money = finite;
+        command.shared = with_infinite_money(false);
         command.money_error = money_error;
         let mut finance = FINANCE;
         finance.current_company = current_company;
@@ -931,10 +958,13 @@ mod money_tests {
         }
         assert_eq!(owner.money, 16);
         assert_eq!(
-            owner.expenses[0][usize::from(ExpensesType::EXPENSES_CONSTRUCTION.0)],
+            owner.yearly_expenses[0][usize::from(ExpensesType::EXPENSES_CONSTRUCTION.0)],
             5
         );
-        assert_eq!((owner.current.income, owner.current.expenses), (3, -2));
+        assert_eq!(
+            (owner.cur_economy.income, owner.cur_economy.expenses),
+            (3, -2)
+        );
         // An invalid current company subtracts nothing.
         CURRENT.set(18);
         // SAFETY: As above.

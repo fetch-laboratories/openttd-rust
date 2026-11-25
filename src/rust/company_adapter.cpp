@@ -4,105 +4,65 @@
  * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
-/** @file company_adapter.cpp Typed noexcept shared-world services for the Rust company owner. */
+/** @file company_adapter.cpp Typed noexcept callees and Company members for the Rust company owner. */
 #include "../stdafx.h"
-#include "presentation_services.h"
 #include "../ai/ai.hpp"
-#include "../aircraft.h"
-#include "../autoreplace_func.h"
-#include "../cargomonitor.h"
+#include "../cargotype.h"
 #include "../command_func.h"
 #include "../company_base.h"
-#include "station_lifecycle_ffi.h"
 #include "../company_cmd.h"
 #include "../company_func.h"
 #include "../company_gui.h"
-#include "../economy_base.h"
+#include "../company_manager_face.h"
 #include "../economy_func.h"
-#include "../game/game.hpp"
 #include "../goal_base.h"
-#include "../group.h"
-#include "../landscape.h"
 #include "../network/network.h"
 #include "../network/network_admin.h"
 #include "../network/network_func.h"
-#include "../news_func.h"
-#include "../object.h"
 #include "../rail.h"
-#include "../rail_map.h"
-#include "../road.h"
 #include "../road_func.h"
-#include "../road_map.h"
-#include "../script/api/script_event_types.hpp"
 #include "../script/api/script_object.hpp"
-#include "../signal_func.h"
+#include "../settings_func.h"
 #include "../signs_base.h"
 #include "../sound_func.h"
-#include "../station_base.h"
 #include "../station_func.h"
 #include "../story_base.h"
-#include "../strings_func.h"
-#include "subsidy_ffi.h"
-#include "../subsidy_func.h"
 #include "../table/strings.h"
-#include "../texteff.hpp"
 #include "../timer/timer.h"
 #include "../timer/timer_game_tick.h"
-#include "../town.h"
 #include "../vehicle_base.h"
-#include "../vehicle_cmd.h"
-#include "../vehicle_func.h"
 #include "../water.h"
 #include "../waypoint_base.h"
 #include "../window_func.h"
 #include "company_adapter.h"
-#include "command_services.h"
-#include "settings_table_ffi.h"
-#include "services_objectives.h"
-#include "company_services.h"
 #include "company_identity_ffi.h"
-#include "object_ffi.h"
-#include "presentation_services.h"
-#include "services_rail.h"
-#include "services_road.h"
-#include "settings_services.h"
-#include "environment_services.h"
-#include "vehicle_services.h"
+#include "company_services.h"
 #include "services_cargo.h"
-#include "services_landscape.h"
-
-#include <memory>
 #include "clock_ffi.h"
+#include "command_services.h"
+#include "engine_ffi.h"
+#include "environment_services.h"
+#include "services_objectives.h"
+#include "services_station.h"
+#include "settings_table_ffi.h"
+#include "station_lifecycle_ffi.h"
+#include "subsidy_ffi.h"
+#include "vehicle_services.h"
 #include "../safeguards.h"
 
 extern void CompanyAdminRemove(CompanyID, CompanyRemoveReason);
 extern const PriceBaseSpec _price_base_specs[];
 extern TimeoutTimer<TimerGameTick> _new_competitor_timeout;
-bool OPENTTD_RUST_CALL RustCompanyPrepare(uint8_t, bool) noexcept;
-void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t) noexcept;
-void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept;
-void RustCompanyNetworkSpectate(uint32_t) noexcept;
-void RustCompanyAdminNew(uint8_t) noexcept;
-Company *RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;
-void RustCompanyNetworkOwnSettings(Company *) noexcept;
+extern std::string _company_manager_face;
 
-/* Constants Rust uses as literals. */
+/* Constants Rust names as its own definitions. */
 static_assert(Ticks::DAY_TICKS == 74 && Ticks::TICKS_PER_SECOND == 37);
-static_assert(CalendarTime::DAYS_IN_YEAR * 2 == 730 && PR_END == 71 && MAX_COMPANIES == 15);
-static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63 && MAX_HISTORY_QUARTERS == 24 && EXPENSES_END == 13);
+static_assert(PR_END == 71 && MAX_COMPANIES == 15 && MAX_HISTORY_QUARTERS == 24 && EXPENSES_END == 13 && SCORE_END == 10);
 static_assert(CompanyID::Invalid().base() == 255 && OWNER_NONE.base() == 16 && OWNER_DEITY.base() == 18 && CRR_END == 3);
-static_assert(CalendarTime::ORIGINAL_BASE_YEAR.base() == 1920 && CalendarTime::ORIGINAL_MAX_YEAR.base() == 2090);
-static_assert(DESTTYPE_TEAM == 1 && OWNER_END.base() == 19 && NETWORK_PUBLIC_KEY_LENGTH == 65 && CALCA_ADD == 0 && CALCA_REMOVE == 1);
-static_assert(RATING_INITIAL == 500 && VEH_TRAIN == 0 && VEH_ROAD == 1 && VEH_SHIP == 2 && VEH_AIRCRAFT == 3);
-
-/** Next pool item at or after @p from whose owner field is @p owner. */
-template <typename T, typename F> static uint32_t NextOwned(uint8_t owner, uint32_t from, F field) noexcept
-{
-	for (const T *item : T::Iterate(from)) {
-		if (field(item) == CompanyID(owner)) return item->index.base();
-	}
-	return UINT32_MAX;
-}
+static_assert(OWNER_END.base() == 19 && NETWORK_PUBLIC_KEY_LENGTH == 65 && CALCA_ADD == 0 && CALCA_REMOVE == 1 && CCA_NEW == 0 && CCA_NEW_AI == 1 && CCA_DELETE == 2);
+static_assert(to_underlying(LoanCommand::Interval) == 0 && to_underlying(LoanCommand::Max) == 1 && to_underlying(LoanCommand::Amount) == 2);
+static_assert(PCAT_NONE == 0 && PCAT_RUNNING == 1 && PCAT_CONSTRUCTION == 2 && LOAN_INTERVAL == 10000 && INITIAL_LOAN == 100000 && MAX_LOAN_LIMIT == 2000000000);
+static_assert(sizeof(Owner) == sizeof(uint8_t));
 
 /* Finance services. */
 static CompanyFinances *Fin_company_finances(uint8_t id) noexcept
@@ -110,357 +70,138 @@ static CompanyFinances *Fin_company_finances(uint8_t id) noexcept
 	Company *c = Company::GetIfValid(id);
 	return c == nullptr ? nullptr : &c->Finances();
 }
-static void Fin_invalidate_company_windows(uint8_t id) noexcept { InvalidateCompanyWindows(Company::Get(id)); }
-static void Fin_give_money_message(uint8_t dest, int64_t amount) noexcept
-{
-	CompanyID d(dest);
-	NetworkTextMessage(NETWORK_ACTION_GIVE_MONEY, GetDrawStringCompanyColour(_current_company), false, GetString(STR_COMPANY_NAME, _current_company), GetString(STR_COMPANY_NAME, d), amount);
-}
-static void Fin_money_animation(uint32_t t, int64_t amount) noexcept
-{
-	TileIndex tile(t);
-	RustCostOrIncomeAnimation(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE, GetTilePixelZ(tile), amount);
-}
-
-/* Company identity and lifecycle services. */
-static bool Co_ai_can_start() noexcept { return AI::CanStartNew(); }
-static bool Co_competitor_fired() noexcept { return _new_competitor_timeout.HasFired(); }
-static size_t Co_company_count() noexcept { return Company::GetNumItems(); }
-static bool Co_can_allocate_company() noexcept { return Company::CanAllocateItem(); }
-static OpenTTDCompanyVehicleCounts Co_company_vehicle_counts(uint8_t id) noexcept
-{
-	/* Special owners are not companies; the original takeover limit is not reached for them. */
-	const Company *c = Company::GetIfValid(id);
-	if (c == nullptr) return {};
-	return {c->group_all[VEH_TRAIN].num_vehicle, RustCompanyRoadVehicleCount(c), c->group_all[VEH_SHIP].num_vehicle, c->group_all[VEH_AIRCRAFT].num_vehicle};
-}
-static OpenTTDCompanyVehicleCounts Co_vehicle_limits() noexcept
-{
-	return {RustTrainLimit(), RustRoadVehicleLimit(), RustShipLimit(), RustAircraftLimit()};
-}
-static void Co_company_in_trouble(uint8_t id) noexcept
-{
-	CompanyID cid(id);
-	auto cni = std::make_unique<CompanyNewsInformation>(STR_NEWS_COMPANY_IN_TROUBLE_TITLE, Company::Get(cid));
-	EncodedString headline = GetEncodedString(STR_NEWS_COMPANY_IN_TROUBLE_DESCRIPTION, cni->company_name);
-	AddCompanyNewsItem(std::move(headline), std::move(cni));
-	AI::BroadcastNewEvent(new ScriptEventCompanyInTrouble(cid));
-	Game::NewEvent(new ScriptEventCompanyInTrouble(cid));
-}
-static void Co_performance_detail_dirty() noexcept { SetWindowDirty(WC_PERFORMANCE_DETAIL, 0); }
-static void Co_company_graphs_dirty() noexcept
-{
-	SetWindowDirty(WC_INCOME_GRAPH, 0);
-	SetWindowDirty(WC_OPERATING_PROFIT, 0);
-	SetWindowDirty(WC_DELIVERED_CARGO, 0);
-	SetWindowDirty(WC_PERFORMANCE_HISTORY, 0);
-	SetWindowDirty(WC_COMPANY_VALUE, 0);
-	SetWindowDirty(WC_COMPANY_LEAGUE, 0);
-}
-static int64_t Co_rail_maintenance_cost(uint8_t rt, uint32_t num, uint32_t total) noexcept { return RailMaintenanceCost(static_cast<RailType>(rt), num, total).base(); }
-static int64_t Co_signal_maintenance_cost(uint32_t num) noexcept { return SignalMaintenanceCost(num).base(); }
-static int64_t Co_road_maintenance_cost(uint8_t rt, uint32_t num, uint32_t total) noexcept { return RoadMaintenanceCost(static_cast<RoadType>(rt), num, total).base(); }
-static int64_t Co_canal_maintenance_cost(uint32_t num) noexcept { return CanalMaintenanceCost(num).base(); }
-static int64_t Co_station_maintenance_cost(uint32_t num) noexcept { return StationMaintenanceCost(num).base(); }
-static void Co_recession_news(bool begin) noexcept
-{
-	AddNewsItem(GetEncodedString(begin ? STR_NEWS_BEGIN_OF_RECESSION : STR_NEWS_END_OF_RECESSION), NewsType::Economy, NewsStyle::Normal, {});
-}
-static OpenTTDCompanyPriceBase Co_price_base(uint32_t price) noexcept { return {_price_base_specs[price].start_price.base(), static_cast<uint8_t>(_price_base_specs[price].category)}; }
-static uint32_t Co_cargo_next(uint32_t from, int64_t *initial_payment) noexcept
-{
-	for (const CargoSpec *cs : CargoSpec::Iterate(from)) {
-		*initial_payment = cs->initial_payment;
-		return RustCargoSpecIndex(cs);
-	}
-	return UINT32_MAX;
-}
-static void Co_price_windows_dirty() noexcept
-{
-	SetWindowClassesDirty(WC_BUILD_VEHICLE);
-	SetWindowClassesDirty(WC_REPLACE_VEHICLE);
-	SetWindowClassesDirty(WC_VEHICLE_DETAILS);
-	SetWindowClassesDirty(WC_COMPANY_INFRASTRUCTURE);
-	InvalidateWindowData(WC_PAYMENT_RATES, 0);
-}
-static void Co_industry_daily_changes(bool init_counter) noexcept { StartupIndustryDailyChanges(init_counter); }
-static void Co_ask_merger(uint8_t best, uint8_t id, int64_t value) noexcept { AI::NewEvent(CompanyID(best), new ScriptEventCompanyAskMerger(CompanyID(id), value)); }
-static void Co_show_buy_company(uint8_t id) noexcept { ShowBuyCompanyDialog(CompanyID(id), false); }
-static uint32_t Co_script_random_next(uint32_t max) noexcept { return ScriptObject::GetRandomizer(OWNER_NONE).Next(max); }
-static void Co_reset_competitor_timeout(uint32_t ticks) noexcept { _new_competitor_timeout.Reset({TimerGameTick::Priority::COMPETITOR_TIMEOUT, ticks}); }
-static void Co_finances_dirty(uint8_t id) noexcept { InvalidateWindowData(WC_FINANCES, id); }
-static void Co_show_company_finances(uint8_t id) noexcept { ShowCompanyFinances(CompanyID(id)); }
-static void Co_new_year_sound(bool bad) noexcept { SndPlayFx(bad ? SND_01_BAD_YEAR : SND_00_GOOD_YEAR); }
-static OpenTTDCompanyRef Co_allocate_company(uint8_t requested, bool is_ai) noexcept
-{
-	Company *c = requested == CompanyID::Invalid().base() ? new Company(STR_SV_UNNAMED, is_ai) : new (CompanyID(requested)) Company(STR_SV_UNNAMED, is_ai);
-	return {&c->Finances(), c->index.base()};
-}
-static void Co_new_company_events(uint8_t id) noexcept
-{
-	AI::BroadcastNewEvent(new ScriptEventCompanyNew(CompanyID(id)), CompanyID(id));
-	Game::NewEvent(new ScriptEventCompanyNew(CompanyID(id)));
-}
-static void Co_company_league_dirty() noexcept { InvalidateWindowData(WC_COMPANY_LEAGUE, 0, 0); }
-static void Co_company_ctrl_windows() noexcept
-{
-	InvalidateWindowClassesData(WC_GAME_OPTIONS);
-	InvalidateWindowClassesData(WC_SCRIPT_SETTINGS);
-	InvalidateWindowClassesData(WC_SCRIPT_LIST);
-}
-static void Co_close_network_status() noexcept { CloseWindowById(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN); }
-static void Co_assert_new_ai_slot([[maybe_unused]] uint8_t id) noexcept { assert(CompanyID(id) == CompanyID::Invalid() || !Company::IsValidID(id)); }
-static void Co_company_bankrupt_news(uint8_t id) noexcept
-{
-	auto cni = std::make_unique<CompanyNewsInformation>(STR_NEWS_COMPANY_BANKRUPT_TITLE, Company::Get(id));
-	EncodedString headline = GetEncodedString(STR_NEWS_COMPANY_BANKRUPT_DESCRIPTION, cni->company_name);
-	AddCompanyNewsItem(std::move(headline), std::move(cni));
-}
-/* AI::Stop resets the instance; ScriptInstance's destructor marks shutdown before
- * releasing the VM and the mode objects suppress their errors, so it does not throw. */
-static void Co_stop_ai(uint8_t id) noexcept { AI::Stop(CompanyID(id)); }
-static void Co_delete_company(uint8_t id) noexcept { delete Company::Get(id); }
-static void Co_company_removed(uint8_t id, uint8_t reason) noexcept
-{
-	CompanyID c_index(id);
-	AI::BroadcastNewEvent(new ScriptEventCompanyBankrupt(c_index));
-	Game::NewEvent(new ScriptEventCompanyBankrupt(c_index));
-	CompanyAdminRemove(c_index, static_cast<CompanyRemoveReason>(reason));
-	if (StoryPage::GetNumItems() == 0 || Goal::GetNumItems() == 0) InvalidateWindowData(WC_MAIN_TOOLBAR, 0);
-	InvalidateWindowData(WC_CLIENT_LIST, 0);
-}
-static void Co_merger_news(uint8_t id, bool hostile) noexcept
-{
-	CompanyID ci(id);
-	Company *c = Company::Get(ci);
-	auto cni = std::make_unique<CompanyNewsInformation>(STR_NEWS_COMPANY_MERGER_TITLE, c, Company::Get(_current_company));
-	EncodedString headline = hostile
-		? GetEncodedString(STR_NEWS_MERGER_TAKEOVER_TITLE, cni->company_name, cni->other_company_name)
-		: GetEncodedString(STR_NEWS_COMPANY_MERGER_DESCRIPTION, cni->company_name, cni->other_company_name, c->Finances().bankrupt_value);
-	AddCompanyNewsItem(std::move(headline), std::move(cni));
-	AI::BroadcastNewEvent(new ScriptEventCompanyMerger(ci, _current_company));
-	Game::NewEvent(new ScriptEventCompanyMerger(ci, _current_company));
-}
-static void Co_acquisition_windows(uint8_t id) noexcept
-{
-	CloseCompanyWindows(CompanyID(id));
-	InvalidateWindowClassesData(WC_TRAINS_LIST, 0);
-	InvalidateWindowClassesData(WC_SHIPS_LIST, 0);
-	InvalidateWindowClassesData(WC_ROADVEH_LIST, 0);
-	InvalidateWindowClassesData(WC_AIRCRAFT_LIST, 0);
-	InvalidateWindowData(WC_CLIENT_LIST, 0);
-}
-
-/* Ownership transfer services. */
-static void Co_clients_to_spectators(uint8_t id) noexcept { NetworkClientsToSpectators(CompanyID(id)); }
-static uint32_t Co_town_next(uint32_t from, uint8_t old, OpenTTDCompanyTownRights *out) noexcept
-{
-	for (const Town *t : Town::Iterate(from)) {
-		*out = {t->ratings[CompanyID(old)], t->have_ratings.base(), t->exclusive_counter, t->exclusivity.base()};
-		return t->index.base();
-	}
-	return UINT32_MAX;
-}
-static int16_t Co_town_rating(uint32_t id, uint8_t owner) noexcept { return Town::Get(id)->ratings[CompanyID(owner)]; }
-static void Co_set_town_rating(uint32_t id, uint8_t owner, int16_t rating, bool have) noexcept
-{
-	Town *t = Town::Get(id);
-	if (have) t->have_ratings.Set(CompanyID(owner));
-	t->ratings[CompanyID(owner)] = rating;
-	if (!have) t->have_ratings.Reset(CompanyID(owner));
-}
-static void Co_set_town_exclusivity(uint32_t id, uint8_t owner, uint8_t counter) noexcept
-{
-	Town *t = Town::Get(id);
-	t->exclusive_counter = counter;
-	t->exclusivity = CompanyID(owner);
-}
-static uint32_t Co_vehicle_next_owned(uint8_t owner, uint32_t from, uint8_t *type) noexcept
-{
-	for (const Vehicle *v : Vehicle::Iterate(from)) {
-		if (v->GetOwner() != CompanyID(owner)) continue;
-		*type = v->GetType();
-		return v->index.base();
-	}
-	return UINT32_MAX;
-}
-static OpenTTDCompanyVehicleProfit Co_vehicle_profit(uint32_t id) noexcept
-{
-	const Vehicle *v = Vehicle::Get(id);
-	return {v->profit_last_year.base(), RustVehicleEconomyAge(v).base()};
-}
-static OpenTTDCompanyVehicleGroupFlags Co_vehicle_group_flags(uint32_t id) noexcept
-{
-	const Vehicle *v = Vehicle::Get(id);
-	return {v->IsEngineCountable(), RustVehiclePrimary(v)};
-}
-static bool Co_vehicle_service_interval_is_custom(uint32_t id) noexcept { return Vehicle::Get(id)->ServiceIntervalIsCustom(); }
-static void Co_delete_vehicle(uint32_t id) noexcept { delete Vehicle::Get(id); }
-static void Co_count_group_engine(uint32_t id, int32_t delta) noexcept { GroupStatistics::CountEngine(Vehicle::Get(id), delta); }
-static void Co_count_group_vehicle(uint32_t id, int32_t delta) noexcept { GroupStatistics::CountVehicle(Vehicle::Get(id), delta); }
-/** The original's CompanyServiceInterval argument evaluation and nested command. */
-static void Co_reset_service_interval(uint32_t id, int32_t interval, bool percent) noexcept
-{
-	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, VehicleID(id), interval, false, percent);
-}
-/** Owner write and its cache invalidation, consecutive in the original. */
-static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept
-{
-	Vehicle *v = Vehicle::Get(id);
-	RustVehicleSetOwner(RustVehicle(v), owner);
-	v->colourmap = PAL_NONE;
-	RustVehicleInvalidateNewGRFCache(v);
-}
-static void Co_remove_engine_replacements(uint8_t id) noexcept { RemoveAllEngineReplacementForCompany(Company::Get(id)); }
-static uint32_t Co_group_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Group>(owner, from, [](const Group *g) { return g->owner; }); }
-static void Co_delete_group(uint32_t id) noexcept { delete Group::Get(id); }
-static void Co_transfer_group(uint32_t id, uint8_t owner) noexcept
-{
-	Group *g = Group::Get(id);
-	Company *c = Company::Get(owner);
-	g->owner = c->index;
-	g->number = c->freegroups.UseID(c->freegroups.NextID());
-}
-static void Co_copy_service_interval_defaults(uint8_t old_owner, uint8_t new_owner) noexcept
-{
-	Company *old_company = Company::Get(old_owner);
-	const Company *new_company = Company::Get(new_owner);
-	old_company->settings.vehicle.servint_aircraft = new_company->settings.vehicle.servint_aircraft;
-	old_company->settings.vehicle.servint_trains = new_company->settings.vehicle.servint_trains;
-	old_company->settings.vehicle.servint_roadveh = new_company->settings.vehicle.servint_roadveh;
-	old_company->settings.vehicle.servint_ships = new_company->settings.vehicle.servint_ships;
-	old_company->settings.vehicle.servint_ispercent = new_company->settings.vehicle.servint_ispercent;
-}
-static void Co_update_autoreplace(uint8_t id) noexcept { GroupStatistics::UpdateAutoreplace(CompanyID(id)); }
-static void Co_add_track_to_signal_buffer(uint32_t tile, uint8_t track, uint8_t owner) noexcept { AddTrackToSignalBuffer(TileIndex(tile), static_cast<Track>(track), CompanyID(owner)); }
-static uint32_t Co_station_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Station>(owner, from, [](const Station *st) { return st->owner; }); }
-static OpenTTDCompanyStationTimes Co_station_times(uint32_t id) noexcept
-{
-	const Station *st = Station::Get(id);
-	return {st->time_since_load, st->time_since_unload};
-}
-static void Co_set_station_owner(uint32_t id, uint8_t owner) noexcept { Station::Get(id)->owner = CompanyID(owner); }
-static uint32_t Co_waypoint_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Waypoint>(owner, from, [](const Waypoint *wp) { return wp->owner; }); }
-static void Co_set_waypoint_owner(uint32_t id, uint8_t owner) noexcept { Waypoint::Get(id)->owner = CompanyID(owner); }
-static uint32_t Co_sign_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Sign>(owner, from, [](const Sign *si) { return si->owner; }); }
-static void Co_set_sign_owner(uint32_t id, uint8_t owner) noexcept { Sign::Get(id)->owner = CompanyID(owner); }
-static uint32_t Co_goal_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Goal>(owner, from, [](const Goal *g) { return g->company; }); }
-static void Co_delete_goal(uint32_t id) noexcept { delete Goal::Get(id); }
-static uint32_t Co_story_page_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<StoryPage>(owner, from, [](const StoryPage *sp) { return sp->company; }); }
-static void Co_delete_story_page(uint32_t id) noexcept { delete StoryPage::Get(id); }
-static void Co_change_window_owner(uint8_t old_owner, uint8_t new_owner) noexcept { ChangeWindowOwner(CompanyID(old_owner), CompanyID(new_owner)); }
+/* InvalidateCompanyWindows by the company's ID, without the pool lookup: it reads only the index. */
+static void Fin_invalidate_company_windows(uint8_t id) noexcept { InvalidateCompanyWindows(CompanyID(id)); }
 
 const OpenTTDCompanyFinanceServices &GetRustCompanyFinanceServices() noexcept
 {
 	static const OpenTTDCompanyFinanceServices services{
-		.current_company = RustCurrentCompanyID, .set_current_company = RustSetCurrentCompanyID,
-		.networking = RustNetworking, .company_finances = Fin_company_finances,
+		.current_company = RustCurrentCompanyID,
+		.set_current_company = RustSetCurrentCompanyID,
+		.networking = RustNetworking,
+		.company_finances = Fin_company_finances,
 		.company_get_finances = RustCompanyGetFinances,
 		.invalidate_company_windows = Fin_invalidate_company_windows,
-		.give_money_message = Fin_give_money_message, .money_animation = Fin_money_animation,
 	};
 	return services;
 }
 
 const OpenTTDClockCompany &GetRustClockCompanyServices() noexcept
 {
-	static const OpenTTDClockCompany services{
-		.services = &GetRustCompanyServices(),
-		.settings = RustEconomySettings,
-		.month = RustEconomyClockMonth,
-		.year = RustCompanyClockYear,
-	};
+	static const OpenTTDClockCompany services{.services = &GetRustCompanyServices()};
 	return services;
 }
 
-static void Co_close_construction_windows() noexcept { CloseConstructionWindows(); }
-static bool Co_allow_list_add(uint8_t id, OpenTTDByteSpan key) noexcept { return Company::Get(id)->allow_list.Add({reinterpret_cast<const char *>(key.data), key.size}); }
-static bool Co_allow_list_remove(uint8_t id, OpenTTDByteSpan key) noexcept { return Company::Get(id)->allow_list.Remove({reinterpret_cast<const char *>(key.data), key.size}); }
+/** Callees that hold no Rust borrow. */
+static Company *Co_allocate_company(uint8_t company, bool is_ai) noexcept
+{
+	if (CompanyID(company) == CompanyID::Invalid()) return new Company(STR_SV_UNNAMED, is_ai);
+	return new (CompanyID(company)) Company(STR_SV_UNNAMED, is_ai);
+}
+static bool Co_allow_list_add(Company *c, OpenTTDByteSpan key) noexcept { return c->allow_list.Add({reinterpret_cast<const char *>(key.data), key.size}); }
+static bool Co_allow_list_remove(Company *c, OpenTTDByteSpan key) noexcept { return c->allow_list.Remove({reinterpret_cast<const char *>(key.data), key.size}); }
+template <typename T> static OpenTTDCompanyPoolCursor Co_next(uint32_t from) noexcept
+{
+	for (T *item : T::Iterate(from)) return {.item = item, .index = item->index.base()};
+	return {.item = nullptr, .index = UINT32_MAX};
+}
+static OpenTTDCompanyPoolCursor Co_next_waypoint(uint32_t from) noexcept
+{
+	if (Waypoint *wp = OpenTTDNextWaypoint(from)) return {.item = static_cast<BaseStation *>(wp), .index = RustBaseStationID(wp)};
+	return {.item = nullptr, .index = UINT32_MAX};
+}
+static bool Co_parse_company_manager_face(Company *c) noexcept
+{
+	if (_company_manager_face.empty()) return false;
+	auto cmf = ParseCompanyManagerFaceCode(_company_manager_face);
+	if (!cmf.has_value()) return false;
+	c->face = std::move(*cmf);
+	return true;
+}
+static void Co_send_company_manager_face(Company *c) noexcept
+{
+	if (!_company_manager_face.empty()) {
+		auto cmf = ParseCompanyManagerFaceCode(_company_manager_face);
+		if (cmf.has_value()) {
+			Command<CMD_SET_COMPANY_MANAGER_FACE>::SendNet(STR_NULL, c->index, cmf->style, cmf->bits);
+		}
+	}
+}
+static uint16_t Co_use_free_unit(Company *c, uint8_t type) noexcept
+{
+	auto &unitidgen = c->freeunits[static_cast<VehicleType>(type)];
+	return unitidgen.UseID(unitidgen.NextID());
+}
+
 const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 {
 	/* Construct process-lifetime C++ views before Rust accesses their storage. */
 	(void)GetRustEconomy(); (void)GetRustPrices(); (void)GetRustCompanyScores();
 	static const OpenTTDCompanyServices services{
-		.identity = &GetRustCompanyIdentityServices(),
-		.finance = &GetRustCompanyFinanceServices(),
-		.shared = &GetRustSharedServices(),
-		.ai_can_start = Co_ai_can_start,
-		.allow_list_add = Co_allow_list_add,
-		.allow_list_remove = Co_allow_list_remove,
-		.assign_company_context = RustRestoreGenerationCompanies,
-		.close_construction_windows = Co_close_construction_windows,
 		.cost = &GetRustCommandCostServices(),
+		.finance = &GetRustCompanyFinanceServices(),
+		.identity = &GetRustCompanyIdentityServices(),
+		.shared = &GetRustSharedServices(),
+		.engines = []() noexcept { return &EngineServices(); },
 		.objectives = GetRustObjectivesServices,
 		.settings = GetRustSettingServices,
-		.company_next = RustCompanyRefNext,
-		.company_count = Co_company_count,
-		.competitor_fired = Co_competitor_fired,
-		.can_allocate_company = Co_can_allocate_company,
-		.network_server = RustNetworkServer,
-		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
-		.company_in_trouble = Co_company_in_trouble,
-		.hq_location = RustCompanyHQ,
-		.object_services = []() noexcept { return &GetRustObjectServices(); },
-		.performance_detail_dirty = Co_performance_detail_dirty, .company_graphs_dirty = Co_company_graphs_dirty,
-		.rail_maintenance_cost = Co_rail_maintenance_cost, .signal_maintenance_cost = Co_signal_maintenance_cost,
-		.road_maintenance_cost = Co_road_maintenance_cost, .canal_maintenance_cost = Co_canal_maintenance_cost,
-		.station_maintenance_cost = Co_station_maintenance_cost, .station_lifecycle = RustStationLifecycleServices,
-		.recession_news = Co_recession_news, .price_base = Co_price_base,
-		.cargo_next = Co_cargo_next, .set_cargo_payment = RustCargoSetCurrentPayment,
-		.price_windows_dirty = Co_price_windows_dirty, .industry_daily_changes = Co_industry_daily_changes,
-		.ask_merger = Co_ask_merger,
-		.is_interactive_company = RustIsInteractiveCompany, .show_buy_company = Co_show_buy_company,
-		.script_random_next = Co_script_random_next, .reset_competitor_timeout = Co_reset_competitor_timeout,
-		.finances_dirty = Co_finances_dirty, .show_company_finances = Co_show_company_finances,
-		.new_year_sound = Co_new_year_sound,
-		.allocate_company = Co_allocate_company,
-		.prepare_new_company = RustCompanyPrepare, .company_defaults = RustCompanyDefaults, .startup_windows = RustCompanyStartupWindows, .new_company_events = Co_new_company_events,
-		.company_league_dirty = Co_company_league_dirty, .company_ctrl_windows = Co_company_ctrl_windows,
-		.close_network_status = Co_close_network_status, .network_spectate = RustCompanyNetworkSpectate,
-		.admin_company_new = RustCompanyAdminNew, .network_own_company = RustCompanyNetworkOwn,
-		.network_own_company_settings = RustCompanyNetworkOwnSettings,
-		.assert_new_ai_slot = Co_assert_new_ai_slot, .company_bankrupt_news = Co_company_bankrupt_news,
-		.stop_ai = Co_stop_ai, .delete_company = Co_delete_company, .company_removed = Co_company_removed,
-		.merger_news = Co_merger_news, .acquisition_windows = Co_acquisition_windows,
-		.clients_to_spectators = Co_clients_to_spectators,
+		.station_lifecycle = RustStationLifecycleServices,
 		.subsidies = RustSubsidyServices,
-		.town_next = Co_town_next, .town_rating = Co_town_rating,
-		.set_town_rating = Co_set_town_rating, .set_town_exclusivity = Co_set_town_exclusivity,
-		.vehicle_next_owned = Co_vehicle_next_owned,
-		.vehicle_value = RustIndexedVehicleRead<int64_t, RustVehicleValue>, .vehicle_is_primary = RustIndexedVehicleRead<bool, RustVehiclePrimary>,
-		.vehicle_profit = Co_vehicle_profit, .vehicle_previous = RustIndexedVehicleRead<uint32_t, RustVehiclePreviousID>,
-		.vehicle_group_flags = Co_vehicle_group_flags, .vehicle_service_interval_is_custom = Co_vehicle_service_interval_is_custom,
-		.delete_vehicle = Co_delete_vehicle, .count_group_engine = Co_count_group_engine,
-		.count_group_vehicle = Co_count_group_vehicle, .reset_service_interval = Co_reset_service_interval,
-		.set_vehicle_owner = Co_set_vehicle_owner, .assign_unit_number = RustCompanyAssignVehicleUnit,
-		.remove_engine_replacements = Co_remove_engine_replacements, .group_next_owned = Co_group_next_owned,
-		.delete_group = Co_delete_group, .transfer_group = Co_transfer_group,
-		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,
-		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer,
-		.update_signals_in_buffer = RustUpdateSignals,
-		.station_next_owned = Co_station_next_owned,
-		.station_times = Co_station_times, .set_station_owner = Co_set_station_owner,
-		.waypoint_next_owned = Co_waypoint_next_owned, .set_waypoint_owner = Co_set_waypoint_owner,
-		.sign_next_owned = Co_sign_next_owned, .set_sign_owner = Co_set_sign_owner,
-		.goal_next_owned = Co_goal_next_owned, .delete_goal = Co_delete_goal,
-		.story_page_next_owned = Co_story_page_next_owned, .delete_story_page = Co_delete_story_page,
-		.change_window_owner = Co_change_window_owner,
+		.ai_can_start_new = []() noexcept { return AI::CanStartNew(); },
+		/* AI::Stop resets the instance; ScriptInstance's destructor marks shutdown before
+		 * releasing the VM and the mode objects suppress their errors, so it does not throw. */
+		.ai_stop = [](uint8_t company) noexcept { AI::Stop(CompanyID(company)); },
+		.allocate_company = Co_allocate_company,
+		.allow_list_add = Co_allow_list_add,
+		.allow_list_remove = Co_allow_list_remove,
+		.can_allocate_company = []() noexcept { return Company::CanAllocateItem(); },
+		.canal_maintenance_cost = [](uint32_t num) noexcept { return CanalMaintenanceCost(num).base(); },
+		.cargo_initial_payment = RustCargoInitialPayment,
+		.cargo_set_current_payment = RustCargoSetCurrentPayment,
+		.change_window_owner = [](uint8_t old_owner, uint8_t new_owner) noexcept { ChangeWindowOwner(CompanyID(old_owner), CompanyID(new_owner)); },
+		.close_company_windows = [](uint8_t company) noexcept { CloseCompanyWindows(CompanyID(company)); },
+		.close_construction_windows = []() noexcept { CloseConstructionWindows(); },
+		.company_admin_remove = [](uint8_t company, uint8_t reason) noexcept { CompanyAdminRemove(CompanyID(company), static_cast<CompanyRemoveReason>(reason)); },
+		.company_count = []() noexcept { return Company::GetNumItems(); },
+		.delete_company = [](Company *c) noexcept { delete c; },
+		.delete_goal = [](Goal *g) noexcept { delete g; },
+		.delete_story_page = [](StoryPage *sp) noexcept { delete sp; },
+		.draw_string_company_colour = [](uint8_t company) noexcept { return static_cast<uint16_t>(GetDrawStringCompanyColour(CompanyID(company))); },
+		.group_all = RustCompanyGroupAll,
+		.location_of_hq = RustCompanyLocationOfHQ,
+		.network_admin_company_new = [](Company *c) noexcept { NetworkAdminCompanyNew(c); },
+		.network_clients_to_spectators = [](uint8_t company) noexcept { NetworkClientsToSpectators(CompanyID(company)); },
+		.network_server = RustNetworkServer,
+		.new_competitor_timeout_has_fired = []() noexcept { return _new_competitor_timeout.HasFired(); },
+		.new_competitor_timeout_reset = [](uint32_t ticks) noexcept { _new_competitor_timeout.Reset({TimerGameTick::Priority::COMPETITOR_TIMEOUT, ticks}); },
+		.next_goal = Co_next<Goal>,
+		.next_sign = Co_next<Sign>,
+		.next_story_page = Co_next<StoryPage>,
+		.next_waypoint = Co_next_waypoint,
+		.parse_company_manager_face = Co_parse_company_manager_face,
+		.price_base_category = [](uint8_t price) noexcept { return static_cast<uint8_t>(_price_base_specs[price].category); },
+		.price_base_start_price = [](uint8_t price) noexcept { return _price_base_specs[price].start_price.base(); },
+		.rail_maintenance_cost = [](uint8_t railtype, uint32_t num, uint32_t total_num) noexcept { return RailMaintenanceCost(static_cast<RailType>(railtype), num, total_num).base(); },
+		.road_maintenance_cost = [](uint8_t roadtype, uint32_t num, uint32_t total_num) noexcept { return RoadMaintenanceCost(static_cast<RoadType>(roadtype), num, total_num).base(); },
+		.script_random_next = [](uint32_t max) noexcept { return ScriptObject::GetRandomizer(OWNER_NONE).Next(max); },
+		.send_company_manager_face = Co_send_company_manager_face,
+		.set_avail_railtypes = [](Company *c, uint64_t types) noexcept { c->avail_railtypes = RailTypes{types}; },
+		.set_avail_roadtypes = [](Company *c, uint64_t types) noexcept { c->avail_roadtypes = RoadTypes{types}; },
+		.set_default_company_settings = [](uint8_t company) noexcept { SetDefaultCompanySettings(CompanyID(company)); },
+		.set_inaugurated_year = [](Company *c, int32_t year) noexcept { c->inaugurated_year = TimerGameEconomy::Year{year}; },
+		.set_inaugurated_year_calendar = [](Company *c, int32_t year) noexcept { c->inaugurated_year_calendar = TimerGameCalendar::Year{year}; },
+		.set_unitnumber = RustVehicleSetUnitNumber,
+		.show_buy_company_dialog = [](uint8_t company, bool hostile_takeover) noexcept { ShowBuyCompanyDialog(CompanyID(company), hostile_takeover); },
+		.show_company_finances = [](uint8_t company) noexcept { ShowCompanyFinances(CompanyID(company)); },
+		.sign_owner = [](Sign *si) noexcept { return reinterpret_cast<uint8_t *>(&si->owner); },
+		.signal_maintenance_cost = [](uint32_t num) noexcept { return SignalMaintenanceCost(num).base(); },
+		.snd_play_fx = [](uint8_t sound) noexcept { SndPlayFx(static_cast<SoundFx>(sound)); },
+		.station_maintenance_cost = [](uint32_t num) noexcept { return StationMaintenanceCost(num).base(); },
+		.sync_company_settings = []() noexcept { SyncCompanySettings(); },
+		.use_free_group = [](Company *c) noexcept { return c->freegroups.UseID(c->freegroups.NextID()); },
+		.use_free_unit = Co_use_free_unit,
 	};
 	return services;
-}
-
-CommandCost RustCompanyCost(const OpenTTDCompanyCost &x)
-{
-	switch (x.error) {
-		case 0: return CommandCost(static_cast<ExpensesType>(x.expense), Money(x.cost));
-		case 1: return CMD_ERROR;
-		case 2: return CommandCostWithParam(STR_ERROR_MAXIMUM_PERMITTED_LOAN, Money(x.param));
-		case 3: return CommandCost(STR_ERROR_LOAN_ALREADY_REPAID);
-		case 4: return CommandCostWithParam(STR_ERROR_CURRENCY_REQUIRED, Money(x.param));
-		case 5: return CommandCost(STR_ERROR_INSUFFICIENT_FUNDS);
-		case 6: return CommandCost(STR_ERROR_TOO_MANY_VEHICLES_IN_GAME);
-		default: NOT_REACHED();
-	}
 }
 
 #include "service_table_check.hpp"

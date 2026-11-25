@@ -133,7 +133,7 @@ fn set_join_status(s: &Services, value: NetworkJoinStatus) {
     unsafe { s.join_status.write(value.0) };
 }
 /// `_network_own_client_id`.
-fn own_client_id(s: &Services) -> ClientID {
+pub(crate) fn own_client_id(s: &Services) -> ClientID {
     ClientID(unsafe { s.own_client_id.read() })
 }
 /// Stores `_network_own_client_id`.
@@ -859,7 +859,14 @@ pub(crate) fn client_error(
         close_connection(s, f, game, res);
         (f.lifecycle.set_networking)(false);
 
-        (f.command.company.close_network_status)();
+        crate::window_func::close_window_by_id(
+            crate::window_type::WindowClass::WC_NETWORK_STATUS_WINDOW,
+            crate::window_type::WindowNumber::from(
+                crate::window_type::WindowNumberEnum::WN_NETWORK_STATUS_WINDOW_JOIN,
+            ),
+            true,
+            0,
+        );
         return;
     }
 
@@ -893,7 +900,14 @@ pub(crate) fn client_error(
         (s.emergency_save)();
     }
 
-    (f.command.company.close_network_status)();
+    crate::window_func::close_window_by_id(
+        crate::window_type::WindowClass::WC_NETWORK_STATUS_WINDOW,
+        crate::window_type::WindowNumber::from(
+            crate::window_type::WindowNumberEnum::WN_NETWORK_STATUS_WINDOW_JOIN,
+        ),
+        true,
+        0,
+    );
 
     if crate::session::mode() != GameMode::MENU {
         crate::session::set_pending(SwitchMode::MENU);

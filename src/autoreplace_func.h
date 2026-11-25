@@ -18,15 +18,6 @@ EngineID EngineReplacement(EngineRenewList erl, EngineID engine, GroupID group, 
 CommandCost RemoveEngineReplacement(EngineRenewList *erl, EngineID engine, GroupID group, DoCommandFlags flags);
 
 /**
- * Remove all engine replacement settings for the given company.
- * @param c the company.
- */
-inline void RemoveAllEngineReplacementForCompany(Company *c)
-{
-	RemoveAllEngineReplacement(&c->RenewalList());
-}
-
-/**
  * Retrieve the engine replacement for the given company and original engine type.
  * @param c company.
  * @param engine Engine type.

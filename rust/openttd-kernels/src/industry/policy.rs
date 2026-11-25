@@ -312,7 +312,7 @@ pub(crate) fn get_construction_cost(
     } else {
         Price::PR_BUILD_INDUSTRY
     };
-    crate::company::price(usize::from(price.0)).saturating_mul(i64::from(cost_multiplier)) >> 8
+    crate::company::price(price).saturating_mul(i64::from(cost_multiplier)) >> 8
 }
 /// `IndustrySpec::GetRemovalCost`: get the cost for removing this industry.
 /// Take note that the cost will always be zero for non-grf industries.
@@ -323,7 +323,7 @@ pub(crate) fn get_construction_cost(
 )]
 pub(crate) fn removal_cost(removal_cost_multiplier: u32) -> i64 {
     // OverflowSafeInt::operator*= takes int, including the unsigned multiplier conversion.
-    crate::company::price(usize::from(Price::PR_CLEAR_INDUSTRY.0))
+    crate::company::price(Price::PR_CLEAR_INDUSTRY)
         .saturating_mul(i64::from(removal_cost_multiplier as i32))
         >> 8
 }

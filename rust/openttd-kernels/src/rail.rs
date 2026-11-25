@@ -254,7 +254,7 @@ pub(crate) fn rail_no_level_crossings(shared: &Shared, rt: RailType) -> bool {
 /// `RailBuildCost`: returns the cost of building the specified railtype.
 pub(crate) fn rail_build_cost(shared: &Shared, railtype: RailType) -> i64 {
     crate::services_assert::assert_with(|| railtype < RailType::RAILTYPE_END);
-    crate::company::price(usize::from(Price::PR_BUILD_RAIL.0)).saturating_mul(i64::from(
+    crate::company::price(Price::PR_BUILD_RAIL).saturating_mul(i64::from(
         get_rail_type_info(shared, railtype).cost_multiplier(),
     )) >> 3
 }
@@ -268,7 +268,7 @@ pub(crate) fn rail_clear_cost(shared: &Shared, railtype: RailType) -> i64 {
      */
     crate::services_assert::assert_with(|| railtype < RailType::RAILTYPE_END);
     std::cmp::max(
-        crate::company::price(usize::from(Price::PR_CLEAR_RAIL.0)),
+        crate::company::price(Price::PR_CLEAR_RAIL),
         rail_build_cost(shared, railtype)
             .saturating_neg()
             .saturating_mul(3)

@@ -331,6 +331,8 @@ mod bodies {
         industry: 0,
         town: 0,
         company: 0,
+        other_company: 0,
+        value: 0,
         text: std::ptr::null(),
         text_length: 0,
     };
@@ -525,6 +527,8 @@ mod bodies {
                 industry: 0,
                 town: 0,
                 company: owner,
+                other_company: 0,
+                value: 0,
                 text: std::ptr::null(),
                 text_length: 0,
             };
@@ -988,7 +992,10 @@ mod bodies {
                             current_company,
                             ..crate::test_tables::FINANCE
                         })),
-                        shared: f.shared,
+                        shared: Box::leak(Box::new(crate::services::Services {
+                            current_company,
+                            ..*f.shared
+                        })),
                         cost: costs,
                         ..crate::test_tables::COMPANY
                     }));

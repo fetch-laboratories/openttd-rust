@@ -208,21 +208,20 @@ pub(crate) unsafe fn cmd_change_service_int(
         is_custom,
         mut is_percent,
     } = cmd;
-    let (v, owner, _) = unsafe { owned_primary(s, cost, veh_id) };
-    if v.is_null() {
+    let (v, owner, Some(handle)) = (unsafe { owned_primary(s, cost, veh_id) }) else {
         return;
-    }
-    // The original resolves the company only after ownership succeeds.
+    };
+    // The original resolves the company once, after ownership succeeds.
+    let company = s.owner_company(owner);
     if !is_custom {
-        is_percent = s.interval_is_percent(owner);
+        is_percent = s.interval_is_percent_of(company);
     }
     if is_custom {
         if serv_int != (s.interval_clamp)(i32::from(serv_int), is_percent) {
             return (s.cost.error)(cost, ERROR);
         }
     } else {
-        serv_int =
-            s.interval_default(owner, crate::fleet::record(s.groups, v).vehicle_type()) as u16;
+        serv_int = s.interval_default_of(company, handle.vehicle_type()) as u16;
     }
     if flags.test(DoCommandFlag::Execute) {
         (s.set_interval)(v, serv_int, is_custom, is_percent);
@@ -962,18 +961,48 @@ impl CommonServices {
 }
 
 impl TransactionServices {
-    /// `Company::Get(owner)->settings.vehicle.servint_ispercent`, through the
-    /// shared vehicle defaults view.
-    pub(crate) fn interval_is_percent(&self, owner: CompanyID) -> bool {
-        let company = unsafe { &*(self.commands.company)() };
-        let defaults = ((company.settings)().company_vehicle_defaults)(owner);
+    /// The company table.
+    fn company_table(&self) -> &crate::company::Services {
+        // SAFETY: The command table names the process-lifetime company table.
+        unsafe { &*(self.commands.company)() }
+    }
+    /// `Company::Get(owner)`.
+    pub(crate) fn owner_company(
+        &self,
+        owner: CompanyID,
+    ) -> *mut crate::company_type::OpenTTDCompany {
+        (self.company_table().identity.company)(owner)
+    }
+    /// `company->settings.vehicle.servint_ispercent` of a resolved company.
+    pub(crate) fn interval_is_percent_of(
+        &self,
+        company: *mut crate::company_type::OpenTTDCompany,
+    ) -> bool {
+        let defaults = (self.company_table().identity.vehicle_defaults)(company);
         crate::raw_field::read_field!(defaults, servint_ispercent)
+    }
+    /// `CompanyServiceInterval(company, kind)` of a resolved company.
+    pub(crate) fn interval_default_of(
+        &self,
+        company: *mut crate::company_type::OpenTTDCompany,
+        kind: VehicleType,
+    ) -> i32 {
+        let table = self.company_table();
+        crate::company::company_service_interval(
+            (table.settings)(),
+            table.identity,
+            Some(company),
+            kind,
+        )
+    }
+    /// `Company::Get(owner)->settings.vehicle.servint_ispercent`.
+    pub(crate) fn interval_is_percent(&self, owner: CompanyID) -> bool {
+        self.interval_is_percent_of(self.owner_company(owner))
     }
     /// `GetServiceIntervalForType`'s default: the owner's service interval for
     /// vehicles of `kind`.
     pub(crate) fn interval_default(&self, owner: CompanyID, kind: VehicleType) -> i32 {
-        let company = unsafe { &*(self.commands.company)() };
-        crate::company::service_interval((company.settings)(), Some(owner), kind)
+        self.interval_default_of(self.owner_company(owner), kind)
     }
     /// Raw adapter: the service interval default over base values, for
     /// `settings_table.rs` until its pass.

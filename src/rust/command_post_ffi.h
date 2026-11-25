@@ -7,9 +7,7 @@
 #include "../openttd.h"
 struct OpenTTDSessionServices;
 struct OpenTTDTileOwnerContext;
-struct OpenTTDCompanyCost;
 struct OpenTTDCommandPostServices {
-	void (*assign_company_cost)(OpenTTDCommandCost *, const OpenTTDCompanyCost *) noexcept OPENTTD_SERVICE_DEFAULT(assign_company_cost);
 	const OpenTTDCommandServices &(*command)() noexcept OPENTTD_SERVICE_DEFAULT(command);
 	const OpenTTDTileOwnerContext *(*control_begin)(OpenTTDCommandControlStorage *) noexcept OPENTTD_SERVICE_DEFAULT(control_begin);
 	void (*control_end)(OpenTTDCommandControlStorage *) noexcept OPENTTD_SERVICE_DEFAULT(control_end);

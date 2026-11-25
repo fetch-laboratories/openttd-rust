@@ -16,6 +16,8 @@
 #include "encoded_ffi.h"
 #include "service_defaults.hpp"
 
+struct Company;
+
 /** Storage for one StringParameter, constructed in place on the Rust caller's stack. */
 struct OpenTTDStringParameterSlot {
 	alignas(8) uint8_t bytes[64];
@@ -27,7 +29,8 @@ struct OpenTTDNewsServices {
 	void (*add_news_item)(const OpenTTDAddNewsItemArgs *args) noexcept OPENTTD_SERVICE_DEFAULT(add_news_item);
 	void (*assert_encoded)(uint32_t codepoint, size_t length) noexcept OPENTTD_SERVICE_DEFAULT(assert_encoded);
 	void (*company_news_company_name)(const NewsAllocatedData *data, OpenTTDRustStringSink sink, void *target) noexcept OPENTTD_SERVICE_DEFAULT(company_news_company_name);
-	NewsAllocatedData *(*company_news_information)(uint32_t title, uint8_t company, uint8_t other) noexcept OPENTTD_SERVICE_DEFAULT(company_news_information);
+	NewsAllocatedData *(*company_news_information)(uint32_t title, const Company *c, const Company *other) noexcept OPENTTD_SERVICE_DEFAULT(company_news_information);
+	void (*company_news_other_company_name)(const NewsAllocatedData *data, OpenTTDRustStringSink sink, void *target) noexcept OPENTTD_SERVICE_DEFAULT(company_news_other_company_name);
 	void (*delete_industry_news)(uint16_t industry) noexcept OPENTTD_SERVICE_DEFAULT(delete_industry_news);
 	void (*delete_station_news)(uint16_t station) noexcept OPENTTD_SERVICE_DEFAULT(delete_station_news);
 	void (*delete_vehicle_news)(uint32_t vehicle, uint8_t advice_type) noexcept OPENTTD_SERVICE_DEFAULT(delete_vehicle_news);

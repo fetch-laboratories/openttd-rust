@@ -366,7 +366,6 @@ void StartupEngines()
 /** Daily check to offer an exclusive engine preview to the companies. */
 static const IntervalTimer<TimerGameCalendar> _calendar_engines_daily({TimerGameCalendar::DAY, TimerGameCalendar::Priority::ENGINE}, RustClockCallback{openttd_rust_clock_engine_daily, &EngineServices()});
 
-
 /**
  * Clear the 'hidden' flag for all engines of a new company.
  * @param cid Company being created.

@@ -39,6 +39,8 @@ impl WindowClass {
     pub const WC_SMALLMAP: Self = Self(8);
     /// Popup with a set of buttons, designed to ask the user a question.
     pub const WC_GOAL_QUESTION: Self = Self(13);
+    /// Script settings.
+    pub const WC_SCRIPT_SETTINGS: Self = Self(19);
     /// Town authority.
     pub const WC_TOWN_AUTHORITY: Self = Self(22);
     /// Vehicle details.
@@ -47,6 +49,8 @@ impl WindowClass {
     pub const WC_VEHICLE_REFIT: Self = Self(24);
     /// Vehicle orders.
     pub const WC_VEHICLE_ORDERS: Self = Self(25);
+    /// Replace vehicle window.
+    pub const WC_REPLACE_VEHICLE: Self = Self(26);
     /// Vehicle timetable.
     pub const WC_VEHICLE_TIMETABLE: Self = Self(27);
     /// Company colour selection.
@@ -57,6 +61,8 @@ impl WindowClass {
     pub const WC_TOWN_DIRECTORY: Self = Self(32);
     /// Sign list.
     pub const WC_SIGN_LIST: Self = Self(36);
+    /// Scripts list.
+    pub const WC_SCRIPT_LIST: Self = Self(37);
     /// Goals list.
     pub const WC_GOALS_LIST: Self = Self(38);
     /// Story book.
@@ -93,6 +99,10 @@ impl WindowClass {
     pub const WC_NETWORK_STATUS_WINDOW: Self = Self(69);
     /// Chatbox.
     pub const WC_SEND_NETWORK_MSG: Self = Self(72);
+    /// Legend for graphs.
+    pub const WC_GRAPH_LEGEND: Self = Self(74);
+    /// Finances of a company.
+    pub const WC_FINANCES: Self = Self(75);
     /// Income graph.
     pub const WC_INCOME_GRAPH: Self = Self(76);
     /// Operating profit graph.
@@ -105,10 +115,16 @@ impl WindowClass {
     pub const WC_COMPANY_VALUE: Self = Self(80);
     /// Company league window.
     pub const WC_COMPANY_LEAGUE: Self = Self(81);
+    /// Payment rates graph.
+    pub const WC_PAYMENT_RATES: Self = Self(82);
+    /// Performance detail window.
+    pub const WC_PERFORMANCE_DETAIL: Self = Self(83);
     /// Industry production history graph.
     pub const WC_INDUSTRY_PRODUCTION: Self = Self(84);
     /// Town cargo history graph.
     pub const WC_TOWN_CARGO_GRAPH: Self = Self(85);
+    /// Company infrastructure overview.
+    pub const WC_COMPANY_INFRASTRUCTURE: Self = Self(86);
     /// Engine preview window.
     pub const WC_ENGINE_PREVIEW: Self = Self(88);
     /// Game options window.

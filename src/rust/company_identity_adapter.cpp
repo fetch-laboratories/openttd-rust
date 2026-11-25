@@ -57,10 +57,12 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.build_owner_legend = Identity_build_owner_legend,
 	.colour = Identity_colour,
 	.company = Identity_company,
+	.company_if_valid = [](uint8_t id) noexcept -> Company * { return Company::GetIfValid(CompanyID(id)); },
 	.engine_renew = RustCompanyEngineRenew,
 	.engine_renew_money = RustCompanyEngineRenewMoney,
 	.engine_renew_months = RustCompanyEngineRenewMonths,
 	.face = Identity_face,
+	.finances = [](Company *c) noexcept -> CompanyFinances * { return &c->Finances(); },
 	.index = Identity_index,
 	.is_ai = Identity_is_ai,
 	.is_freight = Identity_is_freight,
@@ -83,6 +85,7 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.set_president_name = Identity_set_president_name,
 	.set_president_name_1 = Identity_set_president_name_1,
 	.set_president_name_2 = Identity_set_president_name_2,
+	.vehicle_defaults = RustCompanyVehicleDefaultsOf,
 	};
 	return services;
 }

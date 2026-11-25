@@ -156,6 +156,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.play_sound = VehicleSvcPlaySound,
 	.play_vehicle_sound = VehicleSvcPlayVehicleSound,
 	.profit = VehicleSvcProfit,
+	.profit_last_year = [](OpenTTDVehicle *v) noexcept -> int64_t { return VehicleOf(v)->profit_last_year.base(); },
 	.record_from_shell = VehicleRecordFromShell,
 	.set_cargo_subtype = RustVehicleSetCargoSubtype,
 	.set_cargo_type = RustVehicleSetCargoType,
