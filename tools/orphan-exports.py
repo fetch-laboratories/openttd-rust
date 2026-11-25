@@ -119,8 +119,10 @@ def declares(statement: str, member: str, typed: bool = False) -> bool:
 
     With typed, a word must precede the name: whitespace alone satisfies the
     member form, which would read an unqualified call such as `\n\tName(x);`
-    as a declaration. A type balances its angle brackets, so a call after an
-    operator, such as `out << Name(x);`, is not one.
+    as a declaration. A type ends in neither `<` nor `<<` and closes no
+    angle bracket it did not open, so a call after an operator, such as
+    `out << Name(x);` or `in >> Name(x);`, is not one, while a shift inside a
+    template argument, as in `std::array<int, 1 << 2> Name();`, still is.
     """
     words = statement.split()
     kind = r"[\w:<>,\s*&]*\w[\w:<>,\s*&]*?" if typed else r"[\w:<>,\s*&]+?"
@@ -133,7 +135,8 @@ def declares(statement: str, member: str, typed: bool = False) -> bool:
         bool(words)
         and words[0] not in CALL_FREE
         and found is not None
-        and found[1].count("<") == found[1].count(">")
+        and not found[1].rstrip(" \t\n*&").endswith("<")
+        and found[1].count(">") <= found[1].count("<")
     )
 
 

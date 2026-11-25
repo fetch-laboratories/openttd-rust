@@ -360,6 +360,13 @@ class OrphanTests(unittest.TestCase):
         self.assertTrue(
             ORPHANS.declares("\nstd::vector<int> Cost(int e);", "Cost", typed=True)
         )
+        self.assertFalse(ORPHANS.declares("\n\tin >> Cost(e);", "Cost", typed=True))
+        shifted = "std::array<int, 1 << 2> Dead();\nstd::array<int, 1 << 2> Dead() { return {}; }\n"
+        self.assertTrue(
+            ORPHANS.declares("std::array<int, 1 << 2> Dead();", "Dead", typed=True)
+        )
+        uncalled, _, _ = ORPHANS.uncalled_free_functions({"src/a.cpp": shifted})
+        self.assertEqual(uncalled, {"Dead": "src/a.cpp:2"})
         files = {
             "src/engine_gui.cpp": "static std::string Cost(const Engine &e) { return {}; }\n"
             "void Preview(std::ostream &res)\n{\n\tres << Cost(e);\n}\n"
