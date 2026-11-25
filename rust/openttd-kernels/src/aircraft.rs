@@ -14,11 +14,11 @@
 #![allow(unsafe_code)]
 
 use crate::airport::{
-    AT_DUMMY, AT_OILRIG, AirportBlock, AirportBlocks, AirportFTAClassFlag, AirportFTAClassFlags,
-    AirportMovementStates, AirportMovingData, AirportMovingDataFlag, ENDLANDING, ENDTAKEOFF,
-    FLYING, HANGAR, HELIENDLANDING, HELILANDING, HELIPAD1, HELIPAD2, HELIPAD3, HELITAKEOFF,
-    LANDING, MAX_TERMINALS, STARTTAKEOFF, TAKEOFF, TERM1, TERM2, TERM3, TERM4, TERM5, TERM6, TERM7,
-    TERM8,
+    AT_DUMMY, AirportBlock, AirportBlocks, AirportFTAClassFlag, AirportFTAClassFlags,
+    AirportMovementStates, AirportMovingData, AirportMovingDataFlag, AirportTypes, ENDLANDING,
+    ENDTAKEOFF, FLYING, HANGAR, HELIENDLANDING, HELILANDING, HELIPAD1, HELIPAD2, HELIPAD3,
+    HELITAKEOFF, LANDING, MAX_TERMINALS, STARTTAKEOFF, TAKEOFF, TERM1, TERM2, TERM3, TERM4, TERM5,
+    TERM6, TERM7, TERM8,
 };
 use crate::base_station_base;
 use crate::bitmath_func::{clr_bit8, gb, has_bit, set_bit8};
@@ -405,9 +405,9 @@ impl Leaves {
         TileIndex(unsafe { (self.airport_tile)(st) })
     }
     /// `st->airport.type` of a live station.
-    pub(crate) fn airport_type(&self, st: *const Station) -> u8 {
+    pub(crate) fn airport_type(&self, st: *const Station) -> AirportTypes {
         // SAFETY: As `airport_tile`.
-        unsafe { (self.airport_type)(st) }
+        AirportTypes(unsafe { (self.airport_type)(st) })
     }
     /// `&st->airport.blocks` of a live station, which lives as long as the station.
     pub(crate) fn airport_blocks(&self, st: *const Station) -> *mut AirportBlocks {
@@ -530,7 +530,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn airport_rotation(&self, st: *const Station) -> Direction {
         Direction(Self::call(|| unsafe { (self.leaves.rotation)(st) }))
     }
-    fn airport_type(&self, st: *const Station) -> u8 {
+    fn airport_type(&self, st: *const Station) -> AirportTypes {
         Self::call(|| self.leaves.airport_type(st))
     }
     fn airport_w(&self, st: *const Station) -> u8 {
@@ -1555,7 +1555,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
              * Helicopter has arrived at the target landing pad, so the current position is also where it should land.
              * Except for Oilrigs which are special due to being a 1x1 station, and helicopters land outside it. */
             let (mut x, mut y) = (x, y);
-            if self.airport_type(st) != AT_OILRIG {
+            if self.airport_type(st) != AirportTypes::AT_OILRIG {
                 x = b.x_pos();
                 y = b.y_pos();
                 tile = self.tile_virt_xy(x, y);
@@ -1715,7 +1715,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     };
 
                     /* Oilrigs must keep v->tile as st->airport.tile, since the landing pad is in a non-airport tile */
-                    gp_new_tile = if self.airport_type(st) == AT_OILRIG {
+                    gp_new_tile = if self.airport_type(st) == AirportTypes::AT_OILRIG {
                         self.airport_tile(st)
                     } else {
                         self.tile_virt_xy(gp_x, gp_y)

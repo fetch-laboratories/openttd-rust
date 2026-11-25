@@ -48,10 +48,6 @@ impl AirportTypes {
     pub const AT_DUMMY: Self = Self(255);
 }
 
-/// `AT_SMALL`.
-pub(crate) const AT_SMALL: u8 = AirportTypes::AT_SMALL.0;
-/// `AT_LARGE`.
-pub(crate) const AT_LARGE: u8 = AirportTypes::AT_LARGE.0;
 /// `AT_OILRIG`.
 pub const AT_OILRIG: u8 = AirportTypes::AT_OILRIG.0;
 /// `NEW_AIRPORT_OFFSET`.

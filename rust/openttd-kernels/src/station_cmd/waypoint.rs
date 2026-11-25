@@ -944,7 +944,7 @@ impl Ctx<'_> {
                 self.command,
                 ret.0,
                 tile,
-                flags | DoCommandFlags(DoCommandFlag::AUTO),
+                flags | DoCommandFlags::from_element(DoCommandFlag::Auto),
             );
             if !ret.ok() {
                 return cost.take(ret);

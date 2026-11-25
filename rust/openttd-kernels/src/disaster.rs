@@ -37,7 +37,7 @@
 )]
 
 use crate::aircraft::{self, ROTOR_Z_OFFSET};
-use crate::airport::{AT_LARGE, AT_SMALL, AirportBlock, AirportBlocks};
+use crate::airport::{AirportBlock, AirportBlocks, AirportTypes};
 use crate::bitmath_func::{gb, has_bit};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_base::is_human_id;
@@ -320,12 +320,12 @@ impl<'a> Tables<'a> {
     }
     /// `Vehicle::Get(index)`: `Pool::Get`'s `assert(index < this->first_unused)`, then the
     /// slot's record, which a free slot leaves null.
-    fn vehicle_get(&self, index: u32) -> Option<VehicleRef> {
+    fn vehicle_get(&self, index: VehicleID) -> Option<VehicleRef> {
         let pool = self.scheduler().pool();
         // SAFETY: The scheduler's live descriptor; nothing mutates the pool during the read.
-        crate::services_assert::assert_with(|| (index as usize) < unsafe { pool.pool_size() });
+        crate::services_assert::assert_with(|| (index.0 as usize) < unsafe { pool.pool_size() });
         // SAFETY: As above.
-        unsafe { crate::vehicle_base::get(&pool, VehicleID(index)) }
+        unsafe { crate::vehicle_base::get(&pool, index) }
     }
     /// `Industry::Get(index)`: the industry's shell, through the pool's asserting lookup.
     fn industry_get(&self, index: u32) -> *mut crate::industry::tile::ShellHandle {
@@ -845,7 +845,7 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
     }
 
     /* Target a vehicle */
-    let target = t.vehicle_get(ufo.v.dest_tile().0);
+    let target = t.vehicle_get(VehicleID(ufo.v.dest_tile().0));
     crate::services_assert::assert_with(|| {
         target.is_some_and(|target| {
             target.vehicle_type() == VehicleType::VEH_ROAD && target.is_front_engine()
@@ -1272,7 +1272,7 @@ fn disaster_tick_big_ufo_destroyer(t: &Tables<'_>, v: DisasterVehicle) -> bool {
 
     if v.state() == 0 {
         let u = t
-            .vehicle_get(v.big_ufo_destroyer_target().0)
+            .vehicle_get(v.big_ufo_destroyer_target())
             .expect("Vehicle::Get of the destroyer's target");
         if delta(v.v.x_pos(), u.x_pos()) > TILE_SIZE as i32 {
             return true;
@@ -1409,8 +1409,8 @@ fn disaster_zeppeliner_init(t: &Tables<'_>) {
     while !st.is_null() {
         let station = st.cast_const().cast::<crate::station::Station>();
         if t.aircraft().airport_tile(station) != TileIndex::INVALID
-            && (t.aircraft().airport_type(station) == AT_SMALL
-                || t.aircraft().airport_type(station) == AT_LARGE)
+            && (t.aircraft().airport_type(station) == AirportTypes::AT_SMALL
+                || t.aircraft().airport_type(station) == AirportTypes::AT_LARGE)
         {
             x = ((map.tile_x(t.aircraft().airport_tile(station)) + 2) * TILE_SIZE) as i32;
             break;
