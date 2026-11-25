@@ -4,10 +4,11 @@ use crate::direction_type::DiagDirection;
 use crate::slope_type::Slope;
 
 /// `CanBuildDepotByTileh`: find out if the slope of the tile is suitable to
-/// build a depot with given direction. The caller has already checked that
-/// `tileh` is not `SLOPE_FLAT`, which the original asserts.
+/// build a depot with given direction.
 pub(crate) fn can_build_depot_by_tileh(direction: DiagDirection, tileh: Slope) -> bool {
-    let entrance_corners = crate::slope_func::inclined_slope(direction, || {});
+    crate::services_assert::assert_with(|| tileh != Slope::SLOPE_FLAT);
+    let entrance_corners =
+        crate::slope_func::inclined_slope(direction, || crate::services_assert::not_reached());
     /* For steep slopes both entrance corners must be raised (i.e. neither of them is the lowest corner),
      * For non-steep slopes at least one corner must be raised. */
     if crate::slope_func::is_steep_slope_raw(tileh.0) {

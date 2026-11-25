@@ -82,6 +82,16 @@ pub const FOUNDATION_RAIL_W: u8 = Foundation::FOUNDATION_RAIL_W.0;
 /// `FOUNDATION_RAIL_N`.
 pub const FOUNDATION_RAIL_N: u8 = Foundation::FOUNDATION_RAIL_N.0;
 
+/// `VALID_LEVEL_CROSSING_SLOPES`: constant bitset with safe slopes for building a level
+/// crossing.
+pub const VALID_LEVEL_CROSSING_SLOPES: u32 = (1 << Slope::SLOPE_SEN.0)
+    | (1 << Slope::SLOPE_ENW.0)
+    | (1 << Slope::SLOPE_NWS.0)
+    | (1 << Slope::SLOPE_NS.0)
+    | (1 << Slope::SLOPE_WSE.0)
+    | (1 << Slope::SLOPE_EW.0)
+    | (1 << Slope::SLOPE_FLAT.0);
+
 /// Native `Corner`, retaining every underlying `u8` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

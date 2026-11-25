@@ -570,9 +570,9 @@ pub(crate) fn get_rail_foundation(
             return Foundation::FOUNDATION_NONE;
         }
 
-        let valid_on_leveled = !TrackBits(crate::rail_cmd::LEVELED_TRACKS[usize::from(tileh.0)])
-            & bits
-            == TrackBits::TRACK_BIT_NONE;
+        let valid_on_leveled =
+            !crate::rail_cmd::VALID_TRACKS_ON_LEVELED_FOUNDATION[usize::from(tileh.0)] & bits
+                == TrackBits::TRACK_BIT_NONE;
         let leveled = if valid_on_leveled {
             Foundation::FOUNDATION_LEVELED
         } else {

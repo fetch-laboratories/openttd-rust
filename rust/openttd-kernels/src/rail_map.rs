@@ -80,10 +80,6 @@ impl RailGroundType {
 
 /// `RailTileType::Normal`, for the files no pass has finished.
 pub const RAIL_TILE_NORMAL: u8 = RailTileType::Normal.0;
-/// `RailTileType::Signals`, for the files no pass has finished.
-pub const RAIL_TILE_SIGNALS: u8 = RailTileType::Signals.0;
-/// `RailTileType::Depot`, for the files no pass has finished.
-pub const RAIL_TILE_DEPOT: u8 = RailTileType::Depot.0;
 /// `RailGroundType::HalfTileWater`, for the files no pass has finished.
 pub const RAIL_GROUND_HALF_TILE_WATER: u8 = RailGroundType::HalfTileWater.0;
 
@@ -108,12 +104,6 @@ pub(crate) fn get_rail_ground_type_raw(m: &TileTypeAccess, t: u32) -> Option<u8>
 #[inline]
 pub const fn is_pbs_signal(s: SignalType) -> bool {
     s.0 == SignalType::SIGTYPE_PBS.0 || s.0 == SignalType::SIGTYPE_PBS_ONEWAY.0
-}
-
-/// Raw adapter: `IsPbsSignal`.
-#[inline]
-pub const fn is_pbs_signal_raw(kind: u8) -> bool {
-    is_pbs_signal(SignalType(kind))
 }
 
 #[allow(
@@ -176,6 +166,12 @@ impl World<'_> {
     pub(crate) fn get_track_bits(&self, tile: TileIndex) -> TrackBits {
         self.assert_with(|| self.is_plain_rail_tile(tile));
         TrackBits(gb(u32::from(Self::byte(self.types.m5(tile))), 0, 6) as u8)
+    }
+
+    /// `HasTrack`: returns whether the given track is present on the given tile.
+    #[inline]
+    pub(crate) fn has_track(&self, tile: TileIndex, track: Track) -> bool {
+        crate::bitmath_func::has_bit(self.get_track_bits(tile).0, track.0)
     }
 
     /// `GetRailDepotDirection`: returns the direction the depot is facing to.
@@ -324,22 +320,6 @@ impl World<'_> {
     /// Raw adapter: `GetSignalType`.
     pub(crate) fn get_signal_type_raw(&self, t: u32, track: u8) -> u8 {
         self.get_signal_type(TileIndex(t), Track(track)).0
-    }
-    /// Raw adapter: `GetSignalStates`.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "GetSignalStates' four-bit field"
-    )]
-    pub(crate) fn get_signal_states_raw(&self, t: u32) -> u8 {
-        self.get_signal_states(TileIndex(t)) as u8
-    }
-    /// Raw adapter: `GetPresentSignals`.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "GetPresentSignals' four-bit field"
-    )]
-    pub(crate) fn get_present_signals_raw(&self, t: u32) -> u8 {
-        self.get_present_signals(TileIndex(t)) as u8
     }
     /// Raw adapter: `HasSignalOnTrack`.
     pub(crate) fn has_signal_on_track_raw(&self, t: u32, track: u8) -> bool {
