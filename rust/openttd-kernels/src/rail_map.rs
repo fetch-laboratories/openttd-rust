@@ -329,10 +329,6 @@ impl World<'_> {
     pub(crate) fn has_signal_on_trackdir_raw(&self, t: u32, trackdir: u8) -> bool {
         self.has_signal_on_trackdir(TileIndex(t), Trackdir(trackdir))
     }
-    /// Raw adapter: `GetRailGroundType`.
-    pub(crate) fn get_rail_ground_type_raw(&self, t: u32) -> u8 {
-        self.get_rail_ground_type(TileIndex(t)).0
-    }
 }
 
 #[cfg(test)]

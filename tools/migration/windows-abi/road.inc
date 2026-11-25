@@ -258,7 +258,7 @@ static void RoadBoundary()
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
 	movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
-	movement.resolve = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementVehicle { return {.train = {}, .road = road_abi_probe->state, .ship = nullptr, .kind = static_cast<VehicleType>(1)}; };
+	movement.resolve = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementVehicle { return {.train = {}, .road = road_abi_probe->state, .kind = static_cast<VehicleType>(1)}; };
 	road_abi_vehicle.z_pos = 10; road_abi_vehicle.direction = 1;
 	t.shared.movement = &movement;
 	t.shared.map = &map.statics;

@@ -45,8 +45,9 @@ use crate::witness as w;
 macro_rules! carrier {
     ($($name:ident),+) => {$(#[repr(transparent)] #[derive(Clone, Copy)] pub struct $name(pub u8);)+};
 }
-carrier!(WaterTileType, LockPart, DepotPart);
+carrier!(WaterTileType, LockPart);
 pub use crate::direction_type::Axis;
+pub use crate::water_map::DepotPart;
 #[repr(C)]
 pub struct WaterCommandServices {
     pub shared: *const Services,
@@ -277,8 +278,8 @@ impl World<'_> {
                 }
             }
             self.infra(owner, infra, true);
-            (self.a.make_depot)(tile, owner, id, DepotPart(0), axis, WaterClass(wc1));
-            (self.a.make_depot)(tile2, owner, id, DepotPart(1), axis, WaterClass(wc2));
+            (self.a.make_depot)(tile, owner, id, DepotPart::North, axis, WaterClass(wc1));
+            (self.a.make_depot)(tile2, owner, id, DepotPart::South, axis, WaterClass(wc2));
             self.check_docking(tile);
             self.check_docking(tile2);
             (self.s.mark_dirty)(tile);

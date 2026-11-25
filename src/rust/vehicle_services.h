@@ -21,15 +21,12 @@
 #include "../window_func.h"
 #include "../texteff.hpp"
 
-struct OpenTTDShipState;
 struct OpenTTDAircraftState;
 OpenTTDAircraftState *RustVehicleAircraftOwner(const Vehicle *v) noexcept;
-OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept;
 
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
 Train *RustTrainGetIfValid(uint32_t id) noexcept;
 /** Strict Ship::Get lookup, preserving source pool assertions. */
-OpenTTDVehicle *RustShipGet(uint32_t id) noexcept;
 uint64_t RustTrainRailTypes(const Vehicle *v) noexcept;
 uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept;
 
@@ -116,7 +113,6 @@ inline uint8_t RustVehicleNumOrders(const Vehicle *v) noexcept { return v->GetNu
 inline uint8_t RustVehicleRealOrderIndex(const Vehicle *v) noexcept { return v->cur_real_order_index; }
 inline uint16_t RustVehicleServiceInterval(const Vehicle *v) noexcept { return v->GetServiceInterval(); }
 inline int64_t RustVehicleDisplayProfitLastYear(const Vehicle *v) noexcept { return v->GetDisplayProfitLastYear().base(); }
-inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
 bool RustVehiclePrimary(const Vehicle *v) noexcept;

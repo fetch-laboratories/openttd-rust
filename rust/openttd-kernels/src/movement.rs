@@ -174,7 +174,6 @@ pub(crate) mod native_test_support;
 pub struct MovementVehicle {
     pub train: crate::train::Handle,
     pub road: *mut crate::road::State,
-    pub ship: *mut crate::ship_control::State,
     pub kind: crate::vehicle_type::VehicleType,
 }
 #[repr(C)]
@@ -1134,7 +1133,7 @@ impl Context<'_> {
             }
             WaterTileType::Depot => {
                 w::hit(w::MOVE_SHIP_DEPOT);
-                axis_to_track_bits(Axis(self.world.ship_depot_axis(tile.0)), self.check())
+                axis_to_track_bits(self.world.get_ship_depot_axis(tile), self.check())
             }
             _ => return 0,
         };
@@ -1592,10 +1591,11 @@ impl MovementServices {
                         Self::prepare_to_enter_bridge(v);
                     }
 
-                    VehicleType::VEH_SHIP => unsafe {
+                    VehicleType::VEH_SHIP => {
                         w::hit(w::MOVE_SHIP_BRIDGE_ENTER);
-                        crate::ship_control::set_state(h.ship, TrackBits::TRACK_BIT_WORMHOLE);
-                    },
+                        crate::ship_control::Ship::from_vehicle(v)
+                            .set_state(TrackBits::TRACK_BIT_WORMHOLE);
+                    }
 
                     _ => crate::services_assert::not_reached(),
                 }
@@ -1633,15 +1633,9 @@ impl MovementServices {
                     }
 
                     VehicleType::VEH_SHIP => {
-                        if unsafe { crate::ship_control::get_state(h.ship) }
-                            == TrackBits::TRACK_BIT_WORMHOLE
-                        {
-                            unsafe {
-                                crate::ship_control::set_state(
-                                    h.ship,
-                                    diag_dir_to_diag_track_bits(vdir, self.check()),
-                                );
-                            }
+                        let ship = crate::ship_control::Ship::from_vehicle(v);
+                        if ship.state() == TrackBits::TRACK_BIT_WORMHOLE {
+                            ship.set_state(diag_dir_to_diag_track_bits(vdir, self.check()));
                             w::hit(w::MOVE_SHIP_BRIDGE_EXIT);
                             return VehicleEnterTileStates::from_element(
                                 VehicleEnterTileState::EnteredWormhole,
@@ -1782,29 +1776,7 @@ pub(crate) fn foundation_slope(shared: &Services, tile: u32) -> FoundationSlope 
     let (slope, z) = get_foundation_slope(shared, TileIndex(tile));
     FoundationSlope { z, slope }
 }
-/// `VehicleEnterTile`, through the registry.
-///
-/// # Safety
-/// The vehicle/map stay live through the synchronous entry and its source callbacks.
-pub(crate) unsafe fn vehicle_enter_tile(
-    shared: &Services,
-    v: VehicleRef,
-    tile: TileIndex,
-    x: i32,
-    y: i32,
-) -> VehicleEnterTileStates {
-    unsafe { table(shared).vehicle_enter_tile(v, tile, x, y) }
-}
-/// Temporary raw adapter of [`vehicle_enter_tile`] for `ship_control.rs` until
-/// its pass.
-///
-/// # Safety
-/// As [`vehicle_enter_tile`].
-pub(crate) unsafe fn enter(shared: &Services, v: VehicleRef, tile: u32, x: i32, y: i32) -> u8 {
-    unsafe { vehicle_enter_tile(shared, v, TileIndex(tile), x, y) }.0
-}
-
-/// Temporary raw adapter for `ship_control.rs` and `disaster.rs` until their passes:
+/// Temporary raw adapter for `disaster.rs` until its pass:
 /// `TrackStatusToTrackBits(GetTileTrackStatus(tile, TRANSPORT_WATER, 0, side))`.
 pub(crate) fn water_tracks(shared: &Services, tile: u32, side: u8) -> u32 {
     table(shared).water_tracks(tile, side)
@@ -1872,7 +1844,6 @@ crate::abi::layouts! {
     "OpenTTDMovementVehicle" ["landscape"] => MovementVehicle {
         train,
         road,
-        ship,
         kind,
     };
     "OpenTTDMovementServices" ["landscape"] => MovementServices {

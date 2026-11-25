@@ -155,7 +155,6 @@ struct OpenTTDStationCommandServices {
 	uint32_t (*hangar_tile)(const BaseStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);
 	void (*delete_airport_storage)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_airport_storage);
 	void (*clear_airport)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear_airport);
-	const OpenTTDShipLeaves *ship;
 	const OpenTTDClearServices *clear;
 	const OpenTTDWaterRestorationServices *restoration;
 	void (*set_docking)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_docking);

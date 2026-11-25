@@ -161,6 +161,17 @@ pub const fn find_first_track(tracks: TrackBits) -> Track {
     }
 }
 
+/// `TrackToOppositeTrack`: find the opposite track to a given track.
+///
+/// `TRACK_LOWER` -> `TRACK_UPPER` and vice versa, likewise for left/right.
+/// `TRACK_X` is mapped to `TRACK_Y` and reversed.
+pub fn track_to_opposite_track(t: Track, check: impl Fn(bool) + Copy) -> Track {
+    if !is_valid_track(t) {
+        check(false);
+    }
+    Track(t.0 ^ 1)
+}
+
 /// `TrackBitsToTrack`: converts `TrackBits` to Track.
 ///
 /// This function converts a `TrackBits` value to a Track value. As it is not possible to
@@ -807,15 +818,6 @@ pub const fn track_status_to_trackdir_bits_raw(status: u32) -> u16 {
 /// Raw adapter: `FindFirstTrack`.
 pub const fn find_first_track_raw(tracks: u8) -> u8 {
     find_first_track(TrackBits(tracks)).0
-}
-/// Raw adapter: `FindFirstTrack` for the ship controller's promoted `TrackBits`, whose
-/// values fit the byte the original takes.
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "the ship controller promotes a TrackBits byte to its uint32 slot"
-)]
-pub const fn find_first_track_u32_raw(tracks: u32) -> u8 {
-    find_first_track(TrackBits(tracks as u8)).0
 }
 /// Raw adapter: `ReverseTrackdir`, on the process-wide native assertion policy.
 pub fn reverse_trackdir_raw(td: u8) -> u8 {

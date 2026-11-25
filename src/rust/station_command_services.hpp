@@ -125,7 +125,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.hangar_tile = RustSelectedHangarTile,
 		.delete_airport_storage = RustStationDeleteAirportStorage,
 		.clear_airport = RustStationClearAirport,
-		.ship = &GetRustShipServices(),
 		.clear = &GetRustClearServices(),
 		.restoration = &GetRustWaterRestorationServices(),
 

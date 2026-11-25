@@ -130,6 +130,19 @@ pub fn diag_dir_to_dir(dir: DiagDirection, check: impl Fn(bool)) -> Direction {
     }
     Direction(dir.0.wrapping_mul(2).wrapping_add(1))
 }
+/// `XYNSToDiagDir`: convert an axis and a flag for north/south into a `DiagDirection`.
+/// `ns` is north (0) or south (1).
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "XYNSToDiagDir's (DiagDirection) cast of the promoted uint"
+)]
+pub fn xyns_to_diag_dir(xy: Axis, ns: u32, check: impl Fn(bool)) -> DiagDirection {
+    if !is_valid_axis(xy) {
+        check(false);
+    }
+    // `(DiagDirection)(xy * 3 ^ ns * 2)`, in the promoted `uint`.
+    DiagDirection((u32::from(xy.0).wrapping_mul(3) ^ ns.wrapping_mul(2)) as u8)
+}
 /// `OtherAxis`: select the other axis as provided.
 ///
 /// This is basically the not-operator for the axis.

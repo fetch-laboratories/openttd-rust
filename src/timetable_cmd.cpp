@@ -112,13 +112,3 @@ CommandCost CmdAutofillTimetable(DoCommandFlags flags, VehicleID veh, bool autof
 {
 	CommandCost result; openttd_rust_timetable_autofill(Vehicle::GetIfValid(veh), flags.Test(DoCommandFlag::Execute), autofill, preserve_wait_time, &result, &GetRustOrdersLeaves()); return result;
 }
-
-/**
- * Update the timetable for the vehicle.
- * @param v The vehicle to update the timetable for.
- * @param travelling Whether we just travelled or waited at a station.
- */
-void UpdateVehicleTimetable(Vehicle *v, bool travelling)
-{
-	openttd_rust_timetable_update(v, travelling, &GetRustOrdersLeaves());
-}

@@ -180,7 +180,7 @@ fn on_new_economy_day(s: &SchedulerServices, v: VehicleRef, id: VehicleID) {
             s.shared(),
         ),
         VehicleType::VEH_ROAD => road::on_new_economy_day(v, s.road()),
-        VehicleType::VEH_SHIP => ship_control::on_new_economy_day(id, v, s.ship(), s.shared()),
+        VehicleType::VEH_SHIP => ship_control::on_new_economy_day(v, s.ship(), s.shared()),
         VehicleType::VEH_AIRCRAFT => {
             aircraft::on_new_economy_day(s.aircraft(), aircraft::Vehicle::of(v, id));
         }

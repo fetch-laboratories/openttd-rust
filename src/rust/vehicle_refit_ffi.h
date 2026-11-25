@@ -94,7 +94,7 @@ struct OpenTTDVehicleBuildServices {
 	const OpenTTDVehicleConstructServices *construct;
 	const OpenTTDRailConstructionServices *rail;
 	uint32_t (*ship_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_tile);
-	void *(*new_ship)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_ship);
+	void *(*new_ship)() noexcept OPENTTD_SERVICE_DEFAULT(new_ship);
 	void (*set_purchase)(void *, uint16_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_purchase);
 	bool (*is_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(is_engine);
 	void (*presentation)(void *, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(presentation);

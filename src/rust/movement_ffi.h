@@ -25,7 +25,7 @@ struct OpenTTDTunnelBridgeServices;
 /* Only consumed entry-local owner identities/scalars; never a Vehicle/map view.
  * Shells survive the selected depot/admission/sound/viewport calls. No pointer
  * is retained after this synchronous entry and no Rust borrow crosses a call. */
-struct OpenTTDMovementVehicle { OpenTTDTrainHandle train; OpenTTDRoadState *road; OpenTTDShipState *ship; VehicleType kind; };
+struct OpenTTDMovementVehicle { OpenTTDTrainHandle train; OpenTTDRoadState *road; VehicleType kind; };
 struct OpenTTDMovementServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDOrdersLeaves *orders;

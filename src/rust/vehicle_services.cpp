@@ -56,7 +56,6 @@
 #include "../effectvehicle_base.h"
 #include "../table/strings.h"
 OpenTTDAircraftState *RustVehicleAircraftOwner(const Vehicle *v) noexcept { return Aircraft::From(v)->rust_state.get(); }
-OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept { return Ship::From(v)->GetRustState(); }
 
 OpenTTDAircraftVehicle RustAircraftVehicle(Vehicle *v) noexcept
 {
@@ -107,7 +106,6 @@ static void OPENTTD_RUST_CALL VehicleSvcPathfindingResult(OpenTTDVehicle *v, boo
 static void OPENTTD_RUST_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
 uint64_t RustTrainRailTypes(const Vehicle *v) noexcept { return Train::From(v)->GetRailTypes().base(); }
 Train *RustTrainGetIfValid(uint32_t id) noexcept { return Train::GetIfValid(VehicleID(id)); }
-OpenTTDVehicle *RustShipGet(uint32_t id) noexcept { return RustVehicle(Ship::Get(VehicleID(id))); }
 static const OpenTTDOrdersLeaves *VehicleOrders() noexcept { return &GetRustOrdersLeaves(); }
 
 
@@ -163,7 +161,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.set_cargo_type = RustVehicleSetCargoType,
 	.set_colourmap = [](OpenTTDVehicle *v, uint32_t colourmap) noexcept { VehicleOf(v)->colourmap = static_cast<PaletteID>(colourmap); },
 	.set_max_age = RustVehicleSetMaxAge,
-	.ship_get = RustShipGet,
 	.show_newgrf_vehicle_error = [](uint16_t engine, uint32_t part1, uint32_t part2, GRFBug bug, bool critical) noexcept { RustVehicleShowNewGRFError(EngineID(engine), StringID(part1), StringID(part2), bug, critical); },
 	.start_stop_dirty = VehicleSvcStartStopDirty,
 	.update_delta = RustVehicleUpdateDelta<OpenTTDVehicle *>,
