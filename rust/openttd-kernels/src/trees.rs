@@ -1280,7 +1280,7 @@ pub(crate) fn tile_loop_trees(
         }
     }
 
-    crate::newgrf_generic::ambient(settings.ambient_callback, tile.0);
+    crate::newgrf_generic::ambient_sound_effect(settings.ambient_callback, tile);
 
     // TimerGameTick::counter is incremented by 256 between each call, so ignore lower 8 bits.
     // Also, we use a simple hash to spread the updates evenly over the map.

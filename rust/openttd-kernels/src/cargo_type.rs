@@ -73,12 +73,19 @@ pub const CT_COLA: u32 = CargoLabel::CT_COLA.0;
 /// Invalid cargo label.
 pub const CT_INVALID: u32 = CargoLabel::CT_INVALID.0;
 
-/// Mixed livestock/fruit definition.
-pub const MCT_LIVESTOCK_FRUIT: u32 = 0;
-/// Mixed grain/wheat/maize definition.
-pub const MCT_GRAIN_WHEAT_MAIZE: u32 = 1;
-/// Mixed valuables/gold/diamonds definition.
-pub const MCT_VALUABLES_GOLD_DIAMONDS: u32 = 2;
+/// `MixedCargoType`: mixed cargo types for definitions with cargo that can vary depending on
+/// climate.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MixedCargoType(pub u8);
+impl MixedCargoType {
+    /// Cargo can be livestock or fruit.
+    pub const MCT_LIVESTOCK_FRUIT: Self = Self(0);
+    /// Cargo can be grain, wheat or maize.
+    pub const MCT_GRAIN_WHEAT_MAIZE: Self = Self(1);
+    /// Cargo can be valuables, gold or diamonds.
+    pub const MCT_VALUABLES_GOLD_DIAMONDS: Self = Self(2);
+}
 
 /// Original cargo slot count.
 pub const NUM_ORIGINAL_CARGO: u8 = CargoType::NUM_ORIGINAL_CARGO.0;

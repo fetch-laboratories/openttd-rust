@@ -15,7 +15,7 @@ pub(crate) unsafe fn translate_grf_strings(
 ) -> Result<(), ReadBounds> {
     unsafe {
         let grfid = buf.dword()?;
-        let config = (s.find_config)(grfid, u32::MAX);
+        let config = ((*s.global).get_grf_config)(grfid, u32::MAX);
         let status = if config.is_null() {
             None
         } else {

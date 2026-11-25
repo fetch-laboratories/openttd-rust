@@ -476,7 +476,7 @@ fn tile_loop_clear_desert(c: &TileLoop<'_>, clear: ClearTile<'_>) {
 )]
 #[inline(always)]
 pub(crate) fn tile_loop_clear<const AMBIENT: bool>(c: &TileLoop<'_>, tile: TileIndex) {
-    crate::newgrf_generic::ambient(AMBIENT, tile.0);
+    crate::newgrf_generic::ambient_sound_effect(AMBIENT, tile);
     let clear = ClearTile::new(&c.world, tile);
 
     match c.landscape() {

@@ -346,6 +346,8 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     terrain_type: unreachable1,
     copyable_badges: unreachable4,
     grf_file_version: unreachable1,
+    grf_file_traininfo_vehicle_pitch: unreachable1,
+    grf_file_traininfo_vehicle_width: unreachable1,
     grf_price_shift: unreachable2,
     grf_cargo_map: unreachable2,
     grf_boolean_callback: unreachable3,

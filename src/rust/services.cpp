@@ -664,6 +664,8 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.terrain_type = RustTerrainType,
 	.copyable_badges = RustCopyableBadges,
 	.grf_file_version = RustGRFFileVersion,
+	.grf_file_traininfo_vehicle_pitch = RustGRFTrainPitch,
+	.grf_file_traininfo_vehicle_width = RustGRFTrainWidth,
 	.grf_price_shift = RustGRFPriceShift,
 	.grf_cargo_map = RustGRFCargoMap,
 	.grf_boolean_callback = OpenTTDConvertBooleanCallback,

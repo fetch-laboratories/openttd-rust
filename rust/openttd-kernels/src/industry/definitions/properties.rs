@@ -28,7 +28,7 @@ pub struct Context {
     pub climate: u8,
 }
 /// `CT_INVALID` as a default cargo label.
-const INVALID_LABEL: crate::newgrf::CargoLabel = crate::newgrf::CargoLabel {
+const INVALID_LABEL: crate::newgrf::CargoLabelChoice = crate::newgrf::CargoLabelChoice {
     value: CT_INVALID,
     mixed: false,
 };

@@ -240,6 +240,8 @@ struct OpenTTDSharedServices {
 	uint32_t (*terrain_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_type);
 	size_t (*copyable_badges)(OpenTTDBadgeSpan, OpenTTDBadgeSpan, GrfSpecFeature, BadgeID *) noexcept OPENTTD_SERVICE_DEFAULT(copyable_badges);
 	uint8_t (*grf_file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_version);
+	int32_t (*grf_file_traininfo_vehicle_pitch)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_traininfo_vehicle_pitch);
+	uint32_t (*grf_file_traininfo_vehicle_width)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_traininfo_vehicle_width);
 	int32_t (*grf_price_shift)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_price_shift);
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
 	bool (*grf_boolean_callback)(const GRFFile *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_boolean_callback);

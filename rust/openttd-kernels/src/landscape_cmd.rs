@@ -639,7 +639,7 @@ impl<'a> World<'a> {
             out.error(STR_ERROR_ALREADY_AT_SEA_LEVEL.0);
             return INVALID_TILE;
         }
-        if height > i32::from(unsafe { self.s.settings().height_limit.read() }) {
+        if height > i32::from(self.s.settings().map_height_limit()) {
             out.error(STR_ERROR_TOO_HIGH.0);
             return INVALID_TILE;
         }
@@ -739,7 +739,7 @@ impl<'a> World<'a> {
                 return (0, INVALID_TILE);
             }
         };
-        if h > u32::from(unsafe { self.s.settings().height_limit.read() }) {
+        if h > u32::from(self.s.settings().map_height_limit()) {
             out.error(if old == 0 {
                 STR_ERROR_ALREADY_AT_SEA_LEVEL.0
             } else {

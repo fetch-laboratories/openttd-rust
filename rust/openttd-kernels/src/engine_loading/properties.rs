@@ -193,7 +193,7 @@ unsafe fn default_cargo(
     write_field!(
         e.cast_mut(),
         info.cargo_label,
-        crate::newgrf::CargoLabel {
+        crate::newgrf::CargoLabelChoice {
             value: CT_INVALID,
             mixed: false
         }

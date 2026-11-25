@@ -9,7 +9,7 @@ use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
     INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryGfx, IndustryType,
 };
-use crate::newgrf::CargoLabel;
+use crate::newgrf::CargoLabelChoice;
 use crate::newgrf_animation_type::AnimationStatus;
 use crate::newgrf_badge_type::BadgeID;
 use crate::newgrf_callbacks::{IndustryTileCallbackMask, IndustryTileCallbackMasks};
@@ -289,9 +289,9 @@ crate::abi::shared_records! {
         pub random_sounds: NativeVec<u8> => "RustVector<uint8_t>",
         pub badges: NativeVec<u32> => "RustVector<BadgeID>",
         /// Cargo labels of produced cargo for default industries.
-        pub produced_cargo_label: [CargoLabel; INDUSTRY_ORIGINAL_NUM_OUTPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_OUTPUTS]",
+        pub produced_cargo_label: [CargoLabelChoice; INDUSTRY_ORIGINAL_NUM_OUTPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_OUTPUTS]",
         /// Cargo labels of accepted cargo for default industries.
-        pub accepts_cargo_label: [CargoLabel; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
+        pub accepts_cargo_label: [CargoLabelChoice; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
     }
     /// `IndustryTileSpec`: defines the data structure of each individual tile of an industry.
     /// A tile can at most accept 3 types of cargo, even if an industry as a whole can accept
@@ -323,12 +323,12 @@ crate::abi::shared_records! {
         pub grf_prop: SubstituteProps => "SubstituteGRFFileProps",
         pub badges: NativeVec<u32> => "RustVector<BadgeID>",
         /// Cargo labels of accepted cargo for default industry tiles.
-        pub accepts_cargo_label: [CargoLabel; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
+        pub accepts_cargo_label: [CargoLabelChoice; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
     }
 }
 
 /// The default label of a value-initialized `std::variant<CargoLabel, MixedCargoType>`.
-const NO_LABEL: CargoLabel = CargoLabel {
+const NO_LABEL: CargoLabelChoice = CargoLabelChoice {
     value: 0,
     mixed: false,
 };

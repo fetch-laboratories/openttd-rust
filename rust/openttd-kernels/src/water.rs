@@ -679,7 +679,11 @@ pub unsafe extern "C" fn openttd_rust_water_tile_loop(
         let map = crate::map_func::World::new(shared);
         let types = &map.types;
         let tile_type = types.read(TileIndex(tile));
-        let ambient = tile_type == TileType::MP_WATER && crate::newgrf_generic::ambient_enabled();
+        let ambient = tile_type == TileType::MP_WATER
+            && crate::newgrf::has_grf_misc_bit(
+                crate::newgrf_generic::services().global(),
+                crate::newgrf::GrfMiscBit::AmbientSoundCallback,
+            );
         water_tile_loop(
             tile,
             tile_type.0,
@@ -710,7 +714,7 @@ pub(crate) unsafe fn water_tile_loop(
 ) {
     if tile_type == 6 {
         // SAFETY: Live immutable tables; no owner access spans ambient sound.
-        crate::newgrf_generic::ambient(ambient, tile);
+        crate::newgrf_generic::ambient_sound_effect(ambient, TileIndex(tile));
         if types.asserted(unsafe { &*s }, |m| {
             crate::water_map::is_non_flooding_water_tile(m, tile)
         }) {

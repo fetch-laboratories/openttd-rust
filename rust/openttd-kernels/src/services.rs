@@ -541,6 +541,10 @@ pub struct Services {
     ) -> usize,
     /// `GRFFile::grf_version` of a non-null file.
     pub grf_file_version: extern "C" fn(*const c_void) -> u8,
+    /// `GRFFile::traininfo_vehicle_pitch` of a non-null file.
+    pub grf_file_traininfo_vehicle_pitch: extern "C" fn(*const c_void) -> i32,
+    /// `GRFFile::traininfo_vehicle_width` of a non-null file.
+    pub grf_file_traininfo_vehicle_width: extern "C" fn(*const c_void) -> u32,
     /// `RustGRFPriceShift`: the live file multiplier, including its null-file default.
     pub grf_price_shift: extern "C" fn(*const c_void, u32) -> i32,
     /// `GRFFile::cargo_map` entry of a non-null file.
@@ -903,6 +907,8 @@ crate::abi::layouts! {
         terrain_type,
         copyable_badges,
         grf_file_version,
+        grf_file_traininfo_vehicle_pitch,
+        grf_file_traininfo_vehicle_width,
         grf_price_shift,
         grf_cargo_map,
         grf_boolean_callback,
@@ -1054,6 +1060,12 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
     extern "C" fn unexpected_version(_: *const c_void) -> u8 {
         std::process::abort()
     }
+    extern "C" fn unexpected_pitch(_: *const c_void) -> i32 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_width(_: *const c_void) -> u32 {
+        std::process::abort()
+    }
     extern "C" fn unexpected_price_shift(_: *const c_void, _: u32) -> i32 {
         std::process::abort()
     }
@@ -1114,6 +1126,8 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         rail_type_powered_railtypes: unexpected_rail_type_info,
         command_post: unexpected_post,
         grf_file_version: unexpected_version,
+        grf_file_traininfo_vehicle_pitch: unexpected_pitch,
+        grf_file_traininfo_vehicle_width: unexpected_width,
         grf_price_shift: unexpected_price_shift,
         grf_cargo_map: unexpected_cargo_map,
         grf_boolean_callback: unexpected_boolean,

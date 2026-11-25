@@ -18,7 +18,7 @@ use crate::{
     },
     engine_type::INVALID_ENGINE,
     game_state::GameState,
-    newgrf::{CargoLabel, INVALID_GRFID, get_active_cargo_label},
+    newgrf::{CargoLabelChoice, INVALID_GRFID, get_active_cargo_label},
 };
 use std::{collections::BTreeMap, ffi::c_void, ptr};
 pub(crate) mod properties;
@@ -512,7 +512,7 @@ crate::abi::layouts! {
     };
     "EngineIDMapping" ["engine_loading"] => Mapping { grfid, internal_id, kind => type, substitute_id, engine };
     "OpenTTDEngineMappingView" ["engine_loading"] => MappingView { data, size };
-    "OpenTTDNewGRFCargoLabel" ["engine_loading"] => CargoLabel { value, mixed };
+    "OpenTTDNewGRFCargoLabel" ["engine_loading"] => CargoLabelChoice { value, mixed };
     "OpenTTDEngineCargoClass" ["engine_loading"] => CargoClass { classes, cargo };
 
 }
@@ -549,9 +549,7 @@ pub(crate) fn translate_refit_mask(refit_mask: u32, file: File) -> CargoTypes {
     CargoTypes(result)
 }
 fn engine_label(shell: E) -> u32 {
-    get_active_cargo_label(read_field!(shell, info.cargo_label), |label| {
-        openttd_rust_cargo_by_label(label)
-    })
+    get_active_cargo_label(read_field!(shell, info.cargo_label)).0
 }
 fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16, u16) {
     if kind == VEH_AIRCRAFT {

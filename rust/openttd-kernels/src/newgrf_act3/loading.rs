@@ -410,7 +410,11 @@ pub(crate) unsafe fn feature_map_sprite_group(
                 6,
                 "FeatureMapSpriteGroup: Adding generic feature callback for feature 0x{feature:02X}"
             );
-            crate::newgrf_generic::openttd_rust_generic_add(feature, loading::file(), group(id));
+            crate::newgrf_generic::add_generic_callback(
+                crate::newgrf::GrfSpecFeature(feature),
+                loading::file().cast(),
+                group(id),
+            );
             return Ok(());
         }
         ((*s.bindings).mark_feature)(loading::file(), feature);

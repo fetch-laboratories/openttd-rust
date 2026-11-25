@@ -106,7 +106,7 @@ pub unsafe extern "C" fn openttd_rust_grf_set_size(feature: u8, set: u32) -> u32
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { clocks, finance, global, cargo, engine, houses, industry, airports, types, action2, text, bindings, stations, engine_range, config_md5, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, config_filename, config_palette, param_count, set_parameter, find_config, file_for_config, error, error_name, error_property, error_after_translated_file, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, static_grf_info, gradual_loading, signal_side, freight_trains, wagon_speed_limits, improved_load, inflation, starting_year, plane_speed, colourmap_sprite, slopes_sprite, shore_sprite, generic, clock, set_clock, config_at, exists, init_file, too_many, clear_errors, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir, assert_override_size, assert_file_match };
+    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { clocks, finance, global, cargo, engine, houses, industry, airports, types, action2, text, bindings, stations, engine_range, config_md5, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, config_filename, param_count, set_parameter, file_for_config, error, error_name, error_property, error_after_translated_file, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, static_grf_info, gradual_loading, signal_side, freight_trains, wagon_speed_limits, improved_load, inflation, starting_year, plane_speed, colourmap_sprite, slopes_sprite, shore_sprite, generic, clock, set_clock, config_at, exists, init_file, too_many, clear_errors, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir, assert_override_size, assert_file_match };
     "OpenTTDGrfEngineRange" ["grf_loading"] => EngineRange { offset, count };
     "OpenTTDGrfClock" ["grf_loading"] => Clock { ticks, display };
     "OpenTTDGrfExecution" ["grf_loading"] => Execution {
@@ -142,10 +142,8 @@ pub struct Services {
     /// `GRFConfig::filename`, live while the config is.
     config_filename: unsafe extern "C" fn(*const c_void) -> crate::services::ByteSpan,
     /// `GRFConfig::palette`.
-    config_palette: unsafe extern "C" fn(*const c_void) -> u8,
     param_count: unsafe extern "C" fn(*const c_void) -> usize,
     set_parameter: unsafe extern "C" fn(*mut c_void, u8, u32),
-    pub(crate) find_config: unsafe extern "C" fn(u32, u32) -> *mut c_void,
     file_for_config: unsafe extern "C" fn(*const c_void) -> *mut c_void,
     pub(crate) error: unsafe extern "C" fn(*mut c_void, u32, u32, bool) -> *mut c_void,
     error_name: unsafe extern "C" fn(*mut c_void, *const c_void),
@@ -392,14 +390,12 @@ pub unsafe extern "C" fn openttd_rust_grf_unsafe(s: &Services) {
 }
 unsafe fn openttd_rust_grf_param(s: &Services, param: u8, cond: *mut u32) -> u32 {
     unsafe {
-        let mut value = 0;
-        if crate::newgrf::openttd_rust_global_variable_abi(
-            &*s.global,
+        let global = &*s.global;
+        if let Some(value) = crate::newgrf::get_global_variable(
+            global,
             param.wrapping_sub(0x80),
-            &raw mut value,
-            file(),
-        ) != 0
-        {
+            crate::newgrf::GRFFileRef::new(global.shared(), file().cast()),
+        ) {
             return value;
         }
         match param {
@@ -572,7 +568,7 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
                 }
             }
         } else if pn == 0x88 {
-            let mut c = (s.find_config)(value, mask);
+            let mut c = ((*s.global).get_grf_config)(value, mask);
             if !c.is_null()
                 && is_static(s, c)
                 && !is_static(s, config())
@@ -744,7 +740,7 @@ unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), R
                         crate::string_type::StringValidationSetting::ReplaceWithQuestionMark
                     )
                 )),
-                if (s.config_palette)(config()) & GRFP_USE_MASK != 0 {
+                if ((*s.global).palette)(config()) & GRFP_USE_MASK != 0 {
                     "Windows"
                 } else {
                     "DOS"
@@ -766,7 +762,7 @@ unsafe fn inhibit(s: &Services, b: &mut ByteReader, safe: bool) -> Result<(), Re
                     return Ok(());
                 }
             } else {
-                let c = (s.find_config)(id, u32::MAX);
+                let c = ((*s.global).get_grf_config)(id, u32::MAX);
                 if !c.is_null() && c != config() {
                     grf_msg!(
                         2,
@@ -1037,7 +1033,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                 }
             } else {
                 let f = ((*s.engine).find_file)(data);
-                let c = (s.find_config)(data, u32::MAX);
+                let c = ((*s.global).get_grf_config)(data, u32::MAX);
                 if !c.is_null()
                     && is_static(s, c)
                     && !is_static(s, config())
@@ -1148,7 +1144,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                 let bits = result & !local;
                 let bits = if is_static(s, config()) {
                     let safe = 1 << crate::newgrf::SECOND_ROCKY_TILE_SET;
-                    (u32::from(((*s.global).misc_bits)()) & !safe) | (bits & safe)
+                    (u32::from(((*s.global).misc_grf_features)()) & !safe) | (bits & safe)
                 } else {
                     bits
                 };
@@ -1495,7 +1491,7 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
         crate::type_registry::openttd_rust_road_reset(s.types);
         crate::engine_loading::openttd_rust_engine_temp_initialize(&*s.engine);
         openttd_rust_grf_reset_grm();
-        crate::newgrf_generic::openttd_rust_generic_reset(s.generic);
+        crate::newgrf_generic::reset_generic_callbacks(s.generic);
         (s.reset_prices)();
         (s.reset_currencies)();
         crate::house_definition::reset(&*s.houses);
@@ -1744,10 +1740,8 @@ pub(crate) const TEST_TABLE: Services = Services {
     set_file_info: crate::test_tables::unreachable3,
     config_version: crate::test_tables::unreachable1,
     config_filename: crate::test_tables::unreachable1,
-    config_palette: crate::test_tables::unreachable1,
     param_count: crate::test_tables::unreachable1,
     set_parameter: crate::test_tables::unreachable3,
-    find_config: crate::test_tables::unreachable2,
     file_for_config: crate::test_tables::unreachable1,
     error: crate::test_tables::unreachable4,
     error_name: crate::test_tables::unreachable2,

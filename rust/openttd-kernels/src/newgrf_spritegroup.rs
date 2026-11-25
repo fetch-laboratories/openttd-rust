@@ -201,7 +201,7 @@ pub union ScopeData {
     airport: *const crate::newgrf_airport::State,
     house: *const crate::town::resolver::HouseScope,
     roadstop: *const crate::newgrf_roadstop::State,
-    generic: *const crate::newgrf_generic::Invocation,
+    generic: *const crate::newgrf_generic::GenericResolverObject,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -302,9 +302,11 @@ impl<'a> Invocation<'a> {
                     relative,
                     self.s.airport,
                 ),
-                11 => {
-                    crate::newgrf_generic::openttd_rust_generic_scope(b.own, b.default_scope, kind)
-                }
+                11 => crate::newgrf_generic::GenericResolverObject::get_scope(
+                    b.own,
+                    b.default_scope,
+                    kind,
+                ),
                 12 => crate::objects::openttd_rust_object_scope(
                     b.state.cast(),
                     self.ro.cast(),
@@ -431,10 +433,10 @@ impl<'a> Invocation<'a> {
                     available,
                     self.s.airport,
                 ),
-                12 => crate::newgrf_generic::openttd_rust_generic_variable(
+                12 => crate::newgrf_generic::generic_scope_variable(
                     b.data.generic,
                     variable,
-                    available,
+                    &mut *available,
                 ),
                 _ => (self.s.variable)(scope.native, variable, parameter, available),
             }
@@ -589,18 +591,19 @@ impl<'a> Invocation<'a> {
                     }
                 }
                 _ => {
-                    let mut value = 0;
-                    if variable < 0x40
-                        && (crate::newgrf::openttd_rust_global_variable_abi(
-                            &*self.s.global,
+                    let global = &*self.s.global;
+                    let value = if variable < 0x40 {
+                        crate::newgrf::get_global_variable(
+                            global,
                             variable,
-                            &raw mut value,
-                            self.file,
-                        ) != 0)
-                    {
-                        value
+                            crate::newgrf::GRFFileRef::new(global.shared(), self.file.cast()),
+                        )
                     } else {
-                        self.feature_variable(scope, variable, parameter, available)
+                        None
+                    };
+                    match value {
+                        Some(value) => value,
+                        None => self.feature_variable(scope, variable, parameter, available),
                     }
                 }
             }
@@ -930,6 +933,22 @@ pub unsafe extern "C" fn openttd_rust_resolver_resolve(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_resolver_callback(
+    s: &Services,
+    group: Handle,
+    ro: Resolver,
+    state: *mut State,
+    file: Handle,
+    registers: *mut i32,
+    count: usize,
+) -> u16 {
+    unsafe { resolve_callback(s, group, ro, state, file, registers, count) }
+}
+/// `ResolverObject::ResolveCallback`: resolve the root group and, for a callback result, copy
+/// `count` registers from 100 on.
+///
+/// # Safety
+/// The resolver frame and its state are live, and `registers` holds `count` writable values.
+pub(crate) unsafe fn resolve_callback(
     s: &Services,
     group: Handle,
     ro: Resolver,
