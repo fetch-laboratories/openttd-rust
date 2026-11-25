@@ -7,7 +7,7 @@
 #![allow(unsafe_code)]
 
 use super::{DisasterVehicle, Services, Tables};
-use crate::company_type::Owner;
+use crate::company_type::{CompanyID, Owner};
 use crate::direction_type::{DiagDirection, Direction};
 use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, fixture};
 use crate::services::{CommandCost, CommandCostStorage, Services as Shared};
@@ -195,12 +195,16 @@ fn disaster_delay_is_process_wide_across_serialized_threads() {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Event {
     /// `_current_company = company`.
-    SetCompany(u8),
+    SetCompany(CompanyID),
     /// The tile's clear procedure, in the test (`false`) or execute (`true`) phase, with the
     /// current company of that call.
-    Clear { tile: u32, execute: bool, company: u8 },
+    Clear {
+        tile: TileIndex,
+        execute: bool,
+        company: CompanyID,
+    },
     /// The signal update of a buffered block for `owner`, through its `Company::IsValidID`.
-    SignalUpdate(u8),
+    SignalUpdate(CompanyID),
 }
 
 thread_local! {
@@ -220,10 +224,10 @@ extern "C" fn current_company() -> u8 {
 }
 extern "C" fn set_current_company(company: u8) {
     CURRENT.set(company);
-    event(Event::SetCompany(company));
+    event(Event::SetCompany(CompanyID(company)));
 }
 extern "C" fn company_valid(owner: u8) -> bool {
-    event(Event::SignalUpdate(owner));
+    event(Event::SignalUpdate(CompanyID(owner)));
     true
 }
 extern "C" fn no_finances(_: u8) -> *mut crate::company::Finances {
@@ -247,9 +251,9 @@ extern "C" fn landscape_tile_type(_: u32) -> u8 {
 extern "C" fn clear(cost: *mut CommandCost, tile: u32, flags: u16) {
     let execute = flags & crate::command_type::DoCommandFlag::EXECUTE != 0;
     event(Event::Clear {
-        tile,
+        tile: TileIndex(tile),
         execute,
-        company: CURRENT.get(),
+        company: CompanyID(CURRENT.get()),
     });
     // SAFETY: A live fixture cost.
     unsafe { *flag(cost) = true };
@@ -307,17 +311,18 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
     ) {
         return;
     }
-    const HOUSE: u32 = 100;
-    const RAIL: u32 = 200;
-    const DEPOT: u32 = 300;
-    const AI_RAIL: u32 = 400;
-    const BLOCK: u32 = 1000;
+    const HOUSE: TileIndex = TileIndex(100);
+    const RAIL: TileIndex = TileIndex(200);
+    const DEPOT: TileIndex = TileIndex(300);
+    const AI_RAIL: TileIndex = TileIndex(400);
+    const BLOCK: TileIndex = TileIndex(1000);
     let (mut base, _extended) = install_map(TileType::MP_CLEAR, 0);
-    base[HOUSE as usize].kind = TileType::MP_HOUSE.0 << 4;
+    base[HOUSE.0 as usize].kind = TileType::MP_HOUSE.0 << 4;
     for (tile, owner, m5) in [(RAIL, 1, 0x01), (DEPOT, 1, 0xC0), (AI_RAIL, 2, 0x01)] {
-        base[tile as usize].kind = TileType::MP_RAILWAY.0 << 4;
-        base[tile as usize].m1 = owner;
-        base[tile as usize].m5 = m5;
+        let tile = tile.0 as usize;
+        base[tile].kind = TileType::MP_RAILWAY.0 << 4;
+        base[tile].m1 = owner;
+        base[tile].m5 = m5;
     }
 
     let costs = leak(crate::services::CommandCostServices {
@@ -410,18 +415,18 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
     // A block queued for company 5 on clear ground, before each clear.
     let queue_block = || {
         crate::signal::context(shared).add_track_to_signal_buffer(
-            TileIndex(BLOCK),
+            BLOCK,
             crate::track_type::Track::TRACK_X,
-            crate::company_type::CompanyID(5),
+            CompanyID(5),
         );
     };
-    const SAVED: u8 = 3;
+    const SAVED: CompanyID = CompanyID(3);
 
-    for (tile, company) in [(HOUSE, Owner::NONE.0), (RAIL, Owner::WATER.0)] {
-        CURRENT.set(SAVED);
+    for (tile, company) in [(HOUSE, Owner::NONE), (RAIL, Owner::WATER)] {
+        CURRENT.set(SAVED.0);
         airplane.set_state(1);
         queue_block();
-        super::disaster_clear_square(&t, TileIndex(tile));
+        super::disaster_clear_square(&t, tile);
         let mut expected = vec![
             Event::SetCompany(company),
             Event::Clear {
@@ -438,16 +443,16 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
         ];
         if tile == RAIL {
             // The house's block is still queued; the rail's clear updates it.
-            expected.push(Event::SignalUpdate(5));
+            expected.push(Event::SignalUpdate(CompanyID(5)));
         }
-        assert_eq!(take_events(), expected, "tile {tile}");
-        assert_eq!(airplane.state(), 3, "the nested release, tile {tile}");
-        assert_eq!(CURRENT.get(), SAVED);
+        assert_eq!(take_events(), expected, "tile {}", tile.0);
+        assert_eq!(airplane.state(), 3, "the nested release, tile {}", tile.0);
+        assert_eq!(CURRENT.get(), SAVED.0);
     }
 
     for tile in [DEPOT, AI_RAIL] {
-        super::disaster_clear_square(&t, TileIndex(tile));
-        assert_eq!(take_events(), [], "tile {tile}");
+        super::disaster_clear_square(&t, tile);
+        assert_eq!(take_events(), [], "tile {}", tile.0);
     }
     assert_eq!(FAILED_ASSERTIONS.get(), 0);
 }
@@ -473,7 +478,7 @@ extern "C" fn station_commands() -> *const crate::station_cmd::CommandServicesTa
     STATION_COMMANDS.get()
 }
 /// Company `id` as its own address-free handle.
-extern "C" fn company_of(id: crate::company_type::CompanyID) -> *mut crate::company_type::OpenTTDCompany {
+extern "C" fn company_of(id: CompanyID) -> *mut crate::company_type::OpenTTDCompany {
     ptr::without_provenance_mut(usize::from(id.0) + 1)
 }
 /// Company 1 is human, every other company an AI.

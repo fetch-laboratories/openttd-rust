@@ -28,6 +28,8 @@ rust/openttd-kernels/src/crypto.rs
 rust/openttd-kernels/src/crypto/tests.rs
 rust/openttd-kernels/src/debug.rs
 rust/openttd-kernels/src/direction_func.rs
+rust/openttd-kernels/src/disaster.rs
+rust/openttd-kernels/src/disaster/tests.rs
 rust/openttd-kernels/src/disaster_vehicle.rs
 rust/openttd-kernels/src/economy_func.rs
 rust/openttd-kernels/src/effect.rs
