@@ -291,8 +291,11 @@ impl<'a> Tables<'a> {
         crate::movement::get_slope_pixel_z(self.shared, x, y, false)
     }
     /// `GetAircraftFlightLevel(v)`.
+    #[allow(unsafe_code)]
     fn get_aircraft_flight_level(&self, v: DisasterVehicle) -> i32 {
-        aircraft::get_aircraft_flight_level(self.aircraft(), v.v, v.flags(), false)
+        // SAFETY: `flags` addresses the live owner's own member, which the handle names and
+        // nothing else touches during the call.
+        unsafe { aircraft::get_aircraft_flight_level(self.aircraft(), v.v, v.flags(), false) }
     }
     /// `GetAircraftFlightLevelBounds(v, &v->z_pos, nullptr)`: the bounds function reads no
     /// `z_pos`, so the minimum is stored after it returns.

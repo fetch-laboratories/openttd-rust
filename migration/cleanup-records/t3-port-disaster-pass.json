@@ -634,5 +634,17 @@
     "site": "rust/openttd-kernels/src/disaster/tests.rs | fn tables | allow unsafe_code",
     "source_contract": "The tables one disaster entry reaches.",
     "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::Tables::get_aircraft_flight_level",
+    "reason": "Calls the unsafe `aircraft::get_aircraft_flight_level` with the address of the live owner's own `flags`, which the handle names and nothing else touches during the call. The base's module-wide allowance goes.",
+    "retirement_condition": "Retires when the vehicle pool is Rust storage and the owner is a field of the record (#656).",
+    "retiring_owner": "#656",
+    "site": "rust/openttd-kernels/src/disaster.rs | impl<'a> Tables<'a> > fn get_aircraft_flight_level | allow unsafe_code",
+    "source_contract": "`GetAircraftFlightLevel(v)` in `DisasterTick_Aircraft` and `DisasterTick_Zeppeliner`.",
+    "tool": "rust"
   }
 ]

@@ -3342,7 +3342,11 @@ pub(crate) fn get_aircraft_flight_level_bounds(
 }
 /// `GetAircraftFlightLevel(v, takeoff)`, for Rust callers, over the vehicle's `flags`: an
 /// aircraft's, or a disaster vehicle's, whose record has no aircraft link.
-pub(crate) fn get_aircraft_flight_level(
+///
+/// # Safety
+/// `flags` addresses the `flags` member of `v`'s live aircraft or disaster owner, which
+/// nothing else reads or writes during the call.
+pub(crate) unsafe fn get_aircraft_flight_level(
     leaves: &Leaves,
     v: VehicleRef,
     flags: *mut u8,
@@ -3381,8 +3385,8 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
     flags: *mut u8,
     takeoff: bool,
 ) -> i32 {
-    // SAFETY: The caller supplies the live table.
-    get_aircraft_flight_level(unsafe { &*leaves }, id.base(), flags, takeoff)
+    // SAFETY: The caller supplies the live table and the aircraft's own writable `flags`.
+    unsafe { get_aircraft_flight_level(&*leaves, id.base(), flags, takeoff) }
 }
 /// `HandleMissingAircraftOrders`.
 /// # Safety
