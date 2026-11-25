@@ -139,6 +139,8 @@ const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *s
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->town; }
 inline uint16_t RustStationTownID(const Station *station) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(station))); }
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
+/** Waypoint::Iterate(from)'s first waypoint, or nullptr; the one waypoint iterator of the Rust tables. */
+inline Waypoint *OpenTTDNextWaypoint(uint32_t from) noexcept { auto range = Waypoint::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
 template <class Handle> inline Handle RustNextStation(uint32_t from) noexcept { return OpenTTDNextStation(from); }
 template <class Handle> inline Handle RustStationIfValid(uint16_t id) noexcept { return Station::GetIfValid(StationID{id}); }
 inline const OpenTTDStation *Aircraft_station(uint16_t id) noexcept { return RustStation(RustStationIfValid<Station *>(id)); }

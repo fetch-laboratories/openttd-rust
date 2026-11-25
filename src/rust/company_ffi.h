@@ -13,10 +13,12 @@
 #include <cstdint>
 #include "services_ffi.h"
 #include "call_ffi.h"
+#include "abi-record-company.h"
 struct BaseStation;
 struct Company;
 struct CompanyFinances;
 struct GRFFile;
+struct Goal;
 struct OpenTTDCommandCost;
 struct OpenTTDCommandCostServices;
 struct OpenTTDCompanyIdentityServices;
@@ -27,6 +29,8 @@ struct OpenTTDStationLifecycleServices;
 struct OpenTTDSubsidyServices;
 struct OpenTTDTileOwnerContext;
 struct OpenTTDVehicle;
+struct Sign;
+struct StoryPage;
 
 /* Company IDs, owners, vehicle types, price bases and expenses cross as uint8_t;
  * tiles as uint32_t; Money as int64_t. Layouts are checked by the generated ABI probes. */
@@ -41,13 +45,6 @@ struct OpenTTDCompanyStartup {
 	uint8_t company;
 	uint8_t stage;
 	uint32_t index;
-};
-/** The arguments of CmdCompanyCtrl, in command order. */
-struct OpenTTDCmdCompanyCtrl {
-	uint8_t cca;
-	uint8_t company_id;
-	uint8_t reason;
-	uint32_t client_id;
 };
 /** The frame of CmdCompanyCtrl: its arguments, its DoCommandFlags and CCA_NEW_AI's startup. */
 struct OpenTTDCompanyControl {
@@ -99,8 +96,8 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *company_admin_remove)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_admin_remove);
 	size_t (OPENTTD_RUST_CALL *company_count)() noexcept OPENTTD_SERVICE_DEFAULT(company_count);
 	void (OPENTTD_RUST_CALL *delete_company)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(delete_company);
-	void (OPENTTD_RUST_CALL *delete_goal)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_goal);
-	void (OPENTTD_RUST_CALL *delete_story_page)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_story_page);
+	void (OPENTTD_RUST_CALL *delete_goal)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(delete_goal);
+	void (OPENTTD_RUST_CALL *delete_story_page)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(delete_story_page);
 	uint16_t (OPENTTD_RUST_CALL *draw_string_company_colour)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(draw_string_company_colour);
 	void *(OPENTTD_RUST_CALL *group_all)(Company *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(group_all);
 	uint32_t (OPENTTD_RUST_CALL *location_of_hq)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(location_of_hq);
@@ -109,10 +106,10 @@ struct OpenTTDCompanyServices {
 	bool (OPENTTD_RUST_CALL *network_server)() noexcept OPENTTD_SERVICE_DEFAULT(network_server);
 	bool (OPENTTD_RUST_CALL *new_competitor_timeout_has_fired)() noexcept OPENTTD_SERVICE_DEFAULT(new_competitor_timeout_has_fired);
 	void (OPENTTD_RUST_CALL *new_competitor_timeout_reset)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_competitor_timeout_reset);
-	uint32_t (OPENTTD_RUST_CALL *next_goal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_goal);
-	uint32_t (OPENTTD_RUST_CALL *next_sign)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_sign);
-	uint32_t (OPENTTD_RUST_CALL *next_story_page)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_story_page);
-	BaseStation *(OPENTTD_RUST_CALL *next_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_waypoint);
+	OpenTTDCompanyPoolCursor (OPENTTD_RUST_CALL *next_goal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_goal);
+	OpenTTDCompanyPoolCursor (OPENTTD_RUST_CALL *next_sign)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_sign);
+	OpenTTDCompanyPoolCursor (OPENTTD_RUST_CALL *next_story_page)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_story_page);
+	OpenTTDCompanyPoolCursor (OPENTTD_RUST_CALL *next_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_waypoint);
 	bool (OPENTTD_RUST_CALL *parse_company_manager_face)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(parse_company_manager_face);
 	uint8_t (OPENTTD_RUST_CALL *price_base_category)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(price_base_category);
 	int64_t (OPENTTD_RUST_CALL *price_base_start_price)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(price_base_start_price);
@@ -128,7 +125,7 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *set_unitnumber)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_unitnumber);
 	void (OPENTTD_RUST_CALL *show_buy_company_dialog)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(show_buy_company_dialog);
 	void (OPENTTD_RUST_CALL *show_company_finances)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(show_company_finances);
-	uint8_t *(OPENTTD_RUST_CALL *sign_owner)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(sign_owner);
+	uint8_t *(OPENTTD_RUST_CALL *sign_owner)(Sign *) noexcept OPENTTD_SERVICE_DEFAULT(sign_owner);
 	int64_t (OPENTTD_RUST_CALL *signal_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_maintenance_cost);
 	void (OPENTTD_RUST_CALL *snd_play_fx)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(snd_play_fx);
 	int64_t (OPENTTD_RUST_CALL *station_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_maintenance_cost);

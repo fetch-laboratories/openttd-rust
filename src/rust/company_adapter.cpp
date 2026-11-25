@@ -43,6 +43,7 @@
 #include "engine_ffi.h"
 #include "environment_services.h"
 #include "services_objectives.h"
+#include "services_station.h"
 #include "settings_table_ffi.h"
 #include "station_lifecycle_ffi.h"
 #include "subsidy_ffi.h"
@@ -101,15 +102,15 @@ static Company *Co_allocate_company(uint8_t company, bool is_ai) noexcept
 }
 static bool Co_allow_list_add(Company *c, OpenTTDByteSpan key) noexcept { return c->allow_list.Add({reinterpret_cast<const char *>(key.data), key.size}); }
 static bool Co_allow_list_remove(Company *c, OpenTTDByteSpan key) noexcept { return c->allow_list.Remove({reinterpret_cast<const char *>(key.data), key.size}); }
-template <typename T> static uint32_t Co_next_index(uint32_t from) noexcept
+template <typename T> static OpenTTDCompanyPoolCursor Co_next(uint32_t from) noexcept
 {
-	for (const T *item : T::Iterate(from)) return item->index.base();
-	return UINT32_MAX;
+	for (T *item : T::Iterate(from)) return {.item = item, .index = item->index.base()};
+	return {.item = nullptr, .index = UINT32_MAX};
 }
-static BaseStation *Co_next_waypoint(uint32_t from) noexcept
+static OpenTTDCompanyPoolCursor Co_next_waypoint(uint32_t from) noexcept
 {
-	for (Waypoint *wp : Waypoint::Iterate(from)) return wp;
-	return nullptr;
+	if (Waypoint *wp = OpenTTDNextWaypoint(from)) return {.item = static_cast<BaseStation *>(wp), .index = RustBaseStationID(wp)};
+	return {.item = nullptr, .index = UINT32_MAX};
 }
 static bool Co_parse_company_manager_face(Company *c) noexcept
 {
@@ -165,8 +166,8 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.company_admin_remove = [](uint8_t company, uint8_t reason) noexcept { CompanyAdminRemove(CompanyID(company), static_cast<CompanyRemoveReason>(reason)); },
 		.company_count = []() noexcept { return Company::GetNumItems(); },
 		.delete_company = [](Company *c) noexcept { delete c; },
-		.delete_goal = [](uint16_t id) noexcept { delete Goal::Get(GoalID(id)); },
-		.delete_story_page = [](uint16_t id) noexcept { delete StoryPage::Get(StoryPageID(id)); },
+		.delete_goal = [](Goal *g) noexcept { delete g; },
+		.delete_story_page = [](StoryPage *sp) noexcept { delete sp; },
 		.draw_string_company_colour = [](uint8_t company) noexcept { return static_cast<uint16_t>(GetDrawStringCompanyColour(CompanyID(company))); },
 		.group_all = RustCompanyGroupAll,
 		.location_of_hq = RustCompanyLocationOfHQ,
@@ -175,9 +176,9 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.network_server = RustNetworkServer,
 		.new_competitor_timeout_has_fired = []() noexcept { return _new_competitor_timeout.HasFired(); },
 		.new_competitor_timeout_reset = [](uint32_t ticks) noexcept { _new_competitor_timeout.Reset({TimerGameTick::Priority::COMPETITOR_TIMEOUT, ticks}); },
-		.next_goal = Co_next_index<Goal>,
-		.next_sign = Co_next_index<Sign>,
-		.next_story_page = Co_next_index<StoryPage>,
+		.next_goal = Co_next<Goal>,
+		.next_sign = Co_next<Sign>,
+		.next_story_page = Co_next<StoryPage>,
 		.next_waypoint = Co_next_waypoint,
 		.parse_company_manager_face = Co_parse_company_manager_face,
 		.price_base_category = [](uint8_t price) noexcept { return static_cast<uint8_t>(_price_base_specs[price].category); },
@@ -194,7 +195,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.set_unitnumber = RustVehicleSetUnitNumber,
 		.show_buy_company_dialog = [](uint8_t company, bool hostile_takeover) noexcept { ShowBuyCompanyDialog(CompanyID(company), hostile_takeover); },
 		.show_company_finances = [](uint8_t company) noexcept { ShowCompanyFinances(CompanyID(company)); },
-		.sign_owner = [](uint16_t id) noexcept { return reinterpret_cast<uint8_t *>(&Sign::Get(SignID(id))->owner); },
+		.sign_owner = [](Sign *si) noexcept { return reinterpret_cast<uint8_t *>(&si->owner); },
 		.signal_maintenance_cost = [](uint32_t num) noexcept { return SignalMaintenanceCost(num).base(); },
 		.snd_play_fx = [](uint8_t sound) noexcept { SndPlayFx(static_cast<SoundFx>(sound)); },
 		.station_maintenance_cost = [](uint32_t num) noexcept { return StationMaintenanceCost(num).base(); },

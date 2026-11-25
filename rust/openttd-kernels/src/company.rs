@@ -75,6 +75,7 @@ use crate::window_func::{
     set_window_classes_dirty, set_window_dirty,
 };
 use crate::window_type::{WindowClass, WindowNumber, WindowNumberEnum};
+use std::ffi::c_void;
 
 /// `CompanyEconomyEntry`: statistics about the economy of one quarter.
 #[repr(C)]
@@ -239,10 +240,10 @@ pub struct Services {
     pub company_count: extern "C" fn() -> usize,
     /// `delete c`.
     pub delete_company: extern "C" fn(*mut OpenTTDCompany),
-    /// `delete Goal::Get(id)`.
-    pub delete_goal: extern "C" fn(crate::goal_type::GoalID),
-    /// `delete StoryPage::Get(id)`.
-    pub delete_story_page: extern "C" fn(crate::story_type::StoryPageID),
+    /// `delete g`.
+    pub delete_goal: extern "C" fn(*mut crate::goal_type::Goal),
+    /// `delete sp`.
+    pub delete_story_page: extern "C" fn(*mut crate::story_type::StoryPage),
     /// `GetDrawStringCompanyColour(company)`.
     pub draw_string_company_colour: extern "C" fn(CompanyID) -> crate::gfx_type::TextColour,
     /// `&c->group_all[type]`, the company's statistics of all its vehicles of a type.
@@ -259,14 +260,14 @@ pub struct Services {
     pub new_competitor_timeout_has_fired: extern "C" fn() -> bool,
     /// `_new_competitor_timeout.Reset({TimerGameTick::Priority::COMPETITOR_TIMEOUT, ticks})`.
     pub new_competitor_timeout_reset: extern "C" fn(u32),
-    /// `Goal::Iterate(from)`'s next goal index; `u32::MAX` after the last.
-    pub next_goal: extern "C" fn(u32) -> u32,
-    /// `Sign::Iterate(from)`'s next sign index; `u32::MAX` after the last.
-    pub next_sign: extern "C" fn(u32) -> u32,
-    /// `StoryPage::Iterate(from)`'s next page index; `u32::MAX` after the last.
-    pub next_story_page: extern "C" fn(u32) -> u32,
-    /// `Waypoint::Iterate(from)`'s next waypoint; null after the last.
-    pub next_waypoint: extern "C" fn(u32) -> *mut crate::station::BaseStation,
+    /// `Goal::Iterate(from)`'s next goal.
+    pub next_goal: extern "C" fn(u32) -> PoolCursor,
+    /// `Sign::Iterate(from)`'s next sign.
+    pub next_sign: extern "C" fn(u32) -> PoolCursor,
+    /// `StoryPage::Iterate(from)`'s next page.
+    pub next_story_page: extern "C" fn(u32) -> PoolCursor,
+    /// `Waypoint::Iterate(from)`'s next waypoint.
+    pub next_waypoint: extern "C" fn(u32) -> PoolCursor,
     /// `ParseCompanyManagerFaceCode(_company_manager_face)` stored in `c->face`; whether it
     /// parsed.
     pub parse_company_manager_face: extern "C" fn(*mut OpenTTDCompany) -> bool,
@@ -301,8 +302,8 @@ pub struct Services {
     pub show_buy_company_dialog: extern "C" fn(CompanyID, bool),
     /// `ShowCompanyFinances(company)`.
     pub show_company_finances: extern "C" fn(CompanyID),
-    /// `&Sign::Get(id)->owner`.
-    pub sign_owner: extern "C" fn(crate::signs_type::SignID) -> *mut Owner,
+    /// `&si->owner`.
+    pub sign_owner: extern "C" fn(*mut crate::signs_type::Sign) -> *mut Owner,
     /// `SignalMaintenanceCost(num)`.
     pub signal_maintenance_cost: extern "C" fn(u32) -> i64,
     /// `SndPlayFx(sound)`.
@@ -1311,18 +1312,43 @@ fn network_frame(s: &Services) -> &'static crate::network_frame::Services {
     (((s.shared.command_post)().network)().network)()
 }
 
-/// Arguments of `CmdCompanyCtrl`, in command order.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct CmdCompanyCtrl {
-    /// Action to perform.
-    pub cca: CompanyCtrlAction,
-    /// Company to perform the action on.
-    pub company_id: CompanyID,
-    /// The reason a company is removed.
-    pub reason: CompanyRemoveReason,
-    /// `ClientID`.
-    pub client_id: ClientID,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Arguments of `CmdCompanyCtrl`, in command order.
+    #[derive(Clone, Copy)]
+    "OpenTTDCmdCompanyCtrl" ["company"] => pub struct CmdCompanyCtrl {
+        /// Action to perform.
+        pub cca: CompanyCtrlAction,
+        /// Company to perform the action on.
+        pub company_id: CompanyID,
+        /// The reason a company is removed.
+        pub reason: CompanyRemoveReason,
+        /// `ClientID`.
+        pub client_id: ClientID,
+    }
+    /// One step of a pool's `Iterate(from)`: the item and its index, or null and `UINT32_MAX`
+    /// past the last item.
+    #[derive(Clone, Copy)]
+    "OpenTTDCompanyPoolCursor" ["company"] => pub struct PoolCursor {
+        /// The item's native shell.
+        pub item: *mut c_void,
+        /// `item->index`.
+        pub index: u32,
+    }
+}
+
+/// `for (T *item : T::Iterate())` over a pool cursor; the next item is looked up after `body`
+/// returns, from the index after the visited one, so an item `body` deletes is not revisited.
+fn pool_items(next: extern "C" fn(u32) -> PoolCursor, mut body: impl FnMut(PoolCursor)) {
+    let mut from = 0_u32;
+    loop {
+        let cursor = next(from);
+        if cursor.item.is_null() {
+            return;
+        }
+        from = cursor.index + 1;
+        body(cursor);
+    }
 }
 
 /// `Control::stage`: the command has not started.
@@ -1823,34 +1849,20 @@ pub extern "C" fn openttd_rust_company_first_playable(s: &Services) -> CompanyID
     get_first_playable_company_id(s)
 }
 
-/// The station services `Station::Iterate()` and the station members are read through.
-fn station_world(
-    s: &Services,
-) -> (
-    &'static crate::station::CatchmentServices,
-    &'static crate::station_cmd::CommandServicesTable,
-) {
-    // SAFETY: Process-lifetime tables.
-    unsafe {
-        (
-            &*(s.shared.station_catchment)(),
-            &*(s.shared.station_commands)(),
-        )
-    }
+/// The station command services the station members are read and written through.
+fn station_commands(s: &Services) -> &'static crate::station_cmd::CommandServicesTable {
+    // SAFETY: The process-lifetime station command table.
+    unsafe { &*(s.shared.station_commands)() }
 }
 
-/// `for (const Station *st : Station::Iterate())`, visiting each station's native shell.
-fn stations(s: &Services, mut body: impl FnMut(*mut crate::station::BaseStation)) {
-    let (catchment, _) = station_world(s);
-    let mut from = 0_u32;
-    loop {
-        let st = (catchment.next_station)(from);
-        if st.is_null() {
-            return;
-        }
-        from = u32::from((catchment.id)(st).0) + 1;
-        body(st);
-    }
+/// `for (const Station *st : Station::Iterate())`, visiting each station's native shell, as
+/// its `BaseStation`, and its Rust service record.
+fn stations(
+    s: &Services,
+    mut body: impl FnMut(*mut crate::station::BaseStation, *mut crate::station_service::Service),
+) {
+    s.shared
+        .for_each_station(|st, service, _| body(st.cast_mut().cast(), service));
 }
 
 /// `for (const Vehicle *v : Vehicle::Iterate())`. The next vehicle is looked up after `body`
@@ -1870,12 +1882,12 @@ fn calculate_company_asset_value(s: &Services, c: CompanyRef) -> i64 {
 
     let mut num = 0_u32;
 
-    let (_, commands) = station_world(s);
+    let commands = station_commands(s);
     // SAFETY: The process-lifetime station table.
     let world = unsafe { &*commands.station };
-    stations(s, |st| {
+    stations(s, |st, _| {
         if (world.station_owner)(st) == owner.0 {
-            num = num.wrapping_add(u32::from((world.facilities)(st)).count_ones());
+            num = num.wrapping_add(commands.facilities(st).0.count_ones());
         }
     });
 
@@ -2022,16 +2034,16 @@ pub(crate) fn update_company_rating_and_value(s: &Services, c: CompanyRef, updat
     // Count stations
     {
         let mut num = 0_u32;
-        let (catchment, commands) = station_world(s);
+        let commands = station_commands(s);
         // SAFETY: The process-lifetime station table.
         let world = unsafe { &*commands.station };
-        stations(s, |st| {
+        stations(s, |st, service| {
             // Only count stations that are actually serviced
             if (world.station_owner)(st) == owner.0 {
-                // SAFETY: The live owner of the station's shell; immediate copies.
-                let activity = unsafe { crate::station_service::activity((catchment.owner)(st)) };
+                // SAFETY: The visited station's live service record; immediate copies.
+                let activity = unsafe { crate::station_service::activity(service) };
                 if activity.time_since_load <= 20 || activity.time_since_unload <= 20 {
-                    num = num.wrapping_add(u32::from((world.facilities)(st)).count_ones());
+                    num = num.wrapping_add(commands.facilities(st).0.count_ones());
                 }
             }
         });
@@ -2507,11 +2519,11 @@ pub(crate) fn change_ownership_of_company_items(
     } else {
         new_owner
     };
-    let (catchment, commands) = station_world(s);
+    let commands = station_commands(s);
     // SAFETY: The process-lifetime station table.
     let world = unsafe { &*commands.station };
     // convert owner of stations (including deleted ones, but excluding buoys)
-    stations(s, |st| {
+    stations(s, |st, _| {
         if (world.station_owner)(st) == old_owner.0 {
             // if a company goes bankrupt, set owner to OWNER_NONE so the sign doesn't
             // disappear immediately also, drawing station window would cause reading invalid
@@ -2522,69 +2534,51 @@ pub(crate) fn change_ownership_of_company_items(
 
     // do the same for waypoints (we need to do this here so deleted waypoints are converted
     // too)
-    let mut from = 0_u32;
-    loop {
-        let wp = (s.next_waypoint)(from);
-        if wp.is_null() {
-            break;
-        }
-        from = u32::from((catchment.id)(wp).0) + 1;
+    pool_items(s.next_waypoint, |wp| {
+        let wp = wp.item.cast::<crate::station::BaseStation>();
         if (world.station_owner)(wp) == old_owner.0 {
             (commands.set_station_owner)(wp, replacement.0);
         }
-    }
+    });
 
-    let mut from = 0_u32;
-    loop {
-        let si = (s.next_sign)(from);
-        if si == u32::MAX {
-            break;
-        }
-        from = si + 1;
-        let owner = (s.sign_owner)(crate::signs_type::SignID(si as u16));
+    pool_items(s.next_sign, |si| {
+        let owner = (s.sign_owner)(si.item.cast());
         // SAFETY: The live sign's owner member, read and written in place.
         unsafe {
             if owner.read() == old_owner {
                 owner.write(replacement);
             }
         }
-    }
+    });
 
     // Remove Game Script created Goals, CargoMonitors and Story pages.
     let objectives = (s.objectives)();
-    let mut from = 0_u32;
-    loop {
-        let g = (s.next_goal)(from);
-        if g == u32::MAX {
-            break;
-        }
-        from = g + 1;
-        let id = crate::goal_type::GoalID(g as u16);
+    pool_items(s.next_goal, |g| {
+        let g = g.item.cast::<crate::goal_type::Goal>();
         // SAFETY: The live goal's company member.
-        if unsafe { (objectives.goal_company)((objectives.goal)(id)).read() } == old_owner {
-            (s.delete_goal)(id);
+        if unsafe { (objectives.goal_company)(g).read() } == old_owner {
+            (s.delete_goal)(g);
         }
-    }
+    });
 
     crate::cargomonitor::clear_cargo_pickup_monitoring(old_owner);
     crate::cargomonitor::clear_cargo_delivery_monitoring(old_owner);
 
-    let mut from = 0_u32;
-    loop {
-        let sp = (s.next_story_page)(from);
-        if sp == u32::MAX {
-            break;
-        }
-        from = sp + 1;
-        let id = crate::story_type::StoryPageID(sp as u16);
+    pool_items(s.next_story_page, |sp| {
+        let page = sp.item.cast::<crate::story_type::StoryPage>();
         // SAFETY: The live page's company member.
-        if unsafe { (objectives.page_company)((objectives.page)(sp)).read() } == old_owner {
+        if unsafe { (objectives.page_company)(page).read() } == old_owner {
             // `delete sp`: the page's elements first, as its destructor deletes them.
             // SAFETY: The page is live until its deletion below.
-            unsafe { crate::objectives::delete_elements(objectives, id) };
-            (s.delete_story_page)(id);
+            unsafe {
+                crate::objectives::delete_elements(
+                    objectives,
+                    crate::story_type::StoryPageID(sp.index as u16),
+                );
+            }
+            (s.delete_story_page)(page);
         }
-    }
+    });
 
     // Change colour of existing windows
     if new_owner != Owner::INVALID {
@@ -3788,12 +3782,6 @@ crate::abi::layouts! {
         company,
         stage,
         index,
-    };
-    "OpenTTDCmdCompanyCtrl" ["company_economy"] => CmdCompanyCtrl {
-        cca,
-        company_id,
-        reason,
-        client_id,
     };
     "OpenTTDCompanyControl" ["company_economy"] => Control {
         args,

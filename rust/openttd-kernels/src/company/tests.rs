@@ -1738,8 +1738,8 @@ mod evidence_tests {
     use crate::economy_type::{ExpensesType, Price, PriceCategory};
     use crate::news_func::testing::{Effect, Param, company_news_name, encoded};
     use crate::test_tables::{
-        CATCHMENT, COMMANDS, COMPANY, COMPANY_IDENTITY, FINANCE, FLEET_GROUPS, MOVEMENT,
-        OBJECTIVES, SETTINGS, SHARED, STATION_COMMANDS, STATION_WORLD, SUBSIDY, VEHICLE,
+        COMMANDS, COMPANY, COMPANY_IDENTITY, FINANCE, FLEET_GROUPS, MOVEMENT, OBJECTIVES, SETTINGS,
+        SHARED, STATION_COMMANDS, STATION_WORLD, SUBSIDY, VEHICLE,
     };
     use std::cell::{Cell, RefCell};
 
@@ -1874,17 +1874,17 @@ mod evidence_tests {
     extern "C" fn infrastructure(id: u8) -> *mut crate::company_base::CompanyInfrastructure {
         INFRASTRUCTURE.get()[usize::from(id)]
     }
-    extern "C" fn next_station(from: u32) -> *mut crate::station::BaseStation {
-        if from == 0 {
-            std::ptr::without_provenance_mut(1)
-        } else {
-            std::ptr::null_mut()
-        }
-    }
-    extern "C" fn station_id(
-        _: *mut crate::station::BaseStation,
-    ) -> crate::station_type::StationID {
-        crate::station_type::StationID(0)
+    /// `Station::Iterate()` over the one station, whose service record is never read here.
+    extern "C" fn for_each_station(context: *mut c_void, visit: crate::services::StationVisitor) {
+        // SAFETY: The visitor and its context come from `Services::for_each_station`.
+        unsafe {
+            visit(
+                context,
+                std::ptr::without_provenance(1),
+                std::ptr::null_mut(),
+                0,
+            )
+        };
     }
     extern "C" fn station_owner(_: *mut crate::station::BaseStation) -> u8 {
         STATION_OWNER.get()
@@ -1892,14 +1892,6 @@ mod evidence_tests {
     extern "C" fn set_station_owner(_: *mut crate::station::BaseStation, owner: u8) {
         STATION_OWNER.set(owner);
         trace(format!("station owner {owner}"));
-    }
-    extern "C" fn catchment() -> *const crate::station::CatchmentServices {
-        const TABLE: crate::station::CatchmentServices = crate::station::CatchmentServices {
-            next_station,
-            id: station_id,
-            ..CATCHMENT
-        };
-        std::ptr::from_ref(&TABLE)
     }
     extern "C" fn station_commands() -> *const crate::station_cmd::CommandServicesTable {
         const WORLD: crate::station_service::World = crate::station_service::World {
@@ -1983,11 +1975,11 @@ mod evidence_tests {
     ) -> *mut crate::settings_table::VehicleDefaults {
         DEFAULTS.get()[usize::from(index(c).0)]
     }
-    extern "C" fn none_waypoint(_: u32) -> *mut crate::station::BaseStation {
-        std::ptr::null_mut()
-    }
-    extern "C" fn end(_: u32) -> u32 {
-        u32::MAX
+    extern "C" fn end(_: u32) -> crate::company::PoolCursor {
+        crate::company::PoolCursor {
+            item: std::ptr::null_mut(),
+            index: u32::MAX,
+        }
     }
     extern "C" fn objectives() -> &'static crate::objectives::Services {
         &OBJECTIVES
@@ -2033,7 +2025,7 @@ mod evidence_tests {
                 vehicle_next,
                 screen_dirty,
                 company_infrastructure: infrastructure,
-                station_catchment: catchment,
+                for_each_station,
                 station_commands,
                 map: crate::map_func::fixture::statics(),
                 settings: leak(crate::settings_type::SettingAddresses {
@@ -2096,7 +2088,7 @@ mod evidence_tests {
             objectives,
             group_all,
             use_free_group,
-            next_waypoint: none_waypoint,
+            next_waypoint: end,
             next_sign: end,
             next_goal: end,
             next_story_page: end,
