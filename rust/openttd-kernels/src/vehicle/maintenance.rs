@@ -26,7 +26,7 @@ use crate::effectvehicle_func::EffectVehicleType;
 use crate::engine_type::{EngineID, EngineMiscFlag, EngineMiscFlags};
 use crate::landscape_type::LandscapeType;
 use crate::math::{clamp_to_u8, clamp_to_u16};
-use crate::newgrf_sound::VSE_BREAKDOWN;
+use crate::newgrf_sound::VehicleSoundEvent as SoundEvent;
 use crate::news_func::add_vehicle_advice_news_item;
 use crate::news_type::AdviceType;
 use crate::openttd::GameMode;
@@ -569,7 +569,7 @@ fn handle_breakdown_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -
             } else {
                 v.set_cur_speed(0);
 
-                if !svc!(C, base.play_vehicle_sound, v, VSE_BREAKDOWN) {
+                if !svc!(C, base.play_vehicle_sound, v, SoundEvent::VSE_BREAKDOWN) {
                     let train_or_ship = v.vehicle_type() == VehicleType::VEH_TRAIN
                         || v.vehicle_type() == VehicleType::VEH_SHIP;
                     let landscape = Services::of(base).shared().settings().landscape();
@@ -1070,7 +1070,7 @@ mod tests {
         assert_eq!(id, NEW_ID, "the new engine's callback");
         assert_eq!(
             callback,
-            crate::newgrf_callbacks::CBID_VEHICLE_MODIFY_PROPERTY.0
+            crate::newgrf_callbacks::CallbackID::CBID_VEHICLE_MODIFY_PROPERTY.0
         );
         assert_eq!(
             property,
@@ -1150,7 +1150,7 @@ mod tests {
         v: VehicleRef,
         event: crate::newgrf_sound::VehicleSoundEvent,
     ) -> bool {
-        assert_eq!(event.0, VSE_BREAKDOWN.0);
+        assert_eq!(event.0, SoundEvent::VSE_BREAKDOWN.0);
         assert_eq!((v.cur_speed(), v.breakdown_ctr()), (0, 1));
         assert_eq!(native().breakdowns_since_last_service, 255);
         v.set_vehstatus(v.vehstatus().set(VehState::Hidden));

@@ -9,7 +9,7 @@ use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
     INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryGfx, IndustryType,
 };
-use crate::newgrf::CargoLabel;
+use crate::newgrf::{CargoLabelChoice, GRFFile};
 use crate::newgrf_animation_type::AnimationStatus;
 use crate::newgrf_badge_type::BadgeID;
 use crate::newgrf_callbacks::{IndustryTileCallbackMask, IndustryTileCallbackMasks};
@@ -289,9 +289,9 @@ crate::abi::shared_records! {
         pub random_sounds: NativeVec<u8> => "RustVector<uint8_t>",
         pub badges: NativeVec<u32> => "RustVector<BadgeID>",
         /// Cargo labels of produced cargo for default industries.
-        pub produced_cargo_label: [CargoLabel; INDUSTRY_ORIGINAL_NUM_OUTPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_OUTPUTS]",
+        pub produced_cargo_label: [CargoLabelChoice; INDUSTRY_ORIGINAL_NUM_OUTPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_OUTPUTS]",
         /// Cargo labels of accepted cargo for default industries.
-        pub accepts_cargo_label: [CargoLabel; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
+        pub accepts_cargo_label: [CargoLabelChoice; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
     }
     /// `IndustryTileSpec`: defines the data structure of each individual tile of an industry.
     /// A tile can at most accept 3 types of cargo, even if an industry as a whole can accept
@@ -323,12 +323,12 @@ crate::abi::shared_records! {
         pub grf_prop: SubstituteProps => "SubstituteGRFFileProps",
         pub badges: NativeVec<u32> => "RustVector<BadgeID>",
         /// Cargo labels of accepted cargo for default industry tiles.
-        pub accepts_cargo_label: [CargoLabel; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
+        pub accepts_cargo_label: [CargoLabelChoice; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
     }
 }
 
 /// The default label of a value-initialized `std::variant<CargoLabel, MixedCargoType>`.
-const NO_LABEL: CargoLabel = CargoLabel {
+const NO_LABEL: CargoLabelChoice = CargoLabelChoice {
     value: 0,
     mixed: false,
 };
@@ -461,11 +461,11 @@ pub(crate) fn industry(id: u16) -> *mut IndustrySpec {
 ///
 /// # Safety
 /// The returned borrow ends before any call that can reach this storage again.
-pub(crate) unsafe fn file_specs<'a>(file: *const c_void) -> &'a mut FileSpecs {
+pub(crate) unsafe fn file_specs<'a>(file: *const GRFFile) -> &'a mut FileSpecs {
     unsafe { (*FILES.get()).entry(file as usize).or_default() }
 }
 /// Drop the per-file specs of `file`, as clearing `industryspec` and `indtspec` does.
-pub(crate) fn clear_file(file: *const c_void) {
+pub(crate) fn clear_file(file: *const GRFFile) {
     // SAFETY: serialized storage; no borrow is live.
     unsafe {
         (*FILES.get()).remove(&(file as usize));
@@ -528,13 +528,13 @@ pub unsafe extern "C" fn openttd_rust_industry_file_badge_abi(
     tiles: bool,
     badge: u32,
 ) -> u8 {
-    u8::from(unsafe { add_badge_to_specs(file, tiles, BadgeID(badge)) })
+    u8::from(unsafe { add_badge_to_specs(file.cast(), tiles, BadgeID(badge)) })
 }
 /// `AddBadgeToSpecs` over the file's industry or industry-tile specs; whether any exists.
 ///
 /// # Safety
 /// Serialized by the game-state mutex.
-unsafe fn add_badge_to_specs(file: *const c_void, tiles: bool, badge: BadgeID) -> bool {
+unsafe fn add_badge_to_specs(file: *const GRFFile, tiles: bool, badge: BadgeID) -> bool {
     let Some(specs) = (unsafe { (*FILES.get()).get_mut(&(file as usize)) }) else {
         return false;
     };

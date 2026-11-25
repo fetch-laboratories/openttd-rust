@@ -627,8 +627,7 @@ fn place_tree_at_same_height(c: &Trees, w: &World, tile: TileIndex, height: i32)
 /// abort.
 pub(crate) fn place_trees_randomly(c: &Trees) -> bool {
     let s = c.s;
-    // SAFETY: The module's settings contract.
-    let max_height: u8 = unsafe { s.settings().height_limit.read() };
+    let max_height: u8 = s.settings().map_height_limit();
 
     let w = World::new(s);
     let mut i = w
@@ -1285,7 +1284,7 @@ pub(crate) fn tile_loop_trees(
         }
     }
 
-    crate::newgrf_generic::ambient(settings.ambient_callback, tile.0);
+    crate::newgrf_generic::ambient_sound_effect(settings.ambient_callback, tile);
 
     // TimerGameTick::counter is incremented by 256 between each call, so ignore lower 8 bits.
     // Also, we use a simple hash to spread the updates evenly over the map.

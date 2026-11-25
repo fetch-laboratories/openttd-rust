@@ -73,10 +73,8 @@ struct OpenTTDGrfLoadingServices {
 	void (*set_file_info)(GRFFile *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_file_info);
 	uint32_t (*config_version)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_version);
 	OpenTTDByteSpan (*config_filename)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_filename);
-	uint8_t (*config_palette)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_palette);
 	size_t (*param_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(param_count);
 	void (*set_parameter)(GRFFile *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_parameter);
-	GRFConfig *(*find_config)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_config);
 	GRFFile *(*file_for_config)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(file_for_config);
 	GRFError *(*error)(GRFConfig *, uint32_t, StringID, bool) noexcept OPENTTD_SERVICE_DEFAULT(error);
 	void (*error_name)(GRFError *, const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(error_name);

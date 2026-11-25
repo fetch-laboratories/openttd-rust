@@ -29,7 +29,7 @@ use crate::ground_vehicle::{AccelStatus, GroundVehicleFlags};
 use crate::map_func::{Map, World};
 use crate::movement::CachedTable;
 use crate::newgrf_callbacks::{
-    CALLBACK_FAILED, CBID_VEHICLE_LENGTH, VehicleCallbackMask, VehicleCallbackMasks,
+    CALLBACK_FAILED, CallbackID, VehicleCallbackMask, VehicleCallbackMasks,
 };
 use crate::newgrf_config::GRFBug;
 use crate::newgrf_debug::invalidate_newgrf_inspect_window;
@@ -995,13 +995,13 @@ impl Game<'_> {
 
                 if veh_len != CALLBACK_FAILED && u32::from(veh_len) >= VEHICLE_LENGTH {
                     self.vs
-                        .unknown_callback_result(e_u, CBID_VEHICLE_LENGTH, veh_len);
+                        .unknown_callback_result(e_u, CallbackID::CBID_VEHICLE_LENGTH, veh_len);
                 }
             } else if VehicleCallbackMasks(e_u.callbacks()).test(VehicleCallbackMask::Length) {
                 /* Use callback 11 */
                 veh_len = crate::newgrf_vehicle::get_vehicle_callback(
                     self.vs.newgrf(),
-                    CBID_VEHICLE_LENGTH,
+                    CallbackID::CBID_VEHICLE_LENGTH,
                     0,
                     0,
                     u.vehicle().engine_type(),

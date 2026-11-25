@@ -35,9 +35,9 @@ use crate::ground_vehicle::GroundVehicleFlags;
 use crate::map_func::{Map, World};
 use crate::math::is_inside_mm;
 use crate::movement::CachedTable;
-use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
+use crate::newgrf_callbacks::CallbackID;
 use crate::newgrf_properties::PropertyID;
-use crate::newgrf_sound::VSE_START;
+use crate::newgrf_sound::VehicleSoundEvent;
 use crate::news_func::{add_tile_news_item, add_vehicle_news_item};
 use crate::news_type::NewsType;
 use crate::order_type::{
@@ -682,13 +682,13 @@ impl<'a> Game<'a> {
                 && u32::from(veh_len) >= VEHICLE_LENGTH
             {
                 self.vs
-                    .unknown_callback_result(e, CBID_VEHICLE_LENGTH, veh_len);
+                    .unknown_callback_result(e, CallbackID::CBID_VEHICLE_LENGTH, veh_len);
             }
         } else {
             /* Use callback 11 */
             veh_len = crate::newgrf_vehicle::get_vehicle_callback(
                 self.vs.newgrf(),
-                CBID_VEHICLE_LENGTH,
+                CallbackID::CBID_VEHICLE_LENGTH,
                 0,
                 0,
                 v.engine_type(),
@@ -1028,7 +1028,7 @@ impl<'a> Game<'a> {
     /// `StartRoadVehSound`.
     #[inline]
     fn start_road_veh_sound(&self, v: VehicleRef) {
-        if !service!(self.vs.play_vehicle_sound)(v, VSE_START) {
+        if !service!(self.vs.play_vehicle_sound)(v, VehicleSoundEvent::VSE_START) {
             let mut s = SoundID(service!(self.vs.engine)(v).road_sound());
             if s == SoundID::from(SoundFx::SND_19_DEPARTURE_OLD_RV_1) && (v.tick_counter() & 3) == 0
             {

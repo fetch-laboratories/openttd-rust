@@ -3,16 +3,16 @@
 #ifndef RUST_NEWGRF_GLOBAL_FFI_H
 #define RUST_NEWGRF_GLOBAL_FFI_H
 #include "services_ffi.h"
+struct GRFConfig;
 struct GRFFile;
 enum GameMode : uint8_t;
 #include "cargo_label_ffi.h"
 struct OpenTTDGlobalVariableServices {
-	uint8_t (*misc_bits)() noexcept OPENTTD_SERVICE_DEFAULT(misc_bits);
-	uint32_t (*newgrf_version)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf_version);
-	uint8_t (*palette)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(palette);
-	int32_t (*pitch)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(pitch);
+	GRFConfig *(*get_grf_config)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(get_grf_config);
+	uint8_t (*misc_grf_features)() noexcept OPENTTD_SERVICE_DEFAULT(misc_grf_features);
+	uint32_t (*openttd_newgrf_version)() noexcept OPENTTD_SERVICE_DEFAULT(openttd_newgrf_version);
+	uint8_t (*palette)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(palette);
 	const OpenTTDSharedServices *shared;
-	uint32_t (*width)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(width);
 };
 const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept;
 extern "C" uint8_t openttd_rust_global_variable_abi(const OpenTTDGlobalVariableServices *, uint8_t, uint32_t *, const GRFFile *);

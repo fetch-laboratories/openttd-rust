@@ -180,6 +180,16 @@ impl SettingAddresses {
         // SAFETY: As `road_side`.
         unsafe { self.vehicle_breakdowns.read() }
     }
+    /// `_settings_game.vehicle.disable_elrails`; one field-sized load.
+    pub(crate) fn disable_elrails(&self) -> bool {
+        // SAFETY: As `road_side`.
+        unsafe { self.disable_elrails.read() }
+    }
+    /// `_settings_game.construction.map_height_limit`; one field-sized load.
+    pub(crate) fn map_height_limit(&self) -> u8 {
+        // SAFETY: As `road_side`.
+        unsafe { self.height_limit.read() }
+    }
 }
 
 #[cfg(test)]

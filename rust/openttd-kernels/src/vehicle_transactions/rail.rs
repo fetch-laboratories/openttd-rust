@@ -703,7 +703,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
                     x.c.vehicles,
                     Some(Ctx::vref(t)),
                     x.engine(head).0,
-                    crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH.0,
+                    crate::newgrf_callbacks::CallbackID::CBID_TRAIN_ALLOW_WAGON_ATTACH.0,
                     0,
                     head,
                     true,
@@ -735,7 +735,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
                     if callback >= 0x100 {
                         x.c.vehicles.unknown_callback_result(
                             (x.c.vehicles.engine)(Ctx::vref(head)),
-                            crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH,
+                            crate::newgrf_callbacks::CallbackID::CBID_TRAIN_ALLOW_WAGON_ATTACH,
                             callback,
                         );
                     }

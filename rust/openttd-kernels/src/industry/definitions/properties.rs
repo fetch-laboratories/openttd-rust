@@ -14,37 +14,37 @@ use crate::industrytype::{
     self, CheckProc, IndustrySpec, IndustryTileSpec, LayoutTile, NativeVec, get_industry_spec,
     get_industry_tile_spec,
 };
-use crate::newgrf::GrfSpecFeature;
+use crate::newgrf::{GRFFile, GrfSpecFeature};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::ChangeInfoResult;
 use crate::table::strings::STR_NULL;
 use crate::{newgrf_loading, override_manager};
-use std::{ffi::c_void, ptr};
+use std::ptr;
 #[repr(C)]
 pub struct Context {
-    pub file: *mut c_void,
+    pub file: *mut GRFFile,
     pub grfid: u32,
     pub version: u8,
     pub climate: u8,
 }
 /// `CT_INVALID` as a default cargo label.
-const INVALID_LABEL: crate::newgrf::CargoLabel = crate::newgrf::CargoLabel {
+const INVALID_LABEL: crate::newgrf::CargoLabelChoice = crate::newgrf::CargoLabelChoice {
     value: CT_INVALID,
     mixed: false,
 };
 /// `GRFFilePropsBase::SetGRFFile` with the context's non-null file.
 fn set_grf_file(props: &mut industrytype::SubstituteProps, c: &Context) {
-    props.grffile = c.file;
+    props.grffile = c.file.cast();
     props.grfid = c.grfid;
 }
 /// `GRFFile::industryspec[id]`, or null.
-fn file_industry(file: *const c_void, id: u32) -> *mut IndustrySpec {
+fn file_industry(file: *const GRFFile, id: u32) -> *mut IndustrySpec {
     unsafe { industrytype::file_specs(file) }.industries[id as usize]
         .as_deref_mut()
         .map_or(ptr::null_mut(), ptr::from_mut)
 }
 /// `GRFFile::indtspec[id]`, or null.
-fn file_tile(file: *const c_void, id: u32) -> *mut IndustryTileSpec {
+fn file_tile(file: *const GRFFile, id: u32) -> *mut IndustryTileSpec {
     unsafe { industrytype::file_specs(file) }.tiles[id as usize]
         .as_deref_mut()
         .map_or(ptr::null_mut(), ptr::from_mut)
@@ -384,7 +384,7 @@ unsafe fn industrytiles_change_info(
             0x0A..=0x0C => {
                 let acctp = u32::from(buf.word()?);
                 let slot = (prop - 0x0A) as usize;
-                let cargo = get_cargo_translation(gb(acctp, 0, 8) as u8, c.file, false);
+                let cargo = get_cargo_translation(gb(acctp, 0, 8) as u8, c.file.cast(), false);
                 unsafe {
                     (*tsp).accepts_cargo[slot] = cargo.0;
                     (*tsp).acceptance[slot] = gb(acctp, 8, 8).clamp(0, 16) as i8;
@@ -427,7 +427,7 @@ unsafe fn industrytiles_change_info(
                 }
                 for i in 0..INDUSTRY_NUM_INPUTS {
                     if i < num_cargoes {
-                        let cargo = get_cargo_translation(buf.byte()?, c.file, false);
+                        let cargo = get_cargo_translation(buf.byte()?, c.file.cast(), false);
                         unsafe { (*tsp).accepts_cargo[i] = cargo.0 };
                         // Tile acceptance can be negative to counteract the
                         // IndustryTileSpecialFlag::AcceptsAllCargo flag
@@ -591,7 +591,7 @@ unsafe fn industries_change_info(
                     INDUSTRY_ORIGINAL_NUM_INPUTS
                 };
                 for j in 0..count {
-                    let cargo = get_cargo_translation(buf.byte()?, c.file, false);
+                    let cargo = get_cargo_translation(buf.byte()?, c.file.cast(), false);
                     if produced {
                         unsafe {
                             (*indsp).produced_cargo[j] = cargo.0;
@@ -715,7 +715,7 @@ unsafe fn industries_change_info(
                 };
                 for i in 0..size {
                     let cargo = if i < num_cargoes {
-                        get_cargo_translation(buf.byte()?, c.file, false)
+                        get_cargo_translation(buf.byte()?, c.file.cast(), false)
                     } else {
                         CargoType::INVALID_CARGO
                     };

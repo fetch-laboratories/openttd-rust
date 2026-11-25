@@ -13,9 +13,9 @@ struct GenericScopeResolver final : ScopeResolver {
 };
 struct GenericResolverObject final : ResolverObject {
 	GenericScopeResolver generic_scope;
-	GenericResolverObject(const OpenTTDGenericInvocation &invocation) : ResolverObject(invocation.file, static_cast<CallbackID>(invocation.callback), invocation.param1), generic_scope(*this, invocation) { this->root_spritegroup = invocation.root; }
+	GenericResolverObject(const OpenTTDGenericInvocation &invocation) : ResolverObject(invocation.grffile, static_cast<CallbackID>(invocation.callback), invocation.callback_param1), generic_scope(*this, invocation) { this->root_spritegroup = invocation.root_spritegroup; }
 	ScopeResolver *GetScope(VarSpriteGroupScope scope, uint8_t) override { return openttd_rust_generic_scope(&this->generic_scope, &this->default_scope, scope); }
-	GrfSpecFeature GetFeature() const override { return static_cast<GrfSpecFeature>(this->generic_scope.invocation.scope.feature); }
+	GrfSpecFeature GetFeature() const override { return static_cast<GrfSpecFeature>(this->generic_scope.invocation.generic_scope.feature); }
 	uint32_t GetDebugID() const override { return 0; }
 };
 #endif

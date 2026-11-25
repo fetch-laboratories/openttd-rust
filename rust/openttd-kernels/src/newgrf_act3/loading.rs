@@ -222,7 +222,7 @@ unsafe fn map_binding(
                 bind_standard(specs.house(), spec, local, cargo, group);
             }
             GSF_INDUSTRIES => {
-                let specs = industrytype::file_specs(file);
+                let specs = industrytype::file_specs(file.cast());
                 let spec = specs.industries.get_mut(usize::from(local));
                 let props = spec
                     .and_then(|spec| spec.as_deref_mut())
@@ -230,7 +230,7 @@ unsafe fn map_binding(
                 bind_record(props, local, cargo, group, s.shared());
             }
             GSF_INDUSTRYTILES => {
-                let specs = industrytype::file_specs(file);
+                let specs = industrytype::file_specs(file.cast());
                 let spec = specs.tiles.get_mut(usize::from(local));
                 let props = spec
                     .and_then(|spec| spec.as_deref_mut())
@@ -263,22 +263,26 @@ unsafe fn map_binding(
                 group,
             ),
             GSF_STATIONS => {
+                let grffile = crate::newgrf::GRFFileRef::of((*s.stations).shared(), file.cast());
                 if let Some(cargo) = cargo {
                     crate::station_definitions::station_map_specific(
-                        s.stations, file, local, cargo, group,
+                        s.stations, grffile, local, cargo, group,
                     );
                 } else {
-                    crate::station_definitions::station_map_default(s.stations, file, local, group);
+                    crate::station_definitions::station_map_default(
+                        s.stations, grffile, local, group,
+                    );
                 }
             }
             GSF_ROADSTOPS => {
+                let grffile = crate::newgrf::GRFFileRef::of((*s.stations).shared(), file.cast());
                 if let Some(cargo) = cargo {
                     crate::station_definitions::roadstop_map_specific(
-                        s.stations, file, local, cargo, group,
+                        s.stations, grffile, local, cargo, group,
                     );
                 } else {
                     crate::station_definitions::roadstop_map_default(
-                        s.stations, file, local, group,
+                        s.stations, grffile, local, group,
                     );
                 }
             }
@@ -410,7 +414,11 @@ pub(crate) unsafe fn feature_map_sprite_group(
                 6,
                 "FeatureMapSpriteGroup: Adding generic feature callback for feature 0x{feature:02X}"
             );
-            crate::newgrf_generic::openttd_rust_generic_add(feature, loading::file(), group(id));
+            crate::newgrf_generic::add_generic_callback(
+                crate::newgrf::GrfSpecFeature(feature),
+                loading::file().cast(),
+                group(id),
+            );
             return Ok(());
         }
         ((*s.bindings).mark_feature)(loading::file(), feature);

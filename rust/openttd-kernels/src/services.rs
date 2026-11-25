@@ -553,6 +553,10 @@ pub struct Services {
     pub grf_file_id: extern "C" fn(*const c_void) -> u32,
     /// `GRFFile::filename` of a non-null file, live while the file is.
     pub grf_file_name: extern "C" fn(*const c_void) -> ByteSpan,
+    /// `GRFFile::traininfo_vehicle_pitch` of a non-null file.
+    pub grf_file_traininfo_vehicle_pitch: extern "C" fn(*const c_void) -> i32,
+    /// `GRFFile::traininfo_vehicle_width` of a non-null file.
+    pub grf_file_traininfo_vehicle_width: extern "C" fn(*const c_void) -> u32,
     /// Canonical native `GRFFile::GetParam` shared by loaders and resolvers.
     pub grf_parameter: extern "C" fn(*const c_void, u32) -> u32,
     /// `_rust_newgrf_specs`; read through `specs`.
@@ -909,6 +913,8 @@ crate::abi::layouts! {
         grf_file_at_or_null,
         grf_file_id,
         grf_file_name,
+        grf_file_traininfo_vehicle_pitch,
+        grf_file_traininfo_vehicle_width,
         grf_parameter,
         newgrf_specs,
         resolver_grf_file,
@@ -1054,6 +1060,12 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
     extern "C" fn unexpected_version(_: *const c_void) -> u8 {
         std::process::abort()
     }
+    extern "C" fn unexpected_pitch(_: *const c_void) -> i32 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_width(_: *const c_void) -> u32 {
+        std::process::abort()
+    }
     extern "C" fn unexpected_price_shift(_: *const c_void, _: u32) -> i32 {
         std::process::abort()
     }
@@ -1120,6 +1132,8 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         grf_file_at_or_null: unexpected_file_at,
         grf_file_id: unexpected_file_id,
         grf_file_name: unexpected_file_name,
+        grf_file_traininfo_vehicle_pitch: unexpected_pitch,
+        grf_file_traininfo_vehicle_width: unexpected_width,
         grf_parameter: unexpected_parameter,
         newgrf_specs: std::ptr::null(),
         resolver_grf_file: unexpected_file,

@@ -247,6 +247,8 @@ struct OpenTTDSharedServices {
 	GRFFile *(*grf_file_at_or_null)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_at_or_null);
 	uint32_t (*grf_file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_id);
 	OpenTTDByteSpan (*grf_file_name)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_name);
+	int32_t (*grf_file_traininfo_vehicle_pitch)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_traininfo_vehicle_pitch);
+	uint32_t (*grf_file_traininfo_vehicle_width)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_traininfo_vehicle_width);
 	uint32_t (*grf_parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_parameter);
 	const OpenTTDNewGRFSpecs *newgrf_specs = nullptr;
 	const GRFFile *(*resolver_grf_file)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file);
