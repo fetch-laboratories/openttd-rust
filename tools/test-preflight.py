@@ -245,6 +245,28 @@ class RunTests(unittest.TestCase):
         # A step's result is printed whole, after its start line.
         self.assertRegex(lines, r"--> Fails\n(.*\n)*    exit 1; full output: .*02\.log")
 
+    def test_a_full_run_is_logged_and_counted_since_a_date(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+            patch("builtins.print") as printed,
+        ):
+            (Path(directory) / "preflight").mkdir()
+            preflight.record_run("a", 4, 200.4, [])
+            preflight.record_run("a", 4, 100.0, ["Gate"])
+            preflight.record_run("b", 1, 480.0, [])
+            self.assertEqual(preflight.report_runs("2000-01-01"), 0)
+            preflight.report_runs("2999-01-01")
+        lines = [str(call.args[0]) for call in printed.call_args_list]
+        self.assertEqual(
+            lines,
+            [
+                "3 full runs since 2000-01-01 on 2 heads, 1 failed; median 200s, "
+                "longest 480s, 13 minutes in all",
+                "no full runs since 2999-01-01",
+            ],
+        )
+
     def test_the_longest_step_of_the_last_run_starts_first(self) -> None:
         started: list[str] = []
         steps = [preflight.Step(name, [name]) for name in ("a", "b", "c", "d")]

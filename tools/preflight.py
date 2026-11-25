@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 import threading
@@ -67,6 +68,8 @@ JOBS = min(4, max(1, (os.cpu_count() or 2) // 2))
 # Each step's seconds in the last run on this host, shared by every worktree,
 # so the longest steps start first.
 TIMINGS = "preflight/timings.json"
+# One line per full run on this host, read by --runs: what steering counts (#1069).
+RUNS = "preflight/runs.jsonl"
 PRINTING = threading.Lock()
 SHELL = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
 RUST_FORMAT = "Rust formatting (cargo fmt --check)"
@@ -256,6 +259,42 @@ def save_timings(seconds: dict[str, float]) -> None:
         print(f"timings not saved: {error}", flush=True)
 
 
+def record_run(head: str, jobs: int, seconds: float, failed: list[str]) -> None:
+    entry = {
+        "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "head": head,
+        "jobs": jobs,
+        "seconds": round(seconds),
+        "failed": failed,
+    }
+    try:
+        with (migration.COMMON_LOCAL / RUNS).open("a") as log:
+            log.write(json.dumps(entry) + "\n")
+    except OSError as error:
+        print(f"run not logged: {error}", flush=True)
+
+
+def report_runs(since: str) -> int:
+    """Full runs on this host since a date or time (UTC, ISO): count and minutes."""
+    try:
+        lines = (migration.COMMON_LOCAL / RUNS).read_text().splitlines()
+    except OSError:
+        lines = []
+    runs = [entry for entry in map(json.loads, lines) if entry["at"] >= since]
+    if not runs:
+        print(f"no full runs since {since}")
+        return 0
+    seconds = sorted(entry["seconds"] for entry in runs)
+    failed = sum(bool(entry["failed"]) for entry in runs)
+    heads = len({entry["head"] for entry in runs})
+    print(
+        f"{len(runs)} full runs since {since} on {heads} heads, {failed} failed; "
+        f"median {statistics.median(seconds):.0f}s, longest {seconds[-1]}s, "
+        f"{sum(seconds) / 60:.0f} minutes in all"
+    )
+    return 0
+
+
 def run_steps(
     steps: list[Step], env: dict[str, str], logs: Path, jobs: int
 ) -> list[str]:
@@ -319,6 +358,11 @@ def arguments() -> argparse.Namespace:
         help=f"steps run at once (default {JOBS}); 1 runs them in workflow order",
     )
     parser.add_argument("--list", action="store_true", help="list the steps and exit")
+    parser.add_argument(
+        "--runs",
+        metavar="SINCE",
+        help="count this host's full runs since a UTC date or time, and exit",
+    )
     return parser.parse_args()
 
 
@@ -413,8 +457,36 @@ def fast(options: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def execute(
+    options: argparse.Namespace,
+    chosen: list[Step],
+    env: dict[str, str],
+    logs: Path,
+    head: str,
+) -> list[str]:
+    """Run the chosen steps, in workflow order with --jobs 1; log a full run."""
+    started = time.monotonic()
+    if options.jobs == 1:
+        failed = [
+            step.name
+            for number, step in enumerate(chosen, 1)
+            if not run(step, env, logs / f"{number:02}.log")
+        ]
+    else:
+        failed = run_steps(chosen, env, logs, options.jobs)
+    if not options.step:
+        record_run(head, options.jobs, time.monotonic() - started, failed)
+    return failed
+
+
 def main() -> int:
     options = arguments()
+    if options.runs:
+        return report_runs(options.runs)
+    return check(options)
+
+
+def check(options: argparse.Namespace) -> int:
     try:
         if options.fast:
             return fast(options)
@@ -438,14 +510,7 @@ def main() -> int:
         env = environment()
         started = time.monotonic()
         chosen = [step for step in steps if step.name in names]
-        if options.jobs == 1:
-            failed = [
-                step.name
-                for number, step in enumerate(chosen, 1)
-                if not run(step, env, logs / f"{number:02}.log")
-            ]
-        else:
-            failed = run_steps(chosen, env, logs, options.jobs)
+        failed = execute(options, chosen, env, logs, head)
         # A step can change tracked files; the summary describes the end state too.
         warning = warning or uncommitted()
         if not failed:
