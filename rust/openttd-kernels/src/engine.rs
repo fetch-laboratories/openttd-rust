@@ -917,6 +917,15 @@ pub(crate) unsafe fn calendar_engines_monthly_loop(s: &Services) {
         call!(s, refresh_lists, refresh);
     }
 }
+/// `ClearEnginesHiddenFlagOfCompany`, for the engines scenario console, which calls the
+/// original's function directly.
+///
+/// # Safety
+/// `s` is the process-lifetime engine table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_engine_clear_hidden(s: *const Services, company: u8) {
+    clear_engines_hidden_flag_of_company(unsafe { &*s }, CompanyID(company));
+}
 /// `ClearEnginesHiddenFlagOfCompany`: clear the 'hidden' flag for all engines of a new
 /// company.
 pub(crate) fn clear_engines_hidden_flag_of_company(s: &Services, cid: CompanyID) {
