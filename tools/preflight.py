@@ -3,7 +3,8 @@
 
 The steps come from .github/workflows/ci-quick.yml itself, so the two cannot
 drift. Unlike CI, every step runs even after a failure, and the result lists
-each failed step.
+each failed step. The steps read the tree and write nothing a later step reads,
+so --jobs of them run at once, the longest of the last run first (#1069).
 
 --fast runs, in seconds, the pre-push hook's fast tier (the pinned commit
 checker, cargo fmt --check and Quick's Ruff lines) and Quick's ty line, and
@@ -11,12 +12,15 @@ records no stamp.
 """
 
 import argparse
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -57,6 +61,13 @@ BASE_EXPRESSION = re.compile(r"\s*\$\{\{(.*?)\}\}\s*", re.DOTALL)
 TOKENS = {"GH_TOKEN", "GITHUB_TOKEN"}
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 TAIL_LINES = 40
+# Steps at once by default: half the host's threads, at most four. The probe
+# compile, the longest step, sizes its own compiler pool to the free threads.
+JOBS = min(4, max(1, (os.cpu_count() or 2) // 2))
+# Each step's seconds in the last run on this host, shared by every worktree,
+# so the longest steps start first.
+TIMINGS = "preflight/timings.json"
+PRINTING = threading.Lock()
 SHELL = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
 RUST_FORMAT = "Rust formatting (cargo fmt --check)"
 FORMAT = "python3 tools/migration.py fmt"
@@ -192,7 +203,13 @@ def environment() -> dict[str, str]:
 
 
 def run(step: Step, env: dict[str, str], log: Path) -> bool:
-    print(f"--> {step.name}", flush=True)
+    return timed(step, env, log)[0]
+
+
+def timed(step: Step, env: dict[str, str], log: Path) -> tuple[bool, float]:
+    """Run one step into its log; print its start, and its result in one block."""
+    with PRINTING:
+        print(f"--> {step.name}", flush=True)
     started = time.monotonic()
     with log.open("w") as output:
         code = subprocess.run(
@@ -204,13 +221,65 @@ def run(step: Step, env: dict[str, str], log: Path) -> bool:
             check=False,
         ).returncode
     elapsed = time.monotonic() - started
+    lines = []
     if code:
         tail = log.read_text(errors="replace").splitlines()[-TAIL_LINES:]
-        print("\n".join(f"    {line}" for line in tail))
-    print(f"{'FAIL' if code else 'pass'} {elapsed:.0f}s {step.name}", flush=True)
+        lines += [f"    {line}" for line in tail]
+    lines.append(f"{'FAIL' if code else 'pass'} {elapsed:.0f}s {step.name}")
     if code:
-        print(f"    exit {code}; full output: {log}", flush=True)
-    return code == 0
+        lines.append(f"    exit {code}; full output: {log}")
+    with PRINTING:
+        print("\n".join(lines), flush=True)
+    return code == 0, elapsed
+
+
+def timings_path() -> Path:
+    return migration.COMMON_LOCAL / TIMINGS
+
+
+def last_timings() -> dict[str, float]:
+    try:
+        recorded = json.loads(timings_path().read_text())
+    except (OSError, ValueError):
+        return {}
+    return recorded if isinstance(recorded, dict) else {}
+
+
+def save_timings(seconds: dict[str, float]) -> None:
+    path = timings_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(f"{path.name}.{os.getpid()}")
+        temporary.write_text(json.dumps(last_timings() | seconds, indent=1) + "\n")
+        os.replace(temporary, path)
+    except OSError as error:
+        print(f"timings not saved: {error}", flush=True)
+
+
+def run_steps(
+    steps: list[Step], env: dict[str, str], logs: Path, jobs: int
+) -> list[str]:
+    """Run every step, jobs at a time, longest first; the failed names in step order.
+
+    Each step keeps its workflow number for its log. A step with no recorded
+    time starts first, since it may be the longest.
+    """
+    last = last_timings()
+    numbered = list(enumerate(steps, 1))
+    numbered.sort(key=lambda item: -last.get(item[1].name, float("inf")))
+    with ThreadPoolExecutor(max(1, jobs)) as pool:
+        results = dict(
+            zip(
+                (step.name for _, step in numbered),
+                pool.map(
+                    lambda item: timed(item[1], env, logs / f"{item[0]:02}.log"),
+                    numbered,
+                ),
+                strict=True,
+            )
+        )
+    save_timings({name: elapsed for name, (_, elapsed) in results.items()})
+    return [step.name for step in steps if not results[step.name][0]]
 
 
 def selected(names: list[str], patterns: list[str] | None) -> list[str]:
@@ -242,6 +311,12 @@ def arguments() -> argparse.Namespace:
             "run only the pre-push fast tier and Quick's ty line, in seconds, as "
             "a check before a commit; records no stamp"
         ),
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=JOBS,
+        help=f"steps run at once (default {JOBS}); 1 runs them in workflow order",
     )
     parser.add_argument("--list", action="store_true", help="list the steps and exit")
     return parser.parse_args()
@@ -363,11 +438,14 @@ def main() -> int:
         env = environment()
         started = time.monotonic()
         chosen = [step for step in steps if step.name in names]
-        failed = [
-            step.name
-            for number, step in enumerate(chosen, 1)
-            if not run(step, env, logs / f"{number:02}.log")
-        ]
+        if options.jobs == 1:
+            failed = [
+                step.name
+                for number, step in enumerate(chosen, 1)
+                if not run(step, env, logs / f"{number:02}.log")
+            ]
+        else:
+            failed = run_steps(chosen, env, logs, options.jobs)
         # A step can change tracked files; the summary describes the end state too.
         warning = warning or uncommitted()
         if not failed:

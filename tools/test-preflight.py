@@ -193,7 +193,77 @@ class WorkflowTests(unittest.TestCase):
             preflight.selected(names, ["nothing"])
 
 
+STEPS = ["--step", "Short", "--step", "Fails", "--step", "Long"]
+
+
+def exit_code(command: list[str], **_: object) -> CompletedProcess[str]:
+    """A step that runs `false` fails; every other step passes."""
+    return CompletedProcess(command, 1 if command[-1] == "false" else 0)
+
+
 class RunTests(unittest.TestCase):
+    def run_steps(self, argv: list[str], timings: dict[str, float]) -> tuple:
+        """main over three steps, the middle one failing, with these recorded
+        timings: its code, commands, printed lines, saved timings and logs."""
+        quick = workflow(
+            {"name": "Short", "run": "true"},
+            {"name": "Fails", "run": "false"},
+            {"name": "Long", "run": "true"},
+        )
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
+            patch.object(preflight, "git", return_value="sha"),
+            patch.object(preflight.yaml, "safe_load", return_value=quick),
+            patch.object(preflight.migration, "LOCAL", Path(directory)),
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+            patch.object(preflight.subprocess, "run", side_effect=exit_code) as run,
+            patch.object(sys, "argv", ["preflight.py", *STEPS, *argv]),
+            patch("builtins.print") as printed,
+        ):
+            (Path(directory) / preflight.TIMINGS).parent.mkdir(parents=True)
+            (Path(directory) / preflight.TIMINGS).write_text(json.dumps(timings))
+            code = preflight.main()
+            saved = json.loads((Path(directory) / preflight.TIMINGS).read_text())
+            logs = sorted(p.name for p in Path(directory).glob("preflight/2*/*.log"))
+        lines = "\n".join(str(call.args[0]) for call in printed.call_args_list)
+        commands = [call.args[0][-1] for call in run.call_args_list]
+        return code, commands, lines, saved, logs
+
+    def test_steps_run_at_once_longest_first_and_report_in_step_order(self) -> None:
+        timings = {"Short": 1.0, "Fails": 5.0, "Long": 90.0, "Gone": 3.0}
+        code, commands, lines, saved, logs = self.run_steps(["--jobs", "1"], timings)
+        self.assertEqual(code, 1)
+        self.assertEqual(commands, ["true", "false", "true"])  # workflow order
+        code, commands, lines, saved, logs = self.run_steps(["--jobs", "2"], timings)
+        self.assertEqual(code, 1)
+        self.assertEqual(sorted(commands), ["false", "true", "true"])
+        self.assertEqual(logs, ["01.log", "02.log", "03.log"])
+        self.assertIn("failed: Fails;", lines)
+        self.assertEqual(set(saved), {"Short", "Fails", "Long", "Gone"})
+        self.assertLess(saved["Long"], 90)  # this run's time replaces the last
+        # A step's result is printed whole, after its start line.
+        self.assertRegex(lines, r"--> Fails\n(.*\n)*    exit 1; full output: .*02\.log")
+
+    def test_the_longest_step_of_the_last_run_starts_first(self) -> None:
+        started: list[str] = []
+        steps = [preflight.Step(name, [name]) for name in ("a", "b", "c", "d")]
+
+        def record(step: preflight.Step, *_: object) -> tuple[bool, float]:
+            started.append(step.name)
+            return True, 1.0
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+            patch.object(preflight, "timed", side_effect=record),
+        ):
+            preflight.save_timings({"a": 1.0, "b": 30.0, "c": 2.0})
+            failed = preflight.run_steps(steps, {}, Path(directory), 1)
+        # d has no time, so it may be the longest; then b, c and a.
+        self.assertEqual(started, ["d", "b", "c", "a"])
+        self.assertEqual(failed, [])
+
     def test_every_step_runs_and_any_failure_fails(self) -> None:
         quick = workflow(
             {"name": "First", "run": "false"}, {"name": "Second", "run": "true"}
@@ -204,25 +274,23 @@ class RunTests(unittest.TestCase):
             patch.object(preflight, "git", return_value="sha"),
             patch.object(preflight.yaml, "safe_load", return_value=quick),
             patch.object(preflight.migration, "LOCAL", Path(directory)),
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
             patch.object(preflight.subprocess, "run") as run,
             patch.object(sys, "argv", ["preflight.py"]),
             patch("builtins.print"),
         ):
-            run.side_effect = [
-                CompletedProcess([], 0),
-                CompletedProcess([], 1),
-                CompletedProcess([], 0),
-                CompletedProcess([], 0),
-            ]
+            run.side_effect = exit_code
             self.assertEqual(preflight.main(), 1)
             commands = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(len(commands), 4)
+            self.assertIn(["sh", "/hooks/hooks/check-commits.sh", "sha..sha"], commands)
             self.assertEqual(
-                commands[0], ["sh", "/hooks/hooks/check-commits.sh", "sha..sha"]
+                sorted(command[-1] for command in commands),
+                ["false", "sha", "sha..sha", "true"],
             )
-            self.assertEqual(
-                [command[-1] for command in commands[1:]], ["false", "true", "sha"]
+            self.assertIn(
+                ["python3", "tools/compile-check.py", "--base", "sha"], commands
             )
-            self.assertEqual(commands[-1][:2], ["python3", "tools/compile-check.py"])
 
     def test_selected_steps_skip_the_commit_checker(self) -> None:
         quick = workflow({"name": "Only", "run": "true"})
@@ -232,6 +300,7 @@ class RunTests(unittest.TestCase):
             patch.object(preflight, "git", return_value="sha"),
             patch.object(preflight.yaml, "safe_load", return_value=quick),
             patch.object(preflight.migration, "LOCAL", Path(directory)),
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
             patch.object(sys, "argv", ["preflight.py", "--step", "only"]),
             patch("builtins.print"),
         ):
@@ -257,6 +326,8 @@ class RunTests(unittest.TestCase):
                 patch.object(preflight, "git", side_effect=git),
                 patch.object(preflight.yaml, "safe_load", return_value=quick),
                 patch.object(preflight.migration, "LOCAL", Path(directory)),
+                patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+                patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
                 patch.object(sys, "argv", ["preflight.py", "--step", "only"]),
                 patch("builtins.print") as printed,
             ):
@@ -492,6 +563,7 @@ class StampTests(unittest.TestCase):
             patch.object(preflight, "commit_step", return_value=passing),
             patch.object(preflight, "environment", return_value=env),
             patch.object(preflight.migration, "LOCAL", repo / ".local"),
+            patch.object(preflight.migration, "COMMON_LOCAL", repo / ".local"),
             patch.object(sys, "argv", ["preflight.py"]),
             patch("builtins.print"),
         ):
