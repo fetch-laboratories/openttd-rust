@@ -35,6 +35,8 @@ pub struct WindowClass(pub u16);
 impl WindowClass {
     /// Main toolbar (the long bar at the top).
     pub const WC_MAIN_TOOLBAR: Self = Self(1);
+    /// Small map.
+    pub const WC_SMALLMAP: Self = Self(8);
     /// Popup with a set of buttons, designed to ask the user a question.
     pub const WC_GOAL_QUESTION: Self = Self(13);
     /// Town authority.
@@ -91,6 +93,16 @@ impl WindowClass {
     pub const WC_NETWORK_STATUS_WINDOW: Self = Self(69);
     /// Chatbox.
     pub const WC_SEND_NETWORK_MSG: Self = Self(72);
+    /// Income graph.
+    pub const WC_INCOME_GRAPH: Self = Self(76);
+    /// Operating profit graph.
+    pub const WC_OPERATING_PROFIT: Self = Self(77);
+    /// Delivered cargo graph.
+    pub const WC_DELIVERED_CARGO: Self = Self(78);
+    /// Performance history graph.
+    pub const WC_PERFORMANCE_HISTORY: Self = Self(79);
+    /// Company value graph.
+    pub const WC_COMPANY_VALUE: Self = Self(80);
     /// Company league window.
     pub const WC_COMPANY_LEAGUE: Self = Self(81);
     /// Industry production history graph.
@@ -101,6 +113,8 @@ impl WindowClass {
     pub const WC_ENGINE_PREVIEW: Self = Self(88);
     /// Game options window.
     pub const WC_GAME_OPTIONS: Self = Self(91);
+    /// Linkgraph legend.
+    pub const WC_LINKGRAPH_LEGEND: Self = Self(102);
 }
 
 /// Native `WindowNumber`: the number of a window within its class, constructed from an

@@ -69,7 +69,7 @@ pub(crate) fn rail_type_available(s: &Services, rail_type: u32) -> bool {
     }
     let company = script_host::active_company();
     company == crate::company_type::OWNER_DEITY
-        || crate::rail::has_rail_type(
+        || crate::rail::has_rail_type_avail_raw(
             crate::type_availability::services(s.command.shared),
             company,
             rail_type,
@@ -86,7 +86,7 @@ fn rail_tile(s: &Services, tile: u32) -> bool {
     if !valid(&w, tile) {
         return false;
     }
-    (w.kind(TileIndex(tile)) == TileType::MP_RAILWAY && !w.rail_depot(TileIndex(tile)))
+    (w.kind(TileIndex(tile)) == TileType::MP_RAILWAY && !w.is_rail_depot_tile_raw(tile))
         || (w.station_rail_raw(tile) && !w.station_blocked(tile))
         || w.level_crossing_tile(tile)
 }
@@ -98,7 +98,7 @@ fn level_crossing_tile(s: &Services, tile: u32) -> bool {
 
 fn rail_depot_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.rail_depot(TileIndex(tile))
+    valid(&w, tile) && w.is_rail_depot_tile_raw(tile)
 }
 
 fn rail_station_tile(s: &Services, tile: u32) -> bool {
@@ -113,7 +113,7 @@ fn rail_waypoint_tile(s: &Services, tile: u32) -> bool {
 
 /// `ScriptRail::GetRailTracks`.
 fn rail_tracks(s: &Services, tile: u32) -> u32 {
-    use crate::track_func::{axis_to_track, axis_to_track_bits, track_to_track_bits};
+    use crate::track_func::{axis_to_track, axis_to_track_bits_raw, track_to_track_bits_raw};
     if !rail_tile(s, tile) {
         return RAILTRACK_INVALID;
     }
@@ -121,16 +121,16 @@ fn rail_tracks(s: &Services, tile: u32) -> u32 {
     let c = check(&w);
     if rail_station_tile(s, tile) || rail_waypoint_tile(s, tile) {
         let track = axis_to_track(crate::services::Axis(w.station_axis(tile)), c).0;
-        return u32::from(track_to_track_bits(track, c));
+        return u32::from(track_to_track_bits_raw(track, c));
     }
     if level_crossing_tile(s, tile) {
         let axis = crate::direction_func::other_axis_raw(w.crossing_road_axis(tile), c);
-        return u32::from(axis_to_track_bits(axis, c));
+        return u32::from(axis_to_track_bits_raw(axis, c));
     }
     if rail_depot_tile(s, tile) {
         return 0;
     }
-    u32::from(w.tracks(tile))
+    u32::from(w.get_track_bits_raw(tile))
 }
 
 /// `ScriptRail::GetRailTracks` as the C `uint`.
@@ -161,7 +161,7 @@ fn train_can_run_on_rail(s: &Services, engine: u32, track: u32) -> bool {
     if !rail_type_available(s, engine) || !rail_type_available(s, track) {
         return false;
     }
-    crate::rail::is_compatible_rail(s.command.shared, engine as u8, track as u8)
+    crate::rail::is_compatible_rail_raw(s.command.shared, engine as u8, track as u8)
 }
 
 /// `ScriptRail::TrainHasPowerOnRail`, using the integrated rail-command table.
@@ -180,20 +180,34 @@ pub extern "C" fn openttd_rust_script_rail_train_has_power(
     )
 }
 
-/// `ScriptRail::GetMaxSpeed`, using the integrated ground-physics table.
-#[unsafe(no_mangle)]
-#[allow(clippy::cast_possible_truncation)]
-pub extern "C" fn openttd_rust_script_rail_max_speed(
-    s: &Services,
-    physics: &crate::ground_vehicle::Services,
-    rail_type: u32,
-) -> i64 {
-    if !rail_type_available(s, rail_type) {
+/// `ScriptRail::RailType`: the script API's rail type, the native `RailType` values and
+/// `RAILTYPE_INVALID`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RailType(pub u32);
+
+/// `ScriptRail::GetMaxSpeed`: the availability check on the script rail type, then the
+/// native rail type's `max_speed`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GetMaxSpeed's (::RailType)railtype cast"
+)]
+fn get_max_speed(s: &Services, railtype: RailType) -> i64 {
+    if !rail_type_available(s, railtype.0) {
         return -1;
     }
-    i64::from((physics.rail_speed)(crate::services::RailType(
-        rail_type as u8,
-    )))
+    i64::from(
+        crate::rail::get_rail_type_info(
+            s.command.shared,
+            crate::services::RailType(railtype.0 as u8),
+        )
+        .max_speed(),
+    )
+}
+/// `ScriptRail::GetMaxSpeed`'s export.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_rail_max_speed(s: &Services, rail_type: u32) -> i64 {
+    get_max_speed(s, RailType(rail_type))
 }
 
 /// `ScriptRail::GetBuildCost`, retaining availability before build-type validation.
@@ -212,7 +226,7 @@ pub extern "C" fn openttd_rust_script_rail_build_cost(
     if !rail_type_available(s, rail_type) {
         return -1;
     }
-    let price = |index| crate::economy_func::get_price(index as u32, 1, 0, 0);
+    let price = |index| crate::economy_func::get_price_raw(index as u32, 1, 0, 0);
     match build_type {
         0 => (rail.rail_build_cost)(rail_type as u8),
         1 => price(PR_BUILD_SIGNALS),
@@ -229,7 +243,7 @@ pub extern "C" fn openttd_rust_script_rail_type(s: &Services, tile: u32) -> u32 
     if !has_transport_type(s, tile, TRANSPORT_RAIL) {
         return RAILTYPE_INVALID;
     }
-    u32::from(world(s).rail_type(tile))
+    u32::from(world(s).get_rail_type_raw(tile))
 }
 
 /// `ScriptRail::GetRailDepotFrontTile`.
@@ -242,7 +256,7 @@ pub extern "C" fn openttd_rust_script_rail_depot_front_tile(s: &Services, depot:
     depot.wrapping_add(
         w.dimensions
             .tile_offs_by_diag_dir(
-                DiagDirection(w.rail_depot_dir(depot)),
+                DiagDirection(w.get_rail_depot_direction_raw(depot)),
                 crate::map_func::native_check,
             )
             .cast_unsigned(),
@@ -256,7 +270,7 @@ pub extern "C" fn openttd_rust_script_rail_station_direction(s: &Services, tile:
         return RAILTRACK_INVALID;
     }
     let w = world(s);
-    u32::from(crate::track_func::axis_to_track_bits(
+    u32::from(crate::track_func::axis_to_track_bits_raw(
         w.station_axis(tile),
         check(&w),
     ))
@@ -540,7 +554,7 @@ pub extern "C" fn openttd_rust_script_rail_build_track(
     {
         return REFUSED;
     }
-    crate::track_func::find_first_track(rail_track as u8)
+    crate::track_func::find_first_track_raw(rail_track as u8)
 }
 
 /// `ScriptRail::RemoveRailTrack` preconditions after the native company-mode check;
@@ -555,7 +569,7 @@ pub extern "C" fn openttd_rust_script_rail_remove_track(
     let w = world(s);
     if !enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         || !enforce(
-            w.plain_rail(tile) || w.level_crossing_tile(tile),
+            w.is_plain_rail_tile_raw(tile) || w.level_crossing_tile(tile),
             ERR_PRECONDITION_FAILED,
         )
         || !enforce(
@@ -566,7 +580,7 @@ pub extern "C" fn openttd_rust_script_rail_remove_track(
     {
         return REFUSED;
     }
-    crate::track_func::find_first_track(rail_track as u8)
+    crate::track_func::find_first_track_raw(rail_track as u8)
 }
 
 /// `ScriptRailSignalData` (`_possible_trackdirs`): track, trackdir and signal cycles
@@ -618,7 +632,7 @@ fn signal_entry(s: &Services, tile: u32, front: u32) -> Option<(u8, u8, u8)> {
     POSSIBLE_TRACKDIRS[data_index(&w, tile, front)]
         .into_iter()
         .find(|&(track, _, _)| {
-            u32::from(crate::track_func::track_to_track_bits(track, check(&w)))
+            u32::from(crate::track_func::track_to_track_bits_raw(track, check(&w)))
                 & rail_tracks(s, tile)
                 != 0
         })
@@ -631,22 +645,23 @@ pub extern "C" fn openttd_rust_script_rail_signal_type(s: &Services, tile: u32, 
         return SIGNALTYPE_NONE;
     }
     let w = world(s);
-    if w.kind(TileIndex(tile)) != TileType::MP_RAILWAY || !w.has_signals(tile) {
+    if w.kind(TileIndex(tile)) != TileType::MP_RAILWAY || !w.has_signals_raw(tile) {
         return SIGNALTYPE_NONE;
     }
     for (track, trackdir, _) in POSSIBLE_TRACKDIRS[data_index(&w, tile, front)] {
-        if u32::from(crate::track_func::track_to_track_bits(track, check(&w)))
+        if u32::from(crate::track_func::track_to_track_bits_raw(track, check(&w)))
             & rail_tracks(s, tile)
             == 0
         {
             continue;
         }
-        if !w.has_signal_on_track(tile, track) || !w.has_signal_on_trackdir(tile, trackdir) {
+        if !w.has_signal_on_track_raw(tile, track) || !w.has_signal_on_trackdir_raw(tile, trackdir)
+        {
             continue;
         }
-        let mut signal = u32::from(w.signal_type(tile, track));
-        let reverse = crate::track_func::reverse_trackdir(trackdir);
-        if w.has_signal_on_trackdir(tile, reverse) {
+        let mut signal = u32::from(w.get_signal_type_raw(tile, track));
+        let reverse = crate::track_func::reverse_trackdir_raw(trackdir);
+        if w.has_signal_on_trackdir_raw(tile, reverse) {
             signal |= SIGNALTYPE_TWOWAY as u32;
         }
         return signal;
@@ -691,8 +706,10 @@ pub extern "C" fn openttd_rust_script_rail_build_signal(
     if !enforce(
         script_distance(s, tile, front) == 1,
         ERR_PRECONDITION_FAILED,
-    ) || !enforce(world(s).plain_rail(tile), ERR_PRECONDITION_FAILED)
-        || !enforce(is_valid_signal_type(signal), ERR_PRECONDITION_FAILED)
+    ) || !enforce(
+        world(s).is_plain_rail_tile_raw(tile),
+        ERR_PRECONDITION_FAILED,
+    ) || !enforce(is_valid_signal_type(signal), ERR_PRECONDITION_FAILED)
     {
         return refused;
     }
@@ -803,7 +820,7 @@ pub unsafe extern "C" fn openttd_rust_script_rail_type_list(
     let is_deity = owner_company == crate::company_type::OWNER_DEITY;
     let types = crate::type_availability::services(s.command.shared);
     for rt in 0..crate::rail_type::RAILTYPE_END {
-        if is_deity || crate::rail::has_rail_type(types, owner_company, rt) {
+        if is_deity || crate::rail::has_rail_type_avail_raw(types, owner_company, rt) {
             // SAFETY: caller contract.
             unsafe { (*owner).add(i64::from(rt), 0) };
         }

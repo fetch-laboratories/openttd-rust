@@ -27,7 +27,7 @@ use crate::raw_field::{read_field, write_field};
 use crate::services::{RailType, RoadType};
 use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK};
 use crate::track_func::track_status_to_track_bits;
-use crate::track_type::TrackBits;
+use crate::track_type::{TrackBits, Trackdir};
 use crate::train::{VehicleRailFlag, VehicleRailFlags};
 use crate::transport_type::TransportType;
 use crate::vehicle::{VehicleRef, VehicleServices};
@@ -247,8 +247,6 @@ pub struct Services {
     /// `CargoSpec::Get(cargo)->WeightOfNUnitsInTrain(n)`.
     pub train_cargo_weight: extern "C" fn(u8, u32) -> u64,
     pub rail_type: extern "C" fn(u32) -> RailType,
-    pub rail_acceleration: extern "C" fn(RailType) -> u8,
-    pub rail_speed: extern "C" fn(RailType) -> u16,
     pub steepness: extern "C" fn(VehicleType) -> u32,
     pub viewport: extern "C" fn(VehicleRef, bool, bool),
     pub base_crash: extern "C" fn(VehicleRef, bool) -> u32,
@@ -360,10 +358,10 @@ impl GroundVehicleType for Train {
     fn get_power(s: &Services, w: &World<'_>, v: VehicleRef, o: Owner) -> u16 {
         /* Power is not added for articulated parts */
         if !v.is_articulated_part()
-            && crate::rail::has_power_on_rail(
+            && crate::rail::has_power_on_rail_types(
                 s.shared(),
                 o.train.railtypes(),
-                RailType(w.rail_type(v.tile().0)),
+                w.get_rail_type(v.tile()),
             )
         {
             let engine = (s.vehicle.engine)(v);
@@ -392,10 +390,10 @@ impl GroundVehicleType for Train {
     ) -> u16 {
         /* For powered wagons the engine defines the type of engine (i.e. railtype) */
         if o.train.flags().test(VehicleRailFlag::PoweredWagon)
-            && crate::rail::has_power_on_rail(
+            && crate::rail::has_power_on_rail_types(
                 s.shared(),
                 head.train.railtypes(),
-                RailType(w.rail_type(v.tile().0)),
+                w.get_rail_type(v.tile()),
             )
         {
             return s.first_engine(o).wagon_power();
@@ -512,11 +510,11 @@ impl GroundVehicleType for Train {
     /// Allows to know the acceleration type of a vehicle.
     #[inline]
     fn get_acceleration_type(
-        s: &Services,
+        _: &Services,
         w: &World<'_>,
         v: VehicleRef,
     ) -> VehicleAccelerationModel {
-        VehicleAccelerationModel((s.rail_acceleration)(RailType(w.rail_type(v.tile().0))))
+        crate::rail::get_rail_type_info(w.shared, w.get_rail_type(v.tile())).acceleration_type()
     }
     /// Returns the slope steepness used by this vehicle.
     #[inline]
@@ -530,8 +528,8 @@ impl GroundVehicleType for Train {
     }
     /// Gets the maximum speed allowed by the track for this vehicle.
     #[inline]
-    fn get_max_track_speed(s: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
-        (s.rail_speed)(RailType(w.rail_type(v.tile().0)))
+    fn get_max_track_speed(_: &Services, w: &World<'_>, v: VehicleRef) -> u16 {
+        crate::rail::get_rail_type_info(w.shared, w.get_rail_type(v.tile())).max_speed()
     }
     /// Checks if the vehicle is at a tile that can be sloped.
     #[inline]
@@ -737,7 +735,7 @@ impl GroundVehicleType for RoadVehicle {
         _: Owner,
     ) -> bool {
         let ts = movement.get_road_vehicle_track_status(v, v.tile());
-        let trackbits = TrackBits(track_status_to_track_bits(ts));
+        let trackbits = track_status_to_track_bits(ts);
         trackbits == TrackBits::TRACK_BIT_X || trackbits == TrackBits::TRACK_BIT_Y
     }
     /// Road vehicles have to use `GetSlopePixelZ()` to compute their height if they are
@@ -753,7 +751,7 @@ impl GroundVehicleType for RoadVehicle {
          * We already know it has either GVF_GOINGUP_BIT or GVF_GOINGDOWN_BIT set. */
 
         if rv_state <= crate::roadveh::RVSB_TRACKDIR_MASK
-            && crate::track_func::is_reversing_road_trackdir(rv_state, |ok| {
+            && crate::track_func::is_reversing_road_trackdir(Trackdir(rv_state), |ok| {
                 crate::services_assert::check(ok);
             })
         {
@@ -1430,7 +1428,7 @@ pub unsafe extern "C" fn openttd_rust_ground_acceleration_type(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, capabilities, cargo_weight, train_cargo_weight, rail_type, rail_acceleration, rail_speed, steepness, viewport, base_crash, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, capabilities, cargo_weight, train_cargo_weight, rail_type, steepness, viewport, base_crash, };
 }
 
 #[cfg(test)]

@@ -673,7 +673,7 @@ pub(crate) fn price(s: &Services, e: E, index: u32, factor: u32, shift: i32) -> 
     if index >= u32::from(crate::economy_type::PR_END) {
         return 0;
     }
-    crate::economy_func::get_price(
+    crate::economy_func::get_price_raw(
         index,
         factor,
         (s.shared.grf_price_shift)(EngineRef::of(e).grf(), index),

@@ -310,8 +310,7 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     // There are a lot more reasons for autoreplace to fail than we can test here reasonably.
     let mut pending_replace = false;
     let mut needed_money = i64::from(svc!(C, companies.engine_renew_money, c));
-    if needed_money > get_available_money(m.commands(), svc!(C, companies.company_id, c.cast_mut()))
-    {
+    if needed_money > get_available_money(m.commands(), svc!(C, companies.index, c.cast_mut())) {
         return false;
     }
 
@@ -391,7 +390,7 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
             crate::overflowsafe_type::add_i64(&mut needed_money, cost.saturating_mul(2));
             branch!(C, VEHICLE_MAINT_REPLACE);
             if needed_money
-                > get_available_money(m.commands(), svc!(C, companies.company_id, c.cast_mut()))
+                > get_available_money(m.commands(), svc!(C, companies.index, c.cast_mut()))
             {
                 return false;
             }
@@ -1398,7 +1397,7 @@ mod tests {
         }
         leak(Companies {
             company: company_of,
-            company_id,
+            index: company_id,
             engine_renew,
             engine_renew_money,
             engine_renew_months,

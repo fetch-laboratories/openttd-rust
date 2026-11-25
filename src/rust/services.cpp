@@ -346,6 +346,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.smoke_amount = &_settings_game.vehicle.smoke_amount,
 	.starting_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour),
 	.station_noise = &_settings_game.economy.station_noise_level,
+	.town_cargo_scale = &_settings_game.economy.town_cargo_scale,
 	.town_council_tolerance = &_settings_game.difficulty.town_council_tolerance,
 	.town_growth_rate = &_settings_game.economy.town_growth_rate,
 	.train_acceleration_model = &_settings_game.vehicle.train_acceleration_model,
@@ -516,9 +517,16 @@ static void RustFatalError(const uint8_t *message, size_t size) noexcept { Fatal
 static uint8_t *StationHadVehicleOfTypeField(Station *st) noexcept { return reinterpret_cast<uint8_t *>(&st->had_vehicle_of_type); }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
-	.all_compatible_railtypes = RustAllCompatibleRailTypes,
-	.all_powered_railtypes = [](uint64_t types) noexcept { return GetAllPoweredRailTypes(RailTypes{types}).base(); },
-	.rail_type_curve_speed = [](RailType rt) noexcept { return GetRailTypeInfo(rt)->curve_speed; },
+	.rail_type_acceleration_type = [](const RailTypeInfo *rti) noexcept { return to_underlying(rti->acceleration_type); },
+	.rail_type_compatible_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->compatible_railtypes.base(); },
+	.rail_type_curve_speed = [](const RailTypeInfo *rti) noexcept { return rti->curve_speed; },
+	.rail_type_info = [](RailType rt) noexcept { return GetRailTypeInfo(rt); },
+	.rail_type_introduces_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->introduces_railtypes.base(); },
+	.rail_type_introduction_date = [](const RailTypeInfo *rti) noexcept { return rti->introduction_date.base(); },
+	.rail_type_introduction_required_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->introduction_required_railtypes.base(); },
+	.rail_type_label = [](const RailTypeInfo *rti) noexcept { return rti->label; },
+	.rail_type_max_speed = [](const RailTypeInfo *rti) noexcept { return rti->max_speed; },
+	.rail_type_powered_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->powered_railtypes.base(); },
 	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,
@@ -962,6 +970,7 @@ static const OpenTTDNewsServices _rust_news_services{
 static_assert(ScriptEvent::ET_SUBSIDY_OFFER == 2 && ScriptEvent::ET_SUBSIDY_OFFER_EXPIRED == 3 && ScriptEvent::ET_SUBSIDY_AWARDED == 4 && ScriptEvent::ET_SUBSIDY_EXPIRED == 5);
 static_assert(ScriptEvent::ET_VEHICLE_CRASHED == 12 && ScriptEvent::ET_VEHICLE_WAITING_IN_DEPOT == 14 && ScriptEvent::ET_INDUSTRY_OPEN == 16 && ScriptEvent::ET_INDUSTRY_CLOSE == 17 && ScriptEvent::ET_STATION_FIRST_VEHICLE == 19);
 static_assert(ScriptEvent::ET_TOWN_FOUNDED == 22 && ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR == 23 && ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS == 27 && ScriptEvent::ET_ROAD_RECONSTRUCTION == 28);
+static_assert(ScriptEvent::ET_COMPANY_RENAMED == 33 && ScriptEvent::ET_PRESIDENT_RENAMED == 34);
 static_assert(ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING == 1 && ScriptEventVehicleCrashed::CRASH_PLANE_LANDING == 3 && ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT == 4);
 
 /** Construct the native event a Rust record names: each case only constructs its class. */
@@ -981,6 +990,8 @@ static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept
 		case ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR: return new ScriptEventAircraftDestTooFar(VehicleID{e.vehicle});
 		case ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS: return new ScriptEventExclusiveTransportRights(CompanyID{e.company}, TownID{e.town});
 		case ScriptEvent::ET_ROAD_RECONSTRUCTION: return new ScriptEventRoadReconstruction(CompanyID{e.company}, TownID{e.town});
+		case ScriptEvent::ET_COMPANY_RENAMED: return new ScriptEventCompanyRenamed(CompanyID{e.company}, std::string(reinterpret_cast<const char *>(e.text), e.text_length));
+		case ScriptEvent::ET_PRESIDENT_RENAMED: return new ScriptEventPresidentRenamed(CompanyID{e.company}, std::string(reinterpret_cast<const char *>(e.text), e.text_length));
 		default: NOT_REACHED();
 	}
 }
@@ -999,6 +1010,7 @@ static_assert(WC_STATION_LIST == 40 && WC_TRAINS_LIST == 41 && WC_ROADVEH_LIST =
 static_assert(WC_VEHICLE_VIEW == 46 && WC_STATION_VIEW == 47 && WC_VEHICLE_DEPOT == 48 && WC_INDUSTRY_VIEW == 50 && WC_COMPANY == 51 && WC_BUILD_VEHICLE == 54);
 static_assert(WC_MAIN_TOOLBAR == 1 && WC_BUILD_INDUSTRY == 62 && WC_CLIENT_LIST == 68 && WC_NETWORK_STATUS_WINDOW == 69 && WC_SEND_NETWORK_MSG == 72 && WC_COMPANY_LEAGUE == 81);
 static_assert(WC_INDUSTRY_PRODUCTION == 84 && WC_TOWN_CARGO_GRAPH == 85 && WC_ENGINE_PREVIEW == 88 && WC_GAME_OPTIONS == 91 && WN_NETWORK_STATUS_WINDOW_JOIN == 0);
+static_assert(WC_SMALLMAP == 8 && WC_INCOME_GRAPH == 76 && WC_OPERATING_PROFIT == 77 && WC_DELIVERED_CARGO == 78 && WC_PERFORMANCE_HISTORY == 79 && WC_COMPANY_VALUE == 80 && WC_LINKGRAPH_LEGEND == 102);
 static_assert(std::is_same_v<WidgetID, int32_t> && std::is_same_v<std::underlying_type_t<WindowClass>, uint16_t> && std::is_same_v<std::underlying_type_t<WindowNumberEnum>, uint8_t>);
 static_assert(TDIWD_POPULATION_CHANGE == 1 && TDIWD_FORCE_RESORT == 2);
 static_assert(VIWD_CONSIST_CHANGED == -3);

@@ -477,7 +477,7 @@ pub(crate) fn first_playable(s: &Services) -> crate::company_type::CompanyID {
         if c.is_null() {
             break;
         }
-        let id = (s.identity.company_id)(c);
+        let id = (s.identity.index)(c);
         // IsHumanID resolves through Company::Get at this point in the original.
         if !(s.identity.is_ai)((s.identity.company)(id)) {
             return id;
@@ -539,7 +539,7 @@ pub extern "C" fn openttd_rust_company_service_interval(
         if company.is_null() {
             None
         } else {
-            Some((s.identity.company_id)(company))
+            Some((s.identity.index)(company))
         },
         kind,
     )
@@ -917,7 +917,7 @@ fn bankruptcy(s: &Services, m: &Month, p: *mut Finances, id: u8) {
         write_field!(p, bankruptcy, 0);
         write_field!(p, asked, 0);
         if previous != 0 {
-            (s.identity.admin_update)(crate::company_type::CompanyID(id));
+            (s.identity.admin_update)((s.identity.company)(crate::company_type::CompanyID(id)));
         }
         return;
     }
@@ -945,7 +945,7 @@ fn bankruptcy(s: &Services, m: &Month, p: *mut Finances, id: u8) {
     }
     // Original subtraction promotes uint8_t to int before ceil division.
     if (i32::from(month) + 2) / 3 != (i32::from(month) - 1 + 2) / 3 {
-        (s.identity.admin_update)(crate::company_type::CompanyID(id));
+        (s.identity.admin_update)((s.identity.company)(crate::company_type::CompanyID(id)));
     }
 }
 fn maintenance(s: &Services, p: *mut Finances, id: u8) {
@@ -1201,7 +1201,7 @@ fn startup(s: &Services, f: &mut Startup) -> bool {
     if !(s.can_allocate_company)() {
         return false;
     }
-    let colour = crate::company_identity::generate_colour(s.identity);
+    let colour = crate::company_identity::generate_company_colour(s.identity);
     if f.requested != INVALID_OWNER && !(s.finance.company_finances)(f.requested).is_null() {
         return false;
     }
@@ -1209,7 +1209,12 @@ fn startup(s: &Services, f: &mut Startup) -> bool {
     f.company = c.id;
     let id = c.id as u8;
     let company = (s.identity.company)(crate::company_type::CompanyID(id));
-    crate::company_identity::set_startup_colour(s.identity, company, colour);
+    (s.identity.set_colour)(company, colour);
+    crate::company_identity::reset_company_livery(s.identity, company);
+    crate::company_identity::set_company_colour(
+        (s.identity.index)(company),
+        (s.identity.colour)(company),
+    );
     let loan = (((INITIAL_LOAN as u64).wrapping_mul(read_field!(e(), prices)) >> 16) / 10_000
         * 10_000) as i64;
     let loan = loan.min(read_field!(e(), max_loan));
@@ -1223,7 +1228,7 @@ fn startup(s: &Services, f: &mut Startup) -> bool {
         );
     }
     (s.company_defaults)(id);
-    crate::company_identity::generate_president(s.identity, company);
+    crate::company_identity::generate_president_name(s.identity, company);
     (s.startup_windows)();
     if f.is_ai && (!(s.finance.networking)() || (s.network_server)()) {
         f.stage = 1;
@@ -1382,8 +1387,11 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             } else {
                 crate::company_type::CompanyID(0)
             };
-            if railway && owner == crate::company_type::CompanyID(new) && world.has_signals(tile) {
-                let mut tracks = world.tracks(tile);
+            if railway
+                && owner == crate::company_type::CompanyID(new)
+                && world.has_signals_raw(tile)
+            {
+                let mut tracks = world.get_track_bits_raw(tile);
                 loop {
                     // RemoveFirstTrack: INVALID_TRACK leaves NONE/INVALID bits unchanged.
                     let track = if tracks != 0 && tracks != 0xFF {
@@ -1393,7 +1401,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
                     } else {
                         0xFF
                     };
-                    if crate::map_func::World::new(s.shared).has_signal_on_track(tile, track) {
+                    if crate::map_func::World::new(s.shared).has_signal_on_track_raw(tile, track) {
                         (s.add_track_to_signal_buffer)(tile, track, new);
                     }
                     if tracks == 0 {
@@ -1494,7 +1502,7 @@ pub(crate) fn control(
                     network_new(s, id, Some(c.client));
                     let company = (s.network_own_company)(id, c.client);
                     if !company.is_null() {
-                        set_local_company(s, (s.identity.company_id)(company));
+                        set_local_company(s, (s.identity.index)(company));
                         (s.network_own_company_settings)(company);
                     }
                 }
@@ -1599,8 +1607,8 @@ fn tick(s: &Services, t: &mut Tick) -> bool {
         let finances = (s.finance.company_finances)(id);
         if !finances.is_null() {
             let company = (s.identity.company)(crate::company_type::CompanyID(id));
-            if (s.identity.name_id)(company) != 0 {
-                crate::company_identity::generate_name(s.identity, company);
+            if (s.identity.name_1)(company) != crate::strings_type::StringID(0) {
+                crate::company_identity::generate_company_name(s.identity, company);
             }
             if read_field!(finances, asked) != 0 {
                 offer(s, finances, id);
@@ -1939,19 +1947,6 @@ pub extern "C" fn openttd_rust_economy_initialize() {
     write_field!(e(), payment, 1 << 16);
     crate::cargomonitor::openttd_rust_monitor_clear_pickups(crate::company_type::INVALID_OWNER);
     crate::cargomonitor::openttd_rust_monitor_clear_deliveries(crate::company_type::INVALID_OWNER);
-}
-/// `GetPrice` after the facade applies the `PR_END` check and the `NewGRF` shift.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_economy_price(index: u32, cost_factor: u32, shift: i32) -> i64 {
-    let Some(&base) = (unsafe { &*addr_of!(PRICES) }).get(index as usize) else {
-        return 0;
-    };
-    let price = base.saturating_mul(i64::from(cost_factor));
-    if shift >= 0 {
-        price.wrapping_shl(shift as u32)
-    } else {
-        price >> (-shift)
-    }
 }
 /// `GetAvailableMoney`: get the amount of money that a company has available, or `INT64_MAX`
 /// if there is no such valid company.
@@ -2905,7 +2900,7 @@ mod control_tests {
     fn identity() -> crate::company_identity::Services {
         let mut identity = COMPANY_IDENTITY;
         identity.company = company;
-        identity.company_id = company_id;
+        identity.index = company_id;
         identity.next_company = next_company;
         identity.is_ai = is_ai;
         identity
@@ -3257,7 +3252,9 @@ mod competitor_tests {
 mod startup_tests {
     use super::*;
     use crate::company_type::{COMPANY_SPECTATOR, CompanyID, CompanyManagerFace, OpenTTDCompany};
+    use crate::gfx_type::Colours;
     use crate::livery::{Livery, LiveryScheme};
+    use crate::strings_type::StringID;
     use crate::test_tables::{
         COMMAND_COSTS, COMMAND_POST, COMPANY, COMPANY_IDENTITY, FACES, FINANCE, FLEET_GROUPS,
         MOVEMENT, NETWORK_COMMAND, NETWORK_FRAME, OBJECTIVES, SHARED,
@@ -3267,7 +3264,7 @@ mod startup_tests {
     const ID: u8 = 2;
     /// Company 2's native record: colour, liveries, face bits and president.
     struct Record {
-        colour: u8,
+        colour: Colours,
         liveries: [Livery; LiveryScheme::LS_END.0 as usize],
         face_bits: u32,
         president: (u32, u32),
@@ -3275,7 +3272,7 @@ mod startup_tests {
     thread_local! {
         static TRACE: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
         static RECORD: RefCell<Record> = RefCell::new(Record {
-            colour: 0,
+            colour: Colours::COLOUR_BEGIN,
             liveries: [Livery::default(); LiveryScheme::LS_END.0 as usize],
             face_bits: 0,
             president: (0, 0),
@@ -3331,14 +3328,14 @@ mod startup_tests {
     extern "C" fn no_company(_: u32) -> *mut OpenTTDCompany {
         std::ptr::null_mut()
     }
-    extern "C" fn colour(_: *mut OpenTTDCompany) -> u8 {
+    extern "C" fn colour(_: *mut OpenTTDCompany) -> Colours {
         RECORD.with(|r| r.borrow().colour)
     }
-    extern "C" fn set_colour(_: *mut OpenTTDCompany, value: u8) {
+    extern "C" fn set_colour(_: *mut OpenTTDCompany, value: Colours) {
         RECORD.with(|r| r.borrow_mut().colour = value);
     }
-    extern "C" fn livery(_: *mut OpenTTDCompany, scheme: u8) -> *mut Livery {
-        RECORD.with(|r| &raw mut r.borrow_mut().liveries[usize::from(scheme)])
+    extern "C" fn livery(_: *mut OpenTTDCompany) -> *mut Livery {
+        RECORD.with(|r| r.borrow_mut().liveries.as_mut_ptr())
     }
     extern "C" fn face(_: *mut OpenTTDCompany) -> *mut CompanyManagerFace {
         std::ptr::without_provenance_mut(1)
@@ -3346,25 +3343,14 @@ mod startup_tests {
     extern "C" fn face_bits(_: *mut CompanyManagerFace) -> *mut u32 {
         RECORD.with(|r| &raw mut r.borrow_mut().face_bits)
     }
-    extern "C" fn set_president_id(_: *mut OpenTTDCompany, value: u32) {
-        RECORD.with(|r| r.borrow_mut().president.0 = value);
+    extern "C" fn set_president_name_1(_: *mut OpenTTDCompany, value: StringID) {
+        RECORD.with(|r| r.borrow_mut().president.0 = value.0);
     }
-    extern "C" fn set_president_parts(_: *mut OpenTTDCompany, value: u32) {
+    extern "C" fn set_president_name_2(_: *mut OpenTTDCompany, value: u32) {
         RECORD.with(|r| r.borrow_mut().president.1 = value);
     }
     extern "C" fn not_ai(_: *mut OpenTTDCompany) -> bool {
         false
-    }
-    extern "C" fn name_frame(_: *mut crate::company_identity::NameStorage) {}
-    extern "C" fn render(
-        _: *mut crate::company_identity::NameStorage,
-        _: u32,
-        _: u32,
-    ) -> crate::services::ByteSpan {
-        crate::services::ByteSpan {
-            data: b"President".as_ptr(),
-            size: 9,
-        }
     }
     extern "C" fn utf8_length(_: *const u8, size: usize) -> usize {
         size
@@ -3374,9 +3360,6 @@ mod startup_tests {
     }
     extern "C" fn one_style() -> u32 {
         1
-    }
-    extern "C" fn face_random(_: *mut crate::town::names::Randomizer) -> u32 {
-        0
     }
     extern "C" fn no_vars(_: u32) -> crate::company_manager_face::FaceVars {
         crate::company_manager_face::FaceVars {
@@ -3388,7 +3371,7 @@ mod startup_tests {
         std::ptr::without_provenance(1)
     }
     extern "C" fn set_style(_: *mut CompanyManagerFace, _: u32) {}
-    extern "C" fn set_label(
+    extern "C" fn set_style_label(
         _: *mut CompanyManagerFace,
         _: *const crate::company_manager_face::FaceSpec,
     ) {
@@ -3396,10 +3379,13 @@ mod startup_tests {
     extern "C" fn style(_: *mut CompanyManagerFace) -> u32 {
         0
     }
-    extern "C" fn no_group(_: u32) -> u32 {
-        u32::MAX
+    extern "C" fn no_group(_: u32) -> crate::fleet::NextGroup {
+        crate::fleet::NextGroup {
+            group: std::ptr::null_mut(),
+            index: u32::MAX,
+        }
     }
-    extern "C" fn admin_update(_: CompanyID) {
+    extern "C" fn admin_update(_: *mut OpenTTDCompany) {
         trace("admin");
     }
     extern "C" fn reset_colourmap() {
@@ -3528,11 +3514,10 @@ mod startup_tests {
     ) -> &'static crate::company_identity::Services {
         let mut faces = FACES;
         faces.count = one_style;
-        faces.random = face_random;
         faces.vars = no_vars;
         faces.spec = face_spec;
         faces.set_style = set_style;
-        faces.set_label = set_label;
+        faces.set_style_label = set_style_label;
         faces.style = style;
         faces.bits = face_bits;
         let mut groups = FLEET_GROUPS;
@@ -3543,17 +3528,15 @@ mod startup_tests {
         identity.groups = leak(groups);
         identity.company = company;
         identity.next_company = no_company;
-        identity.company_id = company_id;
+        identity.index = company_id;
         identity.colour = colour;
         identity.set_colour = set_colour;
         identity.livery = livery;
         identity.face = face;
-        identity.set_president_id = set_president_id;
-        identity.set_president_parts = set_president_parts;
+        identity.set_president_name_1 = set_president_name_1;
+        identity.set_president_name_2 = set_president_name_2;
         identity.is_ai = not_ai;
-        identity.name_frame_init = name_frame;
-        identity.name_frame_drop = name_frame;
-        identity.render = render;
+        identity.randomizer = Box::into_raw(Box::new(crate::random_func::Randomizer::default()));
         identity.admin_update = admin_update;
         identity.reset_colourmap = reset_colourmap;
         leak(identity)
@@ -3616,6 +3599,8 @@ mod startup_tests {
         s
     }
     fn reset() {
+        // `GeneratePresidentName` formats through the recording `GetString`.
+        crate::news_func::testing::take();
         crate::window_func::testing::take();
         crate::window_func::testing::observe(Some(window_call));
         TRACE.with(|t| t.borrow_mut().clear());
@@ -3774,7 +3759,7 @@ mod startup_tests {
 #[cfg(test)]
 mod bankruptcy_tests {
     use super::*;
-    use crate::company_type::CompanyID;
+    use crate::company_type::{CompanyID, OpenTTDCompany};
     use crate::test_tables::{COMPANY, COMPANY_IDENTITY, FINANCE, SHARED};
     use std::cell::{Cell, RefCell};
 
@@ -3814,8 +3799,13 @@ mod bankruptcy_tests {
         CURRENT.set(id);
     }
     extern "C" fn invalidate(_: u8) {}
-    extern "C" fn admin_update(id: CompanyID) {
-        TRACE.with(|t| t.borrow_mut().push(format!("admin {}", id.0)));
+    /// `Company::Get(id)`: a handle that carries the index, for `admin_update`.
+    extern "C" fn company(id: CompanyID) -> *mut OpenTTDCompany {
+        std::ptr::without_provenance_mut(usize::from(id.0) + 1)
+    }
+    extern "C" fn admin_update(c: *mut OpenTTDCompany) {
+        let id = c.addr() - 1;
+        TRACE.with(|t| t.borrow_mut().push(format!("admin {id}")));
     }
     extern "C" fn month() -> Month {
         Month {
@@ -3860,6 +3850,7 @@ mod bankruptcy_tests {
         });
         let mut identity = COMPANY_IDENTITY;
         identity.admin_update = admin_update;
+        identity.company = company;
         let mut finance = FINANCE;
         finance.networking = yes;
         finance.current_company = current;

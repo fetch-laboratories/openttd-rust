@@ -439,7 +439,9 @@ CommandCost CmdCompanyAllowListCtrl(DoCommandFlags flags, CompanyAllowListCtrlAc
  */
 CommandCost CmdSetCompanyManagerFace(DoCommandFlags flags, uint style, uint32_t bits)
 {
-	return openttd_rust_company_manager_face(&GetRustCompanyIdentityServices(), style, bits, flags.Test(DoCommandFlag::Execute)) ? CommandCost() : CMD_ERROR;
+	CommandCost result;
+	openttd_rust_company_manager_face(&GetRustCompanyIdentityServices(), RustCommandCost(&result), flags.base(), style, bits);
+	return result;
 }
 
 /**
@@ -462,7 +464,9 @@ void UpdateCompanyLiveries(Company *c)
  */
 CommandCost CmdSetCompanyColour(DoCommandFlags flags, LiveryScheme scheme, bool primary, Colours colour)
 {
-	return openttd_rust_company_colour(&GetRustCompanyIdentityServices(), scheme, primary, colour, flags.Test(DoCommandFlag::Execute)) ? CommandCost() : CMD_ERROR;
+	CommandCost result;
+	openttd_rust_company_colour(&GetRustCompanyIdentityServices(), RustCommandCost(&result), flags.base(), scheme, primary, colour);
+	return result;
 }
 
 
@@ -474,8 +478,9 @@ CommandCost CmdSetCompanyColour(DoCommandFlags flags, LiveryScheme scheme, bool 
  */
 CommandCost CmdRenameCompany(DoCommandFlags flags, const std::string &text)
 {
-	uint8_t result = openttd_rust_company_rename(&GetRustCompanyIdentityServices(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()}, flags.Test(DoCommandFlag::Execute));
-	return result == 0 ? CommandCost() : result == 2 ? CommandCost(STR_ERROR_NAME_MUST_BE_UNIQUE) : CMD_ERROR;
+	CommandCost result;
+	openttd_rust_company_rename(&GetRustCompanyIdentityServices(), RustCommandCost(&result), flags.base(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()});
+	return result;
 }
 
 
@@ -487,8 +492,9 @@ CommandCost CmdRenameCompany(DoCommandFlags flags, const std::string &text)
  */
 CommandCost CmdRenamePresident(DoCommandFlags flags, const std::string &text)
 {
-	uint8_t result = openttd_rust_president_rename(&GetRustCompanyIdentityServices(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()}, flags.Test(DoCommandFlag::Execute));
-	return result == 0 ? CommandCost() : result == 2 ? CommandCost(STR_ERROR_NAME_MUST_BE_UNIQUE) : CMD_ERROR;
+	CommandCost result;
+	openttd_rust_president_rename(&GetRustCompanyIdentityServices(), RustCommandCost(&result), flags.base(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()});
+	return result;
 }
 
 /**

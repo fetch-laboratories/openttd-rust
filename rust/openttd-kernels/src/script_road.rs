@@ -101,7 +101,7 @@ pub extern "C" fn openttd_rust_script_road_build_cost(
         3 => PR_BUILD_STATION_TRUCK,
         _ => return -1,
     };
-    crate::economy_func::get_price(price as u32, 1, 0, 0)
+    crate::economy_func::get_price_raw(price as u32, 1, 0, 0)
 }
 
 /// `GetPresentRoadTypes(tile).Test(road_type)`.

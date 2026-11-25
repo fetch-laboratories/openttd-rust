@@ -466,7 +466,7 @@ pub(crate) fn show_visual_effect(
                 || crate::depot_map::is_depot_tile(&world, v.tile())
                 || world.tunnel_tile(v.tile())
                 || (v.vehicle_type() == VehicleType::VEH_TRAIN
-                    && !crate::rail::has_power_on_rail(
+                    && !crate::rail::has_power_on_rail_types(
                         shared,
                         Train::from_vehicle(v).railtypes(),
                         world.get_tile_rail_type(v.tile()),

@@ -130,6 +130,8 @@ mod controller {
         industry: 0,
         town: 0,
         company: 0,
+        text: std::ptr::null(),
+        text_length: 0,
     };
     /// The default road type table's classification, `ROADTYPE_ROAD` a road type and
     /// `ROADTYPE_TRAM` a tram type, held under the game-state test lock until dropped,
@@ -451,6 +453,8 @@ mod controller {
             industry: 0,
             town: 0,
             company: owner,
+            text: std::ptr::null(),
+            text_length: 0,
         };
         let headline = if victims == 1 {
             encoded(STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER.0, &[])

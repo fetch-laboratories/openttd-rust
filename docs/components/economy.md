@@ -51,9 +51,9 @@
 
 ## Company identity, faces and liveries
 
-- Rust owns: company colour/name/president generation, manager-face validation/bit helpers, livery propagation, identity commands, engine livery-scheme selection and company-colour cache.
-- C++ keeps: company/vehicle shells and other fields, face tables and string rendering; console face parsing and network key containers remain native.
-- PRs: #579.
+- Rust owns: company colour/name/president generation, the launch news and renamed events, manager-face validation/bit helpers and their draws from the caller's native randomizer, livery propagation, the four identity commands (`CmdSetCompanyManagerFace`, `CmdSetCompanyColour`, `CmdRenameCompany`, `CmdRenamePresident`) with their window invalidations and nested rename, engine livery-scheme selection, the company-colour cache, `GetPrice` and `ScaleByInverseCargoScale`. `company_identity.rs`, `company_manager_face.rs`, `economy_func.rs` and `livery.rs` are finished files.
+- C++ keeps: the `Company` record, reached through one slot per member until #907; face tables, `GetString` formatting, `BuildOwnerLegend`, `ResetVehicleColourMap`; console face parsing and network key containers. `UpdateObjectColours` and its export stay for `tools/simulation/objects-console.cpp`.
+- PRs: #579, #1047's pass.
 
 ## Company finances and economy lifecycle
 

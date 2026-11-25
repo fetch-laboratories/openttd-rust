@@ -574,7 +574,7 @@ fn fence_ground(c: &TileLoop<'_>, tile: TileIndex) -> RailGroundType {
     let w = &c.world;
     // SAFETY: the batch's table is immutable and lives for the process.
     let leaves = unsafe { &*c.ground.rail };
-    let rail = TrackBits(w.tracks(tile.0));
+    let rail = w.get_track_bits(tile);
 
     let owner = w.owner(tile);
     let mut fences = DiagDirections::EMPTY;
@@ -623,7 +623,7 @@ pub(crate) fn tile_loop_track(c: &TileLoop<'_>, tile: TileIndex) {
     let w = &c.world;
     // SAFETY: the batch's table is immutable and lives for the process.
     let leaves = unsafe { &*c.ground.rail };
-    let old_ground = RailGroundType(w.rail_ground(tile.0));
+    let old_ground = w.get_rail_ground_type(tile);
 
     if old_ground == RailGroundType::HalfTileWater {
         // SAFETY: the batch owns an independent native result context; no result is live
@@ -652,8 +652,8 @@ pub(crate) fn tile_loop_track(c: &TileLoop<'_>, tile: TileIndex) {
 
                 /* for non-flat track, use lower part of track
                  * in other cases, use the highest part with track */
-                if w.is_plain_rail(tile.0) {
-                    let track = TrackBits(w.tracks(tile.0));
+                if w.is_plain_rail(tile) {
+                    let track = w.get_track_bits(tile);
                     let f = crate::movement::get_rail_foundation(slope, track, c.check());
 
                     match f {
@@ -719,7 +719,7 @@ pub(crate) fn tile_loop_track(c: &TileLoop<'_>, tile: TileIndex) {
 
         let mut new_ground = RailGroundType::Grass;
 
-        if w.is_plain_rail(tile.0) && old_ground != RailGroundType::Barren {
+        if w.is_plain_rail(tile) && old_ground != RailGroundType::Barren {
             // wait until bottom is green
             /* determine direction of fence */
             new_ground = fence_ground(c, tile);

@@ -9,10 +9,16 @@
 //!
 //! `Game::NewEvent` stays native until the script API port.
 
-use crate::script_event::services;
+use crate::script_event::ScriptTextEvent;
 use crate::script_event_types::ScriptEvent;
 
 /// `Game::NewEvent(new ScriptEvent...(...))`: queue a new event for a Game Script.
 pub(crate) fn new_event(event: &ScriptEvent) {
-    (services().game_new)(event);
+    crate::script_event::game_new(event);
+}
+
+/// `Game::NewEvent(new ScriptEvent...(..., name))` for an event that carries a name: the
+/// native factory copies the bytes during the call.
+pub(crate) fn new_text_event(event: &ScriptTextEvent<'_>) {
+    crate::script_event::game_new_text(event);
 }

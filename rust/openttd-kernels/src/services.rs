@@ -255,12 +255,27 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
-    /// Native `GetAllCompatibleRailTypes`, including empty and all-bit masks.
-    pub all_compatible_railtypes: extern "C" fn(u64) -> u64,
-    /// Native `GetAllPoweredRailTypes`.
-    pub all_powered_railtypes: extern "C" fn(u64) -> u64,
-    /// `GetRailTypeInfo(rt)->curve_speed`.
-    pub rail_type_curve_speed: extern "C" fn(RailType) -> u8,
+    /// `RailTypeInfo::acceleration_type`.
+    pub rail_type_acceleration_type: extern "C" fn(*const crate::rail::RailTypeInfo) -> u8,
+    /// `RailTypeInfo::compatible_railtypes`.
+    pub rail_type_compatible_railtypes: extern "C" fn(*const crate::rail::RailTypeInfo) -> u64,
+    /// `RailTypeInfo::curve_speed`.
+    pub rail_type_curve_speed: extern "C" fn(*const crate::rail::RailTypeInfo) -> u8,
+    /// `GetRailTypeInfo`, retaining its assertion.
+    pub rail_type_info: extern "C" fn(RailType) -> *const crate::rail::RailTypeInfo,
+    /// `RailTypeInfo::introduces_railtypes`.
+    pub rail_type_introduces_railtypes: extern "C" fn(*const crate::rail::RailTypeInfo) -> u64,
+    /// `RailTypeInfo::introduction_date`.
+    pub rail_type_introduction_date: extern "C" fn(*const crate::rail::RailTypeInfo) -> i32,
+    /// `RailTypeInfo::introduction_required_railtypes`.
+    pub rail_type_introduction_required_railtypes:
+        extern "C" fn(*const crate::rail::RailTypeInfo) -> u64,
+    /// `RailTypeInfo::label`.
+    pub rail_type_label: extern "C" fn(*const crate::rail::RailTypeInfo) -> u32,
+    /// `RailTypeInfo::max_speed`.
+    pub rail_type_max_speed: extern "C" fn(*const crate::rail::RailTypeInfo) -> u16,
+    /// `RailTypeInfo::powered_railtypes`.
+    pub rail_type_powered_railtypes: extern "C" fn(*const crate::rail::RailTypeInfo) -> u64,
     /// Typed Rust post lifecycles and native argument codecs.
     pub command_post: extern "C" fn() -> &'static crate::command_post::Services,
     /// Complete synchronous movement owner; immutable process-lifetime table.
@@ -750,9 +765,16 @@ crate::abi::layouts! {
         generating_world,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
-        all_compatible_railtypes,
-        all_powered_railtypes,
+        rail_type_acceleration_type,
+        rail_type_compatible_railtypes,
         rail_type_curve_speed,
+        rail_type_info,
+        rail_type_introduces_railtypes,
+        rail_type_introduction_date,
+        rail_type_introduction_required_railtypes,
+        rail_type_label,
+        rail_type_max_speed,
+        rail_type_powered_railtypes,
         command_post,
         movement,
         set_tile_owner,
@@ -1053,14 +1075,14 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
     extern "C" fn unexpected_file(_: *const c_void) -> *const c_void {
         std::process::abort()
     }
-    extern "C" fn unexpected_compatible(_: u64) -> u64 {
-        unreachable!()
+    extern "C" fn unexpected_rail_type_info<R>(_: *const crate::rail::RailTypeInfo) -> R {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_rail_type(_: RailType) -> *const crate::rail::RailTypeInfo {
+        std::process::abort()
     }
     extern "C" fn unexpected_powered(_: RoadType) -> u64 {
         unreachable!()
-    }
-    extern "C" fn unexpected_curve_speed(_: RailType) -> u8 {
-        std::process::abort()
     }
     extern "C" fn unexpected_post() -> &'static crate::command_post::Services {
         std::process::abort()
@@ -1075,9 +1097,16 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
     }
     Services {
         copyable_badges: unexpected_copyable,
-        all_compatible_railtypes: unexpected_compatible,
-        all_powered_railtypes: unexpected_compatible,
-        rail_type_curve_speed: unexpected_curve_speed,
+        rail_type_acceleration_type: unexpected_rail_type_info,
+        rail_type_compatible_railtypes: unexpected_rail_type_info,
+        rail_type_curve_speed: unexpected_rail_type_info,
+        rail_type_info: unexpected_rail_type,
+        rail_type_introduces_railtypes: unexpected_rail_type_info,
+        rail_type_introduction_date: unexpected_rail_type_info,
+        rail_type_introduction_required_railtypes: unexpected_rail_type_info,
+        rail_type_label: unexpected_rail_type_info,
+        rail_type_max_speed: unexpected_rail_type_info,
+        rail_type_powered_railtypes: unexpected_rail_type_info,
         command_post: unexpected_post,
         grf_file_version: unexpected_version,
         grf_price_shift: unexpected_price_shift,

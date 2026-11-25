@@ -20,11 +20,11 @@
 use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
 use crate::direction_type::DiagDirection;
-use crate::rail_map::is_pbs_signal as is_pbs;
+use crate::rail_map::is_pbs_signal_raw as is_pbs;
 use crate::tile_type::TileIndex;
 use crate::track_func::{
-    is_diagonal_trackdir as diagonal, trackdir_bits_to_track_bits as trackdir_tracks,
-    tracks_overlap,
+    is_diagonal_trackdir_raw as diagonal, trackdir_bits_to_track_bits_raw as trackdir_tracks,
+    tracks_overlap_raw as tracks_overlap,
 };
 
 use crate::bitmath_func::kill_first_bit;
@@ -294,7 +294,9 @@ fn pieces(bits: u8) -> u32 {
     if tracks_overlap(bits) { n * n } else { n }
 }
 fn reaches(trackdir: u8) -> u16 {
-    crate::track_func::diagdir_reaches_trackdirs(crate::track_func::trackdir_to_exitdir(trackdir))
+    crate::track_func::diagdir_reaches_trackdirs_raw(crate::track_func::trackdir_to_exitdir_raw(
+        trackdir,
+    ))
 }
 /// Saturating unary minus of `OverflowSafeInt64`.
 fn negate(money: i64) -> i64 {
@@ -363,23 +365,25 @@ impl<'a> Ctx<'a> {
     }
     /// The native uint query contains only the four signal-presence bits.
     fn present_signals(&self, tile: u32) -> u8 {
-        std::ffi::c_uint::from(crate::map_func::World::new(self.shared).present_signals(tile)) as u8
+        std::ffi::c_uint::from(
+            crate::map_func::World::new(self.shared).get_present_signals_raw(tile),
+        ) as u8
     }
     fn has_track(&self, tile: u32, track: u8) -> bool {
-        crate::track_func::has_track(self.tracks(tile), track, |ok| {
+        crate::track_func::has_track_raw(self.tracks(tile), track, |ok| {
             crate::movement::native_assert(self.shared, ok);
         })
     }
     /// `HasSignalOnTrack`: signal tile type and a present signal on the track.
     fn has_signal(&self, tile: u32, track: u8) -> bool {
-        crate::map_func::World::new(self.shared).has_signal_on_track(tile, track)
+        crate::map_func::World::new(self.shared).has_signal_on_track_raw(tile, track)
     }
     fn reserved(&self, tile: u32) -> u8 {
         crate::pbs::Pbs::acquire(self.shared).get_reserved_trackbits_raw(tile)
     }
     fn signal_type(&self, tile: u32, track: u8) -> u8 {
         crate::services::SignalType(
-            crate::map_func::World::new(self.shared).signal_type(tile, track),
+            crate::map_func::World::new(self.shared).get_signal_type_raw(tile, track),
         )
         .0
     }
@@ -465,7 +469,7 @@ impl<'a> Ctx<'a> {
         // Resolve at the first original access; the raw pointer retains no Rust borrow.
         let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         cost.set(0);
-        if !crate::rail::val_param_rail_type(self.shared, railtype) || track >= 6 {
+        if !crate::rail::val_param_rail_type_raw(self.shared, railtype) || track >= 6 {
             cost.error(INVALID_STRING_ID);
             return;
         }
@@ -484,7 +488,7 @@ impl<'a> Ctx<'a> {
                 }
                 if !(self.s.compatible_rail)(
                     crate::services::RailType(
-                        crate::map_func::World::new(self.shared).rail_type(tile),
+                        crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                     )
                     .0,
                     railtype,
@@ -508,7 +512,7 @@ impl<'a> Ctx<'a> {
                     return cost.take(ret);
                 }
                 cost.add_money(ret.money());
-                if crate::map_func::World::new(self.shared).has_signals(tile)
+                if crate::map_func::World::new(self.shared).has_signals_raw(tile)
                     && tracks_overlap(self.tracks(tile) | trackbit)
                 {
                     if !auto_remove_signals {
@@ -526,7 +530,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 let current = crate::services::RailType(
-                    crate::map_func::World::new(self.shared).rail_type(tile),
+                    crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                 )
                 .0;
                 if current != railtype && !(self.s.powered_rail)(railtype, current) {
@@ -559,7 +563,8 @@ impl<'a> Ctx<'a> {
                             },
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                    crate::map_func::World::new(self.shared)
+                                        .get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -579,7 +584,8 @@ impl<'a> Ctx<'a> {
                             },
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                    crate::map_func::World::new(self.shared)
+                                        .get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -840,7 +846,7 @@ impl<'a> Ctx<'a> {
                 }
                 cost.add_money((self.s.rail_clear_cost)(
                     crate::services::RailType(
-                        crate::map_func::World::new(self.shared).rail_type(tile),
+                        crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                     )
                     .0,
                 ));
@@ -874,7 +880,8 @@ impl<'a> Ctx<'a> {
                             },
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                    crate::map_func::World::new(self.shared)
+                                        .get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -918,7 +925,7 @@ impl<'a> Ctx<'a> {
                 }
                 cost.add_money((self.s.rail_clear_cost)(
                     crate::services::RailType(
-                        crate::map_func::World::new(self.shared).rail_type(tile),
+                        crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                     )
                     .0,
                 ));
@@ -951,7 +958,8 @@ impl<'a> Ctx<'a> {
                             },
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                    crate::map_func::World::new(self.shared)
+                                        .get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -971,7 +979,8 @@ impl<'a> Ctx<'a> {
                             },
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                    crate::map_func::World::new(self.shared)
+                                        .get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -1073,7 +1082,7 @@ impl<'a> Ctx<'a> {
         fail_on_obstacle: bool,
     ) {
         total.set(0);
-        if (!remove && !crate::rail::val_param_rail_type(self.shared, railtype)) || track >= 6 {
+        if (!remove && !crate::rail::val_param_rail_type_raw(self.shared, railtype)) || track >= 6 {
             return total.error(INVALID_STRING_ID);
         }
         let size = self.map_size();
@@ -1150,7 +1159,7 @@ impl<'a> Ctx<'a> {
         railtype: u8,
         dir: u8,
     ) {
-        if !crate::rail::val_param_rail_type(self.shared, railtype) || dir >= 4 {
+        if !crate::rail::val_param_rail_type_raw(self.shared, railtype) || dir >= 4 {
             return cost.error(INVALID_STRING_ID);
         }
         let tileh = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
@@ -1170,10 +1179,10 @@ impl<'a> Ctx<'a> {
         }
         let mut rotate = false;
         if self.tile_type(tile) == MP_RAILWAY
-            && crate::map_func::World::new(self.shared).is_rail_depot(tile)
+            && crate::map_func::World::new(self.shared).is_rail_depot_raw(tile)
             && railtype
                 == crate::services::RailType(
-                    crate::map_func::World::new(self.shared).rail_type(tile),
+                    crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                 )
                 .0
         {
@@ -1183,7 +1192,7 @@ impl<'a> Ctx<'a> {
             }
             if dir
                 == crate::services::DiagDirection(
-                    crate::map_func::World::new(self.shared).rail_depot_dir(tile),
+                    crate::map_func::World::new(self.shared).get_rail_depot_direction_raw(tile),
                 )
                 .0
             {
@@ -1309,7 +1318,7 @@ impl<'a> Ctx<'a> {
                 unsafe { (self.shared.free_train_reservation)(v) };
             }
         }
-        if !crate::map_func::World::new(self.shared).has_signals(tile) {
+        if !crate::map_func::World::new(self.shared).has_signals_raw(tile) {
             (self.rail.set_has_signals)(tile, true);
             (self.rail.set_signal_states)(tile, 0xF);
             (self.rail.set_present_signals)(tile, 0);
@@ -1411,7 +1420,7 @@ impl<'a> Ctx<'a> {
                 ret.ok()
             };
             let states = std::ffi::c_uint::from(
-                crate::map_func::World::new(self.shared).signal_states(tile),
+                crate::map_func::World::new(self.shared).get_signal_states_raw(tile),
             );
             let value = (states & !mask) | (if reserved { u32::MAX } else { 0 } & mask);
             (self.rail.set_signal_states)(tile, value as u8);
@@ -1481,7 +1490,7 @@ impl<'a> Ctx<'a> {
         }
         match self.tile_type(*tile) {
             MP_RAILWAY => {
-                if crate::map_func::World::new(self.shared).is_rail_depot(*tile) {
+                if crate::map_func::World::new(self.shared).is_rail_depot_raw(*tile) {
                     return false;
                 }
                 if !remove && self.has_signal(*tile, *trackdir & 7) {
@@ -1498,7 +1507,7 @@ impl<'a> Ctx<'a> {
                     return false;
                 }
                 if (self.shared.tunnel_bridge_direction)(*tile)
-                    != crate::track_func::trackdir_to_exitdir(*trackdir)
+                    != crate::track_func::trackdir_to_exitdir_raw(*trackdir)
                 {
                     return false;
                 }
@@ -1768,13 +1777,14 @@ impl<'a> Ctx<'a> {
                 let mut td = track;
                 let mut i = 0;
                 while v.is_null() && i < 2 {
-                    if crate::map_func::World::new(self.shared).has_signal_on_trackdir(tile, td ^ 8)
+                    if crate::map_func::World::new(self.shared)
+                        .has_signal_on_trackdir_raw(tile, td ^ 8)
                     {
                         let next = self
                             .map
                             .tile_add_by_diag_dir(
                                 TileIndex(tile),
-                                DiagDirection(crate::track_func::trackdir_to_exitdir(td)),
+                                DiagDirection(crate::track_func::trackdir_to_exitdir_raw(td)),
                                 crate::map_func::native_check,
                             )
                             .0;
@@ -1855,7 +1865,7 @@ impl<'a> Ctx<'a> {
         totype: u8,
         diagonal_area: bool,
     ) {
-        if !crate::rail::val_param_rail_type(self.shared, totype) {
+        if !crate::rail::val_param_rail_type_raw(self.shared, totype) {
             return cost.error(INVALID_STRING_ID);
         }
         if area_start >= self.map_size() {
@@ -1941,8 +1951,10 @@ impl<'a> Ctx<'a> {
             }
             _ => return false,
         }
-        let kind =
-            crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile)).0;
+        let kind = crate::services::RailType(
+            crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
+        )
+        .0;
         if kind == totype
             || (unsafe { self.shared.settings().disable_elrails.read() }
                 && totype == RAILTYPE_RAIL
@@ -2020,14 +2032,15 @@ impl<'a> Ctx<'a> {
         match tt {
             MP_RAILWAY => {
                 if crate::services::RailTileType(
-                    crate::map_func::World::new(self.shared).rail_tile_type(tile),
+                    crate::map_func::World::new(self.shared).get_rail_tile_type_raw(tile),
                 )
                 .0 == RAIL_TILE_DEPOT
                 {
                     if execute {
                         w::hit(w::RAIL_CMD_CONVERT_DEPOT);
                         let dir = crate::services::DiagDirection(
-                            crate::map_func::World::new(self.shared).rail_depot_dir(tile),
+                            crate::map_func::World::new(self.shared)
+                                .get_rail_depot_direction_raw(tile),
                         )
                         .0;
                         (self.s.layout_changed)(tile, dir & 1);
@@ -2081,7 +2094,7 @@ impl<'a> Ctx<'a> {
                 }
                 if !(self.s.compatible_rail)(
                     crate::services::RailType(
-                        crate::map_func::World::new(self.shared).rail_type(tile),
+                        crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                     )
                     .0,
                     totype,
@@ -2113,7 +2126,8 @@ impl<'a> Ctx<'a> {
                             infrastructure,
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                    crate::map_func::World::new(self.shared)
+                                        .get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -2201,7 +2215,7 @@ impl<'a> Ctx<'a> {
         if flags & DoCommandFlag::EXECUTE != 0 {
             w::hit(w::RAIL_CMD_CLEAR_DEPOT);
             let dir = crate::services::DiagDirection(
-                crate::map_func::World::new(self.shared).rail_depot_dir(tile),
+                crate::map_func::World::new(self.shared).get_rail_depot_direction_raw(tile),
             )
             .0;
             let owner = (self.shared.tile_owner)(tile);
@@ -2220,7 +2234,7 @@ impl<'a> Ctx<'a> {
                     CompanyInfrastructure::get(self.shared, CompanyID(owner)),
                     crate::rail_type::RailType(
                         crate::services::RailType(
-                            crate::map_func::World::new(self.shared).rail_type(tile),
+                            crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                         )
                         .0,
                     ),
@@ -2253,7 +2267,7 @@ impl<'a> Ctx<'a> {
             });
         }
         match crate::services::RailTileType(
-            crate::map_func::World::new(self.shared).rail_tile_type(tile),
+            crate::map_func::World::new(self.shared).get_rail_tile_type_raw(tile),
         )
         .0
         {
@@ -2313,8 +2327,10 @@ impl<'a> Ctx<'a> {
         } else {
             1
         };
-        let railtype =
-            crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile)).0;
+        let railtype = crate::services::RailType(
+            crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
+        )
+        .0;
         let old_infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(old_owner));
         unsafe {
             CompanyInfrastructure::add_rail(
@@ -2331,7 +2347,7 @@ impl<'a> Ctx<'a> {
                 num,
             );
         };
-        if crate::map_func::World::new(self.shared).has_signals(tile) {
+        if crate::map_func::World::new(self.shared).has_signals_raw(tile) {
             let signals = self.present_signals(tile).count_ones();
             unsafe {
                 CompanyInfrastructure::add_signal(old_infrastructure, signals.wrapping_neg());
@@ -2473,7 +2489,7 @@ impl<'a> Ctx<'a> {
                 z_new,
                 tileh_new,
                 crate::services::DiagDirection(
-                    crate::map_func::World::new(self.shared).rail_depot_dir(tile),
+                    crate::map_func::World::new(self.shared).get_rail_depot_direction_raw(tile),
                 )
                 .0,
             )

@@ -476,8 +476,8 @@ impl crate::map_func::World<'_> {
             && !self.is_station_tile_blocked(test_tile)
             && crate::rail::is_compatible_rail(
                 self.shared,
-                self.rail_type(test_tile.0),
-                self.rail_type(station_tile.0),
+                self.get_rail_type(test_tile),
+                self.get_rail_type(station_tile),
             )
             && self.get_rail_station_axis(test_tile) == self.get_rail_station_axis(station_tile)
             && self.get_station_index(test_tile) == self.get_station_index(station_tile)

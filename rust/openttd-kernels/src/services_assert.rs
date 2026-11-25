@@ -33,6 +33,15 @@ pub extern "C" fn check(condition: bool) {
     check(condition);
 }
 
+/// `assert(condition)` on the process-wide native policy, for a header helper's `check`
+/// where the caller holds no table: only a failed condition crosses to the policy.
+#[inline]
+pub(crate) fn native_check(condition: bool) {
+    if !condition {
+        check(false);
+    }
+}
+
 /// `assert(condition)`: evaluate `condition` only where the native build asserts,
 /// and report a failure through `check`. Before the shared table is bound (tests
 /// and tools that bind only the callback) the condition is evaluated.

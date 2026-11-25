@@ -1323,9 +1323,9 @@ impl<'a> Game<'a> {
             return true;
         }
         let ts = self.get_road_vehicle_track_status(od.v.v, od.tile);
-        let trackdirbits = TrackdirBits(track_status_to_trackdir_bits(ts));
+        let trackdirbits = track_status_to_trackdir_bits(ts);
         let red_signals = track_status_to_red_signals(ts); // barred level crossing
-        let trackbits = TrackBits(trackdir_bits_to_track_bits(trackdirbits.0));
+        let trackbits = trackdir_bits_to_track_bits(trackdirbits);
 
         /* Track does not continue along overtaking direction || track has junction || levelcrossing is barred */
         if !crate::bitmath_func::has_bit(trackdirbits.0, od.trackdir.0)
@@ -1391,10 +1391,8 @@ impl<'a> Game<'a> {
             return;
         }
 
-        let trackdir = Trackdir(diag_dir_to_diag_trackdir(
-            dir_to_diag_dir(v.v.direction(), self.check()).0,
-            self.check(),
-        ));
+        let trackdir =
+            diag_dir_to_diag_trackdir(dir_to_diag_dir(v.v.direction(), self.check()), self.check());
 
         /* Are the current and the next tile suitable for overtaking?
          *  - Does the track continue along od.trackdir
@@ -1483,7 +1481,7 @@ impl<'a> Game<'a> {
 
         let ts = self.get_road_vehicle_track_status(v.v, tile);
         let red_signals = track_status_to_red_signals(ts); // crossing
-        let mut trackdirs = TrackdirBits(track_status_to_trackdir_bits(ts));
+        let mut trackdirs = track_status_to_trackdir_bits(ts);
 
         if self.is_tile_type(tile, TileType::MP_ROAD) {
             if self.world().is_road_depot(tile)
@@ -1535,7 +1533,7 @@ impl<'a> Game<'a> {
          */
 
         /* Remove tracks unreachable from the enter dir */
-        trackdirs.0 &= diagdir_reaches_trackdirs(enterdir.0);
+        trackdirs &= diagdir_reaches_trackdirs(enterdir, self.check());
         let best_track = 'found_best_track: {
             if trackdirs == TrackdirBits::TRACKDIR_BIT_NONE {
                 /* If vehicle expected a path, it no longer exists, so invalidate it. */
@@ -1650,7 +1648,7 @@ impl<'a> Game<'a> {
         let dir = self.get_road_depot_direction(v.v.tile());
         v.v.set_direction(diag_dir_to_dir(dir, self.check()));
 
-        let tdir = Trackdir(diag_dir_to_diag_trackdir(dir.0, self.check()));
+        let tdir = diag_dir_to_diag_trackdir(dir, self.check());
         let rdp = Self::road_drive_entry(
             get_road_tram_type(self.roadtype(v.v)),
             self.drive_side() + usize::from(tdir.0),
@@ -1730,11 +1728,11 @@ impl<'a> Game<'a> {
             if diag_dir == DiagDirection::INVALID_DIAGDIR {
                 return Trackdir::INVALID_TRACKDIR;
             }
-            dir = Trackdir(diag_dir_to_diag_trackdir(diag_dir.0, self.check()));
+            dir = diag_dir_to_diag_trackdir(diag_dir, self.check());
         } else if already_reversed
             && (prev.v.tile() != tile
                 || (prev_state < Trackdir::TRACKDIR_END.0
-                    && is_reversing_road_trackdir(prev_state, self.check())))
+                    && is_reversing_road_trackdir(Trackdir(prev_state), self.check())))
         {
             /*
              * The vehicle has reversed, but did not go straight back.
@@ -1963,7 +1961,7 @@ impl<'a> Game<'a> {
             loop {
                 // again:
                 let mut start_frame = RVC_DEFAULT_START_FRAME;
-                if is_reversing_road_trackdir(dir.0, self.check()) {
+                if is_reversing_road_trackdir(dir, self.check()) {
                     /* When turning around we can't be overtaking. */
                     v.set_overtaking(0);
 
@@ -2076,7 +2074,7 @@ impl<'a> Game<'a> {
                     usize::from(RVSB_IN_DT_ROAD_STOP_END),
                 ) && self.is_tile_type(v.v.tile(), TileType::MP_STATION)
                 {
-                    if is_reversing_road_trackdir(dir.0, self.check())
+                    if is_reversing_road_trackdir(dir, self.check())
                         && is_inside_mm(
                             usize::from(v.state()),
                             usize::from(RVSB_IN_ROAD_STOP),
@@ -2725,35 +2723,37 @@ impl<'a> Game<'a> {
 
         if v.is_in_depot() {
             /* We'll assume the road vehicle is facing outwards */
-            return Trackdir(diag_dir_to_diag_trackdir(
-                self.get_road_depot_direction(v.v.tile()).0,
+            return diag_dir_to_diag_trackdir(
+                self.get_road_depot_direction(v.v.tile()),
                 self.check(),
-            ));
+            );
         }
 
         if self.world().is_bay_road_stop_tile(v.v.tile()) {
             /* We'll assume the road vehicle is facing outwards */
-            return Trackdir(diag_dir_to_diag_trackdir(
-                self.world().get_bay_road_stop_dir(v.v.tile()).0,
+            return diag_dir_to_diag_trackdir(
+                self.world().get_bay_road_stop_dir(v.v.tile()),
                 self.check(),
-            )); // Road vehicle in a station
+            ); // Road vehicle in a station
         }
 
         /* Drive through road stops / wormholes (tunnels) */
         if v.state() > RVSB_TRACKDIR_MASK {
-            return Trackdir(diag_dir_to_diag_trackdir(
-                dir_to_diag_dir(v.v.direction(), self.check()).0,
+            return diag_dir_to_diag_trackdir(
+                dir_to_diag_dir(v.v.direction(), self.check()),
                 self.check(),
-            ));
+            );
         }
 
         /* If vehicle's state is a valid track direction (vehicle is not turning around) return it,
          * otherwise transform it into a valid track direction */
-        Trackdir(if is_reversing_road_trackdir(v.state(), self.check()) {
-            v.state() - 6
-        } else {
-            v.state()
-        })
+        Trackdir(
+            if is_reversing_road_trackdir(Trackdir(v.state()), self.check()) {
+                v.state() - 6
+            } else {
+                v.state()
+            },
+        )
     }
 }
 
@@ -2777,7 +2777,7 @@ fn get_current_max_speed<'w, 'a: 'w>(
     while let Some(u) = part {
         if ss.settings().roadveh_acceleration_model() == AccelerationModel::AM_REALISTIC {
             if v.state() <= RVSB_TRACKDIR_MASK
-                && is_reversing_road_trackdir(v.state(), |ok| {
+                && is_reversing_road_trackdir(Trackdir(v.state()), |ok| {
                     crate::movement::native_assert(ss, ok);
                 })
             {

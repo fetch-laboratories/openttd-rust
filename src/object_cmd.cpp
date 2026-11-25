@@ -135,7 +135,7 @@ void UpdateCompanyHQ(TileIndex tile, uint score)
  */
 void UpdateObjectColours(const Company *c)
 {
-	openttd_rust_object_colours(&GetRustObjectServices(), c->index.base());
+	openttd_rust_object_colours(&GetRustObjectServices(), c, c->index.base());
 }
 
 /**
@@ -347,6 +347,7 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.next = [](uint32_t from) noexcept -> OpenTTDObjectNext { for (Object *o : Object::Iterate(from)) return {o, o->index.base(), o->location.tile.base()}; return {nullptr, UINT32_MAX, 0}; },
 		.set_colour = [](Object *o, uint8_t colour) noexcept -> void { o->colour = colour; },
 		.recolour = RustObjectRecolour,
+		.company_recolour = RustCompanyRecolour,
 		.colour_error = RustFixedSpecCallbackError<CBID_OBJECT_COLOUR, ObjectSpec>,
 		.make = [](uint32_t tile, uint8_t owner, uint32_t id, WaterClass water, uint32_t random) noexcept -> void { MakeObject(TileIndex(tile), Owner(owner), ObjectID(id), water, random); },
 		.delete_object = [](Object *o) noexcept -> void { delete o; },

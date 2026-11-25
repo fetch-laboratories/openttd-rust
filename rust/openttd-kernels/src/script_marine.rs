@@ -64,7 +64,7 @@ fn canal_tile(s: &Services, tile: u32) -> bool {
 
 /// `ScriptMarine::AreWaterTilesConnected`.
 fn water_tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
-    use crate::track_func::{diagdir_reaches_tracks, track_status_to_track_bits};
+    use crate::track_func::{diagdir_reaches_tracks_raw, track_status_to_track_bits_raw};
     let w = world(s);
     if !valid(&w, t1) || !valid(&w, t2) {
         return false;
@@ -81,7 +81,7 @@ fn water_tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
     let reachable = |tile, to_other: u8| {
         let side = crate::direction_func::reverse_diag_dir_raw(to_other, check);
         let status = crate::movement::track_status(s.command.shared, tile, water, 0, side);
-        track_status_to_track_bits(status) & diagdir_reaches_tracks(to_other)
+        track_status_to_track_bits_raw(status) & diagdir_reaches_tracks_raw(to_other)
     };
     let to_other_tile = w
         .dimensions
@@ -112,7 +112,7 @@ pub extern "C" fn openttd_rust_script_marine_build_cost(build_type: u32) -> i64 
     ];
     match PRICES.get(build_type as usize) {
         #[allow(clippy::cast_possible_truncation)]
-        Some(&price) => crate::economy_func::get_price(price as u32, 1, 0, 0),
+        Some(&price) => crate::economy_func::get_price_raw(price as u32, 1, 0, 0),
         None => -1,
     }
 }

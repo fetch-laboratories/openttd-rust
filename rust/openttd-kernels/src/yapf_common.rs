@@ -24,7 +24,8 @@ pub(crate) fn octile_distance_cost(
     const DG_DIR_TO_X_OFFS: [i32; 4] = [-1, 0, 1, 0];
     const DG_DIR_TO_Y_OFFS: [i32; 4] = [0, 1, 0, -1];
 
-    let exitdir = usize::from(trackdir_to_exitdir(start_td.0));
+    let exitdir =
+        usize::from(trackdir_to_exitdir(start_td, crate::services_assert::native_check).0);
 
     // `2 * TileX(..)` is unsigned; the sum converts back to `int`.
     let x1 = (2 * map.tile_x(start_tile))

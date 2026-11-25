@@ -161,7 +161,11 @@ fn set_kind(tile: TileIndex, kind: u8) {
     });
 }
 
-extern "C" fn curve_speed(_: crate::rail_type::RailType) -> u8 {
+/// `GetRailTypeInfo`: any rail type resolves to one stand-in record.
+extern "C" fn rail_type_info(_: crate::rail_type::RailType) -> *const crate::rail::RailTypeInfo {
+    std::ptr::NonNull::dangling().as_ptr()
+}
+extern "C" fn curve_speed(_: *const crate::rail::RailTypeInfo) -> u8 {
     with(|w| w.curve_speed)
 }
 extern "C" fn viewport(v: VehicleRef, force_update: bool, update_delta: bool) {
@@ -269,6 +273,7 @@ impl Fixture {
             map: crate::map_func::fixture::statics(),
             settings,
             rail_type_curve_speed: curve_speed,
+            rail_type_info,
             ..SHARED
         }));
         // SAFETY: Both tables were just allocated and nothing else refers to them yet.

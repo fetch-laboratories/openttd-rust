@@ -922,12 +922,13 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
         if e.kind.0 != VEH_TRAIN
             || crate::vehicle::EngineRef::of(e.shell).rail_kind() != RailVehicleTypes::WAGON
         {
-            let ls = crate::company_identity::engine_livery(
+            let ls = crate::company_identity::get_engine_livery_scheme(
                 s.identity,
                 crate::engine_type::EngineID(e.id),
                 crate::engine_type::EngineID::INVALID,
-                std::ptr::null_mut(),
-            );
+                None,
+            )
+            .0;
             (s.use_livery)(ls);
             if e.kind.0 == VEH_TRAIN {
                 (s.use_livery)(LS_FREIGHT_WAGON);

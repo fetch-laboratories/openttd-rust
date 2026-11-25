@@ -255,10 +255,12 @@ void InitializeEconomy()
  */
 Money GetPrice(Price index, uint cost_factor, const GRFFile *grf_file, int shift)
 {
-	/* GRF storage stays canonical C++; observe its scalar at the original point. */
-	if (index >= PR_END) return 0;
-	shift += RustGRFPriceShift(grf_file, index);
-	return openttd_rust_economy_price(index, cost_factor, shift);
+	return openttd_rust_economy_get_price(&GetRustSharedServices(), index, cost_factor, grf_file, shift);
+}
+
+uint ScaleByInverseCargoScale(uint num, bool town)
+{
+	return openttd_rust_economy_scale_by_inverse_cargo_scale(&GetRustSharedServices(), num, town);
 }
 
 /* Leaves only read/write canonical world storage or call existing shared services.

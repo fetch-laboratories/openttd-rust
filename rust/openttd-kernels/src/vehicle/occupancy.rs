@@ -468,8 +468,7 @@ pub(crate) fn ensure_no_train_on_track_bits(
         }
 
         let t = crate::train::Handle::from_vehicle(v);
-        if t.track() != track_bits && !crate::track_func::tracks_overlap(t.track().0 | track_bits.0)
-        {
+        if t.track() != track_bits && !crate::track_func::tracks_overlap(t.track() | track_bits) {
             it.step();
             continue;
         }

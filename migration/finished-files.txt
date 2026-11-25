@@ -17,6 +17,9 @@ rust/openttd-kernels/src/builder.rs
 rust/openttd-kernels/src/byte_strings.rs
 rust/openttd-kernels/src/cargopacket.rs
 rust/openttd-kernels/src/clear_map.rs
+rust/openttd-kernels/src/company_identity.rs
+rust/openttd-kernels/src/company_identity/tests.rs
+rust/openttd-kernels/src/company_manager_face.rs
 rust/openttd-kernels/src/consumer.rs
 rust/openttd-kernels/src/container_func.rs
 rust/openttd-kernels/src/control_codes.rs
@@ -26,6 +29,7 @@ rust/openttd-kernels/src/crypto/tests.rs
 rust/openttd-kernels/src/debug.rs
 rust/openttd-kernels/src/direction_func.rs
 rust/openttd-kernels/src/disaster_vehicle.rs
+rust/openttd-kernels/src/economy_func.rs
 rust/openttd-kernels/src/effect.rs
 rust/openttd-kernels/src/effectvehicle_func.rs
 rust/openttd-kernels/src/encoded.rs
@@ -53,6 +57,7 @@ rust/openttd-kernels/src/integer.rs
 rust/openttd-kernels/src/json.rs
 rust/openttd-kernels/src/kdtree.rs
 rust/openttd-kernels/src/linkgraph/refresh.rs
+rust/openttd-kernels/src/livery.rs
 rust/openttd-kernels/src/map_func.rs
 rust/openttd-kernels/src/math.rs
 rust/openttd-kernels/src/md5.rs
@@ -80,6 +85,8 @@ rust/openttd-kernels/src/pathfinder_func.rs
 rust/openttd-kernels/src/pbs.rs
 rust/openttd-kernels/src/pool.rs
 rust/openttd-kernels/src/pool/tests.rs
+rust/openttd-kernels/src/rail.rs
+rust/openttd-kernels/src/rail_map.rs
 rust/openttd-kernels/src/rail_yapf.rs
 rust/openttd-kernels/src/random_func.rs
 rust/openttd-kernels/src/raw_field.rs
@@ -130,6 +137,7 @@ rust/openttd-kernels/src/town/policy.rs
 rust/openttd-kernels/src/town/resolver.rs
 rust/openttd-kernels/src/town.rs
 rust/openttd-kernels/src/town/spatial.rs
+rust/openttd-kernels/src/track_func.rs
 rust/openttd-kernels/src/train.rs
 rust/openttd-kernels/src/train_reservation.rs
 rust/openttd-kernels/src/train_state.rs

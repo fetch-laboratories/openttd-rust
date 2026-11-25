@@ -18,10 +18,10 @@ use crate::track_type::Trackdir;
 /// tile yield an uphill penalty?
 #[inline]
 pub(crate) fn st_slope_cost(world: &World<'_>, tile: TileIndex, td: Trackdir) -> bool {
-    if is_diagonal_trackdir(td.0) {
+    if is_diagonal_trackdir(td, |ok| world.check(ok)) {
         if world.kind(tile) == TileType::MP_TUNNELBRIDGE && world.bridge(tile) {
             /* it is bridge ramp, check if we are entering the bridge */
-            if world.tunnel_bridge_dir(tile.0) != trackdir_to_exitdir(td.0) {
+            if world.tunnel_bridge_dir(tile.0) != trackdir_to_exitdir(td, |ok| world.check(ok)).0 {
                 return false; // no, we are leaving it, no penalty
             }
             /* we are entering the bridge */
@@ -36,7 +36,7 @@ pub(crate) fn st_slope_cost(world: &World<'_>, tile: TileIndex, td: Trackdir) ->
             return false; // tunnel entry/exit doesn't slope
         }
         let tile_slope = world.tile_slope(tile);
-        return is_uphill_trackdir(tile_slope, td.0, |ok| world.check(ok)); // slopes uphill => apply penalty
+        return is_uphill_trackdir(tile_slope, td, |ok| world.check(ok)); // slopes uphill => apply penalty
     }
     false
 }

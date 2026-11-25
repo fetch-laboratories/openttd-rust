@@ -58,16 +58,7 @@ inline bool EconomyIsInRecession()
  * @param town Are we scaling town production, or industry production?
  * @return The number scaled by the inverse of the cargo scale setting, minimum of 1.
  */
-static uint ScaleByInverseCargoScale(uint num, bool town)
-{
-	uint16_t percentage = (town ? _settings_game.economy.town_cargo_scale : _settings_game.economy.industry_cargo_scale);
-
-	/* We might not need to do anything. */
-	if (percentage == 100) return num;
-
-	/* Never return 0, since we often divide by this number. */
-	return std::max((num * 100) / percentage, 1u);
-}
+uint ScaleByInverseCargoScale(uint num, bool town);
 
 /**
  * Scale a number by the cargo scale setting.

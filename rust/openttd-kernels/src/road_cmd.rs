@@ -753,7 +753,7 @@ impl<'a> Ctx<'a> {
                             (self.shared.tile_owner)(tile),
                             tracks,
                             crate::services::RailType(
-                                crate::map_func::World::new(self.shared).rail_type(tile),
+                                crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                             )
                             .0,
                         );
@@ -770,7 +770,7 @@ impl<'a> Ctx<'a> {
                                     crate::rail_type::RailType(
                                         crate::services::RailType(
                                             crate::map_func::World::new(self.shared)
-                                                .rail_type(tile),
+                                                .get_rail_type_raw(tile),
                                         )
                                         .0,
                                     ),
@@ -1014,7 +1014,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 if crate::services::RailTileType(
-                    crate::map_func::World::new(self.shared).rail_tile_type(tile),
+                    crate::map_func::World::new(self.shared).get_rail_tile_type_raw(tile),
                 )
                 .0 != 0
                 {
@@ -1026,7 +1026,7 @@ impl<'a> Ctx<'a> {
                     }
                     if (self.r.rail_no_crossings)(
                         crate::services::RailType(
-                            crate::map_func::World::new(self.shared).rail_type(tile),
+                            crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                         )
                         .0,
                     ) {
@@ -1064,7 +1064,7 @@ impl<'a> Ctx<'a> {
                                         crate::rail_type::RailType(
                                             crate::services::RailType(
                                                 crate::map_func::World::new(self.shared)
-                                                    .rail_type(tile),
+                                                    .get_rail_type_raw(tile),
                                             )
                                             .0,
                                         ),
@@ -1084,7 +1084,8 @@ impl<'a> Ctx<'a> {
                                 (self.shared.tile_owner)(tile),
                                 axis,
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                    crate::map_func::World::new(self.shared)
+                                        .get_rail_type_raw(tile),
                                 )
                                 .0,
                                 if rtt == 0 { rt } else { INVALID },
@@ -1842,7 +1843,7 @@ impl<'a> Ctx<'a> {
             } else {
                 /* Update infrastructure counts. No need to dirty windows here, we'll redraw the whole screen anyway. */
                 let rt = crate::services::RailType(
-                    crate::map_func::World::new(self.shared).rail_type(tile),
+                    crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
                 )
                 .0;
                 unsafe {

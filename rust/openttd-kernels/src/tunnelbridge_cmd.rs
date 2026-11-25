@@ -42,7 +42,7 @@ use crate::tile_type::TileIndex;
 use crate::tile_type::{
     MP_CLEAR, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER,
 };
-use crate::track_func::{axis_to_track, diag_dir_to_diag_track};
+use crate::track_func::{axis_to_track, diag_dir_to_diag_track_raw};
 use crate::tunnelbridge::{TUNNELBRIDGE_TRACKBIT_FACTOR, get_tunnel_bridge_length};
 use crate::witness as w;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -326,8 +326,10 @@ impl<'a> World<'a> {
             }
             RAIL => {
                 result = result.saturating_add((self.r.rail_clear_cost)(
-                    crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile))
-                        .0,
+                    crate::services::RailType(
+                        crate::map_func::World::new(self.s).get_rail_type_raw(tile),
+                    )
+                    .0,
                 ));
             }
             WATER => result = price(PR_CLEAR_AQUEDUCT),
@@ -410,7 +412,7 @@ impl<'a> World<'a> {
             }
             RAIL => {
                 railtype = kind;
-                if !crate::rail::val_param_rail_type(self.s, railtype) {
+                if !crate::rail::val_param_rail_type_raw(self.s, railtype) {
                     return Self::error(cost);
                 }
             }
@@ -479,8 +481,10 @@ impl<'a> World<'a> {
                 _ => (),
             }
             if transport == RAIL
-                && crate::services::RailType(crate::map_func::World::new(self.s).rail_type(start)).0
-                    != railtype
+                && crate::services::RailType(
+                    crate::map_func::World::new(self.s).get_rail_type_raw(start),
+                )
+                .0 != railtype
             {
                 return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
             }
@@ -834,7 +838,7 @@ impl<'a> World<'a> {
         match transport {
             RAIL => {
                 railtype = kind;
-                if !crate::rail::val_param_rail_type(self.s, railtype) {
+                if !crate::rail::val_param_rail_type_raw(self.s, railtype) {
                     return Self::error(cost);
                 }
             }
@@ -987,7 +991,7 @@ impl<'a> World<'a> {
                 self.signal(start, INVALID_DIAGDIR, company);
                 (self.r.layout_changed)(
                     start,
-                    diag_dir_to_diag_track(direction, |ok| {
+                    diag_dir_to_diag_track_raw(direction, |ok| {
                         crate::movement::native_assert(self.s, ok);
                     }),
                 );
@@ -1131,7 +1135,7 @@ impl<'a> World<'a> {
         if flags & DoCommandFlag::EXECUTE != 0 {
             if crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) == RAIL {
                 let dir = (self.s.tunnel_bridge_direction)(tile);
-                let track = diag_dir_to_diag_track(dir, |ok| {
+                let track = diag_dir_to_diag_track_raw(dir, |ok| {
                     crate::movement::native_assert(self.s, ok);
                 });
                 let owner = (self.s.tile_owner)(tile);
@@ -1142,7 +1146,7 @@ impl<'a> World<'a> {
                             CompanyInfrastructure::get(self.s, CompanyID(owner)),
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.s).rail_type(tile),
+                                    crate::map_func::World::new(self.s).get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -1233,7 +1237,7 @@ impl<'a> World<'a> {
             let train = if rail {
                 self.release_reservation(
                     tile,
-                    diag_dir_to_diag_track(direction, |ok| {
+                    diag_dir_to_diag_track_raw(direction, |ok| {
                         crate::movement::native_assert(self.s, ok);
                     }),
                 )
@@ -1247,7 +1251,7 @@ impl<'a> World<'a> {
                             CompanyInfrastructure::get(self.s, CompanyID(owner)),
                             crate::rail_type::RailType(
                                 crate::services::RailType(
-                                    crate::map_func::World::new(self.s).rail_type(tile),
+                                    crate::map_func::World::new(self.s).get_rail_type_raw(tile),
                                 )
                                 .0,
                             ),
@@ -1318,7 +1322,7 @@ impl<'a> World<'a> {
                     owner,
                 );
                 self.signal(end, direction, owner);
-                let track = diag_dir_to_diag_track(direction, |ok| {
+                let track = diag_dir_to_diag_track_raw(direction, |ok| {
                     crate::movement::native_assert(self.s, ok);
                 });
                 (self.r.layout_changed)(tile, track);
@@ -1440,7 +1444,7 @@ impl<'a> World<'a> {
                     old_infrastructure,
                     crate::rail_type::RailType(
                         crate::services::RailType(
-                            crate::map_func::World::new(self.s).rail_type(tile),
+                            crate::map_func::World::new(self.s).get_rail_type_raw(tile),
                         )
                         .0,
                     ),
@@ -1459,7 +1463,7 @@ impl<'a> World<'a> {
                         },
                         crate::rail_type::RailType(
                             crate::services::RailType(
-                                crate::map_func::World::new(self.s).rail_type(tile),
+                                crate::map_func::World::new(self.s).get_rail_type_raw(tile),
                             )
                             .0,
                         ),

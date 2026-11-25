@@ -61,11 +61,28 @@ crate::abi::shared_records! {
         pub town: u16,
         /// A company.
         pub company: u8,
+        /// A name's bytes, borrowed for the call: `ScriptEventCompanyRenamed` and
+        /// `ScriptEventPresidentRenamed` copy them into their `std::string`.
+        pub text: *const u8,
+        /// Byte length of `text`.
+        pub text_length: usize,
     }
 }
 
 impl ScriptEvent {
-    const fn of(r#type: ScriptEventType) -> Self {
+    /// The record without a name: a plain dispatch sends only this, so a record that
+    /// points at a name reaches native code only through `ScriptTextEvent`.
+    #[must_use]
+    pub(crate) const fn without_text(self) -> Self {
+        Self {
+            text: std::ptr::null(),
+            text_length: 0,
+            ..self
+        }
+    }
+
+    /// The record of an event class with every argument zero and no text.
+    pub(crate) const fn of(r#type: ScriptEventType) -> Self {
         Self {
             r#type,
             vehicle: 0,
@@ -77,6 +94,8 @@ impl ScriptEvent {
             industry: 0,
             town: 0,
             company: 0,
+            text: std::ptr::null(),
+            text_length: 0,
         }
     }
 

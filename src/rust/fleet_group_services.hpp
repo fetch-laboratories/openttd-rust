@@ -17,7 +17,7 @@ struct FleetVehicleListContext { VehicleList list; const VehicleListIdentifier &
  * All wrappers are noexcept; ordinary commands retain native stack frames.
  * Rust ends canonical field accesses before callbacks/reentry/destruction. */
 static void * FleetGroup_group(uint16_t id) noexcept { auto *g = Group::GetIfValid(GroupID(id)); return g == nullptr ? nullptr : g->state.state; }
-static uint32_t FleetGroup_next_group(uint32_t from) noexcept { for (Group *g : Group::Iterate(from)) { if (g->index.base() >= from) return g->index.base(); } return UINT32_MAX; }
+static OpenTTDFleetNextGroup FleetGroup_next_group(uint32_t from) noexcept { for (Group *g : Group::Iterate(from)) { if (g->index.base() >= from) return {g->state.state, g->index.base()}; } return {nullptr, UINT32_MAX}; }
 static void * FleetGroup_vehicle(uint32_t id) noexcept { return Vehicle::GetIfValid(VehicleID(id)); }
 static uint16_t FleetGroup_vehicle_group(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->group_id.base(); }
 static bool FleetGroup_countable(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsEngineCountable(); }

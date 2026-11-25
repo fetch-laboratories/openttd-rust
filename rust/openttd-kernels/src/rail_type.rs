@@ -83,6 +83,16 @@ impl RailTypes {
     pub const fn with(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
+    /// Native `BaseBitSet::Reset` of every element in `other`.
+    #[must_use]
+    pub const fn reset(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
+    }
+    /// Native `BaseBitSet::All`: test if all of the given values are set.
+    #[must_use]
+    pub const fn all(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
 }
 
 /// Native `RailTypeLabel`, retaining every underlying `u32` value.

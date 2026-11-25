@@ -599,6 +599,10 @@ pub unsafe extern "C" fn openttd_rust_town_growth(state: *mut State) -> *mut Gro
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_simulation(state: *mut State) -> *mut SimulationFields {
+    simulation(state)
+}
+/// The town's simulation fields, for field-sized accesses at their observation points.
+pub(crate) fn simulation(state: *mut State) -> *mut SimulationFields {
     // SAFETY: Stable shell-owned allocation. C++ starts the matching trivial native
     // object's lifetime here; aliases remain valid until owner destruction.
     unsafe { &raw mut (*state).simulation }
@@ -1905,7 +1909,7 @@ impl Engine<'_> {
                 if !(self.is_valid_tile(bridge_tile)
                     && (((self.services.is_water_tile)(bridge_tile.0)
                         && !world().is_sea(bridge_tile.0))
-                        || (self.services.is_plain_rail)(bridge_tile.0)
+                        || world().is_plain_rail_tile(bridge_tile)
                         || one_way_road(bridge_tile)))
                 {
                     break;
@@ -1922,7 +1926,7 @@ impl Engine<'_> {
                 bridge_tile += delta;
                 if !(self.is_valid_tile(bridge_tile)
                     && ((self.services.is_water_tile)(bridge_tile.0)
-                        || (self.services.is_plain_rail)(bridge_tile.0)
+                        || world().is_plain_rail_tile(bridge_tile)
                         || one_way_road(bridge_tile)))
                 {
                     break;

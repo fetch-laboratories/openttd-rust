@@ -289,10 +289,9 @@ impl<'a> World<'a> {
                     == 0,
             ),
             1 => {
-                if self
-                    .types
-                    .asserted(self.s, |m| crate::rail_map::get_rail_ground_type(m, tile))
-                    == 13
+                if self.types.asserted(self.s, |m| {
+                    crate::rail_map::get_rail_ground_type_raw(m, tile)
+                }) == crate::rail_map::RAIL_GROUND_HALF_TILE_WATER
                 {
                     if is_slope_with_one_corner_raised_raw(
                         (self.types.asserted(self.s, |m| {
@@ -346,10 +345,9 @@ impl<'a> World<'a> {
     }
     fn half_flood(&self, tile: u32, call: *mut Call) -> bool {
         let mut flooded = false;
-        if self
-            .types
-            .asserted(self.s, |m| crate::rail_map::get_rail_ground_type(m, tile))
-            == 13
+        if self.types.asserted(self.s, |m| {
+            crate::rail_map::get_rail_ground_type_raw(m, tile)
+        }) == crate::rail_map::RAIL_GROUND_HALF_TILE_WATER
         {
             return false;
         }
@@ -359,7 +357,7 @@ impl<'a> World<'a> {
         let mut tracks = (self.r().tracks)(tile).0;
         if is_slope_with_one_corner_raised_raw(slope.0) {
             let corner = (slope.0.trailing_zeros() ^ 2) as usize;
-            let lower = crate::track_func::corner_to_track_bits(corner as u8, |ok| {
+            let lower = crate::track_func::corner_to_track_bits_raw(corner as u8, |ok| {
                 crate::movement::native_assert(self.s, ok);
             });
             let remove = lower & tracks;

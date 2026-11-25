@@ -28,8 +28,6 @@ const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcep
 		.company_roadtypes = RustCompanyRoadTypes,
 		.editor = OpenTTDEditor,
 		.next = Engine_next,
-		.rail_introduces = [](RailType rt) noexcept { return RustRailTypeIntroduces(GetRailTypeInfo(rt)); },
-		.rail_introduction = RustRailTypeIntroduction,
 		.road_flags = [](const RoadTypeInfo *rti) noexcept { return rti->flags.base(); },
 		.road_info = [](RoadType rt) noexcept { return GetRoadTypeInfo(rt); },
 		.road_introduces = RustRoadTypeIntroduces,

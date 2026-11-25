@@ -792,8 +792,9 @@ fn produce_industry_goods(entry: Entry, svc: &Services, builder: *mut Builder) {
         && unsafe {
             u32::from((*state).counter)
                 % crate::economy_func::scale_by_inverse_cargo_scale(
+                    svc.shared().settings(),
                     INDUSTRY_PRODUCE_TICKS,
-                    svc.shared().settings().industry_cargo_scale.read(),
+                    false,
                 )
                 == 0
         }

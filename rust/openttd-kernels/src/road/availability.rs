@@ -11,15 +11,6 @@ use crate::timer_game_common::MAX_DATE;
 use crate::type_availability::{Services, company_available, services};
 use crate::vehicle_type::VehicleType;
 
-/// `IsInsideMM(rti->introduction_date, 0, CalendarTime::MAX_DATE.base())`, with the date
-/// converted to `size_t` as the original's call converts it.
-#[allow(
-    clippy::cast_sign_loss,
-    reason = "IsInsideMM converts the signed introduction_date to size_t"
-)]
-fn is_introduction_date(date: CalendarDate) -> bool {
-    crate::math::is_inside_mm(date.0 as usize, 0, MAX_DATE as usize)
-}
 /// `GetMaskForRoadTramType`; classification masks belong to the registry owner.
 #[must_use]
 pub fn get_mask_for_road_tram_type(rtt: RoadTramType) -> RoadTypes {
@@ -63,7 +54,7 @@ pub fn has_road_type_avail(
 
         /* Not yet introduced at this date. */
         let introduction_date = (s.road_introduction_date)(rti);
-        if is_introduction_date(introduction_date)
+        if crate::timer_game_calendar::is_introduction_date(introduction_date)
             && introduction_date.0 > crate::timer_game_common::calendar_date().0
         {
             return false;
@@ -141,7 +132,7 @@ pub fn add_date_introduced_road_types(
 
             /* Not date introduced. */
             let introduction_date = (s.road_introduction_date)(rti);
-            if !is_introduction_date(introduction_date) {
+            if !crate::timer_game_calendar::is_introduction_date(introduction_date) {
                 continue;
             }
 

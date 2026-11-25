@@ -44,6 +44,20 @@ pub struct Cache {
     position_in_vehicle: u32,
     cache_valid: u8,
 }
+#[cfg(test)]
+impl Cache {
+    /// A cache whose `cache_valid` bits are `valid`, for tests that observe an invalidation.
+    pub(crate) fn with_valid(valid: u8) -> Self {
+        Self {
+            cache_valid: valid,
+            ..Self::default()
+        }
+    }
+    /// The cache's `cache_valid` bits.
+    pub(crate) fn valid(&self) -> u8 {
+        self.cache_valid
+    }
+}
 // The first member preserves the native NewGRFCache alias and its ABI.
 #[repr(C)]
 #[derive(Default)]
@@ -1444,10 +1458,8 @@ unsafe fn variable(
                 let tile = (h).tile_raw();
                 match kind() {
                     0 => {
-                        let rt = crate::rail::get_tile_rail_type(
-                            s.shared,
-                            crate::tile_type::TileIndex(tile),
-                        );
+                        let rt = crate::map_func::World::new(s.shared)
+                            .get_tile_rail_type(crate::tile_type::TileIndex(tile));
                         let types =
                             crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v))
                                 .railtypes()
@@ -1587,10 +1599,8 @@ unsafe fn variable(
                     if param.0 == crate::rail_type::INVALID_RAILTYPE {
                         return 0;
                     }
-                    let tile = crate::rail::get_tile_rail_type(
-                        s.shared,
-                        crate::tile_type::TileIndex((h).tile_raw()),
-                    );
+                    let tile = crate::map_func::World::new(s.shared)
+                        .get_tile_rail_type(crate::tile_type::TileIndex((h).tile_raw()));
                     if tile.0 == param.0 {
                         return 15;
                     }
