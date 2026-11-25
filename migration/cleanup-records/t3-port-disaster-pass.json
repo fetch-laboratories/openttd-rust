@@ -430,5 +430,29 @@
     "site": "rust/openttd-kernels/src/disaster/tests.rs | fn set_cost_flag | allow unsafe_code",
     "source_contract": "`CommandCost` (src/command_type.h).",
     "tool": "rust"
+  },
+  {
+    "added": {
+      "abi-record-road_state.h": 1,
+      "abi-record-settings.h": 1,
+      "abi-record-vehicle.h": 1
+    },
+    "counter": "generated_records",
+    "existing_alternatives": "The base reached each of these through one-call carriers in the disaster table (`road_disaster`, `write_road_disaster`, `disasters_enabled`) and passed the state beside the record on every entry, which the design-fault rule removes.",
+    "kind": "growth",
+    "reason": "#1027 part 4: the vehicle record gains the `disaster` link the C++ default constructor sets, as `road`, `aircraft` and `ship` are linked, so each body reaches the disaster members from the record; `RoadVehicle::disaster_vehicle` moves to the road owner's shared record, which `DisasterTick_Big_Ufo` and `ReleaseDisasterVehicle` write in place; and the settings addresses gain `difficulty.disasters`, which `_economy_disaster_daily` and `StartupDisasters` read through the settings catalog. The declarations are generated from the Rust records.",
+    "retirement_condition": "The link and the member are their one definition and stay with the vehicle and road records; the setting address retires when the game settings move to Rust.",
+    "retiring_owner": "#734"
+  },
+  {
+    "added": {
+      "tools/migration/windows-abi/disaster.inc": 3
+    },
+    "counter": "tools_cpp",
+    "existing_alternatives": "The removed carriers were the fixture's only other way to supply these values; the clear cases already moved to `disaster::tests`.",
+    "kind": "growth",
+    "reason": "#1027 part 4: the disaster ABI fixture supplies the shared tables the Rust bodies now read in place of the disaster table's carriers (the settings catalog's `disasters`, the resolver's `age`, the maintenance table's `set_age`, the news table and the industry and town tables of the coal case). The house and rail clear cases and their stubs leave the fixture for a Rust test, which leaves a net growth of three lines.",
+    "retirement_condition": "Retires with the native ABI fixture when the disaster vehicles run on Rust storage.",
+    "retiring_owner": "#656"
   }
 ]

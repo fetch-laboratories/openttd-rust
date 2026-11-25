@@ -17,6 +17,7 @@ use crate::vehicle_type::VehicleType;
 use std::cell::{Cell, RefCell};
 use std::ptr;
 
+#[cfg(test)]
 thread_local! {
     static FAILED_ASSERTIONS: Cell<u32> = const { Cell::new(0) };
     static RANDOM: Cell<u32> = const { Cell::new(0) };
@@ -38,6 +39,7 @@ extern "C" fn age(_: *mut crate::vehicle_type::OpenTTDVehicle) -> i32 {
 extern "C" fn set_age(_: VehicleRef, value: i32) {
     AGE.set(value);
 }
+#[cfg(test)]
 thread_local! {
     static RESOLVER: &'static crate::newgrf_vehicle::Services = {
         let mut resolver = crate::newgrf_vehicle::TEST_TABLE;
@@ -209,6 +211,7 @@ enum Event {
     SignalUpdate(CompanyID),
 }
 
+#[cfg(test)]
 thread_local! {
     static EVENTS: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
     static CURRENT: Cell<u8> = const { Cell::new(0) };
@@ -240,7 +243,7 @@ extern "C" fn map_max_y() -> u32 {
 }
 extern "C" fn water_services() -> *const crate::water::WaterServices {
     static WATER: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
-    *WATER.get_or_init(|| leak(crate::water::fixture()) as *const _ as usize) as *const _
+    *WATER.get_or_init(|| ptr::from_ref(leak(crate::water::fixture())) as usize) as *const _
 }
 /// The landscape command's own view of every tile: a kind it sends to the recording clear
 /// procedure, which stands for the tile's clear handler. `DisasterClearSquare` classifies
@@ -305,40 +308,17 @@ extern "C" fn success(cost: *const CommandCost) -> bool {
     cost_flag(cost)
 }
 
-/// `DisasterClearSquare` through the real `Command<CMD_LANDSCAPE_CLEAR>::Do`, its nesting and
-/// its company handling. A house is cleared as `OWNER_NONE`, plain rail of a human company
-/// as `OWNER_WATER` with the signal buffer updated after the company is restored, and a rail
-/// depot or an AI's rail is left alone. A top-level command runs its procedure in a test
-/// phase and then an execute phase, so each expectation names its phase.
-#[test]
-fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
-    if crate::services_assert::isolate_test_check(
-        "disaster::tests::disaster_clear_square_clears_house_and_human_rail_as_its_owner",
-        record_assertion,
-    ) {
-        return;
-    }
-    let house = TileIndex(100);
-    let rail = TileIndex(200);
-    let depot = TileIndex(300);
-    let ai_rail = TileIndex(400);
-    let block = TileIndex(1000);
-    let (mut base, _extended) = install_map(TileType::MP_CLEAR, 0);
-    base[house.0 as usize].kind = TileType::MP_HOUSE.0 << 4;
-    for (tile, owner, m5) in [(rail, 1, 0x01), (depot, 1, 0xC0), (ai_rail, 2, 0x01)] {
-        let tile = tile.0 as usize;
-        base[tile].kind = TileType::MP_RAILWAY.0 << 4;
-        base[tile].m1 = owner;
-        base[tile].m5 = m5;
-    }
-
+/// The service tables `disaster_clear_square_clears_house_and_human_rail_as_its_owner` runs
+/// under: the real landscape command over the recording clear procedure, the fixture's
+/// costs and companies, and the signal buffer.
+fn clear_fixture() -> (&'static Services, &'static Shared) {
     let costs = leak(crate::services::CommandCostServices {
         construct,
         destroy,
         expense_money,
         add,
-        money,
         success,
+        money,
         ..crate::test_tables::COMMAND_COSTS
     });
     let finance = leak(crate::company::FinanceServices {
@@ -403,13 +383,43 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
         is_ai,
         ..crate::test_tables::COMPANY_IDENTITY
     });
-    let services = Services {
+    let services = leak(Services {
         identity,
         shared,
         vehicles,
         ..crate::test_tables::DISASTER
-    };
-    let t = Tables::new(&services);
+    });
+    (services, shared)
+}
+
+/// `DisasterClearSquare` through the real `Command<CMD_LANDSCAPE_CLEAR>::Do`, its nesting and
+/// its company handling. A house is cleared as `OWNER_NONE`, plain rail of a human company
+/// as `OWNER_WATER` with the signal buffer updated after the company is restored, and a rail
+/// depot or an AI's rail is left alone. A top-level command runs its procedure in a test
+/// phase and then an execute phase, so each expectation names its phase.
+#[test]
+fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
+    if crate::services_assert::isolate_test_check(
+        "disaster::tests::disaster_clear_square_clears_house_and_human_rail_as_its_owner",
+        record_assertion,
+    ) {
+        return;
+    }
+    let house = TileIndex(100);
+    let rail = TileIndex(200);
+    let depot = TileIndex(300);
+    let ai_rail = TileIndex(400);
+    let block = TileIndex(1000);
+    let (mut base, _extended) = install_map(TileType::MP_CLEAR, 0);
+    base[house.0 as usize].kind = TileType::MP_HOUSE.0 << 4;
+    for (tile, owner, m5) in [(rail, 1, 0x01), (depot, 1, 0xC0), (ai_rail, 2, 0x01)] {
+        let tile = tile.0 as usize;
+        base[tile].kind = TileType::MP_RAILWAY.0 << 4;
+        base[tile].m1 = owner;
+        base[tile].m5 = m5;
+    }
+    let (services, shared) = clear_fixture();
+    let t = Tables::new(services);
 
     // An airplane in state 1 whose target, in `dest_tile`, is industry 7.
     let airplane = disaster_vehicle();
@@ -464,6 +474,7 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
     assert_eq!(FAILED_ASSERTIONS.get(), 0);
 }
 
+#[cfg(test)]
 thread_local! {
     static COMMANDS: Cell<&'static crate::services::CommandServices> =
         const { Cell::new(&crate::test_tables::COMMANDS) };

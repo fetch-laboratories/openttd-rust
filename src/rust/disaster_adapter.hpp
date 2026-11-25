@@ -15,7 +15,7 @@
 #include "environment_services.h"
 
 static OpenTTDVehicle *OPENTTD_RUST_CALL DisasterAllocate() noexcept { return RustVehicle(new DisasterVehicle()); }
-static uint16_t OPENTTD_RUST_CALL DisasterRoadCount(const Company *company) noexcept { return RustCompanyRoadVehicleCount(company); }
+static uint16_t OPENTTD_RUST_CALL DisasterRoadCount(uint8_t company) noexcept { return RustCompanyRoadVehicleCount(Company::Get(CompanyID{company})); }
 const OpenTTDDisasterServices &DisasterServices() noexcept
 {
 	static const OpenTTDDisasterServices services{
