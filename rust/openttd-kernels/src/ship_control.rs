@@ -279,10 +279,6 @@ impl<'a> Tables<'a> {
     fn check(&self) -> impl Fn(bool) + Copy + '_ {
         |ok| crate::movement::native_assert(self.ss, ok)
     }
-    /// `v->UpdateViewport(true, true)`.
-    fn update_viewport(&self, v: Ship) {
-        (self.l.update_viewport)(v.v, true, true);
-    }
     /// `v->UpdatePosition()`.
     fn update_position(&self, v: VehicleRef) {
         // SAFETY: The live shell survives the synchronous index update.
@@ -680,7 +676,7 @@ fn check_ship_stay_in_depot(t: &Tables<'_>, v: Ship) -> bool {
     v.set_rotation(v.v.direction());
     v.v.set_hidden(false);
     v.v.set_cur_speed(0);
-    t.update_viewport(v);
+    (t.l.update_viewport)(v.v, true, true);
     set_window_dirty(
         WindowClass::WC_VEHICLE_DEPOT,
         WindowNumber::from(v.v.tile()),
@@ -928,7 +924,7 @@ fn ship_move_up_down_on_lock(t: &Tables<'_>, v: Ship) -> bool {
     if (v.v.tick_counter() & 7) == 0 {
         v.v.set_z_pos(v.v.z_pos().wrapping_add(dz));
         t.update_position(v.v);
-        t.update_viewport(v);
+        (t.l.update_viewport)(v.v, true, true);
     }
 
     true
@@ -1016,7 +1012,7 @@ fn reverse_ship_into_trackdir(t: &Tables<'_>, v: Ship, trackdir: Trackdir) {
     v.path_clear();
 
     t.update_position(v.v);
-    t.update_viewport(v);
+    (t.l.update_viewport)(v.v, true, true);
 }
 
 /// `ReverseShip`.
@@ -1035,7 +1031,7 @@ fn reverse_ship(t: &Tables<'_>, v: Ship) {
     v.path_clear();
 
     t.update_position(v.v);
-    t.update_viewport(v);
+    (t.l.update_viewport)(v.v, true, true);
 }
 
 /// `Ship::GetCurrentMaxSpeed`.
@@ -1094,7 +1090,7 @@ fn ship_controller(t: &Tables<'_>, v: Ship) {
             ));
             /* Invalidate the sprite cache direction to force recalculation of viewport */
             v.v.set_sprite_cache_last_direction(Direction::INVALID_DIR);
-            t.update_viewport(v);
+            (t.l.update_viewport)(v.v, true, true);
         }
         return;
     }
@@ -1291,7 +1287,7 @@ fn ship_controller(t: &Tables<'_>, v: Ship) {
         v.v.set_y_pos(gp.y);
 
         t.update_position(v.v);
-        t.update_viewport(v);
+        (t.l.update_viewport)(v.v, true, true);
     }
 }
 
