@@ -28,7 +28,8 @@ The three-pass record and the 3% and 1.5% thresholds are provisional.
 python3 tools/migration.py simulate --instructions --jobs 2
 ```
 
-- Before expensive profiling, `python3 tools/simulate.py speed prepare DIR` checks existing instruction builds' identity without games.
+- The driver gives the games half of `--jobs`, and a worker runs a scenario's reference and candidate games in turn: `--jobs 2` profiles the seven scenarios one at a time, which the simulation report records as `jobs: 1`, and `--jobs 4` two at a time.
+- Before expensive profiling, `python3 tools/migration.py build --instructions` builds the instruction games without profiling, and `python3 tools/simulate.py speed prepare DIR` checks their identity without games.
 - Instruction counts compare across the [hardware change](rust-migration.md#hardware) of 2026-11-23. The anchors' wall ratios `R0` were measured before it and stand until a speed pass on the current hardware replaces them.
 - Anchors carry this host's and toolchain's identity, and `simulate --instructions` rejects a profile under another's. `speed prepare` accepts a profile whose only failure is that mismatch; the next speed pass replaces the anchors.
 

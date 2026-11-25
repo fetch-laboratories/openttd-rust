@@ -253,5 +253,121 @@ class MigrationOriginalTests(unittest.TestCase):
         self.assertIn(f"not the pinned {self.commit}", errors)
 
 
+class SimulateListTests(unittest.TestCase):
+    """`simulate --list` lists and builds nothing; `build --instructions` builds
+    the instruction games (#1063)."""
+
+    def setUp(self) -> None:
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.local = Path(scratch.name)
+        self.built: list[bool] = []
+        for target, value in (
+            ("LOCAL", self.local),
+            ("ensure_reference", mock.Mock(side_effect=AssertionError("reference"))),
+            ("build_games", mock.Mock(side_effect=self.build)),
+            ("sanitizer_exec", mock.Mock()),
+            ("SANITIZE", False),
+            ("TSAN", False),
+        ):
+            patch = mock.patch.object(migration, target, value)
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def build(self, execution: "migration.Execution") -> None:
+        self.built.append(execution.instruction_mode)
+        raise RuntimeError("built")
+
+    def listing(self, *argv: str) -> tuple[int | None, list[list[str]], str]:
+        """The listing's exit code, the child commands and stderr."""
+        errors = io.StringIO()
+        run = mock.Mock(return_value=subprocess.CompletedProcess([], 3))
+        with (
+            mock.patch.object(migration.subprocess, "run", run),
+            contextlib.redirect_stderr(errors),
+        ):
+            try:
+                code = migration.run_listing(["simulate", *argv])
+            except SystemExit as error:
+                code = error.code if isinstance(error.code, int) else -1
+        self.assertEqual(self.built, [])
+        self.assertFalse((self.local / "verification").exists())
+        commands = [call.args[0] for call in run.call_args_list]
+        return code, commands, errors.getvalue()
+
+    def test_a_listing_runs_only_the_child_and_returns_its_code(self) -> None:
+        for argv in (
+            ["--list"],
+            ["--soak", "--list", "NAME"],
+            ["--instructions", "--list"],
+        ):
+            with self.subTest(argv):
+                code, commands, _ = self.listing("--jobs", "4", *argv)
+                self.assertEqual(code, 3)
+                self.assertEqual(
+                    commands,
+                    [
+                        [
+                            sys.executable,
+                            str(migration.ROOT / "tools/simulate.py"),
+                            "--jobs",
+                            "2",
+                            *argv,
+                        ]
+                    ],
+                )
+
+    def test_a_listing_halves_jobs_as_a_run_does(self) -> None:
+        _, (command,), _ = self.listing("--jobs", "2", "--benchmark", "1", "--list")
+        self.assertEqual(command[2:], ["--jobs", "1", "--benchmark", "1", "--list"])
+
+    def test_a_listing_gives_a_runs_refusals_with_nothing_built(self) -> None:
+        for argv, refusal in (
+            (["--threaded"], "drop --threaded/--multiplayer"),
+            (["--multiplayer"], "drop --threaded/--multiplayer"),
+            (
+                ["--sanitize", "--instructions"],
+                "--sanitize conflicts with --instructions",
+            ),
+            (
+                ["--multiplayer", "--benchmark", "1"],
+                "--multiplayer requires ordinary simulate without profiling",
+            ),
+        ):
+            with self.subTest(argv):
+                code, commands, errors = self.listing(*argv, "--list")
+                self.assertEqual(code, 2)
+                self.assertEqual(commands, [])
+                self.assertIn(refusal, errors)
+
+    def test_other_commands_are_left_to_main(self) -> None:
+        for argv in (["simulate", "NAME"], ["coverage", "--list"], ["build"]):
+            with self.subTest(argv):
+                self.assertIsNone(migration.run_listing(argv))
+
+    def test_build_instructions_builds_the_instruction_games(self) -> None:
+        with (
+            mock.patch.object(migration, "ensure_reference"),
+            mock.patch.object(sys, "argv", ["migration.py", "build", "--instructions"]),
+            mock.patch.object(migration, "reference_lock"),
+            contextlib.redirect_stdout(io.StringIO()),
+            self.assertRaisesRegex(RuntimeError, "built"),
+        ):
+            sys.argv.append("--no-ccache")
+            migration.main()
+        self.assertEqual(self.built, [True])
+
+    def test_only_build_takes_instructions(self) -> None:
+        for argv in (["build", "--soak"], ["verify", "--instructions"]):
+            errors = io.StringIO()
+            with (
+                self.subTest(argv),
+                contextlib.redirect_stderr(errors),
+                self.assertRaises(SystemExit),
+            ):
+                migration.arguments(argv)
+            self.assertIn("unrecognized arguments", errors.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

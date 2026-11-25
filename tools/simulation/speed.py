@@ -86,7 +86,7 @@ def prepare(out: Path, profile: Path | None, migration: ModuleType) -> int:
     builds = {role: bundle / f"{role}-runtime" for role in ROLES}
     binaries = {role: builds[role] / NAMES[role] for role in ROLES}
     if not all((builds[role] / "instruction-build.json").is_file() for role in ROLES):
-        sys.exit("first run: python3 tools/migration.py simulate --instructions --list")
+        sys.exit("first run: python3 tools/migration.py build --instructions")
     for role in ROLES:
         # --frozen-runtimes copies every adapter folder; speed scenarios use none.
         for module in core.adapter_modules():

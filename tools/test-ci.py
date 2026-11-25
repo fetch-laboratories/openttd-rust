@@ -2053,7 +2053,7 @@ class PolicyTests(unittest.TestCase):
         (step,) = body["steps"]
         self.assertIn("exit 1", step["run"])
         needed = body["needs"]
-        contexts = {"inputs": {"checkout-ref": MERGE}, "github": {}}
+        contexts: dict[str, Any] = {"inputs": {"checkout-ref": MERGE}, "github": {}}
         for failed, result in itertools.product(
             needed, ("failure", "cancelled", "skipped", "success")
         ):

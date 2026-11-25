@@ -107,7 +107,7 @@ All output lives on the SSD in ordinary folders, and each worktree's `.local` is
 
 ## Simulation comparison
 
-`python3 tools/migration.py simulate` builds both games and runs `tools/simulate.py`. Scenario comparisons run on CI, not on this host; run one locally only by name, to diagnose a failure ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)).
+`python3 tools/migration.py simulate` builds both games and runs `tools/simulate.py`. `simulate --list` (with any selectors) prints the scenario names and builds nothing; it takes a run's options and refusals. Scenario comparisons run on CI, not on this host; run one locally only by name, to diagnose a failure ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)).
 
 - Add scenarios and their prepare and check hooks to the component's module in `tools/simulation/`; `tools/simulation/registry.py` assembles them, and a hook for other modules' scenarios goes in its `SHARED_HOOKS`.
 - `MASKS` (`tools/simulation/savegame.py`) masks the random save ID, build revision, NewGRF version and the original's uninitialized `round_trip_time`; a port touching the last needs its own check. Record a known port divergence in `KNOWN_FAILURES` by first divergence and an open issue, not as a new mask.
