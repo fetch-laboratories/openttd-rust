@@ -2,6 +2,24 @@
 //! The company and economy bodies against `company_cmd.cpp`, `economy.cpp` and `misc_cmd.cpp`.
 
 /// The five financial commands against the original's recorded observations.
+/// The event record the native factory reads, written field by field from the original's
+/// event arguments (`src/rust/services.cpp`'s factory: `company`, `other_company`, `value`),
+/// so no expectation goes through the constructor it checks.
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
+fn company_event(
+    r#type: crate::script_event::ScriptEventType,
+    company: u8,
+    other_company: u8,
+    value: i64,
+) -> crate::script_event_types::ScriptEvent {
+    crate::script_event_types::ScriptEvent {
+        company,
+        other_company,
+        value,
+        ..crate::script_event_types::ScriptEvent::of(r#type)
+    }
+}
+
 #[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 mod financial_command_tests {
     use crate::company::*;
@@ -1036,11 +1054,27 @@ mod startup_tests {
     fn news_call(effect: &Effect) {
         match effect {
             Effect::AiBroadcastNewEvent(event, skip) => {
-                assert_eq!(*event, ScriptEvent::company_new(CompanyID(ID)));
+                assert_eq!(
+                    *event,
+                    super::company_event(
+                        crate::script_event::ScriptEventType::ET_COMPANY_NEW,
+                        ID,
+                        0,
+                        0
+                    )
+                );
                 trace(format!("ai event, skip {skip}"));
             }
             Effect::GameNewEvent(event) => {
-                assert_eq!(*event, ScriptEvent::company_new(CompanyID(ID)));
+                assert_eq!(
+                    *event,
+                    super::company_event(
+                        crate::script_event::ScriptEventType::ET_COMPANY_NEW,
+                        ID,
+                        0,
+                        0
+                    )
+                );
                 trace("game event");
             }
             _ => {}
@@ -2210,11 +2244,19 @@ mod evidence_tests {
                     advice_type: crate::news_type::AdviceType::Invalid,
                 }),
                 effect(&Effect::AiBroadcastNewEvent(
-                    ScriptEvent::company_in_trouble(CompanyID(1)),
+                    super::company_event(
+                        crate::script_event::ScriptEventType::ET_COMPANY_IN_TROUBLE,
+                        1,
+                        0,
+                        0
+                    ),
                     CompanyID::INVALID.0
                 )),
-                effect(&Effect::GameNewEvent(ScriptEvent::company_in_trouble(
-                    CompanyID(1)
+                effect(&Effect::GameNewEvent(super::company_event(
+                    crate::script_event::ScriptEventType::ET_COMPANY_IN_TROUBLE,
+                    1,
+                    0,
+                    0
                 ))),
                 "admin 1".to_owned(),
             ]
@@ -2242,7 +2284,7 @@ mod evidence_tests {
         use crate::window_func::testing::Effect as W;
         use crate::window_type::{WindowClass, WindowNumber};
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
-        for (hostile, ai) in [(false, false), (true, true)] {
+        for (hostile, ai) in [(false, false), (false, true), (true, true)] {
             let mut world = World::new();
             world.town(0, [0; 3], 0, 0);
             let s = services();
@@ -2275,12 +2317,19 @@ mod evidence_tests {
                     advice_type: crate::news_type::AdviceType::Invalid,
                 }),
                 effect(&Effect::AiBroadcastNewEvent(
-                    ScriptEvent::company_merger(CompanyID(1), CompanyID(0)),
+                    super::company_event(
+                        crate::script_event::ScriptEventType::ET_COMPANY_MERGER,
+                        1,
+                        0,
+                        0,
+                    ),
                     CompanyID::INVALID.0,
                 )),
-                effect(&Effect::GameNewEvent(ScriptEvent::company_merger(
-                    CompanyID(1),
-                    CompanyID(0),
+                effect(&Effect::GameNewEvent(super::company_event(
+                    crate::script_event::ScriptEventType::ET_COMPANY_MERGER,
+                    1,
+                    0,
+                    0,
                 ))),
             ];
             expected.extend(takeover_walk());
@@ -2328,7 +2377,12 @@ mod evidence_tests {
             handle_bankruptcy_takeover(&s, get(&s, 1));
             let mut expected = vec![effect(&Effect::AiNewEvent(
                 2,
-                ScriptEvent::company_ask_merger(CompanyID(1), 777),
+                super::company_event(
+                    crate::script_event::ScriptEventType::ET_COMPANY_ASK_MERGER,
+                    1,
+                    0,
+                    777,
+                ),
             ))];
             if local == 2 {
                 expected.push("buy dialog 1 false".to_owned());
@@ -2873,6 +2927,7 @@ mod evidence_tests {
         shell.addr() - 1
     }
     unsafe extern "C" fn group_vehicle(id: u32) -> *mut () {
+        trace(format!("resolve {id}"));
         std::ptr::without_provenance_mut(id as usize + 1)
     }
     unsafe extern "C" fn always(_: *mut ()) -> bool {
@@ -3044,15 +3099,21 @@ mod evidence_tests {
         change_ownership_of_company_items(s, &ownership(), CompanyID(1), CompanyID(0));
         let intervals: Vec<String> = traced()
             .into_iter()
-            .filter(|t| t.starts_with("interval"))
+            .filter(|t| t.starts_with("interval") || t.starts_with("resolve"))
             .collect();
         // Company 0's road vehicle default is 200, its percent flag set; the walk first
-        // copies both to company 1's defaults, which the command reads.
+        // copies both to company 1's defaults, which the command reads. Outside a command
+        // the nested call is top-level: it resolves the vehicle for its test pass, then
+        // resolves and stores in its execution. The custom vehicle 1 is never resolved.
         assert_eq!(
             intervals,
             [
+                "resolve 0",
+                "resolve 0",
                 "interval 0 200 false true current 1",
-                "interval 3 200 false true current 1"
+                "resolve 3",
+                "resolve 3",
+                "interval 3 200 false true current 1",
             ]
         );
         SHELLS.with_borrow(|shells| {
