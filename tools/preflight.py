@@ -26,7 +26,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import IO, Any, TypedDict
 
 import preflight_stamp
 import quick_workflow
@@ -79,6 +79,9 @@ ACTIVE: set[subprocess.Popen[bytes]] = set()
 STOP_SECONDS = 5
 INF = float("inf")
 STOPS = (signal.SIGTERM, signal.SIGHUP)
+STOPS_AND_INT = {signal.SIGINT, *STOPS}
+# Set when a parallel run is being stopped: a step launched after it stops at once.
+STOPPING = threading.Event()
 SHELL = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
 RUST_FORMAT = "Rust formatting (cargo fmt --check)"
 FORMAT = "python3 tools/migration.py fmt"
@@ -223,18 +226,10 @@ def timed(step: Step, env: dict[str, str], log: Path) -> tuple[bool, float]:
         print(f"--> {step.name}", flush=True)
     started = time.monotonic()
     with log.open("w") as output:
-        process = subprocess.Popen(
-            step.command,
-            cwd=migration.ROOT,
-            env=env | step.env,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            # Its own process group, so stop() reaches the step's children.
-            start_new_session=True,
-        )
-        with PRINTING:
-            ACTIVE.add(process)
+        process = launch(step, env, output)
         try:
+            # A stop signal held back during the launch arrives here.
+            unblock()
             code = process.wait()
         except BaseException:
             stop([process])
@@ -255,7 +250,48 @@ def timed(step: Step, env: dict[str, str], log: Path) -> tuple[bool, float]:
     return code == 0, elapsed
 
 
+def launch(step: Step, env: dict[str, str], output: IO[str]) -> subprocess.Popen[bytes]:
+    """Start a step in its own process group, so stop() reaches its children,
+    and register it before any stop can miss it.
+
+    On the main thread the stop signals wait until the caller unblocks them; on
+    a worker, a stop that began during the launch stops the step at once.
+    """
+    if on_main_thread():
+        signal.pthread_sigmask(signal.SIG_BLOCK, STOPS_AND_INT)
+    try:
+        process = subprocess.Popen(
+            step.command,
+            cwd=migration.ROOT,
+            env=env | step.env,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except BaseException:
+        unblock()
+        raise
+    with PRINTING:
+        ACTIVE.add(process)
+        stopping = STOPPING.is_set() and not on_main_thread()
+    if stopping:
+        stop([process])
+    return process
+
+
+def on_main_thread() -> bool:
+    return threading.current_thread() is threading.main_thread()
+
+
+def unblock() -> None:
+    if on_main_thread():
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, STOPS_AND_INT)
+
+
 def signal_group(process: subprocess.Popen[bytes], number: int) -> None:
+    # Process group 0 or below would be preflight's own, or every process.
+    if process.pid <= 0:
+        return
     try:
         os.killpg(process.pid, number)
     except ProcessLookupError:
@@ -324,8 +360,12 @@ def record_run(head: str, jobs: int, seconds: float, failed: list[str]) -> None:
     path = migration.COMMON_LOCAL / RUNS
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a") as log:
-            log.write(json.dumps(entry) + "\n")
+        with file_lock(path.with_name(f"{path.name}.lock"), label="preflight runs"):
+            with path.open("ab") as log:
+                # A line an interrupted writer left unfinished ends here.
+                if log.tell() and not path.read_bytes().endswith(b"\n"):
+                    log.write(b"\n")
+                log.write(json.dumps(entry).encode() + b"\n")
     except OSError as error:
         print(f"run not logged: {error}", flush=True)
 
@@ -338,20 +378,35 @@ def utc(text: str) -> datetime.datetime:
     return when
 
 
+def intact(entry: object) -> bool:
+    """Whether a decoded line has every field of a Run, each of its type."""
+    if not isinstance(entry, dict) or set(entry) != set(Run.__annotations__):
+        return False
+    try:
+        utc(entry["at"])
+    except (TypeError, ValueError):
+        return False
+    return (
+        isinstance(entry["head"], str)
+        and all(isinstance(entry[key], int) for key in ("jobs", "seconds"))
+        and isinstance(entry["failed"], list)
+        and all(isinstance(name, str) for name in entry["failed"])
+    )
+
+
 def read_runs(path: Path) -> tuple[list[Run], int]:
     """The run log's intact entries, and how many lines could not be read."""
     try:
-        lines = path.read_text().splitlines()
+        lines = path.read_bytes().splitlines()
     except FileNotFoundError:
         return [], 0
     runs, unreadable = [], 0
     for line in lines:
         try:
-            entry = json.loads(line)
-            intact = isinstance(entry["seconds"], int) and bool(utc(entry["at"]))
-        except (ValueError, KeyError, TypeError):
-            intact = False
-        if intact:
+            entry = json.loads(line.decode())
+        except ValueError:  # UnicodeDecodeError and JSONDecodeError
+            entry = None
+        if intact(entry):
             runs.append(entry)
         else:
             unreadable += 1
@@ -399,6 +454,7 @@ def run_steps(
     """
     last = last_timings()
     order = sorted(range(len(steps)), key=lambda i: -last.get(steps[i].name, INF))
+    STOPPING.clear()
     pool = ThreadPoolExecutor(max(1, jobs))
     try:
         futures = {
@@ -407,11 +463,16 @@ def run_steps(
         }
         results = [futures[index].result() for index in range(len(steps))]
     except BaseException:
-        pool.shutdown(wait=False, cancel_futures=True)
         with PRINTING:
+            STOPPING.set()
             running = list(ACTIVE)
+        pool.shutdown(wait=False, cancel_futures=True)
         stop(running)
+        # A step still launching stops itself on STOPPING; wait for it.
+        pool.shutdown()
         raise
+    finally:
+        STOPPING.clear()
     pool.shutdown()
     save_timings(
         {step.name: seconds for step, (_, seconds) in zip(steps, results, strict=True)}

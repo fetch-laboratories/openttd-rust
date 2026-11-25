@@ -207,7 +207,7 @@ def fake_popen() -> tuple[type, list[list[str]]]:
     class Popen:
         def __init__(self, command: list[str], **_: object) -> None:
             calls.append(command)
-            self.pid = 0
+            self.pid = -1  # signal_group never signals it
             self.returncode = 1 if command[-1] == "false" else 0
 
         def wait(self, _timeout: float | None = None) -> int:
@@ -348,6 +348,43 @@ class RunTests(unittest.TestCase):
             with self.assertRaises(ProcessLookupError):
                 os.kill(pid, 0)
 
+    def test_a_stop_during_a_launch_still_stops_that_step(self) -> None:
+        """A SIGTERM that arrives after a step's process exists but before
+        preflight has registered it, serial and parallel."""
+        for jobs in ("1", "2"):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                script = (
+                    "import os, signal, sys, time\nfrom pathlib import Path\n"
+                    f"sys.path.insert(0, {str(REPO / 'tools')!r})\n"
+                    "import preflight\n"
+                    f"root = Path({directory!r})\n"
+                    "preflight.migration.LOCAL = root\n"
+                    "preflight.migration.COMMON_LOCAL = root\n"
+                    "real = preflight.subprocess.Popen\n"
+                    "def late(*args, **kwargs):\n"
+                    "    process = real(*args, **kwargs)\n"
+                    "    (root / 'pid').write_text(str(process.pid))\n"
+                    "    os.kill(os.getpid(), signal.SIGTERM)\n"
+                    "    time.sleep(0.5)\n"
+                    "    return process\n"
+                    "preflight.subprocess.Popen = late\n"
+                    "steps = [preflight.Step('zzq', ['sleep', '60'])]\n"
+                    "preflight.workflow_steps = lambda *_: list(steps)\n"
+                    f"sys.argv = ['preflight.py', '--step', 'zzq', '--jobs', {jobs!r}]\n"
+                    "sys.exit(preflight.main())\n"
+                )
+                child = subprocess.run(
+                    [sys.executable, "-c", script],
+                    cwd=REPO,
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                )
+                self.assertEqual(child.returncode, 130, child.stderr)
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(int((root / "pid").read_text()), 0)
+
     def test_concurrent_timing_saves_keep_every_step(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -381,11 +418,12 @@ class RunTests(unittest.TestCase):
             patch.object(preflight.subprocess, "Popen", popen),
             patch("builtins.print"),
         ):
-            for argv in ([], ["--jobs", "1"], ["--step", "Only"]):
+            # Serial first: it saves no timings, so only record_run makes the folder.
+            for argv in (["--jobs", "1"], [], ["--step", "Only"]):
                 with patch.object(sys, "argv", ["preflight.py", *argv]):
                     self.assertEqual(preflight.main(), 0)
             runs, unreadable = preflight.read_runs(Path(common) / preflight.RUNS)
-        self.assertEqual([run["jobs"] for run in runs], [preflight.JOBS, 1])
+        self.assertEqual([run["jobs"] for run in runs], [1, preflight.JOBS])
         self.assertEqual(unreadable, 0)
 
     def test_runs_are_counted_since_a_utc_time(self) -> None:
@@ -402,16 +440,22 @@ class RunTests(unittest.TestCase):
         ):
             log = Path(directory) / preflight.RUNS
             log.parent.mkdir()
-            log.write_text(
+            log.write_bytes(
                 "".join(
                     json.dumps(
                         {"at": a, "head": h, "jobs": 4, "seconds": s, "failed": f}
                     )
                     + "\n"
                     for a, h, s, f in rows
-                )
-                + '{"at": "2026-11-25T14:00'
+                ).encode()
+                + b'{"at": "2026-11-25T11:30:00Z", "seconds": 5}\n'
+                + b"\xff\xfe not a run\n"
+                + b'{"at": "2026-11-25T14:00'
             )
+            # A run appended after a truncated line still counts.
+            stamped = "2026-11-25T15:00:00Z"
+            with patch.object(preflight.time, "strftime", return_value=stamped):
+                preflight.record_run("c", 4, 300.0, [])
             self.assertEqual(preflight.report_runs("2026-11-25 10:00:00"), 0)
             self.assertEqual(preflight.report_runs("2999-01-01"), 0)
             self.assertEqual(preflight.report_runs("yesterday"), 2)
@@ -419,10 +463,10 @@ class RunTests(unittest.TestCase):
         self.assertEqual(
             lines[:4],
             [
-                "skipped 1 unreadable lines in preflight/runs.jsonl",
-                "3 full runs since 2026-11-25 10:00:00 on 2 heads, 1 failed; "
-                "median 200s, longest 480s, 13 minutes in all",
-                "skipped 1 unreadable lines in preflight/runs.jsonl",
+                "skipped 3 unreadable lines in preflight/runs.jsonl",
+                "4 full runs since 2026-11-25 10:00:00 on 3 heads, 1 failed; "
+                "median 250s, longest 480s, 18 minutes in all",
+                "skipped 3 unreadable lines in preflight/runs.jsonl",
                 "no full runs since 2999-01-01",
             ],
         )
