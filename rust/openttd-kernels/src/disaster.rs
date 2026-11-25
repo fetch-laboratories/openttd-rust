@@ -646,6 +646,7 @@ fn increment_tick_counter(v: VehicleRef) -> u8 {
     clippy::many_single_char_names,
     reason = "DisasterTick_Zeppeliner's v, x, y, z and r"
 )]
+#[allow(unsafe_code)]
 fn disaster_tick_zeppeliner(t: &Tables<'_>, v: DisasterVehicle) -> bool {
     increment_tick_counter(v.v);
     let world = t.world();
@@ -698,8 +699,12 @@ fn disaster_tick_zeppeliner(t: &Tables<'_>, v: DisasterVehicle) -> bool {
     }
 
     if world.is_valid_tile(v.v.tile()) && world.is_airport_tile(v.v.tile()) {
-        t.aircraft()
-            .airport_blocks_set(station_get_by_tile(t, v.v.tile()), zeppeliner_runway());
+        // SAFETY: `Station::GetByTile` of an airport tile is its live station; nothing runs
+        // during the update.
+        unsafe {
+            t.aircraft()
+                .airport_blocks_set(station_get_by_tile(t, v.v.tile()), zeppeliner_runway());
+        }
     }
 
     if v.state() > 2 {
@@ -709,7 +714,8 @@ fn disaster_tick_zeppeliner(t: &Tables<'_>, v: DisasterVehicle) -> bool {
 
         if world.is_valid_tile(v.v.tile()) && world.is_airport_tile(v.v.tile()) {
             let st = station_get_by_tile(t, v.v.tile());
-            t.aircraft().airport_blocks_reset(st, zeppeliner_runway());
+            // SAFETY: As above.
+            unsafe { t.aircraft().airport_blocks_reset(st, zeppeliner_runway()) };
             crate::ai::new_event(
                 world.owner(v.v.tile()),
                 &ScriptEvent::disaster_zeppeliner_cleared(station_index(t, st)),
@@ -1834,7 +1840,9 @@ fn reset_disaster_delay(t: &Tables<'_>) {
 /// The `_economy_disaster_daily` timer's body.
 ///
 /// # Safety
-/// `s` is the live process-lifetime table, and the caller holds the game-state mutex.
+/// Every link of `s` the call reaches stays valid for the call, as [`Tables::new`] requires,
+/// and access is serialized: the game passes its process-lifetime table under the
+/// game-state mutex, and the native probe its own tables in a serialized call.
 #[allow(unsafe_code)]
 pub(crate) unsafe fn economy_disaster_daily(s: *const Services) {
     // SAFETY: As this function's contract.
@@ -1929,8 +1937,10 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
     &raw mut _disaster_delay
 }
 
-// The C++ shell's entries. SAFETY for each: the caller holds the game-state mutex and passes
-// the immutable process-lifetime table and a live disaster vehicle record.
+// The C++ shell's entries. SAFETY for each: every link of the table the call reaches stays
+// valid for the call, as `Tables::new` requires, access is serialized, and `v` is a live
+// disaster vehicle record. The game passes its process-lifetime table under the game-state
+// mutex; the native probe passes its own tables in serialized calls.
 
 /// `DisasterVehicle::Tick`.
 #[allow(unsafe_code)]

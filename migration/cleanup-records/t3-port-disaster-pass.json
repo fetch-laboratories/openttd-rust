@@ -124,7 +124,7 @@
     "before": 0,
     "kind": "suppression",
     "operation": "disaster::disaster_tick_ufo",
-    "reason": "One scalar load or store each of the live road owner the record's `road` link names, through `road.rs`'s raw accessors. The base's module-wide allowance goes.",
+    "reason": "One scalar load or store each of the live road owner the record's `road` link names, through `road.rs`'s raw accessors. The base's module-wide allowance goes. `target->Crash()` takes the same resolved live road owner through the unsafe `road::crash`.",
     "retirement_condition": "Retires when `road.rs` gives the road owner a safe handle (#734's closure sweep).",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/disaster.rs | fn disaster_tick_ufo | allow unsafe_code",
@@ -627,18 +627,6 @@
     "after": 1,
     "before": 0,
     "kind": "suppression",
-    "operation": "disaster::tests::tables",
-    "reason": "Builds the disaster tables over a test's leaked service table, every link of which is null or a leaked table, as `Tables::new`'s contract requires.",
-    "retirement_condition": "Retires when the tables are typed references (#656, #635).",
-    "retiring_owner": "#656",
-    "site": "rust/openttd-kernels/src/disaster/tests.rs | fn tables | allow unsafe_code",
-    "source_contract": "The tables one disaster entry reaches.",
-    "tool": "rust"
-  },
-  {
-    "after": 1,
-    "before": 0,
-    "kind": "suppression",
     "operation": "disaster::Tables::get_aircraft_flight_level",
     "reason": "Calls the unsafe `aircraft::get_aircraft_flight_level` with the address of the live owner's own `flags`, which the handle names and nothing else touches during the call. The base's module-wide allowance goes.",
     "retirement_condition": "Retires when the vehicle pool is Rust storage and the owner is a field of the record (#656).",
@@ -693,6 +681,42 @@
     "retiring_owner": "#635",
     "site": "rust/openttd-kernels/src/disaster.rs | fn disaster_coal_mine_init | allow unsafe_code",
     "source_contract": "`i->location.tile` in `Disaster_CoalMine_Init`.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::disaster_tick_zeppeliner",
+    "reason": "Sets and resets the live airport station's blocks through the unsafe `aircraft::Leaves` operations, with the station `Station::GetByTile` returns for an airport tile. The base's module-wide allowance goes.",
+    "retirement_condition": "Retires with the station pool port (#634), which removes the airport table.",
+    "retiring_owner": "#634",
+    "site": "rust/openttd-kernels/src/disaster.rs | fn disaster_tick_zeppeliner | allow unsafe_code",
+    "source_contract": "`st->airport.blocks.Set` and `Reset` in `DisasterTick_Zeppeliner`.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::tests::submarine_tables",
+    "reason": "Builds the submarine test's tables with the unsafe `Tables::new` over the service table it leaks, with every link its paths reach.",
+    "retirement_condition": "Retires when the tables are typed references (#656, #635).",
+    "retiring_owner": "#656",
+    "site": "rust/openttd-kernels/src/disaster/tests.rs | fn submarine_tables | allow unsafe_code",
+    "source_contract": "The tables one disaster entry reaches.",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "disaster::tests::clear_fixture",
+    "reason": "Builds the clear test's tables with the unsafe `Tables::new` over the service table it leaks, with every link its paths reach.",
+    "retirement_condition": "Retires when the tables are typed references (#656, #635).",
+    "retiring_owner": "#656",
+    "site": "rust/openttd-kernels/src/disaster/tests.rs | fn clear_fixture | allow unsafe_code",
+    "source_contract": "The tables one disaster entry reaches.",
     "tool": "rust"
   }
 ]

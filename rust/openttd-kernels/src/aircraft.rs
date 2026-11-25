@@ -414,27 +414,46 @@ impl Leaves {
         // SAFETY: As `airport_tile`.
         unsafe { (self.airport_blocks)(st) }
     }
-    /// `st->airport.blocks.Set(set)` of a live station, in place.
-    pub(crate) fn airport_blocks_set(&self, st: *const Station, set: AirportBlocks) {
-        set_airport_blocks(self.airport_blocks(st), set, true);
+    /// `st->airport.blocks.Set(set)`, in place.
+    ///
+    /// # Safety
+    /// `st` is a live station with an airport, and nothing else touches its blocks during
+    /// the call.
+    pub(crate) unsafe fn airport_blocks_set(&self, st: *const Station, set: AirportBlocks) {
+        // SAFETY: As this function's contract; the leaf returns that station's field.
+        unsafe { set_airport_blocks(self.airport_blocks(st), set) };
     }
-    /// `st->airport.blocks.Reset(reset)` of a live station, in place.
-    pub(crate) fn airport_blocks_reset(&self, st: *const Station, reset: AirportBlocks) {
-        set_airport_blocks(self.airport_blocks(st), reset, false);
+    /// `st->airport.blocks.Reset(reset)`, in place.
+    ///
+    /// # Safety
+    /// As [`Self::airport_blocks_set`].
+    pub(crate) unsafe fn airport_blocks_reset(&self, st: *const Station, reset: AirportBlocks) {
+        // SAFETY: As this function's contract.
+        unsafe { reset_airport_blocks(self.airport_blocks(st), reset) };
     }
 }
 
-/// `blocks.Set(set)` (`value`) or `Reset(set)` (`!value`) on the `airport.blocks` that
-/// `blocks` addresses, which `Leaves::airport_blocks` returned for a live station.
-fn set_airport_blocks(blocks: *mut AirportBlocks, set: AirportBlocks, value: bool) {
-    // SAFETY: One field-sized load and store of the live mask; nothing runs between them.
+/// `blocks.Set(set)` on the `airport.blocks` that `blocks` addresses.
+///
+/// # Safety
+/// `blocks` is a live station's `airport.blocks`, which nothing else touches during the call.
+unsafe fn set_airport_blocks(blocks: *mut AirportBlocks, set: AirportBlocks) {
+    // SAFETY: As this function's contract: one field-sized load and store.
     unsafe {
         let mut mask = blocks.read();
-        if value {
-            mask.set(set);
-        } else {
-            mask.reset(set);
-        }
+        mask.set(set);
+        blocks.write(mask);
+    }
+}
+/// `blocks.Reset(reset)` on the `airport.blocks` that `blocks` addresses.
+///
+/// # Safety
+/// As [`set_airport_blocks`].
+unsafe fn reset_airport_blocks(blocks: *mut AirportBlocks, reset: AirportBlocks) {
+    // SAFETY: As this function's contract: one field-sized load and store.
+    unsafe {
+        let mut mask = blocks.read();
+        mask.reset(reset);
         blocks.write(mask);
     }
 }
@@ -552,13 +571,17 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         // SAFETY: One field-sized load of the live mask, ending before any callback.
         unsafe { blocks.read() }
     }
-    /// `st->airport.blocks.Set(set)` in place.
+    /// `st->airport.blocks.Set(set)` in place, on the controller's live station.
     fn airport_blocks_set(&self, st: *const Station, set: AirportBlocks) {
-        set_airport_blocks(Self::call(|| self.leaves.airport_blocks(st)), set, true);
+        let blocks = Self::call(|| self.leaves.airport_blocks(st));
+        // SAFETY: The controller's station is live, and nothing runs during the update.
+        unsafe { set_airport_blocks(blocks, set) };
     }
-    /// `st->airport.blocks.Reset(reset)` in place.
+    /// `st->airport.blocks.Reset(reset)` in place, on the controller's live station.
     fn airport_blocks_reset(&self, st: *const Station, reset: AirportBlocks) {
-        set_airport_blocks(Self::call(|| self.leaves.airport_blocks(st)), reset, false);
+        let blocks = Self::call(|| self.leaves.airport_blocks(st));
+        // SAFETY: As `airport_blocks_set`.
+        unsafe { reset_airport_blocks(blocks, reset) };
     }
     /// `st->airport.GetSpec()`.
     fn airport_spec(st: *const Station) -> *const crate::station_cmd::AirportSpec {
