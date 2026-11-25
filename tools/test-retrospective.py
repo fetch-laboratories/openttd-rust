@@ -215,21 +215,31 @@ class RetrospectiveTests(unittest.TestCase):
 class ReadyWaitTests(unittest.TestCase):
     def test_a_ready_mark_waits_only_after_its_native_run_finished(self) -> None:
         # #1072: #1055 marked ready 0.4 minutes after its native run finished.
-        run = {"createdAt": "2026-11-25T00:11:00Z", "updatedAt": "2026-11-25T00:26:40Z"}
+        run = facts.NativeRun(
+            "2026-11-25T00:11:00Z", "2026-11-25T00:26:40Z", "completed"
+        )
         wait = facts.ready_wait
         self.assertAlmostEqual(wait(["2026-11-25T00:27:04Z"], [run]) or 0, 0.4)
         self.assertIsNone(wait(["2026-11-25T00:12:00Z"], [run]))
         self.assertIsNone(wait(["2026-11-25T00:10:00Z"], [run]))
         # The first mark counts; a later run requested after it does not.
-        later = {
-            "createdAt": "2026-11-25T01:00:00Z",
-            "updatedAt": "2026-11-25T01:15:00Z",
-        }
+        later = facts.NativeRun(
+            "2026-11-25T01:00:00Z", "2026-11-25T01:15:00Z", "completed"
+        )
         self.assertIsNone(
             wait(["2026-11-25T01:20:00Z", "2026-11-25T00:12:00Z"], [run, later])
         )
         with self.assertRaises(ValueError):
             wait([], [run])
+
+    def test_a_run_still_active_at_the_ready_mark_is_not_a_wait(self) -> None:
+        # Review of #1079: an active run's last update is not its finish.
+        active = facts.NativeRun(
+            "2026-11-25T00:11:00Z", "2026-11-25T00:26:10Z", "in_progress"
+        )
+        self.assertIsNone(facts.ready_wait(["2026-11-25T00:27:00Z"], [active]))
+        row = {"createdAt": "a", "updatedAt": "b", "status": "queued"}
+        self.assertEqual(facts.NativeRun.read(row), facts.NativeRun("a", "b", "queued"))
 
 
 class BaseUpdateTests(unittest.TestCase):

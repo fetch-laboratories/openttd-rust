@@ -288,24 +288,42 @@ def stocktake(start: str, end: str) -> dict[str, Any]:
     }
 
 
-def ready_wait(ready: list[str], native: list[dict[str, str]]) -> float | None:
+@dataclass(frozen=True)
+class NativeRun:
+    """One requested `native` run, as `gh run list` reports it."""
+
+    created_at: str
+    updated_at: str
+    status: str
+
+    @classmethod
+    def read(cls, row: dict[str, str]) -> NativeRun:
+        return cls(row["createdAt"], row["updatedAt"], row["status"])
+
+
+def ready_wait(ready: list[str], native: list[NativeRun]) -> float | None:
     """Minutes the first ready mark came after the last `native` run requested
     before it finished; None when it came while that run ran, or before any
-    request (#1072). The brief starts reviewers at the ready mark."""
+    request (#1072). The brief starts reviewers at the ready mark.
+
+    A completed run's last update is its finish; a rerun moves it later, which
+    can only hide a wait."""
     if not ready:
         raise ValueError("never marked ready")
     mark = min(timestamp(at) for at in ready)
-    before = [run for run in native if timestamp(run["createdAt"]) <= mark]
+    before = [run for run in native if timestamp(run.created_at) <= mark]
     if not before:
         return None
-    finished = timestamp(max(before, key=lambda run: run["createdAt"])["updatedAt"])
-    return (mark - finished).total_seconds() / 60 if finished <= mark else None
+    last = max(before, key=lambda run: run.created_at)
+    if last.status != "completed" or timestamp(last.updated_at) > mark:
+        return None
+    return (mark - timestamp(last.updated_at)).total_seconds() / 60
 
 
 def ready_waits(repository: str, since: str) -> int:
     """Print, per PR with a `native` request since SINCE, whether its ready mark
     waited for that run to finish, then the count."""
-    runs = json.loads(
+    rows = json.loads(
         ci.gh(
             "run",
             "list",
@@ -318,14 +336,14 @@ def ready_waits(repository: str, since: str) -> int:
             "--created",
             f">={since}",
             "--json",
-            "displayTitle,createdAt,updatedAt",
+            "displayTitle,createdAt,updatedAt,status",
         )
     )
-    by_pull: dict[int, list[dict[str, str]]] = {}
-    for run in runs:
-        words = run["displayTitle"].split()
+    by_pull: dict[int, list[NativeRun]] = {}
+    for row in rows:
+        words = row["displayTitle"].split()
         if words[:3] == ["CI", "native", "PR"] and words[3].isdigit():
-            by_pull.setdefault(int(words[3]), []).append(run)
+            by_pull.setdefault(int(words[3]), []).append(NativeRun.read(row))
     waited = counted = 0
     for number in sorted(by_pull):
         events = pages(repository, f"issues/{number}/timeline?per_page=100")
