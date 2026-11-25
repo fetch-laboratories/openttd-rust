@@ -26,6 +26,7 @@ from urllib.parse import unquote
 
 import ci
 import ci_log
+import quick_workflow
 import review_report
 import source_fixture
 import status_comment
@@ -2089,9 +2090,7 @@ class PolicyTests(unittest.TestCase):
     def test_quick_uses_no_local_action(self) -> None:
         """On a pull request Quick checks out the PR head, and a branch older
         than a local action does not contain it (#862 broke Quick that way)."""
-        jobs = workflow("ci-quick.yml")["jobs"]
-        steps = [step for body in jobs.values() for step in body["steps"]]
-        self.assertEqual(len(jobs), 4)
+        steps = quick_workflow.steps(workflow("ci-quick.yml"))
         for step in steps:
             self.assertFalse(str(step.get("uses", "")).startswith("./"), step)
         # Its package install is the shared action's script, copied, so the two
@@ -2127,7 +2126,6 @@ class PolicyTests(unittest.TestCase):
         and its one step fails on any other result (#1063)."""
         body = job("ci-quick.yml", "quick")
         (step,) = body["steps"]
-        self.assertIn("exit 1", step["run"])
         needed = body["needs"]
         contexts: dict[str, Any] = {"inputs": {"checkout-ref": MERGE}, "github": {}}
         for failed, result in itertools.product(
@@ -2140,10 +2138,31 @@ class PolicyTests(unittest.TestCase):
             with self.subTest(job=failed, result=result):
                 # always(): the job runs whatever the others did.
                 self.assertTrue(evaluate(body["if"], needs=needs, **contexts))
-                self.assertEqual(
-                    evaluate(step["if"], needs=needs, **contexts),
-                    result != "success",
+                runs = evaluate(step["if"], needs=needs, **contexts)
+                self.assertEqual(runs, result != "success")
+                if not runs:
+                    continue
+                # The step that runs fails the job, as its own shell exits.
+                results = evaluate(
+                    step["env"]["RESULTS"], interpolate=True, needs=needs, **contexts
                 )
+                done = subprocess.run(
+                    [
+                        "bash",
+                        "--noprofile",
+                        "--norc",
+                        "-eo",
+                        "pipefail",
+                        "-c",
+                        step["run"],
+                    ],
+                    env=dict(os.environ, RESULTS=results),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn(f"{result}", done.stdout)
 
     def test_semantic_subset_requires_the_protected_cadence(self) -> None:
         jobs = workflow("ci-build.yml")["jobs"]
