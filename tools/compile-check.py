@@ -225,11 +225,20 @@ def newer_than_build(paths: list[str]) -> list[str]:
     ]
 
 
+# The scratch tree's lock, which each child holds open too (exclusive()).
+HELD: list[int] = []
+
+
 def run(name: str, command: list[str], env: dict[str, str]) -> tuple[str, int, Path]:
     log = OUT / "logs" / f"{name.replace(' ', '-')}.log"
     with log.open("w") as handle:
         code = subprocess.run(
-            command, cwd=ROOT, env=env, stdout=handle, stderr=subprocess.STDOUT
+            command,
+            cwd=ROOT,
+            env=env,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            pass_fds=tuple(HELD),
         ).returncode
     return name, code, log
 
@@ -284,7 +293,10 @@ def workers() -> int:
 
 @contextmanager
 def exclusive() -> Generator[None]:
-    """One check at a time per worktree: each clears and fills the same tree."""
+    """One check at a time per worktree: each clears and fills the same tree.
+
+    Each child inherits the lock's descriptor, so the lock outlasts a check
+    stopped alone while its children still write to the tree."""
     OUT.mkdir(parents=True, exist_ok=True)
     with (OUT.parent / "compile-check.lock").open("w") as handle:
         try:
@@ -292,7 +304,11 @@ def exclusive() -> Generator[None]:
         except BlockingIOError:
             print("waiting for another compile check in this worktree")
             fcntl.flock(handle, fcntl.LOCK_EX)
-        yield
+        HELD.append(handle.fileno())
+        try:
+            yield
+        finally:
+            HELD.remove(handle.fileno())
 
 
 def check(base: str) -> int:

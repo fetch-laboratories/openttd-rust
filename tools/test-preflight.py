@@ -1146,29 +1146,113 @@ class CompileCheckTests(unittest.TestCase):
                     ).exists()
                 )
 
-    def test_a_fresh_abi_header_still_fails_the_compile_only_adapter_build(
-        self,
-    ) -> None:
-        # Review of #1079: a build older than the Rust declarations links
-        # against its old header, so the fresh one must still compile.
+    def test_a_fresh_abi_header_fails_beside_a_link_against_the_built_one(self) -> None:
+        # Re-check of #1079: one console and one include, `abi.h`, whose
+        # build-rust/generated-abi copy declares Removed and whose fresh copy,
+        # from current Rust declarations, does not. Each job runs as its own
+        # process with the environment check() chose for it.
         if not shutil.which("ninja"):
             self.skipTest("no ninja on this host")
         check = tool("compile-check")
+        child = (
+            "import importlib.util, sys\n"
+            "from contextlib import nullcontext\n"
+            "from pathlib import Path\n"
+            "from types import SimpleNamespace\n"
+            "import probe, simulation.registry as registry\n"
+            "import simulation.console_adapter as consoles\n"
+            "root, role, script, source = sys.argv[1:5]\n"
+            "build = Path(root) / 'build-rust'\n"
+            "spec = importlib.util.spec_from_file_location('check', script)\n"
+            "g = importlib.util.module_from_spec(spec)\n"
+            "spec.loader.exec_module(g)\n"
+            "g.BUILD, g.OUT, probe.BUILD = build, Path(root) / 'out', build\n"
+            "g.migration.candidate_lock = lambda *a, **k: nullcontext()\n"
+            "def adapter(b, folder, env):\n"
+            "    return consoles.console_adapter(b, folder, env, Path(source), 'fixture')\n"
+            "module = SimpleNamespace(__name__='simulation.fixture', adapter=adapter)\n"
+            "registry.adapter_modules = lambda: [module]\n"
+            "sys.exit(g.child(None, 'fixture', role))\n"
+        )
         with tempfile.TemporaryDirectory() as d:
             root = Path(d).resolve()
             source = self.fixture_build(root, defined=True)
-            self.assertEqual(self.adapter_check(root, source), 0)
-            fresh = root / "fresh"
-            fresh.mkdir()
-            (fresh / "abi.h").write_text("void Renamed();\n")
-            source.write_text(source.read_text().replace('"abi.h"', '"fresh/abi.h"'))
-            self.assertEqual(self.adapter_check(root, source, str(fresh)), check.FAILED)
-        modules = [SimpleNamespace(__name__="simulation.a")]
-        with patch("simulation.registry.adapter_modules", return_value=modules):
-            names = [n for n, _ in check.jobs(False, ("candidate",), True, True)]
-        self.assertEqual(
-            names, ["adapter a candidate", "adapter a candidate, compile only"]
-        )
+            build = root / "build-rust"
+            (root / "abi.h").unlink()
+            (build / "generated-abi").mkdir()
+            (build / "generated-abi/abi.h").write_text("void Removed();\n")
+            (root / "out/generated-abi").mkdir(parents=True)
+            (root / "out/generated-abi/abi.h").write_text("void Renamed();\n")
+            commands = json.loads((build / "compile_commands.json").read_text())
+            commands[0]["command"] += f" -I{build / 'generated-abi'}"
+            (build / "compile_commands.json").write_text(json.dumps(commands))
+            script = str(REPO / "tools/compile-check.py")
+
+            def run(
+                name: str, command: list[str], env: dict[str, str]
+            ) -> tuple[str, int, Path]:
+                role = command[command.index("--role") + 1]
+                log = root / "out/logs" / f"{name.replace(' ', '-')}.log"
+                argv = [
+                    sys.executable,
+                    "-c",
+                    child,
+                    str(root),
+                    role,
+                    script,
+                    str(source),
+                ]
+                with log.open("w") as handle:
+                    code = subprocess.run(
+                        argv,
+                        cwd=REPO / "tools",
+                        env=env,
+                        stdout=handle,
+                        stderr=subprocess.STDOUT,
+                    ).returncode
+                return name, code, log
+
+            module = SimpleNamespace(__name__="simulation.fixture")
+            environ = {k: v for k, v in os.environ.items() if k != "PROBE_COMPILE_ONLY"}
+            with (
+                patch("simulation.registry.adapter_modules", return_value=[module]),
+                patch.object(check, "BUILD", build),
+                patch.object(check, "OUT", root / "out"),
+                patch.object(check.migration, "REFERENCE_BUILD", root / "none"),
+                patch.object(check.migration, "environment", return_value=environ),
+                patch.object(check, "changed", return_value=["src/engine.cpp"]),
+                patch.object(check, "generated_abi_changed", return_value=["abi.h"]),
+                patch.object(check.shutil, "which", return_value=None),
+                patch.object(check, "run", side_effect=run),
+                patch.object(check, "comparisons", return_value=[]),
+                patch("builtins.print") as printed,
+            ):
+                (build / "CMakeCache.txt").write_text("")
+                self.assertEqual(check.check("base"), 1)
+            lines = [call.args[0] for call in printed.call_args_list]
+            failed = [line for line in lines if line.startswith("FAIL")]
+            self.assertEqual(len(failed), 1, lines)
+            self.assertIn("adapter fixture candidate, compile only", failed[0])
+            log = root / "out/logs/adapter-fixture-candidate,-compile-only.log"
+            self.assertIn("Removed", log.read_text())
+
+    def test_each_child_holds_the_scratch_lock_until_it_exits(self) -> None:
+        # Re-check of #1079: a check stopped alone left children writing.
+        check = tool("compile-check")
+        with (
+            tempfile.TemporaryDirectory() as d,
+            patch.object(check, "OUT", Path(d) / "out"),
+        ):
+            with check.exclusive():
+                (Path(d) / "out/logs").mkdir()
+                (held,) = check.HELD
+                probe_fd = "import os, sys; os.fstat(int(sys.argv[1]))"
+                command = [sys.executable, "-c", probe_fd, str(held)]
+                self.assertEqual(check.run("lock", command, dict(os.environ))[1], 0)
+            self.assertEqual(check.HELD, [])
+            # With no lock held, a child gets no descriptor to keep.
+            (Path(d) / "out/logs").mkdir(exist_ok=True)
+            self.assertNotEqual(check.run("lock", command, dict(os.environ))[1], 0)
 
     def test_a_link_names_changed_sources_newer_than_the_candidate_game(self) -> None:
         check = tool("compile-check")
