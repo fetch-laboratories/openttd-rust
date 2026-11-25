@@ -136,24 +136,43 @@ pub(crate) mod tests {
         panic!("GetPrice reads no multiplier of a null file or at PR_END")
     }
 
-    /// A shared table whose only `GRFFile` reader, `grf_price_shift`, is one of this module's
-    /// stubs, which receive a record's address and never read it.
-    struct StubTable(Services);
+    /// The two multiplier stubs a test table can carry. Each receives a file's address and
+    /// never reads it.
+    #[derive(Clone, Copy)]
+    enum Multiplier {
+        /// `no_shift`: `GetPrice` must read no multiplier.
+        Unread,
+        /// `file_shift`: the file's multiplier is -3.
+        FileShift,
+    }
 
-    fn shared(grf_price_shift: extern "C" fn(*const c_void, u32) -> i32) -> StubTable {
+    fn shared(multiplier: Multiplier) -> Services {
         let mut shared = SHARED;
-        shared.grf_price_shift = grf_price_shift;
-        StubTable(shared)
+        shared.grf_price_shift = match multiplier {
+            Multiplier::Unread => no_shift,
+            Multiplier::FileShift => file_shift,
+        };
+        shared
     }
 
     /// The record the multiplier stubs stand for; they receive only its address.
     static RECORD: u8 = 0;
-    /// The handle of `RECORD` over a stub table.
+
+    /// `get_price` with the stand-in file `RECORD`, over a table built here whose only
+    /// `GRFFile` reader is the chosen stub. The handle stays inside this call.
     #[allow(unsafe_code)] // A live stand-in record the stub readers never read.
-    fn stub_file(table: &StubTable) -> GRFFileRef<'_> {
-        // SAFETY: `RECORD` lives for the process, and the table's only `GRFFile` reader is a stub
-        // that does not dereference it (`GRFFileRef::of`'s stand-in case).
-        unsafe { GRFFileRef::of(&table.0, (&raw const RECORD).cast()) }
+    fn get_price_with_stub_file(
+        multiplier: Multiplier,
+        index: Price,
+        cost_factor: u32,
+        shift: i32,
+    ) -> i64 {
+        let shared = shared(multiplier);
+        // SAFETY: `RECORD` lives for the process, and the handle reaches no reader but the
+        // chosen stub, in `shared` and through `get_price`'s `as_ptr()` to the same table, which
+        // does not dereference it (`GRFFileRef::of`'s stand-in case).
+        let file = unsafe { GRFFileRef::of(&shared, (&raw const RECORD).cast()) };
+        get_price(&shared, index, cost_factor, Some(file), shift)
     }
 
     /// Store `_price[index]` and return its earlier value, under `GLOBAL_LOCK`.
@@ -172,11 +191,12 @@ pub(crate) mod tests {
     /// `economy.cpp`: `index >= PR_END` returns 0 before `_price` or the file is read.
     #[test]
     fn get_price_end_returns_zero_without_the_file() {
-        let shared = shared(no_shift);
-        let file = stub_file(&shared);
-        assert_eq!(get_price(&shared.0, Price::PR_END, 1, Some(file), 0), 0);
         assert_eq!(
-            get_price(&shared.0, Price(Price::PR_END.0 + 1), 1, Some(file), 0),
+            get_price_with_stub_file(Multiplier::Unread, Price::PR_END, 1, 0),
+            0
+        );
+        assert_eq!(
+            get_price_with_stub_file(Multiplier::Unread, Price(Price::PR_END.0 + 1), 1, 0),
             0
         );
         assert_eq!(get_price_raw(u32::from(Price::PR_END.0), 1, 0, 0), 0);
@@ -188,19 +208,11 @@ pub(crate) mod tests {
     fn get_price_shifts_by_the_file_multiplier() {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let earlier = set_price(Price::PR_BUILD_OBJECT, -800);
-        let none = shared(no_shift);
+        let none = shared(Multiplier::Unread);
+        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, None, 2), -9600);
+        assert_eq!(get_price(&none, Price::PR_BUILD_OBJECT, 3, None, -4), -150);
         assert_eq!(
-            get_price(&none.0, Price::PR_BUILD_OBJECT, 3, None, 2),
-            -9600
-        );
-        assert_eq!(
-            get_price(&none.0, Price::PR_BUILD_OBJECT, 3, None, -4),
-            -150
-        );
-        let with = shared(file_shift);
-        let file = stub_file(&with);
-        assert_eq!(
-            get_price(&with.0, Price::PR_BUILD_OBJECT, 3, Some(file), 2),
+            get_price_with_stub_file(Multiplier::FileShift, Price::PR_BUILD_OBJECT, 3, 2),
             -1200
         );
         assert_eq!(
@@ -215,14 +227,14 @@ pub(crate) mod tests {
     fn get_price_multiplies_as_overflow_safe_int() {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let earlier = set_price(Price::PR_BUILD_OBJECT, i64::MAX / 2);
-        let none = shared(no_shift);
+        let none = shared(Multiplier::Unread);
         assert_eq!(
-            get_price(&none.0, Price::PR_BUILD_OBJECT, 3, None, 0),
+            get_price(&none, Price::PR_BUILD_OBJECT, 3, None, 0),
             i64::MAX
         );
         set_price(Price::PR_BUILD_OBJECT, 5);
         assert_eq!(
-            get_price(&none.0, Price::PR_BUILD_OBJECT, u32::MAX, None, 0),
+            get_price(&none, Price::PR_BUILD_OBJECT, u32::MAX, None, 0),
             -5
         );
         set_price(Price::PR_BUILD_OBJECT, earlier);

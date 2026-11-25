@@ -88,10 +88,10 @@
     "tool": "rust",
     "before": 0,
     "after": 1,
-    "site": "rust/openttd-kernels/src/economy_func.rs | mod tests > fn stub_file | allow unsafe_code",
-    "operation": "economy_func::tests",
+    "site": "rust/openttd-kernels/src/economy_func.rs | mod tests > fn get_price_with_stub_file | allow unsafe_code",
+    "operation": "economy_func::tests::get_price_with_stub_file",
     "source_contract": "`grf_file->price_base_multipliers[index]` of `GetPrice` (economy.cpp).",
-    "reason": "The tests' handle of the live stand-in record `RECORD` over a `StubTable`, whose only `GRFFile` reader is a stub that receives the address and never reads it, as `GRFFileRef::of`'s stand-in case permits.",
+    "reason": "The tests' handle of the live stand-in record `RECORD`, formed and used inside one `get_price` call over a table built in the helper whose only `GRFFile` reader is one of the module's two stubs, which receive the address and never read it, as `GRFFileRef::of`'s stand-in case permits.",
     "retiring_owner": "#669",
     "retirement_condition": "Retires when `GRFFile` moves to Rust (#669) and the handle reads its members in place."
   },
