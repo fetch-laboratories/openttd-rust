@@ -34,7 +34,7 @@ Message root, at the thread your spawn message names, only when the queue merges
 
 ## Starting reviewers
 
-This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says, once the PR is ready and `native` is requested: one for behaviour and one for porting, both for the whole PR, or the behaviour reviewer alone for a PR with no game code. Start each with its fixed message and nothing more:
+This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says: one for behaviour and one for porting, both for the whole PR, or the behaviour reviewer alone for a PR with no game code. When the pass is [ready for review](#finishing-a-file-pass), request `native` and mark the PR ready in one step, both as background jobs (`ci.py request PR --profile native --wait`, `ci.py ready PR --wait`), and start the reviewers then. Neither run's result holds them or the ready mark: put the `native` result in the PR when it arrives, and fix a failure while they review. Start each with its fixed message and nothing more:
 
 > Review PR <URL> under `docs/review-brief.md` for behaviour. You are /root/review-<PR>-behaviour. Review <the whole PR | the commits <SHAs>>.
 
