@@ -279,10 +279,11 @@ TEST_CASE("Company economy - session loop posts each competitor through its call
 }
 
 /* A server's bankrupt deletions post through the native command and network service tables
- * and execute nothing; the offline mode, whose deletion executes, is
- * company::tests::offline_bankrupt_deletion_executes_in_id_order, and the network client's
- * mode is company::tests::network_client_never_deletes_bankrupt_companies (#736 F). Retires
- * with the native command-post and network glue. */
+ * and execute nothing. The offline mode, whose deletion executes, is the Rust test
+ * company::tests::evidence_tests::offline_bankrupt_deletion_executes_in_id_order; the
+ * network client's mode is
+ * company::tests::bankruptcy_tests::network_client_never_deletes_bankrupt_companies (#736 F).
+ * Retires with the native command-post and network glue. */
 TEST_CASE("Company economy - server bankrupt deletion posts")
 {
 	FixtureReset(true, true);

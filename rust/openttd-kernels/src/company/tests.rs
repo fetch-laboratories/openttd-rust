@@ -2532,4 +2532,262 @@ mod evidence_tests {
         drop(world);
         unreachable!("the assertion ends the child");
     }
+
+    /// The command result of the offline deletion's `Command::Post`, held in its native
+    /// storage: its error message (0 for success), cost and expense type.
+    #[derive(Clone, Copy)]
+    struct Posted {
+        error: u32,
+        cost: i64,
+        expense: ExpensesType,
+    }
+    fn posted(out: *const crate::services::CommandCost) -> Posted {
+        // SAFETY: Every result is a `Posted` that `construct` wrote into its storage.
+        unsafe { out.cast::<Posted>().read() }
+    }
+    fn store(out: *mut crate::services::CommandCost, value: Posted) {
+        // SAFETY: As `posted`.
+        unsafe { out.cast::<Posted>().write(value) };
+    }
+    const SUCCESS: Posted = Posted {
+        error: 0,
+        cost: 0,
+        expense: ExpensesType::INVALID_EXPENSES,
+    };
+    unsafe extern "C" fn construct(
+        storage: *mut crate::services::CommandCostStorage,
+    ) -> *mut crate::services::CommandCost {
+        let out = storage.cast::<crate::services::CommandCost>();
+        store(out, SUCCESS);
+        out
+    }
+    unsafe extern "C" fn destroy(_: *mut crate::services::CommandCost) {}
+    extern "C" fn zero(out: *mut crate::services::CommandCost) {
+        store(out, SUCCESS);
+    }
+    extern "C" fn error(out: *mut crate::services::CommandCost, message: u32) {
+        store(
+            out,
+            Posted {
+                error: message,
+                ..SUCCESS
+            },
+        );
+    }
+    extern "C" fn move_cost(
+        to: *mut crate::services::CommandCost,
+        from: *mut crate::services::CommandCost,
+    ) {
+        store(to, posted(from));
+    }
+    extern "C" fn success(out: *const crate::services::CommandCost) -> bool {
+        posted(out).error == 0
+    }
+    extern "C" fn money(out: *const crate::services::CommandCost) -> i64 {
+        posted(out).cost
+    }
+    extern "C" fn expense(out: *const crate::services::CommandCost) -> ExpensesType {
+        posted(out).expense
+    }
+    const POST_COSTS: crate::services::CommandCostServices = crate::services::CommandCostServices {
+        construct,
+        destroy,
+        zero,
+        error,
+        move_cost,
+        success,
+        money,
+        expense,
+        ..crate::test_tables::COMMAND_COSTS
+    };
+    extern "C" fn holds(condition: bool) {
+        assert!(condition);
+    }
+    extern "C" fn local_is_18() -> u8 {
+        18
+    }
+    extern "C" fn count() -> usize {
+        (0..COUNT).filter(|&id| !finances_of(id).is_null()).count()
+    }
+    extern "C" fn delete_and_free(c: *mut OpenTTDCompany) {
+        let id = usize::from(index(c).0);
+        trace(format!("delete {id}"));
+        let mut slots = FINANCES.get();
+        slots[id] = std::ptr::null_mut();
+        FINANCES.set(slots);
+    }
+    extern "C" fn admin_remove(c: CompanyID, reason: crate::company_type::CompanyRemoveReason) {
+        trace(format!("admin remove {} {}", c.0, reason.0));
+    }
+    extern "C" fn no_pages() -> u32 {
+        0
+    }
+    extern "C" fn counted_objectives() -> &'static crate::objectives::Services {
+        const TABLE: crate::objectives::Services = crate::objectives::Services {
+            page_count: no_pages,
+            goal_count: no_pages,
+            ..OBJECTIVES
+        };
+        &TABLE
+    }
+    extern "C" fn no_desync_logging() -> bool {
+        false
+    }
+    extern "C" fn control_begin(
+        _: *mut crate::command_post::ControlStorage,
+    ) -> *const crate::tile_owner::Context {
+        leak(ownership())
+    }
+    extern "C" fn control_end(_: *mut crate::command_post::ControlStorage) {}
+    thread_local! {
+        static POST: Cell<*const crate::command_post::Services> = const { Cell::new(std::ptr::null()) };
+        static COMMAND: Cell<*const crate::services::CommandServices> = const { Cell::new(std::ptr::null()) };
+        static POST_COMPANY: Cell<*const Services> = const { Cell::new(std::ptr::null()) };
+    }
+    extern "C" fn command_post() -> &'static crate::command_post::Services {
+        // SAFETY: Leaked by the test for the process.
+        unsafe { &*POST.get() }
+    }
+    extern "C" fn command() -> &'static crate::services::CommandServices {
+        // SAFETY: As above.
+        unsafe { &*COMMAND.get() }
+    }
+    extern "C" fn post_company() -> *const Services {
+        POST_COMPANY.get()
+    }
+
+    /// The services of the offline economy month: the company table over the world, whose
+    /// shared table posts through a command table that runs `CmdCompanyCtrl` over a copy of
+    /// it. As the native fixture's post table did, that copy's local company is 18, the
+    /// current company the command's completion switches to.
+    fn month_services() -> &'static Services {
+        static FINITE: bool = false;
+        let base = services();
+        let shared = leak(crate::services::Services {
+            command_post,
+            settings: leak(crate::settings_type::SettingAddresses {
+                infinite_money: &raw const FINITE,
+                infrastructure_maintenance: &raw const FINITE,
+                economy: &raw const FINITE,
+                ..crate::settings_type::SettingAddresses::NULL
+            }),
+            ..*base.shared
+        });
+        let s = leak(Services {
+            shared,
+            objectives: counted_objectives,
+            company_count: count,
+            delete_company: delete_and_free,
+            company_admin_remove: admin_remove,
+            ..base
+        });
+        POST_COMPANY.set(leak(Services {
+            shared: leak(crate::services::Services {
+                local_company: local_is_18,
+                ..*shared
+            }),
+            ..*s
+        }));
+        COMMAND.set(leak(crate::services::CommandServices {
+            finance: s.finance,
+            company: post_company,
+            shared,
+            cost: &POST_COSTS,
+            signals: leak(crate::signal::SignalServices {
+                assert_condition: holds,
+                ..crate::test_tables::SIGNALS
+            }),
+            shift_pressed: no,
+            ..COMMANDS
+        }));
+        POST.set(leak(crate::command_post::Services {
+            command,
+            control_begin,
+            control_end,
+            desync_logging: no_desync_logging,
+            ..crate::test_tables::COMMAND_POST
+        }));
+        s
+    }
+    fn bankrupt(id: usize) {
+        let f = finances_of(id);
+        write_field!(f, money, -500_000);
+        write_field!(f, current_loan, 100_000);
+        write_field!(f, months_of_bankruptcy, 9);
+        write_field!(f, max_loan, crate::company_base::COMPANY_MAX_LOAN_DEFAULT);
+    }
+    /// Run the economy month callback once, with the economy and clock it reads.
+    fn economy_month(s: &'static Services) {
+        let e = economy();
+        // SAFETY: All-zero is the record's value-initialised state; restored below.
+        let saved = std::mem::replace(unsafe { &mut *e }, unsafe { std::mem::zeroed() });
+        write_field!(e, max_loan, 300_000);
+        write_field!(e, fluct, 100);
+        let month = crate::timer_game_common::economy_month();
+        crate::timer_game_common::write_economy_month(1);
+        let clock = crate::timer_game_common::ClockCompany { services: s };
+        // SAFETY: The clock context outlives the call; no exception slot is used.
+        let ok = unsafe {
+            crate::timer_game_common::openttd_rust_clock_economy_month_abi(
+                (&raw const clock).cast(),
+                std::ptr::null_mut(),
+            )
+        };
+        assert_eq!(ok, 1);
+        crate::timer_game_common::write_economy_month(month);
+        // SAFETY: As above.
+        unsafe { e.write(saved) };
+    }
+
+    /// Evidence 2: offline, one economy month deletes both companies bankrupt for a tenth
+    /// month inside the one callback, in ID order, each through `Command::Post` and
+    /// `CmdCompanyCtrl` with `CRR_BANKRUPT` and no admin update after it, and the current
+    /// company is 18 again afterwards. A local company is kept, asked of everyone, with its
+    /// admin update instead.
+    #[test]
+    fn offline_bankrupt_deletion_executes_in_id_order() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let world = World::new();
+        let s = month_services();
+        GROUP.set(std::ptr::null_mut());
+        write_field!(finances_of(0), money, 1_000_000);
+        bankrupt(1);
+        bankrupt(2);
+        CURRENT.set(18);
+        economy_month(s);
+        let bankrupt_reason = crate::company_type::CompanyRemoveReason::CRR_BANKRUPT.0;
+        let calls: Vec<String> = traced()
+            .into_iter()
+            .filter(|t| t.starts_with("delete") || t.starts_with("admin"))
+            .collect();
+        assert_eq!(
+            calls,
+            [
+                "delete 1".to_owned(),
+                format!("admin remove 1 {bankrupt_reason}"),
+                "delete 2".to_owned(),
+                format!("admin remove 2 {bankrupt_reason}"),
+            ]
+        );
+        assert_eq!(CURRENT.get(), 18);
+        assert_eq!(count(), 1);
+        drop(world);
+
+        // The local company is not deleted offline: it is asked of everyone.
+        let world = World::new();
+        let s = month_services();
+        GROUP.set(std::ptr::null_mut());
+        bankrupt(1);
+        LOCAL.set(1);
+        CURRENT.set(18);
+        economy_month(s);
+        let calls: Vec<String> = traced()
+            .into_iter()
+            .filter(|t| t.starts_with("delete") || t.starts_with("admin"))
+            .collect();
+        assert_eq!(calls, ["admin 1"]);
+        assert!(read_field!(finances_of(1), bankrupt_asked).all());
+        assert_eq!(count(), 3);
+        drop(world);
+    }
 }
