@@ -169,7 +169,8 @@ jobs:
         # nothing, every package was "Unable to locate" and no host was left to move to.
         # Only active entries count: a source's own archive URL, or one in a mirror list an
         # active source uses (apt-mirrors.txt is in `lists` whether or not one does). A
-        # deb822 stanza with `Enabled: no` is not active.
+        # deb822 stanza that apt reads as disabled (`Enabled: no`, `false`, `off`,
+        # `without` or `disable`) is not active.
         active() {
           local file
           for file; do
@@ -182,7 +183,7 @@ jobs:
                   {
                     on = 1
                     for (i = 1; i <= NF; i++)
-                      if (tolower($i) ~ /^[[:space:]]*enabled:[[:space:]]*no[[:space:]]*$/) on = 0
+                      if (tolower($i) ~ /^[[:space:]]*enabled:[[:space:]]*(no|false|off|without|disable)[[:space:]]*$/) on = 0
                     if (on) for (i = 1; i <= NF; i++) if ($i !~ /^[[:space:]]*#/) print $i
                   }' "$file" ;;
               *) grep -v '^[[:space:]]*\(#\|$\)' "$file" || true ;;
@@ -199,8 +200,9 @@ jobs:
           grep -v '//security\.ubuntu\.com/' | head -n 1 || true)
         # With none, the first attempt still runs on the sources as found. Each failed one
         # then writes the script's own source for the next host, which a later move
-        # rewrites, and sets aside each source that uses a mirror list: that list names no
-        # archive, and apt fails its whole update on a list it cannot read.
+        # rewrites, and sets aside each source entry that uses a mirror list: that list
+        # names no archive, and apt fails its whole update on a list it cannot read. A
+        # deb822 stanza is disabled on its own, so the file's other stanzas stay.
         fallback=
         if [ -z "$named" ]; then
           hosts=("" azure.archive.ubuntu.com archive.ubuntu.com)
@@ -247,18 +249,25 @@ jobs:
                 'Components: main restricted universe multiverse' \
                 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' |
                 $sudo tee "$fallback" > /dev/null
-              kept=()
               for file in "${files[@]}"; do
                 if ! active "$file" | grep -q 'mirror+file:'; then
-                  kept+=("$file")
+                  continue
                 elif [[ $file == *.sources ]]; then
-                  $sudo mv "$file" "$file.apt-install-disabled"
+                  awk 'BEGIN { RS = ""; FS = "\n"; ORS = "\n\n" }
+                    {
+                      off = 0
+                      for (i = 1; i <= NF; i++) if ($i !~ /^[[:space:]]*#/ && $i ~ /mirror\+file:/) off = 1
+                      if (!off) { print; next }
+                      stanza = ""
+                      for (i = 1; i <= NF; i++) if (tolower($i) !~ /^[[:space:]]*enabled:/) stanza = stanza $i "\n"
+                      print stanza "Enabled: no"
+                    }' "$file" | $sudo tee "$file.apt-install" > /dev/null
+                  $sudo mv "$file.apt-install" "$file"
                 else
                   $sudo sed -i '/^[[:space:]]*[^#[:space:]].*mirror+file:/s/^/# /' "$file"
-                  kept+=("$file")
                 fi
               done
-              files=("${kept[@]}" "$fallback")
+              files+=("$fallback")
             fi
             for file in "${lists[@]}" "${files[@]}"; do
               if [ -f "$file" ]; then

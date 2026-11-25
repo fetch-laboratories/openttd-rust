@@ -1640,7 +1640,8 @@ if [ "$kind" = update ]; then
   for file in "$APT_ETC"/sources.list "$APT_ETC"/sources.list.d/*.sources \
       "$APT_ETC"/sources.list.d/*.list; do
     [ -f "$file" ] || continue
-    for list in $(awk 'BEGIN { RS = "" } !/[Ee]nabled:[[:space:]]*no/' "$file" |
+    for list in $(awk 'BEGIN { RS = "" }
+        tolower($0) !~ /enabled:[[:space:]]*(no|false|off|without|disable)/' "$file" |
         grep -v '^[[:space:]]*#' | grep -o 'mirror+file:[^[:space:]]*' |
         sed 's/^mirror+file://'); do
       grep -q '^[[:space:]]*[^#[:space:]]' "$list" 2>/dev/null || exit 100
@@ -1887,7 +1888,13 @@ class AptInstallTests(unittest.TestCase):
         "a disabled stanza": {
             "sources.list.d/ubuntu.sources": "Types: deb\n"
             "URIs: http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n"
-            "Suites: noble\nEnabled: no\n",
+            "Suites: noble\nComponents: main\nEnabled: no\n",
+        },
+        # apt reads `false` as `no` too (review of #1065).
+        "a stanza disabled as false": {
+            "sources.list.d/ubuntu.sources": "Types: deb\n"
+            "URIs: http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n"
+            "Suites: noble\nComponents: main\nEnabled: false\n",
         },
     }
 
@@ -1944,32 +1951,36 @@ class AptInstallTests(unittest.TestCase):
                         warnings,
                     )
 
-    def test_a_source_using_a_mirror_list_with_no_active_line_is_set_aside(
+    EMPTY = "# http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n"
+    # A deb822 file: a stanza on a mirror list with no active line, then a
+    # working repository that must stay (review of #1065).
+    BROKEN = (
+        "Types: deb\nURIs: mirror+file:ETC/apt-mirrors.txt\nSuites: noble\n"
+        "Components: main\nEnabled: yes\n\n"
+        "Types: deb\nURIs: file:REPO\nSuites: ./\nTrusted: yes\n"
+    )
+
+    def test_an_entry_using_a_mirror_list_with_no_active_line_is_set_aside(
         self,
     ) -> None:
         """apt fails its whole update on such a list, so the fallback source
         alone would not save the job (review of #1065)."""
-        empty = "# http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n"
-        for label, files, after_source in (
-            (
-                "deb822",
-                {
-                    "apt-mirrors.txt": empty,
-                    "sources.list.d/ubuntu.sources": "Types: deb\n"
-                    "URIs: mirror+file:ETC/apt-mirrors.txt\nSuites: noble\n",
-                },
-                ("sources.list.d/ubuntu.sources.apt-install-disabled", None),
-            ),
+        disabled = (
+            "Types: deb\nURIs: mirror+file:ETC/apt-mirrors.txt\nSuites: noble\n"
+            "Components: main\nEnabled: no\n\n"
+            "Types: deb\nURIs: file:REPO\nSuites: ./\nTrusted: yes\n\n"
+        )
+        for label, name, before, after_text in (
+            ("deb822", "sources.list.d/ubuntu.sources", self.BROKEN, disabled),
             (
                 "one-line",
-                {
-                    "apt-mirrors.txt": empty,
-                    "sources.list": "deb mirror+file:ETC/apt-mirrors.txt noble main\n",
-                },
-                ("sources.list", "# deb mirror+file:ETC/apt-mirrors.txt noble main\n"),
+                "sources.list",
+                "deb mirror+file:ETC/apt-mirrors.txt noble main\n",
+                "# deb mirror+file:ETC/apt-mirrors.txt noble main\n",
             ),
         ):
             with self.subTest(label):
+                files = {"apt-mirrors.txt": self.EMPTY, name: before}
                 code, log, after, warnings = self.install(
                     files, self.FALLBACK, [0, 0, 0, 0]
                 )
@@ -1987,12 +1998,64 @@ class AptInstallTests(unittest.TestCase):
                 )
                 self.assertIn(f"retrying on {azure}", warnings)
                 self.assertIn(self.FALLBACK, after)
-                name, text = after_source
-                if text is None:
-                    self.assertIn(name, after)
-                    self.assertNotIn("sources.list.d/ubuntu.sources", after)
-                else:
-                    self.assertEqual(after[name], text)
+                self.assertEqual(after[name], after_text)
+
+    @unittest.skipUnless(shutil.which("apt-get"), "needs apt-get")
+    def test_real_apt_updates_only_once_the_entry_is_set_aside(self) -> None:
+        """An isolated apt update, as the stub models it: it fails on the
+        sources as found and succeeds on them as the script leaves them, with
+        the working stanza still read."""
+        _, _, after, _ = self.install(
+            {
+                "apt-mirrors.txt": self.EMPTY,
+                "sources.list.d/ubuntu.sources": self.BROKEN,
+            },
+            self.FALLBACK,
+            [0, 0, 0, 0],
+        )
+        # The fallback names the internet archive; this update stays offline.
+        del after[self.FALLBACK]
+        found = {
+            "apt-mirrors.txt": self.EMPTY,
+            "sources.list.d/ubuntu.sources": self.BROKEN,
+        }
+        self.assertEqual(self.real_update(found)[0], 100)
+        self.assertEqual(self.real_update(after), (0, True))
+
+    def real_update(self, files: Mapping[str, str]) -> tuple[int, bool]:
+        """apt-get update over `files` under a temporary Dir, with an empty
+        local repository at REPO: its exit code and whether it read REPO."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            etc, repo = root / "etc", root / "repo"
+            for path in (
+                etc / "sources.list.d",
+                root / "state/lists/partial",
+                root / "cache/archives/partial",
+                repo,
+            ):
+                path.mkdir(parents=True)
+            (repo / "Packages").write_text("")
+            for name, text in files.items():
+                (etc / name).write_text(
+                    text.replace("ETC", str(etc)).replace("REPO", str(repo))
+                )
+            done = subprocess.run(
+                [
+                    "apt-get",
+                    *("-o", f"Dir::Etc={etc}", "-o", f"Dir::State={root / 'state'}"),
+                    *("-o", f"Dir::Cache={root / 'cache'}", "-o", "Debug::NoLocking=1"),
+                    *("-o", "Dir::State::status=/dev/null", "update"),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=60,
+            )
+            read = any(
+                "_repo_" in path.name for path in (root / "state/lists").iterdir()
+            )
+        return done.returncode, read
 
     def test_a_failed_attempt_prints_the_sources_active_lines(self) -> None:
         files = self.UNNAMED["an unused mirror list"]
