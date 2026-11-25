@@ -781,6 +781,8 @@ mod tests {
 
         set_price(Price::PR_CLEAR_RAIL, -1000);
         assert_eq!(rail_clear_cost(shared, RailType(1)), -600);
+        // The rebuild 2400 + -600 is now below the upgrade 1900.
+        assert_eq!(rail_convert_cost(shared, RailType(1), RailType(2)), 1800);
 
         assert!(rail_no_level_crossings(shared, RailType(1)));
         assert!(!rail_no_level_crossings(shared, RailType(2)));
