@@ -108,6 +108,13 @@ fn install_map(kind: TileType, m1: u8) -> (Vec<BaseTileLayout>, Vec<ExtendedTile
     (base, extended)
 }
 
+/// The tables a test's leaked service table names.
+#[allow(unsafe_code)]
+fn tables(services: &'static Services) -> Tables<'static> {
+    // SAFETY: Every link of a test's table is null or a leaked table.
+    unsafe { Tables::new(services) }
+}
+
 /// A disaster vehicle record with its owner, which the test leaks.
 #[allow(unsafe_code)]
 fn disaster_vehicle() -> DisasterVehicle {
@@ -141,7 +148,7 @@ fn submarine_leaves_row_zero_without_assertion_under_native_debug() {
         vehicles: vehicles(),
         ..crate::test_tables::DISASTER
     };
-    let t = Tables::new(&services);
+    let t = tables(leak(services));
     let v = disaster_vehicle();
     v.v.set_subtype(crate::disaster_vehicle::DisasterSubType::ST_SMALL_SUBMARINE.0);
     v.v.set_tile(TileIndex(10)); // (10, 0)
@@ -419,7 +426,7 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
         base[tile].m5 = m5;
     }
     let (services, shared) = clear_fixture();
-    let t = Tables::new(services);
+    let t = tables(services);
 
     // An airplane in state 1 whose target, in `dest_tile`, is industry 7.
     let airplane = disaster_vehicle();

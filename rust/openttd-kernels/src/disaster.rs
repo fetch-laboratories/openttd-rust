@@ -118,10 +118,10 @@ pub(crate) struct DisasterVehicle {
     s: NonNull<State>,
 }
 
-#[allow(unsafe_code)]
 impl DisasterVehicle {
     /// The disaster vehicle whose record is `v`, a live disaster vehicle's, as a
     /// `DisasterVehicle` member's `this` is.
+    #[allow(unsafe_code)]
     fn of(v: VehicleRef) -> Self {
         // SAFETY: Every disaster shell's constructor links its non-null owner.
         Self {
@@ -135,14 +135,17 @@ impl DisasterVehicle {
         self.v.next().map(Self::of)
     }
     /// `image_override`.
+    #[allow(unsafe_code)]
     fn image_override(self) -> SpriteID {
         crate::raw_field::read_field!(self.s.as_ptr(), image_override)
     }
     /// Store `image_override`.
+    #[allow(unsafe_code)]
     fn set_image_override(self, image_override: SpriteID) {
         crate::raw_field::write_field!(self.s.as_ptr(), image_override, image_override);
     }
     /// `big_ufo_destroyer_target`.
+    #[allow(unsafe_code)]
     fn big_ufo_destroyer_target(self) -> VehicleID {
         VehicleID(crate::raw_field::read_field!(
             self.s.as_ptr(),
@@ -150,18 +153,22 @@ impl DisasterVehicle {
         ))
     }
     /// Store `big_ufo_destroyer_target`.
+    #[allow(unsafe_code)]
     fn set_big_ufo_destroyer_target(self, target: VehicleID) {
         crate::raw_field::write_field!(self.s.as_ptr(), big_ufo_destroyer_target, target.0);
     }
     /// `state`.
+    #[allow(unsafe_code)]
     fn state(self) -> u16 {
         crate::raw_field::read_field!(self.s.as_ptr(), state)
     }
     /// Store `state`.
+    #[allow(unsafe_code)]
     fn set_state(self, state: u16) {
         crate::raw_field::write_field!(self.s.as_ptr(), state, state);
     }
     /// `&flags`, which `GetAircraftFlightLevel` reads and writes.
+    #[allow(unsafe_code)]
     fn flags(self) -> *mut u8 {
         // SAFETY: Computing a raw field address creates no reference.
         unsafe { &raw mut (*self.s.as_ptr()).flags }
@@ -201,12 +208,15 @@ pub(crate) struct Tables<'a> {
     vehicles: &'a VehicleServices,
 }
 
-#[allow(unsafe_code)]
 impl<'a> Tables<'a> {
     /// The tables `s` names.
-    pub(crate) fn new(s: &'a Services) -> Self {
-        // SAFETY: Each table link is a process-lifetime table, or a test's that outlives the
-        // entry; every entry has the shared and vehicle tables.
+    ///
+    /// # Safety
+    /// Each of `s`'s table links is null or names a table that outlives `'a`, and the shared
+    /// and vehicle links are not null: the process-lifetime tables, or a test's leaked ones.
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn new(s: &'a Services) -> Self {
+        // SAFETY: As this function's contract.
         unsafe {
             Self {
                 s,
@@ -216,31 +226,37 @@ impl<'a> Tables<'a> {
         }
     }
     /// The aircraft controller's table.
+    #[allow(unsafe_code)]
     fn aircraft(&self) -> &'a aircraft::Leaves {
-        // SAFETY: As `new`, for the bodies that reach this table.
+        // SAFETY: As `new`'s contract, for the bodies that reach this table.
         unsafe { &*self.s.aircraft }
     }
     /// The environment table.
+    #[allow(unsafe_code)]
     fn environment(&self) -> &'a crate::services::EnvironmentServices {
         // SAFETY: As `aircraft`.
         unsafe { &*self.s.environment }
     }
     /// The company identity table.
+    #[allow(unsafe_code)]
     fn identity(&self) -> &'a crate::company_identity::Services {
         // SAFETY: As `aircraft`.
         unsafe { &*self.s.identity }
     }
     /// The industry production table.
+    #[allow(unsafe_code)]
     fn industry(&self) -> &'a crate::industry::Services {
         // SAFETY: As `aircraft`.
         unsafe { &*self.s.industry }
     }
     /// The road vehicle controller's table.
+    #[allow(unsafe_code)]
     fn road(&self) -> &'a crate::road::Leaves {
         // SAFETY: As `aircraft`.
         unsafe { &*self.s.road }
     }
     /// The vehicle scheduler's table.
+    #[allow(unsafe_code)]
     fn scheduler(&self) -> &'a SchedulerServices {
         // SAFETY: As `aircraft`.
         unsafe { &*self.s.scheduler }
@@ -259,6 +275,7 @@ impl<'a> Tables<'a> {
         self.vehicles.newgrf()
     }
     /// The vehicle maintenance table.
+    #[allow(unsafe_code)]
     fn maintenance(&self) -> &crate::vehicle::maintenance::Services {
         // SAFETY: The base table names the process-lifetime maintenance table.
         unsafe { &*self.vehicles.maintenance }
@@ -320,6 +337,7 @@ impl<'a> Tables<'a> {
     }
     /// `Vehicle::Get(index)`: `Pool::Get`'s `assert(index < this->first_unused)`, then the
     /// slot's record, which a free slot leaves null.
+    #[allow(unsafe_code)]
     fn vehicle_get(&self, index: VehicleID) -> Option<VehicleRef> {
         let pool = self.scheduler().pool();
         // SAFETY: The scheduler's live descriptor; nothing mutates the pool during the read.
@@ -328,6 +346,7 @@ impl<'a> Tables<'a> {
         unsafe { crate::vehicle_base::get(&pool, index) }
     }
     /// `Industry::Get(index)`: the industry's shell, through the pool's asserting lookup.
+    #[allow(unsafe_code)]
     fn industry_get(&self, index: u32) -> *mut crate::industry::tile::ShellHandle {
         // SAFETY: The industry table names the process-lifetime transaction table.
         unsafe { ((*self.industry().transaction).industry)(index) }
@@ -1807,7 +1826,7 @@ fn reset_disaster_delay(t: &Tables<'_>) {
 #[allow(unsafe_code)]
 pub(crate) unsafe fn economy_disaster_daily(s: *const Services) {
     // SAFETY: As this function's contract.
-    let t = Tables::new(unsafe { &*s });
+    let t = unsafe { Tables::new(&*s) };
     // SAFETY: One load and store of the process-wide counter (its declaration's contract).
     let delay = unsafe {
         _disaster_delay = _disaster_delay.wrapping_sub(1);
@@ -1831,7 +1850,7 @@ pub(crate) unsafe fn economy_disaster_daily(s: *const Services) {
 #[allow(unsafe_code)]
 pub(crate) unsafe fn startup_disasters(s: *const Services) {
     // SAFETY: As this function's contract.
-    reset_disaster_delay(&Tables::new(unsafe { &*s }));
+    reset_disaster_delay(&unsafe { Tables::new(&*s) });
 }
 
 /// `ReleaseDisastersTargetingIndustry`: marks all disasters targeting the deleted industry
@@ -1906,7 +1925,7 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_disaster_tick_abi(s: *const Services, v: VehicleRef) -> u8 {
     // SAFETY: As the entries' contract.
-    let t = Tables::new(unsafe { &*s });
+    let t = unsafe { Tables::new(&*s) };
     u8::from(tick(&t, DisasterVehicle::of(v)))
 }
 /// `ReleaseDisasterVehicle`, after its `DisasterVehicle::GetIfValid` found `v`.
@@ -1914,7 +1933,7 @@ pub unsafe extern "C" fn openttd_rust_disaster_tick_abi(s: *const Services, v: V
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_disaster_release_vehicle(s: *const Services, v: VehicleRef) {
     // SAFETY: As the entries' contract.
-    let t = Tables::new(unsafe { &*s });
+    let t = unsafe { Tables::new(&*s) };
     release_disaster_vehicle(&t, DisasterVehicle::of(v));
 }
 
