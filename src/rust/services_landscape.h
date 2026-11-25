@@ -67,7 +67,6 @@ inline void RustSetTreeGroundDensity(uint32_t tile, TreeGround ground, uint32_t 
 inline void RustSetTreeGroundDensityValue(uint32_t tile, uint8_t ground, uint32_t density) noexcept { RustSetTreeGroundDensity(tile, static_cast<TreeGround>(ground), density); }
 inline bool RustAmbientSoundEnabled() noexcept { return HasGrfMiscBit(GrfMiscBit::AmbientSoundCallback); }
 inline void RustPlayTileSound(uint32_t tile, uint16_t sound) noexcept { SndPlayTileFx(sound, TileIndex{tile}); }
-inline void RustUpdateSignals() noexcept { UpdateSignalsInBuffer(); }
 /* Necessary legacy signatures: context handles are unused and scalar return
  * widths are retained. All native work remains in the canonical typed leaves. */
 template <typename Context>
