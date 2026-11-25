@@ -234,9 +234,19 @@ pub(crate) unsafe fn init_grf_town_generator_names() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_townname_list(size: *mut usize) -> *const StringID {
     // SAFETY: The caller's contract.
-    let names = unsafe { &*GRF_TOWNNAME_NAMES.get() };
+    let names = unsafe { get_grf_town_name_list() };
     unsafe { size.write(names.len()) };
     names.as_ptr()
+}
+
+/// `GetGRFTownNameList`: valid until the next `NewGRF` load.
+///
+/// # Safety
+/// As [`get_grf_town_name`]; the list is used only until the next `NewGRF` load.
+#[allow(unsafe_code, reason = "the process-wide list")]
+pub(crate) unsafe fn get_grf_town_name_list() -> &'static [StringID] {
+    // SAFETY: The caller's contract.
+    unsafe { &*GRF_TOWNNAME_NAMES.get() }
 }
 
 /// `CleanUpGRFTownNames`.

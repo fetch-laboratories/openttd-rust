@@ -217,9 +217,7 @@ impl Drop for Fixture {
 }
 
 fn names() -> Vec<StringID> {
-    let mut size = 0;
-    let data = unsafe { openttd_rust_grf_townname_list(&raw mut size) };
-    unsafe { std::slice::from_raw_parts(data, size) }.to_vec()
+    unsafe { get_grf_town_name_list() }.to_vec()
 }
 
 #[test]

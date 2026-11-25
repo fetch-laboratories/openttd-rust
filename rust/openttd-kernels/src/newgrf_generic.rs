@@ -410,12 +410,16 @@ pub(crate) struct AiPurchaseCallback {
 
 /// `GetAiPurchaseCallbackResult`: 'execute' an AI purchase selection callback. Returns the
 /// answering file and callback value if successful, or `CALLBACK_FAILED`.
+///
+/// # Safety
+/// The returned handle is a call-time value: the caller uses it only before the loader's next
+/// reset, which destroys the file (`GRFFileRef`'s contract).
 #[allow(unsafe_code, reason = "the live industry specs")]
 #[allow(
     clippy::cast_possible_truncation,
     reason = "the uint16_t subst_id stored to an IndustryType (newgrf_generic.cpp)"
 )]
-pub(crate) fn get_ai_purchase_callback_result(
+pub(crate) unsafe fn get_ai_purchase_callback_result(
     args: &AiPurchaseCallback,
 ) -> (Option<GRFFileRef<'static>>, u16) {
     let mut object =
@@ -484,17 +488,20 @@ pub extern "C" fn openttd_rust_generic_ai(
     count: u8,
     station_size: u8,
 ) -> Result {
-    let (file, result) = get_ai_purchase_callback_result(&AiPurchaseCallback {
-        feature: GrfSpecFeature(feature),
-        cargo_type: CargoType(cargo_type),
-        default_selection,
-        src_industry: IndustryType(src_industry),
-        dst_industry: IndustryType(dst_industry),
-        distance,
-        event: AIConstructionEvent(event),
-        count,
-        station_size,
-    });
+    // SAFETY: Only the answering file's pointer leaves this call.
+    let (file, result) = unsafe {
+        get_ai_purchase_callback_result(&AiPurchaseCallback {
+            feature: GrfSpecFeature(feature),
+            cargo_type: CargoType(cargo_type),
+            default_selection,
+            src_industry: IndustryType(src_industry),
+            dst_industry: IndustryType(dst_industry),
+            distance,
+            event: AIConstructionEvent(event),
+            count,
+            station_size,
+        })
+    };
     Result {
         file: file.map_or(ptr::null(), GRFFileRef::as_ptr),
         result,

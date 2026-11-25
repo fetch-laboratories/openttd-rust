@@ -391,7 +391,7 @@
     "site": "rust/openttd-kernels/src/newgrf_townname.rs | fn openttd_rust_grf_townname_list | allow unsafe_code",
     "operation": "newgrf_townname::openttd_rust_grf_townname_list",
     "source_contract": "`GetGRFTownNameList` for its C++ facade (src/newgrf_townname.h).",
-    "reason": "The export attribute, the list's span and the caller's size output.",
+    "reason": "The export attribute, the list from `get_grf_town_name_list` and the caller's size output.",
     "retiring_owner": "#734",
     "retirement_condition": "Retires when the facade's C++ callers are ported."
   },
@@ -404,6 +404,18 @@
     "operation": "newgrf_townname::feature_town_name",
     "source_contract": "`FeatureTownName` (newgrf/newgrf_actf.cpp): `_cur_gps.grffile` and `_grf_townnames` and `_grf_townname_names` (newgrf_townname.cpp), file statics accessed under the game-state mutex.",
     "reason": "The handle of the loader's current file, the byte reader's strings and raw pointers to the entry and part lists, which only `DelGRFTownName` changes before the entry returns.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when the town-name lists are a Rust owner with safe access under the game-state mutex."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/newgrf_townname.rs | fn get_grf_town_name_list | allow unsafe_code",
+    "operation": "newgrf_townname::get_grf_town_name_list",
+    "source_contract": "`GetGRFTownNameList` over `_grf_townname_names` (newgrf_townname.cpp), a file static accessed under the game-state mutex and valid until the next NewGRF load.",
+    "reason": "A borrow of the process-wide list for the caller, which uses it only until the next NewGRF load.",
     "retiring_owner": "#734",
     "retirement_condition": "Retires when the town-name lists are a Rust owner with safe access under the game-state mutex."
   }
