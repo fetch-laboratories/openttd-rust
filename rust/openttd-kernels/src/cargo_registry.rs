@@ -661,6 +661,17 @@ pub(crate) fn file_cargo_count(file: Handle) -> usize {
     (services().file)(file).labels.size
 }
 
+/// `CargoSpec::Iterate()`: the native spec of each valid cargo, in cargo order, each looked
+/// up as the iteration advances.
+pub(crate) fn cargo_specs() -> impl Iterator<Item = *const c_void> {
+    let s = services();
+    crate::cargotype::iterate(
+        |cargo| (s.spec)(cargo),
+        |spec| is_cargo_spec_valid((s.bitnum)(*spec)),
+    )
+    .map(|(_, spec)| spec)
+}
+
 /// Determines the first active cargo slot with a certain town effect.
 /// `FindFirstCargoWithTownAcceptanceEffect`, in active cargo-slot order.
 pub(crate) fn first_town_acceptance(effect: u8) -> Option<u8> {

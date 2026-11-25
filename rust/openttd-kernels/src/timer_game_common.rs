@@ -424,9 +424,6 @@ pub struct ClockTown {
 #[repr(C)]
 pub struct ClockCompany {
     pub services: *const crate::company::Services,
-    pub settings: extern "C" fn() -> crate::company::EconomySettings,
-    pub month: extern "C" fn() -> crate::company::Month,
-    pub year: extern "C" fn() -> crate::company::Year,
 }
 macro_rules! owner_callback {
     ($name:ident, $ty:ty, $s:ident, $body:block) => {
@@ -497,24 +494,24 @@ owner_callback!(
     }
 );
 owner_callback!(openttd_rust_clock_economy_month_abi, ClockCompany, c, {
-    crate::company::openttd_rust_economy_month(&*c.services, &(c.month)());
+    crate::company::economy_companies_monthly(&*c.services);
 });
 owner_callback!(
     openttd_rust_clock_economy_calendar_month_abi,
     ClockCompany,
     c,
     {
-        crate::company::openttd_rust_economy_calendar_month(&*c.services, &(c.settings)());
+        crate::company::calendar_inflation_monthly(&*c.services);
     }
 );
 owner_callback!(openttd_rust_clock_company_yearly_abi, ClockCompany, c, {
-    crate::company::openttd_rust_company_yearly(&*c.services, &(c.year)());
+    crate::company::economy_companies_yearly(&*c.services);
 });
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDClockIndustry" ["clocks"] => ClockIndustry { builder, services };
     "OpenTTDClockTown" ["clocks"] => ClockTown { leaves, shared };
-    "OpenTTDClockCompany" ["clocks"] => ClockCompany { services, settings, month, year };
+    "OpenTTDClockCompany" ["clocks"] => ClockCompany { services };
     "OpenTTDClockState" ["clocks"] => ClockState { calendar_year, calendar_date, economy_year, economy_date, days_since_last_month, calendar_fraction, calendar_subfraction, economy_fraction, calendar_month, economy_month };
     "OpenTTDClockPeriod" ["clocks"] => Period { trigger, priority };
     "OpenTTDEconomyClockPeriod" ["clocks"] => Period { trigger, priority };

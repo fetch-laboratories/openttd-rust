@@ -910,7 +910,7 @@ pub(crate) unsafe fn terraform_tile_industry(
                 true
             };
             if allow {
-                let foundation = crate::company::price(usize::from(Price::PR_BUILD_FOUNDATION.0));
+                let foundation = crate::company::price(Price::PR_BUILD_FOUNDATION);
                 unsafe {
                     (c.expense_money)(out, ExpensesType::EXPENSES_CONSTRUCTION.0, foundation);
                 };

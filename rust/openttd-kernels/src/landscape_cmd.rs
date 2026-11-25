@@ -100,14 +100,14 @@ impl<'a> World<'a> {
         if c.is_null() {
             i32::MAX
         } else {
-            (unsafe { addr_of!((*c).clear).read() >> 16 }) as i32
+            (unsafe { addr_of!((*c).clear_limit).read() >> 16 }) as i32
         }
     }
     fn terraform_limit(c: *mut crate::company::Finances) -> i32 {
         if c.is_null() {
             i32::MAX
         } else {
-            (unsafe { addr_of!((*c).terraform).read() >> 16 }) as i32
+            (unsafe { addr_of!((*c).terraform_limit).read() >> 16 }) as i32
         }
     }
     fn indirectly_cleared(&self, t: u32) -> bool {
@@ -343,7 +343,7 @@ impl<'a> World<'a> {
             }
             if !(self.a.buoy)(tile) || (self.s.tile_owner)(tile) == (self.s.current_company)() {
                 do_clear = true;
-                out.add_money(crate::company::price(if class == WATER_CLASS_CANAL.0 {
+                out.add_money(crate::company::price_raw(if class == WATER_CLASS_CANAL.0 {
                     crate::economy_type::PR_CLEAR_CANAL
                 } else {
                     crate::economy_type::PR_CLEAR_WATER
@@ -374,7 +374,7 @@ impl<'a> World<'a> {
         if flags & F::EXECUTE != 0 {
             if !company.is_null() {
                 unsafe {
-                    let p = addr_of_mut!((*company).clear);
+                    let p = addr_of_mut!((*company).clear_limit);
                     p.write(p.read().wrapping_sub(1 << 16));
                 }
             }
@@ -628,7 +628,7 @@ impl<'a> World<'a> {
             }
             if !company.is_null() {
                 unsafe {
-                    let p = addr_of_mut!((*company).terraform);
+                    let p = addr_of_mut!((*company).terraform_limit);
                     p.write(
                         p.read()
                             .wrapping_sub((ts.heights.len() as u32).wrapping_shl(16)),
@@ -679,7 +679,7 @@ impl<'a> World<'a> {
         }
         ts.dirty.insert(tile);
         ts.heights.insert(tile, height);
-        out.set(crate::company::price(crate::economy_type::PR_TERRAFORM));
+        out.set(crate::company::price_raw(crate::economy_type::PR_TERRAFORM));
         for dir in 0..4 {
             let neighbour = self
                 .map

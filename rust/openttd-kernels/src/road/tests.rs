@@ -130,6 +130,8 @@ mod controller {
         industry: 0,
         town: 0,
         company: 0,
+        other_company: 0,
+        value: 0,
         text: std::ptr::null(),
         text_length: 0,
     };
@@ -454,6 +456,8 @@ mod controller {
             industry: 0,
             town: 0,
             company: owner,
+            other_company: 0,
+            value: 0,
             text: std::ptr::null(),
             text_length: 0,
         };

@@ -1516,7 +1516,6 @@ pub(crate) const NETWORK_TCP: crate::network_tcp::Services = crate::network_tcp:
 
 /// `crate::command_post::Services` with every entry unreachable.
 pub(crate) const COMMAND_POST: crate::command_post::Services = crate::command_post::Services {
-    assign_company_cost: unreachable2,
     command: unreachable0,
     control_begin: unreachable1,
     control_end: unreachable1,

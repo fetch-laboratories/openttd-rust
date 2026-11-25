@@ -5,7 +5,6 @@ use super::founding::FoundingServices;
 use super::{Engine, State, TownAction, TownActions, TownId, TownRef, engine};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, OWNER_NONE};
-use crate::economy_type::PR_TOWN_ACTION;
 use crate::error::{WarningLevel, show_error_message};
 use crate::movement::native_assert;
 use crate::newgrf::GrfSpecFeature;
@@ -113,9 +112,15 @@ fn town_action_road_rebuild_news(minutes: bool, current: CompanyID, town: TownId
     crate::game::new_event(&ScriptEvent::road_reconstruction(current, town));
 }
 /// `TownActionBuyRights`' news message and script events for `current`'s rights in `town`;
-/// `minutes` is `TimerGameEconomy::UsingWallclockUnits()`.
-fn town_action_buy_rights_news(minutes: bool, current: CompanyID, town: TownId) {
-    let cni = CompanyNewsInformation::new(STR_NEWS_EXCLUSIVE_RIGHTS_TITLE, current, None);
+/// `c` is `Company::Get(_current_company)` and `minutes` is
+/// `TimerGameEconomy::UsingWallclockUnits()`.
+fn town_action_buy_rights_news(
+    minutes: bool,
+    c: *const crate::company_type::OpenTTDCompany,
+    current: CompanyID,
+    town: TownId,
+) {
+    let cni = CompanyNewsInformation::new(STR_NEWS_EXCLUSIVE_RIGHTS_TITLE, c, None);
     let company_name = cni.company_name();
     let message = get_encoded_string(
         if minutes {
@@ -260,12 +265,7 @@ impl<'a> Commands<'a> {
             // Actions worth more than this are not able to be performed.
             // SAFETY: Canonical resolver returns a live owner or null as GetAvailableMoney permits.
             let c = unsafe { &*self.f.command };
-            let avail = unsafe {
-                crate::company::openttd_rust_company_available_money(
-                    (c.finance.company_finances)(cid.0),
-                    (c.infinite_money)(),
-                )
-            };
+            let avail = crate::company::get_available_money(c.shared, c.finance, cid);
             // Check the action bits for validity and if they are valid add them.
             for cur in (0..TownAction::End.0).map(TownAction) {
                 // Is the company prohibited from bribing?
@@ -310,9 +310,9 @@ impl<'a> Commands<'a> {
                 {
                     continue;
                 }
-                let cost = i64::from(get_town_action_cost(cur))
-                    .saturating_mul(crate::company::price(PR_TOWN_ACTION))
-                    >> 8;
+                let cost = i64::from(get_town_action_cost(cur)).saturating_mul(
+                    crate::company::price(crate::economy_type::Price::PR_TOWN_ACTION),
+                ) >> 8;
                 if avail >= cost {
                     buttons.set(cur);
                 }
@@ -1072,7 +1072,7 @@ pub(crate) unsafe fn cmd_do_town_action(
         c.error(out);
         return;
     }
-    let price = crate::company::price(PR_TOWN_ACTION)
+    let price = crate::company::price(crate::economy_type::Price::PR_TOWN_ACTION)
         .saturating_mul(i64::from(get_town_action_cost(action)))
         >> 8;
     if !c.town_action(t, out, flags, action) {
@@ -1169,9 +1169,13 @@ impl Commands<'_> {
                     );
                     set_window_classes_dirty(WindowClass::WC_STATION_VIEW);
                     /* Spawn news message */
+                    let current = CompanyID((self.shared.current_company)());
+                    // SAFETY: The process-lifetime command and company tables.
+                    let company = unsafe { &*((*self.f.command).company)() };
                     town_action_buy_rights_news(
                         self.using_wallclock_units(),
-                        CompanyID((self.shared.current_company)()),
+                        (company.identity.company)(current),
+                        current,
                         t.id,
                     );
                 }
@@ -1351,7 +1355,9 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod news_tests {
     use super::{CompanyID, TownId, town_action_buy_rights_news, town_action_road_rebuild_news};
-    use crate::news_func::testing::{Effect, Param, company_news_name, encoded, formatted, take};
+    use crate::news_func::testing::{
+        Effect, Param, company, company_news_name, encoded, formatted, take,
+    };
     use crate::news_type::{AdviceType, NewsFlags, NewsReference, NewsStyle, NewsType};
     use crate::script_event_types::ScriptEvent;
     use crate::table::strings::{
@@ -1411,16 +1417,16 @@ mod news_tests {
             (true, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES.0),
             (false, STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS.0),
         ] {
-            town_action_buy_rights_news(minutes, CompanyID(3), TownId(7));
-            let name = company_news_name(3);
+            town_action_buy_rights_news(minutes, company(3), CompanyID(3), TownId(7));
+            let name = company_news_name(company(3));
             let event = ScriptEvent::exclusive_transport_rights(CompanyID(3), TownId(7));
             assert_eq!(
                 take(),
                 [
                     Effect::CompanyNewsInformation(
                         STR_NEWS_EXCLUSIVE_RIGHTS_TITLE.0,
-                        3,
-                        CompanyID::INVALID.0
+                        company(3),
+                        std::ptr::null()
                     ),
                     news(
                         encoded(id, &[Param::N(7), Param::S(&name)]),

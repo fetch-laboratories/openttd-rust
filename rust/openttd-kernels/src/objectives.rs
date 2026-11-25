@@ -243,7 +243,7 @@ pub unsafe extern "C" fn openttd_rust_remove_goal_abi(s: &Services, flags: u16, 
         }
         if execute(flags) {
             let company = *(s.goal_company)(goal);
-            (s.company().delete_goal)(u32::from(id.0));
+            (s.company().delete_goal)(id);
             goal_dirty(company);
             if (s.goal_count)() == 0 {
                 invalidate_window_data(WindowClass::WC_MAIN_TOOLBAR, WindowNumber(0), 0, false);
@@ -719,7 +719,7 @@ pub unsafe extern "C" fn openttd_rust_remove_story_page_abi(
         }
         if execute(flags) {
             delete_elements(s, id);
-            (s.company().delete_story_page)(u32::from(id.0));
+            (s.company().delete_story_page)(id);
             invalidate_window_classes_data(WindowClass::WC_STORY_BOOK, -1, false);
             if (s.page_count)() == 0 {
                 invalidate_window_data(WindowClass::WC_MAIN_TOOLBAR, WindowNumber(0), 0, false);

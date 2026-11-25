@@ -75,7 +75,7 @@ pub extern "C" fn openttd_rust_script_bridge_price(
     }
     let length = length.clamp(0, i64::from(i32::MAX)) as i32;
     let factor = crate::bridge::calc_bridge_len_cost_factor(length);
-    crate::company::price(crate::economy_type::PR_BUILD_BRIDGE)
+    crate::company::price_raw(crate::economy_type::PR_BUILD_BRIDGE)
         .saturating_mul(i64::from(factor))
         .saturating_mul(i64::from((tb.price)(bridge_type)))
         >> 8

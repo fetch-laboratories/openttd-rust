@@ -266,34 +266,46 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.ambient = &_settings_client.sound.ambient,
 	.climate = reinterpret_cast<const uint8_t *>(&_settings_game.game_creation.landscape),
 	.competitor_interval = &_settings_game.difficulty.competitors_interval,
+	.construction_cost = &_settings_game.difficulty.construction_cost,
 	.construction_limits = &_settings_game.construction.limits,
 	.custom_industry_number = &_settings_game.game_creation.custom_industry_number,
 	.disable_elrails = &_settings_game.vehicle.disable_elrails,
 	.dist_local_authority = &_settings_game.economy.dist_local_authority,
+	.economy = &_settings_game.difficulty.economy,
 	.economy_type = reinterpret_cast<const uint8_t *>(&_settings_game.economy.type),
 	.extra_tree_placement = &_settings_game.construction.extra_tree_placement,
 	.freeform_edges = &_settings_game.construction.freeform_edges,
 	.generation_seed = &_settings_game.game_creation.generation_seed,
+	.give_money = &_settings_game.economy.give_money,
 	.height_limit = &_settings_game.construction.map_height_limit,
 	.heightmap_height = &_settings_game.game_creation.heightmap_height,
 	.industry_cargo_scale = &_settings_game.economy.industry_cargo_scale,
 	.industry_density = &_settings_game.difficulty.industry_density,
 	.industry_platform = &_settings_game.construction.industry_platform,
+	.infinite_money = &_settings_game.difficulty.infinite_money,
+	.inflation = &_settings_game.economy.inflation,
+	.infrastructure_maintenance = &_settings_game.economy.infrastructure_maintenance,
+	.initial_interest = &_settings_game.difficulty.initial_interest,
 	.land_generator = &_settings_game.game_creation.land_generator,
 	.line_reverse_mode = &_settings_game.difficulty.line_reverse_mode,
 	.lost_vehicle_warn = &_settings_client.gui.lost_vehicle_warn,
 	.map_x = &_settings_game.game_creation.map_x,
 	.map_y = &_settings_game.game_creation.map_y,
+	.max_aircraft = &_settings_game.vehicle.max_aircraft,
 	.max_bridge_length = &_settings_game.construction.max_bridge_length,
 	.max_companies = &_settings_client.network.max_companies,
 	.max_competitors = &_settings_game.difficulty.max_no_competitors,
+	.max_loan = &_settings_game.difficulty.max_loan,
+	.max_roadveh = &_settings_game.vehicle.max_roadveh,
 	.max_search_nodes = &_settings_game.pf.yapf.max_search_nodes,
+	.max_ships = &_settings_game.vehicle.max_ships,
 	.max_train_length = &_settings_game.vehicle.max_train_length,
 	.max_trains = &_settings_game.vehicle.max_trains,
 	.maximum_go_to_depot_penalty = &_settings_game.pf.yapf.maximum_go_to_depot_penalty,
 	.multiple_industry_per_town = &_settings_game.economy.multiple_industry_per_town,
 	.never_expire_airports = &_settings_game.station.never_expire_airports,
 	.never_expire_vehicles = &_settings_game.vehicle.never_expire_vehicles,
+	.new_year = &_settings_client.sound.new_year,
 	.no_servicing_if_no_breakdowns = &_settings_game.order.no_servicing_if_no_breakdowns,
 	.oil_refinery_limit = &_settings_game.game_creation.oil_refinery_limit,
 	.old_vehicle_warn = &_settings_client.gui.old_vehicle_warn,
@@ -344,6 +356,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.select_goods = &_settings_game.order.selectgoods,
 	.ship_curve45_penalty = &_settings_game.pf.yapf.ship_curve45_penalty,
 	.ship_curve90_penalty = &_settings_game.pf.yapf.ship_curve90_penalty,
+	.show_finances = &_settings_client.gui.show_finances,
 	.smoke_amount = &_settings_game.vehicle.smoke_amount,
 	.starting_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour),
 	.station_noise = &_settings_game.economy.station_noise_level,
@@ -354,6 +367,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.tree_placer = &_settings_game.game_creation.tree_placer,
 	.used_liveries = &_loaded_newgrf_features.used_liveries,
 	.vehicle_breakdowns = &_settings_game.difficulty.vehicle_breakdowns,
+	.vehicle_costs = &_settings_game.difficulty.vehicle_costs,
 	.wagon_speed_limits = &_settings_game.vehicle.wagon_speed_limits,
 	.wait_for_pbs_path = &_settings_game.pf.wait_for_pbs_path,
 	.wait_oneway_signal = &_settings_game.pf.wait_oneway_signal,
@@ -557,6 +571,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.is_road_depot = Shared_is_road_depot,
 	.is_water_tile = MapSvcIsWaterTile,
 	.local_company = RustLocalCompanyID,
+	.set_local_company_id = [](uint8_t company) noexcept { _local_company = CompanyID(company); },
 	.map = &_rust_map_statics,
 	.settings = &_rust_setting_addresses,
 	.map_max_x = SharedMapMaxX,
@@ -930,9 +945,8 @@ static const OpenTTDNewsServices _rust_news_services{
 		AssertRustEncoded({.bytes = nullptr, .length = 0, .diagnostic_count = 0, .assertion_offset = 0, .assertion_length = length, .assertion_codepoint = codepoint, .apply = 0, .assertion_kind = 2}, {});
 	},
 	.company_news_company_name = [](const NewsAllocatedData *data, OpenTTDRustStringSink sink, void *target) noexcept { RustSinkString(sink, target, static_cast<const CompanyNewsInformation *>(data)->company_name); },
-	.company_news_information = [](uint32_t title, uint8_t company, uint8_t other) noexcept -> NewsAllocatedData * {
-		return new CompanyNewsInformation(StringID{title}, Company::Get(CompanyID{company}), CompanyID{other} == CompanyID::Invalid() ? nullptr : Company::Get(CompanyID{other}));
-	},
+	.company_news_information = [](uint32_t title, const Company *c, const Company *other) noexcept -> NewsAllocatedData * { return new CompanyNewsInformation(StringID{title}, c, other); },
+	.company_news_other_company_name = [](const NewsAllocatedData *data, OpenTTDRustStringSink sink, void *target) noexcept { RustSinkString(sink, target, static_cast<const CompanyNewsInformation *>(data)->other_company_name); },
 	.delete_industry_news = [](uint16_t industry) noexcept { DeleteIndustryNews(IndustryID{industry}); },
 	.delete_station_news = [](uint16_t station) noexcept { DeleteStationNews(StationID{station}); },
 	.delete_vehicle_news = [](uint32_t vehicle, uint8_t advice_type) noexcept { DeleteVehicleNews(VehicleID{vehicle}, static_cast<AdviceType>(advice_type)); },
@@ -975,6 +989,11 @@ static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept
 		case ScriptEvent::ET_SUBSIDY_OFFER_EXPIRED: return new ScriptEventSubsidyOfferExpired(SubsidyID{e.subsidy});
 		case ScriptEvent::ET_SUBSIDY_AWARDED: return new ScriptEventSubsidyAwarded(SubsidyID{e.subsidy});
 		case ScriptEvent::ET_SUBSIDY_EXPIRED: return new ScriptEventSubsidyExpired(SubsidyID{e.subsidy});
+		case ScriptEvent::ET_COMPANY_NEW: return new ScriptEventCompanyNew(CompanyID{e.company});
+		case ScriptEvent::ET_COMPANY_IN_TROUBLE: return new ScriptEventCompanyInTrouble(CompanyID{e.company});
+		case ScriptEvent::ET_COMPANY_ASK_MERGER: return new ScriptEventCompanyAskMerger(CompanyID{e.company}, Money{e.value});
+		case ScriptEvent::ET_COMPANY_MERGER: return new ScriptEventCompanyMerger(CompanyID{e.company}, CompanyID{e.other_company});
+		case ScriptEvent::ET_COMPANY_BANKRUPT: return new ScriptEventCompanyBankrupt(CompanyID{e.company});
 		case ScriptEvent::ET_VEHICLE_CRASHED: return new ScriptEventVehicleCrashed(VehicleID{e.vehicle}, TileIndex{e.tile}, static_cast<ScriptEventVehicleCrashed::CrashReason>(e.crash_reason), e.victims, CompanyID{e.company});
 		case ScriptEvent::ET_VEHICLE_WAITING_IN_DEPOT: return new ScriptEventVehicleWaitingInDepot(VehicleID{e.vehicle});
 		case ScriptEvent::ET_INDUSTRY_OPEN: return new ScriptEventIndustryOpen(IndustryID{e.industry});

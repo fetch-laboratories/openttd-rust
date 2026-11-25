@@ -725,9 +725,7 @@ impl<'a> Ctx<'a> {
                     return out.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
                 }
             }
-            out.add_money(crate::company::price(usize::from(
-                Price::PR_BUILD_FOUNDATION.0,
-            )));
+            out.add_money(crate::company::price(Price::PR_BUILD_FOUNDATION));
         }
         /* The level of this tile must be equal to allowed_z. */
         if *allowed_z < 0 {
@@ -1818,14 +1816,10 @@ impl Ctx<'_> {
             if !self.is_rail_station_tile(cur_tile) || self.get_rail_station_axis(cur_tile) != axis
             {
                 cost.add_money(ret_cost);
-                cost.add_money(crate::company::price(usize::from(
-                    Price::PR_BUILD_STATION_RAIL.0,
-                )));
+                cost.add_money(crate::company::price(Price::PR_BUILD_STATION_RAIL));
                 cost.add_money((self.rail().rail_build_cost)(rt.0));
                 if length_price_ready {
-                    cost.add_money(crate::company::price(usize::from(
-                        Price::PR_BUILD_STATION_RAIL_LENGTH.0,
-                    )));
+                    cost.add_money(crate::company::price(Price::PR_BUILD_STATION_RAIL_LENGTH));
                     length_price_ready = false;
                 }
             }
@@ -2443,14 +2437,11 @@ impl Ctx<'_> {
     }
     /// `PR_CLEAR_WAYPOINT_RAIL` or `PR_CLEAR_STATION_RAIL`.
     fn rail_removal_cost(waypoint: bool) -> i64 {
-        crate::company::price(usize::from(
-            (if waypoint {
-                Price::PR_CLEAR_WAYPOINT_RAIL
-            } else {
-                Price::PR_CLEAR_STATION_RAIL
-            })
-            .0,
-        ))
+        crate::company::price(if waypoint {
+            Price::PR_CLEAR_WAYPOINT_RAIL
+        } else {
+            Price::PR_CLEAR_STATION_RAIL
+        })
     }
     /// `RemoveFromRailBaseStation`'s execution for one rail station tile.
     /// Returns the train whose reservation was freed, for the caller to restore.
@@ -2587,9 +2578,7 @@ impl Ctx<'_> {
             if keep_rail || self.is_station_tile_blocked(tile) {
                 /* Don't refund the 'steel' of the track when we keep the
                  *  rail, or when the tile didn't have any rail at all. */
-                total_cost.add_money(
-                    crate::company::price(usize::from(Price::PR_CLEAR_RAIL.0)).saturating_neg(),
-                );
+                total_cost.add_money(crate::company::price(Price::PR_CLEAR_RAIL).saturating_neg());
             }
             if !flags.test(DoCommandFlag::Execute) {
                 continue;
@@ -3407,7 +3396,7 @@ impl Ctx<'_> {
         };
         /* Total road stop cost. */
         let unit_cost = if roadstopspec.is_null() {
-            crate::company::price(usize::from(price.0))
+            crate::company::price(price)
         } else {
             crate::newgrf_roadstop::get_build_cost(self.s, roadstopspec, price)
         };
@@ -3805,7 +3794,7 @@ impl Ctx<'_> {
             Price::PR_CLEAR_STATION_BUS
         };
         cost.set(if spec.is_null() {
-            crate::company::price(usize::from(category.0))
+            crate::company::price(category)
         } else {
             crate::newgrf_roadstop::get_clear_cost(self.s, spec, category)
         });
@@ -3897,7 +3886,7 @@ impl Ctx<'_> {
             }
         }
         cost.set(if spec.is_null() {
-            crate::company::price(usize::from(Price::PR_CLEAR_STATION_TRUCK.0))
+            crate::company::price(Price::PR_CLEAR_STATION_TRUCK)
         } else {
             crate::newgrf_roadstop::get_clear_cost(self.s, spec, Price::PR_CLEAR_STATION_TRUCK)
         });
@@ -4575,9 +4564,7 @@ impl Ctx<'_> {
             return cost.error(STR_ERROR_TOO_CLOSE_TO_ANOTHER_AIRPORT.0);
         }
         for _ in self.airport_tiles(spec, layout, tile) {
-            cost.add_money(crate::company::price(usize::from(
-                Price::PR_BUILD_STATION_AIRPORT.0,
-            )));
+            cost.add_money(crate::company::price(Price::PR_BUILD_STATION_AIRPORT));
         }
         if !flags.test(DoCommandFlag::Execute) {
             return;
@@ -4690,9 +4677,7 @@ impl Ctx<'_> {
             if !ret.ok() {
                 return cost.take(ret);
             }
-            cost.add_money(crate::company::price(usize::from(
-                Price::PR_CLEAR_STATION_AIRPORT.0,
-            )));
+            cost.add_money(crate::company::price(Price::PR_CLEAR_STATION_AIRPORT));
             if flags.test(DoCommandFlag::Execute) {
                 crate::ground::do_clear_square(tile_cur, self.shared);
                 delete_newgrf_inspect_window(GrfSpecFeature::GSF_AIRPORTTILES, tile_cur.0);
@@ -5057,9 +5042,7 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        cost.set(crate::company::price(usize::from(
-            Price::PR_BUILD_STATION_DOCK.0,
-        )));
+        cost.set(crate::company::price(Price::PR_BUILD_STATION_DOCK));
         crate::landscape_cmd::clear_command(self.command, ret.0, tile.0, flags.0);
         if !ret.ok() {
             return cost.take(ret);
@@ -5318,9 +5301,7 @@ impl Ctx<'_> {
             self.clear_docking_tiles_checking_neighbours(tile2);
             self.update_ships_for_removed_dock(st);
         }
-        cost.set(crate::company::price(usize::from(
-            Price::PR_CLEAR_STATION_DOCK.0,
-        )));
+        cost.set(crate::company::price(Price::PR_CLEAR_STATION_DOCK));
     }
     /// `BuildOilRig`.
     fn build_oil_rig(&self, ret: Cost<'_>, tile: TileIndex) {
@@ -5762,9 +5743,7 @@ impl Ctx<'_> {
                 _ => false,
             };
             if allowed {
-                return cost.set(crate::company::price(usize::from(
-                    Price::PR_BUILD_FOUNDATION.0,
-                )));
+                return cost.set(crate::company::price(Price::PR_BUILD_FOUNDATION));
             }
         }
         crate::landscape_cmd::clear_command(self.command, cost.0, tile.0, flags.0);

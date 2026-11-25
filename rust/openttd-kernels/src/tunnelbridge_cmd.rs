@@ -19,7 +19,7 @@
 )]
 use crate::bridge::{MAX_BRIDGES, calc_bridge_len_cost_factor, get_bridge_foundation};
 use crate::command_type::DoCommandFlag;
-use crate::company::price;
+use crate::company::price_raw;
 use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
@@ -304,11 +304,11 @@ impl<'a> World<'a> {
         if foundation == FOUNDATION_NONE {
             out.zero();
         } else {
-            out.set(price(PR_BUILD_FOUNDATION));
+            out.set(price_raw(PR_BUILD_FOUNDATION));
         }
     }
     fn clear_cost(&self, tile: u32, base: usize) -> i64 {
-        let mut result = price(base);
+        let mut result = price_raw(base);
         match crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) {
             ROAD => {
                 let road = (self.s.road_type)(tile);
@@ -330,7 +330,7 @@ impl<'a> World<'a> {
                         .0,
                 ));
             }
-            WATER => result = price(PR_CLEAR_AQUEDUCT),
+            WATER => result = price_raw(PR_CLEAR_AQUEDUCT),
             _ => (),
         }
         result
@@ -808,12 +808,12 @@ impl<'a> World<'a> {
             if transport != WATER {
                 cost.add_money(
                     i64::from(length)
-                        .saturating_mul(price(PR_BUILD_BRIDGE))
+                        .saturating_mul(price_raw(PR_BUILD_BRIDGE))
                         .saturating_mul(i64::from((self.a.price)(bridge_type)))
                         >> 8,
                 );
             } else {
-                cost.add_money(i64::from(length).saturating_mul(price(PR_BUILD_AQUEDUCT)));
+                cost.add_money(i64::from(length).saturating_mul(price_raw(PR_BUILD_AQUEDUCT)));
             }
         }
     }
@@ -909,10 +909,10 @@ impl<'a> World<'a> {
                 coefficient += 1;
                 bump = bump.wrapping_mul(2);
             }
-            cost.add_money(price(PR_BUILD_TUNNEL));
+            cost.add_money(price_raw(PR_BUILD_TUNNEL));
             cost.add_money(cost.money() >> coefficient);
         }
-        cost.add_money(price(PR_BUILD_TUNNEL));
+        cost.add_money(price_raw(PR_BUILD_TUNNEL));
         cost.add_money(ret.money());
         END_TILE.store(end, Ordering::Relaxed);
         if tiles > i32::from((self.a.max_tunnel_length)()) {
@@ -940,7 +940,7 @@ impl<'a> World<'a> {
             }
             cost.add_money(ret.money());
         }
-        cost.add_money(price(PR_BUILD_TUNNEL));
+        cost.add_money(price_raw(PR_BUILD_TUNNEL));
         match transport {
             ROAD => cost.add_money(
                 crate::road_cost::build_cost(self.s, roadtype)
@@ -1529,7 +1529,7 @@ impl<'a> World<'a> {
             self.slope(ret, north, axis, &mut slope_new, &mut z_new);
             if ret.ok() && z_old == z_new && slope_old == slope_new {
                 w::hit(w::TB_AUTOSLOPE);
-                return out.set(price(PR_BUILD_FOUNDATION));
+                return out.set(price_raw(PR_BUILD_FOUNDATION));
             }
         }
         self.clear_command(out, tile, flags);

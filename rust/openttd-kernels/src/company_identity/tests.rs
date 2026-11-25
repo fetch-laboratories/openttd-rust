@@ -242,7 +242,19 @@ fn news(effect: &News) {
             format!("Game {} {} {}", event.r#type.0, event.company, text(name))
         }
         News::CompanyNewsInformation(title, company, other) => {
-            format!("CompanyNewsInformation {title} {company} {other}")
+            // A handle's company; a null `other` is the invalid company.
+            let id = |c: *const OpenTTDCompany| {
+                if c.is_null() {
+                    usize::from(CompanyID::INVALID.0)
+                } else {
+                    c.addr() - 1
+                }
+            };
+            format!(
+                "CompanyNewsInformation {title} {} {}",
+                id(company),
+                id(other)
+            )
         }
         News::News { .. } => "AddNewsItem".to_owned(),
         effect => panic!("unexpected news call {effect:?}"),
@@ -683,7 +695,7 @@ fn generate_company_name_launches_an_ai_company() {
             .into_iter()
             .filter(|e| matches!(e, News::News { .. }))
             .collect();
-        let name = crate::news_func::testing::company_news_name(0);
+        let name = crate::news_func::testing::company_news_name(handle(0));
         let expected: Vec<News> = if ai {
             vec![News::News {
                 headline: encoded(

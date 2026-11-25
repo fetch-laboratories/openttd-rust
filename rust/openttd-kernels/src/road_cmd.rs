@@ -248,7 +248,7 @@ fn simple_slope(slope: u8) -> u8 {
     }
 }
 fn price(index: usize) -> i64 {
-    crate::company::price(index)
+    crate::company::price_raw(index)
 }
 /// Original `CanConvertUnownedRoadType` permission helper.
 fn can_convert_unowned_road_type(owner: u8, rtt: u8) -> bool {

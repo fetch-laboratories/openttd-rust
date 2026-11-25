@@ -24,7 +24,7 @@ use crate::bitmath_func::gb;
 use crate::clear_map::{ClearGround, get_clear_density, get_clear_ground, is_clear_ground};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
-use crate::economy_type::{ExpensesType, PR_BUILD_TREES, PR_CLEAR_TREES};
+use crate::economy_type::ExpensesType;
 use crate::geometry_type::Point;
 use crate::landscape_type::LandscapeType;
 use crate::map_func::{Map, TileTypeAccess, World};
@@ -902,7 +902,7 @@ fn cmd_plant_tree(
     } else {
         // SAFETY: A valid company's finances; one field-sized load.
         gb(
-            unsafe { std::ptr::addr_of!((*company).tree).read() },
+            unsafe { std::ptr::addr_of!((*company).tree_limit).read() },
             16,
             16,
         )
@@ -913,7 +913,7 @@ fn cmd_plant_tree(
         if !company.is_null() {
             // SAFETY: As above; one field-sized load and store with no call between.
             unsafe {
-                let field = std::ptr::addr_of_mut!((*company).tree);
+                let field = std::ptr::addr_of_mut!((*company).tree_limit);
                 field.write(field.read().wrapping_sub(1 << 16));
             }
         }
@@ -951,7 +951,8 @@ fn cmd_plant_tree(
                         }
                         // 2x as expensive to add more trees to an existing tile
                         cost = cost.saturating_add(
-                            crate::company::price(PR_BUILD_TREES).saturating_mul(2),
+                            crate::company::price(crate::economy_type::Price::PR_BUILD_TREES)
+                                .saturating_mul(2),
                         );
                     }
                 }
@@ -1080,7 +1081,9 @@ fn cmd_plant_tree(
                                 );
                             }
                         }
-                        cost = cost.saturating_add(crate::company::price(PR_BUILD_TREES));
+                        cost = cost.saturating_add(crate::company::price(
+                            crate::economy_type::Price::PR_BUILD_TREES,
+                        ));
                     }
                 }
 
@@ -1136,7 +1139,9 @@ pub(crate) fn clear_tile_trees(c: &Trees, tile: TileIndex, flags: DoCommandFlags
         crate::ground::do_clear_square(tile, s);
     }
 
-    i64::from(num).saturating_mul(crate::company::price(PR_CLEAR_TREES))
+    i64::from(num).saturating_mul(crate::company::price(
+        crate::economy_type::Price::PR_CLEAR_TREES,
+    ))
 }
 
 /// `TileLoopTreesDesert`.

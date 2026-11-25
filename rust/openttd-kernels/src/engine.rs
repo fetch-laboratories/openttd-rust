@@ -659,9 +659,9 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
         }
         from = u32::from(c.id) + 1;
         let finances = unsafe { finances(s, c.id) };
-        if read_field!(finances, preview) != 0
+        if read_field!(finances, block_preview) != 0
             || read_field!(e.state, preview_asked) & (1 << c.id) != 0
-            || read_field!(finances, old[0].performance) <= performance
+            || read_field!(finances, old_economy[0].performance_history) <= performance
         {
             continue;
         }
@@ -685,7 +685,7 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
             {
                 continue;
             }
-            performance = read_field!(finances, old[0].performance);
+            performance = read_field!(finances, old_economy[0].performance_history);
             best = c.id;
             break;
         }
@@ -782,7 +782,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
             if unsafe { call!(s, company_engine_count, c.id, e.id) } == 0 {
                 crate::witness::hit(crate::witness::ENGINE_PENALTY);
                 let finances = unsafe { finances(s, c.id) };
-                write_field!(finances, preview, 20);
+                write_field!(finances, block_preview, 20);
             }
         }
     }

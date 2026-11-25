@@ -95,14 +95,14 @@ impl CompanyMask {
         self.0 |= Self::bit(company);
         self
     }
+    /// `BaseBitSet::Reset`.
+    pub const fn reset(&mut self, company: CompanyID) -> &mut Self {
+        self.0 &= !Self::bit(company);
+        self
+    }
     /// `BaseBitSet::Set()`: every company.
     pub const fn set_all(&mut self) -> &mut Self {
         self.0 = Self::MASK;
-        self
-    }
-    /// `BaseBitSet::Reset()`: no company.
-    pub const fn reset_all(&mut self) -> &mut Self {
-        self.0 = 0;
         self
     }
 }

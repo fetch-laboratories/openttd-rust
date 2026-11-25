@@ -2,10 +2,10 @@
 //! Canonical road price operations shared by native and Rust command owners.
 use crate::services::Services;
 pub(crate) fn build_cost(s: &Services, road_type: u8) -> i64 {
-    crate::company::price(2).saturating_mul(i64::from((s.road_cost_multiplier)(road_type))) >> 3
+    crate::company::price_raw(2).saturating_mul(i64::from((s.road_cost_multiplier)(road_type))) >> 3
 }
 pub(crate) fn clear_cost(s: &Services, road_type: u8) -> i64 {
-    let clear = crate::company::price(41);
+    let clear = crate::company::price_raw(41);
     if crate::road::road_type_is_road_raw(road_type) {
         return clear;
     }

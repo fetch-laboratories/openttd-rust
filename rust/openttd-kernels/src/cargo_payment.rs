@@ -264,7 +264,7 @@ fn deliver_goods(
     // Update company statistics.
     let finance = unsafe { &*s.finance };
     let finances = (finance.company_finances)(company.0);
-    unsafe { crate::company::record_delivery(finances, cargo_type.0, accepted_total) };
+    unsafe { crate::company::record_delivery(finances, cargo_type, accepted_total) };
     // Increase the town counter for town effects.
     let effect = TownAcceptanceEffect(crate::cargo_registry::town_acceptance(cargo_type.0));
     let town = (s.station_town)(st);
@@ -348,12 +348,12 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
             // SAFETY: The front's owner is the live company selected above.
             if !finances.is_null() {
                 unsafe {
-                    crate::company::subtract_money(
+                    crate::company::subtract_money_from_any_company(
                         finance,
                         finances,
-                        company.0,
+                        company,
                         fields.route_profit.saturating_neg(),
-                        expense.0,
+                        crate::economy_type::ExpensesType(expense.0),
                     );
                 }
             }

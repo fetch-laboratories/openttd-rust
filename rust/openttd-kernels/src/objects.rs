@@ -694,7 +694,7 @@ impl<'a> World<'a> {
             return i32::MAX as u32;
         }
         // SAFETY: immediate field copy; no borrow survives services.
-        unsafe { (*finance).object >> 16 }
+        unsafe { (*finance).build_object_limit >> 16 }
     }
     fn water_loop(&self, tile: u32, call: *mut crate::ground::Call) {
         // SAFETY: own live native result context and immutable shared tables.
@@ -935,10 +935,12 @@ impl<'a> World<'a> {
                     );
                 }
                 out.set(
-                    crate::company::openttd_rust_company_value(
+                    crate::company::calculate_company_value(
                         self.company(),
-                        self.finance(owner),
-                        owner,
+                        crate::company::CompanyRef::get(
+                            self.company().identity,
+                            crate::company_type::CompanyID(owner),
+                        ),
                         true,
                     ) / 100,
                 );
@@ -1209,7 +1211,9 @@ impl<'a> World<'a> {
                 }
                 HQ => {
                     let company = self.current();
-                    let old = (self.company().hq_location)(company);
+                    let c =
+                        (self.company().identity.company)(crate::company_type::CompanyID(company));
+                    let old = (self.company().location_of_hq)(c).0;
                     if old != INVALID_TILE {
                         if old == tile {
                             out.error(STR_ERROR_ALREADY_BUILT.0);
@@ -1222,10 +1226,9 @@ impl<'a> World<'a> {
                         crate::witness::hit(crate::witness::OBJECT_HQ_RELOCATE);
                     }
                     if flags & DoCommandFlag::EXECUTE != 0 {
-                        score = crate::company::openttd_rust_company_update_rating(
+                        score = crate::company::update_company_rating_and_value(
                             self.company(),
-                            self.finance(company),
-                            company,
+                            crate::company::CompanyRef::new(self.company().identity, c),
                             false,
                         ) as u32;
                         (self.s.set_hq)(company, tile);
@@ -1261,7 +1264,8 @@ impl<'a> World<'a> {
                 }
                 if !finance.is_null() {
                     // SAFETY: immediate canonical scalar access, ended before callbacks.
-                    (*finance).object = (*finance).object.wrapping_sub(size << 16);
+                    (*finance).build_object_limit =
+                        (*finance).build_object_limit.wrapping_sub(size << 16);
                 }
             }
             out.add_money(self.get_build_cost(spec).saturating_mul(i64::from(size)));
@@ -1400,7 +1404,7 @@ impl World<'_> {
                     } else {
                         enabled(self.s, spec)
                     } {
-                        out.set(crate::company::price(PR_BUILD_FOUNDATION));
+                        out.set(crate::company::price_raw(PR_BUILD_FOUNDATION));
                         crate::witness::hit(crate::witness::OBJECT_AUTOSLOPE);
                         return;
                     }
@@ -2278,8 +2282,19 @@ pub unsafe extern "C" fn openttd_rust_object_update_hq(
     tile: u32,
     score: u32,
 ) {
+    update_company_hq(s, crate::tile_type::TileIndex(tile), score);
+}
+
+/// `UpdateCompanyHQ`: update the CompanyHQ to the state associated with the given score.
+/// `s` is the process-lifetime object table.
+pub(crate) fn update_company_hq(
+    s: *const ObjectServices,
+    tile: crate::tile_type::TileIndex,
+    score: u32,
+) {
+    // SAFETY: The caller passes the canonical live object table.
     let w = unsafe { World::new::<true>(&*s) };
-    w.update_hq(tile, score);
+    w.update_hq(tile.0, score);
 }
 
 /// Synchronous object owner entry.

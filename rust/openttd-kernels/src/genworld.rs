@@ -527,10 +527,7 @@ impl World<'_> {
         self.storage_mode(crate::newgrf_storage::PSM_ENTER_GAMELOOP, false);
         self.increase(GWP_MAP_INIT)?;
         let company = unsafe { &*s.company };
-        crate::company::openttd_rust_economy_startup(
-            unsafe { &*company.services },
-            &(company.settings)(),
-        );
+        crate::company::startup_economy(unsafe { &*company.services }, (s.industry_builder)());
         if !crate::town::policy::road_types(unsafe { &*(*s.town).growth }) {
             return self.abort();
         }
@@ -609,10 +606,11 @@ impl World<'_> {
         self.storage_mode(crate::newgrf_storage::PSM_LEAVE_GAMELOOP, false);
         (s.reset_object)();
         (s.trash_company)(self.frame);
-        (unsafe { &*(*s.company).services }.assign_company_context)(read_field!(
-            INFO.get(),
-            local_company
-        ));
+        // `_current_company = _local_company = GenWorldInfo::lc`.
+        let company = unsafe { &*(*s.company).services };
+        let lc = read_field!(INFO.get(), local_company);
+        (company.shared.set_local_company_id)(lc.0);
+        (company.finance.set_current_company)(lc.0);
         if crate::session::mode() != GameMode::MENU {
             (s.show_windows)();
         }

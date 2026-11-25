@@ -301,7 +301,7 @@ fn negate(money: i64) -> i64 {
     if money == i64::MIN { i64::MAX } else { -money }
 }
 fn price(index: usize) -> i64 {
-    crate::company::price(index)
+    crate::company::price_raw(index)
 }
 
 struct Ctx<'a> {

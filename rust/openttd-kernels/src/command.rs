@@ -40,14 +40,15 @@ pub(crate) fn before(s: &CommandServices, top_level: bool, test: bool) {
     }
 }
 
+/// `GetAvailableMoneyForCommand`: the money which can be used to execute a command. This is
+/// either the money of the current company, or `INT64_MAX` if infinite money is enabled or
+/// there is no such a company "at the moment" like the server itself.
 pub(crate) fn available_money(s: &CommandServices) -> i64 {
-    if (s.infinite_money)() {
-        return i64::MAX;
-    }
-    let id = (s.finance.current_company)();
-    let owner = (s.finance.company_finances)(id);
-    // SAFETY: the canonical resolver returns null or the live finance owner.
-    unsafe { crate::company::openttd_rust_company_available_money(owner, false) }
+    crate::company::get_available_money(
+        s.shared,
+        s.finance,
+        crate::company_type::CompanyID((s.finance.current_company)()),
+    )
 }
 
 /// # Safety
@@ -58,12 +59,13 @@ pub(crate) unsafe fn check_money(
     result: *mut CommandCost,
 ) -> bool {
     let amount = (c.money)(result);
-    if amount <= 0 || (s.infinite_money)() {
+    // SAFETY: The catalog's address of a live setting.
+    if amount <= 0 || unsafe { s.shared.settings().infinite_money.read() } {
         return true;
     }
     let owner = (s.finance.company_finances)((s.finance.current_company)());
-    // SAFETY: the canonical resolver returns null or a live finance owner.
-    if unsafe { crate::company::has_money(owner, false, amount) } {
+    // `c != nullptr && cost.GetCost() > c->money` fails.
+    if owner.is_null() || amount <= crate::raw_field::read_field!(owner, money) {
         return true;
     }
     // SAFETY: the caller supplies exclusive live native result storage.
@@ -121,7 +123,13 @@ pub(crate) unsafe fn subtract_money(
     let expense = (c.expense)(result);
     // SAFETY: resolver returned the live owner; no borrow crosses invalidation.
     unsafe {
-        crate::company::subtract_money(s.finance, owner, id, amount, expense.0);
+        crate::company::subtract_money_from_any_company(
+            s.finance,
+            owner,
+            crate::company_type::CompanyID(id),
+            amount,
+            expense,
+        );
     }
 }
 

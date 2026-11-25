@@ -18,7 +18,7 @@ use crate::cargotype::{TOWN_PRODUCTION_DIVISOR, TownProductionEffect};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
 use crate::direction_type::DiagDirection;
-use crate::economy_type::{EXPENSES_CONSTRUCTION, PR_BUILD_FOUNDATION};
+use crate::economy_type::EXPENSES_CONSTRUCTION;
 use crate::history_type::THIS_MONTH;
 use crate::house::{
     BuildingFlag, BuildingFlags, HOUSE_NUM_ACCEPTS, HouseExtraFlag, HouseExtraFlags,
@@ -1161,7 +1161,7 @@ impl<'a> House<'a> {
                     (self.costs().expense_money)(
                         result,
                         EXPENSES_CONSTRUCTION,
-                        crate::company::price(PR_BUILD_FOUNDATION),
+                        crate::company::price(crate::economy_type::Price::PR_BUILD_FOUNDATION),
                     );
                     return;
                 }

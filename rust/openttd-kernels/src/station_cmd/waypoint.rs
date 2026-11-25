@@ -16,10 +16,7 @@ use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
 use crate::direction_type::Axis;
-use crate::economy_type::{
-    PR_BUILD_WAYPOINT_BUOY, PR_BUILD_WAYPOINT_RAIL, PR_CLEAR_WAYPOINT_BUOY,
-    ROAD_STOP_TRACKBIT_FACTOR,
-};
+use crate::economy_type::ROAD_STOP_TRACKBIT_FACTOR;
 use crate::newgrf_roadstop::RoadStopClassID;
 use crate::newgrf_station::StationClassID;
 use crate::rail_map::RAIL_TILE_NORMAL;
@@ -501,7 +498,9 @@ impl Ctx<'_> {
         cost.set(0);
         for cur_tile in new_location.tiles(self.map()) {
             if !crate::station_map::is_rail_waypoint_tile(cur_tile, self.shared) {
-                cost.add_money(crate::company::price(PR_BUILD_WAYPOINT_RAIL));
+                cost.add_money(crate::company::price(
+                    crate::economy_type::Price::PR_BUILD_WAYPOINT_RAIL,
+                ));
             }
         }
         /* Make sure the area below consists of clear tiles. (OR tiles belonging to a certain rail station) */
@@ -706,9 +705,7 @@ impl Ctx<'_> {
         };
         /* Total road stop cost. */
         let unit_cost = if roadstopspec.is_null() {
-            crate::company::price(usize::from(
-                crate::economy_type::Price::PR_BUILD_STATION_TRUCK.0,
-            ))
+            crate::company::price(crate::economy_type::Price::PR_BUILD_STATION_TRUCK)
         } else {
             crate::newgrf_roadstop::get_build_cost(
                 self.s,
@@ -941,7 +938,9 @@ impl Ctx<'_> {
         if wp.is_null() && !(self.s.waypoint_available)() {
             return cost.error(STR_ERROR_TOO_MANY_STATIONS_LOADING.0);
         }
-        cost.set(crate::company::price(PR_BUILD_WAYPOINT_BUOY));
+        cost.set(crate::company::price(
+            crate::economy_type::Price::PR_BUILD_WAYPOINT_BUOY,
+        ));
         if !(self.shared.is_water_tile)(tile.0) {
             crate::landscape_cmd::clear_command(
                 self.command,
@@ -1039,7 +1038,9 @@ impl Ctx<'_> {
             (self.s.virtual_coord)(wp);
             self.reset_delete_counter(wp);
         }
-        cost.set(crate::company::price(PR_CLEAR_WAYPOINT_BUOY));
+        cost.set(crate::company::price(
+            crate::economy_type::Price::PR_CLEAR_WAYPOINT_BUOY,
+        ));
     }
 }
 /// # Safety
