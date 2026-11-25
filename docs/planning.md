@@ -35,7 +35,7 @@
 - Size each owner to repay its fixed issue, review and Full cost: fold an item too small for that, and any batch item under about 150 counted C++ lines, into an item of the same phase that shares its files or data.
 - A file pass finishes every file of its workset in one PR. Pass a workset before its callers, ordering worksets by fan-in: the number of files outside the workset that reference it through `crate::`.
 - Count a diff as the PR will: both sides of each rewritten body, the new tests, the cleanup records and the callers in other files. Plans that left those out came in at a median 1.8 times their estimate over 24 PRs.
-- Split a workset only at a file boundary, and only when its diff would exceed about 5,000 changed lines (provisional). The seven passes of merges 82 to 89 ran from 2,500 to 10,000 changed lines, and the larger ones left no more behind for each line.
+- Split a workset only at a file boundary, and only when its diff would exceed about 5,000 changed lines (provisional). The seven passes of merges 82 to 89 ran from 2,500 to 10,000 changed lines and #1056 came to 15,000, and the larger ones left no more behind for each line.
 - Run concurrent file passes on worksets that do not call each other where the order allows. Two passes in one workset, or in a workset and its callee, rewrite the same files: in merges 84 to 89 four of six passes needed a reviewed base update for it, each with another CI run, and accessors that two passes had both added stayed duplicated.
 - A file over about 1,500 lines gets its own single-file pass, placed by fan-in: before its workset's other files when they call it, otherwise immediately after that workset's pass. A single-file pass does not split.
 
