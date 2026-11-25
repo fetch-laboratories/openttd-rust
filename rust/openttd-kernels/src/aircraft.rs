@@ -414,6 +414,25 @@ impl Leaves {
         // SAFETY: As `airport_tile`.
         unsafe { (self.airport_blocks)(st) }
     }
+    /// `st->airport.blocks.Set(set)` or `Reset(set)` of a live station, in place.
+    pub(crate) fn airport_blocks_update(
+        &self,
+        st: *const Station,
+        update: impl FnOnce(&mut AirportBlocks),
+    ) {
+        update_airport_blocks(self.airport_blocks(st), update);
+    }
+}
+
+/// `blocks.Set(set)` or `Reset(set)` on a live station's `airport.blocks`, which `blocks`
+/// addresses.
+fn update_airport_blocks(blocks: *mut AirportBlocks, update: impl FnOnce(&mut AirportBlocks)) {
+    // SAFETY: One field-sized load and store of the live mask, with no callback between.
+    unsafe {
+        let mut value = blocks.read();
+        update(&mut value);
+        blocks.write(value);
+    }
 }
 
 /// The tables and entry-local map descriptor the helpers share.
@@ -531,13 +550,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `st->airport.blocks.Set(set)` or `Reset(set)` in place.
     fn airport_blocks_update(&self, st: *const Station, update: impl FnOnce(&mut AirportBlocks)) {
-        let blocks = Self::call(|| self.leaves.airport_blocks(st));
-        // SAFETY: One field-sized load and store of the live mask, with no callback between.
-        unsafe {
-            let mut value = blocks.read();
-            update(&mut value);
-            blocks.write(value);
-        }
+        update_airport_blocks(Self::call(|| self.leaves.airport_blocks(st)), update);
     }
     /// `st->airport.GetSpec()`.
     fn airport_spec(st: *const Station) -> *const crate::station_cmd::AirportSpec {

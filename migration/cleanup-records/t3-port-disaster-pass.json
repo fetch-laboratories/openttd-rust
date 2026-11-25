@@ -3,18 +3,6 @@
     "after": 1,
     "before": 0,
     "kind": "suppression",
-    "operation": "disaster::airport_blocks_update_station",
-    "reason": "One field-sized load and store of the live station's blocks through the address the aircraft table's `airport_blocks` leaf returns. The base's module-wide allowance goes.",
-    "retirement_condition": "Retires when the station pool and its airport record are Rust storage (#634).",
-    "retiring_owner": "#634",
-    "site": "rust/openttd-kernels/src/disaster.rs | fn airport_blocks_update_station | allow unsafe_code",
-    "source_contract": "`st->airport.blocks.Set` and `Reset` in `DisasterTick_Zeppeliner`.",
-    "tool": "rust"
-  },
-  {
-    "after": 1,
-    "before": 0,
-    "kind": "suppression",
     "operation": "disaster::airport_services",
     "reason": "Dereferences the catchment table's link to the process-lifetime airport table. The base's module-wide allowance goes.",
     "retirement_condition": "Retires with the station pool port (#634), which removes the airport table.",

@@ -683,7 +683,7 @@ fn disaster_tick_zeppeliner(t: &Tables<'_>, v: DisasterVehicle) -> bool {
 
         if world.is_valid_tile(v.v.tile()) && world.is_airport_tile(v.v.tile()) {
             let st = station_get_by_tile(t, v.v.tile());
-            airport_blocks_update_station(t, st, |blocks| {
+            t.aircraft().airport_blocks_update(st, |blocks| {
                 blocks.reset(zeppeliner_runway());
             });
             crate::ai::new_event(
@@ -758,23 +758,8 @@ fn station_index(t: &Tables<'_>, st: *mut crate::station::Station) -> StationID 
 
 /// `Station::GetByTile(tile)->airport.blocks`, updated in place.
 fn airport_blocks_update(t: &Tables<'_>, tile: TileIndex, update: impl FnOnce(&mut AirportBlocks)) {
-    airport_blocks_update_station(t, station_get_by_tile(t, tile), update);
-}
-
-/// `st->airport.blocks`, updated in place.
-#[allow(unsafe_code)]
-fn airport_blocks_update_station(
-    t: &Tables<'_>,
-    st: *mut crate::station::Station,
-    update: impl FnOnce(&mut AirportBlocks),
-) {
-    let blocks = t.aircraft().airport_blocks(st);
-    // SAFETY: One field-sized load and store of the live mask, with no callback between.
-    unsafe {
-        let mut value = blocks.read();
-        update(&mut value);
-        blocks.write(value);
-    }
+    t.aircraft()
+        .airport_blocks_update(station_get_by_tile(t, tile), update);
 }
 
 /// `DisasterTick_Ufo`: (Small) Ufo handling, `v->state` states:
