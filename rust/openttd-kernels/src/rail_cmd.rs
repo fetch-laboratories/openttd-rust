@@ -18,7 +18,7 @@
     clippy::too_many_lines,
     reason = "the native command tables, cost slots and train records; the original's long command bodies"
 )]
-use crate::bitmath_func::{has_bit, has_exactly_one_bit, kill_first_bit};
+use crate::bitmath_func::{has_bit, has_exactly_one_bit, kill_first_bit, set_bit8, toggle_bit8};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_base::CompanyInfrastructure;
 use crate::company_type::{CompanyID, Owner};
@@ -523,7 +523,7 @@ impl<'a> Ctx<'a> {
     /// Writes a succeeded command (no train found), or a failed command (a train was found).
     fn ensure_no_train_on_track(&self, out: Cost<'_>, tile: TileIndex, track: Track) {
         let rail_bits = track_to_track_bits(track, self.check());
-        out.no_train(self.command, tile.0, rail_bits.0);
+        self.command.no_train(out.0, tile, rail_bits);
     }
 
     /// `CheckTrackCombination`: check that the new track bits may be built.
@@ -752,7 +752,7 @@ impl<'a> Ctx<'a> {
                         }
                     }
 
-                    ret.no_vehicle(self.command, tile.0);
+                    self.command.no_vehicle(ret.0, tile);
                     if !ret.ok() {
                         return cost.take(ret);
                     }
@@ -1021,7 +1021,7 @@ impl<'a> Ctx<'a> {
                 }
 
                 if !flags.test(DoCommandFlag::Bankrupt) {
-                    ret.no_vehicle(self.command, tile.0);
+                    self.command.no_vehicle(ret.0, tile);
                     if !ret.ok() {
                         return cost.take(ret);
                     }
@@ -1241,7 +1241,7 @@ impl<'a> Ctx<'a> {
                 return false;
             }
             // first direction is invalid, try the other
-            trackdir.0 |= 1 << 3; // reverse the direction
+            set_bit8(&mut trackdir.0, 3); // reverse the direction
             delta_x = -delta_x;
             delta_y = -delta_y;
         }
@@ -1356,7 +1356,7 @@ impl<'a> Ctx<'a> {
 
             /* toggle railbit for the non-diagonal tracks */
             if !is_diagonal_trackdir(trackdir, self.check()) {
-                trackdir.0 ^= 1;
+                toggle_bit8(&mut trackdir.0, 0);
             }
         }
 
@@ -1418,7 +1418,7 @@ impl<'a> Ctx<'a> {
                 return cost.zero();
             }
 
-            ret.no_vehicle(self.command, tile.0);
+            self.command.no_vehicle(ret.0, tile);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -1731,7 +1731,7 @@ impl<'a> Ctx<'a> {
             /* PBS signals should show red unless they are on reserved tiles without a train. */
             let mask = self.world.get_present_signals(tile) & on_track;
             let reserved = has_bit((self.rail.rail_reservation)(tile.0).0, track.0) && {
-                ret.no_vehicle(self.command, tile.0);
+                self.command.no_vehicle(ret.0, tile);
                 ret.ok()
             };
             (self.rail.set_signal_states)(
@@ -1930,10 +1930,10 @@ impl<'a> Ctx<'a> {
 
         let mut signal_dir = 0_u8;
         if signals & u32::from(signal_along_trackdir(trackdir)) != 0 {
-            signal_dir |= 1 << 0;
+            set_bit8(&mut signal_dir, 0);
         }
         if signals & u32::from(signal_against_trackdir(trackdir)) != 0 {
-            signal_dir |= 1 << 1;
+            set_bit8(&mut signal_dir, 1);
         }
         w::hit(if remove {
             w::RAIL_CMD_SIGNAL_DRAG_REMOVE
@@ -2143,7 +2143,7 @@ impl<'a> Ctx<'a> {
                     .map()
                     .to_tile_index_diff(TRACKDELTA[usize::from(trackdir.0)]);
                 if !is_diagonal_trackdir(trackdir, self.check()) {
-                    trackdir.0 ^= 1;
+                    toggle_bit8(&mut trackdir.0, 0);
                 }
             }
         }
@@ -2390,9 +2390,10 @@ impl<'a> Ctx<'a> {
                 if tt != TileType::MP_TUNNELBRIDGE {
                     if !is_compatible_rail(self.shared, r#type, totype) {
                         if self.world.is_plain_rail_tile(tile) {
-                            ret.no_train(self.command, tile.0, self.world.get_track_bits(tile).0);
+                            self.command
+                                .no_train(ret.0, tile, self.world.get_track_bits(tile));
                         } else {
-                            ret.no_vehicle(self.command, tile.0);
+                            self.command.no_vehicle(ret.0, tile);
                         }
                         if !ret.ok() {
                             error.take(ret);
@@ -2542,7 +2543,7 @@ impl<'a> Ctx<'a> {
                         /* When not converting rail <-> el. rail, any vehicle cannot be in tunnel/bridge */
                         if !is_compatible_rail(self.shared, self.world.get_rail_type(tile), totype)
                         {
-                            ret.wormhole_free(self.command, tile.0, endtile.0);
+                            self.command.wormhole_free(ret.0, tile, endtile, None);
                             if !ret.ok() {
                                 error.take(ret);
                                 break 'tile;
@@ -2674,7 +2675,7 @@ impl<'a> Ctx<'a> {
             }
         }
 
-        cost.no_vehicle(self.command, tile.0);
+        self.command.no_vehicle(cost.0, tile);
         if !cost.ok() {
             return;
         }
@@ -2770,7 +2771,7 @@ impl<'a> Ctx<'a> {
                     && !flags.test(DoCommandFlag::Bankrupt)
                     && (self.shared.company_valid)(self.current_company().0)
                 {
-                    ret.no_vehicle(self.command, tile.0);
+                    self.command.no_vehicle(ret.0, tile);
                     if !ret.ok() {
                         return cost.take(ret);
                     }
