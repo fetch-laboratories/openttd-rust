@@ -291,7 +291,7 @@ impl<'a> World<'a> {
             1 => {
                 if self.types.asserted(self.s, |m| {
                     crate::rail_map::get_rail_ground_type_raw(m, tile)
-                }) == 13
+                }) == crate::rail_map::RAIL_GROUND_HALF_TILE_WATER
                 {
                     if is_slope_with_one_corner_raised_raw(
                         (self.types.asserted(self.s, |m| {
@@ -347,7 +347,7 @@ impl<'a> World<'a> {
         let mut flooded = false;
         if self.types.asserted(self.s, |m| {
             crate::rail_map::get_rail_ground_type_raw(m, tile)
-        }) == 13
+        }) == crate::rail_map::RAIL_GROUND_HALF_TILE_WATER
         {
             return false;
         }

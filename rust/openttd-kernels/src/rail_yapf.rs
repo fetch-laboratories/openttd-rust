@@ -1514,15 +1514,11 @@ impl<'a, T: Types> CYapfRailT<'a, T> {
                             n.flags_u
                                 .set(CYapfRailNodeFlags::LAST_SIGNAL_WAS_RED, is_red);
                             if is_red {
-                                n.last_red_signal_type = SignalType(
-                                    self.world
-                                        .get_signal_type(
-                                            cached.last_signal_tile,
-                                            trackdir_to_track(cached.last_signal_td, |ok| {
-                                                self.check(ok);
-                                            }),
-                                        )
-                                        .0,
+                                n.last_red_signal_type = self.world.get_signal_type(
+                                    cached.last_signal_tile,
+                                    trackdir_to_track(cached.last_signal_td, |ok| {
+                                        self.check(ok);
+                                    }),
                                 );
                             }
                         }

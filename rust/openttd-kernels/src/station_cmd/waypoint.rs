@@ -124,12 +124,12 @@ impl Ctx<'_> {
     fn get_axis_for_new_rail_waypoint(&self, tile: TileIndex) -> Axis {
         w::hit(w::WAYPOINT_AXIS_RAIL);
         /* The axis for rail waypoints is easy. */
-        if crate::station_map::is_rail_waypoint_tile(tile, self.shared) {
-            return crate::map_func::World::new(self.shared).get_rail_station_axis(tile);
+        let world = crate::map_func::World::new(self.shared);
+        if world.is_rail_waypoint_tile(tile) {
+            return world.get_rail_station_axis(tile);
         }
         /* Non-plain rail type, no valid axis for waypoints. */
-        let world = crate::map_func::World::new(self.shared);
-        if TileType((self.shared.tile_type)(tile.0)) != TileType::MP_RAILWAY
+        if !world.is_tile_type(tile, TileType::MP_RAILWAY)
             || world.get_rail_tile_type(tile) != RailTileType::Normal
         {
             return Axis::INVALID_AXIS;

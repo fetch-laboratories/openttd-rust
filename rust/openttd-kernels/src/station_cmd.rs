@@ -1607,21 +1607,16 @@ impl Ctx<'_> {
             flags,
             affected_vehicles,
         } = context;
-        if rt != (self.rail_map().invalid_rail_type)()
-            && crate::map_func::World::new(self.shared).is_plain_rail_tile(tile_cur)
-        {
+        let world = crate::map_func::World::new(self.shared);
+        if rt != RailType::INVALID_RAILTYPE && world.is_plain_rail_tile(tile_cur) {
             /* Don't overbuild signals. */
-            if crate::map_func::World::new(self.shared).has_signals(tile_cur) {
+            if world.has_signals(tile_cur) {
                 cost.error(STR_ERROR_MUST_REMOVE_SIGNALS_FIRST.0);
                 return true;
             }
             /* The current rail type must have power on the to-be-built type (e.g. convert normal rail to electrified rail). */
-            if crate::rail::has_power_on_rail(
-                self.shared,
-                crate::map_func::World::new(self.shared).get_rail_type(tile_cur),
-                rt,
-            ) {
-                let mut tracks = crate::map_func::World::new(self.shared).get_track_bits(tile_cur);
+            if crate::rail::has_power_on_rail(self.shared, world.get_rail_type(tile_cur), rt) {
+                let mut tracks = world.get_track_bits(tile_cur);
                 let track = crate::track_func::remove_first_track(&mut tracks, |ok| {
                     crate::movement::native_assert(self.shared, ok);
                 });
@@ -2259,11 +2254,7 @@ impl Ctx<'_> {
                         unsafe {
                             CompanyInfrastructure::add_rail(
                                 infrastructure,
-                                crate::rail_type::RailType(
-                                    crate::map_func::World::new(self.shared)
-                                        .get_rail_type(tile)
-                                        .0,
-                                ),
+                                crate::map_func::World::new(self.shared).get_rail_type(tile),
                                 u32::MAX,
                             );
                         };

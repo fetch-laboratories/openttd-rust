@@ -712,44 +712,44 @@ pub fn is_straight_road_trackdir(dir: Trackdir, check: impl Fn(bool) + Copy) -> 
 pub fn is_uphill_trackdir(slope: Slope, dir: Trackdir, check: impl Fn(bool) + Copy) -> bool {
     use TrackdirBits as B;
     /// `_uphill_trackdirs`, from `table/track_data.h`.
-    const UPHILL_TRACKDIRS: [u16; 31] = [
-        B::TRACKDIR_BIT_NONE.0,                          //  0 SLOPE_FLAT
-        B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_NW.0, //  1 SLOPE_W   -> inclined for diagonal track
-        B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_SE.0, //  2 SLOPE_S   -> inclined for diagonal track
-        B::TRACKDIR_BIT_X_SW.0,                          //  3 SLOPE_SW
-        B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_SE.0, //  4 SLOPE_E   -> inclined for diagonal track
-        B::TRACKDIR_BIT_NONE.0,                          //  5 SLOPE_EW
-        B::TRACKDIR_BIT_Y_SE.0,                          //  6 SLOPE_SE
-        B::TRACKDIR_BIT_NONE.0,                          //  7 SLOPE_WSE -> leveled
-        B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_NW.0, //  8 SLOPE_N   -> inclined for diagonal track
-        B::TRACKDIR_BIT_Y_NW.0,                          //  9 SLOPE_NW
-        B::TRACKDIR_BIT_NONE.0,                          // 10 SLOPE_NS
-        B::TRACKDIR_BIT_NONE.0,                          // 11 SLOPE_NWS -> leveled
-        B::TRACKDIR_BIT_X_NE.0,                          // 12 SLOPE_NE
-        B::TRACKDIR_BIT_NONE.0,                          // 13 SLOPE_ENW -> leveled
-        B::TRACKDIR_BIT_NONE.0,                          // 14 SLOPE_SEN -> leveled
-        B::TRACKDIR_BIT_NONE.0,                          // 15 invalid
-        B::TRACKDIR_BIT_NONE.0,                          // 16 invalid
-        B::TRACKDIR_BIT_NONE.0,                          // 17 invalid
-        B::TRACKDIR_BIT_NONE.0,                          // 18 invalid
-        B::TRACKDIR_BIT_NONE.0,                          // 19 invalid
-        B::TRACKDIR_BIT_NONE.0,                          // 20 invalid
-        B::TRACKDIR_BIT_NONE.0,                          // 21 invalid
-        B::TRACKDIR_BIT_NONE.0,                          // 22 invalid
-        B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_SE.0, // 23 SLOPE_STEEP_S -> inclined for diagonal track
-        B::TRACKDIR_BIT_NONE.0,                          // 24 invalid
-        B::TRACKDIR_BIT_NONE.0,                          // 25 invalid
-        B::TRACKDIR_BIT_NONE.0,                          // 26 invalid
-        B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_NW.0, // 27 SLOPE_STEEP_W -> inclined for diagonal track
-        B::TRACKDIR_BIT_NONE.0,                          // 28 invalid
-        B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_NW.0, // 29 SLOPE_STEEP_N -> inclined for diagonal track
-        B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_SE.0, // 30 SLOPE_STEEP_E -> inclined for diagonal track
+    const UPHILL_TRACKDIRS: [TrackdirBits; 31] = [
+        B::TRACKDIR_BIT_NONE,                               //  0 SLOPE_FLAT
+        B(B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_NW.0), //  1 SLOPE_W   -> inclined for diagonal track
+        B(B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_SE.0), //  2 SLOPE_S   -> inclined for diagonal track
+        B::TRACKDIR_BIT_X_SW,                               //  3 SLOPE_SW
+        B(B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_SE.0), //  4 SLOPE_E   -> inclined for diagonal track
+        B::TRACKDIR_BIT_NONE,                               //  5 SLOPE_EW
+        B::TRACKDIR_BIT_Y_SE,                               //  6 SLOPE_SE
+        B::TRACKDIR_BIT_NONE,                               //  7 SLOPE_WSE -> leveled
+        B(B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_NW.0), //  8 SLOPE_N   -> inclined for diagonal track
+        B::TRACKDIR_BIT_Y_NW,                               //  9 SLOPE_NW
+        B::TRACKDIR_BIT_NONE,                               // 10 SLOPE_NS
+        B::TRACKDIR_BIT_NONE,                               // 11 SLOPE_NWS -> leveled
+        B::TRACKDIR_BIT_X_NE,                               // 12 SLOPE_NE
+        B::TRACKDIR_BIT_NONE,                               // 13 SLOPE_ENW -> leveled
+        B::TRACKDIR_BIT_NONE,                               // 14 SLOPE_SEN -> leveled
+        B::TRACKDIR_BIT_NONE,                               // 15 invalid
+        B::TRACKDIR_BIT_NONE,                               // 16 invalid
+        B::TRACKDIR_BIT_NONE,                               // 17 invalid
+        B::TRACKDIR_BIT_NONE,                               // 18 invalid
+        B::TRACKDIR_BIT_NONE,                               // 19 invalid
+        B::TRACKDIR_BIT_NONE,                               // 20 invalid
+        B::TRACKDIR_BIT_NONE,                               // 21 invalid
+        B::TRACKDIR_BIT_NONE,                               // 22 invalid
+        B(B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_SE.0), // 23 SLOPE_STEEP_S -> inclined for diagonal track
+        B::TRACKDIR_BIT_NONE,                               // 24 invalid
+        B::TRACKDIR_BIT_NONE,                               // 25 invalid
+        B::TRACKDIR_BIT_NONE,                               // 26 invalid
+        B(B::TRACKDIR_BIT_X_SW.0 | B::TRACKDIR_BIT_Y_NW.0), // 27 SLOPE_STEEP_W -> inclined for diagonal track
+        B::TRACKDIR_BIT_NONE,                               // 28 invalid
+        B(B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_NW.0), // 29 SLOPE_STEEP_N -> inclined for diagonal track
+        B(B::TRACKDIR_BIT_X_NE.0 | B::TRACKDIR_BIT_Y_SE.0), // 30 SLOPE_STEEP_E -> inclined for diagonal track
     ];
     if !is_valid_trackdir_for_road_vehicle(dir) {
         check(false);
     }
     has_bit(
-        UPHILL_TRACKDIRS[usize::from(remove_halftile_slope(slope).0)],
+        UPHILL_TRACKDIRS[usize::from(remove_halftile_slope(slope).0)].0,
         dir.0,
     )
 }

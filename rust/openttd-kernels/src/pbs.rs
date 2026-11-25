@@ -354,9 +354,8 @@ impl<'a> Pbs<'a> {
     /// `IsTileType(tile, MP_RAILWAY) && HasSignalOnTrackdir(tile, trackdir) &&
     /// !IsPbsSignal(GetSignalType(tile, TrackdirToTrack(trackdir)))`: a non-PBS
     /// signal on the trackdir.
-    fn has_non_pbs_signal(self, tile: TileIndex, trackdir: Trackdir) -> bool {
-        let w = World::new(self.shared());
-        is_tile_type(self.shared(), tile, TileType::MP_RAILWAY)
+    fn has_non_pbs_signal(self, w: &World<'_>, tile: TileIndex, trackdir: Trackdir) -> bool {
+        w.is_tile_type(tile, TileType::MP_RAILWAY)
             && w.has_signal_on_trackdir(tile, trackdir)
             && !crate::rail_map::is_pbs_signal(
                 w.get_signal_type(tile, trackdir_to_track(trackdir, |ok| self.check(ok))),
@@ -456,7 +455,7 @@ impl<'a> Pbs<'a> {
                 break;
             }
             /* Non-pbs signal? Reservation can't continue. */
-            if self.has_non_pbs_signal(tile, trackdir) {
+            if self.has_non_pbs_signal(&w, tile, trackdir) {
                 break;
             }
         }
@@ -706,7 +705,7 @@ impl<'a> Pbs<'a> {
         }
 
         /* For non-pbs signals, stop on the signal tile. */
-        if self.has_non_pbs_signal(tile, trackdir) {
+        if self.has_non_pbs_signal(&w, tile, trackdir) {
             return true;
         }
 
@@ -778,10 +777,14 @@ impl<'a> Pbs<'a> {
         }
 
         /* Not reserved and depot or not a pbs signal -> free. */
-        if World::new(s).is_rail_depot_tile(tile) {
+        let w = World::new(s);
+        if w.is_rail_depot_tile(tile) {
             return true;
         }
-        if self.has_non_pbs_signal(tile, trackdir) {
+        if w.is_tile_type(tile, TileType::MP_RAILWAY)
+            && w.has_signal_on_trackdir(tile, trackdir)
+            && !crate::rail_map::is_pbs_signal(w.get_signal_type(tile, track))
+        {
             return true;
         }
 

@@ -317,11 +317,7 @@ unsafe fn cmd_build_rail_wagon(
     let CmdBuildRailWagon { tile, e } = cmd;
     /* Check that the wagon can drive on the track in question */
     let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
-    let tiletype = crate::rail_type::RailType(
-        crate::map_func::World::new(x.t.shared)
-            .get_rail_type(tile)
-            .0,
-    );
+    let tiletype = crate::map_func::World::new(x.t.shared).get_rail_type(tile);
     if !crate::rail::is_compatible_rail_types(
         x.t.shared,
         crate::rail_type::RailTypes(railtypes),
