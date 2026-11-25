@@ -589,7 +589,10 @@ macro_rules! callback_mask_set {
             pub const EMPTY: Self = Self(0);
             /// `EnumBitSet(Tenum value)`: the set holding one element, through `BaseBitSet::Set`.
             #[must_use]
-            #[allow(clippy::cast_possible_truncation)] // `BaseBitSet::Set` stores to `Tstorage`.
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "BaseBitSet::Set stores to the set's Tstorage (core/base_bitset_type.hpp)"
+            )]
             pub const fn from_element(element: $element) -> Self {
                 Self(base_bitset_type::set(0, element.0) as $storage)
             }

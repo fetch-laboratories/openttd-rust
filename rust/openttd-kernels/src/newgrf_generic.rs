@@ -472,10 +472,6 @@ pub(crate) fn get_ai_purchase_callback_result(
 
 /// `GetAiPurchaseCallbackResult` for C++.
 #[allow(unsafe_code, reason = "export")]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the nine parameters of GetAiPurchaseCallbackResult"
-)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_generic_ai(
     feature: u8,
