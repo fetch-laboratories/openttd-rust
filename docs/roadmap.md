@@ -277,12 +277,12 @@ Provisional, for steering 39 to judge:
 
 Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. Root's status comment on #3 holds the queue's state between commits to this section.
 
-Three slots for the session that began on 2026-11-24 at about 21:00Z, at the user's allowance; the standing limit is two ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). At merge 95 (`1007aa96f8`) two are held, by #1056 (#1048, `company.rs`) and #1059 (#1027's third part, `ship_control.rs`), both in review, and the third is free since the stocktake's profile ended. Each slot works one chain, and a pass planned on an open PR's head is dispatched when that PR merges. Residue that passes left in files they did not finish is on #734, one comment for each pass since [merges 66 to 75](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6976329602); two small porting points from #1000 wait on `residue/1000-porting-points` ([record](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6992168925)).
+Three slots for the session that began on 2026-11-24 at about 21:00Z, at the user's allowance; the standing limit is two ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). At merge 95 (`1007aa96f8`) the three are held by #1056 (#1048, `company.rs`) and #1059 (#1027's third part, `ship_control.rs`), both in review, and #1063's implementer. Each slot works one chain, and a pass planned on an open PR's head is dispatched when that PR merges. Residue that passes left in files they did not finish is on #734, one comment for each pass since [merges 66 to 75](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6976329602); two small porting points from #1000 wait on `residue/1000-porting-points` ([record](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6992168925)).
 
-Waiting on nothing, for the free slot, whichever plan is settled first:
+Waiting on nothing but a slot:
 
-1. **#1063, the tools batch for merges 96 to 107.** Its planner runs on `rust-migration`.
-2. **#1062: workset 16 (NewGRF domains)**, 14 files and 7,489 lines, of which `newgrf_vehicle.rs` (2,141) has its own pass. Its planner runs on `rust-migration`. It is first of group (d) by the merge-95 count.
+1. **#1063, the tools batch for merges 96 to 107:** dispatched at merge 95.
+2. **#1062: workset 16 (NewGRF domains)**, 14 files and 7,489 lines, of which `newgrf_vehicle.rs` (2,141) has its own pass. It is first of group (d) by the merge-95 count and takes four PRs; the first (`newgrf.rs`, `newgrf_generic.rs` and seven small files, about 3,750 changed lines before the `GRFFile` handle [root added to it](https://github.com/fetch-laboratories/openttd-rust/issues/1062#issuecomment-7153888902)) is planned on `rust-migration`, and its plan is being corrected and reviewed again. It waits on a slot. Its kept resolver frame names #1064, which root opened for workset 15 (NewGRF loading, 19 files and 8,694 lines), queued in group (d) after worksets 21 and 18.
 
 Planned and reviewed, waiting on a merge:
 
