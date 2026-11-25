@@ -321,16 +321,6 @@ impl World<'_> {
     pub(crate) fn get_signal_type_raw(&self, t: u32, track: u8) -> u8 {
         self.get_signal_type(TileIndex(t), Track(track)).0
     }
-    /// Raw adapter: `GetSignalStates`.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "GetSignalStates' four-bit field"
-    )]
-    /// Raw adapter: `GetPresentSignals`.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "GetPresentSignals' four-bit field"
-    )]
     /// Raw adapter: `HasSignalOnTrack`.
     pub(crate) fn has_signal_on_track_raw(&self, t: u32, track: u8) -> bool {
         self.has_signal_on_track(TileIndex(t), Track(track))
