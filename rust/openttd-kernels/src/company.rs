@@ -597,8 +597,9 @@ pub(crate) fn set_local_company(s: &Services, new_company: CompanyID) {
         );
     }
 
-    // `IsLocalCompany()`.
-    assert_with(|| (s.shared.local_company)() == (s.shared.current_company)());
+    assert_with(|| {
+        crate::command::is_local_company_of(s.shared.local_company, s.shared.current_company)
+    });
 
     // `_current_company = _local_company = new_company`.
     (s.shared.set_local_company_id)(new_company.0);
@@ -706,12 +707,12 @@ pub(crate) unsafe fn subtract_money_from_any_company(
 
 /// `SubtractMoneyFromCompany`: subtract money from the `_current_company`, if the company is
 /// valid.
-fn subtract_money_from_company(f: &FinanceServices, cost: i64, expenses_type: ExpensesType) {
-    let company = CompanyID((f.current_company)());
-    let c = (f.company_finances)(company.0);
+fn subtract_money_from_company(s: &Services, cost: i64, expenses_type: ExpensesType) {
+    let company = CompanyID((s.shared.current_company)());
+    let c = (s.finance.company_finances)(company.0);
     if !c.is_null() {
         // SAFETY: The pool returned the live record of `company`.
-        unsafe { subtract_money_from_any_company(f, c, company, cost, expenses_type) };
+        unsafe { subtract_money_from_any_company(s.finance, c, company, cost, expenses_type) };
     }
 }
 
@@ -813,8 +814,7 @@ pub(crate) fn check_ownership(s: &Services, out: Cost<'_>, owner: Owner, tile: T
     }
 
     out.error(STR_ERROR_OWNED_BY.0);
-    // `IsLocalCompany()`.
-    if (s.shared.local_company)() == (s.shared.current_company)() {
+    if crate::command::is_local_company_of(s.shared.local_company, s.shared.current_company) {
         (out.1.encode_owned_by)(out.0, owner, tile);
         if owner != Owner::TOWN {
             (out.1.error_owner)(out.0, owner);
@@ -1738,7 +1738,7 @@ pub(crate) fn cmd_give_money(
     if flags.test(DoCommandFlag::Execute) {
         // Add money to company
         (s.finance.set_current_company)(dest_company.0);
-        subtract_money_from_company(s.finance, neg(amount), ExpensesType::EXPENSES_OTHER);
+        subtract_money_from_company(s, neg(amount), ExpensesType::EXPENSES_OTHER);
         (s.finance.set_current_company)(current.0);
 
         if (s.finance.networking)() {
@@ -2073,11 +2073,13 @@ pub(crate) fn update_company_rating_and_value(s: &Services, c: CompanyRef, updat
 
     // Generate score for variety of cargo
     {
-        let mut count = 0_i64;
-        for cargo in 0..usize::from(NUM_CARGO) {
-            count += i64::from(read_field!(f, old_economy[0].delivered_cargo[cargo]) != 0);
-        }
-        set_score_part(owner, ScoreID::SCORE_CARGO, count);
+        // SAFETY: The live finance record's `NUM_CARGO` delivered amounts; no callback runs.
+        let num = unsafe {
+            crate::cargo_type::cargo_array_count(
+                (&raw const (*f).old_economy[0].delivered_cargo).cast(),
+            )
+        };
+        set_score_part(owner, ScoreID::SCORE_CARGO, i64::from(num));
     }
 
     // Generate score for company's money
@@ -2446,8 +2448,8 @@ pub(crate) fn change_ownership_of_company_items(
             // SAFETY: The process-lifetime train table.
             let leaves = unsafe { &*crate::movement::table(s.shared).train };
             let map_size = s.shared.map_size();
+            let world = crate::map_func::World::new(s.shared);
             for tile in 0..map_size {
-                let world = crate::map_func::World::new(s.shared);
                 let index = TileIndex(tile);
                 if world.kind(index) == TileType::MP_RAILWAY
                     && world.is_tile_owner(index, new_owner)
@@ -2765,7 +2767,7 @@ fn companies_gen_statistics(s: &Services) {
                 c.index,
             ));
 
-            subtract_money_from_company(s.finance, cost, ExpensesType::EXPENSES_PROPERTY);
+            subtract_money_from_company(s, cost, ExpensesType::EXPENSES_PROPERTY);
         });
     }
     (s.finance.set_current_company)(cur_company);
@@ -3010,13 +3012,13 @@ fn companies_pay_interest(s: &Services) {
         let up_to_this_month = yearly_fee.saturating_mul(month + 1) / 12;
 
         subtract_money_from_company(
-            s.finance,
+            s,
             up_to_this_month.saturating_sub(up_to_previous_month),
             ExpensesType::EXPENSES_LOAN_INTEREST,
         );
 
         subtract_money_from_company(
-            s.finance,
+            s,
             price(Price::PR_STATION_VALUE) >> 2,
             ExpensesType::EXPENSES_OTHER,
         );
@@ -3618,15 +3620,17 @@ pub(crate) fn cmd_change_bank_balance(
     if flags.test(DoCommandFlag::Execute) {
         // Change company bank balance of company.
         (s.finance.set_current_company)(company.0);
-        subtract_money_from_company(s.finance, neg(delta), expenses_type);
+        subtract_money_from_company(s, neg(delta), expenses_type);
         (s.finance.set_current_company)(current);
 
         if tile.0 != 0 {
-            let map = s.shared.map();
+            let world = crate::map_func::World::new(s.shared);
+            let map = world.dimensions;
+            // `GetTilePixelZ(tile)` is `GetTileZ(tile) * TILE_HEIGHT`.
             (s.shared.cost_animation)(
                 (map.tile_x(tile) * TILE_SIZE) as i32,
                 (map.tile_y(tile) * TILE_SIZE) as i32,
-                (s.shared.tile_z)(tile.0) * TILE_HEIGHT as i32,
+                world.tile_z(tile) * TILE_HEIGHT as i32,
                 neg(delta),
             );
         }

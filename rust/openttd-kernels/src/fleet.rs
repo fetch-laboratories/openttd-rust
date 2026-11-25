@@ -471,8 +471,54 @@ unsafe fn add_profit(w: &GroupServices, v: *mut ()) {
 /// `GroupStatistics::UpdateAutoreplace`: update `autoreplace_defined` and
 /// `autoreplace_finished` of all statistics of a company.
 pub(crate) fn update_autoreplace(w: &GroupServices, company: crate::company_type::CompanyID) {
-    // SAFETY: Static services of the serialized game state.
-    unsafe { update_autoreplace_raw(w, company.0) };
+    let company = company.0;
+    // SAFETY: Static services of the serialized game state; each statistics and renewal
+    // record is live for its field-sized accesses, which end before the next call.
+    for kind in 0..4 {
+        let all = unsafe { (w.stats)(company, ALL_GROUP, kind) };
+        unsafe { openttd_rust_fleet_stats_clear_autoreplace(all) };
+        let default = unsafe { (w.stats)(company, DEFAULT_GROUP, kind) };
+        unsafe { openttd_rust_fleet_stats_clear_autoreplace(default) };
+    }
+    let mut from = 0;
+    loop {
+        let NextGroup {
+            group: g,
+            index: id,
+        } = unsafe { (w.next_group)(from) };
+        if id == NONE {
+            break;
+        }
+        if read_field!(g, owner) == company {
+            let kind = read_field!(g, vehicle_type);
+            let s = unsafe { (w.stats)(company, id as u16, kind) };
+            unsafe { openttd_rust_fleet_stats_clear_autoreplace(s) };
+        }
+        from = id + 1;
+    }
+    let head = unsafe { (w.head)(company) };
+    let mut er = unsafe { head.cast::<*mut ()>().read() };
+    while !er.is_null() {
+        let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
+        let engine = read_field!(p, from);
+        let id = read_field!(p, group_id);
+        let next = read_field!(p, next);
+        let kind = w.engine(engine).kind().0;
+        let s = unsafe { (w.stats)(company, id, kind).cast::<Stats>() };
+        unsafe {
+            if !(*s).fields.defined {
+                (*s).fields.defined = true;
+                (*s).fields.finished = true;
+            }
+        }
+        let count = unsafe { sum_engines(w, company, id, engine) };
+        if count > 0 {
+            unsafe {
+                (*s).fields.finished = false;
+            }
+        }
+        er = next;
+    }
 }
 /// `RemoveAllGroupsForCompany`.
 pub(crate) fn remove_all_groups_for_company(
@@ -577,53 +623,10 @@ unsafe fn sum_profit(w: &GroupServices, company: u8, id: u16, kind: u8) -> i64 {
     let s = unsafe { (w.stats)(company, id, kind).cast::<Stats>() };
     sum.saturating_add(unsafe { (*s).fields.profit_min_age })
 }
-/// `GroupStatistics::UpdateAutoreplace`'s body over the base company index.
+/// Raw adapter of [`update_autoreplace`] over the base company index, for this file's
+/// callers.
 unsafe fn update_autoreplace_raw(w: &GroupServices, company: u8) {
-    for kind in 0..4 {
-        let all = unsafe { (w.stats)(company, ALL_GROUP, kind) };
-        unsafe { openttd_rust_fleet_stats_clear_autoreplace(all) };
-        let default = unsafe { (w.stats)(company, DEFAULT_GROUP, kind) };
-        unsafe { openttd_rust_fleet_stats_clear_autoreplace(default) };
-    }
-    let mut from = 0;
-    loop {
-        let NextGroup {
-            group: g,
-            index: id,
-        } = unsafe { (w.next_group)(from) };
-        if id == NONE {
-            break;
-        }
-        if read_field!(g, owner) == company {
-            let kind = read_field!(g, vehicle_type);
-            let s = unsafe { (w.stats)(company, id as u16, kind) };
-            unsafe { openttd_rust_fleet_stats_clear_autoreplace(s) };
-        }
-        from = id + 1;
-    }
-    let head = unsafe { (w.head)(company) };
-    let mut er = unsafe { head.cast::<*mut ()>().read() };
-    while !er.is_null() {
-        let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
-        let engine = read_field!(p, from);
-        let id = read_field!(p, group_id);
-        let next = read_field!(p, next);
-        let kind = w.engine(engine).kind().0;
-        let s = unsafe { (w.stats)(company, id, kind).cast::<Stats>() };
-        unsafe {
-            if !(*s).fields.defined {
-                (*s).fields.defined = true;
-                (*s).fields.finished = true;
-            }
-        }
-        let count = unsafe { sum_engines(w, company, id, engine) };
-        if count > 0 {
-            unsafe {
-                (*s).fields.finished = false;
-            }
-        }
-        er = next;
-    }
+    update_autoreplace(w, crate::company_type::CompanyID(company));
 }
 unsafe fn train_group(w: &GroupServices, v: VehicleRef, new: u16, viewport: bool) {
     let owner = v.owner_raw();

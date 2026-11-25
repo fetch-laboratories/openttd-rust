@@ -37,6 +37,7 @@
 #include "company_adapter.h"
 #include "company_identity_ffi.h"
 #include "company_services.h"
+#include "services_cargo.h"
 #include "clock_ffi.h"
 #include "command_services.h"
 #include "engine_ffi.h"
@@ -68,7 +69,10 @@ static CompanyFinances *Fin_company_finances(uint8_t id) noexcept
 	Company *c = Company::GetIfValid(id);
 	return c == nullptr ? nullptr : &c->Finances();
 }
-static void Fin_invalidate_company_windows(uint8_t id) noexcept { InvalidateCompanyWindows(Company::Get(id)); }
+extern CompanyMask _dirty_company_finances;
+/* InvalidateCompanyWindows(Company::Get(id)) by the company's ID, without the pool lookup:
+ * it reads only the index. */
+static void Fin_invalidate_company_windows(uint8_t id) noexcept { _dirty_company_finances.Set(CompanyID(id)); }
 
 const OpenTTDCompanyFinanceServices &GetRustCompanyFinanceServices() noexcept
 {
@@ -153,8 +157,8 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.allow_list_remove = Co_allow_list_remove,
 		.can_allocate_company = []() noexcept { return Company::CanAllocateItem(); },
 		.canal_maintenance_cost = [](uint32_t num) noexcept { return CanalMaintenanceCost(num).base(); },
-		.cargo_initial_payment = [](const void *cs) noexcept -> int64_t { return static_cast<const CargoSpec *>(cs)->initial_payment; },
-		.cargo_set_current_payment = [](const void *cs, int64_t payment) noexcept { const_cast<CargoSpec *>(static_cast<const CargoSpec *>(cs))->current_payment = payment; },
+		.cargo_initial_payment = RustCargoInitialPayment,
+		.cargo_set_current_payment = RustCargoSetCurrentPayment,
 		.change_window_owner = [](uint8_t old_owner, uint8_t new_owner) noexcept { ChangeWindowOwner(CompanyID(old_owner), CompanyID(new_owner)); },
 		.close_company_windows = [](uint8_t company) noexcept { CloseCompanyWindows(CompanyID(company)); },
 		.close_construction_windows = []() noexcept { CloseConstructionWindows(); },

@@ -233,7 +233,16 @@ fn flush_signals(s: &CommandServices) {
 pub(crate) fn is_local_company(s: &CommandServices) -> bool {
     // SAFETY: the company table is immutable for the process lifetime.
     let company = unsafe { &*(s.company)() };
-    (company.shared.local_company)() == (s.finance.current_company)()
+    is_local_company_of(company.shared.local_company, s.finance.current_company)
+}
+
+/// `IsLocalCompany` over the reads of `_local_company` and `_current_company` a caller's
+/// tables bind: `_local_company == _current_company`.
+pub(crate) fn is_local_company_of(
+    local_company: extern "C" fn() -> u8,
+    current_company: extern "C" fn() -> u8,
+) -> bool {
+    local_company() == current_company()
 }
 
 /// `IsCommandAllowedWhilePaused`, over the command's `CommandType`.

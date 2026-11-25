@@ -164,7 +164,7 @@ void DrawCompanyIcon(CompanyID c, int x, int y)
  * @return true if and only if the face is valid
  */
 
-static CompanyMask _dirty_company_finances{}; ///< Bitmask of company finances that should be marked dirty.
+CompanyMask _dirty_company_finances{}; ///< Bitmask of company finances that should be marked dirty.
 
 /**
  * Mark all finance windows owned by a company as needing a refresh.

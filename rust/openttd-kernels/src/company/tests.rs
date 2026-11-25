@@ -142,9 +142,6 @@ mod financial_command_tests {
     extern "C" fn animation(x: i32, _: i32, _: i32, cost: i64) {
         record([53, i64::from(x / 16), cost]);
     }
-    extern "C" fn tile_z(_: u32) -> i32 {
-        0
-    }
     extern "C" fn colour(_: CompanyID) -> crate::gfx_type::TextColour {
         crate::gfx_type::TextColour(0)
     }
@@ -194,7 +191,6 @@ mod financial_command_tests {
             current_company,
             company_valid,
             cost_animation: animation,
-            tile_z,
             map: crate::map_func::fixture::statics(),
             settings: leak(crate::settings_type::SettingAddresses {
                 give_money,
@@ -222,7 +218,21 @@ mod financial_command_tests {
             OWNERS.set(std::array::from_fn(|_| {
                 Box::into_raw(Box::new(unsafe { std::mem::zeroed::<Finances>() }))
             }));
-            crate::map_func::fixture::set_dimensions(6, 6);
+            // A flat 64x64 map of clear tiles for `GetTilePixelZ` of the animation tile.
+            let tiles = 1 << 12;
+            let base: Box<[crate::map_func::BaseTileLayout]> =
+                (0..tiles).map(|_| unsafe { std::mem::zeroed() }).collect();
+            let extended: Box<[crate::map_func::ExtendedTileLayout]> =
+                (0..tiles).map(|_| unsafe { std::mem::zeroed() }).collect();
+            crate::map_func::fixture::set(
+                crate::map_func::TileTypeAllocation {
+                    base: Box::leak(base).as_ptr(),
+                    extended: Box::leak(extended).as_ptr(),
+                    count: tiles,
+                    assertions: true,
+                },
+                6,
+            );
             crate::news_func::testing::take();
             crate::news_func::testing::observe(Some(message));
             let old_max_loan = read_field!(super::super::economy(), max_loan);
@@ -433,19 +443,12 @@ mod road_price_tests {
             _ => unreachable!(),
         }
     }
-    fn set_price(index: usize, value: i64) {
-        // SAFETY: Process-wide price table, serialized by the game-state test lock.
-        unsafe {
-            crate::company::openttd_rust_economy_prices()
-                .add(index)
-                .write(value);
-        }
-    }
+    use crate::company::price;
+    use crate::company::testing::set_price;
 
     #[test]
     fn road_price_saturation_rounding_and_type_masks() {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
-        let prices = crate::company::openttd_rust_economy_prices();
         let (road_mask, tram_mask) = (
             crate::type_registry::openttd_rust_road_mask(),
             crate::type_registry::openttd_rust_tram_mask(),
@@ -453,16 +456,16 @@ mod road_price_tests {
         // SAFETY: Process-wide scalars, serialized by the lock and restored below.
         let saved = unsafe {
             (
-                prices.add(PR_BUILD_ROAD.0 as usize).read(),
-                prices.add(PR_CLEAR_ROAD.0 as usize).read(),
+                price(PR_BUILD_ROAD),
+                price(PR_CLEAR_ROAD),
                 road_mask.replace(1 << ROADTYPE_ROAD),
                 tram_mask.replace(1 << ROADTYPE_TRAM),
             )
         };
         let mut s = crate::test_tables::SHARED;
         s.road_cost_multiplier = cost_multiplier;
-        set_price(PR_BUILD_ROAD.0 as usize, 7);
-        set_price(PR_CLEAR_ROAD.0 as usize, -27);
+        set_price(PR_BUILD_ROAD, 7);
+        set_price(PR_CLEAR_ROAD, -27);
         assert_eq!(build_cost(&s, ROADTYPE_ROAD), 2);
         assert_eq!(clear_cost(&s, ROADTYPE_ROAD), -27);
         assert_eq!(convert_cost(&s, ROADTYPE_ROAD, ROADTYPE_ROAD), 0);
@@ -470,19 +473,19 @@ mod road_price_tests {
         // SAFETY: As above.
         unsafe { road_mask.write(0) };
         assert_eq!(clear_cost(&s, ROADTYPE_ROAD), -28);
-        set_price(PR_BUILD_ROAD.0 as usize, -7);
+        set_price(PR_BUILD_ROAD, -7);
         assert_eq!(build_cost(&s, ROADTYPE_ROAD), -3);
         assert_eq!(clear_cost(&s, ROADTYPE_ROAD), -25);
-        set_price(PR_BUILD_ROAD.0 as usize, i64::MAX);
+        set_price(PR_BUILD_ROAD, i64::MAX);
         assert_eq!(build_cost(&s, ROADTYPE_TRAM), 1_152_921_504_606_846_975);
         assert_eq!(clear_cost(&s, ROADTYPE_TRAM), -864_691_128_455_135_258);
-        set_price(PR_BUILD_ROAD.0 as usize, i64::MIN);
+        set_price(PR_BUILD_ROAD, i64::MIN);
         assert_eq!(build_cost(&s, ROADTYPE_TRAM), -1_152_921_504_606_846_976);
         assert_eq!(clear_cost(&s, ROADTYPE_TRAM), 864_691_128_455_135_205);
+        set_price(PR_BUILD_ROAD, saved.0);
+        set_price(PR_CLEAR_ROAD, saved.1);
         // SAFETY: As above.
         unsafe {
-            prices.add(PR_BUILD_ROAD.0 as usize).write(saved.0);
-            prices.add(PR_CLEAR_ROAD.0 as usize).write(saved.1);
             road_mask.write(saved.2);
             tram_mask.write(saved.3);
         }
