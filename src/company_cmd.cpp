@@ -299,9 +299,9 @@ void ResetCompanyLivery(Company *c)
 Company *DoStartupNewCompany(bool is_ai, CompanyID company = CompanyID::Invalid())
 {
 	/* Rust returns before AI::StartNew, whose script memory policy can throw. */
-	OpenTTDCompanyStartup frame{.is_ai = is_ai, .company = company.base(), .stage = 0, .index = UINT32_MAX};
+	OpenTTDCompanyStartup frame{.is_ai = is_ai, .company = company.base(), .stage = 0, .index = UINT32_MAX, .created = nullptr};
 	while (openttd_rust_company_startup(&GetRustCompanyServices(), &frame)) AI::StartNew(CompanyID(frame.index));
-	return frame.index == UINT32_MAX ? nullptr : Company::Get(frame.index);
+	return frame.created;
 }
 
 /** Start a new competitor company if possible. */

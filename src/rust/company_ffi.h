@@ -39,12 +39,13 @@ struct StoryPage;
  * a script memory-policy Script_FatalError (AIInstance::Initialize registers the
  * API and loads compatibility scripts before ScriptInstance::Initialize's catch).
  * Rust returns before that call; if it throws, the frame is abandoned. */
-/** The frame of DoStartupNewCompany(is_ai, company); index is UINT32_MAX when no company was created. */
+/** The frame of DoStartupNewCompany(is_ai, company); index is UINT32_MAX and created nullptr when no company was created. */
 struct OpenTTDCompanyStartup {
 	bool is_ai;
 	uint8_t company;
 	uint8_t stage;
 	uint32_t index;
+	Company *created;
 };
 /** The frame of CmdCompanyCtrl: its arguments, its DoCommandFlags and CCA_NEW_AI's startup. */
 struct OpenTTDCompanyControl {

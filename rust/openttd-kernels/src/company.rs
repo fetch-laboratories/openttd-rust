@@ -892,7 +892,7 @@ pub const STARTUP_AI_STARTED: u8 = 1;
 pub const STARTUP_DONE: u8 = 2;
 
 /// The caller-owned frame of `DoStartupNewCompany(is_ai, company)`. `index` is the new
-/// company's index, or `u32::MAX` when none was created.
+/// company's index, or `u32::MAX` when none was created; `created` is its record, or null.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Startup {
@@ -904,6 +904,8 @@ pub struct Startup {
     pub stage: u8,
     /// The index of the company created.
     pub index: u32,
+    /// The company created, or null: the `Company *` the original returns.
+    pub created: *mut OpenTTDCompany,
 }
 
 impl Startup {
@@ -914,6 +916,7 @@ impl Startup {
             company,
             stage: STARTUP_BEGIN,
             index: u32::MAX,
+            created: core::ptr::null_mut(),
         }
     }
 }
@@ -953,6 +956,7 @@ pub(crate) fn do_startup_new_company(s: &Services, frame: &mut Startup) -> bool 
     };
     let c = CompanyRef::new(s.identity, c);
     frame.index = u32::from(c.index.0);
+    frame.created = c.company;
 
     (s.identity.set_colour)(c.company, colour);
 
@@ -1504,7 +1508,7 @@ pub(crate) fn cmd_company_ctrl(
                     }
                 } else {
                     let index = CompanyID(startup.index as u8);
-                    let c = (s.identity.company)(index);
+                    let c = startup.created;
                     (s.network_admin_company_new)(c);
                     let f = network_frame(s);
                     // SAFETY: `ci` is null or the pool's record of the client, which the call
@@ -1629,7 +1633,7 @@ pub(crate) fn cmd_company_ctrl(
         }
         frame.stage = CONTROL_DONE;
         if frame.startup.index != u32::MAX {
-            let c = (s.identity.company)(CompanyID(frame.startup.index as u8));
+            let c = frame.startup.created;
             (s.network_admin_company_new)(c);
             let f = network_frame(s);
             // SAFETY: No client: `nullptr`.
@@ -3916,6 +3920,7 @@ crate::abi::layouts! {
         company,
         stage,
         index,
+        created,
     };
     "OpenTTDCompanyControl" ["company_economy"] => Control {
         args,
