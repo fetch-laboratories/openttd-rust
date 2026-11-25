@@ -32,6 +32,36 @@ pub const fn set(data: u64, value: u8) -> u64 {
     data | 1_u64.wrapping_shl(value as u32)
 }
 
+/// [`set`] on a `uint8_t` storage.
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "BaseBitSet::Set stores to a uint8_t Tstorage (core/base_bitset_type.hpp)"
+)]
+pub const fn set_u8(data: u8, value: u8) -> u8 {
+    set(data as u64, value) as u8
+}
+
+/// [`set`] on a `uint16_t` storage.
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "BaseBitSet::Set stores to a uint16_t Tstorage (core/base_bitset_type.hpp)"
+)]
+pub const fn set_u16(data: u16, value: u8) -> u16 {
+    set(data as u64, value) as u16
+}
+
+/// [`set`] on a `uint32_t` storage.
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "BaseBitSet::Set stores to a uint32_t Tstorage (core/base_bitset_type.hpp)"
+)]
+pub const fn set_u32(data: u32, value: u8) -> u32 {
+    set(data as u64, value) as u32
+}
+
 /// Bitwise operators shared by native bit-mask enums and unmasked `EnumBitSet`s.
 /// Each wrapper keeps its original storage width, including unnamed high bits.
 macro_rules! impl_bitset_ops {

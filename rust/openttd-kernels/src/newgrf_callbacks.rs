@@ -578,7 +578,7 @@ impl AirportTileCallbackMask {
 /// The `EnumBitSet` of a callback mask: its storage, `BaseBitSet::Set` of one element
 /// (the single-element constructor), `BaseBitSet::Test` and the union `Set(const Timpl &)`.
 macro_rules! callback_mask_set {
-    ($set:ident, $element:ident, $storage:ty, $doc:literal) => {
+    ($set:ident, $element:ident, $storage:ty, $set_storage:ident, $doc:literal) => {
         #[doc = $doc]
         #[repr(transparent)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -589,12 +589,8 @@ macro_rules! callback_mask_set {
             pub const EMPTY: Self = Self(0);
             /// `EnumBitSet(Tenum value)`: the set holding one element, through `BaseBitSet::Set`.
             #[must_use]
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "BaseBitSet::Set stores to the set's Tstorage (core/base_bitset_type.hpp)"
-            )]
             pub const fn from_element(element: $element) -> Self {
-                Self(base_bitset_type::set(0, element.0) as $storage)
+                Self(base_bitset_type::$set_storage(0, element.0))
             }
             /// `BaseBitSet::Test`: whether the element is set.
             #[must_use]
@@ -616,60 +612,70 @@ callback_mask_set!(
     VehicleCallbackMasks,
     VehicleCallbackMask,
     u16,
+    set_u16,
     "`VehicleCallbackMasks`, `EnumBitSet<VehicleCallbackMask, uint16_t>`."
 );
 callback_mask_set!(
     StationCallbackMasks,
     StationCallbackMask,
     u16,
+    set_u16,
     "`StationCallbackMasks`, `EnumBitSet<StationCallbackMask, uint16_t>`."
 );
 callback_mask_set!(
     RoadStopCallbackMasks,
     RoadStopCallbackMask,
     u8,
+    set_u8,
     "`RoadStopCallbackMasks`, `EnumBitSet<RoadStopCallbackMask, uint8_t>`."
 );
 callback_mask_set!(
     HouseCallbackMasks,
     HouseCallbackMask,
     u16,
+    set_u16,
     "`HouseCallbackMasks`, `EnumBitSet<HouseCallbackMask, uint16_t>`."
 );
 callback_mask_set!(
     CanalCallbackMasks,
     CanalCallbackMask,
     u8,
+    set_u8,
     "`CanalCallbackMasks`, `EnumBitSet<CanalCallbackMask, uint8_t>`."
 );
 callback_mask_set!(
     CargoCallbackMasks,
     CargoCallbackMask,
     u8,
+    set_u8,
     "`CargoCallbackMasks`, `EnumBitSet<CargoCallbackMask, uint8_t>`."
 );
 callback_mask_set!(
     IndustryCallbackMasks,
     IndustryCallbackMask,
     u16,
+    set_u16,
     "`IndustryCallbackMasks`, `EnumBitSet<IndustryCallbackMask, uint16_t>`."
 );
 callback_mask_set!(
     IndustryTileCallbackMasks,
     IndustryTileCallbackMask,
     u8,
+    set_u8,
     "`IndustryTileCallbackMasks`, `EnumBitSet<IndustryTileCallbackMask, uint8_t>`."
 );
 callback_mask_set!(
     ObjectCallbackMasks,
     ObjectCallbackMask,
     u8,
+    set_u8,
     "`ObjectCallbackMasks`, `EnumBitSet<ObjectCallbackMask, uint8_t>`."
 );
 callback_mask_set!(
     AirportTileCallbackMasks,
     AirportTileCallbackMask,
     u8,
+    set_u8,
     "`AirportTileCallbackMasks`, `EnumBitSet<AirportTileCallbackMask, uint8_t>`."
 );
 

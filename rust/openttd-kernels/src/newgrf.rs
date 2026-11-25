@@ -81,12 +81,8 @@ impl GrfMiscBits {
         base_bitset_type::test(self.0 as u64, bit.0)
     }
     /// `BaseBitSet::Set`: set the bit.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "BaseBitSet::Set stores to the uint8_t storage of GrfMiscBits (newgrf.h)"
-    )]
     pub const fn set(&mut self, bit: GrfMiscBit) {
-        self.0 = base_bitset_type::set(self.0 as u64, bit.0) as u8;
+        self.0 = base_bitset_type::set_u8(self.0, bit.0);
     }
 }
 
@@ -166,12 +162,8 @@ impl GrfSpecFeatures {
     /// Empty bit set.
     pub const EMPTY: Self = Self(0);
     /// `BaseBitSet::Set`: set the feature.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "BaseBitSet::Set stores to the uint32_t storage of GrfSpecFeatures (newgrf.h)"
-    )]
     pub const fn set(&mut self, element: GrfSpecFeature) {
-        self.0 = base_bitset_type::set(self.0 as u64, element.0) as u32;
+        self.0 = base_bitset_type::set_u32(self.0, element.0);
     }
 }
 
