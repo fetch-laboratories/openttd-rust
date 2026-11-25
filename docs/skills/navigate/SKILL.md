@@ -38,12 +38,14 @@ Ask whether each part, followed literally, reaches the destination:
 - **Metrics**: whether every figure root and steer use measures distance.
 - **Rate**: its changes and the parts of the course responsible, measured from each period's merges and PRs, not listed as candidates. In a stage that retires no C++ by design, such as the cleanup, judge that stage's own pace: its intended cost is not a finding.
 - **Autonomy**: waits, parked work and decisions the destination already answers.
+- **Steering and fathoms**: for each steering review and each closed [fathom](../fathom/SKILL.md) case of the period, whether the number it aimed at moved and stayed; which problems came back after a correction; and the cases still open on the tracker, #1067, by cost.
 
 Done when every part has a verdict, and each failure names its text by file and line.
 
 ## 4. Reset the course
 
 - Correct each failure at its source: the goal line in `AGENTS.md`, [goal and phases](../../planning.md#goal-and-phases), the roadmap's "Phases", owning guidance and skills. Rewrite or remove a failing rule rather than adding a counter-rule. Record a correction that is a real decision as an ADR ([ADRs](../../adr/README.md)).
+- Hand down a failure whose cause your counts do not establish: a question for the next steering, or a fathom case ([spawning](../../team.md#spawning)), with the rule's history and the test that would settle it.
 - Put a tool change, such as a metric, in an issue at the top of the work order.
 - Replace the roadmap's "Phases" chart with the position table, each phase's size, exit criterion and status, and root's first actions.
 - Commit all edits as one docs-only commit on `rust-migration`: `Doc: Navigate toward <correction> [skip ci]`, or `Doc: Navigate, course holds [skip ci]` if only the position changed. Push once settled.
