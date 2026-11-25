@@ -722,14 +722,12 @@ pub(crate) unsafe fn cmd_refit_vehicle(
                         .0
                         .as_ptr(),
                 );
-                unsafe {
-                    crate::ship_control::openttd_rust_ship_cache(
-                        vehicle_ref(v, s.common.vehicles),
-                        (b.groups.vehicle_id)(v),
-                        s.ship,
-                        b.shared,
-                    );
-                }
+                crate::ship_control::update_cache(
+                    &crate::ship_control::Tables::new(s.ship, b.shared),
+                    crate::ship_control::Ship::from_vehicle(unsafe {
+                        vehicle_ref(v, s.common.vehicles)
+                    }),
+                );
             }
             VehicleType::AIRCRAFT => {
                 (s.invalidate_chain)(

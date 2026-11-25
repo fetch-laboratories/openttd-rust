@@ -1905,17 +1905,6 @@ pub unsafe extern "C" fn openttd_rust_timetable_autofill(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_timetable_update(
-    v: *mut c_void,
-    travelling: u8,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    g.update_timetable(v, travelling != 0);
-    1
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_orders_start_tick(
     date: i32,
     current_date: i32,
@@ -2128,6 +2117,14 @@ pub unsafe extern "C" fn openttd_rust_increment_real(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_wait_unbunching(
+    v: *mut c_void,
+    leaves: &'static Leaves,
+) -> u32 {
+    u32::from(VisitOrders::new(leaves).is_waiting_for_unbunching(native_vehicle(v, leaves.base)))
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_leave_unbunching(
     v: *mut c_void,
     leaves: &'static Leaves,
@@ -2137,19 +2134,17 @@ pub unsafe extern "C" fn openttd_rust_leave_unbunching(
     0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_wait_unbunching(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    u32::from(VisitOrders::new(leaves).is_waiting_for_unbunching(native_vehicle(v, leaves.base)))
-}
-
 /// `Order::Free`: 'Free' the order.
 /// @note ONLY use on "`current_order`" vehicle orders!
 pub(crate) fn free(v: VehicleRef) {
     // SAFETY: The live vehicle's current order.
     unsafe { free_order(v.current_order_pointer()) };
+}
+/// `Order::MakeLeaveStation` on `v->current_order`: makes this order a Leave Station order.
+pub(crate) fn make_leave_station(v: VehicleRef) {
+    let p = v.current_order_pointer();
+    write_field!(p, kind, OT_LEAVESTATION);
+    write_field!(p, flags, 0);
 }
 /// `Order::Free` on `p`.
 ///
@@ -2267,17 +2262,6 @@ pub unsafe extern "C" fn openttd_rust_order_loading(p: *mut Order, ordered: u8) 
         if ordered == 0 {
             order.flags = 0;
         }
-    };
-    store(p, order);
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_leave(p: *mut Order) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_LEAVESTATION;
-        order.flags = 0;
     };
     store(p, order);
     0
@@ -3162,13 +3146,6 @@ pub unsafe extern "C" fn openttd_rust_remove_destination(
 pub(crate) fn check_orders(v: VehicleRef, leaves: &'static Leaves) {
     let control = Control { g: Game(leaves) };
     control.check_orders(|| v);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_check_orders(v: *mut c_void, leaves: &'static Leaves) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.check_orders(|| native_vehicle(v, leaves.base));
-    0
 }
 
 #[repr(C)]
@@ -5077,12 +5054,6 @@ impl VisitOrders {
         }
 
         read_field!(consist, next_departure) > (self.0.0.tick_counter)()
-    }
-    /// `v->current_order.MakeLeaveStation()`.
-    pub(crate) fn make_leave_station(self, v: VehicleRef) {
-        reenter!(openttd_rust_order_leave(current_order(
-            self.0.vehicle(Self::shell(v))
-        )));
     }
 }
 

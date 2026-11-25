@@ -165,15 +165,6 @@ pub(crate) fn has_vehicle_on_tile(
     }
     false
 }
-/// [`has_vehicle_on_tile`] for callers in files no pass has finished.
-#[inline]
-pub(crate) fn has_vehicle_on_tile_raw(
-    map: Map,
-    tile: u32,
-    predicate: impl FnMut(VehicleRef) -> bool,
-) -> bool {
-    has_vehicle_on_tile(map, TileIndex(tile), predicate)
-}
 
 /// `for (Vehicle *v : VehiclesNearTileXY(x, y, max_dist))`: iterate over all vehicles near a
 /// given world coordinate.

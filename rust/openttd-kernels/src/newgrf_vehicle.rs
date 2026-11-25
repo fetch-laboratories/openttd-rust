@@ -131,7 +131,6 @@ pub struct Services {
     last_service: unsafe extern "C" fn(V) -> i32,
     primary: unsafe extern "C" fn(V) -> bool,
     train_services: unsafe extern "C" fn() -> *const crate::train::Leaves,
-    order_max_speed: unsafe extern "C" fn(V) -> u16,
     pub(crate) id: unsafe extern "C" fn(V) -> u32,
     old_order: unsafe extern "C" fn(V) -> u16,
     num_orders: unsafe extern "C" fn(V) -> u8,
@@ -174,7 +173,6 @@ pub struct Services {
         unsafe extern "C" fn(crate::services::RailType) -> crate::newgrf_specs::BadgeSpan,
     pub(crate) road_badge:
         unsafe extern "C" fn(crate::services::RoadType) -> crate::newgrf_specs::BadgeSpan,
-    ship_owner: unsafe extern "C" fn(V) -> *mut crate::ship_control::State,
     aircraft_leaves: unsafe extern "C" fn() -> *const crate::aircraft::Leaves,
     ground: unsafe extern "C" fn() -> *const crate::ground_vehicle::Services,
     cargo_services: unsafe extern "C" fn() -> *const crate::cargo_storage::Services,
@@ -401,7 +399,6 @@ pub(crate) const TEST_TABLE: Services = Services {
     last_service: crate::test_tables::unreachable1,
     primary: crate::test_tables::unreachable1,
     train_services: crate::test_tables::unreachable0,
-    order_max_speed: crate::test_tables::unreachable1,
     id: crate::test_tables::unreachable1,
     old_order: crate::test_tables::unreachable1,
     num_orders: crate::test_tables::unreachable1,
@@ -437,7 +434,6 @@ pub(crate) const TEST_TABLE: Services = Services {
     badge_at: crate::test_tables::unreachable2,
     rail_badge: crate::test_tables::unreachable1,
     road_badge: crate::test_tables::unreachable1,
-    ship_owner: crate::test_tables::unreachable1,
     aircraft_leaves: crate::test_tables::unreachable0,
     ground: crate::test_tables::unreachable0,
     cargo_services: crate::test_tables::unreachable0,
@@ -1029,15 +1025,6 @@ pub(crate) fn get_vehicle_property(
 ) -> i32 {
     get_engine_property(s, v.engine_type(), property, orig_value, Some(v), false)
 }
-/// [`get_vehicle_property`] for callers in files no pass has finished.
-pub(crate) fn get_vehicle_property_raw(
-    s: &Services,
-    v: VehicleRef,
-    property: u8,
-    orig_value: i32,
-) -> i32 {
-    get_vehicle_property(s, v, PropertyID(property), orig_value)
-}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_property(
     s: &Services,
@@ -1139,10 +1126,7 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
                 crate::train::Handle::from_vehicle(crate::vehicle::VehicleRef::of(v)),
             ),
             1 => crate::road::current_max_speed(s.shared, handle(v)),
-            2 => crate::ship_control::current_max_speed(
-                (handle(v)).cached_max_speed(),
-                (s.order_max_speed)(v),
-            ),
+            2 => crate::ship_control::get_current_max_speed(handle(v)),
             3 => crate::aircraft::speed_old_units(u32::from((handle(v)).cached_max_speed())) as i32,
             _ => 0,
         }
@@ -1895,11 +1879,9 @@ unsafe fn variable(
                 _ => {}
             },
             2 => {
+                let ship = crate::ship_control::Ship::from_vehicle(handle(v));
                 if variable == 0xe2 {
-                    return u32::from(crate::ship_control::openttd_rust_ship_get_state((s
-                        .ship_owner)(
-                        v
-                    )));
+                    return u32::from(ship.state().0);
                 }
             }
             3 => match variable {
@@ -2095,7 +2077,6 @@ crate::abi::layouts! {
         last_service,
         primary,
         train_services,
-        order_max_speed,
         id,
         old_order,
         num_orders,
@@ -2131,7 +2112,6 @@ crate::abi::layouts! {
         badge_at,
         rail_badge,
         road_badge,
-        ship_owner,
         aircraft_leaves,
         ground,
         cargo_services,

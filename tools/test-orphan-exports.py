@@ -353,6 +353,81 @@ class OrphanTests(unittest.TestCase):
             )
             self.assertEqual(check(), 1)  # A new row is growth against the base.
 
+    def test_operator_default_argument_and_objective_cpp_calls_are_uses(
+        self,
+    ) -> None:
+        self.assertFalse(ORPHANS.declares("\n\tres << Cost(e);", "Cost", typed=True))
+        self.assertTrue(
+            ORPHANS.declares("\nstd::vector<int> Cost(int e);", "Cost", typed=True)
+        )
+        self.assertFalse(ORPHANS.declares("\n\tin >> Cost(e);", "Cost", typed=True))
+        shifted = "std::array<int, 1 << 2> Dead();\nstd::array<int, 1 << 2> Dead() { return {}; }\n"
+        self.assertTrue(
+            ORPHANS.declares("std::array<int, 1 << 2> Dead();", "Dead", typed=True)
+        )
+        uncalled, _, _ = ORPHANS.uncalled_free_functions({"src/a.cpp": shifted})
+        self.assertEqual(uncalled, {"Dead": "src/a.cpp:2"})
+        files = {
+            "src/engine_gui.cpp": "static std::string Cost(const Engine &e) { return {}; }\n"
+            "void Preview(std::ostream &res)\n{\n\tres << Cost(e);\n}\n"
+            "int Default() { return 1; }\n"
+            "int Caller(int value = Default())\n{\n\treturn value;\n}\n"
+            "void Hotkey(int key) {}\n"
+            "int main() { Preview(out); Caller(); }\n",
+            "src/video/cocoa/cocoa_wnd.mm": "- (void)touch:(id)item\n{\n"
+            "\tHotkey(item.hotkey);\n}\n",
+        }
+        uncalled, _, _ = ORPHANS.uncalled_free_functions(files)
+        self.assertEqual(uncalled, {})
+
+    def test_the_gate_exempts_abi_checks_and_platform_entries(self) -> None:
+        found = {
+            "Dead": "src/a.cpp:1",
+            "CheckAbi_ship_cmd": "src/ship_cmd.cpp:9",
+            "WinMain": "src/os/windows/win32_main.cpp:47",
+            "em_openttd_add_server": "src/network/network.cpp:1012",
+        }
+        self.assertEqual(ORPHANS.refused_uncalled(found), {"Dead": "src/a.cpp:1"})
+
+    def test_cli_refuses_a_function_left_uncalled(self) -> None:
+        """A change that deletes a function's last caller deletes the function."""
+        files = {
+            "src/a.cpp": "void Live()\n{\n}\nint main() { Live(); }\n",
+            ORPHANS.BASELINE: "",
+            ORPHANS.UNCALLED_FREE: "",
+        }
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(ORPHANS, "ROOT", Path(directory)),
+        ):
+            root = Path(directory)
+            initialize(root, files)
+
+            def check() -> tuple[int, str]:
+                output = io.StringIO()
+                with (
+                    patch.object(
+                        sys, "argv", ["orphan-exports.py", "--base-ref", "HEAD"]
+                    ),
+                    contextlib.redirect_stdout(output),
+                ):
+                    return ORPHANS.main(), output.getvalue()
+
+            self.assertEqual(check()[0], 0)
+            (root / "src/a.cpp").write_text("void Live()\n{\n}\nint main() {}\n")
+            code, output = check()
+            self.assertEqual(code, 1)
+            self.assertIn("new uncalled free function: Live (src/a.cpp:1)", output)
+            (root / ORPHANS.UNCALLED_FREE).write_text("Live | #975 owner\n")
+            code, output = check()
+            self.assertEqual(code, 1)  # The baseline only shrinks.
+            self.assertIn("uncalled-free-function baseline cannot grow: Live", output)
+            (root / ORPHANS.UNCALLED_FREE).write_text("")
+            (root / "src/a.cpp").write_text(
+                "bool CheckAbi_a() { return true; }\nint main() {}\n"
+            )
+            self.assertEqual(check()[0], 0)
+
     def test_help_and_unknown_options_run_no_check(self) -> None:
         for argv, code in ((["--help"], 0), (["-h"], 0), (["--bsae-ref", "X"], 2)):
             output = io.StringIO()

@@ -36,6 +36,7 @@ use crate::orders::VisitOrders;
 use crate::script_event_types::ScriptEvent;
 use crate::services::Services as SharedServices;
 use crate::services_assert::{assert_with, not_reached};
+use crate::ship_control::{Ship, Tables, update_cache};
 use crate::station::{BaseStation, Station};
 use crate::station_service::{Links, Loading, World, has_rating, prepare_unload};
 use crate::station_type::StationID;
@@ -1007,7 +1008,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
         }
     }
 
-    o.make_leave_station(v);
+    crate::orders::make_leave_station(v);
     let st = (s.station.station)(v.last_station_visited().0);
     cancel_reservation(v, StationID::INVALID, st.native, s);
     // SAFETY: The live station's queue owner; the vehicle shell is its key.
@@ -1154,12 +1155,11 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
 
         VehicleType::VEH_SHIP => {
             set_window_classes_dirty(WindowClass::WC_SHIPS_LIST);
-            let leaves = s.refit.ship;
-            let ship = (leaves.state_owner)(index.0);
-            // SAFETY: The live ship's state owner.
-            unsafe { crate::ship_control::set_state(ship, TrackBits::TRACK_BIT_DEPOT) };
-            crate::ship_control::update_cache(leaves, s.shared, ship, v);
-            (leaves.viewport)(v, true, true);
+            // `Ship::From(v)`, whose owner the record's `ship` link names.
+            let (ship, leaves) = (Ship::from_vehicle(v), s.refit.ship);
+            ship.set_state(TrackBits::TRACK_BIT_DEPOT);
+            update_cache(&Tables::new(leaves, s.shared), ship);
+            (leaves.update_viewport)(v, true, true);
             set_window_dirty(WindowClass::WC_VEHICLE_DEPOT, WindowNumber::from(v.tile()));
         }
 

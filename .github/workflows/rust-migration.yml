@@ -3,8 +3,36 @@ name: Migration baseline validation
 on:
   push:
     branches: [rust-migration]
-    # Markdown-only pushes never queue, so they cannot displace a pending code push below.
-    paths-ignore: ['**.md']
+    # Docs-only pushes never queue, so they cannot displace a pending code push below. The last
+    # pattern that matches a path decides, and together they are the docs-only rule of
+    # tools/preflight_stamp.py: a path starts this workflow unless it is docs-only.
+    paths:
+    - '**'
+    - '!AGENTS.md'
+    - '!docs/**'
+    - 'docs/**.py'
+    - 'docs/**.sh'
+    - 'docs/admin_network.md'
+    - 'docs/debugging_desyncs.md'
+    - 'docs/desync.md'
+    - 'docs/directory_structure.md'
+    - 'docs/eints.md'
+    - 'docs/fonts.md'
+    - 'docs/game_coordinator.md'
+    - 'docs/linkgraph.md'
+    - 'docs/logging_and_performance_metrics.md'
+    - 'docs/multiplayer.md'
+    - 'docs/savegame_format.md'
+    - 'docs/symbol_server.md'
+    - 'docs/obg_format.txt'
+    - 'docs/obm_format.txt'
+    - 'docs/obs_format.txt'
+    - 'docs/openttd.6'
+    - 'docs/elrail_tile.png'
+    - 'docs/elrail_track.png'
+    - '!.github/PULL_REQUEST_TEMPLATE.md'
+    - '!.github/ISSUE_TEMPLATE/**'
+    - '!.codex/**'
   pull_request:
     branches: [rust-migration]
   workflow_dispatch:

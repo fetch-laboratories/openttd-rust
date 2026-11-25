@@ -22,7 +22,6 @@ struct OpenTTDGroundPhysicsServices;
 struct OpenTTDTrainServices;
 struct OpenTTDCargoList;
 struct OpenTTDCargoStorageServices;
-struct OpenTTDShipState;
 enum RoadTramType : bool;
 enum RailType : uint8_t;
 enum RoadType : uint8_t;
@@ -64,7 +63,6 @@ struct OpenTTDVehicleResolverServices {
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	bool (*primary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	const OpenTTDTrainServices *(*train_services)() noexcept OPENTTD_SERVICE_DEFAULT(train_services);
-	uint16_t (*order_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_max_speed);
 	uint32_t (*id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(id);
 	uint16_t (*old_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(old_order);
 	uint8_t (*num_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(num_orders);
@@ -100,7 +98,6 @@ struct OpenTTDVehicleResolverServices {
 	uint32_t (*badge_at)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badge_at);
 	OpenTTDBadgeSpan (*rail_badge)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_badge);
 	OpenTTDBadgeSpan (*road_badge)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_badge);
-	OpenTTDShipState * (*ship_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ship_owner);
 	const OpenTTDAircraftLeaves * (*aircraft_leaves)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft_leaves);
 	const OpenTTDGroundPhysicsServices * (*ground)() noexcept OPENTTD_SERVICE_DEFAULT(ground);
 	const OpenTTDCargoStorageServices * (*cargo_services)() noexcept OPENTTD_SERVICE_DEFAULT(cargo_services);

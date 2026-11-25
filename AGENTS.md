@@ -48,4 +48,5 @@ Every line of original C++ and fork-written C++ (glue, tools and tests) will ret
 | Spawning or briefing agents | [Team](docs/team.md) |
 | Checking speed projections or running speed passes | [Speed](docs/speed.md) |
 | Running a deep check | [Deep checks](docs/deep-checks.md) |
+| Finding why a failure, stall or rework in running the project recurs | [Fathom](docs/skills/fathom/SKILL.md) |
 | Starting root, steering, navigating or writing a wind-down message | User-invoked skills: [start-development](docs/skills/start-development/SKILL.md), [steer](docs/skills/steer/SKILL.md), [navigate](docs/skills/navigate/SKILL.md), [wind-down](docs/skills/wind-down/SKILL.md) |

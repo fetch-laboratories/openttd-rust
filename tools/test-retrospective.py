@@ -14,6 +14,7 @@ from typing import Any
 from unittest import mock
 
 import base_update
+import rebuild_reach
 import retrospective as facts
 
 SCRIPT = Path(__file__).resolve().with_name("retrospective.py")
@@ -209,6 +210,81 @@ class RetrospectiveTests(unittest.TestCase):
             self.assertRaises(ValueError),
         ):
             facts.stocktake("start", "end")
+
+
+class ReadyWaitTests(unittest.TestCase):
+    def native(self, created: str, *attempts: tuple[str, str, str]) -> facts.NativeRun:
+        return facts.NativeRun(created, tuple(facts.Attempt(*a) for a in attempts))
+
+    def test_a_ready_mark_waits_only_after_its_native_run_finished(self) -> None:
+        # #1072: #1055 marked ready 0.4 minutes after its native run finished.
+        first = ("2026-11-25T00:11:05Z", "2026-11-25T00:26:40Z", "completed")
+        run = self.native("2026-11-25T00:11:00Z", first)
+        wait = facts.ready_wait
+        self.assertAlmostEqual(wait(["2026-11-25T00:27:04Z"], [run]) or 0, 0.4)
+        self.assertIsNone(wait(["2026-11-25T00:12:00Z"], [run]))
+        self.assertIsNone(wait(["2026-11-25T00:10:00Z"], [run]))
+        # The first mark counts; a later run requested after it does not.
+        later = self.native(
+            "2026-11-25T01:00:00Z",
+            ("2026-11-25T01:00:05Z", "2026-11-25T01:15:00Z", "completed"),
+        )
+        self.assertIsNone(
+            wait(["2026-11-25T01:20:00Z", "2026-11-25T00:12:00Z"], [run, later])
+        )
+        with self.assertRaises(ValueError):
+            wait([], [run])
+
+    def test_a_run_still_active_at_the_ready_mark_is_not_a_wait(self) -> None:
+        # Review of #1079: an active run's last update is not its finish.
+        active = ("2026-11-25T00:11:05Z", "2026-11-25T00:26:10Z", "in_progress")
+        run = self.native("2026-11-25T00:11:00Z", active)
+        self.assertIsNone(facts.ready_wait(["2026-11-25T00:27:00Z"], [run]))
+
+    def test_a_rerun_after_the_mark_keeps_the_first_attempts_finish(self) -> None:
+        # Re-check of #1079: attempt 2 started at 00:30, after the 00:27 mark.
+        run = self.native(
+            "2026-11-25T00:11:00Z",
+            ("2026-11-25T00:11:05Z", "2026-11-25T00:26:40Z", "completed"),
+            ("2026-11-25T00:30:00Z", "2026-11-25T00:45:00Z", "completed"),
+        )
+        self.assertAlmostEqual(
+            facts.ready_wait(["2026-11-25T00:27:00Z"], [run]) or 0, 20 / 60
+        )
+
+    def test_native_run_reads_each_attempt_at_the_json_boundary(self) -> None:
+        row: facts.RunRow = {
+            "databaseId": 7,
+            "displayTitle": "CI native PR 1 x",
+            "createdAt": "c",
+            "attempt": 2,
+        }
+        attempts = {
+            "actions/runs/7/attempts/1": {
+                "run_started_at": "s1",
+                "updated_at": "u1",
+                "status": "completed",
+            },
+            "actions/runs/7/attempts/2": {
+                "run_started_at": "s2",
+                "updated_at": "u2",
+                "status": "queued",
+            },
+        }
+        with mock.patch.object(
+            facts.ci, "api", side_effect=lambda _r, path: attempts[path]
+        ):
+            run = facts.native_run("o/r", row)
+        self.assertEqual(
+            run,
+            facts.NativeRun(
+                "c",
+                (
+                    facts.Attempt("s1", "u1", "completed"),
+                    facts.Attempt("s2", "u2", "queued"),
+                ),
+            ),
+        )
 
 
 class BaseUpdateTests(unittest.TestCase):
@@ -468,6 +544,192 @@ class BaseUpdateTests(unittest.TestCase):
             ["x"], ["CONFLICT (content): x"], ["======="], [], 1
         )
         self.assertFalse(base_update.markers_only(lone))
+
+
+GENERATOR = """import pathlib, sys
+root = pathlib.Path(__file__).resolve().parents[1]
+text = (root / "rust/openttd-kernels/src/record.rs").read_text()
+if "broken" in text:
+    sys.exit(1)
+out = pathlib.Path(sys.argv[1])
+out.mkdir(parents=True, exist_ok=True)
+(out / "abi-record-x.h").write_text(text)
+"""
+
+
+class RebuildReachTests(unittest.TestCase):
+    """A fixture build: a.o includes wide.h and the generated record; b.o
+    includes wide.h; c.o includes neither."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.temp.name) / "repo"
+        self.build = self.repo / "build-rust"
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.email", "fixture@example.invalid")
+        self.git("config", "user.name", "Fixture")
+        self.write(
+            {
+                "src/a.cpp": "a\n",
+                "src/b.cpp": "b\n",
+                "src/c.cpp": "c\n",
+                "src/wide.h": "1\n",
+                "docs/x.md": "1\n",
+                "rust/openttd-kernels/src/record.rs": "1\n",
+                "tools/generate-abi.py": GENERATOR,
+                ".gitignore": "build-rust/\n",
+            }
+        )
+        self.commit("init")
+        self.build.mkdir()
+        (self.build / "CMakeCache.txt").write_text(
+            f"CMAKE_HOME_DIRECTORY:INTERNAL={self.repo}\n"
+        )
+        self.deps = Path(self.temp.name) / "deps.txt"
+        self.deps.write_text(
+            "CMakeFiles/lib.dir/src/a.cpp.o: #deps 4, deps mtime 1 (VALID)\n"
+            "    ../src/a.cpp\n    /usr/include/stdio.h\n    ../src/wide.h\n"
+            f"    {self.build}/generated-abi/abi-record-x.h\n\n"
+            "CMakeFiles/lib.dir/src/b.cpp.o: #deps 2, deps mtime 1 (VALID)\n"
+            f"    {self.repo}/src/b.cpp\n    ../src/wide.h\n\n"
+            "CMakeFiles/lib.dir/src/c.cpp.o: #deps 1, deps mtime 1 (VALID)\n"
+            "    ../src/c.cpp\n\n"
+            "generated/strings.h: #deps 1, deps mtime 1 (VALID)\n    ../src/wide.h\n"
+        )
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def git(self, *arguments: str) -> str:
+        if not self.repo.exists():
+            self.repo.mkdir(parents=True)
+        return subprocess.run(
+            ["git", *arguments],
+            cwd=self.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def write(self, files: dict[str, str]) -> None:
+        for name, text in files.items():
+            (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.repo / name).write_text(text)
+
+    def commit(self, title: str) -> str:
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", title)
+        return self.git("rev-parse", "HEAD")
+
+    def cli(self, *arguments: str) -> tuple[int, str]:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "rebuilds", "--build", str(self.build),
+             "--deps", str(self.deps), *arguments],
+            cwd=self.repo, capture_output=True, text=True,
+            env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull},
+        )  # fmt: skip
+        return result.returncode, result.stdout + result.stderr
+
+    def counts(self, *shas: str) -> list[int]:
+        code, out = self.cli("--json", *shas)
+        self.assertEqual(code, 0, out)
+        return [c["objects"] for c in json.loads(out)["commits"]]
+
+    def test_deps_keep_objects_source_files_and_generated_headers(self) -> None:
+        objects = rebuild_reach.parse_deps(self.deps.read_text(), self.build, self.repo)
+        self.assertEqual(
+            objects["CMakeFiles/lib.dir/src/a.cpp.o"],
+            {"src/a.cpp", "src/wide.h", "generated-abi/abi-record-x.h"},
+        )
+        self.assertEqual(
+            objects["CMakeFiles/lib.dir/src/b.cpp.o"], {"src/b.cpp", "src/wide.h"}
+        )
+        self.assertEqual(len(objects), 3)
+
+    def test_a_change_recompiles_the_objects_that_include_it(self) -> None:
+        self.write({"src/wide.h": "2\n"})
+        wide = self.commit("wide")
+        self.write({"docs/x.md": "2\n"})
+        docs = self.commit("docs")
+        self.write({"src/c.cpp": "c2\n"})
+        source = self.commit("source")
+        self.assertEqual(self.counts(wide, docs, source), [2, 0, 1])
+        code, out = self.cli(wide)
+        self.assertIn("2 of 3 objects; src/wide.h 2", out)
+        self.assertIn("Median 2 objects over the 1 of 1 commits that change any", out)
+
+    def test_generated_headers_follow_their_rust_inputs(self) -> None:
+        self.write({"rust/openttd-kernels/src/record.rs": "2\n"})
+        record = self.commit("record")
+        self.write({"rust/openttd-kernels/src/record.rs": "broken\n"})
+        broken = self.commit("broken")
+        self.assertEqual(self.counts(record, broken), [1, 1])
+        code, out = self.cli(broken)
+        self.assertIn("ABI headers not generated; all counted", out)
+
+    def test_merges_since_come_from_the_base_first_parent_line(self) -> None:
+        self.write({"src/c.cpp": "c3\n"})
+        self.commit("Mention Merge pull request #99 in a regular commit")
+        self.git("checkout", "-q", "-b", "topic")
+        self.write({"src/wide.h": "3\n"})
+        self.commit("topic")
+        self.git("checkout", "-q", "main")
+        self.git(
+            "merge",
+            "-q",
+            "--no-ff",
+            "-m",
+            "Merge pull request #7 from x/topic",
+            "topic",
+        )
+        self.git("update-ref", "refs/remotes/origin/rust-migration", "main")
+        code, out = self.cli("--since", "1 day ago")
+        self.assertEqual(code, 0, out)
+        self.assertIn("#7: 2 of 3 objects", out)
+        self.assertNotIn("#99", out)
+        self.assertIn("over the 1 of 1 commits", out)
+
+    def test_a_bare_date_starts_at_midnight_utc(self) -> None:
+        self.assertEqual(rebuild_reach.since("2026-11-23"), "2026-11-23 00:00:00 +0000")
+        self.assertEqual(rebuild_reach.since("7 days ago"), "7 days ago")
+
+    def test_each_end_uses_its_own_generator(self) -> None:
+        generator = GENERATOR.replace("write_text(text)", "write_text(text + 'v2')")
+        self.write({"tools/generate-abi.py": generator})
+        self.assertEqual(self.counts(self.commit("generator")), [1])
+
+    def test_a_saved_graph_needs_the_build_that_wrote_it(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "rebuilds", "--deps", str(self.deps), "--reach", "src/wide.h"],
+            cwd=self.repo, capture_output=True, text=True,
+        )  # fmt: skip
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--deps FILE needs --build DIR", result.stdout)
+
+    def test_a_build_without_its_cmake_cache_is_refused(self) -> None:
+        (self.build / "CMakeCache.txt").unlink()
+        code, out = self.cli("--reach", "src/wide.h")
+        self.assertEqual(code, 2, out)
+        self.assertIn("names no CMAKE_HOME_DIRECTORY", out)
+
+    def test_reach_json_is_the_whole_output(self) -> None:
+        code, out = self.cli("--reach", "src/wide.h", "--json")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(json.loads(out), {"objects": 3, "reach": {"src/wide.h": 2}})
+
+    def test_reach_counts_the_objects_including_a_header(self) -> None:
+        code, out = self.cli("--reach", "src/wide.h", "generated-abi/abi-record-x.h")
+        self.assertEqual(code, 0, out)
+        self.assertIn("src/wide.h: 2 of 3 objects", out)
+        self.assertIn("generated-abi/abi-record-x.h: 1 of 3 objects", out)
+
+    def test_a_missing_build_says_how_to_make_one(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "rebuilds", "--deps", str(self.repo / "none")],
+            cwd=self.repo, capture_output=True, text=True,
+        )  # fmt: skip
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("python3 tools/migration.py build", result.stdout)
 
 
 if __name__ == "__main__":
