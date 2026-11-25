@@ -345,5 +345,17 @@
     "reason": "The one call of `GRFFileRef::of`, whose liveness contract each caller meets.",
     "retiring_owner": "#669",
     "retirement_condition": "Retires when `GRFFile` moves to Rust (#669)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_registry.rs | impl TownProductionCargoes > fn get | allow unsafe_code",
+    "operation": "cargo_registry::TownProductionCargoes::get",
+    "source_contract": "`CargoSpec::town_production_cargoes[tpe][index]` (cargotype.h), a `std::vector::operator[]` the original does not check (#1057 decision 7); `FindSubsidyPassengerRoute` (subsidy.cpp) indexes it with `RandomRange(size())` even when it is empty.",
+    "reason": "The one read of a list element, unchecked as the original's is, so the pass adds no bounds check the original lacks.",
+    "retiring_owner": "#1058",
+    "retirement_condition": "Retires when the town production lists are Rust-owned with `CargoSpec::array` (#1058) and its port settles the empty-list read."
   }
 ]

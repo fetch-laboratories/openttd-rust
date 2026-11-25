@@ -218,6 +218,18 @@ fn with_registry<R>(f: impl FnOnce(&mut Registry) -> R) -> R {
     f(unsafe { &mut *REGISTRY.get() })
 }
 
+/// The address of one global, derived from the static's own pointer rather than from a borrow
+/// of the state, so that it stays valid across later [`with_registry`] borrows: C++ keeps the
+/// masks' and the sort order's addresses, and a label span outlives the call that made it.
+macro_rules! global_ptr {
+    ($field:ident) => {
+        REGISTRY
+            .get()
+            .wrapping_byte_add(std::mem::offset_of!(Registry, $field))
+            .cast()
+    };
+}
+
 /// The table the last setup or sort installed.
 #[allow(unsafe_code, reason = "the installed process-lifetime table")]
 pub(crate) fn services() -> &'static Services {
@@ -252,19 +264,19 @@ fn grf_file(file: Handle) -> GRFFileRef<'static> {
 #[allow(unsafe_code, reason = "export; C++ binds a reference to the global")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_mask() -> *mut u64 {
-    with_registry(|r| (&raw mut r.cargo_mask).cast())
+    global_ptr!(cargo_mask)
 }
 
 #[allow(unsafe_code, reason = "export; C++ binds a reference to the global")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_standard_cargo_mask() -> *mut u64 {
-    with_registry(|r| (&raw mut r.standard_cargo_mask).cast())
+    global_ptr!(standard_cargo_mask)
 }
 
 #[allow(unsafe_code, reason = "export; C++ binds a span to the global")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_reverse() -> *mut u8 {
-    with_registry(|r| (&raw mut r.sorted_cargo_types).cast())
+    global_ptr!(sorted_cargo_types)
 }
 
 /// `SetupCargoForClimate`: set up the default cargo types for the given landscape type.
@@ -321,10 +333,10 @@ pub unsafe extern "C" fn openttd_rust_cargo_setup(s: *const Services, climate: u
 /// `GetClimateDependentCargoTranslationTable`: get default climate-dependent cargo
 /// translation table for a `NewGRF`, used if the `NewGRF` does not provide its own.
 pub(crate) fn get_climate_dependent_cargo_translation_table() -> Labels {
-    with_registry(|r| Labels {
-        data: r.climate_dependent_cargo_labels.as_ptr(),
-        size: r.climate_dependent_cargo_labels.len(),
-    })
+    Labels {
+        data: global_ptr!(climate_dependent_cargo_labels),
+        size: 12,
+    }
 }
 
 #[allow(unsafe_code, reason = "export")]
@@ -336,10 +348,10 @@ pub extern "C" fn openttd_rust_cargo_climate_labels() -> Labels {
 /// `GetClimateIndependentCargoTranslationTable`: get default climate-independent cargo
 /// translation table for a `NewGRF`, used if the `NewGRF` does not provide its own.
 pub(crate) fn get_climate_independent_cargo_translation_table() -> Labels {
-    with_registry(|r| Labels {
-        data: r.climate_independent_cargo_labels.as_ptr(),
-        size: r.climate_independent_cargo_labels.len(),
-    })
+    Labels {
+        data: global_ptr!(climate_independent_cargo_labels),
+        size: 32,
+    }
 }
 
 /// `BuildCargoLabelMap`: build cargo label map.
@@ -447,9 +459,17 @@ impl TownProductionCargoes {
         with_registry(|r| r.town_production_cargoes[usize::from(self.tpe.0)].len())
     }
 
-    /// `operator[]`: the spec at `index`, which is below [`Self::len`].
+    /// `operator[]`, unchecked as the original's is: an index at or past [`Self::len`] reads
+    /// past the list, as `FindSubsidyPassengerRoute` does when no cargo has `TPE_PASSENGERS`.
+    #[allow(
+        unsafe_code,
+        reason = "the original's unchecked std::vector::operator[]"
+    )]
     pub(crate) fn get(self, index: usize) -> CargoSpecRef<'static> {
-        let cs = with_registry(|r| r.town_production_cargoes[usize::from(self.tpe.0)][index]);
+        let data = with_registry(|r| r.town_production_cargoes[usize::from(self.tpe.0)].as_ptr());
+        // SAFETY: Every caller but the one above passes an index below `len()`; that one reads
+        // past the list exactly as the original's `operator[]` does.
+        let cs = unsafe { data.add(index).read() };
         CargoSpecRef::of(services(), cs)
     }
 }
@@ -869,7 +889,16 @@ pub(crate) fn install_test_no_cargo() {
     with_registry(|r| r.services = table);
 }
 
-/// Test-only: forget [`install_test_labels`] and [`install_test_no_cargo`].
+/// Test-only: install `table` as the registry's table. Forget it with
+/// [`clear_test_labels`].
+#[cfg(test)]
+pub(crate) fn install_test_table(table: Services) {
+    let table: &'static Services = Box::leak(Box::new(table));
+    with_registry(|r| r.services = table);
+}
+
+/// Test-only: forget [`install_test_labels`], [`install_test_no_cargo`] and
+/// [`install_test_table`].
 #[cfg(test)]
 pub(crate) fn clear_test_labels() {
     with_registry(|r| {
