@@ -1055,8 +1055,9 @@ class CompileCheckTests(unittest.TestCase):
             patch.object(
                 check,
                 "run",
-                side_effect=lambda name, _c, env: seen.setdefault(name, env)
-                and (name, 0, Path(directory)),
+                side_effect=lambda name, _c, env: (
+                    seen.setdefault(name, env) and (name, 0, Path(directory))
+                ),
             ),
             patch("builtins.print"),
         ):

@@ -188,7 +188,9 @@ def newer_than_build(paths: list[str]) -> list[str]:
     if not game.is_file():
         return []
     built = game.stat().st_mtime
-    sources = [ROOT / path for path in paths if DEFINITIONS.match(path) or INPUTS.match(path)]
+    sources = [
+        ROOT / path for path in paths if DEFINITIONS.match(path) or INPUTS.match(path)
+    ]
     return [
         str(path.relative_to(ROOT))
         for path in sources
@@ -344,7 +346,9 @@ def main() -> int:
     parser.add_argument("--base", default="origin/rust-migration")
     parser.add_argument("--adapter", help=argparse.SUPPRESS)
     parser.add_argument("--comparison", help=argparse.SUPPRESS)
-    parser.add_argument("--role", choices=ROLES, default="candidate", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--role", choices=ROLES, default="candidate", help=argparse.SUPPRESS
+    )
     args = parser.parse_args()
     if args.adapter or args.comparison:
         return child(args.comparison, args.adapter, args.role)

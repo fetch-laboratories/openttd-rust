@@ -307,9 +307,18 @@ def ready_waits(repository: str, since: str) -> int:
     waited for that run to finish, then the count."""
     runs = json.loads(
         ci.gh(
-            "run", "list", "--repo", repository, "--workflow", "Requested validation",
-            "--limit", "1000", "--created", f">={since}",
-            "--json", "displayTitle,createdAt,updatedAt",
+            "run",
+            "list",
+            "--repo",
+            repository,
+            "--workflow",
+            "Requested validation",
+            "--limit",
+            "1000",
+            "--created",
+            f">={since}",
+            "--json",
+            "displayTitle,createdAt,updatedAt",
         )
     )
     by_pull: dict[int, list[dict[str, str]]] = {}
@@ -320,7 +329,9 @@ def ready_waits(repository: str, since: str) -> int:
     waited = counted = 0
     for number in sorted(by_pull):
         events = pages(repository, f"issues/{number}/timeline?per_page=100")
-        ready = [e["created_at"] for e in events if e.get("event") == "ready_for_review"]
+        ready = [
+            e["created_at"] for e in events if e.get("event") == "ready_for_review"
+        ]
         if not ready:
             print(f"#{number}: not marked ready")
             continue
@@ -363,9 +374,12 @@ def main() -> None:
     command.add_argument("--repo")
     args = parser.parse_args()
     if args.command == "ready-wait":
-        repository = args.repo or json.loads(
-            ci.gh("repo", "view", "--json", "nameWithOwner")
-        )["nameWithOwner"]
+        repository = (
+            args.repo
+            or json.loads(ci.gh("repo", "view", "--json", "nameWithOwner"))[
+                "nameWithOwner"
+            ]
+        )
         sys.exit(ready_waits(repository, args.since))
     if args.command == "base-update":
         sys.exit(base_update.run(args, Path.cwd()))

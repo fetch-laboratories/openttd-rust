@@ -221,8 +221,13 @@ class ReadyWaitTests(unittest.TestCase):
         self.assertIsNone(wait(["2026-11-25T00:12:00Z"], [run]))
         self.assertIsNone(wait(["2026-11-25T00:10:00Z"], [run]))
         # The first mark counts; a later run requested after it does not.
-        later = {"createdAt": "2026-11-25T01:00:00Z", "updatedAt": "2026-11-25T01:15:00Z"}
-        self.assertIsNone(wait(["2026-11-25T01:20:00Z", "2026-11-25T00:12:00Z"], [run, later]))
+        later = {
+            "createdAt": "2026-11-25T01:00:00Z",
+            "updatedAt": "2026-11-25T01:15:00Z",
+        }
+        self.assertIsNone(
+            wait(["2026-11-25T01:20:00Z", "2026-11-25T00:12:00Z"], [run, later])
+        )
         with self.assertRaises(ValueError):
             wait([], [run])
 
