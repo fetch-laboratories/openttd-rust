@@ -1883,8 +1883,8 @@ mod evidence_tests {
                 std::ptr::without_provenance(1),
                 std::ptr::null_mut(),
                 0,
-            )
-        };
+            );
+        }
     }
     extern "C" fn station_owner(_: *mut crate::station::BaseStation) -> u8 {
         STATION_OWNER.get()

@@ -58,5 +58,23 @@
     "operation": "company::change_ownership_of_company_items",
     "source_contract": "`ChangeOwnershipOfCompanyItems` (src/economy.cpp)",
     "reason": "Plan #1048 decision 14: the module's `too_many_lines` allow is scoped to the three bodies it still fires on; the body follows the original's item walks in its order, so splitting it would separate branches the original keeps together."
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/company.rs | module | allow clippy::cast_possible_truncation",
+    "to": "rust/openttd-kernels/src/company.rs | mod tests | allow clippy::cast_possible_truncation"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/company.rs | module | allow clippy::cast_possible_wrap",
+    "to": "rust/openttd-kernels/src/company.rs | mod tests | allow clippy::cast_possible_wrap"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/company.rs | module | allow clippy::cast_sign_loss",
+    "to": "rust/openttd-kernels/src/company.rs | mod tests | allow clippy::cast_sign_loss"
   }
 ]
