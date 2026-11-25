@@ -2124,7 +2124,6 @@ pub unsafe extern "C" fn openttd_rust_wait_unbunching(
     u32::from(VisitOrders::new(leaves).is_waiting_for_unbunching(native_vehicle(v, leaves.base)))
 }
 
-/// `Vehicle::LeaveUnbunchingDepot`, for the orders harness console.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_leave_unbunching(
     v: *mut c_void,
