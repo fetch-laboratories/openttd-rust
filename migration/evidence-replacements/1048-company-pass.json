@@ -20,5 +20,16 @@
         "rust:lib:company::tests::evidence_tests::change_ownership_moves_ratings_rights_groups_and_stations"
       ]
     }
+  },
+  {
+    "retires": [
+      "target:industry-company-acquire candidate COMPANY-CONTROL nested lines"
+    ],
+    "oracle": "MOVED OBSERVATION (#1048, root's ruling https://github.com/fetch-laboratories/openttd-rust/pull/1056#issuecomment-7152060635). tools/simulation/company-control-console.inc observes the nested CMD_CHANGE_SERVICE_INT of ChangeOwnershipOfCompanyItems by link-wrapping the C++ CmdChangeServiceInt and printing its arguments. Plan decision 6 runs the candidate's nested command in Rust (vehicle_transactions::cmd_change_service_int under command::nested), so the candidate passes no wrapped symbol. companies.py now requires the lines of the reference only, where they show that the scenario's input reaches the nested command, and drops them from both logs before the logs are compared; the resulting service intervals stay compared as game state, and a candidate that skips the nested command fails that comparison. The Rust test runs the production walk with expectations from economy.cpp:447-453 at the pin: a vehicle with a custom interval runs no nested command; each other vehicle of the old owner runs it once, executed, with its own index, the old owner as the current company and custom false, and gets the buyer's default and percent flag. The interval, percent and Bankrupt arguments the callee does not read on this path are on #156.",
+    "observations": {
+      "A takeover's nested CMD_CHANGE_SERVICE_INT runs for each non-custom vehicle of the old owner with its index, executed, not custom, under the old owner as the current company, and for no custom one": [
+        "rust:lib:company::tests::evidence_tests::takeover_resets_each_non_custom_service_interval"
+      ]
+    }
   }
 ]

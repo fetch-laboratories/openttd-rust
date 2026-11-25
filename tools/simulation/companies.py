@@ -200,6 +200,12 @@ def prepare(
         finances[0]["old_economy[1]/performance_history"] = 900
     if operation == "timeout":
         finances[1].update(bankrupt_asked=6, bankrupt_timeout=15)
+    if operation == "acquire":
+        # The buyer's road vehicle default differs from the acquired company's, so the
+        # takeover's nested CMD_CHANGE_SERVICE_INT changes each non-custom interval and a
+        # skipped or failed one shows in the compared vehicles (#1048).
+        for buyer in (0, 2):
+            finances[buyer]["settings[0]/settings.vehicle.servint_roadveh"] = 170
     date = rows(fixture, "DATE")[0]
     calendar = datetime.date.fromordinal(date["date"] - 365)
     day = (
@@ -680,13 +686,26 @@ def check(
             "fractional running costs absent",
         )
     if operation == "acquire":
+        # The console sees the nested CMD_CHANGE_SERVICE_INT at the original's C++ command;
+        # the candidate runs it in Rust (#1048), where
+        # company::tests::evidence_tests::takeover_resets_each_non_custom_service_interval
+        # observes its arguments. The reference's lines show that the input reaches the
+        # nested command; they leave both logs before the logs are compared, and the
+        # resulting intervals are compared as game state.
         nested = [
             line for line in run["log"] if line.startswith("COMPANY-CONTROL nested ")
         ]
-        require(
-            bool(nested), "company acquisition nested service-interval arguments absent"
-        )
-        core.findings(result)[f"{mode}_{role}_service_commands"] = nested
+        run["log"][:] = [
+            line
+            for line in run["log"]
+            if not line.startswith("COMPANY-CONTROL nested ")
+        ]
+        if role == "reference":
+            require(
+                bool(nested),
+                "company acquisition nested service-interval arguments absent",
+            )
+            core.findings(result)[f"{mode}_{role}_service_commands"] = nested
     if operation == "reload":
         require(
             set(after) == {0, 1, 2}

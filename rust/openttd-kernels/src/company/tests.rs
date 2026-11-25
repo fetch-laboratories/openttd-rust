@@ -2858,4 +2858,213 @@ mod evidence_tests {
         assert_eq!(count(), 3);
         drop(world);
     }
+
+    /// A takeover vehicle the test owns: its record, consist and `NewGRF` cache.
+    type Part = (
+        *mut crate::vehicle_base::VehicleRecord,
+        Box<crate::orders::Consist>,
+        Box<crate::newgrf_vehicle::Cache>,
+    );
+    thread_local! {
+        /// A takeover's vehicles, whose native shells carry their pool index.
+        static SHELLS: RefCell<Vec<Part>> = const { RefCell::new(Vec::new()) };
+    }
+    fn shell_index(shell: *mut ()) -> usize {
+        shell.addr() - 1
+    }
+    unsafe extern "C" fn group_vehicle(id: u32) -> *mut () {
+        std::ptr::without_provenance_mut(id as usize + 1)
+    }
+    unsafe extern "C" fn always(_: *mut ()) -> bool {
+        true
+    }
+    unsafe extern "C" fn never(_: *mut ()) -> bool {
+        false
+    }
+    unsafe extern "C" fn no_profit(_: *mut ()) -> i64 {
+        0
+    }
+    unsafe extern "C" fn default_group(_: *mut ()) -> u16 {
+        crate::fleet::DEFAULT_GROUP
+    }
+    extern "C" fn record_from_shell(
+        shell: *mut std::ffi::c_void,
+    ) -> *mut crate::vehicle::OpenTTDVehicle {
+        SHELLS.with_borrow(|s| s[shell_index(shell.cast())].0.cast())
+    }
+    extern "C" fn set_colourmap(_: crate::vehicle::VehicleRef, _: crate::gfx_type::PaletteID) {}
+    unsafe extern "C" fn cache(
+        v: *mut crate::vehicle::OpenTTDVehicle,
+    ) -> *mut crate::newgrf_vehicle::Cache {
+        SHELLS.with_borrow_mut(|s| {
+            let entry = s.iter_mut().find(|e| e.0.cast() == v).unwrap();
+            &raw mut *entry.2
+        })
+    }
+    extern "C" fn set_interval(shell: *mut (), interval: u16, custom: bool, percent: bool) {
+        trace(format!(
+            "interval {} {interval} {custom} {percent} current {}",
+            shell_index(shell),
+            CURRENT.get()
+        ));
+    }
+    extern "C" fn use_free_unit(
+        _: *mut OpenTTDCompany,
+        _: crate::vehicle_type::VehicleType,
+    ) -> u16 {
+        1
+    }
+    extern "C" fn set_unitnumber(_: crate::vehicle::VehicleRef, _: u16) {}
+    thread_local! {
+        static TAKEOVER: Cell<*const Services> = const { Cell::new(std::ptr::null()) };
+        static TAKEOVER_SETTINGS: Cell<*const crate::settings_table::Services> =
+            const { Cell::new(std::ptr::null()) };
+    }
+    extern "C" fn takeover_company() -> *const Services {
+        TAKEOVER.get()
+    }
+    extern "C" fn takeover_settings() -> &'static crate::settings_table::Services {
+        // SAFETY: Leaked by `takeover_services` for the test process.
+        unsafe { &*TAKEOVER_SETTINGS.get() }
+    }
+    /// The company table of a takeover whose vehicles run the nested `CmdChangeServiceInt`
+    /// through the real `command::nested` and `vehicle_transactions::cmd_change_service_int`.
+    fn takeover_services() -> &'static Services {
+        let base = services();
+        let vehicles = leak(crate::vehicle::VehicleServices {
+            newgrf: takeover_newgrf,
+            destroy: destroy_vehicle,
+            record_from_shell,
+            set_colourmap,
+            ..VEHICLE
+        });
+        let shared = leak(crate::services::Services {
+            movement: leak(crate::movement::MovementServices {
+                vehicle: vehicles,
+                train: &crate::test_tables::TRAIN_LEAVES,
+                ..MOVEMENT
+            }),
+            ..*base.shared
+        });
+        let groups = leak(crate::fleet::GroupServices {
+            vehicle: group_vehicle,
+            vehicles,
+            primary: always,
+            countable: never,
+            old_enough: never,
+            profit: no_profit,
+            vehicle_group: default_group,
+            ..*base.identity.groups
+        });
+        let commands = leak(crate::services::CommandServices {
+            shared,
+            finance: base.finance,
+            company: takeover_company,
+            cost: &POST_COSTS,
+            signals: leak(crate::signal::SignalServices {
+                assert_condition: holds,
+                ..crate::test_tables::SIGNALS
+            }),
+            ..COMMANDS
+        });
+        let transactions = leak(crate::vehicle_transactions::TransactionServices {
+            shared,
+            commands,
+            cost: &POST_COSTS,
+            groups,
+            set_interval,
+            ..crate::test_tables::VEHICLE_TRANSACTION
+        });
+        TAKEOVER_SETTINGS.set(leak(crate::settings_table::Services {
+            transactions,
+            company_vehicle_defaults,
+            ..SETTINGS
+        }));
+        let s = leak(Services {
+            shared,
+            cost: &POST_COSTS,
+            identity: leak(crate::company_identity::Services {
+                groups,
+                shared,
+                ..*base.identity
+            }),
+            settings: takeover_settings,
+            use_free_unit,
+            set_unitnumber,
+            ..base
+        });
+        TAKEOVER.set(s);
+        s
+    }
+    extern "C" fn takeover_newgrf() -> *const crate::newgrf_vehicle::Services {
+        const TABLE: crate::newgrf_vehicle::Services = crate::newgrf_vehicle::TEST_TABLE
+            .with_id(vehicle_id)
+            .with_cache(cache);
+        std::ptr::from_ref(&TABLE)
+    }
+    /// A road vehicle front engine of `owner`, with a custom service interval or not.
+    fn road_vehicle(owner: CompanyID, custom: bool) {
+        SHELLS.with_borrow_mut(|s| {
+            let id = s.len();
+            let v = crate::vehicle_base::VehicleRecord::new(
+                std::ptr::without_provenance_mut(id + 1),
+                crate::vehicle_type::VehicleType::VEH_ROAD,
+            );
+            // SAFETY: Plain integer records.
+            let mut consist: Box<crate::orders::Consist> = Box::new(unsafe { std::mem::zeroed() });
+            if custom {
+                consist.flags = 1 << crate::base_consist::VehicleFlag::SERVICE_INTERVAL_IS_CUSTOM.0;
+            }
+            write_field!(v, consist, &raw mut *consist);
+            write_field!(v, owner, owner);
+            write_field!(
+                v,
+                subtype,
+                1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_FRONT.0
+            );
+            s.push((v, consist, Box::default()));
+            VEHICLES.with_borrow_mut(|all| all.push(v));
+        });
+    }
+
+    /// `ChangeOwnershipOfCompanyItems` on a takeover (`economy.cpp:447-453`): each vehicle of
+    /// the old owner whose interval is not custom runs the nested `CMD_CHANGE_SERVICE_INT`
+    /// with the old owner as the current company, executed, not custom, and gets the buyer's
+    /// default; a vehicle with a custom interval runs none.
+    #[test]
+    fn takeover_resets_each_non_custom_service_interval() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let world = World::new();
+        GROUP.set(std::ptr::null_mut());
+        road_vehicle(CompanyID(1), false);
+        road_vehicle(CompanyID(1), true);
+        road_vehicle(CompanyID(2), false);
+        road_vehicle(CompanyID(1), false);
+        let s = takeover_services();
+        change_ownership_of_company_items(s, &ownership(), CompanyID(1), CompanyID(0));
+        let intervals: Vec<String> = traced()
+            .into_iter()
+            .filter(|t| t.starts_with("interval"))
+            .collect();
+        // Company 0's road vehicle default is 200, its percent flag set; the walk first
+        // copies both to company 1's defaults, which the command reads.
+        assert_eq!(
+            intervals,
+            [
+                "interval 0 200 false true current 1",
+                "interval 3 200 false true current 1"
+            ]
+        );
+        SHELLS.with_borrow(|shells| {
+            for (i, owner) in [0, 0, 2, 0].into_iter().enumerate() {
+                assert_eq!(
+                    read_field!(shells[i].0, owner),
+                    CompanyID(owner),
+                    "vehicle {i}"
+                );
+            }
+        });
+        SHELLS.with_borrow_mut(Vec::clear);
+        drop(world);
+    }
 }
