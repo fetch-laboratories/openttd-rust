@@ -17,6 +17,7 @@
 #include "order_backup.h"
 #include "order_cmd.h"
 #include "order_func.h"
+#include "rust/orders_ffi.h"
 #include "saveload/saveload.h"
 #include "timetable_cmd.h"
 #include "cargo_type.h"
