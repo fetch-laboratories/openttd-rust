@@ -36,8 +36,6 @@ inline bool RustRailCompatible(EngineType engine, RailType tile) noexcept { retu
 template <typename EngineType>
 inline bool RustRailPowered(EngineType engine, RailType tile) noexcept { return HasPowerOnRail(engine, tile); }
 inline bool RustRailPoweredMask(uint64_t types, RailType type) noexcept { return RustRailPowered(RailTypes(types), type); }
-inline bool RustRailCompatibleLegacy(uint8_t engine, uint8_t tile) noexcept { return RustRailCompatible(static_cast<RailType>(engine), static_cast<RailType>(tile)); }
-inline bool RustRailPoweredLegacy(uint8_t engine, uint8_t tile) noexcept { return RustRailPowered(static_cast<RailType>(engine), static_cast<RailType>(tile)); }
 inline DiagDirection RustRailDepotDirection(uint32_t tile) noexcept { return GetRailDepotDirection(TileIndex(tile)); }
 inline TrackBits RustRailTracks(uint32_t tile) noexcept { return GetTrackBits(TileIndex(tile)); }
 inline bool RustRailHasSignals(uint32_t tile) noexcept { return HasSignals(TileIndex(tile)); }
@@ -51,7 +49,6 @@ inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOth
 /* Rail command, depot and crossing leaves (rail_cmd.rs). */
 inline RailType RustInvalidRailType() noexcept { return INVALID_RAILTYPE; }
 inline void RustSetRailCostMultiplier(RailTypeInfo *info, uint16_t value) noexcept { info->cost_multiplier = value; }
-inline uint16_t RustRailCostMultiplier(RailType type) noexcept { return GetRailTypeInfo(type)->cost_multiplier; }
 inline RailType RustRailType(uint32_t tile) noexcept { return GetRailType(TileIndex(tile)); }
 inline void RustSetRailType(uint32_t tile, uint8_t rt) noexcept { SetRailType(TileIndex(tile), static_cast<RailType>(rt)); }
 inline RailGroundType RustRailGround(uint32_t tile) noexcept { return GetRailGroundType(TileIndex(tile)); }

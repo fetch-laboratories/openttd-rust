@@ -164,19 +164,22 @@ fn train_can_run_on_rail(s: &Services, engine: u32, track: u32) -> bool {
     crate::rail::is_compatible_rail_raw(s.command.shared, engine as u8, track as u8)
 }
 
-/// `ScriptRail::TrainHasPowerOnRail`, using the integrated rail-command table.
+/// `ScriptRail::TrainHasPowerOnRail`.
 #[unsafe(no_mangle)]
 #[allow(clippy::cast_possible_truncation)]
 pub extern "C" fn openttd_rust_script_rail_train_has_power(
     s: &Services,
-    rail: &crate::rail_cmd::RailCommandServices,
     engine: u32,
     track: u32,
 ) -> u8 {
     u8::from(
         rail_type_available(s, engine)
             && rail_type_available(s, track)
-            && (rail.powered_rail)(engine as u8, track as u8),
+            && crate::rail::has_power_on_rail(
+                s.command.shared,
+                crate::services::RailType(engine as u8),
+                crate::services::RailType(track as u8),
+            ),
     )
 }
 
@@ -215,7 +218,6 @@ pub extern "C" fn openttd_rust_script_rail_max_speed(s: &Services, rail_type: u3
 #[allow(clippy::cast_possible_truncation)]
 pub extern "C" fn openttd_rust_script_rail_build_cost(
     s: &Services,
-    rail: &crate::rail_cmd::RailCommandServices,
     rail_type: u32,
     build_type: u32,
 ) -> i64 {
@@ -228,7 +230,10 @@ pub extern "C" fn openttd_rust_script_rail_build_cost(
     }
     let price = |index| crate::economy_func::get_price_raw(index as u32, 1, 0, 0);
     match build_type {
-        0 => (rail.rail_build_cost)(rail_type as u8),
+        0 => crate::rail::rail_build_cost(
+            s.command.shared,
+            crate::services::RailType(rail_type as u8),
+        ),
         1 => price(PR_BUILD_SIGNALS),
         2 => price(PR_BUILD_DEPOT_TRAIN),
         3 => price(PR_BUILD_STATION_RAIL).wrapping_add(price(PR_BUILD_STATION_RAIL_LENGTH)),

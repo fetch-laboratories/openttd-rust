@@ -5,100 +5,92 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Rail track, depot and signal commands and the rail clear, owner, terraform and build-above
-//! tile procs. Map, pools, company counters and every `CommandCost` stay native. Nested
-//! commands are native dispatches that may reenter this module. No entry draws `Random`.
+//! The rail track, depot and signal commands of `rail_cmd.cpp`, with the rail clear, owner,
+//! terraform and build-above tile procs. Map writers, pools, company counters and every
+//! `CommandCost` stay native. Nested commands run here under `command::nested` and may
+//! reenter this module. No entry draws `Random`.
+//!
+//! Every entry builds one [`Ctx`] over the immutable process-lifetime tables and holds the
+//! game-state mutex; Rust holds no reference to native state across a call, and every
+//! `CommandCost` pointer is a distinct live native object for the synchronous call.
 #![allow(
     unsafe_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::too_many_arguments,
-    clippy::too_many_lines,
-    clippy::fn_params_excessive_bools
+    reason = "the native command tables, cost slots and train records"
 )]
+use crate::bitmath_func::{has_bit, has_exactly_one_bit, kill_first_bit};
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_base::CompanyInfrastructure;
-use crate::company_type::CompanyID;
-use crate::direction_type::DiagDirection;
-use crate::rail_map::is_pbs_signal_raw as is_pbs;
-use crate::tile_type::TileIndex;
-use crate::track_func::{
-    is_diagonal_trackdir_raw as diagonal, trackdir_bits_to_track_bits_raw as trackdir_tracks,
-    tracks_overlap_raw as tracks_overlap,
+use crate::company_type::{CompanyID, Owner};
+use crate::container_func::include;
+use crate::depot_func::can_build_depot_by_tileh;
+use crate::direction_func::is_valid_diag_direction;
+use crate::direction_type::{Axis, DiagDirection};
+use crate::economy_type::{LEVELCROSSING_TRACKBIT_FACTOR, Price};
+use crate::map_func::{Map, World};
+use crate::map_type::TileIndexDiffC;
+use crate::movement::get_rail_foundation;
+use crate::newgrf::GrfSpecFeature;
+use crate::newgrf_debug::delete_newgrf_inspect_window;
+use crate::order_type::OrderType;
+use crate::pbs::Pbs;
+use crate::rail::{
+    has_power_on_rail, has_power_on_rail_types, is_compatible_rail, rail_build_cost,
+    rail_clear_cost, rail_convert_cost, rail_no_level_crossings, val_param_rail_type,
 };
-
-use crate::bitmath_func::kill_first_bit;
-use crate::command_type::DoCommandFlag;
-use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_WATER};
-use crate::direction_type::INVALID_DIAGDIR;
-use crate::economy_type::{
-    PR_BUILD_DEPOT_TRAIN, PR_BUILD_FOUNDATION, PR_BUILD_SIGNALS, PR_CLEAR_DEPOT_TRAIN,
-    PR_CLEAR_ROUGH, PR_CLEAR_SIGNALS, PR_CLEAR_WATER,
-};
-use crate::order_type::OT_LOADING;
-pub use crate::services::Train;
+use crate::rail_map::{RailGroundType, RailTileType, is_pbs_signal};
+use crate::rail_type::RailType;
+use crate::rail_yapf::yapf_notify_track_layout_change;
+use crate::road_type::{DisallowedRoadDirections, RoadBits, RoadType};
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Cost, Foundation, Map, RailMapServices,
-    Services, Slope,
+    CommandCost, CommandCostServices, CommandServices, Cost, RailMapServices, Services,
 };
+use crate::signal_func::{signal_against_trackdir, signal_along_trackdir, signal_on_track};
+use crate::signal_type::{SignalType, SignalVariant};
 use crate::slope_func::{
-    FOUNDATION_NONE, SLOPE_HALFTILE_MASK, is_slope_with_one_corner_raised_raw, is_steep_slope_raw,
+    is_slope_with_one_corner_raised, is_special_rail_foundation, is_steep_slope,
+    remove_halftile_slope,
 };
+use crate::slope_type::{Corner, Foundation, Slope, VALID_LEVEL_CROSSING_SLOPES};
 use crate::strings_type::INVALID_STRING_ID;
-use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
+use crate::table::strings::{
+    STR_ERROR_ALREADY_BUILT, STR_ERROR_AREA_IS_OWNED_BY_ANOTHER,
+    STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_CAN_T_BUILD_ON_WATER,
+    STR_ERROR_CROSSING_DISALLOWED_RAIL, STR_ERROR_CROSSING_DISALLOWED_ROAD,
+    STR_ERROR_CROSSING_ON_ONEWAY_ROAD, STR_ERROR_FLAT_LAND_REQUIRED,
+    STR_ERROR_IMPOSSIBLE_TRACK_COMBINATION, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
+    STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_MUST_REMOVE_RAILROAD_TRACK,
+    STR_ERROR_MUST_REMOVE_SIGNALS_FIRST, STR_ERROR_NO_SUITABLE_RAILROAD_TRACK, STR_ERROR_OWNED_BY,
+    STR_ERROR_ROAD_WORKS_IN_PROGRESS, STR_ERROR_SHIP_IN_THE_WAY, STR_ERROR_THERE_ARE_NO_SIGNALS,
+    STR_ERROR_THERE_IS_NO_RAILROAD_TRACK,
+};
+use crate::tile_type::{TileIndex, TileType};
+use crate::track_func::{
+    diag_dir_to_diag_track, is_diagonal_trackdir, is_valid_track, remove_first_track,
+    remove_first_trackdir, reverse_trackdir, track_bits_to_track, track_status_to_trackdir_bits,
+    track_to_track_bits, track_to_trackdir, trackdir_bits_to_track_bits,
+    trackdir_reaches_trackdirs, trackdir_to_exitdir, trackdir_to_track, tracks_overlap,
+};
+use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
+use crate::train::{CCF_TRACK, Handle};
+use crate::transport_type::TransportType;
+use crate::vehicle_base::{TILE_AXIAL_DISTANCE, TILE_CORNER_DISTANCE, VehState};
+use crate::vehicle_func::{has_vehicle_on_tile, vehicles_on_tile};
+use crate::vehicle_type::VehicleType;
+use crate::window_func::invalidate_window_data;
+use crate::window_type::{WindowClass, WindowNumber};
 use crate::witness as w;
 
-/// Opaque caller-owned native frame holding the conversion area iterator and
-/// the ordered affected-train list of `CmdConvertRail`.
-#[repr(C)]
-pub struct ConvertFrame {
-    _private: [u8; 0],
-}
-
-/// Train position read only when the safe-waiting check runs.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TrainPosition {
-    /// `v->tile`.
-    pub tile: u32,
-    /// `v->GetVehicleTrackdir()`.
-    pub trackdir: u8,
-}
-/// Train fields read together at the signal re-reservation branch.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TrainParking {
-    /// `Train::GetTrack()`.
-    pub track: u8,
-    /// `vehstatus` bits.
-    pub status: u8,
-    /// `cur_speed`.
-    pub speed: u16,
-    /// `current_order` type.
-    pub order: u8,
-}
-/// Call-local normal road observations, read at their original guards.
-#[derive(Clone, Copy)]
-pub struct NormalRoad {
-    /// `GetRoadTypeRoad`.
-    pub road_type: u8,
-    /// `GetRoadTypeTram`.
-    pub tram_type: u8,
-    /// `GetRoadBits(RTT_ROAD)`.
-    pub road_bits: u8,
-    /// `GetRoadBits(RTT_TRAM)`.
-    pub tram_bits: u8,
-}
-/// Level-crossing road fields read together when the crossing is removed.
+/// `MakeRoadNormal`'s arguments when a level crossing is removed. `MakeRoadNormal` stays a
+/// native map writer; class types cross as their base integers.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CrossingRoad {
     /// `GetCrossingRoadBits`.
-    pub bits: u8,
+    pub bits: RoadBits,
     /// `GetRoadTypeRoad`.
-    pub road_type: u8,
+    pub road_type: RoadType,
     /// `GetRoadTypeTram`.
-    pub tram_type: u8,
+    pub tram_type: RoadType,
     /// `GetTownIndex`.
     pub town: u16,
     /// `GetRoadOwner(RTT_ROAD)`.
@@ -107,9 +99,9 @@ pub struct CrossingRoad {
     pub tram_owner: u8,
 }
 
-/// Immutable native service table. Pointer-taking leaves require live native cost slots,
-/// trains and conversion frames under the entry contract, so their function-pointer types
-/// are unsafe.
+/// Immutable native service table: the native callees of the rail commands that have no
+/// Rust port, and those of the road, tunnel, water, depot and station commands that share
+/// the table.
 #[repr(C)]
 pub struct RailCommandServices {
     pub shared: *const Services,
@@ -118,57 +110,14 @@ pub struct RailCommandServices {
     pub command: *const CommandServices,
     /// Signal-buffer occupancy and assertion services (`_signal_services`).
     pub signal: *const crate::signal::SignalServices,
-    /// `IsCompatibleRail`.
-    pub compatible_rail: extern "C" fn(u8, u8) -> bool,
-    /// `HasPowerOnRail(RailType, RailType)`.
-    pub powered_rail: extern "C" fn(u8, u8) -> bool,
-    /// `HasPowerOnRail(v->GetRailTypes(), RailType)`.
-    pub train_powered: unsafe extern "C" fn(*mut Train, u8) -> bool,
-    /// `RailNoLevelCrossings`.
-    pub rail_no_crossings: extern "C" fn(u8) -> bool,
+    /// The train table, for the reservation and level crossing owners.
+    pub train: *const crate::train::Leaves,
     /// `RoadNoLevelCrossing`.
     pub road_no_crossing: extern "C" fn(u8) -> bool,
-    /// `RailBuildCost`.
-    pub rail_build_cost: extern "C" fn(u8) -> i64,
-    /// `RailClearCost`.
-    pub rail_clear_cost: extern "C" fn(u8) -> i64,
-    /// `RailConvertCost`.
-    pub rail_convert_cost: extern "C" fn(u8, u8) -> i64,
-    /// `RoadBuildCost`.
     /// `construction.crossing_with_competitor`.
     pub crossing_with_competitor: extern "C" fn() -> bool,
     /// `AutoslopeCheckForEntranceEdge`.
     pub entrance_edge: extern "C" fn(u32, i32, u8, u8) -> bool,
-    /// `CMD_BUILD_SINGLE_RAIL`.
-    pub build_rail: unsafe extern "C" fn(*mut CommandCost, u16, u32, u8, u8, bool),
-    /// `CMD_REMOVE_SINGLE_RAIL`.
-    pub remove_rail: unsafe extern "C" fn(*mut CommandCost, u16, u32, u8),
-    /// `CMD_BUILD_SINGLE_SIGNAL`.
-    pub build_signal: unsafe extern "C" fn(
-        *mut CommandCost,
-        u16,
-        u32,
-        u8,
-        u8,
-        u8,
-        bool,
-        bool,
-        bool,
-        u8,
-        u8,
-        u8,
-        u8,
-    ),
-    /// `CMD_REMOVE_SINGLE_SIGNAL`.
-    pub remove_signal: unsafe extern "C" fn(*mut CommandCost, u16, u32, u8),
-    /// `CMD_CONVERT_RAIL`.
-    pub convert_rail: unsafe extern "C" fn(*mut CommandCost, u16, u32, u32, u8, bool),
-    /// `DirtyCompanyInfrastructureWindows`.
-    /// `GetTrainForReservation`.
-    /// Train fields read at the signal re-reservation branch.
-    pub parking: unsafe extern "C" fn(*mut Train) -> TrainParking,
-    /// `v->tile` and `v->GetVehicleTrackdir()`, read only for the safe-waiting check.
-    pub train_position: unsafe extern "C" fn(*mut Train) -> TrainPosition,
     /// `YapfNotifyTrackLayoutChange`.
     pub layout_changed: extern "C" fn(u32, u8),
     /// `MarkDirtyAdjacentLevelCrossingTiles`.
@@ -189,123 +138,216 @@ pub struct RailCommandServices {
     pub delete_depot: extern "C" fn(u32),
     /// `InvalidateWindowData` of the depot and build-vehicle windows.
     pub depot_windows: extern "C" fn(u32),
-    /// `DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile)`.
-    pub close_inspect: extern "C" fn(u32),
-    /// `MakeShore`, keeping the docking flag as the original does.
-    pub make_shore: extern "C" fn(u32),
-    /// `IsPossibleDockingTile` then `CheckForDockingTile`.
-    /// `include(affected, first)` for every train on the tile, in iteration order.
-    pub include_train: unsafe extern "C" fn(*mut ConvertFrame, crate::vehicle::VehicleRef),
-    /// `ConsistChanged(CCF_TRACK)` for each collected train, in insertion order.
-    pub consist_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
 
-use crate::track_type::INVALID_TRACKDIR;
-use crate::track_type::TRACK_BIT_DEPOT as BIT_DEPOT;
-use crate::track_type::TRACK_BIT_LEFT as BIT_LEFT;
-use crate::track_type::TRACK_BIT_LOWER as BIT_LOWER;
-use crate::track_type::TRACK_BIT_RIGHT as BIT_RIGHT;
-use crate::track_type::TRACK_BIT_UPPER as BIT_UPPER;
-use crate::track_type::TRACK_BIT_X as BIT_X;
-use crate::track_type::TRACK_BIT_Y as BIT_Y;
-use crate::track_type::{INVALID_TRACK, TRACK_X, TRACK_Y};
-
-/// `VALID_LEVEL_CROSSING_SLOPES`.
-pub(crate) const CROSSING_SLOPES: u32 =
-    (1 << 14) | (1 << 13) | (1 << 11) | (1 << 10) | (1 << 7) | (1 << 5) | 1;
-
-use crate::slope_func::FOUNDATION_INVALID;
-use crate::slope_func::{FOUNDATION_RAIL_N, FOUNDATION_RAIL_W};
-
-const GROUND_BARREN: u8 = 0;
-use crate::rail_map::RAIL_GROUND_HALF_TILE_WATER as GROUND_HALF_WATER;
-use crate::rail_map::RAIL_TILE_DEPOT;
-use crate::rail_map::RAIL_TILE_NORMAL;
-use crate::rail_map::RAIL_TILE_SIGNALS;
-
-use crate::signal_type::SIGTYPE_BLOCK;
-const SIGTYPE_ENTRY: u8 = 1;
-const SIGTYPE_EXIT: u8 = 2;
-const SIGTYPE_LAST: u8 = 5;
-const SIG_ELECTRIC: u8 = 0;
-const SIG_SEMAPHORE: u8 = 1;
-
-use crate::rail_type::{RAILTYPE_ELECTRIC, RAILTYPE_RAIL};
-use crate::road_type::INVALID_ROADTYPE;
-use crate::road_type::{ROAD_X, ROAD_Y};
-use crate::table::strings::{
-    STR_ERROR_ALREADY_BUILT, STR_ERROR_AREA_IS_OWNED_BY_ANOTHER,
-    STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_CAN_T_BUILD_ON_WATER,
-    STR_ERROR_CROSSING_DISALLOWED_RAIL, STR_ERROR_CROSSING_DISALLOWED_ROAD,
-    STR_ERROR_CROSSING_ON_ONEWAY_ROAD, STR_ERROR_FLAT_LAND_REQUIRED,
-    STR_ERROR_IMPOSSIBLE_TRACK_COMBINATION, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
-    STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_MUST_REMOVE_RAILROAD_TRACK,
-    STR_ERROR_MUST_REMOVE_SIGNALS_FIRST, STR_ERROR_NO_SUITABLE_RAILROAD_TRACK, STR_ERROR_OWNED_BY,
-    STR_ERROR_ROAD_WORKS_IN_PROGRESS, STR_ERROR_SHIP_IN_THE_WAY, STR_ERROR_THERE_ARE_NO_SIGNALS,
-    STR_ERROR_THERE_IS_NO_RAILROAD_TRACK,
-};
-use crate::vehicle_base::{TILE_AXIAL_DISTANCE, TILE_CORNER_DISTANCE, VS_STOPPED};
-
-pub(crate) const LEVELCROSSING_TRACKBIT_FACTOR: u32 = 2;
-pub(crate) use crate::tunnelbridge::TUNNELBRIDGE_TRACKBIT_FACTOR;
+/// `_valid_tracks_on_leveled_foundation`: valid `TrackBits` on a specific (non-steep)-slope
+/// with leveled foundation.
+pub(crate) const VALID_TRACKS_ON_LEVELED_FOUNDATION: [TrackBits; 15] = [
+    TrackBits::TRACK_BIT_NONE,
+    TrackBits::TRACK_BIT_LEFT,
+    TrackBits::TRACK_BIT_LOWER,
+    TrackBits(
+        TrackBits::TRACK_BIT_Y.0 | TrackBits::TRACK_BIT_LOWER.0 | TrackBits::TRACK_BIT_LEFT.0,
+    ),
+    TrackBits::TRACK_BIT_RIGHT,
+    TrackBits::TRACK_BIT_ALL,
+    TrackBits(
+        TrackBits::TRACK_BIT_X.0 | TrackBits::TRACK_BIT_LOWER.0 | TrackBits::TRACK_BIT_RIGHT.0,
+    ),
+    TrackBits::TRACK_BIT_ALL,
+    TrackBits::TRACK_BIT_UPPER,
+    TrackBits(
+        TrackBits::TRACK_BIT_X.0 | TrackBits::TRACK_BIT_UPPER.0 | TrackBits::TRACK_BIT_LEFT.0,
+    ),
+    TrackBits::TRACK_BIT_ALL,
+    TrackBits::TRACK_BIT_ALL,
+    TrackBits(
+        TrackBits::TRACK_BIT_Y.0 | TrackBits::TRACK_BIT_UPPER.0 | TrackBits::TRACK_BIT_RIGHT.0,
+    ),
+    TrackBits::TRACK_BIT_ALL,
+    TrackBits::TRACK_BIT_ALL,
+];
 
 /// `_trackdelta`, indexed by trackdir.
-const TRACK_DELTA: [(i32, i32); 16] = [
-    (-1, 0),
-    (0, 1),
-    (-1, 0),
-    (0, 1),
-    (1, 0),
-    (0, 1),
-    (0, 0),
-    (0, 0),
-    (1, 0),
-    (0, -1),
-    (0, -1),
-    (1, 0),
-    (0, -1),
-    (-1, 0),
-    (0, 0),
-    (0, 0),
+const TRACKDELTA: [TileIndexDiffC; 16] = [
+    TileIndexDiffC { x: -1, y: 0 },
+    TileIndexDiffC { x: 0, y: 1 },
+    TileIndexDiffC { x: -1, y: 0 },
+    TileIndexDiffC { x: 0, y: 1 },
+    TileIndexDiffC { x: 1, y: 0 },
+    TileIndexDiffC { x: 0, y: 1 },
+    TileIndexDiffC { x: 0, y: 0 },
+    TileIndexDiffC { x: 0, y: 0 },
+    TileIndexDiffC { x: 1, y: 0 },
+    TileIndexDiffC { x: 0, y: -1 },
+    TileIndexDiffC { x: 0, y: -1 },
+    TileIndexDiffC { x: 1, y: 0 },
+    TileIndexDiffC { x: 0, y: -1 },
+    TileIndexDiffC { x: -1, y: 0 },
+    TileIndexDiffC { x: 0, y: 0 },
+    TileIndexDiffC { x: 0, y: 0 },
 ];
-/// `_valid_tracks_on_leveled_foundation`.
-pub(crate) const LEVELED_TRACKS: [u8; 15] = [
-    0,
-    BIT_LEFT,
-    BIT_LOWER,
-    BIT_Y | BIT_LOWER | BIT_LEFT,
-    BIT_RIGHT,
-    63,
-    BIT_X | BIT_LOWER | BIT_RIGHT,
-    63,
-    BIT_UPPER,
-    BIT_X | BIT_UPPER | BIT_LEFT,
-    63,
-    63,
-    BIT_Y | BIT_UPPER | BIT_RIGHT,
-    63,
-    63,
-];
-const SIGNAL_ALONG: [u8; 14] = [8, 8, 8, 2, 4, 1, 0, 0, 4, 4, 4, 1, 8, 2];
-const SIGNAL_AGAINST: [u8; 14] = [4, 4, 4, 1, 8, 2, 0, 0, 8, 8, 8, 2, 4, 1];
-/// Infrastructure pieces of a plain rail tile: squared when tracks overlap.
-fn pieces(bits: u8) -> u32 {
-    let n = bits.count_ones();
-    if tracks_overlap(bits) { n * n } else { n }
-}
-fn reaches(trackdir: u8) -> u16 {
-    crate::track_func::diagdir_reaches_trackdirs_raw(crate::track_func::trackdir_to_exitdir_raw(
-        trackdir,
-    ))
-}
-/// Saturating unary minus of `OverflowSafeInt64`.
-fn negate(money: i64) -> i64 {
-    if money == i64::MIN { i64::MAX } else { -money }
-}
-fn price(index: usize) -> i64 {
-    crate::company::price(index)
+
+/// The infrastructure pieces of plain rail `bits`: the original's `CountBits`, squared
+/// when the tracks overlap.
+fn pieces(bits: TrackBits) -> u32 {
+    let pieces = bits.0.count_ones();
+    if tracks_overlap(bits) {
+        pieces * pieces
+    } else {
+        pieces
+    }
 }
 
+/// `CmdBuildSingleRail`'s parameters.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdBuildSingleRail {
+    /// Tile to build on.
+    pub tile: TileIndex,
+    /// Railtype of the piece being built (normal, mono, maglev).
+    pub railtype: RailType,
+    /// Track orientation.
+    pub track: Track,
+    /// False is an error on a signal in the way, true removes signals in the way.
+    pub auto_remove_signals: bool,
+}
+
+/// `CmdRemoveSingleRail`'s parameters.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdRemoveSingleRail {
+    /// Tile to remove the track from.
+    pub tile: TileIndex,
+    /// Rail orientation.
+    pub track: Track,
+}
+
+/// `CmdRailTrackHelper`'s parameters.
+#[derive(Clone, Copy)]
+struct RailTrackHelper {
+    /// Start tile of the drag.
+    tile: TileIndex,
+    /// End tile of the drag.
+    end_tile: TileIndex,
+    /// Railroad type normal/maglev, used only for building.
+    railtype: RailType,
+    /// Track orientation.
+    track: Track,
+    /// Remove tracks?
+    remove: bool,
+    /// False is an error on a signal in the way, true removes signals in the way; used only
+    /// for building.
+    auto_remove_signals: bool,
+    /// False builds from and up to an obstacle, true fails on an obstacle (used for AIs).
+    fail_on_obstacle: bool,
+}
+
+/// `CmdBuildTrainDepot`'s parameters.
+#[derive(Clone, Copy)]
+struct CmdBuildTrainDepot {
+    /// Position of the train depot.
+    tile: TileIndex,
+    /// Rail type.
+    railtype: RailType,
+    /// Entrance direction.
+    dir: DiagDirection,
+}
+
+/// `CmdBuildSingleSignal`'s parameters.
+#[derive(Clone, Copy)]
+struct CmdBuildSingleSignal {
+    /// Tile where to build the signals.
+    tile: TileIndex,
+    /// Track orientation.
+    track: Track,
+    /// Type of the signal.
+    sigtype: SignalType,
+    /// Variant of signal type (normal/semaphore).
+    sigvar: SignalVariant,
+    /// Convert the present signal type and variant.
+    convert_signal: bool,
+    /// True doesn't modify an existing signal but doesn't fail either, false always sets the
+    /// new signal type.
+    skip_existing_signals: bool,
+    /// True overrides signal/semaphore, or pre/exit/combo signal or toggles the variant
+    /// (CTRL-toggle).
+    ctrl_pressed: bool,
+    /// Start the cycle from this signal type.
+    cycle_start: SignalType,
+    /// Wrap around after this signal type.
+    cycle_stop: SignalType,
+    /// Cycle the signal direction this many times.
+    num_dir_cycle: u8,
+    /// Used for `CmdBuildManySignals()` to copy the direction of the first signal.
+    signals_copy: u8,
+}
+
+/// `CmdSignalTrackHelper`'s parameters.
+#[derive(Clone, Copy)]
+struct SignalTrackHelper {
+    /// Start tile of the drag.
+    tile: TileIndex,
+    /// End tile of the drag.
+    end_tile: TileIndex,
+    /// Track orientation.
+    track: Track,
+    /// Default signal type.
+    sigtype: SignalType,
+    /// Signal variant to build.
+    sigvar: SignalVariant,
+    /// True overrides signal/semaphore, or pre/exit/combo signal (CTRL-toggle).
+    mode: bool,
+    /// Remove signals?
+    remove: bool,
+    /// Fill beyond the selected stretch?
+    autofill: bool,
+    /// False keeps a fixed distance, true minimises the gaps between signals.
+    minimise_gaps: bool,
+    /// User defined signal density.
+    signal_density: i32,
+}
+
+/// `CmdRemoveSingleSignal`'s parameters.
+#[derive(Clone, Copy)]
+struct CmdRemoveSingleSignal {
+    /// Coordinates where the signal is being deleted from.
+    tile: TileIndex,
+    /// Track orientation.
+    track: Track,
+}
+
+/// `CmdConvertRail`'s parameters.
+#[derive(Clone, Copy)]
+struct CmdConvertRail {
+    /// End tile of the rail conversion drag.
+    tile: TileIndex,
+    /// Start tile of the drag.
+    area_start: TileIndex,
+    /// New railtype to convert to.
+    totype: RailType,
+    /// Build diagonally or not.
+    diagonal: bool,
+}
+
+/// `TestAutoslopeOnRailTile`'s parameters.
+#[derive(Clone, Copy)]
+struct TestAutoslopeOnRailTile {
+    /// The tile.
+    tile: TileIndex,
+    /// The command flags.
+    flags: DoCommandFlags,
+    /// Old `TileZ`.
+    z_old: i32,
+    /// Old `TileSlope`.
+    tileh_old: Slope,
+    /// New `TileZ`.
+    z_new: i32,
+    /// New `TileSlope`.
+    tileh_new: Slope,
+    /// Trackbits.
+    rail_bits: TrackBits,
+}
+
+/// One synchronous rail command entry: its tables, map descriptor and PBS context.
 struct Ctx<'a> {
     s: &'a RailCommandServices,
     shared: &'a Services,
@@ -313,15 +355,11 @@ struct Ctx<'a> {
     ground: &'a crate::ground::RailServices,
     cost: &'a CommandCostServices,
     command: &'a CommandServices,
-    map: Map,
+    train: &'a crate::train::Leaves,
+    world: World<'a>,
+    pbs: Pbs<'a>,
 }
 impl<'a> Ctx<'a> {
-    /// `GetSlopeZInCorner` with the native assertion.
-    fn slope_z_in_corner(&self, tileh: u8, corner: u8) -> i32 {
-        crate::landscape::get_slope_z_in_corner(tileh, corner, |ok| {
-            crate::movement::native_assert(self.shared, ok);
-        })
-    }
     /// # Safety
     /// The table and its nested tables are valid for the synchronous call.
     unsafe fn new(s: *const RailCommandServices) -> Self {
@@ -336,58 +374,26 @@ impl<'a> Ctx<'a> {
             ground: unsafe { &*(*s.rail).ground },
             cost: unsafe { &*s.cost },
             command: unsafe { &*s.command },
-            map: shared.map(),
+            train: unsafe { &*s.train },
+            world: World::new(shared),
+            pbs: Pbs::acquire(shared),
         }
+    }
+    /// The native assertion of the shared header helpers.
+    fn check(&self) -> impl Fn(bool) + Copy + '_ {
+        move |ok| self.world.check(ok)
+    }
+    fn map(&self) -> Map {
+        self.world.dimensions
     }
     fn c(&self, cost: *mut CommandCost) -> Cost<'a> {
         Cost(cost, self.cost)
     }
-    fn map_size(&self) -> u32 {
-        ((self.shared.map_max_y)().wrapping_add(1)) << self.map.log_x
+    /// `_current_company`.
+    fn current_company(&self) -> CompanyID {
+        CompanyID((self.shared.current_company)())
     }
-    fn tile_type(&self, tile: u32) -> u8 {
-        (self.shared.tile_type)(tile)
-    }
-    fn current(&self) -> u8 {
-        (self.shared.current_company)()
-    }
-    unsafe fn collect_trains(&self, frame: *mut ConvertFrame, tile: u32) {
-        crate::vehicle_func::vehicles_on_tile_raw(self.map, tile, |v| {
-            if v.vehicle_type_raw() == crate::vehicle::VehicleType::TRAIN.0 {
-                unsafe {
-                    (self.s.include_train)(frame, v);
-                }
-            }
-        });
-    }
-    fn tracks(&self, tile: u32) -> u8 {
-        (self.ground.tracks)(tile).0
-    }
-    /// The native uint query contains only the four signal-presence bits.
-    fn present_signals(&self, tile: u32) -> u8 {
-        std::ffi::c_uint::from(
-            crate::map_func::World::new(self.shared).get_present_signals_raw(tile),
-        ) as u8
-    }
-    fn has_track(&self, tile: u32, track: u8) -> bool {
-        crate::track_func::has_track_raw(self.tracks(tile), track, |ok| {
-            crate::movement::native_assert(self.shared, ok);
-        })
-    }
-    /// `HasSignalOnTrack`: signal tile type and a present signal on the track.
-    fn has_signal(&self, tile: u32, track: u8) -> bool {
-        crate::map_func::World::new(self.shared).has_signal_on_track_raw(tile, track)
-    }
-    fn reserved(&self, tile: u32) -> u8 {
-        crate::pbs::Pbs::acquire(self.shared).get_reserved_trackbits_raw(tile)
-    }
-    fn signal_type(&self, tile: u32, track: u8) -> u8 {
-        crate::services::SignalType(
-            crate::map_func::World::new(self.shared).get_signal_type_raw(tile, track),
-        )
-        .0
-    }
-    /// Direct signal-buffer context over this entry's immutable tables.
+    /// The signal buffer over this entry's tables.
     fn signals(&self) -> crate::signal::Context {
         crate::signal::Context {
             shared: self.s.shared,
@@ -395,1308 +401,1699 @@ impl<'a> Ctx<'a> {
             native: self.s.signal,
         }
     }
-    fn add_track(&self, tile: u32, track: u8, owner: u8) {
-        self.signals().add_track(tile, track, owner);
+    /// The path reservation context of the train table.
+    fn reservation(&self) -> crate::train_reservation::Game<'_> {
+        crate::train_reservation::Game::new(self.train, self.shared)
     }
-    fn add_side(&self, tile: u32, side: u8, owner: u8) {
-        self.signals().add_side(tile, side, owner);
+    /// `FreeTrainTrackReservation`.
+    fn free_train_track_reservation(&self, v: Handle) {
+        crate::train_reservation::free_train_track_reservation(&self.reservation(), v);
     }
-    /// `TileX`/`TileY` delta add, as `tile += ToTileIndexDiff(_trackdelta[td])`.
-    fn step(&self, tile: u32, trackdir: u8) -> u32 {
-        let (x, y) = TRACK_DELTA[usize::from(trackdir)];
-        tile.wrapping_add(self.map.diff(x, y).cast_unsigned())
+    /// `TryPathReserve`.
+    fn try_path_reserve(&self, v: Handle, mark_as_stuck: bool) {
+        crate::train_reservation::try_path_reserve(&self.reservation(), v, mark_as_stuck, false);
     }
-    fn tunnel_length(&self, begin: u32, end: u32) -> u32 {
-        let (x1, y1) = (
-            self.map.tile_x(TileIndex(begin)) as i32,
-            self.map.tile_y(TileIndex(begin)) as i32,
-        );
-        let (x2, y2) = (
-            self.map.tile_x(TileIndex(end)) as i32,
-            self.map.tile_y(TileIndex(end)) as i32,
-        );
-        ((x2 + y2 - x1 - y1).abs() - 1) as u32
+    /// `DirtyCompanyInfrastructureWindows`.
+    fn dirty_company_infrastructure_windows(&self, company: CompanyID) {
+        (self.command.infrastructure_dirty)(company.0);
+    }
+    /// `MarkTileDirtyByTile`.
+    fn mark_tile_dirty_by_tile(&self, tile: TileIndex) {
+        (self.shared.mark_dirty)(tile.0);
+    }
+    /// `Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile)` into `out`.
+    fn landscape_clear(&self, out: Cost<'_>, flags: DoCommandFlags, tile: TileIndex) {
+        crate::landscape_cmd::clear_command(self.command, out.0, tile.0, flags.0);
+    }
+    /// A nested `Command<...>::Do(flags, tile, ...)` running `body` with the nested
+    /// command's flags.
+    fn nested(
+        &self,
+        out: Cost<'_>,
+        tile: TileIndex,
+        flags: DoCommandFlags,
+        mut body: impl FnMut(DoCommandFlags),
+    ) {
+        crate::command::nested(self.command, self.shared, out, tile.0, flags.0, |flags| {
+            body(DoCommandFlags(flags));
+        });
+    }
+    /// `Command<CMD_BUILD_SINGLE_RAIL>::Do(flags, ...)` into `out`.
+    fn build_single_rail_command(
+        &self,
+        out: Cost<'_>,
+        flags: DoCommandFlags,
+        args: CmdBuildSingleRail,
+    ) {
+        // SAFETY: the scratch results live only for the synchronous nested command.
+        unsafe {
+            crate::command::with_cost(self.cost, |ret| {
+                crate::command::with_cost(self.cost, |other| {
+                    self.nested(out, args.tile, flags, |flags| {
+                        self.cmd_build_single_rail(out, ret, other, flags, args);
+                    });
+                });
+            });
+        }
+    }
+    /// `Command<CMD_REMOVE_SINGLE_RAIL>::Do(flags, ...)` into `out`.
+    fn remove_single_rail_command(
+        &self,
+        out: Cost<'_>,
+        flags: DoCommandFlags,
+        args: CmdRemoveSingleRail,
+    ) {
+        // SAFETY: the scratch result lives only for the synchronous nested command.
+        unsafe {
+            crate::command::with_cost(self.cost, |ret| {
+                self.nested(out, args.tile, flags, |flags| {
+                    self.cmd_remove_single_rail(out, ret, flags, args);
+                });
+            });
+        }
+    }
+    /// `Command<CMD_BUILD_SINGLE_SIGNAL>::Do(flags, ...)` into `out`.
+    fn build_single_signal_command(
+        &self,
+        out: Cost<'_>,
+        flags: DoCommandFlags,
+        args: CmdBuildSingleSignal,
+    ) {
+        // SAFETY: the scratch result lives only for the synchronous nested command.
+        unsafe {
+            crate::command::with_cost(self.cost, |ret| {
+                self.nested(out, args.tile, flags, |flags| {
+                    self.cmd_build_single_signal(out, ret, flags, args);
+                });
+            });
+        }
+    }
+    /// `Command<CMD_REMOVE_SINGLE_SIGNAL>::Do(flags, ...)` into `out`.
+    fn remove_single_signal_command(
+        &self,
+        out: Cost<'_>,
+        flags: DoCommandFlags,
+        args: CmdRemoveSingleSignal,
+    ) {
+        self.nested(out, args.tile, flags, |flags| {
+            self.cmd_remove_single_signal(out, flags, args);
+        });
+    }
+    /// `Command<CMD_CONVERT_RAIL>::Do(flags, ...)` into `out`.
+    fn convert_rail_command(&self, out: Cost<'_>, flags: DoCommandFlags, args: CmdConvertRail) {
+        // SAFETY: the scratch results live only for the synchronous nested command.
+        unsafe {
+            crate::command::with_cost(self.cost, |error| {
+                crate::command::with_cost(self.cost, |ret| {
+                    self.nested(out, args.tile, flags, |flags| {
+                        self.cmd_convert_rail(out, error, ret, flags, args);
+                    });
+                });
+            });
+        }
     }
 
-    /// `CheckRailSlope`.
-    fn check_rail_slope(&self, out: Cost<'_>, tileh: u8, bits: u8, existing: u8, tile: u32) {
+    /// `EnsureNoTrainOnTrack`: tests if a vehicle interacts with the specified track.
+    /// All track bits interact except parallel `TRACK_BIT_HORZ` or `TRACK_BIT_VERT`.
+    /// Writes a succeeded command (no train found), or a failed command (a train was found).
+    fn ensure_no_train_on_track(&self, out: Cost<'_>, tile: TileIndex, track: Track) {
+        let rail_bits = track_to_track_bits(track, self.check());
+        out.no_train(self.command, tile.0, rail_bits.0);
+    }
+
+    /// `CheckTrackCombination`: check that the new track bits may be built.
+    fn check_track_combination(&self, out: Cost<'_>, tile: TileIndex, to_build: TrackBits) {
+        if !self.world.is_plain_rail(tile) {
+            return out.error(STR_ERROR_IMPOSSIBLE_TRACK_COMBINATION.0);
+        }
+
+        /* So, we have a tile with tracks on it (and possibly signals). Let's see
+         * what tracks first */
+        let current = self.world.get_track_bits(tile); // The current track layout.
+        let future = current | to_build; // The track layout we want to build.
+
+        /* Are we really building something new? */
+        if current == future {
+            /* Nothing new is being built */
+            return out.error(STR_ERROR_ALREADY_BUILT.0);
+        }
+
+        /* Normally, we may overlap and any combination is valid */
+        out.zero();
+    }
+
+    /// `CheckRailSlope`: tests if a track can be built on a tile; writes the error message or
+    /// the cost of building the foundation. `tile` is used for the water test.
+    fn check_rail_slope(
+        &self,
+        out: Cost<'_>,
+        tileh: Slope,
+        rail_bits: TrackBits,
+        existing: TrackBits,
+        tile: TileIndex,
+    ) {
+        /* don't allow building on the lower side of a coast */
         // SAFETY: Immutable shared tables outlive this synchronous command entry.
         if unsafe {
-            crate::water::get_flooding_behaviour(
-                TileIndex(tile),
-                (self.shared.water_services)(),
-                self.shared,
-            )
-        }
-        .0 != 0
-            && !is_steep_slope_raw(tileh)
-            && !LEVELED_TRACKS[usize::from(tileh)] & (bits | existing) != 0
+            crate::water::get_flooding_behaviour(tile, (self.shared.water_services)(), self.shared)
+        } != crate::water::FloodingBehaviour::FLOOD_NONE
+            && !is_steep_slope(tileh)
+            && (!VALID_TRACKS_ON_LEVELED_FOUNDATION[usize::from(tileh.0)] & (rail_bits | existing))
+                != TrackBits::TRACK_BIT_NONE
         {
-            out.error(STR_ERROR_CAN_T_BUILD_ON_WATER.0);
-            return;
+            return out.error(STR_ERROR_CAN_T_BUILD_ON_WATER.0);
         }
-        let f_new = crate::movement::rail_foundation(tileh, bits | existing, |ok| {
-            crate::movement::native_assert(self.shared, ok);
-        });
-        if f_new == FOUNDATION_INVALID
-            || (f_new != FOUNDATION_NONE && !(self.shared.build_on_slopes)())
+
+        let f_new = get_rail_foundation(tileh, rail_bits | existing, self.check());
+
+        /* check track/slope combination */
+        if f_new == Foundation::FOUNDATION_INVALID
+            || (f_new != Foundation::FOUNDATION_NONE && !(self.shared.build_on_slopes)())
         {
-            out.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
-            return;
+            return out.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
         }
-        let f_old = crate::movement::rail_foundation(tileh, existing, |ok| {
-            crate::movement::native_assert(self.shared, ok);
-        });
+
+        let f_old = get_rail_foundation(tileh, existing, self.check());
         out.set(if f_new == f_old {
             0
         } else {
-            price(PR_BUILD_FOUNDATION)
+            crate::company::price(usize::from(Price::PR_BUILD_FOUNDATION.0))
         });
     }
 
-    /// `CmdBuildSingleRail`.
-    fn build_single_rail(
+    /// `CmdBuildSingleRail`: build a single piece of rail.
+    fn cmd_build_single_rail(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
-        other: Cost<'_>,
-        flags: u16,
-        tile: u32,
-        railtype: u8,
-        track: u8,
-        auto_remove_signals: bool,
+        ret_remove_signals: Cost<'_>,
+        flags: DoCommandFlags,
+        args: CmdBuildSingleRail,
     ) {
-        // Resolve at the first original access; the raw pointer retains no Rust borrow.
-        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
+        let CmdBuildSingleRail {
+            tile,
+            railtype,
+            track,
+            auto_remove_signals,
+        } = args;
         cost.set(0);
-        if !crate::rail::val_param_rail_type_raw(self.shared, railtype) || track >= 6 {
-            cost.error(INVALID_STRING_ID);
-            return;
+
+        if !val_param_rail_type(self.shared, railtype) || !is_valid_track(track) {
+            return cost.error(INVALID_STRING_ID);
         }
-        let tileh = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
-        let trackbit = 1_u8 << track;
-        let mut fall_through = false;
-        match self.tile_type(tile) {
-            MP_RAILWAY => {
-                ret.tile_ownership(self.command, tile);
-                if !ret.ok() {
-                    return cost.take(ret);
-                }
-                if !(self.shared.is_plain_rail)(tile) {
-                    w::hit(w::RAIL_CMD_BUILD_NOT_PLAIN);
-                    return crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
-                }
-                if !(self.s.compatible_rail)(
-                    crate::services::RailType(
-                        crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-                    )
-                    .0,
-                    railtype,
-                ) {
-                    return cost.error(STR_ERROR_IMPOSSIBLE_TRACK_COMBINATION.0);
-                }
-                // CheckTrackCombination, then EnsureNoTrainOnTrack.
-                if self.tracks(tile) | trackbit == self.tracks(tile) {
-                    ret.error(STR_ERROR_ALREADY_BUILT.0);
-                } else {
-                    ret.zero();
-                }
-                if ret.ok() {
-                    ret.no_train(self.command, tile, trackbit);
-                }
-                if !ret.ok() {
-                    return cost.take(ret);
-                }
-                self.check_rail_slope(ret, tileh.0, trackbit, self.tracks(tile), tile);
-                if !ret.ok() {
-                    return cost.take(ret);
-                }
-                cost.add_money(ret.money());
-                if crate::map_func::World::new(self.shared).has_signals_raw(tile)
-                    && tracks_overlap(self.tracks(tile) | trackbit)
-                {
-                    if !auto_remove_signals {
-                        return cost.error(STR_ERROR_MUST_REMOVE_SIGNALS_FIRST.0);
+
+        let tileh = self.world.tile_slope(tile);
+        let trackbit = track_to_track_bits(track, self.check());
+
+        'switch: {
+            match self.world.kind(tile) {
+                TileType::MP_RAILWAY => {
+                    ret.tile_ownership(self.command, tile.0);
+                    if !ret.ok() {
+                        return cost.take(ret);
                     }
-                    w::hit(w::RAIL_CMD_BUILD_REMOVE_SIGNALS);
-                    for track_it in 0..6 {
-                        if self.has_track(tile, track_it) && self.has_signal(tile, track_it) {
-                            unsafe { (self.s.remove_signal)(other.0, flags, tile, track_it) };
-                            if !other.ok() {
-                                return cost.take(other);
+
+                    if !self.world.is_plain_rail(tile) {
+                        w::hit(w::RAIL_CMD_BUILD_NOT_PLAIN);
+                        return self.landscape_clear(cost, flags, tile); // just get appropriate error message
+                    }
+
+                    if !is_compatible_rail(self.shared, self.world.get_rail_type(tile), railtype) {
+                        return cost.error(STR_ERROR_IMPOSSIBLE_TRACK_COMBINATION.0);
+                    }
+
+                    self.check_track_combination(ret, tile, trackbit);
+                    if ret.ok() {
+                        self.ensure_no_train_on_track(ret, tile, track);
+                    }
+                    if !ret.ok() {
+                        return cost.take(ret);
+                    }
+
+                    self.check_rail_slope(
+                        ret,
+                        tileh,
+                        trackbit,
+                        self.world.get_track_bits(tile),
+                        tile,
+                    );
+                    if !ret.ok() {
+                        return cost.take(ret);
+                    }
+                    cost.add_money(ret.money());
+
+                    if self.world.has_signals(tile)
+                        && tracks_overlap(
+                            self.world.get_track_bits(tile)
+                                | track_to_track_bits(track, self.check()),
+                        )
+                    {
+                        /* If adding the new track causes any overlap, all signals must be removed first */
+                        if !auto_remove_signals {
+                            return cost.error(STR_ERROR_MUST_REMOVE_SIGNALS_FIRST.0);
+                        }
+
+                        w::hit(w::RAIL_CMD_BUILD_REMOVE_SIGNALS);
+                        for track_it in Track::TRACK_BEGIN.0..Track::TRACK_END.0 {
+                            let track_it = Track(track_it);
+                            if self.world.has_track(tile, track_it)
+                                && self.world.has_signal_on_track(tile, track_it)
+                            {
+                                self.remove_single_signal_command(
+                                    ret_remove_signals,
+                                    flags,
+                                    CmdRemoveSingleSignal {
+                                        tile,
+                                        track: track_it,
+                                    },
+                                );
+                                if !ret_remove_signals.ok() {
+                                    return cost.take(ret_remove_signals);
+                                }
+                                cost.add_money(ret_remove_signals.money());
                             }
-                            cost.add_money(other.money());
                         }
                     }
+
+                    /* If the rail types don't match, try to convert only if engines of
+                     * the new rail type are not powered on the present rail type and engines of
+                     * the present rail type are powered on the new rail type. */
+                    if self.world.get_rail_type(tile) != railtype
+                        && !has_power_on_rail(self.shared, railtype, self.world.get_rail_type(tile))
+                    {
+                        if has_power_on_rail(self.shared, self.world.get_rail_type(tile), railtype)
+                        {
+                            w::hit(w::RAIL_CMD_BUILD_CONVERT);
+                            self.convert_rail_command(
+                                ret,
+                                flags,
+                                CmdConvertRail {
+                                    tile,
+                                    area_start: tile,
+                                    totype: railtype,
+                                    diagonal: false,
+                                },
+                            );
+                            if !ret.ok() {
+                                return cost.take(ret);
+                            }
+                            cost.add_money(ret.money());
+                        } else {
+                            return cost.error(INVALID_STRING_ID);
+                        }
+                    }
+
+                    if flags.test(DoCommandFlag::Execute) {
+                        w::hit(w::RAIL_CMD_BUILD_RAIL);
+                        (self.ground.set_ground)(tile.0, RailGroundType::Barren);
+                        let bits = self.world.get_track_bits(tile);
+                        (self.rail.set_track_bits)(tile.0, (bits | trackbit).0);
+                        let owner = self.world.owner(tile);
+                        let infrastructure = CompanyInfrastructure::get(self.shared, owner);
+                        // SAFETY: the company is live and serialized; the rail type indexes
+                        // its infrastructure array.
+                        unsafe {
+                            /* Subtract old infrastructure count. */
+                            CompanyInfrastructure::add_rail(
+                                infrastructure,
+                                self.world.get_rail_type(tile),
+                                pieces(bits).wrapping_neg(),
+                            );
+                            /* Add new infrastructure count. */
+                            CompanyInfrastructure::add_rail(
+                                infrastructure,
+                                self.world.get_rail_type(tile),
+                                pieces(bits | trackbit),
+                            );
+                        }
+                        self.dirty_company_infrastructure_windows(self.world.owner(tile));
+                    }
+                    break 'switch;
                 }
-                let current = crate::services::RailType(
-                    crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-                )
-                .0;
-                if current != railtype && !(self.s.powered_rail)(railtype, current) {
-                    if (self.s.powered_rail)(current, railtype) {
-                        w::hit(w::RAIL_CMD_BUILD_CONVERT);
-                        unsafe { (self.s.convert_rail)(ret.0, flags, tile, tile, railtype, false) };
+
+                TileType::MP_ROAD => {
+                    /* Level crossings may only be built on these slopes */
+                    if !has_bit(VALID_LEVEL_CROSSING_SLOPES, tileh.0) {
+                        return cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
+                    }
+
+                    if !(self.s.crossing_with_competitor)()
+                        && self.current_company() != Owner::DEITY
+                    {
+                        ret.tile_ownership(self.command, tile.0);
                         if !ret.ok() {
                             return cost.take(ret);
                         }
-                        cost.add_money(ret.money());
-                    } else {
-                        return cost.error(INVALID_STRING_ID);
                     }
-                }
-                if flags & DoCommandFlag::EXECUTE != 0 {
-                    w::hit(w::RAIL_CMD_BUILD_RAIL);
-                    (self.ground.set_ground)(tile, crate::services::RailGroundType(GROUND_BARREN));
-                    let bits = self.tracks(tile);
-                    (self.rail.set_track_bits)(tile, bits | trackbit);
-                    let owner = (self.shared.tile_owner)(tile);
-                    /* Subtract old infrastructure count. */
-                    unsafe {
-                        CompanyInfrastructure::add_rail(
-                            {
-                                if infrastructure_ptr.is_null() {
-                                    infrastructure_ptr =
-                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
-                                }
-                                infrastructure_ptr
-                            },
-                            crate::rail_type::RailType(
-                                crate::services::RailType(
-                                    crate::map_func::World::new(self.shared)
-                                        .get_rail_type_raw(tile),
-                                )
-                                .0,
-                            ),
-                            pieces(bits).wrapping_neg(),
-                        );
-                    };
-                    let owner = (self.shared.tile_owner)(tile);
-                    /* Add new infrastructure count. */
-                    unsafe {
-                        CompanyInfrastructure::add_rail(
-                            {
-                                if infrastructure_ptr.is_null() {
-                                    infrastructure_ptr =
-                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
-                                }
-                                infrastructure_ptr
-                            },
-                            crate::rail_type::RailType(
-                                crate::services::RailType(
-                                    crate::map_func::World::new(self.shared)
-                                        .get_rail_type_raw(tile),
-                                )
-                                .0,
-                            ),
-                            pieces(bits | trackbit),
-                        );
-                    };
-                    (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
-                }
-            }
-            MP_ROAD => {
-                if CROSSING_SLOPES >> tileh.0 & 1 == 0 {
-                    return cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
-                }
-                if !(self.s.crossing_with_competitor)() && self.current() != OWNER_DEITY {
-                    ret.tile_ownership(self.command, tile);
+
+                    ret.no_vehicle(self.command, tile.0);
                     if !ret.ok() {
                         return cost.take(ret);
                     }
-                }
-                ret.no_vehicle(self.command, tile);
-                if !ret.ok() {
-                    return cost.take(ret);
-                }
-                let mut built = false;
-                if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
-                    if crate::map_func::World::new(self.shared).has_road_works(tile) {
-                        return cost.error(STR_ERROR_ROAD_WORKS_IN_PROGRESS.0);
-                    }
-                    if crate::map_func::World::new(self.shared).disallowed_road_directions(tile)
-                        != 0
-                    {
-                        return cost.error(STR_ERROR_CROSSING_ON_ONEWAY_ROAD.0);
-                    }
-                    if (self.s.rail_no_crossings)(railtype) {
-                        return cost.error(STR_ERROR_CROSSING_DISALLOWED_RAIL.0);
-                    }
-                    let road_type = (self.shared.road_type)(tile);
-                    let tram_type = (self.shared.tram_type)(tile).0;
-                    if road_type != INVALID_ROADTYPE && (self.s.road_no_crossing)(road_type) {
-                        return cost.error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
-                    }
-                    if tram_type != INVALID_ROADTYPE && (self.s.road_no_crossing)(tram_type) {
-                        return cost.error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
-                    }
-                    let road = NormalRoad {
-                        road_type,
-                        tram_type,
-                        road_bits: crate::map_func::World::new(self.shared).road_bits(tile, false),
-                        tram_bits: crate::map_func::World::new(self.shared).road_bits(tile, true),
-                    };
-                    let bits = road.road_bits | road.tram_bits;
-                    if (track == TRACK_X && bits & ROAD_X == 0)
-                        || (track == TRACK_Y && bits & ROAD_Y == 0)
-                    {
-                        if self
-                            .build_crossing(cost, ret, flags, tile, railtype, track, road)
-                            .is_none()
-                        {
-                            return;
+
+                    if self.world.is_normal_road(tile.0) {
+                        if self.world.has_road_works(tile.0) {
+                            return cost.error(STR_ERROR_ROAD_WORKS_IN_PROGRESS.0);
                         }
-                        built = true;
+
+                        if DisallowedRoadDirections(self.world.disallowed_road_directions(tile.0))
+                            != DisallowedRoadDirections::DRD_NONE
+                        {
+                            return cost.error(STR_ERROR_CROSSING_ON_ONEWAY_ROAD.0);
+                        }
+
+                        if rail_no_level_crossings(self.shared, railtype) {
+                            return cost.error(STR_ERROR_CROSSING_DISALLOWED_RAIL.0);
+                        }
+
+                        let roadtype_road = RoadType(self.world.road_type(tile.0, false));
+                        let roadtype_tram = RoadType(self.world.road_type(tile.0, true));
+
+                        if roadtype_road != RoadType::INVALID_ROADTYPE
+                            && (self.s.road_no_crossing)(roadtype_road.0)
+                        {
+                            return cost.error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
+                        }
+                        if roadtype_tram != RoadType::INVALID_ROADTYPE
+                            && (self.s.road_no_crossing)(roadtype_tram.0)
+                        {
+                            return cost.error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
+                        }
+
+                        let road = RoadBits(self.world.road_bits(tile.0, false));
+                        let tram = RoadBits(self.world.road_bits(tile.0, true));
+                        if (track == Track::TRACK_X
+                            && (road | tram) & RoadBits::ROAD_X == RoadBits::ROAD_NONE)
+                            || (track == Track::TRACK_Y
+                                && (road | tram) & RoadBits::ROAD_Y == RoadBits::ROAD_NONE)
+                        {
+                            let road_owner = CompanyID(self.world.road_owner(tile.0, false));
+                            let tram_owner = CompanyID(self.world.road_owner(tile.0, true));
+                            /* Disallow breaking end-of-line of someone else
+                             * so trams can still reverse on this tile. */
+                            if (self.shared.company_valid)(tram_owner.0)
+                                && has_exactly_one_bit(tram.0)
+                            {
+                                ret.ownership(self.command, tram_owner.0, TileIndex::INVALID.0);
+                                if !ret.ok() {
+                                    return cost.take(ret);
+                                }
+                            }
+
+                            let num_new_road_pieces = if road != RoadBits::ROAD_NONE {
+                                2_u32.wrapping_sub(road.0.count_ones())
+                            } else {
+                                0
+                            };
+                            if num_new_road_pieces > 0 {
+                                cost.add_money(
+                                    crate::road_cost::build_cost(self.shared, roadtype_road.0)
+                                        .saturating_mul(i64::from(num_new_road_pieces)),
+                                );
+                            }
+
+                            let num_new_tram_pieces = if tram != RoadBits::ROAD_NONE {
+                                2_u32.wrapping_sub(tram.0.count_ones())
+                            } else {
+                                0
+                            };
+                            if num_new_tram_pieces > 0 {
+                                cost.add_money(
+                                    crate::road_cost::build_cost(self.shared, roadtype_tram.0)
+                                        .saturating_mul(i64::from(num_new_tram_pieces)),
+                                );
+                            }
+
+                            if flags.test(DoCommandFlag::Execute) {
+                                w::hit(w::RAIL_CMD_BUILD_CROSSING);
+                                (self.s.make_crossing)(
+                                    tile.0,
+                                    road_owner.0,
+                                    tram_owner.0,
+                                    self.current_company().0,
+                                    if track == Track::TRACK_X {
+                                        Axis::AXIS_Y.0
+                                    } else {
+                                        Axis::AXIS_X.0
+                                    },
+                                    railtype.0,
+                                    roadtype_road.0,
+                                    roadtype_tram.0,
+                                    (self.shared.town_index)(tile.0),
+                                );
+                                crate::train::update_level_crossing(
+                                    self.train,
+                                    self.shared,
+                                    tile,
+                                    false,
+                                    false,
+                                );
+                                crate::train::mark_dirty_adjacent_level_crossing_tiles(
+                                    self.train,
+                                    self.shared,
+                                    tile,
+                                    Axis(self.world.crossing_road_axis(tile.0)),
+                                );
+                                // SAFETY: the company is live and serialized; the types
+                                // index its infrastructure arrays.
+                                unsafe {
+                                    CompanyInfrastructure::add_rail(
+                                        CompanyInfrastructure::get(
+                                            self.shared,
+                                            self.current_company(),
+                                        ),
+                                        railtype,
+                                        LEVELCROSSING_TRACKBIT_FACTOR,
+                                    );
+                                }
+                                self.dirty_company_infrastructure_windows(self.current_company());
+                                if num_new_road_pieces > 0
+                                    && (self.shared.company_valid)(road_owner.0)
+                                {
+                                    // SAFETY: as above.
+                                    unsafe {
+                                        CompanyInfrastructure::add_road(
+                                            CompanyInfrastructure::get(self.shared, road_owner),
+                                            roadtype_road,
+                                            num_new_road_pieces,
+                                        );
+                                    }
+                                    self.dirty_company_infrastructure_windows(road_owner);
+                                }
+                                if num_new_tram_pieces > 0
+                                    && (self.shared.company_valid)(tram_owner.0)
+                                {
+                                    // SAFETY: as above.
+                                    unsafe {
+                                        CompanyInfrastructure::add_road(
+                                            CompanyInfrastructure::get(self.shared, tram_owner),
+                                            roadtype_tram,
+                                            num_new_tram_pieces,
+                                        );
+                                    }
+                                    self.dirty_company_infrastructure_windows(tram_owner);
+                                }
+                            }
+                            break 'switch;
+                        }
                     }
-                }
-                if !built {
-                    if crate::map_func::World::new(self.shared).level_crossing_tile(tile)
-                        && crate::services::TrackBits(
-                            crate::map_func::World::new(self.shared).crossing_rail_bits(tile),
-                        )
-                        .0 == trackbit
+
+                    if self.world.level_crossing_tile(tile.0)
+                        && TrackBits(self.world.crossing_rail_bits(tile.0)) == trackbit
                     {
                         return cost.error(STR_ERROR_ALREADY_BUILT.0);
                     }
-                    fall_through = true;
+                    // Falls through to the default case.
                 }
+
+                _ => {}
             }
-            _ => fall_through = true,
-        }
-        if fall_through {
-            let water_ground =
-                self.tile_type(tile) == MP_WATER && is_slope_with_one_corner_raised_raw(tileh.0);
-            self.check_rail_slope(ret, tileh.0, trackbit, 0, tile);
+
+            /* Will there be flat water on the lower halftile? */
+            let water_ground = self.world.is_tile_type(tile, TileType::MP_WATER)
+                && is_slope_with_one_corner_raised(tileh);
+
+            self.check_rail_slope(ret, tileh, trackbit, TrackBits::TRACK_BIT_NONE, tile);
             if !ret.ok() {
                 return cost.take(ret);
             }
             cost.add_money(ret.money());
-            crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
+
+            self.landscape_clear(ret, flags, tile);
             if !ret.ok() {
                 return cost.take(ret);
             }
             cost.add_money(ret.money());
+
             if water_ground {
-                cost.add_money(negate(price(PR_CLEAR_WATER)));
-                cost.add_money(price(PR_CLEAR_ROUGH));
+                cost.add_money(
+                    crate::company::price(usize::from(Price::PR_CLEAR_WATER.0)).saturating_neg(),
+                );
+                cost.add_money(crate::company::price(usize::from(Price::PR_CLEAR_ROUGH.0)));
             }
-            if flags & DoCommandFlag::EXECUTE != 0 {
+
+            if flags.test(DoCommandFlag::Execute) {
                 w::hit(w::RAIL_CMD_BUILD_CLEAR);
-                let current = self.current();
-                (self.rail.make_rail_normal)(tile, current, trackbit, railtype);
+                (self.rail.make_rail_normal)(
+                    tile.0,
+                    self.current_company().0,
+                    trackbit.0,
+                    railtype.0,
+                );
                 if water_ground {
                     w::hit(w::RAIL_CMD_BUILD_HALF_WATER);
-                    (self.ground.set_ground)(
-                        tile,
-                        crate::services::RailGroundType(GROUND_HALF_WATER),
-                    );
-                    let stations = (self.shared.station_commands)();
+                    (self.ground.set_ground)(tile.0, RailGroundType::HalfTileWater);
                     // SAFETY: borrowed process-lifetime services; no owner borrow spans docking.
-                    unsafe { crate::station_cmd::check_possible_docking_raw(stations, tile) };
+                    unsafe {
+                        crate::station_cmd::check_possible_docking(
+                            (self.shared.station_commands)(),
+                            tile,
+                        );
+                    }
                 }
+                // SAFETY: the company is live and serialized; the rail type indexes its
+                // infrastructure array.
                 unsafe {
                     CompanyInfrastructure::add_rail(
-                        CompanyInfrastructure::get(self.shared, CompanyID(self.current())),
-                        crate::rail_type::RailType(railtype),
+                        CompanyInfrastructure::get(self.shared, self.current_company()),
+                        railtype,
                         1,
                     );
-                };
-                (self.command.infrastructure_dirty)(self.current());
+                }
+                self.dirty_company_infrastructure_windows(self.current_company());
             }
         }
-        if flags & DoCommandFlag::EXECUTE != 0 {
-            (self.shared.mark_dirty)(tile);
-            self.add_track(tile, track, self.current());
-            (self.s.layout_changed)(tile, track);
+
+        if flags.test(DoCommandFlag::Execute) {
+            self.mark_tile_dirty_by_tile(tile);
+            self.signals()
+                .add_track_to_signal_buffer(tile, track, self.current_company());
+            yapf_notify_track_layout_change(tile, track);
         }
-        cost.add_money((self.s.rail_build_cost)(railtype));
+
+        cost.add_money(rail_build_cost(self.shared, railtype));
     }
 
-    /// Level-crossing branch of `CmdBuildSingleRail`; `Err` returns early.
-    fn build_crossing(
+    /// `CmdRemoveSingleRail`: remove a single piece of track.
+    fn cmd_remove_single_rail(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
-        flags: u16,
-        tile: u32,
-        railtype: u8,
-        track: u8,
-        road: NormalRoad,
-    ) -> Option<()> {
-        let road_owner = crate::map_func::World::new(self.shared).road_owner(tile, false);
-        let tram_owner = crate::map_func::World::new(self.shared).road_owner(tile, true);
-        if (self.shared.company_valid)(tram_owner) && road.tram_bits.is_power_of_two() {
-            ret.ownership(self.command, tram_owner, 0);
-            if !ret.ok() {
-                cost.take(ret);
-                return None;
-            }
-        }
-        let new_road = if road.road_bits == 0 {
-            0
-        } else {
-            2_u32.wrapping_sub(road.road_bits.count_ones())
-        };
-        if new_road > 0 {
-            cost.add_money(
-                crate::road_cost::build_cost(self.shared, road.road_type)
-                    .saturating_mul(i64::from(new_road)),
-            );
-        }
-        let new_tram = if road.tram_bits == 0 {
-            0
-        } else {
-            2_u32.wrapping_sub(road.tram_bits.count_ones())
-        };
-        if new_tram > 0 {
-            cost.add_money(
-                crate::road_cost::build_cost(self.shared, road.tram_type)
-                    .saturating_mul(i64::from(new_tram)),
-            );
-        }
-        if flags & DoCommandFlag::EXECUTE != 0 {
-            w::hit(w::RAIL_CMD_BUILD_CROSSING);
-            let current = self.current();
-            let axis = u8::from(track == TRACK_X); // AXIS_Y for TRACK_X.
-            let town = (self.shared.town_index)(tile);
-            (self.s.make_crossing)(
-                tile,
-                road_owner,
-                tram_owner,
-                current,
-                axis,
-                railtype,
-                road.road_type,
-                road.tram_type,
-                town,
-            );
-            (self.shared.update_level_crossing)(tile, false);
-            (self.s.mark_crossings)(
-                tile,
-                crate::services::Axis(
-                    crate::map_func::World::new(self.shared).crossing_road_axis(tile),
-                )
-                .0,
-            );
-            unsafe {
-                CompanyInfrastructure::add_rail(
-                    CompanyInfrastructure::get(self.shared, CompanyID(self.current())),
-                    crate::rail_type::RailType(railtype),
-                    LEVELCROSSING_TRACKBIT_FACTOR,
-                );
-            };
-            (self.command.infrastructure_dirty)(self.current());
-            if new_road > 0 && (self.shared.company_valid)(road_owner) {
-                unsafe {
-                    CompanyInfrastructure::add_road(
-                        CompanyInfrastructure::get(self.shared, CompanyID(road_owner)),
-                        crate::road_type::RoadType(road.road_type),
-                        new_road,
-                    );
-                };
-                (self.command.infrastructure_dirty)(road_owner);
-            }
-            if new_tram > 0 && (self.shared.company_valid)(tram_owner) {
-                unsafe {
-                    CompanyInfrastructure::add_road(
-                        CompanyInfrastructure::get(self.shared, CompanyID(tram_owner)),
-                        crate::road_type::RoadType(road.tram_type),
-                        new_tram,
-                    );
-                };
-                (self.command.infrastructure_dirty)(tram_owner);
-            }
-        }
-        Some(())
-    }
-
-    /// `CmdRemoveSingleRail`.
-    fn remove_single_rail(&self, cost: Cost<'_>, ret: Cost<'_>, flags: u16, tile: u32, track: u8) {
-        // Resolve at the first original access; the raw pointer retains no Rust borrow.
-        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
+        flags: DoCommandFlags,
+        args: CmdRemoveSingleRail,
+    ) {
+        let CmdRemoveSingleRail { tile, track } = args;
         cost.set(0);
         let mut crossing = false;
-        if track >= 6 {
+
+        if !is_valid_track(track) {
             return cost.error(INVALID_STRING_ID);
         }
-        let trackbit = 1_u8 << track;
-        let mut owner = INVALID_OWNER;
-        let mut v: *mut Train = std::ptr::null_mut();
-        match self.tile_type(tile) {
-            MP_ROAD => {
-                if !crate::map_func::World::new(self.shared).level_crossing_tile(tile)
-                    || crate::services::TrackBits(
-                        crate::map_func::World::new(self.shared).crossing_rail_bits(tile),
-                    )
-                    .0 != trackbit
+        let trackbit = track_to_track_bits(track, self.check());
+
+        /* Need to read tile owner now because it may change when the rail is removed
+         * Also, in case of floods, _current_company != owner
+         * There may be invalid tiletype even in exec run (when removing long track),
+         * so do not call GetTileOwner(tile) in any case here */
+        let mut owner = Owner::INVALID;
+
+        let mut v = Handle::NONE;
+
+        match self.world.kind(tile) {
+            TileType::MP_ROAD => {
+                if !self.world.level_crossing(tile.0)
+                    || TrackBits(self.world.crossing_rail_bits(tile.0)) != trackbit
                 {
                     return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
                 }
-                if self.current() != OWNER_WATER {
-                    ret.tile_ownership(self.command, tile);
+
+                if self.current_company() != Owner::WATER {
+                    ret.tile_ownership(self.command, tile.0);
                     if !ret.ok() {
                         return cost.take(ret);
                     }
                 }
-                if flags & DoCommandFlag::BANKRUPT == 0 {
-                    ret.no_vehicle(self.command, tile);
+
+                if !flags.test(DoCommandFlag::Bankrupt) {
+                    ret.no_vehicle(self.command, tile.0);
                     if !ret.ok() {
                         return cost.take(ret);
                     }
                 }
-                cost.add_money((self.s.rail_clear_cost)(
-                    crate::services::RailType(
-                        crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-                    )
-                    .0,
-                ));
-                if flags & DoCommandFlag::EXECUTE != 0 {
+
+                cost.add_money(rail_clear_cost(self.shared, self.world.get_rail_type(tile)));
+
+                if flags.test(DoCommandFlag::Execute) {
                     w::hit(w::RAIL_CMD_REMOVE_CROSSING);
-                    (self.s.crossing_removed)(
+                    crate::train::update_adjacent_level_crossing_tiles_on_level_crossing_removal(
+                        self.train,
+                        self.shared,
                         tile,
-                        crate::services::Axis(
-                            crate::map_func::World::new(self.shared).crossing_road_axis(tile),
-                        )
-                        .0,
+                        Axis(self.world.crossing_road_axis(tile.0)),
                     );
-                    if self.reserved(tile) & trackbit != 0 {
-                        v = crate::pbs::Pbs::acquire(self.shared)
-                            .get_train_for_reservation_raw(tile, track)
-                            .shell()
-                            .cast::<crate::services::Train>();
-                        if !v.is_null() {
-                            unsafe { (self.shared.free_train_reservation)(v) };
+
+                    if self.pbs.has_reserved_tracks(tile, trackbit) {
+                        v = self.pbs.get_train_for_reservation(tile, track);
+                        if v != Handle::NONE {
+                            self.free_train_track_reservation(v);
                         }
                     }
-                    owner = (self.shared.tile_owner)(tile);
+
+                    owner = self.world.owner(tile);
+                    // SAFETY: the company is live and serialized; the rail type indexes its
+                    // infrastructure array.
                     unsafe {
                         CompanyInfrastructure::add_rail(
-                            {
-                                if infrastructure_ptr.is_null() {
-                                    infrastructure_ptr =
-                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
-                                }
-                                infrastructure_ptr
-                            },
-                            crate::rail_type::RailType(
-                                crate::services::RailType(
-                                    crate::map_func::World::new(self.shared)
-                                        .get_rail_type_raw(tile),
-                                )
-                                .0,
-                            ),
+                            CompanyInfrastructure::get(self.shared, owner),
+                            self.world.get_rail_type(tile),
                             LEVELCROSSING_TRACKBIT_FACTOR.wrapping_neg(),
                         );
-                    };
-                    (self.command.infrastructure_dirty)(owner);
-                    let road = CrossingRoad {
-                        bits: (self.shared.crossing_road_bits)(tile).0,
-                        road_type: (self.shared.road_type)(tile),
-                        tram_type: (self.shared.tram_type)(tile).0,
-                        town: (self.shared.town_index)(tile),
-                        road_owner: crate::map_func::World::new(self.shared)
-                            .road_owner(tile, false),
-                        tram_owner: crate::map_func::World::new(self.shared).road_owner(tile, true),
-                    };
-                    (self.s.make_road)(tile, road);
-                    (self.s.close_inspect)(tile);
+                    }
+                    self.dirty_company_infrastructure_windows(owner);
+                    (self.s.make_road)(
+                        tile.0,
+                        CrossingRoad {
+                            bits: (self.shared.crossing_road_bits)(tile.0),
+                            road_type: RoadType(self.world.road_type(tile.0, false)),
+                            tram_type: RoadType(self.world.road_type(tile.0, true)),
+                            town: (self.shared.town_index)(tile.0),
+                            road_owner: self.world.road_owner(tile.0, false),
+                            tram_owner: self.world.road_owner(tile.0, true),
+                        },
+                    );
+                    delete_newgrf_inspect_window(GrfSpecFeature::GSF_RAILTYPES, tile.0);
                 }
             }
-            MP_RAILWAY => {
-                if !(self.shared.is_plain_rail)(tile) {
+
+            TileType::MP_RAILWAY => {
+                /* There are no rails present at depots. */
+                if !self.world.is_plain_rail(tile) {
                     return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
                 }
-                if self.current() != OWNER_WATER {
-                    ret.tile_ownership(self.command, tile);
+
+                if self.current_company() != Owner::WATER {
+                    ret.tile_ownership(self.command, tile.0);
                     if !ret.ok() {
                         return cost.take(ret);
                     }
                 }
-                ret.no_train(self.command, tile, trackbit);
+
+                self.ensure_no_train_on_track(ret, tile, track);
                 if !ret.ok() {
                     return cost.take(ret);
                 }
-                let mut present = self.tracks(tile);
-                if present & trackbit == 0 {
+
+                let mut present = self.world.get_track_bits(tile);
+                if present & trackbit == TrackBits::TRACK_BIT_NONE {
                     return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
                 }
-                if present == BIT_X | BIT_Y {
+                if present == TrackBits::TRACK_BIT_X | TrackBits::TRACK_BIT_Y {
                     crossing = true;
                 }
-                cost.add_money((self.s.rail_clear_cost)(
-                    crate::services::RailType(
-                        crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-                    )
-                    .0,
-                ));
-                if self.has_signal(tile, track) {
+
+                cost.add_money(rail_clear_cost(self.shared, self.world.get_rail_type(tile)));
+
+                /* Charge extra to remove signals on the track, if they are there */
+                if self.world.has_signal_on_track(tile, track) {
                     w::hit(w::RAIL_CMD_REMOVE_SIGNAL_CHARGE);
-                    unsafe { (self.s.remove_signal)(ret.0, flags, tile, track) };
+                    self.remove_single_signal_command(
+                        ret,
+                        flags,
+                        CmdRemoveSingleSignal { tile, track },
+                    );
                     cost.add(ret);
                 }
-                if flags & DoCommandFlag::EXECUTE != 0 {
+
+                if flags.test(DoCommandFlag::Execute) {
                     w::hit(w::RAIL_CMD_REMOVE_RAIL);
-                    if self.reserved(tile) & trackbit != 0 {
-                        v = crate::pbs::Pbs::acquire(self.shared)
-                            .get_train_for_reservation_raw(tile, track)
-                            .shell()
-                            .cast::<crate::services::Train>();
-                        if !v.is_null() {
-                            unsafe { (self.shared.free_train_reservation)(v) };
+                    if self.pbs.has_reserved_tracks(tile, trackbit) {
+                        v = self.pbs.get_train_for_reservation(tile, track);
+                        if v != Handle::NONE {
+                            self.free_train_track_reservation(v);
                         }
                     }
-                    owner = (self.shared.tile_owner)(tile);
-                    /* Subtract old infrastructure count. */
+
+                    owner = self.world.owner(tile);
+
+                    let infrastructure = CompanyInfrastructure::get(self.shared, owner);
+                    // SAFETY: the company is live and serialized; the rail type indexes its
+                    // infrastructure array.
                     unsafe {
+                        /* Subtract old infrastructure count. */
                         CompanyInfrastructure::add_rail(
-                            {
-                                if infrastructure_ptr.is_null() {
-                                    infrastructure_ptr =
-                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
-                                }
-                                infrastructure_ptr
-                            },
-                            crate::rail_type::RailType(
-                                crate::services::RailType(
-                                    crate::map_func::World::new(self.shared)
-                                        .get_rail_type_raw(tile),
-                                )
-                                .0,
-                            ),
+                            infrastructure,
+                            self.world.get_rail_type(tile),
                             pieces(present).wrapping_neg(),
                         );
-                    };
-                    present ^= trackbit;
-                    /* Add new infrastructure count. */
-                    unsafe {
+                        /* Add new infrastructure count. */
+                        present ^= trackbit;
                         CompanyInfrastructure::add_rail(
-                            {
-                                if infrastructure_ptr.is_null() {
-                                    infrastructure_ptr =
-                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
-                                }
-                                infrastructure_ptr
-                            },
-                            crate::rail_type::RailType(
-                                crate::services::RailType(
-                                    crate::map_func::World::new(self.shared)
-                                        .get_rail_type_raw(tile),
-                                )
-                                .0,
-                            ),
+                            infrastructure,
+                            self.world.get_rail_type(tile),
                             pieces(present),
                         );
-                    };
-                    (self.command.infrastructure_dirty)(owner);
-                    if present == 0 {
-                        let tileh =
-                            crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
-                        if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
-                            && is_slope_with_one_corner_raised_raw(tileh.0)
+                    }
+                    self.dirty_company_infrastructure_windows(owner);
+
+                    if present == TrackBits::TRACK_BIT_NONE {
+                        let tileh = self.world.tile_slope(tile);
+                        /* If there is flat water on the lower halftile, convert the tile to shore so the water remains */
+                        if self.world.get_rail_ground_type(tile) == RailGroundType::HalfTileWater
+                            && is_slope_with_one_corner_raised(tileh)
                         {
                             w::hit(w::RAIL_CMD_REMOVE_SHORE);
-                            (self.s.make_shore)(tile);
+                            let docking = self.world.is_docking_tile(tile);
+                            (self.shared.make_shore)(tile.0);
+                            // SAFETY: the station table has process lifetime.
+                            (unsafe { &*(self.shared.station_commands)() }.set_docking)(
+                                tile.0, docking,
+                            );
                         } else {
-                            crate::ground::do_clear_square_raw(tile, self.shared);
+                            crate::ground::do_clear_square(tile, self.shared);
                         }
-                        (self.s.close_inspect)(tile);
+                        delete_newgrf_inspect_window(GrfSpecFeature::GSF_RAILTYPES, tile.0);
                     } else {
-                        (self.rail.set_track_bits)(tile, present);
-                        let reservation = (self.rail.rail_reservation)(tile).0;
-                        (self.rail.set_track_reservation)(tile, reservation & present);
+                        (self.rail.set_track_bits)(tile.0, present.0);
+                        (self.rail.set_track_reservation)(
+                            tile.0,
+                            ((self.rail.rail_reservation)(tile.0) & present).0,
+                        );
                     }
                 }
             }
+
             _ => return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0),
         }
-        if flags & DoCommandFlag::EXECUTE != 0 {
-            (self.shared.mark_dirty)(tile);
+
+        if flags.test(DoCommandFlag::Execute) {
+            /* if we got that far, 'owner' variable is set correctly */
+            crate::services_assert::assert_with(|| (self.shared.company_valid)(owner.0));
+
+            self.mark_tile_dirty_by_tile(tile);
             if crossing {
                 w::hit(w::RAIL_CMD_REMOVE_DIAGONAL_CROSSING);
-                self.add_track(tile, TRACK_X, owner);
-                self.add_track(tile, TRACK_Y, owner);
-                (self.s.layout_changed)(tile, TRACK_X);
-                (self.s.layout_changed)(tile, TRACK_Y);
+                /* crossing is set when only TRACK_BIT_X and TRACK_BIT_Y are set. As we
+                 * are removing one of these pieces, we'll need to update signals for
+                 * both directions explicitly, as after the track is removed it won't
+                 * 'connect' with the other piece. */
+                self.signals()
+                    .add_track_to_signal_buffer(tile, Track::TRACK_X, owner);
+                self.signals()
+                    .add_track_to_signal_buffer(tile, Track::TRACK_Y, owner);
+                yapf_notify_track_layout_change(tile, Track::TRACK_X);
+                yapf_notify_track_layout_change(tile, Track::TRACK_Y);
             } else {
-                self.add_track(tile, track, owner);
-                (self.s.layout_changed)(tile, track);
+                self.signals()
+                    .add_track_to_signal_buffer(tile, track, owner);
+                yapf_notify_track_layout_change(tile, track);
             }
-            if !v.is_null() {
-                unsafe { (self.shared.try_path_reserve)(v, true, false) };
+
+            if v != Handle::NONE {
+                self.try_path_reserve(v, true);
             }
         }
     }
 
     /// `ValidateAutoDrag`; false is `CMD_ERROR`.
-    fn validate_auto_drag(&self, trackdir: &mut u8, start: u32, end: u32) -> bool {
-        let x = self.map.tile_x(TileIndex(start)) as i32;
-        let y = self.map.tile_y(TileIndex(start)) as i32;
-        let ex = self.map.tile_x(TileIndex(end)) as i32;
-        let ey = self.map.tile_y(TileIndex(end)) as i32;
-        if *trackdir & 7 >= 6 {
+    fn validate_auto_drag(
+        &self,
+        trackdir: &mut Trackdir,
+        start: TileIndex,
+        end: TileIndex,
+    ) -> bool {
+        let x = self.map().tile_x(start).cast_signed();
+        let y = self.map().tile_y(start).cast_signed();
+        let ex = self.map().tile_x(end).cast_signed();
+        let ey = self.map().tile_y(end).cast_signed();
+
+        if !is_valid_track(trackdir_to_track(*trackdir, self.check())) {
             return false;
         }
-        let dx = ex - x;
-        let dy = ey - y;
-        let (mut delta_x, mut delta_y) = TRACK_DELTA[usize::from(*trackdir)];
-        if !diagonal(*trackdir) {
-            let (ox, oy) = TRACK_DELTA[usize::from(*trackdir ^ 1)];
-            delta_x += ox;
-            delta_y += oy;
+
+        /* calculate delta x,y from start to end tile */
+        let dx = ex.wrapping_sub(x);
+        let dy = ey.wrapping_sub(y);
+
+        /* calculate delta x,y for the first direction */
+        let mut trdx = i32::from(TRACKDELTA[usize::from(trackdir.0)].x);
+        let mut trdy = i32::from(TRACKDELTA[usize::from(trackdir.0)].y);
+
+        if !is_diagonal_trackdir(*trackdir, self.check()) {
+            trdx += i32::from(TRACKDELTA[usize::from(trackdir.0 ^ 1)].x);
+            trdy += i32::from(TRACKDELTA[usize::from(trackdir.0 ^ 1)].y);
         }
-        while (delta_x <= 0 && dx > 0)
-            || (delta_x >= 0 && dx < 0)
-            || (delta_y <= 0 && dy > 0)
-            || (delta_y >= 0 && dy < 0)
+
+        /* validate the direction */
+        while (trdx <= 0 && dx > 0)
+            || (trdx >= 0 && dx < 0)
+            || (trdy <= 0 && dy > 0)
+            || (trdy >= 0 && dy < 0)
         {
-            if *trackdir & 8 == 0 {
-                *trackdir |= 8;
-                delta_x = -delta_x;
-                delta_y = -delta_y;
+            if !has_bit(trackdir.0, 3) {
+                // first direction is invalid, try the other
+                trackdir.0 |= 1 << 3; // reverse the direction
+                trdx = -trdx;
+                trdy = -trdy;
             } else {
+                // other direction is invalid too, invalid drag
                 return false;
             }
         }
-        if !diagonal(*trackdir) {
-            let (tx, ty) = TRACK_DELTA[usize::from(*trackdir)];
-            if dx.abs() != dy.abs() && dx.abs() + ty.abs() != dy.abs() + tx.abs() {
+
+        /* (for diagonal tracks, this is already made sure of by above test), but:
+         * for non-diagonal tracks, check if the start and end tile are on 1 line */
+        if !is_diagonal_trackdir(*trackdir, self.check()) {
+            trdx = i32::from(TRACKDELTA[usize::from(trackdir.0)].x);
+            trdy = i32::from(TRACKDELTA[usize::from(trackdir.0)].y);
+            if dx.abs() != dy.abs() && dx.abs() + trdy.abs() != dy.abs() + trdx.abs() {
                 return false;
             }
         }
+
         true
     }
 
-    /// `CmdRailTrackHelper`.
-    fn rail_track_helper(
+    /// `CmdRailTrackHelper`: build or remove a stretch of railroad tracks.
+    fn cmd_rail_track_helper(
         &self,
-        total: Cost<'_>,
+        total_cost: Cost<'_>,
         last_error: Cost<'_>,
         ret: Cost<'_>,
-        flags: u16,
-        mut tile: u32,
-        end_tile: u32,
-        railtype: u8,
-        track: u8,
-        remove: bool,
-        auto_remove_signals: bool,
-        fail_on_obstacle: bool,
+        flags: DoCommandFlags,
+        args: RailTrackHelper,
     ) {
-        total.set(0);
-        if (!remove && !crate::rail::val_param_rail_type_raw(self.shared, railtype)) || track >= 6 {
-            return total.error(INVALID_STRING_ID);
+        let RailTrackHelper {
+            mut tile,
+            end_tile,
+            railtype,
+            track,
+            remove,
+            auto_remove_signals,
+            fail_on_obstacle,
+        } = args;
+        total_cost.set(0);
+
+        if (!remove && !val_param_rail_type(self.shared, railtype)) || !is_valid_track(track) {
+            return total_cost.error(INVALID_STRING_ID);
         }
-        let size = self.map_size();
-        if end_tile >= size || tile >= size {
-            return total.error(INVALID_STRING_ID);
+        if end_tile.0 >= self.shared.map_size() || tile.0 >= self.shared.map_size() {
+            return total_cost.error(INVALID_STRING_ID);
         }
-        let mut trackdir = track;
+
+        let mut trackdir = track_to_trackdir(track, self.check());
+
         if !self.validate_auto_drag(&mut trackdir, tile, end_tile) {
-            return total.error(INVALID_STRING_ID);
+            return total_cost.error(INVALID_STRING_ID);
         }
         w::hit(if remove {
             w::RAIL_CMD_DRAG_REMOVE
         } else {
             w::RAIL_CMD_DRAG_BUILD
         });
+
         let mut had_success = false;
         last_error.error(INVALID_STRING_ID);
         loop {
             if remove {
-                unsafe { (self.s.remove_rail)(ret.0, flags, tile, trackdir & 7) };
+                self.remove_single_rail_command(
+                    ret,
+                    flags,
+                    CmdRemoveSingleRail {
+                        tile,
+                        track: trackdir_to_track(trackdir, self.check()),
+                    },
+                );
             } else {
-                unsafe {
-                    (self.s.build_rail)(
-                        ret.0,
-                        flags,
+                self.build_single_rail_command(
+                    ret,
+                    flags,
+                    CmdBuildSingleRail {
                         tile,
                         railtype,
-                        trackdir & 7,
+                        track: trackdir_to_track(trackdir, self.check()),
                         auto_remove_signals,
-                    );
-                };
+                    },
+                );
             }
             if !remove && !fail_on_obstacle && last_error.message() == STR_ERROR_ALREADY_BUILT.0 {
                 had_success = true;
             }
-            if ret.ok() {
-                had_success = true;
-                total.add_money(ret.money());
-            } else {
+
+            if !ret.ok() {
                 last_error.take(ret);
                 if last_error.message() != STR_ERROR_ALREADY_BUILT.0 && !remove {
                     if fail_on_obstacle {
-                        return total.take(last_error);
+                        return total_cost.take(last_error);
                     }
                     if had_success {
                         w::hit(w::RAIL_CMD_DRAG_OBSTACLE);
-                        break;
+                        break; // Keep going if we haven't constructed any rail yet, skipping the start of the drag
                     }
                 }
+
+                /* Ownership errors are more important. */
                 if last_error.message() == STR_ERROR_OWNED_BY.0 && remove {
                     break;
                 }
+            } else {
+                had_success = true;
+                total_cost.add_money(ret.money());
             }
+
             if tile == end_tile {
                 break;
             }
-            tile = self.step(tile, trackdir);
-            if !diagonal(trackdir) {
-                trackdir ^= 1;
+
+            tile += self
+                .map()
+                .to_tile_index_diff(TRACKDELTA[usize::from(trackdir.0)]);
+
+            /* toggle railbit for the non-diagonal tracks */
+            if !is_diagonal_trackdir(trackdir, self.check()) {
+                trackdir.0 ^= 1;
             }
         }
+
         if !had_success {
-            total.take(last_error);
+            total_cost.take(last_error);
         }
     }
 
-    /// `CmdBuildTrainDepot`.
-    fn build_depot(
+    /// `CmdBuildTrainDepot`: build a train depot.
+    ///
+    /// When checking for the tile slope, the original's to-do is to distinguish between
+    /// "Flat land required" and "land sloped in wrong direction".
+    fn cmd_build_train_depot(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
-        flags: u16,
-        tile: u32,
-        railtype: u8,
-        dir: u8,
+        flags: DoCommandFlags,
+        args: CmdBuildTrainDepot,
     ) {
-        if !crate::rail::val_param_rail_type_raw(self.shared, railtype) || dir >= 4 {
+        let CmdBuildTrainDepot {
+            tile,
+            railtype,
+            dir,
+        } = args;
+        /* check railtype and valid direction for depot (0 through 3), 4 in total */
+        if !val_param_rail_type(self.shared, railtype) || !is_valid_diag_direction(dir) {
             return cost.error(INVALID_STRING_ID);
         }
-        let tileh = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
+
+        let tileh = self.world.tile_slope(tile);
+
         cost.set(0);
-        if tileh != crate::slope_type::Slope::SLOPE_FLAT {
-            const INCLINED: [u8; 4] = [12, 6, 3, 9];
-            let entrance = INCLINED[usize::from(dir)];
-            let fits = if is_steep_slope_raw(tileh.0) {
-                tileh & crate::slope_type::Slope(entrance) == crate::slope_type::Slope(entrance)
-            } else {
-                tileh & crate::slope_type::Slope(entrance) != crate::slope_type::Slope::SLOPE_FLAT
-            };
-            if !(self.shared.build_on_slopes)() || !fits {
+
+        /* Prohibit construction if
+         * The tile is non-flat AND
+         * 1) build-on-slopes is disabled
+         * 2) the tile is steep i.e. spans two height levels
+         * 3) the exit points in the wrong direction
+         */
+
+        if tileh != Slope::SLOPE_FLAT {
+            if !(self.shared.build_on_slopes)() || !can_build_depot_by_tileh(dir, tileh) {
                 return cost.error(STR_ERROR_FLAT_LAND_REQUIRED.0);
             }
-            cost.add_money(price(PR_BUILD_FOUNDATION));
+            cost.add_money(crate::company::price(usize::from(
+                Price::PR_BUILD_FOUNDATION.0,
+            )));
         }
-        let mut rotate = false;
-        if self.tile_type(tile) == MP_RAILWAY
-            && crate::map_func::World::new(self.shared).is_rail_depot_raw(tile)
-            && railtype
-                == crate::services::RailType(
-                    crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-                )
-                .0
-        {
-            ret.tile_ownership(self.command, tile);
+
+        /* Allow the user to rotate the depot instead of having to destroy it and build it again */
+        let mut rotate_existing_depot = false;
+        if self.world.is_rail_depot_tile(tile) && railtype == self.world.get_rail_type(tile) {
+            ret.tile_ownership(self.command, tile.0);
             if !ret.ok() {
                 return cost.take(ret);
             }
-            if dir
-                == crate::services::DiagDirection(
-                    crate::map_func::World::new(self.shared).get_rail_depot_direction_raw(tile),
-                )
-                .0
-            {
+
+            if dir == self.world.get_rail_depot_direction(tile) {
                 return cost.zero();
             }
-            ret.no_vehicle(self.command, tile);
+
+            ret.no_vehicle(self.command, tile.0);
             if !ret.ok() {
                 return cost.take(ret);
             }
-            rotate = true;
+
+            rotate_existing_depot = true;
         }
-        if !rotate {
-            crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
+
+        if !rotate_existing_depot {
+            self.landscape_clear(ret, flags, tile);
             cost.add(ret);
             if !cost.ok() {
                 return;
             }
-            if crate::map_func::World::new(self.shared).bridge_above(TileIndex(tile)) {
+
+            if self.world.bridge_above(tile) {
                 return cost.error(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST.0);
             }
+
             if !(self.s.depot_available)() {
                 return cost.error(INVALID_STRING_ID);
             }
         }
-        if flags & DoCommandFlag::EXECUTE != 0 {
-            if rotate {
+
+        if flags.test(DoCommandFlag::Execute) {
+            if rotate_existing_depot {
                 w::hit(w::RAIL_CMD_DEPOT_ROTATE);
-                (self.rail.set_depot_exit)(tile, dir);
+                (self.rail.set_depot_exit)(tile.0, dir.0);
             } else {
                 w::hit(w::RAIL_CMD_DEPOT_BUILD);
-                let depot = (self.s.new_depot)(tile);
-                (self.rail.make_rail_depot)(tile, self.current(), depot, dir, railtype);
-                (self.s.depot_name)(depot);
+                let d = (self.s.new_depot)(tile.0);
+
+                (self.rail.make_rail_depot)(tile.0, self.current_company().0, d, dir.0, railtype.0);
+                (self.s.depot_name)(d);
+
+                // SAFETY: the company is live and serialized; the rail type indexes its
+                // infrastructure array.
                 unsafe {
                     CompanyInfrastructure::add_rail(
-                        CompanyInfrastructure::get(self.shared, CompanyID(self.current())),
-                        crate::rail_type::RailType(railtype),
+                        CompanyInfrastructure::get(self.shared, self.current_company()),
+                        railtype,
                         1,
                     );
-                };
-                (self.command.infrastructure_dirty)(self.current());
+                }
+                self.dirty_company_infrastructure_windows(self.current_company());
             }
-            (self.shared.mark_dirty)(tile);
-            self.add_side(tile, INVALID_DIAGDIR, self.current());
-            (self.s.layout_changed)(tile, dir & 1);
+
+            self.mark_tile_dirty_by_tile(tile);
+            self.signals().add_side_to_signal_buffer(
+                tile,
+                DiagDirection::INVALID_DIAGDIR,
+                self.current_company(),
+            );
+            yapf_notify_track_layout_change(tile, diag_dir_to_diag_track(dir, self.check()));
         }
-        cost.add_money(price(PR_BUILD_DEPOT_TRAIN));
-        cost.add_money((self.s.rail_build_cost)(railtype));
+
+        cost.add_money(crate::company::price(usize::from(
+            Price::PR_BUILD_DEPOT_TRAIN.0,
+        )));
+        cost.add_money(rail_build_cost(self.shared, railtype));
     }
 
-    /// `CmdBuildSingleSignal`.
-    fn build_signal(
+    /// `CmdBuildSingleSignal`: build signals, alternate between double/single,
+    /// signal/semaphore, pre/exit/combo-signals, and what-else not. If the rail piece does
+    /// not have any signals, signal cycling is ignored.
+    ///
+    /// The original's to-do: p2 should be replaced by two bits for "along" and "against"
+    /// the track.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "SetPresentSignals and SetSignalStates take the uint the original computes"
+    )]
+    fn cmd_build_single_signal(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
-        flags: u16,
-        tile: u32,
-        track: u8,
-        mut sigtype: u8,
-        mut sigvar: u8,
-        convert_signal: bool,
-        skip_existing_signals: bool,
-        ctrl_pressed: bool,
-        cycle_start: u8,
-        cycle_stop: u8,
-        mut num_dir_cycle: u8,
-        signals_copy: u8,
+        flags: DoCommandFlags,
+        args: CmdBuildSingleSignal,
     ) {
-        // Resolve at the first original access; the raw pointer retains no Rust borrow.
-        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
-        if sigtype > SIGTYPE_LAST || sigvar > SIG_SEMAPHORE {
+        let CmdBuildSingleSignal {
+            tile,
+            track,
+            mut sigtype,
+            mut sigvar,
+            convert_signal,
+            skip_existing_signals,
+            ctrl_pressed,
+            cycle_start,
+            cycle_stop,
+            mut num_dir_cycle,
+            signals_copy,
+        } = args;
+        if sigtype > SignalType::SIGTYPE_LAST || sigvar > SignalVariant::SIG_SEMAPHORE {
             return cost.error(INVALID_STRING_ID);
         }
-        if cycle_start > cycle_stop || cycle_stop > SIGTYPE_LAST {
+        if cycle_start > cycle_stop || cycle_stop > SignalType::SIGTYPE_LAST {
             return cost.error(INVALID_STRING_ID);
         }
+
         if ctrl_pressed {
-            sigvar ^= SIG_SEMAPHORE;
+            sigvar = SignalVariant(sigvar.0 ^ SignalVariant::SIG_SEMAPHORE.0);
         }
-        if track >= 6 || !(self.shared.is_plain_rail)(tile) || !self.has_track(tile, track) {
+
+        /* You can only build signals on plain rail tiles, and the selected track must exist */
+        if !is_valid_track(track)
+            || !self.world.is_plain_rail_tile(tile)
+            || !self.world.has_track(tile, track)
+        {
             return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
         }
-        let on_track = crate::signal_func::signal_on_track_raw(track);
-        if signals_copy != 0 && signals_copy & on_track == 0 {
+        /* Protect against invalid signal copying */
+        if signals_copy != 0 && (signals_copy & signal_on_track(track)) == 0 {
             return cost.error(INVALID_STRING_ID);
         }
-        cost.tile_ownership(self.command, tile);
+
+        cost.tile_ownership(self.command, tile.0);
         if !cost.ok() {
             return;
         }
-        if tracks_overlap(self.tracks(tile)) {
+
+        /* See if this is a valid track combination for signals (no overlap) */
+        if tracks_overlap(self.world.get_track_bits(tile)) {
             return cost.error(STR_ERROR_NO_SUITABLE_RAILROAD_TRACK.0);
         }
-        if skip_existing_signals && self.has_signal(tile, track) {
+
+        /* In case we don't want to change an existing signal, return without error. */
+        if skip_existing_signals && self.world.has_signal_on_track(tile, track) {
             return cost.zero();
         }
-        if convert_signal && !self.has_signal(tile, track) {
+
+        /* you can not convert a signal if no signal is on track */
+        if convert_signal && !self.world.has_signal_on_track(tile, track) {
             return cost.error(STR_ERROR_THERE_ARE_NO_SIGNALS.0);
         }
-        if !self.has_signal(tile, track) {
-            cost.set(price(PR_BUILD_SIGNALS));
-        } else if signals_copy != 0 && sigvar != (self.rail.signal_variant)(tile, track).0 {
-            cost.set(price(PR_BUILD_SIGNALS).saturating_add(price(PR_CLEAR_SIGNALS)));
+
+        let build_signals = crate::company::price(usize::from(Price::PR_BUILD_SIGNALS.0));
+        if !self.world.has_signal_on_track(tile, track) {
+            /* build new signals */
+            cost.set(build_signals);
+        } else if signals_copy != 0 && sigvar != (self.rail.signal_variant)(tile.0, track.0) {
+            /* convert signals <-> semaphores */
+            cost.set(
+                build_signals.saturating_add(crate::company::price(usize::from(
+                    Price::PR_CLEAR_SIGNALS.0,
+                ))),
+            );
         } else if convert_signal {
-            if ctrl_pressed || (self.rail.signal_variant)(tile, track).0 != sigvar {
-                cost.set(price(PR_BUILD_SIGNALS).saturating_add(price(PR_CLEAR_SIGNALS)));
+            /* convert button pressed */
+            if ctrl_pressed || (self.rail.signal_variant)(tile.0, track.0) != sigvar {
+                /* it costs money to change signal variant (light or semaphore) */
+                cost.set(
+                    build_signals.saturating_add(crate::company::price(usize::from(
+                        Price::PR_CLEAR_SIGNALS.0,
+                    ))),
+                );
             } else {
+                /* it is free to change signal type (block, exit, entry, combo, path, etc) */
                 cost.zero();
             }
         } else {
+            /* it is free to change orientation or number of signals on the tile (for block/presignals which allow signals in both directions) */
             cost.zero();
         }
-        if flags & DoCommandFlag::EXECUTE == 0 {
+
+        if !flags.test(DoCommandFlag::Execute) {
             return;
         }
-        let mut v: *mut Train = std::ptr::null_mut();
-        if self.reserved(tile) & (1 << track) != 0 {
-            v = crate::pbs::Pbs::acquire(self.shared)
-                .get_train_for_reservation_raw(tile, track)
-                .shell()
-                .cast::<crate::services::Train>();
-            if !v.is_null() {
-                unsafe { (self.shared.free_train_reservation)(v) };
+
+        let mut v = Handle::NONE;
+        /* The new/changed signal could block our path. As this can lead to
+         * stale reservations, we clear the path reservation here and try
+         * to redo it later on. */
+        if self
+            .pbs
+            .has_reserved_tracks(tile, track_to_track_bits(track, self.check()))
+        {
+            v = self.pbs.get_train_for_reservation(tile, track);
+            if v != Handle::NONE {
+                self.free_train_track_reservation(v);
             }
         }
-        if !crate::map_func::World::new(self.shared).has_signals_raw(tile) {
-            (self.rail.set_has_signals)(tile, true);
-            (self.rail.set_signal_states)(tile, 0xF);
-            (self.rail.set_present_signals)(tile, 0);
-            (self.rail.set_signal_type)(tile, track, sigtype);
-            (self.rail.set_signal_variant)(tile, track, sigvar);
+
+        if !self.world.has_signals(tile) {
+            /* there are no signals at all on this tile yet */
+            (self.rail.set_has_signals)(tile.0, true);
+            (self.rail.set_signal_states)(tile.0, 0xF); // all signals are on
+            (self.rail.set_present_signals)(tile.0, 0); // no signals built by default
+            (self.rail.set_signal_type)(tile.0, track.0, sigtype.0);
+            (self.rail.set_signal_variant)(tile.0, track.0, sigvar.0);
         }
-        let present = self.present_signals(tile);
+
+        let infrastructure = CompanyInfrastructure::get(self.shared, self.world.owner(tile));
         /* Subtract old signal infrastructure count. */
+        // SAFETY: the company is live and serialized.
         unsafe {
             CompanyInfrastructure::add_signal(
-                {
-                    if infrastructure_ptr.is_null() {
-                        infrastructure_ptr = CompanyInfrastructure::get(
-                            self.shared,
-                            CompanyID((self.shared.tile_owner)(tile)),
-                        );
-                    }
-                    infrastructure_ptr
-                },
-                present.count_ones().wrapping_neg(),
+                infrastructure,
+                self.world
+                    .get_present_signals(tile)
+                    .count_ones()
+                    .wrapping_neg(),
             );
-        };
+        }
+
+        let on_track = u32::from(signal_on_track(track));
         if signals_copy == 0 {
-            if !self.has_signal(tile, track) {
+            if !self.world.has_signal_on_track(tile, track) {
                 w::hit(w::RAIL_CMD_SIGNAL_BUILD);
-                let added = if is_pbs(sigtype) {
-                    kill_first_bit(on_track)
-                } else {
-                    on_track
-                };
-                (self.rail.set_present_signals)(tile, self.present_signals(tile) | added);
-                (self.rail.set_signal_type)(tile, track, sigtype);
-                (self.rail.set_signal_variant)(tile, track, sigvar);
+                /* build new signals */
+                (self.rail.set_present_signals)(
+                    tile.0,
+                    (self.world.get_present_signals(tile)
+                        | if is_pbs_signal(sigtype) {
+                            u32::from(kill_first_bit(signal_on_track(track)))
+                        } else {
+                            on_track
+                        }) as u8,
+                );
+                (self.rail.set_signal_type)(tile.0, track.0, sigtype.0);
+                (self.rail.set_signal_variant)(tile.0, track.0, sigvar.0);
                 while num_dir_cycle > 0 {
                     num_dir_cycle -= 1;
-                    (self.rail.cycle_signal_side)(tile, track);
+                    (self.rail.cycle_signal_side)(tile.0, track.0);
                 }
             } else if convert_signal {
+                /* convert signal button pressed */
                 if ctrl_pressed {
                     w::hit(w::RAIL_CMD_SIGNAL_VARIANT);
-                    let variant = if (self.rail.signal_variant)(tile, track).0 == SIG_ELECTRIC {
-                        SIG_SEMAPHORE
-                    } else {
-                        SIG_ELECTRIC
-                    };
-                    (self.rail.set_signal_variant)(tile, track, variant);
-                    sigtype = self.signal_type(tile, track);
+                    /* toggle the present signal variant: SIG_ELECTRIC <-> SIG_SEMAPHORE */
+                    (self.rail.set_signal_variant)(
+                        tile.0,
+                        track.0,
+                        if (self.rail.signal_variant)(tile.0, track.0)
+                            == SignalVariant::SIG_ELECTRIC
+                        {
+                            SignalVariant::SIG_SEMAPHORE.0
+                        } else {
+                            SignalVariant::SIG_ELECTRIC.0
+                        },
+                    );
+                    /* Query current signal type so the check for PBS signals below works. */
+                    sigtype = self.world.get_signal_type(tile, track);
                 } else {
                     w::hit(w::RAIL_CMD_SIGNAL_CONVERT);
-                    (self.rail.set_signal_type)(tile, track, sigtype);
-                    (self.rail.set_signal_variant)(tile, track, sigvar);
-                    self.pbs_one_way(tile, sigtype, on_track);
+                    /* convert the present signal to the chosen type and variant */
+                    (self.rail.set_signal_type)(tile.0, track.0, sigtype.0);
+                    (self.rail.set_signal_variant)(tile.0, track.0, sigvar.0);
+                    if is_pbs_signal(sigtype)
+                        && (self.world.get_present_signals(tile) & on_track) == on_track
+                    {
+                        (self.rail.set_present_signals)(
+                            tile.0,
+                            ((self.world.get_present_signals(tile) & !on_track)
+                                | u32::from(kill_first_bit(signal_on_track(track))))
+                                as u8,
+                        );
+                    }
                 }
             } else if ctrl_pressed {
                 w::hit(w::RAIL_CMD_SIGNAL_CYCLE_TYPE);
-                sigtype = self.signal_type(tile, track).wrapping_add(1);
+                /* cycle between cycle_start and cycle_end */
+                sigtype = SignalType(self.world.get_signal_type(tile, track).0.wrapping_add(1));
+
                 if sigtype < cycle_start || sigtype > cycle_stop {
                     sigtype = cycle_start;
                 }
-                (self.rail.set_signal_type)(tile, track, sigtype);
-                self.pbs_one_way(tile, sigtype, on_track);
+
+                (self.rail.set_signal_type)(tile.0, track.0, sigtype.0);
+                if is_pbs_signal(sigtype)
+                    && (self.world.get_present_signals(tile) & on_track) == on_track
+                {
+                    (self.rail.set_present_signals)(
+                        tile.0,
+                        ((self.world.get_present_signals(tile) & !on_track)
+                            | u32::from(kill_first_bit(signal_on_track(track))))
+                            as u8,
+                    );
+                }
             } else {
                 w::hit(w::RAIL_CMD_SIGNAL_CYCLE_SIDE);
-                (self.rail.cycle_signal_side)(tile, track);
-                sigtype = self.signal_type(tile, track);
+                /* cycle the signal side: both -> left -> right -> both -> ... */
+                (self.rail.cycle_signal_side)(tile.0, track.0);
+                /* Query current signal type so the check for PBS signals below works. */
+                sigtype = self.world.get_signal_type(tile, track);
             }
         } else {
             w::hit(w::RAIL_CMD_SIGNAL_COPY);
-            let present = self.present_signals(tile);
+            /* If CmdBuildManySignals is called with copying signals, just copy the
+             * direction of the first signal given as parameter by CmdBuildManySignals */
             (self.rail.set_present_signals)(
-                tile,
-                (present & !on_track) | (signals_copy & on_track),
+                tile.0,
+                ((self.world.get_present_signals(tile) & !on_track)
+                    | (u32::from(signals_copy) & on_track)) as u8,
             );
-            (self.rail.set_signal_variant)(tile, track, sigvar);
-            (self.rail.set_signal_type)(tile, track, sigtype);
+            (self.rail.set_signal_variant)(tile.0, track.0, sigvar.0);
+            (self.rail.set_signal_type)(tile.0, track.0, sigtype.0);
         }
-        let present = self.present_signals(tile);
+
         /* Add new signal infrastructure count. */
+        // SAFETY: the company is live and serialized.
         unsafe {
             CompanyInfrastructure::add_signal(
-                {
-                    if infrastructure_ptr.is_null() {
-                        infrastructure_ptr = CompanyInfrastructure::get(
-                            self.shared,
-                            CompanyID((self.shared.tile_owner)(tile)),
-                        );
-                    }
-                    infrastructure_ptr
-                },
-                present.count_ones(),
+                infrastructure,
+                self.world.get_present_signals(tile).count_ones(),
             );
-        };
-        (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
-        if is_pbs(sigtype) {
+        }
+        self.dirty_company_infrastructure_windows(self.world.owner(tile));
+
+        if is_pbs_signal(sigtype) {
             w::hit(w::RAIL_CMD_SIGNAL_PBS_STATE);
-            let mask = u32::from(self.present_signals(tile) & on_track);
-            let reserved = (self.rail.rail_reservation)(tile).0 >> track & 1 != 0 && {
-                ret.no_vehicle(self.command, tile);
+            /* PBS signals should show red unless they are on reserved tiles without a train. */
+            let mask = self.world.get_present_signals(tile) & on_track;
+            let reserved = has_bit((self.rail.rail_reservation)(tile.0).0, track.0) && {
+                ret.no_vehicle(self.command, tile.0);
                 ret.ok()
             };
-            let states = std::ffi::c_uint::from(
-                crate::map_func::World::new(self.shared).get_signal_states_raw(tile),
+            (self.rail.set_signal_states)(
+                tile.0,
+                ((self.world.get_signal_states(tile) & !mask)
+                    | (if reserved { u32::MAX } else { 0 } & mask)) as u8,
             );
-            let value = (states & !mask) | (if reserved { u32::MAX } else { 0 } & mask);
-            (self.rail.set_signal_states)(tile, value as u8);
         }
-        (self.shared.mark_dirty)(tile);
-        self.add_track(tile, track, self.current());
-        (self.s.layout_changed)(tile, track);
-        if !v.is_null() {
-            let p = unsafe { (self.s.parking)(v) };
-            if p.track != BIT_DEPOT {
-                let parked = (p.status & VS_STOPPED != 0 && p.speed == 0) || p.order == OT_LOADING;
-                if !parked || {
-                    let at = unsafe { (self.s.train_position)(v) };
-                    // SAFETY: The reservation train remains live through this synchronous check.
-                    !{
-                        let pbs = crate::pbs::Pbs::acquire(self.shared);
-                        pbs.is_safe_waiting_position_raw(
-                            pbs.handle(v),
-                            at.tile,
-                            at.trackdir,
-                            true,
-                            (self.shared.forbid_90_deg)(),
-                        )
-                    }
-                } {
-                    w::hit(w::RAIL_CMD_SIGNAL_RESERVE);
-                    unsafe { (self.shared.try_path_reserve)(v, true, false) };
-                }
+        self.mark_tile_dirty_by_tile(tile);
+        self.signals()
+            .add_track_to_signal_buffer(tile, track, self.current_company());
+        yapf_notify_track_layout_change(tile, track);
+        if v != Handle::NONE && v.track() != TrackBits::TRACK_BIT_DEPOT {
+            /* Extend the train's path if it's not stopped or loading, or not at a safe position. */
+            if !((v.vehicle().vehstatus().test(VehState::Stopped) && v.vehicle().cur_speed() == 0)
+                || v.vehicle().current_order().is_type(OrderType::OT_LOADING))
+                || !self.pbs.is_safe_waiting_position(
+                    v,
+                    v.vehicle().tile(),
+                    crate::train::get_vehicle_trackdir(self.train, self.shared, v),
+                    true,
+                    (self.shared.forbid_90_deg)(),
+                )
+            {
+                w::hit(w::RAIL_CMD_SIGNAL_RESERVE);
+                self.try_path_reserve(v, true);
             }
-        }
-    }
-    /// Shared one-way PBS presence rewrite of the convert and cycle branches.
-    fn pbs_one_way(&self, tile: u32, sigtype: u8, on_track: u8) {
-        let present = self.present_signals(tile);
-        if is_pbs(sigtype) && present & on_track == on_track {
-            let present = self.present_signals(tile);
-            (self.rail.set_present_signals)(tile, (present & !on_track) | kill_first_bit(on_track));
         }
     }
 
     /// `AdvanceSignalAutoFill`.
-    fn advance_autofill(&self, tile: &mut u32, trackdir: &mut u8, remove: bool) -> bool {
-        if self.tile_type(*tile) == MP_TUNNELBRIDGE {
-            *tile = (self.rail.other_tunnel_bridge_end)(*tile);
+    fn advance_signal_auto_fill(
+        &self,
+        tile: &mut TileIndex,
+        trackdir: &mut Trackdir,
+        remove: bool,
+    ) -> bool {
+        /* We only process starting tiles of tunnels or bridges so jump to the other end before moving further. */
+        if self.world.is_tile_type(*tile, TileType::MP_TUNNELBRIDGE) {
+            *tile = TileIndex((self.shared.other_tunnel_end)(tile.0));
         }
-        let (dx, dy) = TRACK_DELTA[usize::from(*trackdir)];
-        let x = self.map.tile_x(TileIndex(*tile)) as i32 + dx;
-        let y = self.map.tile_y(TileIndex(*tile)) as i32 + dy;
-        if x as u32 >= self.map.size_x() || y as u32 > (self.shared.map_max_y)() {
-            *tile = INVALID_TILE;
+
+        *tile = self.map().add_tile_index_diff_c_wrap(
+            *tile,
+            TRACKDELTA[usize::from(trackdir.0)],
+            self.world.size_y(),
+        );
+        if *tile == TileIndex::INVALID {
             return false;
         }
-        *tile = ((y as u32) << self.map.log_x) | x as u32;
-        let mut bits = (crate::movement::track_status(self.shared, *tile, 0, 0, INVALID_DIAGDIR)
-            & 0x3F3F) as u16;
-        if tracks_overlap(trackdir_tracks(bits)) {
+
+        /* Check for track bits on the new tile */
+        let mut trackdirbits = track_status_to_trackdir_bits(
+            crate::movement::table(self.shared).get_tile_track_status_in_world(
+                &self.world,
+                *tile,
+                TransportType::TRANSPORT_RAIL,
+                0,
+                DiagDirection::INVALID_DIAGDIR,
+            ),
+        );
+
+        if tracks_overlap(trackdir_bits_to_track_bits(trackdirbits)) {
             return false;
         }
-        bits &= reaches(*trackdir);
-        if bits == 0 {
+        trackdirbits &= trackdir_reaches_trackdirs(*trackdir, self.check());
+
+        /* No track bits, must stop */
+        if trackdirbits == TrackdirBits::TRACKDIR_BIT_NONE {
             return false;
         }
-        *trackdir = bits.trailing_zeros() as u8;
-        bits &= bits - 1;
-        if bits != 0 {
+
+        /* Get the first track dir */
+        *trackdir = remove_first_trackdir(&mut trackdirbits, self.check());
+
+        /* Any left? It's a junction so we stop */
+        if trackdirbits != TrackdirBits::TRACKDIR_BIT_NONE {
             return false;
         }
-        match self.tile_type(*tile) {
-            MP_RAILWAY => {
-                if crate::map_func::World::new(self.shared).is_rail_depot_raw(*tile) {
+
+        match self.world.kind(*tile) {
+            TileType::MP_RAILWAY => {
+                if self.world.is_rail_depot(*tile) {
                     return false;
                 }
-                if !remove && self.has_signal(*tile, *trackdir & 7) {
-                    return false;
-                }
-            }
-            MP_ROAD => {
-                if !crate::map_func::World::new(self.shared).level_crossing_tile(*tile) {
-                    return false;
-                }
-            }
-            MP_TUNNELBRIDGE => {
-                if crate::map_func::World::new(self.shared).tunnel_bridge_transport(*tile) != 0 {
-                    return false;
-                }
-                if (self.shared.tunnel_bridge_direction)(*tile)
-                    != crate::track_func::trackdir_to_exitdir_raw(*trackdir)
+                if !remove
+                    && self
+                        .world
+                        .has_signal_on_track(*tile, trackdir_to_track(*trackdir, self.check()))
                 {
                     return false;
                 }
             }
+
+            TileType::MP_ROAD => {
+                if !self.world.level_crossing(tile.0) {
+                    return false;
+                }
+            }
+
+            TileType::MP_TUNNELBRIDGE => {
+                if TransportType(self.world.tunnel_bridge_transport(tile.0))
+                    != TransportType::TRANSPORT_RAIL
+                {
+                    return false;
+                }
+                if DiagDirection(self.world.tunnel_bridge_dir(tile.0))
+                    != trackdir_to_exitdir(*trackdir, self.check())
+                {
+                    return false;
+                }
+            }
+
             _ => return false,
         }
         true
     }
 
-    /// `CmdSignalTrackHelper`.
-    fn signal_track_helper(
+    /// `CmdSignalTrackHelper`: build many signals by dragging; `AutoSignals`.
+    fn cmd_signal_track_helper(
         &self,
-        total: Cost<'_>,
+        total_cost: Cost<'_>,
         last_error: Cost<'_>,
         ret: Cost<'_>,
-        flags: u16,
-        mut tile: u32,
-        end_tile: u32,
-        mut track: u8,
-        mut sigtype: u8,
-        mut sigvar: u8,
-        mode: bool,
-        remove: bool,
-        autofill: bool,
-        minimise_gaps: bool,
-        mut signal_density: i32,
+        flags: DoCommandFlags,
+        args: SignalTrackHelper,
     ) {
-        total.set(0);
-        if end_tile >= self.map_size() || track >= 6 {
-            return total.error(INVALID_STRING_ID);
+        let SignalTrackHelper {
+            mut tile,
+            end_tile,
+            mut track,
+            mut sigtype,
+            mut sigvar,
+            mode,
+            remove,
+            autofill,
+            minimise_gaps,
+            mut signal_density,
+        } = args;
+        total_cost.set(0);
+
+        if end_tile.0 >= self.shared.map_size() || !is_valid_track(track) {
+            return total_cost.error(INVALID_STRING_ID);
         }
         if signal_density == 0 || signal_density > 20 {
-            return total.error(INVALID_STRING_ID);
+            return total_cost.error(INVALID_STRING_ID);
         }
-        if !remove && (sigtype > SIGTYPE_LAST || sigvar > SIG_SEMAPHORE) {
-            return total.error(INVALID_STRING_ID);
+        if !remove && (sigtype > SignalType::SIGTYPE_LAST || sigvar > SignalVariant::SIG_SEMAPHORE)
+        {
+            return total_cost.error(INVALID_STRING_ID);
         }
-        if !(self.shared.is_plain_rail)(tile) {
-            return total.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
+
+        if !self.world.is_plain_rail_tile(tile) {
+            return total_cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
         }
         let start_tile = tile;
+
+        /* Interpret signal_density as the logical length of said amount of tiles in X/Y direction. */
         signal_density = signal_density.wrapping_mul(TILE_AXIAL_DISTANCE.cast_signed());
-        let mut trackdir = track;
+
+        let mut trackdir = track_to_trackdir(track, self.check());
         if !self.validate_auto_drag(&mut trackdir, tile, end_tile) {
-            return total.error(INVALID_STRING_ID);
+            return total_cost.error(INVALID_STRING_ID);
         }
-        track = trackdir & 7;
+
+        track = trackdir_to_track(trackdir, self.check()); // trackdir might have changed, keep track in sync
         let start_trackdir = trackdir;
-        if !self.has_track(tile, track) {
-            return total.error(INVALID_STRING_ID);
+
+        /* Must start on a valid track to be able to avoid loops */
+        if !self.world.has_track(tile, track) {
+            return total_cost.error(INVALID_STRING_ID);
         }
-        let signals = if self.has_signal(tile, track) {
-            let signals =
-                self.present_signals(tile) & crate::signal_func::signal_on_track_raw(track);
-            sigvar = (self.rail.signal_variant)(tile, track).0;
-            sigtype = self.signal_type(tile, track);
-            if sigtype == SIGTYPE_ENTRY || sigtype == SIGTYPE_EXIT {
-                sigtype = SIGTYPE_BLOCK;
+
+        let signals;
+        /* copy the signal-style of the first rail-piece if existing */
+        if self.world.has_signal_on_track(tile, track) {
+            signals = self.world.get_present_signals(tile) & u32::from(signal_on_track(track));
+            crate::services_assert::assert_with(|| signals != 0);
+
+            /* copy signal/semaphores style (independent of CTRL) */
+            sigvar = (self.rail.signal_variant)(tile.0, track.0);
+
+            sigtype = self.world.get_signal_type(tile, track);
+            /* Don't but copy entry or exit-signal type */
+            if sigtype == SignalType::SIGTYPE_ENTRY || sigtype == SignalType::SIGTYPE_EXIT {
+                sigtype = SignalType::SIGTYPE_BLOCK;
             }
-            signals
-        } else if is_pbs(sigtype) {
-            SIGNAL_ALONG[usize::from(trackdir)]
         } else {
-            crate::signal_func::signal_on_track_raw(track)
-        };
-        let mut signal_dir = 0_u8;
-        if signals & SIGNAL_ALONG[usize::from(trackdir)] != 0 {
-            signal_dir |= 1;
+            // no signals exist, drag a two-way signal stretch
+            signals = u32::from(if is_pbs_signal(sigtype) {
+                signal_along_trackdir(trackdir)
+            } else {
+                signal_on_track(track)
+            });
         }
-        if signals & SIGNAL_AGAINST[usize::from(trackdir)] != 0 {
-            signal_dir |= 2;
+
+        let mut signal_dir = 0_u8;
+        if signals & u32::from(signal_along_trackdir(trackdir)) != 0 {
+            signal_dir |= 1 << 0;
+        }
+        if signals & u32::from(signal_against_trackdir(trackdir)) != 0 {
+            signal_dir |= 1 << 1;
         }
         w::hit(if remove {
             w::RAIL_CMD_SIGNAL_DRAG_REMOVE
         } else {
             w::RAIL_CMD_SIGNAL_DRAG
         });
+
+        /* signal_ctr         - amount of tiles already processed
+         * last_used_ctr      - amount of tiles before previously placed signal
+         * signals_density    - setting to put signal on every Nth tile (double space on |, -- tracks)
+         * last_suitable_ctr  - amount of tiles before last possible signal place
+         * last_suitable_tile - last tile where it is possible to place a signal
+         * last_suitable_trackdir - trackdir of the last tile
+         **********
+         * trackdir   - trackdir to build with autorail
+         * semaphores - semaphores or signals
+         * signals    - is there a signal/semaphore on the first tile, copy its style (two-way/single-way)
+         *              and convert all others to semaphore/signal
+         * remove     - 1 remove signals, 0 build signals */
         let mut signal_ctr = 0_i32;
-        let mut last_used_ctr = signal_density.wrapping_neg();
+        let mut last_used_ctr = signal_density.wrapping_neg(); // to force signal at first tile
         let mut last_suitable_ctr = 0_i32;
-        let mut last_suitable_tile = INVALID_TILE;
-        let mut last_suitable_trackdir = INVALID_TRACKDIR;
+        let mut last_suitable_tile = TileIndex::INVALID;
+        let mut last_suitable_trackdir = Trackdir::INVALID_TRACKDIR;
         last_error.error(INVALID_STRING_ID);
         let mut had_success = false;
-        let mut build_signal = |tile: u32, trackdir: u8, test_only: bool, signal_ctr: i32| {
-            let mut signals = 0_u8;
-            if signal_dir & 1 != 0 {
-                signals |= SIGNAL_ALONG[usize::from(trackdir)];
-            }
-            if signal_dir & 2 != 0 {
-                signals |= SIGNAL_AGAINST[usize::from(trackdir)];
-            }
-            let do_flags = if test_only {
-                flags & !DoCommandFlag::EXECUTE
-            } else {
-                flags
-            };
-            if remove {
-                unsafe { (self.s.remove_signal)(ret.0, do_flags, tile, trackdir & 7) };
-            } else {
-                unsafe {
-                    (self.s.build_signal)(
-                        ret.0,
-                        do_flags,
-                        tile,
-                        trackdir & 7,
-                        sigtype,
-                        sigvar,
-                        false,
-                        signal_ctr == 0,
-                        mode,
-                        SIGTYPE_BLOCK,
-                        SIGTYPE_BLOCK,
-                        0,
-                        signals,
-                    );
+        // The original's lambda reads `signal_ctr` by reference; it is passed at each call.
+        let mut build_signal =
+            |tile: TileIndex, trackdir: Trackdir, test_only: bool, signal_ctr: i32| {
+                /* Pick the correct orientation for the track direction */
+                let mut signals = 0_u8;
+                if has_bit(signal_dir, 0) {
+                    signals |= signal_along_trackdir(trackdir);
+                }
+                if has_bit(signal_dir, 1) {
+                    signals |= signal_against_trackdir(trackdir);
+                }
+
+                let do_flags = if test_only {
+                    flags.reset(DoCommandFlag::Execute)
+                } else {
+                    flags
                 };
-            }
-            let succeeded = ret.ok();
-            if test_only {
-                return succeeded;
-            }
-            if succeeded {
-                had_success = true;
-                total.add_money(ret.money());
-            } else if ret.message() != STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0
-                || last_error.message() == INVALID_STRING_ID
-            {
-                last_error.take(ret);
-            }
-            succeeded
-        };
+                if remove {
+                    self.remove_single_signal_command(
+                        ret,
+                        do_flags,
+                        CmdRemoveSingleSignal {
+                            tile,
+                            track: trackdir_to_track(trackdir, self.check()),
+                        },
+                    );
+                } else {
+                    self.build_single_signal_command(
+                        ret,
+                        do_flags,
+                        CmdBuildSingleSignal {
+                            tile,
+                            track: trackdir_to_track(trackdir, self.check()),
+                            sigtype,
+                            sigvar,
+                            convert_signal: false,
+                            skip_existing_signals: signal_ctr == 0,
+                            ctrl_pressed: mode,
+                            cycle_start: SignalType::SIGTYPE_BLOCK,
+                            cycle_stop: SignalType::SIGTYPE_BLOCK,
+                            num_dir_cycle: 0,
+                            signals_copy: signals,
+                        },
+                    );
+                }
+
+                if test_only {
+                    return ret.ok();
+                }
+
+                if ret.ok() {
+                    had_success = true;
+                    total_cost.add_money(ret.money());
+                } else {
+                    /* The "No railway" error is the least important one. */
+                    if ret.message() != STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0
+                        || last_error.message() == INVALID_STRING_ID
+                    {
+                        last_error.take(ret);
+                    }
+                }
+                ret.ok()
+            };
+
         loop {
             if remove {
+                /* In remove mode last_* stuff doesn't matter, we simply try to clear every tile. */
                 build_signal(tile, trackdir, false, signal_ctr);
             } else if minimise_gaps {
                 w::hit(w::RAIL_CMD_SIGNAL_MINIMISE);
+                /* We're trying to minimize gaps wherever possible, so keep track of last suitable
+                 * position and use it if current gap exceeds required signal density. */
+
                 if signal_ctr > last_used_ctr.wrapping_add(signal_density)
-                    && last_suitable_tile != INVALID_TILE
-                    && build_signal(
+                    && last_suitable_tile != TileIndex::INVALID
+                {
+                    /* We overshot so build a signal in last good location. */
+                    if build_signal(
                         last_suitable_tile,
                         last_suitable_trackdir,
                         false,
                         signal_ctr,
-                    )
-                {
-                    last_suitable_tile = INVALID_TILE;
-                    last_used_ctr = last_suitable_ctr;
+                    ) {
+                        last_suitable_tile = TileIndex::INVALID;
+                        last_used_ctr = last_suitable_ctr;
+                    }
                 }
+
                 if signal_ctr == last_used_ctr.wrapping_add(signal_density) {
+                    /* Current gap matches the required density, build a signal.  */
                     if build_signal(tile, trackdir, false, signal_ctr) {
                         last_used_ctr = signal_ctr;
-                        last_suitable_tile = INVALID_TILE;
+                        last_suitable_tile = TileIndex::INVALID;
                     }
-                } else if build_signal(tile, trackdir, true, signal_ctr) {
-                    last_suitable_tile = tile;
-                    last_suitable_ctr = signal_ctr;
-                    last_suitable_trackdir = trackdir;
+                } else {
+                    /* Test tile for a potential signal spot. */
+                    if build_signal(tile, trackdir, true, signal_ctr) {
+                        last_suitable_tile = tile;
+                        last_suitable_ctr = signal_ctr;
+                        last_suitable_trackdir = trackdir;
+                    }
                 }
             } else if signal_ctr >= last_used_ctr.wrapping_add(signal_density) {
+                /* We're always keeping regular interval between signals so doesn't matter whether we succeed or not. */
                 build_signal(tile, trackdir, false, signal_ctr);
                 last_used_ctr = signal_ctr;
             }
+
             if autofill {
                 w::hit(w::RAIL_CMD_SIGNAL_AUTOFILL);
-                match self.tile_type(tile) {
-                    MP_RAILWAY => {
-                        signal_ctr = signal_ctr.wrapping_add(if diagonal(trackdir) {
-                            TILE_AXIAL_DISTANCE.cast_signed()
-                        } else {
-                            TILE_CORNER_DISTANCE.cast_signed()
-                        });
+                match self.world.kind(tile) {
+                    TileType::MP_RAILWAY => {
+                        signal_ctr = signal_ctr.wrapping_add(
+                            if is_diagonal_trackdir(trackdir, self.check()) {
+                                TILE_AXIAL_DISTANCE
+                            } else {
+                                TILE_CORNER_DISTANCE
+                            }
+                            .cast_signed(),
+                        );
                     }
-                    MP_ROAD => {
+
+                    TileType::MP_ROAD => {
                         signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE.cast_signed());
                     }
-                    MP_TUNNELBRIDGE => {
+
+                    TileType::MP_TUNNELBRIDGE => {
                         w::hit(w::RAIL_CMD_SIGNAL_WORMHOLE);
-                        let other = (self.rail.other_tunnel_bridge_end)(tile);
-                        let len = self
-                            .tunnel_length(tile, other)
-                            .wrapping_add(2)
-                            .wrapping_mul(TILE_AXIAL_DISTANCE);
+                        let len = crate::tunnelbridge::get_tunnel_bridge_length(
+                            self.map(),
+                            tile.0,
+                            (self.shared.other_tunnel_end)(tile.0),
+                        )
+                        .wrapping_add(2)
+                        .wrapping_mul(TILE_AXIAL_DISTANCE);
                         if remove || minimise_gaps {
-                            signal_ctr = signal_ctr.wrapping_add(len as i32);
+                            signal_ctr = signal_ctr.wrapping_add_unsigned(len);
                         } else {
-                            // To keep regular interval we need to emulate placing signals on a
-                            // bridge. We start with TILE_AXIAL_DISTANCE as one bridge tile gets
-                            // processed in the main loop.
+                            /* To keep regular interval we need to emulate placing signals on a bridge.
+                             * We start with TILE_AXIAL_DISTANCE as one bridge tile gets processed in the main loop. */
                             signal_ctr = signal_ctr.wrapping_add(TILE_AXIAL_DISTANCE.cast_signed());
                             let mut i = TILE_AXIAL_DISTANCE;
                             while i < len {
@@ -1709,11 +2106,15 @@ impl<'a> Ctx<'a> {
                             }
                         }
                     }
+
                     _ => {}
                 }
-                if !self.advance_autofill(&mut tile, &mut trackdir, remove) {
+
+                if !self.advance_signal_auto_fill(&mut tile, &mut trackdir, remove) {
                     break;
                 }
+
+                /* Prevent possible loops */
                 if tile == start_tile && trackdir == start_trackdir {
                     break;
                 }
@@ -1721,21 +2122,31 @@ impl<'a> Ctx<'a> {
                 if tile == end_tile {
                     break;
                 }
-                signal_ctr = signal_ctr.wrapping_add(if diagonal(trackdir) {
-                    TILE_AXIAL_DISTANCE.cast_signed()
-                } else {
-                    TILE_CORNER_DISTANCE.cast_signed()
-                });
-                tile = self.step(tile, trackdir);
-                if !diagonal(trackdir) {
-                    trackdir ^= 1;
+
+                signal_ctr = signal_ctr.wrapping_add(
+                    if is_diagonal_trackdir(trackdir, self.check()) {
+                        TILE_AXIAL_DISTANCE
+                    } else {
+                        TILE_CORNER_DISTANCE
+                    }
+                    .cast_signed(),
+                );
+                /* toggle railbit for the non-diagonal tracks (|, -- tracks) */
+
+                tile += self
+                    .map()
+                    .to_tile_index_diff(TRACKDELTA[usize::from(trackdir.0)]);
+                if !is_diagonal_trackdir(trackdir, self.check()) {
+                    trackdir.0 ^= 1;
                 }
             }
         }
+
+        /* We may end up with the current gap exceeding the signal density so fix that if needed. */
         if !remove
             && minimise_gaps
             && signal_ctr > last_used_ctr.wrapping_add(signal_density)
-            && last_suitable_tile != INVALID_TILE
+            && last_suitable_tile != TileIndex::INVALID
         {
             build_signal(
                 last_suitable_tile,
@@ -1744,767 +2155,988 @@ impl<'a> Ctx<'a> {
                 signal_ctr,
             );
         }
+
         if !had_success {
-            total.take(last_error);
+            total_cost.take(last_error);
         }
     }
 
-    /// `CmdRemoveSingleSignal`.
-    fn remove_signal(&self, cost: Cost<'_>, flags: u16, tile: u32, track: u8) {
-        // Resolve at the first original access; the raw pointer retains no Rust borrow.
-        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
-        if track >= 6 || !(self.shared.is_plain_rail)(tile) || !self.has_track(tile, track) {
+    /// `CmdRemoveSingleSignal`: remove signals.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "SetPresentSignals takes the uint the original computes"
+    )]
+    fn cmd_remove_single_signal(
+        &self,
+        cost: Cost<'_>,
+        flags: DoCommandFlags,
+        args: CmdRemoveSingleSignal,
+    ) {
+        let CmdRemoveSingleSignal { tile, track } = args;
+        if !is_valid_track(track)
+            || !self.world.is_plain_rail_tile(tile)
+            || !self.world.has_track(tile, track)
+        {
             return cost.error(STR_ERROR_THERE_IS_NO_RAILROAD_TRACK.0);
         }
-        if !self.has_signal(tile, track) {
+        if !self.world.has_signal_on_track(tile, track) {
             return cost.error(STR_ERROR_THERE_ARE_NO_SIGNALS.0);
         }
-        if self.current() != OWNER_WATER {
-            cost.tile_ownership(self.command, tile);
+
+        /* Only water can remove signals from anyone */
+        if self.current_company() != Owner::WATER {
+            cost.tile_ownership(self.command, tile.0);
             if !cost.ok() {
                 return;
             }
         }
-        if flags & DoCommandFlag::EXECUTE != 0 {
+
+        /* Do it? */
+        if flags.test(DoCommandFlag::Execute) {
             w::hit(w::RAIL_CMD_SIGNAL_REMOVE);
-            let mut v: *mut Train = std::ptr::null_mut();
-            if self.reserved(tile) & (1 << track) != 0 {
-                v = crate::pbs::Pbs::acquire(self.shared)
-                    .get_train_for_reservation_raw(tile, track)
-                    .shell()
-                    .cast::<crate::services::Train>();
-            } else if is_pbs(self.signal_type(tile, track)) {
-                let mut td = track;
+            let mut v = Handle::NONE;
+            if self
+                .pbs
+                .has_reserved_tracks(tile, track_to_track_bits(track, self.check()))
+            {
+                v = self.pbs.get_train_for_reservation(tile, track);
+            } else if is_pbs_signal(self.world.get_signal_type(tile, track)) {
+                /* PBS signal, might be the end of a path reservation. */
+                let mut td = track_to_trackdir(track, self.check());
                 let mut i = 0;
-                while v.is_null() && i < 2 {
-                    if crate::map_func::World::new(self.shared)
-                        .has_signal_on_trackdir_raw(tile, td ^ 8)
+                while v == Handle::NONE && i < 2 {
+                    /* Only test the active signal side. */
+                    if self
+                        .world
+                        .has_signal_on_trackdir(tile, reverse_trackdir(td, self.check()))
                     {
-                        let next = self
-                            .map
-                            .tile_add_by_diag_dir(
-                                TileIndex(tile),
-                                DiagDirection(crate::track_func::trackdir_to_exitdir_raw(td)),
-                                crate::map_func::native_check,
-                            )
-                            .0;
-                        let tracks = trackdir_tracks(reaches(td));
-                        let reserved = self.reserved(next);
-                        if reserved & tracks != 0 {
+                        let next = self.map().tile_add_by_diag_dir(
+                            tile,
+                            trackdir_to_exitdir(td, self.check()),
+                            self.check(),
+                        );
+                        let tracks = trackdir_bits_to_track_bits(trackdir_reaches_trackdirs(
+                            td,
+                            self.check(),
+                        ));
+                        if self.pbs.has_reserved_tracks(next, tracks) {
                             w::hit(w::RAIL_CMD_SIGNAL_REMOVE_PATH_END);
-                            let found =
-                                (self.reserved(next) & tracks & 0x3F).trailing_zeros() as u8;
-                            v = crate::pbs::Pbs::acquire(self.shared)
-                                .get_train_for_reservation_raw(next, found)
-                                .shell()
-                                .cast::<crate::services::Train>();
+                            v = self.pbs.get_train_for_reservation(
+                                next,
+                                track_bits_to_track(
+                                    self.pbs.get_reserved_trackbits(next) & tracks,
+                                    self.check(),
+                                ),
+                            );
                         }
                     }
                     i += 1;
-                    td ^= 8;
+                    td = reverse_trackdir(td, self.check());
                 }
             }
-            let present = self.present_signals(tile);
+            // SAFETY: the company is live and serialized.
             unsafe {
                 CompanyInfrastructure::add_signal(
-                    {
-                        if infrastructure_ptr.is_null() {
-                            infrastructure_ptr = CompanyInfrastructure::get(
-                                self.shared,
-                                CompanyID((self.shared.tile_owner)(tile)),
-                            );
-                        }
-                        infrastructure_ptr
-                    },
-                    present.count_ones().wrapping_neg(),
+                    CompanyInfrastructure::get(self.shared, self.world.owner(tile)),
+                    self.world
+                        .get_present_signals(tile)
+                        .count_ones()
+                        .wrapping_neg(),
                 );
-            };
-            let on_track = crate::signal_func::signal_on_track_raw(track);
-            (self.rail.set_present_signals)(tile, self.present_signals(tile) & !on_track);
-            let present = self.present_signals(tile);
+            }
+            (self.rail.set_present_signals)(
+                tile.0,
+                (self.world.get_present_signals(tile) & !u32::from(signal_on_track(track))) as u8,
+            );
+            // SAFETY: as above.
             unsafe {
                 CompanyInfrastructure::add_signal(
-                    {
-                        if infrastructure_ptr.is_null() {
-                            infrastructure_ptr = CompanyInfrastructure::get(
-                                self.shared,
-                                CompanyID((self.shared.tile_owner)(tile)),
-                            );
-                        }
-                        infrastructure_ptr
-                    },
-                    present.count_ones(),
+                    CompanyInfrastructure::get(self.shared, self.world.owner(tile)),
+                    self.world.get_present_signals(tile).count_ones(),
                 );
-            };
-            (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
-            if self.present_signals(tile) == 0 {
-                (self.rail.set_signal_states)(tile, 0);
-                (self.rail.set_has_signals)(tile, false);
-                (self.rail.set_signal_variant)(tile, INVALID_TRACK, SIG_ELECTRIC);
             }
-            self.add_track(tile, track, (self.shared.tile_owner)(tile));
-            (self.s.layout_changed)(tile, track);
-            if !v.is_null() {
-                unsafe { (self.shared.try_path_reserve)(v, false, false) };
+            self.dirty_company_infrastructure_windows(self.world.owner(tile));
+
+            /* removed last signal from tile? */
+            if self.world.get_present_signals(tile) == 0 {
+                (self.rail.set_signal_states)(tile.0, 0);
+                (self.rail.set_has_signals)(tile.0, false);
+                (self.rail.set_signal_variant)(
+                    tile.0,
+                    Track::INVALID_TRACK.0,
+                    SignalVariant::SIG_ELECTRIC.0,
+                ); // remove any possible semaphores
             }
-            (self.shared.mark_dirty)(tile);
+
+            self.signals()
+                .add_track_to_signal_buffer(tile, track, self.world.owner(tile));
+            yapf_notify_track_layout_change(tile, track);
+            if v != Handle::NONE {
+                self.try_path_reserve(v, false);
+            }
+
+            self.mark_tile_dirty_by_tile(tile);
         }
-        cost.set(price(PR_CLEAR_SIGNALS));
+
+        cost.set(crate::company::price(usize::from(
+            Price::PR_CLEAR_SIGNALS.0,
+        )));
     }
 
-    /// `CmdConvertRail`.
-    fn convert_rail(
+    /// `CmdConvertRail`: convert one rail type to the other. You can convert normal rail to
+    /// monorail/maglev easily or vice-versa.
+    fn cmd_convert_rail(
         &self,
-        frame: *mut ConvertFrame,
         cost: Cost<'_>,
         error: Cost<'_>,
         ret: Cost<'_>,
-        flags: u16,
-        area_end: u32,
-        area_start: u32,
-        totype: u8,
-        diagonal_area: bool,
+        flags: DoCommandFlags,
+        args: CmdConvertRail,
     ) {
-        if !crate::rail::val_param_rail_type_raw(self.shared, totype) {
+        let CmdConvertRail {
+            tile: area_end,
+            area_start,
+            totype,
+            diagonal,
+        } = args;
+
+        if !val_param_rail_type(self.shared, totype) {
             return cost.error(INVALID_STRING_ID);
         }
-        if area_start >= self.map_size() {
+        if area_start.0 >= self.shared.map_size() {
             return cost.error(INVALID_STRING_ID);
         }
-        let execute = flags & DoCommandFlag::EXECUTE != 0;
+
+        let mut affected_trains: Vec<Handle> = Vec::new();
+
         cost.set(0);
-        error.error(STR_ERROR_NO_SUITABLE_RAILROAD_TRACK.0);
-        let mut found = false;
-        let check = |ok| crate::movement::native_assert(self.shared, ok);
+        error.error(STR_ERROR_NO_SUITABLE_RAILROAD_TRACK.0); // by default, there is no track to convert.
+        let mut found_convertible_track = false; // whether we actually did convert some track (see bug #7633)
+
         let mut iter = crate::tilearea::TileIterator::create(
-            self.map,
-            self.map_size(),
-            TileIndex(area_start),
-            TileIndex(area_end),
-            diagonal_area,
-            check,
+            self.map(),
+            self.shared.map_size(),
+            area_start,
+            area_end,
+            diagonal,
+            self.check(),
         );
         loop {
-            let tile = iter.tile().0;
-            if tile == INVALID_TILE {
+            let tile = iter.tile();
+            if tile == TileIndex::INVALID {
                 break;
             }
-            if self.convert_tile(
-                frame,
-                cost,
-                error,
-                ret,
-                execute,
-                tile,
-                area_start,
-                area_end,
-                totype,
-                diagonal_area,
-            ) {
-                found = true;
-            }
-            iter.advance(self.map, self.map_size(), check);
-        }
-        if execute {
-            unsafe { (self.s.consist_changed)(frame) };
-        }
-        if !found {
-            cost.take(error);
-        }
-    }
-    /// One iteration of the `CmdConvertRail` area loop; true when the tile
-    /// set `found_convertible_track`.
-    fn convert_tile(
-        &self,
-        frame: *mut ConvertFrame,
-        cost: Cost<'_>,
-        error: Cost<'_>,
-        ret: Cost<'_>,
-        execute: bool,
-        tile: u32,
-        area_start: u32,
-        area_end: u32,
-        totype: u8,
-        diagonal_area: bool,
-    ) -> bool {
-        let tt = self.tile_type(tile);
-        match tt {
-            MP_RAILWAY => {}
-            MP_STATION => {
-                if !crate::map_func::World::new(self.shared).station_has_rail(tile) {
-                    return false;
+            // Each `break 'tile` is the original's `continue`: the iterator still advances.
+            'tile: {
+                let tt = self.world.kind(tile);
+
+                /* Check if there is any track on tile */
+                match tt {
+                    TileType::MP_RAILWAY => {}
+                    TileType::MP_STATION => {
+                        if !self.world.has_station_rail(tile) {
+                            break 'tile;
+                        }
+                    }
+                    TileType::MP_ROAD => {
+                        if !self.world.level_crossing(tile.0) {
+                            break 'tile;
+                        }
+                        if rail_no_level_crossings(self.shared, totype) {
+                            error.make_error(STR_ERROR_CROSSING_DISALLOWED_RAIL.0);
+                            break 'tile;
+                        }
+                    }
+                    TileType::MP_TUNNELBRIDGE => {
+                        if TransportType(self.world.tunnel_bridge_transport(tile.0))
+                            != TransportType::TRANSPORT_RAIL
+                        {
+                            break 'tile;
+                        }
+                    }
+                    _ => break 'tile,
                 }
-            }
-            MP_ROAD => {
-                if !crate::map_func::World::new(self.shared).level_crossing_tile(tile) {
-                    return false;
+
+                /* Original railtype we are converting from */
+                let r#type = self.world.get_rail_type(tile);
+
+                /* Converting to the same type or converting 'hidden' elrail -> rail */
+                if r#type == totype
+                    // SAFETY: the setting address names a live native setting.
+                    || (unsafe { self.shared.settings().disable_elrails.read() }
+                        && totype == RailType::RAILTYPE_RAIL
+                        && r#type == RailType::RAILTYPE_ELECTRIC)
+                {
+                    break 'tile;
                 }
-                if (self.s.rail_no_crossings)(totype) {
-                    error.make_error(STR_ERROR_CROSSING_DISALLOWED_RAIL.0);
-                    return false;
-                }
-            }
-            MP_TUNNELBRIDGE => {
-                if crate::map_func::World::new(self.shared).tunnel_bridge_transport(tile) != 0 {
-                    return false;
-                }
-            }
-            _ => return false,
-        }
-        let kind = crate::services::RailType(
-            crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-        )
-        .0;
-        if kind == totype
-            || (unsafe { self.shared.settings().disable_elrails.read() }
-                && totype == RAILTYPE_RAIL
-                && kind == RAILTYPE_ELECTRIC)
-        {
-            return false;
-        }
-        ret.tile_ownership(self.command, tile);
-        if !ret.ok() {
-            error.take(ret);
-            return false;
-        }
-        // At most one entry per reserved track (six), or one for a wormhole.
-        // Keep the source insertion order without allocating on each tile.
-        let mut affected = [std::ptr::null_mut(); 6];
-        let mut affected_len = 0;
-        if tt != MP_TUNNELBRIDGE {
-            if !(self.s.compatible_rail)(kind, totype) {
-                if (self.shared.is_plain_rail)(tile) {
-                    ret.no_train(self.command, tile, self.tracks(tile));
-                } else {
-                    ret.no_vehicle(self.command, tile);
-                }
+
+                /* Trying to convert other's rail */
+                ret.tile_ownership(self.command, tile.0);
                 if !ret.ok() {
                     error.take(ret);
-                    return false;
+                    break 'tile;
                 }
-            }
-            if execute {
-                let mut reserved = self.reserved(tile);
-                while reserved != 0 {
-                    let track = reserved.trailing_zeros() as u8;
-                    reserved &= reserved - 1;
-                    if let Some(v) = self.reroute(tile, track, totype) {
-                        affected[affected_len] = v;
-                        affected_len += 1;
-                    }
-                }
-                if !crate::map_func::World::new(self.shared).rail_station(tile)
-                    || !crate::map_func::World::new(self.shared).station_blocked(tile)
-                {
-                    /* Update the company infrastructure counters. */
-                    let owner = (self.shared.tile_owner)(tile);
-                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(owner));
-                    let mut num =
-                        if crate::map_func::World::new(self.shared).level_crossing_tile(tile) {
-                            LEVELCROSSING_TRACKBIT_FACTOR
+
+                let mut vehicles_affected: Vec<Handle> = Vec::new();
+
+                /* Vehicle on the tile when not converting Rail <-> ElRail
+                 * Tunnels and bridges have special check later */
+                if tt != TileType::MP_TUNNELBRIDGE {
+                    if !is_compatible_rail(self.shared, r#type, totype) {
+                        if self.world.is_plain_rail_tile(tile) {
+                            ret.no_train(self.command, tile.0, self.world.get_track_bits(tile).0);
                         } else {
-                            1
-                        };
-                    if (self.shared.is_plain_rail)(tile) {
-                        num = pieces(self.tracks(tile));
-                    }
-                    unsafe {
-                        CompanyInfrastructure::add_rail(
-                            infrastructure,
-                            crate::rail_type::RailType(kind),
-                            num.wrapping_neg(),
-                        );
-                    };
-                    unsafe {
-                        CompanyInfrastructure::add_rail(
-                            infrastructure,
-                            crate::rail_type::RailType(totype),
-                            num,
-                        );
-                    };
-                    (self.command.infrastructure_dirty)(owner);
-                }
-                (self.rail.set_rail_type)(tile, totype);
-                (self.shared.mark_dirty)(tile);
-                unsafe { self.collect_trains(frame, tile) };
-            }
-        }
-        match tt {
-            MP_RAILWAY => {
-                if crate::services::RailTileType(
-                    crate::map_func::World::new(self.shared).get_rail_tile_type_raw(tile),
-                )
-                .0 == RAIL_TILE_DEPOT
-                {
-                    if execute {
-                        w::hit(w::RAIL_CMD_CONVERT_DEPOT);
-                        let dir = crate::services::DiagDirection(
-                            crate::map_func::World::new(self.shared)
-                                .get_rail_depot_direction_raw(tile),
-                        )
-                        .0;
-                        (self.s.layout_changed)(tile, dir & 1);
-                        (self.s.depot_windows)(tile);
-                    }
-                    cost.add_money((self.s.rail_convert_cost)(kind, totype));
-                } else {
-                    if execute {
-                        w::hit(w::RAIL_CMD_CONVERT_RAIL);
-                        let mut tracks = self.tracks(tile);
-                        while tracks != 0 {
-                            let track = tracks.trailing_zeros() as u8;
-                            tracks &= tracks - 1;
-                            (self.s.layout_changed)(tile, track);
+                            ret.no_vehicle(self.command, tile.0);
+                        }
+                        if !ret.ok() {
+                            error.take(ret);
+                            break 'tile;
                         }
                     }
-                    cost.add_money(
-                        (self.s.rail_convert_cost)(kind, totype)
-                            .saturating_mul(i64::from(self.tracks(tile).count_ones())),
-                    );
-                }
-            }
-            MP_TUNNELBRIDGE => {
-                let endtile = (self.rail.other_tunnel_bridge_end)(tile);
-                if endtile < tile {
-                    let check = |ok| crate::movement::native_assert(self.shared, ok);
-                    let (start, end) = (TileIndex(area_start), TileIndex(area_end));
-                    if diagonal_area {
-                        if crate::tilearea::DiagonalTileArea::from_corners(
-                            self.map,
-                            self.map_size(),
-                            start,
-                            end,
-                            check,
-                        )
-                        .contains(TileIndex(endtile), self.map)
+                    if flags.test(DoCommandFlag::Execute) {
+                        // we can safely convert, too
+                        let mut reserved = self.pbs.get_reserved_trackbits(tile);
+                        loop {
+                            let track = remove_first_track(&mut reserved, self.check());
+                            if track == Track::INVALID_TRACK {
+                                break;
+                            }
+                            let v = self.pbs.get_train_for_reservation(tile, track);
+                            if v != Handle::NONE
+                                && !has_power_on_rail_types(self.shared, v.railtypes(), totype)
+                            {
+                                w::hit(w::RAIL_CMD_CONVERT_REROUTE);
+                                /* No power on new rail type, reroute. */
+                                self.free_train_track_reservation(v);
+                                vehicles_affected.push(v);
+                            }
+                        }
+
+                        /* Update the company infrastructure counters. */
+                        if !self.world.is_rail_station_tile(tile)
+                            || !self.world.is_station_tile_blocked(tile)
                         {
-                            return false;
+                            let owner = self.world.owner(tile);
+                            let c = CompanyInfrastructure::get(self.shared, owner);
+                            let mut num_pieces = if self.world.level_crossing_tile(tile.0) {
+                                LEVELCROSSING_TRACKBIT_FACTOR
+                            } else {
+                                1
+                            };
+                            if self.world.is_plain_rail_tile(tile) {
+                                num_pieces = pieces(self.world.get_track_bits(tile));
+                            }
+                            // SAFETY: the company is live and serialized; the rail types
+                            // index its infrastructure array.
+                            unsafe {
+                                CompanyInfrastructure::add_rail(
+                                    c,
+                                    r#type,
+                                    num_pieces.wrapping_neg(),
+                                );
+                                CompanyInfrastructure::add_rail(c, totype, num_pieces);
+                            }
+                            self.dirty_company_infrastructure_windows(owner);
                         }
-                    } else if crate::tilearea::OrthogonalTileArea::from_corners(
-                        self.map,
-                        self.map_size(),
-                        start,
-                        end,
-                        check,
-                    )
-                    .contains(TileIndex(endtile), self.map, check)
-                    {
-                        return false;
+
+                        (self.rail.set_rail_type)(tile.0, totype.0);
+                        self.mark_tile_dirty_by_tile(tile);
+                        /* update power of train on this tile */
+                        vehicles_on_tile(self.map(), tile, |v| {
+                            if v.vehicle_type() == VehicleType::VEH_TRAIN {
+                                include(&mut affected_trains, &Handle::from_vehicle(v).first());
+                            }
+                        });
                     }
                 }
-                if !(self.s.compatible_rail)(
-                    crate::services::RailType(
-                        crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-                    )
-                    .0,
-                    totype,
-                ) {
-                    ret.wormhole_free(self.command, tile, endtile);
-                    if !ret.ok() {
-                        error.take(ret);
-                        return false;
+
+                match tt {
+                    TileType::MP_RAILWAY => {
+                        if self.world.get_rail_tile_type(tile) == RailTileType::Depot {
+                            if flags.test(DoCommandFlag::Execute) {
+                                w::hit(w::RAIL_CMD_CONVERT_DEPOT);
+                                /* notify YAPF about the track layout change */
+                                yapf_notify_track_layout_change(
+                                    tile,
+                                    self.world.get_rail_depot_track(tile),
+                                );
+
+                                /* Update build vehicle window related to this depot */
+                                invalidate_window_data(
+                                    WindowClass::WC_VEHICLE_DEPOT,
+                                    WindowNumber::from(tile),
+                                    0,
+                                    false,
+                                );
+                                invalidate_window_data(
+                                    WindowClass::WC_BUILD_VEHICLE,
+                                    WindowNumber::from(tile),
+                                    0,
+                                    false,
+                                );
+                            }
+                            found_convertible_track = true;
+                            cost.add_money(rail_convert_cost(self.shared, r#type, totype));
+                        } else {
+                            // RailTileType::Normal, RailTileType::Signals
+                            if flags.test(DoCommandFlag::Execute) {
+                                w::hit(w::RAIL_CMD_CONVERT_RAIL);
+                                /* notify YAPF about the track layout change */
+                                let mut tracks = self.world.get_track_bits(tile);
+                                while tracks != TrackBits::TRACK_BIT_NONE {
+                                    yapf_notify_track_layout_change(
+                                        tile,
+                                        remove_first_track(&mut tracks, self.check()),
+                                    );
+                                }
+                            }
+                            found_convertible_track = true;
+                            cost.add_money(
+                                rail_convert_cost(self.shared, r#type, totype).saturating_mul(
+                                    i64::from(self.world.get_track_bits(tile).0.count_ones()),
+                                ),
+                            );
+                        }
                     }
-                }
-                if execute {
-                    w::hit(w::RAIL_CMD_CONVERT_WORMHOLE);
-                    let track = (self.shared.tunnel_bridge_direction)(tile) & 1;
-                    if (self.rail.wormhole_reserved)(tile)
-                        && let Some(v) = self.reroute(tile, track, totype)
-                    {
-                        affected[affected_len] = v;
-                        affected_len += 1;
-                    }
-                    /* Update the company infrastructure counters. */
-                    let num = self
-                        .tunnel_length(tile, endtile)
-                        .wrapping_add(2)
-                        .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR);
-                    let owner = (self.shared.tile_owner)(tile);
-                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(owner));
-                    unsafe {
-                        CompanyInfrastructure::add_rail(
-                            infrastructure,
-                            crate::rail_type::RailType(
-                                crate::services::RailType(
-                                    crate::map_func::World::new(self.shared)
-                                        .get_rail_type_raw(tile),
+
+                    TileType::MP_TUNNELBRIDGE => {
+                        let endtile = TileIndex((self.shared.other_tunnel_end)(tile.0));
+
+                        /* If both ends of tunnel/bridge are in the range, do not try to convert twice -
+                         * it would cause assert because of different test and exec runs */
+                        if endtile < tile {
+                            if diagonal {
+                                if crate::tilearea::DiagonalTileArea::from_corners(
+                                    self.map(),
+                                    self.shared.map_size(),
+                                    area_start,
+                                    area_end,
+                                    self.check(),
                                 )
-                                .0,
+                                .contains(endtile, self.map())
+                                {
+                                    break 'tile;
+                                }
+                            } else if crate::tilearea::OrthogonalTileArea::from_corners(
+                                self.map(),
+                                self.shared.map_size(),
+                                area_start,
+                                area_end,
+                                self.check(),
+                            )
+                            .contains(
+                                endtile,
+                                self.map(),
+                                self.check(),
+                            ) {
+                                break 'tile;
+                            }
+                        }
+
+                        /* When not converting rail <-> el. rail, any vehicle cannot be in tunnel/bridge */
+                        if !is_compatible_rail(self.shared, self.world.get_rail_type(tile), totype)
+                        {
+                            ret.wormhole_free(self.command, tile.0, endtile.0);
+                            if !ret.ok() {
+                                error.take(ret);
+                                break 'tile;
+                            }
+                        }
+
+                        if flags.test(DoCommandFlag::Execute) {
+                            w::hit(w::RAIL_CMD_CONVERT_WORMHOLE);
+                            let track = diag_dir_to_diag_track(
+                                DiagDirection(self.world.tunnel_bridge_dir(tile.0)),
+                                self.check(),
+                            );
+                            if (self.rail.wormhole_reserved)(tile.0) {
+                                let v = self.pbs.get_train_for_reservation(tile, track);
+                                if v != Handle::NONE
+                                    && !has_power_on_rail_types(self.shared, v.railtypes(), totype)
+                                {
+                                    w::hit(w::RAIL_CMD_CONVERT_REROUTE);
+                                    /* No power on new rail type, reroute. */
+                                    self.free_train_track_reservation(v);
+                                    vehicles_affected.push(v);
+                                }
+                            }
+
+                            /* Update the company infrastructure counters. */
+                            let num_pieces = crate::tunnelbridge::get_tunnel_bridge_length(
+                                self.map(),
+                                tile.0,
+                                endtile.0,
+                            )
+                            .wrapping_add(2)
+                            .wrapping_mul(crate::tunnelbridge::TUNNELBRIDGE_TRACKBIT_FACTOR);
+                            let owner = self.world.owner(tile);
+                            let c = CompanyInfrastructure::get(self.shared, owner);
+                            // SAFETY: the company is live and serialized; the rail types
+                            // index its infrastructure array.
+                            unsafe {
+                                CompanyInfrastructure::add_rail(
+                                    c,
+                                    self.world.get_rail_type(tile),
+                                    num_pieces.wrapping_neg(),
+                                );
+                                CompanyInfrastructure::add_rail(c, totype, num_pieces);
+                            }
+                            self.dirty_company_infrastructure_windows(owner);
+
+                            (self.rail.set_rail_type)(tile.0, totype.0);
+                            (self.rail.set_rail_type)(endtile.0, totype.0);
+
+                            vehicles_on_tile(self.map(), tile, |v| {
+                                if v.vehicle_type() == VehicleType::VEH_TRAIN {
+                                    include(&mut affected_trains, &Handle::from_vehicle(v).first());
+                                }
+                            });
+                            vehicles_on_tile(self.map(), endtile, |v| {
+                                if v.vehicle_type() == VehicleType::VEH_TRAIN {
+                                    include(&mut affected_trains, &Handle::from_vehicle(v).first());
+                                }
+                            });
+
+                            yapf_notify_track_layout_change(tile, track);
+                            yapf_notify_track_layout_change(endtile, track);
+
+                            if self.world.bridge(tile) {
+                                (self.shared.mark_bridge_dirty)(tile.0);
+                            } else {
+                                self.mark_tile_dirty_by_tile(tile);
+                                self.mark_tile_dirty_by_tile(endtile);
+                            }
+                        }
+
+                        found_convertible_track = true;
+                        cost.add_money(
+                            rail_convert_cost(self.shared, r#type, totype).saturating_mul(
+                                i64::from(
+                                    crate::tunnelbridge::get_tunnel_bridge_length(
+                                        self.map(),
+                                        tile.0,
+                                        endtile.0,
+                                    )
+                                    .wrapping_add(2),
+                                ),
                             ),
-                            num.wrapping_neg(),
                         );
-                    };
-                    unsafe {
-                        CompanyInfrastructure::add_rail(
-                            infrastructure,
-                            crate::rail_type::RailType(totype),
-                            num,
-                        );
-                    };
-                    (self.command.infrastructure_dirty)(owner);
-                    (self.rail.set_rail_type)(tile, totype);
-                    (self.rail.set_rail_type)(endtile, totype);
-                    unsafe { self.collect_trains(frame, tile) };
-                    unsafe { self.collect_trains(frame, endtile) };
-                    (self.s.layout_changed)(tile, track);
-                    (self.s.layout_changed)(endtile, track);
-                    if (self.shared.is_bridge)(tile) {
-                        (self.shared.mark_bridge_dirty)(tile);
-                    } else {
-                        (self.shared.mark_dirty)(tile);
-                        (self.shared.mark_dirty)(endtile);
+                    }
+
+                    _ => {
+                        // MP_STATION, MP_ROAD
+                        if flags.test(DoCommandFlag::Execute) {
+                            w::hit(w::RAIL_CMD_CONVERT_STATION_CROSSING);
+                            let track = if tt == TileType::MP_STATION {
+                                self.world.get_rail_station_track(tile)
+                            } else {
+                                crate::road_map::get_crossing_rail_track(&self.world, tile)
+                            };
+                            yapf_notify_track_layout_change(tile, track);
+                        }
+
+                        found_convertible_track = true;
+                        cost.add_money(rail_convert_cost(self.shared, r#type, totype));
                     }
                 }
-                let length = self.tunnel_length(tile, endtile).wrapping_add(2);
-                cost.add_money(
-                    (self.s.rail_convert_cost)(kind, totype).saturating_mul(i64::from(length)),
-                );
-            }
-            _ => {
-                if execute {
-                    w::hit(w::RAIL_CMD_CONVERT_STATION_CROSSING);
-                    let track = if tt == MP_STATION {
-                        crate::services::Track(
-                            crate::map_func::World::new(self.shared).station_track(tile),
-                        )
-                        .0
-                    } else {
-                        crate::road_map::get_crossing_rail_track(
-                            &crate::map_func::World::new(self.shared),
-                            TileIndex(tile),
-                        )
-                        .0
-                    };
-                    (self.s.layout_changed)(tile, track);
+
+                for v in vehicles_affected {
+                    self.try_path_reserve(v, true);
                 }
-                cost.add_money((self.s.rail_convert_cost)(kind, totype));
+            }
+            iter.advance(self.map(), self.shared.map_size(), self.check());
+        }
+
+        if flags.test(DoCommandFlag::Execute) {
+            /* Railtype changed, update trains as when entering different track */
+            for v in affected_trains {
+                crate::train::consist_changed(self.train, self.shared, v, CCF_TRACK);
             }
         }
-        for &v in &affected[..affected_len] {
-            unsafe { (self.shared.try_path_reserve)(v, true, false) };
-        }
-        true
-    }
-    /// Free an unpowered reserving train and remember it for re-reservation.
-    fn reroute(&self, tile: u32, track: u8, totype: u8) -> Option<*mut Train> {
-        let v = crate::pbs::Pbs::acquire(self.shared)
-            .get_train_for_reservation_raw(tile, track)
-            .shell()
-            .cast::<crate::services::Train>();
-        if !v.is_null() && !unsafe { (self.s.train_powered)(v, totype) } {
-            w::hit(w::RAIL_CMD_CONVERT_REROUTE);
-            unsafe { (self.shared.free_train_reservation)(v) };
-            Some(v)
-        } else {
-            None
+
+        if !found_convertible_track {
+            cost.take(error);
         }
     }
 
     /// `RemoveTrainDepot`.
-    fn remove_depot(&self, cost: Cost<'_>, flags: u16, tile: u32) {
-        if self.current() != OWNER_WATER {
-            cost.tile_ownership(self.command, tile);
+    fn remove_train_depot(&self, cost: Cost<'_>, tile: TileIndex, flags: DoCommandFlags) {
+        if self.current_company() != Owner::WATER {
+            cost.tile_ownership(self.command, tile.0);
             if !cost.ok() {
                 return;
             }
         }
-        cost.no_vehicle(self.command, tile);
+
+        cost.no_vehicle(self.command, tile.0);
         if !cost.ok() {
             return;
         }
-        if flags & DoCommandFlag::EXECUTE != 0 {
+
+        if flags.test(DoCommandFlag::Execute) {
             w::hit(w::RAIL_CMD_CLEAR_DEPOT);
-            let dir = crate::services::DiagDirection(
-                crate::map_func::World::new(self.shared).get_rail_depot_direction_raw(tile),
-            )
-            .0;
-            let owner = (self.shared.tile_owner)(tile);
-            let mut v: *mut Train = std::ptr::null_mut();
-            if (self.rail.depot_reserved)(tile) {
-                v = crate::pbs::Pbs::acquire(self.shared)
-                    .get_train_for_reservation_raw(tile, dir & 1)
-                    .shell()
-                    .cast::<crate::services::Train>();
-                if !v.is_null() {
-                    unsafe { (self.shared.free_train_reservation)(v) };
+            /* read variables before the depot is removed */
+            let dir = self.world.get_rail_depot_direction(tile);
+            let owner = self.world.owner(tile);
+            let mut v = Handle::NONE;
+
+            if (self.rail.depot_reserved)(tile.0) {
+                v = self
+                    .pbs
+                    .get_train_for_reservation(tile, diag_dir_to_diag_track(dir, self.check()));
+                if v != Handle::NONE {
+                    self.free_train_track_reservation(v);
                 }
             }
+
+            // SAFETY: the company is live and serialized; the rail type indexes its
+            // infrastructure array.
             unsafe {
                 CompanyInfrastructure::add_rail(
-                    CompanyInfrastructure::get(self.shared, CompanyID(owner)),
-                    crate::rail_type::RailType(
-                        crate::services::RailType(
-                            crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-                        )
-                        .0,
-                    ),
+                    CompanyInfrastructure::get(self.shared, owner),
+                    self.world.get_rail_type(tile),
                     1_u32.wrapping_neg(),
                 );
-            };
-            (self.command.infrastructure_dirty)(owner);
-            (self.s.delete_depot)(tile);
-            crate::ground::do_clear_square_raw(tile, self.shared);
-            self.add_side(tile, dir, owner);
-            (self.s.layout_changed)(tile, dir & 1);
-            if !v.is_null() {
-                unsafe { (self.shared.try_path_reserve)(v, true, false) };
+            }
+            self.dirty_company_infrastructure_windows(owner);
+
+            (self.s.delete_depot)(tile.0);
+            crate::ground::do_clear_square(tile, self.shared);
+            self.signals().add_side_to_signal_buffer(tile, dir, owner);
+            yapf_notify_track_layout_change(tile, diag_dir_to_diag_track(dir, self.check()));
+            if v != Handle::NONE {
+                self.try_path_reserve(v, true);
             }
         }
-        cost.set(price(PR_CLEAR_DEPOT_TRAIN));
+
+        cost.set(crate::company::price(usize::from(
+            Price::PR_CLEAR_DEPOT_TRAIN.0,
+        )));
     }
 
     /// `ClearTile_Track`.
-    fn clear_tile(&self, cost: Cost<'_>, ret: Cost<'_>, flags: u16, tile: u32) {
+    fn clear_tile_track(
+        &self,
+        cost: Cost<'_>,
+        ret: Cost<'_>,
+        tile: TileIndex,
+        flags: DoCommandFlags,
+    ) {
         cost.set(0);
-        if flags & DoCommandFlag::AUTO != 0 {
-            if (self.shared.tile_owner)(tile) != self.current() {
+
+        if flags.test(DoCommandFlag::Auto) {
+            if !self.world.is_tile_owner(tile, self.current_company()) {
                 return cost.error(STR_ERROR_AREA_IS_OWNED_BY_ANOTHER.0);
             }
-            return cost.error(if (self.shared.is_plain_rail)(tile) {
-                STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0
-            } else {
-                STR_ERROR_BUILDING_MUST_BE_DEMOLISHED.0
-            });
+
+            if self.world.is_plain_rail(tile) {
+                return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
+            }
+            return cost.error(STR_ERROR_BUILDING_MUST_BE_DEMOLISHED.0);
         }
-        match crate::services::RailTileType(
-            crate::map_func::World::new(self.shared).get_rail_tile_type_raw(tile),
-        )
-        .0
-        {
-            RAIL_TILE_SIGNALS | RAIL_TILE_NORMAL => {
+
+        match self.world.get_rail_tile_type(tile) {
+            RailTileType::Signals | RailTileType::Normal => {
                 w::hit(w::RAIL_CMD_CLEAR_RAIL);
-                let tileh = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
-                let water_ground = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
-                    && is_slope_with_one_corner_raised_raw(tileh.0);
-                let mut tracks = self.tracks(tile);
-                while tracks != 0 {
-                    let track = tracks.trailing_zeros() as u8;
-                    tracks &= tracks - 1;
-                    unsafe { (self.s.remove_rail)(ret.0, flags, tile, track) };
+                let tileh = self.world.tile_slope(tile);
+                /* Is there flat water on the lower halftile that gets cleared expensively? */
+                let water_ground = self.world.get_rail_ground_type(tile)
+                    == RailGroundType::HalfTileWater
+                    && is_slope_with_one_corner_raised(tileh);
+
+                let mut tracks = self.world.get_track_bits(tile);
+                while tracks != TrackBits::TRACK_BIT_NONE {
+                    let track = remove_first_track(&mut tracks, self.check());
+                    self.remove_single_rail_command(
+                        ret,
+                        flags,
+                        CmdRemoveSingleRail { tile, track },
+                    );
                     if !ret.ok() {
                         return cost.take(ret);
                     }
                     cost.add_money(ret.money());
                 }
+
+                /* When bankrupting, don't make water dirty, there could be a ship on lower halftile.
+                 * Same holds for non-companies clearing the tile, e.g. disasters. */
                 if water_ground
-                    && flags & DoCommandFlag::BANKRUPT == 0
-                    && (self.shared.company_valid)(self.current())
+                    && !flags.test(DoCommandFlag::Bankrupt)
+                    && (self.shared.company_valid)(self.current_company().0)
                 {
-                    ret.no_vehicle(self.command, tile);
+                    ret.no_vehicle(self.command, tile.0);
                     if !ret.ok() {
                         return cost.take(ret);
                     }
-                    if flags & DoCommandFlag::EXECUTE != 0 {
+
+                    /* The track was removed, and left a coast tile. Now also clear the water. */
+                    if flags.test(DoCommandFlag::Execute) {
                         w::hit(w::RAIL_CMD_CLEAR_WATER);
-                        crate::ground::do_clear_square_raw(tile, self.shared);
+                        crate::ground::do_clear_square(tile, self.shared);
                     }
-                    cost.add_money(price(PR_CLEAR_WATER));
+                    cost.add_money(crate::company::price(usize::from(Price::PR_CLEAR_WATER.0)));
                 }
             }
-            RAIL_TILE_DEPOT => self.remove_depot(cost, flags, tile),
+
+            RailTileType::Depot => self.remove_train_depot(cost, tile, flags),
+
             _ => cost.error(INVALID_STRING_ID),
         }
     }
 
-    /// `ChangeTileOwner_Track`.
-    fn change_owner(&self, ret: Cost<'_>, tile: u32, old_owner: u8, new_owner: u8) {
-        if (self.shared.tile_owner)(tile) != old_owner {
+    /// `ChangeTileOwner_Track`; `ret` receives the discarded clear result.
+    fn change_tile_owner_track(
+        &self,
+        ret: Cost<'_>,
+        tile: TileIndex,
+        old_owner: Owner,
+        new_owner: Owner,
+    ) {
+        if !self.world.is_tile_owner(tile, old_owner) {
             return;
         }
-        if new_owner == INVALID_OWNER {
-            w::hit(w::RAIL_CMD_OWNER_CLEAR);
-            return crate::landscape_cmd::clear_command(
-                self.command,
-                ret.0,
-                tile,
-                DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT,
-            );
-        }
-        w::hit(w::RAIL_CMD_OWNER_TRANSFER);
-        /* Update company infrastructure counts. No need to dirty windows here, we'll redraw the whole screen anyway. */
-        let num = if (self.shared.is_plain_rail)(tile) {
-            pieces(self.tracks(tile))
+
+        if new_owner != Owner::INVALID {
+            w::hit(w::RAIL_CMD_OWNER_TRANSFER);
+            /* Update company infrastructure counts. No need to dirty windows here, we'll redraw the whole screen anyway. */
+            let mut num_pieces = 1;
+            if self.world.is_plain_rail(tile) {
+                num_pieces = pieces(self.world.get_track_bits(tile));
+            }
+            let rt = self.world.get_rail_type(tile);
+            let old_infrastructure = CompanyInfrastructure::get(self.shared, old_owner);
+            let new_infrastructure = CompanyInfrastructure::get(self.shared, new_owner);
+            // SAFETY: both companies are live and serialized; the rail type indexes their
+            // infrastructure arrays.
+            unsafe {
+                CompanyInfrastructure::add_rail(old_infrastructure, rt, num_pieces.wrapping_neg());
+                CompanyInfrastructure::add_rail(new_infrastructure, rt, num_pieces);
+            }
+
+            if self.world.has_signals(tile) {
+                let num_sigs = self.world.get_present_signals(tile).count_ones();
+                // SAFETY: as above.
+                unsafe {
+                    CompanyInfrastructure::add_signal(old_infrastructure, num_sigs.wrapping_neg());
+                    CompanyInfrastructure::add_signal(new_infrastructure, num_sigs);
+                }
+            }
+
+            (self.shared.set_tile_owner)(tile.0, new_owner.0);
         } else {
-            1
-        };
-        let railtype = crate::services::RailType(
-            crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-        )
-        .0;
-        let old_infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(old_owner));
-        unsafe {
-            CompanyInfrastructure::add_rail(
-                old_infrastructure,
-                crate::rail_type::RailType(railtype),
-                num.wrapping_neg(),
+            w::hit(w::RAIL_CMD_OWNER_CLEAR);
+            self.landscape_clear(
+                ret,
+                DoCommandFlags::from_element(DoCommandFlag::Execute)
+                    .with(DoCommandFlags::from_element(DoCommandFlag::Bankrupt)),
+                tile,
             );
-        };
-        let new_infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(new_owner));
-        unsafe {
-            CompanyInfrastructure::add_rail(
-                new_infrastructure,
-                crate::rail_type::RailType(railtype),
-                num,
-            );
-        };
-        if crate::map_func::World::new(self.shared).has_signals_raw(tile) {
-            let signals = self.present_signals(tile).count_ones();
-            unsafe {
-                CompanyInfrastructure::add_signal(old_infrastructure, signals.wrapping_neg());
-            };
-            unsafe {
-                CompanyInfrastructure::add_signal(new_infrastructure, signals);
-            };
         }
-        (self.shared.set_tile_owner)(tile, new_owner);
     }
 
-    /// `TestAutoslopeOnRailTile`.
-    fn test_autoslope(
-        &self,
-        cost: Cost<'_>,
-        flags: u16,
-        tile: u32,
-        mut z_old: i32,
-        mut tileh_old: u8,
-        mut z_new: i32,
-        mut tileh_new: u8,
-        bits: u8,
-    ) {
+    /// `TestAutoslopeOnRailTile`: tests if autoslope is allowed.
+    fn test_autoslope_on_rail_tile(&self, cost: Cost<'_>, args: TestAutoslopeOnRailTile) {
+        let TestAutoslopeOnRailTile {
+            tile,
+            flags,
+            mut z_old,
+            mut tileh_old,
+            mut z_new,
+            mut tileh_new,
+            rail_bits,
+        } = args;
         if !(self.shared.build_on_slopes)() || !(self.shared.autoslope)() {
             return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
         }
-        self.check_rail_slope(cost, tileh_new, bits, 0, tile);
+
+        /* Is the slope-rail_bits combination valid in general? I.e. is it safe to call GetRailFoundation() ? */
+        self.check_rail_slope(cost, tileh_new, rail_bits, TrackBits::TRACK_BIT_NONE, tile);
         if !cost.ok() {
             return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
         }
-        // ApplyFoundationToSlope also rewrites the slope in place.
+
+        /* Get the slopes on top of the foundations */
         let top = (self.shared.apply_foundation)(
-            Foundation(crate::movement::rail_foundation(tileh_old, bits, |ok| {
-                crate::movement::native_assert(self.shared, ok);
-            })),
-            Slope(tileh_old),
+            get_rail_foundation(tileh_old, rail_bits, self.check()),
+            tileh_old,
         );
         z_old += top.z;
-        tileh_old = top.slope.0;
+        tileh_old = top.slope;
         let top = (self.shared.apply_foundation)(
-            Foundation(crate::movement::rail_foundation(tileh_new, bits, |ok| {
-                crate::movement::native_assert(self.shared, ok);
-            })),
-            Slope(tileh_new),
+            get_rail_foundation(tileh_new, rail_bits, self.check()),
+            tileh_new,
         );
         z_new += top.z;
-        tileh_new = top.slope.0;
-        let corner = match bits {
-            BIT_LEFT => 0,
-            BIT_LOWER => 1,
-            BIT_RIGHT => 2,
-            BIT_UPPER => 3,
+        tileh_new = top.slope;
+
+        let track_corner = match rail_bits {
+            TrackBits::TRACK_BIT_LEFT => Corner::CORNER_W,
+            TrackBits::TRACK_BIT_LOWER => Corner::CORNER_S,
+            TrackBits::TRACK_BIT_RIGHT => Corner::CORNER_E,
+            TrackBits::TRACK_BIT_UPPER => Corner::CORNER_N,
+
+            /* Surface slope must not be changed */
             _ => {
                 if z_old != z_new || tileh_old != tileh_new {
                     return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
                 }
-                return cost.set(price(PR_BUILD_FOUNDATION));
+                return cost.set(crate::company::price(usize::from(
+                    Price::PR_BUILD_FOUNDATION.0,
+                )));
             }
         };
-        z_old += self.slope_z_in_corner(tileh_old & !SLOPE_HALFTILE_MASK, corner);
-        z_new += self.slope_z_in_corner(tileh_new & !SLOPE_HALFTILE_MASK, corner);
+
+        /* The height of the track_corner must not be changed. The rest ensures GetRailFoundation() already. */
+        z_old += crate::landscape::get_slope_z_in_corner(
+            remove_halftile_slope(tileh_old).0,
+            track_corner.0,
+            self.check(),
+        );
+        z_new += crate::landscape::get_slope_z_in_corner(
+            remove_halftile_slope(tileh_new).0,
+            track_corner.0,
+            self.check(),
+        );
         if z_old != z_new {
             return cost.error(STR_ERROR_MUST_REMOVE_RAILROAD_TRACK.0);
         }
-        cost.set(price(PR_BUILD_FOUNDATION));
+
+        cost.set(crate::company::price(usize::from(
+            Price::PR_BUILD_FOUNDATION.0,
+        )));
+        /* Make the ground dirty, if surface slope has changed */
         if tileh_old != tileh_new {
-            if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
-                && is_slope_with_one_corner_raised_raw(tileh_old)
+            /* If there is flat water on the lower halftile add the cost for clearing it */
+            if self.world.get_rail_ground_type(tile) == RailGroundType::HalfTileWater
+                && is_slope_with_one_corner_raised(tileh_old)
             {
-                cost.add_money(price(PR_CLEAR_WATER));
+                cost.add_money(crate::company::price(usize::from(Price::PR_CLEAR_WATER.0)));
             }
-            if flags & DoCommandFlag::EXECUTE != 0 {
-                (self.ground.set_ground)(tile, crate::services::RailGroundType(GROUND_BARREN));
+            if flags.test(DoCommandFlag::Execute) {
+                (self.ground.set_ground)(tile.0, RailGroundType::Barren);
             }
         }
     }
 
     /// `TerraformTile_Track`.
-    fn terraform(&self, cost: Cost<'_>, flags: u16, tile: u32, z_new: i32, tileh_new: u8) {
-        let tileh_old = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
-        let z_old = (self.shared.tile_z)(tile);
-        if (self.shared.is_plain_rail)(tile) {
-            let bits = self.tracks(tile);
-            let was_water = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
-                && is_slope_with_one_corner_raised_raw(tileh_old.0);
+    fn terraform_tile_track(
+        &self,
+        cost: Cost<'_>,
+        tile: TileIndex,
+        flags: DoCommandFlags,
+        z_new: i32,
+        tileh_new: Slope,
+    ) {
+        let (tileh_old, z_old) = self.world.tile_slope_z(tile);
+        if self.world.is_plain_rail(tile) {
+            let rail_bits = self.world.get_track_bits(tile);
+            /* Is there flat water on the lower halftile that must be cleared expensively? */
+            let was_water = self.world.get_rail_ground_type(tile) == RailGroundType::HalfTileWater
+                && is_slope_with_one_corner_raised(tileh_old);
+
+            /* Allow clearing the water only if there is no ship */
             if was_water
-                && crate::vehicle_func::has_vehicle_on_tile_raw(self.map, tile, |v| {
-                    v.vehicle_type_raw() == crate::vehicle::VehicleType::SHIP.0
+                && has_vehicle_on_tile(self.map(), tile, |v| {
+                    v.vehicle_type() == VehicleType::VEH_SHIP
                 })
             {
                 return cost.error(STR_ERROR_SHIP_IN_THE_WAY.0);
             }
-            self.test_autoslope(
+
+            /* First test autoslope. However if it succeeds we still have to test the rest, because non-autoslope terraforming is cheaper. */
+            self.test_autoslope_on_rail_tile(
                 cost,
-                flags,
-                tile,
-                z_old,
-                tileh_old.0,
-                z_new,
-                tileh_new,
-                bits,
+                TestAutoslopeOnRailTile {
+                    tile,
+                    flags,
+                    z_old,
+                    tileh_old,
+                    z_new,
+                    tileh_new,
+                    rail_bits,
+                },
             );
-            let allowed = match bits {
-                BIT_RIGHT => 0,
-                BIT_UPPER => 1,
-                BIT_LEFT => 2,
-                BIT_LOWER => 3,
-                _ => return,
+
+            /* When there is only a single horizontal/vertical track, one corner can be terraformed. */
+            let allowed_corner = match rail_bits {
+                TrackBits::TRACK_BIT_RIGHT => Corner::CORNER_W,
+                TrackBits::TRACK_BIT_UPPER => Corner::CORNER_S,
+                TrackBits::TRACK_BIT_LEFT => Corner::CORNER_E,
+                TrackBits::TRACK_BIT_LOWER => Corner::CORNER_N,
+                _ => return, // the autoslope result
             };
-            let f_old = crate::movement::rail_foundation(tileh_old.0, bits, |ok| {
-                crate::movement::native_assert(self.shared, ok);
-            });
-            if tileh_old != crate::slope_type::Slope::SLOPE_NS
-                && tileh_old != crate::slope_type::Slope::SLOPE_EW
-                && (FOUNDATION_RAIL_W..=FOUNDATION_RAIL_N).contains(&f_old)
+
+            let f_old = get_rail_foundation(tileh_old, rail_bits, self.check());
+
+            /* Do not allow terraforming if allowed_corner is part of anti-zig-zag foundations */
+            if tileh_old != Slope::SLOPE_NS
+                && tileh_old != Slope::SLOPE_EW
+                && is_special_rail_foundation(f_old)
             {
-                return;
+                return; // the autoslope result
             }
-            for corner in 0..4 {
-                if corner == allowed {
+
+            /* Everything is valid, which only changes allowed_corner */
+            for corner in 0..Corner::CORNER_END.0 {
+                let corner = Corner(corner);
+                if allowed_corner == corner {
                     continue;
                 }
-                if z_old + self.slope_z_in_corner(tileh_old.0, corner)
-                    != z_new + self.slope_z_in_corner(tileh_new, corner)
+                if z_old
+                    + crate::landscape::get_slope_z_in_corner(tileh_old.0, corner.0, self.check())
+                    != z_new
+                        + crate::landscape::get_slope_z_in_corner(
+                            tileh_new.0,
+                            corner.0,
+                            self.check(),
+                        )
                 {
-                    return;
+                    return; // the autoslope result
                 }
             }
+
             w::hit(w::RAIL_CMD_TERRAFORM_CORNER);
-            if flags & DoCommandFlag::EXECUTE != 0 {
-                (self.ground.set_ground)(tile, crate::services::RailGroundType(GROUND_BARREN));
+            /* Make the ground dirty */
+            if flags.test(DoCommandFlag::Execute) {
+                (self.ground.set_ground)(tile.0, RailGroundType::Barren);
             }
-            return cost.set(if was_water { price(PR_CLEAR_WATER) } else { 0 });
-        }
-        if (self.shared.build_on_slopes)()
+
+            /* allow terraforming */
+            return cost.set(if was_water {
+                crate::company::price(usize::from(Price::PR_CLEAR_WATER.0))
+            } else {
+                0
+            });
+        } else if (self.shared.build_on_slopes)()
             && (self.shared.autoslope)()
             && (self.s.entrance_edge)(
-                tile,
+                tile.0,
                 z_new,
-                tileh_new,
-                crate::services::DiagDirection(
-                    crate::map_func::World::new(self.shared).get_rail_depot_direction_raw(tile),
-                )
-                .0,
+                tileh_new.0,
+                self.world.get_rail_depot_direction(tile).0,
             )
         {
             w::hit(w::RAIL_CMD_TERRAFORM_DEPOT);
-            return cost.set(price(PR_BUILD_FOUNDATION));
+            return cost.set(crate::company::price(usize::from(
+                Price::PR_BUILD_FOUNDATION.0,
+            )));
         }
-        crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
+        self.landscape_clear(cost, flags, tile);
+    }
+
+    /// `CheckBuildAbove_Track`.
+    fn check_build_above_track(&self, cost: Cost<'_>, tile: TileIndex, flags: DoCommandFlags) {
+        if self.world.is_plain_rail(tile) {
+            return cost.zero();
+        }
+        w::hit(w::RAIL_CMD_BUILD_ABOVE_CLEAR);
+        self.landscape_clear(cost, flags, tile);
     }
 }
 
-// SAFETY for every entry: the service table and its nested tables are valid
-// immutable process-lifetime tables; every `CommandCost` pointer denotes a
-// distinct live native stack object for the synchronous call. The caller holds
-// the game-state mutex. Rust holds no reference to native state across calls.
+/// `Command<CMD_REMOVE_SINGLE_RAIL>::Do(flags, ...)` into `out`, for the station commands.
+/// # Safety
+/// The table and its nested tables are valid for the synchronous call.
+pub(crate) unsafe fn remove_single_rail_command(
+    s: *const RailCommandServices,
+    out: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdRemoveSingleRail,
+) {
+    let x = unsafe { Ctx::new(s) };
+    x.remove_single_rail_command(out, flags, args);
+}
+/// `ClearTile_Track`.
+/// # Safety
+/// The tables are valid and `cost` and `ret` are distinct live native results for the
+/// synchronous call.
+pub(crate) unsafe fn clear_tile_track(
+    s: *const RailCommandServices,
+    cost: *mut CommandCost,
+    ret: *mut CommandCost,
+    tile: TileIndex,
+    flags: DoCommandFlags,
+) {
+    let x = unsafe { Ctx::new(s) };
+    x.clear_tile_track(x.c(cost), x.c(ret), tile, flags);
+}
+/// [`clear_tile_track`] for `landscape_cmd.rs` until its pass.
+/// # Safety
+/// As [`clear_tile_track`].
+pub(crate) unsafe fn clear_tile_track_raw(
+    s: *const RailCommandServices,
+    out: *mut CommandCost,
+    a: *mut CommandCost,
+    flags: u16,
+    tile: u32,
+) {
+    unsafe { clear_tile_track(s, out, a, TileIndex(tile), DoCommandFlags(flags)) };
+}
+/// `ChangeTileOwner_Track`; `ret` receives the discarded clear result.
+/// # Safety
+/// The tables are valid and `ret` is a live native result for the synchronous call.
+pub(crate) unsafe fn change_tile_owner_track(
+    s: *const RailCommandServices,
+    ret: *mut CommandCost,
+    tile: TileIndex,
+    old_owner: Owner,
+    new_owner: Owner,
+) {
+    let x = unsafe { Ctx::new(s) };
+    x.change_tile_owner_track(x.c(ret), tile, old_owner, new_owner);
+}
+/// `TerraformTile_Track`.
+/// # Safety
+/// The tables are valid and `cost` is a live native result for the synchronous call.
+pub(crate) unsafe fn terraform_tile_track(
+    s: *const RailCommandServices,
+    cost: *mut CommandCost,
+    tile: TileIndex,
+    flags: DoCommandFlags,
+    z_new: i32,
+    tileh_new: Slope,
+) {
+    let x = unsafe { Ctx::new(s) };
+    x.terraform_tile_track(x.c(cost), tile, flags, z_new, tileh_new);
+}
+/// [`terraform_tile_track`] for `landscape_cmd.rs` until its pass.
+/// # Safety
+/// As [`terraform_tile_track`].
+pub(crate) unsafe fn terraform_tile_track_raw(
+    s: *const RailCommandServices,
+    out: *mut CommandCost,
+    flags: u16,
+    tile: u32,
+    z_new: i32,
+    tileh_new: u8,
+) {
+    unsafe {
+        terraform_tile_track(
+            s,
+            out,
+            TileIndex(tile),
+            DoCommandFlags(flags),
+            z_new,
+            Slope(tileh_new),
+        );
+    }
+}
+/// `CheckBuildAbove_Track`.
+/// # Safety
+/// The tables are valid and `cost` is a live native result for the synchronous call.
+pub(crate) unsafe fn check_build_above_track(
+    s: *const RailCommandServices,
+    cost: *mut CommandCost,
+    tile: TileIndex,
+    flags: DoCommandFlags,
+) {
+    let x = unsafe { Ctx::new(s) };
+    x.check_build_above_track(x.c(cost), tile, flags);
+}
+
+// The exports below are the native command facades' shims: each takes the command's
+// parameters as base integers, with the facade's scratch results, and builds the command's
+// argument struct. Every entry shares the module's contract.
 
 /// `CmdBuildSingleRail`.
 /// # Safety
@@ -2522,15 +3154,17 @@ pub unsafe extern "C" fn openttd_rust_rail_build_single(
     auto_remove_signals: bool,
 ) {
     let x = unsafe { Ctx::new(s) };
-    x.build_single_rail(
+    x.cmd_build_single_rail(
         x.c(out),
         x.c(a),
         x.c(b),
-        flags,
-        tile,
-        railtype,
-        track,
-        auto_remove_signals,
+        DoCommandFlags(flags),
+        CmdBuildSingleRail {
+            tile: TileIndex(tile),
+            railtype: RailType(railtype),
+            track: Track(track),
+            auto_remove_signals,
+        },
     );
 }
 /// `CmdRemoveSingleRail`.
@@ -2546,7 +3180,15 @@ pub unsafe extern "C" fn openttd_rust_rail_remove_single(
     track: u8,
 ) {
     let x = unsafe { Ctx::new(s) };
-    x.remove_single_rail(x.c(out), x.c(a), flags, tile, track);
+    x.cmd_remove_single_rail(
+        x.c(out),
+        x.c(a),
+        DoCommandFlags(flags),
+        CmdRemoveSingleRail {
+            tile: TileIndex(tile),
+            track: Track(track),
+        },
+    );
 }
 /// `CmdRailTrackHelper` for `CmdBuildRailroadTrack`/`CmdRemoveRailroadTrack`.
 /// # Safety
@@ -2567,18 +3209,20 @@ pub unsafe extern "C" fn openttd_rust_rail_track_drag(
     fail_on_obstacle: bool,
 ) {
     let x = unsafe { Ctx::new(s) };
-    x.rail_track_helper(
+    x.cmd_rail_track_helper(
         x.c(out),
         x.c(a),
         x.c(b),
-        flags,
-        tile,
-        end_tile,
-        railtype,
-        track,
-        remove,
-        auto_remove_signals,
-        fail_on_obstacle,
+        DoCommandFlags(flags),
+        RailTrackHelper {
+            tile: TileIndex(tile),
+            end_tile: TileIndex(end_tile),
+            railtype: RailType(railtype),
+            track: Track(track),
+            remove,
+            auto_remove_signals,
+            fail_on_obstacle,
+        },
     );
 }
 /// `CmdBuildTrainDepot`.
@@ -2595,7 +3239,16 @@ pub unsafe extern "C" fn openttd_rust_rail_build_depot(
     dir: u8,
 ) {
     let x = unsafe { Ctx::new(s) };
-    x.build_depot(x.c(out), x.c(a), flags, tile, railtype, dir);
+    x.cmd_build_train_depot(
+        x.c(out),
+        x.c(a),
+        DoCommandFlags(flags),
+        CmdBuildTrainDepot {
+            tile: TileIndex(tile),
+            railtype: RailType(railtype),
+            dir: DiagDirection(dir),
+        },
+    );
 }
 /// `CmdBuildSingleSignal`.
 /// # Safety
@@ -2619,21 +3272,23 @@ pub unsafe extern "C" fn openttd_rust_rail_build_signal(
     signals_copy: u8,
 ) {
     let x = unsafe { Ctx::new(s) };
-    x.build_signal(
+    x.cmd_build_single_signal(
         x.c(out),
         x.c(a),
-        flags,
-        tile,
-        track,
-        sigtype,
-        sigvar,
-        convert_signal,
-        skip_existing_signals,
-        ctrl_pressed,
-        cycle_start,
-        cycle_stop,
-        num_dir_cycle,
-        signals_copy,
+        DoCommandFlags(flags),
+        CmdBuildSingleSignal {
+            tile: TileIndex(tile),
+            track: Track(track),
+            sigtype: SignalType(sigtype),
+            sigvar: SignalVariant(sigvar),
+            convert_signal,
+            skip_existing_signals,
+            ctrl_pressed,
+            cycle_start: SignalType(cycle_start),
+            cycle_stop: SignalType(cycle_stop),
+            num_dir_cycle,
+            signals_copy,
+        },
     );
 }
 /// `CmdSignalTrackHelper` for `CmdBuildSignalTrack`/`CmdRemoveSignalTrack`.
@@ -2658,21 +3313,23 @@ pub unsafe extern "C" fn openttd_rust_rail_signal_drag(
     signal_density: i32,
 ) {
     let x = unsafe { Ctx::new(s) };
-    x.signal_track_helper(
+    x.cmd_signal_track_helper(
         x.c(out),
         x.c(a),
         x.c(b),
-        flags,
-        tile,
-        end_tile,
-        track,
-        sigtype,
-        sigvar,
-        mode,
-        remove,
-        autofill,
-        minimise_gaps,
-        signal_density,
+        DoCommandFlags(flags),
+        SignalTrackHelper {
+            tile: TileIndex(tile),
+            end_tile: TileIndex(end_tile),
+            track: Track(track),
+            sigtype: SignalType(sigtype),
+            sigvar: SignalVariant(sigvar),
+            mode,
+            remove,
+            autofill,
+            minimise_gaps,
+            signal_density,
+        },
     );
 }
 /// `CmdRemoveSingleSignal`.
@@ -2687,15 +3344,21 @@ pub unsafe extern "C" fn openttd_rust_rail_remove_signal(
     track: u8,
 ) {
     let x = unsafe { Ctx::new(s) };
-    x.remove_signal(x.c(out), flags, tile, track);
+    x.cmd_remove_single_signal(
+        x.c(out),
+        DoCommandFlags(flags),
+        CmdRemoveSingleSignal {
+            tile: TileIndex(tile),
+            track: Track(track),
+        },
+    );
 }
-/// `CmdConvertRail`; `frame` is the caller-owned iterator/train-list frame.
+/// `CmdConvertRail`.
 /// # Safety
 /// See the module entry contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_rail_convert(
     s: *const RailCommandServices,
-    frame: *mut ConvertFrame,
     out: *mut CommandCost,
     a: *mut CommandCost,
     b: *mut CommandCost,
@@ -2703,60 +3366,21 @@ pub unsafe extern "C" fn openttd_rust_rail_convert(
     tile: u32,
     area_start: u32,
     totype: u8,
-    diagonal_area: bool,
+    diagonal: bool,
 ) {
     let x = unsafe { Ctx::new(s) };
-    x.convert_rail(
-        frame,
+    x.cmd_convert_rail(
         x.c(out),
         x.c(a),
         x.c(b),
-        flags,
-        tile,
-        area_start,
-        totype,
-        diagonal_area,
+        DoCommandFlags(flags),
+        CmdConvertRail {
+            tile: TileIndex(tile),
+            area_start: TileIndex(area_start),
+            totype: RailType(totype),
+            diagonal,
+        },
     );
-}
-/// `ClearTile_Track`.
-/// # Safety
-/// See the module entry contract.
-pub(crate) unsafe fn openttd_rust_rail_clear_tile(
-    s: *const RailCommandServices,
-    out: *mut CommandCost,
-    a: *mut CommandCost,
-    flags: u16,
-    tile: u32,
-) {
-    let x = unsafe { Ctx::new(s) };
-    x.clear_tile(x.c(out), x.c(a), flags, tile);
-}
-/// `ChangeTileOwner_Track`; `a` receives the discarded clear result.
-/// # Safety
-/// See the module entry contract.
-pub(crate) unsafe fn openttd_rust_rail_change_owner(
-    s: *const RailCommandServices,
-    a: *mut CommandCost,
-    tile: u32,
-    old_owner: u8,
-    new_owner: u8,
-) {
-    let x = unsafe { Ctx::new(s) };
-    x.change_owner(x.c(a), tile, old_owner, new_owner);
-}
-/// `TerraformTile_Track`.
-/// # Safety
-/// See the module entry contract.
-pub(crate) unsafe fn openttd_rust_rail_terraform(
-    s: *const RailCommandServices,
-    out: *mut CommandCost,
-    flags: u16,
-    tile: u32,
-    z_new: i32,
-    tileh_new: u8,
-) {
-    let x = unsafe { Ctx::new(s) };
-    x.terraform(x.c(out), flags, tile, z_new, tileh_new);
 }
 /// `CheckBuildAbove_Track`.
 /// # Safety
@@ -2768,12 +3392,7 @@ pub unsafe extern "C" fn openttd_rust_rail_build_above(
     flags: u16,
     tile: u32,
 ) {
-    let x = unsafe { Ctx::new(s) };
-    if (x.shared.is_plain_rail)(tile) {
-        return x.c(out).zero();
-    }
-    w::hit(w::RAIL_CMD_BUILD_ABOVE_CLEAR);
-    crate::landscape_cmd::clear_command(x.command, out, tile, flags);
+    unsafe { check_build_above_track(s, out, TileIndex(tile), DoCommandFlags(flags)) };
 }
 
 crate::abi::layouts! {
@@ -2784,23 +3403,10 @@ crate::abi::layouts! {
         cost,
         command,
         signal,
-        compatible_rail,
-        powered_rail,
-        train_powered,
-        rail_no_crossings,
+        train,
         road_no_crossing,
-        rail_build_cost,
-        rail_clear_cost,
-        rail_convert_cost,
         crossing_with_competitor,
         entrance_edge,
-        build_rail,
-        remove_rail,
-        build_signal,
-        remove_signal,
-        convert_rail,
-        parking,
-        train_position,
         layout_changed,
         mark_crossings,
         crossing_removed,
@@ -2811,16 +3417,6 @@ crate::abi::layouts! {
         depot_name,
         delete_depot,
         depot_windows,
-        close_inspect,
-        make_shore,
-        include_train,
-        consist_changed,
-    };
-    "OpenTTDRailTrainParking" ["probe"] => TrainParking {
-        track,
-        status,
-        speed,
-        order,
     };
     "OpenTTDCrossingRoad" ["probe"] => CrossingRoad {
         bits,
@@ -2835,15 +3431,10 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// `CountBits`, squared for overlapping tracks.
     #[test]
-    fn track_helpers_follow_source_tables() {
-        assert!(!tracks_overlap(crate::track_type::TRACK_BIT_HORZ));
-        assert!(!tracks_overlap(crate::track_type::TRACK_BIT_VERT));
-        assert!(tracks_overlap(BIT_X | BIT_Y));
-        assert_eq!(pieces(BIT_X | BIT_Y), 4);
-        assert_eq!(pieces(crate::track_type::TRACK_BIT_HORZ), 2);
-        assert_eq!(trackdir_tracks(reaches(0)), BIT_X | BIT_LOWER | BIT_LEFT);
-        assert_eq!(negate(i64::MIN), i64::MAX);
-        assert_eq!(kill_first_bit(0xC), 0x8);
+    fn pieces_square_overlapping_tracks() {
+        assert_eq!(pieces(TrackBits::TRACK_BIT_X | TrackBits::TRACK_BIT_Y), 4);
+        assert_eq!(pieces(TrackBits::TRACK_BIT_HORZ), 2);
     }
 }

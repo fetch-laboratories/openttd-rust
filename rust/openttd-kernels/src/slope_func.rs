@@ -191,6 +191,15 @@ pub fn special_rail_foundation(corner: Corner, check: impl Fn(bool)) -> Foundati
     }
     Foundation(Foundation::FOUNDATION_RAIL_W.0.wrapping_add(corner.0))
 }
+/// `IsSpecialRailFoundation`: tests if a foundation is a special rail foundation for single
+/// horizontal/vertical track.
+pub const fn is_special_rail_foundation(f: Foundation) -> bool {
+    crate::math::is_inside_mm(
+        f.0 as usize,
+        Foundation::FOUNDATION_RAIL_W.0 as usize,
+        Foundation::FOUNDATION_RAIL_N.0 as usize + 1,
+    )
+}
 
 /// Raw adapter: `IsSteepSlope` over a base value, for files no pass has finished yet.
 #[must_use]
@@ -272,6 +281,20 @@ pub fn slope_with_one_corner_raised_raw(c: u8, check: impl Fn(bool)) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `IsSpecialRailFoundation` is `IsInsideMM(f, FOUNDATION_RAIL_W, FOUNDATION_RAIL_N + 1)`.
+    #[test]
+    fn special_rail_foundations_are_rail_w_to_rail_n() {
+        for f in Foundation::FOUNDATION_RAIL_W.0..=Foundation::FOUNDATION_RAIL_N.0 {
+            assert!(is_special_rail_foundation(Foundation(f)));
+        }
+        assert!(!is_special_rail_foundation(Foundation(
+            Foundation::FOUNDATION_RAIL_W.0 - 1
+        )));
+        assert!(!is_special_rail_foundation(Foundation(
+            Foundation::FOUNDATION_RAIL_N.0 + 1
+        )));
+    }
     #[test]
     fn helpers_match_the_header_tables() {
         for s in 0..=u8::MAX {

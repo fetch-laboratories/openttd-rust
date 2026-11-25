@@ -10,7 +10,8 @@
     clippy::decimal_bitwise_operands
 )]
 use crate::bitmath_func::{gb, sb};
-use crate::rail_type::{RAILTYPE_ELECTRIC, RAILTYPE_MAGLEV, RAILTYPE_MONO, RAILTYPE_RAIL};
+use crate::rail::get_rail_type_info;
+use crate::rail_type::RailType;
 use crate::services::Services as Shared;
 use crate::timer_game_common::{
     DAYS_TILL_ORIGINAL_BASE_YEAR, ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR, is_leap_year,
@@ -24,7 +25,6 @@ pub struct Services {
     newgrf_version: unsafe extern "C" fn() -> u32,
     palette: unsafe extern "C" fn(*const c_void) -> u8,
     pitch: unsafe extern "C" fn(*const c_void) -> i32,
-    rail_cost: unsafe extern "C" fn(u8) -> u16,
     pub(crate) shared: *const Shared,
     width: unsafe extern "C" fn(*const c_void) -> u32,
 }
@@ -70,14 +70,33 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
             0x0E => (s.pitch)(file) as u32,
             0x0F => {
                 let mut costs = 0;
-                sb(&mut costs, 0, 8, u32::from((s.rail_cost)(RAILTYPE_RAIL)));
+                sb(
+                    &mut costs,
+                    0,
+                    8,
+                    u32::from(
+                        get_rail_type_info(shared, RailType::RAILTYPE_RAIL).cost_multiplier(),
+                    ),
+                );
                 let middle = if shared.settings().disable_elrails.read() {
-                    RAILTYPE_MONO
+                    RailType::RAILTYPE_MONO
                 } else {
-                    RAILTYPE_ELECTRIC
+                    RailType::RAILTYPE_ELECTRIC
                 };
-                sb(&mut costs, 8, 8, u32::from((s.rail_cost)(middle)));
-                sb(&mut costs, 16, 8, u32::from((s.rail_cost)(RAILTYPE_MAGLEV)));
+                sb(
+                    &mut costs,
+                    8,
+                    8,
+                    u32::from(get_rail_type_info(shared, middle).cost_multiplier()),
+                );
+                sb(
+                    &mut costs,
+                    16,
+                    8,
+                    u32::from(
+                        get_rail_type_info(shared, RailType::RAILTYPE_MAGLEV).cost_multiplier(),
+                    ),
+                );
                 costs
             }
             0x11 => 0,
@@ -120,7 +139,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGlobalVariableServices" ["storage"] => Services { misc_bits, newgrf_version, palette, pitch, rail_cost, shared, width };
+    "OpenTTDGlobalVariableServices" ["storage"] => Services { misc_bits, newgrf_version, palette, pitch, shared, width };
 }
 
 /// Native `newgrf.h::GrfSpecFeature`, retaining every underlying `u8` value.
@@ -301,7 +320,6 @@ pub(crate) const TEST_TABLE: Services = Services {
     newgrf_version: crate::test_tables::unreachable0,
     palette: crate::test_tables::unreachable1,
     pitch: crate::test_tables::unreachable1,
-    rail_cost: crate::test_tables::unreachable1,
     shared: std::ptr::null(),
     width: crate::test_tables::unreachable1,
 };

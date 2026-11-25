@@ -15,6 +15,12 @@ use crate::track_type::{Track, Trackdir};
 const SIGNAL_ALONG_TRACKDIR: [u8; Trackdir::TRACKDIR_END.0 as usize] = [
     0x8, 0x8, 0x8, 0x2, 0x4, 0x1, 0, 0, 0x4, 0x4, 0x4, 0x1, 0x8, 0x2, 0, 0,
 ];
+/// `_signal_against_trackdir`: maps a trackdir to the bit that stores its status in
+/// the map arrays, in the direction against the trackdir. Declared with `TRACKDIR_END`
+/// entries, as [`SIGNAL_ALONG_TRACKDIR`].
+const SIGNAL_AGAINST_TRACKDIR: [u8; Trackdir::TRACKDIR_END.0 as usize] = [
+    0x4, 0x4, 0x4, 0x1, 0x8, 0x2, 0, 0, 0x8, 0x8, 0x8, 0x2, 0x4, 0x1, 0, 0,
+];
 /// `_signal_on_track`: maps a track to the bits that store the status of the two
 /// signals that can be present on the given track.
 const SIGNAL_ON_TRACK: [u8; Track::TRACK_END.0 as usize] = [0xC, 0xC, 0xC, 0x3, 0xC, 0x3];
@@ -24,16 +30,15 @@ const SIGNAL_ON_TRACK: [u8; Track::TRACK_END.0 as usize] = [0xC, 0xC, 0xC, 0x3, 
 pub fn signal_along_trackdir(trackdir: Trackdir) -> u8 {
     SIGNAL_ALONG_TRACKDIR[usize::from(trackdir.0)]
 }
+/// Maps a trackdir to the bit that stores its status in the map arrays, in the
+/// direction against the trackdir (`SignalAgainstTrackdir`).
+pub fn signal_against_trackdir(trackdir: Trackdir) -> u8 {
+    SIGNAL_AGAINST_TRACKDIR[usize::from(trackdir.0)]
+}
 /// Maps a Track to the bits that store the status of the two signals that can
 /// be present on the given track (`SignalOnTrack`).
 pub const fn signal_on_track(track: Track) -> u8 {
     SIGNAL_ON_TRACK[track.0 as usize]
-}
-
-/// Temporary raw adapter of [`signal_on_track`] for the files no pass has
-/// finished yet.
-pub const fn signal_on_track_raw(track: u8) -> u8 {
-    signal_on_track(Track(track))
 }
 
 /// State of the signal segment (`signal_func.h`), retaining every raw byte.

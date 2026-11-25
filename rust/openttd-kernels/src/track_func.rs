@@ -788,10 +788,6 @@ pub fn diag_dir_to_diag_track_raw(direction: u8, check: impl Fn(bool) + Copy) ->
 pub fn corner_to_track_bits_raw(c: u8, check: impl Fn(bool) + Copy) -> u8 {
     corner_to_track_bits(Corner(c), check).0
 }
-/// Raw adapter: `TracksOverlap`.
-pub const fn tracks_overlap_raw(b: u8) -> bool {
-    tracks_overlap(TrackBits(b))
-}
 /// Raw adapter: `TrackToTrackBits`.
 pub fn track_to_track_bits_raw(track: u8, check: impl Fn(bool) + Copy) -> u8 {
     track_to_track_bits(Track(track), check).0
@@ -821,29 +817,9 @@ pub const fn find_first_track_raw(tracks: u8) -> u8 {
 pub const fn find_first_track_u32_raw(tracks: u32) -> u8 {
     find_first_track(TrackBits(tracks as u8)).0
 }
-/// Raw adapter: `TrackdirBitsToTrackBits`.
-pub const fn trackdir_bits_to_track_bits_raw(bits: u16) -> u8 {
-    trackdir_bits_to_track_bits(TrackdirBits(bits)).0
-}
-/// Raw adapter: `HasTrack`.
-pub fn has_track_raw(bits: u8, track: u8, check: impl Fn(bool) + Copy) -> bool {
-    has_track(TrackBits(bits), Track(track), check)
-}
-/// Raw adapter: `IsDiagonalTrackdir`, on the process-wide native assertion policy.
-pub fn is_diagonal_trackdir_raw(td: u8) -> bool {
-    is_diagonal_trackdir(Trackdir(td), native_check)
-}
 /// Raw adapter: `ReverseTrackdir`, on the process-wide native assertion policy.
 pub fn reverse_trackdir_raw(td: u8) -> u8 {
     reverse_trackdir(Trackdir(td), native_check).0
-}
-/// Raw adapter: `TrackdirToExitdir`, on the process-wide native assertion policy.
-pub fn trackdir_to_exitdir_raw(td: u8) -> u8 {
-    trackdir_to_exitdir(Trackdir(td), native_check).0
-}
-/// Raw adapter: `DiagdirReachesTrackdirs`, on the process-wide native assertion policy.
-pub fn diagdir_reaches_trackdirs_raw(dir: u8) -> u16 {
-    diagdir_reaches_trackdirs(DiagDirection(dir), native_check).0
 }
 /// Raw adapter: `DiagdirReachesTracks`, on the process-wide native assertion policy.
 pub fn diagdir_reaches_tracks_raw(dir: u8) -> u8 {

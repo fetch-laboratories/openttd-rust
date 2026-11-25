@@ -819,23 +819,6 @@ impl Pbs<'_> {
     pub(crate) fn get_train_for_reservation_raw(self, tile: u32, track: u8) -> Handle {
         self.get_train_for_reservation(TileIndex(tile), Track(track))
     }
-    /// [`Self::is_safe_waiting_position`] for `rail_cmd.rs`.
-    pub(crate) fn is_safe_waiting_position_raw(
-        self,
-        v: Handle,
-        tile: u32,
-        trackdir: u8,
-        include_line_end: bool,
-        forbid_90deg: bool,
-    ) -> bool {
-        self.is_safe_waiting_position(
-            v,
-            TileIndex(tile),
-            Trackdir(trackdir),
-            include_line_end,
-            forbid_90deg,
-        )
-    }
 }
 
 /// # Safety

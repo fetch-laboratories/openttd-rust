@@ -4249,6 +4249,26 @@ pub(crate) fn update_level_crossing(
 ) {
     Game::new(leaves, services).update_level_crossing(tile, sound, force_bar);
 }
+/// `MarkDirtyAdjacentLevelCrossingTiles`, for Rust callers outside a train entry.
+pub(crate) fn mark_dirty_adjacent_level_crossing_tiles(
+    leaves: &Leaves,
+    services: &Services,
+    tile: TileIndex,
+    road_axis: Axis,
+) {
+    Game::new(leaves, services).mark_dirty_adjacent_level_crossing_tiles(tile, road_axis);
+}
+/// `UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval`, for Rust callers outside a train
+/// entry.
+pub(crate) fn update_adjacent_level_crossing_tiles_on_level_crossing_removal(
+    leaves: &Leaves,
+    services: &Services,
+    tile: TileIndex,
+    road_axis: Axis,
+) {
+    Game::new(leaves, services)
+        .update_adjacent_level_crossing_tiles_on_level_crossing_removal(tile, road_axis);
+}
 /// `Train::GetVehicleTrackdir`, for Rust callers outside a train entry.
 pub(crate) fn get_vehicle_trackdir(leaves: &Leaves, services: &Services, v: Handle) -> Trackdir {
     Game::new(leaves, services).get_vehicle_trackdir(v)

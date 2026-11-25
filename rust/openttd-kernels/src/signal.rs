@@ -1219,11 +1219,6 @@ impl Context {
     pub(crate) fn set_signals_on_both_dir(self, tile: TileIndex, track: Track, owner: Owner) {
         self.signals().set_signals_on_both_dir(tile, track, owner);
     }
-    /// Temporary raw adapter of [`Self::add_track_to_signal_buffer`] for `rail_cmd.rs` until
-    /// its pass.
-    pub(crate) fn add_track(self, tile: u32, track: u8, owner: u8) {
-        self.add_track_to_signal_buffer(TileIndex(tile), Track(track), CompanyID(owner));
-    }
     /// Temporary raw adapter of [`Self::add_side_to_signal_buffer`] for `rail_cmd.rs` and
     /// `tunnelbridge_cmd.rs` until their passes.
     pub(crate) fn add_side(self, tile: u32, side: u8, owner: u8) {

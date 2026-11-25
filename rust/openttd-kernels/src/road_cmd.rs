@@ -24,10 +24,8 @@ use crate::company_type::{
     INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
 };
 use crate::direction_type::DiagDirection;
-use crate::rail_cmd::{
-    CROSSING_SLOPES, CrossingRoad, LEVELCROSSING_TRACKBIT_FACTOR, RailCommandServices,
-    TUNNELBRIDGE_TRACKBIT_FACTOR,
-};
+use crate::economy_type::LEVELCROSSING_TRACKBIT_FACTOR;
+use crate::rail_cmd::{CrossingRoad, RailCommandServices};
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Foundation, Map, RailMapServices, Services,
     Slope, TownHandle,
@@ -35,9 +33,11 @@ use crate::services::{
 use crate::slope_func::{
     get_slope_max_z_raw, is_slope_with_one_corner_raised_raw, is_steep_slope_raw,
 };
+use crate::slope_type::VALID_LEVEL_CROSSING_SLOPES;
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::TileIndex;
 use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
+use crate::tunnelbridge::TUNNELBRIDGE_TRACKBIT_FACTOR;
 use crate::witness as w;
 /// Opaque caller-owned native affected-road-vehicle list.
 #[repr(C)]
@@ -999,7 +999,8 @@ impl<'a> Ctx<'a> {
                 _ => unreachable!(),
             },
             MP_RAILWAY => {
-                if is_steep_slope_raw(slope.0) || CROSSING_SLOPES & (1 << slope.0) == 0 {
+                if is_steep_slope_raw(slope.0) || VALID_LEVEL_CROSSING_SLOPES & (1 << slope.0) == 0
+                {
                     cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
                     return;
                 }
@@ -1024,11 +1025,11 @@ impl<'a> Ctx<'a> {
                         cost.error(STR_ERROR_CROSSING_DISALLOWED_ROAD.0);
                         return;
                     }
-                    if (self.r.rail_no_crossings)(
+                    if crate::rail::rail_no_level_crossings(
+                        self.shared,
                         crate::services::RailType(
                             crate::map_func::World::new(self.shared).get_rail_type_raw(tile),
-                        )
-                        .0,
+                        ),
                     ) {
                         cost.error(STR_ERROR_CROSSING_DISALLOWED_RAIL.0);
                         return;
@@ -1267,9 +1268,9 @@ impl<'a> Ctx<'a> {
                 _ => (self.r.make_road)(
                     tile,
                     CrossingRoad {
-                        bits: pieces,
-                        road_type: if rtt == 0 { rt } else { INVALID },
-                        tram_type: if rtt == 1 { rt } else { INVALID },
+                        bits: crate::road_type::RoadBits(pieces),
+                        road_type: crate::road_type::RoadType(if rtt == 0 { rt } else { INVALID }),
+                        tram_type: crate::road_type::RoadType(if rtt == 1 { rt } else { INVALID }),
                         town: town_id,
                         road_owner: company,
                         tram_owner: company,
@@ -1891,7 +1892,7 @@ impl<'a> Ctx<'a> {
                 1 => {
                     !is_steep_slope_raw(slope)
                         && (self.shared.tile_max_z)(tile) == z + get_slope_max_z_raw(slope)
-                        && CROSSING_SLOPES & (1 << slope) != 0
+                        && VALID_LEVEL_CROSSING_SLOPES & (1 << slope) != 0
                 }
                 2 => (self.r.entrance_edge)(
                     tile,
