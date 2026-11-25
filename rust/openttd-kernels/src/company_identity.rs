@@ -132,7 +132,7 @@ impl Services {
 
 /// `Company::Iterate()`: call `f` with each company in pool order until it returns false;
 /// returns whether the loop ran to the end.
-fn companies(s: &Services, mut f: impl FnMut(*mut OpenTTDCompany) -> bool) -> bool {
+pub(crate) fn companies(s: &Services, mut f: impl FnMut(*mut OpenTTDCompany) -> bool) -> bool {
     let mut from = 0;
     loop {
         let c = (s.next_company)(from);

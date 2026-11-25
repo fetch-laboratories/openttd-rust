@@ -41,7 +41,7 @@ use crate::airport::{AT_LARGE, AT_SMALL, AirportBlock, AirportBlocks};
 use crate::bitmath_func::{gb, has_bit};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_base::is_human_id;
-use crate::company_type::{CompanyID, Owner};
+use crate::company_type::{CompanyID, OpenTTDCompany, Owner};
 use crate::direction_func::{change_dir, dir_to_diag_dir};
 use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::disaster_vehicle::DisasterSubType;
@@ -184,7 +184,7 @@ pub struct Services {
     /// The road vehicle controller's table, immutable for the process.
     pub road: *const crate::road::Leaves,
     /// `c->group_all[VEH_ROAD].num_vehicle` of a live company.
-    pub road_count: extern "C" fn(u8) -> u16,
+    pub road_count: extern "C" fn(*const OpenTTDCompany) -> u16,
     /// The vehicle scheduler's table, whose descriptor names the vehicle pool.
     pub scheduler: *const SchedulerServices,
     /// The shared table, immutable for the process.
@@ -819,16 +819,10 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
         ufo.set_state(1);
 
         let mut n: u32 = 0; // Total number of targetable road vehicles.
-        let mut from = 0;
-        loop {
-            let c = (t.identity().next_company)(from);
-            if c.is_null() {
-                break;
-            }
-            let index = (t.identity().index)(c);
-            from = u32::from(index.0) + 1;
-            n = n.wrapping_add(u32::from((t.s.road_count)(index.0)));
-        }
+        crate::company_identity::companies(t.identity(), |c| {
+            n = n.wrapping_add(u32::from((t.s.road_count)(c.cast_const())));
+            true
+        });
 
         if n == 0 {
             /* If there are no targetable road vehicles, destroy the UFO. */

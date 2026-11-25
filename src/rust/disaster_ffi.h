@@ -12,6 +12,7 @@
 #include "aircraft_ffi.h"
 #include "road_ffi.h"
 #include "call_ffi.h"
+struct Company;
 struct OpenTTDCompanyIdentityServices;
 struct OpenTTDIndustryServices;
 struct OpenTTDDisasterState {
@@ -27,7 +28,7 @@ struct OpenTTDDisasterServices {
 	const OpenTTDCompanyIdentityServices * identity;
 	const OpenTTDIndustryServices * industry;
 	const OpenTTDRoadLeaves * road;
-	uint16_t (OPENTTD_RUST_CALL *road_count)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_count);
+	uint16_t (OPENTTD_RUST_CALL *road_count)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(road_count);
 	const OpenTTDVehicleSchedulerServices * scheduler;
 	const OpenTTDSharedServices * shared;
 	const OpenTTDVehicleServices * vehicles;
