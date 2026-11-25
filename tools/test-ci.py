@@ -1633,6 +1633,19 @@ host=$(awk 'match($0, /:\/\/[^\/]*\/ubuntu/) {
 echo "$kind $host" >> "$APT_LOG"
 result=$(head -n 1 "$APT_RESULTS")
 sed -i 1d "$APT_RESULTS"
+# As apt does, an update fails on a mirror list that an active source uses and
+# that holds no active line; a stanza with `Enabled: no` is not read.
+if [ "$kind" = update ]; then
+  for file in "$APT_ETC"/sources.list "$APT_ETC"/sources.list.d/*.sources \
+      "$APT_ETC"/sources.list.d/*.list; do
+    [ -f "$file" ] || continue
+    for list in $(awk 'BEGIN { RS = "" } !/[Ee]nabled:[[:space:]]*no/' "$file" |
+        grep -v '^[[:space:]]*#' | grep -o 'mirror+file:[^[:space:]]*' |
+        sed 's/^mirror+file://'); do
+      grep -q '^[[:space:]]*[^#[:space:]]' "$list" 2>/dev/null || exit 100
+    done
+  done
+fi
 exit "${result:-0}"
 """
 
@@ -1683,6 +1696,7 @@ class AptInstallTests(unittest.TestCase):
                 PACKAGES="valgrind",
                 RECOMMENDS="false",
                 APT_IN_USE=str(etc / in_use),
+                APT_ETC=str(etc),
                 APT_LOG=str(root / "log"),
                 APT_RESULTS=str(root / "results"),
             )
@@ -1868,10 +1882,10 @@ class AptInstallTests(unittest.TestCase):
             "sources.list.d/ubuntu.sources": "# Types: deb\n"
             "# URIs: mirror+file:ETC/apt-mirrors.txt\n# Suites: noble\n",
         },
-        "a mirror list with no active line": {
-            "apt-mirrors.txt": "# http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n",
+        "a disabled stanza": {
             "sources.list.d/ubuntu.sources": "Types: deb\n"
-            "URIs: mirror+file:ETC/apt-mirrors.txt\nSuites: noble\n",
+            "URIs: http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n"
+            "Suites: noble\nEnabled: no\n",
         },
     }
 
@@ -1927,6 +1941,56 @@ class AptInstallTests(unittest.TestCase):
                         f"attempt 2 failed or stalled on {azure}; retrying on {archive}",
                         warnings,
                     )
+
+    def test_a_source_using_a_mirror_list_with_no_active_line_is_set_aside(
+        self,
+    ) -> None:
+        """apt fails its whole update on such a list, so the fallback source
+        alone would not save the job (review of #1065)."""
+        empty = "# http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n"
+        for label, files, after_source in (
+            (
+                "deb822",
+                {
+                    "apt-mirrors.txt": empty,
+                    "sources.list.d/ubuntu.sources": "Types: deb\n"
+                    "URIs: mirror+file:ETC/apt-mirrors.txt\nSuites: noble\n",
+                },
+                ("sources.list.d/ubuntu.sources.apt-install-disabled", None),
+            ),
+            (
+                "one-line",
+                {
+                    "apt-mirrors.txt": empty,
+                    "sources.list": "deb mirror+file:ETC/apt-mirrors.txt noble main\n",
+                },
+                ("sources.list", "# deb mirror+file:ETC/apt-mirrors.txt noble main\n"),
+            ),
+        ):
+            with self.subTest(label):
+                code, log, after, warnings = self.install(
+                    files, self.FALLBACK, [0, 0, 0, 0]
+                )
+                self.assertEqual(code, 0)
+                azure = "azure.archive.ubuntu.com"
+                # The first update fails on the empty list; Azure's succeeds.
+                self.assertEqual(
+                    log,
+                    [
+                        "update ",
+                        f"update {azure}",
+                        f"download {azure}",
+                        f"install {azure}",
+                    ],
+                )
+                self.assertIn(f"retrying on {azure}", warnings)
+                self.assertIn(self.FALLBACK, after)
+                name, text = after_source
+                if text is None:
+                    self.assertIn(name, after)
+                    self.assertNotIn("sources.list.d/ubuntu.sources", after)
+                else:
+                    self.assertEqual(after[name], text)
 
     def test_a_failed_attempt_prints_the_sources_active_lines(self) -> None:
         files = self.UNNAMED["an unused mirror list"]
