@@ -29,7 +29,7 @@ def command_gap() -> None:
     import evidence_replacements
 
     evidence_replacements.run_rust(
-        "rust:lib:company::financial_command_tests::all_financial_commands_match_original"
+        "rust:lib:company::tests::financial_command_tests::all_financial_commands_match_original"
     )
     # The exact Rust test verifies the complete input matrix and this count.
     print("company financial command gap: 40320 unchanged-reference cases passed")

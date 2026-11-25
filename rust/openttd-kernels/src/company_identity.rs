@@ -70,10 +70,10 @@ pub struct Services {
     pub engine_renew_money: extern "C" fn(*const OpenTTDCompany) -> u32,
     /// `CompanySettings::engine_renew_months`.
     pub engine_renew_months: extern "C" fn(*const OpenTTDCompany) -> i16,
-    /// `&c->Finances()`: the company's finance members, stored in Rust.
-    pub finances: extern "C" fn(*mut OpenTTDCompany) -> *mut crate::company::Finances,
     /// `&Company::face`.
     pub face: extern "C" fn(*mut OpenTTDCompany) -> *mut CompanyManagerFace,
+    /// `&c->Finances()`: the company's finance members, stored in Rust.
+    pub finances: extern "C" fn(*mut OpenTTDCompany) -> *mut crate::company::Finances,
     /// `Company::index`.
     pub index: extern "C" fn(*mut OpenTTDCompany) -> CompanyID,
     /// `Company::is_ai`.
