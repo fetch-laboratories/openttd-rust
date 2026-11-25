@@ -259,7 +259,6 @@ impl<'a> Tables<'a> {
         self.vehicles.newgrf()
     }
     /// The vehicle maintenance table.
-    #[allow(unsafe_code)]
     fn maintenance(&self) -> &crate::vehicle::maintenance::Services {
         // SAFETY: The base table names the process-lifetime maintenance table.
         unsafe { &*self.vehicles.maintenance }
@@ -321,7 +320,6 @@ impl<'a> Tables<'a> {
     }
     /// `Vehicle::Get(index)`: `Pool::Get`'s `assert(index < this->first_unused)`, then the
     /// slot's record, which a free slot leaves null.
-    #[allow(unsafe_code)]
     fn vehicle_get(&self, index: u32) -> Option<VehicleRef> {
         let pool = self.scheduler().pool();
         // SAFETY: The scheduler's live descriptor; nothing mutates the pool during the read.
@@ -330,7 +328,6 @@ impl<'a> Tables<'a> {
         unsafe { crate::vehicle_base::get(&pool, VehicleID(index)) }
     }
     /// `Industry::Get(index)`: the industry's shell, through the pool's asserting lookup.
-    #[allow(unsafe_code)]
     fn industry_get(&self, index: u32) -> *mut crate::industry::tile::ShellHandle {
         // SAFETY: The industry table names the process-lifetime transaction table.
         unsafe { ((*self.industry().transaction).industry)(index) }
