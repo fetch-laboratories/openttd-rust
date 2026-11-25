@@ -1062,6 +1062,44 @@ def workset_manifest(text: str) -> tuple[dict[str, list[str]], list[str]]:
     return worksets, problems
 
 
+@dataclass
+class WorksetCount:
+    """The manifest counted against a tree: a row per workset, the files the
+    manifest names, and its entries without a file or listed twice."""
+
+    rows: list[WorksetRow] = field(default_factory=list)
+    seen: set[str] = field(default_factory=set)
+    missing: list[str] = field(default_factory=list)
+    twice: list[str] = field(default_factory=list)
+
+
+def count_worksets(
+    manifest: dict[str, list[str]], finished: set[str], lines: dict[str, int]
+) -> WorksetCount:
+    """Each entry counted once, in its first workset."""
+    count = WorksetCount()
+    for name, entries in manifest.items():
+        row = WorksetRow(name)
+        for entry in entries:
+            path = f"{RUST}/{entry}"
+            if path in count.seen:
+                count.twice.append(f"{name}: {entry}")
+                continue
+            count.seen.add(path)
+            if path not in lines:
+                count.missing.append(f"{name}: {entry}")
+                continue
+            row.files += 1
+            if path in finished:
+                row.finished += 1
+                row.finished_lines += lines[path]
+            else:
+                row.left += lines[path]
+                row.unfinished.append(f"{entry} ({lines[path]})")
+        count.rows.append(row)
+    return count
+
+
 def worksets(head: str) -> int:
     """#734's count: each workset's finished files and lines left, over the
     manifest and the finished list at head, and every Rust file there (#1063).
@@ -1079,28 +1117,8 @@ def worksets(head: str) -> int:
         for path, data in archive(head, RUST).items()
         if path.endswith(".rs")
     }
-    seen: set[str] = set()
-    twice, missing = [], []
-    rows = []
-    for name, entries in manifest.items():
-        row = WorksetRow(name)
-        for entry in entries:
-            path = f"{RUST}/{entry}"
-            if path in seen:
-                twice.append(f"{name}: {entry}")
-                continue
-            seen.add(path)
-            if path not in lines:
-                missing.append(f"{name}: {entry}")
-                continue
-            row.files += 1
-            if path in finished:
-                row.finished += 1
-                row.finished_lines += lines[path]
-            else:
-                row.left += lines[path]
-                row.unfinished.append(f"{entry} ({lines[path]})")
-        rows.append(row)
+    count = count_worksets(manifest, finished, lines)
+    rows = count.rows
     entries = sum(row.files for row in rows)
     done = sum(row.finished for row in rows)
     done_lines = sum(row.finished_lines for row in rows)
@@ -1119,8 +1137,8 @@ def worksets(head: str) -> int:
             f"| {row.name} | {row.files} | {row.finished} | {row.finished_lines} | "
             f"{row.left} | {', '.join(row.unfinished)} |"
         )
-    outside = sorted(finished - seen)
-    unplaced = sorted(path for path in lines if path not in seen | finished)
+    outside = sorted(finished - count.seen)
+    unplaced = sorted(path for path in lines if path not in count.seen | finished)
     for title, paths in (
         ("Finished files in no workset", outside),
         ("Rust files in no workset and not finished", unplaced),
@@ -1130,8 +1148,8 @@ def worksets(head: str) -> int:
         for path in paths:
             print(f"  {path} ({lines.get(path, 'no file')})")
     for title, found in (
-        ("Manifest entries without a file", missing),
-        ("Manifest entries listed twice", twice),
+        ("Manifest entries without a file", count.missing),
+        ("Manifest entries listed twice", count.twice),
     ):
         print(f"{title}: {len(found)}")
         for entry in found:
