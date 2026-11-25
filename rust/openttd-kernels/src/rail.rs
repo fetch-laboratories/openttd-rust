@@ -287,16 +287,6 @@ fn engine_available(e: crate::engine::EngineRef, company: CompanyID) -> bool {
     unsafe { company_available(e, company.0) }
 }
 
-/// `IsInsideMM(introduction_date, 0, CalendarTime::MAX_DATE.base())`, with the date
-/// converted to `size_t` as the original's call converts it.
-#[allow(
-    clippy::cast_sign_loss,
-    reason = "IsInsideMM converts the signed introduction_date to size_t"
-)]
-fn is_introduction_date(date: CalendarDate) -> bool {
-    crate::math::is_inside_mm(date.0 as usize, 0, MAX_DATE as usize)
-}
-
 /// `AddDateIntroducedRailTypes`: add the rail types that are to be introduced at the given
 /// date.
 pub(crate) fn add_date_introduced_rail_types(
@@ -316,7 +306,7 @@ pub(crate) fn add_date_introduced_rail_types(
 
         /* Not date introduced. */
         let introduction_date = rti.introduction_date();
-        if !is_introduction_date(introduction_date) {
+        if !crate::timer_game_calendar::is_introduction_date(introduction_date) {
             continue;
         }
 
