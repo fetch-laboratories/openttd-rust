@@ -5655,8 +5655,13 @@ mod command_cost_tests {
             current_company,
             ..crate::test_tables::FINANCE
         };
+        const SHARED: crate::services::Services = crate::services::Services {
+            current_company,
+            ..crate::test_tables::SHARED
+        };
         const COMPANY: crate::company::Services = crate::company::Services {
             finance: &FINANCE,
+            shared: &SHARED,
             ..crate::test_tables::COMPANY
         };
         &COMPANY

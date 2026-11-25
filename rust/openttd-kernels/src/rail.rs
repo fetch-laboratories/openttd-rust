@@ -107,12 +107,21 @@ pub extern "C" fn openttd_rust_company_rail_types(
     company: u8,
     introduces: bool,
 ) -> u64 {
-    let types = engine_types(s, Some(company), introduces);
-    if introduces {
+    get_company_rail_types(s, crate::company_type::CompanyID(company), introduces).0
+}
+/// `GetCompanyRailTypes`: get the rail types the given company can build. If `introduces`,
+/// include rail types introduced by other rail types.
+pub(crate) fn get_company_rail_types(
+    s: &Services,
+    company: crate::company_type::CompanyID,
+    introduces: bool,
+) -> crate::rail_type::RailTypes {
+    let types = engine_types(s, Some(company.0), introduces);
+    crate::rail_type::RailTypes(if introduces {
         openttd_rust_add_date_rail_types(s, types, crate::timer_game_common::calendar_date().0)
     } else {
         types
-    }
+    })
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_rail_types(s: &Services, introduces: bool) -> u64 {

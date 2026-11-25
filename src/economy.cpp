@@ -117,13 +117,6 @@ CompanyScoreParts &GetRustCompanyScores()
 	static CompanyScoreParts *scores = new (openttd_rust_company_scores()) CompanyScoreParts{};
 	return *scores;
 }
-/** Calendar year and difficulty read by inflation, price and startup entries. */
-OpenTTDEconomySettings RustEconomySettings() noexcept
-{
-	const auto &d = _settings_game.difficulty;
-	return {.year = TimerGameCalendar::year.base(), .max_loan = d.max_loan, .initial_interest = d.initial_interest,
-		.vehicle_costs = d.vehicle_costs, .construction_cost = d.construction_cost, .inflation = _settings_game.economy.inflation};
-}
 
 
 /**
@@ -137,7 +130,7 @@ OpenTTDEconomySettings RustEconomySettings() noexcept
  */
 Money CalculateCompanyValue(const Company *c, bool including_loan)
 {
-	return openttd_rust_company_value(&GetRustCompanyServices(), &c->Finances(), c->index.base(), including_loan);
+	return openttd_rust_company_value(&GetRustCompanyServices(), c, including_loan);
 }
 
 /**
@@ -158,7 +151,7 @@ Money CalculateCompanyValue(const Company *c, bool including_loan)
  */
 Money CalculateHostileTakeoverValue(const Company *c)
 {
-	return openttd_rust_company_hostile_takeover_value(&GetRustCompanyServices(), &c->Finances(), c->index.base());
+	return openttd_rust_company_hostile_takeover_value(&GetRustCompanyServices(), c);
 }
 
 /**
@@ -171,7 +164,7 @@ Money CalculateHostileTakeoverValue(const Company *c)
  */
 int UpdateCompanyRatingAndValue(Company *c, bool update)
 {
-	return openttd_rust_company_update_rating(&GetRustCompanyServices(), &c->Finances(), c->index.base(), update);
+	return openttd_rust_company_update_rating(&GetRustCompanyServices(), c, update);
 }
 
 /**
@@ -193,7 +186,7 @@ void ChangeOwnershipOfCompanyItems(Owner old_owner, Owner new_owner)
  */
 bool AddInflation(bool check_year)
 {
-	return openttd_rust_economy_add_inflation(check_year, TimerGameCalendar::year.base());
+	return openttd_rust_economy_add_inflation(check_year);
 }
 
 /**
@@ -201,8 +194,7 @@ bool AddInflation(bool check_year)
  */
 void RecomputePrices()
 {
-	const OpenTTDEconomySettings settings = RustEconomySettings();
-	openttd_rust_economy_recompute_prices(&GetRustCompanyServices(), &settings);
+	openttd_rust_economy_recompute_prices(&GetRustCompanyServices());
 }
 
 
@@ -223,7 +215,6 @@ void ResetPriceBaseMultipliers()
  */
 void SetPriceBaseMultiplier(Price price, int factor)
 {
-	assert(price < PR_END);
 	openttd_rust_economy_set_price_multiplier(price, factor);
 }
 
@@ -477,11 +468,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
  */
 const OpenTTDStationLoading &GetRustStationLoading() noexcept { return _rust_station_loading; }
 
-OpenTTDEconomyMonth RustEconomyClockMonth() noexcept
-{
-	return {.month = TimerGameEconomy::month, .infinite_money = _settings_game.difficulty.infinite_money,
-		.maintenance = _settings_game.economy.infrastructure_maintenance, .fluctuating = _settings_game.difficulty.economy};
-}
 
 /**
  * Every calendar month update of inflation.
@@ -508,7 +494,9 @@ static const IntervalTimer<TimerGameEconomy> _economy_companies_monthly({ TimerG
 CommandCost CmdBuyCompany(DoCommandFlags flags, CompanyID target_company, bool hostile_takeover)
 {
 	RustTileOwnerContext ownership;
-	return RustCompanyCost(openttd_rust_company_buy(&GetRustCompanyServices(), &ownership.view, target_company.base(), hostile_takeover, flags.Test(DoCommandFlag::Execute)));
+	CommandCost result;
+	openttd_rust_company_buy(&GetRustCompanyServices(), &ownership.view, RustCommandCost(&result), flags.base(), target_company.base(), hostile_takeover);
+	return result;
 }
 
 #include "rust/service_table_check.hpp"

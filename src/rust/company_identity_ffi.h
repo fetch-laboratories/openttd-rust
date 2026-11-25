@@ -14,6 +14,7 @@ struct OpenTTDCommandServices;
 struct OpenTTDEngineCapabilitiesServices;
 struct OpenTTDObjectServices;
 struct OpenTTDTownAuthorityServices;
+struct CompanyFinances;
 struct OpenTTDCompanyIdentityServices {
 	const OpenTTDTownAuthorityServices *authority;
 	const OpenTTDEngineCapabilitiesServices *capabilities;
@@ -26,10 +27,12 @@ struct OpenTTDCompanyIdentityServices {
 	void (OPENTTD_RUST_CALL *build_owner_legend)() noexcept OPENTTD_SERVICE_DEFAULT(build_owner_legend);
 	uint8_t (OPENTTD_RUST_CALL *colour)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(colour);
 	Company * (OPENTTD_RUST_CALL *company)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company);
+	Company * (OPENTTD_RUST_CALL *company_if_valid)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company_if_valid);
 	bool (OPENTTD_RUST_CALL *engine_renew)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(engine_renew);
 	uint32_t (OPENTTD_RUST_CALL *engine_renew_money)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(engine_renew_money);
 	int16_t (OPENTTD_RUST_CALL *engine_renew_months)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(engine_renew_months);
 	CompanyManagerFace * (OPENTTD_RUST_CALL *face)(Company *c) noexcept OPENTTD_SERVICE_DEFAULT(face);
+	CompanyFinances * (OPENTTD_RUST_CALL *finances)(Company *c) noexcept OPENTTD_SERVICE_DEFAULT(finances);
 	uint8_t (OPENTTD_RUST_CALL *index)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(index);
 	bool (OPENTTD_RUST_CALL *is_ai)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(is_ai);
 	bool (OPENTTD_RUST_CALL *is_freight)(uint8_t cargo_type) noexcept OPENTTD_SERVICE_DEFAULT(is_freight);

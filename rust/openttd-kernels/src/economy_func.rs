@@ -142,15 +142,9 @@ mod tests {
     }
 
     /// Store `_price[index]` and return its earlier value, under `GLOBAL_LOCK`.
-    #[allow(unsafe_code)] // One store to the process-lifetime price array.
     fn set_price(index: Price, value: i64) -> i64 {
         let earlier = crate::company::price(index);
-        // SAFETY: The caller holds `GLOBAL_LOCK`, which serializes the price array.
-        unsafe {
-            crate::company::openttd_rust_economy_prices()
-                .add(usize::from(index.0))
-                .write(value);
-        }
+        crate::company::testing::set_price(index, value);
         earlier
     }
 

@@ -22,7 +22,6 @@ struct OpenTTDCommandServices {
 	uint8_t (*command_type)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(command_type);
 	bool (*command_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(command_valid);
 	const OpenTTDCompanyFinanceServices *finance;
-	bool (*infinite_money)() noexcept OPENTTD_SERVICE_DEFAULT(infinite_money);
 	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_error);
 	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
 	const OpenTTDLandscapeCommandServices *(*landscape_commands)() noexcept OPENTTD_SERVICE_DEFAULT(landscape_commands);

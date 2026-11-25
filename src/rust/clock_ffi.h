@@ -30,21 +30,12 @@ struct OpenTTDIndustryBuilder;
 struct OpenTTDIndustryServices;
 struct OpenTTDTownLeaves;
 struct OpenTTDCompanyServices;
-struct OpenTTDEconomySettings;
-struct OpenTTDEconomyMonth;
-struct OpenTTDCompanyYear;
 struct OpenTTDClockIndustry { OpenTTDIndustryBuilder *builder; const OpenTTDIndustryServices *services; };
 struct OpenTTDClockTown { const OpenTTDTownLeaves *leaves; const OpenTTDSharedServices *shared; };
 struct OpenTTDClockCompany {
 	const OpenTTDCompanyServices *services;
-	OpenTTDEconomySettings (*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
-	OpenTTDEconomyMonth (*month)() noexcept OPENTTD_SERVICE_DEFAULT(month);
-	OpenTTDCompanyYear (*year)() noexcept OPENTTD_SERVICE_DEFAULT(year);
 };
 const OpenTTDClockCompany &GetRustClockCompanyServices() noexcept;
-OpenTTDEconomySettings RustEconomySettings() noexcept;
-OpenTTDEconomyMonth RustEconomyClockMonth() noexcept;
-OpenTTDCompanyYear RustCompanyClockYear() noexcept;
 const OpenTTDClockServices &GetRustClockServices() noexcept;
 extern "C" {
 uint8_t openttd_rust_clock_industry_daily_abi(const void *, void *) noexcept;

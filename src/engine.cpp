@@ -368,15 +368,6 @@ static const IntervalTimer<TimerGameCalendar> _calendar_engines_daily({TimerGame
 
 
 /**
- * Clear the 'hidden' flag for all engines of a new company.
- * @param cid Company being created.
- */
-void ClearEnginesHiddenFlagOfCompany(CompanyID cid)
-{
-	openttd_rust_engine_clear_hidden(&EngineServices(), cid.base());
-}
-
-/**
  * Set the visibility of an engine.
  * @param flags Operation to perform.
  * @param engine_id Engine id..

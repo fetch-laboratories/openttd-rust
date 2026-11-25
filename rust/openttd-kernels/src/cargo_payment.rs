@@ -998,7 +998,7 @@ mod settlement_tests {
             let finances = FINANCES.get();
             (
                 (*finances).money,
-                (*finances).expenses[0][usize::from(ExpensesType::EXPENSES_TRAIN_REVENUE.0)],
+                (*finances).yearly_expenses[0][usize::from(ExpensesType::EXPENSES_TRAIN_REVENUE.0)],
             )
         };
         if cleaning {

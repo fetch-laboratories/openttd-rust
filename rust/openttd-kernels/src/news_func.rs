@@ -509,6 +509,7 @@ pub(crate) mod testing {
     /// The recorded data of a `CompanyNewsInformation`: the company name first, as
     /// `add_news_item` reads it.
     #[repr(C)]
+    #[derive(Clone)]
     struct Information {
         company_name: Vec<u8>,
         other_company_name: Vec<u8>,
@@ -579,8 +580,9 @@ pub(crate) mod testing {
         sink: Sink,
         target: *mut c_void,
     ) {
-        // SAFETY: `data` is an `Information` this recorder allocated and the test keeps.
-        let name = &unsafe { &*data.cast::<Information>() }.other_company_name;
+        let name = copied(data.cast::<Information>(), 1)
+            .remove(0)
+            .other_company_name;
         sink(target, name.as_ptr(), name.len());
     }
     extern "C" fn delete_industry_news(id: u16) {

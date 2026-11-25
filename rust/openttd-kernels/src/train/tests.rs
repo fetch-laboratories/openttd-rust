@@ -1019,7 +1019,10 @@ mod bodies {
                             current_company,
                             ..crate::test_tables::FINANCE
                         })),
-                        shared: f.shared,
+                        shared: Box::leak(Box::new(crate::services::Services {
+                            current_company,
+                            ..*f.shared
+                        })),
                         cost: costs,
                         ..crate::test_tables::COMPANY
                     }));

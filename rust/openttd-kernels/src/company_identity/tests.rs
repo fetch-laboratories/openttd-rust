@@ -252,8 +252,8 @@ fn news(effect: &News) {
             };
             format!(
                 "CompanyNewsInformation {title} {} {}",
-                id(company),
-                id(other)
+                id(*company),
+                id(*other)
             )
         }
         News::News { .. } => "AddNewsItem".to_owned(),

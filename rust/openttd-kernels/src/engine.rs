@@ -916,13 +916,9 @@ pub(crate) unsafe fn calendar_engines_monthly_loop(s: &Services) {
         call!(s, refresh_lists, refresh);
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_clear_hidden(s: *const Services, company: u8) {
-    clear_engines_hidden_flag_of_company(unsafe { &*s }, CompanyID(company));
-}
 /// `ClearEnginesHiddenFlagOfCompany`: clear the 'hidden' flag for all engines of a new
 /// company.
-fn clear_engines_hidden_flag_of_company(s: &Services, cid: CompanyID) {
+pub(crate) fn clear_engines_hidden_flag_of_company(s: &Services, cid: CompanyID) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let company = cid.0;
     let mut from = 0;

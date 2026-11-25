@@ -754,11 +754,17 @@ mod money_tests {
     extern "C" fn expense(cost: *const CommandCost) -> ExpensesType {
         of(cost).expense
     }
-    extern "C" fn finite() -> bool {
-        false
-    }
-    extern "C" fn infinite() -> bool {
-        true
+    static FINITE: bool = false;
+    static INFINITE: bool = true;
+    /// The shared table whose settings catalog holds `infinite_money` at `value`.
+    fn with_infinite_money(value: &'static bool) -> &'static crate::services::Services {
+        leak(crate::services::Services {
+            settings: leak(crate::settings_type::SettingAddresses {
+                infinite_money: value,
+                ..crate::settings_type::SettingAddresses::NULL
+            }),
+            ..crate::test_tables::SHARED
+        })
     }
 
     thread_local! {
@@ -876,7 +882,7 @@ mod money_tests {
             // SAFETY: The fixture's live result.
             assert!(unsafe { check_money(&command, costs, cost(&mut result)) });
         }
-        command.infinite_money = infinite;
+        command.shared = with_infinite_money(&INFINITE);
         let mut huge = Result {
             ok: true,
             money: i64::MAX,
@@ -886,7 +892,7 @@ mod money_tests {
         assert!(unsafe { check_money(&command, costs, cost(&mut huge)) });
 
         // Company 0 holds 20: a cost of 21 fails once through the cash error, unchanged.
-        command.infinite_money = finite;
+        command.shared = with_infinite_money(&FINITE);
         command.money_error = money_error;
         let mut finance = FINANCE;
         finance.current_company = current_company;
@@ -939,10 +945,13 @@ mod money_tests {
         }
         assert_eq!(owner.money, 16);
         assert_eq!(
-            owner.expenses[0][usize::from(ExpensesType::EXPENSES_CONSTRUCTION.0)],
+            owner.yearly_expenses[0][usize::from(ExpensesType::EXPENSES_CONSTRUCTION.0)],
             5
         );
-        assert_eq!((owner.current.income, owner.current.expenses), (3, -2));
+        assert_eq!(
+            (owner.cur_economy.income, owner.cur_economy.expenses),
+            (3, -2)
+        );
         // An invalid current company subtracts nothing.
         CURRENT.set(18);
         // SAFETY: As above.

@@ -122,8 +122,6 @@ pub struct CommandServices {
     pub command_valid: extern "C" fn(u8) -> bool,
     /// Canonical native finance owner resolution and presentation leaves.
     pub finance: &'static crate::company::FinanceServices,
-    /// Current infinite-money difficulty setting.
-    pub infinite_money: extern "C" fn() -> bool,
     /// Native error storage and local encoded currency formatting only.
     pub money_error: unsafe extern "C" fn(*mut CommandCost, i64),
     /// Canonical infrastructure window invalidation.
@@ -707,7 +705,6 @@ crate::abi::layouts! {
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
         command_flags, command_type, command_valid,
         finance,
-        infinite_money,
         money_error,
         infrastructure_dirty,
         landscape_commands,

@@ -2074,12 +2074,8 @@ mod tests {
     }
     /// Set `_price[PR_BUILD_TREES]` and `_price[PR_CLEAR_TREES]` for the guarded test.
     fn set_prices(build: i64, clear: i64) {
-        let prices = crate::company::openttd_rust_economy_prices();
-        // SAFETY: The process-wide price table, serialized by the global test lock.
-        unsafe {
-            *prices.add(PR_BUILD_TREES) = build;
-            *prices.add(PR_CLEAR_TREES) = clear;
-        }
+        crate::company::testing::set_price(crate::economy_type::Price::PR_BUILD_TREES, build);
+        crate::company::testing::set_price(crate::economy_type::Price::PR_CLEAR_TREES, clear);
     }
     /// Set `_game_mode`, returning the previous mode.
     fn set_mode(mode: GameMode) -> GameMode {
@@ -2092,8 +2088,8 @@ mod tests {
     fn finances(tree_limit: u32, clear_limit: u32) -> Box<crate::company::Finances> {
         // SAFETY: Every field of the finance record is an integer or an array of integers.
         let mut finances: Box<crate::company::Finances> = Box::new(unsafe { std::mem::zeroed() });
-        finances.tree = tree_limit;
-        finances.clear = clear_limit;
+        finances.tree_limit = tree_limit;
+        finances.clear_limit = clear_limit;
         finances
     }
     fn loop_settings(climate: LandscapeType, extra: ExtraTreePlacement) -> LoopSettings {
@@ -2505,7 +2501,7 @@ mod tests {
             events(),
             [Event::Expense(ExpensesType::EXPENSES_OTHER.0, 30)]
         );
-        assert_eq!(company.tree, 3 << 16);
+        assert_eq!(company.tree_limit, 3 << 16);
         plant(
             &trees(),
             DoCommandFlags(DoCommandFlag::EXECUTE),
@@ -2524,7 +2520,7 @@ mod tests {
                 Event::Expense(ExpensesType::EXPENSES_OTHER.0, 30),
             ]
         );
-        assert_eq!(company.tree, 1 << 16);
+        assert_eq!(company.tree_limit, 1 << 16);
         plant(
             &trees(),
             DoCommandFlags(DoCommandFlag::EXECUTE),
@@ -2602,7 +2598,7 @@ mod tests {
                 Event::Error(STR_ERROR_CLEARING_LIMIT_REACHED.0)
             ]
         );
-        assert_eq!(company.tree, 5 << 16);
+        assert_eq!(company.tree_limit, 5 << 16);
         COMPANY.set(std::ptr::null_mut());
         set_mode(saved);
     }

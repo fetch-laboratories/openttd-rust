@@ -190,7 +190,6 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 
 /* Command lifecycle leaves: settings, input and presentation only. None reenters a
  * command; allocation or error-formatting failure terminates under noexcept. */
-static bool CommandInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
 static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
 {
 	NativeCost(cost)->MakeError(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
@@ -220,7 +219,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 		.command_type = [](uint8_t cmd) noexcept { return GetCommandType(static_cast<Commands>(cmd)); },
 		.command_valid = [](uint8_t cmd) noexcept { return IsValidCommand(static_cast<Commands>(cmd)); },
 		.finance = &GetRustCompanyFinanceServices(),
-		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
+		.money_error = CommandMoneyError,
 		.infrastructure_dirty = RustInfrastructureDirty,
 		.landscape_commands = []() noexcept { return &GetRustLandscapeCommandServices(); },
 		.company = []() noexcept { return &GetRustCompanyServices(); },
