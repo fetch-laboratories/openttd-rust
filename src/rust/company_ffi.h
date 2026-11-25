@@ -4,62 +4,58 @@
  * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
-/** @file company_ffi.h Canonical company finances and economy control. */
+/** @file company_ffi.h Company finances, economy and lifecycle, owned by Rust (`company.rs`). */
 #ifndef RUST_COMPANY_FFI_H
 #define RUST_COMPANY_FFI_H
 #include "service_defaults.hpp"
 #include "byte_span_ffi.h"
-struct OpenTTDSubsidyServices;
-struct OpenTTDCompanyIdentityServices;
 #include <cstddef>
 #include <cstdint>
 #include "services_ffi.h"
 #include "call_ffi.h"
+#include "abi-record-company.h"
+struct BaseStation;
+struct Company;
 struct CompanyFinances;
 struct GRFFile;
+struct Goal;
 struct OpenTTDCommandCost;
 struct OpenTTDCommandCostServices;
+struct OpenTTDCompanyIdentityServices;
+struct OpenTTDEngineServices;
 struct OpenTTDObjectivesServices;
 struct OpenTTDSettingServices;
+struct OpenTTDStationLifecycleServices;
+struct OpenTTDSubsidyServices;
 struct OpenTTDTileOwnerContext;
-struct Company;
-struct OpenTTDCompanyServices;
-extern "C" {
-void openttd_rust_company_set_local(const OpenTTDCompanyServices *, uint8_t);
-void openttd_rust_company_check_ownership(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint8_t, uint32_t);
-void openttd_rust_company_check_tile_ownership(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint32_t);
-void openttd_rust_company_allow_list(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint16_t, uint8_t, OpenTTDByteSpan);
-int32_t openttd_rust_company_service_interval(const OpenTTDCompanyServices *, const Company *, uint8_t);
-uint8_t openttd_rust_company_first_playable(const OpenTTDCompanyServices *);
-/* Company IDs, owners, vehicle types, tracks and expenses cross as uint8_t;
- * pool indices and tiles as uint32_t (UINT32_MAX ends an iteration); Money as
- * int64_t. Layouts are checked by ABI 210-214 and 400-417. */
-struct OpenTTDCompanyRef { CompanyFinances *finances; uint32_t id; };
-struct OpenTTDCompanyVehicleCounts { uint16_t trains, road, ships, aircraft; };
-struct OpenTTDCompanyVehicleGroupFlags { bool engine_countable, primary; };
-struct OpenTTDCompanyVehicleProfit { int64_t profit_last_year; int32_t economy_age; };
-struct OpenTTDCompanyStationTimes { uint8_t since_load, since_unload; };
-struct OpenTTDCompanyTownRights { int16_t rating; uint16_t have_ratings; uint8_t exclusive_counter, exclusivity; };
-struct OpenTTDCompanyPriceBase { int64_t start_price; uint8_t category; };
-/** error: 0 ok, 1 CMD_ERROR, 2 max loan (param), 3 repaid, 4 currency required (param), 5 insufficient funds, 6 too many vehicles. */
-struct OpenTTDCompanyCost { int64_t cost, param; uint8_t error, expense; };
+struct OpenTTDVehicle;
+struct Sign;
+struct StoryPage;
+
+/* Company IDs, owners, vehicle types, price bases and expenses cross as uint8_t;
+ * tiles as uint32_t; Money as int64_t. Layouts are checked by the generated ABI probes. */
+
 /* Caller-owned stack continuations. They exist only where AI::StartNew can raise
  * a script memory-policy Script_FatalError (AIInstance::Initialize registers the
  * API and loads compatibility scripts before ScriptInstance::Initialize's catch).
  * Rust returns before that call; if it throws, the frame is abandoned. */
-struct OpenTTDCompanyStartup { uint32_t company; uint8_t requested; bool is_ai; uint8_t stage; };
-struct OpenTTDCompanyControl {
-	OpenTTDCompanyCost result;
-	OpenTTDCompanyStartup startup;
-	uint32_t client;
-	uint8_t action, target, reason;
-	bool execute;
+/** The frame of DoStartupNewCompany(is_ai, company); index is UINT32_MAX and created nullptr when no company was created. */
+struct OpenTTDCompanyStartup {
+	bool is_ai;
+	uint8_t company;
 	uint8_t stage;
+	uint32_t index;
+	Company *created;
 };
-struct OpenTTDEconomyMonth { uint8_t month; bool infinite_money, maintenance, fluctuating; };
-struct OpenTTDCompanyYear { CompanyFinances *local_finances; uint8_t local; bool show_finances, new_year_sound; };
-struct OpenTTDEconomySettings { int32_t year; uint32_t max_loan; uint8_t initial_interest, vehicle_costs, construction_cost; bool inflation; };
-/** Finance services used by money paths and financial commands. */
+/** The frame of CmdCompanyCtrl: its arguments, its DoCommandFlags and CCA_NEW_AI's startup. */
+struct OpenTTDCompanyControl {
+	OpenTTDCmdCompanyCtrl args;
+	uint16_t flags;
+	uint8_t stage;
+	OpenTTDCompanyStartup startup;
+};
+
+/** The finance services the money paths of other owners share. */
 struct OpenTTDCompanyFinanceServices {
 	uint8_t (OPENTTD_RUST_CALL *current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	void (OPENTTD_RUST_CALL *set_current_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_current_company);
@@ -67,127 +63,84 @@ struct OpenTTDCompanyFinanceServices {
 	CompanyFinances * (OPENTTD_RUST_CALL *company_finances)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_finances); ///< Null for an invalid ID.
 	CompanyFinances * (OPENTTD_RUST_CALL *company_get_finances)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_get_finances); ///< Company::Get: asserts the ID is below the pool's first unused index.
 	void (OPENTTD_RUST_CALL *invalidate_company_windows)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_company_windows);
-	void (OPENTTD_RUST_CALL *give_money_message)(uint8_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(give_money_message);
-	void (OPENTTD_RUST_CALL *money_animation)(uint32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_animation);
 };
+
 /**
- * Lifecycle, economy and ownership-transfer services. Every service is a typed
+ * The tables and the native callees of the company bodies. Every service is a typed
  * noexcept C++ call; environmental failures terminate inside it. Services that
- * reenter or delete (delete_*,
- * allocate_company, reset_service_interval, stop_ai) run after Rust has ended
- * every raw field access it may invalidate. *_next_owned scans a pool from an
- * index for the next item of that owner, in pool order.
+ * reenter or delete (delete_*, allocate_company, ai_stop) run after Rust has ended
+ * every raw field access they may invalidate. A slot that takes a company takes the
+ * live Company the Rust caller resolved.
  */
-struct OpenTTDObjectServices;
-struct OpenTTDStationLifecycleServices;
 struct OpenTTDCompanyServices {
-	const OpenTTDCompanyIdentityServices *identity;
-	const OpenTTDCompanyFinanceServices *finance;
-	const OpenTTDSharedServices *shared;
-	bool (*ai_can_start)() noexcept OPENTTD_SERVICE_DEFAULT(ai_can_start);
-	bool (*allow_list_add)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_add);
-	bool (*allow_list_remove)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_remove);
-	void (*assign_company_context)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_company_context);
-	void (*close_construction_windows)() noexcept OPENTTD_SERVICE_DEFAULT(close_construction_windows);
 	const OpenTTDCommandCostServices *cost;
+	const OpenTTDCompanyFinanceServices *finance;
+	const OpenTTDCompanyIdentityServices *identity;
+	const OpenTTDSharedServices *shared;
+	const OpenTTDEngineServices *(OPENTTD_RUST_CALL *engines)() noexcept OPENTTD_SERVICE_DEFAULT(engines);
 	const OpenTTDObjectivesServices &(*objectives)() noexcept OPENTTD_SERVICE_DEFAULT(objectives);
 	const OpenTTDSettingServices &(*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
-	OpenTTDCompanyRef (OPENTTD_RUST_CALL *company_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(company_next);
-	size_t (OPENTTD_RUST_CALL *company_count)() noexcept OPENTTD_SERVICE_DEFAULT(company_count);
-	bool (*competitor_fired)() noexcept OPENTTD_SERVICE_DEFAULT(competitor_fired);
-	bool (OPENTTD_RUST_CALL *can_allocate_company)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate_company);
-	bool (OPENTTD_RUST_CALL *network_server)() noexcept OPENTTD_SERVICE_DEFAULT(network_server);
-	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *company_vehicle_counts)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_vehicle_counts);
-	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *vehicle_limits)() noexcept OPENTTD_SERVICE_DEFAULT(vehicle_limits);
-	void (OPENTTD_RUST_CALL *company_in_trouble)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_in_trouble);
-	uint32_t (OPENTTD_RUST_CALL *hq_location)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(hq_location);
-	const OpenTTDObjectServices *(OPENTTD_RUST_CALL *object_services)() noexcept OPENTTD_SERVICE_DEFAULT(object_services);
-	void (OPENTTD_RUST_CALL *performance_detail_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(performance_detail_dirty);
-	void (OPENTTD_RUST_CALL *company_graphs_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_graphs_dirty);
-	int64_t (OPENTTD_RUST_CALL *rail_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_maintenance_cost);
-	int64_t (OPENTTD_RUST_CALL *signal_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_maintenance_cost);
-	int64_t (OPENTTD_RUST_CALL *road_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_maintenance_cost);
-	int64_t (OPENTTD_RUST_CALL *canal_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal_maintenance_cost);
-	int64_t (OPENTTD_RUST_CALL *station_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_maintenance_cost);
 	const OpenTTDStationLifecycleServices *(OPENTTD_RUST_CALL *station_lifecycle)() noexcept OPENTTD_SERVICE_DEFAULT(station_lifecycle);
-	void (OPENTTD_RUST_CALL *recession_news)(bool) noexcept OPENTTD_SERVICE_DEFAULT(recession_news);
-	OpenTTDCompanyPriceBase (OPENTTD_RUST_CALL *price_base)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price_base);
-	uint32_t (OPENTTD_RUST_CALL *cargo_next)(uint32_t, int64_t *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_next);
-	void (OPENTTD_RUST_CALL *set_cargo_payment)(uint32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_payment);
-	void (OPENTTD_RUST_CALL *price_windows_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(price_windows_dirty);
-	void (OPENTTD_RUST_CALL *industry_daily_changes)(bool) noexcept OPENTTD_SERVICE_DEFAULT(industry_daily_changes);
-	void (OPENTTD_RUST_CALL *ask_merger)(uint8_t, uint8_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(ask_merger);
-	bool (OPENTTD_RUST_CALL *is_interactive_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(is_interactive_company);
-	void (OPENTTD_RUST_CALL *show_buy_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(show_buy_company);
-	uint32_t (OPENTTD_RUST_CALL *script_random_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(script_random_next);
-	void (OPENTTD_RUST_CALL *reset_competitor_timeout)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_competitor_timeout);
-	void (OPENTTD_RUST_CALL *finances_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(finances_dirty);
-	void (OPENTTD_RUST_CALL *show_company_finances)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(show_company_finances);
-	void (OPENTTD_RUST_CALL *new_year_sound)(bool) noexcept OPENTTD_SERVICE_DEFAULT(new_year_sound);
-	OpenTTDCompanyRef (OPENTTD_RUST_CALL *allocate_company)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(allocate_company);
-	bool (OPENTTD_RUST_CALL *prepare_new_company)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(prepare_new_company);
-	void (OPENTTD_RUST_CALL *company_defaults)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_defaults);
-	void (OPENTTD_RUST_CALL *startup_windows)() noexcept OPENTTD_SERVICE_DEFAULT(startup_windows);
-	void (OPENTTD_RUST_CALL *new_company_events)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(new_company_events);
-	void (OPENTTD_RUST_CALL *company_league_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_league_dirty);
-	void (OPENTTD_RUST_CALL *company_ctrl_windows)() noexcept OPENTTD_SERVICE_DEFAULT(company_ctrl_windows);
-	void (OPENTTD_RUST_CALL *close_network_status)() noexcept OPENTTD_SERVICE_DEFAULT(close_network_status);
-	void (OPENTTD_RUST_CALL *network_spectate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_spectate);
-	void (OPENTTD_RUST_CALL *admin_company_new)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(admin_company_new);
-	Company *(OPENTTD_RUST_CALL *network_own_company)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company);
-	void (OPENTTD_RUST_CALL *network_own_company_settings)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company_settings);
-	void (OPENTTD_RUST_CALL *assert_new_ai_slot)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_new_ai_slot);
-	void (OPENTTD_RUST_CALL *company_bankrupt_news)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_bankrupt_news);
-	void (OPENTTD_RUST_CALL *stop_ai)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(stop_ai);
-	void (OPENTTD_RUST_CALL *delete_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_company);
-	void (OPENTTD_RUST_CALL *company_removed)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_removed);
-	void (OPENTTD_RUST_CALL *merger_news)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(merger_news);
-	void (OPENTTD_RUST_CALL *acquisition_windows)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(acquisition_windows);
-	void (OPENTTD_RUST_CALL *clients_to_spectators)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clients_to_spectators);
 	const OpenTTDSubsidyServices *(OPENTTD_RUST_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
-	uint32_t (OPENTTD_RUST_CALL *town_next)(uint32_t, uint8_t, OpenTTDCompanyTownRights *) noexcept OPENTTD_SERVICE_DEFAULT(town_next);
-	int16_t (OPENTTD_RUST_CALL *town_rating)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
-	void (OPENTTD_RUST_CALL *set_town_rating)(uint32_t, uint8_t, int16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_town_rating);
-	void (OPENTTD_RUST_CALL *set_town_exclusivity)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town_exclusivity);
-	uint32_t (OPENTTD_RUST_CALL *vehicle_next_owned)(uint8_t, uint32_t, uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next_owned);
-	int64_t (OPENTTD_RUST_CALL *vehicle_value)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_value);
-	bool (OPENTTD_RUST_CALL *vehicle_is_primary)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_is_primary);
-	OpenTTDCompanyVehicleProfit (OPENTTD_RUST_CALL *vehicle_profit)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_profit);
-	uint32_t (OPENTTD_RUST_CALL *vehicle_previous)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_previous);
-	OpenTTDCompanyVehicleGroupFlags (OPENTTD_RUST_CALL *vehicle_group_flags)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_group_flags);
-	bool (OPENTTD_RUST_CALL *vehicle_service_interval_is_custom)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_service_interval_is_custom);
-	void (OPENTTD_RUST_CALL *delete_vehicle)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_vehicle);
-	void (OPENTTD_RUST_CALL *count_group_engine)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(count_group_engine);
-	void (OPENTTD_RUST_CALL *count_group_vehicle)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(count_group_vehicle);
-	void (OPENTTD_RUST_CALL *reset_service_interval)(uint32_t, int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(reset_service_interval);
-	void (OPENTTD_RUST_CALL *set_vehicle_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_vehicle_owner);
-	void (OPENTTD_RUST_CALL *assign_unit_number)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_unit_number);
-	void (OPENTTD_RUST_CALL *remove_engine_replacements)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_engine_replacements);
-	uint32_t (OPENTTD_RUST_CALL *group_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(group_next_owned);
-	void (OPENTTD_RUST_CALL *delete_group)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_group);
-	void (OPENTTD_RUST_CALL *transfer_group)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(transfer_group);
-	void (OPENTTD_RUST_CALL *copy_service_interval_defaults)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_service_interval_defaults);
-	void (OPENTTD_RUST_CALL *update_autoreplace)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_autoreplace);
-	void (OPENTTD_RUST_CALL *add_track_to_signal_buffer)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_track_to_signal_buffer);
-	void (OPENTTD_RUST_CALL *update_signals_in_buffer)() noexcept OPENTTD_SERVICE_DEFAULT(update_signals_in_buffer);
-	uint32_t (OPENTTD_RUST_CALL *station_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_next_owned);
-	OpenTTDCompanyStationTimes (OPENTTD_RUST_CALL *station_times)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_times);
-	void (OPENTTD_RUST_CALL *set_station_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_station_owner);
-	uint32_t (OPENTTD_RUST_CALL *waypoint_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_next_owned);
-	void (OPENTTD_RUST_CALL *set_waypoint_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_waypoint_owner);
-	uint32_t (OPENTTD_RUST_CALL *sign_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sign_next_owned);
-	void (OPENTTD_RUST_CALL *set_sign_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_sign_owner);
-	uint32_t (OPENTTD_RUST_CALL *goal_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(goal_next_owned);
-	void (OPENTTD_RUST_CALL *delete_goal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_goal);
-	uint32_t (OPENTTD_RUST_CALL *story_page_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(story_page_next_owned);
-	void (OPENTTD_RUST_CALL *delete_story_page)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_story_page);
+	bool (OPENTTD_RUST_CALL *ai_can_start_new)() noexcept OPENTTD_SERVICE_DEFAULT(ai_can_start_new);
+	void (OPENTTD_RUST_CALL *ai_stop)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(ai_stop);
+	Company *(OPENTTD_RUST_CALL *allocate_company)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(allocate_company);
+	bool (OPENTTD_RUST_CALL *allow_list_add)(Company *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_add);
+	bool (OPENTTD_RUST_CALL *allow_list_remove)(Company *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_remove);
+	bool (OPENTTD_RUST_CALL *can_allocate_company)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate_company);
+	int64_t (OPENTTD_RUST_CALL *canal_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal_maintenance_cost);
+	int64_t (OPENTTD_RUST_CALL *cargo_initial_payment)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_initial_payment);
+	void (OPENTTD_RUST_CALL *cargo_set_current_payment)(const void *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_set_current_payment);
 	void (OPENTTD_RUST_CALL *change_window_owner)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(change_window_owner);
+	void (OPENTTD_RUST_CALL *close_company_windows)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(close_company_windows);
+	void (OPENTTD_RUST_CALL *close_construction_windows)() noexcept OPENTTD_SERVICE_DEFAULT(close_construction_windows);
+	void (OPENTTD_RUST_CALL *company_admin_remove)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_admin_remove);
+	size_t (OPENTTD_RUST_CALL *company_count)() noexcept OPENTTD_SERVICE_DEFAULT(company_count);
+	void (OPENTTD_RUST_CALL *delete_company)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(delete_company);
+	void (OPENTTD_RUST_CALL *delete_goal)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(delete_goal);
+	void (OPENTTD_RUST_CALL *delete_story_page)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(delete_story_page);
+	uint16_t (OPENTTD_RUST_CALL *draw_string_company_colour)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(draw_string_company_colour);
+	void *(OPENTTD_RUST_CALL *group_all)(Company *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(group_all);
+	uint32_t (OPENTTD_RUST_CALL *location_of_hq)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(location_of_hq);
+	void (OPENTTD_RUST_CALL *network_admin_company_new)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(network_admin_company_new);
+	void (OPENTTD_RUST_CALL *network_clients_to_spectators)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(network_clients_to_spectators);
+	bool (OPENTTD_RUST_CALL *network_server)() noexcept OPENTTD_SERVICE_DEFAULT(network_server);
+	bool (OPENTTD_RUST_CALL *new_competitor_timeout_has_fired)() noexcept OPENTTD_SERVICE_DEFAULT(new_competitor_timeout_has_fired);
+	void (OPENTTD_RUST_CALL *new_competitor_timeout_reset)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_competitor_timeout_reset);
+	OpenTTDCompanyPoolCursor (OPENTTD_RUST_CALL *next_goal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_goal);
+	OpenTTDCompanyPoolCursor (OPENTTD_RUST_CALL *next_sign)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_sign);
+	OpenTTDCompanyPoolCursor (OPENTTD_RUST_CALL *next_story_page)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_story_page);
+	OpenTTDCompanyPoolCursor (OPENTTD_RUST_CALL *next_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_waypoint);
+	bool (OPENTTD_RUST_CALL *parse_company_manager_face)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(parse_company_manager_face);
+	uint8_t (OPENTTD_RUST_CALL *price_base_category)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(price_base_category);
+	int64_t (OPENTTD_RUST_CALL *price_base_start_price)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(price_base_start_price);
+	int64_t (OPENTTD_RUST_CALL *rail_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_maintenance_cost);
+	int64_t (OPENTTD_RUST_CALL *road_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_maintenance_cost);
+	uint32_t (OPENTTD_RUST_CALL *script_random_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(script_random_next);
+	void (OPENTTD_RUST_CALL *send_company_manager_face)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(send_company_manager_face);
+	void (OPENTTD_RUST_CALL *set_avail_railtypes)(Company *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_avail_railtypes);
+	void (OPENTTD_RUST_CALL *set_avail_roadtypes)(Company *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_avail_roadtypes);
+	void (OPENTTD_RUST_CALL *set_default_company_settings)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_default_company_settings);
+	void (OPENTTD_RUST_CALL *set_inaugurated_year)(Company *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_inaugurated_year);
+	void (OPENTTD_RUST_CALL *set_inaugurated_year_calendar)(Company *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_inaugurated_year_calendar);
+	void (OPENTTD_RUST_CALL *set_unitnumber)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_unitnumber);
+	void (OPENTTD_RUST_CALL *show_buy_company_dialog)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(show_buy_company_dialog);
+	void (OPENTTD_RUST_CALL *show_company_finances)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(show_company_finances);
+	uint8_t *(OPENTTD_RUST_CALL *sign_owner)(Sign *) noexcept OPENTTD_SERVICE_DEFAULT(sign_owner);
+	int64_t (OPENTTD_RUST_CALL *signal_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_maintenance_cost);
+	void (OPENTTD_RUST_CALL *snd_play_fx)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(snd_play_fx);
+	int64_t (OPENTTD_RUST_CALL *station_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_maintenance_cost);
+	void (OPENTTD_RUST_CALL *sync_company_settings)() noexcept OPENTTD_SERVICE_DEFAULT(sync_company_settings);
+	uint16_t (OPENTTD_RUST_CALL *use_free_group)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(use_free_group);
+	uint16_t (OPENTTD_RUST_CALL *use_free_unit)(Company *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(use_free_unit);
 };
+
 /* All entry points run serially on the game thread with borrowed static tables.
  * Rust owns the finance allocations; C++ starts the field objects in that raw
  * storage and keeps stable field addresses for existing readers and save
  * adapters. Rust accesses only raw fields, never across a service that may
  * invalidate them. Save/load errors run entirely outside Rust. Rust panics abort. */
+extern "C" {
 CompanyFinances *OPENTTD_RUST_CALL openttd_rust_company_state_create();
 void OPENTTD_RUST_CALL openttd_rust_company_state_destroy(CompanyFinances *);
 void OPENTTD_RUST_CALL openttd_rust_company_initialize(CompanyFinances *, uint32_t, uint32_t, uint32_t, uint32_t);
@@ -195,35 +148,40 @@ void *OPENTTD_RUST_CALL openttd_rust_economy_state();
 int64_t *OPENTTD_RUST_CALL openttd_rust_economy_prices();
 int64_t *OPENTTD_RUST_CALL openttd_rust_company_scores();
 uint32_t *OPENTTD_RUST_CALL openttd_rust_company_tick();
-void OPENTTD_RUST_CALL openttd_rust_company_subtract_fraction(const OpenTTDCompanyFinanceServices *, CompanyFinances *, uint8_t, int64_t, uint8_t);
-int64_t OPENTTD_RUST_CALL openttd_rust_company_value(const OpenTTDCompanyServices *, const CompanyFinances *, uint8_t, bool);
-int64_t OPENTTD_RUST_CALL openttd_rust_company_hostile_takeover_value(const OpenTTDCompanyServices *, const CompanyFinances *, uint8_t);
-int32_t OPENTTD_RUST_CALL openttd_rust_company_update_rating(const OpenTTDCompanyServices *, CompanyFinances *, uint8_t, bool);
-uint8_t OPENTTD_RUST_CALL openttd_rust_economy_add_inflation_abi(bool, int32_t);
-extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_economy_add_inflation(bool a0, int32_t a1) { return openttd_rust_economy_add_inflation_abi(a0, a1) != 0; }
-void OPENTTD_RUST_CALL openttd_rust_economy_recompute_prices(const OpenTTDCompanyServices *, const OpenTTDEconomySettings *);
-void OPENTTD_RUST_CALL openttd_rust_economy_reset_price_multipliers();
-void OPENTTD_RUST_CALL openttd_rust_economy_set_price_multiplier(uint32_t, int32_t);
-void OPENTTD_RUST_CALL openttd_rust_economy_startup(const OpenTTDCompanyServices *, const OpenTTDEconomySettings *);
-void OPENTTD_RUST_CALL openttd_rust_economy_initialize();
-int64_t OPENTTD_RUST_CALL openttd_rust_economy_get_price(const OpenTTDSharedServices *, uint8_t, uint32_t, const GRFFile *, int32_t);
-uint32_t OPENTTD_RUST_CALL openttd_rust_economy_scale_by_inverse_cargo_scale(const OpenTTDSharedServices *, uint32_t, bool);
-int64_t OPENTTD_RUST_CALL openttd_rust_company_available_money(const CompanyFinances *, bool);
 int64_t OPENTTD_RUST_CALL openttd_rust_company_max_loan(const CompanyFinances *);
+void openttd_rust_company_set_local(const OpenTTDCompanyServices *, uint8_t);
+int64_t OPENTTD_RUST_CALL openttd_rust_company_available_money(const OpenTTDCompanyServices *, uint8_t);
+void OPENTTD_RUST_CALL openttd_rust_company_subtract_fraction(const OpenTTDCompanyFinanceServices *, uint8_t, int64_t, uint8_t);
+void openttd_rust_company_check_ownership(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint8_t, uint32_t);
+void openttd_rust_company_check_tile_ownership(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint32_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_startup_abi(const OpenTTDCompanyServices *, OpenTTDCompanyStartup *);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_startup(const OpenTTDCompanyServices *a0, OpenTTDCompanyStartup *a1) { return openttd_rust_company_startup_abi(a0, a1) != 0; }
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout_abi(const OpenTTDCompanyServices *);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout(const OpenTTDCompanyServices *a0) { return openttd_rust_company_competitor_timeout_abi(a0) != 0; }
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed_abi(const OpenTTDCompanyServices *, uint8_t, uint8_t);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed(const OpenTTDCompanyServices *a0, uint8_t a1, uint8_t a2) { return openttd_rust_company_takeover_allowed_abi(a0, a1, a2) != 0; }
-uint8_t OPENTTD_RUST_CALL openttd_rust_company_control_abi(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, OpenTTDCompanyControl *);
-extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_control(const OpenTTDCompanyServices *a0, const OpenTTDTileOwnerContext *a1, OpenTTDCompanyControl *a2) { return openttd_rust_company_control_abi(a0, a1, a2) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_company_control_abi(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, OpenTTDCommandCost *, OpenTTDCompanyControl *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_control(const OpenTTDCompanyServices *a0, const OpenTTDTileOwnerContext *a1, OpenTTDCommandCost *a2, OpenTTDCompanyControl *a3) { return openttd_rust_company_control_abi(a0, a1, a2, a3) != 0; }
+void openttd_rust_company_allow_list(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint16_t, uint8_t, OpenTTDByteSpan);
+int32_t openttd_rust_company_service_interval(const OpenTTDCompanyServices *, const Company *, uint8_t);
+void OPENTTD_RUST_CALL openttd_rust_company_give_money(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint16_t, int64_t, uint8_t);
+uint8_t openttd_rust_company_first_playable(const OpenTTDCompanyServices *);
+int64_t OPENTTD_RUST_CALL openttd_rust_company_value(const OpenTTDCompanyServices *, const Company *, bool);
+int64_t OPENTTD_RUST_CALL openttd_rust_company_hostile_takeover_value(const OpenTTDCompanyServices *, const Company *);
+int32_t OPENTTD_RUST_CALL openttd_rust_company_update_rating(const OpenTTDCompanyServices *, Company *, bool);
 void OPENTTD_RUST_CALL openttd_rust_company_change_ownership(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, uint8_t, uint8_t);
-OpenTTDCompanyCost OPENTTD_RUST_CALL openttd_rust_company_buy(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, uint8_t, bool, bool);
-OpenTTDCompanyCost OPENTTD_RUST_CALL openttd_rust_company_give_money(const OpenTTDCompanyFinanceServices *, bool, int64_t, uint8_t, bool);
-OpenTTDCompanyCost OPENTTD_RUST_CALL openttd_rust_company_increase_loan(const OpenTTDCompanyFinanceServices *, uint8_t, int64_t, bool, bool);
-OpenTTDCompanyCost OPENTTD_RUST_CALL openttd_rust_company_decrease_loan(const OpenTTDCompanyFinanceServices *, uint8_t, int64_t, bool, bool);
-OpenTTDCompanyCost OPENTTD_RUST_CALL openttd_rust_company_set_max_loan(const OpenTTDCompanyFinanceServices *, uint8_t, int64_t, bool);
-OpenTTDCompanyCost OPENTTD_RUST_CALL openttd_rust_company_change_bank_balance(const OpenTTDCompanyFinanceServices *, uint32_t, int64_t, uint8_t, uint8_t, bool);
+uint8_t OPENTTD_RUST_CALL openttd_rust_economy_add_inflation_abi(bool);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_economy_add_inflation(bool a0) { return openttd_rust_economy_add_inflation_abi(a0) != 0; }
+void OPENTTD_RUST_CALL openttd_rust_economy_recompute_prices(const OpenTTDCompanyServices *);
+void OPENTTD_RUST_CALL openttd_rust_economy_reset_price_multipliers();
+void OPENTTD_RUST_CALL openttd_rust_economy_set_price_multiplier(uint8_t, int32_t);
+void OPENTTD_RUST_CALL openttd_rust_economy_initialize();
+int64_t OPENTTD_RUST_CALL openttd_rust_economy_get_price(const OpenTTDSharedServices *, uint8_t, uint32_t, const GRFFile *, int32_t);
+uint32_t OPENTTD_RUST_CALL openttd_rust_economy_scale_by_inverse_cargo_scale(const OpenTTDSharedServices *, uint32_t, bool);
+void OPENTTD_RUST_CALL openttd_rust_company_buy(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, OpenTTDCommandCost *, uint16_t, uint8_t, bool);
+void OPENTTD_RUST_CALL openttd_rust_company_increase_loan(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint16_t, uint8_t, int64_t);
+void OPENTTD_RUST_CALL openttd_rust_company_decrease_loan(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint16_t, uint8_t, int64_t);
+void OPENTTD_RUST_CALL openttd_rust_company_set_max_loan(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint16_t, uint8_t, int64_t);
+void OPENTTD_RUST_CALL openttd_rust_company_change_bank_balance(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint16_t, uint32_t, int64_t, uint8_t, uint8_t);
 }
 #endif /* RUST_COMPANY_FFI_H */

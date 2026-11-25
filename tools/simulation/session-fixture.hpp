@@ -4,6 +4,7 @@
 #include "../../src/rust/session_ffi.h"
 #include "../../src/tests/fixture_map.hpp"
 #include "../../src/rust/fleet_ffi.h"
+#include "../../src/rust/company_identity_ffi.h"
 #include "../../src/rust/station_lifecycle_ffi.h"
 #include "../../src/rust/roadstop_resolver_ffi.h"
 #include "../../src/rust/animation_save.hpp"
@@ -44,6 +45,7 @@ struct SessionFixture {
 	OpenTTDIndustryServices industries{};
 	OpenTTDWorldServices world{};
 	OpenTTDCompanyServices companies{};
+	OpenTTDCompanyIdentityServices company_identity{};
 	OpenTTDCompanyFinanceServices finance{};
 	OpenTTDScheduleServices schedule{};
 	OpenTTDSessionServices services{};
@@ -115,9 +117,11 @@ struct SessionFixture {
 		stations.environment.editor = []() noexcept { return true; };
 		companies.shared = &shared;
 		companies.finance = &finance;
-		companies.competitor_fired = []() noexcept { return false; };
+		companies.new_competitor_timeout_has_fired = []() noexcept { return false; };
 		finance.company_finances = [](uint8_t) noexcept -> CompanyFinances * { return nullptr; };
-		companies.company_next = [](uint32_t) noexcept { return OpenTTDCompanyRef{nullptr, UINT32_MAX}; };
+		company_identity.next_company = [](uint32_t) noexcept -> Company * { return nullptr; };
+		company_identity.company_if_valid = [](uint8_t) noexcept -> Company * { return nullptr; };
+		companies.identity = &company_identity;
 		industries.shared = &shared;
 		industries.next_tick = [](uint32_t) noexcept { return OpenTTDIndustryEntry{}; };
 		world.industry = &industries;

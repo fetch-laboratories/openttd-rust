@@ -14,11 +14,12 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import NotRequired, TypedDict
 
 from cleanup_contract import ATTRIBUTION
-from review_report import REVIEWED, Comment
+from review_report import PLANNED, REVIEWED, Comment
 
 MARKER = "<!-- status comment: {agent} -->"
 MARKED = re.compile(r"\A<!-- status comment: (\S+) -->[ \t]*(?:\r?\n|\Z)")
@@ -110,7 +111,8 @@ def ours(found: list[Comment], agent: str, author: str) -> list[Comment]:
 
 
 def is_report(body: str) -> bool:
-    return bool(REVIEWED.search(body)) or ACCEPTANCE in body
+    """A review report, plan review or cleanup acceptance, never a status."""
+    return bool(REVIEWED.search(body) or PLANNED.search(body)) or ACCEPTANCE in body
 
 
 def command(target: Target, agent: str, rest: str) -> str:
@@ -245,9 +247,16 @@ def update(target: Target, comment: Comment, body: str) -> Comment:
     )
 
 
-def create(target: Target, agent: str, author: str, body: str) -> Comment:
+def create(
+    target: Target,
+    agent: str,
+    author: str,
+    body: str,
+    find: Callable[[list[Comment]], Comment | None] | None = None,
+) -> Comment:
     """Post the comment once. A post that fails or does not answer may still have
-    landed, so the marker is looked up instead of posting again."""
+    landed, so it is looked up instead of posting again: by `find` over the
+    comments, by default the agent's marker."""
     try:
         return json.loads(
             gh(
@@ -262,10 +271,11 @@ def create(target: Target, agent: str, author: str, body: str) -> Comment:
             )
         )
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
-        landed = one(ours(comments(target), agent, author), target, agent)
+        found = comments(target)
+        landed = find(found) if find else one(ours(found, agent, author), target, agent)
         if landed is None:
             raise ValueError(
-                f"creating the status comment failed ({error}) and none is on "
+                f"creating the comment failed ({error}) and none is on "
                 f"{target.kind} #{target.number}; run the same command again"
             ) from error
         print(f"The create did not answer ({error}), but the comment is there")

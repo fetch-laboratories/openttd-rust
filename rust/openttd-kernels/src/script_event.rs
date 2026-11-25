@@ -24,6 +24,16 @@ impl ScriptEventType {
     pub const ET_SUBSIDY_AWARDED: Self = Self(4);
     /// `ET_SUBSIDY_EXPIRED`.
     pub const ET_SUBSIDY_EXPIRED: Self = Self(5);
+    /// `ET_COMPANY_NEW`.
+    pub const ET_COMPANY_NEW: Self = Self(7);
+    /// `ET_COMPANY_IN_TROUBLE`.
+    pub const ET_COMPANY_IN_TROUBLE: Self = Self(8);
+    /// `ET_COMPANY_ASK_MERGER`.
+    pub const ET_COMPANY_ASK_MERGER: Self = Self(9);
+    /// `ET_COMPANY_MERGER`.
+    pub const ET_COMPANY_MERGER: Self = Self(10);
+    /// `ET_COMPANY_BANKRUPT`.
+    pub const ET_COMPANY_BANKRUPT: Self = Self(11);
     /// `ET_VEHICLE_CRASHED`.
     pub const ET_VEHICLE_CRASHED: Self = Self(12);
     /// `ET_VEHICLE_WAITING_IN_DEPOT`.

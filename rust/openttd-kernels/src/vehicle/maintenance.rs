@@ -310,7 +310,13 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     // There are a lot more reasons for autoreplace to fail than we can test here reasonably.
     let mut pending_replace = false;
     let mut needed_money = i64::from(svc!(C, companies.engine_renew_money, c));
-    if needed_money > get_available_money(m.commands(), svc!(C, companies.index, c.cast_mut())) {
+    if needed_money
+        > get_available_money(
+            m.commands().shared,
+            m.commands().finance,
+            svc!(C, companies.index, c.cast_mut()),
+        )
+    {
         return false;
     }
 
@@ -390,7 +396,11 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
             crate::overflowsafe_type::add_i64(&mut needed_money, cost.saturating_mul(2));
             branch!(C, VEHICLE_MAINT_REPLACE);
             if needed_money
-                > get_available_money(m.commands(), svc!(C, companies.index, c.cast_mut()))
+                > get_available_money(
+                    m.commands().shared,
+                    m.commands().finance,
+                    svc!(C, companies.index, c.cast_mut()),
+                )
             {
                 return false;
             }
@@ -1213,6 +1223,7 @@ mod tests {
                     no_servicing_if_no_breakdowns: SETTINGS.with(|s| s.no_service.as_ptr()),
                     old_vehicle_warn: SETTINGS.with(|s| s.warn.as_ptr()),
                     vehicle_breakdowns: SETTINGS.with(|s| s.breakdowns.as_ptr()),
+                    infinite_money: SETTINGS.with(|s| s.infinite.as_ptr()),
                     ..crate::settings_type::SettingAddresses::NULL
                 }),
                 grf_price_shift,
@@ -1228,6 +1239,7 @@ mod tests {
         no_service: Cell<bool>,
         warn: Cell<bool>,
         breakdowns: Cell<u8>,
+        infinite: Cell<bool>,
     }
     impl Settings {
         const fn new() -> Self {
@@ -1236,6 +1248,7 @@ mod tests {
                 no_service: Cell::new(false),
                 warn: Cell::new(false),
                 breakdowns: Cell::new(0),
+                infinite: Cell::new(false),
             }
         }
     }
@@ -1291,7 +1304,7 @@ mod tests {
                         company_finances,
                         ..FINANCE
                     }),
-                    infinite_money,
+                    shared: shared(),
                     ..COMMANDS
                 }),
                 capabilities: capabilities(),
@@ -1313,7 +1326,6 @@ mod tests {
         renew: bool,
         months: i16,
         money: i64,
-        infinite: bool,
         /// The rule `OLD` to `NEW` in the default group, replacing when old by setting.
         rule: Option<bool>,
     }
@@ -1328,7 +1340,6 @@ mod tests {
                 renew: false,
                 months: 0,
                 money: 0,
-                infinite: false,
                 rule: None,
             })
         };
@@ -1424,10 +1435,6 @@ mod tests {
         // SAFETY: This thread's finances.
         FINANCES.with(|f| unsafe { (*f[1]).money = money });
         ACTIVE.set(1);
-    }
-    extern "C" fn infinite_money() -> bool {
-        read("infinite");
-        OWNER.get().infinite
     }
 
     /// A road vehicle of company 0 with engine `OLD`, its consist and order state.
@@ -1678,15 +1685,13 @@ mod tests {
     }
 
     /// Every company, money and price read of a funded replacement, in the original's order.
-    const FULL: [&str; 9] = [
+    const FULL: [&str; 7] = [
         "reserve",
         "company_id",
-        "infinite",
         "finances",
         "price",
         "shift",
         "company_id",
-        "infinite",
         "finances",
     ];
     /// A road vehicle due for service with servicing off without breakdowns, the price of
@@ -1699,16 +1704,14 @@ mod tests {
             store(s.no_servicing_if_no_breakdowns, true);
             store(s.vehicle_breakdowns, 0);
         });
-        // SAFETY: The isolated test process owns the price table.
-        unsafe {
-            *crate::company::openttd_rust_economy_prices()
-                .add(crate::economy_type::PR_BUILD_VEHICLE_ROAD as usize) = 25_600;
-        };
+        crate::company::testing::set_price(
+            crate::economy_type::Price::PR_BUILD_VEHICLE_ROAD,
+            25_600,
+        );
         owner(|o| {
             *o = Owner {
                 id: CompanyID(7),
                 money: 1_000_000,
-                infinite: false,
                 months: 0,
                 renew: false,
                 rule: Some(false),
@@ -1742,7 +1745,6 @@ mod tests {
                     *o = Owner {
                         id: CompanyID(7),
                         money: 1_000_000,
-                        infinite: false,
                         rule: Some(false),
                         ..*o
                     };
@@ -1764,7 +1766,7 @@ mod tests {
             factor: 17,
             then: || swap(3_500),
         });
-        for (money, due, seen) in [(99, false, &full[..4]), (100, true, &full[..])] {
+        for (money, due, seen) in [(99, false, &full[..3]), (100, true, &full[..])] {
             owner(|o| o.money = money);
             assert_eq!(servicing(&f), (due, seen.to_vec()), "money {money}");
         }
@@ -1792,12 +1794,12 @@ mod tests {
             factor: 17,
             then: || {
                 swap(-1);
-                owner(|o| o.infinite = true);
+                settings(|s| store(s.infinite_money, true));
             },
         });
         let (due, seen) = servicing(&f);
         assert!(due);
-        assert_eq!(seen, full[..8]);
+        assert_eq!(seen, full[..6]);
         // Infinite money from the start reads no money at all.
         PRICE.set(Price {
             factor: 17,
@@ -1807,21 +1809,13 @@ mod tests {
         assert!(due);
         assert_eq!(
             seen,
-            [
-                "reserve",
-                "company_id",
-                "infinite",
-                "price",
-                "shift",
-                "company_id",
-                "infinite"
-            ]
+            ["reserve", "company_id", "price", "shift", "company_id"]
         );
         // An invalid company has `INT64_MAX`.
         owner(|o| {
             o.id = CompanyID::SPECTATOR;
-            o.infinite = false;
         });
+        settings(|s| store(s.infinite_money, false));
         let (due, seen) = servicing(&f);
         assert!(due);
         assert_eq!(seen, full);

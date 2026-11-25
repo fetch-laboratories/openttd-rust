@@ -60,19 +60,53 @@ pub type Owner = CompanyID;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CompanyMask(pub u16);
 impl CompanyMask {
+    /// `BaseBitSet::MASK` of `CompanyMask`: every bit of its `uint16_t` storage.
+    pub const MASK: u16 = u16::MAX;
+    /// The bit `BaseBitSet` shifts in for a company: `1ULL << value`, truncated to the
+    /// `uint16_t` storage, so an owner of 16 or more has no bit.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "`BaseBitSet`'s store of the shifted bit in its `uint16_t`"
+    )]
+    const fn bit(company: CompanyID) -> u16 {
+        match 1_u64.checked_shl(company.0 as u32) {
+            Some(bit) => bit as u16,
+            None => 0,
+        }
+    }
     /// `BaseBitSet::Test`.
     #[must_use]
     pub const fn test(self, company: CompanyID) -> bool {
-        self.0 & (1 << company.0) != 0
+        self.0 & Self::bit(company) != 0
+    }
+    /// `BaseBitSet::All`: whether every company is in the set.
+    #[must_use]
+    pub const fn all(self) -> bool {
+        self.0 == Self::MASK
     }
     /// `BaseBitSet::Any`: whether any company is in the set.
     #[must_use]
     pub const fn any(self) -> bool {
         self.0 != 0
     }
+    /// `BaseBitSet::None`: whether no company is in the set.
+    #[must_use]
+    pub const fn none(self) -> bool {
+        self.0 == 0
+    }
     /// `BaseBitSet::Set`.
     pub const fn set(&mut self, company: CompanyID) -> &mut Self {
-        self.0 |= 1 << company.0;
+        self.0 |= Self::bit(company);
+        self
+    }
+    /// `BaseBitSet::Reset`.
+    pub const fn reset(&mut self, company: CompanyID) -> &mut Self {
+        self.0 &= !Self::bit(company);
+        self
+    }
+    /// `BaseBitSet::Set()`: every company.
+    pub const fn set_all(&mut self) -> &mut Self {
+        self.0 = Self::MASK;
         self
     }
 }
@@ -96,24 +130,70 @@ pub const MAX_LENGTH_COMPANY_NAME_CHARS: usize = 32;
 /// Native `MAX_LENGTH_PRESIDENT_NAME_CHARS`.
 pub const MAX_LENGTH_PRESIDENT_NAME_CHARS: usize = 32;
 
-/// Company allow-list addition.
-pub const CALCA_ADD: u8 = 0;
-/// Company allow-list removal.
-pub const CALCA_REMOVE: u8 = 1;
-
 /// `COMPANY_NEW_COMPANY`.
 pub const COMPANY_NEW_COMPANY: u8 = CompanyID::NEW_COMPANY.0;
 
-/// `CompanyCtrlAction::CCA_NEW`.
-pub(crate) const CCA_NEW: u8 = 0;
-/// `CompanyCtrlAction::CCA_NEW_AI`.
-pub(crate) const CCA_NEW_AI: u8 = 1;
-/// `CompanyCtrlAction::CCA_DELETE`.
-pub(crate) const CCA_DELETE: u8 = 2;
-/// `CompanyRemoveReason::CRR_NONE`.
-pub(crate) const CRR_NONE: u8 = 0;
-/// `CompanyRemoveReason::CRR_BANKRUPT`.
-pub(crate) const CRR_BANKRUPT: u8 = 2;
+/// `MAX_HISTORY_QUARTERS`: the maximum number of quarters kept as performance's history.
+pub const MAX_HISTORY_QUARTERS: usize = 24;
+
+/// `CompanyRemoveReason`: the reason why the company was removed.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CompanyRemoveReason(pub u8);
+impl CompanyRemoveReason {
+    /// The company is manually removed.
+    pub const CRR_MANUAL: Self = Self(0);
+    /// The company is removed due to autoclean.
+    pub const CRR_AUTOCLEAN: Self = Self(1);
+    /// The company went belly-up.
+    pub const CRR_BANKRUPT: Self = Self(2);
+    /// Sentinel for end.
+    pub const CRR_END: Self = Self(3);
+    /// Dummy reason for actions that don't need one.
+    pub const CRR_NONE: Self = Self::CRR_MANUAL;
+}
+
+/// `CompanyCtrlAction`: the action to do with `CMD_COMPANY_CTRL`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompanyCtrlAction(pub u8);
+impl CompanyCtrlAction {
+    /// Create a new company.
+    pub const CCA_NEW: Self = Self(0);
+    /// Create a new AI company.
+    pub const CCA_NEW_AI: Self = Self(1);
+    /// Delete a company.
+    pub const CCA_DELETE: Self = Self(2);
+    /// Sentinel for end.
+    pub const CCA_END: Self = Self(3);
+}
+
+/// `CompanyAllowListCtrlAction`: the action to do with `CMD_COMPANY_ALLOW_LIST_CTRL`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompanyAllowListCtrlAction(pub u8);
+impl CompanyAllowListCtrlAction {
+    /// Create a public key.
+    pub const CALCA_ADD: Self = Self(0);
+    /// Remove a public key.
+    pub const CALCA_REMOVE: Self = Self(1);
+    /// Sentinel for end.
+    pub const CALCA_END: Self = Self(2);
+}
+
+/// `LoanCommand` of `misc_cmd.h`, beside the other command enums: how a loan command reads
+/// its amount.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LoanCommand(pub u8);
+impl LoanCommand {
+    /// One `LOAN_INTERVAL`.
+    pub const INTERVAL: Self = Self(0);
+    /// As much as possible.
+    pub const MAX: Self = Self(1);
+    /// The amount the command gives.
+    pub const AMOUNT: Self = Self(2);
+}
 
 impl CompanyID {
     /// Native `PoolID::End()`.

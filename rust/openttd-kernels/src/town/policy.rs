@@ -105,7 +105,8 @@ pub(crate) use check_town_road_types as road_types;
 /// Get the cost for removing this house (`HouseSpec::GetRemovalCost`).
 /// Return the cost adjusted for inflation, etc.; `Money` multiplication saturates.
 pub(crate) fn get_removal_cost(factor: u8) -> i64 {
-    crate::company::price(crate::economy_type::PR_CLEAR_HOUSE).saturating_mul(i64::from(factor))
+    crate::company::price(crate::economy_type::Price::PR_CLEAR_HOUSE)
+        .saturating_mul(i64::from(factor))
         >> 8
 }
 #[unsafe(no_mangle)]

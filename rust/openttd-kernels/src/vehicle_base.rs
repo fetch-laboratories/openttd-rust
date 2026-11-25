@@ -1058,6 +1058,18 @@ impl crate::vehicle::VehicleRef {
         // SAFETY: As `age`.
         VehicleID(unsafe { (r.id)(self.0.as_ptr()) })
     }
+    /// `Vehicle::profit_last_year`: profit last year << 8, low 8 bits are fract.
+    #[inline]
+    pub(crate) fn profit_last_year(self, base: &crate::vehicle::VehicleServices) -> i64 {
+        (base.profit_last_year)(self)
+    }
+    /// `Vehicle::IsEngineCountable`: check if a vehicle is counted in `num_engines` in each
+    /// company struct, through the group table's binding.
+    #[inline]
+    pub(crate) fn is_engine_countable(self, groups: &crate::fleet::GroupServices) -> bool {
+        // SAFETY: The live vehicle's shell.
+        unsafe { (groups.countable)(self.shell().cast()) }
+    }
     /// `Vehicle::profit_this_year`: profit this year << 8, low 8 bits are fract.
     #[inline]
     pub(crate) fn profit_this_year(self, base: &crate::vehicle::VehicleServices) -> i64 {
@@ -1170,6 +1182,12 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn vehicle_flags(self) -> VehicleFlags {
         let consist = read_field!(self.0.as_ptr(), consist);
         VehicleFlags(read_field!(consist, flags))
+    }
+    /// `Vehicle::ServiceIntervalIsCustom`.
+    #[inline]
+    pub(crate) fn service_interval_is_custom(self) -> bool {
+        self.vehicle_flags()
+            .test(VehicleFlag::SERVICE_INTERVAL_IS_CUSTOM)
     }
     /// `Vehicle::ServiceIntervalIsPercent`.
     #[inline]

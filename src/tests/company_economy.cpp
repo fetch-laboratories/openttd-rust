@@ -31,6 +31,7 @@
 #include "../table/strings.h"
 #include "../road.h"
 #include "../settings_type.h"
+#include "../timer/timer_game_economy.h"
 #include "../tile_map.h"
 #include "../openttd.h"
 #include "../rust/movement_ffi.h"
@@ -141,12 +142,11 @@ TEST_CASE("Company identity - process-wide colour alias and face bit truncation"
 	CHECK(var.GetBits(face) == 2);
 }
 
-/* Semantic saves cannot witness a client waiting for a server-posted deletion or
- * a script memory-policy exception during AI startup. These fixtures copy the
+/* Semantic saves cannot witness a server-posted deletion. These fixtures copy the
  * game's service table and replace only the world services the checked paths
  * use; they are not an oracle for ordinary financial calculations. */
 static std::array<std::unique_ptr<CompanyProperties>, 3> fixture_companies;
-static bool fixture_networking, fixture_server, fixture_is_ai;
+static bool fixture_networking, fixture_server;
 static uint8_t fixture_current;
 static std::vector<std::string> fixture_trace;
 static OpenTTDCompanyFinanceServices fixture_finance;
@@ -158,61 +158,43 @@ static OpenTTDNetworkCommandServices fixture_network_command;
 static OpenTTDNetworkFrameServices fixture_network_frame;
 static OpenTTDNetworkTcpServices fixture_network_tcp;
 static OpenTTDNetworkGameSocket fixture_network_socket;
-static OpenTTDCompanyServices fixture_network_company, fixture_post_company;
+static OpenTTDCompanyServices fixture_network_company;
 static OpenTTDCompanyIdentityServices fixture_identity;
-static OpenTTDSharedServices fixture_identity_shared;
-static OpenTTDFaceServices fixture_faces;
 static CompanyProperties *FixtureProperties(const Company *c) noexcept { return reinterpret_cast<CompanyProperties *>(const_cast<Company *>(c)); }
+static Company *FixtureCompany(size_t id) noexcept { return id < fixture_companies.size() ? reinterpret_cast<Company *>(fixture_companies[id].get()) : nullptr; }
+static uint8_t FixtureIndex(const Company *c) noexcept
+{
+	for (size_t id = 0; id < fixture_companies.size(); id++) if (FixtureCompany(id) == c && c != nullptr) return static_cast<uint8_t>(id);
+	NOT_REACHED();
+}
 static uint8_t FixtureCurrent() noexcept { return fixture_current; }
 static void FixtureSetCurrent(uint8_t id) noexcept { fixture_current = id; }
 static bool FixtureNetworking() noexcept { return fixture_networking; }
 static bool FixtureServer() noexcept { return fixture_server; }
 static uint8_t FixtureLocal() noexcept { return 0; }
 static CompanyFinances *FixtureFinances(uint8_t id) noexcept { return id < fixture_companies.size() && fixture_companies[id] != nullptr ? &fixture_companies[id]->Finances() : nullptr; }
-static OpenTTDCompanyRef FixtureNext(uint32_t from) noexcept
-{
-	for (uint32_t i = from; i < fixture_companies.size(); i++) if (fixture_companies[i] != nullptr) return {&fixture_companies[i]->Finances(), i};
-	return {nullptr, UINT32_MAX};
-}
 static void FixtureNoop(uint8_t) noexcept {}
-static void FixtureAdminUpdate(const Company *c) noexcept { for (size_t id = 0; id < fixture_companies.size(); id++) if (reinterpret_cast<const Company *>(fixture_companies[id].get()) == c) fixture_trace.push_back(fmt::format("admin {}", id)); }
-static void FixturePostDelete(uint8_t id) noexcept
-{
-	fixture_trace.push_back(fmt::format("post {}", id));
-	fixture_companies[id].reset();
-}
+static void FixtureAdminUpdate(const Company *c) noexcept { fixture_trace.push_back(fmt::format("admin {}", FixtureIndex(c))); }
 static uint32_t FixtureRandomNext(uint32_t) noexcept { return 0; }
 static void FixtureTimeout(uint32_t ticks) noexcept { fixture_trace.push_back(fmt::format("timeout {}", ticks)); }
-static bool FixtureCanAllocate() noexcept { return true; }
-static OpenTTDCompanyRef FixtureAllocate(uint8_t, bool) noexcept
-{
-	fixture_companies[2] = std::make_unique<CompanyProperties>();
-	fixture_trace.push_back("allocate 2");
-	return {&fixture_companies[2]->Finances(), 2};
-}
-static bool FixturePrepare(uint8_t id, bool) noexcept { fixture_trace.push_back(fmt::format("setup {}", id)); return true; }
-static void FixtureEvents(uint8_t id) noexcept { fixture_trace.push_back(fmt::format("events {}", id)); }
-static void FixtureVoid() noexcept {}
-static void FixtureNetworkNew(uint8_t id) noexcept { fixture_trace.push_back(fmt::format("network {}", id)); }
 static void FixtureReset(bool networking, bool server)
 {
-	fixture_networking = networking; fixture_server = server; fixture_is_ai = false; fixture_current = 18; fixture_trace.clear();
+	fixture_networking = networking; fixture_server = server; fixture_current = 18; fixture_trace.clear();
 	fixture_finance = GetRustCompanyFinanceServices();
 	fixture_finance.current_company = FixtureCurrent; fixture_finance.set_current_company = FixtureSetCurrent;
 	fixture_finance.networking = FixtureNetworking; fixture_finance.company_finances = FixtureFinances;
 	fixture_finance.invalidate_company_windows = FixtureNoop;
 	fixture_services = GetRustCompanyServices();
 	fixture_services.finance = &fixture_finance;
-	fixture_services.company_next = FixtureNext;
 	fixture_services.network_server = FixtureServer;
-	fixture_shared = GetRustSharedServices(); fixture_shared.local_company = FixtureLocal;
+	fixture_shared = GetRustSharedServices(); fixture_shared.local_company = FixtureLocal; fixture_shared.current_company = FixtureCurrent;
 	fixture_services.shared = &fixture_shared;
 	fixture_post = GetRustCommandPostServices();
 	fixture_shared.command_post = []() noexcept -> const OpenTTDCommandPostServices & { return fixture_post; };
 	fixture_command = GetRustCommandServices();
 	fixture_command.finance = &fixture_finance;
 	fixture_command.shared = &fixture_shared;
-	fixture_command.company = []() noexcept -> const OpenTTDCompanyServices * { return &fixture_post_company; };
+	fixture_command.company = []() noexcept -> const OpenTTDCompanyServices * { return &fixture_services; };
 	fixture_command.shift_pressed = []() noexcept { return false; };
 	fixture_post.command = []() noexcept -> const OpenTTDCommandServices & { return fixture_command; };
 	fixture_post.desync_logging = []() noexcept { return false; };
@@ -233,45 +215,20 @@ static void FixtureReset(bool networking, bool server)
 		fixture_trace.push_back(fmt::format("post {}", target));
 		return GetRustCommandPostServices().pack_control(action, target, reason, client);
 	};
-	fixture_services.script_random_next = FixtureRandomNext; fixture_services.reset_competitor_timeout = FixtureTimeout;
-	fixture_services.can_allocate_company = FixtureCanAllocate;
-	fixture_services.allocate_company = FixtureAllocate;
-	fixture_services.prepare_new_company = FixturePrepare;
-	fixture_services.company_defaults = FixtureNoop; fixture_services.startup_windows = FixtureVoid;
-	fixture_services.new_company_events = FixtureEvents;
+	fixture_services.script_random_next = FixtureRandomNext; fixture_services.new_competitor_timeout_reset = FixtureTimeout;
 	fixture_identity = GetRustCompanyIdentityServices();
-	fixture_identity_shared = GetRustSharedServices();
-	fixture_identity_shared.random = [](void *) noexcept -> uint32_t { return 0; };
-	fixture_identity.shared = &fixture_identity_shared;
-	fixture_identity.company = [](uint8_t id) noexcept { return reinterpret_cast<Company *>(fixture_companies[id].get()); };
-	fixture_identity.next_company = [](uint32_t) noexcept -> Company * { return nullptr; };
-	fixture_identity.index = [](const Company *) noexcept -> uint8_t { return 2; };
-	fixture_identity.set_colour = [](Company *c, uint8_t value) noexcept { FixtureProperties(c)->colour = static_cast<Colours>(value); };
-	fixture_identity.colour = [](const Company *c) noexcept -> uint8_t { return FixtureProperties(c)->colour; };
-	fixture_identity.livery = [](Company *c) noexcept { return FixtureProperties(c)->livery.data(); };
-	fixture_identity.face = [](Company *c) noexcept { return &FixtureProperties(c)->face; };
-	fixture_identity.set_president_name_1 = [](Company *c, uint32_t value) noexcept { FixtureProperties(c)->president_name_1 = value; };
-	fixture_identity.set_president_name_2 = [](Company *c, uint32_t value) noexcept { FixtureProperties(c)->president_name_2 = value; };
+	fixture_identity.company = [](uint8_t id) noexcept { return FixtureCompany(id); };
+	fixture_identity.company_if_valid = [](uint8_t id) noexcept { return FixtureCompany(id); };
+	fixture_identity.next_company = [](uint32_t from) noexcept -> Company * {
+		for (size_t id = from; id < fixture_companies.size(); id++) if (fixture_companies[id] != nullptr) return FixtureCompany(id);
+		return nullptr;
+	};
+	fixture_identity.finances = [](Company *c) noexcept { return &FixtureProperties(c)->Finances(); };
+	fixture_identity.index = FixtureIndex;
 	fixture_identity.admin_update = FixtureAdminUpdate;
-	fixture_identity.is_ai = [](const Company *) noexcept { return fixture_is_ai; };
-	fixture_faces = GetRustFaceServices();
-	fixture_faces.count = []() noexcept -> uint32_t { return 1; };
-	fixture_faces.vars = [](uint32_t) noexcept { return OpenTTDFaceVars{nullptr, 0}; };
-	fixture_faces.spec = [](uint32_t) noexcept { static const FaceSpec spec{"fixture", FaceVars{}}; return &spec; };
-	fixture_identity.faces = &fixture_faces;
+	fixture_identity.is_ai = [](const Company *) noexcept { return false; };
 	fixture_services.identity = &fixture_identity;
-	fixture_services.company_league_dirty = FixtureVoid; fixture_services.company_ctrl_windows = FixtureVoid;
-	fixture_services.assert_new_ai_slot = FixtureNoop; fixture_services.admin_company_new = FixtureNetworkNew;
 	fixture_services.company_count = []() noexcept -> size_t { return std::count_if(fixture_companies.begin(), fixture_companies.end(), [](const auto &p) { return p != nullptr; }); };
-	fixture_services.company_bankrupt_news = FixtureNoop;
-	fixture_services.remove_engine_replacements = FixtureNoop;
-	static const uint32_t no_tiles = 0; static OpenTTDMapStatics empty_map = _rust_map_statics; empty_map.size = &no_tiles; fixture_shared.map = &empty_map;
-	fixture_services.delete_company = FixturePostDelete;
-	fixture_services.company_removed = [](uint8_t, uint8_t) noexcept {};
-	fixture_shared.screen_dirty = FixtureVoid;
-	fixture_post_company = fixture_services;
-	/* Company-control completion restores this fixture's initial current company. */
-	static OpenTTDSharedServices post_shared; post_shared = fixture_shared; post_shared.local_company = []() noexcept -> uint8_t { return 18; }; fixture_post_company.shared = &post_shared;
 }
 /* Only the local company's cash error is encoded natively; the money short circuits and
  * subtraction are command::money_tests (#736 F). Retires with the native CommandCost string
@@ -308,8 +265,8 @@ TEST_CASE("Company economy - session loop posts each competitor through its call
 		companies.shared = &fixture.shared;
 		fixture.finance.networking = FixtureNetworking;
 		companies.network_server = FixtureServer;
-		companies.competitor_fired = []() noexcept { return true; };
-		companies.ai_can_start = []() noexcept { return true; };
+		companies.new_competitor_timeout_has_fired = []() noexcept { return true; };
+		companies.ai_can_start_new = []() noexcept { return true; };
 		companies.company_count = []() noexcept -> size_t { return 0; };
 		fixture.max_competitors = 2;
 		fixture.services.company = &companies;
@@ -321,26 +278,31 @@ TEST_CASE("Company economy - session loop posts each competitor through its call
 	}
 }
 
-/* Offline and server bankrupt deletions post through the native command and network service
- * tables; the network client's mode is company::bankruptcy_tests (#736 F). Retires with the
- * native command-post and network glue. */
-TEST_CASE("Company economy - offline and server bankrupt deletion posts")
+/* A server's bankrupt deletions post through the native command and network service tables
+ * and execute nothing. The offline mode, whose deletion executes, is the Rust test
+ * company::tests::evidence_tests::offline_bankrupt_deletion_executes_in_id_order; the
+ * network client's mode is
+ * company::tests::bankruptcy_tests::network_client_never_deletes_bankrupt_companies (#736 F).
+ * Retires with the native command-post and network glue. */
+TEST_CASE("Company economy - server bankrupt deletion posts")
 {
-	for (int mode : {0, 1}) {
-		FixtureReset(mode != 0, mode == 1);
-		auto *economy = new (openttd_rust_economy_state()) Economy{}; economy->max_loan = 300000; economy->fluct = 100;
-		for (auto &p : fixture_companies) p = std::make_unique<CompanyProperties>();
-		fixture_companies[0]->Finances().money = 1000000;
-		for (uint32_t i : {1U, 2U}) {
-			fixture_companies[i]->Finances().money = -500000;
-			fixture_companies[i]->Finances().current_loan = 100000;
-			fixture_companies[i]->Finances().months_of_bankruptcy = 9;
-		}
-		const OpenTTDClockCompany clock{.services = &fixture_services, .month = []() noexcept { return OpenTTDEconomyMonth{.month = 1, .infinite_money = false, .maintenance = false, .fluctuating = false}; }};
-		openttd_rust_clock_economy_month(&clock, nullptr);
-		CHECK(fixture_current == 18);
-		CHECK(fixture_trace == std::vector<std::string>{"post 1", "post 2"});
-		for (uint32_t i : {1U, 2U}) CHECK((fixture_companies[i] == nullptr) == (mode == 0));
+	FixtureReset(true, true);
+	auto *economy = new (openttd_rust_economy_state()) Economy{}; economy->max_loan = 300000; economy->fluct = 100;
+	for (auto &p : fixture_companies) p = std::make_unique<CompanyProperties>();
+	fixture_companies[0]->Finances().money = 1000000;
+	for (uint32_t i : {1U, 2U}) {
+		fixture_companies[i]->Finances().money = -500000;
+		fixture_companies[i]->Finances().current_loan = 100000;
+		fixture_companies[i]->Finances().months_of_bankruptcy = 9;
 	}
+	AutoRestoreBackup<TimerGameEconomy::Month> month(TimerGameEconomy::month, 1);
+	AutoRestoreBackup<bool> infinite_money(_settings_game.difficulty.infinite_money, false);
+	AutoRestoreBackup<bool> maintenance(_settings_game.economy.infrastructure_maintenance, false);
+	AutoRestoreBackup<bool> fluctuating(_settings_game.difficulty.economy, false);
+	const OpenTTDClockCompany clock{.services = &fixture_services};
+	openttd_rust_clock_economy_month(&clock, nullptr);
+	CHECK(fixture_current == 18);
+	CHECK(fixture_trace == std::vector<std::string>{"post 1", "post 2"});
+	for (uint32_t i : {1U, 2U}) CHECK(fixture_companies[i] != nullptr);
 	for (auto &p : fixture_companies) p.reset();
 }

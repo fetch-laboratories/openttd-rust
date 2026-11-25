@@ -27,6 +27,7 @@ from urllib.parse import unquote
 import ci
 import ci_log
 import preflight_stamp
+import quick_workflow
 import review_report
 import source_fixture
 import status_comment
@@ -1475,19 +1476,31 @@ class MergeQueueTests(unittest.TestCase):
             self.assertIn("merge_group", triggers, filename)
             if quick := filename == "ci-quick.yml":
                 self.assertIn("ready_for_review", triggers["pull_request"]["types"])
-            condition = job(filename, name)["if"]
-            for event, checkout, draft, expected in (
-                ("pull_request", "", False, True),
-                # A draft's checkpoint runs no Quick; ready_for_review runs it (#920).
-                ("pull_request", "", True, not quick),
-                ("push", "", False, True),
-                ("merge_group", "", False, False),
-                # Full calls Quick inside the merge group.
-                ("merge_group", MERGE, False, quick),
-                # A requested profile or bootstrap calls Quick, draft or not.
-                ("pull_request", MERGE, True, True),
+            # Quick's gate jobs share the reporting job's condition (#1063).
+            names = [name, *(("rust", "python", "cleanup") if quick else ())]
+            conditions = [job(filename, each)["if"] for each in names]
+            for (condition, each), (
+                event,
+                checkout,
+                draft,
+                expected,
+            ) in itertools.product(
+                zip(conditions, names, strict=True),
+                (
+                    ("pull_request", "", False, True),
+                    # A draft's checkpoint runs no Quick; ready_for_review runs it (#920).
+                    ("pull_request", "", True, not quick),
+                    ("push", "", False, True),
+                    ("merge_group", "", False, False),
+                    # Full calls Quick inside the merge group.
+                    ("merge_group", MERGE, False, quick),
+                    # A requested profile or bootstrap calls Quick, draft or not.
+                    ("pull_request", MERGE, True, True),
+                ),
             ):
-                with self.subTest(filename=filename, event=event, draft=draft):
+                with self.subTest(
+                    filename=filename, job=each, event=event, draft=draft
+                ):
                     observed = evaluate(
                         condition,
                         github={
@@ -1706,10 +1719,34 @@ host=$(awk 'match($0, /:\/\/[^\/]*\/ubuntu/) {
 echo "$kind $host" >> "$APT_LOG"
 result=$(head -n 1 "$APT_RESULTS")
 sed -i 1d "$APT_RESULTS"
+# As apt does, an update fails on a mirror list that an active source uses and
+# that holds no active line; a stanza with `Enabled: no` is not read.
+if [ "$kind" = update ]; then
+  for file in "$APT_ETC"/sources.list "$APT_ETC"/sources.list.d/*.sources \
+      "$APT_ETC"/sources.list.d/*.list; do
+    [ -f "$file" ] || continue
+    for list in $(awk 'BEGIN { RS = "" }
+        tolower($0) !~ /enabled:[[:space:]]*(no|false|off|without|disable)/' "$file" |
+        grep -v '^[[:space:]]*#' | grep -o 'mirror+file:[^[:space:]]*' |
+        sed 's/^mirror+file://'); do
+      grep -q '^[[:space:]]*[^#[:space:]]' "$list" 2>/dev/null || exit 100
+    done
+  done
+fi
 exit "${result:-0}"
 """
 
 SECURITY = "http://security.ubuntu.com/ubuntu/\tpriority:3\n"
+
+# An unfinished pull_request run of ci-quick.yml at the head: the Quick
+# validation check reports the other jobs and appears only when they end (#1063).
+QUICK_RUNNING: ci_log.Run = {
+    "id": 77,
+    "status": "in_progress",
+    "conclusion": None,
+    "run_started_at": "2026-11-12T01:00:00Z",
+    "html_url": "https://github.com/example/fork/actions/runs/77",
+}
 
 
 class AptInstallTests(unittest.TestCase):
@@ -1747,6 +1784,7 @@ class AptInstallTests(unittest.TestCase):
                 PACKAGES="valgrind",
                 RECOMMENDS="false",
                 APT_IN_USE=str(etc / in_use),
+                APT_ETC=str(etc),
                 APT_LOG=str(root / "log"),
                 APT_RESULTS=str(root / "results"),
             )
@@ -1761,10 +1799,13 @@ class AptInstallTests(unittest.TestCase):
                 timeout=60,
             )
             log = (root / "log").read_text().splitlines()
+            # Every file, so a test can read a source the script wrote.
             after = {
-                name: (etc / name).read_text().replace(str(etc), "ETC")
-                for name in files
+                str(path.relative_to(etc)): path.read_text().replace(str(etc), "ETC")
+                for path in sorted(etc.rglob("*"))
+                if path.is_file()
             }
+        self.stdout = done.stdout
         warnings = "\n".join(
             line for line in done.stdout.splitlines() if line.startswith("::warning")
         )
@@ -1920,6 +1961,203 @@ class AptInstallTests(unittest.TestCase):
                     files["sources.list"].replace(f"//{azure}/", f"//{archive}/"),
                 )
 
+    FALLBACK = "sources.list.d/apt-install-fallback.sources"
+    # Sources that name no Ubuntu archive in an active line (run 45526257014).
+    UNNAMED = {
+        "empty sources.list.d": {},
+        "an unused mirror list": {
+            "apt-mirrors.txt": HOSTED["apt-mirrors.txt"],
+            "sources.list.d/ubuntu.sources": "# Types: deb\n"
+            "# URIs: mirror+file:ETC/apt-mirrors.txt\n# Suites: noble\n",
+        },
+        "a disabled stanza": {
+            "sources.list.d/ubuntu.sources": "Types: deb\n"
+            "URIs: http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n"
+            "Suites: noble\nComponents: main\nEnabled: no\n",
+        },
+        # apt reads `false` as `no` too (review of #1065).
+        "a stanza disabled as false": {
+            "sources.list.d/ubuntu.sources": "Types: deb\n"
+            "URIs: http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n"
+            "Suites: noble\nComponents: main\nEnabled: false\n",
+        },
+    }
+
+    def test_sources_naming_no_archive_get_azure_then_canonicals_archive(
+        self,
+    ) -> None:
+        codename = subprocess.run(
+            ["bash", "-c", ". /etc/os-release && echo $VERSION_CODENAME"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        azure, archive = "azure.archive.ubuntu.com", "archive.ubuntu.com"
+        for (label, files), (results, hosts) in itertools.product(
+            self.UNNAMED.items(),
+            (
+                # The first download fails: Azure on the second attempt.
+                ([0, 1, 0, 0, 0], [azure, azure, azure]),
+                # Azure's update fails too: Canonical's archive on the third.
+                ([0, 1, 1, 0, 0, 0], [azure, archive, archive, archive]),
+            ),
+        ):
+            with self.subTest(label, attempts=len(hosts)):
+                code, log, after, warnings = self.install(files, self.FALLBACK, results)
+                self.assertEqual(code, 0)
+                # The first attempt runs on the sources as found.
+                self.assertEqual(
+                    log,
+                    [
+                        "update ",
+                        "download ",
+                        *(f"update {host}" for host in hosts[:-2]),
+                        f"download {hosts[-1]}",
+                        f"install {hosts[-1]}",
+                    ],
+                )
+                self.assertIn(
+                    "attempt 1 failed or stalled on the sources as found; "
+                    f"retrying on {azure}",
+                    warnings,
+                )
+                self.assertEqual(
+                    after.pop(self.FALLBACK),
+                    "Types: deb\n"
+                    f"URIs: http://{hosts[-1]}/ubuntu\n"
+                    f"Suites: {codename} {codename}-updates {codename}-backports "
+                    f"{codename}-security\n"
+                    "Components: main restricted universe multiverse\n"
+                    "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n",
+                )
+                if len(hosts) == 4:
+                    self.assertIn(
+                        f"attempt 2 failed or stalled on {azure}; retrying on {archive}",
+                        warnings,
+                    )
+
+    EMPTY = "# http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n"
+    # A deb822 file: a stanza on a mirror list with no active line, then a
+    # working repository that must stay (review of #1065).
+    BROKEN = (
+        "Types: deb\nURIs: mirror+file:ETC/apt-mirrors.txt\nSuites: noble\n"
+        "Components: main\nEnabled: yes\n\n"
+        "Types: deb\nURIs: file:REPO\nSuites: ./\nTrusted: yes\n"
+    )
+
+    def test_an_entry_using_a_mirror_list_with_no_active_line_is_set_aside(
+        self,
+    ) -> None:
+        """apt fails its whole update on such a list, so the fallback source
+        alone would not save the job (review of #1065)."""
+        disabled = (
+            "Types: deb\nURIs: mirror+file:ETC/apt-mirrors.txt\nSuites: noble\n"
+            "Components: main\nEnabled: no\n\n"
+            "Types: deb\nURIs: file:REPO\nSuites: ./\nTrusted: yes\n\n"
+        )
+        for label, name, before, after_text in (
+            ("deb822", "sources.list.d/ubuntu.sources", self.BROKEN, disabled),
+            (
+                "one-line",
+                "sources.list",
+                "deb mirror+file:ETC/apt-mirrors.txt noble main\n",
+                "# deb mirror+file:ETC/apt-mirrors.txt noble main\n",
+            ),
+        ):
+            with self.subTest(label):
+                files = {"apt-mirrors.txt": self.EMPTY, name: before}
+                code, log, after, warnings = self.install(
+                    files, self.FALLBACK, [0, 0, 0, 0]
+                )
+                self.assertEqual(code, 0)
+                azure = "azure.archive.ubuntu.com"
+                # The first update fails on the empty list; Azure's succeeds.
+                self.assertEqual(
+                    log,
+                    [
+                        "update ",
+                        f"update {azure}",
+                        f"download {azure}",
+                        f"install {azure}",
+                    ],
+                )
+                self.assertIn(f"retrying on {azure}", warnings)
+                self.assertIn(self.FALLBACK, after)
+                self.assertEqual(after[name], after_text)
+
+    @unittest.skipUnless(shutil.which("apt-get"), "needs apt-get")
+    def test_real_apt_updates_only_once_the_entry_is_set_aside(self) -> None:
+        """An isolated apt update, as the stub models it: it fails on the
+        sources as found and succeeds on them as the script leaves them, with
+        the working stanza still read."""
+        _, _, after, _ = self.install(
+            {
+                "apt-mirrors.txt": self.EMPTY,
+                "sources.list.d/ubuntu.sources": self.BROKEN,
+            },
+            self.FALLBACK,
+            [0, 0, 0, 0],
+        )
+        # The fallback names the internet archive; this update stays offline.
+        del after[self.FALLBACK]
+        found = {
+            "apt-mirrors.txt": self.EMPTY,
+            "sources.list.d/ubuntu.sources": self.BROKEN,
+        }
+        self.assertEqual(self.real_update(found)[0], 100)
+        self.assertEqual(self.real_update(after), (0, True))
+
+    def real_update(self, files: Mapping[str, str]) -> tuple[int, bool]:
+        """apt-get update over `files` under a temporary Dir, with an empty
+        local repository at REPO: its exit code and whether it read REPO."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            etc, repo = root / "etc", root / "repo"
+            for path in (
+                etc / "sources.list.d",
+                root / "state/lists/partial",
+                root / "cache/archives/partial",
+                repo,
+            ):
+                path.mkdir(parents=True)
+            (repo / "Packages").write_text("")
+            for name, text in files.items():
+                (etc / name).write_text(
+                    text.replace("ETC", str(etc)).replace("REPO", str(repo))
+                )
+            done = subprocess.run(
+                [
+                    "apt-get",
+                    *("-o", f"Dir::Etc={etc}", "-o", f"Dir::State={root / 'state'}"),
+                    *("-o", f"Dir::Cache={root / 'cache'}", "-o", "Debug::NoLocking=1"),
+                    *("-o", "Dir::State::status=/dev/null", "update"),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=60,
+            )
+            read = any(
+                "_repo_" in path.name for path in (root / "state/lists").iterdir()
+            )
+        return done.returncode, read
+
+    def test_a_failed_attempt_prints_the_sources_active_lines(self) -> None:
+        files = self.UNNAMED["an unused mirror list"]
+        _, _, _, _ = self.install(files, self.FALLBACK, [0, 1, 0, 0, 0])
+        group = self.stdout.split("::group::apt sources after attempt 1\n")[1]
+        group = group.split("::endgroup::")[0]
+        self.assertIn("/sources.list.d/ubuntu.sources:\n", group)
+        self.assertIn(
+            "/apt-mirrors.txt:\nhttp://us-east-2.ec2.archive.ubuntu.com/ubuntu/", group
+        )
+        # Commented lines are left out: they are what apt does not read.
+        self.assertNotIn("# URIs", group)
+        self.assertNotIn("attempt 2", self.stdout)
+        # The last attempt's failure prints them too.
+        self.install(files, self.FALLBACK, [0, 1, 1, 1, 1])
+        self.assertIn("::group::apt sources after attempt 3\n", self.stdout)
+
     def test_another_mirror_list_a_source_names_is_rewritten(self) -> None:
         # Blacksmith's runners name their own list, not apt-mirrors.txt.
         files = {
@@ -2001,18 +2239,81 @@ class PolicyTests(unittest.TestCase):
     def test_quick_uses_no_local_action(self) -> None:
         """On a pull request Quick checks out the PR head, and a branch older
         than a local action does not contain it (#862 broke Quick that way)."""
-        steps = workflow("ci-quick.yml")["jobs"]["quick"]["steps"]
-        self.assertTrue(steps)
+        steps = quick_workflow.steps(
+            cast(quick_workflow.Workflow, workflow("ci-quick.yml"))
+        )
         for step in steps:
             self.assertFalse(str(step.get("uses", "")).startswith("./"), step)
         # Its package install is the shared action's script, copied, so the two
         # cannot drift: the copy once lost the action's index and dpkg handling.
+        # Exactly one step across the jobs carries it.
         (shared,) = yaml.safe_load(
             (ROOT / ".github/actions/apt-install/action.yml").read_text()
         )["runs"]["steps"]
         (inline,) = (step for step in steps if "PACKAGES" in step.get("env", {}))
         self.assertEqual(inline["run"], shared["run"])
         self.assertEqual(set(inline["env"]), set(shared["env"]))
+
+    def test_quick_validation_needs_every_other_quick_job(self) -> None:
+        """The required check reports the split jobs, so a job added later
+        cannot be left out of it (#1063)."""
+        jobs = workflow("ci-quick.yml")["jobs"]
+        self.assertEqual(jobs["quick"]["name"], "Quick validation")
+        self.assertEqual(set(jobs["quick"]["needs"]), set(jobs) - {"quick"})
+        for name, body in jobs.items():
+            if name != "quick":
+                self.assertNotIn("needs", body, name)
+                self.assertEqual(body["runs-on"], "ubuntu-24.04", name)
+                # Each job keys its own uv cache on Quick's own pins (#940).
+                (uv,) = (s for s in body["steps"] if "setup-uv" in s.get("uses", ""))
+                self.assertEqual(
+                    uv["with"]["cache-dependency-glob"],
+                    ".github/workflows/ci-quick.yml",
+                )
+                self.assertEqual(uv["with"]["cache-suffix"], name)
+
+    def test_quick_validation_fails_unless_every_job_succeeded(self) -> None:
+        """A skipped required check passes, so the reporting job always runs
+        and its one step fails on any other result (#1063)."""
+        body = job("ci-quick.yml", "quick")
+        (step,) = body["steps"]
+        needed = body["needs"]
+        contexts: dict[str, Any] = {"inputs": {"checkout-ref": MERGE}, "github": {}}
+        for failed, result in itertools.product(
+            needed, ("failure", "cancelled", "skipped", "success")
+        ):
+            needs = {
+                name: {"result": result if name == failed else "success"}
+                for name in needed
+            }
+            with self.subTest(job=failed, result=result):
+                # always(): the job runs whatever the others did.
+                self.assertTrue(evaluate(body["if"], needs=needs, **contexts))
+                runs = evaluate(step["if"], needs=needs, **contexts)
+                self.assertEqual(runs, result != "success")
+                if not runs:
+                    continue
+                # The step that runs fails the job, as its own shell exits.
+                results = evaluate(
+                    step["env"]["RESULTS"], interpolate=True, needs=needs, **contexts
+                )
+                done = subprocess.run(
+                    [
+                        "bash",
+                        "--noprofile",
+                        "--norc",
+                        "-eo",
+                        "pipefail",
+                        "-c",
+                        step["run"],
+                    ],
+                    env=dict(os.environ, RESULTS=str(results)),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn(f"{result}", done.stdout)
 
     def test_semantic_subset_requires_the_protected_cadence(self) -> None:
         jobs = workflow("ci-build.yml")["jobs"]
@@ -2502,12 +2803,20 @@ class RequestTests(unittest.TestCase):
             gh.assert_not_called()
         self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
 
-    def ready(self, quick: list[QuickCheck], **pull: object) -> list[tuple]:
-        """Run ready on PULL with pull's changes and `quick` as the head's checks."""
+    def ready(
+        self,
+        quick: list[QuickCheck],
+        runs: list[ci_log.Run] | None = None,
+        **pull: object,
+    ) -> list[tuple]:
+        """Run ready on PULL with pull's changes, `quick` as the head's checks and
+        `runs` as its pull_request runs of ci-quick.yml."""
 
         def answers(_repository: str, path: str) -> object:
             if path.startswith("pulls/"):
                 return dict(PULL, **pull)
+            if "actions/workflows/ci-quick.yml/runs" in path:
+                return {"workflow_runs": runs or []}
             return {"check_runs": quick}
 
         args = argparse.Namespace(repo="example/fork", pr=170)
@@ -2527,6 +2836,19 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(self.ready([skipped, passed], draft=False), [mark])
         self.assertEqual(self.ready([skipped], draft=True), [mark])
         self.assertEqual(self.ready([], draft=False), [mark])
+
+    def test_ready_marks_nothing_again_while_quick_runs(self) -> None:
+        """A draft's skip with Quick's run still going is a run, not a skip to
+        restart (#1063); with no such run it is restarted as before."""
+        mark = ("pr", "ready", "170", "--repo", "example/fork")
+        skipped = QuickCheck(conclusion="skipped", started_at="2026-11-12T01:00:00Z")
+        self.assertEqual(self.ready([skipped], [QUICK_RUNNING], draft=False), [mark])
+        self.assertEqual(
+            self.ready(
+                [skipped], [{**QUICK_RUNNING, "status": "completed"}], draft=False
+            ),
+            [(*mark, "--undo"), mark],
+        )
 
     def test_ready_refuses_a_body_without_its_attribution_line(self) -> None:
         with self.assertRaisesRegex(ValueError, "attribution line"):
@@ -3358,9 +3680,37 @@ class RetryTests(unittest.TestCase):
             ("error: 503 Service Unavailable", True),
             ("gh: Pull request #502 is already merged", False),
             ("run 503 not found (HTTP 404)", False),
+            ("gh: Bad credentials (HTTP 401)", True),
+            ("gh: Requires authentication (HTTP 401)", False),
+            ("gh: Not Found (HTTP 404)", False),
         ):
             error = subprocess.CalledProcessError(1, "gh", stderr=text)
             self.assertEqual(ci.transient(error), expected, text)
+
+    def test_a_read_answered_bad_credentials_twice_returns_the_third_answer(
+        self,
+    ) -> None:
+        calls: list[tuple[str, ...]] = []
+
+        def unauthorized(*arguments: str, **_: object) -> str:
+            calls.append(arguments)
+            if len(calls) <= 2 or arguments[1] == "-X":
+                raise subprocess.CalledProcessError(
+                    1, ["gh", *arguments], stderr="gh: Bad credentials (HTTP 401)"
+                )
+            return "answer\n"
+
+        with (
+            patch.object(ci.vcs, "gh", side_effect=unauthorized),
+            patch.object(ci.time, "sleep"),
+            patch("sys.stderr"),
+        ):
+            self.assertEqual(ci.gh("api", "repos/x/y/pulls/1"), "answer")
+            self.assertEqual(len(calls), 3)
+            calls.clear()
+            with self.assertRaises(subprocess.CalledProcessError):
+                ci.gh("api", "-X", "PATCH", "repos/x/y/issues/comments/1")
+            self.assertEqual(len(calls), 1)
 
     def test_writes_and_other_errors_are_not_repeated(self) -> None:
         for write in (
@@ -3573,9 +3923,11 @@ class RunWaitTests(unittest.TestCase):
         checks: list[dict[str, object] | None],
         draft: bool = True,
         heads: list[str] | None = None,
+        runs: list[ci_log.Run] | None = None,
     ) -> tuple[int, str, list[tuple[str, ...]]]:
         """Run argv against successive Quick check runs of the PR's head; the PR
-        is a draft until marked ready, and its head follows `heads`."""
+        is a draft until marked ready, its head follows `heads`, and `runs` are
+        its pull_request runs of ci-quick.yml."""
         reads = iter(checks)
         moves = iter(heads or [])
         calls: list[tuple[str, ...]] = []
@@ -3585,6 +3937,8 @@ class RunWaitTests(unittest.TestCase):
                 marked = any(call[:2] == ("pr", "ready") for call in calls)
                 head = next(moves, (heads or [HEAD])[-1])
                 return dict(PULL, draft=draft and not marked, head={"sha": head})
+            if "actions/workflows/ci-quick.yml/runs" in path:
+                return {"workflow_runs": runs or []}
             check = next(reads, checks[-1])
             return {"check_runs": [check] if check else []}
 
@@ -3660,6 +4014,32 @@ class RunWaitTests(unittest.TestCase):
         )
         self.assertEqual(status, 2)
         self.assertIn("wait 170 --quick", output)
+
+    def test_wait_quick_waits_out_a_run_whose_check_has_not_appeared(self) -> None:
+        """On a ready PR with only the draft's skip, an unfinished Quick run is
+        waited for past MERGEABLE_WAIT (#1063)."""
+        skipped = dict(self.check("completed", "skipped"), started_at="")
+        done = self.check("completed", "success")
+        # The clock moves 10 seconds a read: 40 skipped reads pass the grace.
+        reads = 2 + ci.MERGEABLE_WAIT // 10
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick"],
+            [*[skipped] * reads, done],
+            draft=False,
+            runs=[QUICK_RUNNING],
+        )
+        self.assertEqual(status, 0)
+        self.assertIn(f"in_progress: {QUICK_RUNNING['html_url']}", output)
+        self.assertNotIn("only skipped", output)
+        # With no unfinished run the skip is a draft's, refused as before.
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick"],
+            [*[skipped] * reads, done],
+            draft=False,
+            runs=[{**QUICK_RUNNING, "status": "completed"}],
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("ready 170 --wait", output)
 
     def test_ready_wait_follows_the_head_it_marked(self) -> None:
         # A push lands between the ready mark and the wait: the wait stops.
@@ -3857,6 +4237,8 @@ class EnqueueWorld:
     comments (cleanup records and the discussion)."""
 
     quick: ci.CheckRun | None = field(default_factory=lambda: EnqueueTests.QUICK)
+    # The head's pull_request runs of ci-quick.yml.
+    quick_runs: list[ci_log.Run] = field(default_factory=list)
     requested: ci_log.Run | None = field(default_factory=lambda: EnqueueTests.REQUESTED)
     dispatched: list[ci_log.Run] | None = None
     pages: list[list[ci_log.Run]] | None = None
@@ -3923,6 +4305,7 @@ class EnqueueTests(unittest.TestCase):
             "check-runs?check_name=Quick%20validation": {
                 "check_runs": [world.quick] if world.quick else []
             },
+            "actions/workflows/ci-quick.yml/runs": {"workflow_runs": world.quick_runs},
             "actions/runs/4/jobs": {
                 "jobs": [{"name": "plan", "conclusion": "skipped"}]
             },
@@ -3992,11 +4375,30 @@ class EnqueueTests(unittest.TestCase):
         red = dict(self.QUICK, conclusion="failure")
         for label, options, message in (
             ("red Quick", {"quick": red}, "runs/1"),
-            ("no Quick", {"quick": None}, "no run"),
+            (
+                "no Quick",
+                {"quick": None},
+                # The refusal says what to do in each case (#940).
+                r"no run\. .*ci\.py wait 170 --quick\. .*push a commit without \[skip ci\]",
+            ),
             (
                 "pending Quick",
                 {"quick": dict(red, status="in_progress", conclusion=None)},
                 "in_progress",
+            ),
+            # Quick's jobs still run, so its check has not appeared (#1063).
+            (
+                "running Quick, no check",
+                {"quick": None, "quick_runs": [QUICK_RUNNING]},
+                f"in_progress/None: {QUICK_RUNNING['html_url']}",
+            ),
+            (
+                "running Quick, a draft's skip",
+                {
+                    "quick": dict(red, conclusion="skipped"),
+                    "quick_runs": [QUICK_RUNNING],
+                },
+                f"in_progress/None: {QUICK_RUNNING['html_url']}",
             ),
             (
                 "red request",
@@ -4741,7 +5143,7 @@ class World:
     later_runs (the dispatched runs any later listing sees) and requests (this
     checkout's request records, whose runs GitHub no longer has)."""
 
-    quick: CheckRun = field(default_factory=quick_run)
+    quick: CheckRun | None = field(default_factory=quick_run)
     runs: list[list[ci_log.Run]] = field(default_factory=list)
     queue: ci.QueueState = field(default_factory=queue_state)
     heads: list[str] = field(default_factory=lambda: [HEAD, HEAD])
@@ -4752,6 +5154,7 @@ class World:
     labeled: list[ci_log.Run] = field(default_factory=list)
     later_runs: list[list[ci_log.Run]] | None = None
     requests: list[dict[str, object]] = field(default_factory=list)
+    quick_runs: list[ci_log.Run] = field(default_factory=list)
 
 
 class FakeGitHub:
@@ -4765,7 +5168,12 @@ class FakeGitHub:
 
     def api(self, _repository: str, path: str) -> object:
         answers = {
-            "check-runs": {"check_runs": [self.world.quick]},
+            "check-runs": {
+                "check_runs": [self.world.quick] if self.world.quick else []
+            },
+            "actions/workflows/ci-quick.yml/runs": {
+                "workflow_runs": self.world.quick_runs
+            },
             "event=merge_group": {"workflow_runs": self.world.group},
             "compare/rust-migration...": {
                 "commits": [{"sha": sha} for sha in self.world.commits],
@@ -5016,6 +5424,17 @@ class StateTests(unittest.TestCase):
             with self.subTest(line):
                 _, output, _ = self.state(world=world)
                 self.assertIn(line + "\n", output)
+
+    def test_a_running_quick_without_its_check_shows_as_running(self) -> None:
+        """No Quick validation check yet, Quick's jobs still running (#1063)."""
+        running = World(
+            runs=[[self.NATIVE_GREEN]], quick=None, quick_runs=[QUICK_RUNNING]
+        )
+        _, output, _ = self.state(world=running)
+        self.assertIn(f"Quick at head: in_progress {QUICK_RUNNING['html_url']}", output)
+        self.assertIn("enqueue checks: blocked: Quick validation at", output)
+        _, output, _ = self.state(world=replace(running, quick_runs=[]))
+        self.assertNotIn(QUICK_RUNNING["html_url"], output)
 
     def test_green_head_passes_enqueue_checks_only_as_checks(self) -> None:
         green = World(runs=[[self.NATIVE_GREEN]])
@@ -5817,6 +6236,193 @@ class CommentTests(unittest.TestCase):
             github, "--issue", "171", "--agent", "/root/a", "--show"
         )
         self.assertIn("on issue #171", out)
+
+    def test_a_plan_review_is_not_adopted_as_a_status_comment(self) -> None:
+        """`Reviewed plan:` is a report header too (#1063), in every form the
+        report writer accepts."""
+        plan = (
+            "Reviewed plan: #171 at 1007aa96f8\n\n"
+            + attribution("/root/rev")
+            + "\n\nplan accepted"
+        )
+        bold = plan.replace("Reviewed plan:", "**Reviewed plan:**")
+        self.assertEqual(review_report.reviewed_plan(bold), (171, "1007aa96f8"))
+        self.assertTrue(status_comment.is_report(bold))
+        github = FakeComments([])
+        github.store.append(FakeComments.comment(1000, plan, issue=171))
+        code, _, err = self.run_comment(
+            github, "--issue", "171", "--agent", "/root/rev", "--comment-id", "1000"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("is a review report or cleanup acceptance", err)
+        self.assertEqual(github.writes, [])
+
+
+class ReportTests(unittest.TestCase):
+    """ci.py report: post or replace a review report from a file (#1063)."""
+
+    REPORT = review(HEAD, "/root/rev", "Disposition: accepted, whole PR behaviour")
+
+    def run_report(
+        self, github: FakeComments, *argv: str, body: str | None = None
+    ) -> tuple[int, str, str]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "report.md"
+            if body is not None:
+                path.write_text(body)
+                argv = (*argv, "--body-file", str(path))
+            with (
+                patch.object(status_comment, "gh", side_effect=github.gh),
+                patch("sys.argv", ["ci.py", "report", *argv, "--repo", "example/fork"]),
+                patch("sys.stdout", new_callable=io.StringIO) as out,
+                patch("sys.stderr", new_callable=io.StringIO) as err,
+            ):
+                code = ci.main()
+        return code, out.getvalue(), err.getvalue()
+
+    def test_no_report_posts_the_body_unchanged(self) -> None:
+        github = FakeComments([])
+        code, out, _ = self.run_report(
+            github, "170", "--agent", "/root/rev", body=self.REPORT + "\n"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            github.writes,
+            [
+                (
+                    "POST",
+                    "repos/example/fork/issues/170/comments",
+                    {"body": self.REPORT + "\n"},
+                )
+            ],
+        )
+        self.assertIn("#issuecomment-2000", out)
+        code, out, _ = self.run_report(github, "170", "--agent", "/root/rev", "--show")
+        self.assertEqual(out, self.REPORT + "\n\n")
+
+    def test_one_report_is_patched_unless_it_changed_since_read(self) -> None:
+        old = review(HEAD, "/root/rev", "Disposition: findings to remediate, whole PR")
+        status = "<!-- status comment: /root/rev -->\nStatus\n" + attribution(
+            "/root/rev"
+        )
+        other = review(HEAD, "/root/other", "Disposition: accepted, whole PR porting")
+        github = FakeComments([(other, ACCOUNT), (status, ACCOUNT), (old, ACCOUNT)])
+        code, _, _ = self.run_report(
+            github, "170", "--agent", "/root/rev", body=self.REPORT
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            github.writes,
+            [
+                (
+                    "PATCH",
+                    "repos/example/fork/issues/comments/1002",
+                    {"body": self.REPORT},
+                )
+            ],
+        )
+        # Another agent's report and the agent's own status comment are left alone.
+        self.assertEqual([c["body"] for c in github.store[:2]], [other, status])
+        changed = FakeComments([(old, ACCOUNT)])
+        changed.reads_by_id[1000] = FakeComments.comment(
+            1000, old, updated="2026-11-12T03:00:00Z"
+        )
+        code, _, err = self.run_report(
+            changed, "170", "--agent", "/root/rev", body=self.REPORT
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("changed since it was read", err)
+        self.assertEqual(changed.writes, [])
+
+    def test_two_reports_by_the_agent_are_refused_and_listed(self) -> None:
+        github = FakeComments([(self.REPORT, ACCOUNT), (self.REPORT, ACCOUNT)])
+        code, _, err = self.run_report(
+            github, "170", "--agent", "/root/rev", body=self.REPORT
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("2 reports by /root/rev on PR #170: 1000", err)
+        self.assertIn("#issuecomment-1001", err)
+        self.assertEqual(github.writes, [])
+
+    def test_a_body_the_readers_cannot_read_is_refused_before_any_write(self) -> None:
+        fenced = (
+            f"Reviewed commit: {HEAD}\n```\n{attribution('/root/rev')}\n```\n"
+            "Disposition: accepted, whole PR"
+        )
+        for body, refusal in (
+            ("Findings: none\n" + self.REPORT, "opens with `Reviewed commit: <sha>`"),
+            (
+                review(HEAD, "/root/other", "Disposition: accepted"),
+                "has ['/root/other']",
+            ),
+            (fenced, "has none"),
+            # An attribution inside a sentence or a four-backtick fence is none
+            # (review of #1065).
+            (
+                f"Reviewed commit: {HEAD}\nAs {attribution('/root/rev')} said.\n"
+                "Disposition: accepted, whole PR",
+                "has none",
+            ),
+            (fenced.replace("```", "````"), "has none"),
+            # A mixed closer does not close a fence, and an unclosed fence runs
+            # to the end (re-check of #1065).
+            (
+                f"Reviewed commit: {HEAD}\n````\n````~\n{attribution('/root/rev')}\n"
+                "````\nDisposition: accepted, whole PR",
+                "has none",
+            ),
+            (
+                f"Reviewed commit: {HEAD}\n```\n{attribution('/root/rev')}\n"
+                "Disposition: accepted, whole PR",
+                "has none",
+            ),
+            (review(HEAD, "/root/rev", "Looks fine."), "gives no disposition"),
+            (
+                f"Reviewed plan: #170 at {HEAD}\n{attribution('/root/rev')}\nplan accepted",
+                "opens with `Reviewed commit: <sha>`",
+            ),
+        ):
+            github = FakeComments([])
+            with self.subTest(refusal):
+                code, _, err = self.run_report(
+                    github, "170", "--agent", "/root/rev", body=body
+                )
+                self.assertEqual(code, 1)
+                self.assertIn(refusal, err)
+                self.assertEqual(github.writes, [])
+        # A fenced attribution alone cannot make a report of unknown authorship.
+        self.assertEqual(review_report.agent(fenced), review_report.UNKNOWN)
+
+    def test_a_plan_review_goes_on_its_issue(self) -> None:
+        plan = f"Reviewed plan: #171 at {HEAD}\n\n{attribution('/root/rev')}\n\nplan accepted"
+        github = FakeComments([])
+        code, _, err = self.run_report(
+            github, "--issue", "171", "--agent", "/root/rev", body=plan
+        )
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(
+            github.writes,
+            [("POST", "repos/example/fork/issues/171/comments", {"body": plan})],
+        )
+        for body in (
+            plan.replace("#171", "#170"),
+            plan.replace("plan accepted", "accepted"),
+            plan.replace("plan accepted", "plan acceptedly"),
+        ):
+            code, _, _ = self.run_report(
+                FakeComments([]), "--issue", "171", "--agent", "/root/rev", body=body
+            )
+            self.assertEqual(code, 1)
+
+    def test_a_create_that_does_not_answer_finds_the_landed_report(self) -> None:
+        github = FakeComments([], post="times out")
+        code, out, _ = self.run_report(
+            github, "170", "--agent", "/root/rev", body=self.REPORT
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("did not answer", out)
+        self.assertIn("#issuecomment-2000", out)
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
 
 
 def mac_job(

@@ -61,6 +61,10 @@ crate::abi::shared_records! {
         pub town: u16,
         /// A company.
         pub company: u8,
+        /// A second company: `ScriptEventCompanyMerger`'s new owner.
+        pub other_company: u8,
+        /// A `Money` value: `ScriptEventCompanyAskMerger`'s value.
+        pub value: i64,
         /// A name's bytes, borrowed for the call: `ScriptEventCompanyRenamed` and
         /// `ScriptEventPresidentRenamed` copy them into their `std::string`.
         pub text: *const u8,
@@ -94,6 +98,8 @@ impl ScriptEvent {
             industry: 0,
             town: 0,
             company: 0,
+            other_company: 0,
+            value: 0,
             text: std::ptr::null(),
             text_length: 0,
         }
@@ -217,6 +223,53 @@ impl ScriptEvent {
             company: company.0,
             town: town.0,
             ..Self::of(ScriptEventType::ET_EXCLUSIVE_TRANSPORT_RIGHTS)
+        }
+    }
+
+    /// `ScriptEventCompanyNew(owner)`.
+    #[must_use]
+    pub const fn company_new(owner: CompanyID) -> Self {
+        Self {
+            company: owner.0,
+            ..Self::of(ScriptEventType::ET_COMPANY_NEW)
+        }
+    }
+
+    /// `ScriptEventCompanyInTrouble(owner)`.
+    #[must_use]
+    pub const fn company_in_trouble(owner: CompanyID) -> Self {
+        Self {
+            company: owner.0,
+            ..Self::of(ScriptEventType::ET_COMPANY_IN_TROUBLE)
+        }
+    }
+
+    /// `ScriptEventCompanyAskMerger(owner, value)`.
+    #[must_use]
+    pub const fn company_ask_merger(owner: CompanyID, value: i64) -> Self {
+        Self {
+            company: owner.0,
+            value,
+            ..Self::of(ScriptEventType::ET_COMPANY_ASK_MERGER)
+        }
+    }
+
+    /// `ScriptEventCompanyMerger(old_owner, new_owner)`.
+    #[must_use]
+    pub const fn company_merger(old_owner: CompanyID, new_owner: CompanyID) -> Self {
+        Self {
+            company: old_owner.0,
+            other_company: new_owner.0,
+            ..Self::of(ScriptEventType::ET_COMPANY_MERGER)
+        }
+    }
+
+    /// `ScriptEventCompanyBankrupt(owner)`.
+    #[must_use]
+    pub const fn company_bankrupt(owner: CompanyID) -> Self {
+        Self {
+            company: owner.0,
+            ..Self::of(ScriptEventType::ET_COMPANY_BANKRUPT)
         }
     }
 

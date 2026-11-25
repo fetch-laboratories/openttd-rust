@@ -140,17 +140,21 @@ fn vehicle_defaults(s: &Services) -> (*mut VehicleDefaults, Option<CompanyID>) {
     }
 }
 
-/// `Vehicle::Iterate()` filtered by `owner == company`, yielding index and type.
-fn owned_vehicles(s: &Services, company: CompanyID, mut each: impl FnMut(VehicleID, u8)) {
+/// `Vehicle::Iterate()` filtered by `owner == company`, yielding the vehicle, its index and
+/// its type.
+fn owned_vehicles(
+    s: &Services,
+    company: CompanyID,
+    mut each: impl FnMut(crate::vehicle::VehicleRef, VehicleID, u8),
+) {
+    let r = crate::movement::table(s.shared).vehicle().newgrf();
     let mut from = 0;
-    loop {
-        let mut kind = 0;
-        let id = (s.company.vehicle_next_owned)(company.0, from, &raw mut kind);
-        if id == u32::MAX {
-            break;
+    while let Some(v) = (s.shared.vehicle_next)(from) {
+        let id = v.index(r);
+        from = id.0.wrapping_add(1);
+        if v.owner() == company {
+            each(v, id, v.vehicle_type_raw());
         }
-        from = id.wrapping_add(1);
-        each(VehicleID(id), kind);
     }
 }
 
@@ -180,10 +184,8 @@ fn update_all_service_interval(s: &Services, new_value: i32) {
 
     if let Some(company) = company {
         hit(witness::SETTINGS_SERVICE_DEFAULTS);
-        owned_vehicles(s, company, |id, kind| {
-            if (s.company.vehicle_is_primary)(id.0)
-                && !(s.company.vehicle_service_interval_is_custom)(id.0)
-            {
+        owned_vehicles(s, company, |v, id, kind| {
+            if v.is_primary_vehicle() && !v.service_interval_is_custom() {
                 hit(witness::SETTINGS_SERVICE_VEHICLE);
                 // `SetServiceInterval` takes the `int` of `CompanyServiceInterval` as uint16_t.
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -206,10 +208,8 @@ fn update_service_interval(s: &Services, kind: u8, new_value: i32) {
     if !menu() {
         let company = CompanyID((s.shared.current_company)());
         if (s.shared.company_valid)(company.0) {
-            owned_vehicles(s, company, |id, vehicle_kind| {
-                if vehicle_kind == kind
-                    && (s.company.vehicle_is_primary)(id.0)
-                    && !(s.company.vehicle_service_interval_is_custom)(id.0)
+            owned_vehicles(s, company, |v, id, vehicle_kind| {
+                if vehicle_kind == kind && v.is_primary_vehicle() && !v.service_interval_is_custom()
                 {
                     hit(witness::SETTINGS_SERVICE_TYPE);
                     // `SetServiceInterval(uint16_t)` truncates the setting value.

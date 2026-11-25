@@ -44,6 +44,7 @@ inline const Vehicle *VehicleOf(const OpenTTDVehicle *v) noexcept { return Vehic
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine.base(); }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
 inline uint16_t RustVehicleLastLoadingStation(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_loading_station.base(); }
+inline void RustVehicleSetUnitNumber(OpenTTDVehicle *v, uint16_t unit) noexcept { VehicleOf(v)->unitnumber = unit; }
 inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->GetLastStationVisited().base(); }
 inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->load_unload_ticks; }
 inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
@@ -87,7 +88,6 @@ inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station)
 template <class T> inline auto RustVehicleNextVehicle(const T *v) noexcept { return v->GetNextVehicle(); }
 inline OpenTTDVehicle *RustVehicleNextArticulated(OpenTTDVehicle *v) noexcept { return RustVehicle(VehicleOf(v)->GetNextArticulatedPart()); }
 /** Chain, subtype and unit leaves shared by consist transactions and controllers. */
-inline Vehicle *RustVehiclePrevious(const Vehicle *v) noexcept { return v->Previous(); }
 inline uint8_t RustVehicleDirectionTowards(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept { return GetDirectionTowards(VehicleOf(v), x, y); }
 inline void RustVehicleSetServiceInterval(Vehicle *v, uint16_t interval) noexcept { v->SetServiceInterval(interval); }
 inline void RustVehicleSetServiceIntervalIsPercent(Vehicle *v, bool percent) noexcept { v->SetServiceIntervalIsPercent(percent); }
@@ -141,12 +141,6 @@ template <typename Handle> inline uint32_t RustVehicleIndex(Handle v) noexcept
 	else return static_cast<const Vehicle *>(static_cast<const void *>(v))->index.base();
 }
 inline uint32_t RustVehicleIndexOpaque(const void *v) noexcept { return RustVehicleIndex(v); }
-/** The legacy company sentinel is UINT32_MAX, distinct from VehicleID::Invalid(). */
-inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
-{
-	const Vehicle *previous = RustVehiclePrevious(v);
-	return previous == nullptr ? UINT32_MAX : RustVehicleIndexOpaque(previous);
-}
 inline void RustVehicleSetEngine(OpenTTDVehicle *v, uint16_t engine) noexcept { VehicleOf(v)->SetEngineType(EngineID(engine)); }
 inline void RustVehicleSetOwner(OpenTTDVehicle *v, uint8_t owner) noexcept { VehicleOf(v)->SetOwner(Owner(owner)); }
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->GetEngineType().base(); }
@@ -202,9 +196,6 @@ template <typename Result, auto Read>
 static Result RustOpaqueVehicleTileRead(void *shell) noexcept { return Read(RustVehicleTile(static_cast<const Vehicle *>(shell))); }
 inline bool RustVehicleOldEnough(const Vehicle *v) noexcept { return RustVehicleEconomyAge(v) > VEHICLE_PROFIT_MIN_AGE; }
 
-/** Legacy indexed callback adapter; canonical read stays shared, owner resolves once. */
-template <typename Result, auto Read>
-static Result RustIndexedVehicleRead(uint32_t id) noexcept { return Read(Vehicle::Get(VehicleID(id))); }
 /** Indexed callback adapter for a canonical field setter. */
 template <typename Value, auto Write>
 static void RustIndexedVehicleWrite(uint32_t id, Value value) noexcept { Write(Vehicle::Get(VehicleID(id)), value); }

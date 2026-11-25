@@ -57,11 +57,11 @@
 
 ## Company finances and economy lifecycle
 
-- Rust owns: cash, loans, histories, rating/value, construction budgets, maintenance/interest/year rotation, bankruptcy/recovery, ranked offers, company creation/deletion/acquisition and ownership transfer; economy scheduling, prices, inflation/recession, scores and tick cursor.
-- C++ keeps: identity, settings, networking, UI, AI and world services; `StartupCompanies`/`InitializeCompanies` timer/reset control.
-- Checks: `python3 tools/migration.py simulate companies economy`; native CTest.
+- Rust owns: cash, loans, histories, rating/value, construction budgets, maintenance/interest/year rotation, bankruptcy/recovery, ranked offers, company creation/deletion/acquisition and ownership transfer with its town, group, vehicle, station, sign, goal and story-page walk; economy scheduling, prices, inflation/recession, scores and tick cursor; the eight company and financial commands, writing a native `CommandCost`; their news, script events and window calls. `company.rs` is a finished file: each original body is one Rust function under its name, and `AI::StartNew` returns to a caller-owned C++ frame (`Startup`, `Control`, `Tick`).
+- C++ keeps: the `Company` record and its pool, through the identity table's slots until #907; `_price_base_specs`, cargo payments, maintenance-cost inline bodies, GUI, sound, AI, networking and the timers; `StartupCompanies`/`InitializeCompanies` timer/reset control.
+- Checks: `python3 tools/migration.py simulate companies economy`; `company::tests` (the 40,320-case financial command oracle and the news, event, window and assertion orders); native CTest.
 - Limits: Gaps remain in subsidies, exclusive rights, goals, story pages, hostile purchase, multiplayer runtime or NewGRFs.
-- PRs: #149, #209.
+- PRs: #149, #209, #1048's pass.
 
 ## Link graph job computation
 

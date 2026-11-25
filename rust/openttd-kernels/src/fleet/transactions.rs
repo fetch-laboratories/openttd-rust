@@ -8,7 +8,7 @@
 //! Whole autoreplace transactions. Native costs/seeds live in the caller's stack.
 use super::{
     ALL_GROUP, DEFAULT_GROUP, ERROR, GroupServices, add_engine_replacement, add_profit,
-    engine_replacement, group, remove_engine_replacement, update_autoreplace,
+    engine_replacement, group, remove_engine_replacement, update_autoreplace_raw,
 };
 use crate::cargo_type::{CargoType, INVALID_CARGO};
 use crate::command_type::DoCommandFlag;
@@ -1252,7 +1252,7 @@ unsafe fn set_rule(
         unsafe { add_engine_replacement(gw, head, from, to, id, old, flags) }
     };
     if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
-        unsafe { update_autoreplace(gw, company) };
+        unsafe { update_autoreplace_raw(gw, company) };
         if w.is_local_company() {
             unsafe { (gw.replace_dirty)(kind) };
         }

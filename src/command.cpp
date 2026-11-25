@@ -209,7 +209,6 @@ static_assert(CCA_NEW == 0 && CCA_DELETE == 2 && CRR_NONE == 0 && CRR_BANKRUPT =
 const OpenTTDCommandPostServices &GetRustCommandPostServices() noexcept
 {
 	static const OpenTTDCommandPostServices services{
-		.assign_company_cost = [](OpenTTDCommandCost *out, const OpenTTDCompanyCost *value) noexcept { *reinterpret_cast<CommandCost *>(out) = RustCompanyCost(*value); },
 		.command = GetRustCommandServices,
 		.control_begin = [](OpenTTDCommandControlStorage *storage) noexcept -> const OpenTTDTileOwnerContext * { return &(new (storage) RustTileOwnerContext())->view; },
 		.control_end = [](OpenTTDCommandControlStorage *storage) noexcept { reinterpret_cast<RustTileOwnerContext *>(storage)->~RustTileOwnerContext(); },

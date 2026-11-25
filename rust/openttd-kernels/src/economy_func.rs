@@ -59,7 +59,7 @@ pub(crate) fn get_price_raw(index: u32, cost_factor: u32, grf_shift: i32, shift:
 )]
 fn multiply_price(index: Price, cost_factor: u32) -> i64 {
     let factor = cost_factor as i32;
-    crate::company::price(usize::from(index.0)).saturating_mul(i64::from(factor))
+    crate::company::price(index).saturating_mul(i64::from(factor))
 }
 
 /// The shift that ends `GetPrice`: left for a non-negative `shift`, else arithmetic right.
@@ -122,6 +122,11 @@ pub(crate) fn scale_by_inverse_cargo_scale(
     (num.wrapping_mul(100) / u32::from(percentage)).max(1)
 }
 
+/// `EconomyIsInRecession`: is the economy in recession?
+pub(crate) fn economy_is_in_recession() -> bool {
+    crate::company::economy_fluct() <= 0
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -176,15 +181,9 @@ pub(crate) mod tests {
     }
 
     /// Store `_price[index]` and return its earlier value, under `GLOBAL_LOCK`.
-    #[allow(unsafe_code)] // One store to the process-lifetime price array.
     pub(crate) fn set_price(index: Price, value: i64) -> i64 {
-        let earlier = crate::company::price(usize::from(index.0));
-        // SAFETY: The caller holds `GLOBAL_LOCK`, which serializes the price array.
-        unsafe {
-            crate::company::openttd_rust_economy_prices()
-                .add(usize::from(index.0))
-                .write(value);
-        }
+        let earlier = crate::company::price(index);
+        crate::company::testing::set_price(index, value);
         earlier
     }
 

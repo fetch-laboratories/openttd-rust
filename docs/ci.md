@@ -6,7 +6,7 @@ Requesting and reading CI runs, and what costs money. Local builds and checks ar
 
 | File | Role |
 | --- | --- |
-| `ci-quick.yml` | Quick: the Cargo checks and the [cleanup gates](rust-migration.md#quick-cleanup-checks). Reports `Quick validation`. |
+| `ci-quick.yml` | Quick: three parallel jobs, `Rust checks` (the Cargo checks and the Clippy ratchet), `Python checks` (Ruff, ty and the `tools/test-*.py` regression checks) and `Cleanup gates` (the other [cleanup gates](rust-migration.md#quick-cleanup-checks) and the commit checker), then `Quick validation`, which needs the three and fails unless each succeeded. Until it reports, `ci.py` reads the head's unfinished Quick run as running. |
 | `ci-request.yml` | Requested runs and the merge queue; publishes `Full validation` and `Validated tree`. |
 | `rust-migration.yml` | Native build, component comparisons and simulation shards. |
 | `ci-build.yml` | Platform builds, `Rust tests (32-bit)`, annotation checks and the platform comparison. |
@@ -50,12 +50,13 @@ Full is the merge gate; its builds are set by [ADR 0018](adr/0018-builds-before-
 | `python3 tools/ci.py log RUN` | Read a failed run: each failed job's failing step, error lines and tail, while other jobs still run. Takes a run or job URL, a request file or `--pr N`; `--grep RE`, `--job NAME`, `--full`. Logs are cached under `.local/ci-logs/`; `wait` and `queue-wait` print the same summary on failure. |
 | `python3 tools/ci.py state PR` | Read a PR's state in one call: head, mergeability, Quick and the newest requested run per profile at head, the run `enqueue` reads when it is on an earlier commit (with how many commits the head is past it), queue position, review reports (agent, disposition, reviewed SHA) and what `enqueue`'s current checks say; `--json` for scripts. `status PR` is the same; `status REQUEST.json` prints a request's state once. |
 | `python3 tools/ci.py ready PR` | Mark a draft PR ready once a preflight stamp covers its head. |
+| `python3 tools/ci.py report PR --agent PATH --body-file FILE` | Post a review report from a file, or replace the one this agent posted, after reading it again; `--issue N` for a plan review, `--show` prints it. It refuses, before writing, a body without its opening header, with other than one attribution line for `--agent` outside fenced blocks and quotations, or without a closing disposition. |
 | `python3 tools/ci.py enqueue PR` | Queue a PR ([integration](workflow.md#integration)). It needs `Quick validation` green at the head and the PR's newest requested or bootstrap run, on any of its own commits, green; a PR that changes `.github/workflows/` needs that run, and a green bootstrap Full, at the head. It refuses, naming each one, while a cleanup record lacks its acceptance. |
 | `python3 tools/ci.py queue-wait PR` | Wait, as a background job, until a queued PR merges or leaves the queue. |
 | `python3 tools/ci.py failures --since DATE` | Count failed runs. |
 | `python3 tools/ci.py macos-fallback RUN [RUN ...] [--pr N]` | Root's macOS fallback ([CI administration](root-workflow.md#ci-administration)). |
 
-- Reads through `ci.py` (REST GETs, variable lists, the queue-state query) are tried three times on HTTP 502, 503 or 504. A dispatch, rerun, variable change or comment is not repeated; `enqueue` reads the queue after a failed merge call and tries once more only when the PR is not queued.
+- Reads through `ci.py` (REST GETs, variable lists, the queue-state query) are tried three times on HTTP 502, 503 or 504, and on the `Bad credentials (HTTP 401)` GitHub sometimes gives a healthy login. A dispatch, rerun, variable change or comment is not repeated; `enqueue` reads the queue after a failed merge call and tries once more only when the PR is not queued.
 
 - Which profile to request, and when, is in [checks](workflow.md#checks).
 - `request --profile full` is an optional pre-check; the queue's Full is the merge gate. A failing pre-check holds the PR out of the queue until a newer requested run on its commits passes.

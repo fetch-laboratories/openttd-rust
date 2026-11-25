@@ -661,6 +661,17 @@ pub(crate) fn file_cargo_count(file: Handle) -> usize {
     (services().file)(file).labels.size
 }
 
+/// `CargoSpec::Iterate()`: the native spec of each valid cargo, in cargo order, each looked
+/// up as the iteration advances.
+pub(crate) fn cargo_specs() -> impl Iterator<Item = *const c_void> {
+    let s = services();
+    crate::cargotype::iterate(
+        |cargo| (s.spec)(cargo),
+        |spec| is_cargo_spec_valid((s.bitnum)(*spec)),
+    )
+    .map(|(_, spec)| spec)
+}
+
 /// Determines the first active cargo slot with a certain town effect.
 /// `FindFirstCargoWithTownAcceptanceEffect`, in active cargo-slot order.
 pub(crate) fn first_town_acceptance(effect: u8) -> Option<u8> {
@@ -710,6 +721,24 @@ pub(crate) fn install_test_labels(labels: &'static [u32], cargos: &[u8]) {
                 .label_map
                 .insert(CargoLabel(*label), CargoType(*cargo));
         }
+    }
+}
+/// Test-only: the registry holds no valid cargo spec, so [`cargo_specs`] visits none. Forget it
+/// with [`clear_test_labels`].
+#[cfg(test)]
+pub(crate) fn install_test_no_cargo() {
+    static TABLE: GameState<Services> = GameState::new(TEST_TABLE);
+    extern "C" fn spec(_: u8) -> Handle {
+        ptr::null()
+    }
+    extern "C" fn bitnum(_: Handle) -> u8 {
+        crate::cargotype::INVALID_CARGO_BITNUM
+    }
+    // SAFETY: Serialized by the caller's test lock.
+    unsafe {
+        (*TABLE.get()).spec = spec;
+        (*TABLE.get()).bitnum = bitnum;
+        (*REGISTRY.get()).services = TABLE.get();
     }
 }
 /// Test-only: forget [`install_test_labels`].

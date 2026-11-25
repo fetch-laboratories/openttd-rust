@@ -9,7 +9,7 @@ use crate::command_type::{
 };
 use crate::network_command::CommandData;
 use crate::openttd::PauseMode;
-use crate::services::{ByteSpan, CommandCost, CommandServices, Cost};
+use crate::services::{ByteSpan, CommandServices, Cost};
 crate::abi::shared_records! {
     fn abi_record;
     "OpenTTDCommandControlStorage" ["probe"] => pub struct ControlStorage {
@@ -18,7 +18,6 @@ crate::abi::shared_records! {
 }
 #[repr(C)]
 pub struct Services {
-    pub(crate) assign_company_cost: extern "C" fn(*mut CommandCost, *const crate::company::Cost),
     pub(crate) command: extern "C" fn() -> &'static CommandServices,
     pub(crate) control_begin:
         extern "C" fn(*mut ControlStorage) -> *const crate::tile_owner::Context,
@@ -34,7 +33,7 @@ pub struct Services {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDCommandPostServices" ["probe"] => Services {
-        assign_company_cost, command, control_begin, control_end, desync_logging, log,
+        command, control_begin, control_end, desync_logging, log,
         network, pack_colour, pack_control, pack_pause, session,
     };
 }
@@ -89,59 +88,37 @@ pub(crate) fn colour(shared: &crate::services::Services, primary: bool, colour: 
     )
 }
 
+/// `CmdCompanyCtrl` executed for a `Post`; human creation and deletion never request the AI
+/// startup action, so the frame needs no continuation.
 fn control_cost(
     p: &Services,
     out: Cost<'_>,
-    action: u8,
-    target: u8,
-    reason: u8,
-    client: u32,
-    execute: bool,
+    flags: crate::command_type::DoCommandFlags,
+    args: crate::company::CmdCompanyCtrl,
 ) {
     let mut storage = std::mem::MaybeUninit::<ControlStorage>::uninit();
     let context = (p.control_begin)(storage.as_mut_ptr());
-    let mut frame = crate::company::Control {
-        result: crate::company::Cost {
-            cost: 0,
-            param: 0,
-            error: 0,
-            expense: 0,
-        },
-        startup: crate::company::Startup {
-            company: 0,
-            requested: 0,
-            is_ai: false,
-            stage: 0,
-        },
-        client,
-        action,
-        target,
-        reason,
-        execute,
-        stage: 0,
-    };
-    // Human creation and deletion never request the AI startup action.
-    crate::company::control(
+    let mut frame = crate::company::Control::new(flags, args);
+    crate::company::cmd_company_ctrl(
         unsafe { &*((p.command)().company)() },
         unsafe { &*context },
+        out,
         &mut frame,
     );
-    (p.assign_company_cost)(out.0, &raw const frame.result);
     (p.control_end)(storage.as_mut_ptr());
 }
 
-fn control(
-    shared: &crate::services::Services,
-    action: u8,
-    target: u8,
-    reason: u8,
-    client: u32,
-) -> bool {
+/// `Command<CMD_COMPANY_CTRL>::Post(cca, company_id, reason, client_id)`.
+fn control(shared: &crate::services::Services, args: crate::company::CmdCompanyCtrl) -> bool {
     let p = (shared.command_post)();
-    let client = if client == crate::network_type::INVALID_CLIENT_ID {
+    let client = if args.client_id.0 == crate::network_type::INVALID_CLIENT_ID {
         crate::network_type::CLIENT_ID_SERVER
     } else {
-        client
+        args.client_id.0
+    };
+    let args = crate::company::CmdCompanyCtrl {
+        client_id: crate::network_type::ClientID(client),
+        ..args
     };
     crate::command::post(
         p,
@@ -149,35 +126,34 @@ fn control(
         COMMAND_TYPE_SERVER_SETTING,
         CommandFlag::SPECTATOR | CommandFlag::CLIENT_ID | CommandFlag::NO_EST,
         client != crate::network_type::INVALID_CLIENT_ID,
-        |out, flags| {
-            control_cost(
-                p,
-                out,
-                action,
-                target,
-                reason,
-                client,
-                flags & DoCommandFlag::EXECUTE != 0,
-            );
-        },
-        || (p.pack_control)(action, target, reason, client),
+        |out, flags| control_cost(p, out, crate::command_type::DoCommandFlags(flags), args),
+        || (p.pack_control)(args.cca.0, args.company_id.0, args.reason.0, client),
     )
 }
+/// `Command<CMD_COMPANY_CTRL>::Post(CCA_NEW, INVALID_COMPANY, CRR_NONE, client)`.
 pub(crate) fn new_company(shared: &crate::services::Services, client: u32) -> bool {
     control(
         shared,
-        crate::company_type::CCA_NEW,
-        crate::company_type::INVALID_OWNER,
-        crate::company_type::CRR_NONE,
-        client,
+        crate::company::CmdCompanyCtrl {
+            cca: crate::company_type::CompanyCtrlAction::CCA_NEW,
+            company_id: crate::company_type::CompanyID::INVALID,
+            reason: crate::company_type::CompanyRemoveReason::CRR_NONE,
+            client_id: crate::network_type::ClientID(client),
+        },
     )
 }
-pub(crate) fn delete_company(shared: &crate::services::Services, id: u8) -> bool {
+/// `Command<CMD_COMPANY_CTRL>::Post(CCA_DELETE, company, CRR_BANKRUPT, INVALID_CLIENT_ID)`.
+pub(crate) fn delete_company(
+    shared: &crate::services::Services,
+    company: crate::company_type::CompanyID,
+) -> bool {
     control(
         shared,
-        crate::company_type::CCA_DELETE,
-        id,
-        crate::company_type::CRR_BANKRUPT,
-        crate::network_type::INVALID_CLIENT_ID,
+        crate::company::CmdCompanyCtrl {
+            cca: crate::company_type::CompanyCtrlAction::CCA_DELETE,
+            company_id: company,
+            reason: crate::company_type::CompanyRemoveReason::CRR_BANKRUPT,
+            client_id: crate::network_type::ClientID(crate::network_type::INVALID_CLIENT_ID),
+        },
     )
 }
