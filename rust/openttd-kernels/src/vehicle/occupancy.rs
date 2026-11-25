@@ -528,10 +528,6 @@ impl CommandServices {
             ensure_no_train_on_track_bits(self.shared.map(), tile, track_bits),
         );
     }
-    /// [`Self::no_train`] for callers in files no pass has finished.
-    pub(crate) fn no_train_raw(&self, out: *mut CommandCost, tile: u32, track_bits: u8) {
-        self.no_train(out, TileIndex(tile), TrackBits(track_bits));
-    }
     /// `TunnelBridgeIsFree(tile, endtile, ignore)`.
     pub(crate) fn wormhole_free(
         &self,

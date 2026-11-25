@@ -1458,10 +1458,6 @@ impl Cost<'_> {
     pub(crate) fn no_vehicle(self, command: &CommandServices, tile: u32) {
         command.no_vehicle_raw(self.0, tile);
     }
-    /// `EnsureNoTrainOnTrackBits`.
-    pub(crate) fn no_train(self, command: &CommandServices, tile: u32, bits: u8) {
-        command.no_train_raw(self.0, tile, bits);
-    }
     /// `TunnelBridgeIsFree` with no ignored vehicle.
     pub(crate) fn wormhole_free(self, command: &CommandServices, tile: u32, end: u32) {
         command.wormhole_free_raw(self.0, tile, end);
