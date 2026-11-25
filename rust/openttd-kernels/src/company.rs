@@ -1071,17 +1071,18 @@ pub extern "C" fn openttd_rust_company_takeover_allowed_abi(
     u8::from(check_takeover_vehicle_limit(s, cbig, csmall))
 }
 
-/// Amount of time out for each company to take over a company; timeout is a quarter (3
-/// months of 30 days) divided over the number of companies. The minimum number of days in a
-/// quarter is 90: 31 in January, 28 in February and 31 in March. Note that the company going
-/// bankrupt can't buy itself.
-const TAKE_OVER_TIMEOUT: i32 = 3 * 30 * DAY_TICKS / (MAX_COMPANIES as i32 - 1);
-
 /// `HandleBankruptcyTakeover`: handle the bankruptcy take over of a company. Companies going
 /// bankrupt will ask the other companies in order of their performance rating, so better
 /// performing companies get the 'do you want to merge with Y' question earlier. The question
 /// will then stay till either the company has gone bankrupt or got merged with a company.
 fn handle_bankruptcy_takeover(s: &Services, c: CompanyRef) {
+    // Amount of time out for each company to take over a company;
+    // Timeout is a quarter (3 months of 30 days) divided over the
+    // number of companies. The minimum number of days in a quarter
+    // is 90: 31 in January, 28 in February and 31 in March.
+    // Note that the company going bankrupt can't buy itself.
+    const TAKE_OVER_TIMEOUT: i32 = 3 * 30 * DAY_TICKS / (MAX_COMPANIES as i32 - 1);
+
     let f = c.finances;
     assert_with(|| read_field!(f, bankrupt_asked).any());
 
@@ -2814,18 +2815,20 @@ fn companies_gen_statistics(s: &Services) {
 /// `AddInflation`: add monthly inflation. `check_year`: shall the inflation get stopped after
 /// 170 years? Returns true if inflation is maxed and nothing was changed.
 pub(crate) fn add_inflation(check_year: bool) -> bool {
-    // The cargo payment inflation differs from the normal inflation, so the relative amount
-    // of money you make with a transport decreases slowly over the 170 years. After a few
-    // hundred years we reach a level in which the games will become unplayable as the maximum
-    // income will be less than the minimum running cost.
+    // The cargo payment inflation differs from the normal inflation, so the
+    // relative amount of money you make with a transport decreases slowly over
+    // the 170 years. After a few hundred years we reach a level in which the
+    // games will become unplayable as the maximum income will be less than
+    // the minimum running cost.
     //
-    // Furthermore there are a lot of inflation related overflows all over the place. Solving
-    // them is hardly possible because inflation will always reach the overflow threshold some
-    // day. So we'll just perform the inflation mechanism during the first 170 years (the
-    // amount of years that one had in the original TTD) and stop doing the inflation after
-    // that because it only causes problems that can't be solved nicely and the inflation
-    // doesn't add anything after that either; it even makes playing it impossible due to the
-    // diverging cost and income rates.
+    // Furthermore there are a lot of inflation related overflows all over the
+    // place. Solving them is hardly possible because inflation will always
+    // reach the overflow threshold some day. So we'll just perform the
+    // inflation mechanism during the first 170 years (the amount of years that
+    // one had in the original TTD) and stop doing the inflation after that
+    // because it only causes problems that can't be solved nicely and the
+    // inflation doesn't add anything after that either; it even makes playing
+    // it impossible due to the diverging cost and income rates.
     let year = crate::timer_game_common::calendar_year().0;
     if check_year && !(ORIGINAL_BASE_YEAR..ORIGINAL_MAX_YEAR).contains(&year) {
         return true;
@@ -2982,18 +2985,19 @@ fn companies_pay_interest(s: &Services) {
     companies(s, |c| {
         (s.finance.set_current_company)(c.index.0);
 
-        // Over a year the paid interest should be "loan * interest percentage", but... as
-        // that number is likely not dividable by 12 (pay each month), one needs to account
-        // for that in the monthly fee calculations.
+        // Over a year the paid interest should be "loan * interest percentage",
+        // but... as that number is likely not dividable by 12 (pay each month),
+        // one needs to account for that in the monthly fee calculations.
         //
-        // To easily calculate what one should pay "this" month, you calculate what (total)
-        // should have been paid up to this month and you subtract whatever has been paid in
-        // the previous months. This will mean one month it'll be a bit more and the other
-        // it'll be a bit less than the average monthly fee, but on average it will be exact.
+        // To easily calculate what one should pay "this" month, you calculate
+        // what (total) should have been paid up to this month and you subtract
+        // whatever has been paid in the previous months. This will mean one month
+        // it'll be a bit more and the other it'll be a bit less than the average
+        // monthly fee, but on average it will be exact.
         //
-        // In order to prevent cheating or abuse (just not paying interest by not taking a
-        // loan) we make companies pay interest on negative cash as well, except if infinite
-        // money is enabled.
+        // In order to prevent cheating or abuse (just not paying interest by not
+        // taking a loan) we make companies pay interest on negative cash as well,
+        // except if infinite money is enabled.
         let interest_rate = i64::from(read_field!(e, interest_rate));
         let mut yearly_fee =
             read_field!(c.finances, current_loan).saturating_mul(interest_rate) / 100;
