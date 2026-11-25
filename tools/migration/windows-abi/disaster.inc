@@ -102,6 +102,7 @@ static void Disasters()
 			CHECK(std::string(reinterpret_cast<const char *>(args->headline), args->headline_length) == DisasterCoalHeadline());
 			_disaster_probe->news++;
 		},
+		.string_assertions = 0,
 	};
 	openttd_rust_news_bind(&news);
 	/* Tile 0 is plain rail of company 1, and the probe's train stays in the tile hash on it,
