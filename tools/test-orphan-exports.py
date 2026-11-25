@@ -353,6 +353,54 @@ class OrphanTests(unittest.TestCase):
             )
             self.assertEqual(check(), 1)  # A new row is growth against the base.
 
+    def test_the_gate_exempts_abi_checks_and_platform_entries(self) -> None:
+        found = {
+            "Dead": "src/a.cpp:1",
+            "CheckAbi_ship_cmd": "src/ship_cmd.cpp:9",
+            "WinMain": "src/os/windows/win32_main.cpp:47",
+            "em_openttd_add_server": "src/network/network.cpp:1012",
+        }
+        self.assertEqual(ORPHANS.refused_uncalled(found), {"Dead": "src/a.cpp:1"})
+
+    def test_cli_refuses_a_function_left_uncalled(self) -> None:
+        """A change that deletes a function's last caller deletes the function."""
+        files = {
+            "src/a.cpp": "void Live()\n{\n}\nint main() { Live(); }\n",
+            ORPHANS.BASELINE: "",
+            ORPHANS.UNCALLED_FREE: "",
+        }
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(ORPHANS, "ROOT", Path(directory)),
+        ):
+            root = Path(directory)
+            initialize(root, files)
+
+            def check() -> tuple[int, str]:
+                output = io.StringIO()
+                with (
+                    patch.object(
+                        sys, "argv", ["orphan-exports.py", "--base-ref", "HEAD"]
+                    ),
+                    contextlib.redirect_stdout(output),
+                ):
+                    return ORPHANS.main(), output.getvalue()
+
+            self.assertEqual(check()[0], 0)
+            (root / "src/a.cpp").write_text("void Live()\n{\n}\nint main() {}\n")
+            code, output = check()
+            self.assertEqual(code, 1)
+            self.assertIn("new uncalled free function: Live (src/a.cpp:1)", output)
+            (root / ORPHANS.UNCALLED_FREE).write_text("Live | #975 owner\n")
+            code, output = check()
+            self.assertEqual(code, 1)  # The baseline only shrinks.
+            self.assertIn("uncalled-free-function baseline cannot grow: Live", output)
+            (root / ORPHANS.UNCALLED_FREE).write_text("")
+            (root / "src/a.cpp").write_text(
+                "bool CheckAbi_a() { return true; }\nint main() {}\n"
+            )
+            self.assertEqual(check()[0], 0)
+
     def test_help_and_unknown_options_run_no_check(self) -> None:
         for argv, code in ((["--help"], 0), (["-h"], 0), (["--bsae-ref", "X"], 2)):
             output = io.StringIO()

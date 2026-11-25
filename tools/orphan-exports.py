@@ -18,6 +18,13 @@ those, and those that only tests and tools call. An export whose only production
 references sit in uncalled free functions is a row in
 tools/uncalled-function-baseline.txt, which follows the member baseline's rules.
 
+An uncalled free function is itself refused: deleting a function's last caller
+deletes the function too (docs/porting.md, callees and shared accessors). Each
+one that stands uncalled is a row in tools/uncalled-free-function-baseline.txt,
+which follows the member baseline's rules. Two kinds are exempt: the
+`CheckAbi_*` service-table completeness checks, which no code calls and which
+each new owner file adds, and the entries the platform calls by name.
+
 An export whose only C++ user is a native fixture that #736's classification keeps
 is not an orphan; it leaves with that fixture (docs/porting.md, callees and shared
 accessors). tools/kept-fixture-exports.txt lists each such export with its fixture
@@ -40,6 +47,11 @@ ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "tools/orphan-export-baseline.txt"
 UNCALLED = "tools/uncalled-export-baseline.txt"
 UNCALLED_FUNCTIONS = "tools/uncalled-function-baseline.txt"
+UNCALLED_FREE = "tools/uncalled-free-function-baseline.txt"
+# Called by name from outside C++: Windows starts the program at WinMain, and
+# os/emscripten/pre.js calls em_openttd_add_server.
+ENTRY_POINTS = {"WinMain", "em_openttd_add_server"}
+ABI_CHECK = re.compile(r"CheckAbi_\w+")
 KEPT_FIXTURES = "tools/kept-fixture-exports.txt"
 # Neither defines functions this fork calls by name: vendored code, and the
 # script API, whose Squirrel bindings are generated.
@@ -511,6 +523,33 @@ def baselines(base_ref: str, relative: str) -> tuple[str, str]:
     return baseline, shown.stdout if shown.returncode == 0 else baseline
 
 
+def refused_uncalled(functions: dict[str, str]) -> dict[str, str]:
+    """The uncalled free functions the gate refuses: all but the exempt kinds."""
+    return {
+        name: where
+        for name, where in functions.items()
+        if name not in ENTRY_POINTS and not ABI_CHECK.fullmatch(name)
+    }
+
+
+def check_uncalled_free(base_ref: str, functions: dict[str, str]) -> list[str]:
+    """Refuse an uncalled free function the baseline does not hold, and print it."""
+    baseline, previous = baselines(base_ref, UNCALLED_FREE)
+    errors = [
+        error.replace(
+            "export held only by uncalled members", "uncalled free function"
+        ).replace("uncalled baseline", "uncalled-free-function baseline")
+        for error in uncalled_errors(refused_uncalled(functions), baseline, previous)
+    ]
+    for error in errors:
+        print(error)
+    print(
+        f"Uncalled free functions: {len(owners(baseline))} baselined; "
+        f"{len(errors)} errors"
+    )
+    return errors
+
+
 def check_uncalled(base_ref: str) -> int:
     baseline, previous = baselines(base_ref, UNCALLED)
     errors = uncalled_errors(uncalled(tracked_sources()), baseline, previous)
@@ -520,7 +559,9 @@ def check_uncalled(base_ref: str) -> int:
         f"Exports held only by uncalled members: {len(owners(baseline))} baselined; {len(errors)} errors"
     )
     functions, previous = baselines(base_ref, UNCALLED_FUNCTIONS)
-    _, _, held = uncalled_free_functions(tracked_sources("src", "tools"))
+    uncalled_functions, _, held = uncalled_free_functions(
+        tracked_sources("src", "tools")
+    )
     found = {name: ", ".join(sorted(holders)) for name, holders in held.items()}
     function_errors = [
         error.replace("uncalled members", "uncalled free functions").replace(
@@ -534,7 +575,8 @@ def check_uncalled(base_ref: str) -> int:
         f"Exports held only by uncalled free functions: {len(owners(functions))} "
         f"baselined; {len(function_errors)} errors"
     )
-    return int(bool(errors or function_errors))
+    free_errors = check_uncalled_free(base_ref, uncalled_functions)
+    return int(bool(errors or function_errors or free_errors))
 
 
 def main() -> int:
