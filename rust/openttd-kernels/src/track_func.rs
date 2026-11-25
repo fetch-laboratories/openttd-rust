@@ -1024,6 +1024,14 @@ mod tests {
             )),
             1
         );
+        // An isolated road-reversal bit fails the mask assertion and is still found.
+        assert_eq!(
+            one(&|f| assert_eq!(
+                find_first_trackdir(TrackdirBits(0x0040), counting(f)),
+                Trackdir(6)
+            )),
+            1
+        );
         assert_eq!(
             stopping_failures(|check| {
                 trackdir_to_exitdir(Trackdir::INVALID_TRACKDIR, check);
