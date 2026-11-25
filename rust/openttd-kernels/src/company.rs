@@ -19,9 +19,6 @@
 //! deletion, nested commands, `AI::Stop`). `AI::StartNew` and the `CCA_NEW_AI` `Post` can raise
 //! `Script_FatalError` in ordinary play, so `do_startup_new_company`, `cmd_company_ctrl` and
 //! `on_tick_companies` return to a caller-owned C++ frame before them.
-// The contract above covers the raw-field loads and stores and the native exports that most
-// of the file's functions hold.
-#![allow(unsafe_code)]
 use crate::cargo_type::{CargoType, NUM_CARGO};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_base::COMPANY_MAX_LOAN_DEFAULT;
@@ -154,6 +151,7 @@ pub struct Economy {
 ///
 /// # Safety
 /// `owner` is a live serialized company finance record and `cargo` a valid cargo slot.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) unsafe fn record_delivery(owner: *mut Finances, cargo: CargoType, amount: u32) {
     let delivered = read_field!(owner, cur_economy.delivered_cargo[usize::from(cargo.0)]);
     write_field!(
@@ -367,6 +365,7 @@ fn companies(s: &Services, mut body: impl FnMut(CompanyRef)) {
 }
 
 /// `_economy`.
+#[allow(unsafe_code)] // The zeroed initial value of the plain-integer record.
 static mut ECONOMY: Economy = unsafe { std::mem::zeroed() };
 /// `_price`.
 static mut PRICE: [i64; Price::PR_END.0 as usize] = [0; Price::PR_END.0 as usize];
@@ -384,11 +383,13 @@ fn economy() -> *mut Economy {
 }
 
 /// `_economy.fluct`.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn economy_fluct() -> i16 {
     read_field!(economy(), fluct)
 }
 
 /// `_price[index]`.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn price(index: Price) -> i64 {
     // SAFETY: Process-lifetime storage the game-state mutex serializes; `index` is a `Price`
     // below `PR_END`, as the original's callers pass.
@@ -410,6 +411,7 @@ pub(crate) fn price_raw(index: usize) -> i64 {
 }
 
 /// `_price[index] = value`.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn set_price(index: Price, value: i64) {
     // SAFETY: As `price`.
     unsafe {
@@ -421,6 +423,7 @@ fn set_price(index: Price, value: i64) {
 }
 
 /// `_score_part[owner][id] = value`.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn set_score_part(owner: CompanyID, id: ScoreID, value: i64) {
     // SAFETY: Process-lifetime storage the game-state mutex serializes; `owner` is a company.
     unsafe {
@@ -434,6 +437,7 @@ fn set_score_part(owner: CompanyID, id: ScoreID, value: i64) {
 }
 
 /// `_score_part[owner][id]`.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn score_part(owner: CompanyID, id: ScoreID) -> i64 {
     // SAFETY: As `set_score_part`.
     unsafe {
@@ -493,6 +497,7 @@ const SCORE_INFO: [ScoreInfo; ScoreID::SCORE_END.0 as usize] = [
 /// Process-lifetime finance storage of a new company, zeroed; C++ starts its field objects in
 /// it at once.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_state_create() -> *mut Finances {
     Box::into_raw(Box::new(unsafe { std::mem::zeroed() }))
 }
@@ -503,30 +508,35 @@ pub extern "C" fn openttd_rust_company_state_create() -> *mut Finances {
 /// `p` is a live result of `openttd_rust_company_state_create`, owned by the caller and
 /// destroyed once.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub unsafe extern "C" fn openttd_rust_company_state_destroy(p: *mut Finances) {
     unsafe { drop(Box::from_raw(p)) };
 }
 
 /// `_economy`, on which C++ builds its view once.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_economy_state() -> *mut Economy {
     economy()
 }
 
 /// `_price`, on which C++ builds its view once.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_economy_prices() -> *mut i64 {
     (&raw mut PRICE).cast()
 }
 
 /// `_score_part`, on which C++ builds its view once.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_scores() -> *mut i64 {
     (&raw mut SCORE_PART).cast()
 }
 
 /// `_cur_company_tick_index`, for the savegame and `InitializeCompanies`.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_tick() -> *mut u32 {
     &raw mut CUR_COMPANY_TICK_INDEX
 }
@@ -537,6 +547,7 @@ pub extern "C" fn openttd_rust_company_tick() -> *mut u32 {
 /// `p` is a live finance record whose C++ view has started, owned by the company being
 /// constructed.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub unsafe extern "C" fn openttd_rust_company_initialize(
     p: *mut Finances,
     terraform: u32,
@@ -556,6 +567,7 @@ pub(crate) fn neg(a: i64) -> i64 {
 }
 
 /// `Company::GetMaxLoan`: calculate the max allowed loan for this company.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn get_max_loan(c: *const Finances) -> i64 {
     if read_field!(c, max_loan) == COMPANY_MAX_LOAN_DEFAULT {
         return read_field!(economy(), max_loan);
@@ -568,6 +580,7 @@ fn get_max_loan(c: *const Finances) -> i64 {
 /// # Safety
 /// `p` is a live finance record.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub unsafe extern "C" fn openttd_rust_company_max_loan(p: *const Finances) -> i64 {
     get_max_loan(p)
 }
@@ -620,12 +633,14 @@ pub(crate) fn set_local_company(s: &Services, new_company: CompanyID) {
 
 /// `SetLocalCompany`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_set_local(s: &Services, new_company: CompanyID) {
     set_local_company(s, new_company);
 }
 
 /// `GetAvailableMoney`: get the amount of money that a company has available, or `INT64_MAX`
 /// if there is no such valid company.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn get_available_money(
     shared: &crate::services::Services,
     f: &FinanceServices,
@@ -645,6 +660,7 @@ pub(crate) fn get_available_money(
 
 /// `GetAvailableMoney`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_available_money(s: &Services, company: CompanyID) -> i64 {
     get_available_money(s.shared, s.finance, company)
 }
@@ -667,6 +683,7 @@ const RUNNING_EXPENSES: u32 = 1 << ExpensesType::EXPENSES_TRAIN_RUN.0
 ///
 /// # Safety
 /// `c` is the live finance record of `company`.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) unsafe fn subtract_money_from_any_company(
     f: &FinanceServices,
     c: *mut Finances,
@@ -706,6 +723,7 @@ pub(crate) unsafe fn subtract_money_from_any_company(
 
 /// `SubtractMoneyFromCompany`: subtract money from the `_current_company`, if the company is
 /// valid.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn subtract_money_from_company(s: &Services, cost: i64, expenses_type: ExpensesType) {
     let company = CompanyID((s.shared.current_company)());
     let c = (s.finance.company_finances)(company.0);
@@ -723,6 +741,7 @@ fn subtract_money_from_company(s: &Services, cost: i64, expenses_type: ExpensesT
     clippy::cast_sign_loss,
     reason = "`c->money_fraction = m - (uint8_t)cost` (company_cmd.cpp:330)"
 )]
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn subtract_money_from_company_fract(
     f: &FinanceServices,
     company: CompanyID,
@@ -746,6 +765,7 @@ pub(crate) fn subtract_money_from_company_fract(
 
 /// `SubtractMoneyFromCompanyFract`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_subtract_fraction(
     f: &FinanceServices,
     company: u8,
@@ -765,6 +785,7 @@ fn update_landscaping_limit(limit: u32, per_64k_frames: u64, burst: u64) -> u32 
 }
 
 /// `UpdateLandscapingLimits`: update the landscaping limits per company.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn update_landscaping_limits(s: &Services) {
     let limits = s.shared.settings().construction_limits;
     companies(s, |c| {
@@ -842,6 +863,7 @@ pub(crate) fn check_tile_ownership(s: &Services, out: Cost<'_>, tile: TileIndex)
 
 /// `CheckOwnership`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_check_ownership(
     s: &Services,
     out: *mut CommandCost,
@@ -853,6 +875,7 @@ pub extern "C" fn openttd_rust_company_check_ownership(
 
 /// `CheckTileOwnership`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_check_tile_ownership(
     s: &Services,
     out: *mut CommandCost,
@@ -902,6 +925,7 @@ impl Startup {
     clippy::cast_possible_truncation,
     reason = "The startup frame carries the new company's `CompanyID` widened to `uint32_t`"
 )]
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn do_startup_new_company(s: &Services, frame: &mut Startup) -> bool {
     if frame.stage == STARTUP_AI_STARTED {
         frame.stage = STARTUP_DONE;
@@ -1000,12 +1024,14 @@ pub(crate) fn do_startup_new_company(s: &Services, frame: &mut Startup) -> bool 
 /// `DoStartupNewCompany`, for the native function's loop around `AI::StartNew`. If that
 /// throws, the frame is simply abandoned.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_startup_abi(s: &Services, frame: &mut Startup) -> u8 {
     u8::from(do_startup_new_company(s, frame))
 }
 
 /// The body of `_new_competitor_timeout`: start a new competitor company if possible. `true`
 /// asks the caller to send the command to all clients that starts up a new AI.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn new_competitor_timeout(s: &Services) -> bool {
     let settings = s.shared.settings();
     if crate::session::mode() == GameMode::GM_MENU || !(s.ai_can_start_new)() {
@@ -1040,6 +1066,7 @@ pub(crate) fn new_competitor_timeout(s: &Services) -> bool {
 
 /// `_new_competitor_timeout`'s callback; `true` asks the caller to `Post` `CCA_NEW_AI`.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_competitor_timeout_abi(s: &Services) -> u8 {
     u8::from(new_competitor_timeout(s))
 }
@@ -1051,6 +1078,7 @@ fn num_vehicle(s: &Services, c: *mut OpenTTDCompany, kind: VehicleType) -> u16 {
 
 /// `CheckTakeoverVehicleLimit`: can company `cbig` buy company `csmall` without exceeding
 /// vehicle limits?
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn check_takeover_vehicle_limit(
     s: &Services,
     cbig: CompanyID,
@@ -1077,6 +1105,7 @@ pub(crate) fn check_takeover_vehicle_limit(
 
 /// `CheckTakeoverVehicleLimit`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_takeover_allowed_abi(
     s: &Services,
     cbig: CompanyID,
@@ -1093,6 +1122,7 @@ pub extern "C" fn openttd_rust_company_takeover_allowed_abi(
     clippy::cast_possible_truncation,
     reason = "`c->bankrupt_timeout = TAKE_OVER_TIMEOUT` (company_cmd.cpp:761) stores the `int` constant in the `int16_t` member"
 )]
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn handle_bankruptcy_takeover(s: &Services, c: CompanyRef) {
     // Amount of time out for each company to take over a company;
     // Timeout is a quarter (3 months of 30 days) divided over the
@@ -1195,6 +1225,7 @@ pub(crate) struct Tick {
     clippy::cast_possible_truncation,
     reason = "`Company::GetIfValid(_cur_company_tick_index)` (company_cmd.cpp:774) converts the `uint` index, below `MAX_COMPANIES`, to `CompanyID`"
 )]
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn on_tick_companies(s: &Services, t: &mut Tick) -> bool {
     let settings = s.shared.settings();
     if t.stage == TICK_BEGIN {
@@ -1289,6 +1320,7 @@ pub(crate) fn on_tick_companies(s: &Services, t: &mut Tick) -> bool {
 
 /// The yearly company statistics timer body (`_economy_companies_yearly`): update the economic
 /// data of all companies, and perhaps show the financial overview window of the local company.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn economy_companies_yearly(s: &Services) {
     // Copy statistics
     companies(s, |c| {
@@ -1413,6 +1445,7 @@ impl Control {
     reason = "The startup frame carries the new company's `CompanyID` widened to `uint32_t`"
 )]
 #[allow(clippy::too_many_lines)] // `CmdCompanyCtrl`'s four actions in one body, as the original.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn cmd_company_ctrl(
     s: &Services,
     ownership: &crate::tile_owner::Context,
@@ -1622,6 +1655,7 @@ pub(crate) fn cmd_company_ctrl(
 /// `CmdCompanyCtrl`, for the native facade's loop around `AI::StartNew`. If that throws, the
 /// frame is simply abandoned.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_control_abi(
     s: &Services,
     ownership: &crate::tile_owner::Context,
@@ -1696,6 +1730,7 @@ pub(crate) fn cmd_company_allow_list_ctrl(
 
 /// `CmdCompanyAllowListCtrl`, for the native facade.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_allow_list(
     s: &Services,
     out: *mut CommandCost,
@@ -1716,6 +1751,7 @@ pub extern "C" fn openttd_rust_company_allow_list(
 
 /// `CompanyServiceInterval`: get the service interval for the given company and vehicle type;
 /// `None` for the client-default settings.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn company_service_interval(
     settings: &crate::settings_table::Services,
     identity: &crate::company_identity::Services,
@@ -1737,6 +1773,7 @@ pub(crate) fn company_service_interval(
 
 /// `CompanyServiceInterval`, for the native function; `c` is null for the client defaults.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_service_interval(
     s: &Services,
     c: *mut OpenTTDCompany,
@@ -1762,6 +1799,7 @@ pub(crate) struct CmdGiveMoney {
 /// `CmdGiveMoney`: transfer funds (money) from one company to another. To prevent abuse in
 /// multiplayer games you can only send money to other companies if you have paid off your
 /// loan (either explicitly, or implicitly given the fact that you have more money than loan).
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn cmd_give_money(
     s: &Services,
     out: Cost<'_>,
@@ -1820,6 +1858,7 @@ pub(crate) fn cmd_give_money(
 
 /// `CmdGiveMoney`, for the native facade.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_give_money(
     s: &Services,
     out: *mut CommandCost,
@@ -1871,11 +1910,13 @@ pub(crate) fn get_first_playable_company_id(s: &Services) -> CompanyID {
 
 /// `GetFirstPlayableCompanyID`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_first_playable(s: &Services) -> CompanyID {
     get_first_playable_company_id(s)
 }
 
 /// The station command services the station members are read and written through.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn station_commands(s: &Services) -> &'static crate::station_cmd::CommandServicesTable {
     // SAFETY: The process-lifetime station command table.
     unsafe { &*(s.shared.station_commands)() }
@@ -1903,6 +1944,7 @@ fn vehicles(s: &Services, mut body: impl FnMut(VehicleRef)) {
 }
 
 /// `CalculateCompanyAssetValue`: calculate the value of the assets of a company.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn calculate_company_asset_value(s: &Services, c: CompanyRef) -> i64 {
     let owner = c.index;
 
@@ -1944,6 +1986,7 @@ fn calculate_company_asset_value(s: &Services, c: CompanyRef) -> i64 {
 /// `CalculateCompanyValue`: calculate the value of the company. That is the value of all
 /// assets (vehicles, stations) and money (including loan), except when `including_loan` is
 /// `false` which is useful when we want to calculate the value for bankruptcy.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn calculate_company_value(s: &Services, c: CompanyRef, including_loan: bool) -> i64 {
     let mut value = calculate_company_asset_value(s, c);
 
@@ -1958,6 +2001,7 @@ pub(crate) fn calculate_company_value(s: &Services, c: CompanyRef, including_loa
 
 /// `CalculateCompanyValue`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_value(
     s: &Services,
     c: *mut OpenTTDCompany,
@@ -1977,6 +2021,7 @@ pub extern "C" fn openttd_rust_company_value(
 /// - The profit for the next two years (if positive) based on the last four quarters.
 ///
 /// And on top of that, they walk away with all the money they have in the bank.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn calculate_hostile_takeover_value(s: &Services, c: CompanyRef) -> i64 {
     let f = c.finances;
     let mut value = calculate_company_asset_value(s, c);
@@ -2001,6 +2046,7 @@ fn calculate_hostile_takeover_value(s: &Services, c: CompanyRef) -> i64 {
 
 /// `CalculateHostileTakeoverValue`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_hostile_takeover_value(
     s: &Services,
     c: *mut OpenTTDCompany,
@@ -2016,6 +2062,7 @@ pub extern "C" fn openttd_rust_company_hostile_takeover_value(
     reason = "`s = Clamp<int64_t>(...) * _score_info[i].score / _score_info[i].needed` (economy.cpp:296) stores the `int64_t` product in the `int` score"
 )]
 #[allow(clippy::too_many_lines)] // `UpdateCompanyRatingAndValue`'s score parts in the original's order.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn update_company_rating_and_value(s: &Services, c: CompanyRef, update: bool) -> i32 {
     let owner = c.index;
     let f = c.finances;
@@ -2191,6 +2238,7 @@ pub(crate) fn update_company_rating_and_value(s: &Services, c: CompanyRef, updat
 
 /// `UpdateCompanyRatingAndValue`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_update_rating(
     s: &Services,
     c: *mut OpenTTDCompany,
@@ -2208,6 +2256,7 @@ pub extern "C" fn openttd_rust_company_update_rating(
     reason = "`t->ratings[old_owner] = RATING_INITIAL` (economy.cpp:381) stores in `int16_t`; `CompanyServiceInterval`'s `int` passes as `CmdChangeServiceInt`'s `uint16_t` interval (economy.cpp:453); the page cursor's index is a `StoryPageID`"
 )]
 #[allow(clippy::too_many_lines)] // `ChangeOwnershipOfCompanyItems`'s item walks in the original's order.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn change_ownership_of_company_items(
     s: &Services,
     ownership: &crate::tile_owner::Context,
@@ -2629,6 +2678,7 @@ pub(crate) fn change_ownership_of_company_items(
 
 /// `ChangeOwnershipOfCompanyItems`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_change_ownership(
     s: &Services,
     ownership: &crate::tile_owner::Context,
@@ -2639,6 +2689,7 @@ pub extern "C" fn openttd_rust_company_change_ownership(
 }
 
 /// `CompanyCheckBankrupt`: check for bankruptcy of a company. Called every three months.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn company_check_bankrupt(s: &Services, c: CompanyRef) {
     let f = c.finances;
     // If "Infinite money" setting is on, companies should not go bankrupt.
@@ -2738,6 +2789,7 @@ fn company_check_bankrupt(s: &Services, c: CompanyRef) {
 
 /// `CompaniesGenStatistics`: update the finances of all companies. Pay for the stations,
 /// update the history graph, update ratings and company values, and deal with bankruptcy.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn companies_gen_statistics(s: &Services) {
     // Check for bankruptcy each month
     companies(s, |c| company_check_bankrupt(s, c));
@@ -2855,6 +2907,7 @@ fn companies_gen_statistics(s: &Services) {
 
 /// `AddInflation`: add monthly inflation. `check_year`: shall the inflation get stopped after
 /// 170 years? Returns true if inflation is maxed and nothing was changed.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn add_inflation(check_year: bool) -> bool {
     // The cargo payment inflation differs from the normal inflation, so the
     // relative amount of money you make with a transport decreases slowly over
@@ -2921,11 +2974,13 @@ pub(crate) fn add_inflation(check_year: bool) -> bool {
 
 /// `AddInflation`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_economy_add_inflation_abi(check_year: bool) -> u8 {
     u8::from(add_inflation(check_year))
 }
 
 /// `RecomputePrices`: computes all prices, payments and maximum loan.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn recompute_prices(s: &Services) {
     let settings = s.shared.settings();
     let e = economy();
@@ -3019,11 +3074,13 @@ pub(crate) fn recompute_prices(s: &Services) {
 
 /// `RecomputePrices`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_economy_recompute_prices(s: &Services) {
     recompute_prices(s);
 }
 
 /// `CompaniesPayInterest`: let all companies pay the monthly interest on their loan.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn companies_pay_interest(s: &Services) {
     let cur_company = (s.shared.current_company)();
     let e = economy();
@@ -3075,6 +3132,7 @@ fn companies_pay_interest(s: &Services) {
     clippy::cast_possible_truncation,
     reason = "`_economy.fluct = -(int)GB(Random(), 0, 2)` and `GB(Random(), 0, 8) + 312` (economy.cpp:858-861) store in the `int16_t` member"
 )]
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn handle_economy_fluctuations(s: &Services) {
     let e = economy();
     // SAFETY: The catalog's address of a live setting.
@@ -3117,6 +3175,7 @@ fn handle_economy_fluctuations(s: &Services) {
 }
 
 /// `ResetPriceBaseMultipliers`: reset changes to the price base multipliers.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn reset_price_base_multipliers() {
     // SAFETY: Process-lifetime storage the game-state mutex serializes.
     unsafe {
@@ -3126,6 +3185,7 @@ pub(crate) fn reset_price_base_multipliers() {
 
 /// `ResetPriceBaseMultipliers`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_economy_reset_price_multipliers() {
     reset_price_base_multipliers();
 }
@@ -3137,6 +3197,7 @@ pub extern "C" fn openttd_rust_economy_reset_price_multipliers() {
     clippy::cast_possible_truncation,
     reason = "`_price_base_multiplier[price] = Clamp(factor, MIN_PRICE_MODIFIER, MAX_PRICE_MODIFIER)` (economy.cpp:885) stores in `int8_t`"
 )]
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn set_price_base_multiplier(price: Price, factor: i32) {
     assert_with(|| price < Price::PR_END);
     // SAFETY: Process-lifetime storage the game-state mutex serializes.
@@ -3150,6 +3211,7 @@ pub(crate) fn set_price_base_multiplier(price: Price, factor: i32) {
 
 /// `SetPriceBaseMultiplier`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_economy_set_price_multiplier(price: u8, factor: i32) {
     set_price_base_multiplier(Price(price), factor);
 }
@@ -3161,6 +3223,7 @@ pub extern "C" fn openttd_rust_economy_set_price_multiplier(price: u8, factor: i
     clippy::cast_sign_loss,
     reason = "`_economy.infl_amount_pr = std::max(0, initial_interest - 1)` stores in `uint8_t` and `_economy.fluct = GB(Random(), 0, 8) + 168` in `int16_t` (economy.cpp:913-914)"
 )]
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn startup_economy(s: &Services, industry_builder: *mut crate::industry::Builder) {
     let settings = s.shared.settings();
     let e = economy();
@@ -3206,6 +3269,7 @@ pub(crate) fn startup_economy(s: &Services, industry_builder: *mut crate::indust
 }
 
 /// `InitializeEconomy`: resets economy to initial values.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn initialize_economy() {
     let e = economy();
     write_field!(e, inflation_prices, 1 << 16);
@@ -3216,12 +3280,14 @@ pub(crate) fn initialize_economy() {
 
 /// `InitializeEconomy`, for the native function.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_economy_initialize() {
     initialize_economy();
 }
 
 /// The calendar-month timer body (`_calendar_inflation_monthly`): every calendar month update
 /// of inflation.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn calendar_inflation_monthly(s: &Services) {
     // SAFETY: The catalog's address of a live setting.
     if unsafe { s.shared.settings().inflation.read() } {
@@ -3239,6 +3305,7 @@ pub(crate) fn economy_companies_monthly(s: &Services) {
 }
 
 /// `DoAcquireCompany`.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 fn do_acquire_company(
     s: &Services,
     ownership: &crate::tile_owner::Context,
@@ -3307,6 +3374,7 @@ pub(crate) struct CmdBuyCompany {
 
 /// `CmdBuyCompany`: buy up another company. When a competing company is gone bankrupt you get
 /// the chance to purchase that company.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn cmd_buy_company(
     s: &Services,
     ownership: &crate::tile_owner::Context,
@@ -3380,6 +3448,7 @@ pub(crate) fn cmd_buy_company(
 
 /// `CmdBuyCompany`, for the native facade.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_buy(
     s: &Services,
     ownership: &crate::tile_owner::Context,
@@ -3412,6 +3481,7 @@ pub(crate) struct CmdLoan {
 }
 
 /// `CmdIncreaseLoan`: increase the loan of your company.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn cmd_increase_loan(s: &Services, out: Cost<'_>, flags: DoCommandFlags, args: CmdLoan) {
     let CmdLoan { cmd, amount } = args;
     let current = CompanyID((s.shared.current_company)());
@@ -3472,6 +3542,7 @@ pub(crate) fn cmd_increase_loan(s: &Services, out: Cost<'_>, flags: DoCommandFla
 }
 
 /// `CmdDecreaseLoan`: decrease the loan of your company.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn cmd_decrease_loan(s: &Services, out: Cost<'_>, flags: DoCommandFlags, args: CmdLoan) {
     let CmdLoan { cmd, amount } = args;
     let current = CompanyID((s.shared.current_company)());
@@ -3530,6 +3601,7 @@ pub(crate) fn cmd_decrease_loan(s: &Services, out: Cost<'_>, flags: DoCommandFla
 
 /// `CmdIncreaseLoan`, for the native facade.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_increase_loan(
     s: &Services,
     out: *mut CommandCost,
@@ -3550,6 +3622,7 @@ pub extern "C" fn openttd_rust_company_increase_loan(
 
 /// `CmdDecreaseLoan`, for the native facade.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_decrease_loan(
     s: &Services,
     out: *mut CommandCost,
@@ -3580,6 +3653,7 @@ pub(crate) struct CmdSetCompanyMaxLoan {
 
 /// `CmdSetCompanyMaxLoan`: sets the max loan amount of your company. Does not respect the
 /// global loan setting.
+#[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
 pub(crate) fn cmd_set_company_max_loan(
     s: &Services,
     out: Cost<'_>,
@@ -3619,6 +3693,7 @@ pub(crate) fn cmd_set_company_max_loan(
 
 /// `CmdSetCompanyMaxLoan`, for the native facade.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_set_max_loan(
     s: &Services,
     out: *mut CommandCost,
@@ -3703,6 +3778,7 @@ pub(crate) fn cmd_change_bank_balance(
 
 /// `CmdChangeBankBalance`, for the native facade.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
 pub extern "C" fn openttd_rust_company_change_bank_balance(
     s: &Services,
     out: *mut CommandCost,
@@ -3862,6 +3938,7 @@ pub(crate) mod testing {
 
 #[cfg(test)]
 #[allow(
+    unsafe_code,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss
