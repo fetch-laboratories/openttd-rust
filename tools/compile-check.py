@@ -13,7 +13,9 @@ PROBE_COMPILE_ONLY set and generated ABI headers fresh from
 each comparison skips its runs (`probe.RUN`). Each runtime adapter is built as
 CI's "Freeze runtime and scenario adapters" step builds it: compiled and linked
 against both games' built objects, the candidate's `build-rust` and the
-reference build, with no debug info, then deleted (#1072). A console that only the candidate's
+reference build, with no debug info, then deleted (#1072). Against the pinned
+reference, whose objects never change, an adapter links only when a harness
+source under tools/simulation/ changed, and is otherwise compiled for syntax. A console that only the candidate's
 headers declare, or that calls a definition the change removed, fails here as
 it would on CI. A link reads the build as it is, so the check names any changed
 source newer than the candidate game: build again before trusting that result. Where `clang++` is installed, the build's compiles of
@@ -54,6 +56,10 @@ INPUTS = re.compile(
 # header changed, as engines-console.cpp's own declaration did on #1056 (#1072).
 DEFINITIONS = re.compile(r"^(src/(?!tests/).*\.(c|cpp)|rust/.*\.rs)$")
 ROLES = ("candidate", "reference")
+# The reference game is pinned, so its objects never change: only a changed
+# harness source can newly break an adapter's link against it.
+HARNESS = re.compile(r"^tools/simulation/")
+COMPILE_ONLY = ", compile only"
 FAILED = 3
 
 
@@ -161,8 +167,11 @@ def child(comparison: str | None, adapter: str | None, role: str = "candidate") 
     return 0
 
 
-def jobs(probes: bool, roles: tuple[str, ...]) -> list[tuple[str, list[str]]]:
-    """Comparison compiles when ``probes``, then each adapter's build per role."""
+def jobs(
+    probes: bool, roles: tuple[str, ...], link_reference: bool = True
+) -> list[tuple[str, list[str]]]:
+    """Comparison compiles when ``probes``, then each adapter's build per role:
+    the reference's compiled only, unless ``link_reference``."""
     from simulation import registry
 
     python = sys.executable
@@ -174,12 +183,14 @@ def jobs(probes: bool, roles: tuple[str, ...]) -> list[tuple[str, list[str]]]:
         name = module.__name__.rsplit(".", 1)[-1]
         for role in roles:
             command = [python, __file__, "--adapter", name, "--role", role]
-            listed.append((f"adapter {name} {role}", command))
+            only = role == "reference" and not link_reference
+            listed.append((f"adapter {name} {role}{COMPILE_ONLY * only}", command))
     return listed
 
 
 def adapter_job(name: str) -> bool:
-    return name.startswith("adapter ")
+    """An adapter build that links, so runs with the build's own environment."""
+    return name.startswith("adapter ") and not name.endswith(COMPILE_ONLY)
 
 
 def newer_than_build(paths: list[str]) -> list[str]:
@@ -297,7 +308,8 @@ def check(base: str) -> int:
         shutil.rmtree(OUT / folder, ignore_errors=True)
         (OUT / folder).mkdir()
     started = time.monotonic()
-    listed = jobs(probes, roles) if links else []
+    harness = any(HARNESS.match(path) for path in paths)
+    listed = jobs(probes, roles, harness) if links else []
     with ThreadPoolExecutor(workers()) as pool:
         results = list(
             pool.map(

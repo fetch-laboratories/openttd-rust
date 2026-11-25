@@ -1042,6 +1042,13 @@ class CompileCheckTests(unittest.TestCase):
             + ["adapter b candidate", "adapter b reference"],
         )
         self.assertEqual(listed[1][1][-2:], ["--role", "reference"])
+        with patch("simulation.registry.adapter_modules", return_value=modules[:1]):
+            compiled = check.jobs(False, check.ROLES, link_reference=False)
+        names = [name for name, _ in compiled]
+        self.assertEqual(
+            names, ["adapter a candidate", "adapter a reference, compile only"]
+        )
+        self.assertEqual([check.adapter_job(name) for name in names], [True, False])
         seen: dict[str, dict[str, str]] = {}
         with (
             tempfile.TemporaryDirectory() as directory,
