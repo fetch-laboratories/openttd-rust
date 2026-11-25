@@ -208,10 +208,9 @@ pub(crate) unsafe fn cmd_change_service_int(
         is_custom,
         mut is_percent,
     } = cmd;
-    let (v, owner, _) = unsafe { owned_primary(s, cost, veh_id) };
-    if v.is_null() {
+    let (v, owner, Some(handle)) = (unsafe { owned_primary(s, cost, veh_id) }) else {
         return;
-    }
+    };
     // The original resolves the company once, after ownership succeeds.
     let company = s.owner_company(owner);
     if !is_custom {
@@ -222,8 +221,7 @@ pub(crate) unsafe fn cmd_change_service_int(
             return (s.cost.error)(cost, ERROR);
         }
     } else {
-        serv_int =
-            s.interval_default_of(company, crate::fleet::record(s.groups, v).vehicle_type()) as u16;
+        serv_int = s.interval_default_of(company, handle.vehicle_type()) as u16;
     }
     if flags.test(DoCommandFlag::Execute) {
         (s.set_interval)(v, serv_int, is_custom, is_percent);

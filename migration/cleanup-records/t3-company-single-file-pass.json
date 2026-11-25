@@ -476,7 +476,7 @@
     "retirement_condition": "Retires when the last native caller of `ChangeOwnershipOfCompanyItems` is ported and the export is deleted.",
     "site": "rust/openttd-kernels/src/company.rs | fn openttd_rust_company_change_ownership | allow unsafe_code",
     "operation": "company::openttd_rust_company_change_ownership",
-    "source_contract": "`ChangeOwnershipOfCompanyItems` (src/company_cmd.cpp), whose native caller passes its arguments and tables, live for the synchronous call.",
+    "source_contract": "`ChangeOwnershipOfCompanyItems` (src/economy.cpp), whose native caller passes its arguments and tables, live for the synchronous call.",
     "reason": "Plan #1048 decision 14: the `#[unsafe(no_mangle)]` attribute of the native facade's entry, and its conversion of the native pointers and integers to the body's arguments; the body holds its own allow where it needs one."
   },
   {
@@ -677,10 +677,10 @@
     "before": 0,
     "after": 1,
     "retiring_owner": "#734",
-    "retirement_condition": "Retires when the last native caller of `Company::Company` is ported and the export is deleted.",
+    "retirement_condition": "Retires when the company record and its finances move to Rust (#907) and the export is deleted.",
     "site": "rust/openttd-kernels/src/company.rs | fn openttd_rust_company_state_create | allow unsafe_code",
     "operation": "company::openttd_rust_company_state_create",
-    "source_contract": "`Company::Company` (src/company_cmd.cpp), whose native caller passes its arguments and tables, live for the synchronous call.",
+    "source_contract": "`CompanyFinanceOwner` (src/company_base.h), which allocates and destroys the company's Rust-owned finances through these exports.",
     "reason": "Plan #1048 decision 14: the `#[unsafe(no_mangle)]` attribute of the native facade's entry, and its conversion of the native pointers and integers to the body's arguments; the body holds its own allow where it needs one."
   },
   {
@@ -689,10 +689,10 @@
     "before": 0,
     "after": 1,
     "retiring_owner": "#734",
-    "retirement_condition": "Retires when the last native caller of `p` is ported and the export is deleted.",
+    "retirement_condition": "Retires when the company record and its finances move to Rust (#907) and the export is deleted.",
     "site": "rust/openttd-kernels/src/company.rs | fn openttd_rust_company_state_destroy | allow unsafe_code",
     "operation": "company::openttd_rust_company_state_destroy",
-    "source_contract": "`p` (src/economy.cpp), whose native caller passes its arguments and tables, live for the synchronous call.",
+    "source_contract": "`CompanyFinanceOwner` (src/company_base.h), which allocates and destroys the company's Rust-owned finances through these exports.",
     "reason": "Plan #1048 decision 14: the `#[unsafe(no_mangle)]` attribute of the native facade's entry, and its conversion of the native pointers and integers to the body's arguments; the body holds its own allow where it needs one."
   },
   {
@@ -836,7 +836,7 @@
     "retirement_condition": "Retires when the last native caller of `_economy` is ported and the export is deleted.",
     "site": "rust/openttd-kernels/src/company.rs | fn openttd_rust_economy_state | allow unsafe_code",
     "operation": "company::openttd_rust_economy_state",
-    "source_contract": "`_economy` (src/company_cmd.cpp), whose native caller passes its arguments and tables, live for the synchronous call.",
+    "source_contract": "`_economy` (src/economy.cpp), whose native caller passes its arguments and tables, live for the synchronous call.",
     "reason": "Plan #1048 decision 14: the `#[unsafe(no_mangle)]` attribute of the native facade's entry, and its conversion of the native pointers and integers to the body's arguments; the body holds its own allow where it needs one."
   },
   {
