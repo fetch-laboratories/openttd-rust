@@ -136,5 +136,17 @@
     "existing_alternatives": "The visit is generated from the Rust layout; it follows the callback_slots record above.",
     "retiring_owner": "#1046",
     "retirement_condition": "Retires with the callback_slots record above."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/rail.rs | impl RailTypeSpriteGroup | allow dead_code",
+    "operation": "rail::RailTypeSpriteGroup constants",
+    "source_contract": "`enum RailTypeSpriteGroup` (src/rail.h), RTSG_CURSORS through RTSG_END.",
+    "reason": "Plan #1046 decision 6 carries the header's fourteen constants into one Rust definition; Rust code reads only RTSG_END (newgrf_act3/loading.rs), so the other thirteen are unused until the NewGRF rail type ports name them.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when Rust code reads each constant, at the latest with the NewGRF rail type sprite resolver's port."
   }
 ]

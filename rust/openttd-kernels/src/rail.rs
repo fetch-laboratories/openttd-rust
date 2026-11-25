@@ -97,12 +97,39 @@ impl RailTypeInfoRef<'_> {
     }
 }
 
-/// `RailTypeSpriteGroup`: sprite groups for a rail type. Rust names only its end marker.
+/// `RailTypeSpriteGroup`: sprite groups for a rail type.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailTypeSpriteGroup(pub u8);
 
+#[allow(dead_code, reason = "rail.h's whole enum; Rust reads RTSG_END only")]
 impl RailTypeSpriteGroup {
+    /// Cursor and toolbar icon images
+    pub const RTSG_CURSORS: Self = Self(0);
+    /// Images for overlaying track
+    pub const RTSG_OVERLAY: Self = Self(1);
+    /// Main group of ground images
+    pub const RTSG_GROUND: Self = Self(2);
+    /// Main group of ground images for snow or desert
+    pub const RTSG_TUNNEL: Self = Self(3);
+    /// Catenary wires
+    pub const RTSG_WIRES: Self = Self(4);
+    /// Catenary pylons
+    pub const RTSG_PYLONS: Self = Self(5);
+    /// Bridge surface images
+    pub const RTSG_BRIDGE: Self = Self(6);
+    /// Level crossing overlay images
+    pub const RTSG_CROSSING: Self = Self(7);
+    /// Depot images
+    pub const RTSG_DEPOT: Self = Self(8);
+    /// Fence images
+    pub const RTSG_FENCES: Self = Self(9);
+    /// Tunnel portal overlay
+    pub const RTSG_TUNNEL_PORTAL: Self = Self(10);
+    /// Signal images
+    pub const RTSG_SIGNALS: Self = Self(11);
+    /// Complete ground images
+    pub const RTSG_GROUND_COMPLETE: Self = Self(12);
     /// End marker
     pub const RTSG_END: Self = Self(13);
 }
