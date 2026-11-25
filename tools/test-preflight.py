@@ -7,9 +7,12 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -196,9 +199,25 @@ class WorkflowTests(unittest.TestCase):
 STEPS = ["--step", "Short", "--step", "Fails", "--step", "Long"]
 
 
-def exit_code(command: list[str], **_: object) -> CompletedProcess[str]:
-    """A step that runs `false` fails; every other step passes."""
-    return CompletedProcess(command, 1 if command[-1] == "false" else 0)
+def fake_popen() -> tuple[type, list[list[str]]]:
+    """A Popen stand-in whose step fails when its command ends in `false`,
+    and the list of commands it was started with."""
+    calls: list[list[str]] = []
+
+    class Popen:
+        def __init__(self, command: list[str], **_: object) -> None:
+            calls.append(command)
+            self.pid = 0
+            self.returncode = 1 if command[-1] == "false" else 0
+
+        def wait(self, _timeout: float | None = None) -> int:
+            return self.returncode
+
+    return Popen, calls
+
+
+def steps_of(*pairs: tuple[str, str]) -> list[preflight.Step]:
+    return [preflight.Step(name, [command]) for name, command in pairs]
 
 
 class RunTests(unittest.TestCase):
@@ -210,6 +229,7 @@ class RunTests(unittest.TestCase):
             {"name": "Fails", "run": "false"},
             {"name": "Long", "run": "true"},
         )
+        popen, calls = fake_popen()
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
@@ -217,7 +237,7 @@ class RunTests(unittest.TestCase):
             patch.object(preflight.yaml, "safe_load", return_value=quick),
             patch.object(preflight.migration, "LOCAL", Path(directory)),
             patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
-            patch.object(preflight.subprocess, "run", side_effect=exit_code) as run,
+            patch.object(preflight.subprocess, "Popen", popen),
             patch.object(sys, "argv", ["preflight.py", *STEPS, *argv]),
             patch("builtins.print") as printed,
         ):
@@ -227,10 +247,10 @@ class RunTests(unittest.TestCase):
             saved = json.loads((Path(directory) / preflight.TIMINGS).read_text())
             logs = sorted(p.name for p in Path(directory).glob("preflight/2*/*.log"))
         lines = "\n".join(str(call.args[0]) for call in printed.call_args_list)
-        commands = [call.args[0][-1] for call in run.call_args_list]
+        commands = [command[-1] for command in calls]
         return code, commands, lines, saved, logs
 
-    def test_steps_run_at_once_longest_first_and_report_in_step_order(self) -> None:
+    def test_steps_run_longest_first_and_report_in_step_order(self) -> None:
         timings = {"Short": 1.0, "Fails": 5.0, "Long": 90.0, "Gone": 3.0}
         code, commands, lines, saved, logs = self.run_steps(["--jobs", "1"], timings)
         self.assertEqual(code, 1)
@@ -245,24 +265,164 @@ class RunTests(unittest.TestCase):
         # A step's result is printed whole, after its start line.
         self.assertRegex(lines, r"--> Fails\n(.*\n)*    exit 1; full output: .*02\.log")
 
-    def test_a_full_run_is_logged_and_counted_since_a_date(self) -> None:
+    def test_steps_overlap_up_to_jobs(self) -> None:
+        """Two steps each wait for the other: only a run of both at once ends."""
+        for jobs, overlaps in ((2, True), (1, False)):
+            meeting = threading.Barrier(2, timeout=1)
+
+            def meet(*_: object, meeting: threading.Barrier = meeting) -> tuple:
+                meeting.wait()
+                return True, 0.0
+
+            with (
+                tempfile.TemporaryDirectory() as directory,
+                patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+                patch.object(preflight, "timed", side_effect=meet),
+            ):
+                steps = steps_of(("a", "true"), ("b", "true"))
+                if overlaps:
+                    self.assertEqual(preflight.run_steps(steps, {}, Path(), jobs), [])
+                else:
+                    with self.assertRaises(threading.BrokenBarrierError):
+                        preflight.run_steps(steps, {}, Path(), jobs)
+
+    def test_a_verdict_belongs_to_its_step_not_its_name(self) -> None:
+        """Steps that share a name, or start out of order, keep their own result."""
+        popen, _ = fake_popen()
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+            patch.object(preflight.subprocess, "Popen", popen),
+            patch("builtins.print"),
+        ):
+            preflight.save_timings({"c": 9.0, "a": 1.0})
+            for jobs in (1, 2):
+                same = steps_of(("Same", "false"), ("Same", "true"))
+                self.assertEqual(
+                    preflight.run_steps(same, {}, Path(directory), jobs), ["Same"]
+                )
+                three = steps_of(("a", "false"), ("b", "true"), ("c", "false"))
+                self.assertEqual(
+                    preflight.run_steps(three, {}, Path(directory), jobs), ["a", "c"]
+                )
+
+    def test_an_interrupt_or_stop_signal_stops_every_running_step(self) -> None:
+        """SIGINT or SIGTERM to a parallel run ends it promptly and leaves no
+        step running, even steps that ignore SIGINT and have children."""
+        for number in (signal.SIGINT, signal.SIGTERM):
+            with tempfile.TemporaryDirectory() as directory:
+                self.stop_run(Path(directory), number)
+
+    def stop_run(self, root: Path, number: int) -> None:
+        step = "trap '' INT; sleep 60 & echo $! > {}; touch {}; wait"
+        script = (
+            "import sys\nfrom pathlib import Path\n"
+            f"sys.path.insert(0, {str(REPO / 'tools')!r})\n"
+            "import preflight\n"
+            f"root = Path({str(root)!r})\n"
+            "preflight.migration.LOCAL = preflight.migration.COMMON_LOCAL = root\n"
+            f"step = {step!r}\n"
+            "steps = [preflight.Step(n, ['sh', '-c', step.format("
+            "root / f'{n}.pid', root / f'{n}.started')]) for n in ('zzq1', 'zzq2')]\n"
+            "preflight.workflow_steps = lambda *_: list(steps)\n"
+            "sys.argv = ['preflight.py', '--step', 'zzq', '--jobs', '2']\n"
+            "sys.exit(preflight.main())\n"
+        )
+        child = subprocess.Popen(
+            [sys.executable, "-c", script],
+            cwd=REPO,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        deadline = time.monotonic() + 30
+        while not all((root / f"zzq{n}.started").exists() for n in "12"):
+            self.assertLess(time.monotonic(), deadline, "steps did not start")
+            self.assertIsNone(child.poll(), "preflight exited before its steps")
+            time.sleep(0.05)
+        started = time.monotonic()
+        child.send_signal(number)
+        self.assertEqual(child.wait(20), 130)
+        self.assertLess(time.monotonic() - started, preflight.STOP_SECONDS + 3)
+        for name in "12":
+            pid = int((root / f"zzq{name}.pid").read_text())
+            with self.assertRaises(ProcessLookupError):
+                os.kill(pid, 0)
+
+    def test_concurrent_timing_saves_keep_every_step(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+        ):
+
+            def save(prefix: str) -> None:
+                for number in range(40):
+                    preflight.save_timings({f"{prefix}{number}": 1.0})
+
+            writers = [threading.Thread(target=save, args=(p,)) for p in "xy"]
+            for writer in writers:
+                writer.start()
+            for writer in writers:
+                writer.join()
+            self.assertEqual(len(preflight.last_timings()), 80)
+
+    def test_full_runs_are_logged_and_subsets_are_not(self) -> None:
+        quick = workflow({"name": "Only", "run": "true"})
+        popen, _ = fake_popen()
+        with (
+            tempfile.TemporaryDirectory() as local,
+            tempfile.TemporaryDirectory() as common,
+            patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
+            patch.object(preflight, "git", return_value="sha"),
+            patch.object(preflight, "uncommitted", return_value=""),
+            patch.object(preflight, "stamp", return_value="stamp: test"),
+            patch.object(preflight.yaml, "safe_load", return_value=quick),
+            patch.object(preflight.migration, "LOCAL", Path(local)),
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(common)),
+            patch.object(preflight.subprocess, "Popen", popen),
+            patch("builtins.print"),
+        ):
+            for argv in ([], ["--jobs", "1"], ["--step", "Only"]):
+                with patch.object(sys, "argv", ["preflight.py", *argv]):
+                    self.assertEqual(preflight.main(), 0)
+            runs, unreadable = preflight.read_runs(Path(common) / preflight.RUNS)
+        self.assertEqual([run["jobs"] for run in runs], [preflight.JOBS, 1])
+        self.assertEqual(unreadable, 0)
+
+    def test_runs_are_counted_since_a_utc_time(self) -> None:
+        rows = [
+            ("2026-11-25T08:00:00Z", "a", 900, []),
+            ("2026-11-25T11:00:00Z", "a", 200, []),
+            ("2026-11-25T12:00:00Z", "a", 100, ["Gate"]),
+            ("2026-11-25T13:00:00Z", "b", 480, []),
+        ]
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
             patch("builtins.print") as printed,
         ):
-            (Path(directory) / "preflight").mkdir()
-            preflight.record_run("a", 4, 200.4, [])
-            preflight.record_run("a", 4, 100.0, ["Gate"])
-            preflight.record_run("b", 1, 480.0, [])
-            self.assertEqual(preflight.report_runs("2000-01-01"), 0)
-            preflight.report_runs("2999-01-01")
+            log = Path(directory) / preflight.RUNS
+            log.parent.mkdir()
+            log.write_text(
+                "".join(
+                    json.dumps(
+                        {"at": a, "head": h, "jobs": 4, "seconds": s, "failed": f}
+                    )
+                    + "\n"
+                    for a, h, s, f in rows
+                )
+                + '{"at": "2026-11-25T14:00'
+            )
+            self.assertEqual(preflight.report_runs("2026-11-25 10:00:00"), 0)
+            self.assertEqual(preflight.report_runs("2999-01-01"), 0)
+            self.assertEqual(preflight.report_runs("yesterday"), 2)
         lines = [str(call.args[0]) for call in printed.call_args_list]
         self.assertEqual(
-            lines,
+            lines[:4],
             [
-                "3 full runs since 2000-01-01 on 2 heads, 1 failed; median 200s, "
-                "longest 480s, 13 minutes in all",
+                "skipped 1 unreadable lines in preflight/runs.jsonl",
+                "3 full runs since 2026-11-25 10:00:00 on 2 heads, 1 failed; "
+                "median 200s, longest 480s, 13 minutes in all",
+                "skipped 1 unreadable lines in preflight/runs.jsonl",
                 "no full runs since 2999-01-01",
             ],
         )
@@ -290,6 +450,7 @@ class RunTests(unittest.TestCase):
         quick = workflow(
             {"name": "First", "run": "false"}, {"name": "Second", "run": "true"}
         )
+        popen, commands = fake_popen()
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
@@ -297,13 +458,11 @@ class RunTests(unittest.TestCase):
             patch.object(preflight.yaml, "safe_load", return_value=quick),
             patch.object(preflight.migration, "LOCAL", Path(directory)),
             patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
-            patch.object(preflight.subprocess, "run") as run,
+            patch.object(preflight.subprocess, "Popen", popen),
             patch.object(sys, "argv", ["preflight.py"]),
             patch("builtins.print"),
         ):
-            run.side_effect = exit_code
             self.assertEqual(preflight.main(), 1)
-            commands = [call.args[0] for call in run.call_args_list]
             self.assertEqual(len(commands), 4)
             self.assertIn(["sh", "/hooks/hooks/check-commits.sh", "sha..sha"], commands)
             self.assertEqual(
