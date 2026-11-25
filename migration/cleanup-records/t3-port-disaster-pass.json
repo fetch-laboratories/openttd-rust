@@ -446,12 +446,12 @@
   },
   {
     "added": {
-      "tools/migration/windows-abi/disaster.inc": 3
+      "tools/migration/windows-abi/disaster.inc": 4
     },
     "counter": "tools_cpp",
     "existing_alternatives": "The removed carriers were the fixture's only other way to supply these values; the clear cases already moved to `disaster::tests`.",
     "kind": "growth",
-    "reason": "#1027 part 4: the disaster ABI fixture supplies the shared tables the Rust bodies now read in place of the disaster table's carriers (the settings catalog's `disasters`, the resolver's `age`, the maintenance table's `set_age`, the news table and the industry and town tables of the coal case). The house and rail clear cases and their stubs leave the fixture for a Rust test, which leaves a net growth of three lines.",
+    "reason": "#1027 part 4: the disaster ABI fixture supplies the shared tables the Rust bodies now read in place of the disaster table's carriers (the settings catalog's `disasters`, the resolver's `age`, the maintenance table's `set_age`, the news table and the industry and town tables of the coal case). The house and rail clear cases and their stubs leave the fixture for a Rust test, which leaves a net growth of four lines, one of them the news table's `string_assertions` field.",
     "retirement_condition": "Retires with the native ABI fixture when the disaster vehicles run on Rust storage.",
     "retiring_owner": "#656"
   }
