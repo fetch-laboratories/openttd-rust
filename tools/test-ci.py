@@ -1638,6 +1638,15 @@ exit "${result:-0}"
 
 SECURITY = "http://security.ubuntu.com/ubuntu/\tpriority:3\n"
 
+# An unfinished pull_request run of ci-quick.yml at the head: the Quick
+# validation check reports the other jobs and appears only when they end (#1063).
+QUICK_RUNNING = {
+    "status": "in_progress",
+    "conclusion": None,
+    "run_started_at": "2026-11-12T01:00:00Z",
+    "html_url": "https://github.com/example/fork/actions/runs/77",
+}
+
 
 class AptInstallTests(unittest.TestCase):
     """The apt-install action's script against stub apt-get, sudo and timeout
@@ -2557,12 +2566,20 @@ class RequestTests(unittest.TestCase):
             gh.assert_not_called()
         self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
 
-    def ready(self, quick: list[QuickCheck], **pull: object) -> list[tuple]:
-        """Run ready on PULL with pull's changes and `quick` as the head's checks."""
+    def ready(
+        self,
+        quick: list[QuickCheck],
+        runs: list[dict[str, Any]] | None = None,
+        **pull: object,
+    ) -> list[tuple]:
+        """Run ready on PULL with pull's changes, `quick` as the head's checks and
+        `runs` as its pull_request runs of ci-quick.yml."""
 
         def answers(_repository: str, path: str) -> object:
             if path.startswith("pulls/"):
                 return dict(PULL, **pull)
+            if "actions/workflows/ci-quick.yml/runs" in path:
+                return {"workflow_runs": runs or []}
             return {"check_runs": quick}
 
         args = argparse.Namespace(repo="example/fork", pr=170)
@@ -2582,6 +2599,19 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(self.ready([skipped, passed], draft=False), [mark])
         self.assertEqual(self.ready([skipped], draft=True), [mark])
         self.assertEqual(self.ready([], draft=False), [mark])
+
+    def test_ready_marks_nothing_again_while_quick_runs(self) -> None:
+        """A draft's skip with Quick's run still going is a run, not a skip to
+        restart (#1063); with no such run it is restarted as before."""
+        mark = ("pr", "ready", "170", "--repo", "example/fork")
+        skipped = QuickCheck(conclusion="skipped", started_at="2026-11-12T01:00:00Z")
+        self.assertEqual(self.ready([skipped], [QUICK_RUNNING], draft=False), [mark])
+        self.assertEqual(
+            self.ready(
+                [skipped], [dict(QUICK_RUNNING, status="completed")], draft=False
+            ),
+            [(*mark, "--undo"), mark],
+        )
 
     def test_ready_refuses_a_body_without_its_attribution_line(self) -> None:
         with self.assertRaisesRegex(ValueError, "attribution line"):
@@ -3656,9 +3686,11 @@ class RunWaitTests(unittest.TestCase):
         checks: list[dict[str, object] | None],
         draft: bool = True,
         heads: list[str] | None = None,
+        runs: list[dict[str, Any]] | None = None,
     ) -> tuple[int, str, list[tuple[str, ...]]]:
         """Run argv against successive Quick check runs of the PR's head; the PR
-        is a draft until marked ready, and its head follows `heads`."""
+        is a draft until marked ready, its head follows `heads`, and `runs` are
+        its pull_request runs of ci-quick.yml."""
         reads = iter(checks)
         moves = iter(heads or [])
         calls: list[tuple[str, ...]] = []
@@ -3668,6 +3700,8 @@ class RunWaitTests(unittest.TestCase):
                 marked = any(call[:2] == ("pr", "ready") for call in calls)
                 head = next(moves, (heads or [HEAD])[-1])
                 return dict(PULL, draft=draft and not marked, head={"sha": head})
+            if "actions/workflows/ci-quick.yml/runs" in path:
+                return {"workflow_runs": runs or []}
             check = next(reads, checks[-1])
             return {"check_runs": [check] if check else []}
 
@@ -3743,6 +3777,32 @@ class RunWaitTests(unittest.TestCase):
         )
         self.assertEqual(status, 2)
         self.assertIn("wait 170 --quick", output)
+
+    def test_wait_quick_waits_out_a_run_whose_check_has_not_appeared(self) -> None:
+        """On a ready PR with only the draft's skip, an unfinished Quick run is
+        waited for past MERGEABLE_WAIT (#1063)."""
+        skipped = dict(self.check("completed", "skipped"), started_at="")
+        done = self.check("completed", "success")
+        # The clock moves 10 seconds a read: 40 skipped reads pass the grace.
+        reads = 2 + ci.MERGEABLE_WAIT // 10
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick"],
+            [*[skipped] * reads, done],
+            draft=False,
+            runs=[QUICK_RUNNING],
+        )
+        self.assertEqual(status, 0)
+        self.assertIn(f"in_progress: {QUICK_RUNNING['html_url']}", output)
+        self.assertNotIn("only skipped", output)
+        # With no unfinished run the skip is a draft's, refused as before.
+        status, output, _ = self.quick(
+            ["wait", "170", "--quick"],
+            [*[skipped] * reads, done],
+            draft=False,
+            runs=[dict(QUICK_RUNNING, status="completed")],
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("ready 170 --wait", output)
 
     def test_ready_wait_follows_the_head_it_marked(self) -> None:
         # A push lands between the ready mark and the wait: the wait stops.
@@ -3940,6 +4000,8 @@ class EnqueueWorld:
     comments (cleanup records and the discussion)."""
 
     quick: ci.CheckRun | None = field(default_factory=lambda: EnqueueTests.QUICK)
+    # The head's pull_request runs of ci-quick.yml.
+    quick_runs: list[dict[str, Any]] = field(default_factory=list)
     requested: ci_log.Run | None = field(default_factory=lambda: EnqueueTests.REQUESTED)
     dispatched: list[ci_log.Run] | None = None
     pages: list[list[ci_log.Run]] | None = None
@@ -4006,6 +4068,7 @@ class EnqueueTests(unittest.TestCase):
             "check-runs?check_name=Quick%20validation": {
                 "check_runs": [world.quick] if world.quick else []
             },
+            "actions/workflows/ci-quick.yml/runs": {"workflow_runs": world.quick_runs},
             "actions/runs/4/jobs": {
                 "jobs": [{"name": "plan", "conclusion": "skipped"}]
             },
@@ -4075,11 +4138,30 @@ class EnqueueTests(unittest.TestCase):
         red = dict(self.QUICK, conclusion="failure")
         for label, options, message in (
             ("red Quick", {"quick": red}, "runs/1"),
-            ("no Quick", {"quick": None}, "no run"),
+            (
+                "no Quick",
+                {"quick": None},
+                # The refusal says what to do in each case (#940).
+                r"no run\. .*ci\.py wait 170 --quick\. .*push a commit without \[skip ci\]",
+            ),
             (
                 "pending Quick",
                 {"quick": dict(red, status="in_progress", conclusion=None)},
                 "in_progress",
+            ),
+            # Quick's jobs still run, so its check has not appeared (#1063).
+            (
+                "running Quick, no check",
+                {"quick": None, "quick_runs": [QUICK_RUNNING]},
+                f"in_progress/None: {QUICK_RUNNING['html_url']}",
+            ),
+            (
+                "running Quick, a draft's skip",
+                {
+                    "quick": dict(red, conclusion="skipped"),
+                    "quick_runs": [QUICK_RUNNING],
+                },
+                f"in_progress/None: {QUICK_RUNNING['html_url']}",
             ),
             (
                 "red request",
@@ -4824,7 +4906,7 @@ class World:
     later_runs (the dispatched runs any later listing sees) and requests (this
     checkout's request records, whose runs GitHub no longer has)."""
 
-    quick: CheckRun = field(default_factory=quick_run)
+    quick: CheckRun | None = field(default_factory=quick_run)
     runs: list[list[ci_log.Run]] = field(default_factory=list)
     queue: ci.QueueState = field(default_factory=queue_state)
     heads: list[str] = field(default_factory=lambda: [HEAD, HEAD])
@@ -4835,6 +4917,7 @@ class World:
     labeled: list[ci_log.Run] = field(default_factory=list)
     later_runs: list[list[ci_log.Run]] | None = None
     requests: list[dict[str, object]] = field(default_factory=list)
+    quick_runs: list[dict[str, Any]] = field(default_factory=list)
 
 
 class FakeGitHub:
@@ -4848,7 +4931,12 @@ class FakeGitHub:
 
     def api(self, _repository: str, path: str) -> object:
         answers = {
-            "check-runs": {"check_runs": [self.world.quick]},
+            "check-runs": {
+                "check_runs": [self.world.quick] if self.world.quick else []
+            },
+            "actions/workflows/ci-quick.yml/runs": {
+                "workflow_runs": self.world.quick_runs
+            },
             "event=merge_group": {"workflow_runs": self.world.group},
             "compare/rust-migration...": {
                 "commits": [{"sha": sha} for sha in self.world.commits],
@@ -5099,6 +5187,17 @@ class StateTests(unittest.TestCase):
             with self.subTest(line):
                 _, output, _ = self.state(world=world)
                 self.assertIn(line + "\n", output)
+
+    def test_a_running_quick_without_its_check_shows_as_running(self) -> None:
+        """No Quick validation check yet, Quick's jobs still running (#1063)."""
+        running = World(
+            runs=[[self.NATIVE_GREEN]], quick=None, quick_runs=[QUICK_RUNNING]
+        )
+        _, output, _ = self.state(world=running)
+        self.assertIn(f"Quick at head: in_progress {QUICK_RUNNING['html_url']}", output)
+        self.assertIn("enqueue checks: blocked: Quick validation at", output)
+        _, output, _ = self.state(world=replace(running, quick_runs=[]))
+        self.assertNotIn(QUICK_RUNNING["html_url"], output)
 
     def test_green_head_passes_enqueue_checks_only_as_checks(self) -> None:
         green = World(runs=[[self.NATIVE_GREEN]])

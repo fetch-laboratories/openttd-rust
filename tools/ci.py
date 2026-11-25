@@ -41,6 +41,8 @@ MERGEABLE_WAIT = 300
 MERGEABLE_INTERVAL = 3
 # Quick's required check on a PR head, from its pull_request run.
 QUICK = "Quick validation"
+# The workflow whose reporting job is the Quick validation check (#1063).
+QUICK_WORKFLOW = "ci-quick.yml"
 # The one branch prefix of deliberate negative controls; `failures` leaves them out.
 CONTROL = "control/"
 FAILED = ("failure", "timed_out", "startup_failure")
@@ -1257,7 +1259,8 @@ def latest_quick(repository: str, head: str) -> CheckRun | None:
 
     A skipped run carries no verdict: one left from the PR's draft can be stamped
     after the run that validated the same head, so it counts only when no other
-    run exists.
+    run exists. With no check or only a skip, an unfinished Quick run at the head
+    answers as a check in progress.
     """
     checks = api(
         repository, f"commits/{head}/check-runs?check_name={quote(QUICK)}&filter=latest"
@@ -1266,7 +1269,32 @@ def latest_quick(repository: str, head: str) -> CheckRun | None:
         checks["check_runs"],
         key=lambda run: (run["conclusion"] != "skipped", run["started_at"] or ""),
     )
-    return runs[-1] if runs else None
+    if runs and runs[-1]["conclusion"] != "skipped":
+        return runs[-1]
+    return running_quick(repository, head) or (runs[-1] if runs else None)
+
+
+def running_quick(repository: str, head: str) -> CheckRun | None:
+    """The head's unfinished pull_request run of Quick's workflow, as a check in
+    progress. The Quick validation check reports Quick's other jobs and appears
+    only once they end, so for most of a run the head has no such check, or only
+    the skip its draft push left (#1063)."""
+    runs = api(
+        repository,
+        f"actions/workflows/{QUICK_WORKFLOW}/runs?event=pull_request"
+        f"&head_sha={head}&per_page=100",
+    )["workflow_runs"]
+    running = [run for run in runs if run["status"] != "completed"]
+    if not running:
+        return None
+    run = max(running, key=lambda run: run.get("run_started_at") or "")
+    return CheckRun(
+        status=run["status"],
+        conclusion=None,
+        started_at=run.get("run_started_at"),
+        html_url=run["html_url"],
+        details_url=run["html_url"],
+    )
 
 
 def bootstrap_runs(
@@ -1523,7 +1551,14 @@ def enqueue_checks(
         state = (
             quick and f"{quick['status']}/{quick['conclusion']}: {quick['html_url']}"
         )
-        raise ValueError(f"{QUICK} at {head} is not green: {state or 'no run'}")
+        raise ValueError(
+            f"{QUICK} at {head} is not green: {state}"
+            if state
+            else f"{QUICK} at {head} is not green: no run. If the push was just "
+            f"now, its run has not appeared yet: wait with python3 tools/ci.py wait "
+            f"{pr} --quick. If no Quick started, as after a [skip ci] push, push a "
+            "commit without [skip ci]"
+        )
     if read is None:
         read = read_pr_runs(repository, pr, pull["created_at"], head)
     gate_run(repository, pr, head, read)
