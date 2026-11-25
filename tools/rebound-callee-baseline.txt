@@ -194,8 +194,6 @@ rebound | RustTownAuthorityIndex | src/rust/disaster_adapter.hpp | town_index
 rebound | RustTownAuthorityIndex | src/town_cmd.cpp | town_index
 rebound | RustTownStorageCount | src/rust/newgrf_storage_services.cpp | town_count
 rebound | RustTownStorageCount | src/town_cmd.cpp | storage_count
-rebound | RustUpdateSignals | src/rust/company_adapter.cpp | update_signals_in_buffer
-rebound | RustUpdateSignals | src/rust/disaster_adapter.hpp | update_signals
 rebound | RustVehicleCargoType | src/economy.cpp | cargo_type
 rebound | RustVehicleCargoType | src/rust/engine_capabilities_services.hpp | vehicle_cargo
 rebound | RustVehicleCargoType | src/station_cmd.cpp | cargo_type

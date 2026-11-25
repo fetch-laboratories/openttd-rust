@@ -47,6 +47,7 @@ inline const Vehicle *VehicleOf(const OpenTTDVehicle *v) noexcept { return Vehic
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine.base(); }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
 inline uint16_t RustVehicleLastLoadingStation(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_loading_station.base(); }
+inline void RustVehicleSetUnitNumber(OpenTTDVehicle *v, uint16_t unit) noexcept { VehicleOf(v)->unitnumber = unit; }
 inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->GetLastStationVisited().base(); }
 inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->load_unload_ticks; }
 inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }

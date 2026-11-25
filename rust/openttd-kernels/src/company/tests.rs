@@ -2022,9 +2022,7 @@ mod evidence_tests {
     /// The world's records, owned for one test; dropped in place.
     struct World {
         finances: Vec<Finances>,
-        /// Boxed, so a town keeps its address across later pushes.
-        #[expect(clippy::vec_box, reason = "a town's address is its owner handle")]
-        towns: Vec<Box<crate::town::State>>,
+        towns: Vec<crate::town::State>,
         group: Box<crate::fleet::GroupFields>,
         stats: *mut (),
         infrastructure: Vec<crate::company_base::CompanyInfrastructure>,
@@ -2078,13 +2076,13 @@ mod evidence_tests {
             world
         }
         fn town(&mut self, have: u16, ratings: [i16; 3], exclusivity: u8, counter: u8) {
-            let mut t = Box::new(crate::town::State::default());
+            let mut t = crate::town::State::default();
             t.simulation.have_ratings = have;
             t.simulation.ratings[..3].copy_from_slice(&ratings);
             t.simulation.exclusivity = exclusivity;
             t.simulation.exclusive_counter = counter;
             self.towns.push(t);
-            TOWNS.set(self.towns.iter_mut().map(|t| &raw mut **t).collect());
+            TOWNS.set(self.towns.iter_mut().map(|t| &raw mut *t).collect());
         }
     }
     impl Drop for World {

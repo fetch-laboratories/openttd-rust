@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-script_event.h": 2,
+      "abi-record-settings.h": 14
+    },
+    "reason": "Plan #1048 decisions 5 and 7: the five company events are built in Rust, so the shared event record gains `other_company` and `value` (ET_COMPANY_ASK_MERGER and ET_COMPANY_MERGER carry them), and the bodies read fourteen game settings in place through the settings catalog (construction_cost, economy, give_money, infinite_money, inflation, infrastructure_maintenance, initial_interest, max_aircraft, max_loan, max_roadveh, max_ships, new_year, show_finances, vehicle_costs) where C++ carriers passed them as parameters. The declarations are generated from the Rust records.",
+    "existing_alternatives": "The events were built in C++ by seven carrier slots and the settings passed by the `EconomySettings`, `Month` and `Year` carriers and `CommandInfiniteMoney`, all of which the design-fault rule removes and this pass deletes; no other event field or setting address holds these values.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The event fields retire with the script event port, which constructs events in Rust; the setting addresses retire when the game settings move to Rust."
+  },
+  {
+    "kind": "growth",
+    "counter": "tools_cpp",
+    "added": {
+      "tools/simulation/session-fixture.hpp": 3
+    },
+    "reason": "Plan #1048 decision 2: the company tick resolves `Company::GetIfValid` and walks the companies through the identity table instead of the company table's `company_next`, so the session fixture's empty company world gives the company table an identity table with no companies: its include, its member and the `company_if_valid` slot beside the renamed `next_company`.",
+    "existing_alternatives": "The fixture copied no identity table before; its `company_next` stub and `OpenTTDCompanyRef` record are gone with the slot they stubbed.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires with the native session fixture, when the session loop's company services are Rust calls."
+  }
+]

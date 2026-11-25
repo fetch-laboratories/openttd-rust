@@ -95,15 +95,6 @@
     "rust/openttd-kernels/src/cargomonitor.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
-    "rust/openttd-kernels/src/company.rs | fn execute_allow_list_action | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/company.rs | fn recompute::mod if | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/company.rs | fn service_interval_from | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
     "rust/openttd-kernels/src/depot_map.rs | impl crate : : map_func : : World < ' _ >::fn depot::mod e | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
@@ -464,15 +455,6 @@
     "rust/openttd-kernels/src/type_registry.rs | module | missing_safety_doc | 4a33eacd5fa65f2b2e28": [
       1,
       1
-    ],
-    "rust/openttd-kernels/src/vehicle/scheduler.rs | fn run_ticks | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/vehicle/visits.rs | fn enter_depot | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/vehicle/visits.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
     ],
     "rust/openttd-kernels/src/vehicle_transactions/build.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       10

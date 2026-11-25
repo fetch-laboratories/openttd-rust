@@ -1220,24 +1220,24 @@ pub(crate) fn on_tick_companies(s: &Services, t: &mut Tick) -> bool {
     }
 
     if t.stage == TICK_POSTING {
-        // One iteration of `for (auto i = 0; i < max_no_competitors; i++)`; the increment of
-        // a resumed iteration has run before this check.
-        #[expect(
-            clippy::never_loop,
-            reason = "one iteration of the original's loop per call; the caller posts between them"
-        )]
-        while t.i < i32::from(unsafe { settings.max_competitors.read() }) {
+        // One iteration of `for (auto i = 0; i < max_no_competitors; i++)` for each call, as
+        // the caller posts between them; the increment of a resumed iteration has run before
+        // this check.
+        'iteration: {
+            if t.i >= i32::from(unsafe { settings.max_competitors.read() }) {
+                break 'iteration;
+            }
             if (s.finance.networking)() {
                 let num_companies = t.num_companies;
                 t.num_companies = num_companies.wrapping_add(1);
                 if num_companies >= usize::from(unsafe { settings.max_companies.read() }) {
-                    break;
+                    break 'iteration;
                 }
             }
             let num_ais = t.num_ais;
             t.num_ais = num_ais.wrapping_add(1);
             if num_ais >= unsafe { settings.max_competitors.read() } {
-                break;
+                break 'iteration;
             }
             t.i += 1;
             return true;
@@ -2248,12 +2248,11 @@ pub(crate) fn change_ownership_of_company_items(
         if read_field!(t, simulation.exclusive_counter) > 0
             && read_field!(t, simulation.exclusivity) == old_owner.0
         {
-            #[expect(clippy::if_not_else, reason = "the original's branch order")]
-            if new_owner != Owner::INVALID {
-                write_field!(t, simulation.exclusivity, new_owner.0);
-            } else {
+            if new_owner == Owner::INVALID {
                 write_field!(t, simulation.exclusive_counter, 0);
                 write_field!(t, simulation.exclusivity, CompanyID::INVALID.0);
+            } else {
+                write_field!(t, simulation.exclusivity, new_owner.0);
             }
         }
     }
