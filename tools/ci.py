@@ -22,6 +22,7 @@ import ci_log
 import cleanup_contract
 import preflight_stamp
 import review_report
+import review_report_comment
 import status_comment
 import vcs
 
@@ -2429,6 +2430,7 @@ HANDLERS = {
     "log": show_log,
     "logs": show_log,
     "comment": lambda args: status_comment.run(args, repository_of(args.repo)),
+    "report": lambda args: review_report_comment.run(args, repository_of(args.repo)),
     "queue-wait": queue_wait_command,
     "ready": ready_command,
     "enqueue": lambda args: print(f"PR #{args.pr}: {enqueue(args)}"),
@@ -2616,6 +2618,7 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     log_parser(commands)
     status_comment.register(commands)
+    review_report_comment.register(commands)
     request_parser(commands)
     pr_parsers(commands)
     args = parser.parse_args()

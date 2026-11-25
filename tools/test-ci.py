@@ -6000,6 +6000,168 @@ class CommentTests(unittest.TestCase):
         )
         self.assertIn("on issue #171", out)
 
+    def test_a_plan_review_is_not_adopted_as_a_status_comment(self) -> None:
+        """`Reviewed plan:` is a report header too (#1063)."""
+        plan = (
+            "Reviewed plan: #171 at 1007aa96f8\n\n"
+            + attribution("/root/rev")
+            + "\n\nplan accepted"
+        )
+        github = FakeComments([])
+        github.store.append(FakeComments.comment(1000, plan, issue=171))
+        code, _, err = self.run_comment(
+            github, "--issue", "171", "--agent", "/root/rev", "--comment-id", "1000"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("is a review report or cleanup acceptance", err)
+        self.assertEqual(github.writes, [])
+
+
+class ReportTests(unittest.TestCase):
+    """ci.py report: post or replace a review report from a file (#1063)."""
+
+    REPORT = review(HEAD, "/root/rev", "Disposition: accepted, whole PR behaviour")
+
+    def run_report(
+        self, github: FakeComments, *argv: str, body: str | None = None
+    ) -> tuple[int, str, str]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "report.md"
+            if body is not None:
+                path.write_text(body)
+                argv = (*argv, "--body-file", str(path))
+            with (
+                patch.object(status_comment, "gh", side_effect=github.gh),
+                patch("sys.argv", ["ci.py", "report", *argv, "--repo", "example/fork"]),
+                patch("sys.stdout", new_callable=io.StringIO) as out,
+                patch("sys.stderr", new_callable=io.StringIO) as err,
+            ):
+                code = ci.main()
+        return code, out.getvalue(), err.getvalue()
+
+    def test_no_report_posts_the_body_unchanged(self) -> None:
+        github = FakeComments([])
+        code, out, _ = self.run_report(
+            github, "170", "--agent", "/root/rev", body=self.REPORT + "\n"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            github.writes,
+            [
+                (
+                    "POST",
+                    "repos/example/fork/issues/170/comments",
+                    {"body": self.REPORT + "\n"},
+                )
+            ],
+        )
+        self.assertIn("#issuecomment-2000", out)
+        code, out, _ = self.run_report(github, "170", "--agent", "/root/rev", "--show")
+        self.assertEqual(out, self.REPORT + "\n\n")
+
+    def test_one_report_is_patched_unless_it_changed_since_read(self) -> None:
+        old = review(HEAD, "/root/rev", "Disposition: findings to remediate, whole PR")
+        status = "<!-- status comment: /root/rev -->\nStatus\n" + attribution(
+            "/root/rev"
+        )
+        other = review(HEAD, "/root/other", "Disposition: accepted, whole PR porting")
+        github = FakeComments([(other, ACCOUNT), (status, ACCOUNT), (old, ACCOUNT)])
+        code, _, _ = self.run_report(
+            github, "170", "--agent", "/root/rev", body=self.REPORT
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            github.writes,
+            [
+                (
+                    "PATCH",
+                    "repos/example/fork/issues/comments/1002",
+                    {"body": self.REPORT},
+                )
+            ],
+        )
+        # Another agent's report and the agent's own status comment are left alone.
+        self.assertEqual([c["body"] for c in github.store[:2]], [other, status])
+        changed = FakeComments([(old, ACCOUNT)])
+        changed.reads_by_id[1000] = FakeComments.comment(
+            1000, old, updated="2026-11-12T03:00:00Z"
+        )
+        code, _, err = self.run_report(
+            changed, "170", "--agent", "/root/rev", body=self.REPORT
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("changed since it was read", err)
+        self.assertEqual(changed.writes, [])
+
+    def test_two_reports_by_the_agent_are_refused_and_listed(self) -> None:
+        github = FakeComments([(self.REPORT, ACCOUNT), (self.REPORT, ACCOUNT)])
+        code, _, err = self.run_report(
+            github, "170", "--agent", "/root/rev", body=self.REPORT
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("2 reports by /root/rev on PR #170: 1000", err)
+        self.assertIn("#issuecomment-1001", err)
+        self.assertEqual(github.writes, [])
+
+    def test_a_body_the_readers_cannot_read_is_refused_before_any_write(self) -> None:
+        fenced = (
+            f"Reviewed commit: {HEAD}\n```\n{attribution('/root/rev')}\n```\n"
+            "Disposition: accepted, whole PR"
+        )
+        for body, refusal in (
+            ("Findings: none\n" + self.REPORT, "opens with `Reviewed commit: <sha>`"),
+            (
+                review(HEAD, "/root/other", "Disposition: accepted"),
+                "has ['/root/other']",
+            ),
+            (fenced, "has none"),
+            (review(HEAD, "/root/rev", "Looks fine."), "gives no disposition"),
+            (
+                f"Reviewed plan: #170 at {HEAD}\n{attribution('/root/rev')}\nplan accepted",
+                "opens with `Reviewed commit: <sha>`",
+            ),
+        ):
+            github = FakeComments([])
+            with self.subTest(refusal):
+                code, _, err = self.run_report(
+                    github, "170", "--agent", "/root/rev", body=body
+                )
+                self.assertEqual(code, 1)
+                self.assertIn(refusal, err)
+                self.assertEqual(github.writes, [])
+        # A fenced attribution alone cannot make a report of unknown authorship.
+        self.assertEqual(review_report.agent(fenced), review_report.UNKNOWN)
+
+    def test_a_plan_review_goes_on_its_issue(self) -> None:
+        plan = f"Reviewed plan: #171 at {HEAD}\n\n{attribution('/root/rev')}\n\nplan accepted"
+        github = FakeComments([])
+        code, _, err = self.run_report(
+            github, "--issue", "171", "--agent", "/root/rev", body=plan
+        )
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(
+            github.writes,
+            [("POST", "repos/example/fork/issues/171/comments", {"body": plan})],
+        )
+        for body in (
+            plan.replace("#171", "#170"),
+            plan.replace("plan accepted", "accepted"),
+        ):
+            code, _, _ = self.run_report(
+                FakeComments([]), "--issue", "171", "--agent", "/root/rev", body=body
+            )
+            self.assertEqual(code, 1)
+
+    def test_a_create_that_does_not_answer_finds_the_landed_report(self) -> None:
+        github = FakeComments([], post="times out")
+        code, out, _ = self.run_report(
+            github, "170", "--agent", "/root/rev", body=self.REPORT
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("did not answer", out)
+        self.assertIn("#issuecomment-2000", out)
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
+
 
 def mac_job(
     job_id: int, conclusion: str | None, runner: bool, name: str = "Release"

@@ -22,9 +22,16 @@ REVIEWED = re.compile(r"\bReviewed\s+(?:commit|head):\s*`?([0-9a-f]{7,40})\b", r
 HEADER = re.compile(
     r"\A\s*[*_]*Reviewed\s+(?:commit|head):[*_]*\s*`?([0-9a-f]{7,40})\b", re.I
 )
+# A plan review's header, `Reviewed plan: #<issue> at <commit>`: anywhere, as
+# REVIEWED marks a PR report, and where the report has it (#1063).
+PLANNED = re.compile(r"\bReviewed\s+plan:\s*#\d+", re.I)
+PLAN_HEADER = re.compile(
+    r"\A\s*[*_]*Reviewed\s+plan:[*_]*\s*#(\d+)\s+at\s+`?([0-9a-f]{7,40})\b", re.I
+)
 FENCE = re.compile(r"^\s*(```|~~~).*?^\s*\1\s*$", re.M | re.S)
 QUOTED = re.compile(r"^\s*>.*\n?", re.M)
 DISPOSITIONS = ("accepted", "findings to remediate")
+PLAN_DISPOSITIONS = ("plan accepted", "findings to remediate")
 UNKNOWN = "unknown"
 
 
@@ -78,16 +85,25 @@ def reviewed_sha(body: str) -> str | None:
     return header[1] if header else None
 
 
+def reviewed_plan(body: str) -> tuple[int, str] | None:
+    """The issue and commit a plan review's opening header names."""
+    header = PLAN_HEADER.match(body)
+    return (int(header[1]), header[2]) if header else None
+
+
 def agent(body: str) -> str:
     """The report's attributed agent path."""
     attribution = ATTRIBUTION.search(own_text(body))
     return attribution[1] if attribution else UNKNOWN
 
 
-def disposition(body: str) -> tuple[str, str | None]:
+def disposition(
+    body: str, names: tuple[str, ...] = DISPOSITIONS
+) -> tuple[str, str | None]:
     """The disposition its closing line gives, and the scope after it, such as
     `whole PR` or `group 2`. A fenced block (a cleanup acceptance) or the
-    attribution line after the disposition does not hide it."""
+    attribution line after the disposition does not hide it. A plan review's
+    names are PLAN_DISPOSITIONS."""
     lines = [
         line
         for line in own_text(body).splitlines()
@@ -97,7 +113,7 @@ def disposition(body: str) -> tuple[str, str | None]:
         return UNKNOWN, None
     closing = lines[-1].strip().strip("*_`-> ").strip()
     closing = re.sub(r"^\**disposition\**\s*:\**\s*", "", closing, flags=re.I)
-    for name in DISPOSITIONS:
+    for name in names:
         if closing.lower().startswith(name):
             scope = closing[len(name) :].strip(" ,.;:*_`")
             return name, scope or None
