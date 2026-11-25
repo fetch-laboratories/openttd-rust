@@ -13,41 +13,23 @@
 #include "command_services_ffi.h"
 #include "signal_ffi.h"
 
-/* Rust owns the command and tile-proc control flow; map, pools, company counters and every
- * CommandCost stay native. Nested commands, reservations and crossing updates may reenter Rust.
- * Strong IDs cross as TileIndex uint32_t, CompanyID uint8_t, DepotID uint16_t, TownID uint16_t;
- * enums as their uint8_t value. No entry draws Random. */
-enum Foundation : uint8_t;
-enum FloodingBehaviour : uint8_t;
-struct Train;
-struct OpenTTDVehicle;
-struct OpenTTDRailConvertFrame; ///< Caller-owned ordered affected-train list.
-struct OpenTTDRailTrainParking { uint8_t track; uint8_t status; uint16_t speed; uint8_t order; };
-struct OpenTTDRailTrainPosition { uint32_t tile; uint8_t trackdir; };
-struct OpenTTDCrossingRoad { uint8_t bits, road_type, tram_type; uint16_t town; uint8_t road_owner, tram_owner; };
+/* Rust owns the command and tile-proc control flow and runs the nested rail commands; map
+ * writers, pools, company counters and every CommandCost stay native. Reservations and
+ * crossing updates may reenter Rust. Strong IDs cross as TileIndex uint32_t, CompanyID
+ * uint8_t, DepotID uint16_t, TownID uint16_t; enums as their uint8_t value. No entry draws
+ * Random. */
+struct OpenTTDTrainServices;
+struct OpenTTDCrossingRoad { RoadBits bits; RoadType road_type, tram_type; uint16_t town; uint8_t road_owner, tram_owner; };
 struct OpenTTDRailCommandServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDRailMapServices *rail;
 	const OpenTTDCommandCostServices *cost;
 	const OpenTTDCommandServices *command;
 	const OpenTTDSignalServices *signal;
-	bool (*compatible_rail)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_rail);
-	bool (*powered_rail)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(powered_rail);
-	bool (*train_powered)(Train *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(train_powered);
-	bool (*rail_no_crossings)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_no_crossings);
+	const OpenTTDTrainServices *train;
 	bool (*road_no_crossing)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_no_crossing);
-	int64_t (*rail_build_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_build_cost);
-	int64_t (*rail_clear_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_clear_cost);
-	int64_t (*rail_convert_cost)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_convert_cost);
 	bool (*crossing_with_competitor)() noexcept OPENTTD_SERVICE_DEFAULT(crossing_with_competitor);
 	bool (*entrance_edge)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(entrance_edge);
-	void (*build_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(build_rail);
-	void (*remove_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
-	void (*build_signal)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, bool, bool, bool, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(build_signal);
-	void (*remove_signal)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_signal);
-	void (*convert_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(convert_rail);
-	OpenTTDRailTrainParking (*parking)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(parking);
-	OpenTTDRailTrainPosition (*train_position)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(train_position);
 	void (*layout_changed)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_changed);
 	void (*mark_crossings)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_crossings);
 	void (*crossing_removed)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_removed);
@@ -58,10 +40,6 @@ struct OpenTTDRailCommandServices {
 	void (*depot_name)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_name);
 	void (*delete_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_depot);
 	void (*depot_windows)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_windows);
-	void (*close_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);
-	void (*make_shore)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_shore);
-	void (*include_train)(OpenTTDRailConvertFrame *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(include_train);
-	void (*consist_changed)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(consist_changed);
 };
 const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept;
 
@@ -73,7 +51,7 @@ void openttd_rust_rail_build_depot(const OpenTTDRailCommandServices *, OpenTTDCo
 void openttd_rust_rail_build_signal(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, bool, bool, bool, uint8_t, uint8_t, uint8_t, uint8_t);
 void openttd_rust_rail_signal_drag(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, uint8_t, uint8_t, bool, bool, bool, bool, int32_t);
 void openttd_rust_rail_remove_signal(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t);
-void openttd_rust_rail_convert(const OpenTTDRailCommandServices *, OpenTTDRailConvertFrame *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool);
+void openttd_rust_rail_convert(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool);
 void openttd_rust_rail_build_above(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t);
 }
 #endif /* RUST_RAIL_COMMAND_FFI_H */

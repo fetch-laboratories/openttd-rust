@@ -180,7 +180,6 @@ const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept
 		.newgrf_version = RustNewGRFVersion,
 		.palette = RustGRFPalette,
 		.pitch = RustGRFTrainPitch,
-		.rail_cost = RustRailCostMultiplier,
 		.shared = &GetRustSharedServices(),
 		.width = RustGRFTrainWidth,
 	};

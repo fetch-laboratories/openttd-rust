@@ -519,7 +519,9 @@ static uint8_t *StationHadVehicleOfTypeField(Station *st) noexcept { return rein
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.rail_type_acceleration_type = [](const RailTypeInfo *rti) noexcept { return to_underlying(rti->acceleration_type); },
 	.rail_type_compatible_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->compatible_railtypes.base(); },
+	.rail_type_cost_multiplier = [](const RailTypeInfo *rti) noexcept { return rti->cost_multiplier; },
 	.rail_type_curve_speed = [](const RailTypeInfo *rti) noexcept { return rti->curve_speed; },
+	.rail_type_flags = [](const RailTypeInfo *rti) noexcept { return rti->flags.base(); },
 	.rail_type_info = [](RailType rt) noexcept { return GetRailTypeInfo(rt); },
 	.rail_type_introduces_railtypes = [](const RailTypeInfo *rti) noexcept { return rti->introduces_railtypes.base(); },
 	.rail_type_introduction_date = [](const RailTypeInfo *rti) noexcept { return rti->introduction_date.base(); },

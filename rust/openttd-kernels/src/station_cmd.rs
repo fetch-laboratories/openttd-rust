@@ -1661,20 +1661,18 @@ impl Ctx<'_> {
                 affected_vehicles.push(v);
             }
         }
-        // Reuse the two native slots across the nested command;
-        // the accumulated station cost is scalar and already successful.
-        let saved = cost.money();
-        self.nested(ret, tile_cur, flags, |flags| unsafe {
-            crate::rail_cmd::openttd_rust_rail_remove_single(
+        // SAFETY: the rail table has process lifetime; `ret` is this entry's live result.
+        unsafe {
+            crate::rail_cmd::remove_single_rail_command(
                 self.s.rail,
-                ret.0,
-                cost.0,
-                flags.0,
-                tile_cur.0,
-                track.0,
+                ret,
+                flags,
+                crate::rail_cmd::CmdRemoveSingleRail {
+                    tile: tile_cur,
+                    track,
+                },
             );
-        });
-        cost.set(saved);
+        }
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -1818,7 +1816,7 @@ impl Ctx<'_> {
                 cost.add_money(crate::company::price(usize::from(
                     Price::PR_BUILD_STATION_RAIL.0,
                 )));
-                cost.add_money((self.rail().rail_build_cost)(rt.0));
+                cost.add_money(crate::rail::rail_build_cost(self.shared, rt));
                 if length_price_ready {
                     cost.add_money(crate::company::price(usize::from(
                         Price::PR_BUILD_STATION_RAIL_LENGTH.0,
@@ -3966,9 +3964,9 @@ impl Ctx<'_> {
                 (self.rail().make_road)(
                     cur_tile.0,
                     crate::rail_cmd::CrossingRoad {
-                        bits: road_bits.0,
-                        road_type: road_type[RTT_ROAD].0,
-                        tram_type: road_type[RTT_TRAM].0,
+                        bits: road_bits,
+                        road_type: road_type[RTT_ROAD],
+                        tram_type: road_type[RTT_TRAM],
                         town,
                         road_owner: road_owner[RTT_ROAD].0,
                         tram_owner: road_owner[RTT_TRAM].0,

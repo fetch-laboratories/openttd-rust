@@ -12,7 +12,6 @@
 #include "call_ffi.h"
 struct OpenTTDScriptHostServices;
 struct OpenTTDScriptList;
-struct OpenTTDRailCommandServices;
 struct OpenTTDGroundPhysicsServices;
 /** `DragPlan`; see `script_rail.rs`. */
 struct OpenTTDScriptRailDrag {
@@ -28,9 +27,9 @@ struct OpenTTDScriptRailSignal {
 	uint8_t cycles;
 };
 extern "C" {
-uint8_t OPENTTD_RUST_CALL openttd_rust_script_rail_train_has_power(const OpenTTDScriptHostServices *, const OpenTTDRailCommandServices *, uint32_t, uint32_t);
+uint8_t OPENTTD_RUST_CALL openttd_rust_script_rail_train_has_power(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_script_rail_max_speed(const OpenTTDScriptHostServices *, uint32_t);
-int64_t OPENTTD_RUST_CALL openttd_rust_script_rail_build_cost(const OpenTTDScriptHostServices *, const OpenTTDRailCommandServices *, uint32_t, uint32_t);
+int64_t OPENTTD_RUST_CALL openttd_rust_script_rail_build_cost(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
 uint32_t OPENTTD_RUST_CALL openttd_rust_script_rail_tracks(const OpenTTDScriptHostServices *, uint32_t);
 uint32_t OPENTTD_RUST_CALL openttd_rust_script_rail_current_type();
 void OPENTTD_RUST_CALL openttd_rust_script_rail_set_current_type(const OpenTTDScriptHostServices *, uint32_t);

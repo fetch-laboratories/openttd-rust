@@ -117,7 +117,7 @@ pub(crate) fn scale_by_inverse_cargo_scale(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::test_tables::SHARED;
 
@@ -138,7 +138,7 @@ mod tests {
 
     /// Store `_price[index]` and return its earlier value, under `GLOBAL_LOCK`.
     #[allow(unsafe_code)] // One store to the process-lifetime price array.
-    fn set_price(index: Price, value: i64) -> i64 {
+    pub(crate) fn set_price(index: Price, value: i64) -> i64 {
         let earlier = crate::company::price(usize::from(index.0));
         // SAFETY: The caller holds `GLOBAL_LOCK`, which serializes the price array.
         unsafe {

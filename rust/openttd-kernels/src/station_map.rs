@@ -497,9 +497,6 @@ impl crate::map_func::World<'_> {
     pub(crate) fn any_road_stop_tile(&self, t: u32) -> bool {
         self.is_any_road_stop_tile(TileIndex(t))
     }
-    pub(crate) fn station_track(&self, t: u32) -> u8 {
-        self.get_rail_station_track(TileIndex(t)).0
-    }
     pub(crate) fn drive_through_stop_tile(&self, t: u32) -> bool {
         self.is_drive_through_stop_tile(TileIndex(t))
     }
